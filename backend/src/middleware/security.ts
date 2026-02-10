@@ -41,6 +41,28 @@ export const strictRateLimiter = isDevelopment
       legacyHeaders: false,
     });
 
+/** Contact form: strict limit to prevent abuse and PII flooding (M1) */
+export const contactRateLimiter = isDevelopment
+  ? noOpRateLimiter
+  : rateLimit({
+      windowMs: 60 * 60 * 1000, // 1 hour
+      max: 10,
+      message: 'Too many contact form submissions. Please try again later.',
+      standardHeaders: true,
+      legacyHeaders: false,
+    });
+
+/** Redirect endpoint: stricter than general to reduce abuse/crawler load (M4) */
+export const redirectRateLimiter = isDevelopment
+  ? noOpRateLimiter
+  : rateLimit({
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      max: 200,
+      message: 'Too many redirect requests. Please try again later.',
+      standardHeaders: true,
+      legacyHeaders: false,
+    });
+
 /**
  * Security headers middleware
  */

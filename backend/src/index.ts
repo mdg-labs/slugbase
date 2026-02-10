@@ -16,7 +16,7 @@ import { setupOIDC, loadOIDCStrategies } from './auth/oidc.js';
 import { setupJWT } from './auth/jwt.js';
 import { validateEnvironmentVariables } from './utils/env-validation.js';
 import { seedDatabase, resetDatabase } from './db/seed.js';
-import { setupSecurityHeaders, generalRateLimiter, strictRateLimiter } from './middleware/security.js';
+import { setupSecurityHeaders, generalRateLimiter, strictRateLimiter, contactRateLimiter, redirectRateLimiter } from './middleware/security.js';
 import { validateUrl } from './utils/validation.js';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger.js';
@@ -77,7 +77,8 @@ const allowedOrigins = [...new Set([...allowedOriginsBase, ...extraOrigins])];
 
 app.use(cors({
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-    // Allow requests with no origin (like mobile apps, Postman, or same-origin)
+    // Allow requests with no origin (M2: intentional for non-browser clients e.g. mobile, Postman).
+    // Browser requests send Origin; disallowed origins are rejected below.
     if (!origin) {
       return callback(null, true);
     }
@@ -99,7 +100,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser()); // Parse cookies for JWT
 
 // Session middleware (required for OIDC OAuth flow)
-// Note: We use JWT for final authentication, but OIDC needs sessions for the OAuth redirect flow
+// M3/L4: In production SESSION_SECRET is required by env validation; fallback only for development
 const sessionSecret = process.env.SESSION_SECRET || process.env.JWT_SECRET || 'slugbase-session-secret-change-in-production';
 // Only use secure cookies if explicitly in production AND using HTTPS
 // Check BASE_URL to determine if we're using HTTPS
@@ -187,7 +188,7 @@ app.use('/api/admin/settings', adminSettingsRoutes);
 app.use('/api/admin/demo-reset', adminDemoResetRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 if (isCloud) {
-  app.use('/api/contact', contactRoutes);
+  app.use('/api/contact', contactRateLimiter, contactRoutes);
 }
 
 // Health check
@@ -208,7 +209,7 @@ app.get('/api/version', (req, res) => {
 // Redirect routes - handle 2-segment paths only (user_key/slug pattern)
 // Use regex to ensure route only matches paths with exactly 2 non-empty segments
 // This prevents the route from matching `/` (root path)
-app.get(/^\/([^\/]+)\/([^\/]+)$/, strictRateLimiter, async (req, res, next) => {
+app.get(/^\/([^\/]+)\/([^\/]+)$/, redirectRateLimiter, async (req, res, next) => {
   try {
     // Extract user_key and slug from the matched groups
     const match = req.path.match(/^\/([^\/]+)\/([^\/]+)$/);

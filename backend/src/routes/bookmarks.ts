@@ -833,9 +833,13 @@ router.post('/', async (req, res) => {
       }
     }
 
-    // Add tags
+    // Add tags (L1: verify user owns each tag)
     if (data.tag_ids && data.tag_ids.length > 0) {
       for (const tagId of data.tag_ids) {
+        const canAccess = await canAccessTag(userId, tagId);
+        if (!canAccess) {
+          return res.status(403).json({ error: 'You do not have access to one or more of the selected tags' });
+        }
         await execute(
           'INSERT INTO bookmark_tags (bookmark_id, tag_id) VALUES (?, ?)',
           [bookmarkId, tagId]
@@ -1093,8 +1097,14 @@ router.put('/:id', async (req, res) => {
       }
     }
 
-    // Update tags if provided
+    // Update tags if provided (L1: verify user owns each tag)
     if (data.tag_ids !== undefined) {
+      for (const tagId of data.tag_ids) {
+        const canAccess = await canAccessTag(userId, tagId);
+        if (!canAccess) {
+          return res.status(403).json({ error: 'You do not have access to one or more of the selected tags' });
+        }
+      }
       await execute('DELETE FROM bookmark_tags WHERE bookmark_id = ?', [id]);
       for (const tagId of data.tag_ids) {
         await execute('INSERT INTO bookmark_tags (bookmark_id, tag_id) VALUES (?, ?)', [id, tagId]);
@@ -1292,6 +1302,13 @@ router.post('/import', async (req, res) => {
 
     if (!Array.isArray(importBookmarks)) {
       return res.status(400).json({ error: 'Invalid import data: expected array of bookmarks' });
+    }
+    // L2: cap import size to prevent DoS
+    const MAX_IMPORT_BOOKMARKS = 1000;
+    if (importBookmarks.length > MAX_IMPORT_BOOKMARKS) {
+      return res.status(400).json({
+        error: `Import limited to ${MAX_IMPORT_BOOKMARKS} bookmarks per request`,
+      });
     }
 
     const results = {

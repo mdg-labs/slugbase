@@ -20,8 +20,12 @@ export function validateEnvironmentVariables(): void {
     errors.push('ENCRYPTION_KEY must be at least 32 characters');
   }
 
-  // Important variables - warn if not set
-  if (!process.env.SESSION_SECRET) {
+  // Session secret: required in production (M3/L4) so we don't fall back to JWT_SECRET or default
+  if (process.env.NODE_ENV === 'production') {
+    if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32) {
+      errors.push('SESSION_SECRET is required in production and must be at least 32 characters');
+    }
+  } else if (!process.env.SESSION_SECRET) {
     warnings.push('SESSION_SECRET is not set (may be used as fallback)');
   }
 
