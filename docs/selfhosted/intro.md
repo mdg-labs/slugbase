@@ -43,7 +43,7 @@ Organize bookmarks using:
 - **Bulk Actions** - Select multiple bookmarks for batch operations
 
 ### 🔗 Link Forwarding (Optional)
-Expose your bookmarks as short redirect URLs using the format `/{user_key}/{slug}`. Perfect for creating memorable, shareable links.
+Expose your bookmarks as short redirect URLs using `/go/<slug>`. Perfect for creating memorable, shareable links and browser custom search.
 
 ### 👥 Sharing & Collaboration
 Share bookmarks and folders with:

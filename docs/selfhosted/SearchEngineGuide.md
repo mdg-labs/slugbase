@@ -51,7 +51,7 @@ The guide provides step-by-step instructions for:
 
 2. **Your Search URL**
    - White card with code display
-   - Personalized URL: `{BASE_URL}/{user_key}/%s`
+   - URL: `{BASE_URL}/go/%s` (or `{BASE_URL}/app/go/%s` in CLOUD mode)
    - Note about `%s` placeholder
 
 3. **Chromium-based Browsers**
@@ -134,12 +134,12 @@ The guide provides step-by-step instructions for:
 
 The search URL is dynamically generated based on:
 - **Base URL**: Current application origin
-- **User Key**: Current user's unique user key
+- **Base URL**: Current application origin
 - **Placeholder**: `%s` for the bookmark slug
 
-**Format**: `{BASE_URL}/{user_key}/%s`
+**Format**: `{BASE_URL}/go/%s` (same for all users; login required)
 
-**Example**: `https://slugbase.example.com/user123/%s`
+**Example**: `https://slugbase.example.com/go/%s`
 
 The `%s` is replaced by the browser with the search query (bookmark slug).
 
@@ -173,7 +173,7 @@ After setup, users can:
 
 1. Type in browser address bar: `go test`
 2. Press Enter
-3. Browser navigates to: `{BASE_URL}/{user_key}/test`
+3. Browser navigates to: `{BASE_URL}/go/test`
 4. SlugBase redirects to the bookmark URL associated with slug "test"
 
 **Note**: Replace "test" with any bookmark slug created in SlugBase.
@@ -184,9 +184,9 @@ The custom search engine feature works by:
 
 1. User types keyword + slug in address bar (e.g., `go mylink`)
 2. Browser replaces keyword and query with search URL
-3. Browser navigates to: `{BASE_URL}/{user_key}/mylink`
+3. Browser navigates to: `{BASE_URL}/go/mylink`
 4. SlugBase backend receives request
-5. Backend looks up bookmark by user_key and slug
+5. Backend looks up bookmark by slug (user identified by session)
 6. If found and forwarding enabled, redirects to bookmark URL
 7. User is taken directly to the target website
 
@@ -201,13 +201,13 @@ The custom search engine feature works by:
 ## Related Pages
 
 - [Bookmarks](bookmarks) - Create bookmarks with slugs
-- [Profile](profile) - View your user key
+- [Profile](profile) - Manage account and remembered slug choices
 
 ## Technical Details
 
 - **Component File**: `frontend/src/pages/SearchEngineGuide.tsx`
-- **User Context**: Uses AuthContext to get user_key
-- **Dynamic URL**: Generates search URL from current origin and user key
+- **Authentication**: Login required; resolution is per-user
+- **Dynamic URL**: Generates search URL from current origin
 - **Routing**: React Router for navigation
 
 ## i18n Keys Used
@@ -280,7 +280,7 @@ Practical demonstration:
 ### URL Template Issues
 
 - Ensure `%s` placeholder is included
-- Check user key is correct
+- Ensure you are logged in
 - Verify base URL is correct
 - Test URL manually in browser
 

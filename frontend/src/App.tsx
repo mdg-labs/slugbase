@@ -6,6 +6,7 @@ import { ToastProvider } from './components/ui/Toast';
 import Layout from './components/Layout';
 import api from './api/client';
 import { isCloud } from './config/mode';
+import { apiBaseUrl } from './config/api';
 
 // Lazy load pages for code splitting
 const Setup = lazy(() => import('./pages/Setup'));
@@ -20,6 +21,7 @@ const Shared = lazy(() => import('./pages/Shared'));
 const PasswordReset = lazy(() => import('./pages/PasswordReset'));
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
 const SearchEngineGuide = lazy(() => import('./pages/SearchEngineGuide'));
+const GoPreferences = lazy(() => import('./pages/GoPreferences'));
 const Landing = lazy(() => import('./pages/landing/Landing'));
 const Pricing = lazy(() => import('./pages/landing/Pricing'));
 const Contact = lazy(() => import('./pages/landing/Contact'));
@@ -133,7 +135,7 @@ function AppRoutesSelfhosted() {
         <Route path="/reset-password" element={<PasswordReset />} />
         <Route path="/password-reset" element={<PasswordReset />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
-        <Route path="/:user_key/:slug" element={<ForwardingHandler />} />
+        <Route path="/go/:slug" element={<ForwardingHandler />} />
         <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
           <Route index element={<Dashboard />} />
           <Route path="bookmarks" element={<Bookmarks />} />
@@ -141,6 +143,7 @@ function AppRoutesSelfhosted() {
           <Route path="tags" element={<Tags />} />
           <Route path="shared" element={<Shared />} />
           <Route path="profile" element={<Profile />} />
+          <Route path="go-preferences" element={<GoPreferences />} />
           <Route path="search-engine-guide" element={<SearchEngineGuide />} />
           <Route path="admin" element={<AdminRoute><Admin /></AdminRoute>} />
         </Route>
@@ -161,7 +164,7 @@ function AppRoutesCloud() {
           <Route path="reset-password" element={<PasswordReset />} />
           <Route path="password-reset" element={<PasswordReset />} />
           <Route path="verify-email" element={<VerifyEmail />} />
-          <Route path=":user_key/:slug" element={<ForwardingHandler />} />
+          <Route path="go/:slug" element={<ForwardingHandler />} />
           <Route path="" element={<PrivateRoute><Layout /></PrivateRoute>}>
             <Route index element={<Dashboard />} />
             <Route path="bookmarks" element={<Bookmarks />} />
@@ -169,6 +172,7 @@ function AppRoutesCloud() {
             <Route path="tags" element={<Tags />} />
             <Route path="shared" element={<Shared />} />
             <Route path="profile" element={<Profile />} />
+            <Route path="go-preferences" element={<GoPreferences />} />
             <Route path="search-engine-guide" element={<SearchEngineGuide />} />
             <Route path="admin" element={<AdminRoute><Admin /></AdminRoute>} />
           </Route>
@@ -183,24 +187,26 @@ function AppRoutes() {
   return <AppRoutesSelfhosted />;
 }
 
-// Component to handle forwarding URLs - redirects to backend
+// Component to handle forwarding URLs - redirects to backend /go endpoint
 function ForwardingHandler() {
   const location = useLocation();
   const { pathname } = location;
   const { t } = useTranslation();
 
   React.useEffect(() => {
+    // Extract slug from pathname: /go/:slug or /app/go/:slug (cloud)
+    const match = pathname.match(/\/go\/([^/]+)/);
+    const slug = match ? match[1] : '';
+    const goPath = slug ? `/go/${slug}` : '/go';
     // In development, redirect to backend (port 5000)
-    // In production, the backend serves the frontend, so just redirect to pathname
-    // Check if we're in development by checking if we're on localhost (any port)
-    // This handles both direct access (port 3000) and WSL port forwarding (port 3001)
+    // In CLOUD mode, use API URL for /go (backend is on different origin)
+    // In production selfhosted, same origin
     const isDevelopment = window.location.hostname === 'localhost';
-    const backendUrl = isDevelopment 
-      ? `http://localhost:5000${pathname}`
-      : pathname;
-    
-    // Redirect to backend which will handle the forwarding
-    // The backend will return a 302 redirect to the actual bookmark URL
+    const backendUrl = isDevelopment
+      ? `http://localhost:5000${goPath}`
+      : apiBaseUrl
+        ? `${apiBaseUrl}${goPath}`
+        : goPath;
     window.location.href = backendUrl;
   }, [pathname]);
 

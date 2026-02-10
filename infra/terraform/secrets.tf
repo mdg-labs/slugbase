@@ -74,7 +74,7 @@ resource "google_secret_manager_secret_version" "db_password" {
   secret_data = random_password.db_password.result
 }
 
-# Optional OIDC client secrets (cloud mode). Create secret versions manually if used.
+# Optional OIDC client secrets (cloud mode). Add a new version with real value when used.
 resource "google_secret_manager_secret" "oidc_google_client_secret" {
   project   = local.project_id
   secret_id = "slugbase-oidc-google-client-secret"
@@ -82,6 +82,10 @@ resource "google_secret_manager_secret" "oidc_google_client_secret" {
     auto {}
   }
   depends_on = [google_project_service.secretmanager]
+}
+resource "google_secret_manager_secret_version" "oidc_google_client_secret" {
+  secret      = google_secret_manager_secret.oidc_google_client_secret.id
+  secret_data = ""
 }
 
 resource "google_secret_manager_secret" "oidc_microsoft_client_secret" {
@@ -92,6 +96,10 @@ resource "google_secret_manager_secret" "oidc_microsoft_client_secret" {
   }
   depends_on = [google_project_service.secretmanager]
 }
+resource "google_secret_manager_secret_version" "oidc_microsoft_client_secret" {
+  secret      = google_secret_manager_secret.oidc_microsoft_client_secret.id
+  secret_data = ""
+}
 
 resource "google_secret_manager_secret" "oidc_github_client_secret" {
   project   = local.project_id
@@ -100,6 +108,24 @@ resource "google_secret_manager_secret" "oidc_github_client_secret" {
     auto {}
   }
   depends_on = [google_project_service.secretmanager]
+}
+resource "google_secret_manager_secret_version" "oidc_github_client_secret" {
+  secret      = google_secret_manager_secret.oidc_github_client_secret.id
+  secret_data = ""
+}
+
+# SMTP password (cloud mode). In cloud mode SMTP is configured via env; only password is secret.
+resource "google_secret_manager_secret" "smtp_password" {
+  project   = local.project_id
+  secret_id = "slugbase-smtp-password"
+  replication {
+    auto {}
+  }
+  depends_on = [google_project_service.secretmanager]
+}
+resource "google_secret_manager_secret_version" "smtp_password" {
+  secret      = google_secret_manager_secret.smtp_password.id
+  secret_data = ""
 }
 
 # Grant runtime SA access to all SlugBase secrets
@@ -112,6 +138,7 @@ locals {
     google_secret_manager_secret.oidc_google_client_secret.secret_id,
     google_secret_manager_secret.oidc_microsoft_client_secret.secret_id,
     google_secret_manager_secret.oidc_github_client_secret.secret_id,
+    google_secret_manager_secret.smtp_password.secret_id,
   ]
 }
 

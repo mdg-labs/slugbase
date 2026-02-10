@@ -3,6 +3,7 @@ import { query, queryOne, execute } from '../../db/index.js';
 import { AuthRequest, requireAuth, requireAdmin } from '../../middleware/auth.js';
 import { testSMTPConfig } from '../../utils/email.js';
 import { encrypt } from '../../utils/encryption.js';
+import { isCloud } from '../../config/mode.js';
 
 const router = Router();
 router.use(requireAuth());
@@ -255,7 +256,10 @@ router.delete('/:key', async (req, res) => {
  */
 router.post('/smtp/test', async (req, res) => {
   const authReq = req as AuthRequest;
-  
+
+  if (isCloud) {
+    return res.status(403).json({ error: 'SMTP configuration is managed via environment variables in CLOUD mode' });
+  }
   // Disable SMTP testing in DEMO_MODE
   if (process.env.DEMO_MODE === 'true') {
     return res.status(403).json({
@@ -328,7 +332,10 @@ router.post('/smtp/test', async (req, res) => {
  */
 router.post('/smtp', async (req, res) => {
   const authReq = req as AuthRequest;
-  
+
+  if (isCloud) {
+    return res.status(403).json({ error: 'SMTP configuration is managed via environment variables in CLOUD mode' });
+  }
   // Disable SMTP configuration in DEMO_MODE
   if (process.env.DEMO_MODE === 'true') {
     return res.status(403).json({

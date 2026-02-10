@@ -1,16 +1,16 @@
 import { useTranslation } from 'react-i18next';
-import { useAuth } from '../contexts/AuthContext';
 import { ArrowLeft, Search, Code, CheckCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import { appBasePath } from '../config/api';
+import { isCloud } from '../config/mode';
 
 export default function SearchEngineGuide() {
   const { t } = useTranslation();
-  const { user } = useAuth();
 
   const baseUrl = window.location.origin;
-  const searchUrl = `${baseUrl}/${user?.user_key}/%s`;
+  const goPath = isCloud ? '/app/go/%s' : '/go/%s';
+  const searchUrl = `${baseUrl}${goPath}`;
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">

@@ -81,8 +81,7 @@ export default function Shared() {
 
   function handleCopyUrl(bookmark: SharedBookmark) {
     const baseUrl = window.location.origin;
-    const userKey = bookmark.owner_user_key ?? user?.user_key;
-    const url = userKey && bookmark.slug ? `${baseUrl}/${userKey}/${bookmark.slug}` : '';
+    const url = bookmark.slug ? `${baseUrl}/go/${bookmark.slug}` : '';
     if (url) {
       navigator.clipboard.writeText(url);
       showToast(t('bookmarks.copied'), 'success');

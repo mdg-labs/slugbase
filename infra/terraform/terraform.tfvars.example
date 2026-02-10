@@ -17,3 +17,24 @@ base_url    = "https://slugbase-backend-xxxxx-uc.a.run.app"  # Set after first d
 
 # Optional: Cloud SQL tier (db-f1-micro is minimal)
 # cloud_sql_tier = "db-f1-micro"
+
+# -----------------------------------------------------------------------------
+# CLOUD mode only (when slugbase_mode = "cloud")
+# -----------------------------------------------------------------------------
+# slugbase_mode = "cloud"
+# cookie_domain       = ".slugbase.app"
+# cors_extra_origins   = "https://slugbase.app"
+# jwt_access_expires_in   = "15m"
+# jwt_refresh_expires_days = "7"
+# oidc_google_client_id    = "xxx.apps.googleusercontent.com"
+# oidc_microsoft_client_id = "xxx"
+# oidc_microsoft_tenant    = "common"
+# oidc_github_client_id   = "xxx"
+# SMTP (non-secret; password goes in Secret Manager as slugbase-smtp-password)
+# smtp_enabled   = "true"
+# smtp_host      = "smtp.example.com"
+# smtp_port      = "587"
+# smtp_secure    = "false"
+# smtp_user      = "noreply@example.com"
+# smtp_from      = "noreply@example.com"
+# smtp_from_name = "SlugBase"

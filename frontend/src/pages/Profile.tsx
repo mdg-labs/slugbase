@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Copy, Check, Mail, User as UserIcon, Key, Globe, Palette, AlertCircle } from 'lucide-react';
+import { appBasePath } from '../config/api';
+import { Mail, User as UserIcon, Globe, Palette, AlertCircle, Link2 } from 'lucide-react';
 import Select from '../components/ui/Select';
 import Button from '../components/ui/Button';
 import { useToast } from '../components/ui/Toast';
@@ -17,7 +19,6 @@ export default function Profile() {
     theme: 'auto',
   });
   const [saving, setSaving] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; name?: string }>({});
   const [editingEmail, setEditingEmail] = useState(false);
   const [editingName, setEditingName] = useState(false);
@@ -68,14 +69,6 @@ export default function Profile() {
       }
     } finally {
       setSaving(false);
-    }
-  }
-
-  function handleCopyUserKey() {
-    if (user?.user_key) {
-      navigator.clipboard.writeText(user.user_key);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
     }
   }
 
@@ -280,41 +273,26 @@ export default function Profile() {
                 </div>
               </div>
 
-              {/* User Key */}
+              {/* Quick access / go preferences */}
               <div className="flex items-start gap-4">
                 <div className="flex-shrink-0">
                   <div className="h-10 w-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
-                    <Key className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                    <Link2 className="h-5 w-5 text-purple-600 dark:text-purple-400" />
                   </div>
                 </div>
                 <div className="flex-1 min-w-0">
                   <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
-                    {t('profile.userKey')}
+                    {t('profile.quickAccess')}
                   </label>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                    {t('profile.userKeyDescription')}
+                    {t('profile.quickAccessDescription')}
                   </p>
-                  <div className="flex items-center gap-2">
-                    <code className="flex-1 px-4 h-9 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-mono text-gray-900 dark:text-white flex items-center">
-                      {user.user_key}
-                    </code>
-                    <button
-                      onClick={handleCopyUserKey}
-                      className="flex-shrink-0 p-2 h-9 w-9 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors flex items-center justify-center"
-                      title={t('bookmarks.copyUrl')}
-                    >
-                      {copied ? (
-                        <Check className="h-4 w-4 text-green-600" />
-                      ) : (
-                        <Copy className="h-4 w-4" />
-                      )}
-                    </button>
-                  </div>
-                  {copied && (
-                    <p className="mt-2 text-xs text-green-600 dark:text-green-400">
-                      {t('bookmarks.copied')}
-                    </p>
-                  )}
+                  <Link
+                    to={`${appBasePath}/go-preferences`}
+                    className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+                  >
+                    {t('goPreferences.title')} →
+                  </Link>
                 </div>
               </div>
             </div>

@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer';
 import { queryOne } from '../db/index.js';
 import { decrypt } from './encryption.js';
+import { isCloud } from '../config/mode.js';
 
 /**
  * Escape HTML to prevent XSS attacks
@@ -43,11 +44,42 @@ interface SMTPConfig {
 }
 
 /**
- * Get SMTP configuration from system settings
- * Returns config object or null with error message
+ * Get SMTP configuration: from environment (CLOUD) or from system settings (SELFHOSTED).
+ * Returns config object or null with error message.
  */
 async function getSMTPConfig(): Promise<{ config: SMTPConfig | null; error?: string }> {
   try {
+    if (isCloud) {
+      const enabled = process.env.SMTP_ENABLED?.toLowerCase() === 'true';
+      if (!enabled) return { config: null, error: 'SMTP is not enabled (SMTP_ENABLED is not true)' };
+
+      const host = process.env.SMTP_HOST?.trim();
+      const portRaw = process.env.SMTP_PORT?.trim();
+      const secure = process.env.SMTP_SECURE?.toLowerCase() === 'true';
+      const user = process.env.SMTP_USER?.trim();
+      const password = process.env.SMTP_PASSWORD?.trim();
+      const from = process.env.SMTP_FROM?.trim();
+      const fromName = process.env.SMTP_FROM_NAME?.trim() || 'SlugBase';
+
+      if (!host) return { config: null, error: 'SMTP host is not configured (SMTP_HOST)' };
+      if (!portRaw) return { config: null, error: 'SMTP port is not configured (SMTP_PORT)' };
+      if (!user) return { config: null, error: 'SMTP user is not configured (SMTP_USER)' };
+      if (!password) return { config: null, error: 'SMTP password is not configured (SMTP_PASSWORD)' };
+      if (!from) return { config: null, error: 'SMTP from email is not configured (SMTP_FROM)' };
+
+      const port = parseInt(portRaw, 10) || 587;
+      return {
+        config: {
+          host,
+          port,
+          secure,
+          auth: { user, password },
+          from,
+          fromName,
+        },
+      };
+    }
+
     const enabled = await queryOne('SELECT value FROM system_config WHERE key = ?', ['smtp_enabled']);
     if (!enabled || (enabled as any).value !== 'true') {
       return { config: null, error: 'SMTP is not enabled' };
@@ -72,45 +104,31 @@ async function getSMTPConfig(): Promise<{ config: SMTPConfig | null; error?: str
     const passwordValue = String((password as any).value).trim();
     const fromValue = String((from as any).value).trim();
 
-    // Check if required values are non-empty
     if (!hostValue) return { config: null, error: 'SMTP host is empty' };
     if (!userValue) return { config: null, error: 'SMTP user is empty' };
     if (!passwordValue) return { config: null, error: 'SMTP password is empty' };
     if (!fromValue) return { config: null, error: 'SMTP from email is empty' };
 
-    // Decrypt password if it's encrypted
     let decryptedPassword = passwordValue;
     try {
-      // Try to decrypt (will return original if not encrypted)
       decryptedPassword = decrypt(passwordValue);
-      // If decryption returns the same value, it might not have been encrypted
-      // This is fine, we'll use it as-is
     } catch (error: any) {
-      // If decryption fails, use as-is (plain text)
       console.warn('SMTP password decryption failed, using as plain text:', error.message);
       decryptedPassword = passwordValue;
     }
 
-    // Ensure decrypted password is not empty
     const trimmedPassword = decryptedPassword ? decryptedPassword.trim() : '';
     if (!trimmedPassword) {
-      // Don't log sensitive information - only log that password validation failed
       console.error('SMTP password validation failed: password is empty');
       return { config: null, error: 'SMTP password is empty. Please set a password in the SMTP settings.' };
     }
-
-    // Log for debugging (but don't log sensitive information)
-    console.log('SMTP config loaded successfully');
 
     return {
       config: {
         host: hostValue,
         port: parseInt(String((port as any).value)) || 587,
         secure: (secure as any)?.value === 'true' || false,
-        auth: {
-          user: userValue,
-          password: trimmedPassword,
-        },
+        auth: { user: userValue, password: trimmedPassword },
         from: fromValue,
         fromName: String((fromName as any)?.value || 'SlugBase'),
       },

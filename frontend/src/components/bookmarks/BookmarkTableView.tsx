@@ -44,7 +44,7 @@ export default function BookmarkTableView({
   onCopyUrl,
   onOpen,
   bulkMode,
-  user,
+  user: _user,
   t,
   compact = false,
 }: BookmarkTableViewProps) {
@@ -289,7 +289,7 @@ export default function BookmarkTableView({
                 <td className={`${compact ? 'px-2 py-1.5' : 'px-4 py-3'}`}>
                   <div className={`flex items-center justify-end ${compact ? 'gap-1' : 'gap-2'}`}>
                     {bookmark.forwarding_enabled && !compact && (
-                      <Tooltip content={`${window.location.origin}/${bookmark.owner_user_key ?? user?.user_key}/${bookmark.slug}`}>
+                      <Tooltip content={`${window.location.origin}/go/${bookmark.slug}`}>
                         <button
                           onClick={() => onCopyUrl(bookmark)}
                           className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"

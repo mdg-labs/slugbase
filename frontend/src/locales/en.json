@@ -186,8 +186,8 @@
     "description": "Manage your account settings and preferences",
     "accountInformation": "Account Information",
     "preferences": "Preferences",
-    "userKey": "User Key",
-    "userKeyDescription": "Your unique identifier for bookmark forwarding. Share this with others to allow them to access your shared bookmarks.",
+    "quickAccess": "Quick Access",
+    "quickAccessDescription": "Use /go/<slug> in your browser for quick access to bookmarks. Manage your remembered choices when multiple bookmarks share the same slug.",
     "email": "Email",
     "emailPlaceholder": "your@email.com",
     "name": "Name",
@@ -258,6 +258,8 @@
     "copy": "Copy",
     "copied": "Copied!",
     "goTo": "Go to",
+    "open": "Open",
+    "remove": "Remove",
     "actions": "Actions",
     "navigation": "Navigation",
     "quickActions": "Quick Actions"
@@ -430,6 +432,11 @@
     "noFolders": "No shared folders yet",
     "unknownUser": "Unknown User",
     "sharedWithYou": "Shared with you"
+  },
+  "goPreferences": {
+    "title": "Remembered Slug Choices",
+    "description": "Manage your saved preferences for /go slug resolution. When multiple bookmarks share the same slug, your choice here determines which one opens.",
+    "empty": "No saved preferences. Visit /go/<slug> when multiple bookmarks match to save a preference."
   },
   "searchEngineGuide": {
     "title": "Custom Search Engine Setup Guide",

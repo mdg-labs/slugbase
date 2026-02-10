@@ -39,7 +39,7 @@ export default function BookmarkListItem({
   onDelete,
   onCopyUrl,
   bulkMode,
-  user,
+  user: _user,
   t,
 }: BookmarkListItemProps) {
   const totalSharedTeams = (bookmark.shared_teams?.length || 0) + 
@@ -110,7 +110,7 @@ export default function BookmarkListItem({
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
               {bookmark.forwarding_enabled && (
-                <Tooltip content={`${window.location.origin}/${bookmark.owner_user_key ?? user?.user_key}/${bookmark.slug}`}>
+                <Tooltip content={`${window.location.origin}/go/${bookmark.slug}`}>
                   <button
                     onClick={onCopyUrl}
                     className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"

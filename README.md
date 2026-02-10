@@ -26,7 +26,7 @@ The demo includes pre-configured users with sample data:
 
 ### Core Functionality
 - 📚 **Bookmark Management** - Store and organize your bookmarks with titles, URLs, and optional custom slugs
-- 🔗 **Link Forwarding** - Optional short redirect URLs (`/{user_key}/{slug}`) for easy sharing
+- 🔗 **Link Forwarding** - Optional short redirect URLs via `/go/:slug` for easy sharing and browser custom search
 - 🏷️ **Tags & Folders** - Organize bookmarks with tags and folders (many-to-many relationships)
 - 👥 **Sharing** - Share bookmarks and folders with teams and individual users
 - 🔍 **Filtering & Sorting** - Filter by folder/tag, sort by date, alphabetically, usage, or access time
@@ -135,19 +135,20 @@ SlugBase supports two runtime modes. **SELFHOSTED** is the default and preserves
 
 - Set `SLUGBASE_MODE=cloud` (backend) and build the frontend with `VITE_SLUGBASE_MODE=cloud` and `VITE_API_URL=https://api.slugbase.app` (or your API origin).
 - Short-lived access JWT (e.g. 15 min) plus refresh token in an httpOnly cookie; refresh tokens stored in the DB and rotated on use.
-- Fixed OIDC providers only: Google, Microsoft, GitHub, configured via environment variables (`OIDC_GOOGLE_CLIENT_ID`, `OIDC_GOOGLE_CLIENT_SECRET`, etc.). Admin “OIDC providers” tab is hidden.
+- Fixed OIDC providers only: Google, Microsoft, GitHub, configured via environment variables (`OIDC_GOOGLE_CLIENT_ID`, `OIDC_GOOGLE_CLIENT_SECRET`, etc.). Admin “OIDC providers” tab is hidden. SMTP is configured via env (`SMTP_ENABLED`, `SMTP_HOST`, etc.); Admin “Settings” tab is hidden in CLOUD.
 - Marketing pages at `/`, `/pricing`, `/contact`; app at `/app` (e.g. `/app/login`, `/app/bookmarks`).
 - CORS and cookie domain (e.g. `COOKIE_DOMAIN=.slugbase.app`) must be set so the frontend (e.g. app.slugbase.app) can call the API (api.slugbase.app) with credentials.
 
-**CLOUD backend env vars:** `FRONTEND_URL`, `BASE_URL`, `JWT_SECRET`, `ENCRYPTION_KEY`; optional: `COOKIE_DOMAIN`, `JWT_ACCESS_EXPIRES_IN`, `JWT_REFRESH_EXPIRES_DAYS`, `CORS_EXTRA_ORIGINS`, and the OIDC_* variables for Google/Microsoft/GitHub.
+**CLOUD backend env vars:** `FRONTEND_URL`, `BASE_URL`, `JWT_SECRET`, `ENCRYPTION_KEY`; optional: `COOKIE_DOMAIN`, `JWT_ACCESS_EXPIRES_IN`, `JWT_REFRESH_EXPIRES_DAYS`, `CORS_EXTRA_ORIGINS`, OIDC_* (Google/Microsoft/GitHub), and SMTP_* (`SMTP_ENABLED`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, `SMTP_FROM_NAME`) for email (e.g. password reset).
 
 **CLOUD frontend build:** `VITE_SLUGBASE_MODE=cloud`, `VITE_API_URL=https://api.slugbase.app`.
 
 ### Sharing and forwarding (SELFHOSTED and CLOUD)
 
 - **Access**: A user can access a bookmark if they own it or it is shared with them (direct user share, team share, or via a shared folder). Same rules apply to folders. Tags are not shared; they are per-user.
-- **Canonical forwarding URL**: The canonical link for a bookmark is always `https://<your-domain>/<owner_user_key>/<slug>`. The owner is the user who created the bookmark. When you copy the “forwarding URL” for a shared bookmark, the app uses the owner’s `user_key` so the link works for anyone who has access.
-- **Shared users and the same link**: If a bookmark is shared with you, you can use the same canonical URL (`/<owner_user_key>/<slug>`). The redirect endpoint resolves by owner or by any user who has access to that bookmark, so shared users can safely share the same link.
+- **Forwarding URL**: The canonical link for a bookmark is always `https://<your-domain>/go/<slug>`. This URL works for you and anyone the bookmark is shared with (requires login)
+- **Browser custom search**: Set up a custom search engine with URL `https://<your-domain>/go/%s` and keyword "go". Type `go <slug>` in your address bar for quick access.
+- **Remembered choices**: When multiple bookmarks could match a slug, you can save a preference. Manage under Profile → Remembered Slug Choices.
 
 ## Configuration
 
@@ -252,14 +253,14 @@ Interactive API documentation is available at `/api-docs` when the server is run
 5. Add folders and tags
 6. Save
 
-The bookmark will be accessible at: `{BASE_URL}/{your_user_key}/my-link`
+The bookmark will be accessible at: `{BASE_URL}/go/my-link`
 
 ### Setting up Custom Search Engine
 
 1. Go to Bookmarks page
 2. Click "Learn how to set up a custom search engine" link
 3. Follow the guide for your browser
-4. Use your search URL: `{BASE_URL}/{user_key}/%s`
+4. Use your search URL: `{BASE_URL}/go/%s`
 5. Set keyword (e.g., `go`)
 6. Access bookmarks by typing: `go {slug}` in your address bar
 

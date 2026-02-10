@@ -69,3 +69,7 @@ variable "artifact_registry_repo" {
   type        = string
   default     = "slugbase-backend"
 }
+
+# Cloud-mode variables (OIDC, SMTP, cookie, CORS, JWT) are declared in cloud_run.tf
+# so the Terraform linter resolves them when analyzing that file. Set them in
+# terraform.tfvars when slugbase_mode = "cloud".

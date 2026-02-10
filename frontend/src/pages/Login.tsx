@@ -24,9 +24,11 @@ export default function Login() {
 
   useEffect(() => {
     if (user) {
-      navigate(isCloud ? '/app' : '/', { replace: true });
+      const redirectTo = searchParams.get('redirect');
+      const safePath = redirectTo?.startsWith('/') && !redirectTo.startsWith('//') ? redirectTo : null;
+      navigate(safePath || (isCloud ? '/app' : '/'), { replace: true });
     }
-  }, [user, navigate]);
+  }, [user, navigate, searchParams]);
 
   useEffect(() => {
     // Check for OIDC error in URL query parameters
@@ -63,7 +65,9 @@ export default function Login() {
 
     try {
       await api.post('/auth/login', localAuth);
-      window.location.href = isCloud ? '/app' : '/';
+      const redirectTo = searchParams.get('redirect');
+      const safePath = redirectTo?.startsWith('/') && !redirectTo.startsWith('//') ? redirectTo : null;
+      window.location.href = safePath || (isCloud ? '/app' : '/');
     } catch (err: any) {
       setError(err.response?.data?.error || t('auth.loginFailed'));
     } finally {

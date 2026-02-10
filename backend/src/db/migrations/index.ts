@@ -20,6 +20,7 @@ import * as migration004 from './004_make_slug_globally_unique.js';
 import * as migration005 from './005_add_email_verification.js';
 import * as migration006 from './006_refresh_tokens.js';
 import * as migration007 from './007_password_reset_token_hash.js';
+import * as migration008 from './008_slug_preferences.js';
 
 export interface Migration {
   migrationId: string;
@@ -71,6 +72,12 @@ const migrations: Migration[] = [
     migrationName: migration007.migrationName,
     up: migration007.up,
     down: migration007.down,
+  },
+  {
+    migrationId: migration008.migrationId,
+    migrationName: migration008.migrationName,
+    up: migration008.up,
+    down: migration008.down,
   },
 ];
 

@@ -57,8 +57,8 @@ Displays bookmarks shared with the user that are:
    - Tag badges (up to 2 shown)
 
 5. **Forwarding URL** (if enabled)
-   - Displays the canonical URL format: `/{owner_user_key}/{slug}`
-   - Copy button copies the full forwarding URL (owner's user_key + slug)
+   - Displays the canonical URL format: `/go/{slug}`
+   - Copy button copies the full forwarding URL
 
 6. **Actions**
    - **Open Button**: Opens bookmark URL in new tab
@@ -103,7 +103,7 @@ Displays folders shared with the user that are:
 ### Copying Forwarding URLs
 
 1. If a shared bookmark has forwarding enabled, click the copy icon
-2. The **canonical forwarding URL** is copied: `https://<your-domain>/<owner_user_key>/<slug>`. The owner is the user who created the bookmark, so the same link works for the owner and anyone the bookmark is shared with.
+2. The **canonical forwarding URL** is copied: `https://<your-domain>/go/<slug>`. The same link works for you and anyone the bookmark is shared with (login required).
 3. Toast notification confirms copy
 
 ### Filtering

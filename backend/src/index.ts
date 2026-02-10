@@ -11,13 +11,12 @@ import passport from 'passport';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-import { initDatabase, isInitialized, queryOne, query, execute } from './db/index.js';
+import { initDatabase, isInitialized } from './db/index.js';
 import { setupOIDC, loadOIDCStrategies } from './auth/oidc.js';
 import { setupJWT } from './auth/jwt.js';
 import { validateEnvironmentVariables } from './utils/env-validation.js';
 import { seedDatabase, resetDatabase } from './db/seed.js';
 import { setupSecurityHeaders, generalRateLimiter, strictRateLimiter, contactRateLimiter, redirectRateLimiter } from './middleware/security.js';
-import { validateUrl } from './utils/validation.js';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger.js';
 import { mode, isCloud } from './config/mode.js';
@@ -25,7 +24,7 @@ import authRoutes from './routes/auth.js';
 import bookmarkRoutes from './routes/bookmarks.js';
 import folderRoutes from './routes/folders.js';
 import tagRoutes from './routes/tags.js';
-import redirectRoutes from './routes/redirect.js';
+import goRoutes, { optionalAuthForGo, handleGoSlug, handleGoRemember } from './routes/go.js';
 import userRoutes from './routes/users.js';
 import teamRoutes from './routes/teams.js';
 import oidcProviderRoutes from './routes/oidc-providers.js';
@@ -190,6 +189,7 @@ app.use('/api/dashboard', dashboardRoutes);
 if (isCloud) {
   app.use('/api/contact', contactRateLimiter, contactRoutes);
 }
+app.use('/api/go', goRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -206,109 +206,16 @@ app.get('/api/version', (req, res) => {
   });
 });
 
-// Redirect routes - handle 2-segment paths only (user_key/slug pattern)
-// Use regex to ensure route only matches paths with exactly 2 non-empty segments
-// This prevents the route from matching `/` (root path)
-app.get(/^\/([^\/]+)\/([^\/]+)$/, redirectRateLimiter, async (req, res, next) => {
-  try {
-    // Extract user_key and slug from the matched groups
-    const match = req.path.match(/^\/([^\/]+)\/([^\/]+)$/);
-    if (!match) {
-      return next();
-    }
-    const user_key = match[1];
-    const slug = match[2];
-
-    // user_key and slug are already extracted from regex match above
-    if (!user_key || !slug) {
-      return next();
-    }
-
-    // First, try to find a bookmark owned by this user_key
-    let bookmark = await queryOne(
-      `SELECT b.* FROM bookmarks b
-       INNER JOIN users u ON b.user_id = u.id
-       WHERE u.user_key = ? AND b.slug = ? AND b.forwarding_enabled = TRUE`,
-      [user_key, slug]
-    );
-
-    // If not found, try to find a shared bookmark accessible by this user_key
-    if (!bookmark) {
-      // Get the user_id from the user_key
-      const user = await queryOne(
-        'SELECT id FROM users WHERE user_key = ?',
-        [user_key]
-      );
-
-      if (user) {
-        const userId = (user as any).id;
-
-        // Get user's teams
-        const userTeams = await query(
-          'SELECT team_id FROM team_members WHERE user_id = ?',
-          [userId]
-        );
-        const teamIds = Array.isArray(userTeams) ? userTeams.map((t: any) => t.team_id) : [];
-
-        // Find shared bookmark with matching slug
-        let sql = `
-          SELECT DISTINCT b.*
-          FROM bookmarks b
-          LEFT JOIN bookmark_user_shares bus ON b.id = bus.bookmark_id
-          LEFT JOIN bookmark_team_shares bts ON b.id = bts.bookmark_id
-          LEFT JOIN bookmark_folders bf ON b.id = bf.bookmark_id
-          LEFT JOIN folder_user_shares fus ON bf.folder_id = fus.folder_id
-          LEFT JOIN folder_team_shares fts ON bf.folder_id = fts.folder_id
-          WHERE b.slug = ? AND b.forwarding_enabled = TRUE AND b.user_id != ?
-            AND (bus.user_id = ?
-            OR (bts.team_id IN (${teamIds.length > 0 ? teamIds.map(() => '?').join(',') : 'NULL'}) AND bts.team_id IS NOT NULL)
-            OR fus.user_id = ?
-            OR (fts.team_id IN (${teamIds.length > 0 ? teamIds.map(() => '?').join(',') : 'NULL'}) AND fts.team_id IS NOT NULL AND bf.folder_id IS NOT NULL))
-        `;
-        const params: any[] = [slug, userId, userId, userId];
-        if (teamIds.length > 0) {
-          params.push(...teamIds);
-          params.push(...teamIds); // Second set for folder shares
-        }
-
-        bookmark = await queryOne(sql, params);
-      }
-    }
-
-    if (!bookmark) {
-      return res.status(404).send('Not Found');
-    }
-
-    const redirectUrl = (bookmark as any).url;
-    const bookmarkId = (bookmark as any).id;
-
-    // Track access (increment access_count and update last_accessed_at)
-    // Do this asynchronously so it doesn't block the redirect
-    execute(
-      `UPDATE bookmarks 
-       SET access_count = COALESCE(access_count, 0) + 1,
-           last_accessed_at = CURRENT_TIMESTAMP
-       WHERE id = ?`,
-      [bookmarkId]
-    ).catch((err) => {
-      // Log error but don't fail the redirect
-      console.error('Failed to track bookmark access:', err);
-    });
-
-    const urlValidation = validateUrl(redirectUrl);
-    if (!urlValidation.valid) {
-      console.error('Invalid redirect URL detected:', redirectUrl);
-      return res.status(400).send('Invalid redirect URL');
-    }
-
-    res.redirect(302, redirectUrl);
-  } catch (error: any) {
-    console.error('Redirect error:', error);
+// /go slug forwarding - single canonical endpoint (authenticated)
+app.get('/go/:slug/remember/:bookmarkId', redirectRateLimiter, optionalAuthForGo, (req, res) => {
+  handleGoRemember(req, res).catch((err) => {
+    console.error('Go remember error:', err);
     res.status(500).send('Internal Server Error');
-  }
+  });
 });
+app.get('/go/:slug', redirectRateLimiter, optionalAuthForGo, handleGoSlug);
 
-// Serve frontend root route in production (AFTER redirect route, since redirect requires 2 segments)
+// Serve frontend root route in production
 if (process.env.NODE_ENV === 'production') {
   app.get('/', (req, res) => {
     res.sendFile(join(__dirname, '../../public/index.html'));
@@ -319,13 +226,7 @@ if (process.env.NODE_ENV === 'production') {
 // This catches all non-API, non-redirect routes for SPA client-side routing
 if (process.env.NODE_ENV === 'production') {
   app.get('*', (req, res, next) => {
-    // Skip API routes and redirect patterns (2 segments)
-    if (req.path.startsWith('/api/') || req.path.startsWith('/api-docs')) {
-      return next();
-    }
-    const pathSegments = req.path.split('/').filter(Boolean);
-    if (pathSegments.length === 2) {
-      // This might be a redirect route, let it fall through
+    if (req.path.startsWith('/api/') || req.path.startsWith('/api-docs') || req.path.startsWith('/go/')) {
       return next();
     }
     res.sendFile(join(__dirname, '../../public/index.html'), (err) => {

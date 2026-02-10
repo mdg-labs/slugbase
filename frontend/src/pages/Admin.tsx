@@ -19,7 +19,7 @@ export default function Admin() {
     { id: 'oidc' as Tab, label: t('admin.oidcProviders'), icon: Key },
     { id: 'settings' as Tab, label: t('admin.settings'), icon: Settings },
   ];
-  const tabs = isCloud ? allTabs.filter((tab) => tab.id !== 'oidc') : allTabs;
+  const tabs = isCloud ? allTabs.filter((tab) => tab.id !== 'oidc' && tab.id !== 'settings') : allTabs;
 
   return (
     <div className="space-y-6">
@@ -60,7 +60,7 @@ export default function Admin() {
         {activeTab === 'users' && <AdminUsers />}
         {activeTab === 'teams' && <AdminTeams />}
         {activeTab === 'oidc' && !isCloud && <AdminOIDCProviders />}
-        {activeTab === 'settings' && <AdminSettings />}
+        {activeTab === 'settings' && !isCloud && <AdminSettings />}
       </div>
 
       {/* API Documentation Link */}

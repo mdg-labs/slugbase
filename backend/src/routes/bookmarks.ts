@@ -198,15 +198,12 @@ router.get('/', async (req, res) => {
         bookmark.slug = '';
       }
       
-      // Owner info: for shared bookmarks (name, email, owner_user_key); for own, set owner_user_key for canonical URL
-      if (bookmark.user_id === userId) {
-        (bookmark as any).owner_user_key = authReq.user!.user_key;
-      } else {
-        const owner = await queryOne('SELECT id, name, email, user_key FROM users WHERE id = ?', [bookmark.user_id]);
+      // Owner info for shared bookmarks (name, email)
+      if (bookmark.user_id !== userId) {
+        const owner = await queryOne('SELECT id, name, email FROM users WHERE id = ?', [bookmark.user_id]);
         if (owner) {
           bookmark.user_name = owner.name;
           bookmark.user_email = owner.email;
-          (bookmark as any).owner_user_key = owner.user_key;
         }
       }
       
@@ -602,14 +599,6 @@ router.get('/:id', async (req, res) => {
     (bookmark as any).folders = foldersList;
     (bookmark as any).shared_teams = Array.isArray(sharedTeams) ? sharedTeams : (sharedTeams ? [sharedTeams] : []);
     (bookmark as any).shared_users = Array.isArray(sharedUsers) ? sharedUsers : (sharedUsers ? [sharedUsers] : []);
-
-    // Owner user_key for canonical forwarding URL (own = current user, shared = owner)
-    if ((bookmark as any).user_id === userId) {
-      (bookmark as any).owner_user_key = authReq.user!.user_key;
-    } else {
-      const owner = await queryOne('SELECT user_key FROM users WHERE id = ?', [(bookmark as any).user_id]);
-      if (owner) (bookmark as any).owner_user_key = (owner as any).user_key;
-    }
 
     res.json(bookmark);
   } catch (error: any) {

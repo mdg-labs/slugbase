@@ -28,7 +28,7 @@ SlugBase implements solid security foundations: parameterized queries throughout
 
 ### Core entities and access model
 
-- **Users:** `users` table; `user_key` for public forwarding paths; admin via `is_admin`.
+- **Users:** `users` table; admin via `is_admin`.
 - **Bookmarks:** `bookmarks` (user_id, slug, url, forwarding_enabled); ownership and sharing via `bookmark_user_shares`, `bookmark_team_shares`, and folder-based sharing (`bookmark_folders` + `folder_user_shares` / `folder_team_shares`).
 - **Folders / Tags:** Per-user; folders/tags shared via team or user share tables.
 - **Teams:** `teams` + `team_members`; team-scoped shares for bookmarks and folders.
@@ -42,7 +42,7 @@ SlugBase implements solid security foundations: parameterized queries throughout
 | Email      | `/api/email-verification/verify`, `/confirm` |
 | Resources  | `/api/bookmarks`, `/api/folders`, `/api/tags`, `/api/teams`, `/api/users/me`, `/api/dashboard/stats` |
 | Admin      | `/api/admin/users`, `/api/admin/teams`, `/api/admin/settings`, `/api/admin/demo-reset` |
-| Public     | `GET /:user_key/:slug` (redirect), `/api/health`, `/api/version`, `/api/contact` (CLOUD) |
+| Public     | `GET /go/:slug` (redirect, auth required), `/api/health`, `/api/version`, `/api/contact` (CLOUD) |
 | CSRF       | `GET /api/csrf-token` |
 
 ---
@@ -124,7 +124,7 @@ SlugBase implements solid security foundations: parameterized queries throughout
 
 - **Impact:** Redirect URL is not user-supplied (good), but the endpoint can be used to amplify traffic to victim sites or for link-checking bots; 500/15min per IP may be high for a single endpoint.
 - **Evidence:** `backend/src/index.ts`: Redirect route uses `strictRateLimiter` (500/15min).
-- **Fix:** Consider a dedicated rate limiter for `GET /:user_key/:slug` (e.g. 100–200/15min per IP) to reduce abuse and crawler load.
+- **Fix:** Consider a dedicated rate limiter for `GET /go/:slug` (e.g. 100–200/15min per IP) to reduce abuse and crawler load.
 - **Verification:** Verify limit with repeated requests; ensure legitimate use (e.g. a few redirects per user per minute) is not blocked.
 
 ---
@@ -217,7 +217,7 @@ SlugBase implements solid security foundations: parameterized queries throughout
 
 - **Authentication:** Login, OIDC, refresh, logout, setup, password reset, email verification.  
 - **API:** All CRUD and search/export/import; admin endpoints.  
-- **Public:** Redirect (`/:user_key/:slug`), contact form.  
+- **Public:** Redirect (`/go/:slug`, auth required), contact form.  
 - **Session:** Express session for OAuth only; stored in DB.
 
 ### Threats considered
