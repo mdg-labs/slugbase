@@ -1,7 +1,9 @@
 import axios from 'axios';
+import { apiBaseUrl } from '../config/api';
+import { isCloud } from '../config/mode';
 
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: apiBaseUrl ? `${apiBaseUrl}/api` : '/api',
   withCredentials: true,
 });
 
@@ -42,6 +44,7 @@ api.interceptors.request.use(
         '/auth/setup',
         '/auth/login',
         '/auth/logout',
+        '/auth/refresh',
         '/csrf-token',
       ].some((path) => config.url?.includes(path));
 
@@ -62,20 +65,26 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor to refresh CSRF token on 403 errors
+// Response interceptor: refresh CSRF on 403; in CLOUD, refresh access token on 401 and retry
 api.interceptors.response.use(
-  (response) => {
-    return response;
-  },
+  (response) => response,
   async (error) => {
     if (error.response?.status === 403 && error.config && !error.config._retry) {
       error.config._retry = true;
-      // Refresh CSRF token and retry
       await fetchCSRFToken();
       if (csrfToken && error.config.headers) {
         error.config.headers['X-CSRF-Token'] = csrfToken;
       }
       return api.request(error.config);
+    }
+    if (isCloud && error.response?.status === 401 && error.config && !error.config._retryRefresh) {
+      error.config._retryRefresh = true;
+      try {
+        await api.post('/auth/refresh');
+        return api.request(error.config);
+      } catch {
+        // refresh failed, reject original error
+      }
     }
     return Promise.reject(error);
   }

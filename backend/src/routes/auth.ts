@@ -1,17 +1,29 @@
 import { Router } from 'express';
 import passport from 'passport';
 import bcrypt from 'bcryptjs';
-import crypto from 'crypto';
 import { query, queryOne, execute, isInitialized } from '../db/index.js';
 import { v4 as uuidv4 } from 'uuid';
 import { reloadOIDCStrategies } from '../auth/oidc.js';
-import { generateToken } from '../utils/jwt.js';
+import { generateToken, generateAccessToken } from '../utils/jwt.js';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { authRateLimiter, strictRateLimiter } from '../middleware/security.js';
 import { validateEmail, normalizeEmail, validatePassword, validateLength, sanitizeString } from '../utils/validation.js';
 import { generateUserKey } from '../utils/user-key.js';
+import { isCloud } from '../config/mode.js';
+import { getAuthCookieOptions, getClearAuthCookieOptions } from '../config/cookies.js';
+import { getCloudProviders } from '../config/cloud-providers.js';
+import { createRefreshToken, rotateRefreshToken, revokeRefreshTokensForUser, findUserIdByRefreshToken } from '../utils/refresh-token.js';
 
 const router = Router();
+
+/** Set auth cookies (token; in CLOUD also refresh_token). SELFHOSTED: single long-lived JWT. */
+function setAuthCookies(res: any, options: { accessToken: string; refreshToken?: string; refreshMaxAgeMs?: number }) {
+  const accessMaxAgeMs = options.refreshToken != null ? 15 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000; // 15 min in CLOUD, 7d in SELFHOSTED
+  res.cookie('token', options.accessToken, { ...getAuthCookieOptions(accessMaxAgeMs), maxAge: accessMaxAgeMs });
+  if (options.refreshToken != null && options.refreshMaxAgeMs != null) {
+    res.cookie('refresh_token', options.refreshToken, getAuthCookieOptions(options.refreshMaxAgeMs));
+  }
+}
 
 /**
  * @swagger
@@ -44,16 +56,23 @@ const router = Router();
  */
 router.get('/providers', async (req, res) => {
   try {
+    const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
+    if (isCloud) {
+      const cloudProviders = getCloudProviders();
+      const list = cloudProviders.map((p) => ({
+        id: p.provider_key,
+        provider_key: p.provider_key,
+        issuer_url: p.issuer_url,
+        callback_url: `${baseUrl}/api/auth/${p.provider_key}/callback`,
+      }));
+      return res.json(list);
+    }
     const providers = await query('SELECT id, provider_key, issuer_url FROM oidc_providers', []);
     const providersList = Array.isArray(providers) ? providers : (providers ? [providers] : []);
-    
-    // Add callback URL information for each provider to help with OIDC configuration
-    const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
     const providersWithCallback = providersList.map((p: any) => ({
       ...p,
       callback_url: `${baseUrl}/api/auth/${p.provider_key}/callback`,
     }));
-    
     res.json(providersWithCallback);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -214,26 +233,25 @@ router.post('/login', authRateLimiter, async (req, res, next) => {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
-    // Generate JWT token
-    const token = generateToken({
+    const userPayload = {
       id: (user as any).id,
       email: (user as any).email,
       name: (user as any).name,
       user_key: (user as any).user_key,
       is_admin: (user as any).is_admin,
-    });
+    };
 
-    // Set httpOnly cookie with JWT token
-    // Only use secure cookies when actually using HTTPS (check BASE_URL)
-    const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
-    const isHttps = baseUrl.startsWith('https://');
-    const isProduction = process.env.NODE_ENV === 'production' && isHttps;
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: isProduction, // Only secure when using HTTPS
-      sameSite: 'strict', // Always use strict for CSRF protection
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    });
+    if (isCloud) {
+      // CLOUD: short-lived access JWT + refresh token cookie with rotation
+      const accessToken = generateAccessToken(userPayload);
+      const { token: refreshToken, expiresAt } = await createRefreshToken((user as any).id);
+      const refreshMaxAgeMs = Math.max(0, expiresAt.getTime() - Date.now());
+      setAuthCookies(res, { accessToken, refreshToken, refreshMaxAgeMs });
+    } else {
+      // SELFHOSTED: single long-lived JWT
+      const token = generateToken(userPayload);
+      setAuthCookies(res, { accessToken: token });
+    }
 
     res.json({
       id: (user as any).id,
@@ -268,18 +286,54 @@ router.post('/login', authRateLimiter, async (req, res, next) => {
  *                   type: string
  *                   example: "Logged out"
  */
-router.post('/logout', (req, res) => {
-  // Clear JWT cookie
-  // Only use secure cookies when actually using HTTPS (check BASE_URL)
-  const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
-  const isHttps = baseUrl.startsWith('https://');
-  const isProduction = process.env.NODE_ENV === 'production' && isHttps;
-  res.clearCookie('token', {
-    httpOnly: true,
-    secure: isProduction, // Only secure when using HTTPS
-    sameSite: 'strict', // Always use strict for CSRF protection
-  });
+router.post('/logout', async (req, res) => {
+  const clearOpts = getClearAuthCookieOptions();
+  if (isCloud && req.cookies?.refresh_token) {
+    const userId = await findUserIdByRefreshToken(req.cookies.refresh_token);
+    if (userId) await revokeRefreshTokensForUser(userId);
+    res.clearCookie('refresh_token', clearOpts);
+  }
+  res.clearCookie('token', clearOpts);
   res.json({ message: 'Logged out' });
+});
+
+/**
+ * @swagger
+ * /api/auth/refresh:
+ *   post:
+ *     summary: Refresh access token (CLOUD mode)
+ *     description: Exchange refresh token cookie for new access + refresh tokens. CLOUD only.
+ *     tags: [Authentication]
+ *     responses:
+ *       200:
+ *         description: New tokens set via cookies; returns user payload
+ *       401:
+ *         description: Invalid or missing refresh token
+ */
+router.post('/refresh', authRateLimiter, async (req, res) => {
+  if (!isCloud) return res.status(401).json({ error: 'Unauthorized' });
+  const refreshToken = req.cookies?.refresh_token;
+  if (!refreshToken) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const result = await rotateRefreshToken(refreshToken);
+    if (!result) return res.status(401).json({ error: 'Unauthorized' });
+    const accessToken = generateAccessToken(result.user);
+    const refreshMaxAgeMs = Math.max(0, result.expiresAt.getTime() - Date.now());
+    setAuthCookies(res, { accessToken, refreshToken: result.token, refreshMaxAgeMs });
+    const userRow = await queryOne('SELECT id, email, name, user_key, is_admin, language, theme FROM users WHERE id = ?', [result.user.id]);
+    const u = userRow as any;
+    res.json({
+      id: u.id,
+      email: u.email,
+      name: u.name,
+      user_key: u.user_key,
+      is_admin: Boolean(u.is_admin),
+      language: u.language || 'en',
+      theme: u.theme || 'auto',
+    });
+  } catch (err: any) {
+    res.status(401).json({ error: 'Unauthorized' });
+  }
 });
 
 /**
@@ -344,24 +398,30 @@ router.get('/:provider', async (req, res, next) => {
 router.get('/:provider/callback', (req, res, next) => {
   const { provider } = req.params;
   
-  passport.authenticate(provider, async (err: any, user: any, info: any) => {
+  passport.authenticate(provider, async (err: any, user: any, info: any): Promise<void> => {
     
     // Handle "ID token not present" error - some providers don't return ID tokens
     // and passport-openidconnect fails before it can use userInfo endpoint
     if (err && err.message === 'ID token not present in token response') {
       try {
-        // Get provider configuration from database (not from user input to prevent SSRF)
-        const providerConfig = await queryOne(
-          'SELECT issuer_url, userinfo_url FROM oidc_providers WHERE provider_key = ?',
-          [provider]
-        );
-        
-        if (!providerConfig) {
-          throw new Error('Provider configuration not found');
+        // Get provider configuration (CLOUD: from env; SELFHOSTED: from DB)
+        let configuredIssuer: string;
+        let configuredUserinfoUrl: string;
+        if (isCloud) {
+          const cloudList = getCloudProviders();
+          const cloudProvider = cloudList.find((p) => p.provider_key === provider);
+          if (!cloudProvider) throw new Error('Provider configuration not found');
+          configuredIssuer = cloudProvider.issuer_url;
+          configuredUserinfoUrl = cloudProvider.userinfo_url || `${configuredIssuer}/userinfo`;
+        } else {
+          const providerConfig = await queryOne(
+            'SELECT issuer_url, userinfo_url FROM oidc_providers WHERE provider_key = ?',
+            [provider]
+          );
+          if (!providerConfig) throw new Error('Provider configuration not found');
+          configuredIssuer = (providerConfig as any).issuer_url;
+          configuredUserinfoUrl = (providerConfig as any).userinfo_url || `${configuredIssuer}/userinfo`;
         }
-        
-        const configuredIssuer = (providerConfig as any).issuer_url;
-        const configuredUserinfoUrl = (providerConfig as any).userinfo_url || `${configuredIssuer}/userinfo`;
         
         // Get the access token from the session (stored by passport during OAuth flow)
         // passport-openidconnect stores it under a key like 'openidconnect:issuer'
@@ -422,19 +482,17 @@ router.get('/:provider/callback', (req, res, next) => {
                 accessToken,
                 matchingState.token_response.refresh_token,
                 {}, // params
-                (verifyErr: any, verifiedUser: any) => {
+                async (verifyErr: any, verifiedUser: any) => {
                   if (verifyErr || !verifiedUser) {
                     console.error(`[OIDC] Verify function error:`, verifyErr);
-                    return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=auth_failed`);
+                    return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}${isCloud ? '/app/login' : '/login'}?error=auth_failed`);
                   }
-                  
-                  // Continue with normal flow
                   user = verifiedUser;
-                  handleSuccess();
+                  await handleSuccess();
                 }
               );
               
-              return; // Exit early, handleSuccess will be called from verify callback
+              return; // Exit early, handleSuccess already ran
             }
           }
           
@@ -486,25 +544,23 @@ router.get('/:provider/callback', (req, res, next) => {
           accessToken,
           oauthState.token_response?.refresh_token,
           {}, // params
-          (verifyErr: any, verifiedUser: any) => {
+          async (verifyErr: any, verifiedUser: any) => {
             if (verifyErr || !verifiedUser) {
               console.error(`[OIDC] Verify function error:`, verifyErr);
-              return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=auth_failed`);
+              return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}${isCloud ? '/app/login' : '/login'}?error=auth_failed`);
             }
-            
-            // Continue with normal flow
             user = verifiedUser;
-            handleSuccess();
+            await handleSuccess();
           }
         );
         
-        return; // Exit early, handleSuccess will be called from verify callback
+        return; // Exit early, handleSuccess already ran
       } catch (manualFetchError: any) {
         console.error(`[OIDC] Manual userInfo fetch failed:`, {
           message: manualFetchError.message,
           stack: manualFetchError.stack,
         });
-        return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=auth_failed`);
+        return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}${isCloud ? '/app/login' : '/login'}?error=auth_failed`);
       }
     }
     
@@ -531,45 +587,31 @@ router.get('/:provider/callback', (req, res, next) => {
           info: info,
         });
       }
-      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=${errorParam}`);
+      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}${isCloud ? '/app/login' : '/login'}?error=${errorParam}`);
     }
     
-    function handleSuccess() {
-
-      // Generate JWT token for OIDC user
-      const token = generateToken({
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        user_key: user.user_key,
-        is_admin: user.is_admin,
-      });
-
-      // Set httpOnly cookie with JWT token
-      // Only use secure cookies when actually using HTTPS (check BASE_URL)
-      const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
-      const isHttps = baseUrl.startsWith('https://');
-      const isProduction = process.env.NODE_ENV === 'production' && isHttps;
-      res.cookie('token', token, {
-        httpOnly: true,
-        secure: isProduction, // Only secure when using HTTPS
-        sameSite: 'strict', // Always use strict for CSRF protection
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      });
-
-      // Destroy session since we're using JWT for authentication
-      // Session was only needed for the OAuth flow
+    async function handleSuccess() {
+      const userPayload = { id: user.id, email: user.email, name: user.name, user_key: user.user_key, is_admin: user.is_admin };
+      if (isCloud) {
+        const accessToken = generateAccessToken(userPayload);
+        const { token: refreshToken, expiresAt } = await createRefreshToken(user.id);
+        const refreshMaxAgeMs = Math.max(0, expiresAt.getTime() - Date.now());
+        setAuthCookies(res, { accessToken, refreshToken, refreshMaxAgeMs });
+      } else {
+        const token = generateToken(userPayload);
+        setAuthCookies(res, { accessToken: token });
+      }
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      const redirectUrl = isCloud ? `${frontendUrl}/app` : frontendUrl;
       req.session?.destroy((sessionErr) => {
-        if (sessionErr) {
-          console.error('Error destroying session:', sessionErr);
-        }
-        res.redirect(process.env.FRONTEND_URL || 'http://localhost:3000');
+        if (sessionErr) console.error('Error destroying session:', sessionErr);
+        res.redirect(redirectUrl);
       });
     }
     
     // If we got here normally (not from manual fetch), handle success
     if (user) {
-      handleSuccess();
+      await handleSuccess();
     }
   })(req, res, next);
 });
@@ -695,25 +737,15 @@ router.post('/setup', strictRateLimiter, async (req, res) => {
     }
 
     // Automatically log in the user after successful setup
-    // Generate JWT token
-    const token = generateToken({
-      id: userId,
-      email: normalizedEmail,
-      name: sanitizedName,
-      user_key: userKey,
-      is_admin: true,
-    });
-
-    // Set httpOnly cookie with JWT token (same as login endpoint)
-    const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
-    const isHttps = baseUrl.startsWith('https://');
-    const isProduction = process.env.NODE_ENV === 'production' && isHttps;
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: isProduction, // Only secure when using HTTPS
-      sameSite: 'strict', // Always use strict for CSRF protection
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    });
+    const userPayload = { id: userId, email: normalizedEmail, name: sanitizedName, user_key: userKey, is_admin: true };
+    if (isCloud) {
+      const accessToken = generateAccessToken(userPayload);
+      const { token: refreshToken, expiresAt } = await createRefreshToken(userId);
+      const refreshMaxAgeMs = Math.max(0, expiresAt.getTime() - Date.now());
+      setAuthCookies(res, { accessToken, refreshToken, refreshMaxAgeMs });
+    } else {
+      setAuthCookies(res, { accessToken: generateToken(userPayload) });
+    }
 
     // Return user data (same format as login endpoint)
     res.json({

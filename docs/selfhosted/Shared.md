@@ -10,7 +10,7 @@ sidebar_position: 8
 
 The Shared page displays bookmarks and folders that have been shared with the current user by other users or teams. It provides a separate view for accessing shared content, distinguishing it from the user's own content.
 
-![Shared Bookmarks Tab](./assets/shared-bookmarks-tab.png)
+![Shared Bookmarks Tab](../assets/shared-bookmarks-tab.png)
 
 ## Route
 
@@ -27,9 +27,9 @@ The page uses a tabbed interface with two sections:
 1. **Bookmarks Tab** - Shows shared bookmarks
 2. **Folders Tab** - Shows shared folders
 
-![Shared Folders Tab](./assets/shared-folders-tab.png)
+![Shared Folders Tab](../assets/shared-folders-tab.png)
 
-![Shared Bookmark Card Detail](./assets/shared-bookmark-card.png)
+![Shared Bookmark Card Detail](../assets/shared-bookmark-card.png)
 
 ### Shared Bookmarks
 
@@ -47,7 +47,7 @@ Displays bookmarks shared with the user that are:
 
 2. **Shared By Information**
    - User icon
-   - Owner name or email (or "Unknown User" if unavailable)
+   - Owner name or email (or "Unknown User" if unavailable). In CLOUD mode, owner email is not shown; only the owner name or "Shared with you" is displayed.
 
 3. **URL Display**
    - Truncated URL with external link icon
@@ -57,8 +57,8 @@ Displays bookmarks shared with the user that are:
    - Tag badges (up to 2 shown)
 
 5. **Forwarding URL** (if enabled)
-   - Displays slug in format: `/{slug}`
-   - Copy button to copy forwarding URL
+   - Displays the canonical URL format: `/{owner_user_key}/{slug}`
+   - Copy button copies the full forwarding URL (owner's user_key + slug)
 
 6. **Actions**
    - **Open Button**: Opens bookmark URL in new tab
@@ -80,7 +80,7 @@ Displays folders shared with the user that are:
 
 2. **Shared By Information**
    - User icon
-   - Owner name or email (or "Unknown User" if unavailable)
+   - Owner name or email (or "Unknown User" if unavailable). In CLOUD mode, owner email is not shown.
 
 3. **Sharing Indicators**
    - Team count badge (if shared via teams)
@@ -103,7 +103,7 @@ Displays folders shared with the user that are:
 ### Copying Forwarding URLs
 
 1. If a shared bookmark has forwarding enabled, click the copy icon
-2. URL is copied to clipboard
+2. The **canonical forwarding URL** is copied: `https://<your-domain>/<owner_user_key>/<slug>`. The owner is the user who created the bookmark, so the same link works for the owner and anyone the bookmark is shared with.
 3. Toast notification confirms copy
 
 ### Filtering

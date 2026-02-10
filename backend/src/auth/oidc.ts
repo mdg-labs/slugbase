@@ -4,6 +4,8 @@ import { queryOne, execute, query } from '../db/index.js';
 import { v4 as uuidv4 } from 'uuid';
 import { decrypt } from '../utils/encryption.js';
 import { generateUserKey } from '../utils/user-key.js';
+import { isCloud } from '../config/mode.js';
+import { getCloudProviders } from '../config/cloud-providers.js';
 
 export function setupOIDC() {
   // Serialization for OIDC OAuth flow (sessions are only used during OAuth redirect)
@@ -23,27 +25,13 @@ export function setupOIDC() {
   });
 }
 
-export async function loadOIDCStrategies() {
-  try {
-    const providers = await query('SELECT id, provider_key, client_id, client_secret, issuer_url, authorization_url, token_url, userinfo_url, scopes, auto_create_users, default_role FROM oidc_providers', []);
-    if (!providers || providers.length === 0) return;
+/** Register a single OIDC strategy (shared by CLOUD env providers and SELFHOSTED DB providers). */
+async function registerOIDCStrategy(provider: any, clientSecret: string): Promise<void> {
+  if (!provider.client_id || !clientSecret || !provider.issuer_url || !provider.provider_key) {
+    throw new Error(`Missing required fields for provider ${provider.provider_key || provider.id}`);
+  }
 
-    const providersList = Array.isArray(providers) ? providers : [providers];
-    
-    for (const provider of providersList) {
-      try {
-        // Decrypt client_secret when loading
-        const decryptedSecret = decrypt(provider.client_secret);
-        
-        // Validate that we have required fields
-        if (!provider.client_id || !decryptedSecret || !provider.issuer_url || !provider.provider_key) {
-          console.error(`Skipping OIDC provider ${provider.provider_key || provider.id}: Missing required fields`);
-          continue;
-        }
-        
-        // passport-openidconnect verify function signature: (iss, profile, context, idToken, accessToken, refreshToken, params, cb)
-        // We'll use: (iss, profile, context, idToken, accessToken, refreshToken, params, cb)
-        const verifyFunction = async (iss: string, profile: Profile, context: any, idToken: string, accessToken: string, refreshToken: string, params: any, cb: (error: any, user?: any) => void) => {
+  const verifyFunction = async (iss: string, profile: Profile, context: any, idToken: string, accessToken: string, refreshToken: string, params: any, cb: (error: any, user?: any) => void) => {
             // Extract sub from profile (profile.id is the sub claim) - do this before try block so it's available in catch
             const sub = profile.id || (profile as any).sub;
             if (!sub) {
@@ -164,39 +152,51 @@ export async function loadOIDCStrategies() {
               console.error(`[OIDC] Fatal error, cannot proceed:`, error);
               return cb(error, null);
             }
-      };
+  };
 
-      // Construct callback URL - must match exactly what's registered with the OIDC provider
-      const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
-      const callbackURL = `${baseUrl}/api/auth/${provider.provider_key}/callback`;
-      
-      // Some OIDC providers don't return ID tokens in the token response
-      // passport-openidconnect will use the userInfo endpoint as fallback
-      // but we need to ensure the configuration allows this
-      // Use custom endpoints if provided, otherwise use standard OIDC defaults
-      const authorizationURL = provider.authorization_url || `${provider.issuer_url}/authorize`;
-      const tokenURL = provider.token_url || `${provider.issuer_url}/token`;
-      const userInfoURL = provider.userinfo_url || `${provider.issuer_url}/userinfo`;
-      
-        const strategyConfig: any = {
-          issuer: provider.issuer_url,
-          authorizationURL: authorizationURL,
-          tokenURL: tokenURL,
-          userInfoURL: userInfoURL,
-          clientID: provider.client_id,
-          clientSecret: decryptedSecret,
-          callbackURL: callbackURL,
-          scope: provider.scopes.split(' '),
-          skipUserProfile: false, // Always fetch from userInfo if needed
-        };
-        
-        passport.use(
-          provider.provider_key,
-          new OpenIDConnectStrategy(strategyConfig, verifyFunction as any)
-        );
+  const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
+  const callbackURL = `${baseUrl}/api/auth/${provider.provider_key}/callback`;
+  const authorizationURL = provider.authorization_url || `${provider.issuer_url}/authorize`;
+  const tokenURL = provider.token_url || `${provider.issuer_url}/token`;
+  const userInfoURL = provider.userinfo_url || `${provider.issuer_url}/userinfo`;
+  const strategyConfig: any = {
+    issuer: provider.issuer_url,
+    authorizationURL,
+    tokenURL,
+    userInfoURL,
+    clientID: provider.client_id,
+    clientSecret,
+    callbackURL,
+    scope: (typeof provider.scopes === 'string' ? provider.scopes : '').split(' ').filter(Boolean),
+    skipUserProfile: false,
+  };
+  passport.use(provider.provider_key, new OpenIDConnectStrategy(strategyConfig, verifyFunction as any));
+}
+
+export async function loadOIDCStrategies() {
+  try {
+    if (isCloud) {
+      const cloudProviders = getCloudProviders();
+      for (const provider of cloudProviders) {
+        try {
+          await registerOIDCStrategy(provider, provider.client_secret);
+        } catch (providerError: any) {
+          console.error(`Error loading CLOUD OIDC provider ${provider.provider_key}:`, providerError.message || providerError);
+        }
+      }
+      return;
+    }
+
+    const providers = await query('SELECT id, provider_key, client_id, client_secret, issuer_url, authorization_url, token_url, userinfo_url, scopes, auto_create_users, default_role FROM oidc_providers', []);
+    if (!providers || providers.length === 0) return;
+
+    const providersList = Array.isArray(providers) ? providers : [providers];
+    for (const provider of providersList) {
+      try {
+        const decryptedSecret = decrypt(provider.client_secret);
+        await registerOIDCStrategy(provider, decryptedSecret);
       } catch (providerError: any) {
         console.error(`Error loading OIDC provider ${provider.provider_key || provider.id}:`, providerError.message || providerError);
-        // Continue with next provider instead of crashing
       }
     }
   } catch (error: any) {

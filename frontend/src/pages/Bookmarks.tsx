@@ -14,6 +14,7 @@ import Select from '../components/ui/Select';
 import BookmarkCard from '../components/bookmarks/BookmarkCard';
 import BookmarkTableView from '../components/bookmarks/BookmarkTableView';
 import { BulkMoveModal, BulkTagModal, BulkShareModal } from '../components/bookmarks/BulkActionModals';
+import { appBasePath } from '../config/api';
 
 interface Bookmark {
   id: string;
@@ -21,6 +22,8 @@ interface Bookmark {
   url: string;
   slug: string;
   forwarding_enabled: boolean;
+  /** Owner's user_key for canonical forwarding URL (own or shared) */
+  owner_user_key?: string;
   folders?: Array<{ id: string; name: string; icon?: string | null; shared_teams?: Array<{ id: string; name: string }>; shared_users?: Array<{ id: string; name: string; email: string }> }>;
   tags?: Array<{ id: string; name: string }>;
   shared_teams?: Array<{ id: string; name: string }>;
@@ -70,28 +73,42 @@ export default function Bookmarks() {
     loadData();
   }, [selectedFolder, selectedTag]);
 
-  // Handle query params from GlobalSearch
+  // Handle query params from GlobalSearch and dashboard Edit link
   useEffect(() => {
     const createParam = searchParams.get('create');
     const importParam = searchParams.get('import');
     const exportParam = searchParams.get('export');
-    
+    const editId = searchParams.get('edit');
+
     if (createParam === 'true') {
       handleCreate();
       const params = new URLSearchParams(searchParams);
       params.delete('create');
       setSearchParams(params, { replace: true });
     } else if (importParam === 'true') {
-      // Trigger import modal
       setImportModalOpen(true);
       const params = new URLSearchParams(searchParams);
       params.delete('import');
       setSearchParams(params, { replace: true });
     } else if (exportParam === 'true') {
-      // Trigger export
       handleExport();
       const params = new URLSearchParams(searchParams);
       params.delete('export');
+      setSearchParams(params, { replace: true });
+    } else if (editId) {
+      api.get(`/bookmarks/${editId}`)
+        .then((res) => {
+          setEditingBookmark(res.data);
+          setModalOpen(true);
+        })
+        .catch((err: any) => {
+          const status = err.response?.status;
+          if (status === 403 || status === 404) {
+            showToast(t('common.notFoundOrNoAccess'), 'error');
+          }
+        });
+      const params = new URLSearchParams(searchParams);
+      params.delete('edit');
       setSearchParams(params, { replace: true });
     }
   }, [searchParams]);
@@ -289,9 +306,12 @@ export default function Bookmarks() {
 
   function handleCopyUrl(bookmark: Bookmark) {
     const baseUrl = window.location.origin;
-    const url = `${baseUrl}/${user?.user_key}/${bookmark.slug}`;
-    navigator.clipboard.writeText(url);
-    showToast(t('common.copied'), 'success');
+    const userKey = bookmark.owner_user_key ?? user?.user_key;
+    const url = userKey && bookmark.slug ? `${baseUrl}/${userKey}/${bookmark.slug}` : '';
+    if (url) {
+      navigator.clipboard.writeText(url);
+      showToast(t('common.copied'), 'success');
+    }
   }
 
   async function handleOpenBookmark(bookmark: Bookmark) {
@@ -595,7 +615,7 @@ export default function Bookmarks() {
             <Button variant="secondary" icon={Upload} onClick={() => setImportModalOpen(true)}>
               {t('bookmarks.emptyImport')}
             </Button>
-            <Link to="/search-engine-guide">
+            <Link to={`${appBasePath}/search-engine-guide`}>
               <Button variant="ghost" icon={ExternalLink}>
                 {t('bookmarks.emptyLearnForwarding')}
               </Button>
@@ -654,7 +674,7 @@ export default function Bookmarks() {
               <p className="text-sm text-gray-700 dark:text-gray-300">
                 {t('bookmarks.searchEngineNote')}{' '}
                 <Link
-                  to="/search-engine-guide"
+                  to={`${appBasePath}/search-engine-guide`}
                   className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium underline"
                 >
                   {t('bookmarks.searchEngineGuideLink')}

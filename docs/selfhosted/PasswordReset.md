@@ -10,7 +10,7 @@ sidebar_position: 11
 
 The Password Reset page provides a two-step password recovery flow for users who have forgotten their passwords. It handles both the password reset request (sending email) and the actual password reset (with token). The page automatically detects which step to show based on the presence of a reset token in the URL.
 
-![Password Reset Request](./assets/password-reset-request.png)
+![Password Reset Request](../assets/password-reset-request.png)
 
 ## Route
 
@@ -36,7 +36,7 @@ The page operates in two modes:
 
 ### Step 2: Reset Password
 
-![Password Reset Form](./assets/password-reset-form.png)
+![Password Reset Form](../assets/password-reset-form.png)
 
 - **Token Verification**: Validates reset token from email link
 - **Password Input**: New password field

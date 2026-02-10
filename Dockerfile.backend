@@ -1,0 +1,46 @@
+# Backend-only image for Cloud Run (no frontend). Build from repo root.
+
+FROM node:20-alpine AS builder
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+COPY backend/package*.json ./backend/
+
+RUN npm ci --legacy-peer-deps
+
+COPY backend/ ./backend/
+
+ARG COMMIT_SHA
+ENV COMMIT_SHA=${COMMIT_SHA}
+
+RUN npm run build --workspace=backend
+RUN cp /app/backend/src/db/schema.sql /app/backend/dist/db/schema.sql
+
+FROM node:20-alpine
+WORKDIR /app
+
+ARG COMMIT_SHA
+ENV COMMIT_SHA=${COMMIT_SHA}
+
+RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
+
+COPY package.json package-lock.json ./
+COPY backend/package*.json ./backend/
+
+RUN npm ci --production --legacy-peer-deps --workspace=backend
+
+COPY --from=builder /app/backend/dist ./backend/dist
+
+WORKDIR /app/backend
+
+RUN chown -R nodejs:nodejs /app
+USER nodejs
+
+ENV NODE_ENV=production
+ENV PORT=8080
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:' + (process.env.PORT || 8080) + '/api/health', (r) => { process.exit(r.statusCode === 200 ? 0 : 1); })"
+
+CMD ["node", "dist/index.js"]

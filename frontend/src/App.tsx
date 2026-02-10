@@ -1,9 +1,11 @@
 import React, { Suspense, lazy } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, Outlet } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ToastProvider } from './components/ui/Toast';
 import Layout from './components/Layout';
+import api from './api/client';
+import { isCloud } from './config/mode';
 
 // Lazy load pages for code splitting
 const Setup = lazy(() => import('./pages/Setup'));
@@ -18,6 +20,12 @@ const Shared = lazy(() => import('./pages/Shared'));
 const PasswordReset = lazy(() => import('./pages/PasswordReset'));
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
 const SearchEngineGuide = lazy(() => import('./pages/SearchEngineGuide'));
+const Landing = lazy(() => import('./pages/landing/Landing'));
+const Pricing = lazy(() => import('./pages/landing/Pricing'));
+const Contact = lazy(() => import('./pages/landing/Contact'));
+
+const loginPath = () => (isCloud ? '/app/login' : '/login');
+const appRootPath = () => (isCloud ? '/app' : '/');
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -32,7 +40,7 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to={loginPath()} replace />;
   }
 
   return <>{children}</>;
@@ -51,41 +59,36 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to={loginPath()} replace />;
   }
 
   if (!user.is_admin) {
-    return <Navigate to="/" replace />;
+    return <Navigate to={appRootPath()} replace />;
   }
 
   return <>{children}</>;
 }
 
-function AppRoutes() {
-  const { user, loading } = useAuth();
+function AppGate({ children }: { children: React.ReactNode }) {
+  const { loading } = useAuth();
   const { t } = useTranslation();
   const [setupStatus, setSetupStatus] = React.useState<{ initialized: boolean } | null>(null);
   const [setupLoading, setSetupLoading] = React.useState(true);
 
   React.useEffect(() => {
-    fetch('/api/auth/setup/status')
-      .then(res => {
-        if (!res.ok) throw new Error('Failed to fetch setup status');
-        return res.json();
-      })
-      .then(data => {
+    api.get('/auth/setup/status')
+      .then((res) => res.data)
+      .then((data) => {
         setSetupStatus(data);
         setSetupLoading(false);
       })
       .catch((error) => {
         console.error('Error checking setup status:', error);
-        // On error, assume initialized to show login page
         setSetupStatus({ initialized: true });
         setSetupLoading(false);
       });
   }, []);
 
-  // Show loading while checking setup status or auth
   if (setupLoading || (loading && setupStatus?.initialized)) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -93,45 +96,45 @@ function AppRoutes() {
       </div>
     );
   }
-
-  // Show setup page if system is not initialized
   if (setupStatus && !setupStatus.initialized) {
     return (
-      <Suspense fallback={
-        <div className="min-h-screen flex items-center justify-center">
-          <div className="text-lg">{t('common.loading')}</div>
-        </div>
-      }>
+      <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="text-lg">{t('common.loading')}</div></div>}>
         <Setup />
       </Suspense>
     );
   }
+  return <>{children}</>;
+}
 
-  // System is initialized - show normal routes
+function AppRoutesSelfhosted() {
+  const { user, loading } = useAuth();
+  const { t } = useTranslation();
+  const [setupStatus, setSetupStatus] = React.useState<{ initialized: boolean } | null>(null);
+  const [setupLoading, setSetupLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    api.get('/auth/setup/status')
+      .then((res) => res.data)
+      .then((data) => { setSetupStatus(data); setSetupLoading(false); })
+      .catch(() => { setSetupStatus({ initialized: true }); setSetupLoading(false); });
+  }, []);
+
+  if (setupLoading || (loading && setupStatus?.initialized)) {
+    return <div className="min-h-screen flex items-center justify-center"><div className="text-lg">{t('common.loading')}</div></div>;
+  }
+  if (setupStatus && !setupStatus.initialized) {
+    return <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="text-lg">{t('common.loading')}</div></div>}><Setup /></Suspense>;
+  }
+
   return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-lg">{t('common.loading')}</div>
-      </div>
-    }>
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="text-lg">{t('common.loading')}</div></div>}>
       <Routes>
         <Route path="/login" element={!user ? <Login /> : <Navigate to="/" replace />} />
         <Route path="/reset-password" element={<PasswordReset />} />
         <Route path="/password-reset" element={<PasswordReset />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
-        {/* Forwarding URLs: /{user_key}/{slug} - handled by backend, frontend should not catch these */}
-        <Route
-          path="/:user_key/:slug"
-          element={<ForwardingHandler />}
-        />
-        <Route
-          path="/"
-          element={
-            <PrivateRoute>
-              <Layout />
-            </PrivateRoute>
-          }
-        >
+        <Route path="/:user_key/:slug" element={<ForwardingHandler />} />
+        <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
           <Route index element={<Dashboard />} />
           <Route path="bookmarks" element={<Bookmarks />} />
           <Route path="folders" element={<Folders />} />
@@ -139,18 +142,45 @@ function AppRoutes() {
           <Route path="shared" element={<Shared />} />
           <Route path="profile" element={<Profile />} />
           <Route path="search-engine-guide" element={<SearchEngineGuide />} />
-          <Route
-            path="admin"
-            element={
-              <AdminRoute>
-                <Admin />
-              </AdminRoute>
-            }
-          />
+          <Route path="admin" element={<AdminRoute><Admin /></AdminRoute>} />
         </Route>
       </Routes>
     </Suspense>
   );
+}
+
+function AppRoutesCloud() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="text-lg">Loading...</div></div>}>
+      <Routes>
+        <Route path="/" element={<Landing />} />
+        <Route path="/pricing" element={<Pricing />} />
+        <Route path="/contact" element={<Contact />} />
+        <Route path="/app" element={<AppGate><Outlet /></AppGate>}>
+          <Route path="login" element={<Login />} />
+          <Route path="reset-password" element={<PasswordReset />} />
+          <Route path="password-reset" element={<PasswordReset />} />
+          <Route path="verify-email" element={<VerifyEmail />} />
+          <Route path=":user_key/:slug" element={<ForwardingHandler />} />
+          <Route path="" element={<PrivateRoute><Layout /></PrivateRoute>}>
+            <Route index element={<Dashboard />} />
+            <Route path="bookmarks" element={<Bookmarks />} />
+            <Route path="folders" element={<Folders />} />
+            <Route path="tags" element={<Tags />} />
+            <Route path="shared" element={<Shared />} />
+            <Route path="profile" element={<Profile />} />
+            <Route path="search-engine-guide" element={<SearchEngineGuide />} />
+            <Route path="admin" element={<AdminRoute><Admin /></AdminRoute>} />
+          </Route>
+        </Route>
+      </Routes>
+    </Suspense>
+  );
+}
+
+function AppRoutes() {
+  if (isCloud) return <AppRoutesCloud />;
+  return <AppRoutesSelfhosted />;
 }
 
 // Component to handle forwarding URLs - redirects to backend

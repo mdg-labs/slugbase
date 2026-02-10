@@ -20,6 +20,7 @@ export function setupJWT() {
       {
         jwtFromRequest: (req) => extractTokenFromRequest(req),
         secretOrKey: JWT_SECRET,
+        algorithms: ['HS256'],
         passReqToCallback: true,
       },
       async (req: any, payload: any, done: any) => {

@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { ArrowLeft, Search, Code, CheckCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import Button from '../components/ui/Button';
+import { appBasePath } from '../config/api';
 
 export default function SearchEngineGuide() {
   const { t } = useTranslation();
@@ -15,7 +16,7 @@ export default function SearchEngineGuide() {
     <div className="space-y-6 max-w-4xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Link to="/bookmarks">
+        <Link to={`${appBasePath}/bookmarks`}>
           <Button variant="ghost" size="sm" icon={ArrowLeft}>
             {t('common.back')}
           </Button>

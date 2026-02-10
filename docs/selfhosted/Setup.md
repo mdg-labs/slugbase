@@ -10,7 +10,7 @@ sidebar_position: 3
 
 The Setup page is the initial configuration page displayed when SlugBase is first installed and no users exist in the system. It allows creating the first admin user, which then enables the rest of the application functionality. After setup is completed, this page becomes permanently inaccessible.
 
-![Setup Form](./assets/setup-form.png)
+![Setup Form](../assets/setup-form.png)
 
 ## Route
 
@@ -79,7 +79,7 @@ The Setup page is the initial configuration page displayed when SlugBase is firs
 
 ### Success State
 
-![Setup Success](./assets/setup-success.png)
+![Setup Success](../assets/setup-success.png)
 
 After successful setup:
 - **Success Icon**: CheckCircle icon in green circle

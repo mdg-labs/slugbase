@@ -10,7 +10,7 @@ sidebar_position: 5
 
 The Bookmarks page is the core of SlugBase, allowing users to create, view, edit, and manage their bookmarks. It features a modern card-based layout, filtering capabilities, and integration with folders and tags.
 
-![Bookmarks Card View](./assets/bookmarks-card-view.png)
+![Bookmarks Card View](../assets/bookmarks-card-view.png)
 
 ## Route
 
@@ -38,13 +38,13 @@ The Bookmarks page is the core of SlugBase, allowing users to create, view, edit
 - **View Toggle**: Switch between card and list views with toolbar buttons
 - **Preferences**: View mode and compact mode preferences saved to localStorage
 
-![Bookmarks List View](./assets/bookmarks-list-view.png)
+![Bookmarks List View](../assets/bookmarks-list-view.png)
 
-![Bookmarks Table View](./assets/bookmarks-table-view.png)
+![Bookmarks Table View](../assets/bookmarks-table-view.png)
 
 ### Filtering & Sorting
 
-![Bookmarks Toolbar](./assets/bookmarks-toolbar.png)
+![Bookmarks Toolbar](../assets/bookmarks-toolbar.png)
 
 - **Filter by Folder**: Dropdown to filter bookmarks by folder
 - **Filter by Tag**: Dropdown to filter bookmarks by tag
@@ -58,7 +58,7 @@ The Bookmarks page is the core of SlugBase, allowing users to create, view, edit
 
 ### Global Search
 
-![Global Search Modal](./assets/bookmarks-global-search.png)
+![Global Search Modal](../assets/bookmarks-global-search.png)
 
 - **Keyboard Shortcut**: Press `Ctrl+K` (or `Cmd+K` on Mac) from anywhere
 - **Search Scope**: Searches across bookmarks, folders, and tags
@@ -108,7 +108,7 @@ Each bookmark card displays:
 
 ### Creating a Bookmark
 
-![Create Bookmark Modal](./assets/bookmark-modal-create.png)
+![Create Bookmark Modal](../assets/bookmark-modal-create.png)
 
 1. Click "Create Bookmark" button (top-right)
 2. Fill in the bookmark modal:
@@ -122,7 +122,7 @@ Each bookmark card displays:
    - Share with teams/users (optional)
 3. Click "Save"
 
-![Bookmark Modal with Forwarding](./assets/bookmark-modal-forwarding.png)
+![Bookmark Modal with Forwarding](../assets/bookmark-modal-forwarding.png)
 
 ### Editing a Bookmark
 
@@ -167,7 +167,7 @@ Each bookmark card displays:
 
 ### Bulk Actions
 
-![Bulk Actions Bar](./assets/bookmarks-bulk-actions.png)
+![Bulk Actions Bar](../assets/bookmarks-bulk-actions.png)
 
 1. Click "Select Multiple" button to enter bulk mode
 2. Select bookmarks using checkboxes
@@ -186,7 +186,7 @@ Each bookmark card displays:
 
 ## Empty State
 
-![Bookmarks Empty State](./assets/bookmarks-empty-state.png)
+![Bookmarks Empty State](../assets/bookmarks-empty-state.png)
 
 When no bookmarks exist or filters return no results:
 

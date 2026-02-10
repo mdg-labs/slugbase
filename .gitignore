@@ -19,3 +19,6 @@ docker-compose.yml
 
 .cursor/
 PRD/
+
+# Docs: private notes, not synced to docs repo
+docs/internal/

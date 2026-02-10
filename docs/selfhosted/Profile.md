@@ -10,7 +10,7 @@ sidebar_position: 9
 
 The Profile page allows users to view and manage their account settings, including email, name, user key, language preference, and theme selection. It provides an inline editing interface for quick updates.
 
-![Profile Overview](./assets/profile-overview.png)
+![Profile Overview](../assets/profile-overview.png)
 
 ## Route
 
@@ -85,7 +85,7 @@ The profile is organized into sections:
 
 ### Editing Email
 
-![Profile Email Edit Mode](./assets/profile-email-edit.png)
+![Profile Email Edit Mode](../assets/profile-email-edit.png)
 
 1. Click "Edit" button next to email
 2. Input field appears inline
@@ -93,7 +93,7 @@ The profile is organized into sections:
 4. Click "Save" or "Cancel"
 5. Error message appears if validation fails
 
-![Email Verification Pending](./assets/profile-email-pending.png)
+![Email Verification Pending](../assets/profile-email-pending.png)
 
 ### Editing Name
 
@@ -112,7 +112,7 @@ The profile is organized into sections:
 
 ### Changing Language
 
-![Profile Preferences](./assets/profile-preferences.png)
+![Profile Preferences](../assets/profile-preferences.png)
 
 1. Select language from dropdown
 2. Optionally change other settings

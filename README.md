@@ -50,6 +50,7 @@ The demo includes pre-configured users with sample data:
 - 🐘 **PostgreSQL** - Full PostgreSQL support for larger deployments
 - 🔄 **Auto Migrations** - Automatic database migration system with version tracking
 - 🐳 **Docker Ready** - Production-ready Docker setup with multi-stage builds
+- ☁️ **GCP / Cloud Run** - Terraform and GitHub Actions (WIF) to deploy the backend to Cloud Run; see [docs/infra/terraform.md](docs/infra/terraform.md)
 - 📊 **API Documentation** - Auto-generated Swagger/OpenAPI documentation
 
 ## Tech Stack
@@ -117,6 +118,36 @@ docker-compose up -d
 - Go through initial setup flow
 - Configure OIDC providers (optional)
 - Configure SMTP settings for password reset (optional)
+
+## Running modes: SELFHOSTED vs CLOUD
+
+SlugBase supports two runtime modes. **SELFHOSTED** is the default and preserves the current behavior. **CLOUD** is for a SaaS deployment (e.g. frontend on Cloudflare Pages, backend on GCP Cloud Run).
+
+### SELFHOSTED (default)
+
+- No `SLUGBASE_MODE` or set to `SLUGBASE_MODE=selfhosted`.
+- Single long-lived JWT cookie; no refresh tokens.
+- OIDC providers configured in the admin panel (“bring your own”).
+- App is served at `/`; no marketing pages.
+- Docker and single-server deployments work as today.
+
+### CLOUD (SaaS)
+
+- Set `SLUGBASE_MODE=cloud` (backend) and build the frontend with `VITE_SLUGBASE_MODE=cloud` and `VITE_API_URL=https://api.slugbase.app` (or your API origin).
+- Short-lived access JWT (e.g. 15 min) plus refresh token in an httpOnly cookie; refresh tokens stored in the DB and rotated on use.
+- Fixed OIDC providers only: Google, Microsoft, GitHub, configured via environment variables (`OIDC_GOOGLE_CLIENT_ID`, `OIDC_GOOGLE_CLIENT_SECRET`, etc.). Admin “OIDC providers” tab is hidden.
+- Marketing pages at `/`, `/pricing`, `/contact`; app at `/app` (e.g. `/app/login`, `/app/bookmarks`).
+- CORS and cookie domain (e.g. `COOKIE_DOMAIN=.slugbase.app`) must be set so the frontend (e.g. app.slugbase.app) can call the API (api.slugbase.app) with credentials.
+
+**CLOUD backend env vars:** `FRONTEND_URL`, `BASE_URL`, `JWT_SECRET`, `ENCRYPTION_KEY`; optional: `COOKIE_DOMAIN`, `JWT_ACCESS_EXPIRES_IN`, `JWT_REFRESH_EXPIRES_DAYS`, `CORS_EXTRA_ORIGINS`, and the OIDC_* variables for Google/Microsoft/GitHub.
+
+**CLOUD frontend build:** `VITE_SLUGBASE_MODE=cloud`, `VITE_API_URL=https://api.slugbase.app`.
+
+### Sharing and forwarding (SELFHOSTED and CLOUD)
+
+- **Access**: A user can access a bookmark if they own it or it is shared with them (direct user share, team share, or via a shared folder). Same rules apply to folders. Tags are not shared; they are per-user.
+- **Canonical forwarding URL**: The canonical link for a bookmark is always `https://<your-domain>/<owner_user_key>/<slug>`. The owner is the user who created the bookmark. When you copy the “forwarding URL” for a shared bookmark, the app uses the owner’s `user_key` so the link works for anyone who has access.
+- **Shared users and the same link**: If a bookmark is shared with you, you can use the same canonical URL (`/<owner_user_key>/<slug>`). The redirect endpoint resolves by owner or by any user who has access to that bookmark, so shared users can safely share the same link.
 
 ## Configuration
 

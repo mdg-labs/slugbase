@@ -20,6 +20,7 @@ import { setupSecurityHeaders, generalRateLimiter, strictRateLimiter } from './m
 import { validateUrl } from './utils/validation.js';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger.js';
+import { mode, isCloud } from './config/mode.js';
 import authRoutes from './routes/auth.js';
 import bookmarkRoutes from './routes/bookmarks.js';
 import folderRoutes from './routes/folders.js';
@@ -36,6 +37,7 @@ import passwordResetRoutes from './routes/password-reset.js';
 import emailVerificationRoutes from './routes/email-verification.js';
 import csrfRoutes from './routes/csrf.js';
 import dashboardRoutes from './routes/dashboard.js';
+import contactRoutes from './routes/contact.js';
 import { DatabaseSessionStore } from './utils/session-store.js';
 
 // Validate required environment variables before starting
@@ -58,14 +60,20 @@ if (process.env.NODE_ENV === 'production') {
 
 // Middleware
 // CORS: Allow both the configured FRONTEND_URL and common development ports
+// In CLOUD mode, also allow CORS_EXTRA_ORIGINS (e.g. marketing domain)
 const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-const allowedOrigins = [
+const allowedOriginsBase = [
   frontendUrl,
   'http://localhost:3000',
   'http://localhost:3001',
   'http://127.0.0.1:3000',
   'http://127.0.0.1:3001',
-].filter((url, index, self) => self.indexOf(url) === index); // Remove duplicates
+];
+const extraOrigins = (process.env.CORS_EXTRA_ORIGINS || '')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+const allowedOrigins = [...new Set([...allowedOriginsBase, ...extraOrigins])];
 
 app.use(cors({
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
@@ -148,10 +156,12 @@ app.use((req: any, res: any, next: any) => {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
     return next();
   }
-  // Skip CSRF for password reset and OIDC callback endpoints
+  // Skip CSRF for password reset, OIDC callback, auth refresh, contact form
   if (req.path.startsWith('/api/password-reset') || 
       req.path.includes('/callback') ||
       req.path === '/api/auth/setup' ||
+      req.path === '/api/auth/refresh' ||
+      req.path === '/api/contact' ||
       req.path === '/api/health' ||
       req.path === '/api/csrf-token' ||
       req.path.startsWith('/api-docs')) {
@@ -176,6 +186,9 @@ app.use('/api/admin/teams', adminTeamRoutes);
 app.use('/api/admin/settings', adminSettingsRoutes);
 app.use('/api/admin/demo-reset', adminDemoResetRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+if (isCloud) {
+  app.use('/api/contact', contactRoutes);
+}
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -187,7 +200,8 @@ app.get('/api/version', (req, res) => {
   res.json({ 
     version: process.env.COMMIT_SHA || 'dev',
     commit: process.env.COMMIT_SHA || null,
-    demoMode: process.env.DEMO_MODE === 'true'
+    demoMode: process.env.DEMO_MODE === 'true',
+    mode,
   });
 });
 

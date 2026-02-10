@@ -10,7 +10,7 @@ sidebar_position: 7
 
 The Tags page allows users to create, edit, and manage tags for organizing bookmarks. Tags provide a flexible labeling system for bookmarks, enabling users to categorize content across multiple dimensions.
 
-![Tags Overview](./assets/tags-overview.png)
+![Tags Overview](../assets/tags-overview.png)
 
 ## Route
 
@@ -51,7 +51,7 @@ Each tag card displays:
 
 ### Creating a Tag
 
-![Create Tag Modal](./assets/tag-modal-create.png)
+![Create Tag Modal](../assets/tag-modal-create.png)
 
 1. Click "Create Tag" button
 2. Enter tag name in the modal
@@ -71,7 +71,7 @@ Each tag card displays:
 
 ## Empty State
 
-![Tags Empty State](./assets/tags-empty-state.png)
+![Tags Empty State](../assets/tags-empty-state.png)
 
 When no tags exist:
 

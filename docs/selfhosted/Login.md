@@ -10,9 +10,9 @@ sidebar_position: 10
 
 The Login page provides authentication functionality for SlugBase, supporting both local email/password authentication and OIDC (OpenID Connect) provider authentication. It serves as the entry point for authenticated users.
 
-![Login Page - Local Auth Only](./assets/login-local-only.png)
+![Login Page - Local Auth Only](../assets/login-local-only.png)
 
-![Login Page with OIDC Providers](./assets/login-with-oidc.png)
+![Login Page with OIDC Providers](../assets/login-with-oidc.png)
 
 ## Route
 

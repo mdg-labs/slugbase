@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { isCloud } from '../config/mode';
 import api from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { Share2, ExternalLink, Copy, Tag as TagIcon, Users, User } from 'lucide-react';
@@ -15,6 +16,8 @@ interface SharedBookmark {
   url: string;
   slug: string;
   forwarding_enabled: boolean;
+  /** Owner's user_key for canonical forwarding URL */
+  owner_user_key?: string;
   folders?: Array<{ id: string; name: string }>;
   tags?: Array<{ id: string; name: string }>;
   shared_teams?: Array<{ id: string; name: string }>;
@@ -78,9 +81,12 @@ export default function Shared() {
 
   function handleCopyUrl(bookmark: SharedBookmark) {
     const baseUrl = window.location.origin;
-    const url = `${baseUrl}/${bookmark.slug}`;
-    navigator.clipboard.writeText(url);
-    showToast(t('bookmarks.copied'), 'success');
+    const userKey = bookmark.owner_user_key ?? user?.user_key;
+    const url = userKey && bookmark.slug ? `${baseUrl}/${userKey}/${bookmark.slug}` : '';
+    if (url) {
+      navigator.clipboard.writeText(url);
+      showToast(t('bookmarks.copied'), 'success');
+    }
   }
 
   if (loading) {
@@ -171,10 +177,14 @@ export default function Shared() {
                     </div>
                   </div>
 
-                  {/* Shared by */}
+                  {/* Shared by (in CLOUD avoid exposing owner email) */}
                   <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 px-1">
                     <User className="h-3 w-3" />
-                    <span className="truncate">{bookmark.user_name || bookmark.user_email || t('shared.unknownUser')}</span>
+                    <span className="truncate">
+                      {isCloud
+                        ? (bookmark.user_name || t('shared.sharedWithYou'))
+                        : (bookmark.user_name || bookmark.user_email || t('shared.unknownUser'))}
+                    </span>
                   </div>
 
                   {/* URL */}
@@ -276,10 +286,14 @@ export default function Shared() {
                     </div>
                   </div>
 
-                  {/* Shared by */}
+                  {/* Shared by (in CLOUD avoid exposing owner email) */}
                   <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 px-1">
                     <User className="h-3 w-3" />
-                    <span className="truncate">{folder.user_name || folder.user_email || t('shared.unknownUser')}</span>
+                    <span className="truncate">
+                      {isCloud
+                        ? (folder.user_name || t('shared.sharedWithYou'))
+                        : (folder.user_name || folder.user_email || t('shared.unknownUser'))}
+                    </span>
                   </div>
 
                   {/* Sharing info */}

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import api from '../api/client';
+import { getAuthProviderUrl } from '../config/api';
 import { useTranslation } from 'react-i18next';
 
 interface User {
@@ -67,7 +68,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   function login(provider: string) {
-    window.location.href = `/api/auth/${provider}`;
+    window.location.href = getAuthProviderUrl(provider);
   }
 
   async function logout() {

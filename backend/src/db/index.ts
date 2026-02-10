@@ -34,13 +34,15 @@ if (DB_TYPE === 'postgresql') {
 } else {
   const dbPath = process.env.DB_PATH || join(__dirname, '../../data/slugbase.db');
   db = new Database(dbPath);
-  
-  // Set secure file permissions (600 = read/write for owner only)
+
+  // Set secure file permissions (600 = read/write for owner only); skip for in-memory DB
+  if (dbPath !== ':memory:') {
   try {
     chmodSync(dbPath, 0o600);
   } catch (error) {
     // Ignore errors if file doesn't exist yet or permissions can't be set
     console.warn('Could not set database file permissions:', error);
+  }
   }
 }
 

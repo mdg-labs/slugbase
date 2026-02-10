@@ -5,6 +5,7 @@ import AdminUsers from '../components/admin/AdminUsers';
 import AdminTeams from '../components/admin/AdminTeams';
 import AdminOIDCProviders from '../components/admin/AdminOIDCProviders';
 import AdminSettings from '../components/admin/AdminSettings';
+import { isCloud } from '../config/mode';
 
 type Tab = 'users' | 'teams' | 'oidc' | 'settings';
 
@@ -12,12 +13,13 @@ export default function Admin() {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<Tab>('users');
 
-  const tabs = [
+  const allTabs = [
     { id: 'users' as Tab, label: t('admin.users'), icon: Users },
     { id: 'teams' as Tab, label: t('admin.teams'), icon: UserCog },
     { id: 'oidc' as Tab, label: t('admin.oidcProviders'), icon: Key },
     { id: 'settings' as Tab, label: t('admin.settings'), icon: Settings },
   ];
+  const tabs = isCloud ? allTabs.filter((tab) => tab.id !== 'oidc') : allTabs;
 
   return (
     <div className="space-y-6">
@@ -57,7 +59,7 @@ export default function Admin() {
       <div className="mt-6">
         {activeTab === 'users' && <AdminUsers />}
         {activeTab === 'teams' && <AdminTeams />}
-        {activeTab === 'oidc' && <AdminOIDCProviders />}
+        {activeTab === 'oidc' && !isCloud && <AdminOIDCProviders />}
         {activeTab === 'settings' && <AdminSettings />}
       </div>
 

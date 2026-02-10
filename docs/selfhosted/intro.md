@@ -25,7 +25,7 @@ Experience SlugBase live at **[https://slugbase-demo.ghotso.dev](https://slugbas
 
 SlugBase is a powerful bookmark management system that gives you complete control over how you organize and access your links. Whether you're managing personal bookmarks or sharing resources with teams, SlugBase provides a flexible, privacy-focused solution.
 
-![SlugBase Dashboard](./assets/intro-hero.png)
+![SlugBase Dashboard](../assets/intro-hero.png)
 
 ## Key Features
 

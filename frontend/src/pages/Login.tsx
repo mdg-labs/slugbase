@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../api/client';
+import { getAuthProviderUrl } from '../config/api';
+import { isCloud } from '../config/mode';
 import { LogIn, Key } from 'lucide-react';
 import Button from '../components/ui/Button';
 
@@ -22,7 +24,7 @@ export default function Login() {
 
   useEffect(() => {
     if (user) {
-      navigate('/', { replace: true });
+      navigate(isCloud ? '/app' : '/', { replace: true });
     }
   }, [user, navigate]);
 
@@ -51,7 +53,7 @@ export default function Login() {
   }, []);
 
   const handleOIDCLogin = (providerKey: string) => {
-    window.location.href = `/api/auth/${providerKey}`;
+    window.location.href = getAuthProviderUrl(providerKey);
   };
 
   const handleLocalLogin = async (e: React.FormEvent) => {
@@ -61,7 +63,7 @@ export default function Login() {
 
     try {
       await api.post('/auth/login', localAuth);
-      window.location.href = '/';
+      window.location.href = isCloud ? '/app' : '/';
     } catch (err: any) {
       setError(err.response?.data?.error || t('auth.loginFailed'));
     } finally {

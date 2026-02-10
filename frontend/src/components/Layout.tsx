@@ -2,13 +2,14 @@ import { Outlet, Link, useLocation } from 'react-router-dom';
 import { Suspense, useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
-import { Bookmark, Folder, Tag, LogOut, Settings, Share2, Github, RotateCcw } from 'lucide-react';
+import { Bookmark, Folder, Tag, LogOut, Settings, Share2, Github, RotateCcw, Plus } from 'lucide-react';
 import Button from './ui/Button';
 import GlobalSearch from './GlobalSearch';
 import { useConfirmDialog } from '../hooks/useConfirmDialog';
 import ConfirmDialog from './ui/ConfirmDialog';
 import { useToast } from './ui/Toast';
 import api from '../api/client';
+import { appBasePath } from '../config/api';
 
 export default function Layout() {
   const { user, logout } = useAuth();
@@ -47,11 +48,11 @@ export default function Layout() {
   };
 
   const navItems = [
-    { path: '/bookmarks', label: t('bookmarks.title'), icon: Bookmark },
-    { path: '/folders', label: t('folders.title'), icon: Folder },
-    { path: '/tags', label: t('tags.title'), icon: Tag },
-    { path: '/shared', label: t('shared.title'), icon: Share2 },
-    ...(user?.is_admin ? [{ path: '/admin', label: t('admin.title'), icon: Settings }] : []),
+    { path: `${appBasePath}/bookmarks`, label: t('bookmarks.title'), icon: Bookmark },
+    { path: `${appBasePath}/folders`, label: t('folders.title'), icon: Folder },
+    { path: `${appBasePath}/tags`, label: t('tags.title'), icon: Tag },
+    { path: `${appBasePath}/shared`, label: t('shared.title'), icon: Share2 },
+    ...(user?.is_admin ? [{ path: `${appBasePath}/admin`, label: t('admin.title'), icon: Settings }] : []),
   ];
 
   useEffect(() => {
@@ -87,8 +88,8 @@ export default function Layout() {
             {/* Logo & Navigation */}
             <div className="flex items-center gap-8">
               <Link
-                to="/"
-                className="flex items-center gap-2 text-xl font-bold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                to={appBasePath || '/'}
+                className="flex items-center gap-2 text-xl font-bold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded-lg dark:focus-visible:ring-offset-gray-800"
               >
                 <img
                   src="/slugbase_icon_blue.svg"
@@ -110,7 +111,7 @@ export default function Layout() {
                     <Link
                       key={item.path}
                       to={item.path}
-                      className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800 ${
                         isActive
                           ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
                           : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
@@ -126,10 +127,15 @@ export default function Layout() {
 
             {/* Search & User Menu */}
             <div className="flex items-center gap-4">
+              <Link to={`${appBasePath}/bookmarks?create=true`}>
+                <Button variant="primary" size="sm" icon={Plus}>
+                  <span className="hidden sm:inline">{t('bookmarks.create')}</span>
+                </Button>
+              </Link>
               <GlobalSearch />
               <Link
-                to="/profile"
-                className="hidden sm:block text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
+                to={`${appBasePath}/profile`}
+                className="hidden sm:block text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded dark:focus-visible:ring-offset-gray-800"
               >
                 {user?.name}
               </Link>
