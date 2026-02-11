@@ -1,0 +1,32 @@
+# Deploy SlugBase backend to Fly.io (staging)
+# Triggers on push to dev or staging branch.
+
+name: Deploy to Fly.io (Staging)
+
+on:
+  push:
+    branches:
+      - dev
+      - staging
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-fly-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to slugbase-staging
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy to Fly.io
+        run: flyctl deploy --remote-only -a slugbase-staging
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

@@ -37,6 +37,7 @@ Sign up for a free account at **[https://slugbase.app](https://slugbase.app)** t
 - 🔄 **Auto Migrations** - Automatic database migration system with version tracking
 - 🐳 **Docker Ready** - Production-ready Docker setup with multi-stage builds
 - ☁️ **GCP / Cloud Run** - Terraform and GitHub Actions (WIF) to deploy the backend to Cloud Run; see [docs/infra/terraform.md](docs/infra/terraform.md)
+- 🪰 **Fly.io + Neon** - Deploy backend to Fly.io with Neon PostgreSQL (EU); see [docs/infra/fly-neon.md](docs/infra/fly-neon.md)
 - 📊 **API Documentation** - Auto-generated Swagger/OpenAPI documentation
 
 ## Tech Stack
@@ -143,7 +144,8 @@ SlugBase supports two runtime modes. **SELFHOSTED** is the default and preserves
 #### Database
 - `DB_TYPE` - Database type: `sqlite` (default) or `postgresql`
 - `DB_PATH` - SQLite database path (default: `./data/slugbase.db`)
-- `DB_HOST` - PostgreSQL host (default: `localhost`)
+- `DATABASE_URL` - PostgreSQL connection string (for Neon etc.): `postgresql://user:pass@host/db?sslmode=require`. Alternative to individual params.
+- `DB_HOST` - PostgreSQL host (default: `localhost`) – used when `DATABASE_URL` is not set
 - `DB_PORT` - PostgreSQL port (default: `5432`)
 - `DB_NAME` - PostgreSQL database name (default: `slugbase`)
 - `DB_USER` - PostgreSQL user
