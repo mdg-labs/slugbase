@@ -102,7 +102,7 @@ function AppGate({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
-  if (setupStatus && !setupStatus.initialized) {
+  if (setupStatus && !setupStatus.initialized && !isCloud) {
     return (
       <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="text-lg">{t('common.loading')}</div></div>}>
         <Setup />

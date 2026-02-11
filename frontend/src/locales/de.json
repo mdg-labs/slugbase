@@ -401,7 +401,16 @@
     "pendingTitle": "E-Mail-Bestätigung ausstehend",
     "pendingDescription": "Eine Bestätigungs-E-Mail wurde an {{email}} gesendet. Bitte überprüfen Sie Ihr Postfach und klicken Sie auf den Bestätigungslink, um die Änderung abzuschließen.",
     "signupSuccess": "E-Mail bestätigt. Sie können sich jetzt anmelden.",
-    "signupSuccessDescription": "Ihr Konto wurde bestätigt. Weiterleitung zur Anmeldung..."
+    "signupSuccessDescription": "Ihr Konto wurde bestätigt. Weiterleitung zur Anmeldung...",
+    "invalidLink": "Dieser Bestätigungslink ist ungültig oder abgelaufen.",
+    "alreadyVerified": "Dieses Konto wurde bereits bestätigt. Sie können sich anmelden.",
+    "resendTitle": "Bestätigungs-E-Mail erneut senden",
+    "resendDescription": "Ihr Bestätigungslink ist abgelaufen. Sie können Ihre E-Mail bei Tippfehlern korrigieren, dann senden wir einen neuen Link.",
+    "resendNoTokenDescription": "Geben Sie die bei der Anmeldung verwendete E-Mail ein. Wir senden einen neuen Bestätigungslink.",
+    "editEmailLabel": "E-Mail-Adresse",
+    "resendButton": "Bestätigungs-E-Mail erneut senden",
+    "resendSuccess": "Bestätigungs-E-Mail gesendet",
+    "resendSuccessDescription": "Überprüfen Sie Ihr Postfach auf den neuen Bestätigungslink. Es kann einige Minuten dauern, bis er ankommt."
   },
   "smtp": {
     "title": "SMTP-E-Mail-Konfiguration",

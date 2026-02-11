@@ -160,10 +160,14 @@ app.use((req: any, res: any, next: any) => {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
     return next();
   }
-  // Skip CSRF for password reset, OIDC callback, auth refresh, contact form
+  // Skip CSRF for password reset, OIDC callback, auth refresh, contact form, and public signup flows
   if (req.path.startsWith('/api/password-reset') ||
       req.path === '/api/auth/setup' ||
       req.path === '/api/auth/refresh' ||
+      req.path === '/api/auth/register' ||
+      req.path === '/api/auth/verify-signup' ||
+      req.path === '/api/auth/resend-signup-verification' ||
+      req.path === '/api/auth/request-signup-resend' ||
       req.path === '/api/contact' ||
       req.path === '/api/health' ||
       req.path === '/api/csrf-token' ||

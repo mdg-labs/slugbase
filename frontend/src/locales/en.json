@@ -423,6 +423,8 @@
     "errorDescription": "The verification link is invalid or has expired.",
     "tokenRequired": "Verification token is required",
     "invalidToken": "Invalid or expired verification token",
+    "invalidLink": "This verification link is invalid or has expired.",
+    "alreadyVerified": "This account has already been verified. You can log in.",
     "verifyFailed": "Failed to verify token",
     "confirmFailed": "Failed to confirm email verification",
     "redirecting": "Redirecting to profile...",
@@ -431,7 +433,14 @@
     "pendingTitle": "Email Verification Pending",
     "pendingDescription": "A verification email has been sent to {{email}}. Please check your inbox and click the verification link to complete the change.",
     "signupSuccess": "Email verified. You can log in.",
-    "signupSuccessDescription": "Your account is verified. Redirecting to login..."
+    "signupSuccessDescription": "Your account is verified. Redirecting to login...",
+    "resendTitle": "Resend Verification Email",
+    "resendDescription": "Your verification link has expired. You can correct your email if you had a typo, then we'll send a new verification link.",
+    "resendNoTokenDescription": "Enter the email you used to sign up. We'll send a new verification link.",
+    "editEmailLabel": "Email address",
+    "resendButton": "Resend verification email",
+    "resendSuccess": "Verification email sent",
+    "resendSuccessDescription": "Check your inbox for the new verification link. It may take a few minutes to arrive."
   },
   "smtp": {
     "title": "SMTP Email Configuration",

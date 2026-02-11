@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { ServerClient } from 'postmark';
 import { queryOne } from '../db/index.js';
 import { decrypt } from './encryption.js';
 import { isCloud } from '../config/mode.js';
@@ -43,43 +44,66 @@ interface SMTPConfig {
   fromName: string;
 }
 
+interface PostmarkConfig {
+  token: string;
+  from: string;
+  fromName: string;
+}
+
 /**
- * Get SMTP configuration: from environment (CLOUD) or from system settings (SELFHOSTED).
+ * Get Postmark configuration for CLOUD mode (from environment).
+ * Returns config object or null with error message.
+ */
+function getPostmarkConfig(): { config: PostmarkConfig | null; error?: string } {
+  if (!isCloud) return { config: null, error: 'Postmark is only used in CLOUD mode' };
+
+  const token = process.env.POSTMARK_SERVER_API_TOKEN?.trim();
+  const from = process.env.POSTMARK_FROM?.trim();
+  const fromName = process.env.POSTMARK_FROM_NAME?.trim() || 'SlugBase';
+
+  if (!token) return { config: null, error: 'Postmark not configured in CLOUD mode (POSTMARK_SERVER_API_TOKEN is required)' };
+  if (!from) return { config: null, error: 'Postmark from email not configured (POSTMARK_FROM is required)' };
+
+  return {
+    config: { token, from, fromName },
+  };
+}
+
+/**
+ * Send email via Postmark API (CLOUD mode only).
+ */
+async function sendEmailViaPostmark(to: string, subject: string, html: string, text?: string): Promise<{ success: boolean; error?: string }> {
+  const stripHtml = (htmlContent: string): string => {
+    if (htmlContent.length > 100000) htmlContent = htmlContent.substring(0, 100000);
+    return htmlContent.replace(/<[^>]{0,1000}>/g, '');
+  };
+
+  const { config, error } = getPostmarkConfig();
+  if (!config) return { success: false, error: error || 'Postmark not configured' };
+
+  try {
+    const client = new ServerClient(config.token);
+    const result = await client.sendEmail({
+      From: `"${config.fromName}" <${config.from}>`,
+      To: to,
+      Subject: subject,
+      HtmlBody: html,
+      TextBody: text || stripHtml(html),
+    });
+    console.log('Email sent via Postmark:', result.MessageID);
+    return { success: true };
+  } catch (err: any) {
+    console.error('Error sending email via Postmark:', err);
+    return { success: false, error: err.message || 'Unknown error sending email' };
+  }
+}
+
+/**
+ * Get SMTP configuration from system settings (SELFHOSTED only).
  * Returns config object or null with error message.
  */
 async function getSMTPConfig(): Promise<{ config: SMTPConfig | null; error?: string }> {
   try {
-    if (isCloud) {
-      const enabled = process.env.SMTP_ENABLED?.toLowerCase() === 'true';
-      if (!enabled) return { config: null, error: 'SMTP is not enabled (SMTP_ENABLED is not true)' };
-
-      const host = process.env.SMTP_HOST?.trim();
-      const portRaw = process.env.SMTP_PORT?.trim();
-      const secure = process.env.SMTP_SECURE?.toLowerCase() === 'true';
-      const user = process.env.SMTP_USER?.trim();
-      const password = process.env.SMTP_PASSWORD?.trim();
-      const from = process.env.SMTP_FROM?.trim();
-      const fromName = process.env.SMTP_FROM_NAME?.trim() || 'SlugBase';
-
-      if (!host) return { config: null, error: 'SMTP host is not configured (SMTP_HOST)' };
-      if (!portRaw) return { config: null, error: 'SMTP port is not configured (SMTP_PORT)' };
-      if (!user) return { config: null, error: 'SMTP user is not configured (SMTP_USER)' };
-      if (!password) return { config: null, error: 'SMTP password is not configured (SMTP_PASSWORD)' };
-      if (!from) return { config: null, error: 'SMTP from email is not configured (SMTP_FROM)' };
-
-      const port = parseInt(portRaw, 10) || 587;
-      return {
-        config: {
-          host,
-          port,
-          secure,
-          auth: { user, password },
-          from,
-          fromName,
-        },
-      };
-    }
-
     const enabled = await queryOne('SELECT value FROM system_config WHERE key = ?', ['smtp_enabled']);
     if (!enabled || (enabled as any).value !== 'true') {
       return { config: null, error: 'SMTP is not enabled' };
@@ -140,9 +164,15 @@ async function getSMTPConfig(): Promise<{ config: SMTPConfig | null; error?: str
 }
 
 /**
- * Send email using configured SMTP settings
+ * Send email using Postmark (CLOUD) or SMTP (SELFHOSTED).
  */
 export async function sendEmail(to: string, subject: string, html: string, text?: string): Promise<{ success: boolean; error?: string }> {
+  if (isCloud) {
+    const { config, error } = getPostmarkConfig();
+    if (config) return sendEmailViaPostmark(to, subject, html, text);
+    return { success: false, error: error || 'Postmark not configured in CLOUD mode' };
+  }
+
   try {
     const { config, error } = await getSMTPConfig();
     if (!config) {
@@ -158,38 +188,22 @@ export async function sendEmail(to: string, subject: string, html: string, text?
     const authPassword = config.auth.password.trim();
 
     if (!authUser || !authPassword) {
-      // Don't log sensitive information like lengths or values
       console.error('SMTP auth validation failed: credentials are empty');
       return { success: false, error: 'SMTP auth credentials are empty' };
     }
 
-    // Create transporter with auth
     const transportConfig = {
       host: config.host,
       port: config.port,
       secure: config.secure,
-      auth: {
-        user: authUser,
-        pass: authPassword, // nodemailer uses 'pass' not 'password'
-      },
+      auth: { user: authUser, pass: authPassword },
     };
 
-    // Don't log sensitive information like username or password details
-    console.log('Creating SMTP transporter with:', {
-      host: config.host,
-      port: config.port,
-      secure: config.secure,
-    });
-
+    console.log('Creating SMTP transporter with:', { host: config.host, port: config.port, secure: config.secure });
     const transporter = nodemailer.createTransport(transportConfig);
 
-    // Safe HTML stripping: use a non-catastrophic regex with bounded quantifier
     const stripHtml = (htmlContent: string): string => {
-      // Limit input size to prevent ReDoS
-      if (htmlContent.length > 100000) {
-        htmlContent = htmlContent.substring(0, 100000);
-      }
-      // Use bounded quantifier {0,1000} to prevent ReDoS attacks
+      if (htmlContent.length > 100000) htmlContent = htmlContent.substring(0, 100000);
       return htmlContent.replace(/<[^>]{0,1000}>/g, '');
     };
 
@@ -197,8 +211,8 @@ export async function sendEmail(to: string, subject: string, html: string, text?
       from: `"${config.fromName}" <${config.from}>`,
       to,
       subject,
-      text: text || stripHtml(html), // Strip HTML for text version
-      html, // HTML is already escaped in template functions
+      text: text || stripHtml(html),
+      html,
     });
 
     console.log('Email sent:', info.messageId);

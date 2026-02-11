@@ -317,10 +317,6 @@ router.post('/register', authRateLimiter, async (req, res) => {
   if (!registrationsEnabled) {
     return res.status(403).json({ error: 'Registrations are disabled' });
   }
-  const initialized = await isInitialized();
-  if (!initialized) {
-    return res.status(403).json({ error: 'System is not ready for registration' });
-  }
 
   try {
     const { email, name, password } = req.body;
@@ -350,6 +346,7 @@ router.post('/register', authRateLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Email already registered' });
     }
 
+    const isFirstUser = !(await isInitialized());
     const passwordHash = await bcrypt.hash(password, 10);
     const userId = uuidv4();
     let userKey = await generateUserKey();
@@ -364,13 +361,13 @@ router.post('/register', authRateLimiter, async (req, res) => {
           await execute(
             `INSERT INTO users (id, email, name, user_key, password_hash, is_admin, email_verified)
              VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [userId, normalizedEmail, sanitizedName, userKey, passwordHash, false, false]
+            [userId, normalizedEmail, sanitizedName, userKey, passwordHash, isFirstUser, false]
           );
         } else {
           await execute(
             `INSERT INTO users (id, email, name, user_key, password_hash, is_admin, email_verified)
              VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [userId, normalizedEmail, sanitizedName, userKey, passwordHash, false, 0]
+            [userId, normalizedEmail, sanitizedName, userKey, passwordHash, isFirstUser, 0]
           );
         }
         break;
@@ -461,6 +458,167 @@ router.post('/verify-signup', authRateLimiter, async (req, res) => {
   } catch (error: any) {
     console.error('Verify-signup error:', error);
     return res.status(500).json({ error: error.message || 'Verification failed' });
+  }
+});
+
+/**
+ * GET /auth/signup-verification/status — CLOUD only. Get status of signup verification token.
+ */
+router.get('/signup-verification/status', authRateLimiter, async (req, res) => {
+  if (!isCloud) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  try {
+    const token = (req.query.token as string)?.trim();
+    if (!token) {
+      return res.status(400).json({ status: 'invalid' });
+    }
+    const row = await queryOne(
+      `SELECT svt.id, svt.user_id, svt.expires_at, svt.used, u.email
+       FROM signup_verification_tokens svt
+       JOIN users u ON u.id = svt.user_id
+       WHERE svt.token = ?`,
+      [token]
+    );
+    if (!row) {
+      return res.json({ status: 'invalid' });
+    }
+    const r = row as any;
+    if (r.used === true || r.used === 1) {
+      return res.json({ status: 'used' });
+    }
+    const expiresAt = new Date(r.expires_at);
+    if (expiresAt.getTime() < Date.now()) {
+      return res.json({ status: 'expired', email: r.email });
+    }
+    return res.json({ status: 'valid', email: r.email });
+  } catch (error: any) {
+    console.error('Signup verification status error:', error);
+    return res.status(500).json({ status: 'invalid' });
+  }
+});
+
+/**
+ * POST /auth/resend-signup-verification — CLOUD only. Resend verification email, optionally with updated email.
+ */
+router.post('/resend-signup-verification', authRateLimiter, async (req, res) => {
+  if (!isCloud) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  try {
+    const { token, newEmail } = req.body;
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({ error: 'Token is required' });
+    }
+    const row = await queryOne(
+      `SELECT svt.id, svt.user_id, svt.used, u.email
+       FROM signup_verification_tokens svt
+       JOIN users u ON u.id = svt.user_id
+       WHERE svt.token = ?`,
+      [token.trim()]
+    );
+    if (!row) {
+      return res.status(400).json({ error: 'Invalid verification token' });
+    }
+    const r = row as any;
+    if (r.used === true || r.used === 1) {
+      return res.status(400).json({ error: 'This verification link has already been used' });
+    }
+    let targetEmail = r.email;
+    if (newEmail && typeof newEmail === 'string' && newEmail.trim()) {
+      const emailValidation = validateEmail(newEmail.trim());
+      if (!emailValidation.valid) {
+        return res.status(400).json({ error: emailValidation.error });
+      }
+      const normalizedNew = normalizeEmail(newEmail.trim());
+      if (normalizedNew !== targetEmail) {
+        const existing = await queryOne('SELECT id FROM users WHERE email = ?', [normalizedNew]);
+        if (existing) {
+          return res.status(400).json({ error: 'Email already registered' });
+        }
+        targetEmail = normalizedNew;
+        await execute('UPDATE users SET email = ? WHERE id = ?', [targetEmail, r.user_id]);
+      }
+    }
+    await execute('DELETE FROM signup_verification_tokens WHERE user_id = ?', [r.user_id]);
+    const tokenId = uuidv4();
+    const newToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const expiresAtStr = expiresAt.toISOString();
+    const DB_TYPE = process.env.DB_TYPE || 'sqlite';
+    if (DB_TYPE === 'postgresql') {
+      await execute(
+        `INSERT INTO signup_verification_tokens (id, user_id, token, expires_at, used)
+         VALUES (?, ?, ?, ?, ?)`,
+        [tokenId, r.user_id, newToken, expiresAtStr, false]
+      );
+    } else {
+      await execute(
+        `INSERT INTO signup_verification_tokens (id, user_id, token, expires_at, used)
+         VALUES (?, ?, ?, ?, ?)`,
+        [tokenId, r.user_id, newToken, expiresAtStr, 0]
+      );
+    }
+    const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+    const verificationUrl = `${frontendUrl}/app/verify-email?token=${encodeURIComponent(newToken)}`;
+    await sendSignupVerificationEmail(targetEmail, verificationUrl);
+    return res.json({ message: 'Verification email sent' });
+  } catch (error: any) {
+    console.error('Resend signup verification error:', error);
+    return res.status(500).json({ error: error.message || 'Failed to resend verification' });
+  }
+});
+
+/**
+ * POST /auth/request-signup-resend — CLOUD only. Request resend of verification email by email (no token).
+ */
+router.post('/request-signup-resend', authRateLimiter, async (req, res) => {
+  if (!isCloud) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  try {
+    const { email } = req.body;
+    if (!email || typeof email !== 'string') {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+    const emailValidation = validateEmail(email.trim());
+    if (!emailValidation.valid) {
+      return res.status(400).json({ error: emailValidation.error });
+    }
+    const normalizedEmail = normalizeEmail(email.trim());
+    const user = await queryOne(
+      'SELECT id FROM users WHERE email = ? AND (email_verified = FALSE OR email_verified = 0)',
+      [normalizedEmail]
+    );
+    if (user) {
+      const u = user as any;
+      await execute('DELETE FROM signup_verification_tokens WHERE user_id = ?', [u.id]);
+      const tokenId = uuidv4();
+      const newToken = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const expiresAtStr = expiresAt.toISOString();
+      const DB_TYPE = process.env.DB_TYPE || 'sqlite';
+      if (DB_TYPE === 'postgresql') {
+        await execute(
+          `INSERT INTO signup_verification_tokens (id, user_id, token, expires_at, used)
+           VALUES (?, ?, ?, ?, ?)`,
+          [tokenId, u.id, newToken, expiresAtStr, false]
+        );
+      } else {
+        await execute(
+          `INSERT INTO signup_verification_tokens (id, user_id, token, expires_at, used)
+           VALUES (?, ?, ?, ?, ?)`,
+          [tokenId, u.id, newToken, expiresAtStr, 0]
+        );
+      }
+      const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+      const verificationUrl = `${frontendUrl}/app/verify-email?token=${encodeURIComponent(newToken)}`;
+      await sendSignupVerificationEmail(normalizedEmail, verificationUrl);
+    }
+    return res.json({ message: 'If an unverified account exists with that email, a new verification link has been sent.' });
+  } catch (error: any) {
+    console.error('Request signup resend error:', error);
+    return res.status(500).json({ error: error.message || 'Failed to request resend' });
   }
 });
 
@@ -829,8 +987,11 @@ router.get('/:provider/callback', (req, res, next) => {
  *       403:
  *         description: System already initialized
  */
-// Setup route - only accessible when system is not initialized
+// Setup route - only accessible when system is not initialized. SELFHOSTED only.
 router.post('/setup', strictRateLimiter, async (req, res) => {
+  if (isCloud) {
+    return res.status(404).json({ error: 'Not found' });
+  }
   try {
     const initialized = await isInitialized();
     if (initialized) {

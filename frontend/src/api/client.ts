@@ -46,6 +46,10 @@ api.interceptors.request.use(
         '/auth/login',
         '/auth/logout',
         '/auth/refresh',
+        '/auth/register',
+        '/auth/verify-signup',
+        '/auth/resend-signup-verification',
+        '/auth/request-signup-resend',
         '/csrf-token',
       ].some((path) => config.url?.includes(path));
 

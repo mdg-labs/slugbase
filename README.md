@@ -122,11 +122,11 @@ SlugBase supports two runtime modes. **SELFHOSTED** is the default and preserves
 
 - Set `SLUGBASE_MODE=cloud` (backend) and build the frontend with `VITE_SLUGBASE_MODE=cloud` and `VITE_API_URL=https://api.slugbase.app` (or your API origin).
 - Short-lived access JWT (e.g. 15 min) plus refresh token in an httpOnly cookie; refresh tokens stored in the DB and rotated on use.
-- Fixed OIDC providers only: Google, Microsoft, GitHub, configured via environment variables (`OIDC_GOOGLE_CLIENT_ID`, `OIDC_GOOGLE_CLIENT_SECRET`, etc.). Admin “OIDC providers” tab is hidden. SMTP is configured via env (`SMTP_ENABLED`, `SMTP_HOST`, etc.); Admin “Settings” tab is hidden in CLOUD.
+- Fixed OIDC providers only: Google, Microsoft, GitHub, configured via environment variables (`OIDC_GOOGLE_CLIENT_ID`, `OIDC_GOOGLE_CLIENT_SECRET`, etc.). Admin “OIDC providers” tab is hidden. Transactional email is sent via Postmark API (`POSTMARK_SERVER_API_TOKEN`, `POSTMARK_FROM`); Admin “Settings” tab is hidden in CLOUD.
 - Marketing pages at `/`, `/pricing`, `/contact`; app at `/app` (e.g. `/app/login`, `/app/bookmarks`).
 - CORS and cookie domain (e.g. `COOKIE_DOMAIN=.slugbase.app`) must be set so the frontend (e.g. app.slugbase.app) can call the API (api.slugbase.app) with credentials.
 
-**CLOUD backend env vars:** `FRONTEND_URL`, `BASE_URL`, `JWT_SECRET`, `ENCRYPTION_KEY`; optional: `COOKIE_DOMAIN`, `JWT_ACCESS_EXPIRES_IN`, `JWT_REFRESH_EXPIRES_DAYS`, `CORS_EXTRA_ORIGINS`, OIDC_* (Google/Microsoft/GitHub), and SMTP_* (`SMTP_ENABLED`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, `SMTP_FROM_NAME`) for email (e.g. password reset).
+**CLOUD backend env vars:** `FRONTEND_URL`, `BASE_URL`, `JWT_SECRET`, `ENCRYPTION_KEY`; optional: `COOKIE_DOMAIN`, `JWT_ACCESS_EXPIRES_IN`, `JWT_REFRESH_EXPIRES_DAYS`, `CORS_EXTRA_ORIGINS`, OIDC_* (Google/Microsoft/GitHub), and Postmark (`POSTMARK_SERVER_API_TOKEN`, `POSTMARK_FROM`, `POSTMARK_FROM_NAME`) for transactional email (password reset, signup verification, contact form).
 
 **CLOUD frontend build:** `VITE_SLUGBASE_MODE=cloud`, `VITE_API_URL=https://api.slugbase.app`.
 
@@ -158,15 +158,16 @@ SlugBase supports two runtime modes. **SELFHOSTED** is the default and preserves
 - `BASE_URL` - Base URL for redirects (e.g., `https://slugbase.example.com`)
 - `FRONTEND_URL` - Frontend URL for CORS (default: `http://localhost:3000`)
 
-#### Email (SMTP)
-- `SMTP_ENABLED` - Enable SMTP (default: `false`)
-- `SMTP_HOST` - SMTP host (e.g., `smtp.gmail.com`)
-- `SMTP_PORT` - SMTP port (default: `587`)
-- `SMTP_SECURE` - Use TLS/SSL (default: `false`)
-- `SMTP_USER` - SMTP username
-- `SMTP_PASSWORD` - SMTP password
-- `SMTP_FROM_EMAIL` - From email address
-- `SMTP_FROM_NAME` - From name
+#### Email
+
+**SELFHOSTED:** SMTP is configured via Admin Settings (Settings tab). No env vars needed.
+
+**CLOUD:** Transactional email uses Postmark API (no SMTP). Set in `.env`:
+- `POSTMARK_SERVER_API_TOKEN` - Server API token from [Postmark](https://account.postmarkapp.com)
+- `POSTMARK_FROM` - Verified sender address (e.g. `noreply@slugbase.app`)
+- `POSTMARK_FROM_NAME` - From display name (default: `SlugBase`)
+
+**Both modes:**
 - `CONTACT_FORM_RECIPIENT` - Email address to receive contact form submissions (optional, per environment)
 
 ### Database Migrations
