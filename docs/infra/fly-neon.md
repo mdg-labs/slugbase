@@ -90,9 +90,13 @@ fly secrets set \
 ## 4. GitHub Setup
 
 1. In GitHub: **Settings** → **Secrets and variables** → **Actions**
-2. Add `FLY_API_TOKEN`:
-   - Run `fly auth token` (or `fly tokens create deploy -x 999999h` for deploy-only)
+2. Add **`FLY_API_TOKEN`** (secret):
+   - Run `fly auth token` (or `fly tokens create deploy` for deploy-only)
    - Paste the token as the secret value
+3. If using a **Fly.io organization**, add **`FLY_ORG`** (variable):
+   - **Settings** → **Secrets and variables** → **Actions** → **Variables**
+   - New variable: name `FLY_ORG`, value = your org slug (e.g. `my-company`)
+   - Find your org slug: `fly orgs list` or in the Fly.io dashboard URL
 
 ---
 

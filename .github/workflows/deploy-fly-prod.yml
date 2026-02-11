@@ -1,5 +1,8 @@
 # Deploy SlugBase backend to Fly.io (production)
 # Triggers on push to main. Enable when ready for production.
+#
+# Required secrets: FLY_API_TOKEN
+# Required variables (when using an org): FLY_ORG - your Fly.io org slug
 
 name: Deploy to Fly.io (Production)
 
@@ -19,8 +22,9 @@ jobs:
     runs-on: ubuntu-latest
     # Until prod is ready: only run on manual trigger. When ready, remove the 'if' below.
     if: github.event_name == 'workflow_dispatch'
-    # Optional: use production environment for approval gates
-    # environment: production
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      FLY_ORG: ${{ vars.FLY_ORG }}
 
     steps:
       - name: Checkout
@@ -30,11 +34,13 @@ jobs:
         uses: superfly/flyctl-actions/setup-flyctl@master
 
       - name: Create app if it doesn't exist
-        run: flyctl apps create slugbase-prod -o json || true
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          ORG_ARG=""
+          [ -n "$FLY_ORG" ] && ORG_ARG="--org $FLY_ORG"
+          flyctl apps create slugbase-prod $ORG_ARG -o json || true
 
       - name: Deploy to Fly.io
-        run: flyctl deploy --remote-only -a slugbase-prod
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          ORG_ARG=""
+          [ -n "$FLY_ORG" ] && ORG_ARG="--org $FLY_ORG"
+          flyctl deploy --remote-only -a slugbase-prod $ORG_ARG
