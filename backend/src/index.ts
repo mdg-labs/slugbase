@@ -37,6 +37,9 @@ import emailVerificationRoutes from './routes/email-verification.js';
 import contactRoutes from './routes/contact.js';
 import csrfRoutes from './routes/csrf.js';
 import dashboardRoutes from './routes/dashboard.js';
+import organizationRoutes from './routes/organizations.js';
+import invitationRoutes from './routes/invitations.js';
+import billingRoutes, { handleStripeWebhook } from './routes/billing.js';
 import { DatabaseSessionStore } from './utils/session-store.js';
 
 // Validate required environment variables before starting
@@ -77,6 +80,11 @@ const extraOrigins = (process.env.CORS_EXTRA_ORIGINS || '')
   .map((o) => o.trim())
   .filter(Boolean);
 const allowedOrigins = [...new Set([...allowedOriginsBase, ...extraOrigins])];
+
+// Stripe webhook needs raw body - mount before express.json()
+app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), (req, res) => {
+  handleStripeWebhook(req, res);
+});
 
 app.use(cors({
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
@@ -168,6 +176,9 @@ app.use((req: any, res: any, next: any) => {
       req.path === '/api/auth/verify-signup' ||
       req.path === '/api/auth/resend-signup-verification' ||
       req.path === '/api/auth/request-signup-resend' ||
+      req.path === '/api/billing/webhook' ||
+      req.path === '/api/billing/create-checkout-session' ||
+      req.path === '/api/billing/create-portal-session' ||
       req.path === '/api/contact' ||
       req.path === '/api/health' ||
       req.path === '/api/csrf-token' ||
@@ -187,6 +198,9 @@ app.use('/api/folders', folderRoutes);
 app.use('/api/tags', tagRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/teams', teamRoutes);
+app.use('/api/organizations', organizationRoutes);
+app.use('/api/invitations', invitationRoutes);
+app.use('/api/billing', billingRoutes);
 app.use('/api/oidc-providers', oidcProviderRoutes);
 app.use('/api/admin/users', adminUserRoutes);
 app.use('/api/admin/teams', adminTeamRoutes);

@@ -581,6 +581,70 @@ export async function sendSignupVerificationEmail(email: string, verificationUrl
 }
 
 /**
+ * Send org invitation email (CLOUD only)
+ */
+export async function sendOrgInvitationEmail(
+  email: string,
+  acceptUrl: string,
+  orgName: string
+): Promise<boolean> {
+  const safeHrefUrl = safeUrlForHref(acceptUrl);
+  const escapedDisplayUrl = escapeHtml(acceptUrl);
+  const escapedOrgName = escapeHtml(orgName);
+
+  const subject = `You're invited to join ${orgName} on SlugBase`;
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Organization Invitation - SlugBase</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f4f4f4; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f4f4f4;">
+    <tr>
+      <td align="center" style="padding: 40px 20px;">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="max-width: 600px; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+          <tr>
+            <td style="padding: 40px 40px 30px; text-align: center; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); border-radius: 8px 8px 0 0;">
+              <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 600;">SlugBase</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 40px;">
+              <h2 style="margin: 0 0 20px; color: #1a1a1a; font-size: 24px; font-weight: 600;">You're invited</h2>
+              <p style="margin: 0 0 20px; color: #4a4a4a; font-size: 16px; line-height: 1.6;">You have been invited to join <strong>${escapedOrgName}</strong> on SlugBase.</p>
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin: 30px 0;">
+                <tr>
+                  <td align="center">
+                    <a href="${safeHrefUrl}" style="display: inline-block; padding: 14px 32px; background-color: #3b82f6; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600;">Accept invitation</a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin: 20px 0; color: #6b7280; font-size: 14px;">Or copy and paste this link into your browser:</p>
+              <p style="margin: 0 0 30px; padding: 12px; background-color: #f9fafb; border-radius: 4px; word-break: break-all; color: #4a4a4a; font-size: 13px; font-family: monospace;">${escapedDisplayUrl}</p>
+              <p style="margin: 0; color: #6b7280; font-size: 14px;">This link expires in 7 days. If you did not expect this invitation, you can ignore this email.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 30px 40px; background-color: #f9fafb; border-top: 1px solid #e5e7eb; border-radius: 0 0 8px 8px;">
+              <p style="margin: 0; color: #9ca3af; font-size: 12px; text-align: center;">This is an automated message from SlugBase.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `;
+
+  const result = await sendEmail(email, subject, html);
+  return result.success;
+}
+
+/**
  * Test SMTP configuration
  */
 export async function testSMTPConfig(testEmail: string): Promise<{ success: boolean; error?: string }> {

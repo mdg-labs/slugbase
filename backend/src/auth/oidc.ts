@@ -6,6 +6,7 @@ import { decrypt } from '../utils/encryption.js';
 import { generateUserKey } from '../utils/user-key.js';
 import { isCloud } from '../config/mode.js';
 import { getCloudProviders } from '../config/cloud-providers.js';
+import { ensureOrgForUser } from '../utils/organizations.js';
 
 export function setupOIDC() {
   // Serialization for OIDC OAuth flow (sessions are only used during OAuth redirect)
@@ -127,6 +128,9 @@ async function registerOIDCStrategy(provider: any, clientSecret: string): Promis
               }
 
               user = await queryOne('SELECT * FROM users WHERE id = ?', [userId]);
+              if (isCloud && user) {
+                await ensureOrgForUser(userId, name);
+              }
               return cb(null, user);
             } catch (error: any) {
               console.error(`[OIDC] Error during user creation/update:`, {

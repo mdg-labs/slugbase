@@ -14,6 +14,7 @@ import { getAuthCookieOptions, getClearAuthCookieOptions } from '../config/cooki
 import { getCloudProviders } from '../config/cloud-providers.js';
 import { createRefreshToken, rotateRefreshToken, revokeRefreshTokensForUser, findUserIdByRefreshToken } from '../utils/refresh-token.js';
 import { sendSignupVerificationEmail } from '../utils/email.js';
+import { ensureOrgForUser } from '../utils/organizations.js';
 import crypto from 'crypto';
 
 const router = Router();
@@ -384,11 +385,14 @@ router.post('/register', authRateLimiter, async (req, res) => {
       }
     }
 
+    if (isCloud) {
+      await ensureOrgForUser(userId, sanitizedName);
+    }
+
     const tokenId = uuidv4();
     const token = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
     const expiresAtStr = expiresAt.toISOString();
-    const usedDefault = DB_TYPE === 'postgresql' ? false : 0;
 
     if (DB_TYPE === 'postgresql') {
       await execute(

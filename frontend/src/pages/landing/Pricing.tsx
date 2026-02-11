@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import MarketingLayout from '../../components/MarketingLayout';
 
 export default function Pricing() {
   const { t } = useTranslation();
+  const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly');
 
   return (
     <MarketingLayout>
@@ -11,6 +13,30 @@ export default function Pricing() {
         <div className="text-center mb-12">
           <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white">{t('pricing.title')}</h1>
           <p className="mt-2 text-gray-600 dark:text-gray-400">{t('pricing.subtitle')}</p>
+          <div className="mt-4 flex items-center justify-center gap-2">
+            <button
+              type="button"
+              onClick={() => setBillingInterval('monthly')}
+              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                billingInterval === 'monthly'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+              }`}
+            >
+              Monthly
+            </button>
+            <button
+              type="button"
+              onClick={() => setBillingInterval('yearly')}
+              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                billingInterval === 'yearly'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+              }`}
+            >
+              Yearly
+            </button>
+          </div>
         </div>
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -52,7 +78,12 @@ export default function Pricing() {
 
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 flex flex-col">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{t('pricing.team')}</h3>
-            <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">{t('pricing.teamPrice')}</p>
+            <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
+              {billingInterval === 'monthly' ? t('pricing.teamPrice') : t('pricing.teamPriceYearly')}
+            </p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              {t('pricing.teamUsers')} · {billingInterval === 'monthly' ? t('pricing.teamExtraUser') : t('pricing.teamExtraUserYearly')}
+            </p>
             <ul className="mt-4 space-y-2 text-sm text-gray-600 dark:text-gray-400 flex-1">
               <li>{t('pricing.teamValue1')}</li>
               <li>{t('pricing.teamValue2')}</li>

@@ -1,25 +1,43 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Users, UserCog, Settings, Key, ExternalLink } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { Users, UserCog, Settings, Key, ExternalLink, CreditCard } from 'lucide-react';
 import AdminUsers from '../components/admin/AdminUsers';
 import AdminTeams from '../components/admin/AdminTeams';
 import AdminOIDCProviders from '../components/admin/AdminOIDCProviders';
 import AdminSettings from '../components/admin/AdminSettings';
+import AdminBillingPlan from '../components/admin/AdminBillingPlan';
 import { isCloud } from '../config/mode';
 
-type Tab = 'users' | 'teams' | 'oidc' | 'settings';
+type Tab = 'users' | 'teams' | 'oidc' | 'settings' | 'billing';
 
 export default function Admin() {
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState<Tab>('users');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState<Tab>(
+    tabParam && ['users', 'teams', 'oidc', 'settings', 'billing'].includes(tabParam)
+      ? (tabParam as Tab)
+      : 'users'
+  );
+
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam && ['users', 'teams', 'oidc', 'settings', 'billing'].includes(tabParam)) {
+      setActiveTab(tabParam as Tab);
+    }
+  }, [searchParams]);
 
   const allTabs = [
     { id: 'users' as Tab, label: t('admin.users'), icon: Users },
     { id: 'teams' as Tab, label: t('admin.teams'), icon: UserCog },
+    ...(isCloud ? [{ id: 'billing' as Tab, label: t('admin.billing'), icon: CreditCard }] : []),
     { id: 'oidc' as Tab, label: t('admin.oidcProviders'), icon: Key },
     { id: 'settings' as Tab, label: t('admin.settings'), icon: Settings },
   ];
-  const tabs = isCloud ? allTabs.filter((tab) => tab.id !== 'oidc' && tab.id !== 'settings') : allTabs;
+  const tabs = isCloud
+    ? allTabs.filter((tab) => tab.id !== 'oidc' && tab.id !== 'settings')
+    : allTabs.filter((tab) => tab.id !== 'billing');
 
   return (
     <div className="space-y-6">
@@ -37,7 +55,10 @@ export default function Admin() {
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  setSearchParams({ tab: tab.id });
+                }}
                 className={`
                   relative inline-flex items-center gap-2 px-4 py-3 text-sm font-medium rounded-t-lg transition-colors
                   ${
@@ -59,6 +80,7 @@ export default function Admin() {
       <div className="mt-6">
         {activeTab === 'users' && <AdminUsers />}
         {activeTab === 'teams' && <AdminTeams />}
+        {activeTab === 'billing' && isCloud && <AdminBillingPlan />}
         {activeTab === 'oidc' && !isCloud && <AdminOIDCProviders />}
         {activeTab === 'settings' && !isCloud && <AdminSettings />}
       </div>

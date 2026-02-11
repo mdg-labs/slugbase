@@ -22,6 +22,7 @@ import * as migration006 from './006_refresh_tokens.js';
 import * as migration007 from './007_password_reset_token_hash.js';
 import * as migration008 from './008_slug_preferences.js';
 import * as migration009 from './009_signup_email_verified.js';
+import * as migration010 from './010_organizations.js';
 
 export interface Migration {
   migrationId: string;
@@ -85,6 +86,12 @@ const migrations: Migration[] = [
     migrationName: migration009.migrationName,
     up: migration009.up,
     down: migration009.down,
+  },
+  {
+    migrationId: migration010.migrationId,
+    migrationName: migration010.migrationName,
+    up: migration010.up,
+    down: migration010.down,
   },
 ];
 

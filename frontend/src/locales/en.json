@@ -39,6 +39,18 @@
     "createAccount": "Create account",
     "signUp": "Sign up"
   },
+  "invitations": {
+    "tokenRequired": "Invitation token is required",
+    "notAvailable": "Organization invitations are not available",
+    "invalidOrExpired": "This invitation is invalid or has expired",
+    "verifying": "Verifying invitation...",
+    "accepting": "Accepting invitation...",
+    "accepted": "Invitation accepted",
+    "redirecting": "Redirecting...",
+    "error": "Unable to accept",
+    "loginRequired": "Log in to accept",
+    "loginRequiredDescription": "Please log in with the email this invitation was sent to in order to join {{org}}."
+  },
   "signup": {
     "title": "Create your account",
     "subtitle": "Sign up with email and password.",
@@ -396,7 +408,20 @@
     "viewApiDocs": "View API Documentation",
     "noUserEmailAvailable": "No user email available",
     "manageTeamsTitle": "Manage Teams - {{userName}}",
-    "manageMembersTitle": "Manage Members - {{teamName}}"
+    "manageMembersTitle": "Manage Members - {{teamName}}",
+    "billing": "Billing & Plan",
+    "billingCurrentPlan": "Current plan",
+    "billingUpgrade": "Upgrade",
+    "billingManageSubscription": "Manage subscription",
+    "billingOrgMembers": "Organization members",
+    "billingSeatsUsed": "{{count}} of {{total}} seats used",
+    "billingInviteMember": "Invite member",
+    "billingNotConfigured": "Billing is not configured. Contact support to enable upgrades.",
+    "billingPersonalMonthly": "Personal (monthly)",
+    "billingPersonalYearly": "Personal (yearly)",
+    "billingTeamMonthly": "Team (monthly)",
+    "billingTeamYearly": "Team (yearly)",
+    "billingEarlySupporter": "Early Supporter (one-time)"
   },
   "passwordReset": {
     "title": "Reset Password",
@@ -596,8 +621,10 @@
     "personalValue3": "Backups and priority support",
     "team": "Team",
     "teamPrice": "€9/mo",
-    "teamUsers": "Up to 5 users included",
-    "teamExtraUser": "+€2 per additional user",
+    "teamPriceYearly": "€90/yr",
+    "teamUsers": "5 users included",
+    "teamExtraUser": "+€1 per additional user/mo",
+    "teamExtraUserYearly": "+€10 per additional user/yr",
     "teamFeatures": "Team sharing, roles, shared folders",
     "teamAudit": "Light audit log",
     "teamValue1": "Shared folders",
@@ -618,7 +645,7 @@
     "comparisonTitle": "What you get",
     "comparisonFree": "Free: Try core features, 300–500 bookmarks.",
     "comparisonPersonal": "Personal: Unlimited bookmarks, forwarding, backups, support.",
-    "comparisonTeam": "Team: Up to 5 users, shared folders, roles, audit.",
+    "comparisonTeam": "Team: 5 users included, +€1/user extra monthly or +€10/user yearly. Shared folders, roles, audit.",
     "comparisonEarlySupporter": "Early Supporter: Lifetime Personal, limited seats."
   },
   "contact": {

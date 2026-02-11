@@ -21,6 +21,7 @@ const Shared = lazy(() => import('./pages/Shared'));
 const PasswordReset = lazy(() => import('./pages/PasswordReset'));
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
 const Signup = lazy(() => import('./pages/Signup'));
+const AcceptInvite = lazy(() => import('./pages/AcceptInvite'));
 const SearchEngineGuide = lazy(() => import('./pages/SearchEngineGuide'));
 const GoPreferences = lazy(() => import('./pages/GoPreferences'));
 const Landing = lazy(() => import('./pages/landing/Landing'));
@@ -173,6 +174,7 @@ function AppRoutesCloud() {
           <Route path="reset-password" element={<PasswordReset />} />
           <Route path="password-reset" element={<PasswordReset />} />
           <Route path="verify-email" element={<VerifyEmail />} />
+          <Route path="accept-invite" element={<AcceptInvite />} />
           <Route path="go/:slug" element={<ForwardingHandler />} />
           <Route path="" element={<PrivateRoute><Layout /></PrivateRoute>}>
             <Route index element={<Dashboard />} />

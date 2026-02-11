@@ -50,6 +50,8 @@ api.interceptors.request.use(
         '/auth/verify-signup',
         '/auth/resend-signup-verification',
         '/auth/request-signup-resend',
+        '/billing/create-checkout-session',
+        '/billing/create-portal-session',
         '/csrf-token',
       ].some((path) => config.url?.includes(path));
 

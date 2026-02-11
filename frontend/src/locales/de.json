@@ -560,8 +560,10 @@
     "personalValue3": "Backups und Prioritäts-Support",
     "team": "Team",
     "teamPrice": "9 €/Monat",
-    "teamUsers": "Bis zu 5 Nutzer inklusive",
-    "teamExtraUser": "+2 € pro zusätzlichem Nutzer",
+    "teamPriceYearly": "90 €/Jahr",
+    "teamUsers": "5 Nutzer inklusive",
+    "teamExtraUser": "+1 € pro zusätzlichem Nutzer/Monat",
+    "teamExtraUserYearly": "+10 € pro zusätzlichem Nutzer/Jahr",
     "teamFeatures": "Team-Freigabe, Rollen, geteilte Ordner",
     "teamAudit": "Einfaches Prüfprotokoll",
     "teamValue1": "Geteilte Ordner",
@@ -582,7 +584,7 @@
     "comparisonTitle": "Was Sie erhalten",
     "comparisonFree": "Kostenlos: Kernfunktionen testen, 300–500 Lesezeichen.",
     "comparisonPersonal": "Personal: Unbegrenzte Lesezeichen, Weiterleitung, Backups, Support.",
-    "comparisonTeam": "Team: Bis 5 Nutzer, geteilte Ordner, Rollen, Prüfprotokoll.",
+    "comparisonTeam": "Team: 5 Nutzer inklusive, +1 €/Nutzer extra monatlich oder +10 €/Nutzer jährlich. Geteilte Ordner, Rollen, Prüfprotokoll.",
     "comparisonEarlySupporter": "Early Supporter: Lebenslang Personal, begrenzte Plätze."
   },
   "contact": {
