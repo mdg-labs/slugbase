@@ -29,6 +29,11 @@ jobs:
       - name: Setup flyctl
         uses: superfly/flyctl-actions/setup-flyctl@master
 
+      - name: Create app if it doesn't exist
+        run: flyctl apps create slugbase-prod -o json || true
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
       - name: Deploy to Fly.io
         run: flyctl deploy --remote-only -a slugbase-prod
         env:
