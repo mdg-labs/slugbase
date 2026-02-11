@@ -38,7 +38,4 @@ jobs:
           flyctl apps create slugbase-staging $ORG_ARG --json || true
 
       - name: Deploy to Fly.io
-        run: |
-          ORG_ARG=""
-          [ -n "$FLY_ORG" ] && ORG_ARG="--org $FLY_ORG"
-          flyctl deploy --remote-only -a slugbase-staging $ORG_ARG
+        run: flyctl deploy --remote-only -a slugbase-staging

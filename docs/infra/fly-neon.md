@@ -53,9 +53,20 @@ fly apps create slugbase-prod
 
 ## 3. Set Secrets
 
-Secrets are configured per Fly app. Set them before the first deploy.
+Non-sensitive vars are in `fly.toml`. Sensitive values must be set via `fly secrets set` **before the first deploy**.
 
-**Staging:**
+### Required secrets
+
+| Secret | Description |
+|--------|-------------|
+| `DATABASE_URL` | Neon PostgreSQL connection string: `postgresql://user:pass@host/db?sslmode=require` |
+| `JWT_SECRET` | Min 32 chars. Generate: `openssl rand -hex 32` |
+| `ENCRYPTION_KEY` | Min 32 chars. Generate: `openssl rand -hex 32` |
+| `SESSION_SECRET` | Min 32 chars. Generate: `openssl rand -base64 48` |
+| `FRONTEND_URL` | Full URL of the app (e.g. `https://slugbase-staging.fly.dev`) |
+| `BASE_URL` | Full URL of the API (same as FRONTEND_URL for combined deploy) |
+
+**Example (staging):**
 
 ```bash
 fly secrets set \
@@ -65,25 +76,29 @@ fly secrets set \
   SESSION_SECRET="$(openssl rand -base64 48)" \
   FRONTEND_URL="https://slugbase-staging.fly.dev" \
   BASE_URL="https://slugbase-staging.fly.dev" \
-  DB_TYPE="postgresql" \
-  NODE_ENV="production" \
-  SLUGBASE_MODE="cloud" \
-  -a slugbase-staging
+  -a slugbase-staging --org <your-org>
 ```
 
-**Cloud mode only** – add OIDC and SMTP if needed:
+### Optional secrets (OIDC, SMTP, custom domain)
 
-```bash
-fly secrets set \
-  COOKIE_DOMAIN=".yourdomain.com" \
-  CORS_EXTRA_ORIGINS="https://yourdomain.com" \
-  OIDC_GOOGLE_CLIENT_ID="..." \
-  OIDC_GOOGLE_CLIENT_SECRET="..." \
-  # ... other OIDC/SMTP vars \
-  -a slugbase-staging
-```
+| Secret | Description |
+|--------|-------------|
+| `COOKIE_DOMAIN` | Cookie domain for shared auth (e.g. `.slugbase.app`) |
+| `CORS_EXTRA_ORIGINS` | Extra CORS origins, comma-separated |
+| `OIDC_GOOGLE_CLIENT_ID` | Google OAuth client ID |
+| `OIDC_GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
+| `OIDC_MICROSOFT_CLIENT_ID` | Microsoft OAuth client ID |
+| `OIDC_MICROSOFT_CLIENT_SECRET` | Microsoft OAuth client secret |
+| `OIDC_GITHUB_CLIENT_ID` | GitHub OAuth client ID |
+| `OIDC_GITHUB_CLIENT_SECRET` | GitHub OAuth client secret |
+| `SMTP_ENABLED` | `true` or `false` |
+| `SMTP_HOST` | SMTP server hostname |
+| `SMTP_USER` | SMTP username |
+| `SMTP_PASSWORD` | SMTP password |
+| `SMTP_FROM` | From email address |
+| `SMTP_FROM_NAME` | From display name |
 
-**Production** (when ready): repeat with production `DATABASE_URL`, `FRONTEND_URL`, `BASE_URL`, and other prod-specific values for `slugbase-prod`.
+**Production** (when ready): repeat the required secrets with production values for `slugbase-prod`.
 
 ---
 
