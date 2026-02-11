@@ -136,6 +136,7 @@ function AppRoutesSelfhosted() {
     <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="text-lg">{t('common.loading')}</div></div>}>
       <Routes>
         <Route path="/login" element={!user ? <Login /> : <Navigate to="/" replace />} />
+        <Route path="/contact" element={!user ? <Contact /> : <Navigate to="/" replace />} />
         <Route path="/reset-password" element={<PasswordReset />} />
         <Route path="/password-reset" element={<PasswordReset />} />
         <Route path="/verify-email" element={<VerifyEmail />} />

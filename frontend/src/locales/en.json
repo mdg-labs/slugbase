@@ -3,6 +3,21 @@
     "name": "SlugBase",
     "tagline": "Your links. Your structure. Your language. Your rules."
   },
+  "contact": {
+    "title": "Contact Us",
+    "description": "Have a question or feedback? We'd love to hear from you.",
+    "name": "Name",
+    "namePlaceholder": "Your name",
+    "email": "Email",
+    "emailPlaceholder": "your@email.com",
+    "message": "Message",
+    "messagePlaceholder": "How can we help you?",
+    "submit": "Send Message",
+    "successMessage": "Thank you! Your message has been sent. We'll get back to you soon.",
+    "confirmationNote": "A confirmation email has been sent to your email address.",
+    "backToLogin": "Back to Login",
+    "submitError": "Failed to submit. Please try again later."
+  },
   "auth": {
     "login": "Login",
     "logout": "Logout",

@@ -34,9 +34,9 @@ import adminSettingsRoutes from './routes/admin/settings.js';
 import adminDemoResetRoutes from './routes/admin/demo-reset.js';
 import passwordResetRoutes from './routes/password-reset.js';
 import emailVerificationRoutes from './routes/email-verification.js';
+import contactRoutes from './routes/contact.js';
 import csrfRoutes from './routes/csrf.js';
 import dashboardRoutes from './routes/dashboard.js';
-import contactRoutes from './routes/contact.js';
 import { DatabaseSessionStore } from './utils/session-store.js';
 
 // Validate required environment variables before starting
@@ -161,8 +161,7 @@ app.use((req: any, res: any, next: any) => {
     return next();
   }
   // Skip CSRF for password reset, OIDC callback, auth refresh, contact form
-  if (req.path.startsWith('/api/password-reset') || 
-      req.path.includes('/callback') ||
+  if (req.path.startsWith('/api/password-reset') ||
       req.path === '/api/auth/setup' ||
       req.path === '/api/auth/refresh' ||
       req.path === '/api/contact' ||
@@ -190,9 +189,7 @@ app.use('/api/admin/teams', adminTeamRoutes);
 app.use('/api/admin/settings', adminSettingsRoutes);
 app.use('/api/admin/demo-reset', adminDemoResetRoutes);
 app.use('/api/dashboard', dashboardRoutes);
-if (isCloud) {
-  app.use('/api/contact', contactRateLimiter, contactRoutes);
-}
+app.use('/api/contact', contactRateLimiter, contactRoutes);
 app.use('/api/go', goRoutes);
 
 // Health check

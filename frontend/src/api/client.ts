@@ -41,6 +41,7 @@ api.interceptors.request.use(
       // Skip CSRF for certain endpoints
       const skipCSRF = [
         '/password-reset',
+        '/contact',
         '/auth/setup',
         '/auth/login',
         '/auth/logout',

@@ -167,6 +167,7 @@ SlugBase supports two runtime modes. **SELFHOSTED** is the default and preserves
 - `SMTP_PASSWORD` - SMTP password
 - `SMTP_FROM_EMAIL` - From email address
 - `SMTP_FROM_NAME` - From name
+- `CONTACT_FORM_RECIPIENT` - Email address to receive contact form submissions (optional, per environment)
 
 ### Database Migrations
 

@@ -1,16 +1,17 @@
 /**
- * CLOUD mode: public contact form endpoint. Stub that accepts and logs; no email sent.
+ * Public contact form endpoint. Accepts form submissions and sends:
+ * - Confirmation email to the customer
+ * - Notification to CONTACT_FORM_RECIPIENT when configured
  * M1: No PII in logs; length validation; contactRateLimiter applied in index.
  */
 
 import { Router } from 'express';
-import { isCloud } from '../config/mode.js';
-import { validateEmail, validateLength, MAX_LENGTHS } from '../utils/validation.js';
+import { validateEmail, validateLength, normalizeEmail, MAX_LENGTHS } from '../utils/validation.js';
+import { sendContactConfirmationEmail, sendContactFormNotification } from '../utils/email.js';
 
 const router = Router();
 
-router.post('/', (req, res) => {
-  if (!isCloud) return res.status(404).json({ error: 'Not found' });
+router.post('/', async (req, res) => {
   const { name, email, message } = req.body || {};
   if (!name || !email || !message) {
     return res.status(400).json({ error: 'Name, email, and message are required' });
@@ -33,9 +34,35 @@ router.post('/', (req, res) => {
     return res.status(400).json({ error: messageValidation.error });
   }
 
+  const trimmedName = nameStr.trim();
+  const trimmedMessage = messageStr.trim();
+  const normalizedEmail = normalizeEmail(emailStr);
+
   // Do not log PII (M1)
   console.log('[Contact] Form submitted');
-  res.status(200).json({ ok: true });
+
+  // Send confirmation to the customer
+  const confirmationSent = await sendContactConfirmationEmail(normalizedEmail, trimmedName);
+  if (!confirmationSent) {
+    console.warn('Failed to send contact form confirmation email');
+  }
+
+  // Send notification to the configured recipient
+  const recipient = process.env.CONTACT_FORM_RECIPIENT?.trim();
+  if (recipient) {
+    const notificationSent = await sendContactFormNotification(recipient, {
+      name: trimmedName,
+      email: normalizedEmail,
+      message: trimmedMessage,
+    });
+    if (!notificationSent) {
+      console.warn('Failed to send contact form notification to recipient');
+    }
+  } else {
+    console.warn('CONTACT_FORM_RECIPIENT not configured - no notification sent');
+  }
+
+  res.status(200).json({ ok: true, message: "Thank you for your message. We'll get back to you soon." });
 });
 
 export default router;

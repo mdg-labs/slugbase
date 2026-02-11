@@ -3,6 +3,21 @@
     "name": "SlugBase",
     "tagline": "Tus enlaces. Tu estructura. Tu idioma. Tus reglas."
   },
+  "contact": {
+    "title": "Contacto",
+    "description": "¿Tienes una pregunta o comentarios? Nos encantaría saber de ti.",
+    "name": "Nombre",
+    "namePlaceholder": "Tu nombre",
+    "email": "Correo electrónico",
+    "emailPlaceholder": "tu@email.com",
+    "message": "Mensaje",
+    "messagePlaceholder": "¿Cómo podemos ayudarte?",
+    "submit": "Enviar mensaje",
+    "successMessage": "¡Gracias! Tu mensaje ha sido enviado. Te responderemos pronto.",
+    "confirmationNote": "Se ha enviado un correo de confirmación a tu dirección.",
+    "backToLogin": "Volver a iniciar sesión",
+    "submitError": "Error al enviar. Por favor, inténtalo de nuevo más tarde."
+  },
   "auth": {
     "login": "Iniciar sesión",
     "logout": "Cerrar sesión",

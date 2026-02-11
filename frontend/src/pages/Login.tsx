@@ -159,6 +159,12 @@ export default function Login() {
               >
                 {t('auth.forgotPassword')}
               </Link>
+              <Link
+                to="/contact"
+                className="block text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+              >
+                {t('contact.title')}
+              </Link>
               {isCloud && (
                 <p className="text-sm text-gray-600 dark:text-gray-400">
                   {t('signup.noAccount')}{' '}

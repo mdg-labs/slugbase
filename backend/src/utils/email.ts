@@ -384,6 +384,127 @@ export async function sendEmailVerificationEmail(email: string, verificationToke
   return result.success;
 }
 
+export interface ContactFormData {
+  name: string;
+  email: string;
+  message: string;
+}
+
+/**
+ * Send contact form confirmation to the customer
+ */
+export async function sendContactConfirmationEmail(email: string, name: string): Promise<boolean> {
+  const escapedName = escapeHtml(name);
+  const escapedEmail = escapeHtml(email);
+
+  const subject = 'We received your message - SlugBase';
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Message Received</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f4f4f4; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f4f4f4;">
+    <tr>
+      <td align="center" style="padding: 40px 20px;">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="max-width: 600px; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+          <tr>
+            <td style="padding: 40px 40px 30px; text-align: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px 8px 0 0;">
+              <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 600;">SlugBase</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 40px;">
+              <h2 style="margin: 0 0 20px; color: #1a1a1a; font-size: 24px; font-weight: 600;">We received your message</h2>
+              <p style="margin: 0 0 20px; color: #4a4a4a; font-size: 16px; line-height: 1.6;">Hi ${escapedName},</p>
+              <p style="margin: 0 0 20px; color: #4a4a4a; font-size: 16px; line-height: 1.6;">Thank you for reaching out! We have received your message and will get back to you at ${escapedEmail} as soon as possible.</p>
+              <p style="margin: 30px 0 0; color: #6b7280; font-size: 14px; line-height: 1.6;">Best regards,<br>The SlugBase Team</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 30px 40px; background-color: #f9fafb; border-top: 1px solid #e5e7eb; border-radius: 0 0 8px 8px;">
+              <p style="margin: 0; color: #9ca3af; font-size: 12px; line-height: 1.6; text-align: center;">This is an automated confirmation from SlugBase.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `;
+
+  const result = await sendEmail(email, subject, html);
+  return result.success;
+}
+
+/**
+ * Send contact form submission to the configured recipient
+ */
+export async function sendContactFormNotification(recipient: string, data: ContactFormData): Promise<boolean> {
+  const escapedName = escapeHtml(data.name);
+  const escapedEmail = escapeHtml(data.email);
+  const escapedMessage = escapeHtml(data.message).replace(/\n/g, '<br>');
+
+  const subject = `Contact Form: Message from ${escapedName}`;
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contact Form Submission</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f4f4f4; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f4f4f4;">
+    <tr>
+      <td align="center" style="padding: 40px 20px;">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="max-width: 600px; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+          <tr>
+            <td style="padding: 40px 40px 30px; text-align: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px 8px 0 0;">
+              <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 600;">New Contact Form Submission</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 40px;">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 0 0 20px; background-color: #f9fafb; border-radius: 6px; border: 1px solid #e5e7eb;">
+                <tr>
+                  <td style="padding: 16px;">
+                    <p style="margin: 0 0 8px; color: #6b7280; font-size: 12px; font-weight: 600; text-transform: uppercase;">Name</p>
+                    <p style="margin: 0; color: #1a1a1a; font-size: 16px;">${escapedName}</p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 16px; border-top: 1px solid #e5e7eb;">
+                    <p style="margin: 0 0 8px; color: #6b7280; font-size: 12px; font-weight: 600; text-transform: uppercase;">Email</p>
+                    <p style="margin: 0;"><a href="mailto:${escapedEmail}" style="color: #667eea; text-decoration: none;">${escapedEmail}</a></p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 16px; border-top: 1px solid #e5e7eb;">
+                    <p style="margin: 0 0 8px; color: #6b7280; font-size: 12px; font-weight: 600; text-transform: uppercase;">Message</p>
+                    <p style="margin: 0; color: #1a1a1a; font-size: 16px; line-height: 1.6; white-space: pre-wrap;">${escapedMessage}</p>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin: 20px 0 0; color: #9ca3af; font-size: 12px;">Submitted via SlugBase contact form</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `;
+
+  const result = await sendEmail(recipient, subject, html);
+  return result.success;
+}
+
 /**
  * Send signup verification email (CLOUD registration)
  */

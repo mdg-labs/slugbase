@@ -3,6 +3,21 @@
     "name": "SlugBase",
     "tagline": "Jouw links. Jouw structuur. Jouw taal. Jouw regels."
   },
+  "contact": {
+    "title": "Contact",
+    "description": "Heb je een vraag of feedback? We horen graag van je.",
+    "name": "Naam",
+    "namePlaceholder": "Je naam",
+    "email": "E-mail",
+    "emailPlaceholder": "jouw@email.com",
+    "message": "Bericht",
+    "messagePlaceholder": "Hoe kunnen we je helpen?",
+    "submit": "Verstuur bericht",
+    "successMessage": "Bedankt! Je bericht is verzonden. We nemen snel contact met je op.",
+    "confirmationNote": "Er is een bevestigingsmail naar je e-mailadres gestuurd.",
+    "backToLogin": "Terug naar inloggen",
+    "submitError": "Verzenden mislukt. Probeer het later opnieuw."
+  },
   "auth": {
     "login": "Inloggen",
     "logout": "Uitloggen",

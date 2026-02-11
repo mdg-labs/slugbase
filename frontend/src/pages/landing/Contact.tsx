@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ExternalLink } from 'lucide-react';
 import api from '../../api/client';
-import { isCloud } from '../../config/mode';
 import MarketingLayout from '../../components/MarketingLayout';
 
 const GITHUB_URL = 'https://github.com/ghotso/slugbase';
@@ -31,10 +30,6 @@ export default function Contact() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (!isCloud) {
-      window.location.href = `mailto:?subject=SlugBase%20contact&body=${encodeURIComponent(`Name: ${name}\nEmail: ${email}\n\n${message}`)}`;
-      return;
-    }
     setLoading(true);
     try {
       await api.post('/contact', { name, email, message });

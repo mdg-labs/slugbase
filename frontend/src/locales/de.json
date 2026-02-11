@@ -3,6 +3,21 @@
     "name": "SlugBase",
     "tagline": "Ihre Links. Ihre Struktur. Ihre Sprache. Ihre Regeln."
   },
+  "contact": {
+    "title": "Kontakt",
+    "description": "Haben Sie eine Frage oder Feedback? Wir freuen uns von Ihnen zu hören.",
+    "name": "Name",
+    "namePlaceholder": "Ihr Name",
+    "email": "E-Mail",
+    "emailPlaceholder": "ihre@email.com",
+    "message": "Nachricht",
+    "messagePlaceholder": "Wie können wir Ihnen helfen?",
+    "submit": "Nachricht senden",
+    "successMessage": "Vielen Dank! Ihre Nachricht wurde gesendet. Wir melden uns bald bei Ihnen.",
+    "confirmationNote": "Eine Bestätigungs-E-Mail wurde an Ihre E-Mail-Adresse gesendet.",
+    "backToLogin": "Zurück zur Anmeldung",
+    "submitError": "Senden fehlgeschlagen. Bitte versuchen Sie es später erneut."
+  },
   "auth": {
     "login": "Anmelden",
     "logout": "Abmelden",
