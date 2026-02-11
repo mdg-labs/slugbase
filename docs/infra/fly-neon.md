@@ -94,11 +94,11 @@ fly secrets set \
    - **For organizations:** run `fly tokens create org --org <your-org-slug>` (required to create apps)
    - **For personal account:** run `fly auth token`
    - Paste the token as the secret value
-3. If using a **Fly.io organization**, add **`FLY_ORG`** (variable) – **required**:
-   - **Settings** → **Secrets and variables** → **Actions** → **Variables**
-   - New variable: name `FLY_ORG`, value = your org slug (e.g. `my-company`)
+3. If using a **Fly.io organization**, add **`FLY_ORG`** as a **secret** (required):
+   - **Settings** → **Secrets and variables** → **Actions** → **Secrets**
+   - New secret: name `FLY_ORG`, value = your org slug (e.g. `my-company`)
    - Find your org slug: `fly orgs list` or in the Fly.io dashboard URL
-   - Without this, deploys will fail with "app not found"
+   - Use a secret (not a variable) – org variables can be unavailable in some GitHub configs
 
 ---
 
