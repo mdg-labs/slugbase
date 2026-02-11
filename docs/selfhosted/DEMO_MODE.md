@@ -8,7 +8,9 @@ sidebar_position: 15
 
 ## Overview
 
-SlugBase supports a **DEMO_MODE** that automatically seeds the database with demo data and provides periodic resets for public demonstration instances. This is ideal for showcasing SlugBase without manual setup or data management.
+> **Note:** DEMO_MODE is for self-hosters who want to run a demo-like instance (e.g. for development or internal testing). To let users try SlugBase without self-hosting, direct them to [SlugBase Cloud](https://slugbase.app). The Free Plan on SlugBase Cloud serves as the "try before you buy" experience.
+
+SlugBase supports a **DEMO_MODE** that automatically seeds the database with demo data and provides periodic resets for self-hosted demonstration instances. This is ideal for showcasing SlugBase in your own environment without manual setup or data management.
 
 ## Features
 

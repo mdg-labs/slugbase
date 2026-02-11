@@ -16,7 +16,7 @@ SlugBase Cloud is the hosted SaaS version of SlugBase. Use bookmark management, 
 
 ## Getting started
 
-1. Sign up at the SlugBase Cloud URL (or log in with Google, Microsoft, or GitHub).
+1. Sign up at **[https://slugbase.app](https://slugbase.app)** (or log in with Google, Microsoft, or GitHub).
 2. Create your first bookmark and organize with folders and tags.
 3. Optionally enable link forwarding for short URLs.
 

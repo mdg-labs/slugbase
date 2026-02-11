@@ -13,6 +13,8 @@ import { isCloud } from '../config/mode.js';
 import { getAuthCookieOptions, getClearAuthCookieOptions } from '../config/cookies.js';
 import { getCloudProviders } from '../config/cloud-providers.js';
 import { createRefreshToken, rotateRefreshToken, revokeRefreshTokensForUser, findUserIdByRefreshToken } from '../utils/refresh-token.js';
+import { sendSignupVerificationEmail } from '../utils/email.js';
+import crypto from 'crypto';
 
 const router = Router();
 
@@ -233,6 +235,12 @@ router.post('/login', authRateLimiter, async (req, res, next) => {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
+    // Require email verification for password users (CLOUD signup flow)
+    const emailVerified = (user as any).email_verified;
+    if (emailVerified === false || emailVerified === 0) {
+      return res.status(403).json({ error: 'Please verify your email', code: 'EMAIL_NOT_VERIFIED' });
+    }
+
     const userPayload = {
       id: (user as any).id,
       email: (user as any).email,
@@ -295,6 +303,165 @@ router.post('/logout', async (req, res) => {
   }
   res.clearCookie('token', clearOpts);
   res.json({ message: 'Logged out' });
+});
+
+/**
+ * POST /auth/register — CLOUD only. Create account with email verification.
+ * Returns 404 when not CLOUD so SELFHOSTED never exposes public registration.
+ */
+router.post('/register', authRateLimiter, async (req, res) => {
+  if (!isCloud) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  const registrationsEnabled = process.env.REGISTRATIONS_ENABLED !== 'false';
+  if (!registrationsEnabled) {
+    return res.status(403).json({ error: 'Registrations are disabled' });
+  }
+  const initialized = await isInitialized();
+  if (!initialized) {
+    return res.status(403).json({ error: 'System is not ready for registration' });
+  }
+
+  try {
+    const { email, name, password } = req.body;
+    if (!email || !name || !password) {
+      return res.status(400).json({ error: 'Email, name, and password are required' });
+    }
+
+    const emailValidation = validateEmail(email);
+    if (!emailValidation.valid) {
+      return res.status(400).json({ error: emailValidation.error });
+    }
+    const normalizedEmail = normalizeEmail(email);
+
+    const nameValidation = validateLength(name, 'Name', 1, 255);
+    if (!nameValidation.valid) {
+      return res.status(400).json({ error: nameValidation.error });
+    }
+    const sanitizedName = sanitizeString(name);
+
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.valid) {
+      return res.status(400).json({ error: passwordValidation.error });
+    }
+
+    const existingUser = await queryOne('SELECT id FROM users WHERE email = ?', [normalizedEmail]);
+    if (existingUser) {
+      return res.status(400).json({ error: 'Email already registered' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const userId = uuidv4();
+    let userKey = await generateUserKey();
+
+    const DB_TYPE = process.env.DB_TYPE || 'sqlite';
+
+    let retries = 0;
+    const maxRetries = 3;
+    while (retries < maxRetries) {
+      try {
+        if (DB_TYPE === 'postgresql') {
+          await execute(
+            `INSERT INTO users (id, email, name, user_key, password_hash, is_admin, email_verified)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [userId, normalizedEmail, sanitizedName, userKey, passwordHash, false, false]
+          );
+        } else {
+          await execute(
+            `INSERT INTO users (id, email, name, user_key, password_hash, is_admin, email_verified)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [userId, normalizedEmail, sanitizedName, userKey, passwordHash, false, 0]
+          );
+        }
+        break;
+      } catch (error: any) {
+        if (error.message && (error.message.includes('UNIQUE constraint') || error.message.includes('duplicate')) && error.message.includes('user_key')) {
+          retries++;
+          if (retries >= maxRetries) {
+            return res.status(500).json({ error: 'Failed to complete registration. Please try again.' });
+          }
+          userKey = await generateUserKey();
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    const tokenId = uuidv4();
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const expiresAtStr = expiresAt.toISOString();
+    const usedDefault = DB_TYPE === 'postgresql' ? false : 0;
+
+    if (DB_TYPE === 'postgresql') {
+      await execute(
+        `INSERT INTO signup_verification_tokens (id, user_id, token, expires_at, used)
+         VALUES (?, ?, ?, ?, ?)`,
+        [tokenId, userId, token, expiresAtStr, false]
+      );
+    } else {
+      await execute(
+        `INSERT INTO signup_verification_tokens (id, user_id, token, expires_at, used)
+         VALUES (?, ?, ?, ?, ?)`,
+        [tokenId, userId, token, expiresAtStr, 0]
+      );
+    }
+
+    const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+    const verificationUrl = `${frontendUrl}/app/verify-email?token=${encodeURIComponent(token)}`;
+    await sendSignupVerificationEmail(normalizedEmail, verificationUrl);
+
+    return res.status(201).json({ message: 'Check your email to verify your account' });
+  } catch (error: any) {
+    console.error('Register error:', error);
+    return res.status(500).json({ error: error.message || 'Registration failed' });
+  }
+});
+
+/**
+ * POST /auth/verify-signup — CLOUD only. Verify signup token and set email_verified.
+ */
+router.post('/verify-signup', authRateLimiter, async (req, res) => {
+  if (!isCloud) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  try {
+    const { token } = req.body;
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({ error: 'Token is required' });
+    }
+
+    const row = await queryOne(
+      'SELECT id, user_id, expires_at, used FROM signup_verification_tokens WHERE token = ?',
+      [token.trim()]
+    );
+    if (!row) {
+      return res.status(400).json({ error: 'Invalid or expired verification link' });
+    }
+
+    const r = row as any;
+    if (r.used === true || r.used === 1) {
+      return res.status(400).json({ error: 'This verification link has already been used' });
+    }
+    const expiresAt = new Date(r.expires_at);
+    if (expiresAt.getTime() < Date.now()) {
+      return res.status(400).json({ error: 'This verification link has expired' });
+    }
+
+    const DB_TYPE = process.env.DB_TYPE || 'sqlite';
+    if (DB_TYPE === 'postgresql') {
+      await execute('UPDATE users SET email_verified = TRUE WHERE id = ?', [r.user_id]);
+      await execute('UPDATE signup_verification_tokens SET used = TRUE WHERE id = ?', [r.id]);
+    } else {
+      await execute('UPDATE users SET email_verified = 1 WHERE id = ?', [r.user_id]);
+      await execute('UPDATE signup_verification_tokens SET used = 1 WHERE id = ?', [r.id]);
+    }
+
+    return res.json({ message: 'Email verified. You can log in.' });
+  } catch (error: any) {
+    console.error('Verify-signup error:', error);
+    return res.status(500).json({ error: error.message || 'Verification failed' });
+  }
 });
 
 /**

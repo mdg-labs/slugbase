@@ -20,11 +20,15 @@ const Admin = lazy(() => import('./pages/Admin'));
 const Shared = lazy(() => import('./pages/Shared'));
 const PasswordReset = lazy(() => import('./pages/PasswordReset'));
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
+const Signup = lazy(() => import('./pages/Signup'));
 const SearchEngineGuide = lazy(() => import('./pages/SearchEngineGuide'));
 const GoPreferences = lazy(() => import('./pages/GoPreferences'));
 const Landing = lazy(() => import('./pages/landing/Landing'));
 const Pricing = lazy(() => import('./pages/landing/Pricing'));
 const Contact = lazy(() => import('./pages/landing/Contact'));
+const Terms = lazy(() => import('./pages/landing/Terms'));
+const Privacy = lazy(() => import('./pages/landing/Privacy'));
+const Imprint = lazy(() => import('./pages/landing/Imprint'));
 
 const loginPath = () => (isCloud ? '/app/login' : '/login');
 const appRootPath = () => (isCloud ? '/app' : '/');
@@ -159,8 +163,12 @@ function AppRoutesCloud() {
         <Route path="/" element={<Landing />} />
         <Route path="/pricing" element={<Pricing />} />
         <Route path="/contact" element={<Contact />} />
+        <Route path="/terms" element={<Terms />} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/imprint" element={<Imprint />} />
         <Route path="/app" element={<AppGate><Outlet /></AppGate>}>
           <Route path="login" element={<Login />} />
+          <Route path="signup" element={<Signup />} />
           <Route path="reset-password" element={<PasswordReset />} />
           <Route path="password-reset" element={<PasswordReset />} />
           <Route path="verify-email" element={<VerifyEmail />} />

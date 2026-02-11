@@ -23,6 +23,12 @@ function boolToDb(value: boolean | undefined | null): number | boolean | null {
   return value ? 1 : 0;
 }
 
+/** Convert ? placeholders to $1, $2, ... for PostgreSQL */
+function toPg(sql: string): string {
+  let n = 0;
+  return sql.replace(/\?/g, () => `$${++n}`);
+}
+
 if (DB_TYPE === 'postgresql') {
   db = new Pool({
     host: process.env.DB_HOST || 'localhost',
@@ -92,7 +98,7 @@ export async function initDatabase() {
 export async function query(sql: string, params: any[] = []) {
   if (DB_TYPE === 'postgresql') {
     const pool = db as Pool;
-    const result = await pool.query(sql, params);
+    const result = await pool.query(toPg(sql), params);
     return result.rows;
   } else {
     const sqlite = db as Database.Database;
@@ -103,7 +109,7 @@ export async function query(sql: string, params: any[] = []) {
 export async function queryOne(sql: string, params: any[] = []) {
   if (DB_TYPE === 'postgresql') {
     const pool = db as Pool;
-    const result = await pool.query(sql, params);
+    const result = await pool.query(toPg(sql), params);
     return result.rows[0] || null;
   } else {
     const sqlite = db as Database.Database;
@@ -122,7 +128,7 @@ export async function execute(sql: string, params: any[] = []) {
 
   if (DB_TYPE === 'postgresql') {
     const pool = db as Pool;
-    const result = await pool.query(sql, processedParams);
+    const result = await pool.query(toPg(sql), processedParams);
     return { changes: result.rowCount || 0, lastInsertRowid: null };
   } else {
     const sqlite = db as Database.Database;

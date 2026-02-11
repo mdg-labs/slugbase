@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../api/client';
+import { isCloud } from '../config/mode';
 import { CheckCircle, XCircle, Mail } from 'lucide-react';
 import Button from '../components/ui/Button';
 
@@ -11,9 +12,11 @@ export default function VerifyEmail() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { checkAuth } = useAuth();
+  const profilePath = isCloud ? '/app/profile' : '/profile';
   const [status, setStatus] = useState<'verifying' | 'success' | 'error'>('verifying');
   const [error, setError] = useState('');
   const [newEmail, setNewEmail] = useState('');
+  const [signupVerified, setSignupVerified] = useState(false);
 
   useEffect(() => {
     const token = searchParams.get('token');
@@ -23,33 +26,41 @@ export default function VerifyEmail() {
       return;
     }
 
-    // Verify token first
-    api.get('/email-verification/verify', { params: { token } })
-      .then(async (response) => {
-        if (response.data.valid) {
-          setNewEmail(response.data.newEmail || '');
-          // Confirm the verification
-          try {
-            await api.post('/email-verification/confirm', { token });
-            setStatus('success');
-            // Refresh auth to get updated user data
-            await checkAuth();
-            // Redirect to profile after a delay
-            setTimeout(() => {
-              navigate('/profile');
-            }, 3000);
-          } catch (err: any) {
-            setStatus('error');
-            setError(err.response?.data?.error || t('emailVerification.confirmFailed'));
-          }
-        } else {
-          setStatus('error');
-          setError(response.data.error || t('emailVerification.invalidToken'));
-        }
+    // Try signup verification first (CLOUD registration)
+    api.post('/auth/verify-signup', { token })
+      .then(() => {
+        setStatus('success');
+        setSignupVerified(true);
+        setTimeout(() => {
+          navigate('/app/login');
+        }, 2500);
       })
-      .catch((err: any) => {
-        setStatus('error');
-        setError(err.response?.data?.error || t('emailVerification.verifyFailed'));
+      .catch(() => {
+        // Not a signup token; try profile email-change verification
+        api.get('/email-verification/verify', { params: { token } })
+          .then(async (response) => {
+            if (response.data.valid) {
+              setNewEmail(response.data.newEmail || '');
+              try {
+                await api.post('/email-verification/confirm', { token });
+                setStatus('success');
+                await checkAuth();
+                setTimeout(() => {
+                  navigate(profilePath);
+                }, 3000);
+              } catch (err: any) {
+                setStatus('error');
+                setError(err.response?.data?.error || t('emailVerification.confirmFailed'));
+              }
+            } else {
+              setStatus('error');
+              setError(response.data.error || t('emailVerification.invalidToken'));
+            }
+          })
+          .catch((err: any) => {
+            setStatus('error');
+            setError(err.response?.data?.error || t('emailVerification.verifyFailed'));
+          });
       });
   }, [searchParams, t, navigate, checkAuth]);
 
@@ -77,14 +88,16 @@ export default function VerifyEmail() {
                 <CheckCircle className="h-8 w-8 text-green-600 dark:text-green-400" />
               </div>
               <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">
-                {t('emailVerification.success')}
+                {signupVerified ? t('emailVerification.signupSuccess') : t('emailVerification.success')}
               </h2>
               <p className="text-gray-600 dark:text-gray-400">
-                {t('emailVerification.successDescription', { email: newEmail })}
+                {signupVerified ? t('emailVerification.signupSuccessDescription') : t('emailVerification.successDescription', { email: newEmail })}
               </p>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                {t('emailVerification.redirecting')}
-              </p>
+              {!signupVerified && (
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  {t('emailVerification.redirecting')}
+                </p>
+              )}
             </>
           )}
 
@@ -102,7 +115,7 @@ export default function VerifyEmail() {
               <div className="pt-4">
                 <Button
                   variant="primary"
-                  onClick={() => navigate('/profile')}
+                  onClick={() => navigate(profilePath)}
                 >
                   {t('emailVerification.backToProfile')}
                 </Button>

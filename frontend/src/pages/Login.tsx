@@ -69,7 +69,13 @@ export default function Login() {
       const safePath = redirectTo?.startsWith('/') && !redirectTo.startsWith('//') ? redirectTo : null;
       window.location.href = safePath || (isCloud ? '/app' : '/');
     } catch (err: any) {
-      setError(err.response?.data?.error || t('auth.loginFailed'));
+      const code = err.response?.data?.code;
+      const message = err.response?.data?.error;
+      if (code === 'EMAIL_NOT_VERIFIED') {
+        setError(t('auth.verifyEmailRequired'));
+      } else {
+        setError(message || t('auth.loginFailed'));
+      }
     } finally {
       setLocalLoading(false);
     }
@@ -146,13 +152,21 @@ export default function Login() {
             >
               {localLoading ? t('common.loading') : t('auth.login')}
             </Button>
-            <div className="text-center">
+            <div className="text-center space-y-2">
               <Link
-                to="/password-reset"
-                className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+                to={isCloud ? '/app/password-reset' : '/password-reset'}
+                className="block text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
               >
                 {t('auth.forgotPassword')}
               </Link>
+              {isCloud && (
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {t('signup.noAccount')}{' '}
+                  <Link to="/app/signup" className="font-medium text-blue-600 dark:text-blue-400 hover:underline">
+                    {t('auth.signUp')}
+                  </Link>
+                </p>
+              )}
             </div>
           </form>
 

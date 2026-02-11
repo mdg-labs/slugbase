@@ -114,6 +114,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } else {
       root.classList.remove('dark');
     }
+    // Sync to localStorage for consistency when user logs out
+    localStorage.setItem('slugbase_theme', theme);
   }
 
   return (
