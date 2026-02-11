@@ -1,11 +1,17 @@
-# SlugBase backend - Fly.io configuration
+# SlugBase - Fly.io configuration (frontend + backend combined)
 # Default app: slugbase-staging. Use -a slugbase-prod for production deploys.
 
 app = "slugbase-staging"
 primary_region = "fra"
 
 [build]
-  dockerfile = "Dockerfile.backend"
+  dockerfile = "Dockerfile"
+  [build.args]
+    VITE_SLUGBASE_MODE = "cloud"
+    VITE_API_URL = ""
+
+[env]
+  PORT = "8080"
 
 [http_service]
   internal_port = 8080

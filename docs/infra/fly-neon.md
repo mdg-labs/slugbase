@@ -1,6 +1,6 @@
 # SlugBase on Fly.io with Neon PostgreSQL
 
-This document covers deploying the SlugBase backend to Fly.io with Neon PostgreSQL. The setup supports staging (active) and production (ready when needed), both hosted in the EU (Frankfurt).
+This document covers deploying SlugBase to Fly.io with Neon PostgreSQL. The deployment uses the **combined image** (frontend + backend) so a single Fly app serves the full stack. The setup supports staging (active) and production (ready when needed), both hosted in the EU (Frankfurt).
 
 ---
 
@@ -63,7 +63,7 @@ fly secrets set \
   JWT_SECRET="$(openssl rand -hex 32)" \
   ENCRYPTION_KEY="$(openssl rand -hex 32)" \
   SESSION_SECRET="$(openssl rand -base64 48)" \
-  FRONTEND_URL="https://your-staging-frontend.pages.dev" \
+  FRONTEND_URL="https://slugbase-staging.fly.dev" \
   BASE_URL="https://slugbase-staging.fly.dev" \
   DB_TYPE="postgresql" \
   NODE_ENV="production" \
