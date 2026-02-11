@@ -24,6 +24,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     env:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      FLY_ACCESS_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       FLY_ORG: ${{ vars.FLY_ORG }}
 
     steps:
@@ -37,7 +38,7 @@ jobs:
         run: |
           ORG_ARG=""
           [ -n "$FLY_ORG" ] && ORG_ARG="--org $FLY_ORG"
-          flyctl apps create slugbase-prod $ORG_ARG -o json || true
+          flyctl apps create slugbase-prod $ORG_ARG --json || true
 
       - name: Deploy to Fly.io
         run: |

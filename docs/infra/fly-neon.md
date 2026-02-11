@@ -91,12 +91,14 @@ fly secrets set \
 
 1. In GitHub: **Settings** → **Secrets and variables** → **Actions**
 2. Add **`FLY_API_TOKEN`** (secret):
-   - Run `fly auth token` (or `fly tokens create deploy` for deploy-only)
+   - **For organizations:** run `fly tokens create org --org <your-org-slug>` (required to create apps)
+   - **For personal account:** run `fly auth token`
    - Paste the token as the secret value
-3. If using a **Fly.io organization**, add **`FLY_ORG`** (variable):
+3. If using a **Fly.io organization**, add **`FLY_ORG`** (variable) – **required**:
    - **Settings** → **Secrets and variables** → **Actions** → **Variables**
    - New variable: name `FLY_ORG`, value = your org slug (e.g. `my-company`)
    - Find your org slug: `fly orgs list` or in the Fly.io dashboard URL
+   - Without this, deploys will fail with "app not found"
 
 ---
 
