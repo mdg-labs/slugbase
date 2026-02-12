@@ -1,5 +1,8 @@
-# SlugBase - Fly.io configuration (frontend + backend combined)
-# Default app: slugbase-staging. Use -a slugbase-prod for production deploys.
+# SlugBase - Fly.io configuration (shared by staging and prod)
+# GitHub Actions deploy:
+#   - Staging: fly deploy -a slugbase-staging (dev, staging branches)
+#   - Production: fly deploy -a slugbase-prod (main branch)
+# The app= below is the default; workflows override via -a.
 #
 # REQUIRED SECRETS (set via: fly secrets set KEY=value -a slugbase-staging):
 #   DATABASE_URL, JWT_SECRET, ENCRYPTION_KEY, SESSION_SECRET, FRONTEND_URL, BASE_URL
