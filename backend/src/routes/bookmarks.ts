@@ -179,6 +179,27 @@ router.get('/', async (req, res) => {
       params.push(tagIdStr);
     }
 
+    // Count query: same FROM/WHERE, no ORDER BY/LIMIT
+    const countSql = `
+      SELECT COUNT(DISTINCT b.id) as total
+      FROM bookmarks b
+      LEFT JOIN bookmark_user_shares bus ON b.id = bus.bookmark_id
+      LEFT JOIN bookmark_team_shares bts ON b.id = bts.bookmark_id
+      LEFT JOIN bookmark_folders bf ON b.id = bf.bookmark_id
+      LEFT JOIN folder_user_shares fus ON bf.folder_id = fus.folder_id
+      LEFT JOIN folder_team_shares fts ON bf.folder_id = fts.folder_id
+      WHERE (b.user_id = ?
+        OR bus.user_id = ?
+        OR (bts.team_id IN (${teamIds.length > 0 ? teamIds.map(() => '?').join(',') : 'NULL'}) AND bts.team_id IS NOT NULL)
+        OR (fus.user_id = ?)
+        OR (fts.team_id IN (${teamIds.length > 0 ? teamIds.map(() => '?').join(',') : 'NULL'}) AND fts.team_id IS NOT NULL AND bf.folder_id IS NOT NULL))
+      ${folderIdStr ? 'AND b.id IN (SELECT bookmark_id FROM bookmark_folders WHERE folder_id = ?)' : ''}
+      ${tagIdStr ? 'AND b.id IN (SELECT bookmark_id FROM bookmark_tags WHERE tag_id = ?)' : ''}
+    `;
+    const countParams = [userId, userId, ...(teamIds.length > 0 ? teamIds : []), userId, ...(teamIds.length > 0 ? teamIds : [])];
+    if (folderIdStr) countParams.push(folderIdStr);
+    if (tagIdStr) countParams.push(tagIdStr);
+
     // Add sorting
     const sortBy = sort_by as string || 'recently_added';
     const DB_TYPE = process.env.DB_TYPE || 'sqlite';
@@ -204,14 +225,21 @@ router.get('/', async (req, res) => {
         break;
     }
 
-    // Fetch limit+1 to determine hasMore without a separate COUNT query (avoids PostgreSQL/SQLite compatibility issues)
+    // Fetch limit+1 to determine hasMore
     sql += ` LIMIT ? OFFSET ?`;
     params.push(limit + 1, offset);
 
-    const rawBookmarks = await query(sql, params);
+    const [rawBookmarksResult, countResult] = await Promise.all([
+      query(sql, params),
+      query(countSql, countParams),
+    ]);
+
+    const rawBookmarks = rawBookmarksResult;
+    const total = (Array.isArray(countResult) && countResult[0] && typeof (countResult[0] as any).total === 'number')
+      ? (countResult[0] as any).total
+      : 0;
     const hasMore = Array.isArray(rawBookmarks) && rawBookmarks.length > limit;
     const bookmarks = hasMore ? rawBookmarks.slice(0, limit) : rawBookmarks;
-    const total = hasMore ? offset + limit + 1 : offset + (Array.isArray(rawBookmarks) ? rawBookmarks.length : 0);
     const bookmarkList = (Array.isArray(bookmarks) ? bookmarks : []) as any[];
 
     // Batch load related data (avoids N+1 queries)
@@ -623,6 +651,96 @@ router.get('/export', async (req, res) => {
   } catch (error: any) {
     console.error('Export error:', error);
     res.status(500).json({ error: 'Export failed' });
+  }
+});
+
+// Get bookmark IDs only (for select-all-across-pages) - must be before /:id route
+router.get('/ids', async (req, res) => {
+  const authReq = req as AuthRequest;
+  try {
+    const userId = authReq.user!.id;
+    const { folder_id, tag_id, sort_by } = req.query;
+
+    const folderIdStr = typeof folder_id === 'string' ? folder_id : undefined;
+    const tagIdStr = typeof tag_id === 'string' ? tag_id : undefined;
+    if (folderIdStr) {
+      const canAccess = await canAccessFolder(userId, folderIdStr);
+      if (!canAccess) {
+        return res.status(404).json({ error: 'Folder not found' });
+      }
+    }
+    if (tagIdStr) {
+      const canAccess = await canAccessTag(userId, tagIdStr);
+      if (!canAccess) {
+        return res.status(404).json({ error: 'Tag not found' });
+      }
+    }
+
+    const userTeams = await query(
+      'SELECT team_id FROM team_members WHERE user_id = ?',
+      [userId]
+    );
+    const teamIds = Array.isArray(userTeams) ? userTeams.map((t: any) => t.team_id) : [];
+
+    let idsSql = `
+      SELECT DISTINCT b.id
+      FROM bookmarks b
+      LEFT JOIN bookmark_user_shares bus ON b.id = bus.bookmark_id
+      LEFT JOIN bookmark_team_shares bts ON b.id = bts.bookmark_id
+      LEFT JOIN bookmark_folders bf ON b.id = bf.bookmark_id
+      LEFT JOIN folder_user_shares fus ON bf.folder_id = fus.folder_id
+      LEFT JOIN folder_team_shares fts ON bf.folder_id = fts.folder_id
+      WHERE (b.user_id = ?
+        OR bus.user_id = ?
+        OR (bts.team_id IN (${teamIds.length > 0 ? teamIds.map(() => '?').join(',') : 'NULL'}) AND bts.team_id IS NOT NULL)
+        OR (fus.user_id = ?)
+        OR (fts.team_id IN (${teamIds.length > 0 ? teamIds.map(() => '?').join(',') : 'NULL'}) AND fts.team_id IS NOT NULL AND bf.folder_id IS NOT NULL))
+    `;
+    const idsParams: any[] = [userId, userId, userId, userId];
+    if (teamIds.length > 0) {
+      idsParams.push(...teamIds);
+      idsParams.push(...teamIds);
+    }
+    if (folderIdStr) {
+      idsSql += ' AND b.id IN (SELECT bookmark_id FROM bookmark_folders WHERE folder_id = ?)';
+      idsParams.push(folderIdStr);
+    }
+    if (tagIdStr) {
+      idsSql += ' AND b.id IN (SELECT bookmark_id FROM bookmark_tags WHERE tag_id = ?)';
+      idsParams.push(tagIdStr);
+    }
+
+    const sortBy = sort_by as string || 'recently_added';
+    const DB_TYPE = process.env.DB_TYPE || 'sqlite';
+    switch (sortBy) {
+      case 'alphabetical':
+        idsSql += ' ORDER BY b.title ASC';
+        break;
+      case 'most_used':
+        idsSql += ' ORDER BY COALESCE(b.access_count, 0) DESC, b.created_at DESC';
+        break;
+      case 'recently_accessed':
+        if (DB_TYPE === 'postgresql') {
+          idsSql += ' ORDER BY b.last_accessed_at DESC NULLS LAST, b.created_at DESC';
+        } else {
+          idsSql += ' ORDER BY CASE WHEN b.last_accessed_at IS NULL THEN 1 ELSE 0 END, b.last_accessed_at DESC, b.created_at DESC';
+        }
+        break;
+      default:
+        idsSql += ' ORDER BY b.created_at DESC';
+        break;
+    }
+
+    idsSql += ' LIMIT 10000';
+    const rows = await query(idsSql, idsParams);
+    const ids = (Array.isArray(rows) ? rows : [])
+      .map((r: any) => r?.id)
+      .filter(Boolean);
+
+    res.json({ ids });
+  } catch (error: any) {
+    console.error('Bookmark IDs fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch bookmark IDs' });
   }
 });
 

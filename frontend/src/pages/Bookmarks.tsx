@@ -11,6 +11,7 @@ import { useToast } from '../components/ui/Toast';
 import { Plus, LayoutGrid, List, X, CheckSquare, Download, Upload, Bookmark as BookmarkIcon, ExternalLink, FolderPlus, Tag as TagIcon, Share2, Trash2, Copy, ChevronLeft, ChevronRight } from 'lucide-react';
 import BookmarkModal from '../components/modals/BookmarkModal';
 import ImportModal from '../components/modals/ImportModal';
+import ShareResourceDialog from '../components/sharing/ShareResourceDialog';
 import Button from '../components/ui/Button';
 import Select from '../components/ui/Select';
 import BookmarkCard from '../components/bookmarks/BookmarkCard';
@@ -66,6 +67,7 @@ export default function Bookmarks() {
   });
   const [sortBy, setSortBy] = useState<SortOption>('recently_added');
   const [selectedBookmarks, setSelectedBookmarks] = useState<Set<string>>(new Set());
+  const [allSelectedAcrossPages, setAllSelectedAcrossPages] = useState(false);
   const [bulkMode, setBulkMode] = useState(false);
   const [bulkMoveModalOpen, setBulkMoveModalOpen] = useState(false);
   const [bulkTagModalOpen, setBulkTagModalOpen] = useState(false);
@@ -76,12 +78,15 @@ export default function Bookmarks() {
   const selectedTag = searchParams.get('tag_id') || '';
   const [modalOpen, setModalOpen] = useState(false);
   const [editingBookmark, setEditingBookmark] = useState<Bookmark | null>(null);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [sharingBookmark, setSharingBookmark] = useState<Bookmark | null>(null);
   const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
   const pageSize = 50;
 
   useEffect(() => {
     setPage(0);
+    setAllSelectedAcrossPages(false);
   }, [selectedFolder, selectedTag, sortBy]);
 
   useEffect(() => {
@@ -244,6 +249,7 @@ export default function Bookmarks() {
           await Promise.all(Array.from(selectedBookmarks).map(id => api.delete(`/bookmarks/${id}`)));
           loadData();
           setSelectedBookmarks(new Set());
+          setAllSelectedAcrossPages(false);
           setBulkMode(false);
           showToast(t('common.success'), 'success');
         } catch (error) {
@@ -262,6 +268,7 @@ export default function Bookmarks() {
       ));
       loadData();
       setSelectedBookmarks(new Set());
+      setAllSelectedAcrossPages(false);
       setBulkMoveModalOpen(false);
       showToast(t('common.success'), 'success');
     } catch (error) {
@@ -282,6 +289,7 @@ export default function Bookmarks() {
       await Promise.all(bookmarkPromises);
       loadData();
       setSelectedBookmarks(new Set());
+      setAllSelectedAcrossPages(false);
       setBulkTagModalOpen(false);
       showToast(t('common.success'), 'success');
     } catch (error) {
@@ -301,6 +309,7 @@ export default function Bookmarks() {
       ));
       loadData();
       setSelectedBookmarks(new Set());
+      setAllSelectedAcrossPages(false);
       setBulkShareModalOpen(false);
       showToast(t('common.success'), 'success');
     } catch (error) {
@@ -358,6 +367,29 @@ export default function Bookmarks() {
     } else {
       setSelectedBookmarks(new Set(displayedBookmarks.map(b => b.id)));
     }
+  }
+
+  async function handleSelectAllRemaining() {
+    try {
+      const res = await api.get('/bookmarks/ids', {
+        params: {
+          folder_id: selectedFolder || undefined,
+          tag_id: selectedTag || undefined,
+          sort_by: sortBy,
+        },
+      });
+      const ids = res.data?.ids ?? [];
+      setSelectedBookmarks(prev => new Set([...prev, ...ids]));
+      setAllSelectedAcrossPages(true);
+    } catch (err) {
+      console.error('Failed to fetch bookmark IDs:', err);
+      showToast(t('common.error'), 'error');
+    }
+  }
+
+  function handleDeselectAll() {
+    setSelectedBookmarks(new Set());
+    setAllSelectedAcrossPages(false);
   }
 
   const ALL_FILTER = '__all__';
@@ -550,15 +582,43 @@ export default function Bookmarks() {
           }
         >
           <div className="flex items-center gap-3">
-            <button
-              onClick={toggleSelectAll}
-              className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
-            >
-              {selectedBookmarks.size === displayedBookmarks.length ? t('bookmarks.deselectAll') : t('bookmarks.selectAll')}
-            </button>
-            <span className="text-sm text-gray-700 dark:text-gray-300">
-              {t('bookmarks.selectedCount', { count: selectedBookmarks.size })}
-            </span>
+            {(allSelectedAcrossPages || selectedBookmarks.size === total) && total > 0 ? (
+              <>
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  {t('bookmarks.allSelected', { total })}
+                </span>
+                <button
+                  onClick={handleDeselectAll}
+                  className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+                >
+                  {t('bookmarks.deselectAll')}
+                </button>
+              </>
+            ) : selectedBookmarks.size === displayedBookmarks.length && displayedBookmarks.length > 0 && total > pageSize ? (
+              <>
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  {t('bookmarks.selectAllOnPageAndRemaining', { pageCount: displayedBookmarks.length, total })}
+                </span>
+                <button
+                  onClick={handleSelectAllRemaining}
+                  className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+                >
+                  {t('bookmarks.selectAllRemaining', { total })}
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={toggleSelectAll}
+                  className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+                >
+                  {selectedBookmarks.size === displayedBookmarks.length ? t('bookmarks.deselectAll') : t('bookmarks.selectAll')}
+                </button>
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  {t('bookmarks.selectedCount', { count: selectedBookmarks.size })}
+                </span>
+              </>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -603,6 +663,7 @@ export default function Bookmarks() {
               onClick={() => {
                 setBulkMode(false);
                 setSelectedBookmarks(new Set());
+                setAllSelectedAcrossPages(false);
               }}
             >
               {t('common.cancel')}
@@ -659,6 +720,7 @@ export default function Bookmarks() {
               onEdit={() => handleEdit(bookmark)}
               onDelete={() => handleDelete(bookmark.id, bookmark.title)}
               onCopyUrl={() => handleCopyUrl(bookmark)}
+              onShare={() => { setSharingBookmark(bookmark); setShareDialogOpen(true); }}
               onOpen={() => handleOpenBookmark(bookmark)}
               bulkMode={bulkMode}
               t={t}
@@ -674,6 +736,7 @@ export default function Bookmarks() {
           onEdit={handleEdit}
           onDelete={handleDelete}
           onCopyUrl={handleCopyUrl}
+          onShare={(bookmark) => { setSharingBookmark(bookmark); setShareDialogOpen(true); }}
           onOpen={handleOpenBookmark}
           bulkMode={bulkMode}
           user={user}
@@ -744,13 +807,23 @@ export default function Bookmarks() {
         bookmark={editingBookmark}
         folders={folders}
         tags={tags}
-        teams={teams}
         isOpen={modalOpen}
         onClose={handleModalClose}
         onTagCreated={(newTag) => {
           setTags([...tags, newTag]);
         }}
       />
+
+      {sharingBookmark && (
+        <ShareResourceDialog
+          resourceType="bookmark"
+          resourceId={sharingBookmark.id}
+          resourceName={sharingBookmark.title}
+          isOpen={shareDialogOpen}
+          onClose={() => { setShareDialogOpen(false); setSharingBookmark(null); }}
+          onSuccess={loadData}
+        />
+      )}
 
       <ImportModal
         isOpen={importModalOpen}

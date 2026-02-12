@@ -330,11 +330,11 @@ router.post('/', async (req, res) => {
     const folderId = uuidv4();
     let { team_ids, user_ids, share_all_teams } = req.body;
 
-    // Cloud: Free/Personal cannot share folders
+    // Cloud: Free/Personal cannot share to teams (only to individual users)
     if (isCloud) {
       const plan = await getUserPlan(userId);
       if (plan === 'free' || plan === 'personal') {
-        if (share_all_teams || (team_ids && team_ids.length > 0) || (user_ids && user_ids.length > 0)) {
+        if (share_all_teams || (team_ids && team_ids.length > 0)) {
           return res.status(403).json({
             error: PLAN_ERRORS.FOLDER_SHARING.message,
             code: PLAN_ERRORS.FOLDER_SHARING.code,
@@ -513,12 +513,11 @@ router.put('/:id', async (req, res) => {
 
     let { team_ids, user_ids, share_all_teams } = req.body;
 
-    // Cloud: Free/Personal - strip folder shares (allow editing name/icon)
+    // Cloud: Free/Personal - strip team shares only (allow user shares)
     if (isCloud) {
       const plan = await getUserPlan(userId);
       if (plan === 'free' || plan === 'personal') {
         team_ids = [];
-        user_ids = [];
         share_all_teams = false;
       }
     }

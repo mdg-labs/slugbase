@@ -37,6 +37,7 @@ interface BookmarkTableViewProps {
   onEdit: (bookmark: Bookmark) => void;
   onDelete: (id: string, name?: string) => void;
   onCopyUrl: (bookmark: Bookmark) => void;
+  onShare?: (bookmark: Bookmark) => void;
   onOpen?: (bookmark: Bookmark) => void;
   bulkMode: boolean;
   user: any;
@@ -52,6 +53,7 @@ export default function BookmarkTableView({
   onEdit,
   onDelete,
   onCopyUrl,
+  onShare,
   onOpen,
   bulkMode,
   user: _user,
@@ -317,6 +319,11 @@ export default function BookmarkTableView({
                     )}
                     {bookmark.bookmark_type === 'own' && (
                       <>
+                        {onShare && (
+                          <Tooltip content={t('sharing.shareBookmark')}>
+                            <Button variant="ghost" size="sm" icon={Share2} className={`flex-shrink-0 ${compact ? 'h-8 w-8 p-0' : 'h-8 w-8 p-0'}`} onClick={() => onShare(bookmark)} aria-label={t('sharing.shareBookmark')} />
+                          </Tooltip>
+                        )}
                         <Tooltip content={t('common.edit')}>
                           <Button variant="ghost" size="sm" icon={Edit} className={`flex-shrink-0 ${compact ? 'h-8 w-8 p-0' : 'h-8 w-8 p-0'}`} onClick={() => onEdit(bookmark)} aria-label={t('common.edit')} />
                         </Tooltip>

@@ -173,5 +173,6 @@ When ready to deploy production on push to `main`:
 
 ## Related
 
+- [Grafana + Stats setup](grafana-stats.md) – monitoring and business metrics
 - [GCP Terraform deployment](terraform.md) – alternative deployment to Google Cloud
 - [SlugBase README](../../README.md) – general configuration and setup

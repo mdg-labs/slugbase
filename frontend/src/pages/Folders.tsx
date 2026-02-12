@@ -6,6 +6,7 @@ import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { useConfirmDialog } from '../hooks/useConfirmDialog';
 import { Plus, Edit, Trash2, Share2, LayoutGrid, List, Folder } from 'lucide-react';
 import FolderModal from '../components/modals/FolderModal';
+import ShareResourceDialog from '../components/sharing/ShareResourceDialog';
 import Button from '../components/ui/Button';
 import Select from '../components/ui/Select';
 import Tooltip from '../components/ui/Tooltip';
@@ -32,10 +33,11 @@ export default function Folders() {
   const { t } = useTranslation();
   const { showConfirm, dialogState } = useConfirmDialog();
   const [folders, setFolders] = useState<Folder[]>([]);
-  const [teams, setTeams] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingFolder, setEditingFolder] = useState<Folder | null>(null);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [sharingFolder, setSharingFolder] = useState<Folder | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const saved = localStorage.getItem('folders-view-mode');
     return (saved === 'list' || saved === 'card') ? saved : 'card';
@@ -59,14 +61,10 @@ export default function Folders() {
 
   async function loadData() {
     try {
-      const [foldersRes, teamsRes] = await Promise.all([
-        api.get('/folders', { params: { sort_by: sortBy } }),
-        api.get('/teams'),
-      ]);
+      const foldersRes = await api.get('/folders', { params: { sort_by: sortBy } });
       // Filter to only show own folders (not shared)
       const ownFolders = foldersRes.data.filter((f: Folder) => f.folder_type === 'own');
       setFolders(ownFolders);
-      setTeams(teamsRes.data);
     } catch (error) {
       console.error('Failed to load data:', error);
     } finally {
@@ -260,6 +258,14 @@ export default function Folders() {
                   <Button
                     variant="ghost"
                     size="sm"
+                    icon={Share2}
+                    onClick={() => { setSharingFolder(folder); setShareDialogOpen(true); }}
+                    title={t('sharing.shareFolder')}
+                    className={`${compactMode ? 'text-xs px-2 py-1' : 'text-xs'}`}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     icon={Edit}
                     onClick={() => handleEdit(folder)}
                     className={`flex-1 ${compactMode ? 'text-xs px-2 py-1' : 'text-xs'}`}
@@ -364,6 +370,14 @@ export default function Folders() {
                         <Button
                           variant="ghost"
                           size="sm"
+                          icon={Share2}
+                          onClick={() => { setSharingFolder(folder); setShareDialogOpen(true); }}
+                          title={t('sharing.shareFolder')}
+                          className={compactMode ? 'px-1 h-6' : 'px-2'}
+                        />
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           icon={Edit}
                           onClick={() => handleEdit(folder)}
                           className={compactMode ? 'px-1 h-6' : 'px-2'}
@@ -388,11 +402,21 @@ export default function Folders() {
 
       <FolderModal
         folder={editingFolder}
-        teams={teams}
         isOpen={modalOpen}
         onClose={handleModalClose}
         onSuccess={loadData}
       />
+
+      {sharingFolder && (
+        <ShareResourceDialog
+          resourceType="folder"
+          resourceId={sharingFolder.id}
+          resourceName={sharingFolder.name}
+          isOpen={shareDialogOpen}
+          onClose={() => { setShareDialogOpen(false); setSharingFolder(null); }}
+          onSuccess={loadData}
+        />
+      )}
 
       <ConfirmDialog {...dialogState} />
     </div>

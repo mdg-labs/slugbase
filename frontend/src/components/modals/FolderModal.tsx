@@ -2,8 +2,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import api from '../../api/client';
 import { useToast } from '../ui/Toast';
-import { useOrgPlan } from '../../contexts/OrgPlanContext';
-import { canShareFolders } from '../../utils/plan';
 import {
   Dialog,
   DialogContent,
@@ -15,7 +13,6 @@ import { Separator } from '../ui/separator';
 import { FormFieldWrapper } from '../ui/FormFieldWrapper';
 import { ModalSection } from '../ui/ModalSection';
 import { ModalFooterActions } from '../ui/ModalFooterActions';
-import { SharingField } from '../ui/SharingField';
 import { Input } from '../ui/input';
 import FolderIcon, { popularIcons, getAllIcons } from '../FolderIcon';
 import { Search, X } from 'lucide-react';
@@ -31,7 +28,6 @@ interface Folder {
 
 interface FolderModalProps {
   folder: Folder | null;
-  teams: Array<{ id: string; name: string }>;
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
@@ -39,21 +35,15 @@ interface FolderModalProps {
 
 export default function FolderModal({
   folder,
-  teams,
   isOpen,
   onClose,
   onSuccess,
 }: FolderModalProps) {
   const { t } = useTranslation();
   const { showToast } = useToast();
-  const { plan } = useOrgPlan();
-  const showShareSection = canShareFolders(plan);
   const [formData, setFormData] = useState({
     name: '',
     icon: '',
-    team_ids: [] as string[],
-    user_ids: [] as string[],
-    share_all_teams: false,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -89,12 +79,9 @@ export default function FolderModal({
       setFormData({
         name: folder.name,
         icon: folder.icon || '',
-        team_ids: folder.shared_teams?.map((t) => t.id) || [],
-        user_ids: (folder as any).shared_users?.map((u: any) => u.id) || [],
-        share_all_teams: (folder as any).share_all_teams || false,
       });
     } else {
-      setFormData({ name: '', icon: '', team_ids: [], user_ids: [], share_all_teams: false });
+      setFormData({ name: '', icon: '' });
     }
     setError('');
     setIconSearchQuery('');
@@ -110,9 +97,6 @@ export default function FolderModal({
       const payload: any = {
         name: formData.name,
         icon: formData.icon || undefined,
-        team_ids: formData.team_ids.length > 0 ? formData.team_ids : undefined,
-        user_ids: formData.user_ids.length > 0 ? formData.user_ids : undefined,
-        share_all_teams: formData.share_all_teams || undefined,
       };
 
       Object.keys(payload).forEach(key => {
@@ -138,15 +122,6 @@ export default function FolderModal({
       setLoading(false);
     }
   }
-
-  const handleSharingChange = (sharing: { user_ids: string[]; team_ids: string[]; share_all_teams: boolean }) => {
-    setFormData({
-      ...formData,
-      user_ids: sharing.user_ids,
-      team_ids: sharing.team_ids,
-      share_all_teams: sharing.share_all_teams,
-    });
-  };
 
   const isValid = formData.name.trim();
 
@@ -313,24 +288,6 @@ export default function FolderModal({
               )}
             </div>
           </ModalSection>
-
-          {showShareSection && (
-            <>
-              <Separator />
-              <ModalSection title={t('folders.shareWithTeams')}>
-                <SharingField
-                  value={{
-                    user_ids: formData.user_ids,
-                    team_ids: formData.team_ids,
-                    share_all_teams: formData.share_all_teams,
-                  }}
-                  onChange={handleSharingChange}
-                  teams={teams}
-                  allowTeamSharing={canShareFolders(plan)}
-                />
-              </ModalSection>
-            </>
-          )}
         </form>
 
         <Separator />

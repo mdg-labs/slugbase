@@ -161,6 +161,9 @@
     "selectedCount": "{{count}} selected",
     "selectAll": "Select All",
     "deselectAll": "Deselect All",
+    "selectAllOnPageAndRemaining": "All {{pageCount}} on this page selected. Select all {{total}} bookmarks?",
+    "selectAllRemaining": "Select all {{total}}",
+    "allSelected": "All {{total}} selected",
     "paginationShowing": "Showing {{from}}-{{to}} of {{total}}",
     "paginationPrevious": "Previous",
     "paginationNext": "Next",
@@ -310,6 +313,19 @@
     "quickActions": "Quick Actions",
     "collapseSidebar": "Collapse sidebar",
     "expandSidebar": "Expand sidebar"
+  },
+  "sharing": {
+    "shareBookmark": "Share bookmark",
+    "shareFolder": "Share folder",
+    "inviteDescription": "Invite people or share with a team.",
+    "peopleWithAccess": "People with access",
+    "addAccess": "Add access",
+    "people": "People",
+    "teams": "Teams",
+    "notSharedYet": "Not shared yet",
+    "emailNotAssociated": "This email is not associated with a SlugBase user yet.",
+    "removeAccess": "Remove access",
+    "add": "Add"
   },
   "plan": {
     "limitBookmarks": "You've reached the Free plan limit (100 bookmarks). Upgrade to add more.",

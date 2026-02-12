@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
-import { useOrgPlan } from '../../contexts/OrgPlanContext';
-import { canShareToTeams } from '../../utils/plan';
 import api from '../../api/client';
 import {
   Dialog,
@@ -15,7 +13,6 @@ import { Separator } from '../ui/separator';
 import { FormFieldWrapper } from '../ui/FormFieldWrapper';
 import { ModalSection } from '../ui/ModalSection';
 import { ModalFooterActions } from '../ui/ModalFooterActions';
-import { SharingField } from '../ui/SharingField';
 import { Switch } from '../ui/switch';
 import { Label } from '../ui/label';
 import { Input } from '../ui/input';
@@ -39,7 +36,6 @@ interface BookmarkModalProps {
   bookmark: Bookmark | null;
   folders: Array<{ id: string; name: string }>;
   tags: Array<{ id: string; name: string }>;
-  teams: Array<{ id: string; name: string }>;
   isOpen: boolean;
   onClose: () => void;
   onTagCreated?: (tag: { id: string; name: string }) => void;
@@ -49,14 +45,12 @@ export default function BookmarkModal({
   bookmark,
   folders,
   tags,
-  teams,
   isOpen,
   onClose,
   onTagCreated,
 }: BookmarkModalProps) {
   const { t } = useTranslation();
   useAuth();
-  const { plan } = useOrgPlan();
   const { showToast } = useToast();
   const [formData, setFormData] = useState({
     title: '',
@@ -65,9 +59,6 @@ export default function BookmarkModal({
     forwarding_enabled: false,
     folder_ids: [] as string[],
     tag_ids: [] as string[],
-    team_ids: [] as string[],
-    user_ids: [] as string[],
-    share_all_teams: false,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -82,9 +73,6 @@ export default function BookmarkModal({
         forwarding_enabled: bookmark.forwarding_enabled,
         folder_ids: (bookmark as any).folders?.map((f: any) => f.id) || [],
         tag_ids: bookmark.tags?.map((t) => t.id) || [],
-        team_ids: bookmark.shared_teams?.map((t) => t.id) || [],
-        user_ids: (bookmark as any).shared_users?.map((u: any) => u.id) || [],
-        share_all_teams: (bookmark as any).share_all_teams || false,
       });
     } else {
       setFormData({
@@ -94,9 +82,6 @@ export default function BookmarkModal({
         forwarding_enabled: false,
         folder_ids: [],
         tag_ids: [],
-        team_ids: [],
-        user_ids: [],
-        share_all_teams: false,
       });
     }
   }, [bookmark, isOpen]);
@@ -113,9 +98,6 @@ export default function BookmarkModal({
         forwarding_enabled: formData.forwarding_enabled,
         folder_ids: formData.folder_ids.length > 0 ? formData.folder_ids : undefined,
         tag_ids: formData.tag_ids.length > 0 ? formData.tag_ids : undefined,
-        team_ids: formData.team_ids.length > 0 ? formData.team_ids : undefined,
-        user_ids: formData.user_ids.length > 0 ? formData.user_ids : undefined,
-        share_all_teams: formData.share_all_teams || undefined,
       };
 
       if (formData.forwarding_enabled) {
@@ -154,7 +136,6 @@ export default function BookmarkModal({
 
   const selectedTags = tags.filter((tag) => formData.tag_ids.includes(tag.id));
   const selectedFolders = folders.filter((folder) => formData.folder_ids.includes(folder.id));
-  const canShare = canShareToTeams(plan);
   const isValid = formData.title.trim() && formData.url.trim();
   const slugError = formData.forwarding_enabled && !formData.slug?.trim() ? t('bookmarks.slugRequired') : undefined;
 
@@ -177,15 +158,6 @@ export default function BookmarkModal({
     } catch {
       return null;
     }
-  };
-
-  const handleSharingChange = (sharing: { user_ids: string[]; team_ids: string[]; share_all_teams: boolean }) => {
-    setFormData({
-      ...formData,
-      user_ids: sharing.user_ids,
-      team_ids: sharing.team_ids,
-      share_all_teams: sharing.share_all_teams,
-    });
   };
 
   return (
@@ -262,9 +234,9 @@ export default function BookmarkModal({
             />
           </div>
 
-          {(formData.forwarding_enabled || canShare) && <Separator />}
-
           {formData.forwarding_enabled && (
+            <>
+              <Separator />
             <ModalSection>
               <FormFieldWrapper
                 label={t('bookmarks.slug')}
@@ -309,21 +281,7 @@ export default function BookmarkModal({
                 </div>
               )}
             </ModalSection>
-          )}
-
-          {canShare && (
-            <ModalSection title={t('bookmarks.shareWithTeams')}>
-              <SharingField
-                value={{
-                  user_ids: formData.user_ids,
-                  team_ids: formData.team_ids,
-                  share_all_teams: formData.share_all_teams,
-                }}
-                onChange={handleSharingChange}
-                teams={teams}
-                allowTeamSharing={canShareToTeams(plan)}
-              />
-            </ModalSection>
+            </>
           )}
         </form>
 

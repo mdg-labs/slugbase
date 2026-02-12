@@ -26,6 +26,7 @@ interface BookmarkCardProps {
   onEdit: () => void;
   onDelete: () => void;
   onCopyUrl: () => void;
+  onShare?: () => void;
   onOpen?: () => void;
   bulkMode: boolean;
   t: any;
@@ -39,6 +40,7 @@ export default function BookmarkCard({
   onEdit,
   onDelete,
   onCopyUrl,
+  onShare,
   onOpen,
   bulkMode,
   t,
@@ -257,6 +259,11 @@ export default function BookmarkCard({
         )}
         {bookmark.bookmark_type === 'own' && (
           <>
+            {onShare && (
+              <Tooltip content={t('sharing.shareBookmark')}>
+                <Button variant="ghost" size="sm" icon={Share2} className={`flex-shrink-0 ${compact ? 'h-8 w-8 p-0' : ''}`} onClick={(e) => { e.stopPropagation(); onShare(); }} aria-label={t('sharing.shareBookmark')} />
+              </Tooltip>
+            )}
             <Tooltip content={t('common.edit')}>
               <Button variant="ghost" size="sm" icon={Edit} className={`flex-shrink-0 ${compact ? 'h-8 w-8 p-0' : ''}`} onClick={(e) => { e.stopPropagation(); onEdit(); }} aria-label={t('common.edit')} />
             </Tooltip>
