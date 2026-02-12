@@ -17,7 +17,7 @@ export default function TopBar({ user }: TopBarProps) {
   const { isMobile } = useSidebar();
 
   return (
-    <header className="flex h-14 shrink-0 items-center gap-2 border-b bg-background px-4 lg:h-16 lg:px-6">
+    <header className="sticky top-0 z-50 flex h-14 shrink-0 items-center gap-2 border-b bg-background px-4 lg:h-16 lg:px-6">
       <div className="flex flex-1 items-center justify-between gap-4">
         {/* Left: SidebarTrigger (mobile) + Logo */}
         <div className="flex items-center gap-3">

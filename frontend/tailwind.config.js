@@ -4,7 +4,7 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
-  darkMode: ['class', "class"],
+  darkMode: 'class',
   theme: {
   	extend: {
   		borderRadius: {
@@ -46,6 +46,10 @@ export default {
   			border: 'hsl(var(--border))',
   			input: 'hsl(var(--input))',
   			ring: 'hsl(var(--ring))',
+  			tooltip: {
+  				DEFAULT: 'hsl(var(--tooltip))',
+  				foreground: 'hsl(var(--tooltip-foreground))'
+  			},
   			chart: {
   				'1': 'hsl(var(--chart-1))',
   				'2': 'hsl(var(--chart-2))',

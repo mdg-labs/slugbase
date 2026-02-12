@@ -392,7 +392,7 @@ export default function Bookmarks() {
   return (
     <div className="space-y-6 pb-24">
       {/* Sticky controls bar: header + filters/toolbar - stays visible when scrolling */}
-      <div className="sticky top-0 z-40 space-y-4 pb-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pt-0 -mt-8 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 shadow-sm">
+      <div className="sticky top-0 z-40 space-y-4 pb-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pt-0 -mt-8 bg-background border-b shadow-sm">
         <div className="flex items-center justify-between flex-wrap gap-4 pt-4">
           <div>
             <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
@@ -439,7 +439,7 @@ export default function Bookmarks() {
         </div>
 
         {/* Toolbar: Filters, Sort, View Modes */}
-        <div className="flex flex-wrap items-center gap-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 shadow-sm">
+        <div className="flex flex-wrap items-center gap-3 bg-card rounded-lg border p-4 shadow-sm">
         {/* Filters */}
         <div className="flex flex-wrap gap-3 flex-1 min-w-[200px]">
           <div className="flex-1 min-w-[180px]">
