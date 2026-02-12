@@ -4,11 +4,23 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useOrgPlan } from '../../contexts/OrgPlanContext';
 import { canShareToTeams } from '../../utils/plan';
 import api from '../../api/client';
-import Modal from '../ui/Modal';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '../ui/dialog';
+import { Separator } from '../ui/separator';
+import { FormFieldWrapper } from '../ui/FormFieldWrapper';
+import { ModalSection } from '../ui/ModalSection';
+import { ModalFooterActions } from '../ui/ModalFooterActions';
+import { SharingField } from '../ui/SharingField';
+import { Switch } from '../ui/switch';
+import { Label } from '../ui/label';
+import { Input } from '../ui/input';
 import Autocomplete from '../ui/Autocomplete';
-import Button from '../ui/Button';
-import SharingModal from './SharingModal';
-import { Share2, Copy, Check } from 'lucide-react';
+import { Copy, Check } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 
 interface Bookmark {
@@ -59,7 +71,6 @@ export default function BookmarkModal({
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [sharingModalOpen, setSharingModalOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -106,8 +117,7 @@ export default function BookmarkModal({
         user_ids: formData.user_ids.length > 0 ? formData.user_ids : undefined,
         share_all_teams: formData.share_all_teams || undefined,
       };
-      
-      // Only include slug if forwarding is enabled (required) or if user provided one (optional when forwarding disabled)
+
       if (formData.forwarding_enabled) {
         if (!formData.slug || !formData.slug.trim()) {
           setError(t('bookmarks.slugRequired'));
@@ -116,12 +126,9 @@ export default function BookmarkModal({
         }
         payload.slug = formData.slug.trim();
       } else {
-        // When forwarding is disabled, always send slug (empty string will be converted to NULL on backend)
-        // This ensures we clear any existing slug when forwarding is disabled
         payload.slug = formData.slug && formData.slug.trim() ? formData.slug.trim() : '';
       }
-      
-      // Remove undefined values
+
       Object.keys(payload).forEach(key => {
         if (payload[key] === undefined) {
           delete payload[key];
@@ -147,6 +154,9 @@ export default function BookmarkModal({
 
   const selectedTags = tags.filter((tag) => formData.tag_ids.includes(tag.id));
   const selectedFolders = folders.filter((folder) => formData.folder_ids.includes(folder.id));
+  const canShare = canShareToTeams(plan);
+  const isValid = formData.title.trim() && formData.url.trim();
+  const slugError = formData.forwarding_enabled && !formData.slug?.trim() ? t('bookmarks.slugRequired') : undefined;
 
   const handleTagChange = (newTags: Array<{ id: string; name: string }>) => {
     setFormData({ ...formData, tag_ids: newTags.map((t) => t.id) });
@@ -160,7 +170,6 @@ export default function BookmarkModal({
     try {
       const response = await api.post('/tags', { name });
       const newTag = { id: response.data.id, name: response.data.name };
-      // Notify parent to refresh tags list
       if (onTagCreated) {
         onTagCreated(newTag);
       }
@@ -170,76 +179,112 @@ export default function BookmarkModal({
     }
   };
 
+  const handleSharingChange = (sharing: { user_ids: string[]; team_ids: string[]; share_all_teams: boolean }) => {
+    setFormData({
+      ...formData,
+      user_ids: sharing.user_ids,
+      team_ids: sharing.team_ids,
+      share_all_teams: sharing.share_all_teams,
+    });
+  };
 
   return (
-    <>
-      <Modal
-        isOpen={isOpen}
-        onClose={onClose}
-        title={bookmark ? t('bookmarks.edit') : t('bookmarks.create')}
-        size="lg"
-      >
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
-              {t('bookmarks.name')}
-            </label>
-            <input
-              type="text"
-              required
-              className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-              value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-            />
-          </div>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{bookmark ? t('bookmarks.edit') : t('bookmarks.create')}</DialogTitle>
+        </DialogHeader>
+        <Separator />
 
-          <div>
-            <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
-              {t('bookmarks.url')}
-            </label>
-            <input
-              type="url"
+        <form id="bookmark-form" onSubmit={handleSubmit} className="space-y-6">
+          <ModalSection>
+            <FormFieldWrapper
+              label={t('bookmarks.name')}
               required
-              className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-              value={formData.url}
-              onChange={(e) => setFormData({ ...formData, url: e.target.value })}
-            />
-          </div>
+              error={error}
+            >
+              <Input
+                type="text"
+                required
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                placeholder={t('bookmarks.name')}
+              />
+            </FormFieldWrapper>
+            <FormFieldWrapper label={t('bookmarks.url')} required>
+              <Input
+                type="url"
+                required
+                value={formData.url}
+                onChange={(e) => setFormData({ ...formData, url: e.target.value })}
+                placeholder={t('bookmarks.url')}
+              />
+            </FormFieldWrapper>
+          </ModalSection>
 
-          <div className="flex items-center gap-3">
-            <input
-              type="checkbox"
-              id="forwarding"
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-gray-600 rounded"
-              checked={formData.forwarding_enabled}
-              onChange={(e) => setFormData({ ...formData, forwarding_enabled: e.target.checked })}
-            />
-            <label htmlFor="forwarding" className="text-sm font-medium text-gray-900 dark:text-white">
+          <Separator />
+
+          <ModalSection title={t('bookmarks.folders')}>
+            {folders.length > 0 ? (
+              <Autocomplete
+                value={selectedFolders}
+                onChange={handleFolderChange}
+                options={folders}
+                placeholder={t('bookmarks.foldersDescription')}
+              />
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {t('bookmarks.noFoldersAvailable')}
+              </p>
+            )}
+            <div>
+              <Label className="text-sm font-medium mb-2 block">{t('bookmarks.tags')}</Label>
+              <Autocomplete
+                value={selectedTags}
+                onChange={handleTagChange}
+                options={tags}
+                placeholder={t('bookmarks.tags')}
+                onCreateNew={handleCreateTag}
+              />
+            </div>
+          </ModalSection>
+
+          <div className="flex items-center justify-between rounded-lg border p-3">
+            <Label htmlFor="forwarding" className="text-sm font-medium cursor-pointer">
               {t('bookmarks.forwardingEnabled')}
-            </label>
+            </Label>
+            <Switch
+              id="forwarding"
+              checked={formData.forwarding_enabled}
+              onCheckedChange={(checked) =>
+                setFormData({ ...formData, forwarding_enabled: checked })
+              }
+            />
           </div>
+
+          {(formData.forwarding_enabled || canShare) && <Separator />}
 
           {formData.forwarding_enabled && (
-            <div className="animate-in slide-in-from-top-2 duration-200">
-              <div>
-                <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
-                  {t('bookmarks.slug')} <span className="text-red-500">*</span>
-                </label>
-                <input
+            <ModalSection>
+              <FormFieldWrapper
+                label={t('bookmarks.slug')}
+                required
+                error={slugError}
+              >
+                <Input
                   type="text"
-                  required
-                  className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                   value={formData.slug || ''}
                   onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
+                  placeholder={t('bookmarks.slug')}
                 />
-              </div>
+              </FormFieldWrapper>
               {formData.slug && (
-                <div className="mt-3 animate-in slide-in-from-top-2 duration-200">
-                  <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                <div className="rounded-lg border bg-muted/50 p-3 space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground">
                     {t('bookmarks.forwardingPreview')}
-                  </label>
-                  <div className="flex items-center gap-2 px-4 py-2.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                    <code className="flex-1 text-xs font-mono text-blue-800 dark:text-blue-200 truncate">
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 text-xs font-mono truncate">
                       {window.location.origin}/go/{formData.slug}
                     </code>
                     <button
@@ -251,115 +296,48 @@ export default function BookmarkModal({
                         showToast(t('common.copied'), 'success');
                         setTimeout(() => setCopied(false), 2000);
                       }}
-                      className="flex-shrink-0 p-1.5 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-md transition-colors"
+                      className="p-1.5 rounded-md hover:bg-muted transition-colors focus-visible:ring-2 focus-visible:ring-ring"
                       title={t('bookmarks.copyUrl')}
+                      aria-label={t('bookmarks.copyUrl')}
                     >
                       {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                     </button>
                   </div>
-                  <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                  <p className="text-xs text-muted-foreground">
                     {t('bookmarks.forwardingPreviewDescription')}
                   </p>
                 </div>
               )}
-            </div>
+            </ModalSection>
           )}
 
-          <div>
-            <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
-              {t('bookmarks.folders')}
-            </label>
-            {folders.length > 0 ? (
-              <Autocomplete
-                value={selectedFolders}
-                onChange={handleFolderChange}
-                options={folders}
-                placeholder={t('bookmarks.foldersDescription')}
+          {canShare && (
+            <ModalSection title={t('bookmarks.shareWithTeams')}>
+              <SharingField
+                value={{
+                  user_ids: formData.user_ids,
+                  team_ids: formData.team_ids,
+                  share_all_teams: formData.share_all_teams,
+                }}
+                onChange={handleSharingChange}
+                teams={teams}
+                allowTeamSharing={canShareToTeams(plan)}
               />
-            ) : (
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                {t('bookmarks.noFoldersAvailable')}
-              </p>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
-              {t('bookmarks.tags')}
-            </label>
-            <Autocomplete
-              value={selectedTags}
-              onChange={handleTagChange}
-              options={tags}
-              placeholder={t('bookmarks.tags')}
-              onCreateNew={handleCreateTag}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
-              <Share2 className="inline h-4 w-4 mr-1.5" />
-              {t('bookmarks.shareWithTeams')}
-            </label>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => setSharingModalOpen(true)}
-              className="w-full"
-            >
-              {formData.share_all_teams
-                ? t('bookmarks.shareAllTeams')
-                : formData.team_ids.length > 0 || formData.user_ids.length > 0
-                ? t('bookmarks.sharingSummary', { 
-                    teamCount: formData.team_ids.length, 
-                    teams: formData.team_ids.length === 1 ? t('common.team') : t('common.teams'),
-                    userCount: formData.user_ids.length,
-                    users: formData.user_ids.length === 1 ? t('common.user') : t('common.users')
-                  })
-                : t('bookmarks.shareWithTeams')}
-            </Button>
-          </div>
-
-          {error && (
-            <div className="px-4 py-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-              <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
-            </div>
+            </ModalSection>
           )}
-
-          <div className="flex gap-3 pt-2">
-            <Button type="button" variant="secondary" onClick={onClose} className="flex-1">
-              {t('common.cancel')}
-            </Button>
-            <Button type="submit" variant="primary" disabled={loading} className="flex-1">
-              {loading ? t('common.loading') : t('common.save')}
-            </Button>
-          </div>
         </form>
-      </Modal>
 
-      {sharingModalOpen && (
-        <SharingModal
-          isOpen={sharingModalOpen}
-          onClose={() => setSharingModalOpen(false)}
-          onSave={(sharing) => {
-            setFormData({
-              ...formData,
-              user_ids: sharing.user_ids,
-              team_ids: sharing.team_ids,
-              share_all_teams: sharing.share_all_teams,
-            });
-            setSharingModalOpen(false);
-          }}
-          currentShares={{
-            user_ids: formData.user_ids,
-            team_ids: formData.team_ids,
-            share_all_teams: formData.share_all_teams,
-          }}
-          teams={teams}
-          type="bookmark"
-          allowTeamSharing={canShareToTeams(plan)}
-        />
-      )}
-    </>
+        <Separator />
+        <DialogFooter className="flex-row justify-between sm:justify-end gap-2">
+          <ModalFooterActions
+            onCancel={onClose}
+            submitLabel={t('common.save')}
+            loading={loading}
+            submitDisabled={!isValid || !!slugError}
+            formId="bookmark-form"
+          />
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

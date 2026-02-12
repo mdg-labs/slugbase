@@ -1,5 +1,5 @@
 import React from 'react';
-import { LucideIcon } from 'lucide-react';
+import { LucideIcon, Loader2 } from 'lucide-react';
 import { Button as ShadcnButton, buttonVariants } from './button-base';
 import { cn } from '@/lib/utils';
 
@@ -8,6 +8,7 @@ const variantMap = {
   secondary: 'secondary',
   danger: 'destructive',
   ghost: 'ghost',
+  outline: 'outline',
 } as const;
 
 const sizeMap = {
@@ -17,10 +18,11 @@ const sizeMap = {
 } as const;
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
+  variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'outline';
   size?: 'sm' | 'md' | 'lg';
   icon?: LucideIcon;
   iconPosition?: 'left' | 'right';
+  loading?: boolean;
   children?: React.ReactNode;
 }
 
@@ -29,11 +31,15 @@ export default function Button({
   size = 'md',
   icon: Icon,
   iconPosition = 'left',
+  loading = false,
   children,
   className = '',
+  disabled,
   ...props
 }: ButtonProps) {
-  const content = (
+  const content = loading ? (
+    <Loader2 className="h-4 w-4 animate-spin" />
+  ) : (
     <>
       {Icon && iconPosition === 'left' && <Icon className="h-4 w-4" />}
       {children && <span>{children}</span>}
@@ -46,6 +52,7 @@ export default function Button({
       className={cn(className)}
       variant={variantMap[variant]}
       size={sizeMap[size]}
+      disabled={disabled ?? loading}
       {...props}
     >
       {content}

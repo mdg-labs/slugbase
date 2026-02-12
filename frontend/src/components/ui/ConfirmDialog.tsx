@@ -15,6 +15,7 @@ interface ConfirmDialogProps {
   isOpen: boolean;
   title: string;
   message: string;
+  itemName?: string;
   confirmText?: string;
   cancelText?: string;
   variant?: 'danger' | 'warning' | 'default';
@@ -32,6 +33,7 @@ export default function ConfirmDialog({
   isOpen,
   title,
   message,
+  itemName,
   confirmText,
   cancelText,
   variant = 'default',
@@ -40,9 +42,13 @@ export default function ConfirmDialog({
 }: ConfirmDialogProps) {
   const { t } = useTranslation();
 
+  const description = itemName
+    ? `${message} "${itemName}"`
+    : message;
+
   return (
     <AlertDialog open={isOpen} onOpenChange={(open) => !open && onCancel()}>
-      <AlertDialogContent className={`${variantBorderClasses[variant]}`}>
+      <AlertDialogContent className={`max-w-sm ${variantBorderClasses[variant]}`}>
         <AlertDialogHeader>
           <div className="flex items-start gap-4">
             <div className="flex-shrink-0 text-destructive">
@@ -51,7 +57,7 @@ export default function ConfirmDialog({
             <div className="flex-1 min-w-0">
               <AlertDialogTitle>{title}</AlertDialogTitle>
               <AlertDialogDescription className="mt-2">
-                {message}
+                {description}
               </AlertDialogDescription>
             </div>
           </div>

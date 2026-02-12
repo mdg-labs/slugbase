@@ -1,7 +1,16 @@
 import { useState } from 'react';
-import Modal from '../ui/Modal';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '../ui/dialog';
+import { Separator } from '../ui/separator';
+import { ModalSection } from '../ui/ModalSection';
+import { ModalFooterActions } from '../ui/ModalFooterActions';
+import { Label } from '../ui/label';
 import Autocomplete from '../ui/Autocomplete';
-import Button from '../ui/Button';
 import SharingModal from '../modals/SharingModal';
 import api from '../../api/client';
 import { useOrgPlan } from '../../contexts/OrgPlanContext';
@@ -18,34 +27,45 @@ interface BulkMoveModalProps {
 export function BulkMoveModal({ isOpen, onClose, onSave, folders, t }: BulkMoveModalProps) {
   const [selectedFolders, setSelectedFolders] = useState<Array<{ id: string; name: string }>>([]);
 
-  function handleSave() {
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
     onSave(selectedFolders.map(f => f.id));
+    onClose();
   }
 
+  const isValid = selectedFolders.length > 0;
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={t('bookmarks.bulkMoveToFolder')} size="md">
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
-            {t('bookmarks.folders')}
-          </label>
-          <Autocomplete
-            value={selectedFolders}
-            onChange={setSelectedFolders}
-            options={folders}
-            placeholder={t('bookmarks.foldersDescription')}
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-[460px]">
+        <DialogHeader>
+          <DialogTitle>{t('bookmarks.bulkMoveToFolder')}</DialogTitle>
+        </DialogHeader>
+        <Separator />
+
+        <form id="bulk-move-form" onSubmit={handleSubmit} className="space-y-6">
+          <ModalSection>
+            <Label className="text-sm font-medium mb-2 block">{t('bookmarks.folders')}</Label>
+            <Autocomplete
+              value={selectedFolders}
+              onChange={setSelectedFolders}
+              options={folders}
+              placeholder={t('bookmarks.foldersDescription')}
+            />
+          </ModalSection>
+        </form>
+
+        <Separator />
+        <DialogFooter className="flex-row justify-between sm:justify-end gap-2">
+          <ModalFooterActions
+            onCancel={onClose}
+            submitLabel={t('common.save')}
+            submitDisabled={!isValid}
+            formId="bulk-move-form"
           />
-        </div>
-        <div className="flex gap-3 pt-2">
-          <Button variant="secondary" onClick={onClose} className="flex-1">
-            {t('common.cancel')}
-          </Button>
-          <Button variant="primary" onClick={handleSave} className="flex-1">
-            {t('common.save')}
-          </Button>
-        </div>
-      </div>
-    </Modal>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -74,35 +94,46 @@ export function BulkTagModal({ isOpen, onClose, onSave, tags, onTagCreated, t }:
     }
   }
 
-  function handleSave() {
-    onSave(selectedTags.map(t => t.id));
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    onSave(selectedTags.map(tag => tag.id));
+    onClose();
   }
 
+  const isValid = selectedTags.length > 0;
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={t('bookmarks.bulkAddTags')} size="md">
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
-            {t('bookmarks.tags')}
-          </label>
-          <Autocomplete
-            value={selectedTags}
-            onChange={setSelectedTags}
-            options={tags}
-            placeholder={t('bookmarks.tags')}
-            onCreateNew={handleCreateTag}
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-[460px]">
+        <DialogHeader>
+          <DialogTitle>{t('bookmarks.bulkAddTags')}</DialogTitle>
+        </DialogHeader>
+        <Separator />
+
+        <form id="bulk-tag-form" onSubmit={handleSubmit} className="space-y-6">
+          <ModalSection>
+            <Label className="text-sm font-medium mb-2 block">{t('bookmarks.tags')}</Label>
+            <Autocomplete
+              value={selectedTags}
+              onChange={setSelectedTags}
+              options={tags}
+              placeholder={t('bookmarks.tags')}
+              onCreateNew={handleCreateTag}
+            />
+          </ModalSection>
+        </form>
+
+        <Separator />
+        <DialogFooter className="flex-row justify-between sm:justify-end gap-2">
+          <ModalFooterActions
+            onCancel={onClose}
+            submitLabel={t('common.save')}
+            submitDisabled={!isValid}
+            formId="bulk-tag-form"
           />
-        </div>
-        <div className="flex gap-3 pt-2">
-          <Button variant="secondary" onClick={onClose} className="flex-1">
-            {t('common.cancel')}
-          </Button>
-          <Button variant="primary" onClick={handleSave} className="flex-1">
-            {t('common.save')}
-          </Button>
-        </div>
-      </div>
-    </Modal>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

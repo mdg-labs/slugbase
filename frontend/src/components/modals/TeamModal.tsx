@@ -1,8 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import Modal from '../ui/Modal';
-import Button from '../ui/Button';
 import api from '../../api/client';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '../ui/dialog';
+import { Separator } from '../ui/separator';
+import { FormFieldWrapper } from '../ui/FormFieldWrapper';
+import { ModalSection } from '../ui/ModalSection';
+import { ModalFooterActions } from '../ui/ModalFooterActions';
+import { Input } from '../ui/input';
 
 interface Team {
   id: string;
@@ -58,54 +68,50 @@ export default function TeamModal({ team, isOpen, onClose, onSuccess }: TeamModa
     }
   }
 
+  const isValid = formData.name.trim();
+
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={team ? t('admin.editTeam') : t('admin.addTeam')}
-      size="md"
-    >
-      <form onSubmit={handleSubmit} className="space-y-5">
-        <div>
-          <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
-            {t('admin.teamName')}
-          </label>
-          <input
-            type="text"
-            required
-            className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-[460px]">
+        <DialogHeader>
+          <DialogTitle>{team ? t('admin.editTeam') : t('admin.addTeam')}</DialogTitle>
+        </DialogHeader>
+        <Separator />
+
+        <form id="team-form" onSubmit={handleSubmit} className="space-y-6">
+          <ModalSection>
+            <FormFieldWrapper label={t('admin.teamName')} required error={error}>
+              <Input
+                type="text"
+                required
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                placeholder={t('admin.teamName')}
+              />
+            </FormFieldWrapper>
+            <FormFieldWrapper label={t('admin.description')}>
+              <textarea
+                rows={3}
+                className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                placeholder={t('admin.description')}
+              />
+            </FormFieldWrapper>
+          </ModalSection>
+        </form>
+
+        <Separator />
+        <DialogFooter className="flex-row justify-between sm:justify-end gap-2">
+          <ModalFooterActions
+            onCancel={onClose}
+            submitLabel={t('common.save')}
+            loading={loading}
+            submitDisabled={!isValid}
+            formId="team-form"
           />
-        </div>
-
-        <div>
-          <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
-            {t('admin.description')}
-          </label>
-          <textarea
-            rows={3}
-            className="w-full px-4 py-2.5 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors resize-none"
-            value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-          />
-        </div>
-
-        {error && (
-          <div className="px-4 py-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-            <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
-          </div>
-        )}
-
-        <div className="flex gap-3 pt-2">
-          <Button type="button" variant="secondary" onClick={onClose} className="flex-1">
-            {t('common.cancel')}
-          </Button>
-          <Button type="submit" variant="primary" disabled={loading} className="flex-1">
-            {loading ? t('common.loading') : t('common.save')}
-          </Button>
-        </div>
-      </form>
-    </Modal>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
