@@ -5,6 +5,8 @@ import { validateEmail, normalizeEmail, validateLength, sanitizeString } from '.
 import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
 import { sendEmailVerificationEmail } from '../utils/email.js';
+import { setCurrentOrg } from '../utils/organizations.js';
+import { isCloud } from '../config/mode.js';
 
 const router = Router();
 router.use(requireAuth());
@@ -46,6 +48,26 @@ router.use(requireAuth());
  *       401:
  *         description: Unauthorized
  */
+/**
+ * PUT /users/me/current-org — Switch current org (Cloud only).
+ */
+router.put('/me/current-org', async (req, res) => {
+  if (!isCloud) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  const authReq = req as AuthRequest;
+  const userId = authReq.user!.id;
+  const { org_id } = req.body;
+  if (!org_id || typeof org_id !== 'string') {
+    return res.status(400).json({ error: 'org_id is required' });
+  }
+  const ok = await setCurrentOrg(userId, org_id);
+  if (!ok) {
+    return res.status(403).json({ error: 'You are not a member of this organization' });
+  }
+  res.json({ message: 'Organization switched', org_id });
+});
+
 // Get current user profile
 router.get('/me', async (req, res) => {
   const authReq = req as AuthRequest;

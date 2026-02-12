@@ -4,29 +4,15 @@
 
 SlugBase is an open-source, self-hosted bookmark manager with optional link forwarding. Store and organize your bookmarks, and optionally expose them as personal short redirect URLs.
 
-## 🚀 Try the Demo
+## Try SlugBase
 
-Check out the live demo at **[https://slugbase-demo.ghotso.dev](https://slugbase-demo.ghotso.dev)**
-
-### Demo Credentials
-
-The demo includes pre-configured users with sample data:
-
-**Admin User:**
-- Email: `admin@demo.slugbase`
-- Password: `DemoAdmin123!`
-
-**Regular Users:**
-- Alice: `alice@demo.slugbase` / `DemoUser123!`
-- Bob: `bob@demo.slugbase` / `DemoUser123!`
-
-*Note: The demo database resets hourly to restore the default state.*
+Sign up for a free account at **[https://slugbase.app](https://slugbase.app)** to try SlugBase Cloud without self-hosting. The Free Plan lets you explore bookmarks, folders, tags, and link forwarding.
 
 ## Features
 
 ### Core Functionality
 - 📚 **Bookmark Management** - Store and organize your bookmarks with titles, URLs, and optional custom slugs
-- 🔗 **Link Forwarding** - Optional short redirect URLs (`/{user_key}/{slug}`) for easy sharing
+- 🔗 **Link Forwarding** - Optional short redirect URLs via `/go/:slug` for easy sharing and browser custom search
 - 🏷️ **Tags & Folders** - Organize bookmarks with tags and folders (many-to-many relationships)
 - 👥 **Sharing** - Share bookmarks and folders with teams and individual users
 - 🔍 **Filtering & Sorting** - Filter by folder/tag, sort by date, alphabetically, usage, or access time
@@ -50,6 +36,8 @@ The demo includes pre-configured users with sample data:
 - 🐘 **PostgreSQL** - Full PostgreSQL support for larger deployments
 - 🔄 **Auto Migrations** - Automatic database migration system with version tracking
 - 🐳 **Docker Ready** - Production-ready Docker setup with multi-stage builds
+- ☁️ **GCP / Cloud Run** - Terraform and GitHub Actions (WIF) to deploy the backend to Cloud Run; see [docs/infra/terraform.md](docs/infra/terraform.md)
+- 🪰 **Fly.io + Neon** - Deploy backend to Fly.io with Neon PostgreSQL (EU); see [docs/infra/fly-neon.md](docs/infra/fly-neon.md)
 - 📊 **API Documentation** - Auto-generated Swagger/OpenAPI documentation
 
 ## Tech Stack
@@ -118,6 +106,37 @@ docker-compose up -d
 - Configure OIDC providers (optional)
 - Configure SMTP settings for password reset (optional)
 
+## Running modes: SELFHOSTED vs CLOUD
+
+SlugBase supports two runtime modes. **SELFHOSTED** is the default and preserves the current behavior. **CLOUD** is for a SaaS deployment (e.g. frontend on Cloudflare Pages, backend on GCP Cloud Run).
+
+### SELFHOSTED (default)
+
+- No `SLUGBASE_MODE` or set to `SLUGBASE_MODE=selfhosted`.
+- Single long-lived JWT cookie; no refresh tokens.
+- OIDC providers configured in the admin panel (“bring your own”).
+- App is served at `/`; no marketing pages.
+- Docker and single-server deployments work as today.
+
+### CLOUD (SaaS)
+
+- Set `SLUGBASE_MODE=cloud` (backend) and build the frontend with `VITE_SLUGBASE_MODE=cloud` and `VITE_API_URL=https://api.slugbase.app` (or your API origin).
+- Short-lived access JWT (e.g. 15 min) plus refresh token in an httpOnly cookie; refresh tokens stored in the DB and rotated on use.
+- Fixed OIDC providers only: Google, Microsoft, GitHub, configured via environment variables (`OIDC_GOOGLE_CLIENT_ID`, `OIDC_GOOGLE_CLIENT_SECRET`, etc.). Admin “OIDC providers” tab is hidden. Transactional email is sent via Postmark API (`POSTMARK_SERVER_API_TOKEN`, `POSTMARK_FROM`); Admin “Settings” tab is hidden in CLOUD.
+- Marketing pages at `/`, `/pricing`, `/contact`; app at `/app` (e.g. `/app/login`, `/app/bookmarks`).
+- CORS and cookie domain (e.g. `COOKIE_DOMAIN=.slugbase.app`) must be set so the frontend (e.g. app.slugbase.app) can call the API (api.slugbase.app) with credentials.
+
+**CLOUD backend env vars:** `FRONTEND_URL`, `BASE_URL`, `JWT_SECRET`, `ENCRYPTION_KEY`; optional: `COOKIE_DOMAIN`, `JWT_ACCESS_EXPIRES_IN`, `JWT_REFRESH_EXPIRES_DAYS`, `CORS_EXTRA_ORIGINS`, OIDC_* (Google/Microsoft/GitHub), and Postmark (`POSTMARK_SERVER_API_TOKEN`, `POSTMARK_FROM`, `POSTMARK_FROM_NAME`) for transactional email (password reset, signup verification, contact form).
+
+**CLOUD frontend build:** `VITE_SLUGBASE_MODE=cloud`, `VITE_API_URL=https://api.slugbase.app`.
+
+### Sharing and forwarding (SELFHOSTED and CLOUD)
+
+- **Access**: A user can access a bookmark if they own it or it is shared with them (direct user share, team share, or via a shared folder). Same rules apply to folders. Tags are not shared; they are per-user.
+- **Forwarding URL**: The canonical link for a bookmark is always `https://<your-domain>/go/<slug>`. This URL works for you and anyone the bookmark is shared with (requires login)
+- **Browser custom search**: Set up a custom search engine with URL `https://<your-domain>/go/%s` and keyword "go". Type `go <slug>` in your address bar for quick access.
+- **Remembered choices**: When multiple bookmarks could match a slug, you can save a preference. Manage under Profile → Remembered Slug Choices.
+
 ## Configuration
 
 ### Environment Variables
@@ -125,7 +144,8 @@ docker-compose up -d
 #### Database
 - `DB_TYPE` - Database type: `sqlite` (default) or `postgresql`
 - `DB_PATH` - SQLite database path (default: `./data/slugbase.db`)
-- `DB_HOST` - PostgreSQL host (default: `localhost`)
+- `DATABASE_URL` - PostgreSQL connection string (for Neon etc.): `postgresql://user:pass@host/db?sslmode=require`. Alternative to individual params.
+- `DB_HOST` - PostgreSQL host (default: `localhost`) – used when `DATABASE_URL` is not set
 - `DB_PORT` - PostgreSQL port (default: `5432`)
 - `DB_NAME` - PostgreSQL database name (default: `slugbase`)
 - `DB_USER` - PostgreSQL user
@@ -138,15 +158,17 @@ docker-compose up -d
 - `BASE_URL` - Base URL for redirects (e.g., `https://slugbase.example.com`)
 - `FRONTEND_URL` - Frontend URL for CORS (default: `http://localhost:3000`)
 
-#### Email (SMTP)
-- `SMTP_ENABLED` - Enable SMTP (default: `false`)
-- `SMTP_HOST` - SMTP host (e.g., `smtp.gmail.com`)
-- `SMTP_PORT` - SMTP port (default: `587`)
-- `SMTP_SECURE` - Use TLS/SSL (default: `false`)
-- `SMTP_USER` - SMTP username
-- `SMTP_PASSWORD` - SMTP password
-- `SMTP_FROM_EMAIL` - From email address
-- `SMTP_FROM_NAME` - From name
+#### Email
+
+**SELFHOSTED:** SMTP is configured via Admin Settings (Settings tab). No env vars needed.
+
+**CLOUD:** Transactional email uses Postmark API (no SMTP). Set in `.env`:
+- `POSTMARK_SERVER_API_TOKEN` - Server API token from [Postmark](https://account.postmarkapp.com)
+- `POSTMARK_FROM` - Verified sender address (e.g. `noreply@slugbase.app`)
+- `POSTMARK_FROM_NAME` - From display name (default: `SlugBase`)
+
+**Both modes:**
+- `CONTACT_FORM_RECIPIENT` - Email address to receive contact form submissions (optional, per environment)
 
 ### Database Migrations
 
@@ -201,7 +223,7 @@ slugbase/
 
 ## Documentation
 
-Visit the documentation at https://slugbase.ghotso.dev
+Visit the documentation at https://docs.slugbase.app
 
 ## API Documentation
 
@@ -221,14 +243,14 @@ Interactive API documentation is available at `/api-docs` when the server is run
 5. Add folders and tags
 6. Save
 
-The bookmark will be accessible at: `{BASE_URL}/{your_user_key}/my-link`
+The bookmark will be accessible at: `{BASE_URL}/go/my-link`
 
 ### Setting up Custom Search Engine
 
 1. Go to Bookmarks page
 2. Click "Learn how to set up a custom search engine" link
 3. Follow the guide for your browser
-4. Use your search URL: `{BASE_URL}/{user_key}/%s`
+4. Use your search URL: `{BASE_URL}/go/%s`
 5. Set keyword (e.g., `go`)
 6. Access bookmarks by typing: `go {slug}` in your address bar
 

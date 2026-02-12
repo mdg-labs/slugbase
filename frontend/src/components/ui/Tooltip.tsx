@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useId } from 'react';
 
 interface TooltipProps {
   content: React.ReactNode;
@@ -11,6 +11,8 @@ export default function Tooltip({ content, children, position = 'top' }: Tooltip
   const [tooltipPosition, setTooltipPosition] = useState({ top: 0, left: 0 });
   const triggerRef = useRef<HTMLElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
+  const generatedId = useId();
+  const tooltipId = `tooltip-${generatedId.replace(/:/g, '')}`;
 
   useEffect(() => {
     if (isVisible && triggerRef.current && tooltipRef.current) {
@@ -20,37 +22,38 @@ export default function Tooltip({ content, children, position = 'top' }: Tooltip
         
         const triggerRect = triggerRef.current.getBoundingClientRect();
         const tooltipRect = tooltipRef.current.getBoundingClientRect();
-        const scrollY = window.scrollY;
-        const scrollX = window.scrollX;
-
+        // Tooltip uses position: fixed, so use viewport coordinates from getBoundingClientRect
         let top = 0;
         let left = 0;
 
         switch (position) {
           case 'top':
-            top = triggerRect.top + scrollY - tooltipRect.height - 8;
-            left = triggerRect.left + scrollX + (triggerRect.width - tooltipRect.width) / 2;
+            top = triggerRect.top - tooltipRect.height - 8;
+            left = triggerRect.left + (triggerRect.width - tooltipRect.width) / 2;
             break;
           case 'bottom':
-            top = triggerRect.bottom + scrollY + 8;
-            left = triggerRect.left + scrollX + (triggerRect.width - tooltipRect.width) / 2;
+            top = triggerRect.bottom + 8;
+            left = triggerRect.left + (triggerRect.width - tooltipRect.width) / 2;
             break;
           case 'left':
-            top = triggerRect.top + scrollY + (triggerRect.height - tooltipRect.height) / 2;
-            left = triggerRect.left + scrollX - tooltipRect.width - 8;
+            top = triggerRect.top + (triggerRect.height - tooltipRect.height) / 2;
+            left = triggerRect.left - tooltipRect.width - 8;
             break;
           case 'right':
-            top = triggerRect.top + scrollY + (triggerRect.height - tooltipRect.height) / 2;
-            left = triggerRect.right + scrollX + 8;
+            top = triggerRect.top + (triggerRect.height - tooltipRect.height) / 2;
+            left = triggerRect.right + 8;
             break;
         }
 
         // Keep tooltip within viewport
         const padding = 8;
-        if (top < scrollY + padding) top = scrollY + padding;
-        if (left < scrollX + padding) left = scrollX + padding;
-        if (left + tooltipRect.width > scrollX + window.innerWidth - padding) {
-          left = scrollX + window.innerWidth - tooltipRect.width - padding;
+        if (top < padding) top = padding;
+        if (left < padding) left = padding;
+        if (left + tooltipRect.width > window.innerWidth - padding) {
+          left = window.innerWidth - tooltipRect.width - padding;
+        }
+        if (top + tooltipRect.height > window.innerHeight - padding) {
+          top = window.innerHeight - tooltipRect.height - padding;
         }
 
         setTooltipPosition({ top, left });
@@ -58,17 +61,15 @@ export default function Tooltip({ content, children, position = 'top' }: Tooltip
     }
   }, [isVisible, position]);
 
-  const handleMouseEnter = () => {
-    setIsVisible(true);
-  };
-
-  const handleMouseLeave = () => {
-    setIsVisible(false);
-  };
+  const handleShow = () => setIsVisible(true);
+  const handleHide = () => setIsVisible(false);
 
   const clonedChild = React.cloneElement(children, {
-    onMouseEnter: handleMouseEnter,
-    onMouseLeave: handleMouseLeave,
+    onMouseEnter: handleShow,
+    onMouseLeave: handleHide,
+    onFocus: handleShow,
+    onBlur: handleHide,
+    ...(isVisible && { 'aria-describedby': tooltipId }),
   });
 
   return (
@@ -79,6 +80,8 @@ export default function Tooltip({ content, children, position = 'top' }: Tooltip
       {isVisible && (
         <div
           ref={tooltipRef}
+          id={tooltipId}
+          role="tooltip"
           className="fixed z-50 px-3 py-2 text-sm bg-gray-900 dark:bg-gray-700 text-white rounded-lg shadow-lg pointer-events-none"
           style={{
             top: `${tooltipPosition.top}px`,

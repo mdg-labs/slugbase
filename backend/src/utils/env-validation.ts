@@ -20,16 +20,13 @@ export function validateEnvironmentVariables(): void {
     errors.push('ENCRYPTION_KEY must be at least 32 characters');
   }
 
-  // Important variables - warn if not set
-  if (!process.env.SESSION_SECRET) {
+  // Session secret: required in production (M3/L4) so we don't fall back to JWT_SECRET or default
+  if (process.env.NODE_ENV === 'production') {
+    if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32) {
+      errors.push('SESSION_SECRET is required in production and must be at least 32 characters');
+    }
+  } else if (!process.env.SESSION_SECRET) {
     warnings.push('SESSION_SECRET is not set (may be used as fallback)');
-  }
-
-  // DEMO_MODE validation (optional, but check if enabled)
-  if (process.env.DEMO_MODE === 'true') {
-    warnings.push('DEMO_MODE is enabled - this is intended for demonstration purposes only');
-    // Note: ENCRYPTION_KEY is still required even in demo mode for OIDC secret encryption
-    // JWT_SECRET validation is already handled above with the default check
   }
 
   if (process.env.NODE_ENV === 'production') {

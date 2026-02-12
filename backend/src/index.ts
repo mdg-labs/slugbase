@@ -11,31 +11,34 @@ import passport from 'passport';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-import { initDatabase, isInitialized, queryOne, query, execute } from './db/index.js';
+import { initDatabase, isInitialized } from './db/index.js';
 import { setupOIDC, loadOIDCStrategies } from './auth/oidc.js';
 import { setupJWT } from './auth/jwt.js';
 import { validateEnvironmentVariables } from './utils/env-validation.js';
-import { seedDatabase, resetDatabase } from './db/seed.js';
-import { setupSecurityHeaders, generalRateLimiter, strictRateLimiter } from './middleware/security.js';
-import { validateUrl } from './utils/validation.js';
+import { setupSecurityHeaders, generalRateLimiter, strictRateLimiter, contactRateLimiter, redirectRateLimiter } from './middleware/security.js';
+
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger.js';
+import { mode, isCloud } from './config/mode.js';
 import authRoutes from './routes/auth.js';
 import bookmarkRoutes from './routes/bookmarks.js';
 import folderRoutes from './routes/folders.js';
 import tagRoutes from './routes/tags.js';
-import redirectRoutes from './routes/redirect.js';
+import goRoutes, { optionalAuthForGo, handleGoSlug, handleGoRemember } from './routes/go.js';
 import userRoutes from './routes/users.js';
 import teamRoutes from './routes/teams.js';
 import oidcProviderRoutes from './routes/oidc-providers.js';
 import adminUserRoutes from './routes/admin/users.js';
 import adminTeamRoutes from './routes/admin/teams.js';
 import adminSettingsRoutes from './routes/admin/settings.js';
-import adminDemoResetRoutes from './routes/admin/demo-reset.js';
 import passwordResetRoutes from './routes/password-reset.js';
 import emailVerificationRoutes from './routes/email-verification.js';
+import contactRoutes from './routes/contact.js';
 import csrfRoutes from './routes/csrf.js';
 import dashboardRoutes from './routes/dashboard.js';
+import organizationRoutes from './routes/organizations.js';
+import invitationRoutes from './routes/invitations.js';
+import billingRoutes, { handleStripeWebhook } from './routes/billing.js';
 import { DatabaseSessionStore } from './utils/session-store.js';
 
 // Validate required environment variables before starting
@@ -43,6 +46,10 @@ validateEnvironmentVariables();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+// Trust proxy for correct client IP when behind Fly.io, Cloud Run, nginx, etc.
+// Required for express-rate-limit to use X-Forwarded-For.
+app.set('trust proxy', 1);
 
 // Get __dirname for path resolution
 const __filename = fileURLToPath(import.meta.url);
@@ -58,18 +65,30 @@ if (process.env.NODE_ENV === 'production') {
 
 // Middleware
 // CORS: Allow both the configured FRONTEND_URL and common development ports
+// In CLOUD mode, also allow CORS_EXTRA_ORIGINS (e.g. marketing domain)
 const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-const allowedOrigins = [
+const allowedOriginsBase = [
   frontendUrl,
   'http://localhost:3000',
   'http://localhost:3001',
   'http://127.0.0.1:3000',
   'http://127.0.0.1:3001',
-].filter((url, index, self) => self.indexOf(url) === index); // Remove duplicates
+];
+const extraOrigins = (process.env.CORS_EXTRA_ORIGINS || '')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+const allowedOrigins = [...new Set([...allowedOriginsBase, ...extraOrigins])];
+
+// Stripe webhook needs raw body - mount before express.json()
+app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), (req, res) => {
+  handleStripeWebhook(req, res);
+});
 
 app.use(cors({
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-    // Allow requests with no origin (like mobile apps, Postman, or same-origin)
+    // Allow requests with no origin (M2: intentional for non-browser clients e.g. mobile, Postman).
+    // Browser requests send Origin; disallowed origins are rejected below.
     if (!origin) {
       return callback(null, true);
     }
@@ -91,7 +110,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser()); // Parse cookies for JWT
 
 // Session middleware (required for OIDC OAuth flow)
-// Note: We use JWT for final authentication, but OIDC needs sessions for the OAuth redirect flow
+// M3/L4: In production SESSION_SECRET is required by env validation; fallback only for development
 const sessionSecret = process.env.SESSION_SECRET || process.env.JWT_SECRET || 'slugbase-session-secret-change-in-production';
 // Only use secure cookies if explicitly in production AND using HTTPS
 // Check BASE_URL to determine if we're using HTTPS
@@ -148,10 +167,18 @@ app.use((req: any, res: any, next: any) => {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
     return next();
   }
-  // Skip CSRF for password reset and OIDC callback endpoints
-  if (req.path.startsWith('/api/password-reset') || 
-      req.path.includes('/callback') ||
+  // Skip CSRF for password reset, OIDC callback, auth refresh, contact form, and public signup flows
+  if (req.path.startsWith('/api/password-reset') ||
       req.path === '/api/auth/setup' ||
+      req.path === '/api/auth/refresh' ||
+      req.path === '/api/auth/register' ||
+      req.path === '/api/auth/verify-signup' ||
+      req.path === '/api/auth/resend-signup-verification' ||
+      req.path === '/api/auth/request-signup-resend' ||
+      req.path === '/api/billing/webhook' ||
+      req.path === '/api/billing/create-checkout-session' ||
+      req.path === '/api/billing/create-portal-session' ||
+      req.path === '/api/contact' ||
       req.path === '/api/health' ||
       req.path === '/api/csrf-token' ||
       req.path.startsWith('/api-docs')) {
@@ -170,12 +197,16 @@ app.use('/api/folders', folderRoutes);
 app.use('/api/tags', tagRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/teams', teamRoutes);
+app.use('/api/organizations', organizationRoutes);
+app.use('/api/invitations', invitationRoutes);
+app.use('/api/billing', billingRoutes);
 app.use('/api/oidc-providers', oidcProviderRoutes);
 app.use('/api/admin/users', adminUserRoutes);
 app.use('/api/admin/teams', adminTeamRoutes);
 app.use('/api/admin/settings', adminSettingsRoutes);
-app.use('/api/admin/demo-reset', adminDemoResetRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/contact', contactRateLimiter, contactRoutes);
+app.use('/api/go', goRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -187,113 +218,20 @@ app.get('/api/version', (req, res) => {
   res.json({ 
     version: process.env.COMMIT_SHA || 'dev',
     commit: process.env.COMMIT_SHA || null,
-    demoMode: process.env.DEMO_MODE === 'true'
+    mode,
   });
 });
 
-// Redirect routes - handle 2-segment paths only (user_key/slug pattern)
-// Use regex to ensure route only matches paths with exactly 2 non-empty segments
-// This prevents the route from matching `/` (root path)
-app.get(/^\/([^\/]+)\/([^\/]+)$/, strictRateLimiter, async (req, res, next) => {
-  try {
-    // Extract user_key and slug from the matched groups
-    const match = req.path.match(/^\/([^\/]+)\/([^\/]+)$/);
-    if (!match) {
-      return next();
-    }
-    const user_key = match[1];
-    const slug = match[2];
-
-    // user_key and slug are already extracted from regex match above
-    if (!user_key || !slug) {
-      return next();
-    }
-
-    // First, try to find a bookmark owned by this user_key
-    let bookmark = await queryOne(
-      `SELECT b.* FROM bookmarks b
-       INNER JOIN users u ON b.user_id = u.id
-       WHERE u.user_key = ? AND b.slug = ? AND b.forwarding_enabled = TRUE`,
-      [user_key, slug]
-    );
-
-    // If not found, try to find a shared bookmark accessible by this user_key
-    if (!bookmark) {
-      // Get the user_id from the user_key
-      const user = await queryOne(
-        'SELECT id FROM users WHERE user_key = ?',
-        [user_key]
-      );
-
-      if (user) {
-        const userId = (user as any).id;
-
-        // Get user's teams
-        const userTeams = await query(
-          'SELECT team_id FROM team_members WHERE user_id = ?',
-          [userId]
-        );
-        const teamIds = Array.isArray(userTeams) ? userTeams.map((t: any) => t.team_id) : [];
-
-        // Find shared bookmark with matching slug
-        let sql = `
-          SELECT DISTINCT b.*
-          FROM bookmarks b
-          LEFT JOIN bookmark_user_shares bus ON b.id = bus.bookmark_id
-          LEFT JOIN bookmark_team_shares bts ON b.id = bts.bookmark_id
-          LEFT JOIN bookmark_folders bf ON b.id = bf.bookmark_id
-          LEFT JOIN folder_user_shares fus ON bf.folder_id = fus.folder_id
-          LEFT JOIN folder_team_shares fts ON bf.folder_id = fts.folder_id
-          WHERE b.slug = ? AND b.forwarding_enabled = TRUE AND b.user_id != ?
-            AND (bus.user_id = ?
-            OR (bts.team_id IN (${teamIds.length > 0 ? teamIds.map(() => '?').join(',') : 'NULL'}) AND bts.team_id IS NOT NULL)
-            OR fus.user_id = ?
-            OR (fts.team_id IN (${teamIds.length > 0 ? teamIds.map(() => '?').join(',') : 'NULL'}) AND fts.team_id IS NOT NULL AND bf.folder_id IS NOT NULL))
-        `;
-        const params: any[] = [slug, userId, userId, userId];
-        if (teamIds.length > 0) {
-          params.push(...teamIds);
-          params.push(...teamIds); // Second set for folder shares
-        }
-
-        bookmark = await queryOne(sql, params);
-      }
-    }
-
-    if (!bookmark) {
-      return res.status(404).send('Not Found');
-    }
-
-    const redirectUrl = (bookmark as any).url;
-    const bookmarkId = (bookmark as any).id;
-
-    // Track access (increment access_count and update last_accessed_at)
-    // Do this asynchronously so it doesn't block the redirect
-    execute(
-      `UPDATE bookmarks 
-       SET access_count = COALESCE(access_count, 0) + 1,
-           last_accessed_at = CURRENT_TIMESTAMP
-       WHERE id = ?`,
-      [bookmarkId]
-    ).catch((err) => {
-      // Log error but don't fail the redirect
-      console.error('Failed to track bookmark access:', err);
-    });
-
-    const urlValidation = validateUrl(redirectUrl);
-    if (!urlValidation.valid) {
-      console.error('Invalid redirect URL detected:', redirectUrl);
-      return res.status(400).send('Invalid redirect URL');
-    }
-
-    res.redirect(302, redirectUrl);
-  } catch (error: any) {
-    console.error('Redirect error:', error);
+// /go slug forwarding - single canonical endpoint (authenticated)
+app.get('/go/:slug/remember/:bookmarkId', redirectRateLimiter, optionalAuthForGo, (req, res) => {
+  handleGoRemember(req, res).catch((err) => {
+    console.error('Go remember error:', err);
     res.status(500).send('Internal Server Error');
-  }
+  });
 });
+app.get('/go/:slug', redirectRateLimiter, optionalAuthForGo, handleGoSlug);
 
-// Serve frontend root route in production (AFTER redirect route, since redirect requires 2 segments)
+// Serve frontend root route in production
 if (process.env.NODE_ENV === 'production') {
   app.get('/', (req, res) => {
     res.sendFile(join(__dirname, '../../public/index.html'));
@@ -304,13 +242,7 @@ if (process.env.NODE_ENV === 'production') {
 // This catches all non-API, non-redirect routes for SPA client-side routing
 if (process.env.NODE_ENV === 'production') {
   app.get('*', (req, res, next) => {
-    // Skip API routes and redirect patterns (2 segments)
-    if (req.path.startsWith('/api/') || req.path.startsWith('/api-docs')) {
-      return next();
-    }
-    const pathSegments = req.path.split('/').filter(Boolean);
-    if (pathSegments.length === 2) {
-      // This might be a redirect route, let it fall through
+    if (req.path.startsWith('/api/') || req.path.startsWith('/api-docs') || req.path.startsWith('/go/')) {
       return next();
     }
     res.sendFile(join(__dirname, '../../public/index.html'), (err) => {
@@ -337,64 +269,14 @@ async function start() {
     await loadOIDCStrategies();
     
     const initialized = await isInitialized();
-    const isDemoMode = process.env.DEMO_MODE === 'true';
-    
-    // Handle DEMO_MODE seeding
-    if (isDemoMode) {
-      console.log('🎭 DEMO_MODE is enabled');
-      if (!initialized) {
-        console.log('Seeding database with demo data...');
-        await seedDatabase();
-      } else {
-        console.log('Database already initialized, skipping seed');
-      }
-      
-      // Setup scheduled reset (daily at 3 AM UTC)
-      const DEMO_RESET_SCHEDULE = process.env.DEMO_RESET_SCHEDULE || '0 3 * * *';
-      setupScheduledReset(DEMO_RESET_SCHEDULE);
-      console.log(`📅 Scheduled reset configured: ${DEMO_RESET_SCHEDULE} (daily reset)`);
-    }
-    
-    console.log(`System initialized: ${initialized || isDemoMode}`);
+    console.log(`System initialized: ${initialized}`);
     
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
-      if (isDemoMode) {
-        console.log('🎭 DEMO MODE: Demo credentials available - see documentation');
-      }
     });
   } catch (error) {
     console.error('Failed to start server:', error);
     process.exit(1);
-  }
-}
-
-/**
- * Setup scheduled database reset for DEMO_MODE
- * Uses node-cron to reset the database periodically
- */
-function setupScheduledReset(cronSchedule: string) {
-  try {
-    // Dynamic import to avoid issues if node-cron is not installed
-    import('node-cron').then((cronModule: any) => {
-      const cron = cronModule.default || cronModule;
-      cron.schedule(cronSchedule, async () => {
-        console.log('🔄 Scheduled database reset triggered...');
-        try {
-          await resetDatabase();
-          console.log('✅ Scheduled reset completed successfully');
-        } catch (error: any) {
-          console.error('❌ Error during scheduled reset:', error);
-        }
-      }, {
-        timezone: 'UTC',
-      });
-      console.log(`   ✓ Reset scheduled with pattern: ${cronSchedule}`);
-    }).catch((error: any) => {
-      console.warn('⚠️  node-cron not available, scheduled reset disabled:', error.message);
-    });
-  } catch (error: any) {
-    console.warn('⚠️  Could not setup scheduled reset:', error.message);
   }
 }
 

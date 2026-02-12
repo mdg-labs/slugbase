@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import api from '../api/client';
+import { appBasePath } from '../config/api';
 import { Mail, Key, ArrowLeft } from 'lucide-react';
 import Button from '../components/ui/Button';
 
@@ -141,7 +142,7 @@ export default function PasswordReset() {
 
             <div className="text-center">
               <Link
-                to="/login"
+                to={`${appBasePath}/login`}
                 className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
               >
                 <ArrowLeft className="h-4 w-4" />
@@ -161,7 +162,7 @@ export default function PasswordReset() {
                   {t('passwordReset.invalidToken')}
                 </p>
                 <Link
-                  to="/password-reset"
+                  to={`${appBasePath}/password-reset`}
                   className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
                 >
                   <ArrowLeft className="h-4 w-4" />
@@ -223,7 +224,7 @@ export default function PasswordReset() {
 
                 <div className="text-center">
                   <Link
-                    to="/login"
+                    to={`${appBasePath}/login`}
                     className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
                   >
                     <ArrowLeft className="h-4 w-4" />

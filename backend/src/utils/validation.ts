@@ -17,6 +17,8 @@ export const MAX_LENGTHS = {
   teamName: 255,
   teamDescription: 500,
   icon: 50,
+  /** Contact form message body (M1: cap to prevent DoS and log size) */
+  contactMessage: 10000,
 } as const;
 
 /**

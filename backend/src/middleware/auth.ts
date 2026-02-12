@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction, RequestHandler } from 'express';
 import passport from 'passport';
+import { isCloud } from '../config/mode.js';
 
 export interface AuthRequest extends Request {
   user?: {
@@ -8,6 +9,7 @@ export interface AuthRequest extends Request {
     name: string;
     user_key: string;
     is_admin: boolean;
+    org_role?: 'owner' | 'admin' | 'member' | null;
   };
 }
 
@@ -41,7 +43,9 @@ export function requireAdmin(): RequestHandler {
       if (err || !user) {
         return res.status(401).json({ error: 'Unauthorized' });
       }
-      if (!user.is_admin) {
+      const isGlobalAdmin = user.is_admin === true || user.is_admin === 1;
+      const isOrgAdmin = isCloud && (user.org_role === 'owner' || user.org_role === 'admin');
+      if (!isGlobalAdmin && !isOrgAdmin) {
         return res.status(403).json({ error: 'Forbidden' });
       }
       (req as AuthRequest).user = user;

@@ -15,6 +15,7 @@ interface Bookmark {
   url: string;
   slug: string;
   forwarding_enabled: boolean;
+  owner_user_key?: string;
   folder_id?: string;
   tags?: Array<{ id: string; name: string }>;
   shared_teams?: Array<{ id: string; name: string }>;
@@ -40,7 +41,7 @@ export default function BookmarkModal({
   onTagCreated,
 }: BookmarkModalProps) {
   const { t } = useTranslation();
-  const { user } = useAuth();
+  useAuth();
   const { showToast } = useToast();
   const [formData, setFormData] = useState({
     title: '',
@@ -236,12 +237,12 @@ export default function BookmarkModal({
                   </label>
                   <div className="flex items-center gap-2 px-4 py-2.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                     <code className="flex-1 text-xs font-mono text-blue-800 dark:text-blue-200 truncate">
-                      {window.location.origin}/{user?.user_key}/{formData.slug}
+                      {window.location.origin}/go/{formData.slug}
                     </code>
                     <button
                       type="button"
                       onClick={() => {
-                        const url = `${window.location.origin}/${user?.user_key}/${formData.slug}`;
+                        const url = `${window.location.origin}/go/${formData.slug}`;
                         navigator.clipboard.writeText(url);
                         setCopied(true);
                         showToast(t('common.copied'), 'success');

@@ -9,6 +9,56 @@ import { authRateLimiter } from '../middleware/security.js';
 
 const router = Router();
 
+const DB_TYPE = process.env.DB_TYPE || 'sqlite';
+
+function hashToken(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+/** Convert ? placeholders to $1, $2 for PostgreSQL */
+function toPg(sql: string): string {
+  let n = 0;
+  return sql.replace(/\?/g, () => `$${++n}`);
+}
+
+function sql(sqlStr: string, params: any[]): [string, any[]] {
+  return DB_TYPE === 'postgresql' ? [toPg(sqlStr), params] : [sqlStr, params];
+}
+
+/** Single message for invalid/expired to avoid leaking which case (L3) */
+const INVALID_OR_EXPIRED = 'Invalid or expired token';
+
+/**
+ * Find a reset token row by submitted token (hash-first, then legacy plaintext).
+ * Returns the row and its id for marking used; null if not found.
+ */
+async function findResetTokenByToken(submittedToken: string): Promise<{ row: any; id: string } | null> {
+  const tokenHash = hashToken(submittedToken);
+  const [qHash, pHash] = sql(
+    'SELECT * FROM password_reset_tokens WHERE token_hash = ? AND used = FALSE',
+    [tokenHash]
+  );
+  let row = await queryOne(qHash, pHash);
+  if (row) {
+    return { row, id: (row as any).id };
+  }
+  // Legacy: token stored in plaintext (token_hash IS NULL)
+  const [qLegacy, pLegacy] = sql(
+    'SELECT * FROM password_reset_tokens WHERE token = ? AND used = FALSE AND token_hash IS NULL',
+    [submittedToken]
+  );
+  row = await queryOne(qLegacy, pLegacy);
+  if (!row) return null;
+  const id = (row as any).id;
+  // Migrate legacy row to token_hash so we don't need plaintext again
+  const [qUp, pUp] = sql(
+    'UPDATE password_reset_tokens SET token_hash = ?, token = ? WHERE id = ?',
+    [tokenHash, 'h:' + id, id]
+  );
+  await execute(qUp, pUp);
+  return { row, id };
+}
+
 /**
  * @swagger
  * /api/password-reset/request:
@@ -32,14 +82,6 @@ const router = Router();
  *     responses:
  *       200:
  *         description: Password reset email sent (if user exists and SMTP configured)
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "If an account with this email exists, a password reset link has been sent."
  *       400:
  *         description: Invalid email format
  */
@@ -51,47 +93,39 @@ router.post('/request', authRateLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Email is required' });
     }
 
-    // Validate email
     const emailValidation = validateEmail(email);
     if (!emailValidation.valid) {
       return res.status(400).json({ error: emailValidation.error });
     }
-
     const normalizedEmail = normalizeEmail(email);
 
-    // Check if user exists
     const user = await queryOne('SELECT * FROM users WHERE email = ?', [normalizedEmail]);
-    
-    // Always return success message to prevent email enumeration
-    // Only send email if user exists and has a password (not OIDC-only)
+
     if (user && (user as any).password_hash) {
-      // Generate reset token
       const token = crypto.randomBytes(32).toString('hex');
+      const tokenHash = hashToken(token);
       const tokenId = uuidv4();
       const expiresAt = new Date();
-      expiresAt.setHours(expiresAt.getHours() + 1); // 1 hour expiration
+      expiresAt.setHours(expiresAt.getHours() + 1);
 
-      // Store token in database
-      await execute(
-        'INSERT INTO password_reset_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)',
-        [tokenId, (user as any).id, token, expiresAt.toISOString()]
+      // Store only hash; token column holds placeholder so we don't store plaintext (H2)
+      const tokenPlaceholder = 'h:' + tokenId;
+      const [qIns, pIns] = sql(
+        'INSERT INTO password_reset_tokens (id, user_id, token, token_hash, expires_at) VALUES (?, ?, ?, ?, ?)',
+        [tokenId, (user as any).id, tokenPlaceholder, tokenHash, expiresAt.toISOString()]
       );
+      await execute(qIns, pIns);
 
-      // Build reset URL
       const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
       const resetUrl = `${baseUrl}/reset-password?token=${token}`;
-
-      // Send email (don't fail if email fails, just log)
       await sendPasswordResetEmail(normalizedEmail, token, resetUrl);
     }
 
-    // Always return same message to prevent email enumeration
     res.json({
       message: 'If an account with this email exists, a password reset link has been sent.',
     });
   } catch (error: any) {
     console.error('Password reset request error:', error);
-    // Still return success to prevent information disclosure
     res.json({
       message: 'If an account with this email exists, a password reset link has been sent.',
     });
@@ -111,18 +145,9 @@ router.post('/request', authRateLimiter, async (req, res) => {
  *         required: true
  *         schema:
  *           type: string
- *         description: Password reset token
  *     responses:
  *       200:
  *         description: Token is valid
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 valid:
- *                   type: boolean
- *                   example: true
  *       400:
  *         description: Token is invalid or expired
  */
@@ -131,31 +156,25 @@ router.get('/verify', async (req, res) => {
     const { token } = req.query;
 
     if (!token || typeof token !== 'string') {
-      return res.status(400).json({ valid: false, error: 'Token is required' });
+      return res.status(400).json({ valid: false, error: INVALID_OR_EXPIRED });
     }
 
-    // Find token
-    const resetToken = await queryOne(
-      'SELECT * FROM password_reset_tokens WHERE token = ? AND used = FALSE',
-      [token]
-    );
-
-    if (!resetToken) {
-      return res.status(400).json({ valid: false, error: 'Invalid or expired token' });
+    const found = await findResetTokenByToken(token);
+    if (!found) {
+      return res.status(400).json({ valid: false, error: INVALID_OR_EXPIRED });
     }
 
-    // Check expiration
-    const expiresAt = new Date((resetToken as any).expires_at);
+    const expiresAt = new Date((found.row as any).expires_at);
     if (expiresAt < new Date()) {
-      // Mark as used
-      await execute('UPDATE password_reset_tokens SET used = TRUE WHERE token = ?', [token]);
-      return res.status(400).json({ valid: false, error: 'Token has expired' });
+      const [qUp, pUp] = sql('UPDATE password_reset_tokens SET used = TRUE WHERE id = ?', [found.id]);
+      await execute(qUp, pUp);
+      return res.status(400).json({ valid: false, error: INVALID_OR_EXPIRED });
     }
 
     res.json({ valid: true });
   } catch (error: any) {
     console.error('Token verification error:', error);
-    res.status(400).json({ valid: false, error: 'Invalid token' });
+    res.status(400).json({ valid: false, error: INVALID_OR_EXPIRED });
   }
 });
 
@@ -164,7 +183,6 @@ router.get('/verify', async (req, res) => {
  * /api/password-reset/reset:
  *   post:
  *     summary: Reset password with token
- *     description: Resets the user's password using a valid reset token
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
@@ -172,28 +190,13 @@ router.get('/verify', async (req, res) => {
  *         application/json:
  *           schema:
  *             type: object
- *             required:
- *               - token
- *               - password
+ *             required: [token, password]
  *             properties:
- *               token:
- *                 type: string
- *                 description: Password reset token
- *               password:
- *                 type: string
- *                 format: password
- *                 description: New password (must meet complexity requirements)
+ *               token: { type: string }
+ *               password: { type: string }
  *     responses:
  *       200:
  *         description: Password reset successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "Password reset successfully"
  *       400:
  *         description: Invalid token, expired token, or weak password
  */
@@ -205,51 +208,40 @@ router.post('/reset', authRateLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Token and password are required' });
     }
 
-    // Validate password
     const passwordValidation = validatePassword(password);
     if (!passwordValidation.valid) {
       return res.status(400).json({ error: passwordValidation.error });
     }
 
-    // Find token
-    const resetToken = await queryOne(
-      'SELECT * FROM password_reset_tokens WHERE token = ? AND used = FALSE',
-      [token]
-    );
-
-    if (!resetToken) {
-      return res.status(400).json({ error: 'Invalid or expired token' });
+    const found = await findResetTokenByToken(token);
+    if (!found) {
+      return res.status(400).json({ error: INVALID_OR_EXPIRED });
     }
 
-    // Check expiration
-    const expiresAt = new Date((resetToken as any).expires_at);
+    const expiresAt = new Date((found.row as any).expires_at);
     if (expiresAt < new Date()) {
-      // Mark as used
-      await execute('UPDATE password_reset_tokens SET used = TRUE WHERE token = ?', [token]);
-      return res.status(400).json({ error: 'Token has expired' });
+      const [qUp, pUp] = sql('UPDATE password_reset_tokens SET used = TRUE WHERE id = ?', [found.id]);
+      await execute(qUp, pUp);
+      return res.status(400).json({ error: INVALID_OR_EXPIRED });
     }
 
-    // Get user
-    const userId = (resetToken as any).user_id;
+    const userId = (found.row as any).user_id;
     const user = await queryOne('SELECT * FROM users WHERE id = ?', [userId]);
     if (!user) {
       return res.status(400).json({ error: 'User not found' });
     }
 
-    // Hash new password
     const passwordHash = await bcrypt.hash(password, 10);
-
-    // Update password
     await execute('UPDATE users SET password_hash = ? WHERE id = ?', [passwordHash, userId]);
 
-    // Mark token as used
-    await execute('UPDATE password_reset_tokens SET used = TRUE WHERE token = ?', [token]);
+    const [qUsed, pUsed] = sql('UPDATE password_reset_tokens SET used = TRUE WHERE id = ?', [found.id]);
+    await execute(qUsed, pUsed);
 
-    // Invalidate all other reset tokens for this user
-    await execute(
+    const [qInv, pInv] = sql(
       'UPDATE password_reset_tokens SET used = TRUE WHERE user_id = ? AND used = FALSE',
       [userId]
     );
+    await execute(qInv, pInv);
 
     res.json({ message: 'Password reset successfully' });
   } catch (error: any) {

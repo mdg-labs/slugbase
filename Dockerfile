@@ -20,6 +20,14 @@ COPY backend/ ./backend/
 ARG COMMIT_SHA
 ENV COMMIT_SHA=${COMMIT_SHA}
 
+# Frontend build-time env. Omit or set to selfhosted → single-page app at / (no landing).
+# Set VITE_SLUGBASE_MODE=cloud for landing/pricing/contact at / and app at /app.
+# Published image (CI) is built with selfhosted so GHCR image is the combined selfhosted bundle.
+ARG VITE_SLUGBASE_MODE=selfhosted
+ARG VITE_API_URL=
+ENV VITE_SLUGBASE_MODE=${VITE_SLUGBASE_MODE}
+ENV VITE_API_URL=${VITE_API_URL}
+
 # Build both workspaces
 RUN npm run build --workspace=frontend
 RUN npm run build --workspace=backend

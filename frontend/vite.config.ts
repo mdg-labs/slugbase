@@ -29,12 +29,10 @@ export default defineConfig({
         target: 'http://localhost:5000',
         changeOrigin: true
       },
-      // Proxy forwarding URLs to backend
-      // Matches pattern: /{user_key}/{slug} where user_key and slug are alphanumeric
-      '^/([a-zA-Z0-9]+)/([a-zA-Z0-9_-]+)$': {
+      // Proxy /go slug forwarding to backend
+      '/go': {
         target: 'http://localhost:5000',
-        changeOrigin: true,
-        rewrite: (path) => path // Keep the path as-is
+        changeOrigin: true
       }
     }
   }

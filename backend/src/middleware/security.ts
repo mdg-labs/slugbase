@@ -22,6 +22,18 @@ export const authRateLimiter = isDevelopment
       skipSuccessfulRequests: true, // Don't count successful requests
     });
 
+/** Refresh token: more lenient - 401 is expected when unauthenticated (e.g. signup/login page) */
+export const refreshRateLimiter = isDevelopment
+  ? noOpRateLimiter
+  : rateLimit({
+      windowMs: 15 * 60 * 1000,
+      max: 500, // Higher limit; failures are often from unauthenticated users checking /auth/me
+      message: 'Too many requests, please try again later.',
+      standardHeaders: true,
+      legacyHeaders: false,
+      skipSuccessfulRequests: true,
+    });
+
 export const generalRateLimiter = isDevelopment
   ? noOpRateLimiter
   : rateLimit({
@@ -37,6 +49,28 @@ export const strictRateLimiter = isDevelopment
       windowMs: 15 * 60 * 1000, // 15 minutes
       max: 500, // Limit each IP to 500 requests per windowMs
       message: 'Too many requests, please try again later.',
+      standardHeaders: true,
+      legacyHeaders: false,
+    });
+
+/** Contact form: strict limit to prevent abuse and PII flooding (M1) */
+export const contactRateLimiter = isDevelopment
+  ? noOpRateLimiter
+  : rateLimit({
+      windowMs: 60 * 60 * 1000, // 1 hour
+      max: 10,
+      message: 'Too many contact form submissions. Please try again later.',
+      standardHeaders: true,
+      legacyHeaders: false,
+    });
+
+/** Redirect endpoint: stricter than general to reduce abuse/crawler load (M4) */
+export const redirectRateLimiter = isDevelopment
+  ? noOpRateLimiter
+  : rateLimit({
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      max: 200,
+      message: 'Too many redirect requests. Please try again later.',
       standardHeaders: true,
       legacyHeaders: false,
     });

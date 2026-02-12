@@ -4,10 +4,16 @@ import { AuthRequest, requireAuth, requireAdmin } from '../middleware/auth.js';
 import { v4 as uuidv4 } from 'uuid';
 import { encrypt, decrypt } from '../utils/encryption.js';
 import { reloadOIDCStrategies } from '../auth/oidc.js';
+import { isCloud } from '../config/mode.js';
 
 const router = Router();
+// CLOUD mode: do not expose "bring your own" OIDC; fixed providers only via env
+router.use((req, res, next) => {
+  if (isCloud) return res.status(403).json({ error: 'OIDC provider management is not available in CLOUD mode' });
+  next();
+});
 router.use(requireAuth());
-router.use(requireAdmin()); // Only admins can manage OIDC providers
+router.use(requireAdmin());
 
 /**
  * @swagger

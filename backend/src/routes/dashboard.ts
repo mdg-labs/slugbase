@@ -179,12 +179,51 @@ router.get('/stats', requireAuth(), async (req, res) => {
       sharedFolders = sharedFoldersResult ? parseInt((sharedFoldersResult as any).count) : 0;
     }
 
-    // Recent bookmarks (last 5, own only)
+    // Recent bookmarks (last 5, own only) with last_accessed_at
     const recentBookmarks = await query(
-      'SELECT id, title, url, created_at FROM bookmarks WHERE user_id = ? ORDER BY created_at DESC LIMIT 5',
+      'SELECT id, title, url, created_at, last_accessed_at FROM bookmarks WHERE user_id = ? ORDER BY created_at DESC LIMIT 5',
       [userId]
     );
     const recentBookmarksList = Array.isArray(recentBookmarks) ? recentBookmarks : (recentBookmarks ? [recentBookmarks] : []);
+
+    // Enrich with folder and tag names (optional fields, backward-compatible)
+    const bookmarkIds = (recentBookmarksList as any[]).map((b: any) => b.id).filter(Boolean);
+    const folderNamesByBookmark: Record<string, string[]> = {};
+    const tagNamesByBookmark: Record<string, string[]> = {};
+    if (bookmarkIds.length > 0) {
+      const placeholders = bookmarkIds.map(() => '?').join(',');
+      const folderRows = await query(
+        `SELECT bf.bookmark_id, f.name
+         FROM bookmark_folders bf
+         INNER JOIN folders f ON bf.folder_id = f.id
+         WHERE bf.bookmark_id IN (${placeholders})`,
+        bookmarkIds
+      ) as any[];
+      const tagRows = await query(
+        `SELECT bt.bookmark_id, t.name
+         FROM bookmark_tags bt
+         INNER JOIN tags t ON bt.tag_id = t.id
+         WHERE bt.bookmark_id IN (${placeholders})`,
+        bookmarkIds
+      ) as any[];
+      (Array.isArray(folderRows) ? folderRows : []).forEach((row: any) => {
+        if (!folderNamesByBookmark[row.bookmark_id]) folderNamesByBookmark[row.bookmark_id] = [];
+        folderNamesByBookmark[row.bookmark_id].push(row.name);
+      });
+      (Array.isArray(tagRows) ? tagRows : []).forEach((row: any) => {
+        if (!tagNamesByBookmark[row.bookmark_id]) tagNamesByBookmark[row.bookmark_id] = [];
+        tagNamesByBookmark[row.bookmark_id].push(row.name);
+      });
+    }
+    const recentBookmarksEnriched = (recentBookmarksList as any[]).map((b: any) => ({
+      id: b.id,
+      title: b.title,
+      url: b.url,
+      created_at: b.created_at,
+      last_accessed_at: b.last_accessed_at ?? undefined,
+      folder_names: folderNamesByBookmark[b.id] || [],
+      tag_names: (tagNamesByBookmark[b.id] || []).slice(0, 3),
+    }));
 
     // Top tags (most used, top 5)
     const topTags = await query(
@@ -206,7 +245,7 @@ router.get('/stats', requireAuth(), async (req, res) => {
       totalTags,
       sharedBookmarks,
       sharedFolders,
-      recentBookmarks: recentBookmarksList,
+      recentBookmarks: recentBookmarksEnriched,
       topTags: topTagsList,
     });
   } catch (error: any) {

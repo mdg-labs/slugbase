@@ -6,7 +6,8 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "migrate": "tsx src/migrate.ts"
+    "migrate": "tsx src/migrate.ts",
+    "test": "DB_PATH=:memory: node --test --import tsx test/authorization.test.ts test/go.test.ts"
   },
   "dependencies": {
     "@types/cookie-parser": "^1.4.10",
@@ -31,6 +32,8 @@
     "passport-jwt": "^4.0.1",
     "passport-openidconnect": "^0.1.1",
     "pg": "^8.11.3",
+    "postmark": "^4.0.5",
+    "stripe": "^20.3.1",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
     "uuid": "^9.0.1",

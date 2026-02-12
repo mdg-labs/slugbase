@@ -4,11 +4,22 @@ import App from './App.tsx'
 import './index.css'
 import './i18n'
 
-// Apply initial dark mode based on browser preference before React renders
-// This ensures dark mode is applied immediately, even on login page
-const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-if (prefersDark) {
-  document.documentElement.classList.add('dark');
+// Apply initial dark mode: localStorage (anonymous users) > browser preference
+const root = document.documentElement;
+const storedTheme = localStorage.getItem('slugbase_theme');
+if (storedTheme === 'dark') {
+  root.classList.add('dark');
+  root.dataset.userTheme = 'true';
+} else if (storedTheme === 'light') {
+  root.classList.remove('dark');
+  root.dataset.userTheme = 'true';
+} else {
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  if (prefersDark) {
+    root.classList.add('dark');
+  } else {
+    root.classList.remove('dark');
+  }
 }
 
 // Listen for changes to browser preference

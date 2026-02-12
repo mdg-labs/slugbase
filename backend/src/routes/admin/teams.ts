@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { query, queryOne, execute } from '../../db/index.js';
 import { AuthRequest, requireAuth, requireAdmin } from '../../middleware/auth.js';
 import { v4 as uuidv4 } from 'uuid';
+import { isCloud } from '../../config/mode.js';
+import { getCurrentOrgId } from '../../utils/organizations.js';
 
 const router = Router();
 router.use(requireAuth());
@@ -48,6 +50,15 @@ router.use(requireAdmin());
 router.get('/', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
+    if (isCloud) {
+      const orgId = await getCurrentOrgId(authReq.user!.id);
+      if (!orgId) {
+        return res.json([]);
+      }
+      const teams = await query('SELECT * FROM teams WHERE org_id = ? ORDER BY created_at DESC', [orgId]);
+      const teamsList = Array.isArray(teams) ? teams : (teams ? [teams] : []);
+      return res.json(teamsList);
+    }
     const teams = await query('SELECT * FROM teams ORDER BY created_at DESC', []);
     const teamsList = Array.isArray(teams) ? teams : (teams ? [teams] : []);
     res.json(teamsList);
@@ -119,6 +130,12 @@ router.get('/:id', async (req, res) => {
     const team = await queryOne('SELECT * FROM teams WHERE id = ?', [id]);
     if (!team) {
       return res.status(404).json({ error: 'Team not found' });
+    }
+    if (isCloud) {
+      const orgId = await getCurrentOrgId(authReq.user!.id);
+      if (!orgId || (team as any).org_id !== orgId) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
     }
 
     const members = await query(
@@ -199,6 +216,29 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Name is required' });
     }
 
+    if (isCloud) {
+      const orgId = await getCurrentOrgId(authReq.user!.id);
+      if (!orgId) {
+        return res.status(403).json({ error: 'No organization selected' });
+      }
+      const org = await queryOne('SELECT plan FROM organizations WHERE id = ?', [orgId]);
+      const plan = (org as any)?.plan || 'free';
+      if (plan !== 'team') {
+        return res.status(403).json({ error: 'Team plan required to create teams' });
+      }
+      const existing = await queryOne('SELECT id FROM teams WHERE name = ? AND org_id = ?', [name, orgId]);
+      if (existing) {
+        return res.status(400).json({ error: 'Team with this name already exists' });
+      }
+      const teamId = uuidv4();
+      await execute(
+        'INSERT INTO teams (id, name, description, org_id) VALUES (?, ?, ?, ?)',
+        [teamId, name, description || null, orgId]
+      );
+      const team = await queryOne('SELECT * FROM teams WHERE id = ?', [teamId]);
+      return res.status(201).json(team);
+    }
+
     const existing = await queryOne('SELECT id FROM teams WHERE name = ?', [name]);
     if (existing) {
       return res.status(400).json({ error: 'Team with this name already exists' });
@@ -274,10 +314,18 @@ router.put('/:id', async (req, res) => {
     if (!existing) {
       return res.status(404).json({ error: 'Team not found' });
     }
+    if (isCloud) {
+      const orgId = await getCurrentOrgId(authReq.user!.id);
+      if (!orgId || (existing as any).org_id !== orgId) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+    }
 
     if (name && name !== (existing as any).name) {
-      const nameExists = await queryOne('SELECT id FROM teams WHERE name = ? AND id != ?', [name, id]);
-      if (nameExists) {
+      const nameCheck = isCloud
+        ? await queryOne('SELECT id FROM teams WHERE name = ? AND id != ? AND org_id = ?', [name, id, (existing as any).org_id])
+        : await queryOne('SELECT id FROM teams WHERE name = ? AND id != ?', [name, id]);
+      if (nameCheck) {
         return res.status(400).json({ error: 'Team with this name already exists' });
       }
     }
@@ -352,6 +400,12 @@ router.delete('/:id', async (req, res) => {
     if (!team) {
       return res.status(404).json({ error: 'Team not found' });
     }
+    if (isCloud) {
+      const orgId = await getCurrentOrgId(authReq.user!.id);
+      if (!orgId || (team as any).org_id !== orgId) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+    }
 
     await execute('DELETE FROM teams WHERE id = ?', [id]);
     res.json({ message: 'Team deleted' });
@@ -424,6 +478,19 @@ router.post('/:id/members', async (req, res) => {
     const team = await queryOne('SELECT * FROM teams WHERE id = ?', [id]);
     if (!team) {
       return res.status(404).json({ error: 'Team not found' });
+    }
+    if (isCloud) {
+      const orgId = await getCurrentOrgId(authReq.user!.id);
+      if (!orgId || (team as any).org_id !== orgId) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+      const userInOrg = await queryOne(
+        'SELECT 1 FROM org_members WHERE user_id = ? AND org_id = ?',
+        [user_id, orgId]
+      );
+      if (!userInOrg) {
+        return res.status(403).json({ error: 'User is not in your organization' });
+      }
     }
 
     const user = await queryOne('SELECT * FROM users WHERE id = ?', [user_id]);
@@ -517,6 +584,16 @@ router.delete('/:id/members/:userId', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const { id, userId } = req.params;
+
+    if (isCloud) {
+      const team = await queryOne('SELECT * FROM teams WHERE id = ?', [id]);
+      if (team) {
+        const orgId = await getCurrentOrgId(authReq.user!.id);
+        if (!orgId || (team as any).org_id !== orgId) {
+          return res.status(403).json({ error: 'Access denied' });
+        }
+      }
+    }
 
     await execute('DELETE FROM team_members WHERE team_id = ? AND user_id = ?', [id, userId]);
     res.json({ message: 'User removed from team' });

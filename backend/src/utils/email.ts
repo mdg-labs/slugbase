@@ -1,6 +1,8 @@
 import nodemailer from 'nodemailer';
+import { ServerClient } from 'postmark';
 import { queryOne } from '../db/index.js';
 import { decrypt } from './encryption.js';
+import { isCloud } from '../config/mode.js';
 
 /**
  * Escape HTML to prevent XSS attacks
@@ -42,9 +44,63 @@ interface SMTPConfig {
   fromName: string;
 }
 
+interface PostmarkConfig {
+  token: string;
+  from: string;
+  fromName: string;
+}
+
 /**
- * Get SMTP configuration from system settings
- * Returns config object or null with error message
+ * Get Postmark configuration for CLOUD mode (from environment).
+ * Returns config object or null with error message.
+ */
+function getPostmarkConfig(): { config: PostmarkConfig | null; error?: string } {
+  if (!isCloud) return { config: null, error: 'Postmark is only used in CLOUD mode' };
+
+  const token = process.env.POSTMARK_SERVER_API_TOKEN?.trim();
+  const from = process.env.POSTMARK_FROM?.trim();
+  const fromName = process.env.POSTMARK_FROM_NAME?.trim() || 'SlugBase';
+
+  if (!token) return { config: null, error: 'Postmark not configured in CLOUD mode (POSTMARK_SERVER_API_TOKEN is required)' };
+  if (!from) return { config: null, error: 'Postmark from email not configured (POSTMARK_FROM is required)' };
+
+  return {
+    config: { token, from, fromName },
+  };
+}
+
+/**
+ * Send email via Postmark API (CLOUD mode only).
+ */
+async function sendEmailViaPostmark(to: string, subject: string, html: string, text?: string): Promise<{ success: boolean; error?: string }> {
+  const stripHtml = (htmlContent: string): string => {
+    if (htmlContent.length > 100000) htmlContent = htmlContent.substring(0, 100000);
+    return htmlContent.replace(/<[^>]{0,1000}>/g, '');
+  };
+
+  const { config, error } = getPostmarkConfig();
+  if (!config) return { success: false, error: error || 'Postmark not configured' };
+
+  try {
+    const client = new ServerClient(config.token);
+    const result = await client.sendEmail({
+      From: `"${config.fromName}" <${config.from}>`,
+      To: to,
+      Subject: subject,
+      HtmlBody: html,
+      TextBody: text || stripHtml(html),
+    });
+    console.log('Email sent via Postmark:', result.MessageID);
+    return { success: true };
+  } catch (err: any) {
+    console.error('Error sending email via Postmark:', err);
+    return { success: false, error: err.message || 'Unknown error sending email' };
+  }
+}
+
+/**
+ * Get SMTP configuration from system settings (SELFHOSTED only).
+ * Returns config object or null with error message.
  */
 async function getSMTPConfig(): Promise<{ config: SMTPConfig | null; error?: string }> {
   try {
@@ -72,45 +128,31 @@ async function getSMTPConfig(): Promise<{ config: SMTPConfig | null; error?: str
     const passwordValue = String((password as any).value).trim();
     const fromValue = String((from as any).value).trim();
 
-    // Check if required values are non-empty
     if (!hostValue) return { config: null, error: 'SMTP host is empty' };
     if (!userValue) return { config: null, error: 'SMTP user is empty' };
     if (!passwordValue) return { config: null, error: 'SMTP password is empty' };
     if (!fromValue) return { config: null, error: 'SMTP from email is empty' };
 
-    // Decrypt password if it's encrypted
     let decryptedPassword = passwordValue;
     try {
-      // Try to decrypt (will return original if not encrypted)
       decryptedPassword = decrypt(passwordValue);
-      // If decryption returns the same value, it might not have been encrypted
-      // This is fine, we'll use it as-is
     } catch (error: any) {
-      // If decryption fails, use as-is (plain text)
       console.warn('SMTP password decryption failed, using as plain text:', error.message);
       decryptedPassword = passwordValue;
     }
 
-    // Ensure decrypted password is not empty
     const trimmedPassword = decryptedPassword ? decryptedPassword.trim() : '';
     if (!trimmedPassword) {
-      // Don't log sensitive information - only log that password validation failed
       console.error('SMTP password validation failed: password is empty');
       return { config: null, error: 'SMTP password is empty. Please set a password in the SMTP settings.' };
     }
-
-    // Log for debugging (but don't log sensitive information)
-    console.log('SMTP config loaded successfully');
 
     return {
       config: {
         host: hostValue,
         port: parseInt(String((port as any).value)) || 587,
         secure: (secure as any)?.value === 'true' || false,
-        auth: {
-          user: userValue,
-          password: trimmedPassword,
-        },
+        auth: { user: userValue, password: trimmedPassword },
         from: fromValue,
         fromName: String((fromName as any)?.value || 'SlugBase'),
       },
@@ -122,9 +164,15 @@ async function getSMTPConfig(): Promise<{ config: SMTPConfig | null; error?: str
 }
 
 /**
- * Send email using configured SMTP settings
+ * Send email using Postmark (CLOUD) or SMTP (SELFHOSTED).
  */
 export async function sendEmail(to: string, subject: string, html: string, text?: string): Promise<{ success: boolean; error?: string }> {
+  if (isCloud) {
+    const { config, error } = getPostmarkConfig();
+    if (config) return sendEmailViaPostmark(to, subject, html, text);
+    return { success: false, error: error || 'Postmark not configured in CLOUD mode' };
+  }
+
   try {
     const { config, error } = await getSMTPConfig();
     if (!config) {
@@ -140,38 +188,22 @@ export async function sendEmail(to: string, subject: string, html: string, text?
     const authPassword = config.auth.password.trim();
 
     if (!authUser || !authPassword) {
-      // Don't log sensitive information like lengths or values
       console.error('SMTP auth validation failed: credentials are empty');
       return { success: false, error: 'SMTP auth credentials are empty' };
     }
 
-    // Create transporter with auth
     const transportConfig = {
       host: config.host,
       port: config.port,
       secure: config.secure,
-      auth: {
-        user: authUser,
-        pass: authPassword, // nodemailer uses 'pass' not 'password'
-      },
+      auth: { user: authUser, pass: authPassword },
     };
 
-    // Don't log sensitive information like username or password details
-    console.log('Creating SMTP transporter with:', {
-      host: config.host,
-      port: config.port,
-      secure: config.secure,
-    });
-
+    console.log('Creating SMTP transporter with:', { host: config.host, port: config.port, secure: config.secure });
     const transporter = nodemailer.createTransport(transportConfig);
 
-    // Safe HTML stripping: use a non-catastrophic regex with bounded quantifier
     const stripHtml = (htmlContent: string): string => {
-      // Limit input size to prevent ReDoS
-      if (htmlContent.length > 100000) {
-        htmlContent = htmlContent.substring(0, 100000);
-      }
-      // Use bounded quantifier {0,1000} to prevent ReDoS attacks
+      if (htmlContent.length > 100000) htmlContent = htmlContent.substring(0, 100000);
       return htmlContent.replace(/<[^>]{0,1000}>/g, '');
     };
 
@@ -179,8 +211,8 @@ export async function sendEmail(to: string, subject: string, html: string, text?
       from: `"${config.fromName}" <${config.from}>`,
       to,
       subject,
-      text: text || stripHtml(html), // Strip HTML for text version
-      html, // HTML is already escaped in template functions
+      text: text || stripHtml(html),
+      html,
     });
 
     console.log('Email sent:', info.messageId);
@@ -352,6 +384,252 @@ export async function sendEmailVerificationEmail(email: string, verificationToke
           <tr>
             <td style="padding: 30px 40px; background-color: #f9fafb; border-top: 1px solid #e5e7eb; border-radius: 0 0 8px 8px;">
               <p style="margin: 0; color: #9ca3af; font-size: 12px; line-height: 1.6; text-align: center;">This is an automated message from SlugBase. Please do not reply to this email.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `;
+
+  const result = await sendEmail(email, subject, html);
+  return result.success;
+}
+
+export interface ContactFormData {
+  name: string;
+  email: string;
+  message: string;
+}
+
+/**
+ * Send contact form confirmation to the customer
+ */
+export async function sendContactConfirmationEmail(email: string, name: string): Promise<boolean> {
+  const escapedName = escapeHtml(name);
+  const escapedEmail = escapeHtml(email);
+
+  const subject = 'We received your message - SlugBase';
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Message Received</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f4f4f4; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f4f4f4;">
+    <tr>
+      <td align="center" style="padding: 40px 20px;">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="max-width: 600px; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+          <tr>
+            <td style="padding: 40px 40px 30px; text-align: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px 8px 0 0;">
+              <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 600;">SlugBase</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 40px;">
+              <h2 style="margin: 0 0 20px; color: #1a1a1a; font-size: 24px; font-weight: 600;">We received your message</h2>
+              <p style="margin: 0 0 20px; color: #4a4a4a; font-size: 16px; line-height: 1.6;">Hi ${escapedName},</p>
+              <p style="margin: 0 0 20px; color: #4a4a4a; font-size: 16px; line-height: 1.6;">Thank you for reaching out! We have received your message and will get back to you at ${escapedEmail} as soon as possible.</p>
+              <p style="margin: 30px 0 0; color: #6b7280; font-size: 14px; line-height: 1.6;">Best regards,<br>The SlugBase Team</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 30px 40px; background-color: #f9fafb; border-top: 1px solid #e5e7eb; border-radius: 0 0 8px 8px;">
+              <p style="margin: 0; color: #9ca3af; font-size: 12px; line-height: 1.6; text-align: center;">This is an automated confirmation from SlugBase.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `;
+
+  const result = await sendEmail(email, subject, html);
+  return result.success;
+}
+
+/**
+ * Send contact form submission to the configured recipient
+ */
+export async function sendContactFormNotification(recipient: string, data: ContactFormData): Promise<boolean> {
+  const escapedName = escapeHtml(data.name);
+  const escapedEmail = escapeHtml(data.email);
+  const escapedMessage = escapeHtml(data.message).replace(/\n/g, '<br>');
+
+  const subject = `Contact Form: Message from ${escapedName}`;
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contact Form Submission</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f4f4f4; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f4f4f4;">
+    <tr>
+      <td align="center" style="padding: 40px 20px;">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="max-width: 600px; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+          <tr>
+            <td style="padding: 40px 40px 30px; text-align: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px 8px 0 0;">
+              <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 600;">New Contact Form Submission</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 40px;">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 0 0 20px; background-color: #f9fafb; border-radius: 6px; border: 1px solid #e5e7eb;">
+                <tr>
+                  <td style="padding: 16px;">
+                    <p style="margin: 0 0 8px; color: #6b7280; font-size: 12px; font-weight: 600; text-transform: uppercase;">Name</p>
+                    <p style="margin: 0; color: #1a1a1a; font-size: 16px;">${escapedName}</p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 16px; border-top: 1px solid #e5e7eb;">
+                    <p style="margin: 0 0 8px; color: #6b7280; font-size: 12px; font-weight: 600; text-transform: uppercase;">Email</p>
+                    <p style="margin: 0;"><a href="mailto:${escapedEmail}" style="color: #667eea; text-decoration: none;">${escapedEmail}</a></p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 16px; border-top: 1px solid #e5e7eb;">
+                    <p style="margin: 0 0 8px; color: #6b7280; font-size: 12px; font-weight: 600; text-transform: uppercase;">Message</p>
+                    <p style="margin: 0; color: #1a1a1a; font-size: 16px; line-height: 1.6; white-space: pre-wrap;">${escapedMessage}</p>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin: 20px 0 0; color: #9ca3af; font-size: 12px;">Submitted via SlugBase contact form</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `;
+
+  const result = await sendEmail(recipient, subject, html);
+  return result.success;
+}
+
+/**
+ * Send signup verification email (CLOUD registration)
+ */
+export async function sendSignupVerificationEmail(email: string, verificationUrl: string): Promise<boolean> {
+  const safeHrefUrl = safeUrlForHref(verificationUrl);
+  const escapedDisplayUrl = escapeHtml(verificationUrl);
+
+  const subject = 'Verify your SlugBase account';
+  const html = `
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="x-apple-disable-message-reformatting">
+  <title>Verify your SlugBase account</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f4f4f4; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f4f4f4;">
+    <tr>
+      <td align="center" style="padding: 40px 20px;">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="max-width: 600px; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+          <tr>
+            <td style="padding: 40px 40px 30px; text-align: center; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); border-radius: 8px 8px 0 0;">
+              <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 600;">SlugBase</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 40px;">
+              <h2 style="margin: 0 0 20px; color: #1a1a1a; font-size: 24px; font-weight: 600;">Verify your account</h2>
+              <p style="margin: 0 0 20px; color: #4a4a4a; font-size: 16px; line-height: 1.6;">Thanks for signing up. Click the button below to verify your email and start using SlugBase:</p>
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin: 30px 0;">
+                <tr>
+                  <td align="center">
+                    <a href="${safeHrefUrl}" style="display: inline-block; padding: 14px 32px; background-color: #3b82f6; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600;">Verify email</a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin: 20px 0; color: #6b7280; font-size: 14px;">Or copy and paste this link into your browser:</p>
+              <p style="margin: 0 0 30px; padding: 12px; background-color: #f9fafb; border-radius: 4px; word-break: break-all; color: #4a4a4a; font-size: 13px; font-family: monospace;">${escapedDisplayUrl}</p>
+              <p style="margin: 0; color: #6b7280; font-size: 14px;">This link expires in 24 hours. If you did not sign up for SlugBase, you can ignore this email.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 30px 40px; background-color: #f9fafb; border-top: 1px solid #e5e7eb; border-radius: 0 0 8px 8px;">
+              <p style="margin: 0; color: #9ca3af; font-size: 12px; text-align: center;">This is an automated message from SlugBase.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `;
+
+  const result = await sendEmail(email, subject, html);
+  return result.success;
+}
+
+/**
+ * Send org invitation email (CLOUD only)
+ */
+export async function sendOrgInvitationEmail(
+  email: string,
+  acceptUrl: string,
+  orgName: string
+): Promise<boolean> {
+  const safeHrefUrl = safeUrlForHref(acceptUrl);
+  const escapedDisplayUrl = escapeHtml(acceptUrl);
+  const escapedOrgName = escapeHtml(orgName);
+
+  const subject = `You're invited to join ${orgName} on SlugBase`;
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Organization Invitation - SlugBase</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f4f4f4; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f4f4f4;">
+    <tr>
+      <td align="center" style="padding: 40px 20px;">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="max-width: 600px; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+          <tr>
+            <td style="padding: 40px 40px 30px; text-align: center; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); border-radius: 8px 8px 0 0;">
+              <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 600;">SlugBase</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 40px;">
+              <h2 style="margin: 0 0 20px; color: #1a1a1a; font-size: 24px; font-weight: 600;">You're invited</h2>
+              <p style="margin: 0 0 20px; color: #4a4a4a; font-size: 16px; line-height: 1.6;">You have been invited to join <strong>${escapedOrgName}</strong> on SlugBase.</p>
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin: 30px 0;">
+                <tr>
+                  <td align="center">
+                    <a href="${safeHrefUrl}" style="display: inline-block; padding: 14px 32px; background-color: #3b82f6; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600;">Accept invitation</a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin: 20px 0; color: #6b7280; font-size: 14px;">Or copy and paste this link into your browser:</p>
+              <p style="margin: 0 0 30px; padding: 12px; background-color: #f9fafb; border-radius: 4px; word-break: break-all; color: #4a4a4a; font-size: 13px; font-family: monospace;">${escapedDisplayUrl}</p>
+              <p style="margin: 0; color: #6b7280; font-size: 14px;">This link expires in 7 days. If you did not expect this invitation, you can ignore this email.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 30px 40px; background-color: #f9fafb; border-top: 1px solid #e5e7eb; border-radius: 0 0 8px 8px;">
+              <p style="margin: 0; color: #9ca3af; font-size: 12px; text-align: center;">This is an automated message from SlugBase.</p>
             </td>
           </tr>
         </table>

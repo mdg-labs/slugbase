@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import api from '../api/client';
+import { getAuthProviderUrl } from '../config/api';
 import { useTranslation } from 'react-i18next';
 
-interface User {
+export interface User {
   id: string;
   email: string;
   name: string;
@@ -10,6 +11,10 @@ interface User {
   is_admin: boolean;
   language: string;
   theme: string;
+  /** In Cloud mode: org role (owner/admin/member) if user is in an org */
+  org_role?: 'owner' | 'admin' | 'member' | null;
+  /** In Cloud mode: current org id for multi-org context */
+  current_org_id?: string | null;
   email_pending?: string | null;
   oidc_provider?: string | null;
   oidc_sub?: string | null;
@@ -67,7 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   function login(provider: string) {
-    window.location.href = `/api/auth/${provider}`;
+    window.location.href = getAuthProviderUrl(provider);
   }
 
   async function logout() {
@@ -113,6 +118,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } else {
       root.classList.remove('dark');
     }
+    // Sync to localStorage for consistency when user logs out
+    localStorage.setItem('slugbase_theme', theme);
   }
 
   return (

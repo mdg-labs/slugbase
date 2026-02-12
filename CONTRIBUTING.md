@@ -37,7 +37,7 @@ We welcome pull requests! Here's how to contribute:
 #### 1. Fork and Clone
 
 ```bash
-git clone https://github.com/ghotso/slugbase.git
+git clone https://github.com/mdg-labs/slugbase.git
 cd slugbase
 ```
 

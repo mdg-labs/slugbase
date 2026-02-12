@@ -13,22 +13,17 @@ export function errorHandler(err: any, req: Request, res: Response, next: NextFu
     method: req.method,
   });
 
-  // Don't expose error details in production
+  // Don't expose error details in production (M5: never send err.message or stack)
   if (process.env.NODE_ENV === 'production') {
-    // Generic error messages for production
-    if (err.statusCode) {
-      return res.status(err.statusCode).json({
-        error: err.message || 'An error occurred',
-      });
-    }
-
-    // Database errors
-    if (err.message && (err.message.includes('UNIQUE constraint') || err.message.includes('duplicate'))) {
-      return res.status(400).json({ error: 'A record with this value already exists' });
-    }
-
-    // Generic server error
-    return res.status(500).json({ error: 'Internal server error' });
+    const status = err.statusCode || 500;
+    const safeMessages: Record<number, string> = {
+      400: 'Bad request',
+      401: 'Unauthorized',
+      403: 'Forbidden',
+      404: 'Not found',
+    };
+    const safeMessage = status in safeMessages ? safeMessages[status] : 'Internal server error';
+    return res.status(status).json({ error: safeMessage });
   }
 
   // Development: show more details

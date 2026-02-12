@@ -23,24 +23,34 @@ function boolToDb(value: boolean | undefined | null): number | boolean | null {
   return value ? 1 : 0;
 }
 
+/** Convert ? placeholders to $1, $2, ... for PostgreSQL */
+function toPg(sql: string): string {
+  let n = 0;
+  return sql.replace(/\?/g, () => `$${++n}`);
+}
+
 if (DB_TYPE === 'postgresql') {
-  db = new Pool({
-    host: process.env.DB_HOST || 'localhost',
-    port: parseInt(process.env.DB_PORT || '5432'),
-    database: process.env.DB_NAME || 'slugbase',
-    user: process.env.DB_USER || 'postgres',
-    password: process.env.DB_PASSWORD || '',
-  });
+  db = process.env.DATABASE_URL
+    ? new Pool({ connectionString: process.env.DATABASE_URL })
+    : new Pool({
+        host: process.env.DB_HOST || 'localhost',
+        port: parseInt(process.env.DB_PORT || '5432'),
+        database: process.env.DB_NAME || 'slugbase',
+        user: process.env.DB_USER || 'postgres',
+        password: process.env.DB_PASSWORD || '',
+      });
 } else {
   const dbPath = process.env.DB_PATH || join(__dirname, '../../data/slugbase.db');
   db = new Database(dbPath);
-  
-  // Set secure file permissions (600 = read/write for owner only)
+
+  // Set secure file permissions (600 = read/write for owner only); skip for in-memory DB
+  if (dbPath !== ':memory:') {
   try {
     chmodSync(dbPath, 0o600);
   } catch (error) {
     // Ignore errors if file doesn't exist yet or permissions can't be set
     console.warn('Could not set database file permissions:', error);
+  }
   }
 }
 
@@ -90,7 +100,7 @@ export async function initDatabase() {
 export async function query(sql: string, params: any[] = []) {
   if (DB_TYPE === 'postgresql') {
     const pool = db as Pool;
-    const result = await pool.query(sql, params);
+    const result = await pool.query(toPg(sql), params);
     return result.rows;
   } else {
     const sqlite = db as Database.Database;
@@ -101,7 +111,7 @@ export async function query(sql: string, params: any[] = []) {
 export async function queryOne(sql: string, params: any[] = []) {
   if (DB_TYPE === 'postgresql') {
     const pool = db as Pool;
-    const result = await pool.query(sql, params);
+    const result = await pool.query(toPg(sql), params);
     return result.rows[0] || null;
   } else {
     const sqlite = db as Database.Database;
@@ -120,7 +130,7 @@ export async function execute(sql: string, params: any[] = []) {
 
   if (DB_TYPE === 'postgresql') {
     const pool = db as Pool;
-    const result = await pool.query(sql, processedParams);
+    const result = await pool.query(toPg(sql), processedParams);
     return { changes: result.rowCount || 0, lastInsertRowid: null };
   } else {
     const sqlite = db as Database.Database;

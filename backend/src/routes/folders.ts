@@ -1,7 +1,10 @@
 import { Router } from 'express';
 import { query, queryOne, execute } from '../db/index.js';
 import { AuthRequest, requireAuth } from '../middleware/auth.js';
+import { canAccessFolder, canModifyFolder } from '../auth/authorization.js';
 import { v4 as uuidv4 } from 'uuid';
+import { isCloud } from '../config/mode.js';
+import { getCurrentOrgId } from '../utils/organizations.js';
 import { validateLength, sanitizeString, MAX_LENGTHS } from '../utils/validation.js';
 
 const router = Router();
@@ -163,28 +166,12 @@ router.get('/:id', async (req, res) => {
     const userId = authReq.user!.id;
     const { id } = req.params;
 
-    // Get user's teams
-    const userTeams = await query(
-      'SELECT team_id FROM team_members WHERE user_id = ?',
-      [userId]
-    );
-    const teamIds = Array.isArray(userTeams) ? userTeams.map((t: any) => t.team_id) : [];
-
-    let sql = `
-      SELECT DISTINCT f.*
-      FROM folders f
-      LEFT JOIN folder_user_shares fus ON f.id = fus.folder_id
-      LEFT JOIN folder_team_shares fts ON f.id = fts.folder_id
-      WHERE f.id = ? AND (f.user_id = ?
-        OR fus.user_id = ?
-        OR (fts.team_id IN (${teamIds.length > 0 ? teamIds.map(() => '?').join(',') : 'NULL'}) AND fts.team_id IS NOT NULL))
-    `;
-    const params: any[] = [id, userId, userId];
-    if (teamIds.length > 0) {
-      params.push(...teamIds);
+    const canAccess = await canAccessFolder(userId, id);
+    if (!canAccess) {
+      return res.status(404).json({ error: 'Folder not found' });
     }
 
-    const folder = await queryOne(sql, params);
+    const folder = await queryOne('SELECT * FROM folders WHERE id = ?', [id]);
     if (!folder) {
       return res.status(404).json({ error: 'Folder not found' });
     }
@@ -337,6 +324,21 @@ router.post('/', async (req, res) => {
     // Add user shares
     if (user_ids && user_ids.length > 0) {
       const filteredUserIds = user_ids.filter((uid: string) => uid !== userId);
+      if (isCloud) {
+        const orgId = await getCurrentOrgId(userId);
+        if (!orgId) {
+          return res.status(403).json({ error: 'No organization selected' });
+        }
+        for (const shareUserId of filteredUserIds) {
+          const inOrg = await queryOne(
+            'SELECT 1 FROM org_members WHERE user_id = ? AND org_id = ?',
+            [shareUserId, orgId]
+          );
+          if (!inOrg) {
+            return res.status(403).json({ error: 'One or more users are not in your organization' });
+          }
+        }
+      }
       for (const shareUserId of filteredUserIds) {
         const user = await queryOne('SELECT id FROM users WHERE id = ?', [shareUserId]);
         if (!user) {
@@ -425,7 +427,11 @@ router.put('/:id', async (req, res) => {
       return res.status(400).json({ error: 'Name is required' });
     }
 
-    const folder = await queryOne('SELECT * FROM folders WHERE id = ? AND user_id = ?', [id, userId]);
+    const canModify = await canModifyFolder(userId, id);
+    if (!canModify) {
+      return res.status(404).json({ error: 'Folder not found' });
+    }
+    const folder = await queryOne('SELECT * FROM folders WHERE id = ?', [id]);
     if (!folder) {
       return res.status(404).json({ error: 'Folder not found' });
     }
@@ -493,6 +499,21 @@ router.put('/:id', async (req, res) => {
       await execute('DELETE FROM folder_user_shares WHERE folder_id = ?', [id]);
       if (user_ids.length > 0) {
         const filteredUserIds = user_ids.filter((uid: string) => uid !== userId);
+        if (isCloud) {
+          const orgId = await getCurrentOrgId(userId);
+          if (!orgId) {
+            return res.status(403).json({ error: 'No organization selected' });
+          }
+          for (const shareUserId of filteredUserIds) {
+            const inOrg = await queryOne(
+              'SELECT 1 FROM org_members WHERE user_id = ? AND org_id = ?',
+              [shareUserId, orgId]
+            );
+            if (!inOrg) {
+              return res.status(403).json({ error: 'One or more users are not in your organization' });
+            }
+          }
+        }
         for (const shareUserId of filteredUserIds) {
           const user = await queryOne('SELECT id FROM users WHERE id = ?', [shareUserId]);
           if (!user) {
@@ -554,8 +575,8 @@ router.delete('/:id', async (req, res) => {
     const userId = authReq.user!.id;
     const { id } = req.params;
 
-    const folder = await queryOne('SELECT * FROM folders WHERE id = ? AND user_id = ?', [id, userId]);
-    if (!folder) {
+    const canModify = await canModifyFolder(userId, id);
+    if (!canModify) {
       return res.status(404).json({ error: 'Folder not found' });
     }
 

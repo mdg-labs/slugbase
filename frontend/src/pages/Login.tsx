@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../api/client';
+import { getAuthProviderUrl } from '../config/api';
+import { isCloud } from '../config/mode';
 import { LogIn, Key } from 'lucide-react';
 import Button from '../components/ui/Button';
 
@@ -22,9 +24,11 @@ export default function Login() {
 
   useEffect(() => {
     if (user) {
-      navigate('/', { replace: true });
+      const redirectTo = searchParams.get('redirect');
+      const safePath = redirectTo?.startsWith('/') && !redirectTo.startsWith('//') ? redirectTo : null;
+      navigate(safePath || (isCloud ? '/app' : '/'), { replace: true });
     }
-  }, [user, navigate]);
+  }, [user, navigate, searchParams]);
 
   useEffect(() => {
     // Check for OIDC error in URL query parameters
@@ -51,7 +55,7 @@ export default function Login() {
   }, []);
 
   const handleOIDCLogin = (providerKey: string) => {
-    window.location.href = `/api/auth/${providerKey}`;
+    window.location.href = getAuthProviderUrl(providerKey);
   };
 
   const handleLocalLogin = async (e: React.FormEvent) => {
@@ -61,9 +65,17 @@ export default function Login() {
 
     try {
       await api.post('/auth/login', localAuth);
-      window.location.href = '/';
+      const redirectTo = searchParams.get('redirect');
+      const safePath = redirectTo?.startsWith('/') && !redirectTo.startsWith('//') ? redirectTo : null;
+      window.location.href = safePath || (isCloud ? '/app' : '/');
     } catch (err: any) {
-      setError(err.response?.data?.error || t('auth.loginFailed'));
+      const code = err.response?.data?.code;
+      const message = err.response?.data?.error;
+      if (code === 'EMAIL_NOT_VERIFIED') {
+        setError(t('auth.verifyEmailRequired'));
+      } else {
+        setError(message || t('auth.loginFailed'));
+      }
     } finally {
       setLocalLoading(false);
     }
@@ -140,13 +152,27 @@ export default function Login() {
             >
               {localLoading ? t('common.loading') : t('auth.login')}
             </Button>
-            <div className="text-center">
+            <div className="text-center space-y-2">
               <Link
-                to="/password-reset"
-                className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+                to={isCloud ? '/app/password-reset' : '/password-reset'}
+                className="block text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
               >
                 {t('auth.forgotPassword')}
               </Link>
+              <Link
+                to="/contact"
+                className="block text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+              >
+                {t('contact.title')}
+              </Link>
+              {isCloud && (
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {t('signup.noAccount')}{' '}
+                  <Link to="/app/signup" className="font-medium text-blue-600 dark:text-blue-400 hover:underline">
+                    {t('auth.signUp')}
+                  </Link>
+                </p>
+              )}
             </div>
           </form>
 

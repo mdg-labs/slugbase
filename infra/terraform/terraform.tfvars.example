@@ -1,0 +1,40 @@
+# Copy to terraform.tfvars and set values. Do not commit terraform.tfvars.
+
+project_id  = "your-gcp-project-id"
+region      = "us-central1"
+frontend_url = "https://your-app.pages.dev"
+base_url    = "https://slugbase-backend-xxxxx-uc.a.run.app"  # Set after first deploy or use a custom domain
+
+# Optional: restrict GitHub Actions to this repo (recommended for production)
+# github_repo = "your-org/slugbase"
+
+# Optional: or restrict by org only
+# github_org = "your-org"
+
+# Optional: Cloud Run scaling
+# cloud_run_max_instances = 5
+# cloud_run_concurrency  = 80
+
+# Optional: Cloud SQL tier (db-f1-micro is minimal)
+# cloud_sql_tier = "db-f1-micro"
+
+# -----------------------------------------------------------------------------
+# CLOUD mode only (when slugbase_mode = "cloud")
+# -----------------------------------------------------------------------------
+# slugbase_mode = "cloud"
+# cookie_domain       = ".slugbase.app"
+# cors_extra_origins   = "https://slugbase.app"
+# jwt_access_expires_in   = "15m"
+# jwt_refresh_expires_days = "7"
+# oidc_google_client_id    = "xxx.apps.googleusercontent.com"
+# oidc_microsoft_client_id = "xxx"
+# oidc_microsoft_tenant    = "common"
+# oidc_github_client_id   = "xxx"
+# SMTP (non-secret; password goes in Secret Manager as slugbase-smtp-password)
+# smtp_enabled   = "true"
+# smtp_host      = "smtp.example.com"
+# smtp_port      = "587"
+# smtp_secure    = "false"
+# smtp_user      = "noreply@example.com"
+# smtp_from      = "noreply@example.com"
+# smtp_from_name = "SlugBase"

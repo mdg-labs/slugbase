@@ -8,6 +8,8 @@ if (!JWT_SECRET) {
 }
 
 const JWT_EXPIRES_IN = (process.env.JWT_EXPIRES_IN || '7d') as string;
+/** CLOUD mode: short-lived access token (e.g. 15m). */
+const JWT_ACCESS_EXPIRES_IN = (process.env.JWT_ACCESS_EXPIRES_IN || '15m') as string;
 
 export interface JWTPayload {
   id: string;
@@ -18,7 +20,7 @@ export interface JWTPayload {
 }
 
 /**
- * Generate a JWT token for a user
+ * Generate a JWT token for a user (SELFHOSTED: long-lived; or generic with default 7d).
  */
 export function generateToken(user: JWTPayload): string {
   return jwt.sign(
@@ -35,11 +37,28 @@ export function generateToken(user: JWTPayload): string {
 }
 
 /**
+ * Generate a short-lived access JWT (CLOUD mode). Uses JWT_ACCESS_EXPIRES_IN.
+ */
+export function generateAccessToken(user: JWTPayload): string {
+  return jwt.sign(
+    {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      user_key: user.user_key,
+      is_admin: user.is_admin,
+    },
+    JWT_SECRET,
+    { expiresIn: JWT_ACCESS_EXPIRES_IN } as SignOptions
+  );
+}
+
+/**
  * Verify and decode a JWT token
  */
 export function verifyToken(token: string): JWTPayload | null {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as JWTPayload;
+    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as JWTPayload;
     return decoded;
   } catch (error) {
     return null;

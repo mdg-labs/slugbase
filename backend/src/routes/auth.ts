@@ -1,17 +1,32 @@
 import { Router } from 'express';
 import passport from 'passport';
 import bcrypt from 'bcryptjs';
-import crypto from 'crypto';
 import { query, queryOne, execute, isInitialized } from '../db/index.js';
 import { v4 as uuidv4 } from 'uuid';
 import { reloadOIDCStrategies } from '../auth/oidc.js';
-import { generateToken } from '../utils/jwt.js';
+import { generateToken, generateAccessToken } from '../utils/jwt.js';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
-import { authRateLimiter, strictRateLimiter } from '../middleware/security.js';
+import { authRateLimiter, refreshRateLimiter, strictRateLimiter } from '../middleware/security.js';
 import { validateEmail, normalizeEmail, validatePassword, validateLength, sanitizeString } from '../utils/validation.js';
 import { generateUserKey } from '../utils/user-key.js';
+import { isCloud } from '../config/mode.js';
+import { getAuthCookieOptions, getClearAuthCookieOptions } from '../config/cookies.js';
+import { getCloudProviders } from '../config/cloud-providers.js';
+import { createRefreshToken, rotateRefreshToken, revokeRefreshTokensForUser, findUserIdByRefreshToken } from '../utils/refresh-token.js';
+import { sendSignupVerificationEmail } from '../utils/email.js';
+import { ensureOrgForUser } from '../utils/organizations.js';
+import crypto from 'crypto';
 
 const router = Router();
+
+/** Set auth cookies (token; in CLOUD also refresh_token). SELFHOSTED: single long-lived JWT. */
+function setAuthCookies(res: any, options: { accessToken: string; refreshToken?: string; refreshMaxAgeMs?: number }) {
+  const accessMaxAgeMs = options.refreshToken != null ? 15 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000; // 15 min in CLOUD, 7d in SELFHOSTED
+  res.cookie('token', options.accessToken, { ...getAuthCookieOptions(accessMaxAgeMs), maxAge: accessMaxAgeMs });
+  if (options.refreshToken != null && options.refreshMaxAgeMs != null) {
+    res.cookie('refresh_token', options.refreshToken, getAuthCookieOptions(options.refreshMaxAgeMs));
+  }
+}
 
 /**
  * @swagger
@@ -44,16 +59,23 @@ const router = Router();
  */
 router.get('/providers', async (req, res) => {
   try {
+    const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
+    if (isCloud) {
+      const cloudProviders = getCloudProviders();
+      const list = cloudProviders.map((p) => ({
+        id: p.provider_key,
+        provider_key: p.provider_key,
+        issuer_url: p.issuer_url,
+        callback_url: `${baseUrl}/api/auth/${p.provider_key}/callback`,
+      }));
+      return res.json(list);
+    }
     const providers = await query('SELECT id, provider_key, issuer_url FROM oidc_providers', []);
     const providersList = Array.isArray(providers) ? providers : (providers ? [providers] : []);
-    
-    // Add callback URL information for each provider to help with OIDC configuration
-    const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
     const providersWithCallback = providersList.map((p: any) => ({
       ...p,
       callback_url: `${baseUrl}/api/auth/${p.provider_key}/callback`,
     }));
-    
     res.json(providersWithCallback);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -102,10 +124,10 @@ router.get('/providers', async (req, res) => {
  *       401:
  *         description: Unauthorized
  */
-router.get('/me', requireAuth(), (req, res) => {
+router.get('/me', requireAuth(), async (req, res) => {
   const authReq = req as AuthRequest;
   const user = authReq.user!;
-  res.json({
+  const payload: Record<string, unknown> = {
     id: user.id,
     email: user.email,
     name: user.name,
@@ -113,7 +135,17 @@ router.get('/me', requireAuth(), (req, res) => {
     is_admin: user.is_admin,
     language: (user as any).language || 'en',
     theme: (user as any).theme || 'auto',
-  });
+  };
+  if (isCloud && user.org_role !== undefined) {
+    payload.org_role = user.org_role;
+  }
+  if (isCloud) {
+    const userRow = await queryOne('SELECT current_org_id FROM users WHERE id = ?', [user.id]);
+    if (userRow && (userRow as any).current_org_id) {
+      payload.current_org_id = (userRow as any).current_org_id;
+    }
+  }
+  res.json(payload);
 });
 
 /**
@@ -214,28 +246,33 @@ router.post('/login', authRateLimiter, async (req, res, next) => {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
-    // Generate JWT token
-    const token = generateToken({
+    // Require email verification for password users (CLOUD signup flow)
+    const emailVerified = (user as any).email_verified;
+    if (emailVerified === false || emailVerified === 0) {
+      return res.status(403).json({ error: 'Please verify your email', code: 'EMAIL_NOT_VERIFIED' });
+    }
+
+    const userPayload = {
       id: (user as any).id,
       email: (user as any).email,
       name: (user as any).name,
       user_key: (user as any).user_key,
       is_admin: (user as any).is_admin,
-    });
+    };
 
-    // Set httpOnly cookie with JWT token
-    // Only use secure cookies when actually using HTTPS (check BASE_URL)
-    const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
-    const isHttps = baseUrl.startsWith('https://');
-    const isProduction = process.env.NODE_ENV === 'production' && isHttps;
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: isProduction, // Only secure when using HTTPS
-      sameSite: 'strict', // Always use strict for CSRF protection
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    });
+    if (isCloud) {
+      // CLOUD: short-lived access JWT + refresh token cookie with rotation
+      const accessToken = generateAccessToken(userPayload);
+      const { token: refreshToken, expiresAt } = await createRefreshToken((user as any).id);
+      const refreshMaxAgeMs = Math.max(0, expiresAt.getTime() - Date.now());
+      setAuthCookies(res, { accessToken, refreshToken, refreshMaxAgeMs });
+    } else {
+      // SELFHOSTED: single long-lived JWT
+      const token = generateToken(userPayload);
+      setAuthCookies(res, { accessToken: token });
+    }
 
-    res.json({
+    const payload: Record<string, unknown> = {
       id: (user as any).id,
       email: (user as any).email,
       name: (user as any).name,
@@ -243,7 +280,15 @@ router.post('/login', authRateLimiter, async (req, res, next) => {
       is_admin: (user as any).is_admin,
       language: (user as any).language,
       theme: (user as any).theme,
-    });
+    };
+    if (isCloud) {
+      const orgMember = await queryOne(
+        `SELECT role FROM org_members WHERE user_id = ? ORDER BY CASE role WHEN 'owner' THEN 1 WHEN 'admin' THEN 2 WHEN 'member' THEN 3 ELSE 4 END LIMIT 1`,
+        [(user as any).id]
+      );
+      payload.org_role = orgMember ? (orgMember as any).role : null;
+    }
+    res.json(payload);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -268,18 +313,383 @@ router.post('/login', authRateLimiter, async (req, res, next) => {
  *                   type: string
  *                   example: "Logged out"
  */
-router.post('/logout', (req, res) => {
-  // Clear JWT cookie
-  // Only use secure cookies when actually using HTTPS (check BASE_URL)
-  const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
-  const isHttps = baseUrl.startsWith('https://');
-  const isProduction = process.env.NODE_ENV === 'production' && isHttps;
-  res.clearCookie('token', {
-    httpOnly: true,
-    secure: isProduction, // Only secure when using HTTPS
-    sameSite: 'strict', // Always use strict for CSRF protection
-  });
+router.post('/logout', async (req, res) => {
+  const clearOpts = getClearAuthCookieOptions();
+  if (isCloud && req.cookies?.refresh_token) {
+    const userId = await findUserIdByRefreshToken(req.cookies.refresh_token);
+    if (userId) await revokeRefreshTokensForUser(userId);
+    res.clearCookie('refresh_token', clearOpts);
+  }
+  res.clearCookie('token', clearOpts);
   res.json({ message: 'Logged out' });
+});
+
+/**
+ * POST /auth/register — CLOUD only. Create account with email verification.
+ * Returns 404 when not CLOUD so SELFHOSTED never exposes public registration.
+ */
+router.post('/register', authRateLimiter, async (req, res) => {
+  if (!isCloud) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  const registrationsEnabled = process.env.REGISTRATIONS_ENABLED !== 'false';
+  if (!registrationsEnabled) {
+    return res.status(403).json({ error: 'Registrations are disabled' });
+  }
+
+  try {
+    const { email, name, password } = req.body;
+    if (!email || !name || !password) {
+      return res.status(400).json({ error: 'Email, name, and password are required' });
+    }
+
+    const emailValidation = validateEmail(email);
+    if (!emailValidation.valid) {
+      return res.status(400).json({ error: emailValidation.error });
+    }
+    const normalizedEmail = normalizeEmail(email);
+
+    const nameValidation = validateLength(name, 'Name', 1, 255);
+    if (!nameValidation.valid) {
+      return res.status(400).json({ error: nameValidation.error });
+    }
+    const sanitizedName = sanitizeString(name);
+
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.valid) {
+      return res.status(400).json({ error: passwordValidation.error });
+    }
+
+    const existingUser = await queryOne('SELECT id FROM users WHERE email = ?', [normalizedEmail]);
+    if (existingUser) {
+      return res.status(400).json({ error: 'Email already registered' });
+    }
+
+    const isFirstUser = !(await isInitialized());
+    const passwordHash = await bcrypt.hash(password, 10);
+    const userId = uuidv4();
+    let userKey = await generateUserKey();
+
+    const DB_TYPE = process.env.DB_TYPE || 'sqlite';
+
+    let retries = 0;
+    const maxRetries = 3;
+    while (retries < maxRetries) {
+      try {
+        if (DB_TYPE === 'postgresql') {
+          await execute(
+            `INSERT INTO users (id, email, name, user_key, password_hash, is_admin, email_verified)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [userId, normalizedEmail, sanitizedName, userKey, passwordHash, isFirstUser, false]
+          );
+        } else {
+          await execute(
+            `INSERT INTO users (id, email, name, user_key, password_hash, is_admin, email_verified)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [userId, normalizedEmail, sanitizedName, userKey, passwordHash, isFirstUser, 0]
+          );
+        }
+        break;
+      } catch (error: any) {
+        if (error.message && (error.message.includes('UNIQUE constraint') || error.message.includes('duplicate')) && error.message.includes('user_key')) {
+          retries++;
+          if (retries >= maxRetries) {
+            return res.status(500).json({ error: 'Failed to complete registration. Please try again.' });
+          }
+          userKey = await generateUserKey();
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    if (isCloud) {
+      await ensureOrgForUser(userId, sanitizedName);
+    }
+
+    const tokenId = uuidv4();
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const expiresAtStr = expiresAt.toISOString();
+
+    if (DB_TYPE === 'postgresql') {
+      await execute(
+        `INSERT INTO signup_verification_tokens (id, user_id, token, expires_at, used)
+         VALUES (?, ?, ?, ?, ?)`,
+        [tokenId, userId, token, expiresAtStr, false]
+      );
+    } else {
+      await execute(
+        `INSERT INTO signup_verification_tokens (id, user_id, token, expires_at, used)
+         VALUES (?, ?, ?, ?, ?)`,
+        [tokenId, userId, token, expiresAtStr, 0]
+      );
+    }
+
+    const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+    const verificationUrl = `${frontendUrl}/app/verify-email?token=${encodeURIComponent(token)}`;
+    await sendSignupVerificationEmail(normalizedEmail, verificationUrl);
+
+    return res.status(201).json({ message: 'Check your email to verify your account' });
+  } catch (error: any) {
+    console.error('Register error:', error);
+    return res.status(500).json({ error: error.message || 'Registration failed' });
+  }
+});
+
+/**
+ * POST /auth/verify-signup — CLOUD only. Verify signup token and set email_verified.
+ */
+router.post('/verify-signup', authRateLimiter, async (req, res) => {
+  if (!isCloud) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  try {
+    const { token } = req.body;
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({ error: 'Token is required' });
+    }
+
+    const row = await queryOne(
+      'SELECT id, user_id, expires_at, used FROM signup_verification_tokens WHERE token = ?',
+      [token.trim()]
+    );
+    if (!row) {
+      return res.status(400).json({ error: 'Invalid or expired verification link' });
+    }
+
+    const r = row as any;
+    if (r.used === true || r.used === 1) {
+      return res.status(400).json({ error: 'This verification link has already been used' });
+    }
+    const expiresAt = new Date(r.expires_at);
+    if (expiresAt.getTime() < Date.now()) {
+      return res.status(400).json({ error: 'This verification link has expired' });
+    }
+
+    const DB_TYPE = process.env.DB_TYPE || 'sqlite';
+    if (DB_TYPE === 'postgresql') {
+      await execute('UPDATE users SET email_verified = TRUE WHERE id = ?', [r.user_id]);
+      await execute('UPDATE signup_verification_tokens SET used = TRUE WHERE id = ?', [r.id]);
+    } else {
+      await execute('UPDATE users SET email_verified = 1 WHERE id = ?', [r.user_id]);
+      await execute('UPDATE signup_verification_tokens SET used = 1 WHERE id = ?', [r.id]);
+    }
+
+    return res.json({ message: 'Email verified. You can log in.' });
+  } catch (error: any) {
+    console.error('Verify-signup error:', error);
+    return res.status(500).json({ error: error.message || 'Verification failed' });
+  }
+});
+
+/**
+ * GET /auth/signup-verification/status — CLOUD only. Get status of signup verification token.
+ */
+router.get('/signup-verification/status', authRateLimiter, async (req, res) => {
+  if (!isCloud) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  try {
+    const token = (req.query.token as string)?.trim();
+    if (!token) {
+      return res.status(400).json({ status: 'invalid' });
+    }
+    const row = await queryOne(
+      `SELECT svt.id, svt.user_id, svt.expires_at, svt.used, u.email
+       FROM signup_verification_tokens svt
+       JOIN users u ON u.id = svt.user_id
+       WHERE svt.token = ?`,
+      [token]
+    );
+    if (!row) {
+      return res.json({ status: 'invalid' });
+    }
+    const r = row as any;
+    if (r.used === true || r.used === 1) {
+      return res.json({ status: 'used' });
+    }
+    const expiresAt = new Date(r.expires_at);
+    if (expiresAt.getTime() < Date.now()) {
+      return res.json({ status: 'expired', email: r.email });
+    }
+    return res.json({ status: 'valid', email: r.email });
+  } catch (error: any) {
+    console.error('Signup verification status error:', error);
+    return res.status(500).json({ status: 'invalid' });
+  }
+});
+
+/**
+ * POST /auth/resend-signup-verification — CLOUD only. Resend verification email, optionally with updated email.
+ */
+router.post('/resend-signup-verification', authRateLimiter, async (req, res) => {
+  if (!isCloud) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  try {
+    const { token, newEmail } = req.body;
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({ error: 'Token is required' });
+    }
+    const row = await queryOne(
+      `SELECT svt.id, svt.user_id, svt.used, u.email
+       FROM signup_verification_tokens svt
+       JOIN users u ON u.id = svt.user_id
+       WHERE svt.token = ?`,
+      [token.trim()]
+    );
+    if (!row) {
+      return res.status(400).json({ error: 'Invalid verification token' });
+    }
+    const r = row as any;
+    if (r.used === true || r.used === 1) {
+      return res.status(400).json({ error: 'This verification link has already been used' });
+    }
+    let targetEmail = r.email;
+    if (newEmail && typeof newEmail === 'string' && newEmail.trim()) {
+      const emailValidation = validateEmail(newEmail.trim());
+      if (!emailValidation.valid) {
+        return res.status(400).json({ error: emailValidation.error });
+      }
+      const normalizedNew = normalizeEmail(newEmail.trim());
+      if (normalizedNew !== targetEmail) {
+        const existing = await queryOne('SELECT id FROM users WHERE email = ?', [normalizedNew]);
+        if (existing) {
+          return res.status(400).json({ error: 'Email already registered' });
+        }
+        targetEmail = normalizedNew;
+        await execute('UPDATE users SET email = ? WHERE id = ?', [targetEmail, r.user_id]);
+      }
+    }
+    await execute('DELETE FROM signup_verification_tokens WHERE user_id = ?', [r.user_id]);
+    const tokenId = uuidv4();
+    const newToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const expiresAtStr = expiresAt.toISOString();
+    const DB_TYPE = process.env.DB_TYPE || 'sqlite';
+    if (DB_TYPE === 'postgresql') {
+      await execute(
+        `INSERT INTO signup_verification_tokens (id, user_id, token, expires_at, used)
+         VALUES (?, ?, ?, ?, ?)`,
+        [tokenId, r.user_id, newToken, expiresAtStr, false]
+      );
+    } else {
+      await execute(
+        `INSERT INTO signup_verification_tokens (id, user_id, token, expires_at, used)
+         VALUES (?, ?, ?, ?, ?)`,
+        [tokenId, r.user_id, newToken, expiresAtStr, 0]
+      );
+    }
+    const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+    const verificationUrl = `${frontendUrl}/app/verify-email?token=${encodeURIComponent(newToken)}`;
+    await sendSignupVerificationEmail(targetEmail, verificationUrl);
+    return res.json({ message: 'Verification email sent' });
+  } catch (error: any) {
+    console.error('Resend signup verification error:', error);
+    return res.status(500).json({ error: error.message || 'Failed to resend verification' });
+  }
+});
+
+/**
+ * POST /auth/request-signup-resend — CLOUD only. Request resend of verification email by email (no token).
+ */
+router.post('/request-signup-resend', authRateLimiter, async (req, res) => {
+  if (!isCloud) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  try {
+    const { email } = req.body;
+    if (!email || typeof email !== 'string') {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+    const emailValidation = validateEmail(email.trim());
+    if (!emailValidation.valid) {
+      return res.status(400).json({ error: emailValidation.error });
+    }
+    const normalizedEmail = normalizeEmail(email.trim());
+    const user = await queryOne(
+      'SELECT id FROM users WHERE email = ? AND (email_verified = FALSE OR email_verified = 0)',
+      [normalizedEmail]
+    );
+    if (user) {
+      const u = user as any;
+      await execute('DELETE FROM signup_verification_tokens WHERE user_id = ?', [u.id]);
+      const tokenId = uuidv4();
+      const newToken = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const expiresAtStr = expiresAt.toISOString();
+      const DB_TYPE = process.env.DB_TYPE || 'sqlite';
+      if (DB_TYPE === 'postgresql') {
+        await execute(
+          `INSERT INTO signup_verification_tokens (id, user_id, token, expires_at, used)
+           VALUES (?, ?, ?, ?, ?)`,
+          [tokenId, u.id, newToken, expiresAtStr, false]
+        );
+      } else {
+        await execute(
+          `INSERT INTO signup_verification_tokens (id, user_id, token, expires_at, used)
+           VALUES (?, ?, ?, ?, ?)`,
+          [tokenId, u.id, newToken, expiresAtStr, 0]
+        );
+      }
+      const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+      const verificationUrl = `${frontendUrl}/app/verify-email?token=${encodeURIComponent(newToken)}`;
+      await sendSignupVerificationEmail(normalizedEmail, verificationUrl);
+    }
+    return res.json({ message: 'If an unverified account exists with that email, a new verification link has been sent.' });
+  } catch (error: any) {
+    console.error('Request signup resend error:', error);
+    return res.status(500).json({ error: error.message || 'Failed to request resend' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/auth/refresh:
+ *   post:
+ *     summary: Refresh access token (CLOUD mode)
+ *     description: Exchange refresh token cookie for new access + refresh tokens. CLOUD only.
+ *     tags: [Authentication]
+ *     responses:
+ *       200:
+ *         description: New tokens set via cookies; returns user payload
+ *       401:
+ *         description: Invalid or missing refresh token
+ */
+router.post('/refresh', refreshRateLimiter, async (req, res) => {
+  if (!isCloud) return res.status(401).json({ error: 'Unauthorized' });
+  const refreshToken = req.cookies?.refresh_token;
+  if (!refreshToken) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    const result = await rotateRefreshToken(refreshToken);
+    if (!result) return res.status(401).json({ error: 'Unauthorized' });
+    const accessToken = generateAccessToken(result.user);
+    const refreshMaxAgeMs = Math.max(0, result.expiresAt.getTime() - Date.now());
+    setAuthCookies(res, { accessToken, refreshToken: result.token, refreshMaxAgeMs });
+    const userRow = await queryOne('SELECT id, email, name, user_key, is_admin, language, theme, current_org_id FROM users WHERE id = ?', [result.user.id]);
+    const u = userRow as any;
+    const refreshPayload: Record<string, unknown> = {
+      id: u.id,
+      email: u.email,
+      name: u.name,
+      user_key: u.user_key,
+      is_admin: Boolean(u.is_admin),
+      language: u.language || 'en',
+      theme: u.theme || 'auto',
+    };
+    if (u.current_org_id) {
+      refreshPayload.current_org_id = u.current_org_id;
+    }
+    const orgMember = await queryOne(
+      `SELECT role FROM org_members WHERE user_id = ? ORDER BY CASE role WHEN 'owner' THEN 1 WHEN 'admin' THEN 2 WHEN 'member' THEN 3 ELSE 4 END LIMIT 1`,
+      [u.id]
+    );
+    refreshPayload.org_role = orgMember ? (orgMember as any).role : null;
+    res.json(refreshPayload);
+  } catch (err: any) {
+    res.status(401).json({ error: 'Unauthorized' });
+  }
 });
 
 /**
@@ -344,24 +754,30 @@ router.get('/:provider', async (req, res, next) => {
 router.get('/:provider/callback', (req, res, next) => {
   const { provider } = req.params;
   
-  passport.authenticate(provider, async (err: any, user: any, info: any) => {
+  passport.authenticate(provider, async (err: any, user: any, info: any): Promise<void> => {
     
     // Handle "ID token not present" error - some providers don't return ID tokens
     // and passport-openidconnect fails before it can use userInfo endpoint
     if (err && err.message === 'ID token not present in token response') {
       try {
-        // Get provider configuration from database (not from user input to prevent SSRF)
-        const providerConfig = await queryOne(
-          'SELECT issuer_url, userinfo_url FROM oidc_providers WHERE provider_key = ?',
-          [provider]
-        );
-        
-        if (!providerConfig) {
-          throw new Error('Provider configuration not found');
+        // Get provider configuration (CLOUD: from env; SELFHOSTED: from DB)
+        let configuredIssuer: string;
+        let configuredUserinfoUrl: string;
+        if (isCloud) {
+          const cloudList = getCloudProviders();
+          const cloudProvider = cloudList.find((p) => p.provider_key === provider);
+          if (!cloudProvider) throw new Error('Provider configuration not found');
+          configuredIssuer = cloudProvider.issuer_url;
+          configuredUserinfoUrl = cloudProvider.userinfo_url || `${configuredIssuer}/userinfo`;
+        } else {
+          const providerConfig = await queryOne(
+            'SELECT issuer_url, userinfo_url FROM oidc_providers WHERE provider_key = ?',
+            [provider]
+          );
+          if (!providerConfig) throw new Error('Provider configuration not found');
+          configuredIssuer = (providerConfig as any).issuer_url;
+          configuredUserinfoUrl = (providerConfig as any).userinfo_url || `${configuredIssuer}/userinfo`;
         }
-        
-        const configuredIssuer = (providerConfig as any).issuer_url;
-        const configuredUserinfoUrl = (providerConfig as any).userinfo_url || `${configuredIssuer}/userinfo`;
         
         // Get the access token from the session (stored by passport during OAuth flow)
         // passport-openidconnect stores it under a key like 'openidconnect:issuer'
@@ -422,19 +838,17 @@ router.get('/:provider/callback', (req, res, next) => {
                 accessToken,
                 matchingState.token_response.refresh_token,
                 {}, // params
-                (verifyErr: any, verifiedUser: any) => {
+                async (verifyErr: any, verifiedUser: any) => {
                   if (verifyErr || !verifiedUser) {
                     console.error(`[OIDC] Verify function error:`, verifyErr);
-                    return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=auth_failed`);
+                    return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}${isCloud ? '/app/login' : '/login'}?error=auth_failed`);
                   }
-                  
-                  // Continue with normal flow
                   user = verifiedUser;
-                  handleSuccess();
+                  await handleSuccess();
                 }
               );
               
-              return; // Exit early, handleSuccess will be called from verify callback
+              return; // Exit early, handleSuccess already ran
             }
           }
           
@@ -486,25 +900,23 @@ router.get('/:provider/callback', (req, res, next) => {
           accessToken,
           oauthState.token_response?.refresh_token,
           {}, // params
-          (verifyErr: any, verifiedUser: any) => {
+          async (verifyErr: any, verifiedUser: any) => {
             if (verifyErr || !verifiedUser) {
               console.error(`[OIDC] Verify function error:`, verifyErr);
-              return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=auth_failed`);
+              return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}${isCloud ? '/app/login' : '/login'}?error=auth_failed`);
             }
-            
-            // Continue with normal flow
             user = verifiedUser;
-            handleSuccess();
+            await handleSuccess();
           }
         );
         
-        return; // Exit early, handleSuccess will be called from verify callback
+        return; // Exit early, handleSuccess already ran
       } catch (manualFetchError: any) {
         console.error(`[OIDC] Manual userInfo fetch failed:`, {
           message: manualFetchError.message,
           stack: manualFetchError.stack,
         });
-        return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=auth_failed`);
+        return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}${isCloud ? '/app/login' : '/login'}?error=auth_failed`);
       }
     }
     
@@ -531,45 +943,31 @@ router.get('/:provider/callback', (req, res, next) => {
           info: info,
         });
       }
-      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=${errorParam}`);
+      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}${isCloud ? '/app/login' : '/login'}?error=${errorParam}`);
     }
     
-    function handleSuccess() {
-
-      // Generate JWT token for OIDC user
-      const token = generateToken({
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        user_key: user.user_key,
-        is_admin: user.is_admin,
-      });
-
-      // Set httpOnly cookie with JWT token
-      // Only use secure cookies when actually using HTTPS (check BASE_URL)
-      const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
-      const isHttps = baseUrl.startsWith('https://');
-      const isProduction = process.env.NODE_ENV === 'production' && isHttps;
-      res.cookie('token', token, {
-        httpOnly: true,
-        secure: isProduction, // Only secure when using HTTPS
-        sameSite: 'strict', // Always use strict for CSRF protection
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      });
-
-      // Destroy session since we're using JWT for authentication
-      // Session was only needed for the OAuth flow
+    async function handleSuccess() {
+      const userPayload = { id: user.id, email: user.email, name: user.name, user_key: user.user_key, is_admin: user.is_admin };
+      if (isCloud) {
+        const accessToken = generateAccessToken(userPayload);
+        const { token: refreshToken, expiresAt } = await createRefreshToken(user.id);
+        const refreshMaxAgeMs = Math.max(0, expiresAt.getTime() - Date.now());
+        setAuthCookies(res, { accessToken, refreshToken, refreshMaxAgeMs });
+      } else {
+        const token = generateToken(userPayload);
+        setAuthCookies(res, { accessToken: token });
+      }
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      const redirectUrl = isCloud ? `${frontendUrl}/app` : frontendUrl;
       req.session?.destroy((sessionErr) => {
-        if (sessionErr) {
-          console.error('Error destroying session:', sessionErr);
-        }
-        res.redirect(process.env.FRONTEND_URL || 'http://localhost:3000');
+        if (sessionErr) console.error('Error destroying session:', sessionErr);
+        res.redirect(redirectUrl);
       });
     }
     
     // If we got here normally (not from manual fetch), handle success
     if (user) {
-      handleSuccess();
+      await handleSuccess();
     }
   })(req, res, next);
 });
@@ -620,8 +1018,11 @@ router.get('/:provider/callback', (req, res, next) => {
  *       403:
  *         description: System already initialized
  */
-// Setup route - only accessible when system is not initialized
+// Setup route - only accessible when system is not initialized. SELFHOSTED only.
 router.post('/setup', strictRateLimiter, async (req, res) => {
+  if (isCloud) {
+    return res.status(404).json({ error: 'Not found' });
+  }
   try {
     const initialized = await isInitialized();
     if (initialized) {
@@ -695,25 +1096,15 @@ router.post('/setup', strictRateLimiter, async (req, res) => {
     }
 
     // Automatically log in the user after successful setup
-    // Generate JWT token
-    const token = generateToken({
-      id: userId,
-      email: normalizedEmail,
-      name: sanitizedName,
-      user_key: userKey,
-      is_admin: true,
-    });
-
-    // Set httpOnly cookie with JWT token (same as login endpoint)
-    const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
-    const isHttps = baseUrl.startsWith('https://');
-    const isProduction = process.env.NODE_ENV === 'production' && isHttps;
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: isProduction, // Only secure when using HTTPS
-      sameSite: 'strict', // Always use strict for CSRF protection
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    });
+    const userPayload = { id: userId, email: normalizedEmail, name: sanitizedName, user_key: userKey, is_admin: true };
+    if (isCloud) {
+      const accessToken = generateAccessToken(userPayload);
+      const { token: refreshToken, expiresAt } = await createRefreshToken(userId);
+      const refreshMaxAgeMs = Math.max(0, expiresAt.getTime() - Date.now());
+      setAuthCookies(res, { accessToken, refreshToken, refreshMaxAgeMs });
+    } else {
+      setAuthCookies(res, { accessToken: generateToken(userPayload) });
+    }
 
     // Return user data (same format as login endpoint)
     res.json({

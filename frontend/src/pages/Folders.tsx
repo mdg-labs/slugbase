@@ -196,9 +196,16 @@ export default function Folders() {
       {/* Folders Display */}
       {sortedFolders.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 px-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-          <FolderIcon className="h-12 w-12 text-gray-400 dark:text-gray-500 mb-4" />
-          <p className="text-gray-500 dark:text-gray-400 text-lg mb-4">{t('folders.empty')}</p>
-          <Button onClick={handleCreate} variant="primary" size="sm" icon={Plus}>
+          <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mb-4">
+            <FolderIcon iconName={null} className="h-8 w-8 text-green-600 dark:text-green-400" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+            {t('folders.empty')}
+          </h3>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-6 text-center max-w-md">
+            {t('folders.emptyDescription')}
+          </p>
+          <Button onClick={handleCreate} variant="primary" icon={Plus}>
             {t('folders.create')}
           </Button>
         </div>
