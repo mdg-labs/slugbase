@@ -3,6 +3,10 @@ import { useTranslation } from 'react-i18next';
 import api from '../../api/client';
 import { UserPlus } from 'lucide-react';
 import Button from '../ui/Button';
+import { Card, CardContent, CardHeader } from '../ui/card';
+import { Badge } from '../ui/badge';
+import { Progress } from '../ui/progress';
+import { useOrgPlan } from '../../contexts/OrgPlanContext';
 
 interface Org {
   id: string;
@@ -27,6 +31,7 @@ interface Plan {
 
 export default function AdminBillingPlan() {
   const { t } = useTranslation();
+  const { bookmarkCount, bookmarkLimit } = useOrgPlan();
   const [org, setOrg] = useState<Org | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
@@ -149,33 +154,50 @@ export default function AdminBillingPlan() {
   const paidPlans = plans.filter((p) => p.id !== 'free');
   const orgWithStripe = org as Org & { stripe_customer_id?: string };
 
+  const isFreePlan = org.plan === 'free';
+  const showBookmarkUsage = isFreePlan && bookmarkLimit != null;
+
   return (
     <div className="space-y-6">
-      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          {t('admin.billingCurrentPlan')}
-        </h2>
-        <p className="text-2xl font-bold text-gray-900 dark:text-white">
-          {planName(org.plan)}
-        </p>
-        {orgWithStripe.stripe_customer_id && canManageBilling && (
-          <Button
-            variant="secondary"
-            onClick={handlePortal}
-            disabled={!!checkoutLoading}
-            className="mt-4"
-          >
-            {checkoutLoading === 'portal' ? t('common.loading') : t('admin.billingManageSubscription')}
-          </Button>
-        )}
-      </div>
+      <Card>
+        <CardHeader>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+            {t('admin.billingCurrentPlan')}
+          </h2>
+          <p className="text-2xl font-bold text-gray-900 dark:text-white">
+            {planName(org.plan)}
+          </p>
+          {showBookmarkUsage && (
+            <div className="mt-3 space-y-2">
+              <p className="text-sm text-muted-foreground">
+                {t('plan.bookmarksUsed', { count: bookmarkCount, limit: bookmarkLimit })}
+              </p>
+              <Progress value={bookmarkLimit ? Math.min(100, (bookmarkCount / bookmarkLimit) * 100) : 0} className="h-2" />
+            </div>
+          )}
+        </CardHeader>
+        <CardContent>
+          {orgWithStripe.stripe_customer_id && canManageBilling && (
+            <Button
+              variant="secondary"
+              onClick={handlePortal}
+              disabled={!!checkoutLoading}
+            >
+              {checkoutLoading === 'portal' ? t('common.loading') : t('admin.billingManageSubscription')}
+            </Button>
+          )}
+        </CardContent>
+      </Card>
 
       {canManageBilling && (
-        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            {t('admin.billingUpgrade')}
-          </h2>
-          <div className="mb-4 flex gap-2">
+        <Card>
+          <CardHeader>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              {t('admin.billingUpgrade')}
+            </h2>
+          </CardHeader>
+          <CardContent className="space-y-4">
+          <div className="flex gap-2">
             <button
               type="button"
               onClick={() => setBillingInterval('monthly')}
@@ -204,18 +226,19 @@ export default function AdminBillingPlan() {
               const isCurrent = org.plan === plan.id;
               const features = planFeatures[plan.id] || [];
               return (
-                <div
+                <Card
                   key={plan.id}
-                  className={`rounded-lg border p-4 flex flex-col ${
+                  className={`flex flex-col min-h-[320px] ${
                     plan.id === 'personal'
                       ? 'border-blue-200 dark:border-blue-800 ring-2 ring-blue-500/20'
-                      : 'border-gray-200 dark:border-gray-700'
+                      : ''
                   }`}
                 >
+                  <CardHeader className="p-4 pb-2">
                   {plan.id === 'personal' && (
-                    <span className="inline-block w-fit mb-2 px-2.5 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded-full">
+                    <Badge variant="secondary" className="w-fit mb-2 text-xs bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">
                       {t('pricing.mostPopular')}
-                    </span>
+                    </Badge>
                   )}
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{planName(plan.id)}</h3>
                   {plan.id === 'free' && (
@@ -226,7 +249,7 @@ export default function AdminBillingPlan() {
                       <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
                         {billingInterval === 'monthly' ? t('pricing.personalPrice') : `€${((plan.price_yearly || 0) / 100).toFixed(0)}/yr`}
                       </p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">{t('pricing.personalYearly')}</p>
+                      <p className="text-sm text-muted-foreground">{t('pricing.personalYearly')}</p>
                     </>
                   )}
                   {plan.id === 'team' && (
@@ -234,7 +257,7 @@ export default function AdminBillingPlan() {
                       <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
                         {billingInterval === 'monthly' ? t('pricing.teamPrice') : t('pricing.teamPriceYearly')}
                       </p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                      <p className="text-sm text-muted-foreground">
                         {t('pricing.teamUsers')} · {billingInterval === 'monthly' ? t('pricing.teamExtraUser') : t('pricing.teamExtraUserYearly')}
                       </p>
                     </>
@@ -245,9 +268,14 @@ export default function AdminBillingPlan() {
                       <p className="mt-1 text-2xl font-bold text-gray-900 dark:text-white">{t('pricing.earlySupporterPrice')}</p>
                     </>
                   )}
-                  <ul className="mt-4 space-y-2 text-sm text-gray-600 dark:text-gray-400 flex-1">
+                  </CardHeader>
+                  <CardContent className="p-4 pt-0 flex flex-col flex-1">
+                  <ul className="space-y-2 text-sm text-muted-foreground flex-1">
                     {features.map((f, i) => (
-                      <li key={i}>{f}</li>
+                      <li key={i} className="flex items-start gap-2">
+                        <span className="text-primary mt-0.5">•</span>
+                        <span>{f}</span>
+                      </li>
                     ))}
                   </ul>
                   {plan.id !== 'free' && (
@@ -310,22 +338,27 @@ export default function AdminBillingPlan() {
                     </div>
                   )}
                   {plan.id === 'free' && isCurrent && (
-                    <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">{t('admin.billingCurrentPlan')}</p>
+                    <p className="mt-4 text-sm text-muted-foreground">{t('admin.billingCurrentPlan')}</p>
                   )}
-                </div>
+                  </CardContent>
+                </Card>
               );
             })}
           </div>
           {paidPlans.length === 0 && (
-            <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">{t('admin.billingNotConfigured')}</p>
+            <p className="text-sm text-muted-foreground">{t('admin.billingNotConfigured')}</p>
           )}
-        </div>
+          </CardContent>
+        </Card>
       )}
 
-      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          {t('admin.billingOrgMembers')}
-        </h2>
+      <Card>
+        <CardHeader>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+            {t('admin.billingOrgMembers')}
+          </h2>
+        </CardHeader>
+        <CardContent>
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
           {t('admin.billingSeatsUsed', {
             count: org.member_count,
@@ -381,7 +414,8 @@ export default function AdminBillingPlan() {
         {inviteError && (
           <p className="mt-2 text-sm text-red-600 dark:text-red-400">{inviteError}</p>
         )}
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

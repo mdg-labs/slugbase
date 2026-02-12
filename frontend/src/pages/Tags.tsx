@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import api from '../api/client';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
@@ -7,7 +8,10 @@ import { Plus, Edit, Trash2, Tag as TagIcon, LayoutGrid, List } from 'lucide-rea
 import TagModal from '../components/modals/TagModal';
 import Button from '../components/ui/Button';
 import Select from '../components/ui/Select';
+import { PageHeader } from '../components/PageHeader';
+import { EmptyState } from '../components/EmptyState';
 import { PageLoadingSkeleton } from '../components/ui/PageLoadingSkeleton';
+import { appBasePath } from '../config/api';
 
 interface Tag {
   id: string;
@@ -108,19 +112,16 @@ export default function Tags() {
     <div className="space-y-6 pb-24">
       {/* Sticky controls bar: header + toolbar - stays visible when scrolling */}
       <div className="sticky top-0 z-40 space-y-4 pb-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pt-0 -mt-8 bg-background border-b shadow-sm">
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
-              {t('tags.title')}
-            </h1>
-            <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
-              {tags.length} {tags.length === 1 ? t('common.tag') : t('common.tags')}
-            </p>
-          </div>
-          <Button onClick={handleCreate} icon={Plus}>
-            {t('tags.create')}
-          </Button>
-        </div>
+        <PageHeader
+          className="pt-4"
+          title={t('tags.title')}
+          subtitle={`${tags.length} ${tags.length === 1 ? t('common.tag') : t('common.tags')}`}
+          actions={
+            <Button onClick={handleCreate} icon={Plus}>
+              {t('tags.create')}
+            </Button>
+          }
+        />
 
         {/* Toolbar: Sort, View Modes */}
         {sortedTags.length > 0 && (
@@ -179,20 +180,16 @@ export default function Tags() {
 
       {/* Tags Display */}
       {sortedTags.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 px-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-          <div className="w-16 h-16 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center mb-4">
-            <TagIcon className="h-8 w-8 text-purple-600 dark:text-purple-400" />
-          </div>
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-            {t('tags.empty')}
-          </h3>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-6 text-center max-w-md">
-            {t('tags.emptyDescription')}
-          </p>
-          <Button onClick={handleCreate} variant="primary" icon={Plus}>
-            {t('tags.create')}
-          </Button>
-        </div>
+        <EmptyState
+          icon={TagIcon}
+          title={t('tags.empty')}
+          description={t('tags.emptyDescription')}
+          action={
+            <Button onClick={handleCreate} variant="primary" icon={Plus}>
+              {t('tags.create')}
+            </Button>
+          }
+        />
       ) : viewMode === 'card' ? (
         <div className={`grid grid-cols-1 gap-4 ${
           compactMode 
@@ -204,21 +201,26 @@ export default function Tags() {
               key={tag.id}
               className={`group bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-purple-400 dark:hover:border-purple-500 hover:shadow-lg transition-all duration-200 flex flex-col ${compactMode ? 'p-2.5' : 'p-4'}`}
             >
-              <div className="space-y-3 flex-1 flex flex-col">
-                {/* Header with icon */}
-                <div className="flex items-start gap-3">
-                  <div className={`flex-shrink-0 ${compactMode ? 'w-10 h-10' : 'w-12 h-12'} rounded-xl bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/20 flex items-center justify-center border border-purple-100 dark:border-purple-800/50`}>
-                    <TagIcon className={`${compactMode ? 'h-5 w-5' : 'h-6 w-6'} text-purple-600 dark:text-purple-400`} />
+              <Link
+                to={`${appBasePath}/bookmarks?tag_id=${tag.id}`}
+                className="flex-1 flex flex-col min-w-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
+              >
+                <div className="space-y-3 flex-1 flex flex-col">
+                  <div className="flex items-start gap-3">
+                    <div className={`flex-shrink-0 ${compactMode ? 'w-10 h-10' : 'w-12 h-12'} rounded-xl bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/20 flex items-center justify-center border border-purple-100 dark:border-purple-800/50`}>
+                      <TagIcon className={`${compactMode ? 'h-5 w-5' : 'h-6 w-6'} text-purple-600 dark:text-purple-400`} />
+                    </div>
+                    <div className="flex-1 min-w-0 pt-0.5">
+                      <h3 className={`${compactMode ? 'text-xs' : 'text-[15px]'} font-medium text-gray-900 dark:text-white truncate`}>
+                        {tag.name}
+                      </h3>
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0 pt-0.5">
-                    <h3 className={`${compactMode ? 'text-xs' : 'text-[15px]'} font-medium text-gray-900 dark:text-white truncate`}>
-                      {tag.name}
-                    </h3>
-                  </div>
+                  {/* TODO: Add bookmark_count when backend supports it */}
+                  <p className="text-xs text-muted-foreground">—</p>
                 </div>
-
-                {/* Actions */}
-                <div className={`flex gap-2 pt-3 mt-auto border-t border-gray-100 dark:border-gray-700/50 ${compactMode ? 'pt-2' : ''}`}>
+              </Link>
+              <div className={`flex gap-2 pt-3 mt-auto border-t border-gray-100 dark:border-gray-700/50 ${compactMode ? 'pt-2' : ''}`}>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -237,7 +239,6 @@ export default function Tags() {
                     className={`text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 ${compactMode ? 'px-1.5' : 'px-2'}`}
                   />
                 </div>
-              </div>
             </div>
           ))}
         </div>
@@ -261,15 +262,21 @@ export default function Tags() {
                   className={`hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${compactMode ? 'h-10' : ''}`}
                 >
                   <td className={`${compactMode ? 'px-2 py-1.5' : 'px-4 py-3'}`}>
-                    <div className={`flex items-center ${compactMode ? 'gap-2' : 'gap-3'}`}>
+                    <Link
+                      to={`${appBasePath}/bookmarks?tag_id=${tag.id}`}
+                      className={`flex items-center ${compactMode ? 'gap-2' : 'gap-3'} hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded`}
+                    >
                       <div className={`flex-shrink-0 ${compactMode ? 'w-6 h-6' : 'w-8 h-8'} rounded-lg bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/20 flex items-center justify-center border border-purple-100 dark:border-purple-800/50`}>
                         <TagIcon className={`${compactMode ? 'h-3 w-3' : 'h-4 w-4'} text-purple-600 dark:text-purple-400`} />
                       </div>
                       <div className={`font-medium text-gray-900 dark:text-white ${compactMode ? 'text-xs' : 'text-[15px]'}`}>
                         {tag.name}
                       </div>
-                    </div>
+                    </Link>
                   </td>
+                  {!compactMode && (
+                    <td className="px-4 py-3 text-xs text-muted-foreground">—</td>
+                  )}
                   <td className={`${compactMode ? 'px-2 py-1.5' : 'px-4 py-3'}`}>
                     <div className={`flex items-center justify-end ${compactMode ? 'gap-1' : 'gap-2'}`}>
                       <Button

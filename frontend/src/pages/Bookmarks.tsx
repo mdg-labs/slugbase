@@ -18,6 +18,7 @@ import BookmarkTableView from '../components/bookmarks/BookmarkTableView';
 import { BulkMoveModal, BulkTagModal, BulkShareModal } from '../components/bookmarks/BulkActionModals';
 import { PageLoadingSkeleton } from '../components/ui/PageLoadingSkeleton';
 import { Card } from '../components/ui/card';
+import { PageHeader } from '../components/PageHeader';
 import { useSidebar } from '../components/ui/sidebar';
 import { appBasePath } from '../config/api';
 
@@ -385,17 +386,11 @@ export default function Bookmarks() {
     <div className="space-y-6 pb-24">
       {/* Sticky controls bar: header + filters/toolbar - stays visible when scrolling */}
       <div className="sticky top-0 z-40 space-y-4 pb-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pt-0 -mt-8 bg-background border-b shadow-sm">
-        <div className="flex items-center justify-between flex-wrap gap-4 pt-4">
-          <div>
-            <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
-              {t('bookmarks.title')}
-            </h1>
-            <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
-              {bookmarkLimit != null
-                ? t('plan.bookmarksUsed', { count: bookmarkCount, limit: bookmarkLimit })
-                : `${total} ${total === 1 ? t('common.bookmark') : t('common.bookmarks')}`}
-            </p>
-          </div>
+        <PageHeader
+          className="pt-4"
+          title={t('bookmarks.title')}
+          subtitle={bookmarkLimit != null ? t('plan.bookmarksUsed', { count: bookmarkCount, limit: bookmarkLimit }) : `${total} ${total === 1 ? t('common.bookmark') : t('common.bookmarks')}`}
+          actions={
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"
@@ -428,7 +423,8 @@ export default function Bookmarks() {
               </Link>
             )}
           </div>
-        </div>
+        }
+        />
 
         {/* Toolbar: Filters, Sort, View Modes */}
         <div className="flex flex-wrap items-center gap-3 bg-card rounded-lg border p-4 shadow-sm">

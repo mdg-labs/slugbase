@@ -4,6 +4,7 @@ import Button from '../ui/Button';
 import Tooltip from '../ui/Tooltip';
 import Favicon from '../Favicon';
 import FolderIcon from '../FolderIcon';
+import { Badge } from '../ui/badge';
 import {
   Table,
   TableBody,
@@ -216,14 +217,20 @@ export default function BookmarkTableView({
                   </TableCell>
                 )}
                 <TableCell className={cellClass}>
-                  <div className={`flex items-center ${compact ? 'gap-2' : 'gap-3'}`}>
+                  <a
+                    href={bookmark.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => { if (onOpen) { e.preventDefault(); onOpen(bookmark); } }}
+                    className={`flex items-center ${compact ? 'gap-2' : 'gap-3'} group/title hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded`}
+                  >
                     <div className={`flex-shrink-0 ${compact ? 'w-6 h-6' : 'w-8 h-8'} rounded-lg bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/20 flex items-center justify-center border border-blue-100 dark:border-blue-800/50 overflow-hidden`}>
                       <Favicon url={bookmark.url} size={compact ? 12 : 16} />
                     </div>
-                    <div className={`font-medium text-gray-900 dark:text-white ${compact ? 'text-xs' : 'text-[15px]'} truncate`}>
+                    <div className={`font-semibold text-gray-900 dark:text-white ${compact ? 'text-xs' : 'text-[15px]'} truncate`}>
                       {bookmark.title}
                     </div>
-                  </div>
+                  </a>
                 </TableCell>
                 {!compact && (
                   <TableCell className={cellClass}>
@@ -231,7 +238,7 @@ export default function BookmarkTableView({
                       href={bookmark.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-sm text-gray-700 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-400 truncate max-w-xs block"
+                      className="text-sm text-muted-foreground hover:text-foreground truncate max-w-xs block"
                     >
                       {bookmark.url}
                     </a>
@@ -242,13 +249,10 @@ export default function BookmarkTableView({
                     <div className="flex flex-wrap gap-1">
                       {bookmark.folders && bookmark.folders.length > 0 ? (
                         bookmark.folders.slice(0, 2).map((folder) => (
-                          <span
-                            key={folder.id}
-                            className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-md"
-                          >
-                            <FolderIcon iconName={folder.icon} size={12} />
+                          <Badge key={folder.id} variant="secondary" className="text-xs font-medium bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300">
+                            <FolderIcon iconName={folder.icon} size={12} className="mr-1" />
                             {folder.name}
-                          </span>
+                          </Badge>
                         ))
                       ) : (
                         <span className="text-xs text-muted-foreground">-</span>
@@ -261,13 +265,10 @@ export default function BookmarkTableView({
                     <div className="flex flex-wrap gap-1">
                       {bookmark.tags && bookmark.tags.length > 0 ? (
                         bookmark.tags.slice(0, 3).map((tag) => (
-                          <span
-                            key={tag.id}
-                            className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 rounded-md"
-                          >
-                            <TagIcon className="h-3 w-3" />
+                          <Badge key={tag.id} variant="secondary" className="text-xs font-medium bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300">
+                            <TagIcon className="h-3 w-3 mr-1" />
                             {tag.name}
-                          </span>
+                          </Badge>
                         ))
                       ) : (
                         <span className="text-xs text-muted-foreground">-</span>
@@ -298,56 +299,30 @@ export default function BookmarkTableView({
                 )}
                 <TableCell className={cellClass}>
                   <div className={`flex items-center justify-end ${compact ? 'gap-1' : 'gap-2'}`}>
-                    {bookmark.forwarding_enabled && !compact && (
+                    {bookmark.forwarding_enabled && (
                       <Tooltip content={`${window.location.origin}/go/${bookmark.slug}`}>
-                        <button
-                          onClick={() => onCopyUrl(bookmark)}
-                          className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                          title={t('bookmarks.copyUrl')}
-                        >
-                          <Copy className="h-4 w-4" />
-                        </button>
+                        <Button variant="ghost" size="sm" icon={Copy} className={`flex-shrink-0 h-8 w-8 p-0`} onClick={() => onCopyUrl(bookmark)} aria-label={t('bookmarks.copyUrl')} />
                       </Tooltip>
                     )}
                     {onOpen ? (
-                      <Button 
-                        variant="primary" 
-                        size="sm" 
-                        icon={ExternalLink} 
-                        className={compact ? 'text-[10px] px-1.5 py-0.5 h-6' : 'text-xs px-2'}
-                        onClick={() => onOpen(bookmark)}
-                      >
-                        {compact ? '' : t('bookmarks.open')}
-                      </Button>
+                      <Tooltip content={t('bookmarks.open')}>
+                        <Button variant="ghost" size="sm" icon={ExternalLink} className={`flex-shrink-0 ${compact ? 'h-8 w-8 p-0' : 'h-8 w-8 p-0'}`} onClick={() => onOpen(bookmark)} aria-label={t('bookmarks.open')} />
+                      </Tooltip>
                     ) : (
-                      <a
-                        href={bookmark.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        <Button variant="primary" size="sm" icon={ExternalLink} className={compact ? 'text-[10px] px-1.5 py-0.5 h-6' : 'text-xs px-2'}>
-                          {compact ? '' : t('bookmarks.open')}
-                        </Button>
-                      </a>
+                      <Tooltip content={t('bookmarks.open')}>
+                        <a href={bookmark.url} target="_blank" rel="noopener noreferrer" className="flex-shrink-0">
+                          <Button variant="ghost" size="sm" icon={ExternalLink} className={`flex-shrink-0 ${compact ? 'h-8 w-8 p-0' : 'h-8 w-8 p-0'}`} aria-label={t('bookmarks.open')} />
+                        </a>
+                      </Tooltip>
                     )}
                     {bookmark.bookmark_type === 'own' && (
                       <>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          icon={Edit}
-                          onClick={() => onEdit(bookmark)}
-                          title={t('common.edit')}
-                          className={compact ? 'px-1 h-6' : 'px-2'}
-                        />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          icon={Trash2}
-                          onClick={() => onDelete(bookmark.id, bookmark.title)}
-                          title={t('common.delete')}
-                          className={`text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 ${compact ? 'px-1 h-6' : 'px-2'}`}
-                        />
+                        <Tooltip content={t('common.edit')}>
+                          <Button variant="ghost" size="sm" icon={Edit} className={`flex-shrink-0 ${compact ? 'h-8 w-8 p-0' : 'h-8 w-8 p-0'}`} onClick={() => onEdit(bookmark)} aria-label={t('common.edit')} />
+                        </Tooltip>
+                        <Tooltip content={t('common.delete')}>
+                          <Button variant="ghost" size="sm" icon={Trash2} className={`flex-shrink-0 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 ${compact ? 'h-8 w-8 p-0' : 'h-8 w-8 p-0'}`} onClick={() => onDelete(bookmark.id, bookmark.title)} aria-label={t('common.delete')} />
+                        </Tooltip>
                       </>
                     )}
                   </div>

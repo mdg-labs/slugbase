@@ -342,10 +342,15 @@
     "goToBookmarks": "Go to Bookmarks",
     "editBookmark": "Edit bookmark",
     "openBookmark": "Open link",
+    "copyUrl": "Copy link",
+    "deleteBookmark": "Delete bookmark",
+    "shareBookmark": "Share",
     "lastOpened": "Last opened {{time}}",
     "filterByTagHint": "Click to filter bookmarks by this tag",
     "tagBookmarkCount": "{{count}} bookmarks",
-    "denseView": "Dense view"
+    "denseView": "Dense view",
+    "createFolder": "Create Folder",
+    "createTag": "Create Tag"
   },
   "apiDocs": {
     "title": "API Documentation",
@@ -614,10 +619,10 @@
     "freePrice": "€0",
     "freeUsers": "1 user",
     "freeWorkspace": "1 workspace",
-    "freeBookmarks": "300–500 bookmarks",
+    "freeBookmarks": "100 bookmarks",
     "freeFeatures": "Core features",
     "freeSupport": "Community support",
-    "freeValue1": "Organize up to 500 bookmarks with folders, tags, and search.",
+    "freeValue1": "Up to 100 bookmarks with folders, tags, and search.",
     "freeValue2": "Community support",
     "freeValue3": "Core features",
     "personal": "Personal",
@@ -654,7 +659,7 @@
     "ctaContact": "Contact us",
     "ctaBecomeEarlySupporter": "Become an early supporter",
     "comparisonTitle": "What you get",
-    "comparisonFree": "Free: Try core features, 300–500 bookmarks.",
+    "comparisonFree": "Free: Try core features, 100 bookmarks.",
     "comparisonPersonal": "Personal: Unlimited bookmarks, forwarding, backups, support.",
     "comparisonTeam": "Team: 5 users included, +€1/user extra monthly or +€10/user yearly. Shared folders, roles, audit.",
     "comparisonEarlySupporter": "Early Supporter: Lifetime Personal, limited seats."
