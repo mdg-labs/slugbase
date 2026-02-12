@@ -57,6 +57,7 @@ a:focus-visible {
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
     --radius: 0.5rem;
+    /* Sidebar: white bg, blue active state (Slugbase style) */
     --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 222 47% 11%;
     --sidebar-primary: 221 83% 53%;
@@ -94,6 +95,7 @@ a:focus-visible {
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
+    /* Sidebar: gray-800 bg, blue-400 active state (Slugbase style) */
     --sidebar-background: 217 33% 17%;
     --sidebar-foreground: 0 0% 98%;
     --sidebar-primary: 213 94% 68%;
