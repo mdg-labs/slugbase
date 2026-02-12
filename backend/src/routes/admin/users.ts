@@ -5,6 +5,8 @@ import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
 import { validateEmail, normalizeEmail, validatePassword, validateLength, sanitizeString } from '../../utils/validation.js';
 import { generateUserKey } from '../../utils/user-key.js';
+import { isCloud } from '../../config/mode.js';
+import { getCurrentOrgId } from '../../utils/organizations.js';
 
 const router = Router();
 router.use(requireAuth());
@@ -66,6 +68,22 @@ router.use(requireAdmin());
 router.get('/', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
+    if (isCloud) {
+      const orgId = await getCurrentOrgId(authReq.user!.id);
+      if (!orgId) {
+        return res.json([]);
+      }
+      const users = await query(
+        `SELECT u.id, u.email, u.name, u.user_key, u.is_admin, u.oidc_provider, u.language, u.theme, u.created_at
+         FROM users u
+         INNER JOIN org_members om ON u.id = om.user_id
+         WHERE om.org_id = ?
+         ORDER BY u.name`,
+        [orgId]
+      );
+      const usersList = Array.isArray(users) ? users : (users ? [users] : []);
+      return res.json(usersList);
+    }
     const users = await query(
       'SELECT id, email, name, user_key, is_admin, oidc_provider, language, theme, created_at FROM users ORDER BY created_at DESC',
       []
@@ -543,6 +561,20 @@ router.get('/:id/teams', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const { id } = req.params;
+    if (isCloud) {
+      const orgId = await getCurrentOrgId(authReq.user!.id);
+      if (!orgId) {
+        return res.json([]);
+      }
+      const teams = await query(
+        `SELECT t.* FROM teams t
+         INNER JOIN team_members tm ON t.id = tm.team_id
+         WHERE tm.user_id = ? AND t.org_id = ?`,
+        [id, orgId]
+      );
+      const teamsList = Array.isArray(teams) ? teams : (teams ? [teams] : []);
+      return res.json(teamsList);
+    }
     const teams = await query(
       `SELECT t.* FROM teams t
        INNER JOIN team_members tm ON t.id = tm.team_id

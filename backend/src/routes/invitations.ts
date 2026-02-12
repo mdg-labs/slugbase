@@ -82,18 +82,12 @@ router.post('/accept', requireAuth(), authRateLimiter, async (req, res) => {
     await execute('UPDATE org_invitations SET status = ? WHERE id = ?', ['accepted', r.id]);
     return res.json({ message: 'You are already a member of this organization' });
   }
-  const alreadyInOrg = await queryOne(
-    'SELECT 1 FROM org_members WHERE user_id = ?',
-    [userId]
-  );
-  if (alreadyInOrg) {
-    return res.status(400).json({ error: 'You are already a member of another organization' });
-  }
   await execute(
     'INSERT INTO org_members (user_id, org_id, role) VALUES (?, ?, ?)',
     [userId, r.org_id, 'member']
   );
   await execute('UPDATE org_invitations SET status = ? WHERE id = ?', ['accepted', r.id]);
+  await execute('UPDATE users SET current_org_id = ? WHERE id = ?', [r.org_id, userId]);
   res.json({ message: 'Invitation accepted', org_id: r.org_id });
 });
 

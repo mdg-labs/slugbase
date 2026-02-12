@@ -9,6 +9,7 @@ import { query, queryOne, execute } from './index.js';
 import { generateUserKey } from '../utils/user-key.js';
 import { DEMO_DATA, DEMO_TEAMS } from './seed-data.js';
 import { normalizeEmail, sanitizeString } from '../utils/validation.js';
+import { isCloud } from '../config/mode.js';
 
 /**
  * Seed the database with demo data
@@ -24,6 +25,23 @@ export async function seedDatabase(): Promise<void> {
   console.log('🌱 Starting database seeding for DEMO_MODE...');
 
   try {
+    // In Cloud mode, ensure demo org exists for org-scoped teams
+    let demoOrgId: string | null = null;
+    if (isCloud) {
+      const firstOrg = await queryOne('SELECT id FROM organizations ORDER BY id LIMIT 1', []);
+      if (firstOrg) {
+        demoOrgId = (firstOrg as any).id;
+        console.log(`   Using existing org: ${demoOrgId}`);
+      } else {
+        demoOrgId = uuidv4();
+        await execute(
+          `INSERT INTO organizations (id, name, plan, included_seats) VALUES (?, ?, 'team', 5)`,
+          [demoOrgId, 'Demo Organization']
+        );
+        console.log(`   ✓ Created demo organization`);
+      }
+    }
+
     // Map to store user IDs by email (for sharing and team membership)
     const userIdMap = new Map<string, string>(); // email -> user id
     // Map to store bookmark IDs by composite key (ownerEmail:slug for sharing)
@@ -100,6 +118,23 @@ export async function seedDatabase(): Promise<void> {
         }
 
         console.log(`   ✓ Created user: ${user.email} (${userKey})`);
+      }
+
+      // In Cloud mode, add user to demo org and set current_org_id
+      if (isCloud && demoOrgId) {
+        const existingMember = await queryOne(
+          'SELECT 1 FROM org_members WHERE user_id = ? AND org_id = ?',
+          [userId, demoOrgId]
+        );
+        if (!existingMember) {
+          const role = user.isAdmin ? 'owner' : 'member';
+          await execute(
+            'INSERT INTO org_members (user_id, org_id, role) VALUES (?, ?, ?)',
+            [userId, demoOrgId, role]
+          );
+          await execute('UPDATE users SET current_org_id = ? WHERE id = ?', [demoOrgId, userId]);
+          console.log(`     ✓ Added ${user.email} to demo org`);
+        }
       }
       
       // Store user ID in map for sharing/teams
@@ -261,10 +296,17 @@ export async function seedDatabase(): Promise<void> {
         console.log(`   Using existing team: ${team.name}`);
       } else {
         teamId = uuidv4();
-        await execute(
-          'INSERT INTO teams (id, name, description) VALUES (?, ?, ?)',
-          [teamId, sanitizeString(team.name), team.description ? sanitizeString(team.description) : null]
-        );
+        if (isCloud && demoOrgId) {
+          await execute(
+            'INSERT INTO teams (id, name, description, org_id) VALUES (?, ?, ?, ?)',
+            [teamId, sanitizeString(team.name), team.description ? sanitizeString(team.description) : null, demoOrgId]
+          );
+        } else {
+          await execute(
+            'INSERT INTO teams (id, name, description) VALUES (?, ?, ?)',
+            [teamId, sanitizeString(team.name), team.description ? sanitizeString(team.description) : null]
+          );
+        }
         console.log(`   ✓ Created team: ${team.name}`);
       }
       
@@ -439,6 +481,17 @@ export async function resetDatabase(): Promise<void> {
 
     // Delete teams
     await execute('DELETE FROM teams', []);
+
+    // Delete org-related data (Cloud mode)
+    try {
+      await execute('DELETE FROM org_invitations', []);
+      await execute('DELETE FROM org_members', []);
+      await execute('DELETE FROM organizations', []);
+    } catch (error: any) {
+      if (!error.message?.includes("doesn't exist") && !error.message?.includes('does not exist')) {
+        console.warn('Could not delete org data:', error.message);
+      }
+    }
 
     // Delete password reset tokens
     await execute('DELETE FROM password_reset_tokens', []);

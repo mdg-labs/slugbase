@@ -9,9 +9,12 @@ import {
   LayoutDashboard,
   ChevronLeft,
   ChevronRight,
+  Github,
+  RotateCcw,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import Tooltip from './ui/Tooltip';
+import Button from './ui/Button';
 import { appBasePath } from '../config/api';
 import { isCloud } from '../config/mode';
 import type { User } from '../contexts/AuthContext';
@@ -65,6 +68,10 @@ interface SidebarProps {
   onMobileClose: () => void;
   isMobile: boolean;
   user: User | null;
+  version?: string | null;
+  demoMode?: boolean;
+  onResetDemo?: () => void;
+  resetting?: boolean;
 }
 
 export default function Sidebar({
@@ -74,6 +81,10 @@ export default function Sidebar({
   onMobileClose,
   isMobile,
   user,
+  version = null,
+  demoMode = false,
+  onResetDemo,
+  resetting = false,
 }: SidebarProps) {
   const { t } = useTranslation();
   const location = useLocation();
@@ -83,6 +94,8 @@ export default function Sidebar({
 
   const showAdmin =
     user?.is_admin || (isCloud && (user?.org_role === 'owner' || user?.org_role === 'admin'));
+  const showDemoReset =
+    demoMode && (user?.is_admin || (isCloud && (user?.org_role === 'owner' || user?.org_role === 'admin')));
 
   const primaryNavItems = [
     { path: appBasePath || '/', label: t('dashboard.overview'), icon: LayoutDashboard },
@@ -153,13 +166,76 @@ export default function Sidebar({
             </button>
           </div>
         )}
+
+        {/* Bottom: GitHub link, version, demo reset */}
+        <div className="mt-auto pt-4 pb-3 px-3 border-t border-gray-200 dark:border-gray-700 space-y-2">
+          <div className={`flex items-center gap-2 ${isCollapsed && !isMobile ? 'justify-center' : ''}`}>
+            {isCollapsed && !isMobile ? (
+              <Tooltip content="GitHub Repository" position="right">
+                <a
+                  href="https://github.com/mdg-labs/slugbase"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center w-10 h-10 rounded-lg text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  aria-label="GitHub Repository"
+                >
+                  <Github className="h-5 w-5" />
+                </a>
+              </Tooltip>
+            ) : (
+              <>
+                <a
+                  href="https://github.com/mdg-labs/slugbase"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  aria-label="GitHub Repository"
+                >
+                  <Github className="h-5 w-5" />
+                  <span className="truncate">GitHub</span>
+                </a>
+                {version && (
+                  <span className="text-xs text-gray-500 dark:text-gray-400 font-mono ml-1 truncate">
+                    {version}
+                  </span>
+                )}
+              </>
+            )}
+          </div>
+          {showDemoReset && onResetDemo && !isCollapsed && (
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={RotateCcw}
+              onClick={onResetDemo}
+              disabled={resetting}
+              className="w-full justify-start text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300"
+            >
+              {t('common.resetDemo')}
+            </Button>
+          )}
+          {showDemoReset && onResetDemo && isCollapsed && !isMobile && (
+            <Tooltip content={t('common.resetDemo')} position="right">
+              <div className="flex justify-center">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={RotateCcw}
+                  onClick={onResetDemo}
+                  disabled={resetting}
+                  className="text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300"
+                />
+              </div>
+            </Tooltip>
+          )}
+        </div>
       </nav>
     </>
   );
 
   const sidebarWidthClasses = isMobile ? 'w-60' : isCollapsed ? 'w-16' : 'w-60';
   const baseSidebarClasses =
-    'flex flex-col bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex-shrink-0 transition-all duration-200 ease-in-out overflow-hidden';
+    'flex flex-col bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex-shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out';
 
   if (isMobile) {
     return (
@@ -172,7 +248,7 @@ export default function Sidebar({
           />
         )}
         <aside
-          className={`fixed top-0 left-0 z-50 h-full ${baseSidebarClasses} ${sidebarWidthClasses} shadow-xl transition-transform duration-200 ease-in-out lg:hidden ${
+          className={`fixed top-0 left-0 z-50 h-full ${baseSidebarClasses} ${sidebarWidthClasses} shadow-xl transition-transform duration-300 ease-in-out lg:hidden ${
             isMobileOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
         >

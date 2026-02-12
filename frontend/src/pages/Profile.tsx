@@ -3,10 +3,12 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { appBasePath } from '../config/api';
-import { Mail, User as UserIcon, Globe, Palette, AlertCircle, Link2 } from 'lucide-react';
+import { Mail, User as UserIcon, Globe, Palette, AlertCircle, Link2, Building2, ArrowRightLeft } from 'lucide-react';
 import Select from '../components/ui/Select';
 import Button from '../components/ui/Button';
 import { useToast } from '../components/ui/Toast';
+import api from '../api/client';
+import { isCloud } from '../config/mode';
 
 export default function Profile() {
   const { t } = useTranslation();
@@ -22,6 +24,8 @@ export default function Profile() {
   const [errors, setErrors] = useState<{ email?: string; name?: string }>({});
   const [editingEmail, setEditingEmail] = useState(false);
   const [editingName, setEditingName] = useState(false);
+  const [orgs, setOrgs] = useState<{ id: string; name: string; role: string }[]>([]);
+  const [switchingOrg, setSwitchingOrg] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -31,6 +35,15 @@ export default function Profile() {
         language: user.language || 'en',
         theme: user.theme || 'auto',
       });
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (isCloud && user) {
+      api.get('/organizations').then((res) => {
+        const list = Array.isArray(res.data) ? res.data : [];
+        setOrgs(list.map((o: any) => ({ id: o.id, name: o.name, role: o.role || 'member' })));
+      }).catch(() => setOrgs([]));
     }
   }, [user]);
 
@@ -69,6 +82,20 @@ export default function Profile() {
       }
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleSwitchOrg(orgId: string) {
+    if (switchingOrg) return;
+    setSwitchingOrg(orgId);
+    try {
+      await api.put('/organizations/me/switch', { org_id: orgId });
+      await checkAuth();
+      showToast(t('profile.orgSwitched'), 'success');
+    } catch (error: any) {
+      showToast(error.response?.data?.error || t('common.error'), 'error');
+    } finally {
+      setSwitchingOrg(null);
     }
   }
 
@@ -298,6 +325,58 @@ export default function Profile() {
             </div>
           </div>
         </div>
+
+        {/* Organizations Section (Cloud only) */}
+        {isCloud && orgs.length > 0 && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+            <div className="p-4">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                <Building2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                {t('profile.yourOrganizations')}
+              </h2>
+              <ul className="space-y-2">
+                {orgs.map((org) => (
+                  <li
+                    key={org.id}
+                    className="flex items-center justify-between gap-2 py-2 px-3 rounded-lg bg-gray-50 dark:bg-gray-700/50"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                        {org.name}
+                      </span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400 capitalize">
+                        {org.role}
+                      </span>
+                      {user.current_org_id === org.id && (
+                        <span className="text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30 px-2 py-0.5 rounded">
+                          {t('profile.current')}
+                        </span>
+                      )}
+                    </div>
+                    {user.current_org_id !== org.id && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleSwitchOrg(org.id)}
+                        disabled={switchingOrg === org.id}
+                      >
+                        {switchingOrg === org.id ? (
+                          t('common.loading')
+                        ) : (
+                          <>
+                            <ArrowRightLeft className="h-4 w-4 mr-1" />
+                            {t('profile.switch')}
+                          </>
+                        )}
+                      </Button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
 
         {/* Preferences Section */}
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">

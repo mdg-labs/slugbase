@@ -5,11 +5,31 @@ import crypto from 'crypto';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { authRateLimiter } from '../middleware/security.js';
 import { validateEmail, normalizeEmail } from '../utils/validation.js';
-import { ensureOrgForUser } from '../utils/organizations.js';
+import { ensureOrgForUser, getCurrentOrgId, setCurrentOrg } from '../utils/organizations.js';
 import { isCloud } from '../config/mode.js';
 import { sendOrgInvitationEmail } from '../utils/email.js';
 
 const router = Router();
+
+/**
+ * GET /organizations — List organizations user is in (Cloud only).
+ */
+router.get('/', requireAuth(), async (req, res) => {
+  if (!isCloud) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  const authReq = req as AuthRequest;
+  const userId = authReq.user!.id;
+  const orgs = await query(
+    `SELECT o.*, om.role FROM organizations o
+     INNER JOIN org_members om ON o.id = om.org_id
+     WHERE om.user_id = ?
+     ORDER BY o.name`,
+    [userId]
+  );
+  const orgList = Array.isArray(orgs) ? orgs : orgs ? [orgs] : [];
+  res.json(orgList);
+});
 
 /**
  * GET /organizations/me — Get current user's organization (Cloud only).
@@ -23,12 +43,29 @@ router.get('/me', requireAuth(), async (req, res) => {
   const userId = authReq.user!.id;
   const userName = authReq.user!.name;
   await ensureOrgForUser(userId, userName);
+  let orgId = await getCurrentOrgId(userId);
+  if (!orgId) {
+    const first = await queryOne(
+      'SELECT org_id FROM org_members WHERE user_id = ? ORDER BY joined_at ASC LIMIT 1',
+      [userId]
+    );
+    if (first) {
+      const firstOrgId = (first as any).org_id;
+      if (firstOrgId) {
+        orgId = firstOrgId;
+        await setCurrentOrg(userId, firstOrgId);
+      }
+    }
+  }
+  if (!orgId) {
+    return res.status(404).json({ error: 'Organization not found' });
+  }
   const row = await queryOne(
     `SELECT o.*, om.role
      FROM organizations o
      INNER JOIN org_members om ON o.id = om.org_id
-     WHERE om.user_id = ?`,
-    [userId]
+     WHERE om.user_id = ? AND o.id = ?`,
+    [userId, orgId]
   );
   if (!row) {
     return res.status(404).json({ error: 'Organization not found' });
@@ -58,6 +95,50 @@ router.get('/me', requireAuth(), async (req, res) => {
     role: org.role,
     members: Array.isArray(members) ? members : [members],
   });
+});
+
+/**
+ * PUT /organizations/me/switch — Switch current org (Cloud only).
+ */
+router.put('/me/switch', requireAuth(), async (req, res) => {
+  if (!isCloud) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  const authReq = req as AuthRequest;
+  const userId = authReq.user!.id;
+  const { org_id } = req.body;
+  if (!org_id || typeof org_id !== 'string') {
+    return res.status(400).json({ error: 'org_id is required' });
+  }
+  const ok = await setCurrentOrg(userId, org_id);
+  if (!ok) {
+    return res.status(403).json({ error: 'You are not a member of this organization' });
+  }
+  res.json({ message: 'Organization switched', org_id });
+});
+
+/**
+ * GET /organizations/members — List members of current org (Cloud only).
+ */
+router.get('/members', requireAuth(), async (req, res) => {
+  if (!isCloud) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  const authReq = req as AuthRequest;
+  const userId = authReq.user!.id;
+  const orgId = await getCurrentOrgId(userId);
+  if (!orgId) {
+    return res.status(404).json({ error: 'No organization selected' });
+  }
+  const members = await query(
+    `SELECT u.id, u.email, u.name FROM users u
+     INNER JOIN org_members om ON u.id = om.user_id
+     WHERE om.org_id = ?
+     ORDER BY u.name`,
+    [orgId]
+  );
+  const list = Array.isArray(members) ? members : members ? [members] : [];
+  res.json(list);
 });
 
 /**

@@ -255,7 +255,11 @@
     "languageJapanese": "日本語",
     "languageChinese": "中文",
     "languagePolish": "Polski",
-    "emailManagedByOIDC": "Email is managed by your identity provider and cannot be changed here."
+    "emailManagedByOIDC": "Email is managed by your identity provider and cannot be changed here.",
+    "yourOrganizations": "Your organizations",
+    "current": "Current",
+    "switch": "Switch",
+    "orgSwitched": "Organization switched"
   },
   "common": {
     "loading": "Loading...",

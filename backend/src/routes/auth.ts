@@ -124,7 +124,7 @@ router.get('/providers', async (req, res) => {
  *       401:
  *         description: Unauthorized
  */
-router.get('/me', requireAuth(), (req, res) => {
+router.get('/me', requireAuth(), async (req, res) => {
   const authReq = req as AuthRequest;
   const user = authReq.user!;
   const payload: Record<string, unknown> = {
@@ -138,6 +138,12 @@ router.get('/me', requireAuth(), (req, res) => {
   };
   if (isCloud && user.org_role !== undefined) {
     payload.org_role = user.org_role;
+  }
+  if (isCloud) {
+    const userRow = await queryOne('SELECT current_org_id FROM users WHERE id = ?', [user.id]);
+    if (userRow && (userRow as any).current_org_id) {
+      payload.current_org_id = (userRow as any).current_org_id;
+    }
   }
   res.json(payload);
 });
@@ -661,7 +667,7 @@ router.post('/refresh', refreshRateLimiter, async (req, res) => {
     const accessToken = generateAccessToken(result.user);
     const refreshMaxAgeMs = Math.max(0, result.expiresAt.getTime() - Date.now());
     setAuthCookies(res, { accessToken, refreshToken: result.token, refreshMaxAgeMs });
-    const userRow = await queryOne('SELECT id, email, name, user_key, is_admin, language, theme FROM users WHERE id = ?', [result.user.id]);
+    const userRow = await queryOne('SELECT id, email, name, user_key, is_admin, language, theme, current_org_id FROM users WHERE id = ?', [result.user.id]);
     const u = userRow as any;
     const refreshPayload: Record<string, unknown> = {
       id: u.id,
@@ -672,6 +678,9 @@ router.post('/refresh', refreshRateLimiter, async (req, res) => {
       language: u.language || 'en',
       theme: u.theme || 'auto',
     };
+    if (u.current_org_id) {
+      refreshPayload.current_org_id = u.current_org_id;
+    }
     const orgMember = await queryOne(
       `SELECT role FROM org_members WHERE user_id = ? ORDER BY CASE role WHEN 'owner' THEN 1 WHEN 'admin' THEN 2 WHEN 'member' THEN 3 ELSE 4 END LIMIT 1`,
       [u.id]

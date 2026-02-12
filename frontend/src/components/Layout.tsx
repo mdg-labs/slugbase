@@ -2,15 +2,12 @@ import { Outlet } from 'react-router-dom';
 import { Suspense, useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
-import { Github, RotateCcw } from 'lucide-react';
-import Button from './ui/Button';
 import TopBar from './TopBar';
 import Sidebar from './Sidebar';
 import { useConfirmDialog } from '../hooks/useConfirmDialog';
 import ConfirmDialog from './ui/ConfirmDialog';
 import { useToast } from './ui/Toast';
 import api from '../api/client';
-import { isCloud } from '../config/mode';
 
 const SIDEBAR_COLLAPSED_KEY = 'slugbase_sidebar_collapsed';
 const MOBILE_BREAKPOINT = 1024; // lg
@@ -121,6 +118,10 @@ export default function Layout() {
           onMobileClose={() => setSidebarMobileOpen(false)}
           isMobile={isMobile}
           user={user}
+          version={version}
+          demoMode={demoMode}
+          onResetDemo={handleResetClick}
+          resetting={resetting}
         />
 
         {/* Main Content */}
@@ -136,43 +137,6 @@ export default function Layout() {
           </div>
         </main>
       </div>
-
-      {/* Footer */}
-      <footer className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex justify-center items-center gap-3">
-            <a
-              href="https://github.com/mdg-labs/slugbase"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
-              aria-label="GitHub Repository"
-            >
-              <Github className="h-5 w-5" />
-            </a>
-            {version && (
-              <span className="text-xs text-gray-500 dark:text-gray-400 font-mono">
-                {version}
-              </span>
-            )}
-            {demoMode && (user?.is_admin || (isCloud && (user?.org_role === 'owner' || user?.org_role === 'admin'))) && (
-              <>
-                <span className="text-gray-400 dark:text-gray-600">|</span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  icon={RotateCcw}
-                  onClick={handleResetClick}
-                  disabled={resetting}
-                  className="text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300"
-                >
-                  <span className="hidden sm:inline">{t('common.resetDemo')}</span>
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
-      </footer>
 
       <ConfirmDialog
         isOpen={dialogState.isOpen}

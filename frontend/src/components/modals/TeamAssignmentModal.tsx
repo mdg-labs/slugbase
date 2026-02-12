@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import api from '../../api/client';
+import { isCloud } from '../../config/mode';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import { UserPlus, X, Users, User, Search } from 'lucide-react';
@@ -67,12 +68,13 @@ export default function TeamAssignmentModal({
         setAllTeams(teamsRes.data);
         setUserTeams(userTeamsRes.data || []);
       } else if (mode === 'team' && teamId) {
-        // Load all users and team's members
+        // Load all users and team's members (in Cloud mode, use org members for user list)
+        const usersEndpoint = isCloud ? '/organizations/members' : '/admin/users';
         const [usersRes, teamRes] = await Promise.all([
-          api.get('/admin/users'),
+          api.get(usersEndpoint),
           api.get(`/admin/teams/${teamId}`),
         ]);
-        setAllUsers(usersRes.data);
+        setAllUsers(Array.isArray(usersRes.data) ? usersRes.data : []);
         setTeamMembers(teamRes.data.members || []);
       }
     } catch (error) {

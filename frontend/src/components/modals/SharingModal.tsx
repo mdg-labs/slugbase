@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../api/client';
+import { isCloud } from '../../config/mode';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import { Users, User, Search, X, Check, UserPlus } from 'lucide-react';
@@ -64,8 +65,10 @@ export default function SharingModal({
 
   async function loadUsers() {
     try {
-      const response = await api.get('/admin/users');
-      setAllUsers(response.data.filter((u: User) => u.id !== user?.id)); // Exclude self
+      const endpoint = isCloud ? '/organizations/members' : '/admin/users';
+      const response = await api.get(endpoint);
+      const users = Array.isArray(response.data) ? response.data : [];
+      setAllUsers(users.filter((u: User) => u.id !== user?.id)); // Exclude self
     } catch (error) {
       console.error('Failed to load users:', error);
     }

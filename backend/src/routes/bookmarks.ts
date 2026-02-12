@@ -3,6 +3,8 @@ import { query, queryOne, execute } from '../db/index.js';
 import { AuthRequest, requireAuth } from '../middleware/auth.js';
 import { canAccessBookmark, canModifyBookmark, canAccessFolder, canAccessTag } from '../auth/authorization.js';
 import { v4 as uuidv4 } from 'uuid';
+import { isCloud } from '../config/mode.js';
+import { getCurrentOrgId } from '../utils/organizations.js';
 import { CreateBookmarkInput, UpdateBookmarkInput } from '../types.js';
 import { validateUrl, validateSlug, validateLength, sanitizeString, MAX_LENGTHS } from '../utils/validation.js';
 
@@ -871,6 +873,21 @@ router.post('/', async (req, res) => {
     if (data.user_ids && data.user_ids.length > 0) {
       // Don't allow sharing with self
       const filteredUserIds = data.user_ids.filter((uid) => uid !== userId);
+      if (isCloud) {
+        const orgId = await getCurrentOrgId(userId);
+        if (!orgId) {
+          return res.status(403).json({ error: 'No organization selected' });
+        }
+        for (const shareUserId of filteredUserIds) {
+          const inOrg = await queryOne(
+            'SELECT 1 FROM org_members WHERE user_id = ? AND org_id = ?',
+            [shareUserId, orgId]
+          );
+          if (!inOrg) {
+            return res.status(403).json({ error: 'One or more users are not in your organization' });
+          }
+        }
+      }
       for (const shareUserId of filteredUserIds) {
         // Verify user exists
         const user = await queryOne('SELECT id FROM users WHERE id = ?', [shareUserId]);
@@ -1140,6 +1157,21 @@ router.put('/:id', async (req, res) => {
       if (data.user_ids.length > 0) {
         // Don't allow sharing with self
         const filteredUserIds = data.user_ids.filter((uid) => uid !== userId);
+        if (isCloud) {
+          const orgId = await getCurrentOrgId(userId);
+          if (!orgId) {
+            return res.status(403).json({ error: 'No organization selected' });
+          }
+          for (const shareUserId of filteredUserIds) {
+            const inOrg = await queryOne(
+              'SELECT 1 FROM org_members WHERE user_id = ? AND org_id = ?',
+              [shareUserId, orgId]
+            );
+            if (!inOrg) {
+              return res.status(403).json({ error: 'One or more users are not in your organization' });
+            }
+          }
+        }
         for (const shareUserId of filteredUserIds) {
           // Verify user exists
           const user = await queryOne('SELECT id FROM users WHERE id = ?', [shareUserId]);
