@@ -4,7 +4,7 @@ This directory contains customer-facing documentation for SlugBase, organized by
 
 ## Structure
 
-- **`selfhosted/`** – Documentation for self-hosted SlugBase instances (setup, features, admin, OIDC, demo mode for self-hosted demo instances, etc.).
+- **`selfhosted/`** – Documentation for self-hosted SlugBase instances (setup, features, admin, OIDC, etc.).
 - **`cloud/`** – Documentation for SlugBase Cloud (hosted SaaS).
 - **`assets/`** – Shared images and assets used by both selfhosted and cloud docs.
 

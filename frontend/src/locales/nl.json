@@ -223,14 +223,6 @@
     "save": "Opslaan",
     "cancel": "Annuleren",
     "clearFilter": "Filter wissen",
-    "demoMode": "DEMO MODUS",
-    "demoModeDescription": "Dit is een demonstratie-instantie. De database wordt periodiek gereset.",
-    "demoModeCredentials": "Demo-referenties beschikbaar in documentatie",
-    "resetDemo": "Demo resetten",
-    "resetDemoConfirm": "Demo-database resetten",
-    "resetDemoMessage": "Dit verwijdert alle gegevens en herstelt de demo-database naar de oorspronkelijke staat. Deze actie kan niet ongedaan worden gemaakt. Doorgaan?",
-    "resetDemoSuccess": "Demo-database succesvol gereset",
-    "resetDemoError": "Fout bij resetten van demo-database",
     "yes": "Ja",
     "no": "Nee",
     "view": "Bekijken",
@@ -407,8 +399,7 @@
     "sendTest": "Test-e-mail verzenden",
     "testSent": "Test-e-mail succesvol verzonden!",
     "testFailed": "Verzenden van test-e-mail mislukt",
-    "save": "SMTP-instellingen opslaan",
-    "demoModeDisabled": "SMTP-configuratie is uitgeschakeld in demo-modus. De database wordt periodiek gereset en e-mailinstellingen gaan verloren."
+    "save": "SMTP-instellingen opslaan"
   },
   "shared": {
     "title": "Gedeeld",

@@ -242,14 +242,6 @@
     "save": "Speichern",
     "cancel": "Abbrechen",
     "clearFilter": "Filter löschen",
-    "demoMode": "DEMO-MODUS",
-    "demoModeDescription": "Dies ist eine Demonstrationsinstanz. Die Datenbank wird regelmäßig zurückgesetzt.",
-    "demoModeCredentials": "Demo-Anmeldedaten in der Dokumentation verfügbar",
-    "resetDemo": "Demo zurücksetzen",
-    "resetDemoConfirm": "Demo-Datenbank zurücksetzen",
-    "resetDemoMessage": "Dadurch werden alle Daten gelöscht und die Demo-Datenbank auf den ursprünglichen Zustand zurückgesetzt. Diese Aktion kann nicht rückgängig gemacht werden. Fortfahren?",
-    "resetDemoSuccess": "Demo-Datenbank erfolgreich zurückgesetzt",
-    "resetDemoError": "Fehler beim Zurücksetzen der Demo-Datenbank",
     "yes": "Ja",
     "no": "Nein",
     "view": "Ansehen",
@@ -437,8 +429,7 @@
     "sendTest": "Test-E-Mail senden",
     "testSent": "Test-E-Mail erfolgreich gesendet!",
     "testFailed": "Fehler beim Senden der Test-E-Mail",
-    "save": "SMTP-Einstellungen speichern",
-    "demoModeDisabled": "SMTP-Konfiguration ist im Demo-Modus deaktiviert. Die Datenbank wird regelmäßig zurückgesetzt, und E-Mail-Einstellungen würden verloren gehen."
+    "save": "SMTP-Einstellungen speichern"
   },
   "shared": {
     "title": "Geteilt",

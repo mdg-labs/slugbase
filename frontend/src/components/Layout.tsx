@@ -4,9 +4,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import TopBar from './TopBar';
 import Sidebar from './Sidebar';
-import { useConfirmDialog } from '../hooks/useConfirmDialog';
-import ConfirmDialog from './ui/ConfirmDialog';
-import { useToast } from './ui/Toast';
 import api from '../api/client';
 
 const SIDEBAR_COLLAPSED_KEY = 'slugbase_sidebar_collapsed';
@@ -16,41 +13,11 @@ export default function Layout() {
   const { user } = useAuth();
   const { t } = useTranslation();
   const [version, setVersion] = useState<string | null>(null);
-  const [demoMode, setDemoMode] = useState<boolean>(false);
-  const [resetting, setResetting] = useState<boolean>(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true'
   );
   const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const { showConfirm, dialogState } = useConfirmDialog();
-  const { showToast } = useToast();
-
-  const handleResetDemo = async () => {
-    try {
-      setResetting(true);
-      await api.post('/admin/demo-reset');
-      showToast(t('common.resetDemoSuccess'), 'success');
-      setTimeout(() => {
-        window.location.reload();
-      }, 1500);
-    } catch (error: any) {
-      console.error('Failed to reset demo:', error);
-      showToast(error.response?.data?.error || t('common.resetDemoError'), 'error');
-    } finally {
-      setResetting(false);
-    }
-  };
-
-  const handleResetClick = () => {
-    showConfirm(
-      t('common.resetDemoConfirm'),
-      t('common.resetDemoMessage'),
-      handleResetDemo,
-      { variant: 'warning', confirmText: t('common.resetDemo') }
-    );
-  };
-
   // Persist sidebar collapsed state
   useEffect(() => {
     localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(sidebarCollapsed));
@@ -76,15 +43,12 @@ export default function Layout() {
     return () => document.removeEventListener('keydown', handler);
   }, [sidebarMobileOpen]);
 
-  // Fetch version and demo mode
+  // Fetch version
   useEffect(() => {
     api.get('/version')
       .then(res => {
         if (res.data.commit) {
           setVersion(res.data.commit.substring(0, 7));
-        }
-        if (res.data.demoMode) {
-          setDemoMode(res.data.demoMode);
         }
       })
       .catch(() => {});
@@ -92,15 +56,6 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
-      {/* Demo Mode Banner */}
-      {demoMode && (
-        <div className="bg-amber-500 dark:bg-amber-600 text-white px-4 py-2 text-center text-sm font-medium">
-          <span className="font-bold">{t('common.demoMode')}</span>
-          {' - '}
-          {t('common.demoModeDescription')}
-        </div>
-      )}
-
       {/* Top Bar */}
       <TopBar
         onMenuClick={() => setSidebarMobileOpen(true)}
@@ -119,9 +74,6 @@ export default function Layout() {
           isMobile={isMobile}
           user={user}
           version={version}
-          demoMode={demoMode}
-          onResetDemo={handleResetClick}
-          resetting={resetting}
         />
 
         {/* Main Content */}
@@ -137,17 +89,6 @@ export default function Layout() {
           </div>
         </main>
       </div>
-
-      <ConfirmDialog
-        isOpen={dialogState.isOpen}
-        title={dialogState.title}
-        message={dialogState.message}
-        confirmText={dialogState.confirmText}
-        cancelText={dialogState.cancelText}
-        variant={dialogState.variant}
-        onConfirm={dialogState.onConfirm}
-        onCancel={dialogState.onCancel}
-      />
     </div>
   );
 }

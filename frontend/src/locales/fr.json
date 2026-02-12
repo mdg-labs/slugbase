@@ -223,14 +223,6 @@
     "save": "Enregistrer",
     "cancel": "Annuler",
     "clearFilter": "Effacer le filtre",
-    "demoMode": "MODE DÉMO",
-    "demoModeDescription": "Ceci est une instance de démonstration. La base de données est réinitialisée périodiquement.",
-    "demoModeCredentials": "Identifiants de démo disponibles dans la documentation",
-    "resetDemo": "Réinitialiser la démo",
-    "resetDemoConfirm": "Réinitialiser la base de données de démo",
-    "resetDemoMessage": "Cela supprimera toutes les données et restaurera la base de données de démo à son état initial. Cette action ne peut pas être annulée. Continuer ?",
-    "resetDemoSuccess": "Base de données de démo réinitialisée avec succès",
-    "resetDemoError": "Échec de la réinitialisation de la base de données de démo",
     "yes": "Oui",
     "no": "Non",
     "view": "Voir",
@@ -407,8 +399,7 @@
     "sendTest": "Envoyer un e-mail de test",
     "testSent": "E-mail de test envoyé avec succès !",
     "testFailed": "Échec de l'envoi de l'e-mail de test",
-    "save": "Enregistrer les paramètres SMTP",
-    "demoModeDisabled": "La configuration SMTP est désactivée en mode démo. La base de données est réinitialisée périodiquement, et les paramètres de messagerie seraient perdus."
+    "save": "Enregistrer les paramètres SMTP"
   },
   "shared": {
     "title": "Partagé",

@@ -223,14 +223,6 @@
     "save": "Guardar",
     "cancel": "Cancelar",
     "clearFilter": "Limpiar filtro",
-    "demoMode": "MODO DEMO",
-    "demoModeDescription": "Esta es una instancia de demostración. La base de datos se restablece periódicamente.",
-    "demoModeCredentials": "Credenciales de demostración disponibles en la documentación",
-    "resetDemo": "Restablecer demo",
-    "resetDemoConfirm": "Restablecer base de datos de demostración",
-    "resetDemoMessage": "Esto eliminará todos los datos y restaurará la base de datos de demostración a su estado inicial. Esta acción no se puede deshacer. ¿Continuar?",
-    "resetDemoSuccess": "Base de datos de demostración restablecida con éxito",
-    "resetDemoError": "Error al restablecer la base de datos de demostración",
     "yes": "Sí",
     "no": "No",
     "view": "Ver",
@@ -407,8 +399,7 @@
     "sendTest": "Enviar correo de prueba",
     "testSent": "¡Correo de prueba enviado con éxito!",
     "testFailed": "Error al enviar correo de prueba",
-    "save": "Guardar configuración SMTP",
-    "demoModeDisabled": "La configuración SMTP está deshabilitada en modo demo. La base de datos se restablece periódicamente y la configuración de correo se perdería."
+    "save": "Guardar configuración SMTP"
   },
   "shared": {
     "title": "Compartido",

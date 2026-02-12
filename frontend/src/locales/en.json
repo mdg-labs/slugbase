@@ -273,14 +273,6 @@
     "save": "Save",
     "cancel": "Cancel",
     "clearFilter": "Clear Filter",
-    "demoMode": "DEMO MODE",
-    "demoModeDescription": "This is a demonstration instance. The database is reset periodically.",
-    "demoModeCredentials": "Demo credentials available in documentation",
-    "resetDemo": "Reset Demo",
-    "resetDemoConfirm": "Reset Demo Database",
-    "resetDemoMessage": "This will delete all data and restore the demo database to its initial state. This action cannot be undone. Continue?",
-    "resetDemoSuccess": "Demo database reset successfully",
-    "resetDemoError": "Failed to reset demo database",
     "yes": "Yes",
     "no": "No",
     "view": "View",
@@ -498,8 +490,7 @@
     "sendTest": "Send Test Email",
     "testSent": "Test email sent successfully!",
     "testFailed": "Failed to send test email",
-    "save": "Save SMTP Settings",
-    "demoModeDisabled": "SMTP configuration is disabled in demo mode. The database is reset periodically, and email settings would be lost."
+    "save": "Save SMTP Settings"
   },
   "shared": {
     "title": "Shared",

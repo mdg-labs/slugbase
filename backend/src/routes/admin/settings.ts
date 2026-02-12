@@ -260,12 +260,6 @@ router.post('/smtp/test', async (req, res) => {
   if (isCloud) {
     return res.status(403).json({ error: 'SMTP configuration is managed via environment variables in CLOUD mode' });
   }
-  // Disable SMTP testing in DEMO_MODE
-  if (process.env.DEMO_MODE === 'true') {
-    return res.status(403).json({
-      error: 'SMTP testing is disabled in demo mode',
-    });
-  }
   
   try {
     const { email } = req.body;
@@ -335,12 +329,6 @@ router.post('/smtp', async (req, res) => {
 
   if (isCloud) {
     return res.status(403).json({ error: 'SMTP configuration is managed via environment variables in CLOUD mode' });
-  }
-  // Disable SMTP configuration in DEMO_MODE
-  if (process.env.DEMO_MODE === 'true') {
-    return res.status(403).json({
-      error: 'SMTP configuration is disabled in demo mode',
-    });
   }
   
   try {

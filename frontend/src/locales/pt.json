@@ -208,14 +208,6 @@
     "save": "Salvar",
     "cancel": "Cancelar",
     "clearFilter": "Limpar filtro",
-    "demoMode": "MODO DEMO",
-    "demoModeDescription": "Esta é uma instância de demonstração. O banco de dados é redefinido periodicamente.",
-    "demoModeCredentials": "Credenciais de demonstração disponíveis na documentação",
-    "resetDemo": "Redefinir demo",
-    "resetDemoConfirm": "Redefinir banco de dados de demonstração",
-    "resetDemoMessage": "Isso excluirá todos os dados e restaurará o banco de dados de demonstração ao seu estado inicial. Esta ação não pode ser desfeita. Continuar?",
-    "resetDemoSuccess": "Banco de dados de demonstração redefinido com sucesso",
-    "resetDemoError": "Falha ao redefinir o banco de dados de demonstração",
     "yes": "Sim",
     "no": "Não",
     "view": "Visualizar",
@@ -392,8 +384,7 @@
     "sendTest": "Enviar email de teste",
     "testSent": "Email de teste enviado com sucesso!",
     "testFailed": "Falha ao enviar email de teste",
-    "save": "Salvar configurações SMTP",
-    "demoModeDisabled": "A configuração SMTP está desabilitada no modo demo. O banco de dados é redefinido periodicamente e as configurações de email seriam perdidas."
+    "save": "Salvar configurações SMTP"
   },
   "shared": {
     "title": "Compartilhado",

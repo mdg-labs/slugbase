@@ -29,13 +29,6 @@ export function validateEnvironmentVariables(): void {
     warnings.push('SESSION_SECRET is not set (may be used as fallback)');
   }
 
-  // DEMO_MODE validation (optional, but check if enabled)
-  if (process.env.DEMO_MODE === 'true') {
-    warnings.push('DEMO_MODE is enabled - this is intended for demonstration purposes only');
-    // Note: ENCRYPTION_KEY is still required even in demo mode for OIDC secret encryption
-    // JWT_SECRET validation is already handled above with the default check
-  }
-
   if (process.env.NODE_ENV === 'production') {
     if (!process.env.FRONTEND_URL) {
       warnings.push('FRONTEND_URL should be set in production');

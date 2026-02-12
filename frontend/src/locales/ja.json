@@ -208,14 +208,6 @@
     "save": "保存",
     "cancel": "キャンセル",
     "clearFilter": "フィルタをクリア",
-    "demoMode": "デモモード",
-    "demoModeDescription": "これはデモンストレーションインスタンスです。データベースは定期的にリセットされます。",
-    "demoModeCredentials": "デモの認証情報はドキュメントで利用可能",
-    "resetDemo": "デモをリセット",
-    "resetDemoConfirm": "デモデータベースをリセット",
-    "resetDemoMessage": "これによりすべてのデータが削除され、デモデータベースが初期状態に復元されます。この操作は取り消せません。続行しますか？",
-    "resetDemoSuccess": "デモデータベースのリセットが正常に完了しました",
-    "resetDemoError": "デモデータベースのリセットに失敗しました",
     "yes": "はい",
     "no": "いいえ",
     "view": "表示",
@@ -392,8 +384,7 @@
     "sendTest": "テストメールを送信",
     "testSent": "テストメールが正常に送信されました！",
     "testFailed": "テストメールの送信に失敗しました",
-    "save": "SMTP設定を保存",
-    "demoModeDisabled": "SMTP設定はデモモードでは無効になっています。データベースは定期的にリセットされるため、メール設定は失われます。"
+    "save": "SMTP設定を保存"
   },
   "shared": {
     "title": "共有",

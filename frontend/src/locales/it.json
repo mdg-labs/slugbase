@@ -208,14 +208,6 @@
     "save": "Salva",
     "cancel": "Annulla",
     "clearFilter": "Pulisci filtro",
-    "demoMode": "MODO DEMO",
-    "demoModeDescription": "Questa è un'istanza dimostrativa. Il database viene reimpostato periodicamente.",
-    "demoModeCredentials": "Credenziali demo disponibili nella documentazione",
-    "resetDemo": "Reimposta demo",
-    "resetDemoConfirm": "Reimposta database demo",
-    "resetDemoMessage": "Questo eliminerà tutti i dati e ripristinerà il database demo al suo stato iniziale. Questa azione non può essere annullata. Continuare?",
-    "resetDemoSuccess": "Database demo reimpostato con successo",
-    "resetDemoError": "Errore nel reimpostare il database demo",
     "yes": "Sì",
     "no": "No",
     "view": "Visualizza",
@@ -392,8 +384,7 @@
     "sendTest": "Invia email di prova",
     "testSent": "Email di prova inviata con successo!",
     "testFailed": "Errore nell'invio dell'email di prova",
-    "save": "Salva impostazioni SMTP",
-    "demoModeDisabled": "La configurazione SMTP è disabilitata in modalità demo. Il database viene reimpostato periodicamente e le impostazioni email andrebbero perse."
+    "save": "Salva impostazioni SMTP"
   },
   "shared": {
     "title": "Condiviso",

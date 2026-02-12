@@ -10,11 +10,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Github,
-  RotateCcw,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import Tooltip from './ui/Tooltip';
-import Button from './ui/Button';
 import { appBasePath } from '../config/api';
 import { isCloud } from '../config/mode';
 import type { User } from '../contexts/AuthContext';
@@ -30,7 +28,7 @@ interface SidebarNavItemProps {
 
 function SidebarNavItem({ to, icon: Icon, label, isActive, isCollapsed, onClick }: SidebarNavItemProps) {
   const baseClasses =
-    'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800';
+    'flex items-center gap-3 rounded-lg text-sm font-medium transition-colors w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800 flex-shrink-0 min-h-[40px]';
   const activeClasses =
     'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border-l-2 border-blue-600 dark:border-blue-400';
   const inactiveClasses =
@@ -41,24 +39,36 @@ function SidebarNavItem({ to, icon: Icon, label, isActive, isCollapsed, onClick 
       to={to}
       onClick={onClick}
       className={`${baseClasses} ${isActive ? activeClasses : inactiveClasses} ${
-        isCollapsed ? 'justify-center px-0' : ''
+        isCollapsed ? 'justify-center px-0' : 'px-3'
       }`}
       aria-current={isActive ? 'page' : undefined}
     >
       <Icon className="h-5 w-5 flex-shrink-0" />
-      {!isCollapsed && <span className="truncate">{label}</span>}
+      <span
+        className={`overflow-hidden whitespace-nowrap transition-all duration-300 ease-in-out ${
+          isCollapsed ? 'max-w-0 min-w-0 opacity-0' : 'max-w-[180px] opacity-100'
+        }`}
+      >
+        {label}
+      </span>
     </Link>
+  );
+
+  const wrapper = (
+    <div className={`flex flex-shrink-0 ${isCollapsed ? 'justify-center' : 'justify-start'}`}>
+      {linkContent}
+    </div>
   );
 
   if (isCollapsed) {
     return (
       <Tooltip content={label} position="right">
-        <div className="flex justify-center">{linkContent}</div>
+        {wrapper}
       </Tooltip>
     );
   }
 
-  return linkContent;
+  return wrapper;
 }
 
 interface SidebarProps {
@@ -69,9 +79,6 @@ interface SidebarProps {
   isMobile: boolean;
   user: User | null;
   version?: string | null;
-  demoMode?: boolean;
-  onResetDemo?: () => void;
-  resetting?: boolean;
 }
 
 export default function Sidebar({
@@ -82,9 +89,6 @@ export default function Sidebar({
   isMobile,
   user,
   version = null,
-  demoMode = false,
-  onResetDemo,
-  resetting = false,
 }: SidebarProps) {
   const { t } = useTranslation();
   const location = useLocation();
@@ -94,8 +98,6 @@ export default function Sidebar({
 
   const showAdmin =
     user?.is_admin || (isCloud && (user?.org_role === 'owner' || user?.org_role === 'admin'));
-  const showDemoReset =
-    demoMode && (user?.is_admin || (isCloud && (user?.org_role === 'owner' || user?.org_role === 'admin')));
 
   const primaryNavItems = [
     { path: appBasePath || '/', label: t('dashboard.overview'), icon: LayoutDashboard },
@@ -111,7 +113,7 @@ export default function Sidebar({
         className="flex flex-col flex-1 py-4 overflow-y-auto"
         aria-label="Main navigation"
       >
-        <div className="px-3 space-y-1">
+        <div className="px-3 space-y-1 flex flex-col">
           {primaryNavItems.map((item) => (
             <SidebarNavItem
               key={item.path}
@@ -130,7 +132,7 @@ export default function Sidebar({
         {showAdmin && (
           <>
             <div className="my-2 border-t border-gray-200 dark:border-gray-700" />
-            <div className="px-3 space-y-1">
+            <div className="px-3 space-y-1 flex flex-col">
               <SidebarNavItem
                 to={`${appBasePath}/admin`}
                 icon={Settings}
@@ -148,28 +150,34 @@ export default function Sidebar({
         )}
 
         {!isMobile && (
-          <div className="px-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <div className="px-3 pt-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
             <button
               type="button"
               onClick={onToggleCollapse}
-              className="flex items-center justify-center w-full gap-3 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700/50 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800"
+              className={`flex items-center w-full gap-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700/50 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800 ${
+                isCollapsed ? 'justify-center px-0' : 'justify-start px-3'
+              }`}
               aria-label={isCollapsed ? t('common.expandSidebar') : t('common.collapseSidebar')}
             >
               {isCollapsed ? (
-                <ChevronRight className="h-5 w-5" />
+                <ChevronRight className="h-5 w-5 flex-shrink-0" />
               ) : (
-                <>
-                  <ChevronLeft className="h-5 w-5" />
-                  <span className="truncate">{t('common.collapseSidebar')}</span>
-                </>
+                <ChevronLeft className="h-5 w-5 flex-shrink-0" />
               )}
+              <span
+                className={`overflow-hidden whitespace-nowrap transition-all duration-300 ease-in-out ${
+                  isCollapsed ? 'max-w-0 min-w-0 opacity-0' : 'max-w-[180px] opacity-100'
+                }`}
+              >
+                {t('common.collapseSidebar')}
+              </span>
             </button>
           </div>
         )}
 
-        {/* Bottom: GitHub link, version, demo reset */}
-        <div className="mt-auto pt-4 pb-3 px-3 border-t border-gray-200 dark:border-gray-700 space-y-2">
-          <div className={`flex items-center gap-2 ${isCollapsed && !isMobile ? 'justify-center' : ''}`}>
+        {/* Bottom: GitHub link, version */}
+        <div className="mt-auto pt-4 pb-3 px-3 border-t border-gray-200 dark:border-gray-700 space-y-2 flex-shrink-0">
+          <div className={`flex items-center gap-2 ${(isCollapsed && !isMobile) || (!version && !isMobile) ? 'justify-center' : ''}`}>
             {isCollapsed && !isMobile ? (
               <Tooltip content="GitHub Repository" position="right">
                 <a
@@ -202,32 +210,6 @@ export default function Sidebar({
               </>
             )}
           </div>
-          {showDemoReset && onResetDemo && !isCollapsed && (
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={RotateCcw}
-              onClick={onResetDemo}
-              disabled={resetting}
-              className="w-full justify-start text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300"
-            >
-              {t('common.resetDemo')}
-            </Button>
-          )}
-          {showDemoReset && onResetDemo && isCollapsed && !isMobile && (
-            <Tooltip content={t('common.resetDemo')} position="right">
-              <div className="flex justify-center">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  icon={RotateCcw}
-                  onClick={onResetDemo}
-                  disabled={resetting}
-                  className="text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300"
-                />
-              </div>
-            </Tooltip>
-          )}
         </div>
       </nav>
     </>

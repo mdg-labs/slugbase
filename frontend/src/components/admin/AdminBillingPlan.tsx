@@ -128,8 +128,6 @@ export default function AdminBillingPlan() {
     early_supporter: [t('pricing.earlySupporterHelp'), t('pricing.earlySupporterIncludes'), t('pricing.earlySupporterSeats'), t('pricing.earlySupporterNote')],
   };
 
-  const canInviteMembers = org!.plan === 'team' && org!.member_count < org!.included_seats;
-
   if (loading) {
     return (
       <div className="text-center py-8 text-gray-500 dark:text-gray-400">
@@ -147,6 +145,7 @@ export default function AdminBillingPlan() {
   }
 
   const canManageBilling = org.role === 'owner' || org.role === 'admin';
+  const canInviteMembers = org.plan === 'team' && org.member_count < org.included_seats;
   const paidPlans = plans.filter((p) => p.id !== 'free');
   const orgWithStripe = org as Org & { stripe_customer_id?: string };
 

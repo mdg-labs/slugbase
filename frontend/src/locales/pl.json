@@ -208,14 +208,6 @@
     "save": "Zapisz",
     "cancel": "Anuluj",
     "clearFilter": "Wyczyść filtr",
-    "demoMode": "TRYB DEMO",
-    "demoModeDescription": "To jest instancja demonstracyjna. Baza danych jest okresowo resetowana.",
-    "demoModeCredentials": "Dane logowania demo dostępne w dokumentacji",
-    "resetDemo": "Resetuj demo",
-    "resetDemoConfirm": "Resetuj bazę danych demo",
-    "resetDemoMessage": "Spowoduje to usunięcie wszystkich danych i przywrócenie bazy danych demo do stanu początkowego. Ta czynność nie może być cofnięta. Kontynuować?",
-    "resetDemoSuccess": "Baza danych demo została zresetowana pomyślnie",
-    "resetDemoError": "Nie udało się zresetować bazy danych demo",
     "yes": "Tak",
     "no": "Nie",
     "view": "Zobacz",
@@ -392,8 +384,7 @@
     "sendTest": "Wyślij e-mail testowy",
     "testSent": "E-mail testowy został wysłany pomyślnie!",
     "testFailed": "Nie udało się wysłać e-maila testowego",
-    "save": "Zapisz ustawienia SMTP",
-    "demoModeDisabled": "Konfiguracja SMTP jest wyłączona w trybie demo. Baza danych jest okresowo resetowana, a ustawienia e-mail zostałyby utracone."
+    "save": "Zapisz ustawienia SMTP"
   },
   "shared": {
     "title": "Udostępnione",

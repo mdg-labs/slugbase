@@ -41,7 +41,7 @@ SlugBase implements solid security foundations: parameterized queries throughout
 | Password   | `/api/password-reset/request`, `/verify`, `/reset` |
 | Email      | `/api/email-verification/verify`, `/confirm` |
 | Resources  | `/api/bookmarks`, `/api/folders`, `/api/tags`, `/api/teams`, `/api/users/me`, `/api/dashboard/stats` |
-| Admin      | `/api/admin/users`, `/api/admin/teams`, `/api/admin/settings`, `/api/admin/demo-reset` |
+| Admin      | `/api/admin/users`, `/api/admin/teams`, `/api/admin/settings` |
 | Public     | `GET /go/:slug` (redirect, auth required), `/api/health`, `/api/version`, `/api/contact` (CLOUD) |
 | CSRF       | `GET /api/csrf-token` |
 

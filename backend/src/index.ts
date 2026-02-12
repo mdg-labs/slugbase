@@ -15,8 +15,8 @@ import { initDatabase, isInitialized } from './db/index.js';
 import { setupOIDC, loadOIDCStrategies } from './auth/oidc.js';
 import { setupJWT } from './auth/jwt.js';
 import { validateEnvironmentVariables } from './utils/env-validation.js';
-import { seedDatabase, resetDatabase } from './db/seed.js';
 import { setupSecurityHeaders, generalRateLimiter, strictRateLimiter, contactRateLimiter, redirectRateLimiter } from './middleware/security.js';
+
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger.js';
 import { mode, isCloud } from './config/mode.js';
@@ -31,7 +31,6 @@ import oidcProviderRoutes from './routes/oidc-providers.js';
 import adminUserRoutes from './routes/admin/users.js';
 import adminTeamRoutes from './routes/admin/teams.js';
 import adminSettingsRoutes from './routes/admin/settings.js';
-import adminDemoResetRoutes from './routes/admin/demo-reset.js';
 import passwordResetRoutes from './routes/password-reset.js';
 import emailVerificationRoutes from './routes/email-verification.js';
 import contactRoutes from './routes/contact.js';
@@ -205,7 +204,6 @@ app.use('/api/oidc-providers', oidcProviderRoutes);
 app.use('/api/admin/users', adminUserRoutes);
 app.use('/api/admin/teams', adminTeamRoutes);
 app.use('/api/admin/settings', adminSettingsRoutes);
-app.use('/api/admin/demo-reset', adminDemoResetRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/contact', contactRateLimiter, contactRoutes);
 app.use('/api/go', goRoutes);
@@ -220,7 +218,6 @@ app.get('/api/version', (req, res) => {
   res.json({ 
     version: process.env.COMMIT_SHA || 'dev',
     commit: process.env.COMMIT_SHA || null,
-    demoMode: process.env.DEMO_MODE === 'true',
     mode,
   });
 });
@@ -272,64 +269,14 @@ async function start() {
     await loadOIDCStrategies();
     
     const initialized = await isInitialized();
-    const isDemoMode = process.env.DEMO_MODE === 'true';
-    
-    // Handle DEMO_MODE seeding
-    if (isDemoMode) {
-      console.log('🎭 DEMO_MODE is enabled');
-      if (!initialized) {
-        console.log('Seeding database with demo data...');
-        await seedDatabase();
-      } else {
-        console.log('Database already initialized, skipping seed');
-      }
-      
-      // Setup scheduled reset (daily at 3 AM UTC)
-      const DEMO_RESET_SCHEDULE = process.env.DEMO_RESET_SCHEDULE || '0 3 * * *';
-      setupScheduledReset(DEMO_RESET_SCHEDULE);
-      console.log(`📅 Scheduled reset configured: ${DEMO_RESET_SCHEDULE} (daily reset)`);
-    }
-    
-    console.log(`System initialized: ${initialized || isDemoMode}`);
+    console.log(`System initialized: ${initialized}`);
     
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
-      if (isDemoMode) {
-        console.log('🎭 DEMO MODE: Demo credentials available - see documentation');
-      }
     });
   } catch (error) {
     console.error('Failed to start server:', error);
     process.exit(1);
-  }
-}
-
-/**
- * Setup scheduled database reset for DEMO_MODE
- * Uses node-cron to reset the database periodically
- */
-function setupScheduledReset(cronSchedule: string) {
-  try {
-    // Dynamic import to avoid issues if node-cron is not installed
-    import('node-cron').then((cronModule: any) => {
-      const cron = cronModule.default || cronModule;
-      cron.schedule(cronSchedule, async () => {
-        console.log('🔄 Scheduled database reset triggered...');
-        try {
-          await resetDatabase();
-          console.log('✅ Scheduled reset completed successfully');
-        } catch (error: any) {
-          console.error('❌ Error during scheduled reset:', error);
-        }
-      }, {
-        timezone: 'UTC',
-      });
-      console.log(`   ✓ Reset scheduled with pattern: ${cronSchedule}`);
-    }).catch((error: any) => {
-      console.warn('⚠️  node-cron not available, scheduled reset disabled:', error.message);
-    });
-  } catch (error: any) {
-    console.warn('⚠️  Could not setup scheduled reset:', error.message);
   }
 }
 

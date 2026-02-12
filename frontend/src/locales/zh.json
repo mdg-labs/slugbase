@@ -208,14 +208,6 @@
     "save": "保存",
     "cancel": "取消",
     "clearFilter": "清除筛选",
-    "demoMode": "演示模式",
-    "demoModeDescription": "这是一个演示实例。数据库会定期重置。",
-    "demoModeCredentials": "演示凭据可在文档中找到",
-    "resetDemo": "重置演示",
-    "resetDemoConfirm": "重置演示数据库",
-    "resetDemoMessage": "这将删除所有数据并将演示数据库恢复到初始状态。此操作无法撤销。继续吗？",
-    "resetDemoSuccess": "演示数据库重置成功",
-    "resetDemoError": "重置演示数据库失败",
     "yes": "是",
     "no": "否",
     "view": "查看",
@@ -392,8 +384,7 @@
     "sendTest": "发送测试电子邮件",
     "testSent": "测试电子邮件发送成功！",
     "testFailed": "发送测试电子邮件失败",
-    "save": "保存SMTP设置",
-    "demoModeDisabled": "演示模式下SMTP配置已禁用。数据库会定期重置，电子邮件设置将丢失。"
+    "save": "保存SMTP设置"
   },
   "shared": {
     "title": "共享",
