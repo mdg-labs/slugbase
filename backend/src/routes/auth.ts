@@ -19,6 +19,86 @@ import crypto from 'crypto';
 
 const router = Router();
 
+const DB_TYPE = process.env.DB_TYPE || 'sqlite';
+
+function hashToken(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+/** Convert ? placeholders to $1, $2 for PostgreSQL */
+function toPg(sqlStr: string): string {
+  let n = 0;
+  return sqlStr.replace(/\?/g, () => `$${++n}`);
+}
+
+function sql(sqlStr: string, params: any[]): [string, any[]] {
+  return DB_TYPE === 'postgresql' ? [toPg(sqlStr), params] : [sqlStr, params];
+}
+
+/**
+ * Find signup verification token by submitted token (hash-first, then legacy plaintext).
+ * Returns row with id, user_id, expires_at, used; for status/resend also need email (join users).
+ * Migrates legacy rows to token_hash on use.
+ */
+async function findSignupTokenByToken(submittedToken: string): Promise<any | null> {
+  const tokenHash = hashToken(submittedToken);
+  const [qHash, pHash] = sql(
+    'SELECT id, user_id, expires_at, used FROM signup_verification_tokens WHERE token_hash = ?',
+    [tokenHash]
+  );
+  let row = await queryOne(qHash, pHash);
+  if (row) return row;
+  // Legacy: token stored in plaintext (token_hash IS NULL)
+  const [qLegacy, pLegacy] = sql(
+    'SELECT id, user_id, expires_at, used FROM signup_verification_tokens WHERE token = ? AND token_hash IS NULL',
+    [submittedToken]
+  );
+  row = await queryOne(qLegacy, pLegacy);
+  if (!row) return null;
+  const r = row as any;
+  // Migrate legacy row to token_hash
+  const [qUp, pUp] = sql(
+    'UPDATE signup_verification_tokens SET token_hash = ?, token = ? WHERE id = ?',
+    [tokenHash, 'h:' + r.id, r.id]
+  );
+  await execute(qUp, pUp);
+  return row;
+}
+
+/**
+ * Find signup verification token with user email (for status/resend endpoints).
+ */
+async function findSignupTokenWithEmailByToken(submittedToken: string): Promise<any | null> {
+  const tokenHash = hashToken(submittedToken);
+  const [qHash, pHash] = sql(
+    `SELECT svt.id, svt.user_id, svt.expires_at, svt.used, u.email
+     FROM signup_verification_tokens svt
+     JOIN users u ON u.id = svt.user_id
+     WHERE svt.token_hash = ?`,
+    [tokenHash]
+  );
+  let row = await queryOne(qHash, pHash);
+  if (row) return row;
+  // Legacy: token stored in plaintext (token_hash IS NULL)
+  const [qLegacy, pLegacy] = sql(
+    `SELECT svt.id, svt.user_id, svt.expires_at, svt.used, u.email
+     FROM signup_verification_tokens svt
+     JOIN users u ON u.id = svt.user_id
+     WHERE svt.token = ? AND svt.token_hash IS NULL`,
+    [submittedToken]
+  );
+  row = await queryOne(qLegacy, pLegacy);
+  if (!row) return null;
+  const r = row as any;
+  // Migrate legacy row to token_hash
+  const [qUp, pUp] = sql(
+    'UPDATE signup_verification_tokens SET token_hash = ?, token = ? WHERE id = ?',
+    [tokenHash, 'h:' + r.id, r.id]
+  );
+  await execute(qUp, pUp);
+  return row;
+}
+
 /** Set auth cookies (token; in CLOUD also refresh_token). SELFHOSTED: single long-lived JWT. */
 function setAuthCookies(res: any, options: { accessToken: string; refreshToken?: string; refreshMaxAgeMs?: number }) {
   const accessMaxAgeMs = options.refreshToken != null ? 15 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000; // 15 min in CLOUD, 7d in SELFHOSTED
@@ -409,20 +489,22 @@ router.post('/register', authRateLimiter, async (req, res) => {
 
     const tokenId = uuidv4();
     const token = crypto.randomBytes(32).toString('hex');
+    const tokenHash = hashToken(token);
+    const tokenPlaceholder = 'h:' + tokenId;
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
     const expiresAtStr = expiresAt.toISOString();
 
     if (DB_TYPE === 'postgresql') {
       await execute(
-        `INSERT INTO signup_verification_tokens (id, user_id, token, expires_at, used)
-         VALUES (?, ?, ?, ?, ?)`,
-        [tokenId, userId, token, expiresAtStr, false]
+        `INSERT INTO signup_verification_tokens (id, user_id, token, token_hash, expires_at, used)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [tokenId, userId, tokenPlaceholder, tokenHash, expiresAtStr, false]
       );
     } else {
       await execute(
-        `INSERT INTO signup_verification_tokens (id, user_id, token, expires_at, used)
-         VALUES (?, ?, ?, ?, ?)`,
-        [tokenId, userId, token, expiresAtStr, 0]
+        `INSERT INTO signup_verification_tokens (id, user_id, token, token_hash, expires_at, used)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [tokenId, userId, tokenPlaceholder, tokenHash, expiresAtStr, 0]
       );
     }
 
@@ -450,10 +532,7 @@ router.post('/verify-signup', authRateLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Token is required' });
     }
 
-    const row = await queryOne(
-      'SELECT id, user_id, expires_at, used FROM signup_verification_tokens WHERE token = ?',
-      [token.trim()]
-    );
+    const row = await findSignupTokenByToken(token.trim());
     if (!row) {
       return res.status(400).json({ error: 'Invalid or expired verification link' });
     }
@@ -467,7 +546,6 @@ router.post('/verify-signup', authRateLimiter, async (req, res) => {
       return res.status(400).json({ error: 'This verification link has expired' });
     }
 
-    const DB_TYPE = process.env.DB_TYPE || 'sqlite';
     if (DB_TYPE === 'postgresql') {
       await execute('UPDATE users SET email_verified = TRUE WHERE id = ?', [r.user_id]);
       await execute('UPDATE signup_verification_tokens SET used = TRUE WHERE id = ?', [r.id]);
@@ -495,13 +573,7 @@ router.get('/signup-verification/status', authRateLimiter, async (req, res) => {
     if (!token) {
       return res.status(400).json({ status: 'invalid' });
     }
-    const row = await queryOne(
-      `SELECT svt.id, svt.user_id, svt.expires_at, svt.used, u.email
-       FROM signup_verification_tokens svt
-       JOIN users u ON u.id = svt.user_id
-       WHERE svt.token = ?`,
-      [token]
-    );
+    const row = await findSignupTokenWithEmailByToken(token);
     if (!row) {
       return res.json({ status: 'invalid' });
     }
@@ -532,13 +604,7 @@ router.post('/resend-signup-verification', authRateLimiter, async (req, res) => 
     if (!token || typeof token !== 'string') {
       return res.status(400).json({ error: 'Token is required' });
     }
-    const row = await queryOne(
-      `SELECT svt.id, svt.user_id, svt.used, u.email
-       FROM signup_verification_tokens svt
-       JOIN users u ON u.id = svt.user_id
-       WHERE svt.token = ?`,
-      [token.trim()]
-    );
+    const row = await findSignupTokenWithEmailByToken(token.trim());
     if (!row) {
       return res.status(400).json({ error: 'Invalid verification token' });
     }
@@ -565,20 +631,21 @@ router.post('/resend-signup-verification', authRateLimiter, async (req, res) => 
     await execute('DELETE FROM signup_verification_tokens WHERE user_id = ?', [r.user_id]);
     const tokenId = uuidv4();
     const newToken = crypto.randomBytes(32).toString('hex');
+    const newTokenHash = hashToken(newToken);
+    const newTokenPlaceholder = 'h:' + tokenId;
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
     const expiresAtStr = expiresAt.toISOString();
-    const DB_TYPE = process.env.DB_TYPE || 'sqlite';
     if (DB_TYPE === 'postgresql') {
       await execute(
-        `INSERT INTO signup_verification_tokens (id, user_id, token, expires_at, used)
-         VALUES (?, ?, ?, ?, ?)`,
-        [tokenId, r.user_id, newToken, expiresAtStr, false]
+        `INSERT INTO signup_verification_tokens (id, user_id, token, token_hash, expires_at, used)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [tokenId, r.user_id, newTokenPlaceholder, newTokenHash, expiresAtStr, false]
       );
     } else {
       await execute(
-        `INSERT INTO signup_verification_tokens (id, user_id, token, expires_at, used)
-         VALUES (?, ?, ?, ?, ?)`,
-        [tokenId, r.user_id, newToken, expiresAtStr, 0]
+        `INSERT INTO signup_verification_tokens (id, user_id, token, token_hash, expires_at, used)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [tokenId, r.user_id, newTokenPlaceholder, newTokenHash, expiresAtStr, 0]
       );
     }
     const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
@@ -617,20 +684,21 @@ router.post('/request-signup-resend', authRateLimiter, async (req, res) => {
       await execute('DELETE FROM signup_verification_tokens WHERE user_id = ?', [u.id]);
       const tokenId = uuidv4();
       const newToken = crypto.randomBytes(32).toString('hex');
+      const newTokenHash = hashToken(newToken);
+      const newTokenPlaceholder = 'h:' + tokenId;
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
       const expiresAtStr = expiresAt.toISOString();
-      const DB_TYPE = process.env.DB_TYPE || 'sqlite';
       if (DB_TYPE === 'postgresql') {
         await execute(
-          `INSERT INTO signup_verification_tokens (id, user_id, token, expires_at, used)
-           VALUES (?, ?, ?, ?, ?)`,
-          [tokenId, u.id, newToken, expiresAtStr, false]
+          `INSERT INTO signup_verification_tokens (id, user_id, token, token_hash, expires_at, used)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [tokenId, u.id, newTokenPlaceholder, newTokenHash, expiresAtStr, false]
         );
       } else {
         await execute(
-          `INSERT INTO signup_verification_tokens (id, user_id, token, expires_at, used)
-           VALUES (?, ?, ?, ?, ?)`,
-          [tokenId, u.id, newToken, expiresAtStr, 0]
+          `INSERT INTO signup_verification_tokens (id, user_id, token, token_hash, expires_at, used)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [tokenId, u.id, newTokenPlaceholder, newTokenHash, expiresAtStr, 0]
         );
       }
       const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
@@ -717,6 +785,10 @@ router.post('/refresh', refreshRateLimiter, async (req, res) => {
 // Note: OIDC requires sessions for the OAuth flow, so we don't use session: false here
 router.get('/:provider', async (req, res, next) => {
   const { provider } = req.params;
+  const strategies = (passport as any)._strategies || {};
+  if (!strategies[provider]) {
+    return res.status(404).json({ error: 'Not found' });
+  }
   passport.authenticate(provider)(req, res, next);
 });
 
@@ -753,7 +825,10 @@ router.get('/:provider', async (req, res, next) => {
 // Note: OIDC requires sessions for the OAuth flow, but we convert to JWT after authentication
 router.get('/:provider/callback', (req, res, next) => {
   const { provider } = req.params;
-  
+  const strategies = (passport as any)._strategies || {};
+  if (!strategies[provider]) {
+    return res.status(404).json({ error: 'Not found' });
+  }
   passport.authenticate(provider, async (err: any, user: any, info: any): Promise<void> => {
     
     // Handle "ID token not present" error - some providers don't return ID tokens

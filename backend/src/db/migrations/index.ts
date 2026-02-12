@@ -24,6 +24,8 @@ import * as migration008 from './008_slug_preferences.js';
 import * as migration009 from './009_signup_email_verified.js';
 import * as migration010 from './010_organizations.js';
 import * as migration011 from './011_org_scoped_teams.js';
+import * as migration012 from './012_org_invitations_token_hash.js';
+import * as migration013 from './013_signup_verification_token_hash.js';
 
 export interface Migration {
   migrationId: string;
@@ -99,6 +101,18 @@ const migrations: Migration[] = [
     migrationName: migration011.migrationName,
     up: migration011.up,
     down: migration011.down,
+  },
+  {
+    migrationId: migration012.migrationId,
+    migrationName: migration012.migrationName,
+    up: migration012.up,
+    down: migration012.down,
+  },
+  {
+    migrationId: migration013.migrationId,
+    migrationName: migration013.migrationName,
+    up: migration013.up,
+    down: migration013.down,
   },
 ];
 

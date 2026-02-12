@@ -111,7 +111,12 @@ app.use(cookieParser()); // Parse cookies for JWT
 
 // Session middleware (required for OIDC OAuth flow)
 // M3/L4: In production SESSION_SECRET is required by env validation; fallback only for development
-const sessionSecret = process.env.SESSION_SECRET || process.env.JWT_SECRET || 'slugbase-session-secret-change-in-production';
+const DEFAULT_SESSION_SECRET = 'slugbase-session-secret-change-in-production';
+const sessionSecret = process.env.SESSION_SECRET || process.env.JWT_SECRET || DEFAULT_SESSION_SECRET;
+if (process.env.NODE_ENV === 'production' && sessionSecret === DEFAULT_SESSION_SECRET) {
+  console.error('FATAL: Cannot use default session secret in production. Set SESSION_SECRET.');
+  process.exit(1);
+}
 // Only use secure cookies if explicitly in production AND using HTTPS
 // Check BASE_URL to determine if we're using HTTPS
 const baseUrl = process.env.BASE_URL || 'http://localhost:5000';

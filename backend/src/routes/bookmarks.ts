@@ -1568,7 +1568,8 @@ router.post('/import', async (req, res) => {
         if (isCloud) currentBookmarkCount++;
       } catch (error: any) {
         results.failed++;
-        results.errors.push(`Error importing bookmark: ${error.message}`);
+        console.error('Import bookmark error:', error?.message || error);
+        results.errors.push('Failed to import bookmark');
       }
     }
 

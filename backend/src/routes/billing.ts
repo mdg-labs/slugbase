@@ -4,6 +4,7 @@ import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { authRateLimiter } from '../middleware/security.js';
 import { queryOne, execute } from '../db/index.js';
 import { isCloud } from '../config/mode.js';
+import { validateRedirectUrl } from '../utils/validation.js';
 
 const router = Router();
 
@@ -120,11 +121,14 @@ router.post('/create-checkout-session', requireAuth(), authRateLimiter, async (r
   if (!priceId) {
     return res.status(400).json({ error: 'Invalid plan or interval' });
   }
+  // Validate redirect URLs to prevent open redirect (must be same-origin with frontend)
+  const safeSuccessUrl = validateRedirectUrl(success_url, frontendUrl) ?? defaultSuccess;
+  const safeCancelUrl = validateRedirectUrl(cancel_url, frontendUrl) ?? defaultCancel;
   const sessionParams: Stripe.Checkout.SessionCreateParams = {
     customer: customerId,
     mode: plan === 'early_supporter' ? 'payment' : 'subscription',
-    success_url: success_url || defaultSuccess,
-    cancel_url: cancel_url || defaultCancel,
+    success_url: safeSuccessUrl,
+    cancel_url: safeCancelUrl,
     metadata: { org_id: org.id, plan },
   };
   if (plan === 'early_supporter') {
@@ -168,9 +172,11 @@ router.post('/create-portal-session', requireAuth(), authRateLimiter, async (req
     return res.status(400).json({ error: 'No billing account found' });
   }
   const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+  const defaultReturnUrl = `${frontendUrl}/app/admin?tab=billing`;
+  const safeReturnUrl = validateRedirectUrl(return_url, frontendUrl) ?? defaultReturnUrl;
   const portalSession = await stripe.billingPortal.sessions.create({
     customer: org.stripe_customer_id,
-    return_url: return_url || `${frontendUrl}/app/admin?tab=billing`,
+    return_url: safeReturnUrl,
   });
   res.json({ url: portalSession.url });
 });

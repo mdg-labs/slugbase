@@ -218,11 +218,13 @@ router.post('/:id/invite', requireAuth(), authRateLimiter, async (req, res) => {
   }
   const inviteId = uuidv4();
   const token = crypto.randomBytes(32).toString('hex');
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  const tokenPlaceholder = 'h:' + inviteId;
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
   await execute(
-    `INSERT INTO org_invitations (id, org_id, email, invited_by, token, status, expires_at)
-     VALUES (?, ?, ?, ?, ?, 'pending', ?)`,
-    [inviteId, orgId, normalizedEmail, userId, token, expiresAt.toISOString()]
+    `INSERT INTO org_invitations (id, org_id, email, invited_by, token, token_hash, status, expires_at)
+     VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)`,
+    [inviteId, orgId, normalizedEmail, userId, tokenPlaceholder, tokenHash, expiresAt.toISOString()]
   );
   const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
   const acceptUrl = `${frontendUrl}/app/accept-invite?token=${encodeURIComponent(token)}`;
