@@ -393,7 +393,7 @@ export default function Bookmarks() {
             <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
               {bookmarkLimit != null
                 ? t('plan.bookmarksUsed', { count: bookmarkCount, limit: bookmarkLimit })
-                : `${bookmarks.length} ${bookmarks.length === 1 ? t('common.bookmark') : t('common.bookmarks')}`}
+                : `${total} ${total === 1 ? t('common.bookmark') : t('common.bookmarks')}`}
             </p>
           </div>
           <div className="flex items-center gap-2">
