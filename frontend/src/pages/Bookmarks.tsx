@@ -18,6 +18,7 @@ import BookmarkTableView from '../components/bookmarks/BookmarkTableView';
 import { BulkMoveModal, BulkTagModal, BulkShareModal } from '../components/bookmarks/BulkActionModals';
 import { PageLoadingSkeleton } from '../components/ui/PageLoadingSkeleton';
 import { Card } from '../components/ui/card';
+import { useSidebar } from '../components/ui/sidebar';
 import { appBasePath } from '../config/api';
 
 interface Bookmark {
@@ -45,6 +46,7 @@ type SortOption = 'recently_added' | 'alphabetical' | 'most_used' | 'recently_ac
 export default function Bookmarks() {
   const { t } = useTranslation();
   const { user } = useAuth();
+  const { isMobile, state: sidebarState } = useSidebar();
   const { plan, bookmarkCount, bookmarkLimit, refresh } = useOrgPlan();
   const [searchParams, setSearchParams] = useSearchParams();
   const { showConfirm, dialogState } = useConfirmDialog();
@@ -541,9 +543,16 @@ export default function Bookmarks() {
         </div>
       </div>
 
-      {/* Bulk Actions Bar */}
+      {/* Bulk Actions Bar - offset left on desktop to not overlap sidebar */}
       {bulkMode && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 border-t border-blue-200 dark:border-blue-800 shadow-lg p-4">
+        <div
+          className="fixed bottom-0 right-0 z-50 flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 border-t border-blue-200 dark:border-blue-800 shadow-lg p-4"
+          style={
+            !isMobile
+              ? { left: sidebarState === 'expanded' ? '16rem' : '3rem' }
+              : { left: 0 }
+          }
+        >
           <div className="flex items-center gap-3">
             <button
               onClick={toggleSelectAll}
