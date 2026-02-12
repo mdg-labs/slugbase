@@ -367,13 +367,14 @@ export default function Bookmarks() {
     }
   }
 
+  const ALL_FILTER = '__all__';
   const folderOptions = [
-    { value: '', label: t('bookmarks.allFolders') },
+    { value: ALL_FILTER, label: t('bookmarks.allFolders') },
     ...folders.map((f) => ({ value: f.id, label: f.name, icon: (f as any).icon })),
   ];
 
   const tagOptions = [
-    { value: '', label: t('bookmarks.allTags') },
+    { value: ALL_FILTER, label: t('bookmarks.allTags') },
     ...tags.map((t) => ({ value: t.id, label: t.name })),
   ];
 
@@ -443,10 +444,10 @@ export default function Bookmarks() {
         <div className="flex flex-wrap gap-3 flex-1 min-w-[200px]">
           <div className="flex-1 min-w-[180px]">
             <Select
-              value={selectedFolder}
+              value={selectedFolder || ALL_FILTER}
               onChange={(value) => {
                 const params = new URLSearchParams(searchParams);
-                if (value) {
+                if (value && value !== ALL_FILTER) {
                   params.set('folder_id', value);
                 } else {
                   params.delete('folder_id');
@@ -459,10 +460,10 @@ export default function Bookmarks() {
           </div>
           <div className="flex-1 min-w-[180px]">
             <Select
-              value={selectedTag}
+              value={selectedTag || ALL_FILTER}
               onChange={(value) => {
                 const params = new URLSearchParams(searchParams);
-                if (value) {
+                if (value && value !== ALL_FILTER) {
                   params.set('tag_id', value);
                 } else {
                   params.delete('tag_id');
