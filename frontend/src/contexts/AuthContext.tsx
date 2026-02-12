@@ -11,6 +11,8 @@ interface User {
   is_admin: boolean;
   language: string;
   theme: string;
+  /** In Cloud mode: org role (owner/admin/member) if user is in an org */
+  org_role?: 'owner' | 'admin' | 'member' | null;
   email_pending?: string | null;
   oidc_provider?: string | null;
   oidc_sub?: string | null;

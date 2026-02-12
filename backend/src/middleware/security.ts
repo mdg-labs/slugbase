@@ -22,6 +22,18 @@ export const authRateLimiter = isDevelopment
       skipSuccessfulRequests: true, // Don't count successful requests
     });
 
+/** Refresh token: more lenient - 401 is expected when unauthenticated (e.g. signup/login page) */
+export const refreshRateLimiter = isDevelopment
+  ? noOpRateLimiter
+  : rateLimit({
+      windowMs: 15 * 60 * 1000,
+      max: 500, // Higher limit; failures are often from unauthenticated users checking /auth/me
+      message: 'Too many requests, please try again later.',
+      standardHeaders: true,
+      legacyHeaders: false,
+      skipSuccessfulRequests: true,
+    });
+
 export const generalRateLimiter = isDevelopment
   ? noOpRateLimiter
   : rateLimit({

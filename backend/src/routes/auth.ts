@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { reloadOIDCStrategies } from '../auth/oidc.js';
 import { generateToken, generateAccessToken } from '../utils/jwt.js';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
-import { authRateLimiter, strictRateLimiter } from '../middleware/security.js';
+import { authRateLimiter, refreshRateLimiter, strictRateLimiter } from '../middleware/security.js';
 import { validateEmail, normalizeEmail, validatePassword, validateLength, sanitizeString } from '../utils/validation.js';
 import { generateUserKey } from '../utils/user-key.js';
 import { isCloud } from '../config/mode.js';
@@ -127,7 +127,7 @@ router.get('/providers', async (req, res) => {
 router.get('/me', requireAuth(), (req, res) => {
   const authReq = req as AuthRequest;
   const user = authReq.user!;
-  res.json({
+  const payload: Record<string, unknown> = {
     id: user.id,
     email: user.email,
     name: user.name,
@@ -135,7 +135,11 @@ router.get('/me', requireAuth(), (req, res) => {
     is_admin: user.is_admin,
     language: (user as any).language || 'en',
     theme: (user as any).theme || 'auto',
-  });
+  };
+  if (isCloud && user.org_role !== undefined) {
+    payload.org_role = user.org_role;
+  }
+  res.json(payload);
 });
 
 /**
@@ -262,7 +266,7 @@ router.post('/login', authRateLimiter, async (req, res, next) => {
       setAuthCookies(res, { accessToken: token });
     }
 
-    res.json({
+    const payload: Record<string, unknown> = {
       id: (user as any).id,
       email: (user as any).email,
       name: (user as any).name,
@@ -270,7 +274,15 @@ router.post('/login', authRateLimiter, async (req, res, next) => {
       is_admin: (user as any).is_admin,
       language: (user as any).language,
       theme: (user as any).theme,
-    });
+    };
+    if (isCloud) {
+      const orgMember = await queryOne(
+        `SELECT role FROM org_members WHERE user_id = ? ORDER BY CASE role WHEN 'owner' THEN 1 WHEN 'admin' THEN 2 WHEN 'member' THEN 3 ELSE 4 END LIMIT 1`,
+        [(user as any).id]
+      );
+      payload.org_role = orgMember ? (orgMember as any).role : null;
+    }
+    res.json(payload);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -639,7 +651,7 @@ router.post('/request-signup-resend', authRateLimiter, async (req, res) => {
  *       401:
  *         description: Invalid or missing refresh token
  */
-router.post('/refresh', authRateLimiter, async (req, res) => {
+router.post('/refresh', refreshRateLimiter, async (req, res) => {
   if (!isCloud) return res.status(401).json({ error: 'Unauthorized' });
   const refreshToken = req.cookies?.refresh_token;
   if (!refreshToken) return res.status(401).json({ error: 'Unauthorized' });
@@ -651,7 +663,7 @@ router.post('/refresh', authRateLimiter, async (req, res) => {
     setAuthCookies(res, { accessToken, refreshToken: result.token, refreshMaxAgeMs });
     const userRow = await queryOne('SELECT id, email, name, user_key, is_admin, language, theme FROM users WHERE id = ?', [result.user.id]);
     const u = userRow as any;
-    res.json({
+    const refreshPayload: Record<string, unknown> = {
       id: u.id,
       email: u.email,
       name: u.name,
@@ -659,7 +671,13 @@ router.post('/refresh', authRateLimiter, async (req, res) => {
       is_admin: Boolean(u.is_admin),
       language: u.language || 'en',
       theme: u.theme || 'auto',
-    });
+    };
+    const orgMember = await queryOne(
+      `SELECT role FROM org_members WHERE user_id = ? ORDER BY CASE role WHEN 'owner' THEN 1 WHEN 'admin' THEN 2 WHEN 'member' THEN 3 ELSE 4 END LIMIT 1`,
+      [u.id]
+    );
+    refreshPayload.org_role = orgMember ? (orgMember as any).role : null;
+    res.json(refreshPayload);
   } catch (err: any) {
     res.status(401).json({ error: 'Unauthorized' });
   }

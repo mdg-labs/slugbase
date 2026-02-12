@@ -10,6 +10,7 @@ import ConfirmDialog from './ui/ConfirmDialog';
 import { useToast } from './ui/Toast';
 import api from '../api/client';
 import { appBasePath } from '../config/api';
+import { isCloud } from '../config/mode';
 
 export default function Layout() {
   const { user, logout } = useAuth();
@@ -52,7 +53,9 @@ export default function Layout() {
     { path: `${appBasePath}/folders`, label: t('folders.title'), icon: Folder },
     { path: `${appBasePath}/tags`, label: t('tags.title'), icon: Tag },
     { path: `${appBasePath}/shared`, label: t('shared.title'), icon: Share2 },
-    ...(user?.is_admin ? [{ path: `${appBasePath}/admin`, label: t('admin.title'), icon: Settings }] : []),
+    ...((user?.is_admin || (isCloud && (user?.org_role === 'owner' || user?.org_role === 'admin')))
+      ? [{ path: `${appBasePath}/admin`, label: t('admin.title'), icon: Settings }]
+      : []),
   ];
 
   useEffect(() => {
@@ -177,7 +180,7 @@ export default function Layout() {
               </span>
             )}
             {/* Demo Reset Button - Only visible in demo mode for admins */}
-            {demoMode && user?.is_admin && (
+            {demoMode && (user?.is_admin || (isCloud && (user?.org_role === 'owner' || user?.org_role === 'admin'))) && (
               <>
                 <span className="text-gray-400 dark:text-gray-600">|</span>
                 <Button

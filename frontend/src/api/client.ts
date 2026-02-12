@@ -72,6 +72,19 @@ api.interceptors.request.use(
   }
 );
 
+// Deduplicate refresh: multiple concurrent 401s share a single refresh attempt to avoid rate limiting
+let refreshPromise: Promise<boolean> | null = null;
+
+async function tryRefreshToken(): Promise<boolean> {
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = api
+    .post('/auth/refresh')
+    .then(() => true)
+    .catch(() => false)
+    .finally(() => { refreshPromise = null; });
+  return refreshPromise;
+}
+
 // Response interceptor: refresh CSRF on 403; in CLOUD, refresh access token on 401 and retry
 api.interceptors.response.use(
   (response) => response,
@@ -84,14 +97,12 @@ api.interceptors.response.use(
       }
       return api.request(error.config);
     }
-    if (isCloud && error.response?.status === 401 && error.config && !error.config._retryRefresh) {
+    // Skip refresh when the failed request was /auth/refresh (avoid recursion)
+    const isAuthRefresh = (error.config?.url ?? '').includes('/auth/refresh');
+    if (isCloud && error.response?.status === 401 && error.config && !error.config._retryRefresh && !isAuthRefresh) {
       error.config._retryRefresh = true;
-      try {
-        await api.post('/auth/refresh');
-        return api.request(error.config);
-      } catch {
-        // refresh failed, reject original error
-      }
+      const refreshed = await tryRefreshToken();
+      if (refreshed) return api.request(error.config);
     }
     return Promise.reject(error);
   }

@@ -69,7 +69,8 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to={loginPath()} replace />;
   }
 
-  if (!user.is_admin) {
+  const canAccessAdmin = user.is_admin || (isCloud && (user.org_role === 'owner' || user.org_role === 'admin'));
+  if (!canAccessAdmin) {
     return <Navigate to={appRootPath()} replace />;
   }
 
