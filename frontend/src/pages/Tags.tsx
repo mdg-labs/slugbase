@@ -7,6 +7,7 @@ import { Plus, Edit, Trash2, Tag as TagIcon, LayoutGrid, List } from 'lucide-rea
 import TagModal from '../components/modals/TagModal';
 import Button from '../components/ui/Button';
 import Select from '../components/ui/Select';
+import { PageLoadingSkeleton } from '../components/ui/PageLoadingSkeleton';
 
 interface Tag {
   id: string;
@@ -100,11 +101,7 @@ export default function Tags() {
   ];
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-gray-500 dark:text-gray-400">{t('common.loading')}</div>
-      </div>
-    );
+    return <PageLoadingSkeleton lines={6} />;
   }
 
   return (

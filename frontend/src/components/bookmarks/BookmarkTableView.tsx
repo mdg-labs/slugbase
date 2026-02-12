@@ -4,6 +4,15 @@ import Button from '../ui/Button';
 import Tooltip from '../ui/Tooltip';
 import Favicon from '../Favicon';
 import FolderIcon from '../FolderIcon';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../ui/table';
+import { Card } from '../ui/card';
 
 interface Bookmark {
   id: string;
@@ -96,9 +105,9 @@ export default function BookmarkTableView({
       return <ArrowUpDown className={`${iconSize} text-gray-400`} />;
     }
     return sortDirection === 'asc' ? (
-      <ArrowUp className={`${iconSize} text-blue-600 dark:text-blue-400`} />
+      <ArrowUp className={`${iconSize} text-primary`} />
     ) : (
-      <ArrowDown className={`${iconSize} text-blue-600 dark:text-blue-400`} />
+      <ArrowDown className={`${iconSize} text-primary`} />
     );
   }
 
@@ -108,91 +117,92 @@ export default function BookmarkTableView({
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 
+  const cellClass = compact ? 'px-2 py-1.5' : 'px-4 py-3';
+
   return (
-    <div className="overflow-x-auto bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-      <table className="w-full">
-        <thead className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
-          <tr>
+    <Card>
+      <Table>
+        <TableHeader>
+          <TableRow>
             {bulkMode && (
-              <th className={`${compact ? 'px-2 py-1.5' : 'px-4 py-3'} text-left`}>
+              <TableHead className={cellClass}>
                 <button
                   onClick={onSelectAll}
-                  className="text-blue-600 dark:text-blue-400"
+                  className="text-primary"
                 >
                   {selectedBookmarks.size === bookmarks.length ? (
-                    <CheckSquare className={`${compact ? 'h-4 w-4' : 'h-5 w-5'}`} />
+                    <CheckSquare className={compact ? 'h-4 w-4' : 'h-5 w-5'} />
                   ) : (
-                    <Square className={`${compact ? 'h-4 w-4' : 'h-5 w-5'}`} />
+                    <Square className={compact ? 'h-4 w-4' : 'h-5 w-5'} />
                   )}
                 </button>
-              </th>
+              </TableHead>
             )}
-            <th className={`${compact ? 'px-2 py-1.5' : 'px-4 py-3'} text-left`}>
+            <TableHead className={cellClass}>
               <button
                 onClick={() => handleSort('title')}
-                className={`flex items-center gap-2 ${compact ? 'text-[10px]' : 'text-xs'} font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide hover:text-gray-900 dark:hover:text-white`}
+                className={`flex items-center gap-2 ${compact ? 'text-[10px]' : 'text-xs'} font-semibold uppercase tracking-wide hover:text-foreground`}
               >
                 {t('bookmarks.name')}
                 {getSortIcon('title')}
               </button>
-            </th>
+            </TableHead>
             {!compact && (
-              <th className={`${compact ? 'px-2 py-1.5' : 'px-4 py-3'} text-left`}>
+              <TableHead className={cellClass}>
                 <button
                   onClick={() => handleSort('url')}
-                  className={`flex items-center gap-2 ${compact ? 'text-[10px]' : 'text-xs'} font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide hover:text-gray-900 dark:hover:text-white`}
+                  className={`flex items-center gap-2 text-xs font-semibold uppercase tracking-wide hover:text-foreground`}
                 >
                   {t('bookmarks.url')}
                   {getSortIcon('url')}
                 </button>
-              </th>
+              </TableHead>
             )}
             {!compact && (
-              <th className={`${compact ? 'px-2 py-1.5' : 'px-4 py-3'} text-left ${compact ? 'text-[10px]' : 'text-xs'} font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide`}>
+              <TableHead className={`${cellClass} text-xs font-semibold uppercase tracking-wide`}>
                 {t('bookmarks.folders')}
-              </th>
+              </TableHead>
             )}
             {!compact && (
-              <th className={`${compact ? 'px-2 py-1.5' : 'px-4 py-3'} text-left ${compact ? 'text-[10px]' : 'text-xs'} font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide`}>
+              <TableHead className={`${cellClass} text-xs font-semibold uppercase tracking-wide`}>
                 {t('bookmarks.tags')}
-              </th>
+              </TableHead>
             )}
             {!compact && (
-              <th className={`${compact ? 'px-2 py-1.5' : 'px-4 py-3'} text-left ${compact ? 'text-[10px]' : 'text-xs'} font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide`}>
+              <TableHead className={`${cellClass} text-xs font-semibold uppercase tracking-wide`}>
                 {t('bookmarks.shared')}
-              </th>
+              </TableHead>
             )}
             {!compact && (
-              <th className={`${compact ? 'px-2 py-1.5' : 'px-4 py-3'} text-left`}>
+              <TableHead className={cellClass}>
                 <button
                   onClick={() => handleSort('last_accessed')}
-                  className={`flex items-center gap-2 ${compact ? 'text-[10px]' : 'text-xs'} font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide hover:text-gray-900 dark:hover:text-white`}
+                  className={`flex items-center gap-2 text-xs font-semibold uppercase tracking-wide hover:text-foreground`}
                 >
                   {t('bookmarks.sortRecentlyAccessed')}
                   {getSortIcon('last_accessed')}
                 </button>
-              </th>
+              </TableHead>
             )}
-            <th className={`${compact ? 'px-2 py-1.5' : 'px-4 py-3'} text-right ${compact ? 'text-[10px]' : 'text-xs'} font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide`}>
+            <TableHead className={`${cellClass} text-right text-xs font-semibold uppercase tracking-wide`}>
               {t('common.actions')}
-            </th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {sortedBookmarks.map((bookmark) => {
             const totalSharedTeams = (bookmark.shared_teams?.length || 0) + 
               (bookmark.folders?.reduce((sum, f) => sum + (f.shared_teams?.length || 0), 0) || 0);
             const isShared = totalSharedTeams > 0;
             
             return (
-              <tr
+              <TableRow
                 key={bookmark.id}
-                className={`hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${
-                  selectedBookmarks.has(bookmark.id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''
-                } ${compact ? 'h-10' : ''}`}
+                className={`${selectedBookmarks.has(bookmark.id) ? 'bg-primary/10' : ''} ${compact ? 'h-10' : ''}`}
+                data-state={selectedBookmarks.has(bookmark.id) ? 'selected' : undefined}
               >
                 {bulkMode && (
-                  <td className={`${compact ? 'px-2 py-1.5' : 'px-4 py-3'}`}>
+                  <TableCell className={cellClass}>
                     <button
                       onClick={() => onSelect(bookmark.id)}
                       className="text-blue-600 dark:text-blue-400"
@@ -203,9 +213,9 @@ export default function BookmarkTableView({
                         <Square className={`${compact ? 'h-4 w-4' : 'h-5 w-5'}`} />
                       )}
                     </button>
-                  </td>
+                  </TableCell>
                 )}
-                <td className={`${compact ? 'px-2 py-1.5' : 'px-4 py-3'}`}>
+                <TableCell className={cellClass}>
                   <div className={`flex items-center ${compact ? 'gap-2' : 'gap-3'}`}>
                     <div className={`flex-shrink-0 ${compact ? 'w-6 h-6' : 'w-8 h-8'} rounded-lg bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/20 flex items-center justify-center border border-blue-100 dark:border-blue-800/50 overflow-hidden`}>
                       <Favicon url={bookmark.url} size={compact ? 12 : 16} />
@@ -214,9 +224,9 @@ export default function BookmarkTableView({
                       {bookmark.title}
                     </div>
                   </div>
-                </td>
+                </TableCell>
                 {!compact && (
-                  <td className="px-4 py-3">
+                  <TableCell className={cellClass}>
                     <a
                       href={bookmark.url}
                       target="_blank"
@@ -225,10 +235,10 @@ export default function BookmarkTableView({
                     >
                       {bookmark.url}
                     </a>
-                  </td>
+                  </TableCell>
                 )}
                 {!compact && (
-                  <td className="px-4 py-3">
+                  <TableCell className={cellClass}>
                     <div className="flex flex-wrap gap-1">
                       {bookmark.folders && bookmark.folders.length > 0 ? (
                         bookmark.folders.slice(0, 2).map((folder) => (
@@ -241,13 +251,13 @@ export default function BookmarkTableView({
                           </span>
                         ))
                       ) : (
-                        <span className="text-xs text-gray-500 dark:text-gray-400">-</span>
+                        <span className="text-xs text-muted-foreground">-</span>
                       )}
                     </div>
-                  </td>
+                  </TableCell>
                 )}
                 {!compact && (
-                  <td className="px-4 py-3">
+                  <TableCell className={cellClass}>
                     <div className="flex flex-wrap gap-1">
                       {bookmark.tags && bookmark.tags.length > 0 ? (
                         bookmark.tags.slice(0, 3).map((tag) => (
@@ -260,13 +270,13 @@ export default function BookmarkTableView({
                           </span>
                         ))
                       ) : (
-                        <span className="text-xs text-gray-500 dark:text-gray-400">-</span>
+                        <span className="text-xs text-muted-foreground">-</span>
                       )}
                     </div>
-                  </td>
+                  </TableCell>
                 )}
                 {!compact && (
-                  <td className="px-4 py-3">
+                  <TableCell className={cellClass}>
                     {isShared ? (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 rounded-md">
                         <Share2 className="h-3 w-3" />
@@ -275,18 +285,18 @@ export default function BookmarkTableView({
                           : t('bookmarks.shared')}
                       </span>
                     ) : (
-                      <span className="text-xs text-gray-500 dark:text-gray-400">-</span>
+                      <span className="text-xs text-muted-foreground">-</span>
                     )}
-                  </td>
+                  </TableCell>
                 )}
                 {!compact && (
-                  <td className="px-4 py-3">
-                    <span className="text-xs text-gray-600 dark:text-gray-400">
+                  <TableCell className={cellClass}>
+                    <span className="text-xs text-muted-foreground">
                       {formatDate(bookmark.last_accessed_at)}
                     </span>
-                  </td>
+                  </TableCell>
                 )}
-                <td className={`${compact ? 'px-2 py-1.5' : 'px-4 py-3'}`}>
+                <TableCell className={cellClass}>
                   <div className={`flex items-center justify-end ${compact ? 'gap-1' : 'gap-2'}`}>
                     {bookmark.forwarding_enabled && !compact && (
                       <Tooltip content={`${window.location.origin}/go/${bookmark.slug}`}>
@@ -341,12 +351,12 @@ export default function BookmarkTableView({
                       </>
                     )}
                   </div>
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             );
           })}
-        </tbody>
-      </table>
-    </div>
+        </TableBody>
+      </Table>
+    </Card>
   );
 }

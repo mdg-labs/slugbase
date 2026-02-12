@@ -1,13 +1,29 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import api from '../../api/client';
-import { Plus, Edit, Trash2, Shield, Mail, Network, UserPlus } from 'lucide-react';
+import { Plus, Edit, Trash2, Shield, Mail, Network, UserPlus, MoreHorizontal } from 'lucide-react';
 import UserModal from '../modals/UserModal';
 import TeamAssignmentModal from '../modals/TeamAssignmentModal';
 import Button from '../ui/Button';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { isCloud } from '../../config/mode';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../ui/dropdown-menu';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../ui/table';
+import { Card } from '../ui/card';
+import { Skeleton } from '../ui/skeleton';
 
 interface User {
   id: string;
@@ -134,8 +150,18 @@ export default function AdminUsers() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-gray-500 dark:text-gray-400">{t('common.loading')}</div>
+      <div className="space-y-6">
+        <div className="space-y-2">
+          <Skeleton className="h-6 w-32" />
+          <Skeleton className="h-4 w-48" />
+        </div>
+        <Card>
+          <div className="p-6 space-y-4">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-16 w-full" />
+            ))}
+          </div>
+        </Card>
       </div>
     );
   }
@@ -188,61 +214,80 @@ export default function AdminUsers() {
         </div>
       )}
 
-      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-        <div className="divide-y divide-gray-200 dark:divide-gray-700">
-          {users.map((user) => (
-            <div key={user.id} className="px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4 flex-1 min-w-0">
-                  <div className="flex-shrink-0">
-                    <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                      <Mail className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                    </div>
+      <Card>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[50px]">
+                <span className="sr-only">{t('admin.user')}</span>
+              </TableHead>
+              <TableHead>{t('admin.user')}</TableHead>
+              <TableHead className="hidden sm:table-cell">{t('auth.email')}</TableHead>
+              <TableHead className="w-[80px] text-right">{t('common.actions')}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {users.map((user) => (
+              <TableRow key={user.id}>
+                <TableCell>
+                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Mail className="h-5 w-5 text-primary" />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                        {user.name}
-                      </p>
-                      {Boolean(user.is_admin) && (
-                        <span title={t('admin.admin')}>
-                          <Shield className="h-4 w-4 text-yellow-500" />
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{user.email}</p>
-                    {user.oidc_provider && (
-                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-                        {t('admin.oidcUser')}: {user.oidc_provider}
-                      </p>
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium">{user.name}</p>
+                    {Boolean(user.is_admin) && (
+                      <span title={t('admin.admin')}>
+                        <Shield className="h-4 w-4 text-yellow-500" />
+                      </span>
                     )}
                   </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    icon={Network}
-                    onClick={() => handleManageTeams(user)}
-                  />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    icon={Edit}
-                    onClick={() => handleEdit(user)}
-                  />
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    icon={Trash2}
-                    onClick={() => handleDelete(user.id)}
-                  />
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+                  <p className="text-sm text-muted-foreground truncate sm:hidden">{user.email}</p>
+                  {user.oidc_provider && (
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {t('admin.oidcUser')}: {user.oidc_provider}
+                    </p>
+                  )}
+                </TableCell>
+                <TableCell className="hidden sm:table-cell text-muted-foreground">
+                  {user.email}
+                </TableCell>
+                <TableCell className="text-right">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                      type="button"
+                      className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent hover:text-accent-foreground"
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                      <span className="sr-only">{t('common.actions')}</span>
+                    </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => handleManageTeams(user)}>
+                        <Network className="mr-2 h-4 w-4" />
+                        {t('admin.manageTeams')}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleEdit(user)}>
+                        <Edit className="mr-2 h-4 w-4" />
+                        {t('common.edit')}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => handleDelete(user.id)}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        {t('common.delete')}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Card>
 
       <UserModal
         user={editingUser}

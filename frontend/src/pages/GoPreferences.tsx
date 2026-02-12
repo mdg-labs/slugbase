@@ -6,6 +6,7 @@ import Button from '../components/ui/Button';
 import { useToast } from '../components/ui/Toast';
 import api from '../api/client';
 import { appBasePath } from '../config/api';
+import { PageLoadingSkeleton } from '../components/ui/PageLoadingSkeleton';
 
 interface SlugPreference {
   slug: string;
@@ -55,11 +56,7 @@ export default function GoPreferences() {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-gray-500 dark:text-gray-400">{t('common.loading')}</div>
-      </div>
-    );
+    return <PageLoadingSkeleton lines={6} />;
   }
 
   return (

@@ -6,6 +6,7 @@ import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { Plus, Edit, Trash2, Key, Globe } from 'lucide-react';
 import OIDCProviderModal from '../modals/OIDCProviderModal';
 import Button from '../ui/Button';
+import { PageLoadingSkeleton } from '../ui/PageLoadingSkeleton';
 
 interface OIDCProvider {
   id: string;
@@ -72,11 +73,7 @@ export default function AdminOIDCProviders() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-gray-500 dark:text-gray-400">{t('common.loading')}</div>
-      </div>
-    );
+    return <PageLoadingSkeleton lines={6} />;
   }
 
   return (

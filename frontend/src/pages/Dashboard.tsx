@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useEffect, useState } from 'react';
 import { Bookmark, Folder, Tag, ArrowRight, Share2, Clock, TrendingUp, Plus, Edit } from 'lucide-react';
 import Button from '../components/ui/Button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import api from '../api/client';
 import { appBasePath } from '../config/api';
 import { useOrgPlan } from '../contexts/OrgPlanContext';
@@ -167,125 +168,112 @@ export default function Dashboard() {
               {t('dashboard.yourLibrary')}
             </p>
             <div className={`grid grid-cols-1 gap-4 sm:grid-cols-3 ${denseMode ? 'gap-3' : ''}`}>
-              <div className={`bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 ${denseMode ? 'p-3' : 'p-4'}`}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                      {t('dashboard.totalBookmarks')}
-                    </p>
-                    <p className="text-2xl font-semibold text-gray-900 dark:text-white mt-2">
-                      {bookmarkLimit != null
-                        ? t('plan.bookmarksUsed', { count: bookmarkCount, limit: bookmarkLimit })
-                        : stats.totalBookmarks}
-                    </p>
+              <Card className={denseMode ? 'p-3' : ''}>
+                <CardContent className={denseMode ? 'p-3 pt-0' : 'p-4'}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">
+                        {t('dashboard.totalBookmarks')}
+                      </p>
+                      <p className="text-2xl font-semibold mt-2">
+                        {bookmarkLimit != null
+                          ? t('plan.bookmarksUsed', { count: bookmarkCount, limit: bookmarkLimit })
+                          : stats.totalBookmarks}
+                      </p>
+                    </div>
+                    <div className="p-3 bg-blue-100 dark:bg-blue-900/20 rounded-lg">
+                      <Bookmark className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                    </div>
                   </div>
-                  <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                    <Bookmark className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                </CardContent>
+              </Card>
+              <Card className={denseMode ? 'p-3' : ''}>
+                <CardContent className={denseMode ? 'p-3 pt-0' : 'p-4'}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">
+                        {t('dashboard.totalFolders')}
+                      </p>
+                      <p className="text-2xl font-semibold mt-2">
+                        {stats.totalFolders}
+                      </p>
+                    </div>
+                    <div className="p-3 bg-green-100 dark:bg-green-900/20 rounded-lg">
+                      <Folder className="h-6 w-6 text-green-600 dark:text-green-400" />
+                    </div>
                   </div>
-                </div>
-              </div>
-              <div className={`bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 ${denseMode ? 'p-3' : 'p-4'}`}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                      {t('dashboard.totalFolders')}
-                    </p>
-                    <p className="text-2xl font-semibold text-gray-900 dark:text-white mt-2">
-                      {stats.totalFolders}
-                    </p>
+                </CardContent>
+              </Card>
+              <Card className={denseMode ? 'p-3' : ''}>
+                <CardContent className={denseMode ? 'p-3 pt-0' : 'p-4'}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">
+                        {t('dashboard.totalTags')}
+                      </p>
+                      <p className="text-2xl font-semibold mt-2">
+                        {stats.totalTags}
+                      </p>
+                    </div>
+                    <div className="p-3 bg-purple-100 dark:bg-purple-900/20 rounded-lg">
+                      <Tag className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                    </div>
                   </div>
-                  <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                    <Folder className="h-6 w-6 text-green-600 dark:text-green-400" />
-                  </div>
-                </div>
-              </div>
-              <div className={`bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 ${denseMode ? 'p-3' : 'p-4'}`}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                      {t('dashboard.totalTags')}
-                    </p>
-                    <p className="text-2xl font-semibold text-gray-900 dark:text-white mt-2">
-                      {stats.totalTags}
-                    </p>
-                  </div>
-                  <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                    <Tag className="h-6 w-6 text-purple-600 dark:text-purple-400" />
-                  </div>
-                </div>
-              </div>
+                </CardContent>
+              </Card>
             </div>
             <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 pt-2">
               {t('dashboard.sharedWithYou')}
             </p>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div
-                className={`rounded-lg border ${denseMode ? 'p-3' : 'p-4'} ${
-                  stats.sharedBookmarks === 0
-                    ? 'bg-gray-50 dark:bg-gray-800/50 border-gray-100 dark:border-gray-700/70'
-                    : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                      {t('dashboard.sharedBookmarks')}
-                    </p>
-                    <p
-                      className={`text-2xl font-semibold mt-2 ${
-                        stats.sharedBookmarks === 0
-                          ? 'text-gray-400 dark:text-gray-500'
-                          : 'text-gray-900 dark:text-white'
-                      }`}
-                    >
-                      {stats.sharedBookmarks}
-                    </p>
+              <Card className={stats.sharedBookmarks === 0 ? 'bg-muted/50 border-muted' : ''}>
+                <CardContent className={denseMode ? 'p-3 pt-0' : 'p-4'}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">
+                        {t('dashboard.sharedBookmarks')}
+                      </p>
+                      <p className={`text-2xl font-semibold mt-2 ${stats.sharedBookmarks === 0 ? 'text-muted-foreground' : ''}`}>
+                        {stats.sharedBookmarks}
+                      </p>
+                    </div>
+                    <div className="p-3 bg-green-100 dark:bg-green-900/20 rounded-lg">
+                      <Share2 className="h-6 w-6 text-green-600 dark:text-green-400" />
+                    </div>
                   </div>
-                  <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                    <Share2 className="h-6 w-6 text-green-600 dark:text-green-400" />
+                </CardContent>
+              </Card>
+              <Card className={stats.sharedFolders === 0 ? 'bg-muted/50 border-muted' : ''}>
+                <CardContent className={denseMode ? 'p-3 pt-0' : 'p-4'}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">
+                        {t('dashboard.sharedFolders')}
+                      </p>
+                      <p className={`text-2xl font-semibold mt-2 ${stats.sharedFolders === 0 ? 'text-muted-foreground' : ''}`}>
+                        {stats.sharedFolders}
+                      </p>
+                    </div>
+                    <div className="p-3 bg-green-100 dark:bg-green-900/20 rounded-lg">
+                      <Share2 className="h-6 w-6 text-green-600 dark:text-green-400" />
+                    </div>
                   </div>
-                </div>
-              </div>
-              <div
-                className={`rounded-lg border ${denseMode ? 'p-3' : 'p-4'} ${
-                  stats.sharedFolders === 0
-                    ? 'bg-gray-50 dark:bg-gray-800/50 border-gray-100 dark:border-gray-700/70'
-                    : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                      {t('dashboard.sharedFolders')}
-                    </p>
-                    <p
-                      className={`text-2xl font-semibold mt-2 ${
-                        stats.sharedFolders === 0
-                          ? 'text-gray-400 dark:text-gray-500'
-                          : 'text-gray-900 dark:text-white'
-                      }`}
-                    >
-                      {stats.sharedFolders}
-                    </p>
-                  </div>
-                  <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                    <Share2 className="h-6 w-6 text-green-600 dark:text-green-400" />
-                  </div>
-                </div>
-              </div>
+                </CardContent>
+              </Card>
             </div>
           </div>
 
           {/* Recent Bookmarks and Top Tags */}
           <div className={`grid grid-cols-1 lg:grid-cols-2 ${denseMode ? 'gap-4' : 'gap-6'}`}>
             {/* Recent Bookmarks */}
-            <div className={`bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 ${denseMode ? 'p-3' : 'p-4'}`}>
-              <div className="flex items-center gap-2 mb-4">
-                <Clock className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-                <h3 className="text-[15px] font-medium text-gray-900 dark:text-white">
+            <Card>
+              <CardHeader className={denseMode ? 'p-3 pb-2' : 'p-4 pb-2'}>
+                <CardTitle className="flex items-center gap-2 text-[15px]">
+                  <Clock className="h-5 w-5 text-muted-foreground" />
                   {t('dashboard.recentBookmarks')}
-                </h3>
-              </div>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className={denseMode ? 'p-3 pt-0' : 'p-4 pt-0'}>
               {stats.recentBookmarks.length > 0 ? (
                 <div className="space-y-3">
                   {stats.recentBookmarks.map((bookmark) => (
@@ -353,19 +341,21 @@ export default function Dashboard() {
                   </Link>
                 </div>
               )}
-            </div>
+              </CardContent>
+            </Card>
 
             {/* Top Tags */}
-            <div className={`bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 ${denseMode ? 'p-3' : 'p-4'}`}>
-              <div className="flex items-center gap-2 mb-1">
-                <TrendingUp className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-                <h3 className="text-[15px] font-medium text-gray-900 dark:text-white">
+            <Card>
+              <CardHeader className={denseMode ? 'p-3 pb-1' : 'p-4 pb-1'}>
+                <CardTitle className="flex items-center gap-2 text-[15px]">
+                  <TrendingUp className="h-5 w-5 text-muted-foreground" />
                   {t('dashboard.topTags')}
-                </h3>
-              </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-                {t('dashboard.filterByTagHint')}
-              </p>
+                </CardTitle>
+                <CardDescription className="mb-4">
+                  {t('dashboard.filterByTagHint')}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className={denseMode ? 'p-3 pt-0' : 'p-4 pt-0'}>
               {stats.topTags.length > 0 ? (
                 <div className="space-y-3">
                   {stats.topTags.map((tag) => (
@@ -400,7 +390,8 @@ export default function Dashboard() {
                   </Link>
                 </div>
               )}
-            </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
       )}
@@ -410,28 +401,22 @@ export default function Dashboard() {
         {cards.map((card) => {
           const Icon = card.icon;
           return (
-            <Link
-              key={card.to}
-              to={card.to}
-              className="group relative bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-all overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900"
-            >
-              <div className="p-4 space-y-4">
-                <div className={`inline-flex p-3 rounded-lg border ${colorClasses[card.color as keyof typeof colorClasses]}`}>
-                  <Icon className="h-6 w-6" />
-                </div>
-                <div>
-                  <h3 className="text-[15px] font-medium text-gray-900 dark:text-white mb-1">
-                    {card.title}
-                  </h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {card.description}
-                  </p>
-                </div>
-                <div className="flex items-center text-sm font-medium text-gray-600 dark:text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                  {t('common.view')}
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </div>
-              </div>
+            <Link key={card.to} to={card.to} className="group block">
+              <Card className="h-full transition-all hover:shadow-md focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+                <CardHeader className="space-y-4">
+                  <div className={`inline-flex w-fit p-3 rounded-lg border ${colorClasses[card.color as keyof typeof colorClasses]}`}>
+                    <Icon className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-[15px] mb-1">{card.title}</CardTitle>
+                    <CardDescription>{card.description}</CardDescription>
+                  </div>
+                  <div className="flex items-center text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">
+                    {t('common.view')}
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </div>
+                </CardHeader>
+              </Card>
             </Link>
           );
         })}

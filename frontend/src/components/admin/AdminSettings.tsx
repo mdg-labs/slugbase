@@ -7,6 +7,7 @@ import { Save, Plus, Trash2, Settings as SettingsIcon, Mail, Send } from 'lucide
 import Button from '../ui/Button';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
+import { PageLoadingSkeleton } from '../ui/PageLoadingSkeleton';
 
 export default function AdminSettings() {
   const { t } = useTranslation();
@@ -141,11 +142,7 @@ export default function AdminSettings() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-gray-500 dark:text-gray-400">{t('common.loading')}</div>
-      </div>
-    );
+    return <PageLoadingSkeleton lines={8} />;
   }
 
   // Filter out SMTP settings from general settings display

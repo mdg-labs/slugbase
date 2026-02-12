@@ -1,5 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X } from 'lucide-react';
+import { Popover, PopoverAnchor, PopoverContent } from './popover';
+import { Input } from './input';
+import { Badge } from './badge';
+import { ScrollArea } from './scroll-area';
+import { cn } from '@/lib/utils';
 
 interface AutocompleteOption {
   id: string;
@@ -24,10 +29,9 @@ export default function Autocomplete({
   className = '',
 }: AutocompleteProps) {
   const [inputValue, setInputValue] = useState('');
-  const [isOpen, setIsOpen] = useState(false);
+  const [open, setOpen] = useState(false);
   const [filteredOptions, setFilteredOptions] = useState<AutocompleteOption[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (inputValue.trim()) {
@@ -37,30 +41,22 @@ export default function Autocomplete({
           opt.name.toLowerCase().includes(inputValue.toLowerCase())
       );
       setFilteredOptions(filtered);
-      setIsOpen(Boolean(filtered.length > 0 || (onCreateNew !== undefined && inputValue.trim().length > 0)));
+      setOpen(
+        Boolean(
+          filtered.length > 0 ||
+            (onCreateNew !== undefined && inputValue.trim().length > 0)
+        )
+      );
     } else {
       setFilteredOptions([]);
-      setIsOpen(false);
+      setOpen(false);
     }
   }, [inputValue, options, value, onCreateNew]);
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    }
-
-    if (isOpen === true) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [isOpen]);
 
   const handleSelect = (option: AutocompleteOption) => {
     onChange([...value, option]);
     setInputValue('');
-    setIsOpen(false);
+    setOpen(false);
     inputRef.current?.focus();
   };
 
@@ -78,67 +74,65 @@ export default function Autocomplete({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && isOpen && filteredOptions.length > 0) {
+    if (e.key === 'Enter' && open && filteredOptions.length > 0) {
       e.preventDefault();
       handleSelect(filteredOptions[0]);
     } else if (e.key === 'Enter' && onCreateNew && inputValue.trim()) {
       e.preventDefault();
       handleCreateNew();
     } else if (e.key === 'Escape') {
-      setIsOpen(false);
+      setOpen(false);
     }
   };
 
   return (
-    <div ref={containerRef} className={`relative ${className}`}>
-      {/* Selected items */}
+    <div className={cn('relative', className)}>
       {value.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-2">
           {value.map((item) => (
-            <span
+            <Badge
               key={item.id}
-              className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 dark:bg-blue-900/30 px-3 py-1 text-sm font-medium text-blue-800 dark:text-blue-200"
+              variant="secondary"
+              className="pr-1 gap-1.5"
             >
               {item.name}
               <button
                 type="button"
                 onClick={() => handleRemove(item.id)}
-                className="rounded-full hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                className="rounded-full hover:bg-secondary/80 p-0.5 transition-colors"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
-            </span>
+            </Badge>
           ))}
         </div>
       )}
 
-      {/* Input */}
-      <input
-        ref={inputRef}
-        type="text"
-        value={inputValue}
-        onChange={(e) => setInputValue(e.target.value)}
-        onFocus={() => inputValue.trim() && setIsOpen(true)}
-        onKeyDown={handleKeyDown}
-        placeholder={placeholder}
-        className="w-full px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-      />
-
-      {/* Dropdown */}
-      {isOpen && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
-          <div className="absolute z-20 mt-1 w-full rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg max-h-60 overflow-auto">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverAnchor asChild>
+          <Input
+            ref={inputRef}
+            type="text"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onFocus={() => inputValue.trim() && setOpen(true)}
+            onKeyDown={handleKeyDown}
+            placeholder={placeholder}
+            className="w-full"
+          />
+        </PopoverAnchor>
+        <PopoverContent className="w-[var(--radix-popover-anchor-width)] p-0" align="start">
+          <ScrollArea className="max-h-60">
             {filteredOptions.length === 0 && onCreateNew && inputValue.trim() ? (
               <button
                 type="button"
                 onClick={handleCreateNew}
-                className="w-full text-left px-4 py-2 text-sm text-blue-600 dark:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                className="w-full text-left px-3 py-2 text-sm text-primary hover:bg-accent hover:text-accent-foreground"
               >
-                Create "{inputValue.trim()}"
+                Create &quot;{inputValue.trim()}&quot;
               </button>
             ) : filteredOptions.length === 0 ? (
-              <div className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
+              <div className="px-3 py-2 text-sm text-muted-foreground">
                 No options found
               </div>
             ) : (
@@ -147,15 +141,15 @@ export default function Autocomplete({
                   key={option.id}
                   type="button"
                   onClick={() => handleSelect(option)}
-                  className="w-full text-left px-4 py-2 text-sm text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
                 >
                   {option.name}
                 </button>
               ))
             )}
-          </div>
-        </>
-      )}
+          </ScrollArea>
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }

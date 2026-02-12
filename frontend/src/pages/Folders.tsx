@@ -9,6 +9,7 @@ import Button from '../components/ui/Button';
 import Select from '../components/ui/Select';
 import Tooltip from '../components/ui/Tooltip';
 import FolderIcon from '../components/FolderIcon';
+import { PageLoadingSkeleton } from '../components/ui/PageLoadingSkeleton';
 
 interface Folder {
   id: string;
@@ -113,11 +114,7 @@ export default function Folders() {
   ];
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-gray-500 dark:text-gray-400">{t('common.loading')}</div>
-      </div>
-    );
+    return <PageLoadingSkeleton lines={6} />;
   }
 
   return (

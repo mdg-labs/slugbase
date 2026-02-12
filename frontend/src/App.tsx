@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { OrgPlanProvider } from './contexts/OrgPlanContext';
 import { ToastProvider } from './components/ui/Toast';
+import { TooltipProvider } from './components/ui/tooltip-base';
 import Layout from './components/Layout';
 import api from './api/client';
 import { isCloud } from './config/mode';
@@ -234,9 +235,11 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <ToastProvider>
-          <AppRoutes />
-        </ToastProvider>
+        <TooltipProvider>
+          <ToastProvider>
+            <AppRoutes />
+          </ToastProvider>
+        </TooltipProvider>
       </AuthProvider>
     </BrowserRouter>
   );

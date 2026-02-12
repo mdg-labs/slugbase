@@ -16,6 +16,8 @@ import Select from '../components/ui/Select';
 import BookmarkCard from '../components/bookmarks/BookmarkCard';
 import BookmarkTableView from '../components/bookmarks/BookmarkTableView';
 import { BulkMoveModal, BulkTagModal, BulkShareModal } from '../components/bookmarks/BulkActionModals';
+import { PageLoadingSkeleton } from '../components/ui/PageLoadingSkeleton';
+import { Card } from '../components/ui/card';
 import { appBasePath } from '../config/api';
 
 interface Bookmark {
@@ -383,11 +385,7 @@ export default function Bookmarks() {
   ];
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-gray-500 dark:text-gray-400">{t('common.loading')}</div>
-      </div>
-    );
+    return <PageLoadingSkeleton lines={6} />;
   }
 
   return (
@@ -619,7 +617,7 @@ export default function Bookmarks() {
 
       {/* Bookmarks Display */}
       {sortedBookmarks.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 px-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+        <Card className="flex flex-col items-center justify-center py-20 px-4">
           <div className="w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mb-4">
             <BookmarkIcon className="h-8 w-8 text-blue-600 dark:text-blue-400" />
           </div>
@@ -648,7 +646,7 @@ export default function Bookmarks() {
               </Button>
             </Link>
           </div>
-        </div>
+        </Card>
       ) : viewMode === 'card' ? (
         <div className={`grid grid-cols-1 gap-4 ${
           compactMode 
@@ -690,7 +688,7 @@ export default function Bookmarks() {
 
       {/* Search Engine Setup Guide Note */}
       {sortedBookmarks.length > 0 && (
-        <div className="mt-8 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
+        <Card className="mt-8 bg-primary/5 border-primary/20 p-4">
           <div className="flex items-start gap-3">
             <div className="flex-shrink-0">
               <div className="h-8 w-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
@@ -709,7 +707,7 @@ export default function Bookmarks() {
               </p>
             </div>
           </div>
-        </div>
+        </Card>
       )}
 
       <BookmarkModal

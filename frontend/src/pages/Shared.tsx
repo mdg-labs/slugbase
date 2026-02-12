@@ -9,6 +9,7 @@ import { Share2, ExternalLink, Copy, Tag as TagIcon, Users, User } from 'lucide-
 import Button from '../components/ui/Button';
 import Favicon from '../components/Favicon';
 import FolderIcon from '../components/FolderIcon';
+import { PageLoadingSkeleton } from '../components/ui/PageLoadingSkeleton';
 
 interface SharedBookmark {
   id: string;
@@ -89,11 +90,7 @@ export default function Shared() {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-gray-500 dark:text-gray-400">{t('common.loading')}</div>
-      </div>
-    );
+    return <PageLoadingSkeleton lines={6} />;
   }
 
   return (
