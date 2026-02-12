@@ -85,6 +85,17 @@ router.get('/me', requireAuth(), async (req, res) => {
      ORDER BY om.joined_at ASC`,
     [org.id]
   );
+
+  // Bookmark usage for Free plan (per-user)
+  const FREE_BOOKMARK_LIMIT = 100;
+  let bookmark_count: number | undefined;
+  let bookmark_limit: number | null = null;
+  if (plan === 'free') {
+    const countResult = await queryOne('SELECT COUNT(*) as count FROM bookmarks WHERE user_id = ?', [userId]);
+    bookmark_count = countResult ? parseInt((countResult as any).count) : 0;
+    bookmark_limit = FREE_BOOKMARK_LIMIT;
+  }
+
   res.json({
     id: org.id,
     name: org.name,
@@ -94,6 +105,8 @@ router.get('/me', requireAuth(), async (req, res) => {
     member_count: parseInt((memberCount as any)?.count || '0'),
     role: org.role,
     members: Array.isArray(members) ? members : [members],
+    ...(bookmark_count !== undefined && { bookmark_count }),
+    bookmark_limit,
   });
 });
 

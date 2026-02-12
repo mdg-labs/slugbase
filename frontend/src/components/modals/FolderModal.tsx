@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import api from '../../api/client';
+import { useToast } from '../ui/Toast';
+import { useOrgPlan } from '../../contexts/OrgPlanContext';
+import { canShareFolders } from '../../utils/plan';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import SharingModal from './SharingModal';
@@ -32,6 +35,9 @@ export default function FolderModal({
   onSuccess,
 }: FolderModalProps) {
   const { t } = useTranslation();
+  const { showToast } = useToast();
+  const { plan } = useOrgPlan();
+  const showShareSection = canShareFolders(plan);
   const [formData, setFormData] = useState({
     name: '',
     icon: '',
@@ -121,7 +127,12 @@ export default function FolderModal({
       onSuccess();
       onClose();
     } catch (err: any) {
-      setError(err.response?.data?.error || t('common.error'));
+      const errorMessage = err.response?.data?.error || t('common.error');
+      const code = err.response?.data?.code;
+      setError(errorMessage);
+      if (code === 'PLAN_FOLDER_SHARING') {
+        showToast(errorMessage, 'error');
+      }
     } finally {
       setLoading(false);
     }
@@ -315,6 +326,7 @@ export default function FolderModal({
           )}
         </div>
 
+        {showShareSection && (
         <div>
           <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
             <Share2 className="inline h-4 w-4 mr-1.5" />
@@ -338,6 +350,7 @@ export default function FolderModal({
               : t('folders.shareWithTeams')}
           </Button>
         </div>
+        )}
 
         {error && (
           <div className="px-4 py-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
@@ -356,7 +369,7 @@ export default function FolderModal({
       </form>
       </Modal>
 
-      {sharingModalOpen && (
+      {showShareSection && sharingModalOpen && (
         <SharingModal
           isOpen={sharingModalOpen}
           onClose={() => setSharingModalOpen(false)}
@@ -376,6 +389,7 @@ export default function FolderModal({
           }}
           teams={teams}
           type="folder"
+          allowTeamSharing={canShareFolders(plan)}
         />
       )}
     </>

@@ -308,6 +308,14 @@
     "collapseSidebar": "Collapse sidebar",
     "expandSidebar": "Expand sidebar"
   },
+  "plan": {
+    "limitBookmarks": "You've reached the Free plan limit (100 bookmarks). Upgrade to add more.",
+    "shareToTeam": "Sharing to teams is available on the Team plan.",
+    "folderSharing": "Folder sharing is available on the Team plan.",
+    "upgradeCta": "Upgrade",
+    "bookmarksUsed": "Bookmarks used: {{count}}/{{limit}}",
+    "importLimitWarning": "You can import up to {{remaining}} more bookmarks (Free plan limit: {{limit}})."
+  },
   "dashboard": {
     "bookmarksDescription": "Manage your bookmarks",
     "foldersDescription": "Organize with folders",

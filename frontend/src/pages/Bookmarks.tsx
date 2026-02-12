@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useOrgPlan } from '../contexts/OrgPlanContext';
+import { canCreateBookmark } from '../utils/plan';
 import api from '../api/client';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { useConfirmDialog } from '../hooks/useConfirmDialog';
@@ -41,6 +43,7 @@ type SortOption = 'recently_added' | 'alphabetical' | 'most_used' | 'recently_ac
 export default function Bookmarks() {
   const { t } = useTranslation();
   const { user } = useAuth();
+  const { plan, bookmarkCount, bookmarkLimit, refresh } = useOrgPlan();
   const [searchParams, setSearchParams] = useSearchParams();
   const { showConfirm, dialogState } = useConfirmDialog();
   const { showToast } = useToast();
@@ -81,7 +84,12 @@ export default function Bookmarks() {
     const editId = searchParams.get('edit');
 
     if (createParam === 'true') {
-      handleCreate();
+      const atLimit = !canCreateBookmark(plan, bookmarkCount, bookmarkLimit);
+      if (atLimit) {
+        showToast(t('plan.limitBookmarks'), 'error');
+      } else {
+        handleCreate();
+      }
       const params = new URLSearchParams(searchParams);
       params.delete('create');
       setSearchParams(params, { replace: true });
@@ -195,6 +203,8 @@ export default function Bookmarks() {
   const hasActiveFilters = selectedFolder || selectedTag;
 
   function handleCreate() {
+    const atLimit = !canCreateBookmark(plan, bookmarkCount, bookmarkLimit);
+    if (atLimit) return;
     setEditingBookmark(null);
     setModalOpen(true);
   }
@@ -327,6 +337,7 @@ export default function Bookmarks() {
   function handleModalClose() {
     setModalOpen(false);
     setEditingBookmark(null);
+    refresh();
     loadData();
   }
 
@@ -389,7 +400,9 @@ export default function Bookmarks() {
               {t('bookmarks.title')}
             </h1>
             <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
-              {bookmarks.length} {bookmarks.length === 1 ? t('common.bookmark') : t('common.bookmarks')}
+              {bookmarkLimit != null
+                ? t('plan.bookmarksUsed', { count: bookmarkCount, limit: bookmarkLimit })
+                : `${bookmarks.length} ${bookmarks.length === 1 ? t('common.bookmark') : t('common.bookmarks')}`}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -397,8 +410,9 @@ export default function Bookmarks() {
               variant="ghost"
               size="sm"
               icon={Upload}
-              onClick={() => setImportModalOpen(true)}
-              title={t('bookmarks.import')}
+              onClick={() => !canCreateBookmark(plan, bookmarkCount, bookmarkLimit) ? undefined : setImportModalOpen(true)}
+              title={!canCreateBookmark(plan, bookmarkCount, bookmarkLimit) ? t('plan.limitBookmarks') : t('bookmarks.import')}
+              disabled={!canCreateBookmark(plan, bookmarkCount, bookmarkLimit)}
             >
               <span className="hidden sm:inline">{t('bookmarks.import')}</span>
             </Button>
@@ -411,9 +425,17 @@ export default function Bookmarks() {
             >
               <span className="hidden sm:inline">{t('bookmarks.export')}</span>
             </Button>
-            <Button onClick={handleCreate} icon={Plus}>
-              {t('bookmarks.create')}
-            </Button>
+            {canCreateBookmark(plan, bookmarkCount, bookmarkLimit) ? (
+              <Button onClick={handleCreate} icon={Plus}>
+                {t('bookmarks.create')}
+              </Button>
+            ) : (
+              <Link to={`${appBasePath}/admin?tab=billing`}>
+                <Button variant="secondary" icon={Plus} disabled title={t('plan.limitBookmarks')}>
+                  {t('plan.upgradeCta')}
+                </Button>
+              </Link>
+            )}
           </div>
         </div>
       </div>
@@ -611,7 +633,13 @@ export default function Bookmarks() {
             <Button onClick={handleCreate} variant="primary" icon={Plus}>
               {t('bookmarks.emptyCreateFirst')}
             </Button>
-            <Button variant="secondary" icon={Upload} onClick={() => setImportModalOpen(true)}>
+            <Button
+              variant="secondary"
+              icon={Upload}
+              onClick={() => canCreateBookmark(plan, bookmarkCount, bookmarkLimit) && setImportModalOpen(true)}
+              disabled={!canCreateBookmark(plan, bookmarkCount, bookmarkLimit)}
+              title={!canCreateBookmark(plan, bookmarkCount, bookmarkLimit) ? t('plan.limitBookmarks') : t('bookmarks.emptyImport')}
+            >
               {t('bookmarks.emptyImport')}
             </Button>
             <Link to={`${appBasePath}/search-engine-guide`}>
@@ -699,7 +727,13 @@ export default function Bookmarks() {
       <ImportModal
         isOpen={importModalOpen}
         onClose={() => setImportModalOpen(false)}
-        onSuccess={loadData}
+        onSuccess={() => {
+          refresh();
+          loadData();
+        }}
+        bookmarkCount={bookmarkCount}
+        bookmarkLimit={bookmarkLimit}
+        plan={plan}
       />
 
       {/* Bulk Move Modal */}

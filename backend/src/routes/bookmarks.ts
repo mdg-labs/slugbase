@@ -4,7 +4,8 @@ import { AuthRequest, requireAuth } from '../middleware/auth.js';
 import { canAccessBookmark, canModifyBookmark, canAccessFolder, canAccessTag } from '../auth/authorization.js';
 import { v4 as uuidv4 } from 'uuid';
 import { isCloud } from '../config/mode.js';
-import { getCurrentOrgId } from '../utils/organizations.js';
+import { getCurrentOrgId, getUserPlan } from '../utils/organizations.js';
+import { PLAN_ERRORS } from '../utils/plan-errors.js';
 import { CreateBookmarkInput, UpdateBookmarkInput } from '../types.js';
 import { validateUrl, validateSlug, validateLength, sanitizeString, MAX_LENGTHS } from '../utils/validation.js';
 
@@ -752,6 +753,8 @@ router.post('/:id/track-access', async (req, res) => {
  *       403:
  *         description: User does not own folder or is not member of team
  */
+const FREE_BOOKMARK_LIMIT = 100;
+
 // Create bookmark
 router.post('/', async (req, res) => {
   const authReq = req as AuthRequest;
@@ -761,6 +764,30 @@ router.post('/', async (req, res) => {
 
     if (!data.title || !data.url) {
       return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Cloud: enforce Free plan bookmark limit
+    if (isCloud) {
+      const plan = await getUserPlan(userId);
+      if (plan === 'free') {
+        const countResult = await queryOne('SELECT COUNT(*) as count FROM bookmarks WHERE user_id = ?', [userId]);
+        const count = countResult ? parseInt((countResult as any).count) : 0;
+        if (count >= FREE_BOOKMARK_LIMIT) {
+          return res.status(403).json({
+            error: PLAN_ERRORS.BOOKMARK_LIMIT.message,
+            code: PLAN_ERRORS.BOOKMARK_LIMIT.code,
+          });
+        }
+      }
+      // Cloud: Free/Personal cannot share to teams
+      if (plan === 'free' || plan === 'personal') {
+        if (data.share_all_teams || (data.team_ids && data.team_ids.length > 0)) {
+          return res.status(403).json({
+            error: PLAN_ERRORS.SHARE_TO_TEAM.message,
+            code: PLAN_ERRORS.SHARE_TO_TEAM.code,
+          });
+        }
+      }
     }
 
     // Validate and sanitize title
@@ -1004,6 +1031,19 @@ router.put('/:id', async (req, res) => {
     const existing = await queryOne('SELECT * FROM bookmarks WHERE id = ?', [id]);
     if (!existing) {
       return res.status(404).json({ error: 'Bookmark not found' });
+    }
+
+    // Cloud: Free/Personal cannot share to teams
+    if (isCloud) {
+      const plan = await getUserPlan(userId);
+      if (plan === 'free' || plan === 'personal') {
+        if (data.share_all_teams || (data.team_ids && data.team_ids.length > 0)) {
+          return res.status(403).json({
+            error: PLAN_ERRORS.SHARE_TO_TEAM.message,
+            code: PLAN_ERRORS.SHARE_TO_TEAM.code,
+          });
+        }
+      }
     }
 
     // Slug validation
@@ -1338,8 +1378,29 @@ router.post('/import', async (req, res) => {
       errors: [] as string[],
     };
 
+    // Cloud: Free plan bookmark limit - get current count
+    let currentBookmarkCount = 0;
+    if (isCloud) {
+      const plan = await getUserPlan(userId);
+      if (plan === 'free') {
+        const countResult = await queryOne('SELECT COUNT(*) as count FROM bookmarks WHERE user_id = ?', [userId]);
+        currentBookmarkCount = countResult ? parseInt((countResult as any).count) : 0;
+      }
+    }
+
+    let hitLimit = false;
     for (const bookmarkData of importBookmarks) {
       try {
+        // Cloud: stop importing if at Free limit
+        if (isCloud && currentBookmarkCount >= FREE_BOOKMARK_LIMIT) {
+          if (!hitLimit) {
+            hitLimit = true;
+            results.errors.push(PLAN_ERRORS.BOOKMARK_LIMIT.message);
+          }
+          results.failed++;
+          continue;
+        }
+
         if (!bookmarkData.title || !bookmarkData.url) {
           results.failed++;
           results.errors.push(`Missing title or URL: ${JSON.stringify(bookmarkData)}`);
@@ -1399,6 +1460,7 @@ router.post('/import', async (req, res) => {
         );
 
         results.success++;
+        if (isCloud) currentBookmarkCount++;
       } catch (error: any) {
         results.failed++;
         results.errors.push(`Error importing bookmark: ${error.message}`);

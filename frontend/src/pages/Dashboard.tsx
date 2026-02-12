@@ -5,6 +5,8 @@ import { Bookmark, Folder, Tag, ArrowRight, Share2, Clock, TrendingUp, Plus, Edi
 import Button from '../components/ui/Button';
 import api from '../api/client';
 import { appBasePath } from '../config/api';
+import { useOrgPlan } from '../contexts/OrgPlanContext';
+import { canCreateBookmark } from '../utils/plan';
 
 interface RecentBookmark {
   id: string;
@@ -40,8 +42,10 @@ function formatLastOpened(dateStr: string): string {
 
 export default function Dashboard() {
   const { t } = useTranslation();
+  const { plan, bookmarkCount, bookmarkLimit } = useOrgPlan();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [denseMode, setDenseMode] = useState(() => localStorage.getItem('dashboard-dense') === 'true');
+  const atBookmarkLimit = !canCreateBookmark(plan, bookmarkCount, bookmarkLimit);
 
   useEffect(() => {
     loadStats();
@@ -113,13 +117,21 @@ export default function Dashboard() {
 
       {/* Primary action: New Bookmark */}
       <div className="flex flex-col items-center gap-2">
-        <Link to={`${appBasePath}/bookmarks?create=true`} className="w-full sm:w-auto">
-          <Button variant="primary" size="lg" icon={Plus} className="w-full sm:w-auto">
-            {t('bookmarks.create')}
-          </Button>
-        </Link>
+        {atBookmarkLimit ? (
+          <Link to={`${appBasePath}/admin?tab=billing`} className="w-full sm:w-auto">
+            <Button variant="secondary" size="lg" icon={Plus} className="w-full sm:w-auto" title={t('plan.limitBookmarks')}>
+              {t('plan.upgradeCta')}
+            </Button>
+          </Link>
+        ) : (
+          <Link to={`${appBasePath}/bookmarks?create=true`} className="w-full sm:w-auto">
+            <Button variant="primary" size="lg" icon={Plus} className="w-full sm:w-auto">
+              {t('bookmarks.create')}
+            </Button>
+          </Link>
+        )}
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          {t('dashboard.newBookmarkHint')}
+          {atBookmarkLimit ? t('plan.limitBookmarks') : t('dashboard.newBookmarkHint')}
         </p>
       </div>
 
@@ -162,7 +174,9 @@ export default function Dashboard() {
                       {t('dashboard.totalBookmarks')}
                     </p>
                     <p className="text-2xl font-semibold text-gray-900 dark:text-white mt-2">
-                      {stats.totalBookmarks}
+                      {bookmarkLimit != null
+                        ? t('plan.bookmarksUsed', { count: bookmarkCount, limit: bookmarkLimit })
+                        : stats.totalBookmarks}
                     </p>
                   </div>
                   <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">

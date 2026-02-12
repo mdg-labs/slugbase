@@ -2,6 +2,7 @@ import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, Outlet } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { OrgPlanProvider } from './contexts/OrgPlanContext';
 import { ToastProvider } from './components/ui/Toast';
 import Layout from './components/Layout';
 import api from './api/client';
@@ -143,7 +144,7 @@ function AppRoutesSelfhosted() {
         <Route path="/password-reset" element={<PasswordReset />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/go/:slug" element={<ForwardingHandler />} />
-        <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
+        <Route path="/" element={<PrivateRoute><OrgPlanProvider><Layout /></OrgPlanProvider></PrivateRoute>}>
           <Route index element={<Dashboard />} />
           <Route path="bookmarks" element={<Bookmarks />} />
           <Route path="folders" element={<Folders />} />
@@ -177,7 +178,7 @@ function AppRoutesCloud() {
           <Route path="verify-email" element={<VerifyEmail />} />
           <Route path="accept-invite" element={<AcceptInvite />} />
           <Route path="go/:slug" element={<ForwardingHandler />} />
-          <Route path="" element={<PrivateRoute><Layout /></PrivateRoute>}>
+          <Route path="" element={<PrivateRoute><OrgPlanProvider><Layout /></OrgPlanProvider></PrivateRoute>}>
             <Route index element={<Dashboard />} />
             <Route path="bookmarks" element={<Bookmarks />} />
             <Route path="folders" element={<Folders />} />

@@ -4,6 +4,8 @@ import Autocomplete from '../ui/Autocomplete';
 import Button from '../ui/Button';
 import SharingModal from '../modals/SharingModal';
 import api from '../../api/client';
+import { useOrgPlan } from '../../contexts/OrgPlanContext';
+import { canShareToTeams } from '../../utils/plan';
 
 interface BulkMoveModalProps {
   isOpen: boolean;
@@ -113,6 +115,7 @@ interface BulkShareModalProps {
 }
 
 export function BulkShareModal({ isOpen, onClose, onSave, teams }: BulkShareModalProps) {
+  const { plan } = useOrgPlan();
   return (
     <SharingModal
       isOpen={isOpen}
@@ -125,6 +128,7 @@ export function BulkShareModal({ isOpen, onClose, onSave, teams }: BulkShareModa
       }}
       teams={teams}
       type="bookmark"
+      allowTeamSharing={canShareToTeams(plan)}
     />
   );
 }

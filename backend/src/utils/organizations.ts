@@ -44,6 +44,22 @@ export async function setCurrentOrg(userId: string, orgId: string): Promise<bool
   return true;
 }
 
+export type PlanTier = 'free' | 'personal' | 'team';
+
+/**
+ * Get effective plan tier for user (Cloud only). Returns null if self-hosted. early_supporter -> personal.
+ */
+export async function getUserPlan(userId: string): Promise<PlanTier | null> {
+  if (!isCloud) return null;
+  const orgId = await getCurrentOrgId(userId);
+  if (!orgId) return null;
+  const row = await queryOne('SELECT plan FROM organizations WHERE id = ?', [orgId]);
+  const plan = (row as any)?.plan;
+  if (plan === 'early_supporter') return 'personal';
+  if (plan === 'free' || plan === 'personal' || plan === 'team') return plan;
+  return 'free';
+}
+
 /**
  * Ensure user has an organization in Cloud mode. Creates org if needed.
  * Returns org id or null (if not Cloud or error).

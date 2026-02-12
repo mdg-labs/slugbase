@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
+import { useOrgPlan } from '../../contexts/OrgPlanContext';
+import { canShareToTeams } from '../../utils/plan';
 import api from '../../api/client';
 import Modal from '../ui/Modal';
 import Autocomplete from '../ui/Autocomplete';
@@ -42,6 +44,7 @@ export default function BookmarkModal({
 }: BookmarkModalProps) {
   const { t } = useTranslation();
   useAuth();
+  const { plan } = useOrgPlan();
   const { showToast } = useToast();
   const [formData, setFormData] = useState({
     title: '',
@@ -132,10 +135,10 @@ export default function BookmarkModal({
       onClose();
     } catch (err: any) {
       const errorMessage = err.response?.data?.error || t('common.error');
+      const code = err.response?.data?.code;
       setError(errorMessage);
-      // If it's a slug uniqueness error, highlight the slug field
-      if (errorMessage.includes(t('bookmarks.slugAlreadyExists')) || errorMessage.toLowerCase().includes('slug') && errorMessage.toLowerCase().includes('exists')) {
-        // Error is already set, user will see it
+      if (code === 'PLAN_LIMIT_BOOKMARKS' || code === 'PLAN_SHARE_TO_TEAM' || code === 'PLAN_FOLDER_SHARING') {
+        showToast(errorMessage, 'error');
       }
     } finally {
       setLoading(false);
@@ -354,6 +357,7 @@ export default function BookmarkModal({
           }}
           teams={teams}
           type="bookmark"
+          allowTeamSharing={canShareToTeams(plan)}
         />
       )}
     </>

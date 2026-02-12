@@ -30,6 +30,8 @@ interface SharingModalProps {
   };
   teams: Team[];
   type?: 'bookmark' | 'folder';
+  /** When false, hide team sharing UI (Free/Personal plan). Default true. */
+  allowTeamSharing?: boolean;
 }
 
 export default function SharingModal({
@@ -38,6 +40,7 @@ export default function SharingModal({
   onSave,
   currentShares = {},
   teams,
+  allowTeamSharing = true,
 }: SharingModalProps) {
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -89,8 +92,8 @@ export default function SharingModal({
   function handleSave() {
     onSave({
       user_ids: selectedUserIds,
-      team_ids: shareAllTeams ? [] : selectedTeamIds,
-      share_all_teams: shareAllTeams,
+      team_ids: allowTeamSharing ? (shareAllTeams ? [] : selectedTeamIds) : [],
+      share_all_teams: allowTeamSharing && shareAllTeams,
     });
     onClose();
   }
@@ -103,7 +106,8 @@ export default function SharingModal({
       size="lg"
     >
       <div className="space-y-6">
-        {/* Share with All Teams */}
+        {/* Share with All Teams - hidden when allowTeamSharing is false */}
+        {allowTeamSharing && (
         <div>
           <label className="flex items-center gap-3 cursor-pointer">
             <input
@@ -127,9 +131,10 @@ export default function SharingModal({
             </div>
           </label>
         </div>
+        )}
 
-        {/* Share with Specific Teams */}
-        {!shareAllTeams && (
+        {/* Share with Specific Teams - hidden when allowTeamSharing is false */}
+        {allowTeamSharing && !shareAllTeams && (
           <div>
             <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
               <Users className="inline h-4 w-4 mr-1.5" />
@@ -173,7 +178,7 @@ export default function SharingModal({
           </div>
         )}
 
-        {/* Share with Specific Users */}
+        {/* Share with Specific Users - always shown */}
         <div>
           <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
             <User className="inline h-4 w-4 mr-1.5" />

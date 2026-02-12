@@ -4,7 +4,8 @@ import { AuthRequest, requireAuth } from '../middleware/auth.js';
 import { canAccessFolder, canModifyFolder } from '../auth/authorization.js';
 import { v4 as uuidv4 } from 'uuid';
 import { isCloud } from '../config/mode.js';
-import { getCurrentOrgId } from '../utils/organizations.js';
+import { getCurrentOrgId, getUserPlan } from '../utils/organizations.js';
+import { PLAN_ERRORS } from '../utils/plan-errors.js';
 import { validateLength, sanitizeString, MAX_LENGTHS } from '../utils/validation.js';
 
 const router = Router();
@@ -287,7 +288,20 @@ router.post('/', async (req, res) => {
     }
 
     const folderId = uuidv4();
-    const { team_ids, user_ids, share_all_teams } = req.body;
+    let { team_ids, user_ids, share_all_teams } = req.body;
+
+    // Cloud: Free/Personal cannot share folders
+    if (isCloud) {
+      const plan = await getUserPlan(userId);
+      if (plan === 'free' || plan === 'personal') {
+        if (share_all_teams || (team_ids && team_ids.length > 0) || (user_ids && user_ids.length > 0)) {
+          return res.status(403).json({
+            error: PLAN_ERRORS.FOLDER_SHARING.message,
+            code: PLAN_ERRORS.FOLDER_SHARING.code,
+          });
+        }
+      }
+    }
 
     await execute('INSERT INTO folders (id, user_id, name, icon) VALUES (?, ?, ?, ?)', [folderId, userId, sanitizedName, icon || null]);
 
@@ -457,7 +471,17 @@ router.put('/:id', async (req, res) => {
       return res.status(400).json({ error: 'Folder with this name already exists' });
     }
 
-    const { team_ids, user_ids, share_all_teams } = req.body;
+    let { team_ids, user_ids, share_all_teams } = req.body;
+
+    // Cloud: Free/Personal - strip folder shares (allow editing name/icon)
+    if (isCloud) {
+      const plan = await getUserPlan(userId);
+      if (plan === 'free' || plan === 'personal') {
+        team_ids = [];
+        user_ids = [];
+        share_all_teams = false;
+      }
+    }
 
     await execute('UPDATE folders SET name = ?, icon = ? WHERE id = ?', [sanitizedName, icon || null, id]);
 
