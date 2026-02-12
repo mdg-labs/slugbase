@@ -56,7 +56,8 @@ export default function BookmarkCard({
           : 'border-border hover:border-primary/70'
       } hover:shadow-lg transition-all duration-200 flex flex-col h-full min-h-0 ${compact ? 'p-2.5 min-h-[200px]' : 'p-4'}`}
     >
-      <div className={`space-y-3 flex-1 flex flex-col min-h-0 ${compact ? 'space-y-2' : ''}`}>
+      {/* Content area - sticks to top */}
+      <div className={`flex-shrink-0 space-y-3 ${compact ? 'space-y-2' : ''}`}>
         {/* Header with icon and title */}
         <div className="flex items-start gap-3">
           {bulkMode && (
@@ -225,9 +226,13 @@ export default function BookmarkCard({
             </button>
           </div>
         )}
+      </div>
 
-        {/* Actions - always at bottom of card */}
-        <div className={`flex gap-2 pt-3 mt-auto border-t border-border shrink-0 ${compact ? 'pt-2 mt-2' : ''}`}>
+      {/* Spacer - pushes action row to bottom */}
+      <div className="flex-1 min-h-0" />
+
+      {/* Action row - sticks to bottom of card */}
+      <div className={`flex gap-2 pt-3 shrink-0 border-t border-border ${compact ? 'pt-2' : ''}`}>
           {onOpen ? (
             <Button 
               variant="primary" 
@@ -271,7 +276,6 @@ export default function BookmarkCard({
             </>
           )}
         </div>
-      </div>
     </div>
   );
 }

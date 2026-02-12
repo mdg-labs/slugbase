@@ -524,6 +524,20 @@ export default function Bookmarks() {
             {t('bookmarks.compactMode')}
           </button>
         </div>
+
+        {/* Bulk Select Toggle */}
+        {!bulkMode && displayedBookmarks.length > 0 && (
+          <div className="flex items-center gap-2 border-l border-gray-200 dark:border-gray-700 pl-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={CheckSquare}
+              onClick={() => setBulkMode(true)}
+            >
+              {t('bookmarks.bulkSelect')}
+            </Button>
+          </div>
+        )}
         </div>
       </div>
 
@@ -589,20 +603,6 @@ export default function Bookmarks() {
               {t('common.cancel')}
             </Button>
           </div>
-        </div>
-      )}
-
-      {/* Bulk Actions Toolbar Toggle */}
-      {!bulkMode && displayedBookmarks.length > 0 && (
-        <div className="flex justify-end">
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={CheckSquare}
-            onClick={() => setBulkMode(true)}
-          >
-            {t('bookmarks.bulkSelect')}
-          </Button>
         </div>
       )}
 
