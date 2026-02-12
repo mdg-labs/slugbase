@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Search, X, Bookmark, Folder, Tag, ExternalLink, Plus, ArrowRight } from 'lucide-react';
 import api from '../api/client';
+import { appBasePath } from '../config/api';
+import { isCloud } from '../config/mode';
 
 interface SearchResult {
   id: string;
@@ -65,20 +67,22 @@ export default function GlobalSearch() {
     }
   }, [isOpen]);
 
+  const showAdmin = user?.is_admin || (isCloud && (user?.org_role === 'owner' || user?.org_role === 'admin'));
+
   // Navigation and action items (always shown when no query)
   const navigationItems: SearchResult[] = [
-    { type: 'navigation', title: t('bookmarks.title'), path: '/bookmarks', id: 'nav-bookmarks' },
-    { type: 'navigation', title: t('folders.title'), path: '/folders', id: 'nav-folders' },
-    { type: 'navigation', title: t('tags.title'), path: '/tags', id: 'nav-tags' },
-    { type: 'navigation', title: t('shared.title'), path: '/shared', id: 'nav-shared' },
-    ...(user?.is_admin ? [{ type: 'navigation' as const, title: t('admin.title'), path: '/admin', id: 'nav-admin' }] : []),
+    { type: 'navigation', title: t('bookmarks.title'), path: `${appBasePath}/bookmarks`, id: 'nav-bookmarks' },
+    { type: 'navigation', title: t('folders.title'), path: `${appBasePath}/folders`, id: 'nav-folders' },
+    { type: 'navigation', title: t('tags.title'), path: `${appBasePath}/tags`, id: 'nav-tags' },
+    { type: 'navigation', title: t('shared.title'), path: `${appBasePath}/shared`, id: 'nav-shared' },
+    ...(showAdmin ? [{ type: 'navigation' as const, title: t('admin.title'), path: `${appBasePath}/admin`, id: 'nav-admin' }] : []),
   ];
 
   const actionItems: SearchResult[] = [
-    { type: 'action', title: t('bookmarks.create'), path: '/bookmarks', id: 'action-create-bookmark', action: () => navigate('/bookmarks?create=true') },
-    { type: 'action', title: t('folders.create'), path: '/folders', id: 'action-create-folder', action: () => navigate('/folders?create=true') },
-    { type: 'action', title: t('bookmarks.import'), path: '/bookmarks', id: 'action-import', action: () => navigate('/bookmarks?import=true') },
-    { type: 'action', title: t('bookmarks.export'), path: '/bookmarks', id: 'action-export', action: () => navigate('/bookmarks?export=true') },
+    { type: 'action', title: t('bookmarks.create'), path: `${appBasePath}/bookmarks`, id: 'action-create-bookmark', action: () => navigate(`${appBasePath}/bookmarks?create=true`) },
+    { type: 'action', title: t('folders.create'), path: `${appBasePath}/folders`, id: 'action-create-folder', action: () => navigate(`${appBasePath}/folders?create=true`) },
+    { type: 'action', title: t('bookmarks.import'), path: `${appBasePath}/bookmarks`, id: 'action-import', action: () => navigate(`${appBasePath}/bookmarks?import=true`) },
+    { type: 'action', title: t('bookmarks.export'), path: `${appBasePath}/bookmarks`, id: 'action-export', action: () => navigate(`${appBasePath}/bookmarks?export=true`) },
   ];
 
   useEffect(() => {
@@ -221,9 +225,9 @@ export default function GlobalSearch() {
         window.open(result.url, '_blank', 'noopener,noreferrer');
       }
     } else if (result.type === 'folder') {
-      navigate(`/bookmarks?folder_id=${result.id}`);
+      navigate(`${appBasePath}/bookmarks?folder_id=${result.id}`);
     } else if (result.type === 'tag') {
-      navigate(`/bookmarks?tag_id=${result.id}`);
+      navigate(`${appBasePath}/bookmarks?tag_id=${result.id}`);
     }
   }
 

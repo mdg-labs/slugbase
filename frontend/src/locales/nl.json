@@ -260,7 +260,9 @@
     "goTo": "Ga naar",
     "actions": "Acties",
     "navigation": "Navigatie",
-    "quickActions": "Snelle acties"
+    "quickActions": "Snelle acties",
+    "collapseSidebar": "Zijbalk insluiten",
+    "expandSidebar": "Zijbalk uitvouwen"
   },
   "dashboard": {
     "bookmarksDescription": "Beheer je bladwijzers",

@@ -279,7 +279,9 @@
     "goTo": "Gehe zu",
     "actions": "Aktionen",
     "navigation": "Navigation",
-    "quickActions": "Schnellaktionen"
+    "quickActions": "Schnellaktionen",
+    "collapseSidebar": "Seitenleiste einklappen",
+    "expandSidebar": "Seitenleiste erweitern"
   },
   "dashboard": {
     "bookmarksDescription": "Verwalten Sie Ihre Lesezeichen",

@@ -245,7 +245,9 @@
     "goTo": "Vai a",
     "actions": "Azioni",
     "navigation": "Navigazione",
-    "quickActions": "Azioni rapide"
+    "quickActions": "Azioni rapide",
+    "collapseSidebar": "Comprimi barra laterale",
+    "expandSidebar": "Espandi barra laterale"
   },
   "dashboard": {
     "bookmarksDescription": "Gestisci i tuoi segnalibri",

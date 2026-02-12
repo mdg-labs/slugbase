@@ -308,7 +308,9 @@
     "remove": "Remove",
     "actions": "Actions",
     "navigation": "Navigation",
-    "quickActions": "Quick Actions"
+    "quickActions": "Quick Actions",
+    "collapseSidebar": "Collapse sidebar",
+    "expandSidebar": "Expand sidebar"
   },
   "dashboard": {
     "bookmarksDescription": "Manage your bookmarks",

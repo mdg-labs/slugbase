@@ -1,24 +1,31 @@
-import { Outlet, Link, useLocation } from 'react-router-dom';
+import { Outlet } from 'react-router-dom';
 import { Suspense, useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
-import { Bookmark, Folder, Tag, LogOut, Settings, Share2, Github, RotateCcw, Plus } from 'lucide-react';
+import { Github, RotateCcw } from 'lucide-react';
 import Button from './ui/Button';
-import GlobalSearch from './GlobalSearch';
+import TopBar from './TopBar';
+import Sidebar from './Sidebar';
 import { useConfirmDialog } from '../hooks/useConfirmDialog';
 import ConfirmDialog from './ui/ConfirmDialog';
 import { useToast } from './ui/Toast';
 import api from '../api/client';
-import { appBasePath } from '../config/api';
 import { isCloud } from '../config/mode';
 
+const SIDEBAR_COLLAPSED_KEY = 'slugbase_sidebar_collapsed';
+const MOBILE_BREAKPOINT = 1024; // lg
+
 export default function Layout() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const { t } = useTranslation();
-  const location = useLocation();
   const [version, setVersion] = useState<string | null>(null);
   const [demoMode, setDemoMode] = useState<boolean>(false);
   const [resetting, setResetting] = useState<boolean>(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true'
+  );
+  const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const { showConfirm, dialogState } = useConfirmDialog();
   const { showToast } = useToast();
 
@@ -27,7 +34,6 @@ export default function Layout() {
       setResetting(true);
       await api.post('/admin/demo-reset');
       showToast(t('common.resetDemoSuccess'), 'success');
-      // Reload the page after a short delay to show fresh demo data
       setTimeout(() => {
         window.location.reload();
       }, 1500);
@@ -48,30 +54,43 @@ export default function Layout() {
     );
   };
 
-  const navItems = [
-    { path: `${appBasePath}/bookmarks`, label: t('bookmarks.title'), icon: Bookmark },
-    { path: `${appBasePath}/folders`, label: t('folders.title'), icon: Folder },
-    { path: `${appBasePath}/tags`, label: t('tags.title'), icon: Tag },
-    { path: `${appBasePath}/shared`, label: t('shared.title'), icon: Share2 },
-    ...((user?.is_admin || (isCloud && (user?.org_role === 'owner' || user?.org_role === 'admin')))
-      ? [{ path: `${appBasePath}/admin`, label: t('admin.title'), icon: Settings }]
-      : []),
-  ];
-
+  // Persist sidebar collapsed state
   useEffect(() => {
-    // Fetch version and demo mode status on mount
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(sidebarCollapsed));
+  }, [sidebarCollapsed]);
+
+  // Mobile breakpoint
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`);
+    setIsMobile(mq.matches);
+    const handler = () => setIsMobile(mq.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
+  // ESC to close mobile drawer
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && sidebarMobileOpen) {
+        setSidebarMobileOpen(false);
+      }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [sidebarMobileOpen]);
+
+  // Fetch version and demo mode
+  useEffect(() => {
     api.get('/version')
       .then(res => {
         if (res.data.commit) {
-          setVersion(res.data.commit.substring(0, 7)); // Show short commit hash
+          setVersion(res.data.commit.substring(0, 7));
         }
         if (res.data.demoMode) {
           setDemoMode(res.data.demoMode);
         }
       })
-      .catch(() => {
-        // Silently fail if version endpoint is not available
-      });
+      .catch(() => {});
   }, []);
 
   return (
@@ -84,89 +103,46 @@ export default function Layout() {
           {t('common.demoModeDescription')}
         </div>
       )}
-      {/* Navigation */}
-      <nav className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            {/* Logo & Navigation */}
-            <div className="flex items-center gap-8">
-              <Link
-                to={appBasePath || '/'}
-                className="flex items-center gap-2 text-xl font-bold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded-lg dark:focus-visible:ring-offset-gray-800"
-              >
-                <img
-                  src="/slugbase_icon_blue.svg"
-                  alt=""
-                  className="h-12 w-12 dark:hidden"
-                />
-                <img
-                  src="/slugbase_icon_white.svg"
-                  alt=""
-                  className="h-12 w-12 hidden dark:block"
-                />
-                {t('app.name')}
-              </Link>
-              <div className="hidden md:flex items-center gap-1">
-                {navItems.map((item) => {
-                  const Icon = item.icon;
-                  const isActive = location.pathname === item.path;
-                  return (
-                    <Link
-                      key={item.path}
-                      to={item.path}
-                      className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800 ${
-                        isActive
-                          ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
-                          : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                      }`}
-                    >
-                      <Icon className="h-4 w-4" />
-                      {item.label}
-                    </Link>
-                  );
-                })}
+
+      {/* Top Bar */}
+      <TopBar
+        onMenuClick={() => setSidebarMobileOpen(true)}
+        isMobile={isMobile}
+        user={user}
+      />
+
+      {/* AppShell: Sidebar + Main Content */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Sidebar - hidden on mobile (drawer), docked on desktop */}
+        <Sidebar
+          isCollapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed(v => !v)}
+          isMobileOpen={sidebarMobileOpen}
+          onMobileClose={() => setSidebarMobileOpen(false)}
+          isMobile={isMobile}
+          user={user}
+        />
+
+        {/* Main Content */}
+        <main className="flex-1 overflow-auto">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+            <Suspense fallback={
+              <div className="min-h-[400px] flex items-center justify-center">
+                <div className="text-gray-500 dark:text-gray-400">{t('common.loading')}</div>
               </div>
-            </div>
-
-            {/* Search & User Menu */}
-            <div className="flex items-center gap-4">
-              <Link to={`${appBasePath}/bookmarks?create=true`}>
-                <Button variant="primary" size="sm" icon={Plus}>
-                  <span className="hidden sm:inline">{t('bookmarks.create')}</span>
-                </Button>
-              </Link>
-              <GlobalSearch />
-              <Link
-                to={`${appBasePath}/profile`}
-                className="hidden sm:block text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded dark:focus-visible:ring-offset-gray-800"
-              >
-                {user?.name}
-              </Link>
-              <Button variant="ghost" size="sm" icon={LogOut} onClick={logout}>
-                <span className="hidden sm:inline">{t('auth.logout')}</span>
-              </Button>
-            </div>
+            }>
+              <Outlet />
+            </Suspense>
           </div>
-        </div>
-      </nav>
-
-      {/* Main Content */}
-      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
-        <Suspense fallback={
-          <div className="min-h-[400px] flex items-center justify-center">
-            <div className="text-gray-500 dark:text-gray-400">{t('common.loading')}</div>
-          </div>
-        }>
-          <Outlet />
-        </Suspense>
-      </main>
+        </main>
+      </div>
 
       {/* Footer */}
-      <footer className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+      <footer className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex justify-center items-center gap-3">
             <a
-              href="https://github.com/ghotso/slugbase"
+              href="https://github.com/mdg-labs/slugbase"
               target="_blank"
               rel="noopener noreferrer"
               className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
@@ -179,7 +155,6 @@ export default function Layout() {
                 {version}
               </span>
             )}
-            {/* Demo Reset Button - Only visible in demo mode for admins */}
             {demoMode && (user?.is_admin || (isCloud && (user?.org_role === 'owner' || user?.org_role === 'admin'))) && (
               <>
                 <span className="text-gray-400 dark:text-gray-600">|</span>
@@ -199,7 +174,6 @@ export default function Layout() {
         </div>
       </footer>
 
-      {/* Confirm Dialog */}
       <ConfirmDialog
         isOpen={dialogState.isOpen}
         title={dialogState.title}

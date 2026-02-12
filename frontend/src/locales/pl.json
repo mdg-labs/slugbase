@@ -245,7 +245,9 @@
     "goTo": "Idź do",
     "actions": "Akcje",
     "navigation": "Nawigacja",
-    "quickActions": "Szybkie akcje"
+    "quickActions": "Szybkie akcje",
+    "collapseSidebar": "Zwiń pasek boczny",
+    "expandSidebar": "Rozwiń pasek boczny"
   },
   "dashboard": {
     "bookmarksDescription": "Zarządzaj zakładkami",

@@ -35,7 +35,7 @@ After trying SlugBase Cloud:
 1. **[Install SlugBase](setup)** – Deploy your own self-hosted instance
 2. **[Read the Documentation](intro)** – Learn about all features
 3. **[Plans and billing](../cloud/plans-billing)** – Free, Personal, Team, and Early Supporter plans
-4. **[Join the Community](https://github.com/ghotso/slugbase/blob/main/CONTRIBUTING.md)** – Contribute or get help
+4. **[Join the Community](https://github.com/mdg-labs/slugbase/blob/main/CONTRIBUTING.md)** – Contribute or get help
 
 ## Related Documentation
 

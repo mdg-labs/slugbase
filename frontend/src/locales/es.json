@@ -260,7 +260,9 @@
     "goTo": "Ir a",
     "actions": "Acciones",
     "navigation": "Navegación",
-    "quickActions": "Acciones rápidas"
+    "quickActions": "Acciones rápidas",
+    "collapseSidebar": "Contraer barra lateral",
+    "expandSidebar": "Expandir barra lateral"
   },
   "dashboard": {
     "bookmarksDescription": "Administra tus marcadores",

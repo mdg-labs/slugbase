@@ -3,7 +3,7 @@ import api from '../api/client';
 import { getAuthProviderUrl } from '../config/api';
 import { useTranslation } from 'react-i18next';
 
-interface User {
+export interface User {
   id: string;
   email: string;
   name: string;

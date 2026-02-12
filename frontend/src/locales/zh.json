@@ -245,7 +245,9 @@
     "goTo": "转到",
     "actions": "操作",
     "navigation": "导航",
-    "quickActions": "快速操作"
+    "quickActions": "快速操作",
+    "collapseSidebar": "收起侧边栏",
+    "expandSidebar": "展开侧边栏"
   },
   "dashboard": {
     "bookmarksDescription": "管理您的书签",

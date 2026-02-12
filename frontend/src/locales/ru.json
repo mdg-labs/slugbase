@@ -245,7 +245,9 @@
     "goTo": "Перейти к",
     "actions": "Действия",
     "navigation": "Навигация",
-    "quickActions": "Быстрые действия"
+    "quickActions": "Быстрые действия",
+    "collapseSidebar": "Свернуть боковую панель",
+    "expandSidebar": "Развернуть боковую панель"
   },
   "dashboard": {
     "bookmarksDescription": "Управление закладками",

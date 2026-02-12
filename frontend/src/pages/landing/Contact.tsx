@@ -5,7 +5,7 @@ import { ExternalLink } from 'lucide-react';
 import api from '../../api/client';
 import MarketingLayout from '../../components/MarketingLayout';
 
-const GITHUB_URL = 'https://github.com/ghotso/slugbase';
+const GITHUB_URL = 'https://github.com/mdg-labs/slugbase';
 const DOCS_URL = 'https://docs.slugbase.app';
 
 function isValidEmail(email: string): boolean {

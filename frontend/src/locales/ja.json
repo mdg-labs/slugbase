@@ -245,7 +245,9 @@
     "goTo": "移動",
     "actions": "操作",
     "navigation": "ナビゲーション",
-    "quickActions": "クイックアクション"
+    "quickActions": "クイックアクション",
+    "collapseSidebar": "サイドバーを折りたたむ",
+    "expandSidebar": "サイドバーを展開"
   },
   "dashboard": {
     "bookmarksDescription": "ブックマークを管理",
