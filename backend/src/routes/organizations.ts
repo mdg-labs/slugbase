@@ -34,6 +34,8 @@ router.get('/me', requireAuth(), async (req, res) => {
     return res.status(404).json({ error: 'Organization not found' });
   }
   const org = row as any;
+  const plan = org.plan || 'free';
+  const includedSeats = plan === 'team' ? (org.included_seats ?? 5) : 1;
   const memberCount = await queryOne(
     'SELECT COUNT(*) as count FROM org_members WHERE org_id = ?',
     [org.id]
@@ -51,7 +53,7 @@ router.get('/me', requireAuth(), async (req, res) => {
     name: org.name,
     plan: org.plan,
     stripe_customer_id: org.stripe_customer_id || null,
-    included_seats: org.included_seats ?? 5,
+    included_seats: includedSeats,
     member_count: parseInt((memberCount as any)?.count || '0'),
     role: org.role,
     members: Array.isArray(members) ? members : [members],
@@ -105,6 +107,20 @@ router.post('/:id/invite', requireAuth(), authRateLimiter, async (req, res) => {
   );
   if (existingInvite) {
     return res.status(400).json({ error: 'An invitation has already been sent to this email' });
+  }
+  const memberCountRow = await queryOne(
+    'SELECT COUNT(*) as count FROM org_members WHERE org_id = ?',
+    [orgId]
+  );
+  const memberCount = parseInt((memberCountRow as any)?.count || '0');
+  const plan = (org as any).plan || 'free';
+  const maxSeats = plan === 'team' ? 5 : 1;
+  if (memberCount >= maxSeats) {
+    return res.status(403).json({
+      error: plan === 'team'
+        ? 'Team plan includes 5 members. Upgrade your subscription for additional seats.'
+        : 'Your plan allows only 1 member. Upgrade to Team plan to invite more members.',
+    });
   }
   const inviteId = uuidv4();
   const token = crypto.randomBytes(32).toString('hex');

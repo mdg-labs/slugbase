@@ -21,6 +21,8 @@ interface Plan {
   price_yearly?: number;
   price_one_time?: number;
   included_seats: number;
+  extra_seat_monthly?: number | null;
+  extra_seat_yearly?: number | null;
 }
 
 export default function AdminBillingPlan() {
@@ -28,6 +30,7 @@ export default function AdminBillingPlan() {
   const [org, setOrg] = useState<Org | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
+  const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly');
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteLoading, setInviteLoading] = useState(false);
@@ -118,6 +121,15 @@ export default function AdminBillingPlan() {
     return names[id] || id;
   };
 
+  const planFeatures: Record<string, string[]> = {
+    free: [t('pricing.freeValue1'), t('pricing.freeValue2'), t('pricing.freeValue3')],
+    personal: [t('pricing.personalValue1'), t('pricing.personalValue2'), t('pricing.personalValue3')],
+    team: [t('pricing.teamValue1'), t('pricing.teamValue2'), t('pricing.teamValue3')],
+    early_supporter: [t('pricing.earlySupporterHelp'), t('pricing.earlySupporterIncludes'), t('pricing.earlySupporterSeats'), t('pricing.earlySupporterNote')],
+  };
+
+  const canInviteMembers = org!.plan === 'team' && org!.member_count < org!.included_seats;
+
   if (loading) {
     return (
       <div className="text-center py-8 text-gray-500 dark:text-gray-400">
@@ -164,77 +176,149 @@ export default function AdminBillingPlan() {
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
             {t('admin.billingUpgrade')}
           </h2>
-          <div className="grid sm:grid-cols-2 gap-4">
-            {paidPlans.map((plan) => (
-              <div key={plan.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-                <p className="font-medium text-gray-900 dark:text-white">{planName(plan.id)}</p>
-                {plan.price_one_time && (
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                    €{(plan.price_one_time / 100).toFixed(0)} one-time
-                  </p>
-                )}
-                {plan.price_monthly !== undefined && plan.price_monthly > 0 && (
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                    €{(plan.price_monthly / 100).toFixed(0)}/mo · €{((plan.price_yearly || 0) / 100).toFixed(0)}/yr
-                  </p>
-                )}
-                <div className="mt-3 flex gap-2 flex-wrap">
-                  {plan.id === 'early_supporter' && (
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      disabled={!!checkoutLoading || org.plan === plan.id}
-                      onClick={() => handleCheckout(plan.id, 'one_time')}
-                    >
-                      {checkoutLoading ? t('common.loading') : t('admin.billingEarlySupporter')}
-                    </Button>
+          <div className="mb-4 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setBillingInterval('monthly')}
+              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                billingInterval === 'monthly'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+              }`}
+            >
+              Monthly
+            </button>
+            <button
+              type="button"
+              onClick={() => setBillingInterval('yearly')}
+              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                billingInterval === 'yearly'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+              }`}
+            >
+              Yearly
+            </button>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {plans.map((plan) => {
+              const isCurrent = org.plan === plan.id;
+              const features = planFeatures[plan.id] || [];
+              return (
+                <div
+                  key={plan.id}
+                  className={`rounded-lg border p-4 flex flex-col ${
+                    plan.id === 'personal'
+                      ? 'border-blue-200 dark:border-blue-800 ring-2 ring-blue-500/20'
+                      : 'border-gray-200 dark:border-gray-700'
+                  }`}
+                >
+                  {plan.id === 'personal' && (
+                    <span className="inline-block w-fit mb-2 px-2.5 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded-full">
+                      {t('pricing.mostPopular')}
+                    </span>
+                  )}
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{planName(plan.id)}</h3>
+                  {plan.id === 'free' && (
+                    <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">{t('pricing.freePrice')}</p>
                   )}
                   {plan.id === 'personal' && (
                     <>
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        disabled={!!checkoutLoading || org.plan === plan.id}
-                        onClick={() => handleCheckout(plan.id, 'monthly')}
-                      >
-                        {checkoutLoading === 'personal-monthly' ? t('common.loading') : t('admin.billingPersonalMonthly')}
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        disabled={!!checkoutLoading || org.plan === plan.id}
-                        onClick={() => handleCheckout(plan.id, 'yearly')}
-                      >
-                        {checkoutLoading === 'personal-yearly' ? t('common.loading') : t('admin.billingPersonalYearly')}
-                      </Button>
+                      <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
+                        {billingInterval === 'monthly' ? t('pricing.personalPrice') : `€${((plan.price_yearly || 0) / 100).toFixed(0)}/yr`}
+                      </p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">{t('pricing.personalYearly')}</p>
                     </>
                   )}
                   {plan.id === 'team' && (
                     <>
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        disabled={!!checkoutLoading || org.plan === plan.id}
-                        onClick={() => handleCheckout(plan.id, 'monthly')}
-                      >
-                        {checkoutLoading === 'team-monthly' ? t('common.loading') : t('admin.billingTeamMonthly')}
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        disabled={!!checkoutLoading || org.plan === plan.id}
-                        onClick={() => handleCheckout(plan.id, 'yearly')}
-                      >
-                        {checkoutLoading === 'team-yearly' ? t('common.loading') : t('admin.billingTeamYearly')}
-                      </Button>
+                      <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
+                        {billingInterval === 'monthly' ? t('pricing.teamPrice') : t('pricing.teamPriceYearly')}
+                      </p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        {t('pricing.teamUsers')} · {billingInterval === 'monthly' ? t('pricing.teamExtraUser') : t('pricing.teamExtraUserYearly')}
+                      </p>
                     </>
                   )}
+                  {plan.id === 'early_supporter' && (
+                    <>
+                      <p className="mt-2 text-sm font-medium text-amber-700 dark:text-amber-400">{t('pricing.earlySupporterLifetime')}</p>
+                      <p className="mt-1 text-2xl font-bold text-gray-900 dark:text-white">{t('pricing.earlySupporterPrice')}</p>
+                    </>
+                  )}
+                  <ul className="mt-4 space-y-2 text-sm text-gray-600 dark:text-gray-400 flex-1">
+                    {features.map((f, i) => (
+                      <li key={i}>{f}</li>
+                    ))}
+                  </ul>
+                  {plan.id !== 'free' && (
+                    <div className="mt-4 flex gap-2 flex-wrap">
+                      {plan.id === 'early_supporter' && (
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          className="w-full"
+                          disabled={!!checkoutLoading || isCurrent}
+                          onClick={() => handleCheckout(plan.id, 'one_time')}
+                        >
+                          {checkoutLoading === 'early_supporter-one_time' ? t('common.loading') : t('pricing.earlySupporterPrice')}
+                        </Button>
+                      )}
+                      {plan.id === 'personal' && (
+                        <>
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            className="flex-1"
+                            disabled={!!checkoutLoading || isCurrent}
+                            onClick={() => handleCheckout(plan.id, 'monthly')}
+                          >
+                            {checkoutLoading === 'personal-monthly' ? t('common.loading') : t('pricing.personalPrice')}
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            className="flex-1"
+                            disabled={!!checkoutLoading || isCurrent}
+                            onClick={() => handleCheckout(plan.id, 'yearly')}
+                          >
+                            {checkoutLoading === 'personal-yearly' ? t('common.loading') : `€${((plan.price_yearly || 0) / 100).toFixed(0)}/yr`}
+                          </Button>
+                        </>
+                      )}
+                      {plan.id === 'team' && (
+                        <>
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            className="flex-1"
+                            disabled={!!checkoutLoading || isCurrent}
+                            onClick={() => handleCheckout(plan.id, 'monthly')}
+                          >
+                            {checkoutLoading === 'team-monthly' ? t('common.loading') : t('pricing.teamPrice')}
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            className="flex-1"
+                            disabled={!!checkoutLoading || isCurrent}
+                            onClick={() => handleCheckout(plan.id, 'yearly')}
+                          >
+                            {checkoutLoading === 'team-yearly' ? t('common.loading') : t('pricing.teamPriceYearly')}
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                  {plan.id === 'free' && isCurrent && (
+                    <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">{t('admin.billingCurrentPlan')}</p>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           {paidPlans.length === 0 && (
-            <p className="text-sm text-gray-500 dark:text-gray-400">{t('admin.billingNotConfigured')}</p>
+            <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">{t('admin.billingNotConfigured')}</p>
           )}
         </div>
       )}
@@ -265,7 +349,7 @@ export default function AdminBillingPlan() {
             </li>
           ))}
         </ul>
-        {canManageBilling && (
+        {canManageBilling && canInviteMembers && (
           <form onSubmit={handleInvite} className="flex gap-2">
             <input
               type="email"
@@ -284,6 +368,16 @@ export default function AdminBillingPlan() {
               {inviteLoading ? t('common.loading') : t('admin.billingInviteMember')}
             </Button>
           </form>
+        )}
+        {canManageBilling && !canInviteMembers && org.plan !== 'team' && (
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+            {t('admin.billingUpgradeToInvite')}
+          </p>
+        )}
+        {canManageBilling && !canInviteMembers && org.plan === 'team' && org.member_count >= org.included_seats && (
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+            {t('admin.billingTeamAtLimit')}
+          </p>
         )}
         {inviteError && (
           <p className="mt-2 text-sm text-red-600 dark:text-red-400">{inviteError}</p>

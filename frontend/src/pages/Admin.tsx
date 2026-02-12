@@ -8,6 +8,7 @@ import AdminOIDCProviders from '../components/admin/AdminOIDCProviders';
 import AdminSettings from '../components/admin/AdminSettings';
 import AdminBillingPlan from '../components/admin/AdminBillingPlan';
 import { isCloud } from '../config/mode';
+import api from '../api/client';
 
 type Tab = 'users' | 'teams' | 'oidc' | 'settings' | 'billing';
 
@@ -20,6 +21,7 @@ export default function Admin() {
       ? (tabParam as Tab)
       : 'users'
   );
+  const [orgPlan, setOrgPlan] = useState<string | null>(null);
 
   useEffect(() => {
     const tabParam = searchParams.get('tab');
@@ -28,9 +30,27 @@ export default function Admin() {
     }
   }, [searchParams]);
 
+  useEffect(() => {
+    if (isCloud) {
+      api.get('/organizations/me')
+        .then((res) => setOrgPlan(res.data?.plan || 'free'))
+        .catch(() => setOrgPlan('free'));
+    }
+  }, []);
+
+  const showTeamsTab = !isCloud || (orgPlan != null && orgPlan !== 'free' && orgPlan !== 'personal');
+
+  // Redirect away from teams tab if not available (Free/Personal plan)
+  useEffect(() => {
+    if (activeTab === 'teams' && !showTeamsTab) {
+      setActiveTab('users');
+      setSearchParams({ tab: 'users' });
+    }
+  }, [activeTab, showTeamsTab, setSearchParams]);
+
   const allTabs = [
     { id: 'users' as Tab, label: t('admin.users'), icon: Users },
-    { id: 'teams' as Tab, label: t('admin.teams'), icon: UserCog },
+    ...(showTeamsTab ? [{ id: 'teams' as Tab, label: t('admin.teams'), icon: UserCog }] : []),
     ...(isCloud ? [{ id: 'billing' as Tab, label: t('admin.billing'), icon: CreditCard }] : []),
     { id: 'oidc' as Tab, label: t('admin.oidcProviders'), icon: Key },
     { id: 'settings' as Tab, label: t('admin.settings'), icon: Settings },

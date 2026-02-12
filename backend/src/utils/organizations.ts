@@ -23,7 +23,7 @@ export async function ensureOrgForUser(userId: string, userName: string): Promis
   const orgId = uuidv4();
   const orgName = `${userName}'s Workspace`;
   await execute(
-    `INSERT INTO organizations (id, name, plan, included_seats) VALUES (?, ?, 'free', 5)`,
+    `INSERT INTO organizations (id, name, plan, included_seats) VALUES (?, ?, 'free', 1)`,
     [orgId, orgName]
   );
   await execute(

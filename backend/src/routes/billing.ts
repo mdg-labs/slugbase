@@ -203,6 +203,9 @@ export async function handleStripeWebhook(req: Request, res: Response): Promise<
     res.status(400).end();
     return;
   }
+  const getSeatsForPlan = (plan: string) =>
+    plan === 'team' ? 5 : 1;
+
   try {
     switch (event.type) {
       case 'checkout.session.completed': {
@@ -211,9 +214,10 @@ export async function handleStripeWebhook(req: Request, res: Response): Promise<
         const plan = session.metadata?.plan;
         if (!orgId || !plan) break;
         const subId = typeof session.subscription === 'string' ? session.subscription : session.subscription?.id || null;
+        const seats = getSeatsForPlan(plan);
         await execute(
-          'UPDATE organizations SET plan = ?, stripe_subscription_id = COALESCE(?, stripe_subscription_id) WHERE id = ?',
-          [plan, subId, orgId]
+          'UPDATE organizations SET plan = ?, included_seats = ?, stripe_subscription_id = COALESCE(?, stripe_subscription_id) WHERE id = ?',
+          [plan, seats, subId, orgId]
         );
         break;
       }
@@ -226,14 +230,15 @@ export async function handleStripeWebhook(req: Request, res: Response): Promise<
         if (orgRow) {
           const org = orgRow as any;
           const plan = sub.metadata?.plan || 'team';
-          await execute('UPDATE organizations SET plan = ? WHERE id = ?', [plan, org.id]);
+          const seats = getSeatsForPlan(plan);
+          await execute('UPDATE organizations SET plan = ?, included_seats = ? WHERE id = ?', [plan, seats, org.id]);
         }
         break;
       }
       case 'customer.subscription.deleted': {
         const sub = event.data.object as Stripe.Subscription;
         await execute(
-          'UPDATE organizations SET plan = ?, stripe_subscription_id = NULL WHERE stripe_subscription_id = ?',
+          'UPDATE organizations SET plan = ?, included_seats = 1, stripe_subscription_id = NULL WHERE stripe_subscription_id = ?',
           ['free', sub.id]
         );
         break;
