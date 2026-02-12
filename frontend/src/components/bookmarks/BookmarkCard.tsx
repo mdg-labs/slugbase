@@ -50,13 +50,13 @@ export default function BookmarkCard({
 
   return (
     <div
-      className={`group bg-white dark:bg-gray-800 rounded-lg border ${
+      className={`group bg-card rounded-lg border ${
         selected
-          ? 'border-blue-500 dark:border-blue-400 ring-2 ring-blue-500/20'
-          : 'border-gray-200 dark:border-gray-700 hover:border-blue-400 dark:hover:border-blue-500'
-      } hover:shadow-lg transition-all duration-200 flex flex-col ${compact ? 'p-2.5 min-h-[200px]' : 'p-4'}`}
+          ? 'border-primary ring-2 ring-primary/20'
+          : 'border-border hover:border-primary/70'
+      } hover:shadow-lg transition-all duration-200 flex flex-col h-full min-h-0 ${compact ? 'p-2.5 min-h-[200px]' : 'p-4'}`}
     >
-      <div className={`space-y-3 flex-1 flex flex-col ${compact ? 'space-y-2' : ''}`}>
+      <div className={`space-y-3 flex-1 flex flex-col min-h-0 ${compact ? 'space-y-2' : ''}`}>
         {/* Header with icon and title */}
         <div className="flex items-start gap-3">
           {bulkMode && (
@@ -226,8 +226,8 @@ export default function BookmarkCard({
           </div>
         )}
 
-        {/* Actions */}
-        <div className={`flex gap-2 pt-3 mt-auto border-t border-gray-100 dark:border-gray-700/50 ${compact ? 'pt-2 mt-2' : ''}`}>
+        {/* Actions - always at bottom of card */}
+        <div className={`flex gap-2 pt-3 mt-auto border-t border-border shrink-0 ${compact ? 'pt-2 mt-2' : ''}`}>
           {onOpen ? (
             <Button 
               variant="primary" 

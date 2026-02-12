@@ -32,11 +32,11 @@ export default function Layout() {
   }, []);
 
   return (
-    <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen} className="min-h-screen bg-background">
+    <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen} className="h-svh overflow-hidden bg-background">
       <AppSidebar user={user} version={version} />
-      <SidebarInset className="flex flex-col min-h-0">
+      <SidebarInset className="flex flex-col min-h-0 overflow-hidden">
         <TopBar user={user} />
-        <div className="flex-1 min-h-0 overflow-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full min-h-full">
             <Suspense
               fallback={

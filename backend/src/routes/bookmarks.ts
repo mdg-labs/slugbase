@@ -35,6 +35,18 @@ router.use(requireAuth());
  *           type: string
  *         description: Filter bookmarks by tag ID
  *         example: "123e4567-e89b-12d3-a456-426614174000"
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 50
+ *         description: Max items per page (1-100)
+ *       - in: query
+ *         name: offset
+ *         schema:
+ *           type: integer
+ *           default: 0
+ *         description: Number of items to skip
  *     responses:
  *       200:
  *         description: List of bookmarks
@@ -102,7 +114,11 @@ router.get('/', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const userId = authReq.user!.id;
-    const { folder_id, tag_id, sort_by } = req.query;
+    const { folder_id, tag_id, sort_by, limit: limitParam, offset: offsetParam } = req.query;
+
+    // Pagination: default 50, max 100
+    const limit = Math.min(100, Math.max(1, parseInt(String(limitParam), 10) || 50));
+    const offset = Math.max(0, parseInt(String(offsetParam), 10) || 0);
 
     // Validate folder_id and tag_id so we don't leak other users' resources (IDOR)
     const folderIdStr = typeof folder_id === 'string' ? folder_id : undefined;
@@ -163,10 +179,17 @@ router.get('/', async (req, res) => {
       params.push(tagIdStr);
     }
 
+    // Count total (same filters, no pagination)
+    const fromWhereMatch = sql.match(/FROM bookmarks[\s\S]*/);
+    const fromWhere = fromWhereMatch ? fromWhereMatch[0] : '';
+    const countSql = `SELECT COUNT(*) as count FROM (SELECT DISTINCT b.id ${fromWhere}) AS sub`;
+    const countResult = await queryOne(countSql, params);
+    const total = countResult ? parseInt((countResult as any).count, 10) : 0;
+
     // Add sorting
     const sortBy = sort_by as string || 'recently_added';
     const DB_TYPE = process.env.DB_TYPE || 'sqlite';
-    
+
     switch (sortBy) {
       case 'alphabetical':
         sql += ' ORDER BY b.title ASC';
@@ -188,86 +211,171 @@ router.get('/', async (req, res) => {
         break;
     }
 
-    const bookmarks = await query(sql, params);
+    sql += ` LIMIT ? OFFSET ?`;
+    params.push(limit, offset);
 
-    // Get tags, folders, and teams for each bookmark
-    for (const bookmark of bookmarks as any[]) {
-      // Convert boolean fields from SQLite (0/1) to boolean
+    const bookmarks = await query(sql, params);
+    const bookmarkList = bookmarks as any[];
+
+    // Batch load related data (avoids N+1 queries)
+    const bookmarkIds = bookmarkList.map((b) => b.id).filter(Boolean);
+    if (bookmarkIds.length === 0) {
+      return res.json({ items: bookmarks, total, hasMore: offset + bookmarkList.length < total });
+    }
+
+    // Placeholders for IN clause (SQLite limit ~999)
+    const placeholders = bookmarkIds.map(() => '?').join(',');
+
+    // 1. Batch fetch tags: bookmark_id -> tag[]
+    const tagsRows = await query(
+      `SELECT bt.bookmark_id, t.id, t.name, t.created_at FROM bookmark_tags bt
+       INNER JOIN tags t ON bt.tag_id = t.id
+       WHERE bt.bookmark_id IN (${placeholders})`,
+      bookmarkIds
+    );
+    const tagsByBookmark = new Map<string, any[]>();
+    for (const row of Array.isArray(tagsRows) ? tagsRows : []) {
+      const bid = (row as any).bookmark_id;
+      if (!bid) continue;
+      const tag = { id: (row as any).id, name: (row as any).name, created_at: (row as any).created_at };
+      if (!tagsByBookmark.has(bid)) tagsByBookmark.set(bid, []);
+      tagsByBookmark.get(bid)!.push(tag);
+    }
+
+    // 2. Batch fetch bookmark_folders with folder details
+    const bfRows = await query(
+      `SELECT bf.bookmark_id, f.id, f.name, f.icon FROM bookmark_folders bf
+       INNER JOIN folders f ON bf.folder_id = f.id
+       WHERE bf.bookmark_id IN (${placeholders})`,
+      bookmarkIds
+    );
+    const foldersByBookmark = new Map<string, any[]>();
+    const folderIds = new Set<string>();
+    for (const row of Array.isArray(bfRows) ? bfRows : []) {
+      const r = row as any;
+      const bid = r.bookmark_id;
+      const fid = r.id;
+      if (!bid || !fid) continue;
+      folderIds.add(fid);
+      const folder = { id: fid, name: r.name, icon: r.icon };
+      if (!foldersByBookmark.has(bid)) foldersByBookmark.set(bid, []);
+      foldersByBookmark.get(bid)!.push(folder);
+    }
+
+    // 3. Batch fetch folder sharing (folder_team_shares, folder_user_shares)
+    const folderIdsArr = Array.from(folderIds);
+    const folderPlaceholders = folderIdsArr.length > 0 ? folderIdsArr.map(() => '?').join(',') : '';
+    let folderTeamsByFolder = new Map<string, any[]>();
+    let folderUsersByFolder = new Map<string, any[]>();
+    if (folderPlaceholders) {
+      const ftsRows = await query(
+        `SELECT fts.folder_id, t.id, t.name, t.description, t.created_at FROM folder_team_shares fts
+         INNER JOIN teams t ON fts.team_id = t.id
+         WHERE fts.folder_id IN (${folderPlaceholders})`,
+        folderIdsArr
+      );
+      for (const row of Array.isArray(ftsRows) ? ftsRows : []) {
+        const r = row as any;
+        const fid = r.folder_id;
+        if (!fid) continue;
+        const team = { id: r.id, name: r.name, description: r.description, created_at: r.created_at };
+        if (!folderTeamsByFolder.has(fid)) folderTeamsByFolder.set(fid, []);
+        folderTeamsByFolder.get(fid)!.push(team);
+      }
+      const fusRows = await query(
+        `SELECT fus.folder_id, u.id, u.name, u.email FROM folder_user_shares fus
+         INNER JOIN users u ON fus.user_id = u.id
+         WHERE fus.folder_id IN (${folderPlaceholders})`,
+        folderIdsArr
+      );
+      for (const row of Array.isArray(fusRows) ? fusRows : []) {
+        const r = row as any;
+        const fid = r.folder_id;
+        if (!fid) continue;
+        const user = { id: r.id, name: r.name, email: r.email };
+        if (!folderUsersByFolder.has(fid)) folderUsersByFolder.set(fid, []);
+        folderUsersByFolder.get(fid)!.push(user);
+      }
+    }
+
+    // 4. Batch fetch bookmark sharing (bookmark_team_shares, bookmark_user_shares)
+    const btsRows = await query(
+      `SELECT bts.bookmark_id, t.id, t.name, t.description, t.created_at FROM bookmark_team_shares bts
+       INNER JOIN teams t ON bts.team_id = t.id
+       WHERE bts.bookmark_id IN (${placeholders})`,
+      bookmarkIds
+    );
+    const bookmarkTeamsByBookmark = new Map<string, any[]>();
+    for (const row of Array.isArray(btsRows) ? btsRows : []) {
+      const r = row as any;
+      const bid = r.bookmark_id;
+      if (!bid) continue;
+      const team = { id: r.id, name: r.name, description: r.description, created_at: r.created_at };
+      if (!bookmarkTeamsByBookmark.has(bid)) bookmarkTeamsByBookmark.set(bid, []);
+      bookmarkTeamsByBookmark.get(bid)!.push(team);
+    }
+    const busRows = await query(
+      `SELECT bus.bookmark_id, u.id, u.name, u.email FROM bookmark_user_shares bus
+       INNER JOIN users u ON bus.user_id = u.id
+       WHERE bus.bookmark_id IN (${placeholders})`,
+      bookmarkIds
+    );
+    const bookmarkUsersByBookmark = new Map<string, any[]>();
+    for (const row of Array.isArray(busRows) ? busRows : []) {
+      const r = row as any;
+      const bid = r.bookmark_id;
+      if (!bid) continue;
+      const user = { id: r.id, name: r.name, email: r.email };
+      if (!bookmarkUsersByBookmark.has(bid)) bookmarkUsersByBookmark.set(bid, []);
+      bookmarkUsersByBookmark.get(bid)!.push(user);
+    }
+
+    // 5. Batch fetch owner info for shared bookmarks
+    const ownerIds = [...new Set(bookmarkList.filter((b) => b.user_id !== userId).map((b) => b.user_id))];
+    const ownersById = new Map<string, { name: string; email: string }>();
+    if (ownerIds.length > 0) {
+      const ownerPlaceholders = ownerIds.map(() => '?').join(',');
+      const ownerRows = await query(
+        `SELECT id, name, email FROM users WHERE id IN (${ownerPlaceholders})`,
+        ownerIds
+      );
+      for (const row of Array.isArray(ownerRows) ? ownerRows : []) {
+        const r = row as any;
+        ownersById.set(r.id, { name: r.name, email: r.email });
+      }
+    }
+
+    // 6. Assemble bookmarks with related data
+    for (const bookmark of bookmarkList) {
       bookmark.forwarding_enabled = Boolean(bookmark.forwarding_enabled);
       bookmark.pinned = Boolean(bookmark.pinned || false);
       bookmark.access_count = bookmark.access_count || 0;
-      // Convert null slug or internal placeholder to empty string for frontend
       if (!bookmark.slug || bookmark.slug.startsWith('_internal_')) {
         bookmark.slug = '';
       }
-      
-      // Owner info for shared bookmarks (name, email)
       if (bookmark.user_id !== userId) {
-        const owner = await queryOne('SELECT id, name, email FROM users WHERE id = ?', [bookmark.user_id]);
+        const owner = ownersById.get(bookmark.user_id);
         if (owner) {
           bookmark.user_name = owner.name;
           bookmark.user_email = owner.email;
         }
       }
-      
-      const tags = await query(
-        `SELECT t.* FROM tags t
-         INNER JOIN bookmark_tags bt ON t.id = bt.tag_id
-         WHERE bt.bookmark_id = ?`,
-        [bookmark.id]
-      );
-      bookmark.tags = tags;
-      
-      // Get folders for this bookmark (including icon and sharing info)
-      const bookmarkFolders = await query(
-        `SELECT f.id, f.name, f.icon FROM folders f
-         INNER JOIN bookmark_folders bf ON f.id = bf.folder_id
-         WHERE bf.bookmark_id = ?`,
-        [bookmark.id]
-      );
-      const foldersList = Array.isArray(bookmarkFolders) ? bookmarkFolders : (bookmarkFolders ? [bookmarkFolders] : []);
-      
-      // Get sharing information for each folder
-      for (const folder of foldersList as any[]) {
-        const folderSharedTeams = await query(
-          `SELECT t.* FROM teams t
-           INNER JOIN folder_team_shares fts ON t.id = fts.team_id
-           WHERE fts.folder_id = ?`,
-          [folder.id]
-        );
-        folder.shared_teams = Array.isArray(folderSharedTeams) ? folderSharedTeams : (folderSharedTeams ? [folderSharedTeams] : []);
-        
-        const folderSharedUsers = await query(
-          `SELECT u.id, u.name, u.email FROM users u
-           INNER JOIN folder_user_shares fus ON u.id = fus.user_id
-           WHERE fus.folder_id = ?`,
-          [folder.id]
-        );
-        folder.shared_users = Array.isArray(folderSharedUsers) ? folderSharedUsers : (folderSharedUsers ? [folderSharedUsers] : []);
+      bookmark.tags = tagsByBookmark.get(bookmark.id) || [];
+      const foldersList = foldersByBookmark.get(bookmark.id) || [];
+      for (const folder of foldersList) {
+        folder.shared_teams = folderTeamsByFolder.get(folder.id) || [];
+        folder.shared_users = folderUsersByFolder.get(folder.id) || [];
       }
-      
       bookmark.folders = foldersList;
-      
-      // Get shared teams for this bookmark
-      const sharedTeams = await query(
-        `SELECT t.* FROM teams t
-         INNER JOIN bookmark_team_shares bts ON t.id = bts.team_id
-         WHERE bts.bookmark_id = ?`,
-        [bookmark.id]
-      );
-      bookmark.shared_teams = Array.isArray(sharedTeams) ? sharedTeams : (sharedTeams ? [sharedTeams] : []);
-      
-      // Get shared users for this bookmark
-      const sharedUsers = await query(
-        `SELECT u.id, u.name, u.email FROM users u
-         INNER JOIN bookmark_user_shares bus ON u.id = bus.user_id
-         WHERE bus.bookmark_id = ?`,
-        [bookmark.id]
-      );
-      bookmark.shared_users = Array.isArray(sharedUsers) ? sharedUsers : (sharedUsers ? [sharedUsers] : []);
+      bookmark.shared_teams = bookmarkTeamsByBookmark.get(bookmark.id) || [];
+      bookmark.shared_users = bookmarkUsersByBookmark.get(bookmark.id) || [];
     }
 
-    res.json(bookmarks);
+    res.json({
+      items: bookmarks,
+      total,
+      hasMore: offset + bookmarkList.length < total,
+    });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

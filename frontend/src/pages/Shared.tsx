@@ -58,12 +58,14 @@ export default function Shared() {
   async function loadData() {
     try {
       const [bookmarksRes, foldersRes] = await Promise.all([
-        api.get('/bookmarks', { params: { folder_id: selectedFolderId || undefined } }),
+        api.get('/bookmarks', { params: { folder_id: selectedFolderId || undefined, limit: 100 } }),
         api.get('/folders'),
       ]);
-      
+      const bookmarksPayload = bookmarksRes.data;
+      const bookmarksItems = bookmarksPayload?.items ?? bookmarksPayload ?? [];
+
       // Filter to only shared items (not owned by current user)
-      const sharedBookmarks = bookmarksRes.data.filter((b: SharedBookmark) => b.user_id !== user?.id && (b as any).bookmark_type === 'shared');
+      const sharedBookmarks = (Array.isArray(bookmarksItems) ? bookmarksItems : []).filter((b: SharedBookmark) => b.user_id !== user?.id && (b as any).bookmark_type === 'shared');
       const sharedFolders = foldersRes.data.filter((f: SharedFolder) => f.user_id !== user?.id && (f as any).folder_type === 'shared');
       
       setBookmarks(sharedBookmarks);

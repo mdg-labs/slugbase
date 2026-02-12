@@ -103,12 +103,14 @@ export default function GlobalSearch() {
           ]);
         } catch {
           const [bookmarksRes, foldersRes, tagsRes] = await Promise.all([
-            api.get('/bookmarks'),
+            api.get('/bookmarks', { params: { limit: 100 } }),
             api.get('/folders'),
             api.get('/tags'),
           ]);
+          const bookmarksPayload = bookmarksRes.data;
+          const bookmarksItems = bookmarksPayload?.items ?? bookmarksPayload ?? [];
 
-          const bookmarkResults: SearchResult[] = bookmarksRes.data
+          const bookmarkResults: SearchResult[] = (Array.isArray(bookmarksItems) ? bookmarksItems : [])
             .filter((b: { title?: string; url?: string; slug?: string }) =>
               (b.title?.toLowerCase().includes(searchLower)) ||
               (b.url?.toLowerCase().includes(searchLower)) ||

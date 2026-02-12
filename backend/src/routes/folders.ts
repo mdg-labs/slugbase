@@ -99,33 +99,73 @@ router.get('/', async (req, res) => {
     }
 
     const folders = await query(sql, params);
+    const folderList = folders as any[];
 
-    // Get shared teams and users for each folder
-    for (const folder of folders as any[]) {
-      // Get owner info for shared folders
+    if (folderList.length === 0) {
+      return res.json(folders);
+    }
+
+    const folderIds = folderList.map((f) => f.id).filter(Boolean);
+    const placeholders = folderIds.map(() => '?').join(',');
+
+    // Batch fetch folder_team_shares and folder_user_shares
+    const ftsRows = await query(
+      `SELECT fts.folder_id, t.id, t.name, t.description, t.created_at FROM folder_team_shares fts
+       INNER JOIN teams t ON fts.team_id = t.id
+       WHERE fts.folder_id IN (${placeholders})`,
+      folderIds
+    );
+    const sharedTeamsByFolder = new Map<string, any[]>();
+    for (const row of Array.isArray(ftsRows) ? ftsRows : []) {
+      const r = row as any;
+      const fid = r.folder_id;
+      if (!fid) continue;
+      const team = { id: r.id, name: r.name, description: r.description, created_at: r.created_at };
+      if (!sharedTeamsByFolder.has(fid)) sharedTeamsByFolder.set(fid, []);
+      sharedTeamsByFolder.get(fid)!.push(team);
+    }
+
+    const fusRows = await query(
+      `SELECT fus.folder_id, u.id, u.name, u.email FROM folder_user_shares fus
+       INNER JOIN users u ON fus.user_id = u.id
+       WHERE fus.folder_id IN (${placeholders})`,
+      folderIds
+    );
+    const sharedUsersByFolder = new Map<string, any[]>();
+    for (const row of Array.isArray(fusRows) ? fusRows : []) {
+      const r = row as any;
+      const fid = r.folder_id;
+      if (!fid) continue;
+      const user = { id: r.id, name: r.name, email: r.email };
+      if (!sharedUsersByFolder.has(fid)) sharedUsersByFolder.set(fid, []);
+      sharedUsersByFolder.get(fid)!.push(user);
+    }
+
+    // Batch fetch owner info for shared folders
+    const ownerIds = [...new Set(folderList.filter((f) => f.user_id !== userId).map((f) => f.user_id))];
+    const ownersById = new Map<string, { name: string; email: string }>();
+    if (ownerIds.length > 0) {
+      const ownerPlaceholders = ownerIds.map(() => '?').join(',');
+      const ownerRows = await query(
+        `SELECT id, name, email FROM users WHERE id IN (${ownerPlaceholders})`,
+        ownerIds
+      );
+      for (const row of Array.isArray(ownerRows) ? ownerRows : []) {
+        const r = row as any;
+        ownersById.set(r.id, { name: r.name, email: r.email });
+      }
+    }
+
+    for (const folder of folderList) {
       if (folder.user_id !== userId) {
-        const owner = await queryOne('SELECT id, name, email FROM users WHERE id = ?', [folder.user_id]);
+        const owner = ownersById.get(folder.user_id);
         if (owner) {
           folder.user_name = owner.name;
           folder.user_email = owner.email;
         }
       }
-      
-      const sharedTeams = await query(
-        `SELECT t.* FROM teams t
-         INNER JOIN folder_team_shares fts ON t.id = fts.team_id
-         WHERE fts.folder_id = ?`,
-        [folder.id]
-      );
-      folder.shared_teams = Array.isArray(sharedTeams) ? sharedTeams : (sharedTeams ? [sharedTeams] : []);
-      
-      const sharedUsers = await query(
-        `SELECT u.id, u.name, u.email FROM users u
-         INNER JOIN folder_user_shares fus ON u.id = fus.user_id
-         WHERE fus.folder_id = ?`,
-        [folder.id]
-      );
-      folder.shared_users = Array.isArray(sharedUsers) ? sharedUsers : (sharedUsers ? [sharedUsers] : []);
+      folder.shared_teams = sharedTeamsByFolder.get(folder.id) || [];
+      folder.shared_users = sharedUsersByFolder.get(folder.id) || [];
     }
 
     res.json(folders);
