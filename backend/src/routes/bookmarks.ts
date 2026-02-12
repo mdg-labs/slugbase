@@ -179,13 +179,6 @@ router.get('/', async (req, res) => {
       params.push(tagIdStr);
     }
 
-    // Count total (same filters, no pagination)
-    const fromWhereMatch = sql.match(/FROM bookmarks[\s\S]*/);
-    const fromWhere = fromWhereMatch ? fromWhereMatch[0] : '';
-    const countSql = `SELECT COUNT(*) as count FROM (SELECT DISTINCT b.id ${fromWhere}) AS sub`;
-    const countResult = await queryOne(countSql, params);
-    const total = countResult ? parseInt((countResult as any).count, 10) : 0;
-
     // Add sorting
     const sortBy = sort_by as string || 'recently_added';
     const DB_TYPE = process.env.DB_TYPE || 'sqlite';
@@ -211,16 +204,20 @@ router.get('/', async (req, res) => {
         break;
     }
 
+    // Fetch limit+1 to determine hasMore without a separate COUNT query (avoids PostgreSQL/SQLite compatibility issues)
     sql += ` LIMIT ? OFFSET ?`;
-    params.push(limit, offset);
+    params.push(limit + 1, offset);
 
-    const bookmarks = await query(sql, params);
-    const bookmarkList = bookmarks as any[];
+    const rawBookmarks = await query(sql, params);
+    const hasMore = Array.isArray(rawBookmarks) && rawBookmarks.length > limit;
+    const bookmarks = hasMore ? rawBookmarks.slice(0, limit) : rawBookmarks;
+    const total = hasMore ? offset + limit + 1 : offset + (Array.isArray(rawBookmarks) ? rawBookmarks.length : 0);
+    const bookmarkList = (Array.isArray(bookmarks) ? bookmarks : []) as any[];
 
     // Batch load related data (avoids N+1 queries)
     const bookmarkIds = bookmarkList.map((b) => b.id).filter(Boolean);
     if (bookmarkIds.length === 0) {
-      return res.json({ items: bookmarks, total, hasMore: offset + bookmarkList.length < total });
+      return res.json({ items: bookmarks, total, hasMore });
     }
 
     // Placeholders for IN clause (SQLite limit ~999)
@@ -374,7 +371,7 @@ router.get('/', async (req, res) => {
     res.json({
       items: bookmarks,
       total,
-      hasMore: offset + bookmarkList.length < total,
+      hasMore,
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
