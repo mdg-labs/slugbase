@@ -149,34 +149,8 @@ export default function Sidebar({
           <div className="flex-1" />
         )}
 
-        {!isMobile && (
-          <div className="px-3 pt-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
-            <button
-              type="button"
-              onClick={onToggleCollapse}
-              className={`flex items-center w-full gap-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700/50 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800 ${
-                isCollapsed ? 'justify-center px-0' : 'justify-start px-3'
-              }`}
-              aria-label={isCollapsed ? t('common.expandSidebar') : t('common.collapseSidebar')}
-            >
-              {isCollapsed ? (
-                <ChevronRight className="h-5 w-5 flex-shrink-0" />
-              ) : (
-                <ChevronLeft className="h-5 w-5 flex-shrink-0" />
-              )}
-              <span
-                className={`overflow-hidden whitespace-nowrap transition-all duration-300 ease-in-out ${
-                  isCollapsed ? 'max-w-0 min-w-0 opacity-0' : 'max-w-[180px] opacity-100'
-                }`}
-              >
-                {t('common.collapseSidebar')}
-              </span>
-            </button>
-          </div>
-        )}
-
-        {/* Bottom: GitHub link, version */}
-        <div className="mt-auto pt-4 pb-3 px-3 border-t border-gray-200 dark:border-gray-700 space-y-2 flex-shrink-0">
+        {/* GitHub link, version */}
+        <div className="pt-4 pb-2 px-3 border-t border-gray-200 dark:border-gray-700 space-y-2 flex-shrink-0">
           <div className={`flex items-center gap-2 ${(isCollapsed && !isMobile) || (!version && !isMobile) ? 'justify-center' : ''}`}>
             {isCollapsed && !isMobile ? (
               <Tooltip content="GitHub Repository" position="right">
@@ -211,6 +185,33 @@ export default function Sidebar({
             )}
           </div>
         </div>
+
+        {/* Collapse toggle - at the very bottom */}
+        {!isMobile && (
+          <div className="pt-2 pb-3 px-3 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
+            <button
+              type="button"
+              onClick={onToggleCollapse}
+              className={`flex items-center w-full gap-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700/50 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800 ${
+                isCollapsed ? 'justify-center px-0' : 'justify-start px-3'
+              }`}
+              aria-label={isCollapsed ? t('common.expandSidebar') : t('common.collapseSidebar')}
+            >
+              {isCollapsed ? (
+                <ChevronRight className="h-5 w-5 flex-shrink-0" />
+              ) : (
+                <ChevronLeft className="h-5 w-5 flex-shrink-0" />
+              )}
+              <span
+                className={`overflow-hidden whitespace-nowrap transition-all duration-300 ease-in-out ${
+                  isCollapsed ? 'max-w-0 min-w-0 opacity-0' : 'max-w-[180px] opacity-100'
+                }`}
+              >
+                {t('common.collapseSidebar')}
+              </span>
+            </button>
+          </div>
+        )}
       </nav>
     </>
   );
