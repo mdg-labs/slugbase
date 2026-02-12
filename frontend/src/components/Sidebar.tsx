@@ -218,7 +218,7 @@ export default function Sidebar({
 
   const sidebarWidthClasses = isMobile ? 'w-60' : isCollapsed ? 'w-16' : 'w-60';
   const baseSidebarClasses =
-    'flex flex-col bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex-shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out';
+    'flex flex-col h-full min-h-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex-shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out';
 
   if (isMobile) {
     return (

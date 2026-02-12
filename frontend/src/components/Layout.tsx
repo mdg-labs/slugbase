@@ -55,7 +55,7 @@ export default function Layout() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
+    <div className="h-screen overflow-hidden bg-gray-50 dark:bg-gray-900 flex flex-col">
       {/* Top Bar */}
       <TopBar
         onMenuClick={() => setSidebarMobileOpen(true)}
@@ -64,7 +64,7 @@ export default function Layout() {
       />
 
       {/* AppShell: Sidebar + Main Content */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Sidebar - hidden on mobile (drawer), docked on desktop */}
         <Sidebar
           isCollapsed={sidebarCollapsed}
@@ -77,8 +77,8 @@ export default function Layout() {
         />
 
         {/* Main Content */}
-        <main className="flex-1 overflow-auto">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+        <main className="flex-1 min-h-0 overflow-auto">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full min-h-full">
             <Suspense fallback={
               <div className="min-h-[400px] flex items-center justify-center">
                 <div className="text-gray-500 dark:text-gray-400">{t('common.loading')}</div>

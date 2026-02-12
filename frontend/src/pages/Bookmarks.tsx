@@ -392,9 +392,9 @@ export default function Bookmarks() {
 
   return (
     <div className="space-y-6 pb-24">
-      {/* Sticky Header */}
-      <div className="sticky top-0 z-40 bg-gray-50 dark:bg-gray-900 -mx-4 px-4 pt-4 pb-4 border-b border-gray-200 dark:border-gray-700 -mb-4 shadow-sm">
-        <div className="flex items-center justify-between flex-wrap gap-4">
+      {/* Sticky controls bar: header + filters/toolbar - stays visible when scrolling */}
+      <div className="sticky top-0 z-40 space-y-4 pb-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pt-0 -mt-8 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 shadow-sm">
+        <div className="flex items-center justify-between flex-wrap gap-4 pt-4">
           <div>
             <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
               {t('bookmarks.title')}
@@ -438,10 +438,9 @@ export default function Bookmarks() {
             )}
           </div>
         </div>
-      </div>
 
-      {/* Sticky Toolbar: Filters, Sort, View Modes */}
-      <div className="sticky top-[140px] z-30 flex flex-wrap items-center gap-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 shadow-sm">
+        {/* Toolbar: Filters, Sort, View Modes */}
+        <div className="flex flex-wrap items-center gap-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 shadow-sm">
         {/* Filters */}
         <div className="flex flex-wrap gap-3 flex-1 min-w-[200px]">
           <div className="flex-1 min-w-[180px]">
@@ -536,9 +535,10 @@ export default function Bookmarks() {
             {t('bookmarks.compactMode')}
           </button>
         </div>
+        </div>
       </div>
 
-      {/* Sticky Bulk Actions Bar */}
+      {/* Bulk Actions Bar */}
       {bulkMode && (
         <div className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 border-t border-blue-200 dark:border-blue-800 shadow-lg p-4">
           <div className="flex items-center gap-3">

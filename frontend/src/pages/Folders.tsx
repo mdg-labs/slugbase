@@ -122,8 +122,8 @@ export default function Folders() {
 
   return (
     <div className="space-y-6 pb-24">
-      {/* Sticky Header */}
-      <div className="sticky top-0 z-40 bg-gray-50 dark:bg-gray-900 -mx-4 px-4 pt-4 pb-4 border-b border-gray-200 dark:border-gray-700 -mb-4 shadow-sm">
+      {/* Sticky controls bar: header + toolbar - stays visible when scrolling */}
+      <div className="sticky top-0 z-40 space-y-4 pb-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pt-0 -mt-8 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 shadow-sm">
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
             <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
@@ -137,11 +137,10 @@ export default function Folders() {
             {t('folders.create')}
           </Button>
         </div>
-      </div>
 
-      {/* Sticky Toolbar: Sort, View Modes */}
-      {sortedFolders.length > 0 && (
-        <div className="sticky top-[140px] z-30 flex flex-wrap items-center gap-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 shadow-sm">
+        {/* Toolbar: Sort, View Modes */}
+        {sortedFolders.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 shadow-sm">
           {/* Sort */}
           <div className="flex items-center gap-2">
             <Select
@@ -191,7 +190,8 @@ export default function Folders() {
             </button>
           </div>
         </div>
-      )}
+        )}
+      </div>
 
       {/* Folders Display */}
       {sortedFolders.length === 0 ? (
