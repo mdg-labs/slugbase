@@ -421,6 +421,7 @@
     "billingManageSubscription": "Manage subscription",
     "billingOrgMembers": "Organization members",
     "billingSeatsUsed": "{{count}} of {{total}} seats used",
+    "seatsUsed": "{{used}} of {{total}} seats",
     "billingInviteMember": "Invite member",
     "billingUpgradeToInvite": "Upgrade to Team plan to invite more members.",
     "billingTeamAtLimit": "You've reached the 5-member limit. Additional seats are €1/user/month.",
