@@ -51,7 +51,7 @@ export default function GlobalSearch() {
     { type: 'navigation', title: t('folders.title'), path: `${appBasePath}/folders`, id: 'nav-folders' },
     { type: 'navigation', title: t('tags.title'), path: `${appBasePath}/tags`, id: 'nav-tags' },
     { type: 'navigation', title: t('shared.title'), path: `${appBasePath}/shared`, id: 'nav-shared' },
-    ...(showAdmin ? [{ type: 'navigation' as const, title: t('admin.title'), path: `${appBasePath}/admin`, id: 'nav-admin' }] : []),
+    ...(showAdmin ? [{ type: 'navigation' as const, title: t('admin.title'), path: `${appBasePath}/admin/members`, id: 'nav-admin' }] : []),
   ], [showAdmin, t]);
 
   const actionItems: SearchResult[] = useMemo(() => [
@@ -198,11 +198,11 @@ export default function GlobalSearch() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="hidden md:flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground bg-muted rounded-lg hover:bg-accent hover:text-accent-foreground transition-colors border border-input"
+        className="hidden md:flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground bg-muted rounded-lg hover:bg-accent hover:text-accent-foreground transition-colors border border-border focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
         <Search className="h-4 w-4" />
         <span>{t('common.search')}</span>
-        <kbd className="hidden lg:inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-semibold text-muted-foreground bg-background border rounded">
+        <kbd className="hidden lg:inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-semibold text-muted-foreground bg-background border border-border rounded-md">
           {navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}K
         </kbd>
       </button>
@@ -256,8 +256,8 @@ export default function GlobalSearch() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="truncate font-medium">{result.title}</span>
-                    {(result.type === 'bookmark' || result.type === 'navigation' || result.type === 'action') && (
-                      <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    {result.type === 'bookmark' && (
+                      <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
                     )}
                   </div>
                   {result.url && (
