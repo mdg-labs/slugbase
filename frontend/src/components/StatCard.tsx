@@ -8,6 +8,8 @@ interface StatCardProps {
   value: string | number;
   icon: LucideIcon;
   href?: string;
+  /** Use compact padding and smaller icon for dense layouts */
+  dense?: boolean;
   /** Tailwind classes for the icon container (e.g. bg-blue-100 dark:bg-blue-900/20) */
   iconContainerClassName?: string;
   /** Tailwind classes for the icon color (e.g. text-blue-600 dark:text-blue-400) */
@@ -15,20 +17,20 @@ interface StatCardProps {
   className?: string;
 }
 
-export function StatCard({ label, value, icon: Icon, href, iconContainerClassName, iconColorClassName, className }: StatCardProps) {
+export function StatCard({ label, value, icon: Icon, href, dense, iconContainerClassName, iconColorClassName, className }: StatCardProps) {
   const content = (
     <>
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-medium text-muted-foreground">
+          <p className={cn('font-medium text-muted-foreground', dense ? 'text-xs' : 'text-sm')}>
             {label}
           </p>
-          <p className="text-2xl font-semibold mt-2">
+          <p className={cn('font-semibold mt-2', dense ? 'text-xl' : 'text-2xl')}>
             {value}
           </p>
         </div>
-        <div className={cn('p-3 rounded-lg', iconContainerClassName ?? 'bg-muted')}>
-          <Icon className={cn('h-6 w-6', iconColorClassName ?? 'text-muted-foreground')} />
+        <div className={cn('rounded-lg', iconContainerClassName ?? 'bg-muted', dense ? 'p-2' : 'p-3')}>
+          <Icon className={cn(iconColorClassName ?? 'text-muted-foreground', dense ? 'h-5 w-5' : 'h-6 w-6')} />
         </div>
       </div>
     </>
@@ -40,11 +42,13 @@ export function StatCard({ label, value, icon: Icon, href, iconContainerClassNam
     className
   );
 
+  const contentPadding = dense ? 'p-3' : 'p-4';
+
   if (href) {
     return (
       <Link to={href} className="block focus:outline-none">
         <Card className={cardClassName}>
-          <CardContent className="p-4">
+          <CardContent className={contentPadding}>
             {content}
           </CardContent>
         </Card>
@@ -54,7 +58,7 @@ export function StatCard({ label, value, icon: Icon, href, iconContainerClassNam
 
   return (
     <Card className={cardClassName}>
-      <CardContent className="p-4">
+      <CardContent className={contentPadding}>
         {content}
       </CardContent>
     </Card>

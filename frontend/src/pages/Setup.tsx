@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/client';
+import { appRootPath } from '../config/api';
 import { useAuth } from '../contexts/AuthContext';
 import { CheckCircle, UserPlus, Shield } from 'lucide-react';
 import Button from '../components/ui/Button';
@@ -23,7 +24,7 @@ export default function Setup() {
   // If user is already authenticated, redirect to dashboard
   useEffect(() => {
     if (user) {
-      navigate('/dashboard');
+      navigate(appRootPath);
     }
   }, [user, navigate]);
 
@@ -55,7 +56,7 @@ export default function Setup() {
       setSuccess(true);
       // Redirect to dashboard after a brief delay
       setTimeout(() => {
-        navigate('/dashboard');
+        navigate(appRootPath);
       }, 1500);
     } catch (err: any) {
       setError(err.response?.data?.error || t('common.error'));

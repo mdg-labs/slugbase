@@ -112,12 +112,25 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className={denseMode ? 'space-y-6' : 'space-y-8'}>
       <PageHeader
         title={t('dashboard.overview')}
         subtitle={t('dashboard.overviewSubtitle')}
         actions={
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setDenseMode(!denseMode)}
+              className={`px-3 py-1.5 text-sm rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 ${
+                denseMode
+                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+              }`}
+              title={t('dashboard.denseView')}
+            >
+              {t('dashboard.denseView')}
+            </button>
+            <span className="text-muted-foreground">·</span>
             <Link to={appBasePath + '/folders'} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
               {t('dashboard.createFolder')}
             </Link>
@@ -148,22 +161,11 @@ export default function Dashboard() {
             <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
               {t('dashboard.yourLibrary')}
             </h2>
-            <button
-              type="button"
-              onClick={() => setDenseMode(!denseMode)}
-              className={`px-3 py-1.5 text-sm rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 ${
-                denseMode
-                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
-              }`}
-              title={t('dashboard.denseView')}
-            >
-              {t('dashboard.denseView')}
-            </button>
           </div>
 
           <div className={`grid grid-cols-1 gap-4 sm:grid-cols-3 ${denseMode ? 'gap-3' : ''}`}>
             <StatCard
+              dense={denseMode}
               label={t('dashboard.totalBookmarks')}
               value={bookmarkLimit != null ? t('plan.bookmarksUsed', { count: bookmarkCount, limit: bookmarkLimit }) : stats.totalBookmarks}
               icon={Bookmark}
@@ -172,6 +174,7 @@ export default function Dashboard() {
               iconColorClassName="text-blue-600 dark:text-blue-400"
             />
             <StatCard
+              dense={denseMode}
               label={t('dashboard.totalFolders')}
               value={stats.totalFolders}
               icon={Folder}
@@ -180,6 +183,7 @@ export default function Dashboard() {
               iconColorClassName="text-green-600 dark:text-green-400"
             />
             <StatCard
+              dense={denseMode}
               label={t('dashboard.totalTags')}
               value={stats.totalTags}
               icon={Tag}
@@ -192,8 +196,9 @@ export default function Dashboard() {
           <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 pt-2">
             {t('dashboard.sharedWithYou')}
           </p>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className={`grid grid-cols-1 sm:grid-cols-2 ${denseMode ? 'gap-3' : 'gap-4'}`}>
             <StatCard
+              dense={denseMode}
               label={t('dashboard.sharedBookmarks')}
               value={stats.sharedBookmarks}
               icon={Share2}
@@ -202,6 +207,7 @@ export default function Dashboard() {
               iconColorClassName={stats.sharedBookmarks === 0 ? 'text-muted-foreground' : 'text-green-600 dark:text-green-400'}
             />
             <StatCard
+              dense={denseMode}
               label={t('dashboard.sharedFolders')}
               value={stats.sharedFolders}
               icon={Share2}
@@ -221,11 +227,11 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent className={denseMode ? 'p-3 pt-0' : 'p-4 pt-0'}>
                 {stats.recentBookmarks.length > 0 ? (
-                  <div className="space-y-3">
+                  <div className={denseMode ? 'space-y-2' : 'space-y-3'}>
                     {stats.recentBookmarks.map((bookmark) => (
                       <div
                         key={bookmark.id}
-                        className="group/bookmark flex items-start gap-2 p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                        className={`group/bookmark flex items-start gap-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${denseMode ? 'p-2 gap-1.5' : 'p-3'}`}
                       >
                         <a
                           href={bookmark.url}
@@ -234,14 +240,14 @@ export default function Dashboard() {
                           className="flex-1 min-w-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded"
                           title={t('dashboard.openBookmark')}
                         >
-                          <p className="text-sm font-medium text-gray-900 dark:text-white line-clamp-1">
+                          <p className={`font-medium text-gray-900 dark:text-white line-clamp-1 ${denseMode ? 'text-xs' : 'text-sm'}`}>
                             {bookmark.title}
                           </p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">
+                          <p className={`text-gray-500 dark:text-gray-400 truncate ${denseMode ? 'text-[10px] mt-0.5' : 'text-xs mt-1'}`}>
                             {bookmark.url}
                           </p>
                           {(bookmark.folder_names?.length || bookmark.tag_names?.length || bookmark.last_accessed_at) ? (
-                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-2 text-xs text-gray-500 dark:text-gray-400">
+                            <div className={`flex flex-wrap items-center gap-x-2 gap-y-1 text-gray-500 dark:text-gray-400 ${denseMode ? 'mt-1 text-[10px]' : 'mt-2 text-xs'}`}>
                               {bookmark.folder_names?.length ? (
                                 <span className="inline-flex items-center gap-1">
                                   <Folder className="h-3 w-3" />
@@ -347,15 +353,15 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent className={denseMode ? 'p-3 pt-0' : 'p-4 pt-0'}>
                 {stats.topTags.length > 0 ? (
-                  <div className="space-y-3">
+                  <div className={denseMode ? 'space-y-2' : 'space-y-3'}>
                     {stats.topTags.map((tag) => (
                       <Link
                         key={tag.id}
                         to={`${appBasePath}/bookmarks?tag_id=${tag.id}`}
-                        className="flex items-center justify-between p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800"
+                        className={`flex items-center justify-between rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800 ${denseMode ? 'p-2' : 'p-3'}`}
                         aria-label={t('dashboard.tagBookmarkCount', { count: tag.bookmark_count })}
                       >
-                        <span className="text-sm font-medium text-gray-900 dark:text-white">
+                        <span className={`font-medium text-gray-900 dark:text-white ${denseMode ? 'text-xs' : 'text-sm'}`}>
                           {tag.name}
                         </span>
                         <Badge variant="secondary" className="text-xs">
@@ -383,19 +389,19 @@ export default function Dashboard() {
       )}
 
       {/* Quick Access Cards */}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 ${denseMode ? 'gap-4' : 'gap-6'}`}>
         {cards.map((card) => {
           const Icon = card.icon;
           return (
             <Link key={card.to} to={card.to} className="group block focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-xl">
               <Card className="h-full transition-all hover:shadow-md hover:border-primary/70">
-                <CardHeader className="space-y-4">
-                  <div className={`inline-flex w-fit p-3 rounded-lg border ${colorClasses[card.color as keyof typeof colorClasses]}`}>
-                    <Icon className="h-6 w-6" />
+                <CardHeader className={denseMode ? 'space-y-2 p-3' : 'space-y-4'}>
+                  <div className={`inline-flex w-fit rounded-lg border ${colorClasses[card.color as keyof typeof colorClasses]} ${denseMode ? 'p-2' : 'p-3'}`}>
+                    <Icon className={denseMode ? 'h-5 w-5' : 'h-6 w-6'} />
                   </div>
                   <div>
-                    <CardTitle className="text-[15px] mb-1">{card.title}</CardTitle>
-                    <CardDescription>{card.description}</CardDescription>
+                    <CardTitle className={denseMode ? 'text-sm mb-0.5' : 'text-[15px] mb-1'}>{card.title}</CardTitle>
+                    <CardDescription className={denseMode ? 'text-xs' : ''}>{card.description}</CardDescription>
                   </div>
                   <div className="flex items-center text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">
                     {t('common.view')}
