@@ -50,7 +50,7 @@ export default function Favicon({ url, className = '', size = 20 }: FaviconProps
   if (loading) {
     return (
       <div className={`flex items-center justify-center ${className}`} style={{ width: `${size}px`, height: `${size}px` }}>
-        <div className="w-3 h-3 border-2 border-gray-300 dark:border-gray-600 border-t-blue-600 dark:border-t-blue-400 rounded-full animate-spin" />
+        <div className="w-3 h-3 border-2 border-input border-t-primary rounded-full animate-spin" />
       </div>
     );
   }
@@ -58,7 +58,7 @@ export default function Favicon({ url, className = '', size = 20 }: FaviconProps
   if (error || !faviconUrl) {
     return (
       <div className={`flex items-center justify-center ${className}`} style={{ width: `${size}px`, height: `${size}px` }}>
-        <BookmarkIcon className="text-blue-600 dark:text-blue-400" style={{ width: `${size}px`, height: `${size}px` }} />
+        <BookmarkIcon className="text-primary" style={{ width: `${size}px`, height: `${size}px` }} />
       </div>
     );
   }

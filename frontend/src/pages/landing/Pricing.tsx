@@ -12,16 +12,16 @@ export default function Pricing() {
     <MarketingLayout>
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-16">
         <div className="text-center mb-12">
-          <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white">{t('pricing.title')}</h1>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">{t('pricing.subtitle')}</p>
+          <h1 className="text-3xl sm:text-4xl font-bold text-foreground">{t('pricing.title')}</h1>
+          <p className="mt-2 text-muted-foreground">{t('pricing.subtitle')}</p>
           <div className="mt-4 flex items-center justify-center gap-2">
             <button
               type="button"
               onClick={() => setBillingInterval('monthly')}
               className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
                 billingInterval === 'monthly'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:bg-accent'
               }`}
             >
               Monthly
@@ -31,8 +31,8 @@ export default function Pricing() {
               onClick={() => setBillingInterval('yearly')}
               className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
                 billingInterval === 'yearly'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:bg-accent'
               }`}
             >
               Yearly
