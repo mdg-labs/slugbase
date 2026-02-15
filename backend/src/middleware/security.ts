@@ -75,6 +75,17 @@ export const redirectRateLimiter = isDevelopment
       legacyHeaders: false,
     });
 
+/** API token creation: limit to prevent abuse */
+export const tokenCreateRateLimiter = isDevelopment
+  ? noOpRateLimiter
+  : rateLimit({
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      max: 10,
+      message: 'Too many token creation attempts. Please try again later.',
+      standardHeaders: true,
+      legacyHeaders: false,
+    });
+
 /**
  * Security headers middleware
  */

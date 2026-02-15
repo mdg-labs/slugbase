@@ -27,6 +27,7 @@ import * as migration011 from './011_org_scoped_teams.js';
 import * as migration012 from './012_org_invitations_token_hash.js';
 import * as migration013 from './013_signup_verification_token_hash.js';
 import * as migration014 from './014_stats_indexes.js';
+import * as migration015 from './015_api_tokens.js';
 
 export interface Migration {
   migrationId: string;
@@ -120,6 +121,12 @@ const migrations: Migration[] = [
     migrationName: migration014.migrationName,
     up: migration014.up,
     down: migration014.down,
+  },
+  {
+    migrationId: migration015.migrationId,
+    migrationName: migration015.migrationName,
+    up: migration015.up,
+    down: migration015.down,
   },
 ];
 

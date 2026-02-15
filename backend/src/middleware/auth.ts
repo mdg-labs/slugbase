@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction, RequestHandler } from 'express';
 import passport from 'passport';
 import { isCloud } from '../config/mode.js';
+import { validateToken } from '../services/api-tokens.js';
 
 export interface AuthRequest extends Request {
   user?: {
@@ -19,28 +20,57 @@ export function isAuthRequest(req: Request): req is AuthRequest {
 }
 
 /**
- * Middleware to authenticate requests using JWT
- * Uses Passport JWT strategy to verify token from cookie or Authorization header
+ * Middleware to authenticate requests using JWT or API token.
+ * Priority: JWT (cookie or Bearer) → API token (Bearer with sb_ prefix).
+ * If JWT fails and Bearer token starts with sb_, tries API token lookup.
  */
 export function requireAuth(): RequestHandler {
   return (req: Request, res: Response, next: NextFunction) => {
-    passport.authenticate('jwt', { session: false }, (err: any, user: any) => {
+    passport.authenticate('jwt', { session: false }, async (err: any, user: any) => {
       if (err) {
         return res.status(401).json({ error: 'Unauthorized' });
       }
-      if (!user) {
-        return res.status(401).json({ error: 'Unauthorized' });
+      if (user) {
+        (req as AuthRequest).user = user;
+        return next();
       }
-      (req as AuthRequest).user = user;
-      next();
+      // JWT failed; try API token if Bearer header present
+      const authHeader = req.headers.authorization;
+      if (authHeader?.startsWith('Bearer ')) {
+        const token = authHeader.substring(7);
+        if (token.startsWith('sb_')) {
+          const apiUser = await validateToken(token);
+          if (apiUser) {
+            (req as AuthRequest).user = apiUser;
+            return next();
+          }
+        }
+      }
+      return res.status(401).json({ error: 'Unauthorized' });
     })(req, res, next);
   };
 }
 
+/**
+ * Middleware to authenticate and require admin (global or org admin in cloud).
+ * Supports JWT and API token same as requireAuth.
+ */
 export function requireAdmin(): RequestHandler {
   return (req: Request, res: Response, next: NextFunction) => {
-    passport.authenticate('jwt', { session: false }, (err: any, user: any) => {
-      if (err || !user) {
+    passport.authenticate('jwt', { session: false }, async (err: any, user: any) => {
+      if (err) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      if (!user) {
+        const authHeader = req.headers.authorization;
+        if (authHeader?.startsWith('Bearer ')) {
+          const token = authHeader.substring(7);
+          if (token.startsWith('sb_')) {
+            user = await validateToken(token);
+          }
+        }
+      }
+      if (!user) {
         return res.status(401).json({ error: 'Unauthorized' });
       }
       const isGlobalAdmin = user.is_admin === true || user.is_admin === 1;

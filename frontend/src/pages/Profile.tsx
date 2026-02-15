@@ -1,14 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { appBasePath } from '../config/api';
-import { Mail, User as UserIcon, Globe, Palette, AlertCircle, Link2, Building2, ArrowRightLeft } from 'lucide-react';
+import { appBasePath, apiBaseUrl } from '../config/api';
+import { Mail, User as UserIcon, Globe, Palette, AlertCircle, Link2, Building2, ArrowRightLeft, Key } from 'lucide-react';
 import Select from '../components/ui/Select';
 import Button from '../components/ui/Button';
 import { useToast } from '../components/ui/Toast';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
+import CreateTokenModal from '../components/profile/CreateTokenModal';
 import api from '../api/client';
 import { isCloud } from '../config/mode';
+
+interface ApiToken {
+  id: string;
+  name: string;
+  created_at: string;
+  last_used_at: string | null;
+}
 
 export default function Profile() {
   const { t } = useTranslation();
@@ -26,6 +35,10 @@ export default function Profile() {
   const [editingName, setEditingName] = useState(false);
   const [orgs, setOrgs] = useState<{ id: string; name: string; role: string }[]>([]);
   const [switchingOrg, setSwitchingOrg] = useState<string | null>(null);
+  const [tokens, setTokens] = useState<ApiToken[]>([]);
+  const [tokensLoading, setTokensLoading] = useState(true);
+  const [createTokenOpen, setCreateTokenOpen] = useState(false);
+  const [revokeTokenId, setRevokeTokenId] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -46,6 +59,17 @@ export default function Profile() {
       }).catch(() => setOrgs([]));
     }
   }, [user]);
+
+  const fetchTokens = useCallback(() => {
+    setTokensLoading(true);
+    api.get('/tokens').then((res) => {
+      setTokens(Array.isArray(res.data) ? res.data : []);
+    }).catch(() => setTokens([])).finally(() => setTokensLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (user) fetchTokens();
+  }, [user, fetchTokens]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -96,6 +120,32 @@ export default function Profile() {
       showToast(error.response?.data?.error || t('common.error'), 'error');
     } finally {
       setSwitchingOrg(null);
+    }
+  }
+
+  async function handleRevokeToken(tokenId: string) {
+    try {
+      await api.delete(`/tokens/${tokenId}`);
+      setTokens((prev) => prev.filter((t) => t.id !== tokenId));
+      showToast(t('common.success'), 'success');
+    } catch (error: any) {
+      showToast(error.response?.data?.error || t('common.error'), 'error');
+    } finally {
+      setRevokeTokenId(null);
+    }
+  }
+
+  function formatDate(iso: string) {
+    try {
+      return new Date(iso).toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch {
+      return iso;
     }
   }
 
@@ -429,7 +479,99 @@ export default function Profile() {
             </form>
           </div>
         </div>
+
+        {/* API Access Section */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+          <div className="p-4">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+              <Key className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              {t('profile.apiAccess')}
+            </h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+              {t('profile.apiAccessDescription')}
+            </p>
+            <div className="flex items-start gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg mb-4">
+              <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-amber-800 dark:text-amber-200">
+                {t('profile.apiTokenWarning')}
+              </p>
+            </div>
+            <a
+              href={apiBaseUrl ? `${apiBaseUrl}/api-docs` : '/api-docs'}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 mb-4 inline-block"
+            >
+              {t('profile.viewApiDocs')} →
+            </a>
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-sm font-medium text-gray-900 dark:text-white">
+                {t('profile.yourTokens')}
+              </span>
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                onClick={() => setCreateTokenOpen(true)}
+              >
+                {t('profile.createToken')}
+              </Button>
+            </div>
+            {tokensLoading ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400">{t('common.loading')}</p>
+            ) : tokens.length === 0 ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {t('profile.noTokens')}. {t('profile.noTokensDescription')}
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {tokens.map((tok) => (
+                  <li
+                    key={tok.id}
+                    className="flex items-center justify-between gap-2 py-2 px-3 rounded-lg bg-gray-50 dark:bg-gray-700/50"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <span className="text-sm font-medium text-gray-900 dark:text-white block truncate">
+                        {tok.name}
+                      </span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400 font-mono">
+                        sb_********************************
+                      </span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400 block mt-1">
+                        {t('profile.lastUsed')}: {tok.last_used_at ? formatDate(tok.last_used_at) : t('profile.neverUsed')} · {t('profile.createdAt')}: {formatDate(tok.created_at)}
+                      </span>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setRevokeTokenId(tok.id)}
+                      className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                    >
+                      {t('profile.revokeToken')}
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
       </div>
+
+      <CreateTokenModal
+        isOpen={createTokenOpen}
+        onClose={() => setCreateTokenOpen(false)}
+        onCreated={fetchTokens}
+      />
+      <ConfirmDialog
+        isOpen={revokeTokenId !== null}
+        title={t('profile.revokeToken')}
+        message={t('profile.revokeTokenConfirm')}
+        variant="danger"
+        confirmText={t('profile.revokeToken')}
+        onConfirm={() => revokeTokenId && handleRevokeToken(revokeTokenId)}
+        onCancel={() => setRevokeTokenId(null)}
+      />
     </div>
   );
 }

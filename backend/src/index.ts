@@ -40,6 +40,7 @@ import dashboardRoutes from './routes/dashboard.js';
 import healthRoutes from './routes/health.js';
 import organizationRoutes from './routes/organizations.js';
 import invitationRoutes from './routes/invitations.js';
+import tokenRoutes from './routes/tokens.js';
 import billingRoutes, { handleStripeWebhook } from './routes/billing.js';
 import { DatabaseSessionStore } from './utils/session-store.js';
 
@@ -206,6 +207,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/teams', teamRoutes);
 app.use('/api/organizations', organizationRoutes);
 app.use('/api/invitations', invitationRoutes);
+app.use('/api/tokens', tokenRoutes);
 app.use('/api/billing', billingRoutes);
 app.use('/api/oidc-providers', oidcProviderRoutes);
 app.use('/api/admin/users', adminUserRoutes);
