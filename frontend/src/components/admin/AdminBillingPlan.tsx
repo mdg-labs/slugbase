@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Progress } from '../ui/progress';
 import { useOrgPlan } from '../../contexts/OrgPlanContext';
+import { appBasePath } from '../../config/api';
 
 interface Org {
   id: string;
@@ -70,8 +71,8 @@ export default function AdminBillingPlan() {
       const res = await api.post('/billing/create-checkout-session', {
         plan,
         interval,
-        success_url: `${frontendUrl}/app/admin?tab=billing`,
-        cancel_url: `${frontendUrl}/app/admin?tab=billing`,
+        success_url: `${frontendUrl}${appBasePath}/admin/billing`,
+        cancel_url: `${frontendUrl}${appBasePath}/admin/billing`,
       });
       if (res.data?.url) {
         window.location.href = res.data.url;
@@ -88,7 +89,7 @@ export default function AdminBillingPlan() {
     try {
       const frontendUrl = window.location.origin;
       const res = await api.post('/billing/create-portal-session', {
-        return_url: `${frontendUrl}/app/admin?tab=billing`,
+        return_url: `${frontendUrl}${appBasePath}/admin/billing`,
       });
       if (res.data?.url) {
         window.location.href = res.data.url;
@@ -203,8 +204,8 @@ export default function AdminBillingPlan() {
               onClick={() => setBillingInterval('monthly')}
               className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
                 billingInterval === 'monthly'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:bg-accent'
               }`}
             >
               Monthly
@@ -214,8 +215,8 @@ export default function AdminBillingPlan() {
               onClick={() => setBillingInterval('yearly')}
               className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
                 billingInterval === 'yearly'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:bg-accent'
               }`}
             >
               Yearly
@@ -230,13 +231,13 @@ export default function AdminBillingPlan() {
                   key={plan.id}
                   className={`flex flex-col min-h-[320px] ${
                     plan.id === 'personal'
-                      ? 'border-blue-200 dark:border-blue-800 ring-2 ring-blue-500/20'
+                      ? 'border-primary/30 ring-2 ring-primary/20'
                       : ''
                   }`}
                 >
                   <CardHeader className="p-4 pb-2">
                   {plan.id === 'personal' && (
-                    <Badge variant="secondary" className="w-fit mb-2 text-xs bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">
+                    <Badge variant="secondary" className="w-fit mb-2 text-xs bg-primary/20 text-primary">
                       {t('pricing.mostPopular')}
                     </Badge>
                   )}
@@ -388,7 +389,7 @@ export default function AdminBillingPlan() {
               value={inviteEmail}
               onChange={(e) => setInviteEmail(e.target.value)}
               placeholder={t('auth.emailPlaceholder')}
-              className="flex-1 px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+              className="flex-1 px-4 py-2 text-sm border border-input rounded-lg bg-background text-foreground focus:ring-2 focus:ring-ring"
               required
             />
             <Button

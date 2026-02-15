@@ -18,7 +18,12 @@ const Bookmarks = lazy(() => import('./pages/Bookmarks'));
 const Folders = lazy(() => import('./pages/Folders'));
 const Tags = lazy(() => import('./pages/Tags'));
 const Profile = lazy(() => import('./pages/Profile'));
-const Admin = lazy(() => import('./pages/Admin'));
+const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'));
+const AdminMembersPage = lazy(() => import('./pages/admin/AdminMembersPage'));
+const AdminTeamsPage = lazy(() => import('./pages/admin/AdminTeamsPage'));
+const AdminBillingPage = lazy(() => import('./pages/admin/AdminBillingPage'));
+const AdminOIDCPage = lazy(() => import('./pages/admin/AdminOIDCPage'));
+const AdminSettingsPage = lazy(() => import('./pages/admin/AdminSettingsPage'));
 const Shared = lazy(() => import('./pages/Shared'));
 const PasswordReset = lazy(() => import('./pages/PasswordReset'));
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
@@ -154,7 +159,13 @@ function AppRoutesSelfhosted() {
           <Route path="profile" element={<Profile />} />
           <Route path="go-preferences" element={<GoPreferences />} />
           <Route path="search-engine-guide" element={<SearchEngineGuide />} />
-          <Route path="admin" element={<AdminRoute><Admin /></AdminRoute>} />
+          <Route path="admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
+            <Route index element={<Navigate to="members" replace />} />
+            <Route path="members" element={<AdminMembersPage />} />
+            <Route path="teams" element={<AdminTeamsPage />} />
+            <Route path="oidc" element={<AdminOIDCPage />} />
+            <Route path="settings" element={<AdminSettingsPage />} />
+          </Route>
         </Route>
       </Routes>
     </Suspense>
@@ -188,7 +199,12 @@ function AppRoutesCloud() {
             <Route path="profile" element={<Profile />} />
             <Route path="go-preferences" element={<GoPreferences />} />
             <Route path="search-engine-guide" element={<SearchEngineGuide />} />
-            <Route path="admin" element={<AdminRoute><Admin /></AdminRoute>} />
+            <Route path="admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
+              <Route index element={<Navigate to="members" replace />} />
+              <Route path="members" element={<AdminMembersPage />} />
+              <Route path="teams" element={<AdminTeamsPage />} />
+              <Route path="billing" element={<AdminBillingPage />} />
+            </Route>
           </Route>
         </Route>
       </Routes>

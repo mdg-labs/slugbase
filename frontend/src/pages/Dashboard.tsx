@@ -139,7 +139,7 @@ export default function Dashboard() {
               {t('dashboard.createTag')}
             </Link>
             {atBookmarkLimit ? (
-              <Link to={`${appBasePath}/admin?tab=billing`}>
+              <Link to={`${appBasePath}/admin/billing`}>
                 <Button variant="secondary" size="lg" icon={Plus} title={t('plan.limitBookmarks')}>
                   {t('plan.upgradeCta')}
                 </Button>
@@ -327,7 +327,7 @@ export default function Dashboard() {
                     description={t('dashboard.noRecentBookmarksHint')}
                     action={
                       atBookmarkLimit ? (
-                        <Link to={`${appBasePath}/admin?tab=billing`}>
+                        <Link to={`${appBasePath}/admin/billing`}>
                           <Button variant="secondary" icon={Plus}>{t('plan.upgradeCta')}</Button>
                         </Link>
                       ) : (

@@ -10,6 +10,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Github,
+  Users,
+  UserCog,
+  CreditCard,
+  Key,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -17,6 +21,7 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -26,6 +31,7 @@ import {
 import { appBasePath } from '../config/api';
 import { isCloud } from '../config/mode';
 import type { User } from '../contexts/AuthContext';
+import { useOrgPlan } from '../contexts/OrgPlanContext';
 
 interface AppSidebarProps {
   user: User | null;
@@ -37,6 +43,18 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
   const location = useLocation();
   const pathname = location.pathname;
   const { setOpenMobile, toggleSidebar, isMobile, state } = useSidebar();
+  const { plan } = useOrgPlan();
+
+  const showTeamsTab = !isCloud || (plan != null && plan !== 'free' && plan !== 'personal');
+  const adminBase = `${appBasePath || ''}/admin`;
+
+  const adminNavItems = [
+    { path: `${adminBase}/members`, label: t('admin.users'), icon: Users },
+    ...(showTeamsTab ? [{ path: `${adminBase}/teams`, label: t('admin.teams'), icon: UserCog }] : []),
+    ...(isCloud ? [{ path: `${adminBase}/billing`, label: t('admin.billing'), icon: CreditCard }] : []),
+    ...(!isCloud ? [{ path: `${adminBase}/oidc`, label: t('admin.oidcProviders'), icon: Key }] : []),
+    ...(!isCloud ? [{ path: `${adminBase}/settings`, label: t('admin.settings'), icon: Settings }] : []),
+  ];
 
   const isOverviewActive =
     pathname === appBasePath ||
@@ -90,24 +108,30 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
           <>
             <SidebarSeparator />
             <SidebarGroup>
+              <SidebarGroupLabel>{t('admin.title')}</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={pathname === `${appBasePath}/admin`}
-                      tooltip={t('admin.title')}
-                    >
-                      <Link
-                        to={`${appBasePath}/admin`}
-                        onClick={handleNavClick}
-                        aria-current={pathname === `${appBasePath}/admin` ? 'page' : undefined}
-                      >
-                        <Settings className="h-5 w-5" />
-                        <span>{t('admin.title')}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
+                  {adminNavItems.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <SidebarMenuItem key={item.path}>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={pathname === item.path}
+                          tooltip={item.label}
+                        >
+                          <Link
+                            to={item.path}
+                            onClick={handleNavClick}
+                            aria-current={pathname === item.path ? 'page' : undefined}
+                          >
+                            <Icon className="h-5 w-5" />
+                            <span>{item.label}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    );
+                  })}
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>

@@ -192,7 +192,7 @@ export default function ImportModal({ isOpen, onClose, onSuccess, bookmarkCount 
             <div className="px-4 py-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20">
               <p className="text-sm text-amber-800 dark:text-amber-200">{t('plan.limitBookmarks')}</p>
               <Link
-                to={`${appBasePath}/admin?tab=billing`}
+                to={`${appBasePath}/admin/billing`}
                 className="mt-2 inline-block text-sm font-medium text-amber-700 dark:text-amber-300 hover:underline"
               >
                 {t('plan.upgradeCta')}

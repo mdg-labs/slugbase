@@ -448,7 +448,7 @@ export default function Bookmarks() {
                 {t('bookmarks.create')}
               </Button>
             ) : (
-              <Link to={`${appBasePath}/admin?tab=billing`}>
+              <Link to={`${appBasePath}/admin/billing`}>
                 <Button variant="secondary" icon={Plus} disabled title={t('plan.limitBookmarks')}>
                   {t('plan.upgradeCta')}
                 </Button>
