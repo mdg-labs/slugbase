@@ -159,6 +159,19 @@ router.get('/:id', async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
+    if (isCloud) {
+      const orgId = await getCurrentOrgId(authReq.user!.id);
+      if (!orgId) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      const inOrg = await queryOne(
+        'SELECT 1 FROM org_members WHERE user_id = ? AND org_id = ?',
+        [id, orgId]
+      );
+      if (!inOrg) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+    }
     res.json(user);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -303,6 +316,16 @@ router.post('/', async (req, res) => {
       }
     }
 
+    if (isCloud) {
+      const orgId = await getCurrentOrgId(authReq.user!.id);
+      if (orgId) {
+        await execute(
+          'INSERT INTO org_members (user_id, org_id, role) VALUES (?, ?, ?)',
+          [userId, orgId, 'member']
+        );
+      }
+    }
+
     const user = await queryOne(
       'SELECT id, email, name, user_key, is_admin, oidc_provider, language, theme, created_at FROM users WHERE id = ?',
       [userId]
@@ -386,6 +409,19 @@ router.put('/:id', async (req, res) => {
     const existing = await queryOne('SELECT * FROM users WHERE id = ?', [id]);
     if (!existing) {
       return res.status(404).json({ error: 'User not found' });
+    }
+    if (isCloud) {
+      const orgId = await getCurrentOrgId(authReq.user!.id);
+      if (!orgId) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      const inOrg = await queryOne(
+        'SELECT 1 FROM org_members WHERE user_id = ? AND org_id = ?',
+        [id, orgId]
+      );
+      if (!inOrg) {
+        return res.status(404).json({ error: 'User not found' });
+      }
     }
 
     const updates: string[] = [];
@@ -505,6 +541,19 @@ router.delete('/:id', async (req, res) => {
     const user = await queryOne('SELECT * FROM users WHERE id = ?', [id]);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
+    }
+    if (isCloud) {
+      const orgId = await getCurrentOrgId(authReq.user!.id);
+      if (!orgId) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      const inOrg = await queryOne(
+        'SELECT 1 FROM org_members WHERE user_id = ? AND org_id = ?',
+        [id, orgId]
+      );
+      if (!inOrg) {
+        return res.status(404).json({ error: 'User not found' });
+      }
     }
 
     await execute('DELETE FROM users WHERE id = ?', [id]);

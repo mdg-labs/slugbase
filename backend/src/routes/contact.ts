@@ -11,6 +11,46 @@ import { sendContactConfirmationEmail, sendContactFormNotification } from '../ut
 
 const router = Router();
 
+/**
+ * @swagger
+ * /api/contact:
+ *   post:
+ *     summary: Submit contact form
+ *     description: Public contact form. Sends confirmation to submitter and optional notification to CONTACT_FORM_RECIPIENT.
+ *     tags: [Contact]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - email
+ *               - message
+ *             properties:
+ *               name:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               message:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Message received
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *       400:
+ *         description: Name, email, and message are required
+ */
 router.post('/', async (req, res) => {
   const { name, email, message } = req.body || {};
   if (!name || !email || !message) {

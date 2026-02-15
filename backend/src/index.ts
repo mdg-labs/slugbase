@@ -19,7 +19,7 @@ import { setupSecurityHeaders, generalRateLimiter, strictRateLimiter, contactRat
 
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger.js';
-import { mode, isCloud } from './config/mode.js';
+import { isCloud } from './config/mode.js';
 import authRoutes from './routes/auth.js';
 import bookmarkRoutes from './routes/bookmarks.js';
 import folderRoutes from './routes/folders.js';
@@ -37,6 +37,7 @@ import emailVerificationRoutes from './routes/email-verification.js';
 import contactRoutes from './routes/contact.js';
 import csrfRoutes from './routes/csrf.js';
 import dashboardRoutes from './routes/dashboard.js';
+import healthRoutes from './routes/health.js';
 import organizationRoutes from './routes/organizations.js';
 import invitationRoutes from './routes/invitations.js';
 import billingRoutes, { handleStripeWebhook } from './routes/billing.js';
@@ -212,22 +213,9 @@ app.use('/api/admin/teams', adminTeamRoutes);
 app.use('/api/admin/settings', adminSettingsRoutes);
 app.use('/api/admin/stats', adminStatsRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api', healthRoutes);
 app.use('/api/contact', contactRateLimiter, contactRoutes);
 app.use('/api/go', goRoutes);
-
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok' });
-});
-
-// Version endpoint
-app.get('/api/version', (req, res) => {
-  res.json({ 
-    version: process.env.COMMIT_SHA || 'dev',
-    commit: process.env.COMMIT_SHA || null,
-    mode,
-  });
-});
 
 // /go slug forwarding - single canonical endpoint (authenticated)
 app.get('/go/:slug/remember/:bookmarkId', redirectRateLimiter, optionalAuthForGo, (req, res) => {

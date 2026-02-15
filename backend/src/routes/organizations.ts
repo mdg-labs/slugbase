@@ -12,7 +12,37 @@ import { sendOrgInvitationEmail } from '../utils/email.js';
 const router = Router();
 
 /**
- * GET /organizations — List organizations user is in (Cloud only).
+ * @swagger
+ * /api/organizations:
+ *   get:
+ *     summary: List organizations
+ *     description: Returns all organizations the authenticated user is a member of. Cloud mode only.
+ *     tags: [Organizations]
+ *     security:
+ *       - cookieAuth: []
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of organizations
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id:
+ *                     type: string
+ *                   name:
+ *                     type: string
+ *                   plan:
+ *                     type: string
+ *                   role:
+ *                     type: string
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Not found (self-hosted mode)
  */
 router.get('/', requireAuth(), async (req, res) => {
   if (!isCloud) {
@@ -32,8 +62,39 @@ router.get('/', requireAuth(), async (req, res) => {
 });
 
 /**
- * GET /organizations/me — Get current user's organization (Cloud only).
- * Creates org if user has none (backfill for existing users).
+ * @swagger
+ * /api/organizations/me:
+ *   get:
+ *     summary: Get current organization
+ *     description: Returns the current user's organization with members and usage. Creates org if user has none. Cloud mode only.
+ *     tags: [Organizations]
+ *     security:
+ *       - cookieAuth: []
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Current organization details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id:
+ *                   type: string
+ *                 name:
+ *                   type: string
+ *                 plan:
+ *                   type: string
+ *                 role:
+ *                   type: string
+ *                 member_count:
+ *                   type: number
+ *                 members:
+ *                   type: array
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Organization not found
  */
 router.get('/me', requireAuth(), async (req, res) => {
   if (!isCloud) {
@@ -111,7 +172,36 @@ router.get('/me', requireAuth(), async (req, res) => {
 });
 
 /**
- * PUT /organizations/me/switch — Switch current org (Cloud only).
+ * @swagger
+ * /api/organizations/me/switch:
+ *   put:
+ *     summary: Switch current organization
+ *     description: Switches the user's current organization context. Cloud mode only.
+ *     tags: [Organizations]
+ *     security:
+ *       - cookieAuth: []
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - org_id
+ *             properties:
+ *               org_id:
+ *                 type: string
+ *                 description: Organization ID to switch to
+ *     responses:
+ *       200:
+ *         description: Organization switched successfully
+ *       400:
+ *         description: org_id is required
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Not a member of this organization
  */
 router.put('/me/switch', requireAuth(), async (req, res) => {
   if (!isCloud) {
@@ -131,7 +221,35 @@ router.put('/me/switch', requireAuth(), async (req, res) => {
 });
 
 /**
- * GET /organizations/members — List members of current org (Cloud only).
+ * @swagger
+ * /api/organizations/members:
+ *   get:
+ *     summary: List organization members
+ *     description: Returns all members of the current organization. Cloud mode only.
+ *     tags: [Organizations]
+ *     security:
+ *       - cookieAuth: []
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of organization members
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id:
+ *                     type: string
+ *                   email:
+ *                     type: string
+ *                   name:
+ *                     type: string
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: No organization selected
  */
 router.get('/members', requireAuth(), async (req, res) => {
   if (!isCloud) {
@@ -155,7 +273,43 @@ router.get('/members', requireAuth(), async (req, res) => {
 });
 
 /**
- * POST /organizations/:id/invite — Invite user by email (Cloud only, org admin/owner).
+ * @swagger
+ * /api/organizations/{id}/invite:
+ *   post:
+ *     summary: Invite user to organization
+ *     description: Sends an invitation email to join the organization. Org admin/owner only. Cloud mode only.
+ *     tags: [Organizations]
+ *     security:
+ *       - cookieAuth: []
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Organization ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *     responses:
+ *       201:
+ *         description: Invitation sent
+ *       400:
+ *         description: Invalid email or user already member
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Only owners and admins can invite
  */
 router.post('/:id/invite', requireAuth(), authRateLimiter, async (req, res) => {
   if (!isCloud) {

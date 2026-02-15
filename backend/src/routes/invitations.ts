@@ -60,7 +60,37 @@ async function findInvitationByToken(submittedToken: string): Promise<any | null
 }
 
 /**
- * GET /invitations/verify?token=xxx — Verify invite token (public, rate-limited).
+ * @swagger
+ * /api/invitations/verify:
+ *   get:
+ *     summary: Verify invitation token
+ *     description: Verifies an organization invitation token. Returns validity and org name. Cloud mode only. Public, rate-limited.
+ *     tags: [Invitations]
+ *     parameters:
+ *       - in: query
+ *         name: token
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Invitation token from email
+ *     responses:
+ *       200:
+ *         description: Verification result
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 valid:
+ *                   type: boolean
+ *                 email:
+ *                   type: string
+ *                 org_name:
+ *                   type: string
+ *                 error:
+ *                   type: string
+ *       400:
+ *         description: Token is required
  */
 router.get('/verify', authRateLimiter, async (req, res) => {
   if (!isCloud) {
@@ -84,7 +114,36 @@ router.get('/verify', authRateLimiter, async (req, res) => {
 });
 
 /**
- * POST /invitations/accept — Accept org invitation (authenticated).
+ * @swagger
+ * /api/invitations/accept:
+ *   post:
+ *     summary: Accept organization invitation
+ *     description: Accepts an organization invitation and adds the user to the org. User must be logged in with matching email. Cloud mode only.
+ *     tags: [Invitations]
+ *     security:
+ *       - cookieAuth: []
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - token
+ *             properties:
+ *               token:
+ *                 type: string
+ *                 description: Invitation token from email
+ *     responses:
+ *       200:
+ *         description: Invitation accepted
+ *       400:
+ *         description: Invalid or expired token
+ *       401:
+ *         description: Must be logged in
+ *       403:
+ *         description: Invitation was sent to different email
  */
 router.post('/accept', requireAuth(), authRateLimiter, async (req, res) => {
   if (!isCloud) {

@@ -49,7 +49,37 @@ router.use(requireAuth());
  *         description: Unauthorized
  */
 /**
- * PUT /users/me/current-org — Switch current org (Cloud only).
+ * @swagger
+ * /api/users/me/current-org:
+ *   put:
+ *     summary: Switch current organization
+ *     description: Switches the user's current organization context. Cloud mode only. Alias for PUT /api/organizations/me/switch.
+ *     tags: [Users]
+ *     security:
+ *       - cookieAuth: []
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - org_id
+ *             properties:
+ *               org_id:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Organization switched
+ *       400:
+ *         description: org_id is required
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Not a member of this organization
+ *       404:
+ *         description: Not found (self-hosted mode)
  */
 router.put('/me/current-org', async (req, res) => {
   if (!isCloud) {

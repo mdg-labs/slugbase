@@ -4,6 +4,7 @@ import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { authRateLimiter } from '../middleware/security.js';
 import { queryOne, execute } from '../db/index.js';
 import { isCloud } from '../config/mode.js';
+import { getCurrentOrgId } from '../utils/organizations.js';
 import { validateRedirectUrl } from '../utils/validation.js';
 
 const router = Router();
@@ -15,7 +16,37 @@ function getStripe(): Stripe | null {
 }
 
 /**
- * GET /billing/plans — Public plan definitions (Cloud only).
+ * @swagger
+ * /api/billing/plans:
+ *   get:
+ *     summary: Get plan definitions
+ *     description: Returns available subscription plans and pricing. Cloud mode only. Public.
+ *     tags: [Billing]
+ *     responses:
+ *       200:
+ *         description: Plan definitions
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 plans:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                       name:
+ *                         type: string
+ *                       price_monthly:
+ *                         type: number
+ *                       price_yearly:
+ *                         type: number
+ *                       included_seats:
+ *                         type: number
+ *       404:
+ *         description: Not found (self-hosted mode)
  */
 router.get('/plans', (req, res) => {
   if (!isCloud) {
@@ -61,7 +92,61 @@ router.get('/plans', (req, res) => {
 });
 
 /**
- * POST /billing/create-checkout-session — Create Stripe Checkout session (Cloud only).
+ * @swagger
+ * /api/billing/create-checkout-session:
+ *   post:
+ *     summary: Create Stripe Checkout session
+ *     description: Creates a Stripe Checkout session for subscription. Org owner/admin only. Cloud mode only.
+ *     tags: [Billing]
+ *     security:
+ *       - cookieAuth: []
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - plan
+ *               - interval
+ *               - success_url
+ *               - cancel_url
+ *             properties:
+ *               plan:
+ *                 type: string
+ *                 enum: [free, personal, team, early_supporter]
+ *               interval:
+ *                 type: string
+ *                 enum: [monthly, yearly, one_time]
+ *               success_url:
+ *                 type: string
+ *                 format: uri
+ *               cancel_url:
+ *                 type: string
+ *                 format: uri
+ *     responses:
+ *       200:
+ *         description: Checkout session URL
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 url:
+ *                   type: string
+ *                 session_id:
+ *                   type: string
+ *       400:
+ *         description: Missing or invalid parameters
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Only owners and admins can manage billing
+ *       404:
+ *         description: Organization not found
+ *       503:
+ *         description: Billing not configured
  */
 router.post('/create-checkout-session', requireAuth(), authRateLimiter, async (req: Request, res: Response) => {
   if (!isCloud) {
@@ -73,6 +158,10 @@ router.post('/create-checkout-session', requireAuth(), authRateLimiter, async (r
   }
   const authReq = req as AuthRequest;
   const userId = authReq.user!.id;
+  const orgId = await getCurrentOrgId(userId);
+  if (!orgId) {
+    return res.status(404).json({ error: 'Organization not found' });
+  }
   const { plan, interval, success_url, cancel_url } = req.body;
   if (!plan || !interval || !success_url || !cancel_url) {
     return res.status(400).json({ error: 'plan, interval, success_url, and cancel_url are required' });
@@ -80,8 +169,8 @@ router.post('/create-checkout-session', requireAuth(), authRateLimiter, async (r
   const membership = await queryOne(
     `SELECT o.*, om.role FROM org_members om
      INNER JOIN organizations o ON o.id = om.org_id
-     WHERE om.user_id = ?`,
-    [userId]
+     WHERE om.user_id = ? AND om.org_id = ?`,
+    [userId, orgId]
   );
   if (!membership) {
     return res.status(404).json({ error: 'Organization not found' });
@@ -145,7 +234,42 @@ router.post('/create-checkout-session', requireAuth(), authRateLimiter, async (r
 });
 
 /**
- * POST /billing/create-portal-session — Create Stripe Customer Portal session (Cloud only).
+ * @swagger
+ * /api/billing/create-portal-session:
+ *   post:
+ *     summary: Create Stripe Customer Portal session
+ *     description: Creates a Stripe Customer Portal session for managing subscription. Cloud mode only.
+ *     tags: [Billing]
+ *     security:
+ *       - cookieAuth: []
+ *       - bearerAuth: []
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               return_url:
+ *                 type: string
+ *                 format: uri
+ *     responses:
+ *       200:
+ *         description: Portal session URL
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 url:
+ *                   type: string
+ *       400:
+ *         description: No billing account found
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Organization not found
+ *       503:
+ *         description: Billing not configured
  */
 router.post('/create-portal-session', requireAuth(), authRateLimiter, async (req: Request, res: Response) => {
   if (!isCloud) {
@@ -157,12 +281,16 @@ router.post('/create-portal-session', requireAuth(), authRateLimiter, async (req
   }
   const authReq = req as AuthRequest;
   const userId = authReq.user!.id;
+  const orgId = await getCurrentOrgId(userId);
+  if (!orgId) {
+    return res.status(404).json({ error: 'Organization not found' });
+  }
   const { return_url } = req.body;
   const membership = await queryOne(
     `SELECT o.* FROM org_members om
      INNER JOIN organizations o ON o.id = om.org_id
-     WHERE om.user_id = ?`,
-    [userId]
+     WHERE om.user_id = ? AND om.org_id = ?`,
+    [userId, orgId]
   );
   if (!membership) {
     return res.status(404).json({ error: 'Organization not found' });
