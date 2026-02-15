@@ -523,8 +523,8 @@ export default function Bookmarks() {
               onClick={() => setViewMode('card')}
               className={`p-1.5 rounded transition-colors ${
                 viewMode === 'card'
-                  ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm'
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                  ? 'bg-card text-primary shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
               title={t('bookmarks.viewCard')}
             >
@@ -534,8 +534,8 @@ export default function Bookmarks() {
               onClick={() => setViewMode('list')}
               className={`p-1.5 rounded transition-colors ${
                 viewMode === 'list'
-                  ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm'
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                  ? 'bg-card text-primary shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
               title={t('bookmarks.viewList')}
             >
@@ -546,8 +546,8 @@ export default function Bookmarks() {
             onClick={() => setCompactMode(!compactMode)}
             className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
               compactMode
-                ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                ? 'bg-primary/20 text-primary'
+                : 'bg-muted text-muted-foreground hover:bg-accent'
             }`}
             title={t('bookmarks.compactMode')}
           >
@@ -574,7 +574,7 @@ export default function Bookmarks() {
       {/* Bulk Actions Bar - offset left on desktop to not overlap sidebar */}
       {bulkMode && (
         <div
-          className="fixed bottom-0 right-0 z-50 flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 border-t border-blue-200 dark:border-blue-800 shadow-lg p-4"
+          className="fixed bottom-0 right-0 z-50 flex items-center justify-between bg-primary/10 border-t border-primary/30 shadow-lg p-4"
           style={
             !isMobile
               ? { left: sidebarState === 'expanded' ? '16rem' : '3rem' }
@@ -589,7 +589,7 @@ export default function Bookmarks() {
                 </span>
                 <button
                   onClick={handleDeselectAll}
-                  className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+                  className="text-sm text-primary hover:text-primary/90"
                 >
                   {t('bookmarks.deselectAll')}
                 </button>
@@ -601,7 +601,7 @@ export default function Bookmarks() {
                 </span>
                 <button
                   onClick={handleSelectAllRemaining}
-                  className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+                  className="text-sm text-primary hover:text-primary/90"
                 >
                   {t('bookmarks.selectAllRemaining', { total })}
                 </button>
@@ -610,7 +610,7 @@ export default function Bookmarks() {
               <>
                 <button
                   onClick={toggleSelectAll}
-                  className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+                  className="text-sm text-primary hover:text-primary/90"
                 >
                   {selectedBookmarks.size === displayedBookmarks.length ? t('bookmarks.deselectAll') : t('bookmarks.selectAll')}
                 </button>
@@ -675,8 +675,8 @@ export default function Bookmarks() {
       {/* Bookmarks Display */}
       {displayedBookmarks.length === 0 ? (
         <Card className="flex flex-col items-center justify-center py-20 px-4">
-          <div className="w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mb-4">
-            <BookmarkIcon className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+          <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mb-4">
+            <BookmarkIcon className="h-8 w-8 text-primary" />
           </div>
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
             {t('bookmarks.empty')}
@@ -784,8 +784,8 @@ export default function Bookmarks() {
         <Card className="mt-8 bg-primary/5 border-primary/20 p-4">
           <div className="flex items-start gap-3">
             <div className="flex-shrink-0">
-              <div className="h-8 w-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                <Copy className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <div className="h-8 w-8 rounded-lg bg-primary/20 flex items-center justify-center">
+                <Copy className="h-4 w-4 text-primary" />
               </div>
             </div>
             <div className="flex-1 min-w-0">
@@ -793,7 +793,7 @@ export default function Bookmarks() {
                 {t('bookmarks.searchEngineNote')}{' '}
                 <Link
                   to={`${appBasePath}/search-engine-guide`}
-                  className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium underline"
+                  className="text-primary hover:text-primary/90 font-medium underline"
                 >
                   {t('bookmarks.searchEngineGuideLink')}
                 </Link>

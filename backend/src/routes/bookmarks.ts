@@ -250,9 +250,8 @@ router.get('/', async (req, res) => {
     ]);
 
     const rawBookmarks = rawBookmarksResult;
-    const total = (Array.isArray(countResult) && countResult[0] && typeof (countResult[0] as any).total === 'number')
-      ? (countResult[0] as any).total
-      : 0;
+    const rawTotal = Array.isArray(countResult) && countResult[0] ? (countResult[0] as any).total : 0;
+    const total = Number(rawTotal) || 0;
     const hasMore = Array.isArray(rawBookmarks) && rawBookmarks.length > limit;
     const bookmarks = hasMore ? rawBookmarks.slice(0, limit) : rawBookmarks;
     const bookmarkList = (Array.isArray(bookmarks) ? bookmarks : []) as any[];

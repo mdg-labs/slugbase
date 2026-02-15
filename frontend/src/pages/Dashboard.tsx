@@ -106,7 +106,7 @@ export default function Dashboard() {
   ];
 
   const colorClasses = {
-    blue: 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800',
+    blue: 'bg-primary/10 text-primary border-primary/30',
     green: 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 border-green-200 dark:border-green-800',
     purple: 'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-800',
   };
@@ -121,10 +121,10 @@ export default function Dashboard() {
             <button
               type="button"
               onClick={() => setDenseMode(!denseMode)}
-              className={`px-3 py-1.5 text-sm rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 ${
+              className={`px-3 py-1.5 text-sm rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
                 denseMode
-                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  ? 'bg-primary/20 text-primary'
+                  : 'bg-muted text-muted-foreground hover:bg-accent'
               }`}
               title={t('dashboard.denseView')}
             >
@@ -170,8 +170,8 @@ export default function Dashboard() {
               value={bookmarkLimit != null ? t('plan.bookmarksUsed', { count: bookmarkCount, limit: bookmarkLimit }) : stats.totalBookmarks}
               icon={Bookmark}
               href={appBasePath + '/bookmarks'}
-              iconContainerClassName="bg-blue-100 dark:bg-blue-900/20"
-              iconColorClassName="text-blue-600 dark:text-blue-400"
+              iconContainerClassName="bg-primary/20"
+              iconColorClassName="text-primary"
             />
             <StatCard
               dense={denseMode}
@@ -231,13 +231,13 @@ export default function Dashboard() {
                     {stats.recentBookmarks.map((bookmark) => (
                       <div
                         key={bookmark.id}
-                        className={`group/bookmark flex items-start gap-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${denseMode ? 'p-2 gap-1.5' : 'p-3'}`}
+                        className={`group/bookmark flex items-start gap-2 rounded-lg border border-border hover:bg-accent transition-colors ${denseMode ? 'p-2 gap-1.5' : 'p-3'}`}
                       >
                         <a
                           href={bookmark.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex-1 min-w-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded"
+                          className="flex-1 min-w-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
                           title={t('dashboard.openBookmark')}
                         >
                           <p className={`font-medium text-gray-900 dark:text-white line-clamp-1 ${denseMode ? 'text-xs' : 'text-sm'}`}>
@@ -272,7 +272,7 @@ export default function Dashboard() {
                               href={bookmark.url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="p-1.5 rounded-md text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
+                              className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-accent transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
                               aria-label={t('dashboard.openBookmark')}
                             >
                               <ExternalLink className="h-4 w-4" />
@@ -281,7 +281,7 @@ export default function Dashboard() {
                           <Tooltip content={t('dashboard.editBookmark')}>
                             <Link
                               to={`${appBasePath}/bookmarks?edit=${bookmark.id}`}
-                              className="p-1.5 rounded-md text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
+                              className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-accent transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
                               aria-label={t('dashboard.editBookmark')}
                             >
                               <Edit className="h-4 w-4" />
@@ -291,7 +291,7 @@ export default function Dashboard() {
                             <button
                               type="button"
                               onClick={(e) => { e.preventDefault(); handleCopyUrl(bookmark); }}
-                              className="p-1.5 rounded-md text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
+                              className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-accent transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
                               aria-label={t('dashboard.copyUrl')}
                             >
                               <Copy className="h-4 w-4" />
@@ -301,7 +301,7 @@ export default function Dashboard() {
                             <button
                               type="button"
                               onClick={(e) => { e.preventDefault(); handleDeleteBookmark(bookmark); }}
-                              className="p-1.5 rounded-md text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
+                              className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-accent transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
                               aria-label={t('dashboard.deleteBookmark')}
                             >
                               <Trash2 className="h-4 w-4" />
@@ -310,7 +310,7 @@ export default function Dashboard() {
                           <Tooltip content={t('dashboard.shareBookmark')}>
                             <Link
                               to={`${appBasePath}/bookmarks?edit=${bookmark.id}`}
-                              className="p-1.5 rounded-md text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
+                              className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-accent transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
                               aria-label={t('dashboard.shareBookmark')}
                             >
                               <Share2 className="h-4 w-4" />
@@ -358,7 +358,7 @@ export default function Dashboard() {
                       <Link
                         key={tag.id}
                         to={`${appBasePath}/bookmarks?tag_id=${tag.id}`}
-                        className={`flex items-center justify-between rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800 ${denseMode ? 'p-2' : 'p-3'}`}
+                        className={`flex items-center justify-between rounded-lg border border-border hover:bg-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${denseMode ? 'p-2' : 'p-3'}`}
                         aria-label={t('dashboard.tagBookmarkCount', { count: tag.bookmark_count })}
                       >
                         <span className={`font-medium text-gray-900 dark:text-white ${denseMode ? 'text-xs' : 'text-sm'}`}>

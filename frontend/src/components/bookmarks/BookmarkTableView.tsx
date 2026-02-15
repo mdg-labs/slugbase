@@ -208,7 +208,7 @@ export default function BookmarkTableView({
                   <TableCell className={cellClass}>
                     <button
                       onClick={() => onSelect(bookmark.id)}
-                      className="text-blue-600 dark:text-blue-400"
+                      className="text-primary"
                     >
                       {selectedBookmarks.has(bookmark.id) ? (
                         <CheckSquare className={`${compact ? 'h-4 w-4' : 'h-5 w-5'}`} />

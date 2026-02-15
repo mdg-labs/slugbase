@@ -39,7 +39,7 @@ a:focus-visible {
     --popover: 0 0% 100%;
     --popover-foreground: 219 58% 10%;
     --primary: 17 100% 45%; /* #E64100 */
-    --primary-foreground: 0 0% 100%;
+    --primary-foreground: 219 58% 10%; /* #0b162A navy */
     --secondary: 219 30% 93%;
     --secondary-foreground: 219 58% 10%;
     --muted: 219 30% 93%;
@@ -60,7 +60,7 @@ a:focus-visible {
     --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 219 58% 10%;
     --sidebar-primary: 17 100% 45%;
-    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-primary-foreground: 219 58% 10%; /* #0b162A navy */
     --sidebar-accent: 17 50% 95%;
     --sidebar-accent-foreground: 219 58% 10%;
     --sidebar-border: 219 20% 91%;
@@ -77,7 +77,7 @@ a:focus-visible {
     --popover: 219 40% 14%;
     --popover-foreground: 0 0% 98%;
     --primary: 17 100% 45%; /* #E64100 */
-    --primary-foreground: 0 0% 100%;
+    --primary-foreground: 219 58% 10%; /* #0b162A navy */
     --secondary: 219 40% 18%;
     --secondary-foreground: 0 0% 98%;
     --muted: 219 40% 18%;
@@ -97,7 +97,7 @@ a:focus-visible {
     --sidebar-background: 219 58% 10%;
     --sidebar-foreground: 0 0% 98%;
     --sidebar-primary: 17 100% 45%;
-    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-primary-foreground: 219 58% 10%; /* #0b162A navy */
     --sidebar-accent: 17 60% 18%;
     --sidebar-accent-foreground: 0 0% 98%;
     --sidebar-border: 219 30% 22%;

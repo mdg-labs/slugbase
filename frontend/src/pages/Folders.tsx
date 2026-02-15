@@ -154,8 +154,8 @@ export default function Folders() {
                 onClick={() => setViewMode('card')}
                 className={`p-1.5 rounded transition-colors ${
                   viewMode === 'card'
-                    ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm'
-                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                    ? 'bg-card text-primary shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
                 }`}
                 title={t('folders.viewCard')}
               >
@@ -165,8 +165,8 @@ export default function Folders() {
                 onClick={() => setViewMode('list')}
                 className={`p-1.5 rounded transition-colors ${
                   viewMode === 'list'
-                    ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm'
-                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                    ? 'bg-card text-primary shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
                 }`}
                 title={t('folders.viewList')}
               >
@@ -177,8 +177,8 @@ export default function Folders() {
               onClick={() => setCompactMode(!compactMode)}
               className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
                 compactMode
-                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  ? 'bg-primary/20 text-primary'
+                  : 'bg-muted text-muted-foreground hover:bg-accent'
               }`}
               title={t('folders.compactMode')}
             >
@@ -210,7 +210,7 @@ export default function Folders() {
           {sortedFolders.map((folder) => (
             <div
               key={folder.id}
-              className={`group bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-lg transition-all duration-200 flex flex-col ${compactMode ? 'p-2.5' : 'p-4'}`}
+              className={`group bg-card rounded-lg border border-border hover:border-primary hover:shadow-lg transition-all duration-200 flex flex-col ${compactMode ? 'p-2.5' : 'p-4'}`}
             >
               <Link
                 to={`${appBasePath}/bookmarks?folder_id=${folder.id}`}
@@ -218,8 +218,8 @@ export default function Folders() {
               >
                 <div className="space-y-3 flex-1 flex flex-col">
                   <div className="flex items-start gap-3">
-                    <div className={`flex-shrink-0 ${compactMode ? 'w-10 h-10' : 'w-12 h-12'} rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/20 flex items-center justify-center border border-blue-100 dark:border-blue-800/50`}>
-                      <FolderIcon iconName={folder.icon} size={compactMode ? 20 : 24} className="text-blue-600 dark:text-blue-400" />
+                    <div className={`flex-shrink-0 ${compactMode ? 'w-10 h-10' : 'w-12 h-12'} rounded-xl bg-primary/20 flex items-center justify-center border border-primary/30`}>
+                      <FolderIcon iconName={folder.icon} size={compactMode ? 20 : 24} className="text-primary" />
                     </div>
                     <div className="flex-1 min-w-0 pt-0.5">
                       <h3 className={`${compactMode ? 'text-xs' : 'text-[15px]'} font-medium text-gray-900 dark:text-white truncate mb-1.5`}>
@@ -319,8 +319,8 @@ export default function Folders() {
                       to={`${appBasePath}/bookmarks?folder_id=${folder.id}`}
                       className={`flex items-center ${compactMode ? 'gap-2' : 'gap-3'} hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded`}
                     >
-                      <div className={`flex-shrink-0 ${compactMode ? 'w-6 h-6' : 'w-8 h-8'} rounded-lg bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/20 flex items-center justify-center border border-blue-100 dark:border-blue-800/50`}>
-                        <FolderIcon iconName={folder.icon} size={compactMode ? 12 : 16} className="text-blue-600 dark:text-blue-400" />
+                      <div className={`flex-shrink-0 ${compactMode ? 'w-6 h-6' : 'w-8 h-8'} rounded-lg bg-primary/20 flex items-center justify-center border border-primary/30`}>
+                        <FolderIcon iconName={folder.icon} size={compactMode ? 12 : 16} className="text-primary" />
                       </div>
                       <div className={`font-medium text-gray-900 dark:text-white ${compactMode ? 'text-xs' : 'text-[15px]'}`}>
                         {folder.name}

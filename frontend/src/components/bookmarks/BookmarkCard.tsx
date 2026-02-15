@@ -86,12 +86,12 @@ export default function BookmarkCard({
             <button
               data-card-action
               onClick={(e) => { e.stopPropagation(); onSelect(); }}
-              className="flex-shrink-0 mt-0.5 text-blue-600 dark:text-blue-400"
+              className="flex-shrink-0 mt-0.5 text-primary"
             >
               {selected ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5" />}
             </button>
           )}
-          <div className={`flex-shrink-0 ${compact ? 'w-10 h-10' : 'w-12 h-12'} rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/20 flex items-center justify-center border border-blue-100 dark:border-blue-800/50 overflow-hidden`}>
+            <div className={`flex-shrink-0 ${compact ? 'w-10 h-10' : 'w-12 h-12'} rounded-xl bg-primary/20 flex items-center justify-center border border-primary/30 overflow-hidden`}>
             <Favicon url={bookmark.url} size={compact ? 20 : 24} />
           </div>
           <div className="flex-1 min-w-0 pt-0.5">

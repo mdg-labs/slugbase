@@ -199,8 +199,8 @@ export default function Profile() {
               {/* Email */}
               <div className="flex items-start gap-4">
                 <div className="flex-shrink-0">
-                  <div className="h-10 w-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                    <Mail className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  <div className="h-10 w-10 rounded-lg bg-primary/20 flex items-center justify-center">
+                    <Mail className="h-5 w-5 text-primary" />
                   </div>
                 </div>
                 <div className="flex-1 min-w-0">
@@ -216,7 +216,7 @@ export default function Profile() {
                           setFormData({ ...formData, email: e.target.value });
                           setErrors({ ...errors, email: undefined });
                         }}
-                        className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                        className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-colors"
                         placeholder={t('profile.emailPlaceholder')}
                       />
                       {errors.email && (
@@ -267,13 +267,13 @@ export default function Profile() {
                         </p>
                       )}
                       {user.email_pending && (
-                        <div className="flex items-start gap-2 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                          <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                        <div className="flex items-start gap-2 px-3 py-2 bg-primary/10 border border-primary/30 rounded-lg">
+                          <AlertCircle className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
                           <div className="flex-1">
-                            <p className="text-xs text-blue-800 dark:text-blue-200 font-medium">
+                            <p className="text-xs text-foreground font-medium">
                               {t('emailVerification.pendingTitle')}
                             </p>
-                            <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                            <p className="text-xs text-muted-foreground mt-1">
                               {t('emailVerification.pendingDescription', { email: user.email_pending })}
                             </p>
                           </div>
@@ -304,7 +304,7 @@ export default function Profile() {
                           setFormData({ ...formData, name: e.target.value });
                           setErrors({ ...errors, name: undefined });
                         }}
-                        className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                        className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-colors"
                         placeholder={t('profile.namePlaceholder')}
                       />
                       {errors.name && (
@@ -366,7 +366,7 @@ export default function Profile() {
                   </p>
                   <Link
                     to={`${appBasePath}/go-preferences`}
-                    className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+                    className="text-sm font-medium text-primary hover:text-primary/90"
                   >
                     {t('goPreferences.title')} →
                   </Link>
@@ -381,7 +381,7 @@ export default function Profile() {
           <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
             <div className="p-4">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                <Building2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                <Building2 className="h-5 w-5 text-primary" />
                 {t('profile.yourOrganizations')}
               </h2>
               <ul className="space-y-2">
@@ -398,7 +398,7 @@ export default function Profile() {
                         {org.role}
                       </span>
                       {user.current_org_id === org.id && (
-                        <span className="text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30 px-2 py-0.5 rounded">
+                        <span className="text-xs font-medium text-primary bg-primary/20 px-2 py-0.5 rounded">
                           {t('profile.current')}
                         </span>
                       )}
@@ -500,7 +500,7 @@ export default function Profile() {
               href={apiBaseUrl ? `${apiBaseUrl}/api-docs` : '/api-docs'}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 mb-4 inline-block"
+                    className="text-sm font-medium text-primary hover:text-primary/90 mb-4 inline-block"
             >
               {t('profile.viewApiDocs')} →
             </a>
