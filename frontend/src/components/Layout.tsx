@@ -32,24 +32,26 @@ export default function Layout() {
   }, []);
 
   return (
-    <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen} className="h-svh overflow-hidden bg-background">
-      <AppSidebar user={user} version={version} />
-      <SidebarInset className="flex flex-col min-h-0 overflow-hidden">
-        <TopBar user={user} />
-        <div className="flex-1 min-h-0 overflow-y-auto">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full min-h-full">
-            <Suspense
-              fallback={
-                <div className="min-h-[400px] flex items-center justify-center">
-                  <div className="text-muted-foreground">{t('common.loading')}</div>
-                </div>
-              }
-            >
-              <Outlet />
-            </Suspense>
+    <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen} className="h-svh overflow-hidden bg-background flex flex-col">
+      <TopBar user={user} />
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        <AppSidebar user={user} version={version} />
+        <SidebarInset className="flex flex-col min-h-0 overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full min-h-full">
+              <Suspense
+                fallback={
+                  <div className="min-h-[400px] flex items-center justify-center">
+                    <div className="text-muted-foreground">{t('common.loading')}</div>
+                  </div>
+                }
+              >
+                <Outlet />
+              </Suspense>
+            </div>
           </div>
-        </div>
-      </SidebarInset>
+        </SidebarInset>
+      </div>
     </SidebarProvider>
   );
 }
