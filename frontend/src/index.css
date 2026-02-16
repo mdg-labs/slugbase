@@ -39,7 +39,7 @@ a:focus-visible {
     --popover: 0 0% 100%;
     --popover-foreground: 219 58% 10%;
     --primary: 17 100% 45%; /* #E64100 */
-    --primary-foreground: 219 58% 10%; /* #0b162A navy */
+    --primary-foreground: 0 0% 100%; /* white for contrast on orange buttons */
     --secondary: 219 30% 93%;
     --secondary-foreground: 219 58% 10%;
     --muted: 219 30% 93%;
