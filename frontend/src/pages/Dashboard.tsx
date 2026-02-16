@@ -12,7 +12,7 @@ import Tooltip from '../components/ui/Tooltip';
 import api from '../api/client';
 import { appBasePath } from '../config/api';
 import { useOrgPlan } from '../contexts/OrgPlanContext';
-import { canCreateBookmark } from '../utils/plan';
+import { canCreateBookmark, FREE_PLAN_BOOKMARK_LIMIT } from '../utils/plan';
 import { useConfirmDialog } from '../hooks/useConfirmDialog';
 import { useToast } from '../components/ui/Toast';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
@@ -140,7 +140,7 @@ export default function Dashboard() {
             </Link>
             {atBookmarkLimit ? (
               <Link to={`${appBasePath}/admin/billing`}>
-                <Button variant="secondary" size="lg" icon={Plus} title={t('plan.limitBookmarks', { limit: bookmarkLimit ?? 50 })}>
+                <Button variant="secondary" size="lg" icon={Plus} title={t('plan.limitBookmarks', { limit: bookmarkLimit ?? FREE_PLAN_BOOKMARK_LIMIT })}>
                   {t('plan.upgradeCta')}
                 </Button>
               </Link>

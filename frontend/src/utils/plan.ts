@@ -3,6 +3,9 @@
  * When plan is null (self-hosted or loading), treat as unrestricted.
  */
 
+/** Free plan bookmark limit. Must match backend FREE_BOOKMARK_LIMIT. */
+export const FREE_PLAN_BOOKMARK_LIMIT = 50;
+
 export type PlanTier = 'free' | 'personal' | 'team';
 
 export const canShareToTeams = (plan: string | null): boolean => !plan || plan === 'team';

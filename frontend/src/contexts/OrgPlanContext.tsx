@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import api from '../api/client';
 import { useAuth } from './AuthContext';
 import { isCloud } from '../config/mode';
+import { FREE_PLAN_BOOKMARK_LIMIT } from '../utils/plan';
 
 export type PlanTier = 'free' | 'personal' | 'team';
 
@@ -41,7 +42,11 @@ export function OrgPlanProvider({ children }: { children: React.ReactNode }) {
         rawPlan === 'early_supporter' ? 'personal' : rawPlan === 'free' || rawPlan === 'personal' || rawPlan === 'team' ? rawPlan : 'free';
       setPlan(effectivePlan);
       setBookmarkCount(data?.bookmark_count ?? 0);
-      setBookmarkLimit(data?.bookmark_limit ?? null);
+      const rawLimit = data?.bookmark_limit ?? null;
+      const limit = effectivePlan === 'free' && rawLimit != null
+        ? Math.min(rawLimit, FREE_PLAN_BOOKMARK_LIMIT)
+        : rawLimit;
+      setBookmarkLimit(limit);
       setFreePlanGraceEndsAt(data?.free_plan_grace_ends_at ?? null);
     } catch {
       setPlan(null);

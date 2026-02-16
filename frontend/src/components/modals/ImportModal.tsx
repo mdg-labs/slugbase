@@ -15,6 +15,7 @@ import api from '../../api/client';
 import { useToast } from '../ui/Toast';
 import { isCloud } from '../../config/mode';
 import { appBasePath } from '../../config/api';
+import { FREE_PLAN_BOOKMARK_LIMIT } from '../../utils/plan';
 
 /**
  * Decode HTML entities safely (only common ones, no script execution)
@@ -192,7 +193,7 @@ export default function ImportModal({ isOpen, onClose, onSuccess, bookmarkCount 
 
           {atLimit && (
             <div className="px-4 py-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20">
-              <p className="text-sm text-amber-800 dark:text-amber-200">{t('plan.limitBookmarks', { limit: bookmarkLimit ?? 50 })}</p>
+              <p className="text-sm text-amber-800 dark:text-amber-200">{t('plan.limitBookmarks', { limit: bookmarkLimit ?? FREE_PLAN_BOOKMARK_LIMIT })}</p>
               <Link
                 to={`${appBasePath}/admin/billing`}
                 className="mt-2 inline-block text-sm font-medium text-amber-700 dark:text-amber-300 hover:underline"
