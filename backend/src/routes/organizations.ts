@@ -121,6 +121,11 @@ router.get('/me', requireAuth(), async (req, res) => {
   if (!orgId) {
     return res.status(404).json({ error: 'Organization not found' });
   }
+  const userRow = await queryOne('SELECT current_org_id FROM users WHERE id = ?', [userId]);
+  const dbCurrentOrgId = (userRow as any)?.current_org_id;
+  if (orgId !== dbCurrentOrgId) {
+    await setCurrentOrg(userId, orgId);
+  }
   const row = await queryOne(
     `SELECT o.*, om.role
      FROM organizations o

@@ -11,7 +11,7 @@ import { isCloud } from '../config/mode.js';
 export function startOrgCleanupJob(): void {
   if (!isCloud) return;
 
-  // Run daily at 2:00 AM
+  const tz = process.env.ORG_CLEANUP_CRON_TZ || undefined;
   cron.schedule('0 2 * * *', async () => {
     try {
       const orphans = await query(
@@ -34,7 +34,7 @@ export function startOrgCleanupJob(): void {
     } catch (error: any) {
       console.warn('Org cleanup job error:', error?.message);
     }
-  });
+  }, tz ? { timezone: tz } : {});
 
-  console.log('Org cleanup job scheduled (daily at 2:00 AM)');
+  console.log('Org cleanup job scheduled (daily at 2:00 AM)' + (tz ? ` [${tz}]` : ''));
 }

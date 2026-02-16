@@ -6,7 +6,7 @@ import bcrypt from 'bcryptjs';
 import { validateEmail, normalizeEmail, validatePassword, validateLength, sanitizeString } from '../../utils/validation.js';
 import { generateUserKey } from '../../utils/user-key.js';
 import { isCloud } from '../../config/mode.js';
-import { deleteOrganization, getCurrentOrgId } from '../../utils/organizations.js';
+import { deleteOrganization, getCurrentOrgId, setCurrentOrg } from '../../utils/organizations.js';
 
 const router = Router();
 router.use(requireAuth());
@@ -323,6 +323,7 @@ router.post('/', async (req, res) => {
           'INSERT INTO org_members (user_id, org_id, role) VALUES (?, ?, ?)',
           [userId, orgId, 'member']
         );
+        await setCurrentOrg(userId, orgId);
       }
     }
 
