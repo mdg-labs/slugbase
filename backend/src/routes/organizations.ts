@@ -5,7 +5,7 @@ import crypto from 'crypto';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { authRateLimiter } from '../middleware/security.js';
 import { validateEmail, normalizeEmail } from '../utils/validation.js';
-import { deleteOrganization, ensureOrgForUser, getCurrentOrgId, getFreePlanGraceEndsAt, setCurrentOrg, setFreePlanGraceIfOverLimit } from '../utils/organizations.js';
+import { deleteOrganization, ensureOrgForUser, FREE_BOOKMARK_LIMIT, getCurrentOrgId, getFreePlanGraceEndsAt, setCurrentOrg, setFreePlanGraceIfOverLimit } from '../utils/organizations.js';
 import { isCloud } from '../config/mode.js';
 import { sendOrgInvitationEmail } from '../utils/email.js';
 
@@ -153,7 +153,6 @@ router.get('/me', requireAuth(), async (req, res) => {
   );
 
   // Bookmark usage for Free plan (per-user)
-  const FREE_BOOKMARK_LIMIT = 100;
   let bookmark_count: number | undefined;
   let bookmark_limit: number | null = null;
   let free_plan_grace_ends_at: string | null = null;
