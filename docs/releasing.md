@@ -62,18 +62,18 @@ Create a release from the tag at **Releases** → **Draft a new release**:
 
 ## Deployment
 
-| Branch | Deploys to | Trigger |
-|--------|------------|---------|
-| `main` | Fly.io production (slugbase-prod) | Push |
-| `dev`, `staging` | Fly.io staging (slugbase-staging) | Push |
+| Trigger | Deploys to | Workflow |
+|---------|------------|----------|
+| Push tag `v*` (e.g. `v1.2.3`) | Fly.io production (slugbase-prod) | deploy-fly-prod |
+| Push to `dev` or `staging` | Fly.io staging (slugbase-staging) | deploy-fly-staging |
+
+Production only deploys on release tags—pushing to `main` does not trigger a deploy. Create and push a version tag to release.
 
 Both workflows pass `COMMIT_SHA` to the Docker build so `/api/version` shows the deployed commit.
 
 ## Docker images
 
-The `docker-build-push` workflow builds images on push to `main` and `dev`:
+The `docker-build-push` workflow:
 
-- `main` → `latest`, `main-<sha>`
-- `dev` → `dev`, `dev-<sha>`
-
-For version-tagged images, build manually or add a release workflow that triggers on tag push `v*`.
+- **On tag push `v*`**: `v1.2.3`, `latest`
+- **On push to `dev`**: `dev`, `dev-<sha>`
