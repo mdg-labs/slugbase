@@ -71,6 +71,12 @@ export default function Terms() {
           </section>
           <section>
             <h2 className="text-lg font-medium text-gray-900 dark:text-white mt-6 mb-2">
+              {t('legal.termsDataLossTitle')}
+            </h2>
+            <p>{t('legal.termsDataLossBody')}</p>
+          </section>
+          <section>
+            <h2 className="text-lg font-medium text-gray-900 dark:text-white mt-6 mb-2">
               {t('legal.termsLifetimeTitle')}
             </h2>
             <p>{t('legal.termsLifetimeBody')}</p>
@@ -86,6 +92,12 @@ export default function Terms() {
               {t('legal.termsThirdPartyTitle')}
             </h2>
             <p>{t('legal.termsThirdPartyBody')}</p>
+          </section>
+          <section>
+            <h2 className="text-lg font-medium text-gray-900 dark:text-white mt-6 mb-2">
+              {t('legal.termsBetaTitle')}
+            </h2>
+            <p>{t('legal.termsBetaBody')}</p>
           </section>
           <section>
             <h2 className="text-lg font-medium text-gray-900 dark:text-white mt-6 mb-2">
@@ -131,9 +143,21 @@ export default function Terms() {
           </section>
           <section>
             <h2 className="text-lg font-medium text-gray-900 dark:text-white mt-6 mb-2">
+              {t('legal.termsForceMajeureTitle')}
+            </h2>
+            <p>{t('legal.termsForceMajeureBody')}</p>
+          </section>
+          <section>
+            <h2 className="text-lg font-medium text-gray-900 dark:text-white mt-6 mb-2">
               {t('legal.termsLawTitle')}
             </h2>
             <p>{t('legal.termsLawBody')}</p>
+          </section>
+          <section>
+            <h2 className="text-lg font-medium text-gray-900 dark:text-white mt-6 mb-2">
+              {t('legal.termsSeverabilityTitle')}
+            </h2>
+            <p>{t('legal.termsSeverabilityBody')}</p>
           </section>
           <section>
             <h2 className="text-lg font-medium text-gray-900 dark:text-white mt-6 mb-2">
