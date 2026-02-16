@@ -47,13 +47,13 @@ router.get('/health', (req, res) => {
  *               properties:
  *                 version:
  *                   type: string
- *                   description: Commit SHA or 'dev'
+ *                   description: "Commit SHA or 'dev'"
  *                 commit:
  *                   type: string
  *                   nullable: true
  *                 mode:
  *                   type: string
- *                   description: 'selfhosted' or 'cloud'
+ *                   description: "'selfhosted' or 'cloud'"
  */
 router.get('/version', (req, res) => {
   res.json({
