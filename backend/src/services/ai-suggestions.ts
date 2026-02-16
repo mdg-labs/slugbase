@@ -121,13 +121,15 @@ const SYSTEM_PROMPT = `You suggest bookmark metadata from a URL and optional pag
 
 Rules:
 - When given page title and/or description, use them as the PRIMARY source. Do NOT guess from domain names alone.
+- BRAND IN TITLE: When the URL domain suggests a brand (e.g. sentry.io -> Sentry, github.com -> GitHub), include that brand in the title. Prefer format "Brand - Description" or "Brand: Description". If og:site_name is provided, use it as the brand. Otherwise infer from the domain (e.g. main domain name before TLD). The title must identify the product/service, not just describe the category.
 - Domain names can be ambiguous (e.g. "allquiet" could be a brand unrelated to literature). Always prefer page content over domain inference.
 - Tags should reflect: product category (e.g. devops, alerting, monitoring, saas), use case (e.g. on-call, incident-management), technology type. Avoid thematic or cultural tags unless clearly supported by the page content.
 - When you have NO page content and only a URL, set confidence lower (0.3–0.5) and prefer generic tags like "web-app", "tool", "website".
-- title: concise page title (max 500 chars), ideally from page content when available
+- OUTPUT LANGUAGE: Output title, slug, and tags in the user's preferred language (ISO 639-1). The language field must match this code. If no language is specified, use English.
+- title: concise page title (max 500 chars), ideally from page content when available, always include brand when inferable
 - slug: URL-safe, lowercase, hyphen-separated, alphanumeric only, max 255 chars. No secrets, tokens, or sensitive data.
-- tags: 5-10 relevant tags (strings)
-- language: ISO 639-1 code (e.g. en)
+- tags: 5-10 relevant tags (strings), in the user's language
+- language: ISO 639-1 code matching the output language
 - confidence: 0.0 to 1.0 (higher when page content was provided)`;
 
 /**
@@ -138,6 +140,8 @@ Rules:
  * @param apiKey - decrypted API key
  * @param model - model name (default gpt-4o-mini)
  * @param timeoutMs - request timeout (default 10000)
+ * @param userLanguage - user's preferred language (ISO 639-1), output in this language
+ * @param siteName - optional og:site_name from page (brand)
  */
 export async function callAIProvider(
   sanitizedUrl: string,
@@ -145,7 +149,9 @@ export async function callAIProvider(
   pageDescription: string | undefined,
   apiKey: string,
   model: string = 'gpt-4o-mini',
-  timeoutMs: number = 10000
+  timeoutMs: number = 10000,
+  userLanguage: string = 'en',
+  siteName?: string
 ): Promise<AISuggestionResult | null> {
   const client = new OpenAI({ apiKey });
 
@@ -153,6 +159,8 @@ export async function callAIProvider(
     `URL: ${sanitizedUrl}`,
     pageTitle && `Page title: ${pageTitle}`,
     pageDescription && `Page description: ${pageDescription}`,
+    siteName && `Site name (brand): ${siteName}`,
+    `User's preferred language: ${userLanguage}. Output title, slug, and tags in this language.`,
   ]
     .filter(Boolean)
     .join('\n');

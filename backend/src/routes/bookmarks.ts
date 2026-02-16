@@ -860,6 +860,9 @@ router.post('/ai-suggest', async (req, res) => {
       return res.status(400).json({ error: 'Invalid URL' });
     }
 
+    const userRow = await queryOne('SELECT language FROM users WHERE id = ?', [userId]) as { language?: string } | null;
+    const userLanguage = (userRow?.language || 'en').slice(0, 10);
+
     const DB_TYPE = process.env.DB_TYPE || 'sqlite';
     const cacheTtlDays = 7;
     const cacheCondition =
@@ -867,8 +870,8 @@ router.post('/ai-suggest', async (req, res) => {
         ? `AND created_at >= NOW() - INTERVAL '${cacheTtlDays} days'`
         : "AND datetime(created_at) >= datetime('now', '-7 days')";
     const cached = await queryOne(
-      `SELECT title, slug, tags, language, confidence FROM ai_suggestions_cache WHERE user_id = ? AND canonical_url = ? ${cacheCondition}`,
-      [userId, sanitizedUrl]
+      `SELECT title, slug, tags, language, confidence FROM ai_suggestions_cache WHERE user_id = ? AND canonical_url = ? AND output_language = ? ${cacheCondition}`,
+      [userId, sanitizedUrl, userLanguage]
     );
     if (cached) {
       const tags = typeof (cached as any).tags === 'string'
@@ -886,6 +889,7 @@ router.post('/ai-suggest', async (req, res) => {
     const metadata = await fetchPageMetadata(sanitizedUrl);
     const fetchedTitle = metadata?.title;
     const fetchedDescription = metadata?.description;
+    const siteName = metadata?.siteName;
     const pageTitleToUse =
       typeof pageTitle === 'string' && pageTitle.trim()
         ? pageTitle.trim()
@@ -898,26 +902,23 @@ router.post('/ai-suggest', async (req, res) => {
       fetchedDescription,
       apiKey,
       model,
-      10000
+      10000,
+      userLanguage,
+      siteName
     );
 
     if (!result) {
       return res.status(503).json({ error: 'AI suggestion failed' });
     }
 
-    // Prefer fetched page title over AI-generated when available (avoids AI hallucination)
-    if (fetchedTitle && fetchedTitle.trim()) {
-      result.title = fetchedTitle.trim().slice(0, MAX_LENGTHS.title);
-    }
-
     const tagsJson = DB_TYPE === 'postgresql'
       ? JSON.stringify(result.tags)
       : JSON.stringify(result.tags);
     await execute(
-      `INSERT INTO ai_suggestions_cache (user_id, canonical_url, title, slug, tags, language, confidence)
-       VALUES (?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT (user_id, canonical_url) DO UPDATE SET title = excluded.title, slug = excluded.slug, tags = excluded.tags, language = excluded.language, confidence = excluded.confidence`,
-      [userId, sanitizedUrl, result.title, result.slug, tagsJson, result.language, result.confidence]
+      `INSERT INTO ai_suggestions_cache (user_id, canonical_url, output_language, title, slug, tags, language, confidence)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (user_id, canonical_url, output_language) DO UPDATE SET title = excluded.title, slug = excluded.slug, tags = excluded.tags, language = excluded.language, confidence = excluded.confidence`,
+      [userId, sanitizedUrl, userLanguage, result.title, result.slug, tagsJson, result.language, result.confidence]
     );
 
     res.json({

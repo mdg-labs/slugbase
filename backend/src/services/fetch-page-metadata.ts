@@ -64,6 +64,7 @@ async function resolveAndCheckHost(hostname: string): Promise<void> {
 export interface PageMetadata {
   title?: string;
   description?: string;
+  siteName?: string;
 }
 
 /**
@@ -116,6 +117,13 @@ function extractMetadataFromHtml(html: string): PageMetadata {
     if (ogDesc?.[1]) {
       result.description = ogDesc[1].replace(/\s+/g, ' ').trim().slice(0, 1000);
     }
+  }
+
+  // og:site_name (brand)
+  const ogSiteName = html.match(/<meta[^>]+property=["']og:site_name["'][^>]+content=["']([^"']*)["']/i)
+    || html.match(/<meta[^>]+content=["']([^"']*)["'][^>]+property=["']og:site_name["']/i);
+  if (ogSiteName?.[1]) {
+    result.siteName = ogSiteName[1].replace(/\s+/g, ' ').trim().slice(0, 200);
   }
 
   return result;
