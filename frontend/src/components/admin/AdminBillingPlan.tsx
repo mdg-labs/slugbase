@@ -33,6 +33,17 @@ interface Plan {
   extra_seat_yearly?: number | null;
 }
 
+interface Invoice {
+  id: string;
+  number: string;
+  status: string;
+  amount_paid: number;
+  currency: string;
+  created: number;
+  invoice_pdf: string | null;
+  hosted_invoice_url: string | null;
+}
+
 export default function AdminBillingPlan() {
   const { t } = useTranslation();
   const { bookmarkCount, bookmarkLimit } = useOrgPlan();
@@ -45,6 +56,9 @@ export default function AdminBillingPlan() {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteError, setInviteError] = useState('');
   const [aiSaving, setAiSaving] = useState(false);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [invoicesLoading, setInvoicesLoading] = useState(false);
+  const [invoicesError, setInvoicesError] = useState('');
 
   useEffect(() => {
     loadData();
@@ -57,8 +71,27 @@ export default function AdminBillingPlan() {
         api.get('/organizations/me'),
         api.get('/billing/plans'),
       ]);
-      setOrg(orgRes.data);
+      const orgData = orgRes.data;
+      setOrg(orgData);
       setPlans(plansRes.data?.plans || []);
+      const orgWithStripe = orgData as Org & { stripe_customer_id?: string };
+      const canManage = orgData?.role === 'owner' || orgData?.role === 'admin';
+      if (orgWithStripe?.stripe_customer_id && canManage) {
+        setInvoicesLoading(true);
+        setInvoicesError('');
+        try {
+          const invRes = await api.get('/billing/invoices');
+          setInvoices(invRes.data?.invoices || []);
+        } catch (err: any) {
+          setInvoicesError(err.response?.data?.error || t('common.error'));
+          setInvoices([]);
+        } finally {
+          setInvoicesLoading(false);
+        }
+      } else {
+        setInvoices([]);
+        setInvoicesError('');
+      }
     } catch (error: any) {
       if (error.response?.status === 404) {
         setOrg(null);
@@ -206,6 +239,79 @@ export default function AdminBillingPlan() {
           )}
         </CardContent>
       </Card>
+
+      {orgWithStripe.stripe_customer_id && canManageBilling && (
+        <Card>
+          <CardHeader>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              {t('admin.billingInvoices')}
+            </h2>
+          </CardHeader>
+          <CardContent>
+            {invoicesLoading ? (
+              <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
+            ) : invoicesError ? (
+              <p className="text-sm text-red-600 dark:text-red-400">{invoicesError}</p>
+            ) : invoices.length === 0 ? (
+              <p className="text-sm text-muted-foreground">{t('admin.billingInvoicesEmpty')}</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-200 dark:border-gray-700">
+                      <th className="text-left py-2 font-medium text-gray-900 dark:text-white">{t('admin.billingInvoiceDate')}</th>
+                      <th className="text-left py-2 font-medium text-gray-900 dark:text-white">{t('admin.billingInvoiceNumber')}</th>
+                      <th className="text-left py-2 font-medium text-gray-900 dark:text-white">{t('admin.billingInvoiceAmount')}</th>
+                      <th className="text-left py-2 font-medium text-gray-900 dark:text-white">{t('admin.billingInvoiceStatus')}</th>
+                      <th className="text-right py-2 font-medium text-gray-900 dark:text-white">{t('common.actions')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {invoices.map((inv) => (
+                      <tr key={inv.id} className="border-b border-gray-100 dark:border-gray-700 last:border-0">
+                        <td className="py-2 text-gray-600 dark:text-gray-400">
+                          {new Date(inv.created * 1000).toLocaleDateString()}
+                        </td>
+                        <td className="py-2 font-medium text-gray-900 dark:text-white">{inv.number}</td>
+                        <td className="py-2 text-gray-600 dark:text-gray-400">
+                          {(inv.amount_paid / 100).toFixed(2)} {inv.currency}
+                        </td>
+                        <td className="py-2">
+                          <Badge variant="secondary" className="text-xs">{inv.status}</Badge>
+                        </td>
+                        <td className="py-2 text-right">
+                          <span className="flex gap-2 justify-end">
+                            {inv.invoice_pdf && (
+                              <a
+                                href={inv.invoice_pdf}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-primary hover:underline text-xs"
+                              >
+                                {t('admin.billingInvoiceDownload')}
+                              </a>
+                            )}
+                            {inv.hosted_invoice_url && (
+                              <a
+                                href={inv.hosted_invoice_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-primary hover:underline text-xs"
+                              >
+                                {t('admin.billingInvoiceView')}
+                              </a>
+                            )}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {canManageBilling && (org.plan === 'personal' || org.plan === 'team' || org.plan === 'early_supporter') && (
         <Card>

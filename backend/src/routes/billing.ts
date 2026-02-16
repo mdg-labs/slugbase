@@ -235,6 +235,90 @@ router.post('/create-checkout-session', requireAuth(), authRateLimiter, async (r
 
 /**
  * @swagger
+ * /api/billing/invoices:
+ *   get:
+ *     summary: List invoices for current org
+ *     description: Returns invoice history for the organization's Stripe customer. Cloud mode only.
+ *     tags: [Billing]
+ *     security:
+ *       - cookieAuth: []
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Invoice list
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 invoices:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id: { type: string }
+ *                       number: { type: string }
+ *                       status: { type: string }
+ *                       amount_paid: { type: number }
+ *                       currency: { type: string }
+ *                       created: { type: number }
+ *                       invoice_pdf: { type: string, nullable: true }
+ *                       hosted_invoice_url: { type: string, nullable: true }
+ *       400:
+ *         description: No billing account found
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Organization not found
+ *       503:
+ *         description: Billing not configured
+ */
+router.get('/invoices', requireAuth(), authRateLimiter, async (req: Request, res: Response) => {
+  if (!isCloud) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  const stripe = getStripe();
+  if (!stripe) {
+    return res.status(503).json({ error: 'Billing is not configured' });
+  }
+  const authReq = req as AuthRequest;
+  const userId = authReq.user!.id;
+  const orgId = await getCurrentOrgId(userId);
+  if (!orgId) {
+    return res.status(404).json({ error: 'Organization not found' });
+  }
+  const membership = await queryOne(
+    `SELECT o.* FROM org_members om
+     INNER JOIN organizations o ON o.id = om.org_id
+     WHERE om.user_id = ? AND om.org_id = ?`,
+    [userId, orgId]
+  );
+  if (!membership) {
+    return res.status(404).json({ error: 'Organization not found' });
+  }
+  const org = membership as any;
+  if (!org.stripe_customer_id) {
+    return res.status(400).json({ error: 'No billing account found' });
+  }
+  const list = await stripe.invoices.list({
+    customer: org.stripe_customer_id,
+    limit: 20,
+  });
+  const invoices = (list.data || []).map((inv) => ({
+    id: inv.id,
+    number: inv.number || inv.id,
+    status: inv.status,
+    amount_paid: inv.amount_paid ?? 0,
+    currency: (inv.currency || 'eur').toUpperCase(),
+    created: inv.created,
+    invoice_pdf: inv.invoice_pdf || null,
+    hosted_invoice_url: inv.hosted_invoice_url || null,
+  }));
+  res.json({ invoices });
+});
+
+/**
+ * @swagger
  * /api/billing/create-portal-session:
  *   post:
  *     summary: Create Stripe Customer Portal session
