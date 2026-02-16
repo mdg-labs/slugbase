@@ -905,6 +905,11 @@ router.post('/ai-suggest', async (req, res) => {
       return res.status(503).json({ error: 'AI suggestion failed' });
     }
 
+    // Prefer fetched page title over AI-generated when available (avoids AI hallucination)
+    if (fetchedTitle && fetchedTitle.trim()) {
+      result.title = fetchedTitle.trim().slice(0, MAX_LENGTHS.title);
+    }
+
     const tagsJson = DB_TYPE === 'postgresql'
       ? JSON.stringify(result.tags)
       : JSON.stringify(result.tags);

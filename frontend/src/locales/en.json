@@ -139,6 +139,7 @@
     "slugRequired": "Slug is required when forwarding is enabled",
     "slugAlreadyExists": "Slug already exists. Slugs must be unique across all bookmarks.",
     "aiSuggesting": "AI suggesting…",
+    "aiSuggestionsLabel": "Suggested:",
     "searchEngineNote": "Want to quickly access your bookmarks from your browser's address bar?",
     "searchEngineGuideLink": "Learn how to set up a custom search engine",
     "viewMode": "View Mode",

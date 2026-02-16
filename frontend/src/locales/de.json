@@ -126,6 +126,8 @@
     "optional": "Optional",
     "slugRequired": "Slug ist erforderlich, wenn Weiterleitung aktiviert ist",
     "slugAlreadyExists": "Slug existiert bereits. Slugs müssen für alle Lesezeichen eindeutig sein.",
+    "aiSuggesting": "KI schlägt vor…",
+    "aiSuggestionsLabel": "Vorgeschlagen:",
     "searchEngineNote": "Möchten Sie schnell auf Ihre Lesezeichen über die Adressleiste Ihres Browsers zugreifen?",
     "searchEngineGuideLink": "Erfahren Sie, wie Sie eine benutzerdefinierte Suchmaschine einrichten",
     "viewMode": "Ansichtsmodus",

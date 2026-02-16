@@ -17,7 +17,7 @@ import { Switch } from '../ui/switch';
 import { Label } from '../ui/label';
 import { Input } from '../ui/input';
 import Autocomplete from '../ui/Autocomplete';
-import { Copy, Check, Loader2 } from 'lucide-react';
+import { Copy, Check, Loader2, Plus } from 'lucide-react';
 import { useToast } from '../ui/Toast';
 
 const AI_DEBOUNCE_MS = 500;
@@ -71,6 +71,11 @@ export default function BookmarkModal({
   const [copied, setCopied] = useState(false);
   const [aiEnabled, setAiEnabled] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<{
+    title?: string;
+    slug?: string;
+    tags?: string[];
+  } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -99,6 +104,7 @@ export default function BookmarkModal({
     abortRef.current?.abort();
     abortRef.current = new AbortController();
     setAiLoading(true);
+    setAiSuggestions(null);
     try {
       const res = await api.post(
         '/bookmarks/ai-suggest',
@@ -106,31 +112,11 @@ export default function BookmarkModal({
         { signal: abortRef.current.signal }
       );
       const { title, slug, tags: tagNames } = res.data;
-      setFormData((prev) => {
-        const next = { ...prev };
-        if (title) next.title = title;
-        if (slug) next.slug = slug;
-        return next;
+      setAiSuggestions({
+        title: title || undefined,
+        slug: slug || undefined,
+        tags: Array.isArray(tagNames) && tagNames.length > 0 ? tagNames : undefined,
       });
-      if (Array.isArray(tagNames) && tagNames.length > 0) {
-        const idsToAdd: string[] = [];
-        const existingByName = new Map(tags.map((t) => [t.name.toLowerCase(), t]));
-        for (const name of tagNames) {
-          const existing = existingByName.get(name.toLowerCase());
-          if (existing) {
-            idsToAdd.push(existing.id);
-          } else {
-            const created = await handleCreateTag(name);
-            if (created) idsToAdd.push(created.id);
-          }
-        }
-        if (idsToAdd.length > 0) {
-          setFormData((prev) => ({
-            ...prev,
-            tag_ids: [...new Set([...prev.tag_ids, ...idsToAdd])],
-          }));
-        }
-      }
     } catch (err: any) {
       if (err?.name !== 'AbortError' && err?.code !== 'ERR_CANCELED') {
         // Silently ignore - bookmark creation never depends on AI
@@ -139,7 +125,7 @@ export default function BookmarkModal({
       setAiLoading(false);
       abortRef.current = null;
     }
-  }, [aiEnabled, bookmark, tags]);
+  }, [aiEnabled, bookmark]);
 
   useEffect(() => {
     if (bookmark || !aiEnabled || !isOpen) return;
@@ -170,6 +156,7 @@ export default function BookmarkModal({
         folder_ids: (bookmark as any).folders?.map((f: any) => f.id) || [],
         tag_ids: bookmark.tags?.map((t) => t.id) || [],
       });
+      setAiSuggestions(null);
     } else {
       setFormData({
         title: '',
@@ -179,6 +166,7 @@ export default function BookmarkModal({
         folder_ids: [],
         tag_ids: [],
       });
+      if (!isOpen) setAiSuggestions(null);
     }
   }, [bookmark, isOpen]);
 
@@ -243,6 +231,39 @@ export default function BookmarkModal({
     setFormData({ ...formData, folder_ids: newFolders.map((f) => f.id) });
   };
 
+  const handleAddTitleSuggestion = () => {
+    if (aiSuggestions?.title) {
+      setFormData((prev) => ({ ...prev, title: aiSuggestions.title! }));
+    }
+  };
+
+  const handleAddSlugSuggestion = () => {
+    if (aiSuggestions?.slug) {
+      setFormData((prev) => ({ ...prev, slug: aiSuggestions.slug! }));
+    }
+  };
+
+  const handleAddTagSuggestion = async (tagName: string) => {
+    const existingByName = new Map(tags.map((t) => [t.name.toLowerCase(), t]));
+    const existing = existingByName.get(tagName.toLowerCase());
+    if (existing) {
+      setFormData((prev) => ({
+        ...prev,
+        tag_ids: [...new Set([...prev.tag_ids, existing.id])],
+      }));
+    } else {
+      const created = await handleCreateTag(tagName);
+      if (created) {
+        setFormData((prev) => ({
+          ...prev,
+          tag_ids: [...new Set([...prev.tag_ids, created.id])],
+        }));
+      }
+    }
+  };
+
+  const selectedTagNames = new Set(selectedTags.map((t) => t.name.toLowerCase()));
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-2xl">
@@ -270,6 +291,19 @@ export default function BookmarkModal({
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   {t('bookmarks.aiSuggesting')}
                 </p>
+              )}
+              {!aiLoading && aiSuggestions?.title && (
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  <span className="text-xs text-muted-foreground">{t('bookmarks.aiSuggestionsLabel')}</span>
+                  <button
+                    type="button"
+                    onClick={handleAddTitleSuggestion}
+                    className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs hover:bg-muted/80 transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                  >
+                    <span className="max-w-[200px] truncate">{aiSuggestions.title}</span>
+                    <Plus className="h-3 w-3 shrink-0" aria-hidden />
+                  </button>
+                </div>
               )}
             </FormFieldWrapper>
             <FormFieldWrapper label={t('bookmarks.url')} required>
@@ -313,6 +347,24 @@ export default function BookmarkModal({
                   {t('bookmarks.aiSuggesting')}
                 </p>
               )}
+              {!aiLoading && aiSuggestions?.tags && aiSuggestions.tags.length > 0 && (
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  <span className="text-xs text-muted-foreground">{t('bookmarks.aiSuggestionsLabel')}</span>
+                  {aiSuggestions.tags
+                    .filter((name) => !selectedTagNames.has(name.toLowerCase()))
+                    .map((tagName) => (
+                      <button
+                        key={tagName}
+                        type="button"
+                        onClick={() => handleAddTagSuggestion(tagName)}
+                        className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs hover:bg-muted/80 transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                      >
+                        {tagName}
+                        <Plus className="h-3 w-3 shrink-0" aria-hidden />
+                      </button>
+                    ))}
+                </div>
+              )}
             </div>
           </ModalSection>
 
@@ -349,6 +401,19 @@ export default function BookmarkModal({
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     {t('bookmarks.aiSuggesting')}
                   </p>
+                )}
+                {!aiLoading && aiSuggestions?.slug && (
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    <span className="text-xs text-muted-foreground">{t('bookmarks.aiSuggestionsLabel')}</span>
+                    <button
+                      type="button"
+                      onClick={handleAddSlugSuggestion}
+                      className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs hover:bg-muted/80 transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                    >
+                      {aiSuggestions.slug}
+                      <Plus className="h-3 w-3 shrink-0" aria-hidden />
+                    </button>
+                  </div>
                 )}
               </FormFieldWrapper>
               {formData.slug && (

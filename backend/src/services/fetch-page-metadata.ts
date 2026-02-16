@@ -12,7 +12,7 @@ const resolve6 = promisify(dns.resolve6);
 const FETCH_TIMEOUT_MS = 8000;
 const MAX_RESPONSE_BYTES = 100 * 1024; // 100 KB
 const MAX_REDIRECTS = 3;
-const USER_AGENT = 'SlugBase/1.0 (bookmark metadata)';
+const USER_AGENT = 'Mozilla/5.0 (compatible; SlugBase/1.0; +https://slugbase.app)';
 
 /** Private/internal IP ranges - SSRF protection */
 const PRIVATE_IPV4_RANGES = [
