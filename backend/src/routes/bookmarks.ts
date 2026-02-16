@@ -10,6 +10,7 @@ import { CreateBookmarkInput, UpdateBookmarkInput } from '../types.js';
 import { validateUrl, validateSlug, validateLength, sanitizeString, MAX_LENGTHS } from '../utils/validation.js';
 import { isAISuggestionsEnabled, getAIApiKey, getAIModel } from '../utils/ai-feature.js';
 import { sanitizeUrlForAI, callAIProvider } from '../services/ai-suggestions.js';
+import { fetchPageMetadata } from '../services/fetch-page-metadata.js';
 
 const router = Router();
 router.use(requireAuth());
@@ -860,8 +861,13 @@ router.post('/ai-suggest', async (req, res) => {
     }
 
     const DB_TYPE = process.env.DB_TYPE || 'sqlite';
+    const cacheTtlDays = 7;
+    const cacheCondition =
+      DB_TYPE === 'postgresql'
+        ? `AND created_at >= NOW() - INTERVAL '${cacheTtlDays} days'`
+        : "AND datetime(created_at) >= datetime('now', '-7 days')";
     const cached = await queryOne(
-      'SELECT title, slug, tags, language, confidence FROM ai_suggestions_cache WHERE user_id = ? AND canonical_url = ?',
+      `SELECT title, slug, tags, language, confidence FROM ai_suggestions_cache WHERE user_id = ? AND canonical_url = ? ${cacheCondition}`,
       [userId, sanitizedUrl]
     );
     if (cached) {
@@ -877,10 +883,19 @@ router.post('/ai-suggest', async (req, res) => {
       });
     }
 
+    const metadata = await fetchPageMetadata(sanitizedUrl);
+    const fetchedTitle = metadata?.title;
+    const fetchedDescription = metadata?.description;
+    const pageTitleToUse =
+      typeof pageTitle === 'string' && pageTitle.trim()
+        ? pageTitle.trim()
+        : fetchedTitle;
+
     const model = await getAIModel();
     const result = await callAIProvider(
       sanitizedUrl,
-      typeof pageTitle === 'string' ? pageTitle : undefined,
+      pageTitleToUse,
+      fetchedDescription,
       apiKey,
       model,
       10000

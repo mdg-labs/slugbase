@@ -117,17 +117,24 @@ const AI_RESPONSE_SCHEMA = {
   },
 } as const;
 
-const SYSTEM_PROMPT = `You suggest bookmark metadata from a URL. Return JSON with:
-- title: concise page title (max 500 chars)
+const SYSTEM_PROMPT = `You suggest bookmark metadata from a URL and optional page content.
+
+Rules:
+- When given page title and/or description, use them as the PRIMARY source. Do NOT guess from domain names alone.
+- Domain names can be ambiguous (e.g. "allquiet" could be a brand unrelated to literature). Always prefer page content over domain inference.
+- Tags should reflect: product category (e.g. devops, alerting, monitoring, saas), use case (e.g. on-call, incident-management), technology type. Avoid thematic or cultural tags unless clearly supported by the page content.
+- When you have NO page content and only a URL, set confidence lower (0.3–0.5) and prefer generic tags like "web-app", "tool", "website".
+- title: concise page title (max 500 chars), ideally from page content when available
 - slug: URL-safe, lowercase, hyphen-separated, alphanumeric only, max 255 chars. No secrets, tokens, or sensitive data.
 - tags: 5-10 relevant tags (strings)
 - language: ISO 639-1 code (e.g. en)
-- confidence: 0.0 to 1.0.`;
+- confidence: 0.0 to 1.0 (higher when page content was provided)`;
 
 /**
  * Call AI provider (OpenAI) for bookmark suggestions.
  * @param sanitizedUrl - sanitized URL (domain + path, no secrets)
- * @param pageTitle - optional page title if already known
+ * @param pageTitle - optional page title (from fetch or request)
+ * @param pageDescription - optional page description (from meta tags)
  * @param apiKey - decrypted API key
  * @param model - model name (default gpt-4o-mini)
  * @param timeoutMs - request timeout (default 10000)
@@ -135,15 +142,20 @@ const SYSTEM_PROMPT = `You suggest bookmark metadata from a URL. Return JSON wit
 export async function callAIProvider(
   sanitizedUrl: string,
   pageTitle: string | undefined,
+  pageDescription: string | undefined,
   apiKey: string,
   model: string = 'gpt-4o-mini',
   timeoutMs: number = 10000
 ): Promise<AISuggestionResult | null> {
   const client = new OpenAI({ apiKey });
 
-  const userContent = pageTitle
-    ? `URL: ${sanitizedUrl}\nPage title (if known): ${pageTitle}`
-    : `URL: ${sanitizedUrl}`;
+  const userContent = [
+    `URL: ${sanitizedUrl}`,
+    pageTitle && `Page title: ${pageTitle}`,
+    pageDescription && `Page description: ${pageDescription}`,
+  ]
+    .filter(Boolean)
+    .join('\n');
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
