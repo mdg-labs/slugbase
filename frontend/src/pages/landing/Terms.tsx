@@ -83,6 +83,12 @@ export default function Terms() {
           </section>
           <section>
             <h2 className="text-lg font-medium text-gray-900 dark:text-white mt-6 mb-2">
+              {t('legal.termsThirdPartyTitle')}
+            </h2>
+            <p>{t('legal.termsThirdPartyBody')}</p>
+          </section>
+          <section>
+            <h2 className="text-lg font-medium text-gray-900 dark:text-white mt-6 mb-2">
               {t('legal.termsCancellationTitle')}
             </h2>
             <p>{t('legal.termsCancellationBody')}</p>

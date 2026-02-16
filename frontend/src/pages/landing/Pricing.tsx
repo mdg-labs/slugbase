@@ -75,6 +75,7 @@ export default function Pricing() {
                 <li>{t('pricing.personalValue1')}</li>
                 <li>{t('pricing.personalValue2')}</li>
                 <li>{t('pricing.personalValue3')}</li>
+                <li>{t('pricing.personalValue4')}</li>
               </ul>
               <Link
                 to="/app/signup"
@@ -100,6 +101,7 @@ export default function Pricing() {
                 <li>{t('pricing.teamValue1')}</li>
                 <li>{t('pricing.teamValue2')}</li>
                 <li>{t('pricing.teamValue3')}</li>
+                <li>{t('pricing.teamValue4')}</li>
               </ul>
               <Link
                 to="/app/signup"
@@ -120,6 +122,7 @@ export default function Pricing() {
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li>{t('pricing.earlySupporterHelp')}</li>
                 <li>{t('pricing.earlySupporterIncludes')}</li>
+                <li>{t('pricing.earlySupporterValue4')}</li>
                 <li>{t('pricing.earlySupporterSeats')}</li>
                 <li className="text-xs">{t('pricing.earlySupporterNote')}</li>
               </ul>

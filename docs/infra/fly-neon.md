@@ -97,6 +97,8 @@ fly secrets set \
 | `SMTP_PASSWORD` | SMTP password |
 | `SMTP_FROM` | From email address |
 | `SMTP_FROM_NAME` | From display name |
+| `AI_OPENAI_API_KEY` | OpenAI API key for AI bookmark suggestions (Personal/Team plans) |
+| `AI_OPENAI_MODEL` | Model override (default: gpt-4o-mini) |
 
 **Production** (when ready): repeat the required secrets with production values for `slugbase-prod`.
 

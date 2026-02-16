@@ -25,7 +25,7 @@ SlugBase is a powerful bookmark management system that gives you complete contro
 ## Key Features
 
 ### 📚 Bookmark Management
-Store and organize your bookmarks with titles, URLs, and optional custom slugs. Create a personal knowledge base of your favorite links.
+Store and organize your bookmarks with titles, URLs, and optional custom slugs. Create a personal knowledge base of your favorite links. **AI Suggestions** - Optional AI-powered title, tag, and slug suggestions when creating bookmarks (configurable by admin).
 
 ### 🏷️ Organization Tools
 Organize bookmarks using:

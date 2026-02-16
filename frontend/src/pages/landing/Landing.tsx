@@ -142,6 +142,7 @@ export default function Landing() {
               <h3 className="text-lg font-semibold text-foreground mt-1">{t('pricing.personal')}</h3>
               <p className="mt-2 text-2xl font-bold text-foreground">{t('pricing.personalPrice')}</p>
               <p className="mt-2 text-sm text-muted-foreground">{t('pricing.personalBookmarks')}</p>
+              <p className="mt-1 text-xs text-primary font-medium">{t('pricing.personalValue4')}</p>
               <Link to="/app/signup" className="mt-6 inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                 {t('landing.ctaStartFree')}
               </Link>
@@ -150,6 +151,7 @@ export default function Landing() {
               <h3 className="text-lg font-semibold text-foreground">{t('pricing.team')}</h3>
               <p className="mt-2 text-2xl font-bold text-foreground">{t('pricing.teamPrice')}</p>
               <p className="mt-2 text-sm text-muted-foreground">{t('pricing.teamUsers')} · {t('pricing.teamExtraUser')}</p>
+              <p className="mt-1 text-xs text-primary font-medium">{t('pricing.teamValue4')}</p>
               <Link to="/app/signup" className="mt-6 inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                 {t('pricing.ctaChoosePlan')}
               </Link>
@@ -178,7 +180,7 @@ export default function Landing() {
           <h2 className="text-xl font-semibold text-foreground text-center mb-8">
             {t('landing.featuresTitle')}
           </h2>
-          <div className="grid sm:grid-cols-3 gap-8">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-8">
             <div className="bg-card rounded-xl border border-border p-6">
               <h3 className="text-lg font-semibold text-foreground">{t('landing.feature1Title')}</h3>
               <p className="mt-2 text-sm text-muted-foreground">{t('landing.feature1Desc')}</p>
@@ -190,6 +192,10 @@ export default function Landing() {
             <div className="bg-card rounded-xl border border-border p-6">
               <h3 className="text-lg font-semibold text-foreground">{t('landing.feature3Title')}</h3>
               <p className="mt-2 text-sm text-muted-foreground">{t('landing.feature3Desc')}</p>
+            </div>
+            <div className="bg-card rounded-xl border border-primary/30 p-6">
+              <h3 className="text-lg font-semibold text-foreground">{t('landing.featureAiTitle')}</h3>
+              <p className="mt-2 text-sm text-muted-foreground">{t('landing.featureAiDesc')}</p>
             </div>
           </div>
           <div className="mt-10 text-center">

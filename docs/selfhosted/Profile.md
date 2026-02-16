@@ -54,6 +54,12 @@ The Profile page allows users to view and manage their account settings, includi
 - **Persistence**: Saved to user profile
 - **Immediate Effect**: Theme changes apply immediately
 
+#### AI Suggestions
+- **Toggle**: Enable or disable AI suggestions when creating bookmarks
+- **Visibility**: Only shown when AI is configured by admin
+- **Persistence**: Saved to user profile
+- **Effect**: When disabled, no AI suggestions appear in the bookmark creation modal
+
 ### Form Structure
 
 The profile is organized into sections:
@@ -79,6 +85,10 @@ The profile is organized into sections:
 
 5. **Theme Section** (Pink icon)
    - Dropdown selection
+   - Save with other settings
+
+6. **AI Suggestions Section** (Violet icon, when AI configured)
+   - Toggle switch
    - Save with other settings
 
 ## User Interactions
@@ -126,6 +136,13 @@ The profile is organized into sections:
 3. Click "Save Settings" button
 4. Theme changes immediately
 
+### Toggling AI Suggestions
+
+1. When AI is configured by admin, the AI Suggestions toggle appears in Preferences
+2. Toggle on or off
+3. Click "Save Settings" button
+4. AI suggestions will or will not appear when creating bookmarks accordingly
+
 ## Component Structure
 
 ```tsx
@@ -148,6 +165,7 @@ The profile is organized into sections:
     <Settings Form>
       <Language Select>
       <Theme Select>
+      <AI Suggestions Toggle> (when AI configured)
       <Save Button>
     </Settings>
   </Card>
@@ -158,7 +176,7 @@ The profile is organized into sections:
 
 - `GET /users/me` - Fetch current user data (via AuthContext)
 - `PUT /users/me` - Update user profile
-- Updates include: `email`, `name`, `language`, `theme`
+- Updates include: `email`, `name`, `language`, `theme`, `ai_suggestions_enabled`
 
 ## Form State Management
 
