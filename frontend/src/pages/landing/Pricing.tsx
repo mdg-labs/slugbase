@@ -13,7 +13,7 @@ export default function Pricing() {
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-16">
         <div className="text-center mb-12">
           <h1 className="text-3xl sm:text-4xl font-bold text-foreground">{t('pricing.title')}</h1>
-          <p className="mt-2 text-muted-foreground">{t('pricing.subtitle')}</p>
+          <p className="mt-2 text-muted-foreground">{t('pricing.positioning')}</p>
           <div className="mt-4 flex items-center justify-center gap-2">
             <button
               type="button"
@@ -24,7 +24,7 @@ export default function Pricing() {
                   : 'bg-muted text-muted-foreground hover:bg-accent'
               }`}
             >
-              Monthly
+              {t('pricing.billingMonthly')}
             </button>
             <button
               type="button"
@@ -35,7 +35,7 @@ export default function Pricing() {
                   : 'bg-muted text-muted-foreground hover:bg-accent'
               }`}
             >
-              Yearly
+              {t('pricing.billingYearly')}
             </button>
           </div>
         </div>

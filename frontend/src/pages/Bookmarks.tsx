@@ -104,7 +104,7 @@ export default function Bookmarks() {
     if (createParam === 'true') {
       const atLimit = !canCreateBookmark(plan, bookmarkCount, bookmarkLimit, freePlanGraceEndsAt);
       if (atLimit) {
-        showToast(t('plan.limitBookmarks'), 'error');
+        showToast(t('plan.limitBookmarks', { limit: bookmarkLimit ?? 50 }), 'error');
       } else {
         handleCreate();
       }
@@ -452,7 +452,7 @@ export default function Bookmarks() {
               size="sm"
               icon={Upload}
               onClick={() => !canCreateBookmark(plan, bookmarkCount, bookmarkLimit, freePlanGraceEndsAt) ? undefined : setImportModalOpen(true)}
-              title={!canCreateBookmark(plan, bookmarkCount, bookmarkLimit, freePlanGraceEndsAt) ? t('plan.limitBookmarks') : t('bookmarks.import')}
+              title={!canCreateBookmark(plan, bookmarkCount, bookmarkLimit, freePlanGraceEndsAt) ? t('plan.limitBookmarks', { limit: bookmarkLimit ?? 50 }) : t('bookmarks.import')}
               disabled={!canCreateBookmark(plan, bookmarkCount, bookmarkLimit, freePlanGraceEndsAt)}
             >
               <span className="hidden sm:inline">{t('bookmarks.import')}</span>
@@ -472,7 +472,7 @@ export default function Bookmarks() {
               </Button>
             ) : (
               <Link to={`${appBasePath}/admin/billing`}>
-                <Button variant="secondary" icon={Plus} disabled title={t('plan.limitBookmarks')}>
+                <Button variant="secondary" icon={Plus} disabled title={t('plan.limitBookmarks', { limit: bookmarkLimit ?? 50 })}>
                   {t('plan.upgradeCta')}
                 </Button>
               </Link>
@@ -716,7 +716,7 @@ export default function Bookmarks() {
               icon={Upload}
               onClick={() => canCreateBookmark(plan, bookmarkCount, bookmarkLimit, freePlanGraceEndsAt) && setImportModalOpen(true)}
               disabled={!canCreateBookmark(plan, bookmarkCount, bookmarkLimit, freePlanGraceEndsAt)}
-              title={!canCreateBookmark(plan, bookmarkCount, bookmarkLimit, freePlanGraceEndsAt) ? t('plan.limitBookmarks') : t('bookmarks.emptyImport')}
+              title={!canCreateBookmark(plan, bookmarkCount, bookmarkLimit, freePlanGraceEndsAt) ? t('plan.limitBookmarks', { limit: bookmarkLimit ?? 50 }) : t('bookmarks.emptyImport')}
             >
               {t('bookmarks.emptyImport')}
             </Button>

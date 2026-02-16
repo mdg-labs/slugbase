@@ -15,7 +15,7 @@ export default function Landing() {
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-20 sm:py-28">
         {/* Hero */}
         <div className="text-center">
-          <h1 className="text-6xl sm:text-7xl font-bold text-foreground tracking-tight">
+          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold text-foreground tracking-tight">
             {t('landing.heroHeadline')}
           </h1>
           <p className="mt-6 text-xl text-muted-foreground max-w-2xl mx-auto">
@@ -31,12 +31,12 @@ export default function Landing() {
             >
               {t('landing.ctaStartFree')}
             </Link>
-            <Link
-              to="/app/signup"
-              className="inline-flex items-center justify-center px-8 py-3 text-base font-medium text-muted-foreground bg-card border border-input hover:bg-accent rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-            >
-              {t('landing.ctaViewDemo')}
-            </Link>
+          </div>
+          {/* Proof strip: Open Source + API docs */}
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
+            <span>{t('landing.proofOpenSource')}</span>
+            <span>·</span>
+            <span>{t('landing.proofApiDocs')}</span>
           </div>
           {/* Example snippet */}
           <div className="mt-12 px-4 py-3 rounded-lg bg-primary/10 border border-primary/30 ring-1 ring-primary/30 inline-block">
@@ -48,30 +48,24 @@ export default function Landing() {
           </div>
         </div>
 
-        {/* Trust signals */}
-        <div className="mt-16 flex flex-wrap items-center justify-center gap-6 text-base text-muted-foreground">
-          <a
-            href={GITHUB_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 hover:text-foreground transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
-            aria-label={t('landing.trustOpenSource')}
-          >
-            <Star className="h-4 w-4" aria-hidden />
-            {t('landing.trustOpenSource')}
-            <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-          </a>
-          <span className="inline-flex items-center">{t('landing.trustActiveDev')}</span>
-          <a
-            href={DOCS_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 hover:text-foreground transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
-          >
-            {t('landing.trustApiDocs')}
-            <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-          </a>
-          <span className="inline-flex items-center">{t('landing.trustDemoResets')}</span>
+        {/* Why browser bookmarks aren't enough (problem framing) - moved up */}
+        <div className="mt-24 sm:mt-32 grid sm:grid-cols-2 gap-8 max-w-3xl mx-auto">
+          <div className="bg-card rounded-xl border border-border p-6">
+            <h3 className="text-lg font-semibold text-foreground">{t('landing.problemTitle')}</h3>
+            <ul className="mt-4 space-y-2 text-sm text-muted-foreground list-disc list-inside">
+              <li>{t('landing.problem1')}</li>
+              <li>{t('landing.problem2')}</li>
+              <li>{t('landing.problem3')}</li>
+            </ul>
+          </div>
+          <div className="bg-card rounded-xl border border-primary/30 p-6">
+            <h3 className="text-lg font-semibold text-foreground">{t('landing.solutionTitle')}</h3>
+            <ul className="mt-4 space-y-2 text-sm text-muted-foreground list-disc list-inside">
+              <li>{t('landing.solution1')}</li>
+              <li>{t('landing.solution2')}</li>
+              <li>{t('landing.solution3')}</li>
+            </ul>
+          </div>
         </div>
 
         {/* How it works */}
@@ -98,27 +92,64 @@ export default function Landing() {
           </div>
         </div>
 
-        {/* Problem → Solution */}
-        <div className="mt-24 sm:mt-32 grid sm:grid-cols-2 gap-8 max-w-3xl mx-auto">
-          <div className="bg-card rounded-xl border border-border p-6">
-            <h3 className="text-lg font-semibold text-foreground">{t('landing.problemTitle')}</h3>
-            <ul className="mt-4 space-y-2 text-sm text-muted-foreground list-disc list-inside">
-              <li>{t('landing.problem1')}</li>
-              <li>{t('landing.problem2')}</li>
-              <li>{t('landing.problem3')}</li>
-            </ul>
+        {/* Key differentiators / features (includes AI) */}
+        <div className="mt-24 sm:mt-32">
+          <h2 className="text-xl font-semibold text-foreground text-center mb-8">
+            {t('landing.featuresTitle')}
+          </h2>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-8">
+            <div className="bg-card rounded-xl border border-border p-6">
+              <h3 className="text-lg font-semibold text-foreground">{t('landing.feature1Title')}</h3>
+              <p className="mt-2 text-sm text-muted-foreground">{t('landing.feature1Desc')}</p>
+            </div>
+            <div className="bg-card rounded-xl border border-border p-6">
+              <h3 className="text-lg font-semibold text-foreground">{t('landing.feature2Title')}</h3>
+              <p className="mt-2 text-sm text-muted-foreground">{t('landing.feature2Desc')}</p>
+            </div>
+            <div className="bg-card rounded-xl border border-border p-6">
+              <h3 className="text-lg font-semibold text-foreground">{t('landing.feature3Title')}</h3>
+              <p className="mt-2 text-sm text-muted-foreground">{t('landing.feature3Desc')}</p>
+            </div>
+            <div className="bg-card rounded-xl border border-primary/30 p-6">
+              <h3 className="text-lg font-semibold text-foreground">{t('landing.featureAiTitle')}</h3>
+              <p className="mt-2 text-sm text-muted-foreground">{t('landing.featureAiDesc')}</p>
+            </div>
           </div>
-          <div className="bg-card rounded-xl border border-primary/30 p-6">
-            <h3 className="text-lg font-semibold text-foreground">{t('landing.solutionTitle')}</h3>
-            <ul className="mt-4 space-y-2 text-sm text-muted-foreground list-disc list-inside">
-              <li>{t('landing.solution1')}</li>
-              <li>{t('landing.solution2')}</li>
-              <li>{t('landing.solution3')}</li>
-            </ul>
+          <div className="mt-10 text-center">
+            <Link
+              to="/app/signup"
+              className="inline-flex items-center justify-center px-6 py-2.5 text-sm font-medium text-primary hover:text-primary/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
+            >
+              {t('landing.ctaStartFree')} →
+            </Link>
           </div>
         </div>
 
-        {/* Pricing snippet */}
+        {/* Lightweight UI preview */}
+        <div className="mt-24 sm:mt-32 flex justify-center">
+          <div className="w-full max-w-md bg-card rounded-xl border border-border p-4 shadow-lg">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-2 h-2 rounded-full bg-muted-foreground/50" />
+              <div className="w-2 h-2 rounded-full bg-muted-foreground/50" />
+              <div className="w-2 h-2 rounded-full bg-muted-foreground/50" />
+            </div>
+            <div className="space-y-2">
+              {[
+                { title: 'React Docs', slug: 'react', tags: 'docs, frontend' },
+                { title: 'Vite Guide', slug: 'vite', tags: 'build, dev' },
+                { title: 'API Reference', slug: 'api', tags: 'backend' },
+              ].map((b, i) => (
+                <div key={i} className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/50">
+                  <span className="text-sm font-medium text-foreground truncate">{b.title}</span>
+                  <span className="text-xs text-muted-foreground ml-2 shrink-0">/{b.slug}</span>
+                  <span className="text-xs text-muted-foreground/80 truncate max-w-[100px]">{b.tags}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Pricing preview */}
         <div className="mt-24 sm:mt-32" id="pricing">
           <h2 className="text-xl font-semibold text-foreground text-center mb-2">
             {t('landing.pricingTitle')}
@@ -175,40 +206,7 @@ export default function Landing() {
           </div>
         </div>
 
-        {/* Why SlugBase */}
-        <div className="mt-24 sm:mt-32">
-          <h2 className="text-xl font-semibold text-foreground text-center mb-8">
-            {t('landing.featuresTitle')}
-          </h2>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-8">
-            <div className="bg-card rounded-xl border border-border p-6">
-              <h3 className="text-lg font-semibold text-foreground">{t('landing.feature1Title')}</h3>
-              <p className="mt-2 text-sm text-muted-foreground">{t('landing.feature1Desc')}</p>
-            </div>
-            <div className="bg-card rounded-xl border border-border p-6">
-              <h3 className="text-lg font-semibold text-foreground">{t('landing.feature2Title')}</h3>
-              <p className="mt-2 text-sm text-muted-foreground">{t('landing.feature2Desc')}</p>
-            </div>
-            <div className="bg-card rounded-xl border border-border p-6">
-              <h3 className="text-lg font-semibold text-foreground">{t('landing.feature3Title')}</h3>
-              <p className="mt-2 text-sm text-muted-foreground">{t('landing.feature3Desc')}</p>
-            </div>
-            <div className="bg-card rounded-xl border border-primary/30 p-6">
-              <h3 className="text-lg font-semibold text-foreground">{t('landing.featureAiTitle')}</h3>
-              <p className="mt-2 text-sm text-muted-foreground">{t('landing.featureAiDesc')}</p>
-            </div>
-          </div>
-          <div className="mt-10 text-center">
-            <Link
-              to="/app/signup"
-              className="inline-flex items-center justify-center px-6 py-2.5 text-sm font-medium text-primary hover:text-primary/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
-            >
-              {t('landing.ctaStartFree')} →
-            </Link>
-          </div>
-        </div>
-
-        {/* Built for modern workflows */}
+        {/* Built for … (audience tiles) */}
         <div className="mt-24 sm:mt-32">
           <h2 className="text-xl font-semibold text-foreground text-center mb-8">
             {t('landing.useCaseTitle')}
@@ -231,6 +229,31 @@ export default function Landing() {
               <p className="mt-2 text-sm text-muted-foreground">{t('landing.useCaseSelfHostDesc')}</p>
             </div>
           </div>
+        </div>
+
+        {/* Trust signals (footer strip) */}
+        <div className="mt-24 flex flex-wrap items-center justify-center gap-6 text-base text-muted-foreground">
+          <a
+            href={GITHUB_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 hover:text-foreground transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
+            aria-label={t('landing.trustOpenSource')}
+          >
+            <Star className="h-4 w-4" aria-hidden />
+            {t('landing.trustOpenSource')}
+            <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+          </a>
+          <span className="inline-flex items-center">{t('landing.trustActiveDev')}</span>
+          <a
+            href={DOCS_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 hover:text-foreground transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
+          >
+            {t('landing.trustApiDocs')}
+            <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+          </a>
         </div>
       </div>
     </MarketingLayout>

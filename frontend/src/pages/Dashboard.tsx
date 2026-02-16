@@ -140,7 +140,7 @@ export default function Dashboard() {
             </Link>
             {atBookmarkLimit ? (
               <Link to={`${appBasePath}/admin/billing`}>
-                <Button variant="secondary" size="lg" icon={Plus} title={t('plan.limitBookmarks')}>
+                <Button variant="secondary" size="lg" icon={Plus} title={t('plan.limitBookmarks', { limit: bookmarkLimit ?? 50 })}>
                   {t('plan.upgradeCta')}
                 </Button>
               </Link>

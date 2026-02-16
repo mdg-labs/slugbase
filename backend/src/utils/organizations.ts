@@ -87,14 +87,14 @@ export async function ensureOrgForUser(userId: string, userName: string): Promis
   return orgId;
 }
 
-/** Grace period in days when user has >100 bookmarks on free plan */
+/** Grace period in days when user has >50 bookmarks on free plan */
 export const FREE_PLAN_GRACE_DAYS = parseInt(process.env.FREE_PLAN_GRACE_DAYS || '14', 10) || 14;
 
 /** Free plan bookmark limit */
-export const FREE_BOOKMARK_LIMIT = 100;
+export const FREE_BOOKMARK_LIMIT = 50;
 
 /**
- * Set free_plan_grace_ends_at when user has >100 bookmarks (e.g. after being removed from org).
+ * Set free_plan_grace_ends_at when user has >50 bookmarks (e.g. after being removed from org).
  * Only sets if not already set. Call when user moves to free plan with over-limit bookmarks.
  */
 export async function setFreePlanGraceIfOverLimit(userId: string): Promise<void> {
@@ -110,7 +110,7 @@ export async function setFreePlanGraceIfOverLimit(userId: string): Promise<void>
 }
 
 /**
- * Clear free_plan_grace_ends_at (e.g. when user deletes down to ≤100 or upgrades).
+ * Clear free_plan_grace_ends_at (e.g. when user deletes down to ≤50 or upgrades).
  */
 export async function clearFreePlanGrace(userId: string): Promise<void> {
   if (!isCloud) return;
