@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../api/client';
@@ -17,8 +17,14 @@ import { Switch } from '../ui/switch';
 import { Label } from '../ui/label';
 import { Input } from '../ui/input';
 import Autocomplete from '../ui/Autocomplete';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, Loader2 } from 'lucide-react';
 import { useToast } from '../ui/Toast';
+
+const AI_DEBOUNCE_MS = 500;
+const isValidUrl = (url: string): boolean => {
+  const t = url.trim();
+  return t.length > 0 && /^https?:\/\/.+/.test(t);
+};
 
 interface Bookmark {
   id: string;
@@ -63,6 +69,96 @@ export default function BookmarkModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleCreateTag = useCallback(async (name: string): Promise<{ id: string; name: string } | null> => {
+    try {
+      const response = await api.post('/tags', { name });
+      const newTag = { id: response.data.id, name: response.data.name };
+      if (onTagCreated) {
+        onTagCreated(newTag);
+      }
+      return newTag;
+    } catch {
+      return null;
+    }
+  }, [onTagCreated]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    api.get('/config/ai-suggestions')
+      .then((res) => setAiEnabled(res.data?.enabled === true))
+      .catch(() => setAiEnabled(false));
+  }, [isOpen]);
+
+  const fetchAISuggestions = useCallback(async (url: string) => {
+    if (!aiEnabled || bookmark) return;
+    abortRef.current?.abort();
+    abortRef.current = new AbortController();
+    setAiLoading(true);
+    try {
+      const res = await api.post(
+        '/bookmarks/ai-suggest',
+        { url },
+        { signal: abortRef.current.signal }
+      );
+      const { title, slug, tags: tagNames } = res.data;
+      setFormData((prev) => {
+        const next = { ...prev };
+        if (title) next.title = title;
+        if (slug) next.slug = slug;
+        return next;
+      });
+      if (Array.isArray(tagNames) && tagNames.length > 0) {
+        const idsToAdd: string[] = [];
+        const existingByName = new Map(tags.map((t) => [t.name.toLowerCase(), t]));
+        for (const name of tagNames) {
+          const existing = existingByName.get(name.toLowerCase());
+          if (existing) {
+            idsToAdd.push(existing.id);
+          } else {
+            const created = await handleCreateTag(name);
+            if (created) idsToAdd.push(created.id);
+          }
+        }
+        if (idsToAdd.length > 0) {
+          setFormData((prev) => ({
+            ...prev,
+            tag_ids: [...new Set([...prev.tag_ids, ...idsToAdd])],
+          }));
+        }
+      }
+    } catch (err: any) {
+      if (err?.name !== 'AbortError' && err?.code !== 'ERR_CANCELED') {
+        // Silently ignore - bookmark creation never depends on AI
+      }
+    } finally {
+      setAiLoading(false);
+      abortRef.current = null;
+    }
+  }, [aiEnabled, bookmark, tags]);
+
+  useEffect(() => {
+    if (bookmark || !aiEnabled || !isOpen) return;
+    const url = formData.url.trim();
+    if (!isValidUrl(url)) return;
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      debounceRef.current = null;
+      fetchAISuggestions(url);
+    }, AI_DEBOUNCE_MS);
+
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+    };
+  }, [formData.url, aiEnabled, bookmark, isOpen, fetchAISuggestions]);
 
   useEffect(() => {
     if (bookmark) {
@@ -147,19 +243,6 @@ export default function BookmarkModal({
     setFormData({ ...formData, folder_ids: newFolders.map((f) => f.id) });
   };
 
-  const handleCreateTag = async (name: string): Promise<{ id: string; name: string } | null> => {
-    try {
-      const response = await api.post('/tags', { name });
-      const newTag = { id: response.data.id, name: response.data.name };
-      if (onTagCreated) {
-        onTagCreated(newTag);
-      }
-      return newTag;
-    } catch {
-      return null;
-    }
-  };
-
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-2xl">
@@ -182,6 +265,12 @@ export default function BookmarkModal({
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                 placeholder={t('bookmarks.name')}
               />
+              {aiLoading && (
+                <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  {t('bookmarks.aiSuggesting')}
+                </p>
+              )}
             </FormFieldWrapper>
             <FormFieldWrapper label={t('bookmarks.url')} required>
               <Input
@@ -218,6 +307,12 @@ export default function BookmarkModal({
                 placeholder={t('bookmarks.tags')}
                 onCreateNew={handleCreateTag}
               />
+              {aiLoading && (
+                <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  {t('bookmarks.aiSuggesting')}
+                </p>
+              )}
             </div>
           </ModalSection>
 
@@ -249,6 +344,12 @@ export default function BookmarkModal({
                   onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
                   placeholder={t('bookmarks.slug')}
                 />
+                {aiLoading && (
+                  <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    {t('bookmarks.aiSuggesting')}
+                  </p>
+                )}
               </FormFieldWrapper>
               {formData.slug && (
                 <div className="rounded-lg border bg-muted/50 p-3 space-y-1">

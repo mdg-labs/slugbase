@@ -383,4 +383,108 @@ router.post('/smtp', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/admin/settings/ai:
+ *   get:
+ *     summary: Get AI settings (self-hosted only)
+ *     description: Returns AI configuration. API key is masked. Cloud mode returns 403.
+ *     tags: [Admin - Settings]
+ *     security:
+ *       - cookieAuth: []
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: AI settings
+ *       403:
+ *         description: Cloud mode - AI configured via env
+ */
+router.get('/ai', async (req, res) => {
+  if (isCloud) {
+    return res.status(403).json({ error: 'AI configuration is managed via environment variables in CLOUD mode' });
+  }
+  try {
+    const keys = ['ai_enabled', 'ai_provider', 'ai_api_key', 'ai_model'];
+    const result: Record<string, string> = {};
+    for (const key of keys) {
+      const row = await queryOne('SELECT value FROM system_config WHERE key = ?', [key]);
+      const val = row ? (row as any).value : '';
+      result[key] = key === 'ai_api_key' && val ? '***SET***' : (val || '');
+    }
+    res.json({
+      ai_enabled: result.ai_enabled === 'true',
+      ai_provider: result.ai_provider || 'openai',
+      ai_model: result.ai_model || 'gpt-4o-mini',
+      ai_api_key_set: result.ai_api_key === '***SET***',
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /api/admin/settings/ai:
+ *   post:
+ *     summary: Save AI settings (self-hosted only)
+ *     description: Saves AI configuration. API key is encrypted. Cloud mode returns 403.
+ *     tags: [Admin - Settings]
+ *     security:
+ *       - cookieAuth: []
+ *       - bearerAuth: []
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               ai_enabled: { type: boolean }
+ *               ai_provider: { type: string }
+ *               ai_api_key: { type: string }
+ *               ai_model: { type: string }
+ *     responses:
+ *       200:
+ *         description: AI settings saved
+ *       403:
+ *         description: Cloud mode
+ */
+router.post('/ai', async (req, res) => {
+  if (isCloud) {
+    return res.status(403).json({ error: 'AI configuration is managed via environment variables in CLOUD mode' });
+  }
+  try {
+    const { ai_enabled, ai_provider, ai_api_key, ai_model } = req.body;
+
+    if (ai_enabled !== undefined) {
+      await execute(
+        'INSERT OR REPLACE INTO system_config (key, value) VALUES (?, ?)',
+        ['ai_enabled', ai_enabled ? 'true' : 'false']
+      );
+    }
+    if (ai_provider !== undefined) {
+      await execute(
+        'INSERT OR REPLACE INTO system_config (key, value) VALUES (?, ?)',
+        ['ai_provider', String(ai_provider)]
+      );
+    }
+    if (ai_api_key !== undefined && ai_api_key !== null && ai_api_key.trim() !== '') {
+      const encrypted = encrypt(ai_api_key.trim());
+      await execute(
+        'INSERT OR REPLACE INTO system_config (key, value) VALUES (?, ?)',
+        ['ai_api_key', encrypted]
+      );
+    }
+    if (ai_model !== undefined) {
+      await execute(
+        'INSERT OR REPLACE INTO system_config (key, value) VALUES (?, ?)',
+        ['ai_model', String(ai_model)]
+      );
+    }
+
+    res.json({ message: 'AI settings updated successfully' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

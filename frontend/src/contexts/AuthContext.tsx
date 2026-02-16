@@ -11,6 +11,7 @@ export interface User {
   is_admin: boolean;
   language: string;
   theme: string;
+  ai_suggestions_enabled?: boolean;
   /** In Cloud mode: org role (owner/admin/member) if user is in an org */
   org_role?: 'owner' | 'admin' | 'member' | null;
   /** In Cloud mode: current org id for multi-org context */

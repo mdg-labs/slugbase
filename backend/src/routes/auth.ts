@@ -207,14 +207,17 @@ router.get('/providers', async (req, res) => {
 router.get('/me', requireAuth(), async (req, res) => {
   const authReq = req as AuthRequest;
   const user = authReq.user!;
+  const userRow = await queryOne('SELECT id, email, name, user_key, is_admin, language, theme, ai_suggestions_enabled FROM users WHERE id = ?', [user.id]);
+  const u = userRow as any;
   const payload: Record<string, unknown> = {
     id: user.id,
-    email: user.email,
-    name: user.name,
+    email: u?.email ?? user.email,
+    name: u?.name ?? user.name,
     user_key: user.user_key,
     is_admin: user.is_admin,
-    language: (user as any).language || 'en',
-    theme: (user as any).theme || 'auto',
+    language: u?.language || (user as any).language || 'en',
+    theme: u?.theme || (user as any).theme || 'auto',
+    ai_suggestions_enabled: u?.ai_suggestions_enabled !== 0 && u?.ai_suggestions_enabled !== false,
   };
   if (isCloud && user.org_role !== undefined) {
     payload.org_role = user.org_role;

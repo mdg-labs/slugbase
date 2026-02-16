@@ -3,9 +3,10 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { appBasePath, apiBaseUrl } from '../config/api';
-import { Mail, User as UserIcon, Globe, Palette, AlertCircle, Link2, Building2, ArrowRightLeft, Key } from 'lucide-react';
+import { Mail, User as UserIcon, Globe, Palette, AlertCircle, Link2, Building2, ArrowRightLeft, Key, Sparkles } from 'lucide-react';
 import Select from '../components/ui/Select';
 import Button from '../components/ui/Button';
+import { Switch } from '../components/ui/switch';
 import { useToast } from '../components/ui/Toast';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import CreateTokenModal from '../components/profile/CreateTokenModal';
@@ -28,7 +29,9 @@ export default function Profile() {
     name: '',
     language: 'en',
     theme: 'auto',
+    ai_suggestions_enabled: true,
   });
+  const [aiAvailable, setAiAvailable] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; name?: string }>({});
   const [editingEmail, setEditingEmail] = useState(false);
@@ -47,7 +50,16 @@ export default function Profile() {
         name: user.name || '',
         language: user.language || 'en',
         theme: user.theme || 'auto',
+        ai_suggestions_enabled: Boolean((user as { ai_suggestions_enabled?: boolean | number }).ai_suggestions_enabled ?? true),
       });
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (user) {
+      api.get('/config/ai-suggestions')
+        .then((res) => setAiAvailable(res.data?.available === true))
+        .catch(() => setAiAvailable(false));
     }
   }, [user]);
 
@@ -470,6 +482,33 @@ export default function Profile() {
                   />
                 </div>
               </div>
+
+              {aiAvailable && (
+                <div className="flex items-start gap-4">
+                  <div className="flex-shrink-0">
+                    <div className="h-10 w-10 rounded-lg bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center">
+                      <Sparkles className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                      {t('profile.aiSuggestions')}
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <Switch
+                        id="ai-suggestions"
+                        checked={formData.ai_suggestions_enabled}
+                        onCheckedChange={(checked) =>
+                          setFormData({ ...formData, ai_suggestions_enabled: checked })
+                        }
+                      />
+                      <label htmlFor="ai-suggestions" className="text-sm text-gray-600 dark:text-gray-400 cursor-pointer">
+                        {t('profile.aiSuggestionsDescription')}
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="pt-2">
                 <Button type="submit" variant="primary" disabled={saving}>

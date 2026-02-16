@@ -8,6 +8,8 @@ import { canCreateBookmarkFreePlan, clearFreePlanGrace, FREE_BOOKMARK_LIMIT, get
 import { PLAN_ERRORS } from '../utils/plan-errors.js';
 import { CreateBookmarkInput, UpdateBookmarkInput } from '../types.js';
 import { validateUrl, validateSlug, validateLength, sanitizeString, MAX_LENGTHS } from '../utils/validation.js';
+import { isAISuggestionsEnabled, getAIApiKey, getAIModel } from '../utils/ai-feature.js';
+import { sanitizeUrlForAI, callAIProvider } from '../services/ai-suggestions.js';
 
 const router = Router();
 router.use(requireAuth());
@@ -779,6 +781,138 @@ router.get('/ids', async (req, res) => {
   } catch (error: any) {
     console.error('Bookmark IDs fetch error:', error);
     res.status(500).json({ error: 'Failed to fetch bookmark IDs' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/bookmarks/ai-suggest:
+ *   post:
+ *     summary: Get AI suggestions for bookmark metadata
+ *     description: Returns suggested title, slug, and tags for a URL. Requires AI feature enabled. Non-blocking; bookmark creation never depends on this.
+ *     tags: [Bookmarks]
+ *     security:
+ *       - cookieAuth: []
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [url]
+ *             properties:
+ *               url:
+ *                 type: string
+ *                 format: uri
+ *               page_title:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: AI suggestions
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 title: { type: string }
+ *                 slug: { type: string }
+ *                 tags: { type: array, items: { type: string } }
+ *                 language: { type: string }
+ *                 confidence: { type: number }
+ *       400:
+ *         description: Invalid URL
+ *       403:
+ *         description: AI feature disabled or not available for plan
+ *       408:
+ *         description: AI request timeout
+ *       503:
+ *         description: AI not configured
+ */
+router.post('/ai-suggest', async (req, res) => {
+  const authReq = req as AuthRequest;
+  try {
+    const userId = authReq.user!.id;
+    const { url, page_title: pageTitle } = req.body;
+
+    if (!url || typeof url !== 'string') {
+      return res.status(400).json({ error: 'URL is required' });
+    }
+
+    const urlValidation = validateUrl(url);
+    if (!urlValidation.valid) {
+      return res.status(400).json({ error: urlValidation.error });
+    }
+
+    const enabled = await isAISuggestionsEnabled(userId);
+    if (!enabled) {
+      return res.status(403).json({ error: 'AI suggestions are not available' });
+    }
+
+    const apiKey = await getAIApiKey();
+    if (!apiKey) {
+      return res.status(503).json({ error: 'AI is not configured' });
+    }
+
+    const sanitizedUrl = sanitizeUrlForAI(url);
+    if (!sanitizedUrl) {
+      return res.status(400).json({ error: 'Invalid URL' });
+    }
+
+    const DB_TYPE = process.env.DB_TYPE || 'sqlite';
+    const cached = await queryOne(
+      'SELECT title, slug, tags, language, confidence FROM ai_suggestions_cache WHERE user_id = ? AND canonical_url = ?',
+      [userId, sanitizedUrl]
+    );
+    if (cached) {
+      const tags = typeof (cached as any).tags === 'string'
+        ? JSON.parse((cached as any).tags)
+        : (cached as any).tags;
+      return res.json({
+        title: (cached as any).title,
+        slug: (cached as any).slug || '',
+        tags: Array.isArray(tags) ? tags : [],
+        language: (cached as any).language || 'en',
+        confidence: (cached as any).confidence ?? 0.5,
+      });
+    }
+
+    const model = await getAIModel();
+    const result = await callAIProvider(
+      sanitizedUrl,
+      typeof pageTitle === 'string' ? pageTitle : undefined,
+      apiKey,
+      model,
+      10000
+    );
+
+    if (!result) {
+      return res.status(503).json({ error: 'AI suggestion failed' });
+    }
+
+    const tagsJson = DB_TYPE === 'postgresql'
+      ? JSON.stringify(result.tags)
+      : JSON.stringify(result.tags);
+    await execute(
+      `INSERT INTO ai_suggestions_cache (user_id, canonical_url, title, slug, tags, language, confidence)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (user_id, canonical_url) DO UPDATE SET title = excluded.title, slug = excluded.slug, tags = excluded.tags, language = excluded.language, confidence = excluded.confidence`,
+      [userId, sanitizedUrl, result.title, result.slug, tagsJson, result.language, result.confidence]
+    );
+
+    res.json({
+      title: result.title,
+      slug: result.slug,
+      tags: result.tags,
+      language: result.language,
+      confidence: result.confidence,
+    });
+  } catch (error: any) {
+    if (error.name === 'AbortError') {
+      return res.status(408).json({ error: 'AI request timed out' });
+    }
+    console.error('AI suggest error:', error);
+    res.status(500).json({ error: 'AI suggestion failed' });
   }
 });
 

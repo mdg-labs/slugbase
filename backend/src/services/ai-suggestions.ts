@@ -1,0 +1,176 @@
+/**
+ * AI-based bookmark suggestions (title, slug, tags).
+ * Uses OpenAI GPT-4o-mini with structured JSON output.
+ * Data minimization: only sanitized URL and optional page title sent to AI.
+ */
+
+import OpenAI from 'openai';
+import { validateSlug, MAX_LENGTHS } from '../utils/validation.js';
+
+/** Params that may contain secrets - strip from URL before sending to AI */
+const SECRET_PARAM_NAMES = new Set([
+  'token', 'auth', 'key', 'session', 'signature', 'code', 'state',
+  'access_token', 'refresh_token', 'api_key', 'apikey', 'secret',
+  'password', 'passwd', 'credential', 'credentials',
+]);
+
+export interface AISuggestionResult {
+  title: string;
+  slug: string;
+  tags: string[];
+  language: string;
+  confidence: number;
+}
+
+/**
+ * Sanitize URL for AI: remove fragments, strip secret params, keep only utm_* query params.
+ */
+export function sanitizeUrlForAI(url: string): string {
+  if (!url || typeof url !== 'string') return '';
+  const trimmed = url.trim();
+  if (!trimmed) return '';
+
+  try {
+    const parsed = new URL(trimmed);
+    parsed.hash = '';
+
+    const keepParams = new URLSearchParams();
+    parsed.searchParams.forEach((value, key) => {
+      const lower = key.toLowerCase();
+      if (lower.startsWith('utm_')) {
+        keepParams.set(key, value);
+      }
+    });
+    parsed.search = keepParams.toString();
+
+    return parsed.toString();
+  } catch {
+    return trimmed;
+  }
+}
+
+/**
+ * Normalize slug: lowercase, hyphen-separated, alphanumeric only, max length.
+ */
+function normalizeSlug(slug: string): string {
+  if (!slug || typeof slug !== 'string') return '';
+  let s = slug
+    .toLowerCase()
+    .trim()
+    .replace(/_/g, '-')
+    .replace(/[^a-z0-9-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+  return s.slice(0, MAX_LENGTHS.slug);
+}
+
+/**
+ * Validate and normalize AI response against schema.
+ */
+function validateAndNormalizeResponse(raw: unknown): AISuggestionResult | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const obj = raw as Record<string, unknown>;
+
+  const title = typeof obj.title === 'string' ? obj.title.trim().slice(0, MAX_LENGTHS.title) : '';
+  if (!title) return null;
+
+  let slug = typeof obj.slug === 'string' ? obj.slug : '';
+  slug = normalizeSlug(slug);
+  const slugValidation = validateSlug(slug);
+  if (!slugValidation.valid) {
+    slug = slug || 'bookmark';
+  }
+
+  const tagsRaw = Array.isArray(obj.tags) ? obj.tags : [];
+  const tags = tagsRaw
+    .filter((t): t is string => typeof t === 'string' && t.trim().length > 0)
+    .map((t) => t.trim().slice(0, MAX_LENGTHS.tagName))
+    .slice(0, 10);
+
+  const language = typeof obj.language === 'string' ? obj.language.slice(0, 10) : 'en';
+  const confidence = typeof obj.confidence === 'number' ? Math.max(0, Math.min(1, obj.confidence)) : 0.5;
+
+  return { title, slug, tags, language, confidence };
+}
+
+const AI_RESPONSE_SCHEMA = {
+  type: 'json_schema',
+  json_schema: {
+    name: 'bookmark_suggestions',
+    strict: true,
+    schema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Page title' },
+        slug: { type: 'string', description: 'URL-safe slug, lowercase, hyphen-separated' },
+        tags: {
+          type: 'array',
+          items: { type: 'string' },
+          description: '5-10 relevant tags',
+        },
+        language: { type: 'string', description: 'ISO 639-1 language code' },
+        confidence: { type: 'number', description: 'Confidence 0-1' },
+      },
+      required: ['title', 'slug', 'tags', 'language', 'confidence'],
+      additionalProperties: false,
+    },
+  },
+} as const;
+
+const SYSTEM_PROMPT = `You suggest bookmark metadata from a URL. Return JSON with:
+- title: concise page title (max 500 chars)
+- slug: URL-safe, lowercase, hyphen-separated, alphanumeric only, max 255 chars. No secrets, tokens, or sensitive data.
+- tags: 5-10 relevant tags (strings)
+- language: ISO 639-1 code (e.g. en)
+- confidence: 0.0 to 1.0.`;
+
+/**
+ * Call AI provider (OpenAI) for bookmark suggestions.
+ * @param sanitizedUrl - sanitized URL (domain + path, no secrets)
+ * @param pageTitle - optional page title if already known
+ * @param apiKey - decrypted API key
+ * @param model - model name (default gpt-4o-mini)
+ * @param timeoutMs - request timeout (default 10000)
+ */
+export async function callAIProvider(
+  sanitizedUrl: string,
+  pageTitle: string | undefined,
+  apiKey: string,
+  model: string = 'gpt-4o-mini',
+  timeoutMs: number = 10000
+): Promise<AISuggestionResult | null> {
+  const client = new OpenAI({ apiKey });
+
+  const userContent = pageTitle
+    ? `URL: ${sanitizedUrl}\nPage title (if known): ${pageTitle}`
+    : `URL: ${sanitizedUrl}`;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const completion = await client.chat.completions.create(
+      {
+        model,
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: userContent },
+        ],
+        response_format: AI_RESPONSE_SCHEMA,
+        max_tokens: 500,
+      },
+      { signal: controller.signal }
+    );
+
+    clearTimeout(timeoutId);
+
+    const content = completion.choices?.[0]?.message?.content;
+    if (!content) return null;
+
+    const parsed = JSON.parse(content) as unknown;
+    return validateAndNormalizeResponse(parsed);
+  } catch (e) {
+    clearTimeout(timeoutId);
+    throw e;
+  }
+}

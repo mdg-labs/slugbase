@@ -24,6 +24,7 @@ const AdminTeamsPage = lazy(() => import('./pages/admin/AdminTeamsPage'));
 const AdminBillingPage = lazy(() => import('./pages/admin/AdminBillingPage'));
 const AdminOIDCPage = lazy(() => import('./pages/admin/AdminOIDCPage'));
 const AdminSettingsPage = lazy(() => import('./pages/admin/AdminSettingsPage'));
+const AdminAIPage = lazy(() => import('./pages/admin/AdminAIPage'));
 const Shared = lazy(() => import('./pages/Shared'));
 const PasswordReset = lazy(() => import('./pages/PasswordReset'));
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
@@ -165,6 +166,7 @@ function AppRoutesSelfhosted() {
             <Route path="teams" element={<AdminTeamsPage />} />
             <Route path="oidc" element={<AdminOIDCPage />} />
             <Route path="settings" element={<AdminSettingsPage />} />
+            <Route path="ai" element={<AdminAIPage />} />
           </Route>
         </Route>
       </Routes>

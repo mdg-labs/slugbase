@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import api from '../../api/client';
-import { UserPlus } from 'lucide-react';
+import { UserPlus, Sparkles } from 'lucide-react';
 import Button from '../ui/Button';
 import { Card, CardContent, CardHeader } from '../ui/card';
+import { Switch } from '../ui/switch';
+import { Label } from '../ui/label';
 import { Badge } from '../ui/badge';
 import { Progress } from '../ui/progress';
 import { useOrgPlan } from '../../contexts/OrgPlanContext';
@@ -16,6 +18,7 @@ interface Org {
   included_seats: number;
   member_count: number;
   role: string;
+  ai_enabled?: boolean;
   members: Array<{ id: string; email: string; name: string; role: string }>;
 }
 
@@ -41,6 +44,7 @@ export default function AdminBillingPlan() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteError, setInviteError] = useState('');
+  const [aiSaving, setAiSaving] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -98,6 +102,19 @@ export default function AdminBillingPlan() {
       console.error('Portal error:', error);
       alert(error.response?.data?.error || t('common.error'));
       setCheckoutLoading(null);
+    }
+  };
+
+  const handleAiToggle = async (checked: boolean) => {
+    if (!org) return;
+    setAiSaving(true);
+    try {
+      await api.patch('/organizations/me/ai', { ai_enabled: checked });
+      setOrg({ ...org, ai_enabled: checked });
+    } catch (error: any) {
+      console.error('AI toggle error:', error);
+    } finally {
+      setAiSaving(false);
     }
   };
 
@@ -189,6 +206,35 @@ export default function AdminBillingPlan() {
           )}
         </CardContent>
       </Card>
+
+      {canManageBilling && (org.plan === 'personal' || org.plan === 'team' || org.plan === 'early_supporter') && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-violet-500 dark:text-violet-400" />
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                {t('admin.ai.orgTitle')}
+              </h2>
+            </div>
+            <p className="text-sm text-muted-foreground mt-1">
+              {t('admin.ai.orgDescription')}
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-3">
+              <Switch
+                id="org-ai-enabled"
+                checked={org.ai_enabled ?? false}
+                onCheckedChange={handleAiToggle}
+                disabled={aiSaving}
+              />
+              <Label htmlFor="org-ai-enabled" className="text-sm font-medium cursor-pointer">
+                {t('admin.ai.orgEnabled')}
+              </Label>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {canManageBilling && (
         <Card>

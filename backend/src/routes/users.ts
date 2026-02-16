@@ -103,7 +103,7 @@ router.get('/me', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const userId = authReq.user!.id;
-    const user = await queryOne('SELECT id, email, name, user_key, is_admin, language, theme, email_pending, oidc_provider, oidc_sub FROM users WHERE id = ?', [userId]);
+    const user = await queryOne('SELECT id, email, name, user_key, is_admin, language, theme, ai_suggestions_enabled, email_pending, oidc_provider, oidc_sub FROM users WHERE id = ?', [userId]);
     res.json(user);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -159,7 +159,7 @@ router.put('/me', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const userId = authReq.user!.id;
-    const { email, name, language, theme } = req.body;
+    const { email, name, language, theme, ai_suggestions_enabled } = req.body;
 
     const existing = await queryOne('SELECT * FROM users WHERE id = ?', [userId]);
     if (!existing) {
@@ -252,6 +252,13 @@ router.put('/me', async (req, res) => {
       params.push(theme);
     }
 
+    if (ai_suggestions_enabled !== undefined) {
+      const DB_TYPE = process.env.DB_TYPE || 'sqlite';
+      const val = ai_suggestions_enabled === true || ai_suggestions_enabled === 'true';
+      updates.push('ai_suggestions_enabled = ?');
+      params.push(DB_TYPE === 'postgresql' ? val : (val ? 1 : 0));
+    }
+
     if (updates.length === 0) {
       return res.status(400).json({ error: 'No fields to update' });
     }
@@ -259,7 +266,7 @@ router.put('/me', async (req, res) => {
     params.push(userId);
     await execute(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, params);
 
-    const user = await queryOne('SELECT id, email, name, user_key, is_admin, language, theme FROM users WHERE id = ?', [userId]);
+    const user = await queryOne('SELECT id, email, name, user_key, is_admin, language, theme, ai_suggestions_enabled FROM users WHERE id = ?', [userId]);
     res.json(user);
   } catch (error: any) {
     res.status(500).json({ error: error.message });

@@ -173,10 +173,68 @@ router.get('/me', requireAuth(), async (req, res) => {
     member_count: parseInt((memberCount as any)?.count || '0'),
     role: org.role,
     members: Array.isArray(members) ? members : [members],
+    ai_enabled: org.ai_enabled === 1 || org.ai_enabled === true,
     ...(bookmark_count !== undefined && { bookmark_count }),
     bookmark_limit,
     ...(free_plan_grace_ends_at && { free_plan_grace_ends_at }),
   });
+});
+
+/**
+ * @swagger
+ * /api/organizations/me/ai:
+ *   patch:
+ *     summary: Update org AI settings
+ *     description: Enable or disable AI suggestions for the organization. Org owner/admin only. Cloud mode only.
+ *     tags: [Organizations]
+ *     security:
+ *       - cookieAuth: []
+ *       - bearerAuth: []
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               ai_enabled:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Updated
+ *       403:
+ *         description: Only owners and admins can update
+ */
+router.patch('/me/ai', requireAuth(), async (req, res) => {
+  if (!isCloud) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  const authReq = req as AuthRequest;
+  const userId = authReq.user!.id;
+  const orgId = await getCurrentOrgId(userId);
+  if (!orgId) {
+    return res.status(404).json({ error: 'No organization selected' });
+  }
+  const membership = await queryOne(
+    'SELECT role FROM org_members WHERE user_id = ? AND org_id = ?',
+    [userId, orgId]
+  );
+  if (!membership) {
+    return res.status(404).json({ error: 'Organization not found' });
+  }
+  const role = (membership as any).role;
+  if (role !== 'owner' && role !== 'admin') {
+    return res.status(403).json({ error: 'Only owners and admins can update AI settings' });
+  }
+  const { ai_enabled } = req.body;
+  if (ai_enabled !== undefined) {
+    const DB_TYPE = process.env.DB_TYPE || 'sqlite';
+    const val = ai_enabled === true || ai_enabled === 'true';
+    await execute(
+      'UPDATE organizations SET ai_enabled = ? WHERE id = ?',
+      [DB_TYPE === 'postgresql' ? val : (val ? 1 : 0), orgId]
+    );
+  }
+  res.json({ message: 'AI settings updated' });
 });
 
 /**

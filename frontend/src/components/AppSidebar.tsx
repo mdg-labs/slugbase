@@ -14,6 +14,7 @@ import {
   UserCog,
   CreditCard,
   Key,
+  Sparkles,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -54,6 +55,7 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
     ...(isCloud ? [{ path: `${adminBase}/billing`, label: t('admin.billing'), icon: CreditCard }] : []),
     ...(!isCloud ? [{ path: `${adminBase}/oidc`, label: t('admin.oidcProviders'), icon: Key }] : []),
     ...(!isCloud ? [{ path: `${adminBase}/settings`, label: t('admin.settings'), icon: Settings }] : []),
+    ...(!isCloud ? [{ path: `${adminBase}/ai`, label: t('admin.ai.nav'), icon: Sparkles }] : []),
   ];
 
   const isOverviewActive =

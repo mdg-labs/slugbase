@@ -42,6 +42,7 @@ import organizationRoutes from './routes/organizations.js';
 import invitationRoutes from './routes/invitations.js';
 import tokenRoutes from './routes/tokens.js';
 import billingRoutes, { handleStripeWebhook } from './routes/billing.js';
+import configRoutes from './routes/config.js';
 import { DatabaseSessionStore } from './utils/session-store.js';
 import { startOrgCleanupJob } from './utils/org-cleanup.js';
 
@@ -210,6 +211,7 @@ app.use('/api/organizations', organizationRoutes);
 app.use('/api/invitations', invitationRoutes);
 app.use('/api/tokens', tokenRoutes);
 app.use('/api/billing', billingRoutes);
+app.use('/api/config', configRoutes);
 app.use('/api/oidc-providers', oidcProviderRoutes);
 app.use('/api/admin/users', adminUserRoutes);
 app.use('/api/admin/teams', adminTeamRoutes);
