@@ -6,6 +6,8 @@ This directory contains customer-facing documentation for SlugBase, organized by
 
 - **`selfhosted/`** – Documentation for self-hosted SlugBase instances (setup, features, admin, OIDC, etc.).
 - **`cloud/`** – Documentation for SlugBase Cloud (hosted SaaS).
+- **`infra/`** – Deployment and infrastructure (Fly.io, Terraform, Grafana).
+- **`releasing.md`** – Versioning workflow and release process.
 - **`assets/`** – Shared images and assets used by both selfhosted and cloud docs.
 
 ## Local-only: `internal/`
