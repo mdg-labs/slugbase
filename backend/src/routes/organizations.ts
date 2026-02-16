@@ -5,7 +5,7 @@ import crypto from 'crypto';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { authRateLimiter } from '../middleware/security.js';
 import { validateEmail, normalizeEmail } from '../utils/validation.js';
-import { ensureOrgForUser, getCurrentOrgId, setCurrentOrg } from '../utils/organizations.js';
+import { deleteOrganization, ensureOrgForUser, getCurrentOrgId, getFreePlanGraceEndsAt, setCurrentOrg, setFreePlanGraceIfOverLimit } from '../utils/organizations.js';
 import { isCloud } from '../config/mode.js';
 import { sendOrgInvitationEmail } from '../utils/email.js';
 
@@ -151,10 +151,12 @@ router.get('/me', requireAuth(), async (req, res) => {
   const FREE_BOOKMARK_LIMIT = 100;
   let bookmark_count: number | undefined;
   let bookmark_limit: number | null = null;
+  let free_plan_grace_ends_at: string | null = null;
   if (plan === 'free') {
     const countResult = await queryOne('SELECT COUNT(*) as count FROM bookmarks WHERE user_id = ?', [userId]);
     bookmark_count = countResult ? parseInt((countResult as any).count) : 0;
     bookmark_limit = FREE_BOOKMARK_LIMIT;
+    free_plan_grace_ends_at = await getFreePlanGraceEndsAt(userId);
   }
 
   res.json({
@@ -168,6 +170,7 @@ router.get('/me', requireAuth(), async (req, res) => {
     members: Array.isArray(members) ? members : [members],
     ...(bookmark_count !== undefined && { bookmark_count }),
     bookmark_limit,
+    ...(free_plan_grace_ends_at && { free_plan_grace_ends_at }),
   });
 });
 
@@ -384,6 +387,169 @@ router.post('/:id/invite', requireAuth(), authRateLimiter, async (req, res) => {
   const acceptUrl = `${frontendUrl}/app/accept-invite?token=${encodeURIComponent(token)}`;
   await sendOrgInvitationEmail(normalizedEmail, acceptUrl, (org as any).name);
   res.status(201).json({ message: 'Invitation sent' });
+});
+
+/**
+ * @swagger
+ * /api/organizations/{id}/members/{userId}:
+ *   delete:
+ *     summary: Remove member from organization
+ *     description: Owner or admin removes a member. Cannot remove yourself (use leave). Cannot remove the last owner. Cloud mode only.
+ *     tags: [Organizations]
+ *     security:
+ *       - cookieAuth: []
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Organization ID
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: User ID to remove
+ *     responses:
+ *       200:
+ *         description: Member removed
+ *       400:
+ *         description: Cannot remove yourself; use leave
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Only owners and admins can remove members; cannot remove last owner
+ *       404:
+ *         description: Organization or member not found
+ */
+router.delete('/:id/members/:userId', requireAuth(), async (req, res) => {
+  if (!isCloud) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  const authReq = req as AuthRequest;
+  const actorId = authReq.user!.id;
+  const orgId = req.params.id;
+  const targetUserId = req.params.userId;
+
+  if (actorId === targetUserId) {
+    return res.status(400).json({ error: 'Cannot remove yourself; use leave organization instead' });
+  }
+
+  const actorMembership = await queryOne(
+    'SELECT role FROM org_members WHERE user_id = ? AND org_id = ?',
+    [actorId, orgId]
+  );
+  if (!actorMembership) {
+    return res.status(404).json({ error: 'Organization not found' });
+  }
+  const actorRole = (actorMembership as any).role;
+  if (actorRole !== 'owner' && actorRole !== 'admin') {
+    return res.status(403).json({ error: 'Only owners and admins can remove members' });
+  }
+
+  const targetMembership = await queryOne(
+    'SELECT role FROM org_members WHERE user_id = ? AND org_id = ?',
+    [targetUserId, orgId]
+  );
+  if (!targetMembership) {
+    return res.status(404).json({ error: 'Member not found' });
+  }
+  const targetRole = (targetMembership as any).role;
+
+  if (targetRole === 'owner') {
+    const ownerCountRow = await queryOne(
+      'SELECT COUNT(*) as count FROM org_members WHERE org_id = ? AND role = ?',
+      [orgId, 'owner']
+    );
+    const ownerCount = parseInt((ownerCountRow as any)?.count || '0');
+    if (ownerCount <= 1) {
+      return res.status(403).json({ error: 'Cannot remove the last owner; transfer ownership first or they must leave' });
+    }
+  }
+
+  await execute('DELETE FROM org_members WHERE user_id = ? AND org_id = ?', [targetUserId, orgId]);
+  await execute('UPDATE users SET current_org_id = NULL WHERE id = ? AND current_org_id = ?', [targetUserId, orgId]);
+
+  await setFreePlanGraceIfOverLimit(targetUserId);
+
+  const remainingCountRow = await queryOne(
+    'SELECT COUNT(*) as count FROM org_members WHERE org_id = ?',
+    [orgId]
+  );
+  const remainingCount = parseInt((remainingCountRow as any)?.count || '0');
+  if (remainingCount === 0) {
+    try {
+      await deleteOrganization(orgId);
+    } catch (err: any) {
+      console.warn('Org cleanup after member remove failed:', err?.message);
+    }
+  }
+
+  res.json({ message: 'Member removed' });
+});
+
+/**
+ * @swagger
+ * /api/organizations/{id}/leave:
+ *   post:
+ *     summary: Leave organization
+ *     description: Removes the current user from the organization. If sole member, the org is deleted. Cloud mode only.
+ *     tags: [Organizations]
+ *     security:
+ *       - cookieAuth: []
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Organization ID
+ *     responses:
+ *       200:
+ *         description: Left organization
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Organization not found or not a member
+ */
+router.post('/:id/leave', requireAuth(), async (req, res) => {
+  if (!isCloud) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  const authReq = req as AuthRequest;
+  const userId = authReq.user!.id;
+  const orgId = req.params.id;
+
+  const membership = await queryOne(
+    'SELECT 1 FROM org_members WHERE user_id = ? AND org_id = ?',
+    [userId, orgId]
+  );
+  if (!membership) {
+    return res.status(404).json({ error: 'Organization not found or you are not a member' });
+  }
+
+  await execute('DELETE FROM org_members WHERE user_id = ? AND org_id = ?', [userId, orgId]);
+  await execute('UPDATE users SET current_org_id = NULL WHERE id = ? AND current_org_id = ?', [userId, orgId]);
+
+  await setFreePlanGraceIfOverLimit(userId);
+
+  const remainingCountRow = await queryOne(
+    'SELECT COUNT(*) as count FROM org_members WHERE org_id = ?',
+    [orgId]
+  );
+  const remainingCount = parseInt((remainingCountRow as any)?.count || '0');
+  if (remainingCount === 0) {
+    try {
+      await deleteOrganization(orgId);
+    } catch (err: any) {
+      console.warn('Org cleanup after leave failed:', err?.message);
+    }
+  }
+
+  res.json({ message: 'Left organization' });
 });
 
 export default router;

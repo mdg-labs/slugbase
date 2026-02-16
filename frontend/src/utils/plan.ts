@@ -33,8 +33,21 @@ export function getSharingCapabilities(
   return { allowShareToTeams: false, allowShareToUsers: true };
 }
 
+/**
+ * Can user create bookmarks? Considers free plan limit and grace period.
+ * When freePlanGraceEndsAt is set and in the future, allows create even if over limit.
+ */
 export const canCreateBookmark = (
   _plan: string | null,
   count: number,
-  limit: number | null
-): boolean => !limit || count < limit;
+  limit: number | null,
+  freePlanGraceEndsAt?: string | null
+): boolean => {
+  if (!limit) return true;
+  if (count < limit) return true;
+  if (freePlanGraceEndsAt) {
+    const endsAt = new Date(freePlanGraceEndsAt).getTime();
+    if (Date.now() < endsAt) return true;
+  }
+  return false;
+};

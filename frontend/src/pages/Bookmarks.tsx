@@ -22,6 +22,7 @@ import { Card } from '../components/ui/card';
 import { PageHeader } from '../components/PageHeader';
 import { useSidebar } from '../components/ui/sidebar';
 import { appBasePath } from '../config/api';
+import { isCloud } from '../config/mode';
 
 interface Bookmark {
   id: string;
@@ -49,7 +50,7 @@ export default function Bookmarks() {
   const { t } = useTranslation();
   const { user } = useAuth();
   const { isMobile, state: sidebarState } = useSidebar();
-  const { plan, bookmarkCount, bookmarkLimit, refresh } = useOrgPlan();
+  const { plan, bookmarkCount, bookmarkLimit, freePlanGraceEndsAt, refresh } = useOrgPlan();
   const [searchParams, setSearchParams] = useSearchParams();
   const { showConfirm, dialogState } = useConfirmDialog();
   const { showToast } = useToast();
@@ -101,7 +102,7 @@ export default function Bookmarks() {
     const editId = searchParams.get('edit');
 
     if (createParam === 'true') {
-      const atLimit = !canCreateBookmark(plan, bookmarkCount, bookmarkLimit);
+      const atLimit = !canCreateBookmark(plan, bookmarkCount, bookmarkLimit, freePlanGraceEndsAt);
       if (atLimit) {
         showToast(t('plan.limitBookmarks'), 'error');
       } else {
@@ -203,7 +204,7 @@ export default function Bookmarks() {
   const hasActiveFilters = selectedFolder || selectedTag;
 
   function handleCreate() {
-    const atLimit = !canCreateBookmark(plan, bookmarkCount, bookmarkLimit);
+    const atLimit = !canCreateBookmark(plan, bookmarkCount, bookmarkLimit, freePlanGraceEndsAt);
     if (atLimit) return;
     setEditingBookmark(null);
     setModalOpen(true);
@@ -414,8 +415,30 @@ export default function Bookmarks() {
     return <PageLoadingSkeleton lines={6} />;
   }
 
+  const showGraceBanner = isCloud && plan === 'free' && bookmarkLimit != null && bookmarkCount > bookmarkLimit && freePlanGraceEndsAt;
+  const graceExpired = showGraceBanner && new Date(freePlanGraceEndsAt!).getTime() <= Date.now();
+
   return (
     <div className="space-y-6 pb-24">
+      {showGraceBanner && (
+        <div className={`rounded-lg border p-4 ${graceExpired ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20' : 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20'}`}>
+          <p className={`text-sm ${graceExpired ? 'text-red-800 dark:text-red-200' : 'text-amber-800 dark:text-amber-200'}`}>
+            {graceExpired
+              ? t('plan.gracePeriodExpired', { limit: bookmarkLimit })
+              : t('plan.gracePeriodBanner', {
+                  count: bookmarkCount,
+                  limit: bookmarkLimit,
+                  date: new Date(freePlanGraceEndsAt).toLocaleDateString(undefined, { dateStyle: 'medium' }),
+                })}
+          </p>
+          <Link
+            to={`${appBasePath}/admin/billing`}
+            className="mt-2 inline-block text-sm font-medium text-amber-700 dark:text-amber-300 hover:underline"
+          >
+            {t('plan.upgradeCta')}
+          </Link>
+        </div>
+      )}
       {/* Sticky controls bar: header + filters/toolbar - stays visible when scrolling */}
       <div className="sticky top-0 z-40 space-y-4 pb-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pt-0 -mt-8 bg-background border-b shadow-sm">
         <PageHeader
@@ -428,9 +451,9 @@ export default function Bookmarks() {
               variant="ghost"
               size="sm"
               icon={Upload}
-              onClick={() => !canCreateBookmark(plan, bookmarkCount, bookmarkLimit) ? undefined : setImportModalOpen(true)}
-              title={!canCreateBookmark(plan, bookmarkCount, bookmarkLimit) ? t('plan.limitBookmarks') : t('bookmarks.import')}
-              disabled={!canCreateBookmark(plan, bookmarkCount, bookmarkLimit)}
+              onClick={() => !canCreateBookmark(plan, bookmarkCount, bookmarkLimit, freePlanGraceEndsAt) ? undefined : setImportModalOpen(true)}
+              title={!canCreateBookmark(plan, bookmarkCount, bookmarkLimit, freePlanGraceEndsAt) ? t('plan.limitBookmarks') : t('bookmarks.import')}
+              disabled={!canCreateBookmark(plan, bookmarkCount, bookmarkLimit, freePlanGraceEndsAt)}
             >
               <span className="hidden sm:inline">{t('bookmarks.import')}</span>
             </Button>
@@ -443,7 +466,7 @@ export default function Bookmarks() {
             >
               <span className="hidden sm:inline">{t('bookmarks.export')}</span>
             </Button>
-            {canCreateBookmark(plan, bookmarkCount, bookmarkLimit) ? (
+            {canCreateBookmark(plan, bookmarkCount, bookmarkLimit, freePlanGraceEndsAt) ? (
               <Button onClick={handleCreate} icon={Plus}>
                 {t('bookmarks.create')}
               </Button>
@@ -691,9 +714,9 @@ export default function Bookmarks() {
             <Button
               variant="secondary"
               icon={Upload}
-              onClick={() => canCreateBookmark(plan, bookmarkCount, bookmarkLimit) && setImportModalOpen(true)}
-              disabled={!canCreateBookmark(plan, bookmarkCount, bookmarkLimit)}
-              title={!canCreateBookmark(plan, bookmarkCount, bookmarkLimit) ? t('plan.limitBookmarks') : t('bookmarks.emptyImport')}
+              onClick={() => canCreateBookmark(plan, bookmarkCount, bookmarkLimit, freePlanGraceEndsAt) && setImportModalOpen(true)}
+              disabled={!canCreateBookmark(plan, bookmarkCount, bookmarkLimit, freePlanGraceEndsAt)}
+              title={!canCreateBookmark(plan, bookmarkCount, bookmarkLimit, freePlanGraceEndsAt) ? t('plan.limitBookmarks') : t('bookmarks.emptyImport')}
             >
               {t('bookmarks.emptyImport')}
             </Button>
@@ -835,6 +858,7 @@ export default function Bookmarks() {
         bookmarkCount={bookmarkCount}
         bookmarkLimit={bookmarkLimit}
         plan={plan}
+        freePlanGraceEndsAt={freePlanGraceEndsAt}
       />
 
       {/* Bulk Move Modal */}

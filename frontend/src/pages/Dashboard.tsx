@@ -51,12 +51,12 @@ function formatLastOpened(dateStr: string): string {
 
 export default function Dashboard() {
   const { t } = useTranslation();
-  const { plan, bookmarkCount, bookmarkLimit, refresh } = useOrgPlan();
+  const { plan, bookmarkCount, bookmarkLimit, freePlanGraceEndsAt, refresh } = useOrgPlan();
   const { showConfirm, dialogState } = useConfirmDialog();
   const { showToast } = useToast();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [denseMode, setDenseMode] = useState(() => localStorage.getItem('dashboard-dense') === 'true');
-  const atBookmarkLimit = !canCreateBookmark(plan, bookmarkCount, bookmarkLimit);
+  const atBookmarkLimit = !canCreateBookmark(plan, bookmarkCount, bookmarkLimit, freePlanGraceEndsAt);
 
   useEffect(() => {
     loadStats();

@@ -4,7 +4,7 @@ import { AuthRequest, requireAuth } from '../middleware/auth.js';
 import { canAccessBookmark, canModifyBookmark, canAccessFolder, canAccessTag, getTeamIdsForUser, getTeamIdsForUserInOrg } from '../auth/authorization.js';
 import { v4 as uuidv4 } from 'uuid';
 import { isCloud } from '../config/mode.js';
-import { getCurrentOrgId, getUserPlan } from '../utils/organizations.js';
+import { canCreateBookmarkFreePlan, clearFreePlanGrace, FREE_BOOKMARK_LIMIT, getCurrentOrgId, getUserPlan } from '../utils/organizations.js';
 import { PLAN_ERRORS } from '../utils/plan-errors.js';
 import { CreateBookmarkInput, UpdateBookmarkInput } from '../types.js';
 import { validateUrl, validateSlug, validateLength, sanitizeString, MAX_LENGTHS } from '../utils/validation.js';
@@ -1016,8 +1016,6 @@ router.post('/:id/track-access', async (req, res) => {
  *       403:
  *         description: User does not own folder or is not member of team
  */
-const FREE_BOOKMARK_LIMIT = 100;
-
 // Create bookmark
 router.post('/', async (req, res) => {
   const authReq = req as AuthRequest;
@@ -1030,13 +1028,14 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    // Cloud: enforce Free plan bookmark limit
+    // Cloud: enforce Free plan bookmark limit (with grace period for over-limit)
     if (isCloud) {
       const plan = await getUserPlan(userId);
       if (plan === 'free') {
         const countResult = await queryOne('SELECT COUNT(*) as count FROM bookmarks WHERE user_id = ?', [userId]);
         const count = countResult ? parseInt((countResult as any).count) : 0;
-        if (count >= FREE_BOOKMARK_LIMIT) {
+        const canCreate = await canCreateBookmarkFreePlan(userId, count);
+        if (!canCreate) {
           return res.status(403).json({
             error: PLAN_ERRORS.BOOKMARK_LIMIT.message,
             code: PLAN_ERRORS.BOOKMARK_LIMIT.code,
@@ -1557,6 +1556,15 @@ router.delete('/:id', async (req, res) => {
     }
 
     await execute('DELETE FROM bookmarks WHERE id = ?', [id]);
+
+    if (isCloud) {
+      const countResult = await queryOne('SELECT COUNT(*) as count FROM bookmarks WHERE user_id = ?', [userId]);
+      const count = countResult ? parseInt((countResult as any).count) : 0;
+      if (count <= FREE_BOOKMARK_LIMIT) {
+        await clearFreePlanGrace(userId);
+      }
+    }
+
     res.json({ message: 'Bookmark deleted' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -1662,14 +1670,17 @@ router.post('/import', async (req, res) => {
     let hitLimit = false;
     for (const bookmarkData of importBookmarks) {
       try {
-        // Cloud: stop importing if at Free limit
-        if (isCloud && currentBookmarkCount >= FREE_BOOKMARK_LIMIT) {
-          if (!hitLimit) {
-            hitLimit = true;
-            results.errors.push(PLAN_ERRORS.BOOKMARK_LIMIT.message);
+        // Cloud: stop importing if at Free limit (considering grace period)
+        if (isCloud) {
+          const canCreate = await canCreateBookmarkFreePlan(userId, currentBookmarkCount);
+          if (!canCreate) {
+            if (!hitLimit) {
+              hitLimit = true;
+              results.errors.push(PLAN_ERRORS.BOOKMARK_LIMIT.message);
+            }
+            results.failed++;
+            continue;
           }
-          results.failed++;
-          continue;
         }
 
         if (!bookmarkData.title || !bookmarkData.url) {

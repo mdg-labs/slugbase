@@ -351,7 +351,9 @@
     "folderSharing": "Folder sharing is available on the Team plan.",
     "upgradeCta": "Upgrade",
     "bookmarksUsed": "Bookmarks used: {{count}}/{{limit}}",
-    "importLimitWarning": "You can import up to {{remaining}} more bookmarks (Free plan limit: {{limit}})."
+    "importLimitWarning": "You can import up to {{remaining}} more bookmarks (Free plan limit: {{limit}}).",
+    "gracePeriodBanner": "You have {{count}} bookmarks (Free plan limit: {{limit}}). Delete bookmarks or upgrade before {{date}} to keep using SlugBase.",
+    "gracePeriodExpired": "Your grace period has ended. Delete bookmarks to get under {{limit}} or upgrade to continue."
   },
   "dashboard": {
     "bookmarksDescription": "Manage your bookmarks",

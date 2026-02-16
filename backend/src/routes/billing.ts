@@ -2,9 +2,9 @@ import { Router, Request, Response } from 'express';
 import Stripe from 'stripe';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { authRateLimiter } from '../middleware/security.js';
-import { queryOne, execute } from '../db/index.js';
+import { query, queryOne, execute } from '../db/index.js';
 import { isCloud } from '../config/mode.js';
-import { getCurrentOrgId } from '../utils/organizations.js';
+import { clearFreePlanGrace, getCurrentOrgId, setFreePlanGraceIfOverLimit } from '../utils/organizations.js';
 import { validateRedirectUrl } from '../utils/validation.js';
 
 const router = Router();
@@ -353,6 +353,14 @@ export async function handleStripeWebhook(req: Request, res: Response): Promise<
           'UPDATE organizations SET plan = ?, included_seats = ?, stripe_subscription_id = COALESCE(?, stripe_subscription_id) WHERE id = ?',
           [plan, seats, subId, orgId]
         );
+        if (plan !== 'free') {
+          const members = await query('SELECT user_id FROM org_members WHERE org_id = ?', [orgId]);
+          const list = Array.isArray(members) ? members : members ? [members] : [];
+          for (const row of list) {
+            const uid = (row as any).user_id;
+            if (uid) await clearFreePlanGrace(uid);
+          }
+        }
         break;
       }
       case 'customer.subscription.updated': {
@@ -366,15 +374,36 @@ export async function handleStripeWebhook(req: Request, res: Response): Promise<
           const plan = sub.metadata?.plan || 'team';
           const seats = getSeatsForPlan(plan);
           await execute('UPDATE organizations SET plan = ?, included_seats = ? WHERE id = ?', [plan, seats, org.id]);
+          if (plan !== 'free') {
+            const members = await query('SELECT user_id FROM org_members WHERE org_id = ?', [org.id]);
+            const list = Array.isArray(members) ? members : members ? [members] : [];
+            for (const row of list) {
+              const uid = (row as any).user_id;
+              if (uid) await clearFreePlanGrace(uid);
+            }
+          }
         }
         break;
       }
       case 'customer.subscription.deleted': {
         const sub = event.data.object as Stripe.Subscription;
+        const orgRow = await queryOne(
+          'SELECT id FROM organizations WHERE stripe_subscription_id = ?',
+          [sub.id]
+        );
         await execute(
           'UPDATE organizations SET plan = ?, included_seats = 1, stripe_subscription_id = NULL WHERE stripe_subscription_id = ?',
           ['free', sub.id]
         );
+        if (orgRow) {
+          const org = orgRow as any;
+          const members = await query('SELECT user_id FROM org_members WHERE org_id = ?', [org.id]);
+          const list = Array.isArray(members) ? members : members ? [members] : [];
+          for (const row of list) {
+            const uid = (row as any).user_id;
+            if (uid) await setFreePlanGraceIfOverLimit(uid);
+          }
+        }
         break;
       }
       case 'invoice.paid':

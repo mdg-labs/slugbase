@@ -118,9 +118,10 @@ interface ImportModalProps {
   bookmarkCount?: number;
   bookmarkLimit?: number | null;
   plan?: string | null;
+  freePlanGraceEndsAt?: string | null;
 }
 
-export default function ImportModal({ isOpen, onClose, onSuccess, bookmarkCount = 0, bookmarkLimit = null, plan }: ImportModalProps) {
+export default function ImportModal({ isOpen, onClose, onSuccess, bookmarkCount = 0, bookmarkLimit = null, plan, freePlanGraceEndsAt }: ImportModalProps) {
   const { t } = useTranslation();
   const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -172,7 +173,8 @@ export default function ImportModal({ isOpen, onClose, onSuccess, bookmarkCount 
     }
   }
 
-  const atLimit = isCloud && plan === 'free' && bookmarkLimit != null && bookmarkCount >= bookmarkLimit;
+  const atLimit = isCloud && plan === 'free' && bookmarkLimit != null && bookmarkCount >= bookmarkLimit &&
+    !(freePlanGraceEndsAt && new Date(freePlanGraceEndsAt).getTime() > Date.now());
   const remaining = bookmarkLimit != null ? Math.max(0, bookmarkLimit - bookmarkCount) : null;
 
   return (

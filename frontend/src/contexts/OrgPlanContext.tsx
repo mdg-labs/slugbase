@@ -9,6 +9,7 @@ interface OrgPlanContextType {
   plan: PlanTier | null;
   bookmarkCount: number;
   bookmarkLimit: number | null;
+  freePlanGraceEndsAt: string | null;
   loading: boolean;
   refresh: () => Promise<void>;
 }
@@ -20,6 +21,7 @@ export function OrgPlanProvider({ children }: { children: React.ReactNode }) {
   const [plan, setPlan] = useState<PlanTier | null>(null);
   const [bookmarkCount, setBookmarkCount] = useState(0);
   const [bookmarkLimit, setBookmarkLimit] = useState<number | null>(null);
+  const [freePlanGraceEndsAt, setFreePlanGraceEndsAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   async function load() {
@@ -27,6 +29,7 @@ export function OrgPlanProvider({ children }: { children: React.ReactNode }) {
       setPlan(null);
       setBookmarkCount(0);
       setBookmarkLimit(null);
+      setFreePlanGraceEndsAt(null);
       setLoading(false);
       return;
     }
@@ -39,10 +42,12 @@ export function OrgPlanProvider({ children }: { children: React.ReactNode }) {
       setPlan(effectivePlan);
       setBookmarkCount(data?.bookmark_count ?? 0);
       setBookmarkLimit(data?.bookmark_limit ?? null);
+      setFreePlanGraceEndsAt(data?.free_plan_grace_ends_at ?? null);
     } catch {
       setPlan(null);
       setBookmarkCount(0);
       setBookmarkLimit(null);
+      setFreePlanGraceEndsAt(null);
     } finally {
       setLoading(false);
     }
@@ -58,6 +63,7 @@ export function OrgPlanProvider({ children }: { children: React.ReactNode }) {
         plan,
         bookmarkCount,
         bookmarkLimit,
+        freePlanGraceEndsAt,
         loading,
         refresh: load,
       }}

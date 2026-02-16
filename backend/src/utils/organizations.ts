@@ -86,3 +86,72 @@ export async function ensureOrgForUser(userId: string, userName: string): Promis
   await execute('UPDATE users SET current_org_id = ? WHERE id = ?', [orgId, userId]);
   return orgId;
 }
+
+/** Grace period in days when user has >100 bookmarks on free plan */
+export const FREE_PLAN_GRACE_DAYS = parseInt(process.env.FREE_PLAN_GRACE_DAYS || '14', 10) || 14;
+
+/** Free plan bookmark limit */
+export const FREE_BOOKMARK_LIMIT = 100;
+
+/**
+ * Set free_plan_grace_ends_at when user has >100 bookmarks (e.g. after being removed from org).
+ * Only sets if not already set. Call when user moves to free plan with over-limit bookmarks.
+ */
+export async function setFreePlanGraceIfOverLimit(userId: string): Promise<void> {
+  if (!isCloud) return;
+  const countRow = await queryOne('SELECT COUNT(*) as count FROM bookmarks WHERE user_id = ?', [userId]);
+  const count = parseInt((countRow as any)?.count || '0');
+  if (count <= FREE_BOOKMARK_LIMIT) return;
+  const existing = await queryOne('SELECT free_plan_grace_ends_at FROM users WHERE id = ?', [userId]);
+  if (existing && (existing as any).free_plan_grace_ends_at) return; // Already has grace
+  const graceEndsAt = new Date();
+  graceEndsAt.setDate(graceEndsAt.getDate() + FREE_PLAN_GRACE_DAYS);
+  await execute('UPDATE users SET free_plan_grace_ends_at = ? WHERE id = ?', [graceEndsAt.toISOString(), userId]);
+}
+
+/**
+ * Clear free_plan_grace_ends_at (e.g. when user deletes down to ≤100 or upgrades).
+ */
+export async function clearFreePlanGrace(userId: string): Promise<void> {
+  if (!isCloud) return;
+  await execute('UPDATE users SET free_plan_grace_ends_at = NULL WHERE id = ?', [userId]);
+}
+
+/**
+ * Get free_plan_grace_ends_at for user (for API response). Returns ISO string or null.
+ */
+export async function getFreePlanGraceEndsAt(userId: string): Promise<string | null> {
+  if (!isCloud) return null;
+  const row = await queryOne('SELECT free_plan_grace_ends_at FROM users WHERE id = ?', [userId]);
+  const val = (row as any)?.free_plan_grace_ends_at;
+  return val ? String(val) : null;
+}
+
+/**
+ * Check if user can create bookmarks on free plan (considering grace period).
+ * Returns true if allowed, false if over limit and grace expired or not set.
+ */
+export async function canCreateBookmarkFreePlan(userId: string, bookmarkCount: number): Promise<boolean> {
+  if (!isCloud) return true;
+  if (bookmarkCount < FREE_BOOKMARK_LIMIT) return true;
+  const row = await queryOne('SELECT free_plan_grace_ends_at FROM users WHERE id = ?', [userId]);
+  const graceEndsAt = (row as any)?.free_plan_grace_ends_at;
+  if (!graceEndsAt) return false;
+  const endsAt = new Date(graceEndsAt);
+  return Date.now() < endsAt.getTime();
+}
+
+/**
+ * Delete an organization and all related data. Cloud mode only.
+ * Clears users.current_org_id, deletes teams, then the org (cascades org_members, org_invitations).
+ * Does not cancel Stripe subscriptions.
+ */
+export async function deleteOrganization(orgId: string): Promise<void> {
+  if (!isCloud) return;
+  // Clear current_org_id for any users pointing to this org
+  await execute('UPDATE users SET current_org_id = NULL WHERE current_org_id = ?', [orgId]);
+  // Delete teams belonging to this org (cascades team_members, bookmark_team_shares, folder_team_shares)
+  await execute('DELETE FROM teams WHERE org_id = ?', [orgId]);
+  // Delete org (cascades org_members, org_invitations)
+  await execute('DELETE FROM organizations WHERE id = ?', [orgId]);
+}

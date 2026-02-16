@@ -6,7 +6,7 @@ import bcrypt from 'bcryptjs';
 import { validateEmail, normalizeEmail, validatePassword, validateLength, sanitizeString } from '../../utils/validation.js';
 import { generateUserKey } from '../../utils/user-key.js';
 import { isCloud } from '../../config/mode.js';
-import { getCurrentOrgId } from '../../utils/organizations.js';
+import { deleteOrganization, getCurrentOrgId } from '../../utils/organizations.js';
 
 const router = Router();
 router.use(requireAuth());
@@ -556,7 +556,32 @@ router.delete('/:id', async (req, res) => {
       }
     }
 
+    // Detect orgs where user is sole member (for cleanup after deletion)
+    const orgsToCleanup: string[] = [];
+    if (isCloud) {
+      const userOrgs = await query('SELECT org_id FROM org_members WHERE user_id = ?', [id]);
+      const orgList = Array.isArray(userOrgs) ? userOrgs : userOrgs ? [userOrgs] : [];
+      for (const row of orgList) {
+        const oid = (row as any).org_id;
+        if (oid) {
+          const countRow = await queryOne('SELECT COUNT(*) as count FROM org_members WHERE org_id = ?', [oid]);
+          const count = parseInt((countRow as any)?.count || '0');
+          if (count === 1) orgsToCleanup.push(oid);
+        }
+      }
+    }
+
     await execute('DELETE FROM users WHERE id = ?', [id]);
+
+    // Clean up orphan orgs (user was sole member)
+    for (const orgId of orgsToCleanup) {
+      try {
+        await deleteOrganization(orgId);
+      } catch (err: any) {
+        console.warn('Org cleanup after user delete failed:', err?.message);
+      }
+    }
+
     res.json({ message: 'User deleted' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });

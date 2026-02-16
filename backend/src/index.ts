@@ -43,6 +43,7 @@ import invitationRoutes from './routes/invitations.js';
 import tokenRoutes from './routes/tokens.js';
 import billingRoutes, { handleStripeWebhook } from './routes/billing.js';
 import { DatabaseSessionStore } from './utils/session-store.js';
+import { startOrgCleanupJob } from './utils/org-cleanup.js';
 
 // Validate required environment variables before starting
 validateEnvironmentVariables();
@@ -261,7 +262,11 @@ async function start() {
   try {
     await initDatabase();
     console.log('Database initialized');
-    
+
+    if (isCloud) {
+      startOrgCleanupJob();
+    }
+
     // Load OIDC strategies after database is initialized
     await loadOIDCStrategies();
     
