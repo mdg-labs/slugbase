@@ -25,8 +25,10 @@ ENV COMMIT_SHA=${COMMIT_SHA}
 # Published image (CI) is built with selfhosted so GHCR image is the combined selfhosted bundle.
 ARG VITE_SLUGBASE_MODE=selfhosted
 ARG VITE_API_URL=
+ARG VITE_SENTRY_DEBUG=
 ENV VITE_SLUGBASE_MODE=${VITE_SLUGBASE_MODE}
 ENV VITE_API_URL=${VITE_API_URL}
+ENV VITE_SENTRY_DEBUG=${VITE_SENTRY_DEBUG}
 
 # Build both workspaces
 RUN npm run build --workspace=frontend

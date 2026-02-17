@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation, Outlet } from 'rea
 import { useTranslation } from 'react-i18next';
 import * as Sentry from '@sentry/react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { SentryDebug } from './components/SentryDebug';
 import { OrgPlanProvider } from './contexts/OrgPlanContext';
 import { ToastProvider } from './components/ui/Toast';
 import { TooltipProvider } from './components/ui/tooltip-base';
@@ -274,6 +275,7 @@ function App() {
           <TooltipProvider>
             <ToastProvider>
               <AppRoutes />
+              <SentryDebug />
             </ToastProvider>
           </TooltipProvider>
         </AuthProvider>

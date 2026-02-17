@@ -223,6 +223,13 @@ app.use('/api', healthRoutes);
 app.use('/api/contact', contactRateLimiter, contactRoutes);
 app.use('/api/go', goRoutes);
 
+// Debug route for Sentry testing (only when SENTRY_DEBUG=true)
+if (process.env.SENTRY_DEBUG === 'true') {
+  app.get('/api/debug-sentry', () => {
+    throw new Error('Sentry backend test error');
+  });
+}
+
 // /go slug forwarding - single canonical endpoint (authenticated)
 app.get('/go/:slug/remember/:bookmarkId', redirectRateLimiter, optionalAuthForGo, (req, res) => {
   handleGoRemember(req, res).catch((err) => {
