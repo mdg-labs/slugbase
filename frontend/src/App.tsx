@@ -1,6 +1,7 @@
 import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, Outlet } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import * as Sentry from '@sentry/react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { OrgPlanProvider } from './contexts/OrgPlanContext';
 import { ToastProvider } from './components/ui/Toast';
@@ -249,17 +250,35 @@ function ForwardingHandler() {
   );
 }
 
+function AppErrorFallback() {
+  const { t } = useTranslation();
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-4">
+      <p className="text-lg text-gray-700 dark:text-gray-300">{t('common.error')}</p>
+      <button
+        type="button"
+        onClick={() => window.location.reload()}
+        className="px-4 py-2 rounded-md bg-primary text-primary-foreground hover:opacity-90"
+      >
+        {t('common.reload')}
+      </button>
+    </div>
+  );
+}
+
 function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <TooltipProvider>
-          <ToastProvider>
-            <AppRoutes />
-          </ToastProvider>
-        </TooltipProvider>
-      </AuthProvider>
-    </BrowserRouter>
+    <Sentry.ErrorBoundary fallback={<AppErrorFallback />}>
+      <BrowserRouter>
+        <AuthProvider>
+          <TooltipProvider>
+            <ToastProvider>
+              <AppRoutes />
+            </ToastProvider>
+          </TooltipProvider>
+        </AuthProvider>
+      </BrowserRouter>
+    </Sentry.ErrorBoundary>
   );
 }
 

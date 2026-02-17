@@ -1,4 +1,5 @@
 import axios from 'axios';
+import * as Sentry from '@sentry/react';
 import { apiBaseUrl } from '../config/api';
 import { isCloud } from '../config/mode';
 
@@ -103,6 +104,15 @@ api.interceptors.response.use(
       error.config._retryRefresh = true;
       const refreshed = await tryRefreshToken();
       if (refreshed) return api.request(error.config);
+    }
+    // Report 5xx, network errors, and unexpected 4xx to Sentry (skip 401/403/404 - auth flow)
+    const status = error.response?.status;
+    const shouldReport =
+      status === undefined ||
+      status >= 500 ||
+      (status >= 400 && status !== 401 && status !== 403 && status !== 404);
+    if (shouldReport) {
+      Sentry.captureException(error);
     }
     return Promise.reject(error);
   }

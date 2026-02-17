@@ -291,6 +291,7 @@
   },
   "common": {
     "loading": "Loading...",
+    "reload": "Reload",
     "error": "An error occurred",
     "notFoundOrNoAccess": "Not found or you don't have access",
     "success": "Success",

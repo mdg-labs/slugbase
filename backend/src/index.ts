@@ -1,6 +1,7 @@
 // IMPORTANT: Load environment variables FIRST, before any other imports
 // that might use process.env at module load time
 import './load-env.js';
+import './instrument.js';
 
 // Now import other modules (they can safely use process.env)
 import express from 'express';
@@ -255,8 +256,10 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // Error handling (must be last)
+import * as Sentry from '@sentry/node';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
 app.use(notFoundHandler);
+Sentry.setupExpressErrorHandler(app);
 app.use(errorHandler);
 
 // Initialize database on startup
