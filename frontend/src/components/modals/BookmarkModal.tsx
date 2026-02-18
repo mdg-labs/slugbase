@@ -195,6 +195,17 @@ export default function BookmarkModal({
         payload.slug = formData.slug && formData.slug.trim() ? formData.slug.trim() : '';
       }
 
+      if (aiSuggestions != null) {
+        const titleUsed = Boolean(aiSuggestions.title && formData.title.trim() === aiSuggestions.title);
+        const slugUsed = Boolean(aiSuggestions.slug && formData.slug?.trim() === aiSuggestions.slug);
+        const selectedTagsForSubmit = tags.filter((t) => formData.tag_ids.includes(t.id));
+        const selectedTagNamesLower = new Set(selectedTagsForSubmit.map((t) => t.name.toLowerCase()));
+        const tagsUsed =
+          Boolean(aiSuggestions.tags?.length) &&
+          aiSuggestions.tags!.every((name: string) => selectedTagNamesLower.has(name.toLowerCase()));
+        payload.ai_suggestion_used = { title: titleUsed, slug: slugUsed, tags: tagsUsed };
+      }
+
       Object.keys(payload).forEach(key => {
         if (payload[key] === undefined) {
           delete payload[key];

@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { isCloud } from '../config/mode.js';
 import { canCreateBookmarkFreePlan, clearFreePlanGrace, FREE_BOOKMARK_LIMIT, getCurrentOrgId, getUserPlan } from '../utils/organizations.js';
 import { PLAN_ERRORS } from '../utils/plan-errors.js';
-import { CreateBookmarkInput, UpdateBookmarkInput } from '../types.js';
+import { CreateBookmarkInput, UpdateBookmarkInput, AiSuggestionUsed } from '../types.js';
 import { validateUrl, validateSlug, validateLength, sanitizeString, MAX_LENGTHS } from '../utils/validation.js';
 import { isAISuggestionsEnabled, getAIApiKey, getAIModel } from '../utils/ai-feature.js';
 import { sanitizeUrlForAI, callAIProvider } from '../services/ai-suggestions.js';
@@ -14,6 +14,23 @@ import { fetchPageMetadata } from '../services/fetch-page-metadata.js';
 
 const router = Router();
 router.use(requireAuth());
+
+/** Record AI suggestion usage for analytics. Does not fail the request if insert fails (e.g. migration not run). */
+async function recordAiSuggestionUsage(userId: string, used: AiSuggestionUsed | undefined): Promise<void> {
+  if (!used || typeof used !== 'object') return;
+  try {
+    const id = uuidv4();
+    const titleUsed = Boolean(used.title);
+    const slugUsed = Boolean(used.slug);
+    const tagsUsed = Boolean(used.tags);
+    await execute(
+      'INSERT INTO ai_suggestion_usage (id, user_id, title_used, slug_used, tags_used) VALUES (?, ?, ?, ?, ?)',
+      [id, userId, titleUsed, slugUsed, tagsUsed]
+    );
+  } catch (_err) {
+    // Table may not exist yet; do not fail the bookmark request
+  }
+}
 
 /**
  * @swagger
@@ -1349,6 +1366,8 @@ router.post('/', async (req, res) => {
       }
     }
 
+    await recordAiSuggestionUsage(userId, data.ai_suggestion_used);
+
     const bookmark = await queryOne('SELECT * FROM bookmarks WHERE id = ?', [bookmarkId]);
     // Convert boolean fields from SQLite (0/1) to boolean
     bookmark.forwarding_enabled = Boolean(bookmark.forwarding_enabled);
@@ -1650,6 +1669,8 @@ router.put('/:id', async (req, res) => {
         }
       }
     }
+
+    await recordAiSuggestionUsage(userId, data.ai_suggestion_used);
 
     const bookmark = await queryOne('SELECT * FROM bookmarks WHERE id = ?', [id]);
     // Convert boolean fields from SQLite (0/1) to boolean
