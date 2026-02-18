@@ -14,7 +14,8 @@ The Admin page provides administrative controls for managing users, teams, OIDC 
 
 ## Route
 
-- **Path**: `/admin`
+- **Path**: `/admin` (redirects to `/admin/members`)
+- **Tab paths**: `/admin/members`, `/admin/teams`, `/admin/oidc`, `/admin/settings`, `/admin/ai`
 - **Authentication**: Required
 - **Authorization**: Admin users only
 - **Access**: Redirects to dashboard if user is not admin
@@ -25,11 +26,11 @@ The Admin page provides administrative controls for managing users, teams, OIDC 
 
 The admin page uses a tabbed navigation system with five main sections:
 
-1. **Users Tab** - Manage system users
-2. **Teams Tab** - Manage teams and team memberships
-3. **OIDC Providers Tab** - Configure OIDC authentication providers
-4. **Settings Tab** - System-wide settings (e.g., SMTP configuration)
-5. **AI Suggestions Tab** - Configure AI-powered bookmark suggestions
+1. **Users Tab** (`/admin/members`) – Manage system users
+2. **Teams Tab** (`/admin/teams`) – Manage teams and team memberships
+3. **OIDC Providers Tab** (`/admin/oidc`) – Configure OIDC authentication providers
+4. **Settings Tab** (`/admin/settings`) – System-wide settings (e.g., SMTP configuration)
+5. **AI Suggestions Tab** (`/admin/ai`) – Configure AI-powered bookmark suggestions
 
 ### Users Management
 
@@ -146,12 +147,12 @@ When not configured, the feature is disabled and bookmark creation works normall
 
 1. User must be authenticated
 2. User must have `is_admin: true`
-3. Navigate to `/admin` route
+3. Navigate to `/admin` (or directly to `/admin/members`); the default redirect goes to the Users (members) tab
 4. Non-admin users are redirected to dashboard
 
 ### Managing Users
 
-1. Click "Users" tab
+1. Click "Users" tab (path: `/admin/members`)
 2. View list of all users
 3. Click "Add User" to create new user
 4. Click edit icon to modify user

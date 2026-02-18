@@ -6,28 +6,29 @@ sidebar_position: 5
 
 # Features and User Guide
 
-SlugBase Cloud uses the same app as self-hosted SlugBase. The following guides describe how to use bookmarks, folders, tags, sharing, and other features. They apply to both Cloud and self-hosted instances.
+SlugBase Cloud uses the same app as self-hosted SlugBase. The following guides describe how to use bookmarks, folders, tags, sharing, and other features. **In SlugBase Cloud, all app routes are under `/app`** (e.g. `/app/bookmarks`, `/app/profile`, `/app/admin/billing`).
 
 ## Core features
 
-- [Dashboard](https://docs.slugbase.app/selfhosted/dashboard) – Overview of your bookmarks and quick navigation
-- [Bookmarks](https://docs.slugbase.app/selfhosted/bookmarks) – Managing your bookmark collection
-- [Folders](https://docs.slugbase.app/selfhosted/folders) – Organizing bookmarks with folders
-- [Tags](https://docs.slugbase.app/selfhosted/tags) – Tagging and filtering bookmarks
-- [Shared](https://docs.slugbase.app/selfhosted/shared) – Accessing and managing shared content
+- [Dashboard](dashboard) – Overview of your bookmarks, stats, recent bookmarks, and quick navigation
+- [Bookmarks](bookmarks) – Managing your bookmark collection
+- [Folders](folders) – Organizing bookmarks with folders
+- [Tags](tags) – Tagging and filtering bookmarks
+- [Shared](shared) – Accessing and managing shared content
 
 ## Account and settings
 
-- [Profile](https://docs.slugbase.app/selfhosted/profile) – Account settings, preferences, and theme
-- [Login and auth](https://docs.slugbase.app/cloud/auth) – How to sign in to SlugBase Cloud
-- [Password reset](https://docs.slugbase.app/selfhosted/password-reset) – Recovering your password
+- [Profile](profile) – Account settings, preferences, theme, and (on Cloud) organization switcher
+- [Login and auth](auth) – How to sign in to SlugBase Cloud
+- [Login page](login) – Sign-in and sign-up entry points
+- [Password reset](password-reset) – Recovering your password
 
 ## Teams and admin (Cloud)
 
-On Team and Early Supporter plans, organization admins can manage users and billing:
+On Team and Early Supporter plans, organization admins can manage members and billing:
 
-- [Admin](https://docs.slugbase.app/selfhosted/admin) – User, team, and (where applicable) billing management
+- [Admin](admin) – Members, teams (Team/Early Supporter), and billing & plan
 
 ## More
 
-- [Search engine guide](https://docs.slugbase.app/selfhosted/search-engine-guide) – Using SlugBase with browser custom search
+- [Search engine guide](search-engine-guide) – Using SlugBase with browser custom search

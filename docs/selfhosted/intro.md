@@ -77,7 +77,7 @@ Automatic theme detection from your browser preferences, with manual toggle and 
 - [Shared](shared) - Shared content access
 
 ### User Features
-- [Profile](profile) - Account settings and preferences
+- [Profile](profile) - Account settings, preferences, theme, and Go preferences (browser search setup)
 - [Login](login) - Authentication options
 - [Password Reset](password-reset) - Password recovery
 - [Search Engine Guide](search-engine-guide) - Browser search integration
