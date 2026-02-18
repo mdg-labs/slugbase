@@ -4,12 +4,15 @@ import { useTranslation } from 'react-i18next';
 import api from '../api/client';
 import Button from '../components/ui/Button';
 
+const MIN_PASSWORD_LENGTH = 8;
+
 export default function Signup() {
   const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [acceptTerms, setAcceptTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
@@ -19,6 +22,14 @@ export default function Signup() {
     setError('');
     if (password !== confirmPassword) {
       setError(t('setup.passwordMismatch'));
+      return;
+    }
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      setError(t('setup.passwordTooShort'));
+      return;
+    }
+    if (!acceptTerms) {
+      setError(t('signup.acceptTermsRequired'));
       return;
     }
     setLoading(true);
@@ -113,12 +124,14 @@ export default function Signup() {
                 id="signup-password"
                 type="password"
                 required
+                minLength={MIN_PASSWORD_LENGTH}
                 autoComplete="new-password"
                 className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder={t('setup.passwordPlaceholder')}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t('signup.passwordHint')}</p>
             </div>
             <div>
               <label htmlFor="signup-confirm" className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
@@ -128,12 +141,34 @@ export default function Signup() {
                 id="signup-confirm"
                 type="password"
                 required
+                minLength={MIN_PASSWORD_LENGTH}
                 autoComplete="new-password"
                 className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder={t('setup.confirmPasswordPlaceholder')}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
               />
+            </div>
+            <div className="flex items-start gap-3">
+              <input
+                id="signup-accept-terms"
+                type="checkbox"
+                required
+                checked={acceptTerms}
+                onChange={(e) => setAcceptTerms(e.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+              />
+              <label htmlFor="signup-accept-terms" className="text-sm text-gray-700 dark:text-gray-300">
+                {t('signup.acceptTermsPrefix')}
+                <Link to="/terms" className="text-blue-600 dark:text-blue-400 hover:underline">
+                  {t('signup.acceptTermsTerms')}
+                </Link>
+                {t('signup.acceptTermsAnd')}
+                <Link to="/privacy" className="text-blue-600 dark:text-blue-400 hover:underline">
+                  {t('signup.acceptTermsPrivacy')}
+                </Link>
+                {t('signup.acceptTermsSuffix')}
+              </label>
             </div>
             {error && (
               <div className="px-4 py-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">

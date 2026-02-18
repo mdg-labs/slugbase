@@ -17,6 +17,8 @@ export default function Terms() {
               {t('legal.termsScopeTitle')}
             </h2>
             <p>{t('legal.termsScopeBody')}</p>
+            {t('legal.termsScopeB2BBody') && <p className="mt-2">{t('legal.termsScopeB2BBody')}</p>}
+            {t('legal.termsB2BBindingBody') && <p className="mt-2">{t('legal.termsB2BBindingBody')}</p>}
           </section>
           <section>
             <h2 className="text-lg font-medium text-gray-900 dark:text-white mt-6 mb-2">
@@ -110,6 +112,7 @@ export default function Terms() {
               {t('legal.termsWithdrawalTitle')}
             </h2>
             <p>{t('legal.termsWithdrawalBody')}</p>
+            {t('legal.termsWithdrawalB2BNote') && <p className="mt-2">{t('legal.termsWithdrawalB2BNote')}</p>}
           </section>
           <section>
             <h2 className="text-lg font-medium text-gray-900 dark:text-white mt-6 mb-2">
@@ -128,6 +131,7 @@ export default function Terms() {
               {t('legal.termsLiabilityTitle')}
             </h2>
             <p>{t('legal.termsLiabilityBody')}</p>
+            {t('legal.termsLiabilityB2BNote') && <p className="mt-2">{t('legal.termsLiabilityB2BNote')}</p>}
           </section>
           <section>
             <h2 className="text-lg font-medium text-gray-900 dark:text-white mt-6 mb-2">

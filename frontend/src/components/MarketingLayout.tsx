@@ -84,7 +84,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
       <main className="flex-1">{children}</main>
       <footer className="border-t bg-card py-6">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <span className="text-sm text-muted-foreground">© SlugBase</span>
+          <span className="text-sm text-muted-foreground">{t('landing.footerCopyright')}</span>
           <div className="flex flex-wrap gap-6">
             <a
               href="https://docs.slugbase.app"

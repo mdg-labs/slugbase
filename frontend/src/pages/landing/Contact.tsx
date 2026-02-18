@@ -152,6 +152,12 @@ export default function Contact() {
                 className={inputClasses}
               />
             </div>
+            <p className="text-sm text-muted-foreground">
+              {t('contact.privacyNotice')}{' '}
+              <Link to="/privacy" className="text-primary hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded">
+                {t('legal.privacyTitle')}
+              </Link>
+            </p>
             <button
               type="submit"
               disabled={isSubmitDisabled}

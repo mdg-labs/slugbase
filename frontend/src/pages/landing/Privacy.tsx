@@ -18,6 +18,14 @@ export default function Privacy() {
             </h2>
             <p>{t('legal.privacyScopeBody')}</p>
           </section>
+          {t('legal.privacyB2BTitle') && (
+            <section>
+              <h2 className="text-lg font-medium text-gray-900 dark:text-white mt-6 mb-2">
+                {t('legal.privacyB2BTitle')}
+              </h2>
+              <p>{t('legal.privacyB2BBody')}</p>
+            </section>
+          )}
           <section>
             <h2 className="text-lg font-medium text-gray-900 dark:text-white mt-6 mb-2">
               {t('legal.privacyControllerTitle')}
