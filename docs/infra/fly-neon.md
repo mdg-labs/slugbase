@@ -163,6 +163,6 @@ This triggers `.github/workflows/deploy-fly-prod.yml`. Or trigger manually: **Ac
 
 ## Related
 
-- [Grafana + Stats setup](grafana-stats.md) – monitoring and business metrics
-- [GCP Terraform deployment](terraform.md) – alternative deployment to Google Cloud
-- [SlugBase README](../../README.md) – general configuration and setup
+- [Grafana + Stats setup](https://docs.slugbase.app/infra/grafana-stats) – monitoring and business metrics
+- [GCP Terraform deployment](https://docs.slugbase.app/infra/terraform) – alternative deployment to Google Cloud
+- [SlugBase documentation](https://docs.slugbase.app) – general configuration and setup

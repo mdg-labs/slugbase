@@ -36,8 +36,8 @@ Sign up for a free account at **[https://slugbase.app](https://slugbase.app)** t
 - 🐘 **PostgreSQL** - Full PostgreSQL support for larger deployments
 - 🔄 **Auto Migrations** - Automatic database migration system with version tracking
 - 🐳 **Docker Ready** - Production-ready Docker setup with multi-stage builds
-- ☁️ **GCP / Cloud Run** - Terraform and GitHub Actions (WIF) to deploy the backend to Cloud Run; see [docs/infra/terraform.md](docs/infra/terraform.md)
-- 🪰 **Fly.io + Neon** - Deploy backend to Fly.io with Neon PostgreSQL (EU); see [docs/infra/fly-neon.md](docs/infra/fly-neon.md)
+- ☁️ **GCP / Cloud Run** - Terraform and GitHub Actions (WIF) to deploy the backend to Cloud Run; see [docs/infra/terraform](https://docs.slugbase.app/infra/terraform)
+- 🪰 **Fly.io + Neon** - Deploy backend to Fly.io with Neon PostgreSQL (EU); see [docs/infra/fly-neon](https://docs.slugbase.app/infra/fly-neon)
 - 📊 **API Documentation** - Auto-generated Swagger/OpenAPI documentation
 
 ## Tech Stack

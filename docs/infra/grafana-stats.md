@@ -205,5 +205,5 @@ If you prefer not to install a plugin:
 
 ## Related
 
-- [Fly.io + Neon deployment](fly-neon.md)
-- [SlugBase README](../../README.md)
+- [Fly.io + Neon deployment](https://docs.slugbase.app/infra/fly-neon)
+- [SlugBase documentation](https://docs.slugbase.app)
