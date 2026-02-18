@@ -4,10 +4,6 @@
 #   - Production: fly deploy -a slugbase-prod (main branch)
 # The app= below is the default; workflows override via -a.
 #
-# Note: min_machines_running=1 keeps one machine always on. With 0, machines
-# scale to zero when idle, which can cause Fly.io logs page to disconnect/reload
-# as machines stop and start. See: https://community.fly.io/t/live-logs-are-cleared-automatically-too-often/23555
-#
 # REQUIRED SECRETS (set via: fly secrets set KEY=value -a slugbase-staging):
 #   DATABASE_URL, JWT_SECRET, ENCRYPTION_KEY, SESSION_SECRET, FRONTEND_URL, BASE_URL
 # See docs/infra/fly-neon.md for full list and optional (OIDC, SMTP) secrets.
@@ -38,7 +34,7 @@ primary_region = "fra"
   force_https = true
   auto_stop_machines = "stop"
   auto_start_machines = true
-  min_machines_running = 1
+  min_machines_running = 0
 
   [http_service.concurrency]
     type = "requests"
