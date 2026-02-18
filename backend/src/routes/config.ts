@@ -6,8 +6,21 @@
 import { Router } from 'express';
 import { AuthRequest, requireAuth } from '../middleware/auth.js';
 import { isAISuggestionsEnabled, isAIFeatureAvailable } from '../utils/ai-feature.js';
+import { isCloud } from '../config/mode.js';
 
 const router = Router();
+
+/**
+ * GET /api/config/public — Public config for the frontend (no auth).
+ * Returns non-sensitive, runtime config such as Featurebase app ID when in Cloud mode.
+ * Allows the widget to work without build-time VITE_ vars (e.g. when using Fly secrets).
+ */
+router.get('/public', (req, res) => {
+  const featurebaseAppId = isCloud
+    ? (process.env.FEATUREBASE_APP_ID ?? '').trim() || null
+    : null;
+  res.json({ featurebaseAppId });
+});
 
 /**
  * @swagger

@@ -4,11 +4,15 @@
  * When user is logged in, fetches a secure JWT from the backend (secure installation:
  * https://help.featurebase.app/en/help/articles/5402549-secure-your-installation-required-by-default).
  */
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { isCloud } from '../config/mode';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../api/client';
+
+interface PublicConfig {
+  featurebaseAppId: string | null;
+}
 
 const FEATUREBASE_SDK_URL = 'https://do.featurebase.app/js/sdk.js';
 const FEATUREBASE_SCRIPT_ID = 'featurebase-sdk';
@@ -55,10 +59,30 @@ function getLanguage(userLang: string | undefined, i18nLang: string): string {
   return lang.split('-')[0] || 'en';
 }
 
+/** Resolve appId: build-time (Vite) or runtime from public config. */
+function useFeaturebaseAppId(): string | null {
+  const buildTimeId = (import.meta.env.VITE_FEATUREBASE_APP_ID as string)?.trim() || null;
+  const [runtimeId, setRuntimeId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isCloud) return;
+    if (buildTimeId) {
+      setRuntimeId(buildTimeId);
+      return;
+    }
+    api.get<PublicConfig>('/config/public').then((res) => {
+      const id = res.data?.featurebaseAppId?.trim() || null;
+      setRuntimeId(id);
+    }).catch(() => setRuntimeId(null));
+  }, [isCloud, buildTimeId]);
+
+  return buildTimeId || runtimeId;
+}
+
 export default function FeaturebaseWidget() {
   const { user, loading } = useAuth();
   const { i18n } = useTranslation();
-  const appId = (import.meta.env.VITE_FEATUREBASE_APP_ID as string)?.trim();
+  const appId = useFeaturebaseAppId();
   const sdkInitializedRef = useRef(false);
 
   const runBoot = useCallback((opts: Record<string, unknown>) => {
