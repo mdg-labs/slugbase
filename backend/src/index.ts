@@ -51,7 +51,7 @@ import { startOrgCleanupJob } from './utils/org-cleanup.js';
 validateEnvironmentVariables();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = parseInt(process.env.PORT || '5000', 10);
 
 // Trust proxy for correct client IP when behind Fly.io, Cloud Run, nginx, etc.
 // Required for express-rate-limit to use X-Forwarded-For.
