@@ -96,7 +96,7 @@ export function setupSecurityHeaders() {
   
   const cspDirectives: any = {
     defaultSrc: ["'self'"],
-    styleSrc: ["'self'", "'unsafe-inline'"], // Swagger UI needs inline styles
+    styleSrc: ["'self'", "'unsafe-inline'", "https://do.featurebase.app"], // Swagger UI; Featurebase Messenger SDK CSS (Cloud only)
     scriptSrc: ["'self'", "https://do.featurebase.app"], // Featurebase Messenger SDK (Cloud only)
     imgSrc: ["'self'", "data:", "https:"], // Allow data URIs and HTTPS images (for favicons)
     connectSrc: [
