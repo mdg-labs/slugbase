@@ -12,6 +12,7 @@ import { canAccessBookmark } from '../auth/authorization.js';
 import { getAccessibleBookmarksBySlug } from './go-helpers.js';
 import { validateUrl, validateSlug } from '../utils/validation.js';
 import { isCloud } from '../config/mode.js';
+import { getCurrentOrgId } from '../utils/organizations.js';
 
 const router = Router();
 const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
@@ -117,6 +118,7 @@ export function handleGoSlug(req: Request, res: Response) {
   }
 
   (async () => {
+    const orgId = isCloud ? await getCurrentOrgId(userId) : null;
     // Step 1: Check remembered preference
     const pref = await queryOne(
       'SELECT bookmark_id FROM slug_preferences WHERE user_id = ? AND slug = ?',
@@ -124,7 +126,7 @@ export function handleGoSlug(req: Request, res: Response) {
     );
     if (pref) {
       const bookmarkId = (pref as any).bookmark_id;
-      const hasAccess = await canAccessBookmark(userId, bookmarkId);
+      const hasAccess = await canAccessBookmark(userId, bookmarkId, orgId);
       if (hasAccess) {
         const bookmark = await queryOne(
           'SELECT id, url, slug, forwarding_enabled FROM bookmarks WHERE id = ?',
@@ -146,7 +148,7 @@ export function handleGoSlug(req: Request, res: Response) {
     }
 
     // Step 2: Search accessible bookmarks
-    const candidates = await getAccessibleBookmarksBySlug(userId, slug);
+    const candidates = await getAccessibleBookmarksBySlug(userId, slug, orgId);
 
     if (candidates.length === 0) {
       return res.status(404).type('text/html').send(notFoundHtml(slug));
@@ -189,8 +191,9 @@ export async function handleGoRemember(
   const { slug, bookmarkId } = req.params;
   const authReq = req as AuthRequest;
   const userId = authReq.user!.id;
+  const orgId = isCloud ? await getCurrentOrgId(userId) : null;
 
-  const hasAccess = await canAccessBookmark(userId, bookmarkId);
+  const hasAccess = await canAccessBookmark(userId, bookmarkId, orgId);
   if (!hasAccess) {
     return res.status(403).send('Forbidden');
   }
@@ -232,7 +235,39 @@ async function getOwnerName(userId: string): Promise<string> {
   return r.name || r.email || 'Shared';
 }
 
-/** GET /api/go/preferences - List user's slug preferences */
+/**
+ * @swagger
+ * /api/go/preferences:
+ *   get:
+ *     summary: List slug preferences
+ *     description: Returns the user's slug-to-bookmark preferences for collision resolution.
+ *     tags: [Go]
+ *     security:
+ *       - cookieAuth: []
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of slug preferences
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   slug:
+ *                     type: string
+ *                   bookmark_id:
+ *                     type: string
+ *                   title:
+ *                     type: string
+ *                   url:
+ *                     type: string
+ *                   workspace:
+ *                     type: string
+ *       401:
+ *         description: Unauthorized
+ */
 router.get('/preferences', requireAuth(), async (req, res) => {
   const authReq = req as AuthRequest;
   const userId = authReq.user!.id;
@@ -268,10 +303,46 @@ router.get('/preferences', requireAuth(), async (req, res) => {
   }
 });
 
-/** POST /api/go/preferences - Create or update preference */
+/**
+ * @swagger
+ * /api/go/preferences:
+ *   post:
+ *     summary: Create or update slug preference
+ *     description: Sets which bookmark to use when multiple match a slug. User must have access to the bookmark.
+ *     tags: [Go]
+ *     security:
+ *       - cookieAuth: []
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - slug
+ *               - bookmark_id
+ *             properties:
+ *               slug:
+ *                 type: string
+ *               bookmark_id:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Preference created or updated
+ *       400:
+ *         description: slug and bookmark_id required
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Bookmark not found or slug mismatch
+ */
 router.post('/preferences', requireAuth(), async (req, res) => {
   const authReq = req as AuthRequest;
   const userId = authReq.user!.id;
+  const orgId = isCloud ? await getCurrentOrgId(userId) : null;
   const { slug, bookmark_id } = req.body;
   if (!slug || !bookmark_id) {
     return res.status(400).json({ error: 'slug and bookmark_id are required' });
@@ -280,7 +351,7 @@ router.post('/preferences', requireAuth(), async (req, res) => {
   if (!slugVal.valid) {
     return res.status(400).json({ error: slugVal.error });
   }
-  const hasAccess = await canAccessBookmark(userId, bookmark_id);
+  const hasAccess = await canAccessBookmark(userId, bookmark_id, orgId);
   if (!hasAccess) {
     return res.status(403).json({ error: 'Forbidden' });
   }
@@ -305,7 +376,32 @@ router.post('/preferences', requireAuth(), async (req, res) => {
   }
 });
 
-/** DELETE /api/go/preferences/:slug - Remove preference */
+/**
+ * @swagger
+ * /api/go/preferences/{slug}:
+ *   delete:
+ *     summary: Remove slug preference
+ *     description: Removes the user's preference for a slug.
+ *     tags: [Go]
+ *     security:
+ *       - cookieAuth: []
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: slug
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       204:
+ *         description: Preference removed
+ *       400:
+ *         description: Invalid slug
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Preference not found
+ */
 router.delete('/preferences/:slug', requireAuth(), async (req, res) => {
   const authReq = req as AuthRequest;
   const userId = authReq.user!.id;

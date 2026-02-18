@@ -14,13 +14,13 @@ This document covers deploying SlugBase to Fly.io with Neon PostgreSQL. The depl
 
 ## Branch-to-Environment Mapping
 
-| Branch     | Fly App           | Triggers                    |
-|-----------|-------------------|-----------------------------|
-| `dev`     | slugbase-staging  | Push, workflow_dispatch    |
-| `staging` | slugbase-staging  | Push, workflow_dispatch    |
-| `main`    | slugbase-prod     | workflow_dispatch only*    |
+| Branch     | Fly App           | Triggers                 |
+|-----------|-------------------|--------------------------|
+| `dev`     | slugbase-staging  | Push, workflow_dispatch  |
+| `staging` | slugbase-staging  | Push, workflow_dispatch  |
+| `main`    | slugbase-prod     | Push, workflow_dispatch  |
 
-\* Production auto-deploys on push to `main` are disabled by default. See [Enabling production](#enabling-production) when ready.
+Deployment is handled by GitHub Actions (`.github/workflows/deploy-fly-staging.yml` and `deploy-fly-prod.yml`). If you previously used Fly.io's built-in GitHub integration, disable it in the Fly dashboard (App → Deployments → Settings) to avoid duplicate deploys.
 
 ---
 
@@ -97,6 +97,8 @@ fly secrets set \
 | `SMTP_PASSWORD` | SMTP password |
 | `SMTP_FROM` | From email address |
 | `SMTP_FROM_NAME` | From display name |
+| `AI_OPENAI_API_KEY` | OpenAI API key for AI bookmark suggestions (Personal/Team plans) |
+| `AI_OPENAI_MODEL` | Model override (default: gpt-4o-mini) |
 
 **Production** (when ready): repeat the required secrets with production values for `slugbase-prod`.
 
@@ -128,26 +130,14 @@ git push origin dev
 
 This triggers `.github/workflows/deploy-fly-staging.yml`. Or trigger manually: **Actions** → **Deploy to Fly.io (Staging)** → **Run workflow**.
 
-**Production** (manual only until enabled):
+**Production** (from `main` branch):
 
-- **Actions** → **Deploy to Fly.io (Production)** → **Run workflow**
+```bash
+git checkout main
+git push origin main
+```
 
----
-
-## Enabling Production
-
-When ready to deploy production on push to `main`:
-
-1. Configure secrets for `slugbase-prod` (see step 3).
-2. In `.github/workflows/deploy-fly-prod.yml`, remove the job-level `if`:
-
-   ```yaml
-   # Remove this line:
-   if: github.event_name == 'workflow_dispatch'
-   ```
-
-3. Optionally add `environment: production` for approval gates.
-4. Push to `main` to deploy.
+This triggers `.github/workflows/deploy-fly-prod.yml`. Or trigger manually: **Actions** → **Deploy to Fly.io (Production)** → **Run workflow**. Ensure `slugbase-prod` secrets are configured (see step 3) before the first deploy.
 
 ---
 
@@ -173,5 +163,6 @@ When ready to deploy production on push to `main`:
 
 ## Related
 
-- [GCP Terraform deployment](terraform.md) – alternative deployment to Google Cloud
-- [SlugBase README](../../README.md) – general configuration and setup
+- [Grafana + Stats setup](https://docs.slugbase.app/infra/grafana-stats) – monitoring and business metrics
+- [GCP Terraform deployment](https://docs.slugbase.app/infra/terraform) – alternative deployment to Google Cloud
+- [SlugBase documentation](https://docs.slugbase.app) – general configuration and setup

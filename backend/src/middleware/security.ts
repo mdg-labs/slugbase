@@ -75,6 +75,17 @@ export const redirectRateLimiter = isDevelopment
       legacyHeaders: false,
     });
 
+/** API token creation: limit to prevent abuse */
+export const tokenCreateRateLimiter = isDevelopment
+  ? noOpRateLimiter
+  : rateLimit({
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      max: 10,
+      message: 'Too many token creation attempts. Please try again later.',
+      standardHeaders: true,
+      legacyHeaders: false,
+    });
+
 /**
  * Security headers middleware
  */
@@ -88,7 +99,13 @@ export function setupSecurityHeaders() {
     styleSrc: ["'self'", "'unsafe-inline'"], // Swagger UI needs inline styles
     scriptSrc: ["'self'"],
     imgSrc: ["'self'", "data:", "https:"], // Allow data URIs and HTTPS images (for favicons)
-    connectSrc: ["'self'"],
+    connectSrc: [
+      "'self'",
+      // Sentry error tracking (ingest endpoints vary by region)
+      "https://*.ingest.sentry.io",
+      "https://*.ingest.de.sentry.io",
+      "https://*.ingest.eu.sentry.io",
+    ],
     fontSrc: ["'self'"],
     objectSrc: ["'none'"],
     mediaSrc: ["'self'"],

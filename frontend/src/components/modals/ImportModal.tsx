@@ -1,10 +1,21 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { Upload } from 'lucide-react';
-import Modal from '../ui/Modal';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '../ui/dialog';
+import { Separator } from '../ui/separator';
 import Button from '../ui/Button';
 import api from '../../api/client';
 import { useToast } from '../ui/Toast';
+import { isCloud } from '../../config/mode';
+import { appBasePath } from '../../config/api';
+import { FREE_PLAN_BOOKMARK_LIMIT } from '../../utils/plan';
 
 /**
  * Decode HTML entities safely (only common ones, no script execution)
@@ -19,7 +30,7 @@ function decodeHtmlEntities(text: string): string {
     '&#x27;': "'",
     '&#x2F;': '/',
   };
-  
+
   return text.replace(/&[#\w]+;/g, (entity) => {
     return entityMap[entity] || entity;
   });
@@ -33,19 +44,14 @@ function extractTextFromHtmlTag(html: string): string {
   if (!html || typeof html !== 'string') {
     return '';
   }
-  // Remove HTML tags using regex (safe for extraction, not for rendering)
-  // Apply repeatedly to avoid incomplete multi-character sanitization
   let text = html;
   let previous = '';
   while (text !== previous) {
     previous = text;
     text = text.replace(/<[^>]*>/g, '');
   }
-  // Remove any remaining angle brackets to avoid partial tags like "<script"
   text = text.replace(/[<>]/g, '');
-  // Decode HTML entities
   text = decodeHtmlEntities(text);
-  // Trim and return
   return text.trim();
 }
 
@@ -56,26 +62,23 @@ function validateAndSanitizeUrl(href: string): string | null {
   if (!href || typeof href !== 'string') {
     return null;
   }
-  
+
   const trimmed = href.trim();
   if (!trimmed) {
     return null;
   }
-  
-  // Block dangerous protocols
+
   const lowerHref = trimmed.toLowerCase();
-  if (lowerHref.startsWith('javascript:') || 
-      lowerHref.startsWith('data:') || 
+  if (lowerHref.startsWith('javascript:') ||
+      lowerHref.startsWith('data:') ||
       lowerHref.startsWith('vbscript:') ||
       lowerHref.startsWith('file:') ||
       lowerHref.startsWith('about:')) {
     return null;
   }
-  
-  // Validate as proper URL
+
   try {
     const url = new URL(trimmed, window.location.origin);
-    // Only allow http and https
     if (url.protocol !== 'http:' && url.protocol !== 'https:') {
       return null;
     }
@@ -87,39 +90,25 @@ function validateAndSanitizeUrl(href: string): string | null {
 
 /**
  * Parse HTML bookmark file using regex (avoids DOMParser XSS concerns)
- * This is safe because we only extract text and URLs, never render HTML
  */
 function parseHtmlBookmarks(html: string): Array<{ title: string; url: string }> {
   const bookmarks: Array<{ title: string; url: string }> = [];
-  
-  // Match <a> tags with href attribute
-  // This regex matches: <a ... href="..." ...>...</a>
-  // We use non-greedy matching and capture href and content
   const linkRegex = /<a\s+[^>]*href\s*=\s*["']([^"']+)["'][^>]*>(.*?)<\/a>/gi;
-  
+
   let match;
   while ((match = linkRegex.exec(html)) !== null) {
     const href = match[1];
     const tagContent = match[2];
-    
-    // Extract and validate URL
+
     const validatedUrl = validateAndSanitizeUrl(href);
-    if (!validatedUrl) {
-      continue; // Skip invalid URLs
-    }
-    
-    // Extract text content (remove any nested HTML tags)
+    if (!validatedUrl) continue;
+
     const title = extractTextFromHtmlTag(tagContent);
-    if (!title) {
-      continue; // Skip bookmarks without titles
-    }
-    
-    bookmarks.push({
-      title,
-      url: validatedUrl,
-    });
+    if (!title) continue;
+
+    bookmarks.push({ title, url: validatedUrl });
   }
-  
+
   return bookmarks;
 }
 
@@ -127,9 +116,13 @@ interface ImportModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  bookmarkCount?: number;
+  bookmarkLimit?: number | null;
+  plan?: string | null;
+  freePlanGraceEndsAt?: string | null;
 }
 
-export default function ImportModal({ isOpen, onClose, onSuccess }: ImportModalProps) {
+export default function ImportModal({ isOpen, onClose, onSuccess, bookmarkCount = 0, bookmarkLimit = null, plan, freePlanGraceEndsAt }: ImportModalProps) {
   const { t } = useTranslation();
   const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -147,18 +140,12 @@ export default function ImportModal({ isOpen, onClose, onSuccess }: ImportModalP
       let bookmarks: any[] = [];
 
       if (file.name.endsWith('.json')) {
-        // JSON import
         const data = JSON.parse(text);
         bookmarks = Array.isArray(data) ? data : [data];
       } else if (file.name.endsWith('.html')) {
-        // HTML/Netscape bookmark format
-        // Limit file size to prevent DoS attacks
-        if (text.length > 10 * 1024 * 1024) { // 10MB limit
+        if (text.length > 10 * 1024 * 1024) {
           throw new Error('HTML file is too large. Maximum size is 10MB.');
         }
-        
-        // Parse HTML bookmarks using regex (avoids DOMParser XSS concerns)
-        // This approach extracts text and URLs without parsing HTML into DOM
         bookmarks = parseHtmlBookmarks(text);
       } else {
         throw new Error('Unsupported file format. Please use JSON or HTML.');
@@ -170,9 +157,9 @@ export default function ImportModal({ isOpen, onClose, onSuccess }: ImportModalP
 
       const response = await api.post('/bookmarks/import', { bookmarks });
       showToast(
-        t('bookmarks.importSuccess', { 
-          success: response.data.success, 
-          failed: response.data.failed 
+        t('bookmarks.importSuccess', {
+          success: response.data.success,
+          failed: response.data.failed
         }),
         response.data.failed > 0 ? 'warning' : 'success'
       );
@@ -183,57 +170,88 @@ export default function ImportModal({ isOpen, onClose, onSuccess }: ImportModalP
       showToast(err.response?.data?.error || err.message || t('common.error'), 'error');
     } finally {
       setLoading(false);
-      // Reset file input
       e.target.value = '';
     }
   }
 
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} title={t('bookmarks.import')} size="md">
-      <div className="space-y-4">
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          {t('bookmarks.importDescription')}
-        </p>
+  const atLimit = isCloud && plan === 'free' && bookmarkLimit != null && bookmarkCount >= bookmarkLimit &&
+    !(freePlanGraceEndsAt && new Date(freePlanGraceEndsAt).getTime() > Date.now());
+  const remaining = bookmarkLimit != null ? Math.max(0, bookmarkLimit - bookmarkCount) : null;
 
-        <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center">
-          <Upload className="h-12 w-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
-          <label className="cursor-pointer">
-            <input
-              type="file"
-              accept=".json,.html"
-              onChange={handleFileSelect}
-              className="hidden"
-              disabled={loading}
-            />
-            <Button
-              variant="primary"
-              icon={Upload}
-              disabled={loading}
-              onClick={() => {
-                const input = document.querySelector('input[type="file"]') as HTMLInputElement;
-                input?.click();
-              }}
-            >
-              {loading ? t('common.loading') : t('bookmarks.selectFile')}
-            </Button>
-          </label>
-          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-            {t('bookmarks.supportedFormats')}
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-[460px]">
+        <DialogHeader>
+          <DialogTitle>{t('bookmarks.import')}</DialogTitle>
+        </DialogHeader>
+        <Separator />
+
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            {t('bookmarks.importDescription')}
           </p>
+
+          {atLimit && (
+            <div className="px-4 py-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20">
+              <p className="text-sm text-amber-800 dark:text-amber-200">{t('plan.limitBookmarks', { limit: bookmarkLimit ?? FREE_PLAN_BOOKMARK_LIMIT })}</p>
+              <Link
+                to={`${appBasePath}/admin/billing`}
+                className="mt-2 inline-block text-sm font-medium text-amber-700 dark:text-amber-300 hover:underline"
+              >
+                {t('plan.upgradeCta')}
+              </Link>
+            </div>
+          )}
+
+          {!atLimit && remaining != null && remaining < 20 && (
+            <p className="text-sm text-muted-foreground">
+              {t('plan.importLimitWarning', { remaining, limit: bookmarkLimit })}
+            </p>
+          )}
+
+          <div className="border-2 border-dashed border-border rounded-lg p-6 text-center">
+            <Upload className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <label className={atLimit ? 'cursor-not-allowed' : 'cursor-pointer'}>
+              <input
+                type="file"
+                accept=".json,.html"
+                onChange={handleFileSelect}
+                className="hidden"
+                disabled={loading || atLimit}
+              />
+              <Button
+                variant="primary"
+                icon={Upload}
+                disabled={loading || atLimit}
+                loading={loading}
+                onClick={() => {
+                  if (atLimit) return;
+                  const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+                  input?.click();
+                }}
+              >
+                {loading ? t('common.loading') : t('bookmarks.selectFile')}
+              </Button>
+            </label>
+            <p className="mt-2 text-xs text-muted-foreground">
+              {t('bookmarks.supportedFormats')}
+            </p>
+          </div>
+
+          {error && (
+            <div className="px-4 py-3 rounded-lg border bg-destructive/10 border-destructive/20">
+              <p className="text-sm text-destructive">{error}</p>
+            </div>
+          )}
         </div>
 
-        {error && (
-          <div className="px-4 py-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-            <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
-          </div>
-        )}
-
-        <div className="flex gap-3 pt-2">
-          <Button variant="secondary" onClick={onClose} className="flex-1" disabled={loading}>
+        <Separator />
+        <DialogFooter className="flex-row justify-end">
+          <Button variant="secondary" onClick={onClose} disabled={loading}>
             {t('common.cancel')}
           </Button>
-        </div>
-      </div>
-    </Modal>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

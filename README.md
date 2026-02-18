@@ -36,8 +36,8 @@ Sign up for a free account at **[https://slugbase.app](https://slugbase.app)** t
 - 🐘 **PostgreSQL** - Full PostgreSQL support for larger deployments
 - 🔄 **Auto Migrations** - Automatic database migration system with version tracking
 - 🐳 **Docker Ready** - Production-ready Docker setup with multi-stage builds
-- ☁️ **GCP / Cloud Run** - Terraform and GitHub Actions (WIF) to deploy the backend to Cloud Run; see [docs/infra/terraform.md](docs/infra/terraform.md)
-- 🪰 **Fly.io + Neon** - Deploy backend to Fly.io with Neon PostgreSQL (EU); see [docs/infra/fly-neon.md](docs/infra/fly-neon.md)
+- ☁️ **GCP / Cloud Run** - Terraform and GitHub Actions (WIF) to deploy the backend to Cloud Run; see [docs/infra/terraform](https://docs.slugbase.app/infra/terraform)
+- 🪰 **Fly.io + Neon** - Deploy backend to Fly.io with Neon PostgreSQL (EU); see [docs/infra/fly-neon](https://docs.slugbase.app/infra/fly-neon)
 - 📊 **API Documentation** - Auto-generated Swagger/OpenAPI documentation
 
 ## Tech Stack
@@ -126,7 +126,7 @@ SlugBase supports two runtime modes. **SELFHOSTED** is the default and preserves
 - Marketing pages at `/`, `/pricing`, `/contact`; app at `/app` (e.g. `/app/login`, `/app/bookmarks`).
 - CORS and cookie domain (e.g. `COOKIE_DOMAIN=.slugbase.app`) must be set so the frontend (e.g. app.slugbase.app) can call the API (api.slugbase.app) with credentials.
 
-**CLOUD backend env vars:** `FRONTEND_URL`, `BASE_URL`, `JWT_SECRET`, `ENCRYPTION_KEY`; optional: `COOKIE_DOMAIN`, `JWT_ACCESS_EXPIRES_IN`, `JWT_REFRESH_EXPIRES_DAYS`, `CORS_EXTRA_ORIGINS`, OIDC_* (Google/Microsoft/GitHub), and Postmark (`POSTMARK_SERVER_API_TOKEN`, `POSTMARK_FROM`, `POSTMARK_FROM_NAME`) for transactional email (password reset, signup verification, contact form).
+**CLOUD backend env vars:** `FRONTEND_URL`, `BASE_URL`, `JWT_SECRET`, `ENCRYPTION_KEY`; optional: `COOKIE_DOMAIN`, `JWT_ACCESS_EXPIRES_IN`, `JWT_REFRESH_EXPIRES_DAYS`, `CORS_EXTRA_ORIGINS`, OIDC_* (Google/Microsoft/GitHub), Postmark (`POSTMARK_SERVER_API_TOKEN`, `POSTMARK_FROM`, `POSTMARK_FROM_NAME`) for transactional email, and AI (`AI_OPENAI_API_KEY`, `AI_OPENAI_MODEL` default gpt-4o-mini) for bookmark suggestions.
 
 **CLOUD frontend build:** `VITE_SLUGBASE_MODE=cloud`, `VITE_API_URL=https://api.slugbase.app`.
 
@@ -169,6 +169,13 @@ SlugBase supports two runtime modes. **SELFHOSTED** is the default and preserves
 
 **Both modes:**
 - `CONTACT_FORM_RECIPIENT` - Email address to receive contact form submissions (optional, per environment)
+
+#### AI Suggestions (CLOUD mode only)
+
+- `AI_OPENAI_API_KEY` - OpenAI API key for AI bookmark suggestions (optional; required for AI on Personal/Team plans)
+- `AI_OPENAI_MODEL` - Model override (default: gpt-4o-mini)
+
+**SELFHOSTED:** AI is configured via Admin > AI Suggestions tab. No env vars needed.
 
 ### Database Migrations
 

@@ -23,12 +23,13 @@ The Admin page provides administrative controls for managing users, teams, OIDC 
 
 ### Tabbed Interface
 
-The admin page uses a tabbed navigation system with four main sections:
+The admin page uses a tabbed navigation system with five main sections:
 
 1. **Users Tab** - Manage system users
 2. **Teams Tab** - Manage teams and team memberships
 3. **OIDC Providers Tab** - Configure OIDC authentication providers
 4. **Settings Tab** - System-wide settings (e.g., SMTP configuration)
+5. **AI Suggestions Tab** - Configure AI-powered bookmark suggestions
 
 ### Users Management
 
@@ -123,6 +124,22 @@ System-wide configuration:
 - Manage system settings
 - View/edit key-value pairs
 
+### AI Suggestions Management
+
+Optional AI-powered suggestions for title, tags, and slug when creating bookmarks:
+
+- **Enable/Disable**: Toggle AI suggestions on or off for the instance
+- **Provider**: AI provider (default: OpenAI)
+- **API Key**: OpenAI API key (masked in UI, encrypted at rest)
+- **Model**: Model name (default: gpt-4o-mini)
+
+When not configured, the feature is disabled and bookmark creation works normally. Users can disable AI suggestions in their profile even when enabled by admin.
+
+#### AI Configuration:
+- API key stored encrypted (same pattern as OIDC secrets)
+- Leave API key blank to keep existing key when updating other settings
+- Get API key from [platform.openai.com](https://platform.openai.com)
+
 ## User Interactions
 
 ### Accessing Admin Panel
@@ -166,6 +183,14 @@ System-wide configuration:
 3. Test email configuration
 4. Manage system settings key-value pairs
 
+### Managing AI Settings
+
+1. Click "AI Suggestions" tab
+2. Toggle "Enable AI suggestions" on or off
+3. Enter OpenAI API key (get from platform.openai.com)
+4. Optionally set model (default: gpt-4o-mini)
+5. Click "Save"
+
 ## Component Structure
 
 ```tsx
@@ -179,12 +204,14 @@ System-wide configuration:
     <Teams Tab>
     <OIDC Tab>
     <Settings Tab>
+    <AI Tab>
   </Tabs>
   <Tab Content>
     {activeTab === 'users' && <AdminUsers />}
     {activeTab === 'teams' && <AdminTeams />}
     {activeTab === 'oidc' && <AdminOIDCProviders />}
     {activeTab === 'settings' && <AdminSettings />}
+    {activeTab === 'ai' && <AdminAI />}
   </Tab Content>
   <API Docs Link>
 </Admin>
@@ -215,6 +242,11 @@ System-wide configuration:
 - Test email functionality
 - System settings key-value editor
 
+### AdminAI
+- AI enable/disable toggle
+- Provider and model configuration
+- API key input (masked when set)
+
 ## API Integration
 
 ### Users
@@ -243,7 +275,12 @@ System-wide configuration:
 - `GET /admin/settings` - Get settings
 - `POST /admin/settings` - Create/update setting
 - `DELETE /admin/settings/:key` - Delete setting
-- `POST /admin/settings/test-email` - Test SMTP
+- `POST /admin/settings/smtp` - Save SMTP config
+- `POST /admin/settings/smtp/test` - Test SMTP
+
+### AI Settings
+- `GET /admin/settings/ai` - Get AI config (API key masked)
+- `POST /admin/settings/ai` - Save AI config (encrypts API key)
 
 ## Security Considerations
 
@@ -310,6 +347,11 @@ At the bottom of the admin page, a link to API documentation is provided:
    - Test SMTP configuration before production use
    - Backup settings before changes
    - Document custom settings keys
+
+5. **AI Suggestions**:
+   - Store API key securely (encrypted at rest)
+   - Feature is optional; bookmark creation never depends on AI
+   - Users can opt out in profile even when enabled
 
 ## Error Handling
 

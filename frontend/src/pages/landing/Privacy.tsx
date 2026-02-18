@@ -44,6 +44,12 @@ export default function Privacy() {
           </section>
           <section>
             <h2 className="text-lg font-medium text-gray-900 dark:text-white mt-6 mb-2">
+              {t('legal.privacyAITitle')}
+            </h2>
+            <p>{t('legal.privacyAIBody')}</p>
+          </section>
+          <section>
+            <h2 className="text-lg font-medium text-gray-900 dark:text-white mt-6 mb-2">
               {t('legal.privacyTransfersTitle')}
             </h2>
             <p>{t('legal.privacyTransfersBody')}</p>

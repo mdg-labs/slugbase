@@ -17,3 +17,6 @@ export function getAuthProviderUrl(providerKey: string): string {
 
 /** Base path for app routes: '' in SELFHOSTED, '/app' in CLOUD. Use for links like to={`${appBasePath}/bookmarks`}. */
 export const appBasePath: string = isCloud ? '/app' : '';
+
+/** Root path for the app (dashboard): '/' in SELFHOSTED, '/app' in CLOUD. Use for post-login/setup redirects. */
+export const appRootPath: string = isCloud ? '/app' : '/';

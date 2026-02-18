@@ -13,6 +13,7 @@ SlugBase Cloud is the hosted SaaS version of SlugBase. Use bookmark management, 
 - No installation or server maintenance
 - Automatic updates and backups
 - Same core features as self-hosted SlugBase
+- AI-powered suggestions for title, tags, and slug when creating bookmarks (Personal and Team plans)
 
 ## Getting started
 

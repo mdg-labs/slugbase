@@ -1,8 +1,12 @@
 import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, Outlet } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import * as Sentry from '@sentry/react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { SentryDebug } from './components/SentryDebug';
+import { OrgPlanProvider } from './contexts/OrgPlanContext';
 import { ToastProvider } from './components/ui/Toast';
+import { TooltipProvider } from './components/ui/tooltip-base';
 import Layout from './components/Layout';
 import api from './api/client';
 import { isCloud } from './config/mode';
@@ -16,7 +20,13 @@ const Bookmarks = lazy(() => import('./pages/Bookmarks'));
 const Folders = lazy(() => import('./pages/Folders'));
 const Tags = lazy(() => import('./pages/Tags'));
 const Profile = lazy(() => import('./pages/Profile'));
-const Admin = lazy(() => import('./pages/Admin'));
+const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'));
+const AdminMembersPage = lazy(() => import('./pages/admin/AdminMembersPage'));
+const AdminTeamsPage = lazy(() => import('./pages/admin/AdminTeamsPage'));
+const AdminBillingPage = lazy(() => import('./pages/admin/AdminBillingPage'));
+const AdminOIDCPage = lazy(() => import('./pages/admin/AdminOIDCPage'));
+const AdminSettingsPage = lazy(() => import('./pages/admin/AdminSettingsPage'));
+const AdminAIPage = lazy(() => import('./pages/admin/AdminAIPage'));
 const Shared = lazy(() => import('./pages/Shared'));
 const PasswordReset = lazy(() => import('./pages/PasswordReset'));
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
@@ -143,7 +153,7 @@ function AppRoutesSelfhosted() {
         <Route path="/password-reset" element={<PasswordReset />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/go/:slug" element={<ForwardingHandler />} />
-        <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
+        <Route path="/" element={<PrivateRoute><OrgPlanProvider><Layout /></OrgPlanProvider></PrivateRoute>}>
           <Route index element={<Dashboard />} />
           <Route path="bookmarks" element={<Bookmarks />} />
           <Route path="folders" element={<Folders />} />
@@ -152,7 +162,14 @@ function AppRoutesSelfhosted() {
           <Route path="profile" element={<Profile />} />
           <Route path="go-preferences" element={<GoPreferences />} />
           <Route path="search-engine-guide" element={<SearchEngineGuide />} />
-          <Route path="admin" element={<AdminRoute><Admin /></AdminRoute>} />
+          <Route path="admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
+            <Route index element={<Navigate to="members" replace />} />
+            <Route path="members" element={<AdminMembersPage />} />
+            <Route path="teams" element={<AdminTeamsPage />} />
+            <Route path="oidc" element={<AdminOIDCPage />} />
+            <Route path="settings" element={<AdminSettingsPage />} />
+            <Route path="ai" element={<AdminAIPage />} />
+          </Route>
         </Route>
       </Routes>
     </Suspense>
@@ -177,7 +194,7 @@ function AppRoutesCloud() {
           <Route path="verify-email" element={<VerifyEmail />} />
           <Route path="accept-invite" element={<AcceptInvite />} />
           <Route path="go/:slug" element={<ForwardingHandler />} />
-          <Route path="" element={<PrivateRoute><Layout /></PrivateRoute>}>
+          <Route path="" element={<PrivateRoute><OrgPlanProvider><Layout /></OrgPlanProvider></PrivateRoute>}>
             <Route index element={<Dashboard />} />
             <Route path="bookmarks" element={<Bookmarks />} />
             <Route path="folders" element={<Folders />} />
@@ -186,7 +203,12 @@ function AppRoutesCloud() {
             <Route path="profile" element={<Profile />} />
             <Route path="go-preferences" element={<GoPreferences />} />
             <Route path="search-engine-guide" element={<SearchEngineGuide />} />
-            <Route path="admin" element={<AdminRoute><Admin /></AdminRoute>} />
+            <Route path="admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
+              <Route index element={<Navigate to="members" replace />} />
+              <Route path="members" element={<AdminMembersPage />} />
+              <Route path="teams" element={<AdminTeamsPage />} />
+              <Route path="billing" element={<AdminBillingPage />} />
+            </Route>
           </Route>
         </Route>
       </Routes>
@@ -229,15 +251,36 @@ function ForwardingHandler() {
   );
 }
 
+function AppErrorFallback() {
+  const { t } = useTranslation();
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-4">
+      <p className="text-lg text-gray-700 dark:text-gray-300">{t('common.error')}</p>
+      <button
+        type="button"
+        onClick={() => window.location.reload()}
+        className="px-4 py-2 rounded-md bg-primary text-primary-foreground hover:opacity-90"
+      >
+        {t('common.reload')}
+      </button>
+    </div>
+  );
+}
+
 function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <ToastProvider>
-          <AppRoutes />
-        </ToastProvider>
-      </AuthProvider>
-    </BrowserRouter>
+    <Sentry.ErrorBoundary fallback={<AppErrorFallback />}>
+      <BrowserRouter>
+        <AuthProvider>
+          <TooltipProvider>
+            <ToastProvider>
+              <AppRoutes />
+              <SentryDebug />
+            </ToastProvider>
+          </TooltipProvider>
+        </AuthProvider>
+      </BrowserRouter>
+    </Sentry.ErrorBoundary>
   );
 }
 

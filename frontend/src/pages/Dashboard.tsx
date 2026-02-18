@@ -1,10 +1,21 @@
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useEffect, useState } from 'react';
-import { Bookmark, Folder, Tag, ArrowRight, Share2, Clock, TrendingUp, Plus, Edit } from 'lucide-react';
+import { Bookmark, Folder, Tag, Share2, Clock, TrendingUp, Plus, Edit, Trash2, Copy, ExternalLink, ArrowRight } from 'lucide-react';
 import Button from '../components/ui/Button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
+import { Badge } from '../components/ui/badge';
+import { PageHeader } from '../components/PageHeader';
+import { StatCard } from '../components/StatCard';
+import { EmptyState } from '../components/EmptyState';
+import Tooltip from '../components/ui/Tooltip';
 import api from '../api/client';
 import { appBasePath } from '../config/api';
+import { useOrgPlan } from '../contexts/OrgPlanContext';
+import { canCreateBookmark, FREE_PLAN_BOOKMARK_LIMIT } from '../utils/plan';
+import { useConfirmDialog } from '../hooks/useConfirmDialog';
+import { useToast } from '../components/ui/Toast';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 
 interface RecentBookmark {
   id: string;
@@ -40,8 +51,12 @@ function formatLastOpened(dateStr: string): string {
 
 export default function Dashboard() {
   const { t } = useTranslation();
+  const { plan, bookmarkCount, bookmarkLimit, freePlanGraceEndsAt, refresh } = useOrgPlan();
+  const { showConfirm, dialogState } = useConfirmDialog();
+  const { showToast } = useToast();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [denseMode, setDenseMode] = useState(() => localStorage.getItem('dashboard-dense') === 'true');
+  const atBookmarkLimit = !canCreateBookmark(plan, bookmarkCount, bookmarkLimit, freePlanGraceEndsAt);
 
   useEffect(() => {
     loadStats();
@@ -60,368 +75,346 @@ export default function Dashboard() {
     }
   }
 
+  function handleCopyUrl(bookmark: RecentBookmark) {
+    navigator.clipboard.writeText(bookmark.url);
+    showToast(t('common.copied'), 'success');
+  }
+
+  function handleDeleteBookmark(bookmark: RecentBookmark) {
+    showConfirm(
+      t('bookmarks.deleteBookmark'),
+      t('bookmarks.deleteConfirmWithName', { name: bookmark.title }),
+      async () => {
+        try {
+          await api.delete(`/bookmarks/${bookmark.id}`);
+          loadStats();
+          refresh();
+          showToast(t('common.success'), 'success');
+        } catch (error) {
+          console.error('Failed to delete bookmark:', error);
+          showToast(t('common.error'), 'error');
+        }
+      },
+      { variant: 'danger', confirmText: t('common.delete'), cancelText: t('common.cancel') }
+    );
+  }
+
   const cards = [
-    {
-      to: '/bookmarks',
-      icon: Bookmark,
-      title: t('bookmarks.title'),
-      description: t('dashboard.bookmarksDescription'),
-      color: 'blue',
-    },
-    {
-      to: '/folders',
-      icon: Folder,
-      title: t('folders.title'),
-      description: t('dashboard.foldersDescription'),
-      color: 'green',
-    },
-    {
-      to: '/tags',
-      icon: Tag,
-      title: t('tags.title'),
-      description: t('dashboard.tagsDescription'),
-      color: 'purple',
-    },
+    { to: appBasePath + '/bookmarks', icon: Bookmark, title: t('bookmarks.title'), description: t('dashboard.bookmarksDescription'), color: 'blue' },
+    { to: appBasePath + '/folders', icon: Folder, title: t('folders.title'), description: t('dashboard.foldersDescription'), color: 'green' },
+    { to: appBasePath + '/tags', icon: Tag, title: t('tags.title'), description: t('dashboard.tagsDescription'), color: 'purple' },
   ];
 
   const colorClasses = {
-    blue: 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800',
+    blue: 'bg-primary/10 text-primary border-primary/30',
     green: 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 border-green-200 dark:border-green-800',
     purple: 'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-800',
   };
 
   return (
-    <div className="space-y-8">
-      <div className="text-center">
-        <h1 className="flex items-center justify-center gap-2 text-2xl font-semibold text-gray-900 dark:text-white mb-3">
-          <img
-            src="/slugbase_icon_blue.svg"
-            alt=""
-            className="h-12 w-12 dark:hidden"
-          />
-          <img
-            src="/slugbase_icon_white.svg"
-            alt=""
-            className="h-12 w-12 hidden dark:block"
-          />
-          {t('app.name')}
-        </h1>
-        <p className="text-lg text-gray-600 dark:text-gray-400">
-          {t('app.tagline')}
-        </p>
-      </div>
-
-      {/* Primary action: New Bookmark */}
-      <div className="flex flex-col items-center gap-2">
-        <Link to={`${appBasePath}/bookmarks?create=true`} className="w-full sm:w-auto">
-          <Button variant="primary" size="lg" icon={Plus} className="w-full sm:w-auto">
-            {t('bookmarks.create')}
-          </Button>
-        </Link>
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          {t('dashboard.newBookmarkHint')}
-        </p>
-      </div>
-
-      {/* Statistics Overview */}
-      {stats && (
-        <div className={denseMode ? 'space-y-4' : 'space-y-6'}>
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                {t('dashboard.overview')}
-              </h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400 -mt-2">
-                {t('dashboard.overviewSubtitle')}
-              </p>
-            </div>
+    <div className={denseMode ? 'space-y-6' : 'space-y-8'}>
+      <PageHeader
+        title={t('dashboard.overview')}
+        subtitle={t('dashboard.overviewSubtitle')}
+        actions={
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setDenseMode(!denseMode)}
-              className={`px-3 py-1.5 text-sm rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 ${
+              className={`px-3 py-1.5 text-sm rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
                 denseMode
-                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  ? 'bg-primary/20 text-primary'
+                  : 'bg-muted text-muted-foreground hover:bg-accent'
               }`}
               title={t('dashboard.denseView')}
             >
               {t('dashboard.denseView')}
             </button>
+            <span className="text-muted-foreground">·</span>
+            <Link to={appBasePath + '/folders'} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+              {t('dashboard.createFolder')}
+            </Link>
+            <span className="text-muted-foreground">·</span>
+            <Link to={appBasePath + '/tags'} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+              {t('dashboard.createTag')}
+            </Link>
+            {atBookmarkLimit ? (
+              <Link to={`${appBasePath}/admin/billing`}>
+                <Button variant="secondary" size="lg" icon={Plus} title={t('plan.limitBookmarks', { limit: bookmarkLimit ?? FREE_PLAN_BOOKMARK_LIMIT })}>
+                  {t('plan.upgradeCta')}
+                </Button>
+              </Link>
+            ) : (
+              <Link to={`${appBasePath}/bookmarks?create=true`}>
+                <Button variant="primary" size="lg" icon={Plus}>
+                  {t('bookmarks.create')}
+                </Button>
+              </Link>
+            )}
           </div>
+        }
+      />
 
-          {/* Stats Grid: Your library + Shared with you */}
-          <div className={`max-w-5xl ${denseMode ? 'space-y-3' : 'space-y-4'}`}>
-            <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+      {stats && (
+        <div className={denseMode ? 'space-y-4' : 'space-y-6'}>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
               {t('dashboard.yourLibrary')}
-            </p>
-            <div className={`grid grid-cols-1 gap-4 sm:grid-cols-3 ${denseMode ? 'gap-3' : ''}`}>
-              <div className={`bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 ${denseMode ? 'p-3' : 'p-4'}`}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                      {t('dashboard.totalBookmarks')}
-                    </p>
-                    <p className="text-2xl font-semibold text-gray-900 dark:text-white mt-2">
-                      {stats.totalBookmarks}
-                    </p>
-                  </div>
-                  <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                    <Bookmark className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                  </div>
-                </div>
-              </div>
-              <div className={`bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 ${denseMode ? 'p-3' : 'p-4'}`}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                      {t('dashboard.totalFolders')}
-                    </p>
-                    <p className="text-2xl font-semibold text-gray-900 dark:text-white mt-2">
-                      {stats.totalFolders}
-                    </p>
-                  </div>
-                  <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                    <Folder className="h-6 w-6 text-green-600 dark:text-green-400" />
-                  </div>
-                </div>
-              </div>
-              <div className={`bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 ${denseMode ? 'p-3' : 'p-4'}`}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                      {t('dashboard.totalTags')}
-                    </p>
-                    <p className="text-2xl font-semibold text-gray-900 dark:text-white mt-2">
-                      {stats.totalTags}
-                    </p>
-                  </div>
-                  <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                    <Tag className="h-6 w-6 text-purple-600 dark:text-purple-400" />
-                  </div>
-                </div>
-              </div>
-            </div>
-            <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 pt-2">
-              {t('dashboard.sharedWithYou')}
-            </p>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div
-                className={`rounded-lg border ${denseMode ? 'p-3' : 'p-4'} ${
-                  stats.sharedBookmarks === 0
-                    ? 'bg-gray-50 dark:bg-gray-800/50 border-gray-100 dark:border-gray-700/70'
-                    : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                      {t('dashboard.sharedBookmarks')}
-                    </p>
-                    <p
-                      className={`text-2xl font-semibold mt-2 ${
-                        stats.sharedBookmarks === 0
-                          ? 'text-gray-400 dark:text-gray-500'
-                          : 'text-gray-900 dark:text-white'
-                      }`}
-                    >
-                      {stats.sharedBookmarks}
-                    </p>
-                  </div>
-                  <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                    <Share2 className="h-6 w-6 text-green-600 dark:text-green-400" />
-                  </div>
-                </div>
-              </div>
-              <div
-                className={`rounded-lg border ${denseMode ? 'p-3' : 'p-4'} ${
-                  stats.sharedFolders === 0
-                    ? 'bg-gray-50 dark:bg-gray-800/50 border-gray-100 dark:border-gray-700/70'
-                    : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                      {t('dashboard.sharedFolders')}
-                    </p>
-                    <p
-                      className={`text-2xl font-semibold mt-2 ${
-                        stats.sharedFolders === 0
-                          ? 'text-gray-400 dark:text-gray-500'
-                          : 'text-gray-900 dark:text-white'
-                      }`}
-                    >
-                      {stats.sharedFolders}
-                    </p>
-                  </div>
-                  <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                    <Share2 className="h-6 w-6 text-green-600 dark:text-green-400" />
-                  </div>
-                </div>
-              </div>
-            </div>
+            </h2>
           </div>
 
-          {/* Recent Bookmarks and Top Tags */}
-          <div className={`grid grid-cols-1 lg:grid-cols-2 ${denseMode ? 'gap-4' : 'gap-6'}`}>
-            {/* Recent Bookmarks */}
-            <div className={`bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 ${denseMode ? 'p-3' : 'p-4'}`}>
-              <div className="flex items-center gap-2 mb-4">
-                <Clock className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-                <h3 className="text-[15px] font-medium text-gray-900 dark:text-white">
-                  {t('dashboard.recentBookmarks')}
-                </h3>
-              </div>
-              {stats.recentBookmarks.length > 0 ? (
-                <div className="space-y-3">
-                  {stats.recentBookmarks.map((bookmark) => (
-                    <div
-                      key={bookmark.id}
-                      className="group/bookmark flex items-start gap-2 p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                    >
-                      <a
-                        href={bookmark.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex-1 min-w-0"
-                        title={t('dashboard.openBookmark')}
-                      >
-                        <p className="text-sm font-medium text-gray-900 dark:text-white line-clamp-1">
-                          {bookmark.title}
-                        </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate">
-                          {bookmark.url}
-                        </p>
-                        {(bookmark.folder_names?.length || bookmark.tag_names?.length || bookmark.last_accessed_at) ? (
-                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-2 text-xs text-gray-500 dark:text-gray-400">
-                            {bookmark.folder_names?.length ? (
-                              <span className="inline-flex items-center gap-1">
-                                <Folder className="h-3 w-3" />
-                                {bookmark.folder_names.slice(0, 2).join(', ')}
-                              </span>
-                            ) : null}
-                            {bookmark.tag_names?.length ? (
-                              <span className="inline-flex items-center gap-1">
-                                <Tag className="h-3 w-3" />
-                                {bookmark.tag_names.slice(0, 3).join(', ')}
-                              </span>
-                            ) : null}
-                            {bookmark.last_accessed_at ? (
-                              <span>{t('dashboard.lastOpened', { time: formatLastOpened(bookmark.last_accessed_at) })}</span>
-                            ) : null}
-                          </div>
-                        ) : null}
-                      </a>
-                      <Link
-                        to={`/bookmarks?edit=${bookmark.id}`}
-                        className="flex-shrink-0 p-1.5 rounded-md text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-600 opacity-0 group-hover/bookmark:opacity-100 transition-opacity focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
-                        title={t('dashboard.editBookmark')}
-                        aria-label={t('dashboard.editBookmark')}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Link>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {t('dashboard.noRecentBookmarks')}
-                  </p>
-                  <p className="text-xs text-gray-400 dark:text-gray-500">
-                    {t('dashboard.noRecentBookmarksHint')}
-                  </p>
-                  <Link
-                    to={`${appBasePath}/bookmarks?create=true`}
-                    className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded dark:focus-visible:ring-offset-gray-800"
-                  >
-                    {t('dashboard.goToBookmarks')}
-                  </Link>
-                </div>
-              )}
-            </div>
+          <div className={`grid grid-cols-1 gap-4 sm:grid-cols-3 ${denseMode ? 'gap-3' : ''}`}>
+            <StatCard
+              dense={denseMode}
+              label={t('dashboard.totalBookmarks')}
+              value={bookmarkLimit != null ? t('plan.bookmarksUsed', { count: bookmarkCount, limit: bookmarkLimit }) : stats.totalBookmarks}
+              icon={Bookmark}
+              href={appBasePath + '/bookmarks'}
+              iconContainerClassName="bg-primary/20"
+              iconColorClassName="text-primary"
+            />
+            <StatCard
+              dense={denseMode}
+              label={t('dashboard.totalFolders')}
+              value={stats.totalFolders}
+              icon={Folder}
+              href={appBasePath + '/folders'}
+              iconContainerClassName="bg-green-100 dark:bg-green-900/20"
+              iconColorClassName="text-green-600 dark:text-green-400"
+            />
+            <StatCard
+              dense={denseMode}
+              label={t('dashboard.totalTags')}
+              value={stats.totalTags}
+              icon={Tag}
+              href={appBasePath + '/tags'}
+              iconContainerClassName="bg-purple-100 dark:bg-purple-900/20"
+              iconColorClassName="text-purple-600 dark:text-purple-400"
+            />
+          </div>
 
-            {/* Top Tags */}
-            <div className={`bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 ${denseMode ? 'p-3' : 'p-4'}`}>
-              <div className="flex items-center gap-2 mb-1">
-                <TrendingUp className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-                <h3 className="text-[15px] font-medium text-gray-900 dark:text-white">
+          <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 pt-2">
+            {t('dashboard.sharedWithYou')}
+          </p>
+          <div className={`grid grid-cols-1 sm:grid-cols-2 ${denseMode ? 'gap-3' : 'gap-4'}`}>
+            <StatCard
+              dense={denseMode}
+              label={t('dashboard.sharedBookmarks')}
+              value={stats.sharedBookmarks}
+              icon={Share2}
+              href={appBasePath + '/shared'}
+              iconContainerClassName={stats.sharedBookmarks === 0 ? 'bg-muted' : 'bg-green-100 dark:bg-green-900/20'}
+              iconColorClassName={stats.sharedBookmarks === 0 ? 'text-muted-foreground' : 'text-green-600 dark:text-green-400'}
+            />
+            <StatCard
+              dense={denseMode}
+              label={t('dashboard.sharedFolders')}
+              value={stats.sharedFolders}
+              icon={Share2}
+              href={appBasePath + '/shared'}
+              iconContainerClassName={stats.sharedFolders === 0 ? 'bg-muted' : 'bg-green-100 dark:bg-green-900/20'}
+              iconColorClassName={stats.sharedFolders === 0 ? 'text-muted-foreground' : 'text-green-600 dark:text-green-400'}
+            />
+          </div>
+
+          <div className={`grid grid-cols-1 lg:grid-cols-2 ${denseMode ? 'gap-4' : 'gap-6'}`}>
+            <Card>
+              <CardHeader className={denseMode ? 'p-3 pb-2' : 'p-4 pb-2'}>
+                <CardTitle className="flex items-center gap-2 text-[15px]">
+                  <Clock className="h-5 w-5 text-muted-foreground" />
+                  {t('dashboard.recentBookmarks')}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className={denseMode ? 'p-3 pt-0' : 'p-4 pt-0'}>
+                {stats.recentBookmarks.length > 0 ? (
+                  <div className={denseMode ? 'space-y-2' : 'space-y-3'}>
+                    {stats.recentBookmarks.map((bookmark) => (
+                      <div
+                        key={bookmark.id}
+                        className={`group/bookmark flex items-start gap-2 rounded-lg border border-border hover:bg-accent transition-colors ${denseMode ? 'p-2 gap-1.5' : 'p-3'}`}
+                      >
+                        <a
+                          href={bookmark.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1 min-w-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
+                          title={t('dashboard.openBookmark')}
+                        >
+                          <p className={`font-medium text-gray-900 dark:text-white line-clamp-1 ${denseMode ? 'text-xs' : 'text-sm'}`}>
+                            {bookmark.title}
+                          </p>
+                          <p className={`text-gray-500 dark:text-gray-400 truncate ${denseMode ? 'text-[10px] mt-0.5' : 'text-xs mt-1'}`}>
+                            {bookmark.url}
+                          </p>
+                          {(bookmark.folder_names?.length || bookmark.tag_names?.length || bookmark.last_accessed_at) ? (
+                            <div className={`flex flex-wrap items-center gap-x-2 gap-y-1 text-gray-500 dark:text-gray-400 ${denseMode ? 'mt-1 text-[10px]' : 'mt-2 text-xs'}`}>
+                              {bookmark.folder_names?.length ? (
+                                <span className="inline-flex items-center gap-1">
+                                  <Folder className="h-3 w-3" />
+                                  {bookmark.folder_names.slice(0, 2).join(', ')}
+                                </span>
+                              ) : null}
+                              {bookmark.tag_names?.length ? (
+                                <span className="inline-flex items-center gap-1">
+                                  <Tag className="h-3 w-3" />
+                                  {bookmark.tag_names.slice(0, 3).join(', ')}
+                                </span>
+                              ) : null}
+                              {bookmark.last_accessed_at ? (
+                                <span>{t('dashboard.lastOpened', { time: formatLastOpened(bookmark.last_accessed_at) })}</span>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </a>
+                        <div className="flex items-center gap-0.5 opacity-0 group-hover/bookmark:opacity-100 transition-opacity focus-within:opacity-100">
+                          <Tooltip content={t('dashboard.openBookmark')}>
+                            <a
+                              href={bookmark.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-accent transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
+                              aria-label={t('dashboard.openBookmark')}
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                            </a>
+                          </Tooltip>
+                          <Tooltip content={t('dashboard.editBookmark')}>
+                            <Link
+                              to={`${appBasePath}/bookmarks?edit=${bookmark.id}`}
+                              className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-accent transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
+                              aria-label={t('dashboard.editBookmark')}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Link>
+                          </Tooltip>
+                          <Tooltip content={t('dashboard.copyUrl')}>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.preventDefault(); handleCopyUrl(bookmark); }}
+                              className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-accent transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
+                              aria-label={t('dashboard.copyUrl')}
+                            >
+                              <Copy className="h-4 w-4" />
+                            </button>
+                          </Tooltip>
+                          <Tooltip content={t('dashboard.deleteBookmark')}>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.preventDefault(); handleDeleteBookmark(bookmark); }}
+                              className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-accent transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
+                              aria-label={t('dashboard.deleteBookmark')}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </Tooltip>
+                          <Tooltip content={t('dashboard.shareBookmark')}>
+                            <Link
+                              to={`${appBasePath}/bookmarks?edit=${bookmark.id}`}
+                              className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-accent transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
+                              aria-label={t('dashboard.shareBookmark')}
+                            >
+                              <Share2 className="h-4 w-4" />
+                            </Link>
+                          </Tooltip>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState
+                    icon={Bookmark}
+                    title={t('dashboard.noRecentBookmarks')}
+                    description={t('dashboard.noRecentBookmarksHint')}
+                    action={
+                      atBookmarkLimit ? (
+                        <Link to={`${appBasePath}/admin/billing`}>
+                          <Button variant="secondary" icon={Plus}>{t('plan.upgradeCta')}</Button>
+                        </Link>
+                      ) : (
+                        <Link to={`${appBasePath}/bookmarks?create=true`}>
+                          <Button variant="primary" icon={Plus}>{t('bookmarks.create')}</Button>
+                        </Link>
+                      )
+                    }
+                  />
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className={denseMode ? 'p-3 pb-1' : 'p-4 pb-1'}>
+                <CardTitle className="flex items-center gap-2 text-[15px]">
+                  <TrendingUp className="h-5 w-5 text-muted-foreground" />
                   {t('dashboard.topTags')}
-                </h3>
-              </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-                {t('dashboard.filterByTagHint')}
-              </p>
-              {stats.topTags.length > 0 ? (
-                <div className="space-y-3">
-                  {stats.topTags.map((tag) => (
-                    <Link
-                      key={tag.id}
-                      to={`/bookmarks?tag_id=${tag.id}`}
-                      className="flex items-center justify-between p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800"
-                      aria-label={t('dashboard.tagBookmarkCount', { count: tag.bookmark_count })}
-                    >
-                      <span className="text-sm font-medium text-gray-900 dark:text-white">
-                        {tag.name}
-                      </span>
-                      <span className="text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700/50 px-2 py-0.5 rounded">
-                        {t('dashboard.tagBookmarkCount', { count: tag.bookmark_count })}
-                      </span>
-                    </Link>
-                  ))}
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {t('dashboard.noTags')}
-                  </p>
-                  <p className="text-xs text-gray-400 dark:text-gray-500">
-                    {t('dashboard.noTagsHint')}
-                  </p>
-                  <Link
-                    to={`${appBasePath}/bookmarks`}
-                    className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded dark:focus-visible:ring-offset-gray-800"
-                  >
-                    {t('dashboard.goToBookmarks')}
-                  </Link>
-                </div>
-              )}
-            </div>
+                </CardTitle>
+                <CardDescription className="mb-4">
+                  {t('dashboard.filterByTagHint')}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className={denseMode ? 'p-3 pt-0' : 'p-4 pt-0'}>
+                {stats.topTags.length > 0 ? (
+                  <div className={denseMode ? 'space-y-2' : 'space-y-3'}>
+                    {stats.topTags.map((tag) => (
+                      <Link
+                        key={tag.id}
+                        to={`${appBasePath}/bookmarks?tag_id=${tag.id}`}
+                        className={`flex items-center justify-between rounded-lg border border-border hover:bg-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${denseMode ? 'p-2' : 'p-3'}`}
+                        aria-label={t('dashboard.tagBookmarkCount', { count: tag.bookmark_count })}
+                      >
+                        <span className={`font-medium text-gray-900 dark:text-white ${denseMode ? 'text-xs' : 'text-sm'}`}>
+                          {tag.name}
+                        </span>
+                        <Badge variant="secondary" className="text-xs">
+                          {t('dashboard.tagBookmarkCount', { count: tag.bookmark_count })}
+                        </Badge>
+                      </Link>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState
+                    icon={Tag}
+                    title={t('dashboard.noTags')}
+                    description={t('dashboard.noTagsHint')}
+                    action={
+                      <Link to={appBasePath + '/bookmarks'}>
+                        <Button variant="secondary">{t('dashboard.goToBookmarks')}</Button>
+                      </Link>
+                    }
+                  />
+                )}
+              </CardContent>
+            </Card>
           </div>
         </div>
       )}
 
       {/* Quick Access Cards */}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 ${denseMode ? 'gap-4' : 'gap-6'}`}>
         {cards.map((card) => {
           const Icon = card.icon;
           return (
-            <Link
-              key={card.to}
-              to={card.to}
-              className="group relative bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-all overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900"
-            >
-              <div className="p-4 space-y-4">
-                <div className={`inline-flex p-3 rounded-lg border ${colorClasses[card.color as keyof typeof colorClasses]}`}>
-                  <Icon className="h-6 w-6" />
-                </div>
-                <div>
-                  <h3 className="text-[15px] font-medium text-gray-900 dark:text-white mb-1">
-                    {card.title}
-                  </h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {card.description}
-                  </p>
-                </div>
-                <div className="flex items-center text-sm font-medium text-gray-600 dark:text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                  {t('common.view')}
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </div>
-              </div>
+            <Link key={card.to} to={card.to} className="group block focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-xl">
+              <Card className="h-full transition-all hover:shadow-md hover:border-primary/70">
+                <CardHeader className={denseMode ? 'space-y-2 p-3' : 'space-y-4'}>
+                  <div className={`inline-flex w-fit rounded-lg border ${colorClasses[card.color as keyof typeof colorClasses]} ${denseMode ? 'p-2' : 'p-3'}`}>
+                    <Icon className={denseMode ? 'h-5 w-5' : 'h-6 w-6'} />
+                  </div>
+                  <div>
+                    <CardTitle className={denseMode ? 'text-sm mb-0.5' : 'text-[15px] mb-1'}>{card.title}</CardTitle>
+                    <CardDescription className={denseMode ? 'text-xs' : ''}>{card.description}</CardDescription>
+                  </div>
+                  <div className="flex items-center text-sm font-medium text-muted-foreground group-hover:text-primary transition-colors">
+                    {t('common.view')}
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </div>
+                </CardHeader>
+              </Card>
             </Link>
           );
         })}
       </div>
+
+      <ConfirmDialog {...dialogState} />
     </div>
   );
 }

@@ -7,7 +7,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "migrate": "tsx src/migrate.ts",
-    "test": "DB_PATH=:memory: node --test --import tsx test/authorization.test.ts test/go.test.ts"
+    "test": "DB_PATH=:memory: node --test --import tsx test/authorization.test.ts test/go.test.ts test/stats.test.ts"
   },
   "dependencies": {
     "@types/cookie-parser": "^1.4.10",
@@ -16,6 +16,7 @@
     "@types/passport-jwt": "^4.0.1",
     "@types/swagger-jsdoc": "^6.0.4",
     "@types/swagger-ui-express": "^4.1.8",
+    "@sentry/node": "^8.0.0",
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^12.4.1",
     "cookie-parser": "^1.4.7",
@@ -28,6 +29,7 @@
     "jsonwebtoken": "^9.0.3",
     "node-cron": "^3.0.3",
     "nodemailer": "^7.0.12",
+    "openai": "^6.22.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "passport-openidconnect": "^0.1.1",

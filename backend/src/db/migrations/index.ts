@@ -24,6 +24,13 @@ import * as migration008 from './008_slug_preferences.js';
 import * as migration009 from './009_signup_email_verified.js';
 import * as migration010 from './010_organizations.js';
 import * as migration011 from './011_org_scoped_teams.js';
+import * as migration012 from './012_org_invitations_token_hash.js';
+import * as migration013 from './013_signup_verification_token_hash.js';
+import * as migration014 from './014_stats_indexes.js';
+import * as migration015 from './015_api_tokens.js';
+import * as migration016 from './016_free_plan_grace_ends_at.js';
+import * as migration017 from './017_ai_suggestions.js';
+import * as migration018 from './018_ai_cache_output_language.js';
 
 export interface Migration {
   migrationId: string;
@@ -99,6 +106,48 @@ const migrations: Migration[] = [
     migrationName: migration011.migrationName,
     up: migration011.up,
     down: migration011.down,
+  },
+  {
+    migrationId: migration012.migrationId,
+    migrationName: migration012.migrationName,
+    up: migration012.up,
+    down: migration012.down,
+  },
+  {
+    migrationId: migration013.migrationId,
+    migrationName: migration013.migrationName,
+    up: migration013.up,
+    down: migration013.down,
+  },
+  {
+    migrationId: migration014.migrationId,
+    migrationName: migration014.migrationName,
+    up: migration014.up,
+    down: migration014.down,
+  },
+  {
+    migrationId: migration015.migrationId,
+    migrationName: migration015.migrationName,
+    up: migration015.up,
+    down: migration015.down,
+  },
+  {
+    migrationId: migration016.migrationId,
+    migrationName: migration016.migrationName,
+    up: migration016.up,
+    down: migration016.down,
+  },
+  {
+    migrationId: migration017.migrationId,
+    migrationName: migration017.migrationName,
+    up: migration017.up,
+    down: migration017.down,
+  },
+  {
+    migrationId: migration018.migrationId,
+    migrationName: migration018.migrationName,
+    up: migration018.up,
+    down: migration018.down,
   },
 ];
 

@@ -1,12 +1,16 @@
 import { Router } from 'express';
 import { query, queryOne, execute } from '../db/index.js';
 import { AuthRequest, requireAuth } from '../middleware/auth.js';
-import { canAccessBookmark, canModifyBookmark, canAccessFolder, canAccessTag } from '../auth/authorization.js';
+import { canAccessBookmark, canModifyBookmark, canAccessFolder, canAccessTag, getTeamIdsForUser, getTeamIdsForUserInOrg } from '../auth/authorization.js';
 import { v4 as uuidv4 } from 'uuid';
 import { isCloud } from '../config/mode.js';
-import { getCurrentOrgId } from '../utils/organizations.js';
+import { canCreateBookmarkFreePlan, clearFreePlanGrace, FREE_BOOKMARK_LIMIT, getCurrentOrgId, getUserPlan } from '../utils/organizations.js';
+import { PLAN_ERRORS } from '../utils/plan-errors.js';
 import { CreateBookmarkInput, UpdateBookmarkInput } from '../types.js';
 import { validateUrl, validateSlug, validateLength, sanitizeString, MAX_LENGTHS } from '../utils/validation.js';
+import { isAISuggestionsEnabled, getAIApiKey, getAIModel } from '../utils/ai-feature.js';
+import { sanitizeUrlForAI, callAIProvider } from '../services/ai-suggestions.js';
+import { fetchPageMetadata } from '../services/fetch-page-metadata.js';
 
 const router = Router();
 router.use(requireAuth());
@@ -34,6 +38,18 @@ router.use(requireAuth());
  *           type: string
  *         description: Filter bookmarks by tag ID
  *         example: "123e4567-e89b-12d3-a456-426614174000"
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 50
+ *         description: Max items per page (1-100)
+ *       - in: query
+ *         name: offset
+ *         schema:
+ *           type: integer
+ *           default: 0
+ *         description: Number of items to skip
  *     responses:
  *       200:
  *         description: List of bookmarks
@@ -101,13 +117,18 @@ router.get('/', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const userId = authReq.user!.id;
-    const { folder_id, tag_id, sort_by } = req.query;
+    const orgId = isCloud ? await getCurrentOrgId(userId) : null;
+    const { folder_id, tag_id, sort_by, limit: limitParam, offset: offsetParam } = req.query;
+
+    // Pagination: default 50, max 100
+    const limit = Math.min(100, Math.max(1, parseInt(String(limitParam), 10) || 50));
+    const offset = Math.max(0, parseInt(String(offsetParam), 10) || 0);
 
     // Validate folder_id and tag_id so we don't leak other users' resources (IDOR)
     const folderIdStr = typeof folder_id === 'string' ? folder_id : undefined;
     const tagIdStr = typeof tag_id === 'string' ? tag_id : undefined;
     if (folderIdStr) {
-      const canAccess = await canAccessFolder(userId, folderIdStr);
+      const canAccess = await canAccessFolder(userId, folderIdStr, orgId);
       if (!canAccess) {
         return res.status(404).json({ error: 'Folder not found' });
       }
@@ -119,14 +140,15 @@ router.get('/', async (req, res) => {
       }
     }
 
-    // Get user's teams
-    const userTeams = await query(
-      'SELECT team_id FROM team_members WHERE user_id = ?',
-      [userId]
-    );
-    const teamIds = Array.isArray(userTeams) ? userTeams.map((t: any) => t.team_id) : [];
+    // Get user's teams (org-scoped in cloud mode)
+    const teamIds = orgId
+      ? await getTeamIdsForUserInOrg(userId, orgId)
+      : await getTeamIdsForUser(userId);
 
     // Build query for own bookmarks + shared bookmarks (directly shared with user, teams, or via shared folders)
+    // In cloud mode, user shares (bus/fus) only count when owner is in same org
+    const busCond = orgId ? '(bus.user_id = ? AND b.user_id IN (SELECT user_id FROM org_members WHERE org_id = ?))' : 'bus.user_id = ?';
+    const fusCond = orgId ? '(fus.user_id = ? AND bf.folder_id IN (SELECT id FROM folders WHERE user_id IN (SELECT user_id FROM org_members WHERE org_id = ?)))' : 'fus.user_id = ?';
     let sql = `
       SELECT DISTINCT b.*,
              CASE WHEN b.user_id = ? THEN 'own' ELSE 'shared' END as bookmark_type
@@ -137,12 +159,17 @@ router.get('/', async (req, res) => {
       LEFT JOIN folder_user_shares fus ON bf.folder_id = fus.folder_id
       LEFT JOIN folder_team_shares fts ON bf.folder_id = fts.folder_id
       WHERE (b.user_id = ? 
-        OR bus.user_id = ?
+        OR ${busCond}
         OR (bts.team_id IN (${teamIds.length > 0 ? teamIds.map(() => '?').join(',') : 'NULL'}) AND bts.team_id IS NOT NULL)
-        OR (fus.user_id = ?)
+        OR ${fusCond}
         OR (fts.team_id IN (${teamIds.length > 0 ? teamIds.map(() => '?').join(',') : 'NULL'}) AND fts.team_id IS NOT NULL AND bf.folder_id IS NOT NULL))
     `;
-    const params: any[] = [userId, userId, userId, userId];
+    const params: any[] = [userId, userId];
+    if (orgId) {
+      params.push(userId, orgId, userId, orgId);
+    } else {
+      params.push(userId, userId);
+    }
     if (teamIds.length > 0) {
       params.push(...teamIds);
       params.push(...teamIds); // Second set for folder shares
@@ -162,10 +189,39 @@ router.get('/', async (req, res) => {
       params.push(tagIdStr);
     }
 
+    // Count query: same FROM/WHERE, no ORDER BY/LIMIT
+    const countSql = `
+      SELECT COUNT(DISTINCT b.id) as total
+      FROM bookmarks b
+      LEFT JOIN bookmark_user_shares bus ON b.id = bus.bookmark_id
+      LEFT JOIN bookmark_team_shares bts ON b.id = bts.bookmark_id
+      LEFT JOIN bookmark_folders bf ON b.id = bf.bookmark_id
+      LEFT JOIN folder_user_shares fus ON bf.folder_id = fus.folder_id
+      LEFT JOIN folder_team_shares fts ON bf.folder_id = fts.folder_id
+      WHERE (b.user_id = ?
+        OR ${busCond}
+        OR (bts.team_id IN (${teamIds.length > 0 ? teamIds.map(() => '?').join(',') : 'NULL'}) AND bts.team_id IS NOT NULL)
+        OR ${fusCond}
+        OR (fts.team_id IN (${teamIds.length > 0 ? teamIds.map(() => '?').join(',') : 'NULL'}) AND fts.team_id IS NOT NULL AND bf.folder_id IS NOT NULL))
+      ${folderIdStr ? 'AND b.id IN (SELECT bookmark_id FROM bookmark_folders WHERE folder_id = ?)' : ''}
+      ${tagIdStr ? 'AND b.id IN (SELECT bookmark_id FROM bookmark_tags WHERE tag_id = ?)' : ''}
+    `;
+    const countParams = [userId];
+    if (orgId) {
+      countParams.push(userId, orgId, userId, orgId);
+    } else {
+      countParams.push(userId, userId);
+    }
+    if (teamIds.length > 0) {
+      countParams.push(...teamIds, ...teamIds);
+    }
+    if (folderIdStr) countParams.push(folderIdStr);
+    if (tagIdStr) countParams.push(tagIdStr);
+
     // Add sorting
     const sortBy = sort_by as string || 'recently_added';
     const DB_TYPE = process.env.DB_TYPE || 'sqlite';
-    
+
     switch (sortBy) {
       case 'alphabetical':
         sql += ' ORDER BY b.title ASC';
@@ -187,86 +243,181 @@ router.get('/', async (req, res) => {
         break;
     }
 
-    const bookmarks = await query(sql, params);
+    // Fetch limit+1 to determine hasMore
+    sql += ` LIMIT ? OFFSET ?`;
+    params.push(limit + 1, offset);
 
-    // Get tags, folders, and teams for each bookmark
-    for (const bookmark of bookmarks as any[]) {
-      // Convert boolean fields from SQLite (0/1) to boolean
+    const [rawBookmarksResult, countResult] = await Promise.all([
+      query(sql, params),
+      query(countSql, countParams),
+    ]);
+
+    const rawBookmarks = rawBookmarksResult;
+    const rawTotal = Array.isArray(countResult) && countResult[0] ? (countResult[0] as any).total : 0;
+    const total = Number(rawTotal) || 0;
+    const hasMore = Array.isArray(rawBookmarks) && rawBookmarks.length > limit;
+    const bookmarks = hasMore ? rawBookmarks.slice(0, limit) : rawBookmarks;
+    const bookmarkList = (Array.isArray(bookmarks) ? bookmarks : []) as any[];
+
+    // Batch load related data (avoids N+1 queries)
+    const bookmarkIds = bookmarkList.map((b) => b.id).filter(Boolean);
+    if (bookmarkIds.length === 0) {
+      return res.json({ items: bookmarks, total, hasMore });
+    }
+
+    // Placeholders for IN clause (SQLite limit ~999)
+    const placeholders = bookmarkIds.map(() => '?').join(',');
+
+    // 1. Batch fetch tags: bookmark_id -> tag[]
+    const tagsRows = await query(
+      `SELECT bt.bookmark_id, t.id, t.name, t.created_at FROM bookmark_tags bt
+       INNER JOIN tags t ON bt.tag_id = t.id
+       WHERE bt.bookmark_id IN (${placeholders})`,
+      bookmarkIds
+    );
+    const tagsByBookmark = new Map<string, any[]>();
+    for (const row of Array.isArray(tagsRows) ? tagsRows : []) {
+      const bid = (row as any).bookmark_id;
+      if (!bid) continue;
+      const tag = { id: (row as any).id, name: (row as any).name, created_at: (row as any).created_at };
+      if (!tagsByBookmark.has(bid)) tagsByBookmark.set(bid, []);
+      tagsByBookmark.get(bid)!.push(tag);
+    }
+
+    // 2. Batch fetch bookmark_folders with folder details
+    const bfRows = await query(
+      `SELECT bf.bookmark_id, f.id, f.name, f.icon FROM bookmark_folders bf
+       INNER JOIN folders f ON bf.folder_id = f.id
+       WHERE bf.bookmark_id IN (${placeholders})`,
+      bookmarkIds
+    );
+    const foldersByBookmark = new Map<string, any[]>();
+    const folderIds = new Set<string>();
+    for (const row of Array.isArray(bfRows) ? bfRows : []) {
+      const r = row as any;
+      const bid = r.bookmark_id;
+      const fid = r.id;
+      if (!bid || !fid) continue;
+      folderIds.add(fid);
+      const folder = { id: fid, name: r.name, icon: r.icon };
+      if (!foldersByBookmark.has(bid)) foldersByBookmark.set(bid, []);
+      foldersByBookmark.get(bid)!.push(folder);
+    }
+
+    // 3. Batch fetch folder sharing (folder_team_shares, folder_user_shares)
+    const folderIdsArr = Array.from(folderIds);
+    const folderPlaceholders = folderIdsArr.length > 0 ? folderIdsArr.map(() => '?').join(',') : '';
+    let folderTeamsByFolder = new Map<string, any[]>();
+    let folderUsersByFolder = new Map<string, any[]>();
+    if (folderPlaceholders) {
+      const ftsRows = await query(
+        `SELECT fts.folder_id, t.id, t.name, t.description, t.created_at FROM folder_team_shares fts
+         INNER JOIN teams t ON fts.team_id = t.id
+         WHERE fts.folder_id IN (${folderPlaceholders})`,
+        folderIdsArr
+      );
+      for (const row of Array.isArray(ftsRows) ? ftsRows : []) {
+        const r = row as any;
+        const fid = r.folder_id;
+        if (!fid) continue;
+        const team = { id: r.id, name: r.name, description: r.description, created_at: r.created_at };
+        if (!folderTeamsByFolder.has(fid)) folderTeamsByFolder.set(fid, []);
+        folderTeamsByFolder.get(fid)!.push(team);
+      }
+      const fusRows = await query(
+        `SELECT fus.folder_id, u.id, u.name, u.email FROM folder_user_shares fus
+         INNER JOIN users u ON fus.user_id = u.id
+         WHERE fus.folder_id IN (${folderPlaceholders})`,
+        folderIdsArr
+      );
+      for (const row of Array.isArray(fusRows) ? fusRows : []) {
+        const r = row as any;
+        const fid = r.folder_id;
+        if (!fid) continue;
+        const user = { id: r.id, name: r.name, email: r.email };
+        if (!folderUsersByFolder.has(fid)) folderUsersByFolder.set(fid, []);
+        folderUsersByFolder.get(fid)!.push(user);
+      }
+    }
+
+    // 4. Batch fetch bookmark sharing (bookmark_team_shares, bookmark_user_shares)
+    const btsRows = await query(
+      `SELECT bts.bookmark_id, t.id, t.name, t.description, t.created_at FROM bookmark_team_shares bts
+       INNER JOIN teams t ON bts.team_id = t.id
+       WHERE bts.bookmark_id IN (${placeholders})`,
+      bookmarkIds
+    );
+    const bookmarkTeamsByBookmark = new Map<string, any[]>();
+    for (const row of Array.isArray(btsRows) ? btsRows : []) {
+      const r = row as any;
+      const bid = r.bookmark_id;
+      if (!bid) continue;
+      const team = { id: r.id, name: r.name, description: r.description, created_at: r.created_at };
+      if (!bookmarkTeamsByBookmark.has(bid)) bookmarkTeamsByBookmark.set(bid, []);
+      bookmarkTeamsByBookmark.get(bid)!.push(team);
+    }
+    const busRows = await query(
+      `SELECT bus.bookmark_id, u.id, u.name, u.email FROM bookmark_user_shares bus
+       INNER JOIN users u ON bus.user_id = u.id
+       WHERE bus.bookmark_id IN (${placeholders})`,
+      bookmarkIds
+    );
+    const bookmarkUsersByBookmark = new Map<string, any[]>();
+    for (const row of Array.isArray(busRows) ? busRows : []) {
+      const r = row as any;
+      const bid = r.bookmark_id;
+      if (!bid) continue;
+      const user = { id: r.id, name: r.name, email: r.email };
+      if (!bookmarkUsersByBookmark.has(bid)) bookmarkUsersByBookmark.set(bid, []);
+      bookmarkUsersByBookmark.get(bid)!.push(user);
+    }
+
+    // 5. Batch fetch owner info for shared bookmarks
+    const ownerIds = [...new Set(bookmarkList.filter((b) => b.user_id !== userId).map((b) => b.user_id))];
+    const ownersById = new Map<string, { name: string; email: string }>();
+    if (ownerIds.length > 0) {
+      const ownerPlaceholders = ownerIds.map(() => '?').join(',');
+      const ownerRows = await query(
+        `SELECT id, name, email FROM users WHERE id IN (${ownerPlaceholders})`,
+        ownerIds
+      );
+      for (const row of Array.isArray(ownerRows) ? ownerRows : []) {
+        const r = row as any;
+        ownersById.set(r.id, { name: r.name, email: r.email });
+      }
+    }
+
+    // 6. Assemble bookmarks with related data
+    for (const bookmark of bookmarkList) {
       bookmark.forwarding_enabled = Boolean(bookmark.forwarding_enabled);
       bookmark.pinned = Boolean(bookmark.pinned || false);
       bookmark.access_count = bookmark.access_count || 0;
-      // Convert null slug or internal placeholder to empty string for frontend
       if (!bookmark.slug || bookmark.slug.startsWith('_internal_')) {
         bookmark.slug = '';
       }
-      
-      // Owner info for shared bookmarks (name, email)
       if (bookmark.user_id !== userId) {
-        const owner = await queryOne('SELECT id, name, email FROM users WHERE id = ?', [bookmark.user_id]);
+        const owner = ownersById.get(bookmark.user_id);
         if (owner) {
           bookmark.user_name = owner.name;
           bookmark.user_email = owner.email;
         }
       }
-      
-      const tags = await query(
-        `SELECT t.* FROM tags t
-         INNER JOIN bookmark_tags bt ON t.id = bt.tag_id
-         WHERE bt.bookmark_id = ?`,
-        [bookmark.id]
-      );
-      bookmark.tags = tags;
-      
-      // Get folders for this bookmark (including icon and sharing info)
-      const bookmarkFolders = await query(
-        `SELECT f.id, f.name, f.icon FROM folders f
-         INNER JOIN bookmark_folders bf ON f.id = bf.folder_id
-         WHERE bf.bookmark_id = ?`,
-        [bookmark.id]
-      );
-      const foldersList = Array.isArray(bookmarkFolders) ? bookmarkFolders : (bookmarkFolders ? [bookmarkFolders] : []);
-      
-      // Get sharing information for each folder
-      for (const folder of foldersList as any[]) {
-        const folderSharedTeams = await query(
-          `SELECT t.* FROM teams t
-           INNER JOIN folder_team_shares fts ON t.id = fts.team_id
-           WHERE fts.folder_id = ?`,
-          [folder.id]
-        );
-        folder.shared_teams = Array.isArray(folderSharedTeams) ? folderSharedTeams : (folderSharedTeams ? [folderSharedTeams] : []);
-        
-        const folderSharedUsers = await query(
-          `SELECT u.id, u.name, u.email FROM users u
-           INNER JOIN folder_user_shares fus ON u.id = fus.user_id
-           WHERE fus.folder_id = ?`,
-          [folder.id]
-        );
-        folder.shared_users = Array.isArray(folderSharedUsers) ? folderSharedUsers : (folderSharedUsers ? [folderSharedUsers] : []);
+      bookmark.tags = tagsByBookmark.get(bookmark.id) || [];
+      const foldersList = foldersByBookmark.get(bookmark.id) || [];
+      for (const folder of foldersList) {
+        folder.shared_teams = folderTeamsByFolder.get(folder.id) || [];
+        folder.shared_users = folderUsersByFolder.get(folder.id) || [];
       }
-      
       bookmark.folders = foldersList;
-      
-      // Get shared teams for this bookmark
-      const sharedTeams = await query(
-        `SELECT t.* FROM teams t
-         INNER JOIN bookmark_team_shares bts ON t.id = bts.team_id
-         WHERE bts.bookmark_id = ?`,
-        [bookmark.id]
-      );
-      bookmark.shared_teams = Array.isArray(sharedTeams) ? sharedTeams : (sharedTeams ? [sharedTeams] : []);
-      
-      // Get shared users for this bookmark
-      const sharedUsers = await query(
-        `SELECT u.id, u.name, u.email FROM users u
-         INNER JOIN bookmark_user_shares bus ON u.id = bus.user_id
-         WHERE bus.bookmark_id = ?`,
-        [bookmark.id]
-      );
-      bookmark.shared_users = Array.isArray(sharedUsers) ? sharedUsers : (sharedUsers ? [sharedUsers] : []);
+      bookmark.shared_teams = bookmarkTeamsByBookmark.get(bookmark.id) || [];
+      bookmark.shared_users = bookmarkUsersByBookmark.get(bookmark.id) || [];
     }
 
-    res.json(bookmarks);
+    res.json({
+      items: bookmarks,
+      total,
+      hasMore,
+    });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -350,6 +501,7 @@ router.get('/search', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const userId = authReq.user!.id;
+    const orgId = isCloud ? await getCurrentOrgId(userId) : null;
     const { q } = req.query;
 
     if (!q || typeof q !== 'string') {
@@ -358,13 +510,13 @@ router.get('/search', async (req, res) => {
 
     const searchTerm = `%${q.toLowerCase()}%`;
 
-    // Get user's teams for share checks
-    const userTeams = await query(
-      'SELECT team_id FROM team_members WHERE user_id = ?',
-      [userId]
-    );
-    const teamIds = Array.isArray(userTeams) ? userTeams.map((t: any) => t.team_id) : [];
+    // Get user's teams for share checks (org-scoped in cloud mode)
+    const teamIds = orgId
+      ? await getTeamIdsForUserInOrg(userId, orgId)
+      : await getTeamIdsForUser(userId);
     const teamPlaceholders = teamIds.length > 0 ? teamIds.map(() => '?').join(',') : 'NULL';
+    const busCond = orgId ? '(bus.user_id = ? AND b.user_id IN (SELECT user_id FROM org_members WHERE org_id = ?))' : 'bus.user_id = ?';
+    const fusCond = orgId ? '(fus.user_id = ? AND bf.folder_id IN (SELECT id FROM folders WHERE user_id IN (SELECT user_id FROM org_members WHERE org_id = ?)))' : 'fus.user_id = ?';
 
     // Search bookmarks (same access as GET /: own + user share + team share + folder-based sharing)
     const bookmarkSql = `
@@ -376,14 +528,19 @@ router.get('/search', async (req, res) => {
       LEFT JOIN bookmark_folders bf ON b.id = bf.bookmark_id
       LEFT JOIN folder_user_shares fus ON bf.folder_id = fus.folder_id
       LEFT JOIN folder_team_shares fts ON bf.folder_id = fts.folder_id
-      WHERE (b.user_id = ? OR bus.user_id = ?
+      WHERE (b.user_id = ? OR ${busCond}
         OR (bts.team_id IN (${teamPlaceholders}) AND bts.team_id IS NOT NULL)
-        OR fus.user_id = ?
+        OR ${fusCond}
         OR (fts.team_id IN (${teamPlaceholders}) AND fts.team_id IS NOT NULL AND bf.folder_id IS NOT NULL))
       AND (LOWER(b.title) LIKE ? OR LOWER(b.url) LIKE ? OR LOWER(COALESCE(b.slug, '')) LIKE ?)
       LIMIT 10
     `;
-    const bookmarkParams: any[] = [userId, userId, userId, userId];
+    const bookmarkParams: any[] = [userId, userId];
+    if (orgId) {
+      bookmarkParams.push(userId, orgId, userId, orgId);
+    } else {
+      bookmarkParams.push(userId, userId);
+    }
     if (teamIds.length > 0) {
       bookmarkParams.push(...teamIds);
       bookmarkParams.push(...teamIds);
@@ -392,17 +549,23 @@ router.get('/search', async (req, res) => {
     const bookmarkResults = await query(bookmarkSql, bookmarkParams);
 
     // Search folders (same access as GET /folders: own + shared via user/team)
+    const folderFusCond = orgId ? '(fus.user_id = ? AND f.user_id IN (SELECT user_id FROM org_members WHERE org_id = ?))' : 'fus.user_id = ?';
     const folderSql = `
       SELECT DISTINCT f.*, 'folder' as type
       FROM folders f
       LEFT JOIN folder_user_shares fus ON f.id = fus.folder_id
       LEFT JOIN folder_team_shares fts ON f.id = fts.folder_id
-      WHERE (f.user_id = ? OR fus.user_id = ?
+      WHERE (f.user_id = ? OR ${folderFusCond}
         OR (fts.team_id IN (${teamPlaceholders}) AND fts.team_id IS NOT NULL))
       AND LOWER(f.name) LIKE ?
       LIMIT 5
     `;
-    const folderParams: any[] = [userId, userId];
+    const folderParams: any[] = [userId];
+    if (orgId) {
+      folderParams.push(userId, orgId);
+    } else {
+      folderParams.push(userId);
+    }
     if (teamIds.length > 0) folderParams.push(...teamIds);
     folderParams.push(searchTerm);
     const folderResults = await query(folderSql, folderParams);
@@ -471,14 +634,15 @@ router.get('/export', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const userId = authReq.user!.id;
+    const orgId = isCloud ? await getCurrentOrgId(userId) : null;
 
     // Get all bookmarks (same access as GET /: own + user share + team share + folder-based sharing)
-    const userTeams = await query(
-      'SELECT team_id FROM team_members WHERE user_id = ?',
-      [userId]
-    );
-    const teamIds = Array.isArray(userTeams) ? userTeams.map((t: any) => t.team_id) : [];
+    const teamIds = orgId
+      ? await getTeamIdsForUserInOrg(userId, orgId)
+      : await getTeamIdsForUser(userId);
     const teamPlaceholders = teamIds.length > 0 ? teamIds.map(() => '?').join(',') : 'NULL';
+    const busCond = orgId ? '(bus.user_id = ? AND b.user_id IN (SELECT user_id FROM org_members WHERE org_id = ?))' : 'bus.user_id = ?';
+    const fusCond = orgId ? '(fus.user_id = ? AND bf.folder_id IN (SELECT id FROM folders WHERE user_id IN (SELECT user_id FROM org_members WHERE org_id = ?)))' : 'fus.user_id = ?';
     const exportSql = `
       SELECT DISTINCT b.*,
              CASE WHEN b.user_id = ? THEN 'own' ELSE 'shared' END as bookmark_type
@@ -488,13 +652,18 @@ router.get('/export', async (req, res) => {
       LEFT JOIN bookmark_folders bf ON b.id = bf.bookmark_id
       LEFT JOIN folder_user_shares fus ON bf.folder_id = fus.folder_id
       LEFT JOIN folder_team_shares fts ON bf.folder_id = fts.folder_id
-      WHERE (b.user_id = ? OR bus.user_id = ?
+      WHERE (b.user_id = ? OR ${busCond}
         OR (bts.team_id IN (${teamPlaceholders}) AND bts.team_id IS NOT NULL)
-        OR fus.user_id = ?
+        OR ${fusCond}
         OR (fts.team_id IN (${teamPlaceholders}) AND fts.team_id IS NOT NULL AND bf.folder_id IS NOT NULL))
       ORDER BY b.created_at DESC
     `;
-    const exportParams: any[] = [userId, userId, userId, userId];
+    const exportParams: any[] = [userId, userId];
+    if (orgId) {
+      exportParams.push(userId, orgId, userId, orgId);
+    } else {
+      exportParams.push(userId, userId);
+    }
     if (teamIds.length > 0) {
       exportParams.push(...teamIds);
       exportParams.push(...teamIds);
@@ -520,14 +689,263 @@ router.get('/export', async (req, res) => {
   }
 });
 
+// Get bookmark IDs only (for select-all-across-pages) - must be before /:id route
+router.get('/ids', async (req, res) => {
+  const authReq = req as AuthRequest;
+  try {
+    const userId = authReq.user!.id;
+    const orgId = isCloud ? await getCurrentOrgId(userId) : null;
+    const { folder_id, tag_id, sort_by } = req.query;
+
+    const folderIdStr = typeof folder_id === 'string' ? folder_id : undefined;
+    const tagIdStr = typeof tag_id === 'string' ? tag_id : undefined;
+    if (folderIdStr) {
+      const canAccess = await canAccessFolder(userId, folderIdStr, orgId);
+      if (!canAccess) {
+        return res.status(404).json({ error: 'Folder not found' });
+      }
+    }
+    if (tagIdStr) {
+      const canAccess = await canAccessTag(userId, tagIdStr);
+      if (!canAccess) {
+        return res.status(404).json({ error: 'Tag not found' });
+      }
+    }
+
+    const teamIds = orgId
+      ? await getTeamIdsForUserInOrg(userId, orgId)
+      : await getTeamIdsForUser(userId);
+
+    const busCond = orgId ? '(bus.user_id = ? AND b.user_id IN (SELECT user_id FROM org_members WHERE org_id = ?))' : 'bus.user_id = ?';
+    const fusCond = orgId ? '(fus.user_id = ? AND bf.folder_id IN (SELECT id FROM folders WHERE user_id IN (SELECT user_id FROM org_members WHERE org_id = ?)))' : 'fus.user_id = ?';
+    let idsSql = `
+      SELECT DISTINCT b.id
+      FROM bookmarks b
+      LEFT JOIN bookmark_user_shares bus ON b.id = bus.bookmark_id
+      LEFT JOIN bookmark_team_shares bts ON b.id = bts.bookmark_id
+      LEFT JOIN bookmark_folders bf ON b.id = bf.bookmark_id
+      LEFT JOIN folder_user_shares fus ON bf.folder_id = fus.folder_id
+      LEFT JOIN folder_team_shares fts ON bf.folder_id = fts.folder_id
+      WHERE (b.user_id = ?
+        OR ${busCond}
+        OR (bts.team_id IN (${teamIds.length > 0 ? teamIds.map(() => '?').join(',') : 'NULL'}) AND bts.team_id IS NOT NULL)
+        OR ${fusCond}
+        OR (fts.team_id IN (${teamIds.length > 0 ? teamIds.map(() => '?').join(',') : 'NULL'}) AND fts.team_id IS NOT NULL AND bf.folder_id IS NOT NULL))
+    `;
+    const idsParams: any[] = [userId];
+    if (orgId) {
+      idsParams.push(userId, orgId, userId, orgId);
+    } else {
+      idsParams.push(userId, userId);
+    }
+    if (teamIds.length > 0) {
+      idsParams.push(...teamIds);
+      idsParams.push(...teamIds);
+    }
+    if (folderIdStr) {
+      idsSql += ' AND b.id IN (SELECT bookmark_id FROM bookmark_folders WHERE folder_id = ?)';
+      idsParams.push(folderIdStr);
+    }
+    if (tagIdStr) {
+      idsSql += ' AND b.id IN (SELECT bookmark_id FROM bookmark_tags WHERE tag_id = ?)';
+      idsParams.push(tagIdStr);
+    }
+
+    const sortBy = sort_by as string || 'recently_added';
+    const DB_TYPE = process.env.DB_TYPE || 'sqlite';
+    switch (sortBy) {
+      case 'alphabetical':
+        idsSql += ' ORDER BY b.title ASC';
+        break;
+      case 'most_used':
+        idsSql += ' ORDER BY COALESCE(b.access_count, 0) DESC, b.created_at DESC';
+        break;
+      case 'recently_accessed':
+        if (DB_TYPE === 'postgresql') {
+          idsSql += ' ORDER BY b.last_accessed_at DESC NULLS LAST, b.created_at DESC';
+        } else {
+          idsSql += ' ORDER BY CASE WHEN b.last_accessed_at IS NULL THEN 1 ELSE 0 END, b.last_accessed_at DESC, b.created_at DESC';
+        }
+        break;
+      default:
+        idsSql += ' ORDER BY b.created_at DESC';
+        break;
+    }
+
+    idsSql += ' LIMIT 10000';
+    const rows = await query(idsSql, idsParams);
+    const ids = (Array.isArray(rows) ? rows : [])
+      .map((r: any) => r?.id)
+      .filter(Boolean);
+
+    res.json({ ids });
+  } catch (error: any) {
+    console.error('Bookmark IDs fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch bookmark IDs' });
+  }
+});
+
+/**
+ * @swagger
+ * /api/bookmarks/ai-suggest:
+ *   post:
+ *     summary: Get AI suggestions for bookmark metadata
+ *     description: Returns suggested title, slug, and tags for a URL. Requires AI feature enabled. Non-blocking; bookmark creation never depends on this.
+ *     tags: [Bookmarks]
+ *     security:
+ *       - cookieAuth: []
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [url]
+ *             properties:
+ *               url:
+ *                 type: string
+ *                 format: uri
+ *               page_title:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: AI suggestions
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 title: { type: string }
+ *                 slug: { type: string }
+ *                 tags: { type: array, items: { type: string } }
+ *                 language: { type: string }
+ *                 confidence: { type: number }
+ *       400:
+ *         description: Invalid URL
+ *       403:
+ *         description: AI feature disabled or not available for plan
+ *       408:
+ *         description: AI request timeout
+ *       503:
+ *         description: AI not configured
+ */
+router.post('/ai-suggest', async (req, res) => {
+  const authReq = req as AuthRequest;
+  try {
+    const userId = authReq.user!.id;
+    const { url, page_title: pageTitle } = req.body;
+
+    if (!url || typeof url !== 'string') {
+      return res.status(400).json({ error: 'URL is required' });
+    }
+
+    const urlValidation = validateUrl(url);
+    if (!urlValidation.valid) {
+      return res.status(400).json({ error: urlValidation.error });
+    }
+
+    const enabled = await isAISuggestionsEnabled(userId);
+    if (!enabled) {
+      return res.status(403).json({ error: 'AI suggestions are not available' });
+    }
+
+    const apiKey = await getAIApiKey();
+    if (!apiKey) {
+      return res.status(503).json({ error: 'AI is not configured' });
+    }
+
+    const sanitizedUrl = sanitizeUrlForAI(url);
+    if (!sanitizedUrl) {
+      return res.status(400).json({ error: 'Invalid URL' });
+    }
+
+    const userRow = await queryOne('SELECT language FROM users WHERE id = ?', [userId]) as { language?: string } | null;
+    const userLanguage = (userRow?.language || 'en').slice(0, 10);
+
+    const DB_TYPE = process.env.DB_TYPE || 'sqlite';
+    const cacheTtlDays = 7;
+    const cacheCondition =
+      DB_TYPE === 'postgresql'
+        ? `AND created_at >= NOW() - INTERVAL '${cacheTtlDays} days'`
+        : "AND datetime(created_at) >= datetime('now', '-7 days')";
+    const cached = await queryOne(
+      `SELECT title, slug, tags, language, confidence FROM ai_suggestions_cache WHERE user_id = ? AND canonical_url = ? AND output_language = ? ${cacheCondition}`,
+      [userId, sanitizedUrl, userLanguage]
+    );
+    if (cached) {
+      const tags = typeof (cached as any).tags === 'string'
+        ? JSON.parse((cached as any).tags)
+        : (cached as any).tags;
+      return res.json({
+        title: (cached as any).title,
+        slug: (cached as any).slug || '',
+        tags: Array.isArray(tags) ? tags : [],
+        language: (cached as any).language || 'en',
+        confidence: (cached as any).confidence ?? 0.5,
+      });
+    }
+
+    const metadata = await fetchPageMetadata(sanitizedUrl);
+    const fetchedTitle = metadata?.title;
+    const fetchedDescription = metadata?.description;
+    const siteName = metadata?.siteName;
+    const pageTitleToUse =
+      typeof pageTitle === 'string' && pageTitle.trim()
+        ? pageTitle.trim()
+        : fetchedTitle;
+
+    const model = await getAIModel();
+    const result = await callAIProvider(
+      sanitizedUrl,
+      pageTitleToUse,
+      fetchedDescription,
+      apiKey,
+      model,
+      10000,
+      userLanguage,
+      siteName
+    );
+
+    if (!result) {
+      return res.status(503).json({ error: 'AI suggestion failed' });
+    }
+
+    const tagsJson = DB_TYPE === 'postgresql'
+      ? JSON.stringify(result.tags)
+      : JSON.stringify(result.tags);
+    await execute(
+      `INSERT INTO ai_suggestions_cache (user_id, canonical_url, output_language, title, slug, tags, language, confidence)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (user_id, canonical_url, output_language) DO UPDATE SET title = excluded.title, slug = excluded.slug, tags = excluded.tags, language = excluded.language, confidence = excluded.confidence`,
+      [userId, sanitizedUrl, userLanguage, result.title, result.slug, tagsJson, result.language, result.confidence]
+    );
+
+    res.json({
+      title: result.title,
+      slug: result.slug,
+      tags: result.tags,
+      language: result.language,
+      confidence: result.confidence,
+    });
+  } catch (error: any) {
+    if (error.name === 'AbortError') {
+      return res.status(408).json({ error: 'AI request timed out' });
+    }
+    console.error('AI suggest error:', error);
+    res.status(500).json({ error: 'AI suggestion failed' });
+  }
+});
+
 // Get single bookmark (own or shared) - must be after /export and /search routes
 router.get('/:id', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const userId = authReq.user!.id;
+    const orgId = isCloud ? await getCurrentOrgId(userId) : null;
     const { id } = req.params;
 
-    const canAccess = await canAccessBookmark(userId, id);
+    const canAccess = await canAccessBookmark(userId, id, orgId);
     if (!canAccess) {
       return res.status(404).json({ error: 'Bookmark not found' });
     }
@@ -638,9 +1056,10 @@ router.post('/:id/track-access', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const userId = authReq.user!.id;
+    const orgId = isCloud ? await getCurrentOrgId(userId) : null;
     const { id } = req.params;
 
-    const canAccess = await canAccessBookmark(userId, id);
+    const canAccess = await canAccessBookmark(userId, id, orgId);
     if (!canAccess) {
       return res.status(404).json({ error: 'Bookmark not found' });
     }
@@ -757,10 +1176,36 @@ router.post('/', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const userId = authReq.user!.id;
+    const orgId = isCloud ? await getCurrentOrgId(userId) : null;
     const data: CreateBookmarkInput = req.body;
 
     if (!data.title || !data.url) {
       return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Cloud: enforce Free plan bookmark limit (with grace period for over-limit)
+    if (isCloud) {
+      const plan = await getUserPlan(userId);
+      if (plan === 'free') {
+        const countResult = await queryOne('SELECT COUNT(*) as count FROM bookmarks WHERE user_id = ?', [userId]);
+        const count = countResult ? parseInt((countResult as any).count) : 0;
+        const canCreate = await canCreateBookmarkFreePlan(userId, count);
+        if (!canCreate) {
+          return res.status(403).json({
+            error: PLAN_ERRORS.BOOKMARK_LIMIT.message,
+            code: PLAN_ERRORS.BOOKMARK_LIMIT.code,
+          });
+        }
+      }
+      // Cloud: Free/Personal cannot share to teams
+      if (plan === 'free' || plan === 'personal') {
+        if (data.share_all_teams || (data.team_ids && data.team_ids.length > 0)) {
+          return res.status(403).json({
+            error: PLAN_ERRORS.SHARE_TO_TEAM.message,
+            code: PLAN_ERRORS.SHARE_TO_TEAM.code,
+          });
+        }
+      }
     }
 
     // Validate and sanitize title
@@ -840,12 +1285,10 @@ router.post('/', async (req, res) => {
 
     // Add team shares
     if (data.share_all_teams) {
-      // Share with all teams user is a member of
-      const userTeams = await query(
-        'SELECT team_id FROM team_members WHERE user_id = ?',
-        [userId]
-      );
-      const teamIds = Array.isArray(userTeams) ? userTeams.map((t: any) => t.team_id) : [];
+      // Share with all teams user is a member of (org-scoped in cloud mode)
+      const teamIds = orgId
+        ? await getTeamIdsForUserInOrg(userId, orgId)
+        : await getTeamIdsForUser(userId);
       for (const teamId of teamIds) {
         await execute(
           'INSERT INTO bookmark_team_shares (bookmark_id, team_id) VALUES (?, ?)',
@@ -853,7 +1296,7 @@ router.post('/', async (req, res) => {
         );
       }
     } else if (data.team_ids && data.team_ids.length > 0) {
-      // Verify user is member of all teams
+      // Verify user is member of all teams (and team is in org in cloud mode)
       for (const teamId of data.team_ids) {
         const isMember = await queryOne(
           'SELECT * FROM team_members WHERE user_id = ? AND team_id = ?',
@@ -861,6 +1304,12 @@ router.post('/', async (req, res) => {
         );
         if (!isMember) {
           return res.status(403).json({ error: `You are not a member of team ${teamId}` });
+        }
+        if (orgId) {
+          const teamInOrg = await queryOne('SELECT 1 FROM teams WHERE id = ? AND org_id = ?', [teamId, orgId]);
+          if (!teamInOrg) {
+            return res.status(403).json({ error: `Team ${teamId} is not in your organization` });
+          }
         }
         await execute(
           'INSERT INTO bookmark_team_shares (bookmark_id, team_id) VALUES (?, ?)',
@@ -874,7 +1323,6 @@ router.post('/', async (req, res) => {
       // Don't allow sharing with self
       const filteredUserIds = data.user_ids.filter((uid) => uid !== userId);
       if (isCloud) {
-        const orgId = await getCurrentOrgId(userId);
         if (!orgId) {
           return res.status(403).json({ error: 'No organization selected' });
         }
@@ -994,6 +1442,7 @@ router.put('/:id', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const userId = authReq.user!.id;
+    const orgId = isCloud ? await getCurrentOrgId(userId) : null;
     const { id } = req.params;
     const data: UpdateBookmarkInput = req.body;
 
@@ -1004,6 +1453,19 @@ router.put('/:id', async (req, res) => {
     const existing = await queryOne('SELECT * FROM bookmarks WHERE id = ?', [id]);
     if (!existing) {
       return res.status(404).json({ error: 'Bookmark not found' });
+    }
+
+    // Cloud: Free/Personal cannot share to teams
+    if (isCloud) {
+      const plan = await getUserPlan(userId);
+      if (plan === 'free' || plan === 'personal') {
+        if (data.share_all_teams || (data.team_ids && data.team_ids.length > 0)) {
+          return res.status(403).json({
+            error: PLAN_ERRORS.SHARE_TO_TEAM.message,
+            code: PLAN_ERRORS.SHARE_TO_TEAM.code,
+          });
+        }
+      }
     }
 
     // Slug validation
@@ -1121,12 +1583,10 @@ router.put('/:id', async (req, res) => {
     if (data.share_all_teams !== undefined || data.team_ids !== undefined) {
       await execute('DELETE FROM bookmark_team_shares WHERE bookmark_id = ?', [id]);
       if (data.share_all_teams) {
-        // Share with all teams user is a member of
-        const userTeams = await query(
-          'SELECT team_id FROM team_members WHERE user_id = ?',
-          [userId]
-        );
-        const teamIds = Array.isArray(userTeams) ? userTeams.map((t: any) => t.team_id) : [];
+        // Share with all teams user is a member of (org-scoped in cloud mode)
+        const teamIds = orgId
+          ? await getTeamIdsForUserInOrg(userId, orgId)
+          : await getTeamIdsForUser(userId);
         for (const teamId of teamIds) {
           await execute(
             'INSERT INTO bookmark_team_shares (bookmark_id, team_id) VALUES (?, ?)',
@@ -1134,7 +1594,7 @@ router.put('/:id', async (req, res) => {
           );
         }
       } else if (data.team_ids && data.team_ids.length > 0) {
-        // Verify user is member of all teams
+        // Verify user is member of all teams (and team is in org in cloud mode)
         for (const teamId of data.team_ids) {
           const isMember = await queryOne(
             'SELECT * FROM team_members WHERE user_id = ? AND team_id = ?',
@@ -1142,6 +1602,12 @@ router.put('/:id', async (req, res) => {
           );
           if (!isMember) {
             return res.status(403).json({ error: `You are not a member of team ${teamId}` });
+          }
+          if (orgId) {
+            const teamInOrg = await queryOne('SELECT 1 FROM teams WHERE id = ? AND org_id = ?', [teamId, orgId]);
+            if (!teamInOrg) {
+              return res.status(403).json({ error: `Team ${teamId} is not in your organization` });
+            }
           }
           await execute(
             'INSERT INTO bookmark_team_shares (bookmark_id, team_id) VALUES (?, ?)',
@@ -1158,7 +1624,6 @@ router.put('/:id', async (req, res) => {
         // Don't allow sharing with self
         const filteredUserIds = data.user_ids.filter((uid) => uid !== userId);
         if (isCloud) {
-          const orgId = await getCurrentOrgId(userId);
           if (!orgId) {
             return res.status(403).json({ error: 'No organization selected' });
           }
@@ -1246,6 +1711,15 @@ router.delete('/:id', async (req, res) => {
     }
 
     await execute('DELETE FROM bookmarks WHERE id = ?', [id]);
+
+    if (isCloud) {
+      const countResult = await queryOne('SELECT COUNT(*) as count FROM bookmarks WHERE user_id = ?', [userId]);
+      const count = countResult ? parseInt((countResult as any).count) : 0;
+      if (count <= FREE_BOOKMARK_LIMIT) {
+        await clearFreePlanGrace(userId);
+      }
+    }
+
     res.json({ message: 'Bookmark deleted' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -1338,8 +1812,32 @@ router.post('/import', async (req, res) => {
       errors: [] as string[],
     };
 
+    // Cloud: Free plan bookmark limit - get current count
+    let currentBookmarkCount = 0;
+    if (isCloud) {
+      const plan = await getUserPlan(userId);
+      if (plan === 'free') {
+        const countResult = await queryOne('SELECT COUNT(*) as count FROM bookmarks WHERE user_id = ?', [userId]);
+        currentBookmarkCount = countResult ? parseInt((countResult as any).count) : 0;
+      }
+    }
+
+    let hitLimit = false;
     for (const bookmarkData of importBookmarks) {
       try {
+        // Cloud: stop importing if at Free limit (considering grace period)
+        if (isCloud) {
+          const canCreate = await canCreateBookmarkFreePlan(userId, currentBookmarkCount);
+          if (!canCreate) {
+            if (!hitLimit) {
+              hitLimit = true;
+              results.errors.push(PLAN_ERRORS.BOOKMARK_LIMIT.message);
+            }
+            results.failed++;
+            continue;
+          }
+        }
+
         if (!bookmarkData.title || !bookmarkData.url) {
           results.failed++;
           results.errors.push(`Missing title or URL: ${JSON.stringify(bookmarkData)}`);
@@ -1399,9 +1897,11 @@ router.post('/import', async (req, res) => {
         );
 
         results.success++;
+        if (isCloud) currentBookmarkCount++;
       } catch (error: any) {
         results.failed++;
-        results.errors.push(`Error importing bookmark: ${error.message}`);
+        console.error('Import bookmark error:', error?.message || error);
+        results.errors.push('Failed to import bookmark');
       }
     }
 

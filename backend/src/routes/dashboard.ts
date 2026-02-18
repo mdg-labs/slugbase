@@ -1,6 +1,9 @@
 import { Router } from 'express';
 import { query, queryOne } from '../db/index.js';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
+import { isCloud } from '../config/mode.js';
+import { getCurrentOrgId } from '../utils/organizations.js';
+import { getTeamIdsForUser, getTeamIdsForUserInOrg } from '../auth/authorization.js';
 
 const router = Router();
 
@@ -43,13 +46,12 @@ router.get('/stats', requireAuth(), async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const userId = authReq.user!.id;
+    const orgId = isCloud ? await getCurrentOrgId(userId) : null;
 
-    // Get user's teams
-    const userTeams = await query(
-      'SELECT team_id FROM team_members WHERE user_id = ?',
-      [userId]
-    );
-    const teamIds = Array.isArray(userTeams) ? userTeams.map((t: any) => t.team_id) : [];
+    // Get user's teams (org-scoped in cloud mode)
+    const teamIds = orgId
+      ? await getTeamIdsForUserInOrg(userId, orgId)
+      : await getTeamIdsForUser(userId);
 
     // Total bookmarks (own only)
     const totalBookmarksResult = await queryOne(
@@ -76,10 +78,15 @@ router.get('/stats', requireAuth(), async (req, res) => {
     // Use simpler queries that don't cause cartesian products
     const sharedBookmarkIds = new Set<string>();
     
-    // Direct user shares
+    // Direct user shares (org-scoped in cloud: only from owners in same org)
+    const userSharedBookmarksSql = orgId
+      ? `SELECT DISTINCT bus.bookmark_id FROM bookmark_user_shares bus
+         INNER JOIN bookmarks b ON b.id = bus.bookmark_id
+         WHERE bus.user_id = ? AND b.user_id IN (SELECT user_id FROM org_members WHERE org_id = ?)`
+      : 'SELECT DISTINCT bookmark_id FROM bookmark_user_shares WHERE user_id = ?';
     const userSharedBookmarks = await query(
-      'SELECT DISTINCT bookmark_id FROM bookmark_user_shares WHERE user_id = ?',
-      [userId]
+      userSharedBookmarksSql,
+      orgId ? [userId, orgId] : [userId]
     );
     (Array.isArray(userSharedBookmarks) ? userSharedBookmarks : []).forEach((row: any) => {
       if (row.bookmark_id) sharedBookmarkIds.add(row.bookmark_id);
@@ -96,10 +103,15 @@ router.get('/stats', requireAuth(), async (req, res) => {
       });
     }
     
-    // Folder user shares
+    // Folder user shares (org-scoped in cloud: only from owners in same org)
+    const folderUserSharesSql = orgId
+      ? `SELECT DISTINCT fus.folder_id FROM folder_user_shares fus
+         INNER JOIN folders f ON f.id = fus.folder_id
+         WHERE fus.user_id = ? AND f.user_id IN (SELECT user_id FROM org_members WHERE org_id = ?)`
+      : 'SELECT DISTINCT folder_id FROM folder_user_shares WHERE user_id = ?';
     const folderUserShares = await query(
-      'SELECT DISTINCT folder_id FROM folder_user_shares WHERE user_id = ?',
-      [userId]
+      folderUserSharesSql,
+      orgId ? [userId, orgId] : [userId]
     );
     if (Array.isArray(folderUserShares) && folderUserShares.length > 0) {
       const folderIds = folderUserShares.map((row: any) => row.folder_id).filter(Boolean);
@@ -148,10 +160,10 @@ router.get('/stats', requireAuth(), async (req, res) => {
     // Shared folders count (folders shared with user)
     const sharedFolderIds = new Set<string>();
     
-    // Direct user shares
+    // Direct user shares (org-scoped in cloud: only from owners in same org)
     const userSharedFolders = await query(
-      'SELECT DISTINCT folder_id FROM folder_user_shares WHERE user_id = ?',
-      [userId]
+      orgId ? folderUserSharesSql : 'SELECT DISTINCT folder_id FROM folder_user_shares WHERE user_id = ?',
+      orgId ? [userId, orgId] : [userId]
     );
     (Array.isArray(userSharedFolders) ? userSharedFolders : []).forEach((row: any) => {
       if (row.folder_id) sharedFolderIds.add(row.folder_id);

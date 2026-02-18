@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/client';
+import { appRootPath } from '../config/api';
 import { useAuth } from '../contexts/AuthContext';
 import { CheckCircle, UserPlus, Shield } from 'lucide-react';
 import Button from '../components/ui/Button';
@@ -23,7 +24,7 @@ export default function Setup() {
   // If user is already authenticated, redirect to dashboard
   useEffect(() => {
     if (user) {
-      navigate('/dashboard');
+      navigate(appRootPath);
     }
   }, [user, navigate]);
 
@@ -55,7 +56,7 @@ export default function Setup() {
       setSuccess(true);
       // Redirect to dashboard after a brief delay
       setTimeout(() => {
-        navigate('/dashboard');
+        navigate(appRootPath);
       }, 1500);
     } catch (err: any) {
       setError(err.response?.data?.error || t('common.error'));
@@ -119,7 +120,7 @@ export default function Setup() {
                 name="email"
                 type="email"
                 required
-                className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-colors"
                 placeholder={t('setup.emailPlaceholder')}
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -135,7 +136,7 @@ export default function Setup() {
                 name="name"
                 type="text"
                 required
-                className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-colors"
                 placeholder={t('setup.namePlaceholder')}
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -152,7 +153,7 @@ export default function Setup() {
                 type="password"
                 required
                 minLength={8}
-                className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-colors"
                 placeholder={t('setup.passwordPlaceholder')}
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
@@ -169,17 +170,17 @@ export default function Setup() {
                 type="password"
                 required
                 minLength={8}
-                className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-colors"
                 placeholder={t('setup.confirmPasswordPlaceholder')}
                 value={formData.confirmPassword}
                 onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
               />
             </div>
 
-            <div className="px-4 py-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+            <div className="px-4 py-3 bg-primary/10 border border-primary/30 rounded-lg">
               <div className="flex items-start gap-2">
-                <Shield className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-blue-800 dark:text-blue-200">
+                <Shield className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-foreground">
                   {t('setup.adminNote')}
                 </p>
               </div>

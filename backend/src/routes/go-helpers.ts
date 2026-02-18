@@ -3,7 +3,7 @@
  */
 
 import { query, queryOne } from '../db/index.js';
-import { getTeamIdsForUser } from '../auth/authorization.js';
+import { getTeamIdsForUser, getTeamIdsForUserInOrg } from '../auth/authorization.js';
 
 const DB_TYPE = process.env.DB_TYPE || 'sqlite';
 
@@ -29,13 +29,19 @@ export interface BookmarkCandidate {
 /**
  * Get all bookmarks accessible to the user that match the slug and have forwarding enabled.
  * Returns candidates with workspace labels for collision UI.
+ * @param orgId - Optional. In cloud mode, pass to scope team shares to current org.
  */
 export async function getAccessibleBookmarksBySlug(
   userId: string,
-  slug: string
+  slug: string,
+  orgId?: string | null
 ): Promise<BookmarkCandidate[]> {
-  const teamIds = await getTeamIdsForUser(userId);
+  const teamIds = orgId
+    ? await getTeamIdsForUserInOrg(userId, orgId)
+    : await getTeamIdsForUser(userId);
   const teamPlaceholders = teamIds.length > 0 ? teamIds.map(() => '?').join(',') : 'NULL';
+  const busCond = orgId ? '(bus.user_id = ? AND b.user_id IN (SELECT user_id FROM org_members WHERE org_id = ?))' : 'bus.user_id = ?';
+  const fusCond = orgId ? '(fus.user_id = ? AND bf.folder_id IN (SELECT id FROM folders WHERE user_id IN (SELECT user_id FROM org_members WHERE org_id = ?)))' : 'fus.user_id = ?';
 
   const sql = `
     SELECT DISTINCT b.id, b.title, b.url, b.slug, b.user_id,
@@ -48,13 +54,18 @@ export async function getAccessibleBookmarksBySlug(
     LEFT JOIN folder_team_shares fts ON bf.folder_id = fts.folder_id
     LEFT JOIN users u ON b.user_id = u.id
     WHERE (b.user_id = ?
-      OR bus.user_id = ?
+      OR ${busCond}
       OR (bts.team_id IN (${teamPlaceholders}) AND bts.team_id IS NOT NULL)
-      OR fus.user_id = ?
+      OR ${fusCond}
       OR (fts.team_id IN (${teamPlaceholders}) AND fts.team_id IS NOT NULL AND bf.folder_id IS NOT NULL))
       AND b.slug = ? AND b.forwarding_enabled = TRUE
   `;
-  const params: any[] = [userId, userId, userId, userId];
+  const params: any[] = [userId, userId];
+  if (orgId) {
+    params.push(userId, orgId, userId, orgId);
+  } else {
+    params.push(userId, userId);
+  }
   if (teamIds.length > 0) {
     params.push(...teamIds);
     params.push(...teamIds);

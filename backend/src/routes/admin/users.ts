@@ -6,7 +6,7 @@ import bcrypt from 'bcryptjs';
 import { validateEmail, normalizeEmail, validatePassword, validateLength, sanitizeString } from '../../utils/validation.js';
 import { generateUserKey } from '../../utils/user-key.js';
 import { isCloud } from '../../config/mode.js';
-import { getCurrentOrgId } from '../../utils/organizations.js';
+import { deleteOrganization, getCurrentOrgId, setCurrentOrg } from '../../utils/organizations.js';
 
 const router = Router();
 router.use(requireAuth());
@@ -159,6 +159,19 @@ router.get('/:id', async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
+    if (isCloud) {
+      const orgId = await getCurrentOrgId(authReq.user!.id);
+      if (!orgId) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      const inOrg = await queryOne(
+        'SELECT 1 FROM org_members WHERE user_id = ? AND org_id = ?',
+        [id, orgId]
+      );
+      if (!inOrg) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+    }
     res.json(user);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -303,6 +316,17 @@ router.post('/', async (req, res) => {
       }
     }
 
+    if (isCloud) {
+      const orgId = await getCurrentOrgId(authReq.user!.id);
+      if (orgId) {
+        await execute(
+          'INSERT INTO org_members (user_id, org_id, role) VALUES (?, ?, ?)',
+          [userId, orgId, 'member']
+        );
+        await setCurrentOrg(userId, orgId);
+      }
+    }
+
     const user = await queryOne(
       'SELECT id, email, name, user_key, is_admin, oidc_provider, language, theme, created_at FROM users WHERE id = ?',
       [userId]
@@ -386,6 +410,19 @@ router.put('/:id', async (req, res) => {
     const existing = await queryOne('SELECT * FROM users WHERE id = ?', [id]);
     if (!existing) {
       return res.status(404).json({ error: 'User not found' });
+    }
+    if (isCloud) {
+      const orgId = await getCurrentOrgId(authReq.user!.id);
+      if (!orgId) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      const inOrg = await queryOne(
+        'SELECT 1 FROM org_members WHERE user_id = ? AND org_id = ?',
+        [id, orgId]
+      );
+      if (!inOrg) {
+        return res.status(404).json({ error: 'User not found' });
+      }
     }
 
     const updates: string[] = [];
@@ -506,8 +543,46 @@ router.delete('/:id', async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
+    if (isCloud) {
+      const orgId = await getCurrentOrgId(authReq.user!.id);
+      if (!orgId) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      const inOrg = await queryOne(
+        'SELECT 1 FROM org_members WHERE user_id = ? AND org_id = ?',
+        [id, orgId]
+      );
+      if (!inOrg) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+    }
+
+    // Detect orgs where user is sole member (for cleanup after deletion)
+    const orgsToCleanup: string[] = [];
+    if (isCloud) {
+      const userOrgs = await query('SELECT org_id FROM org_members WHERE user_id = ?', [id]);
+      const orgList = Array.isArray(userOrgs) ? userOrgs : userOrgs ? [userOrgs] : [];
+      for (const row of orgList) {
+        const oid = (row as any).org_id;
+        if (oid) {
+          const countRow = await queryOne('SELECT COUNT(*) as count FROM org_members WHERE org_id = ?', [oid]);
+          const count = parseInt((countRow as any)?.count || '0');
+          if (count === 1) orgsToCleanup.push(oid);
+        }
+      }
+    }
 
     await execute('DELETE FROM users WHERE id = ?', [id]);
+
+    // Clean up orphan orgs (user was sole member)
+    for (const orgId of orgsToCleanup) {
+      try {
+        await deleteOrganization(orgId);
+      } catch (err: any) {
+        console.warn('Org cleanup after user delete failed:', err?.message);
+      }
+    }
+
     res.json({ message: 'User deleted' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });

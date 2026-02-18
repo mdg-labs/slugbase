@@ -32,16 +32,16 @@ The **Free Plan** gives you a full-featured account to try SlugBase. When you're
 
 After trying SlugBase Cloud:
 
-1. **[Install SlugBase](setup)** – Deploy your own self-hosted instance
-2. **[Read the Documentation](intro)** – Learn about all features
-3. **[Plans and billing](../cloud/plans-billing)** – Free, Personal, Team, and Early Supporter plans
+1. **[Install SlugBase](https://docs.slugbase.app/selfhosted/setup)** – Deploy your own self-hosted instance
+2. **[Read the Documentation](https://docs.slugbase.app/selfhosted/intro)** – Learn about all features
+3. **[Plans and billing](https://docs.slugbase.app/cloud/plans-billing)** – Free, Personal, Team, and Early Supporter plans
 4. **[Join the Community](https://github.com/mdg-labs/slugbase/blob/main/CONTRIBUTING.md)** – Contribute or get help
 
 ## Related Documentation
 
-- [What is SlugBase Cloud](../cloud/overview) – Overview of the hosted SaaS version
-- [Setup Guide](setup) – How to set up your own self-hosted instance
-- [Features Overview](intro) – Complete feature list
+- [What is SlugBase Cloud](https://docs.slugbase.app/cloud/overview) – Overview of the hosted SaaS version
+- [Setup Guide](https://docs.slugbase.app/selfhosted/setup) – How to set up your own self-hosted instance
+- [Features Overview](https://docs.slugbase.app/selfhosted/intro) – Complete feature list
 
 ---
 

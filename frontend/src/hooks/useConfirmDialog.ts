@@ -4,6 +4,7 @@ interface ConfirmDialogState {
   isOpen: boolean;
   title: string;
   message: string;
+  itemName?: string;
   confirmText?: string;
   cancelText?: string;
   variant?: 'danger' | 'warning' | 'default';
@@ -23,6 +24,7 @@ export function useConfirmDialog() {
     message: string,
     onConfirm: () => void,
     options?: {
+      itemName?: string;
       confirmText?: string;
       cancelText?: string;
       variant?: 'danger' | 'warning' | 'default';
@@ -33,6 +35,7 @@ export function useConfirmDialog() {
       title,
       message,
       onConfirm,
+      itemName: options?.itemName,
       confirmText: options?.confirmText,
       cancelText: options?.cancelText,
       variant: options?.variant || 'default',

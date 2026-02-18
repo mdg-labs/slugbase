@@ -1,14 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { appBasePath } from '../config/api';
-import { Mail, User as UserIcon, Globe, Palette, AlertCircle, Link2, Building2, ArrowRightLeft } from 'lucide-react';
+import { appBasePath, apiBaseUrl } from '../config/api';
+import { Mail, User as UserIcon, Globe, Palette, AlertCircle, Link2, Building2, ArrowRightLeft, Key, Sparkles } from 'lucide-react';
 import Select from '../components/ui/Select';
 import Button from '../components/ui/Button';
+import { Switch } from '../components/ui/switch';
 import { useToast } from '../components/ui/Toast';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
+import CreateTokenModal from '../components/profile/CreateTokenModal';
 import api from '../api/client';
 import { isCloud } from '../config/mode';
+
+interface ApiToken {
+  id: string;
+  name: string;
+  created_at: string;
+  last_used_at: string | null;
+}
 
 export default function Profile() {
   const { t } = useTranslation();
@@ -19,13 +29,19 @@ export default function Profile() {
     name: '',
     language: 'en',
     theme: 'auto',
+    ai_suggestions_enabled: true,
   });
+  const [aiAvailable, setAiAvailable] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; name?: string }>({});
   const [editingEmail, setEditingEmail] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [orgs, setOrgs] = useState<{ id: string; name: string; role: string }[]>([]);
   const [switchingOrg, setSwitchingOrg] = useState<string | null>(null);
+  const [tokens, setTokens] = useState<ApiToken[]>([]);
+  const [tokensLoading, setTokensLoading] = useState(true);
+  const [createTokenOpen, setCreateTokenOpen] = useState(false);
+  const [revokeTokenId, setRevokeTokenId] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -34,7 +50,16 @@ export default function Profile() {
         name: user.name || '',
         language: user.language || 'en',
         theme: user.theme || 'auto',
+        ai_suggestions_enabled: Boolean((user as { ai_suggestions_enabled?: boolean | number }).ai_suggestions_enabled ?? true),
       });
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (user) {
+      api.get('/config/ai-suggestions')
+        .then((res) => setAiAvailable(res.data?.available === true))
+        .catch(() => setAiAvailable(false));
     }
   }, [user]);
 
@@ -46,6 +71,17 @@ export default function Profile() {
       }).catch(() => setOrgs([]));
     }
   }, [user]);
+
+  const fetchTokens = useCallback(() => {
+    setTokensLoading(true);
+    api.get('/tokens').then((res) => {
+      setTokens(Array.isArray(res.data) ? res.data : []);
+    }).catch(() => setTokens([])).finally(() => setTokensLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (user) fetchTokens();
+  }, [user, fetchTokens]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -99,6 +135,32 @@ export default function Profile() {
     }
   }
 
+  async function handleRevokeToken(tokenId: string) {
+    try {
+      await api.delete(`/tokens/${tokenId}`);
+      setTokens((prev) => prev.filter((t) => t.id !== tokenId));
+      showToast(t('common.success'), 'success');
+    } catch (error: any) {
+      showToast(error.response?.data?.error || t('common.error'), 'error');
+    } finally {
+      setRevokeTokenId(null);
+    }
+  }
+
+  function formatDate(iso: string) {
+    try {
+      return new Date(iso).toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch {
+      return iso;
+    }
+  }
+
   if (!user) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -149,8 +211,8 @@ export default function Profile() {
               {/* Email */}
               <div className="flex items-start gap-4">
                 <div className="flex-shrink-0">
-                  <div className="h-10 w-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                    <Mail className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  <div className="h-10 w-10 rounded-lg bg-primary/20 flex items-center justify-center">
+                    <Mail className="h-5 w-5 text-primary" />
                   </div>
                 </div>
                 <div className="flex-1 min-w-0">
@@ -166,7 +228,7 @@ export default function Profile() {
                           setFormData({ ...formData, email: e.target.value });
                           setErrors({ ...errors, email: undefined });
                         }}
-                        className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                        className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-colors"
                         placeholder={t('profile.emailPlaceholder')}
                       />
                       {errors.email && (
@@ -217,13 +279,13 @@ export default function Profile() {
                         </p>
                       )}
                       {user.email_pending && (
-                        <div className="flex items-start gap-2 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                          <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                        <div className="flex items-start gap-2 px-3 py-2 bg-primary/10 border border-primary/30 rounded-lg">
+                          <AlertCircle className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
                           <div className="flex-1">
-                            <p className="text-xs text-blue-800 dark:text-blue-200 font-medium">
+                            <p className="text-xs text-foreground font-medium">
                               {t('emailVerification.pendingTitle')}
                             </p>
-                            <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                            <p className="text-xs text-muted-foreground mt-1">
                               {t('emailVerification.pendingDescription', { email: user.email_pending })}
                             </p>
                           </div>
@@ -254,7 +316,7 @@ export default function Profile() {
                           setFormData({ ...formData, name: e.target.value });
                           setErrors({ ...errors, name: undefined });
                         }}
-                        className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                        className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-colors"
                         placeholder={t('profile.namePlaceholder')}
                       />
                       {errors.name && (
@@ -316,7 +378,7 @@ export default function Profile() {
                   </p>
                   <Link
                     to={`${appBasePath}/go-preferences`}
-                    className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+                    className="text-sm font-medium text-primary hover:text-primary/90"
                   >
                     {t('goPreferences.title')} →
                   </Link>
@@ -331,7 +393,7 @@ export default function Profile() {
           <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
             <div className="p-4">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                <Building2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                <Building2 className="h-5 w-5 text-primary" />
                 {t('profile.yourOrganizations')}
               </h2>
               <ul className="space-y-2">
@@ -348,7 +410,7 @@ export default function Profile() {
                         {org.role}
                       </span>
                       {user.current_org_id === org.id && (
-                        <span className="text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30 px-2 py-0.5 rounded">
+                        <span className="text-xs font-medium text-primary bg-primary/20 px-2 py-0.5 rounded">
                           {t('profile.current')}
                         </span>
                       )}
@@ -421,6 +483,33 @@ export default function Profile() {
                 </div>
               </div>
 
+              {aiAvailable && (
+                <div className="flex items-start gap-4">
+                  <div className="flex-shrink-0">
+                    <div className="h-10 w-10 rounded-lg bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center">
+                      <Sparkles className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                      {t('profile.aiSuggestions')}
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <Switch
+                        id="ai-suggestions"
+                        checked={formData.ai_suggestions_enabled}
+                        onCheckedChange={(checked) =>
+                          setFormData({ ...formData, ai_suggestions_enabled: checked })
+                        }
+                      />
+                      <label htmlFor="ai-suggestions" className="text-sm text-gray-600 dark:text-gray-400 cursor-pointer">
+                        {t('profile.aiSuggestionsDescription')}
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="pt-2">
                 <Button type="submit" variant="primary" disabled={saving}>
                   {saving ? t('common.loading') : t('profile.save')}
@@ -429,7 +518,99 @@ export default function Profile() {
             </form>
           </div>
         </div>
+
+        {/* API Access Section */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+          <div className="p-4">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+              <Key className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              {t('profile.apiAccess')}
+            </h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+              {t('profile.apiAccessDescription')}
+            </p>
+            <div className="flex items-start gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg mb-4">
+              <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-amber-800 dark:text-amber-200">
+                {t('profile.apiTokenWarning')}
+              </p>
+            </div>
+            <a
+              href={apiBaseUrl ? `${apiBaseUrl}/api-docs` : '/api-docs'}
+              target="_blank"
+              rel="noopener noreferrer"
+                    className="text-sm font-medium text-primary hover:text-primary/90 mb-4 inline-block"
+            >
+              {t('profile.viewApiDocs')} →
+            </a>
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-sm font-medium text-gray-900 dark:text-white">
+                {t('profile.yourTokens')}
+              </span>
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                onClick={() => setCreateTokenOpen(true)}
+              >
+                {t('profile.createToken')}
+              </Button>
+            </div>
+            {tokensLoading ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400">{t('common.loading')}</p>
+            ) : tokens.length === 0 ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {t('profile.noTokens')}. {t('profile.noTokensDescription')}
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {tokens.map((tok) => (
+                  <li
+                    key={tok.id}
+                    className="flex items-center justify-between gap-2 py-2 px-3 rounded-lg bg-gray-50 dark:bg-gray-700/50"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <span className="text-sm font-medium text-gray-900 dark:text-white block truncate">
+                        {tok.name}
+                      </span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400 font-mono">
+                        sb_********************************
+                      </span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400 block mt-1">
+                        {t('profile.lastUsed')}: {tok.last_used_at ? formatDate(tok.last_used_at) : t('profile.neverUsed')} · {t('profile.createdAt')}: {formatDate(tok.created_at)}
+                      </span>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setRevokeTokenId(tok.id)}
+                      className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                    >
+                      {t('profile.revokeToken')}
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
       </div>
+
+      <CreateTokenModal
+        isOpen={createTokenOpen}
+        onClose={() => setCreateTokenOpen(false)}
+        onCreated={fetchTokens}
+      />
+      <ConfirmDialog
+        isOpen={revokeTokenId !== null}
+        title={t('profile.revokeToken')}
+        message={t('profile.revokeTokenConfirm')}
+        variant="danger"
+        confirmText={t('profile.revokeToken')}
+        onConfirm={() => revokeTokenId && handleRevokeToken(revokeTokenId)}
+        onCancel={() => setRevokeTokenId(null)}
+      />
     </div>
   );
 }

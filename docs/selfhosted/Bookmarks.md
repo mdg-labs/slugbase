@@ -23,6 +23,7 @@ The Bookmarks page is the core of SlugBase, allowing users to create, view, edit
 ### Bookmark Management
 
 - **Create Bookmarks**: Add new bookmarks with title, URL, optional slug, and forwarding
+- **AI Suggestions** (optional): When enabled by admin, AI suggests title, tags, and slug as you enter a URL. Non-blocking; you can edit or ignore suggestions.
 - **Edit Bookmarks**: Modify existing bookmarks
 - **Delete Bookmarks**: Remove bookmarks (with confirmation)
 - **View Bookmarks**: Display all bookmarks in a responsive grid or list view
@@ -114,6 +115,7 @@ Each bookmark card displays:
 2. Fill in the bookmark modal:
    - Title (required)
    - URL (required)
+   - **AI Suggestions** (optional, when enabled by admin): When a valid URL is entered, AI may suggest title, tags, and slug after a short delay. Suggestions appear automatically; you can edit or ignore them. Bookmark creation never waits for AI.
    - Enable forwarding (optional) - **Slug field appears only when forwarding is enabled**
    - Slug (required if forwarding enabled, optional otherwise)
    - **Live Preview**: See forwarding URL preview with copy button when slug is entered
@@ -251,6 +253,7 @@ At the bottom of the page, a note section provides:
 
 - `GET /bookmarks` - Fetch bookmarks (with optional folder/tag filters and sort_by parameter)
   - Query params: `folder_id`, `tag_id`, `sort_by` (recently_added, alphabetical, most_used, recently_accessed)
+- `POST /bookmarks/ai-suggest` - Get AI suggestions for title, slug, and tags (optional, when AI enabled). Body: `{ url, page_title? }`. Returns `{ title, slug, tags, language, confidence }`.
 - `GET /bookmarks/search` - Global search across bookmarks, folders, and tags
   - Query param: `q` (search query)
 - `GET /bookmarks/export` - Export all bookmarks as JSON

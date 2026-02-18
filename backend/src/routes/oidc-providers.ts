@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { encrypt, decrypt } from '../utils/encryption.js';
 import { reloadOIDCStrategies } from '../auth/oidc.js';
 import { isCloud } from '../config/mode.js';
+import { validateOidcUrl, validateProviderKey } from '../utils/validation.js';
 
 const router = Router();
 // CLOUD mode: do not expose "bring your own" OIDC; fixed providers only via env
@@ -214,6 +215,36 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
+    // Validate provider_key format
+    const providerKeyValidation = validateProviderKey(provider_key);
+    if (!providerKeyValidation.valid) {
+      return res.status(400).json({ error: providerKeyValidation.error });
+    }
+
+    // Validate OIDC URLs (SSRF prevention)
+    const issuerValidation = validateOidcUrl(issuer_url);
+    if (!issuerValidation.valid) {
+      return res.status(400).json({ error: `issuer_url: ${issuerValidation.error}` });
+    }
+    if (authorization_url) {
+      const authUrlValidation = validateOidcUrl(authorization_url);
+      if (!authUrlValidation.valid) {
+        return res.status(400).json({ error: `authorization_url: ${authUrlValidation.error}` });
+      }
+    }
+    if (token_url) {
+      const tokenUrlValidation = validateOidcUrl(token_url);
+      if (!tokenUrlValidation.valid) {
+        return res.status(400).json({ error: `token_url: ${tokenUrlValidation.error}` });
+      }
+    }
+    if (userinfo_url) {
+      const userinfoUrlValidation = validateOidcUrl(userinfo_url);
+      if (!userinfoUrlValidation.valid) {
+        return res.status(400).json({ error: `userinfo_url: ${userinfoUrlValidation.error}` });
+      }
+    }
+
     // Validate default_role
     if (default_role !== 'user' && default_role !== 'admin') {
       return res.status(400).json({ error: 'default_role must be "user" or "admin"' });
@@ -347,6 +378,49 @@ router.put('/:id', async (req, res) => {
     // Validate default_role if provided
     if (default_role && default_role !== 'user' && default_role !== 'admin') {
       return res.status(400).json({ error: 'default_role must be "user" or "admin"' });
+    }
+
+    // Validate provider_key format if changed
+    if (provider_key && provider_key !== (existing as any).provider_key) {
+      const providerKeyValidation = validateProviderKey(provider_key);
+      if (!providerKeyValidation.valid) {
+        return res.status(400).json({ error: providerKeyValidation.error });
+      }
+    }
+
+    // Validate OIDC URLs if provided (SSRF prevention)
+    if (issuer_url) {
+      const issuerValidation = validateOidcUrl(issuer_url);
+      if (!issuerValidation.valid) {
+        return res.status(400).json({ error: `issuer_url: ${issuerValidation.error}` });
+      }
+    }
+    if (authorization_url !== undefined) {
+      const urlToValidate = authorization_url || '';
+      if (urlToValidate) {
+        const authUrlValidation = validateOidcUrl(urlToValidate);
+        if (!authUrlValidation.valid) {
+          return res.status(400).json({ error: `authorization_url: ${authUrlValidation.error}` });
+        }
+      }
+    }
+    if (token_url !== undefined) {
+      const urlToValidate = token_url || '';
+      if (urlToValidate) {
+        const tokenUrlValidation = validateOidcUrl(urlToValidate);
+        if (!tokenUrlValidation.valid) {
+          return res.status(400).json({ error: `token_url: ${tokenUrlValidation.error}` });
+        }
+      }
+    }
+    if (userinfo_url !== undefined) {
+      const urlToValidate = userinfo_url || '';
+      if (urlToValidate) {
+        const userinfoUrlValidation = validateOidcUrl(urlToValidate);
+        if (!userinfoUrlValidation.valid) {
+          return res.status(400).json({ error: `userinfo_url: ${userinfoUrlValidation.error}` });
+        }
+      }
     }
 
     // Check provider_key uniqueness if changed

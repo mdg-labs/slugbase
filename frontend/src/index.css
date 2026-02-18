@@ -9,29 +9,109 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: rgb(249 250 251); /* gray-50 */
-}
-
-@media (prefers-color-scheme: dark) {
-  body {
-    background-color: rgb(17 24 39); /* gray-900 */
-  }
 }
 
 * {
   box-sizing: border-box;
 }
 
-/* Accessible focus styles for interactive elements */
+/* Accessible focus styles - use theme ring color */
 a:focus-visible,
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid rgb(59 130 246); /* blue-500 */
+  outline: 2px solid hsl(var(--ring));
   outline-offset: 2px;
 }
 
 a:focus-visible {
   border-radius: 0.25rem;
+}
+
+@layer base {
+  :root {
+    /* Light: navy-tinted bg, white cards, orange primary (#E64100) */
+    --background: 219 30% 97%;
+    --foreground: 219 58% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 219 58% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 219 58% 10%;
+    --primary: 17 100% 45%; /* #E64100 */
+    --primary-foreground: 0 0% 100%; /* white for contrast on orange buttons */
+    --secondary: 219 30% 93%;
+    --secondary-foreground: 219 58% 10%;
+    --muted: 219 30% 93%;
+    --muted-foreground: 219 20% 46%;
+    --accent: 17 50% 95%;
+    --accent-foreground: 219 58% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 219 20% 91%;
+    --input: 219 20% 91%;
+    --ring: 17 100% 45%;
+    --chart-1: 17 100% 45%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+    --radius: 0.5rem;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 219 58% 10%;
+    --sidebar-primary: 17 100% 45%;
+    --sidebar-primary-foreground: 219 58% 10%; /* #0b162A navy */
+    --sidebar-accent: 17 50% 95%;
+    --sidebar-accent-foreground: 219 58% 10%;
+    --sidebar-border: 219 20% 91%;
+    --sidebar-ring: 17 100% 45%;
+    --tooltip: 219 58% 10%;
+    --tooltip-foreground: 0 0% 98%;
+  }
+  .dark {
+    /* Dark: #0b162A bg, navy cards, orange primary (#E64100) */
+    --background: 219 58% 10%; /* #0b162A */
+    --foreground: 0 0% 98%;
+    --card: 219 40% 14%;
+    --card-foreground: 0 0% 98%;
+    --popover: 219 40% 14%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 17 100% 45%; /* #E64100 */
+    --primary-foreground: 219 58% 10%; /* #0b162A navy */
+    --secondary: 219 40% 18%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 219 40% 18%;
+    --muted-foreground: 219 20% 65%;
+    --accent: 17 60% 18%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 219 30% 22%;
+    --input: 219 30% 22%;
+    --ring: 17 100% 45%;
+    --chart-1: 17 100% 45%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+    --sidebar-background: 219 58% 10%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 17 100% 45%;
+    --sidebar-primary-foreground: 219 58% 10%; /* #0b162A navy */
+    --sidebar-accent: 17 60% 18%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 219 30% 22%;
+    --sidebar-ring: 17 100% 45%;
+    --tooltip: 219 40% 18%;
+    --tooltip-foreground: 0 0% 98%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
 }

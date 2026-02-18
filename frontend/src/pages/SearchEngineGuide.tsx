@@ -33,17 +33,17 @@ export default function SearchEngineGuide() {
       </div>
 
       {/* How it works */}
-      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-6">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">
+      <div className="bg-primary/10 border border-primary/30 rounded-xl p-6">
+        <h2 className="text-xl font-semibold text-foreground mb-3">
           {t('searchEngineGuide.howItWorks')}
         </h2>
-        <p className="text-gray-700 dark:text-gray-300 mb-4">
+        <p className="text-muted-foreground mb-4">
           {t('searchEngineGuide.howItWorksDescription')}
         </p>
-        <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-blue-200 dark:border-blue-700">
-          <div className="flex items-center gap-2 text-sm font-mono text-gray-900 dark:text-white">
-            <Code className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-            <span className="text-blue-600 dark:text-blue-400">go</span>
+        <div className="bg-card rounded-lg p-4 border border-primary/30">
+          <div className="flex items-center gap-2 text-sm font-mono text-foreground">
+            <Code className="h-4 w-4 text-primary" />
+            <span className="text-primary">go</span>
             <span className="text-gray-400">your-slug</span>
           </div>
         </div>

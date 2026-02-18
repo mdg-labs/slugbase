@@ -17,7 +17,11 @@ const options: swaggerJsdoc.Options = {
     info: {
       title: 'SlugBase API',
       version: '1.0.0',
-      description: 'API documentation for SlugBase - A bookmark management system',
+      description: `API documentation for SlugBase - A bookmark management system.
+
+**Authentication:**
+- **JWT (cookie or Bearer):** Session-based, short-lived. Used when logging in via the web app.
+- **Personal API Token (Bearer):** Long-lived tokens with prefix \`sb_\`. Use for scripts, CLI, or CI/CD. Create tokens at Profile > API Access. Send as \`Authorization: Bearer <token>\`.`,
       contact: {
         name: 'SlugBase',
       },
@@ -34,11 +38,19 @@ const options: swaggerJsdoc.Options = {
           type: 'apiKey',
           in: 'cookie',
           name: 'token',
+          description: 'JWT in httpOnly cookie (web app session)',
         },
         bearerAuth: {
           type: 'http',
           scheme: 'bearer',
           bearerFormat: 'JWT',
+          description: 'JWT token (short-lived session)',
+        },
+        apiTokenAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'API Token',
+          description: 'Personal API token (prefix sb_). Long-lived. Create at Profile > API Access.',
         },
       },
     },
@@ -48,6 +60,9 @@ const options: swaggerJsdoc.Options = {
       },
       {
         bearerAuth: [],
+      },
+      {
+        apiTokenAuth: [],
       },
     ],
   },

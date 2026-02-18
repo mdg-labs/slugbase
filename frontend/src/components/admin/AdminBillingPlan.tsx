@@ -1,8 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import api from '../../api/client';
-import { UserPlus } from 'lucide-react';
+import { UserPlus, Sparkles } from 'lucide-react';
 import Button from '../ui/Button';
+import { Card, CardContent, CardHeader } from '../ui/card';
+import { Switch } from '../ui/switch';
+import { Label } from '../ui/label';
+import { Badge } from '../ui/badge';
+import { Progress } from '../ui/progress';
+import { useOrgPlan } from '../../contexts/OrgPlanContext';
+import { appBasePath } from '../../config/api';
 
 interface Org {
   id: string;
@@ -11,6 +18,7 @@ interface Org {
   included_seats: number;
   member_count: number;
   role: string;
+  ai_enabled?: boolean;
   members: Array<{ id: string; email: string; name: string; role: string }>;
 }
 
@@ -25,8 +33,20 @@ interface Plan {
   extra_seat_yearly?: number | null;
 }
 
+interface Invoice {
+  id: string;
+  number: string;
+  status: string;
+  amount_paid: number;
+  currency: string;
+  created: number;
+  invoice_pdf: string | null;
+  hosted_invoice_url: string | null;
+}
+
 export default function AdminBillingPlan() {
   const { t } = useTranslation();
+  const { bookmarkCount, bookmarkLimit } = useOrgPlan();
   const [org, setOrg] = useState<Org | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,6 +55,10 @@ export default function AdminBillingPlan() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteError, setInviteError] = useState('');
+  const [aiSaving, setAiSaving] = useState(false);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [invoicesLoading, setInvoicesLoading] = useState(false);
+  const [invoicesError, setInvoicesError] = useState('');
 
   useEffect(() => {
     loadData();
@@ -47,8 +71,27 @@ export default function AdminBillingPlan() {
         api.get('/organizations/me'),
         api.get('/billing/plans'),
       ]);
-      setOrg(orgRes.data);
+      const orgData = orgRes.data;
+      setOrg(orgData);
       setPlans(plansRes.data?.plans || []);
+      const orgWithStripe = orgData as Org & { stripe_customer_id?: string };
+      const canManage = orgData?.role === 'owner' || orgData?.role === 'admin';
+      if (orgWithStripe?.stripe_customer_id && canManage) {
+        setInvoicesLoading(true);
+        setInvoicesError('');
+        try {
+          const invRes = await api.get('/billing/invoices');
+          setInvoices(invRes.data?.invoices || []);
+        } catch (err: any) {
+          setInvoicesError(err.response?.data?.error || t('common.error'));
+          setInvoices([]);
+        } finally {
+          setInvoicesLoading(false);
+        }
+      } else {
+        setInvoices([]);
+        setInvoicesError('');
+      }
     } catch (error: any) {
       if (error.response?.status === 404) {
         setOrg(null);
@@ -65,8 +108,8 @@ export default function AdminBillingPlan() {
       const res = await api.post('/billing/create-checkout-session', {
         plan,
         interval,
-        success_url: `${frontendUrl}/app/admin?tab=billing`,
-        cancel_url: `${frontendUrl}/app/admin?tab=billing`,
+        success_url: `${frontendUrl}${appBasePath}/admin/billing`,
+        cancel_url: `${frontendUrl}${appBasePath}/admin/billing`,
       });
       if (res.data?.url) {
         window.location.href = res.data.url;
@@ -83,7 +126,7 @@ export default function AdminBillingPlan() {
     try {
       const frontendUrl = window.location.origin;
       const res = await api.post('/billing/create-portal-session', {
-        return_url: `${frontendUrl}/app/admin?tab=billing`,
+        return_url: `${frontendUrl}${appBasePath}/admin/billing`,
       });
       if (res.data?.url) {
         window.location.href = res.data.url;
@@ -92,6 +135,19 @@ export default function AdminBillingPlan() {
       console.error('Portal error:', error);
       alert(error.response?.data?.error || t('common.error'));
       setCheckoutLoading(null);
+    }
+  };
+
+  const handleAiToggle = async (checked: boolean) => {
+    if (!org) return;
+    setAiSaving(true);
+    try {
+      await api.patch('/organizations/me/ai', { ai_enabled: checked });
+      setOrg({ ...org, ai_enabled: checked });
+    } catch (error: any) {
+      console.error('AI toggle error:', error);
+    } finally {
+      setAiSaving(false);
     }
   };
 
@@ -149,40 +205,159 @@ export default function AdminBillingPlan() {
   const paidPlans = plans.filter((p) => p.id !== 'free');
   const orgWithStripe = org as Org & { stripe_customer_id?: string };
 
+  const isFreePlan = org.plan === 'free';
+  const showBookmarkUsage = isFreePlan && bookmarkLimit != null;
+
   return (
     <div className="space-y-6">
-      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          {t('admin.billingCurrentPlan')}
-        </h2>
-        <p className="text-2xl font-bold text-gray-900 dark:text-white">
-          {planName(org.plan)}
-        </p>
-        {orgWithStripe.stripe_customer_id && canManageBilling && (
-          <Button
-            variant="secondary"
-            onClick={handlePortal}
-            disabled={!!checkoutLoading}
-            className="mt-4"
-          >
-            {checkoutLoading === 'portal' ? t('common.loading') : t('admin.billingManageSubscription')}
-          </Button>
-        )}
-      </div>
+      <Card>
+        <CardHeader>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+            {t('admin.billingCurrentPlan')}
+          </h2>
+          <p className="text-2xl font-bold text-gray-900 dark:text-white">
+            {planName(org.plan)}
+          </p>
+          {showBookmarkUsage && (
+            <div className="mt-3 space-y-2">
+              <p className="text-sm text-muted-foreground">
+                {t('plan.bookmarksUsed', { count: bookmarkCount, limit: bookmarkLimit })}
+              </p>
+              <Progress value={bookmarkLimit ? Math.min(100, (bookmarkCount / bookmarkLimit) * 100) : 0} className="h-2" />
+            </div>
+          )}
+        </CardHeader>
+        <CardContent>
+          {orgWithStripe.stripe_customer_id && canManageBilling && (
+            <Button
+              variant="secondary"
+              onClick={handlePortal}
+              disabled={!!checkoutLoading}
+            >
+              {checkoutLoading === 'portal' ? t('common.loading') : t('admin.billingManageSubscription')}
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+
+      {orgWithStripe.stripe_customer_id && canManageBilling && (
+        <Card>
+          <CardHeader>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              {t('admin.billingInvoices')}
+            </h2>
+          </CardHeader>
+          <CardContent>
+            {invoicesLoading ? (
+              <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
+            ) : invoicesError ? (
+              <p className="text-sm text-red-600 dark:text-red-400">{invoicesError}</p>
+            ) : invoices.length === 0 ? (
+              <p className="text-sm text-muted-foreground">{t('admin.billingInvoicesEmpty')}</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-200 dark:border-gray-700">
+                      <th className="text-left py-2 font-medium text-gray-900 dark:text-white">{t('admin.billingInvoiceDate')}</th>
+                      <th className="text-left py-2 font-medium text-gray-900 dark:text-white">{t('admin.billingInvoiceNumber')}</th>
+                      <th className="text-left py-2 font-medium text-gray-900 dark:text-white">{t('admin.billingInvoiceAmount')}</th>
+                      <th className="text-left py-2 font-medium text-gray-900 dark:text-white">{t('admin.billingInvoiceStatus')}</th>
+                      <th className="text-right py-2 font-medium text-gray-900 dark:text-white">{t('common.actions')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {invoices.map((inv) => (
+                      <tr key={inv.id} className="border-b border-gray-100 dark:border-gray-700 last:border-0">
+                        <td className="py-2 text-gray-600 dark:text-gray-400">
+                          {new Date(inv.created * 1000).toLocaleDateString()}
+                        </td>
+                        <td className="py-2 font-medium text-gray-900 dark:text-white">{inv.number}</td>
+                        <td className="py-2 text-gray-600 dark:text-gray-400">
+                          {(inv.amount_paid / 100).toFixed(2)} {inv.currency}
+                        </td>
+                        <td className="py-2">
+                          <Badge variant="secondary" className="text-xs">{inv.status}</Badge>
+                        </td>
+                        <td className="py-2 text-right">
+                          <span className="flex gap-2 justify-end">
+                            {inv.invoice_pdf && (
+                              <a
+                                href={inv.invoice_pdf}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-primary hover:underline text-xs"
+                              >
+                                {t('admin.billingInvoiceDownload')}
+                              </a>
+                            )}
+                            {inv.hosted_invoice_url && (
+                              <a
+                                href={inv.hosted_invoice_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-primary hover:underline text-xs"
+                              >
+                                {t('admin.billingInvoiceView')}
+                              </a>
+                            )}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {canManageBilling && (org.plan === 'personal' || org.plan === 'team' || org.plan === 'early_supporter') && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-violet-500 dark:text-violet-400" />
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                {t('admin.ai.orgTitle')}
+              </h2>
+            </div>
+            <p className="text-sm text-muted-foreground mt-1">
+              {t('admin.ai.orgDescription')}
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-3">
+              <Switch
+                id="org-ai-enabled"
+                checked={org.ai_enabled ?? false}
+                onCheckedChange={handleAiToggle}
+                disabled={aiSaving}
+              />
+              <Label htmlFor="org-ai-enabled" className="text-sm font-medium cursor-pointer">
+                {t('admin.ai.orgEnabled')}
+              </Label>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {canManageBilling && (
-        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            {t('admin.billingUpgrade')}
-          </h2>
-          <div className="mb-4 flex gap-2">
+        <Card>
+          <CardHeader>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              {t('admin.billingUpgrade')}
+            </h2>
+          </CardHeader>
+          <CardContent className="space-y-4">
+          <div className="flex gap-2">
             <button
               type="button"
               onClick={() => setBillingInterval('monthly')}
               className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
                 billingInterval === 'monthly'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:bg-accent'
               }`}
             >
               Monthly
@@ -192,8 +367,8 @@ export default function AdminBillingPlan() {
               onClick={() => setBillingInterval('yearly')}
               className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
                 billingInterval === 'yearly'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:bg-accent'
               }`}
             >
               Yearly
@@ -204,18 +379,19 @@ export default function AdminBillingPlan() {
               const isCurrent = org.plan === plan.id;
               const features = planFeatures[plan.id] || [];
               return (
-                <div
+                <Card
                   key={plan.id}
-                  className={`rounded-lg border p-4 flex flex-col ${
+                  className={`flex flex-col min-h-[320px] ${
                     plan.id === 'personal'
-                      ? 'border-blue-200 dark:border-blue-800 ring-2 ring-blue-500/20'
-                      : 'border-gray-200 dark:border-gray-700'
+                      ? 'border-primary/30 ring-2 ring-primary/20'
+                      : ''
                   }`}
                 >
+                  <CardHeader className="p-4 pb-2">
                   {plan.id === 'personal' && (
-                    <span className="inline-block w-fit mb-2 px-2.5 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded-full">
+                    <Badge variant="secondary" className="w-fit mb-2 text-xs bg-primary/20 text-primary">
                       {t('pricing.mostPopular')}
-                    </span>
+                    </Badge>
                   )}
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{planName(plan.id)}</h3>
                   {plan.id === 'free' && (
@@ -226,7 +402,7 @@ export default function AdminBillingPlan() {
                       <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
                         {billingInterval === 'monthly' ? t('pricing.personalPrice') : `€${((plan.price_yearly || 0) / 100).toFixed(0)}/yr`}
                       </p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">{t('pricing.personalYearly')}</p>
+                      <p className="text-sm text-muted-foreground">{t('pricing.personalYearly')}</p>
                     </>
                   )}
                   {plan.id === 'team' && (
@@ -234,7 +410,7 @@ export default function AdminBillingPlan() {
                       <p className="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
                         {billingInterval === 'monthly' ? t('pricing.teamPrice') : t('pricing.teamPriceYearly')}
                       </p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                      <p className="text-sm text-muted-foreground">
                         {t('pricing.teamUsers')} · {billingInterval === 'monthly' ? t('pricing.teamExtraUser') : t('pricing.teamExtraUserYearly')}
                       </p>
                     </>
@@ -245,9 +421,14 @@ export default function AdminBillingPlan() {
                       <p className="mt-1 text-2xl font-bold text-gray-900 dark:text-white">{t('pricing.earlySupporterPrice')}</p>
                     </>
                   )}
-                  <ul className="mt-4 space-y-2 text-sm text-gray-600 dark:text-gray-400 flex-1">
+                  </CardHeader>
+                  <CardContent className="p-4 pt-0 flex flex-col flex-1">
+                  <ul className="space-y-2 text-sm text-muted-foreground flex-1">
                     {features.map((f, i) => (
-                      <li key={i}>{f}</li>
+                      <li key={i} className="flex items-start gap-2">
+                        <span className="text-primary mt-0.5">•</span>
+                        <span>{f}</span>
+                      </li>
                     ))}
                   </ul>
                   {plan.id !== 'free' && (
@@ -310,22 +491,27 @@ export default function AdminBillingPlan() {
                     </div>
                   )}
                   {plan.id === 'free' && isCurrent && (
-                    <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">{t('admin.billingCurrentPlan')}</p>
+                    <p className="mt-4 text-sm text-muted-foreground">{t('admin.billingCurrentPlan')}</p>
                   )}
-                </div>
+                  </CardContent>
+                </Card>
               );
             })}
           </div>
           {paidPlans.length === 0 && (
-            <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">{t('admin.billingNotConfigured')}</p>
+            <p className="text-sm text-muted-foreground">{t('admin.billingNotConfigured')}</p>
           )}
-        </div>
+          </CardContent>
+        </Card>
       )}
 
-      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          {t('admin.billingOrgMembers')}
-        </h2>
+      <Card>
+        <CardHeader>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+            {t('admin.billingOrgMembers')}
+          </h2>
+        </CardHeader>
+        <CardContent>
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
           {t('admin.billingSeatsUsed', {
             count: org.member_count,
@@ -355,7 +541,7 @@ export default function AdminBillingPlan() {
               value={inviteEmail}
               onChange={(e) => setInviteEmail(e.target.value)}
               placeholder={t('auth.emailPlaceholder')}
-              className="flex-1 px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+              className="flex-1 px-4 py-2 text-sm border border-input rounded-lg bg-background text-foreground focus:ring-2 focus:ring-ring"
               required
             />
             <Button
@@ -381,7 +567,8 @@ export default function AdminBillingPlan() {
         {inviteError && (
           <p className="mt-2 text-sm text-red-600 dark:text-red-400">{inviteError}</p>
         )}
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import { query, queryOne, execute } from '../db/index.js';
 import { AuthRequest, requireAuth } from '../middleware/auth.js';
-import { canAccessFolder, canModifyFolder } from '../auth/authorization.js';
+import { canAccessFolder, canModifyFolder, getTeamIdsForUser, getTeamIdsForUserInOrg } from '../auth/authorization.js';
 import { v4 as uuidv4 } from 'uuid';
 import { isCloud } from '../config/mode.js';
-import { getCurrentOrgId } from '../utils/organizations.js';
+import { getCurrentOrgId, getUserPlan } from '../utils/organizations.js';
+import { PLAN_ERRORS } from '../utils/plan-errors.js';
 import { validateLength, sanitizeString, MAX_LENGTHS } from '../utils/validation.js';
 
 const router = Router();
@@ -61,15 +62,16 @@ router.get('/', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const userId = authReq.user!.id;
-    
-    // Get user's teams
-    const userTeams = await query(
-      'SELECT team_id FROM team_members WHERE user_id = ?',
-      [userId]
-    );
-    const teamIds = Array.isArray(userTeams) ? userTeams.map((t: any) => t.team_id) : [];
+    const orgId = isCloud ? await getCurrentOrgId(userId) : null;
+
+    // Get user's teams (org-scoped in cloud mode)
+    const teamIds = orgId
+      ? await getTeamIdsForUserInOrg(userId, orgId)
+      : await getTeamIdsForUser(userId);
 
     // Get own folders + shared folders (via users, teams, or folder shares)
+    // In cloud mode, user shares (fus) only count when folder owner is in same org
+    const fusCond = orgId ? '(fus.user_id = ? AND f.user_id IN (SELECT user_id FROM org_members WHERE org_id = ?))' : 'fus.user_id = ?';
     let sql = `
       SELECT DISTINCT f.*,
              CASE WHEN f.user_id = ? THEN 'own' ELSE 'shared' END as folder_type
@@ -77,10 +79,15 @@ router.get('/', async (req, res) => {
       LEFT JOIN folder_user_shares fus ON f.id = fus.folder_id
       LEFT JOIN folder_team_shares fts ON f.id = fts.folder_id
       WHERE (f.user_id = ?
-        OR fus.user_id = ?
+        OR ${fusCond}
         OR (fts.team_id IN (${teamIds.length > 0 ? teamIds.map(() => '?').join(',') : 'NULL'}) AND fts.team_id IS NOT NULL))
     `;
-    const params: any[] = [userId, userId, userId];
+    const params: any[] = [userId, userId];
+    if (orgId) {
+      params.push(userId, orgId);
+    } else {
+      params.push(userId);
+    }
     if (teamIds.length > 0) {
       params.push(...teamIds);
     }
@@ -98,33 +105,73 @@ router.get('/', async (req, res) => {
     }
 
     const folders = await query(sql, params);
+    const folderList = folders as any[];
 
-    // Get shared teams and users for each folder
-    for (const folder of folders as any[]) {
-      // Get owner info for shared folders
+    if (folderList.length === 0) {
+      return res.json(folders);
+    }
+
+    const folderIds = folderList.map((f) => f.id).filter(Boolean);
+    const placeholders = folderIds.map(() => '?').join(',');
+
+    // Batch fetch folder_team_shares and folder_user_shares
+    const ftsRows = await query(
+      `SELECT fts.folder_id, t.id, t.name, t.description, t.created_at FROM folder_team_shares fts
+       INNER JOIN teams t ON fts.team_id = t.id
+       WHERE fts.folder_id IN (${placeholders})`,
+      folderIds
+    );
+    const sharedTeamsByFolder = new Map<string, any[]>();
+    for (const row of Array.isArray(ftsRows) ? ftsRows : []) {
+      const r = row as any;
+      const fid = r.folder_id;
+      if (!fid) continue;
+      const team = { id: r.id, name: r.name, description: r.description, created_at: r.created_at };
+      if (!sharedTeamsByFolder.has(fid)) sharedTeamsByFolder.set(fid, []);
+      sharedTeamsByFolder.get(fid)!.push(team);
+    }
+
+    const fusRows = await query(
+      `SELECT fus.folder_id, u.id, u.name, u.email FROM folder_user_shares fus
+       INNER JOIN users u ON fus.user_id = u.id
+       WHERE fus.folder_id IN (${placeholders})`,
+      folderIds
+    );
+    const sharedUsersByFolder = new Map<string, any[]>();
+    for (const row of Array.isArray(fusRows) ? fusRows : []) {
+      const r = row as any;
+      const fid = r.folder_id;
+      if (!fid) continue;
+      const user = { id: r.id, name: r.name, email: r.email };
+      if (!sharedUsersByFolder.has(fid)) sharedUsersByFolder.set(fid, []);
+      sharedUsersByFolder.get(fid)!.push(user);
+    }
+
+    // Batch fetch owner info for shared folders
+    const ownerIds = [...new Set(folderList.filter((f) => f.user_id !== userId).map((f) => f.user_id))];
+    const ownersById = new Map<string, { name: string; email: string }>();
+    if (ownerIds.length > 0) {
+      const ownerPlaceholders = ownerIds.map(() => '?').join(',');
+      const ownerRows = await query(
+        `SELECT id, name, email FROM users WHERE id IN (${ownerPlaceholders})`,
+        ownerIds
+      );
+      for (const row of Array.isArray(ownerRows) ? ownerRows : []) {
+        const r = row as any;
+        ownersById.set(r.id, { name: r.name, email: r.email });
+      }
+    }
+
+    for (const folder of folderList) {
       if (folder.user_id !== userId) {
-        const owner = await queryOne('SELECT id, name, email FROM users WHERE id = ?', [folder.user_id]);
+        const owner = ownersById.get(folder.user_id);
         if (owner) {
           folder.user_name = owner.name;
           folder.user_email = owner.email;
         }
       }
-      
-      const sharedTeams = await query(
-        `SELECT t.* FROM teams t
-         INNER JOIN folder_team_shares fts ON t.id = fts.team_id
-         WHERE fts.folder_id = ?`,
-        [folder.id]
-      );
-      folder.shared_teams = Array.isArray(sharedTeams) ? sharedTeams : (sharedTeams ? [sharedTeams] : []);
-      
-      const sharedUsers = await query(
-        `SELECT u.id, u.name, u.email FROM users u
-         INNER JOIN folder_user_shares fus ON u.id = fus.user_id
-         WHERE fus.folder_id = ?`,
-        [folder.id]
-      );
-      folder.shared_users = Array.isArray(sharedUsers) ? sharedUsers : (sharedUsers ? [sharedUsers] : []);
+      folder.shared_teams = sharedTeamsByFolder.get(folder.id) || [];
+      folder.shared_users = sharedUsersByFolder.get(folder.id) || [];
     }
 
     res.json(folders);
@@ -164,9 +211,10 @@ router.get('/:id', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const userId = authReq.user!.id;
+    const orgId = isCloud ? await getCurrentOrgId(userId) : null;
     const { id } = req.params;
 
-    const canAccess = await canAccessFolder(userId, id);
+    const canAccess = await canAccessFolder(userId, id, orgId);
     if (!canAccess) {
       return res.status(404).json({ error: 'Folder not found' });
     }
@@ -259,6 +307,7 @@ router.post('/', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const userId = authReq.user!.id;
+    const orgId = isCloud ? await getCurrentOrgId(userId) : null;
     const { name, icon } = req.body;
 
     if (!name) {
@@ -287,17 +336,28 @@ router.post('/', async (req, res) => {
     }
 
     const folderId = uuidv4();
-    const { team_ids, user_ids, share_all_teams } = req.body;
+    let { team_ids, user_ids, share_all_teams } = req.body;
+
+    // Cloud: Free/Personal cannot share to teams (only to individual users)
+    if (isCloud) {
+      const plan = await getUserPlan(userId);
+      if (plan === 'free' || plan === 'personal') {
+        if (share_all_teams || (team_ids && team_ids.length > 0)) {
+          return res.status(403).json({
+            error: PLAN_ERRORS.FOLDER_SHARING.message,
+            code: PLAN_ERRORS.FOLDER_SHARING.code,
+          });
+        }
+      }
+    }
 
     await execute('INSERT INTO folders (id, user_id, name, icon) VALUES (?, ?, ?, ?)', [folderId, userId, sanitizedName, icon || null]);
 
     // Add team shares
     if (share_all_teams) {
-      const userTeams = await query(
-        'SELECT team_id FROM team_members WHERE user_id = ?',
-        [userId]
-      );
-      const teamIds = Array.isArray(userTeams) ? userTeams.map((t: any) => t.team_id) : [];
+      const teamIds = orgId
+        ? await getTeamIdsForUserInOrg(userId, orgId)
+        : await getTeamIdsForUser(userId);
       for (const teamId of teamIds) {
         await execute(
           'INSERT INTO folder_team_shares (folder_id, team_id) VALUES (?, ?)',
@@ -305,7 +365,7 @@ router.post('/', async (req, res) => {
         );
       }
     } else if (team_ids && team_ids.length > 0) {
-      // Verify user is member of all teams
+      // Verify user is member of all teams (and team is in org in cloud mode)
       for (const teamId of team_ids) {
         const isMember = await queryOne(
           'SELECT * FROM team_members WHERE user_id = ? AND team_id = ?',
@@ -313,6 +373,12 @@ router.post('/', async (req, res) => {
         );
         if (!isMember) {
           return res.status(403).json({ error: `You are not a member of team ${teamId}` });
+        }
+        if (orgId) {
+          const teamInOrg = await queryOne('SELECT 1 FROM teams WHERE id = ? AND org_id = ?', [teamId, orgId]);
+          if (!teamInOrg) {
+            return res.status(403).json({ error: `Team ${teamId} is not in your organization` });
+          }
         }
         await execute(
           'INSERT INTO folder_team_shares (folder_id, team_id) VALUES (?, ?)',
@@ -325,7 +391,6 @@ router.post('/', async (req, res) => {
     if (user_ids && user_ids.length > 0) {
       const filteredUserIds = user_ids.filter((uid: string) => uid !== userId);
       if (isCloud) {
-        const orgId = await getCurrentOrgId(userId);
         if (!orgId) {
           return res.status(403).json({ error: 'No organization selected' });
         }
@@ -420,6 +485,7 @@ router.put('/:id', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const userId = authReq.user!.id;
+    const orgId = isCloud ? await getCurrentOrgId(userId) : null;
     const { id } = req.params;
     const { name, icon } = req.body;
 
@@ -457,7 +523,16 @@ router.put('/:id', async (req, res) => {
       return res.status(400).json({ error: 'Folder with this name already exists' });
     }
 
-    const { team_ids, user_ids, share_all_teams } = req.body;
+    let { team_ids, user_ids, share_all_teams } = req.body;
+
+    // Cloud: Free/Personal - strip team shares only (allow user shares)
+    if (isCloud) {
+      const plan = await getUserPlan(userId);
+      if (plan === 'free' || plan === 'personal') {
+        team_ids = [];
+        share_all_teams = false;
+      }
+    }
 
     await execute('UPDATE folders SET name = ?, icon = ? WHERE id = ?', [sanitizedName, icon || null, id]);
 
@@ -465,11 +540,9 @@ router.put('/:id', async (req, res) => {
     if (share_all_teams !== undefined || team_ids !== undefined) {
       await execute('DELETE FROM folder_team_shares WHERE folder_id = ?', [id]);
       if (share_all_teams) {
-        const userTeams = await query(
-          'SELECT team_id FROM team_members WHERE user_id = ?',
-          [userId]
-        );
-        const teamIds = Array.isArray(userTeams) ? userTeams.map((t: any) => t.team_id) : [];
+        const teamIds = orgId
+          ? await getTeamIdsForUserInOrg(userId, orgId)
+          : await getTeamIdsForUser(userId);
         for (const teamId of teamIds) {
           await execute(
             'INSERT INTO folder_team_shares (folder_id, team_id) VALUES (?, ?)',
@@ -477,7 +550,7 @@ router.put('/:id', async (req, res) => {
           );
         }
       } else if (team_ids && team_ids.length > 0) {
-        // Verify user is member of all teams
+        // Verify user is member of all teams (and team is in org in cloud mode)
         for (const teamId of team_ids) {
           const isMember = await queryOne(
             'SELECT * FROM team_members WHERE user_id = ? AND team_id = ?',
@@ -485,6 +558,12 @@ router.put('/:id', async (req, res) => {
           );
           if (!isMember) {
             return res.status(403).json({ error: `You are not a member of team ${teamId}` });
+          }
+          if (orgId) {
+            const teamInOrg = await queryOne('SELECT 1 FROM teams WHERE id = ? AND org_id = ?', [teamId, orgId]);
+            if (!teamInOrg) {
+              return res.status(403).json({ error: `Team ${teamId} is not in your organization` });
+            }
           }
           await execute(
             'INSERT INTO folder_team_shares (folder_id, team_id) VALUES (?, ?)',
@@ -500,7 +579,6 @@ router.put('/:id', async (req, res) => {
       if (user_ids.length > 0) {
         const filteredUserIds = user_ids.filter((uid: string) => uid !== userId);
         if (isCloud) {
-          const orgId = await getCurrentOrgId(userId);
           if (!orgId) {
             return res.status(403).json({ error: 'No organization selected' });
           }

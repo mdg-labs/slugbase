@@ -117,7 +117,7 @@ export default function Login() {
                 name="email"
                 type="email"
                 required
-                className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-colors"
                 placeholder={t('auth.emailPlaceholder')}
                 value={localAuth.email}
                 onChange={(e) => setLocalAuth({ ...localAuth, email: e.target.value })}
@@ -132,7 +132,7 @@ export default function Login() {
                 name="password"
                 type="password"
                 required
-                className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-colors"
                 placeholder={t('auth.passwordPlaceholder')}
                 value={localAuth.password}
                 onChange={(e) => setLocalAuth({ ...localAuth, password: e.target.value })}
@@ -155,20 +155,20 @@ export default function Login() {
             <div className="text-center space-y-2">
               <Link
                 to={isCloud ? '/app/password-reset' : '/password-reset'}
-                className="block text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+                className="block text-sm font-medium text-primary hover:text-primary/90"
               >
                 {t('auth.forgotPassword')}
               </Link>
               <Link
                 to="/contact"
-                className="block text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+                className="block text-sm font-medium text-primary hover:text-primary/90"
               >
                 {t('contact.title')}
               </Link>
               {isCloud && (
                 <p className="text-sm text-gray-600 dark:text-gray-400">
                   {t('signup.noAccount')}{' '}
-                  <Link to="/app/signup" className="font-medium text-blue-600 dark:text-blue-400 hover:underline">
+                  <Link to="/app/signup" className="font-medium text-primary hover:underline">
                     {t('auth.signUp')}
                   </Link>
                 </p>

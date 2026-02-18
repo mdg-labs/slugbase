@@ -7,6 +7,7 @@ import { Plus, Edit, Trash2, Users, Network } from 'lucide-react';
 import TeamModal from '../modals/TeamModal';
 import TeamAssignmentModal from '../modals/TeamAssignmentModal';
 import Button from '../ui/Button';
+import { PageLoadingSkeleton } from '../ui/PageLoadingSkeleton';
 
 interface Team {
   id: string;
@@ -78,11 +79,7 @@ export default function AdminTeams() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-gray-500 dark:text-gray-400">{t('common.loading')}</div>
-      </div>
-    );
+    return <PageLoadingSkeleton lines={6} />;
   }
 
   return (

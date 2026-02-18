@@ -1,20 +1,28 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useOrgPlan } from '../contexts/OrgPlanContext';
+import { canCreateBookmark, FREE_PLAN_BOOKMARK_LIMIT } from '../utils/plan';
 import api from '../api/client';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { useConfirmDialog } from '../hooks/useConfirmDialog';
 import { useToast } from '../components/ui/Toast';
-import { Plus, LayoutGrid, List, X, CheckSquare, Download, Upload, Bookmark as BookmarkIcon, ExternalLink, FolderPlus, Tag as TagIcon, Share2, Trash2, Copy } from 'lucide-react';
+import { Plus, LayoutGrid, List, X, CheckSquare, Download, Upload, Bookmark as BookmarkIcon, ExternalLink, FolderPlus, Tag as TagIcon, Share2, Trash2, Copy, ChevronLeft, ChevronRight } from 'lucide-react';
 import BookmarkModal from '../components/modals/BookmarkModal';
 import ImportModal from '../components/modals/ImportModal';
+import ShareResourceDialog from '../components/sharing/ShareResourceDialog';
 import Button from '../components/ui/Button';
 import Select from '../components/ui/Select';
 import BookmarkCard from '../components/bookmarks/BookmarkCard';
 import BookmarkTableView from '../components/bookmarks/BookmarkTableView';
 import { BulkMoveModal, BulkTagModal, BulkShareModal } from '../components/bookmarks/BulkActionModals';
+import { PageLoadingSkeleton } from '../components/ui/PageLoadingSkeleton';
+import { Card } from '../components/ui/card';
+import { PageHeader } from '../components/PageHeader';
+import { useSidebar } from '../components/ui/sidebar';
 import { appBasePath } from '../config/api';
+import { isCloud } from '../config/mode';
 
 interface Bookmark {
   id: string;
@@ -41,6 +49,8 @@ type SortOption = 'recently_added' | 'alphabetical' | 'most_used' | 'recently_ac
 export default function Bookmarks() {
   const { t } = useTranslation();
   const { user } = useAuth();
+  const { isMobile, state: sidebarState } = useSidebar();
+  const { plan, bookmarkCount, bookmarkLimit, freePlanGraceEndsAt, refresh } = useOrgPlan();
   const [searchParams, setSearchParams] = useSearchParams();
   const { showConfirm, dialogState } = useConfirmDialog();
   const { showToast } = useToast();
@@ -58,6 +68,7 @@ export default function Bookmarks() {
   });
   const [sortBy, setSortBy] = useState<SortOption>('recently_added');
   const [selectedBookmarks, setSelectedBookmarks] = useState<Set<string>>(new Set());
+  const [allSelectedAcrossPages, setAllSelectedAcrossPages] = useState(false);
   const [bulkMode, setBulkMode] = useState(false);
   const [bulkMoveModalOpen, setBulkMoveModalOpen] = useState(false);
   const [bulkTagModalOpen, setBulkTagModalOpen] = useState(false);
@@ -68,10 +79,20 @@ export default function Bookmarks() {
   const selectedTag = searchParams.get('tag_id') || '';
   const [modalOpen, setModalOpen] = useState(false);
   const [editingBookmark, setEditingBookmark] = useState<Bookmark | null>(null);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [sharingBookmark, setSharingBookmark] = useState<Bookmark | null>(null);
+  const [page, setPage] = useState(0);
+  const [total, setTotal] = useState(0);
+  const pageSize = 50;
+
+  useEffect(() => {
+    setPage(0);
+    setAllSelectedAcrossPages(false);
+  }, [selectedFolder, selectedTag, sortBy]);
 
   useEffect(() => {
     loadData();
-  }, [selectedFolder, selectedTag]);
+  }, [selectedFolder, selectedTag, sortBy, page]);
 
   // Handle query params from GlobalSearch and dashboard Edit link
   useEffect(() => {
@@ -81,7 +102,12 @@ export default function Bookmarks() {
     const editId = searchParams.get('edit');
 
     if (createParam === 'true') {
-      handleCreate();
+      const atLimit = !canCreateBookmark(plan, bookmarkCount, bookmarkLimit, freePlanGraceEndsAt);
+      if (atLimit) {
+        showToast(t('plan.limitBookmarks', { limit: bookmarkLimit ?? FREE_PLAN_BOOKMARK_LIMIT }), 'error');
+      } else {
+        handleCreate();
+      }
       const params = new URLSearchParams(searchParams);
       params.delete('create');
       setSearchParams(params, { replace: true });
@@ -145,19 +171,23 @@ export default function Bookmarks() {
   async function loadData() {
     try {
       const [bookmarksRes, foldersRes, tagsRes, teamsRes] = await Promise.all([
-        api.get('/bookmarks', { 
-          params: { 
-            folder_id: selectedFolder || undefined, 
+        api.get('/bookmarks', {
+          params: {
+            folder_id: selectedFolder || undefined,
             tag_id: selectedTag || undefined,
-            sort_by: sortBy 
-          } 
+            sort_by: sortBy,
+            limit: pageSize,
+            offset: page * pageSize,
+          },
         }),
         api.get('/folders'),
         api.get('/tags'),
         api.get('/teams'),
       ]);
-      // Filter to only show own bookmarks (not shared)
-      const ownBookmarks = bookmarksRes.data.filter((b: Bookmark) => b.bookmark_type === 'own');
+      const payload = bookmarksRes.data;
+      const items = payload.items ?? [];
+      setTotal(payload.total ?? 0);
+      const ownBookmarks = items.filter((b: Bookmark) => b.bookmark_type === 'own');
       setBookmarks(ownBookmarks);
       setFolders(foldersRes.data);
       setTags(tagsRes.data);
@@ -169,32 +199,13 @@ export default function Bookmarks() {
     }
   }
 
-  const sortedBookmarks = useMemo(() => {
-    const sorted = [...bookmarks];
-    switch (sortBy) {
-      case 'alphabetical':
-        return sorted.sort((a, b) => a.title.localeCompare(b.title));
-      case 'most_used':
-        return sorted.sort((a, b) => (b.access_count || 0) - (a.access_count || 0));
-      case 'recently_accessed':
-        return sorted.sort((a, b) => {
-          const aDate = a.last_accessed_at ? new Date(a.last_accessed_at).getTime() : 0;
-          const bDate = b.last_accessed_at ? new Date(b.last_accessed_at).getTime() : 0;
-          return bDate - aDate;
-        });
-      case 'recently_added':
-      default:
-        return sorted.sort((a, b) => {
-          const aDate = a.created_at ? new Date(a.created_at).getTime() : 0;
-          const bDate = b.created_at ? new Date(b.created_at).getTime() : 0;
-          return bDate - aDate;
-        });
-    }
-  }, [bookmarks, sortBy]);
+  const displayedBookmarks = bookmarks;
 
   const hasActiveFilters = selectedFolder || selectedTag;
 
   function handleCreate() {
+    const atLimit = !canCreateBookmark(plan, bookmarkCount, bookmarkLimit, freePlanGraceEndsAt);
+    if (atLimit) return;
     setEditingBookmark(null);
     setModalOpen(true);
   }
@@ -239,6 +250,7 @@ export default function Bookmarks() {
           await Promise.all(Array.from(selectedBookmarks).map(id => api.delete(`/bookmarks/${id}`)));
           loadData();
           setSelectedBookmarks(new Set());
+          setAllSelectedAcrossPages(false);
           setBulkMode(false);
           showToast(t('common.success'), 'success');
         } catch (error) {
@@ -257,6 +269,7 @@ export default function Bookmarks() {
       ));
       loadData();
       setSelectedBookmarks(new Set());
+      setAllSelectedAcrossPages(false);
       setBulkMoveModalOpen(false);
       showToast(t('common.success'), 'success');
     } catch (error) {
@@ -277,6 +290,7 @@ export default function Bookmarks() {
       await Promise.all(bookmarkPromises);
       loadData();
       setSelectedBookmarks(new Set());
+      setAllSelectedAcrossPages(false);
       setBulkTagModalOpen(false);
       showToast(t('common.success'), 'success');
     } catch (error) {
@@ -296,6 +310,7 @@ export default function Bookmarks() {
       ));
       loadData();
       setSelectedBookmarks(new Set());
+      setAllSelectedAcrossPages(false);
       setBulkShareModalOpen(false);
       showToast(t('common.success'), 'success');
     } catch (error) {
@@ -327,6 +342,7 @@ export default function Bookmarks() {
   function handleModalClose() {
     setModalOpen(false);
     setEditingBookmark(null);
+    refresh();
     loadData();
   }
 
@@ -347,20 +363,44 @@ export default function Bookmarks() {
   }
 
   function toggleSelectAll() {
-    if (selectedBookmarks.size === sortedBookmarks.length) {
+    if (selectedBookmarks.size === displayedBookmarks.length) {
       setSelectedBookmarks(new Set());
     } else {
-      setSelectedBookmarks(new Set(sortedBookmarks.map(b => b.id)));
+      setSelectedBookmarks(new Set(displayedBookmarks.map(b => b.id)));
     }
   }
 
+  async function handleSelectAllRemaining() {
+    try {
+      const res = await api.get('/bookmarks/ids', {
+        params: {
+          folder_id: selectedFolder || undefined,
+          tag_id: selectedTag || undefined,
+          sort_by: sortBy,
+        },
+      });
+      const ids = res.data?.ids ?? [];
+      setSelectedBookmarks(prev => new Set([...prev, ...ids]));
+      setAllSelectedAcrossPages(true);
+    } catch (err) {
+      console.error('Failed to fetch bookmark IDs:', err);
+      showToast(t('common.error'), 'error');
+    }
+  }
+
+  function handleDeselectAll() {
+    setSelectedBookmarks(new Set());
+    setAllSelectedAcrossPages(false);
+  }
+
+  const ALL_FILTER = '__all__';
   const folderOptions = [
-    { value: '', label: t('bookmarks.allFolders') },
+    { value: ALL_FILTER, label: t('bookmarks.allFolders') },
     ...folders.map((f) => ({ value: f.id, label: f.name, icon: (f as any).icon })),
   ];
 
   const tagOptions = [
-    { value: '', label: t('bookmarks.allTags') },
+    { value: ALL_FILTER, label: t('bookmarks.allTags') },
     ...tags.map((t) => ({ value: t.id, label: t.name })),
   ];
 
@@ -372,33 +412,48 @@ export default function Bookmarks() {
   ];
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-gray-500 dark:text-gray-400">{t('common.loading')}</div>
-      </div>
-    );
+    return <PageLoadingSkeleton lines={6} />;
   }
+
+  const showGraceBanner = isCloud && plan === 'free' && bookmarkLimit != null && bookmarkCount > bookmarkLimit && freePlanGraceEndsAt;
+  const graceExpired = showGraceBanner && new Date(freePlanGraceEndsAt!).getTime() <= Date.now();
 
   return (
     <div className="space-y-6 pb-24">
-      {/* Sticky Header */}
-      <div className="sticky top-0 z-40 bg-gray-50 dark:bg-gray-900 -mx-4 px-4 pt-4 pb-4 border-b border-gray-200 dark:border-gray-700 -mb-4 shadow-sm">
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
-              {t('bookmarks.title')}
-            </h1>
-            <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
-              {bookmarks.length} {bookmarks.length === 1 ? t('common.bookmark') : t('common.bookmarks')}
-            </p>
-          </div>
+      {showGraceBanner && (
+        <div className={`rounded-lg border p-4 ${graceExpired ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20' : 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20'}`}>
+          <p className={`text-sm ${graceExpired ? 'text-red-800 dark:text-red-200' : 'text-amber-800 dark:text-amber-200'}`}>
+            {graceExpired
+              ? t('plan.gracePeriodExpired', { limit: bookmarkLimit })
+              : t('plan.gracePeriodBanner', {
+                  count: bookmarkCount,
+                  limit: bookmarkLimit,
+                  date: new Date(freePlanGraceEndsAt).toLocaleDateString(undefined, { dateStyle: 'medium' }),
+                })}
+          </p>
+          <Link
+            to={`${appBasePath}/admin/billing`}
+            className="mt-2 inline-block text-sm font-medium text-amber-700 dark:text-amber-300 hover:underline"
+          >
+            {t('plan.upgradeCta')}
+          </Link>
+        </div>
+      )}
+      {/* Sticky controls bar: header + filters/toolbar - stays visible when scrolling */}
+      <div className="sticky top-0 z-40 space-y-4 pb-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pt-0 -mt-8 bg-background border-b shadow-sm">
+        <PageHeader
+          className="pt-4"
+          title={t('bookmarks.title')}
+          subtitle={bookmarkLimit != null ? t('plan.bookmarksUsed', { count: bookmarkCount, limit: bookmarkLimit }) : `${total} ${total === 1 ? t('common.bookmark') : t('common.bookmarks')}`}
+          actions={
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"
               size="sm"
               icon={Upload}
-              onClick={() => setImportModalOpen(true)}
-              title={t('bookmarks.import')}
+              onClick={() => !canCreateBookmark(plan, bookmarkCount, bookmarkLimit, freePlanGraceEndsAt) ? undefined : setImportModalOpen(true)}
+              title={!canCreateBookmark(plan, bookmarkCount, bookmarkLimit, freePlanGraceEndsAt) ? t('plan.limitBookmarks', { limit: bookmarkLimit ?? FREE_PLAN_BOOKMARK_LIMIT }) : t('bookmarks.import')}
+              disabled={!canCreateBookmark(plan, bookmarkCount, bookmarkLimit, freePlanGraceEndsAt)}
             >
               <span className="hidden sm:inline">{t('bookmarks.import')}</span>
             </Button>
@@ -411,23 +466,31 @@ export default function Bookmarks() {
             >
               <span className="hidden sm:inline">{t('bookmarks.export')}</span>
             </Button>
-            <Button onClick={handleCreate} icon={Plus}>
-              {t('bookmarks.create')}
-            </Button>
+            {canCreateBookmark(plan, bookmarkCount, bookmarkLimit, freePlanGraceEndsAt) ? (
+              <Button onClick={handleCreate} icon={Plus}>
+                {t('bookmarks.create')}
+              </Button>
+            ) : (
+              <Link to={`${appBasePath}/admin/billing`}>
+                <Button variant="secondary" icon={Plus} disabled title={t('plan.limitBookmarks', { limit: bookmarkLimit ?? FREE_PLAN_BOOKMARK_LIMIT })}>
+                  {t('plan.upgradeCta')}
+                </Button>
+              </Link>
+            )}
           </div>
-        </div>
-      </div>
+        }
+        />
 
-      {/* Sticky Toolbar: Filters, Sort, View Modes */}
-      <div className="sticky top-[140px] z-30 flex flex-wrap items-center gap-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 shadow-sm">
+        {/* Toolbar: Filters, Sort, View Modes */}
+        <div className="flex flex-wrap items-center gap-3 bg-card rounded-lg border p-4 shadow-sm">
         {/* Filters */}
         <div className="flex flex-wrap gap-3 flex-1 min-w-[200px]">
           <div className="flex-1 min-w-[180px]">
             <Select
-              value={selectedFolder}
+              value={selectedFolder || ALL_FILTER}
               onChange={(value) => {
                 const params = new URLSearchParams(searchParams);
-                if (value) {
+                if (value && value !== ALL_FILTER) {
                   params.set('folder_id', value);
                 } else {
                   params.delete('folder_id');
@@ -440,10 +503,10 @@ export default function Bookmarks() {
           </div>
           <div className="flex-1 min-w-[180px]">
             <Select
-              value={selectedTag}
+              value={selectedTag || ALL_FILTER}
               onChange={(value) => {
                 const params = new URLSearchParams(searchParams);
-                if (value) {
+                if (value && value !== ALL_FILTER) {
                   params.set('tag_id', value);
                 } else {
                   params.delete('tag_id');
@@ -483,8 +546,8 @@ export default function Bookmarks() {
               onClick={() => setViewMode('card')}
               className={`p-1.5 rounded transition-colors ${
                 viewMode === 'card'
-                  ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm'
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                  ? 'bg-card text-primary shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
               title={t('bookmarks.viewCard')}
             >
@@ -494,8 +557,8 @@ export default function Bookmarks() {
               onClick={() => setViewMode('list')}
               className={`p-1.5 rounded transition-colors ${
                 viewMode === 'list'
-                  ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm'
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                  ? 'bg-card text-primary shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
               title={t('bookmarks.viewList')}
             >
@@ -506,29 +569,79 @@ export default function Bookmarks() {
             onClick={() => setCompactMode(!compactMode)}
             className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
               compactMode
-                ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                ? 'bg-primary/20 text-primary'
+                : 'bg-muted text-muted-foreground hover:bg-accent'
             }`}
             title={t('bookmarks.compactMode')}
           >
             {t('bookmarks.compactMode')}
           </button>
         </div>
+
+        {/* Bulk Select Toggle */}
+        {!bulkMode && displayedBookmarks.length > 0 && (
+          <div className="flex items-center gap-2 border-l border-gray-200 dark:border-gray-700 pl-3">
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={CheckSquare}
+              onClick={() => setBulkMode(true)}
+            >
+              {t('bookmarks.bulkSelect')}
+            </Button>
+          </div>
+        )}
+        </div>
       </div>
 
-      {/* Sticky Bulk Actions Bar */}
+      {/* Bulk Actions Bar - offset left on desktop to not overlap sidebar */}
       {bulkMode && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 border-t border-blue-200 dark:border-blue-800 shadow-lg p-4">
+        <div
+          className="fixed bottom-0 right-0 z-50 flex items-center justify-between bg-primary/10 border-t border-primary/30 shadow-lg p-4"
+          style={
+            !isMobile
+              ? { left: sidebarState === 'expanded' ? '16rem' : '3rem' }
+              : { left: 0 }
+          }
+        >
           <div className="flex items-center gap-3">
-            <button
-              onClick={toggleSelectAll}
-              className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
-            >
-              {selectedBookmarks.size === sortedBookmarks.length ? t('bookmarks.deselectAll') : t('bookmarks.selectAll')}
-            </button>
-            <span className="text-sm text-gray-700 dark:text-gray-300">
-              {t('bookmarks.selectedCount', { count: selectedBookmarks.size })}
-            </span>
+            {(allSelectedAcrossPages || selectedBookmarks.size === total) && total > 0 ? (
+              <>
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  {t('bookmarks.allSelected', { total })}
+                </span>
+                <button
+                  onClick={handleDeselectAll}
+                  className="text-sm text-primary hover:text-primary/90"
+                >
+                  {t('bookmarks.deselectAll')}
+                </button>
+              </>
+            ) : selectedBookmarks.size === displayedBookmarks.length && displayedBookmarks.length > 0 && total > pageSize ? (
+              <>
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  {t('bookmarks.selectAllOnPageAndRemaining', { pageCount: displayedBookmarks.length, total })}
+                </span>
+                <button
+                  onClick={handleSelectAllRemaining}
+                  className="text-sm text-primary hover:text-primary/90"
+                >
+                  {t('bookmarks.selectAllRemaining', { total })}
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={toggleSelectAll}
+                  className="text-sm text-primary hover:text-primary/90"
+                >
+                  {selectedBookmarks.size === displayedBookmarks.length ? t('bookmarks.deselectAll') : t('bookmarks.selectAll')}
+                </button>
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  {t('bookmarks.selectedCount', { count: selectedBookmarks.size })}
+                </span>
+              </>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -573,6 +686,7 @@ export default function Bookmarks() {
               onClick={() => {
                 setBulkMode(false);
                 setSelectedBookmarks(new Set());
+                setAllSelectedAcrossPages(false);
               }}
             >
               {t('common.cancel')}
@@ -581,25 +695,11 @@ export default function Bookmarks() {
         </div>
       )}
 
-      {/* Bulk Actions Toolbar Toggle */}
-      {!bulkMode && sortedBookmarks.length > 0 && (
-        <div className="flex justify-end">
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={CheckSquare}
-            onClick={() => setBulkMode(true)}
-          >
-            {t('bookmarks.bulkSelect')}
-          </Button>
-        </div>
-      )}
-
       {/* Bookmarks Display */}
-      {sortedBookmarks.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 px-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-          <div className="w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mb-4">
-            <BookmarkIcon className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+      {displayedBookmarks.length === 0 ? (
+        <Card className="flex flex-col items-center justify-center py-20 px-4">
+          <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mb-4">
+            <BookmarkIcon className="h-8 w-8 text-primary" />
           </div>
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
             {t('bookmarks.empty')}
@@ -611,7 +711,13 @@ export default function Bookmarks() {
             <Button onClick={handleCreate} variant="primary" icon={Plus}>
               {t('bookmarks.emptyCreateFirst')}
             </Button>
-            <Button variant="secondary" icon={Upload} onClick={() => setImportModalOpen(true)}>
+            <Button
+              variant="secondary"
+              icon={Upload}
+              onClick={() => canCreateBookmark(plan, bookmarkCount, bookmarkLimit, freePlanGraceEndsAt) && setImportModalOpen(true)}
+              disabled={!canCreateBookmark(plan, bookmarkCount, bookmarkLimit, freePlanGraceEndsAt)}
+              title={!canCreateBookmark(plan, bookmarkCount, bookmarkLimit, freePlanGraceEndsAt) ? t('plan.limitBookmarks', { limit: bookmarkLimit ?? FREE_PLAN_BOOKMARK_LIMIT }) : t('bookmarks.emptyImport')}
+            >
               {t('bookmarks.emptyImport')}
             </Button>
             <Link to={`${appBasePath}/search-engine-guide`}>
@@ -620,14 +726,14 @@ export default function Bookmarks() {
               </Button>
             </Link>
           </div>
-        </div>
+        </Card>
       ) : viewMode === 'card' ? (
-        <div className={`grid grid-cols-1 gap-4 ${
+        <div className={`grid grid-cols-1 gap-4 items-stretch ${
           compactMode 
             ? 'sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6' 
             : 'sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
         }`}>
-          {sortedBookmarks.map((bookmark) => (
+          {displayedBookmarks.map((bookmark) => (
             <BookmarkCard
               key={bookmark.id}
               bookmark={bookmark}
@@ -637,6 +743,7 @@ export default function Bookmarks() {
               onEdit={() => handleEdit(bookmark)}
               onDelete={() => handleDelete(bookmark.id, bookmark.title)}
               onCopyUrl={() => handleCopyUrl(bookmark)}
+              onShare={() => { setSharingBookmark(bookmark); setShareDialogOpen(true); }}
               onOpen={() => handleOpenBookmark(bookmark)}
               bulkMode={bulkMode}
               t={t}
@@ -645,13 +752,14 @@ export default function Bookmarks() {
         </div>
       ) : viewMode === 'list' ? (
         <BookmarkTableView
-          bookmarks={sortedBookmarks}
+          bookmarks={displayedBookmarks}
           selectedBookmarks={selectedBookmarks}
           onSelect={toggleSelectBookmark}
           onSelectAll={toggleSelectAll}
           onEdit={handleEdit}
           onDelete={handleDelete}
           onCopyUrl={handleCopyUrl}
+          onShare={(bookmark) => { setSharingBookmark(bookmark); setShareDialogOpen(true); }}
           onOpen={handleOpenBookmark}
           bulkMode={bulkMode}
           user={user}
@@ -660,13 +768,47 @@ export default function Bookmarks() {
         />
       ) : null}
 
+      {/* Pagination */}
+      {total > pageSize && displayedBookmarks.length > 0 && (
+        <div className="flex items-center justify-between gap-4 mt-6 py-4 border-t border-gray-200 dark:border-gray-700">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            {t('bookmarks.paginationShowing', {
+              from: page * pageSize + 1,
+              to: Math.min(page * pageSize + displayedBookmarks.length, total),
+              total,
+            })}
+          </p>
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={ChevronLeft}
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={page === 0}
+            >
+              {t('bookmarks.paginationPrevious')}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={ChevronRight}
+              iconPosition="right"
+              onClick={() => setPage((p) => p + 1)}
+              disabled={page * pageSize + displayedBookmarks.length >= total}
+            >
+              {t('bookmarks.paginationNext')}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Search Engine Setup Guide Note */}
-      {sortedBookmarks.length > 0 && (
-        <div className="mt-8 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
+      {displayedBookmarks.length > 0 && (
+        <Card className="mt-8 bg-primary/5 border-primary/20 p-4">
           <div className="flex items-start gap-3">
             <div className="flex-shrink-0">
-              <div className="h-8 w-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                <Copy className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <div className="h-8 w-8 rounded-lg bg-primary/20 flex items-center justify-center">
+                <Copy className="h-4 w-4 text-primary" />
               </div>
             </div>
             <div className="flex-1 min-w-0">
@@ -674,21 +816,20 @@ export default function Bookmarks() {
                 {t('bookmarks.searchEngineNote')}{' '}
                 <Link
                   to={`${appBasePath}/search-engine-guide`}
-                  className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium underline"
+                  className="text-primary hover:text-primary/90 font-medium underline"
                 >
                   {t('bookmarks.searchEngineGuideLink')}
                 </Link>
               </p>
             </div>
           </div>
-        </div>
+        </Card>
       )}
 
       <BookmarkModal
         bookmark={editingBookmark}
         folders={folders}
         tags={tags}
-        teams={teams}
         isOpen={modalOpen}
         onClose={handleModalClose}
         onTagCreated={(newTag) => {
@@ -696,10 +837,28 @@ export default function Bookmarks() {
         }}
       />
 
+      {sharingBookmark && (
+        <ShareResourceDialog
+          resourceType="bookmark"
+          resourceId={sharingBookmark.id}
+          resourceName={sharingBookmark.title}
+          isOpen={shareDialogOpen}
+          onClose={() => { setShareDialogOpen(false); setSharingBookmark(null); }}
+          onSuccess={loadData}
+        />
+      )}
+
       <ImportModal
         isOpen={importModalOpen}
         onClose={() => setImportModalOpen(false)}
-        onSuccess={loadData}
+        onSuccess={() => {
+          refresh();
+          loadData();
+        }}
+        bookmarkCount={bookmarkCount}
+        bookmarkLimit={bookmarkLimit}
+        plan={plan}
+        freePlanGraceEndsAt={freePlanGraceEndsAt}
       />
 
       {/* Bulk Move Modal */}

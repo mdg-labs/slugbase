@@ -1,6 +1,7 @@
 // IMPORTANT: Load environment variables FIRST, before any other imports
 // that might use process.env at module load time
 import './load-env.js';
+import './instrument.js';
 
 // Now import other modules (they can safely use process.env)
 import express from 'express';
@@ -19,7 +20,7 @@ import { setupSecurityHeaders, generalRateLimiter, strictRateLimiter, contactRat
 
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger.js';
-import { mode, isCloud } from './config/mode.js';
+import { isCloud } from './config/mode.js';
 import authRoutes from './routes/auth.js';
 import bookmarkRoutes from './routes/bookmarks.js';
 import folderRoutes from './routes/folders.js';
@@ -31,21 +32,26 @@ import oidcProviderRoutes from './routes/oidc-providers.js';
 import adminUserRoutes from './routes/admin/users.js';
 import adminTeamRoutes from './routes/admin/teams.js';
 import adminSettingsRoutes from './routes/admin/settings.js';
+import adminStatsRoutes from './routes/admin/stats.js';
 import passwordResetRoutes from './routes/password-reset.js';
 import emailVerificationRoutes from './routes/email-verification.js';
 import contactRoutes from './routes/contact.js';
 import csrfRoutes from './routes/csrf.js';
 import dashboardRoutes from './routes/dashboard.js';
+import healthRoutes from './routes/health.js';
 import organizationRoutes from './routes/organizations.js';
 import invitationRoutes from './routes/invitations.js';
+import tokenRoutes from './routes/tokens.js';
 import billingRoutes, { handleStripeWebhook } from './routes/billing.js';
+import configRoutes from './routes/config.js';
 import { DatabaseSessionStore } from './utils/session-store.js';
+import { startOrgCleanupJob } from './utils/org-cleanup.js';
 
 // Validate required environment variables before starting
 validateEnvironmentVariables();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = parseInt(process.env.PORT || '5000', 10);
 
 // Trust proxy for correct client IP when behind Fly.io, Cloud Run, nginx, etc.
 // Required for express-rate-limit to use X-Forwarded-For.
@@ -111,7 +117,12 @@ app.use(cookieParser()); // Parse cookies for JWT
 
 // Session middleware (required for OIDC OAuth flow)
 // M3/L4: In production SESSION_SECRET is required by env validation; fallback only for development
-const sessionSecret = process.env.SESSION_SECRET || process.env.JWT_SECRET || 'slugbase-session-secret-change-in-production';
+const DEFAULT_SESSION_SECRET = 'slugbase-session-secret-change-in-production';
+const sessionSecret = process.env.SESSION_SECRET || process.env.JWT_SECRET || DEFAULT_SESSION_SECRET;
+if (process.env.NODE_ENV === 'production' && sessionSecret === DEFAULT_SESSION_SECRET) {
+  console.error('FATAL: Cannot use default session secret in production. Set SESSION_SECRET.');
+  process.exit(1);
+}
 // Only use secure cookies if explicitly in production AND using HTTPS
 // Check BASE_URL to determine if we're using HTTPS
 const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
@@ -199,28 +210,25 @@ app.use('/api/users', userRoutes);
 app.use('/api/teams', teamRoutes);
 app.use('/api/organizations', organizationRoutes);
 app.use('/api/invitations', invitationRoutes);
+app.use('/api/tokens', tokenRoutes);
 app.use('/api/billing', billingRoutes);
+app.use('/api/config', configRoutes);
 app.use('/api/oidc-providers', oidcProviderRoutes);
 app.use('/api/admin/users', adminUserRoutes);
 app.use('/api/admin/teams', adminTeamRoutes);
 app.use('/api/admin/settings', adminSettingsRoutes);
+app.use('/api/admin/stats', adminStatsRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api', healthRoutes);
 app.use('/api/contact', contactRateLimiter, contactRoutes);
 app.use('/api/go', goRoutes);
 
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok' });
-});
-
-// Version endpoint
-app.get('/api/version', (req, res) => {
-  res.json({ 
-    version: process.env.COMMIT_SHA || 'dev',
-    commit: process.env.COMMIT_SHA || null,
-    mode,
+// Debug route for Sentry testing (only when SENTRY_DEBUG=true)
+if (process.env.SENTRY_DEBUG === 'true') {
+  app.get('/api/debug-sentry', () => {
+    throw new Error('Sentry backend test error');
   });
-});
+}
 
 // /go slug forwarding - single canonical endpoint (authenticated)
 app.get('/go/:slug/remember/:bookmarkId', redirectRateLimiter, optionalAuthForGo, (req, res) => {
@@ -255,8 +263,10 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // Error handling (must be last)
+import * as Sentry from '@sentry/node';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
 app.use(notFoundHandler);
+Sentry.setupExpressErrorHandler(app);
 app.use(errorHandler);
 
 // Initialize database on startup
@@ -264,14 +274,18 @@ async function start() {
   try {
     await initDatabase();
     console.log('Database initialized');
-    
+
+    if (isCloud) {
+      startOrgCleanupJob();
+    }
+
     // Load OIDC strategies after database is initialized
     await loadOIDCStrategies();
     
     const initialized = await isInitialized();
     console.log(`System initialized: ${initialized}`);
     
-    app.listen(PORT, () => {
+    app.listen(PORT, '0.0.0.0', () => {
       console.log(`Server running on port ${PORT}`);
     });
   } catch (error) {
