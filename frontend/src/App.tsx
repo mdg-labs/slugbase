@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import * as Sentry from '@sentry/react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SentryDebug } from './components/SentryDebug';
+import FeaturebaseWidget from './components/FeaturebaseWidget';
 import { OrgPlanProvider } from './contexts/OrgPlanContext';
 import { ToastProvider } from './components/ui/Toast';
 import { TooltipProvider } from './components/ui/tooltip-base';
@@ -275,6 +276,7 @@ function App() {
           <TooltipProvider>
             <ToastProvider>
               <AppRoutes />
+              {isCloud && <FeaturebaseWidget />}
               <SentryDebug />
             </ToastProvider>
           </TooltipProvider>

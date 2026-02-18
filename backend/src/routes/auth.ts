@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import passport from 'passport';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 import { query, queryOne, execute, isInitialized } from '../db/index.js';
 import { v4 as uuidv4 } from 'uuid';
 import { reloadOIDCStrategies } from '../auth/oidc.js';
@@ -229,6 +230,40 @@ router.get('/me', requireAuth(), async (req, res) => {
     }
   }
   res.json(payload);
+});
+
+/**
+ * GET /auth/featurebase-jwt — CLOUD only. Returns a JWT signed with FEATUREBASE_JWT_SECRET
+ * for use with Featurebase Messenger boot (secure installation). If not Cloud or secret unset, returns 404.
+ */
+router.get('/featurebase-jwt', requireAuth(), async (req, res) => {
+  if (!isCloud) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  const secret = process.env.FEATUREBASE_JWT_SECRET;
+  if (!secret || secret.trim() === '') {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  const authReq = req as AuthRequest;
+  const user = authReq.user!;
+  const userRow = await queryOne('SELECT id, email, name, created_at FROM users WHERE id = ?', [user.id]);
+  const u = userRow as any;
+  if (!u) {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  const payload = {
+    name: u.name ?? user.name,
+    email: u.email ?? user.email,
+    userId: u.id,
+    ...(u.created_at && { createdAt: typeof u.created_at === 'string' ? u.created_at : new Date(u.created_at).toISOString() }),
+  };
+  try {
+    const token = jwt.sign(payload, secret.trim(), { algorithm: 'HS256', expiresIn: '15m' });
+    return res.json({ token });
+  } catch (err: any) {
+    console.error('Featurebase JWT sign error:', err?.message || err);
+    return res.status(503).json({ error: 'Service unavailable' });
+  }
 });
 
 /**
