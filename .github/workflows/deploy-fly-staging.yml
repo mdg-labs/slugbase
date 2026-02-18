@@ -21,7 +21,7 @@ jobs:
         uses: superfly/flyctl-actions/setup-flyctl@master
 
       - name: Deploy to Fly.io
-        run: flyctl deploy --remote-only -a slugbase-staging --build-arg COMMIT_SHA=${{ github.sha }} --build-arg VITE_SENTRY_DSN=${{ secrets.SENTRY_DSN_STAGING }} --build-arg VITE_SENTRY_DEBUG=true
+        run: flyctl deploy --remote-only -a slugbase-staging --build-arg COMMIT_SHA=${{ github.sha }} --build-arg VITE_SENTRY_DSN=${{ secrets.SENTRY_DSN_STAGING }} --build-arg VITE_SENTRY_DEBUG=true --build-arg VITE_FEATUREBASE_APP_ID=${{ secrets.FEATUREBASE_APP_ID }}
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           FLY_ORG: ${{ secrets.FLY_ORG }}
