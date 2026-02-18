@@ -6,8 +6,7 @@
 #
 # REQUIRED SECRETS (set via: fly secrets set KEY=value -a slugbase-staging):
 #   DATABASE_URL, JWT_SECRET, ENCRYPTION_KEY, SESSION_SECRET, FRONTEND_URL, BASE_URL
-# See docs/infra/fly-neon.md for full list and optional (OIDC, SMTP, Featurebase) secrets.
-# Optional: FEATUREBASE_APP_ID (runtime; frontend fetches from GET /api/config/public), FEATUREBASE_JWT_SECRET (for logged-in user identification).
+# See docs/infra/fly-neon.md for full list and optional (OIDC, SMTP) secrets.
 
 app = "slugbase-staging"
 primary_region = "fra"

@@ -96,8 +96,8 @@ export function setupSecurityHeaders() {
   
   const cspDirectives: any = {
     defaultSrc: ["'self'"],
-    styleSrc: ["'self'", "'unsafe-inline'", "https://do.featurebase.app"], // Swagger UI; Featurebase Messenger SDK CSS (Cloud only)
-    scriptSrc: ["'self'", "https://do.featurebase.app"], // Featurebase Messenger SDK (Cloud only)
+    styleSrc: ["'self'", "'unsafe-inline'"], // Swagger UI needs inline styles
+    scriptSrc: ["'self'"],
     imgSrc: ["'self'", "data:", "https:"], // Allow data URIs and HTTPS images (for favicons)
     connectSrc: [
       "'self'",
@@ -105,14 +105,11 @@ export function setupSecurityHeaders() {
       "https://*.ingest.sentry.io",
       "https://*.ingest.de.sentry.io",
       "https://*.ingest.eu.sentry.io",
-      // Featurebase Messenger (Cloud only)
-      "https://do.featurebase.app",
-      "https://*.featurebase.app",
     ],
     fontSrc: ["'self'"],
     objectSrc: ["'none'"],
     mediaSrc: ["'self'"],
-    frameSrc: ["'self'", "https://do.featurebase.app", "https://*.featurebase.app"], // Swagger UI; Featurebase Messenger (Cloud only)
+    frameSrc: ["'self'"], // Allow iframes for Swagger UI
   };
   
   // Only upgrade insecure requests when using HTTPS (set to null to disable when using HTTP)

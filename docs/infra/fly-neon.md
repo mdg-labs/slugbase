@@ -119,7 +119,6 @@ fly secrets set \
 
 4. **Optional – build-time secrets** (passed as Docker build args by the deploy workflows):
    - **`SENTRY_DSN_STAGING`** / **`SENTRY_DSN_PROD`** – Sentry DSN for error reporting (staging vs production)
-   - **`FEATUREBASE_APP_ID`** – Featurebase Messenger (chat) widget app ID. Get it from Featurebase → Settings → Support → Customization → Install. If set, the widget is baked into the frontend at build time and appears on Cloud (staging/prod). For logged-in user identification you also set the Fly secret **`FEATUREBASE_JWT_SECRET`** (runtime).
 
 ---
 
