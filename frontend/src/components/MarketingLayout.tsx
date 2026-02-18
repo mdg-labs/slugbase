@@ -43,6 +43,14 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
             <span className="font-semibold text-foreground">{t('app.name')}</span>
           </Link>
           <nav className="flex items-center gap-4 sm:gap-6">
+            <a
+              href="https://docs.slugbase.app"
+              target="_blank"
+              rel="noopener noreferrer"
+              className={navLinkClass({ isActive: false })}
+            >
+              {t('landing.footerDocs')}
+            </a>
             <NavLink to="/pricing" className={navLinkClass}>
               {t('landing.footerPricing')}
             </NavLink>
@@ -78,6 +86,14 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
         <div className="max-w-5xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
           <span className="text-sm text-muted-foreground">© SlugBase</span>
           <div className="flex flex-wrap gap-6">
+            <a
+              href="https://docs.slugbase.app"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-muted-foreground hover:text-foreground"
+            >
+              {t('landing.footerDocs')}
+            </a>
             <Link to="/pricing" className="text-sm text-muted-foreground hover:text-foreground">
               {t('landing.footerPricing')}
             </Link>
