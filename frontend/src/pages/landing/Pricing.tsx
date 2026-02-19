@@ -14,6 +14,16 @@ export default function Pricing() {
         <div className="text-center mb-12">
           <h1 className="text-3xl sm:text-4xl font-bold text-foreground">{t('pricing.title')}</h1>
           <p className="mt-2 text-muted-foreground">{t('pricing.positioning')}</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            <a
+              href="https://docs.slugbase.app/cloud/plans-billing"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
+            >
+              {t('pricing.docsPlans')}
+            </a>
+          </p>
           <div className="mt-4 flex items-center justify-center gap-2">
             <button
               type="button"

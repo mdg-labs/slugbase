@@ -70,6 +70,11 @@ export default function Imprint() {
               </a>
             </p>
           </section>
+          {t('legal.imprintAppliesTo') && (
+            <p className="mt-4 text-sm text-muted-foreground">
+              {t('legal.imprintAppliesTo')}
+            </p>
+          )}
         </div>
         <p className="mt-8 text-sm text-gray-500 dark:text-gray-400">
           <Link to="/" className="text-blue-600 dark:text-blue-400 hover:underline">

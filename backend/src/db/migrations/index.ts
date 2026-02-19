@@ -31,6 +31,7 @@ import * as migration015 from './015_api_tokens.js';
 import * as migration016 from './016_free_plan_grace_ends_at.js';
 import * as migration017 from './017_ai_suggestions.js';
 import * as migration018 from './018_ai_cache_output_language.js';
+import * as migration019 from './019_ai_suggestion_usage.js';
 
 export interface Migration {
   migrationId: string;
@@ -148,6 +149,12 @@ const migrations: Migration[] = [
     migrationName: migration018.migrationName,
     up: migration018.up,
     down: migration018.down,
+  },
+  {
+    migrationId: migration019.migrationId,
+    migrationName: migration019.migrationName,
+    up: migration019.up,
+    down: migration019.down,
   },
 ];
 

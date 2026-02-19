@@ -57,6 +57,13 @@ export interface Bookmark {
   updated_at: string;
 }
 
+/** Sent by frontend when user saved a bookmark after seeing AI suggestions; used for usage stats. */
+export interface AiSuggestionUsed {
+  title?: boolean;
+  slug?: boolean;
+  tags?: boolean;
+}
+
 export interface CreateBookmarkInput {
   title: string;
   url: string;
@@ -67,6 +74,7 @@ export interface CreateBookmarkInput {
   team_ids?: string[];
   user_ids?: string[];
   share_all_teams?: boolean;
+  ai_suggestion_used?: AiSuggestionUsed;
 }
 
 export interface UpdateBookmarkInput {
@@ -80,4 +88,5 @@ export interface UpdateBookmarkInput {
   team_ids?: string[];
   user_ids?: string[];
   share_all_teams?: boolean;
+  ai_suggestion_used?: AiSuggestionUsed;
 }

@@ -60,6 +60,9 @@ The Profile page allows users to view and manage their account settings, includi
 - **Persistence**: Saved to user profile
 - **Effect**: When disabled, no AI suggestions appear in the bookmark creation modal
 
+#### Go preferences
+- A link to **Go preferences** (path: `/go-preferences`) lets you manage default slug behavior and open the [Search Engine Guide](search-engine-guide) for browser keyword setup.
+
 ### Form Structure
 
 The profile is organized into sections:

@@ -1,7 +1,7 @@
 ---
 id: dashboard
 title: Dashboard Page
-sidebar_position: 4
+sidebar_position: 5
 ---
 
 # Dashboard Page
@@ -14,7 +14,7 @@ The Dashboard is the main landing page of SlugBase, displayed when users navigat
 
 ## Route
 
-- **Path**: `/`
+- **Path**: **`/app`** (SlugBase Cloud; root of the app after login)
 - **Authentication**: Required
 - **Access**: All authenticated users
 
@@ -24,22 +24,14 @@ The Dashboard is the main landing page of SlugBase, displayed when users navigat
 
 The dashboard fetches summary data from **`GET /api/dashboard/stats`** and displays:
 
-- **Your library**: Total bookmarks, total folders, total tags (each links to the corresponding section). When a bookmark limit applies (e.g. on Cloud plans), the bookmarks stat shows usage (e.g. "X / Y bookmarks").
+- **Your library**: Total bookmarks, total folders, total tags (each links to the corresponding section). On SlugBase Cloud, the bookmarks stat shows usage against your plan limit (e.g. "X / Y bookmarks") when a limit applies.
 - **Shared with you**: Count of shared bookmarks and shared folders (links to the Shared page).
 
 Stats are shown in compact cards with icons; clicking a card navigates to the relevant page.
 
 ### Recent bookmarks
 
-A **Recent bookmarks** card lists recently added or accessed bookmarks. For each item you can:
-
-- Open the bookmark (external link)
-- Edit the bookmark (navigate to bookmarks with edit query)
-- Copy URL
-- Delete (with confirmation)
-- Share (navigate to edit to change sharing)
-
-If there are no recent bookmarks, the card shows an empty state with a link to create a bookmark (or to upgrade on Cloud when at limit).
+A **Recent bookmarks** card lists recently added or accessed bookmarks. For each item you can open, edit, copy URL, delete, or share. If there are no recent bookmarks, the card shows an empty state with a link to create a bookmark or to upgrade when at plan limit.
 
 ### Top tags
 
@@ -47,7 +39,11 @@ A **Top tags** card shows your most-used tags (by bookmark count). Each tag link
 
 ### Density toggle
 
-A **Dense view** toggle in the header reduces spacing and font size for a more compact layout. The preference is stored in localStorage.
+A **Dense view** toggle in the header reduces spacing and font size. The preference is stored in localStorage.
+
+### Plan and upgrade (Cloud)
+
+When you are on a plan with a bookmark limit and have reached it (or are on the Free plan and see limit messaging), the dashboard shows an **Upgrade** call-to-action that links to **Admin → Billing** where you can change plan or manage your subscription.
 
 ### Navigation Cards
 
@@ -55,50 +51,26 @@ A **Dense view** toggle in the header reduces spacing and font size for a more c
 
 Below the stats and recent content, the dashboard displays three main navigation cards:
 
-1. **Bookmarks Card** (Blue)
-   - Navigates to `/bookmarks`
-   - Description: "Manage your bookmarks"
-   - Icon: Bookmark icon
-
-2. **Folders Card** (Green)
-   - Navigates to `/folders`
-   - Description: "Organize with folders"
-   - Icon: Folder icon
-
-3. **Tags Card** (Purple)
-   - Navigates to `/tags`
-   - Description: "Tag your bookmarks"
-   - Icon: Tag icon
+1. **Bookmarks Card** (Blue) – Navigates to `/app/bookmarks`
+2. **Folders Card** (Green) – Navigates to `/app/folders`
+3. **Tags Card** (Purple) – Navigates to `/app/tags`
 
 ### Design Features
 
-- **Page header**: Title, subtitle, dense view toggle, quick links (create folder, create tag), and primary action (Create bookmark)
-- **Card Layout**: Responsive grid for stats, recent content, and navigation cards
+- **Page header**: Title, subtitle, dense toggle, quick links (create folder, create tag), and primary action (Create bookmark or Upgrade)
+- **Card Layout**: Responsive grid for stats and content
 - **Hover Effects**: Cards have shadow and transition effects on hover
-- **Color Coding**: Each card uses a distinct color scheme for visual differentiation
+- **Color Coding**: Each section uses a distinct color scheme
 - **Internationalization**: All text is translatable via i18n
-
-## Component Structure
-
-```tsx
-<Dashboard>
-  <Hero Section>
-    <App Name>
-    <Tagline>
-  </Hero>
-  <Navigation Cards Grid>
-    <Bookmark Card>
-    <Folder Card>
-    <Tag Card>
-  </Grid>
-</Dashboard>
-```
 
 ## User Interactions
 
-1. **Click on Card**: Navigates to the respective section
-2. **Hover**: Visual feedback with shadow elevation
-3. **Responsive**: Cards rearrange based on screen size
+1. **Stats cards**: Click to navigate to bookmarks, folders, tags, or shared.
+2. **Recent bookmarks**: Open, edit, copy URL, delete, or share from the card.
+3. **Top tags**: Click a tag to open bookmarks filtered by that tag.
+4. **Dense view**: Toggle for compact layout.
+5. **Navigation cards**: Click to go to bookmarks, folders, or tags.
+6. **Upgrade (when at limit)**: Opens Admin → Billing to change plan.
 
 ## Styling
 
@@ -113,6 +85,7 @@ Below the stats and recent content, the dashboard displays three main navigation
 - [Folders](folders) - Folder organization
 - [Tags](tags) - Tag management
 - [Shared](shared) - Shared bookmarks and folders
+- [Admin](admin) - Billing and plan (when at bookmark limit)
 
 ## Technical Details
 

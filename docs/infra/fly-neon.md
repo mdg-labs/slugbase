@@ -117,6 +117,9 @@ fly secrets set \
    - Find your org slug: `fly orgs list` or in the Fly.io dashboard URL
    - Use a secret (not a variable) – org variables can be unavailable in some GitHub configs
 
+4. **Optional – build-time secrets** (passed as Docker build args by the deploy workflows):
+   - **`SENTRY_DSN_STAGING`** / **`SENTRY_DSN_PROD`** – Sentry DSN for error reporting (staging vs production)
+
 ---
 
 ## 5. First Deploy
