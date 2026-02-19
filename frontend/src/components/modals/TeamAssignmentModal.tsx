@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import api from '../../api/client';
-import { isCloud } from '../../config/mode';
 import {
   Dialog,
   DialogContent,
@@ -75,9 +74,8 @@ export default function TeamAssignmentModal({
         setAllTeams(teamsRes.data);
         setUserTeams(userTeamsRes.data || []);
       } else if (mode === 'team' && teamId) {
-        const usersEndpoint = isCloud ? '/organizations/members' : '/admin/users';
         const [usersRes, teamRes] = await Promise.all([
-          api.get(usersEndpoint),
+          api.get('/admin/users'),
           api.get(`/admin/teams/${teamId}`),
         ]);
         setAllUsers(Array.isArray(usersRes.data) ? usersRes.data : []);

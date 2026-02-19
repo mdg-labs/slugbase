@@ -1,7 +1,6 @@
 import axios from 'axios';
 import * as Sentry from '@sentry/react';
 import { apiBaseUrl } from '../config/api';
-import { isCloud } from '../config/mode';
 
 const api = axios.create({
   baseURL: apiBaseUrl ? `${apiBaseUrl}/api` : '/api',
@@ -51,8 +50,6 @@ api.interceptors.request.use(
         '/auth/verify-signup',
         '/auth/resend-signup-verification',
         '/auth/request-signup-resend',
-        '/billing/create-checkout-session',
-        '/billing/create-portal-session',
         '/csrf-token',
       ].some((path) => config.url?.includes(path));
 
@@ -73,20 +70,7 @@ api.interceptors.request.use(
   }
 );
 
-// Deduplicate refresh: multiple concurrent 401s share a single refresh attempt to avoid rate limiting
-let refreshPromise: Promise<boolean> | null = null;
-
-async function tryRefreshToken(): Promise<boolean> {
-  if (refreshPromise) return refreshPromise;
-  refreshPromise = api
-    .post('/auth/refresh')
-    .then(() => true)
-    .catch(() => false)
-    .finally(() => { refreshPromise = null; });
-  return refreshPromise;
-}
-
-// Response interceptor: refresh CSRF on 403; in CLOUD, refresh access token on 401 and retry
+// Response interceptor: refresh CSRF on 403.
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -97,13 +81,6 @@ api.interceptors.response.use(
         error.config.headers['X-CSRF-Token'] = csrfToken;
       }
       return api.request(error.config);
-    }
-    // Skip refresh when the failed request was /auth/refresh (avoid recursion)
-    const isAuthRefresh = (error.config?.url ?? '').includes('/auth/refresh');
-    if (isCloud && error.response?.status === 401 && error.config && !error.config._retryRefresh && !isAuthRefresh) {
-      error.config._retryRefresh = true;
-      const refreshed = await tryRefreshToken();
-      if (refreshed) return api.request(error.config);
     }
     // Report 5xx, network errors, and unexpected 4xx to Sentry (skip 401/403/404 - auth flow)
     const status = error.response?.status;

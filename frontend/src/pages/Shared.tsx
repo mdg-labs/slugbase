@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { isCloud } from '../config/mode';
 import api from '../api/client';
 import { useToast } from '../components/ui/Toast';
 import { Share2, ExternalLink, Copy, Tag as TagIcon, Users, User } from 'lucide-react';
@@ -175,13 +174,11 @@ export default function Shared() {
                     </div>
                   </div>
 
-                  {/* Shared by (in CLOUD avoid exposing owner email) */}
+                  {/* Shared by */}
                   <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 px-1">
                     <User className="h-3 w-3" />
                     <span className="truncate">
-                      {isCloud
-                        ? (bookmark.user_name || t('shared.sharedWithYou'))
-                        : (bookmark.user_name || bookmark.user_email || t('shared.unknownUser'))}
+                      {bookmark.user_name || bookmark.user_email || t('shared.unknownUser')}
                     </span>
                   </div>
 
@@ -284,13 +281,11 @@ export default function Shared() {
                     </div>
                   </div>
 
-                  {/* Shared by (in CLOUD avoid exposing owner email) */}
+                  {/* Shared by */}
                   <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 px-1">
                     <User className="h-3 w-3" />
                     <span className="truncate">
-                      {isCloud
-                        ? (folder.user_name || t('shared.sharedWithYou'))
-                        : (folder.user_name || folder.user_email || t('shared.unknownUser'))}
+                      {folder.user_name || folder.user_email || t('shared.unknownUser')}
                     </span>
                   </div>
 

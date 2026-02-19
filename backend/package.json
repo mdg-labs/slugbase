@@ -7,7 +7,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "migrate": "tsx src/migrate.ts",
-    "test": "DB_PATH=:memory: node --test --import tsx test/authorization.test.ts test/go.test.ts test/stats.test.ts"
+    "test": "DB_PATH=:memory: node --test --import tsx test/authorization.test.ts test/go.test.ts test/stats.test.ts test/tenant-isolation.test.ts"
   },
   "dependencies": {
     "@types/cookie-parser": "^1.4.10",

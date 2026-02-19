@@ -17,10 +17,10 @@ import { setupOIDC, loadOIDCStrategies } from './auth/oidc.js';
 import { setupJWT } from './auth/jwt.js';
 import { validateEnvironmentVariables } from './utils/env-validation.js';
 import { setupSecurityHeaders, generalRateLimiter, strictRateLimiter, contactRateLimiter, redirectRateLimiter } from './middleware/security.js';
+import { tenantMiddleware } from './middleware/tenant.js';
 
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger.js';
-import { isCloud } from './config/mode.js';
 import authRoutes from './routes/auth.js';
 import bookmarkRoutes from './routes/bookmarks.js';
 import folderRoutes from './routes/folders.js';
@@ -39,13 +39,9 @@ import contactRoutes from './routes/contact.js';
 import csrfRoutes from './routes/csrf.js';
 import dashboardRoutes from './routes/dashboard.js';
 import healthRoutes from './routes/health.js';
-import organizationRoutes from './routes/organizations.js';
-import invitationRoutes from './routes/invitations.js';
 import tokenRoutes from './routes/tokens.js';
-import billingRoutes, { handleStripeWebhook } from './routes/billing.js';
 import configRoutes from './routes/config.js';
 import { DatabaseSessionStore } from './utils/session-store.js';
-import { startOrgCleanupJob } from './utils/org-cleanup.js';
 
 // Validate required environment variables before starting
 validateEnvironmentVariables();
@@ -71,7 +67,6 @@ if (process.env.NODE_ENV === 'production') {
 
 // Middleware
 // CORS: Allow both the configured FRONTEND_URL and common development ports
-// In CLOUD mode, also allow CORS_EXTRA_ORIGINS (e.g. marketing domain)
 const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
 const allowedOriginsBase = [
   frontendUrl,
@@ -85,11 +80,6 @@ const extraOrigins = (process.env.CORS_EXTRA_ORIGINS || '')
   .map((o) => o.trim())
   .filter(Boolean);
 const allowedOrigins = [...new Set([...allowedOriginsBase, ...extraOrigins])];
-
-// Stripe webhook needs raw body - mount before express.json()
-app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), (req, res) => {
-  handleStripeWebhook(req, res);
-});
 
 app.use(cors({
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
@@ -149,6 +139,7 @@ app.use(session({
 
 // General rate limiting (applied to all routes)
 app.use(generalRateLimiter);
+app.use(tenantMiddleware);
 
 // Setup Passport strategies BEFORE initializing passport middleware
 // This ensures serializeUser/deserializeUser are registered before passport.session() is used
@@ -186,9 +177,6 @@ app.use((req: any, res: any, next: any) => {
       req.path === '/api/auth/verify-signup' ||
       req.path === '/api/auth/resend-signup-verification' ||
       req.path === '/api/auth/request-signup-resend' ||
-      req.path === '/api/billing/webhook' ||
-      req.path === '/api/billing/create-checkout-session' ||
-      req.path === '/api/billing/create-portal-session' ||
       req.path === '/api/contact' ||
       req.path === '/api/health' ||
       req.path === '/api/csrf-token' ||
@@ -208,10 +196,7 @@ app.use('/api/folders', folderRoutes);
 app.use('/api/tags', tagRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/teams', teamRoutes);
-app.use('/api/organizations', organizationRoutes);
-app.use('/api/invitations', invitationRoutes);
 app.use('/api/tokens', tokenRoutes);
-app.use('/api/billing', billingRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/oidc-providers', oidcProviderRoutes);
 app.use('/api/admin/users', adminUserRoutes);
@@ -274,10 +259,6 @@ async function start() {
   try {
     await initDatabase();
     console.log('Database initialized');
-
-    if (isCloud) {
-      startOrgCleanupJob();
-    }
 
     // Load OIDC strategies after database is initialized
     await loadOIDCStrategies();

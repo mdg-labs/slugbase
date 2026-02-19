@@ -1,5 +1,6 @@
 import { execute } from '../index.js';
 
+// legacy cloud migration; no longer registered in selfhost-core
 export const migrationId = '010';
 export const migrationName = 'Organizations for Cloud billing';
 

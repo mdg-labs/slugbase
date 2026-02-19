@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { User as UserIcon, LogOut, Settings } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { appBasePath } from '../config/api';
-import { isCloud } from '../config/mode';
 import type { User } from '../contexts/AuthContext';
 import {
   DropdownMenu,
@@ -30,8 +29,7 @@ export default function UserDropdown({ user }: UserDropdownProps) {
   const { t } = useTranslation();
   const { logout } = useAuth();
 
-  const showAdmin =
-    user?.is_admin || (isCloud && (user?.org_role === 'owner' || user?.org_role === 'admin'));
+  const showAdmin = user?.is_admin;
 
   if (!user) return null;
 

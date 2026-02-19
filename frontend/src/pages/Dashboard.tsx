@@ -11,8 +11,6 @@ import { EmptyState } from '../components/EmptyState';
 import Tooltip from '../components/ui/Tooltip';
 import api from '../api/client';
 import { appBasePath } from '../config/api';
-import { useOrgPlan } from '../contexts/OrgPlanContext';
-import { canCreateBookmark, FREE_PLAN_BOOKMARK_LIMIT } from '../utils/plan';
 import { useConfirmDialog } from '../hooks/useConfirmDialog';
 import { useToast } from '../components/ui/Toast';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
@@ -51,12 +49,10 @@ function formatLastOpened(dateStr: string): string {
 
 export default function Dashboard() {
   const { t } = useTranslation();
-  const { plan, bookmarkCount, bookmarkLimit, freePlanGraceEndsAt, refresh } = useOrgPlan();
   const { showConfirm, dialogState } = useConfirmDialog();
   const { showToast } = useToast();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [denseMode, setDenseMode] = useState(() => localStorage.getItem('dashboard-dense') === 'true');
-  const atBookmarkLimit = !canCreateBookmark(plan, bookmarkCount, bookmarkLimit, freePlanGraceEndsAt);
 
   useEffect(() => {
     loadStats();
@@ -88,7 +84,6 @@ export default function Dashboard() {
         try {
           await api.delete(`/bookmarks/${bookmark.id}`);
           loadStats();
-          refresh();
           showToast(t('common.success'), 'success');
         } catch (error) {
           console.error('Failed to delete bookmark:', error);
@@ -138,19 +133,11 @@ export default function Dashboard() {
             <Link to={appBasePath + '/tags'} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
               {t('dashboard.createTag')}
             </Link>
-            {atBookmarkLimit ? (
-              <Link to={`${appBasePath}/admin/billing`}>
-                <Button variant="secondary" size="lg" icon={Plus} title={t('plan.limitBookmarks', { limit: bookmarkLimit ?? FREE_PLAN_BOOKMARK_LIMIT })}>
-                  {t('plan.upgradeCta')}
-                </Button>
-              </Link>
-            ) : (
-              <Link to={`${appBasePath}/bookmarks?create=true`}>
-                <Button variant="primary" size="lg" icon={Plus}>
-                  {t('bookmarks.create')}
-                </Button>
-              </Link>
-            )}
+            <Link to={`${appBasePath}/bookmarks?create=true`}>
+              <Button variant="primary" size="lg" icon={Plus}>
+                {t('bookmarks.create')}
+              </Button>
+            </Link>
           </div>
         }
       />
@@ -167,7 +154,7 @@ export default function Dashboard() {
             <StatCard
               dense={denseMode}
               label={t('dashboard.totalBookmarks')}
-              value={bookmarkLimit != null ? t('plan.bookmarksUsed', { count: bookmarkCount, limit: bookmarkLimit }) : stats.totalBookmarks}
+              value={stats.totalBookmarks}
               icon={Bookmark}
               href={appBasePath + '/bookmarks'}
               iconContainerClassName="bg-primary/20"
@@ -326,15 +313,9 @@ export default function Dashboard() {
                     title={t('dashboard.noRecentBookmarks')}
                     description={t('dashboard.noRecentBookmarksHint')}
                     action={
-                      atBookmarkLimit ? (
-                        <Link to={`${appBasePath}/admin/billing`}>
-                          <Button variant="secondary" icon={Plus}>{t('plan.upgradeCta')}</Button>
-                        </Link>
-                      ) : (
-                        <Link to={`${appBasePath}/bookmarks?create=true`}>
-                          <Button variant="primary" icon={Plus}>{t('bookmarks.create')}</Button>
-                        </Link>
-                      )
+                      <Link to={`${appBasePath}/bookmarks?create=true`}>
+                        <Button variant="primary" icon={Plus}>{t('bookmarks.create')}</Button>
+                      </Link>
                     }
                   />
                 )}

@@ -1,8 +1,6 @@
 import nodemailer from 'nodemailer';
-import { ServerClient } from 'postmark';
 import { queryOne } from '../db/index.js';
 import { decrypt } from './encryption.js';
-import { isCloud } from '../config/mode.js';
 
 /**
  * Escape HTML to prevent XSS attacks
@@ -48,7 +46,6 @@ interface BuildEmailLayoutOptions {
 
 /**
  * Build a consistent email layout with header (logo + SlugBase), content, and footer.
- * In cloud mode, when includeLegalFooter is true, adds Imprint and Privacy links.
  */
 function buildEmailLayout(options: BuildEmailLayoutOptions): string {
   const {
@@ -60,10 +57,9 @@ function buildEmailLayout(options: BuildEmailLayoutOptions): string {
   const frontendUrl = getFrontendUrl();
   const logoUrl = `${frontendUrl}/slugbase_icon_white.svg`;
 
-  const legalFooterHtml =
-    includeLegalFooter && isCloud
-      ? ` &middot; <a href="${frontendUrl}/imprint" style="color: #6b7280; text-decoration: underline;">Imprint</a> &middot; <a href="${frontendUrl}/privacy" style="color: #6b7280; text-decoration: underline;">Privacy</a>`
-      : '';
+  const legalFooterHtml = includeLegalFooter
+    ? ` &middot; <a href="${frontendUrl}/imprint" style="color: #6b7280; text-decoration: underline;">Imprint</a> &middot; <a href="${frontendUrl}/privacy" style="color: #6b7280; text-decoration: underline;">Privacy</a>`
+    : '';
 
   return `<!DOCTYPE html>
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
@@ -125,60 +121,6 @@ interface SMTPConfig {
   };
   from: string;
   fromName: string;
-}
-
-interface PostmarkConfig {
-  token: string;
-  from: string;
-  fromName: string;
-}
-
-/**
- * Get Postmark configuration for CLOUD mode (from environment).
- * Returns config object or null with error message.
- */
-function getPostmarkConfig(): { config: PostmarkConfig | null; error?: string } {
-  if (!isCloud) return { config: null, error: 'Postmark is only used in CLOUD mode' };
-
-  const token = process.env.POSTMARK_SERVER_API_TOKEN?.trim();
-  const from = process.env.POSTMARK_FROM?.trim();
-  const fromName = process.env.POSTMARK_FROM_NAME?.trim() || 'SlugBase';
-
-  if (!token) return { config: null, error: 'Postmark not configured in CLOUD mode (POSTMARK_SERVER_API_TOKEN is required)' };
-  if (!from) return { config: null, error: 'Postmark from email not configured (POSTMARK_FROM is required)' };
-
-  return {
-    config: { token, from, fromName },
-  };
-}
-
-/**
- * Send email via Postmark API (CLOUD mode only).
- */
-async function sendEmailViaPostmark(to: string, subject: string, html: string, text?: string): Promise<{ success: boolean; error?: string }> {
-  const stripHtml = (htmlContent: string): string => {
-    if (htmlContent.length > 100000) htmlContent = htmlContent.substring(0, 100000);
-    return htmlContent.replace(/<[^>]{0,1000}>/g, '');
-  };
-
-  const { config, error } = getPostmarkConfig();
-  if (!config) return { success: false, error: error || 'Postmark not configured' };
-
-  try {
-    const client = new ServerClient(config.token);
-    const result = await client.sendEmail({
-      From: `"${config.fromName}" <${config.from}>`,
-      To: to,
-      Subject: subject,
-      HtmlBody: html,
-      TextBody: text || stripHtml(html),
-    });
-    console.log('Email sent via Postmark:', result.MessageID);
-    return { success: true };
-  } catch (err: any) {
-    console.error('Error sending email via Postmark:', err);
-    return { success: false, error: err.message || 'Unknown error sending email' };
-  }
 }
 
 /**
@@ -247,15 +189,9 @@ async function getSMTPConfig(): Promise<{ config: SMTPConfig | null; error?: str
 }
 
 /**
- * Send email using Postmark (CLOUD) or SMTP (SELFHOSTED).
+ * Send email using SMTP (self-hosted).
  */
 export async function sendEmail(to: string, subject: string, html: string, text?: string): Promise<{ success: boolean; error?: string }> {
-  if (isCloud) {
-    const { config, error } = getPostmarkConfig();
-    if (config) return sendEmailViaPostmark(to, subject, html, text);
-    return { success: false, error: error || 'Postmark not configured in CLOUD mode' };
-  }
-
   try {
     const { config, error } = await getSMTPConfig();
     if (!config) {
@@ -473,7 +409,7 @@ export async function sendContactFormNotification(recipient: string, data: Conta
 }
 
 /**
- * Send signup verification email (CLOUD registration)
+ * Send signup verification email.
  */
 export async function sendSignupVerificationEmail(email: string, verificationUrl: string): Promise<boolean> {
   const safeHrefUrl = safeUrlForHref(verificationUrl);
@@ -498,44 +434,6 @@ export async function sendSignupVerificationEmail(email: string, verificationUrl
   const html = buildEmailLayout({
     contentHtml,
     title: 'Verify your SlugBase account',
-    includeLegalFooter: true,
-  });
-
-  const result = await sendEmail(email, subject, html);
-  return result.success;
-}
-
-/**
- * Send org invitation email (CLOUD only)
- */
-export async function sendOrgInvitationEmail(
-  email: string,
-  acceptUrl: string,
-  orgName: string
-): Promise<boolean> {
-  const safeHrefUrl = safeUrlForHref(acceptUrl);
-  const escapedDisplayUrl = escapeHtml(acceptUrl);
-  const escapedOrgName = escapeHtml(orgName);
-
-  const subject = `You're invited to join ${orgName} on SlugBase`;
-  const contentHtml = `
-    <h2 style="margin: 0 0 20px; color: #1a1a1a; font-size: 24px; font-weight: 600;">You're invited</h2>
-    <p style="margin: 0 0 20px; color: #4a4a4a; font-size: 16px; line-height: 1.6;">You have been invited to join <strong>${escapedOrgName}</strong> on SlugBase.</p>
-    <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin: 30px 0;">
-      <tr>
-        <td align="center" style="padding: 0;">
-          <a href="${safeHrefUrl}" style="display: inline-block; padding: 14px 32px; background-color: ${PRIMARY_BLUE}; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600;">Accept invitation</a>
-        </td>
-      </tr>
-    </table>
-    <p style="margin: 20px 0; color: #6b7280; font-size: 14px;">Or copy and paste this link into your browser:</p>
-    <p style="margin: 0 0 30px; padding: 12px; background-color: #f9fafb; border-radius: 4px; word-break: break-all; color: #4a4a4a; font-size: 13px; font-family: monospace;">${escapedDisplayUrl}</p>
-    <p style="margin: 0; color: #6b7280; font-size: 14px;">This link expires in 7 days. If you did not expect this invitation, you can ignore this email.</p>
-  `;
-
-  const html = buildEmailLayout({
-    contentHtml,
-    title: 'Organization Invitation - SlugBase',
     includeLegalFooter: true,
   });
 

@@ -1,11 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
-import { useOrgPlan } from '../../contexts/OrgPlanContext';
-import { mode } from '../../config/mode';
-import { getSharingCapabilities, type PlanTier } from '../../utils/plan';
 import api from '../../api/client';
-import { isCloud } from '../../config/mode';
 import {
   Dialog,
   DialogContent,
@@ -61,7 +57,6 @@ export default function ShareResourceDialog({
 }: ShareResourceDialogProps) {
   const { t } = useTranslation();
   const { user } = useAuth();
-  const { plan } = useOrgPlan();
   const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -76,11 +71,8 @@ export default function ShareResourceDialog({
   const [teamsPopoverOpen, setTeamsPopoverOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'people' | 'teams'>('people');
 
-  const { allowShareToTeams, allowShareToUsers } = getSharingCapabilities(
-    mode,
-    plan as PlanTier | null,
-    teams.length > 0
-  );
+  const allowShareToTeams = teams.length > 0;
+  const allowShareToUsers = true;
 
   const fetchResource = useCallback(async () => {
     if (!resourceId || !isOpen) return;
@@ -105,7 +97,7 @@ export default function ShareResourceDialog({
   const fetchUsersAndTeams = useCallback(async () => {
     try {
       const [usersRes, teamsRes] = await Promise.all([
-        api.get(isCloud ? '/organizations/members' : '/admin/users'),
+        api.get('/admin/users'),
         api.get('/teams'),
       ]);
       const users = Array.isArray(usersRes.data) ? usersRes.data : [];

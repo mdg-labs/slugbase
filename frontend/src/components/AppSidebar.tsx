@@ -12,7 +12,6 @@ import {
   Github,
   Users,
   UserCog,
-  CreditCard,
   Key,
   Sparkles,
 } from 'lucide-react';
@@ -30,9 +29,7 @@ import {
   useSidebar,
 } from './ui/sidebar';
 import { appBasePath } from '../config/api';
-import { isCloud } from '../config/mode';
 import type { User } from '../contexts/AuthContext';
-import { useOrgPlan } from '../contexts/OrgPlanContext';
 
 interface AppSidebarProps {
   user: User | null;
@@ -44,18 +41,14 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
   const location = useLocation();
   const pathname = location.pathname;
   const { setOpenMobile, toggleSidebar, isMobile, state } = useSidebar();
-  const { plan } = useOrgPlan();
-
-  const showTeamsTab = !isCloud || (plan != null && plan !== 'free' && plan !== 'personal');
   const adminBase = `${appBasePath || ''}/admin`;
 
   const adminNavItems = [
     { path: `${adminBase}/members`, label: t('admin.users'), icon: Users },
-    ...(showTeamsTab ? [{ path: `${adminBase}/teams`, label: t('admin.teams'), icon: UserCog }] : []),
-    ...(isCloud ? [{ path: `${adminBase}/billing`, label: t('admin.billing'), icon: CreditCard }] : []),
-    ...(!isCloud ? [{ path: `${adminBase}/oidc`, label: t('admin.oidcProviders'), icon: Key }] : []),
-    ...(!isCloud ? [{ path: `${adminBase}/settings`, label: t('admin.settings'), icon: Settings }] : []),
-    ...(!isCloud ? [{ path: `${adminBase}/ai`, label: t('admin.ai.nav'), icon: Sparkles }] : []),
+    { path: `${adminBase}/teams`, label: t('admin.teams'), icon: UserCog },
+    { path: `${adminBase}/oidc`, label: t('admin.oidcProviders'), icon: Key },
+    { path: `${adminBase}/settings`, label: t('admin.settings'), icon: Settings },
+    { path: `${adminBase}/ai`, label: t('admin.ai.nav'), icon: Sparkles },
   ];
 
   const isOverviewActive =
@@ -63,8 +56,7 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
     pathname === appBasePath + '/' ||
     pathname === (appBasePath || '/');
 
-  const showAdmin =
-    user?.is_admin || (isCloud && (user?.org_role === 'owner' || user?.org_role === 'admin'));
+  const showAdmin = user?.is_admin;
 
   const primaryNavItems = [
     { path: appBasePath || '/', label: t('dashboard.overview'), icon: LayoutDashboard },

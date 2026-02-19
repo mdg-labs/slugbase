@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../api/client';
-import { isCloud } from '../../config/mode';
 import { Popover, PopoverContent, PopoverTrigger } from './popover';
 import { Switch } from './switch';
 import { Label } from './label';
@@ -63,8 +62,7 @@ export function SharingField({
 
   async function loadUsers() {
     try {
-      const endpoint = isCloud ? '/organizations/members' : '/admin/users';
-      const response = await api.get(endpoint);
+      const response = await api.get('/admin/users');
       const users = Array.isArray(response.data) ? response.data : [];
       setAllUsers(users.filter((u: UserType) => u.id !== user?.id));
     } catch (error) {

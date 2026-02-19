@@ -4,18 +4,15 @@ import bcrypt from 'bcryptjs';
 import { query, queryOne, execute, isInitialized } from '../db/index.js';
 import { v4 as uuidv4 } from 'uuid';
 import { reloadOIDCStrategies } from '../auth/oidc.js';
-import { generateToken, generateAccessToken } from '../utils/jwt.js';
+import { generateToken } from '../utils/jwt.js';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { authRateLimiter, refreshRateLimiter, strictRateLimiter } from '../middleware/security.js';
 import { validateEmail, normalizeEmail, validatePassword, validateLength, sanitizeString } from '../utils/validation.js';
 import { generateUserKey } from '../utils/user-key.js';
-import { isCloud } from '../config/mode.js';
 import { getAuthCookieOptions, getClearAuthCookieOptions } from '../config/cookies.js';
-import { getCloudProviders } from '../config/cloud-providers.js';
-import { createRefreshToken, rotateRefreshToken, revokeRefreshTokensForUser, findUserIdByRefreshToken } from '../utils/refresh-token.js';
 import { sendSignupVerificationEmail } from '../utils/email.js';
-import { ensureOrgForUser, getCurrentOrgId } from '../utils/organizations.js';
 import crypto from 'crypto';
+import { getDefaultTenantId } from '../utils/tenant.js';
 
 const router = Router();
 
@@ -99,13 +96,10 @@ async function findSignupTokenWithEmailByToken(submittedToken: string): Promise<
   return row;
 }
 
-/** Set auth cookies (token; in CLOUD also refresh_token). SELFHOSTED: single long-lived JWT. */
+/** Set auth cookie for self-hosted JWT auth. */
 function setAuthCookies(res: any, options: { accessToken: string; refreshToken?: string; refreshMaxAgeMs?: number }) {
-  const accessMaxAgeMs = options.refreshToken != null ? 15 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000; // 15 min in CLOUD, 7d in SELFHOSTED
+  const accessMaxAgeMs = 7 * 24 * 60 * 60 * 1000;
   res.cookie('token', options.accessToken, { ...getAuthCookieOptions(accessMaxAgeMs), maxAge: accessMaxAgeMs });
-  if (options.refreshToken != null && options.refreshMaxAgeMs != null) {
-    res.cookie('refresh_token', options.refreshToken, getAuthCookieOptions(options.refreshMaxAgeMs));
-  }
 }
 
 /**
@@ -140,17 +134,7 @@ function setAuthCookies(res: any, options: { accessToken: string; refreshToken?:
 router.get('/providers', async (req, res) => {
   try {
     const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
-    if (isCloud) {
-      const cloudProviders = getCloudProviders();
-      const list = cloudProviders.map((p) => ({
-        id: p.provider_key,
-        provider_key: p.provider_key,
-        issuer_url: p.issuer_url,
-        callback_url: `${baseUrl}/api/auth/${p.provider_key}/callback`,
-      }));
-      return res.json(list);
-    }
-    const providers = await query('SELECT id, provider_key, issuer_url FROM oidc_providers', []);
+    const providers = await query('SELECT id, provider_key, issuer_url FROM oidc_providers WHERE tenant_id = ?', [getDefaultTenantId()]);
     const providersList = Array.isArray(providers) ? providers : (providers ? [providers] : []);
     const providersWithCallback = providersList.map((p: any) => ({
       ...p,
@@ -219,15 +203,6 @@ router.get('/me', requireAuth(), async (req, res) => {
     theme: u?.theme || (user as any).theme || 'auto',
     ai_suggestions_enabled: u?.ai_suggestions_enabled !== 0 && u?.ai_suggestions_enabled !== false,
   };
-  if (isCloud && user.org_role !== undefined) {
-    payload.org_role = user.org_role;
-  }
-  if (isCloud) {
-    const orgId = await getCurrentOrgId(user.id);
-    if (orgId) {
-      payload.current_org_id = orgId;
-    }
-  }
   res.json(payload);
 });
 
@@ -343,17 +318,8 @@ router.post('/login', authRateLimiter, async (req, res, next) => {
       is_admin: (user as any).is_admin,
     };
 
-    if (isCloud) {
-      // CLOUD: short-lived access JWT + refresh token cookie with rotation
-      const accessToken = generateAccessToken(userPayload);
-      const { token: refreshToken, expiresAt } = await createRefreshToken((user as any).id);
-      const refreshMaxAgeMs = Math.max(0, expiresAt.getTime() - Date.now());
-      setAuthCookies(res, { accessToken, refreshToken, refreshMaxAgeMs });
-    } else {
-      // SELFHOSTED: single long-lived JWT
-      const token = generateToken(userPayload);
-      setAuthCookies(res, { accessToken: token });
-    }
+    const token = generateToken(userPayload);
+    setAuthCookies(res, { accessToken: token });
 
     const payload: Record<string, unknown> = {
       id: (user as any).id,
@@ -364,13 +330,6 @@ router.post('/login', authRateLimiter, async (req, res, next) => {
       language: (user as any).language,
       theme: (user as any).theme,
     };
-    if (isCloud) {
-      const orgMember = await queryOne(
-        `SELECT role FROM org_members WHERE user_id = ? ORDER BY CASE role WHEN 'owner' THEN 1 WHEN 'admin' THEN 2 WHEN 'member' THEN 3 ELSE 4 END LIMIT 1`,
-        [(user as any).id]
-      );
-      payload.org_role = orgMember ? (orgMember as any).role : null;
-    }
     res.json(payload);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -398,11 +357,6 @@ router.post('/login', authRateLimiter, async (req, res, next) => {
  */
 router.post('/logout', async (req, res) => {
   const clearOpts = getClearAuthCookieOptions();
-  if (isCloud && req.cookies?.refresh_token) {
-    const userId = await findUserIdByRefreshToken(req.cookies.refresh_token);
-    if (userId) await revokeRefreshTokensForUser(userId);
-    res.clearCookie('refresh_token', clearOpts);
-  }
   res.clearCookie('token', clearOpts);
   res.json({ message: 'Logged out' });
 });
@@ -412,9 +366,6 @@ router.post('/logout', async (req, res) => {
  * Returns 404 when not CLOUD so SELFHOSTED never exposes public registration.
  */
 router.post('/register', authRateLimiter, async (req, res) => {
-  if (!isCloud) {
-    return res.status(404).json({ error: 'Not found' });
-  }
   const registrationsEnabled = process.env.REGISTRATIONS_ENABLED !== 'false';
   if (!registrationsEnabled) {
     return res.status(403).json({ error: 'Registrations are disabled' });
@@ -486,10 +437,6 @@ router.post('/register', authRateLimiter, async (req, res) => {
       }
     }
 
-    if (isCloud) {
-      await ensureOrgForUser(userId, sanitizedName);
-    }
-
     const tokenId = uuidv4();
     const token = crypto.randomBytes(32).toString('hex');
     const tokenHash = hashToken(token);
@@ -512,7 +459,7 @@ router.post('/register', authRateLimiter, async (req, res) => {
     }
 
     const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
-    const verificationUrl = `${frontendUrl}/app/verify-email?token=${encodeURIComponent(token)}`;
+    const verificationUrl = `${frontendUrl}/verify-email?token=${encodeURIComponent(token)}`;
     await sendSignupVerificationEmail(normalizedEmail, verificationUrl);
 
     return res.status(201).json({ message: 'Check your email to verify your account' });
@@ -526,9 +473,6 @@ router.post('/register', authRateLimiter, async (req, res) => {
  * POST /auth/verify-signup — CLOUD only. Verify signup token and set email_verified.
  */
 router.post('/verify-signup', authRateLimiter, async (req, res) => {
-  if (!isCloud) {
-    return res.status(404).json({ error: 'Not found' });
-  }
   try {
     const { token } = req.body;
     if (!token || typeof token !== 'string') {
@@ -568,9 +512,6 @@ router.post('/verify-signup', authRateLimiter, async (req, res) => {
  * GET /auth/signup-verification/status — CLOUD only. Get status of signup verification token.
  */
 router.get('/signup-verification/status', authRateLimiter, async (req, res) => {
-  if (!isCloud) {
-    return res.status(404).json({ error: 'Not found' });
-  }
   try {
     const token = (req.query.token as string)?.trim();
     if (!token) {
@@ -599,9 +540,6 @@ router.get('/signup-verification/status', authRateLimiter, async (req, res) => {
  * POST /auth/resend-signup-verification — CLOUD only. Resend verification email, optionally with updated email.
  */
 router.post('/resend-signup-verification', authRateLimiter, async (req, res) => {
-  if (!isCloud) {
-    return res.status(404).json({ error: 'Not found' });
-  }
   try {
     const { token, newEmail } = req.body;
     if (!token || typeof token !== 'string') {
@@ -652,7 +590,7 @@ router.post('/resend-signup-verification', authRateLimiter, async (req, res) => 
       );
     }
     const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
-    const verificationUrl = `${frontendUrl}/app/verify-email?token=${encodeURIComponent(newToken)}`;
+    const verificationUrl = `${frontendUrl}/verify-email?token=${encodeURIComponent(newToken)}`;
     await sendSignupVerificationEmail(targetEmail, verificationUrl);
     return res.json({ message: 'Verification email sent' });
   } catch (error: any) {
@@ -665,9 +603,6 @@ router.post('/resend-signup-verification', authRateLimiter, async (req, res) => 
  * POST /auth/request-signup-resend — CLOUD only. Request resend of verification email by email (no token).
  */
 router.post('/request-signup-resend', authRateLimiter, async (req, res) => {
-  if (!isCloud) {
-    return res.status(404).json({ error: 'Not found' });
-  }
   try {
     const { email } = req.body;
     if (!email || typeof email !== 'string') {
@@ -705,7 +640,7 @@ router.post('/request-signup-resend', authRateLimiter, async (req, res) => {
         );
       }
       const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
-      const verificationUrl = `${frontendUrl}/app/verify-email?token=${encodeURIComponent(newToken)}`;
+      const verificationUrl = `${frontendUrl}/verify-email?token=${encodeURIComponent(newToken)}`;
       await sendSignupVerificationEmail(normalizedEmail, verificationUrl);
     }
     return res.json({ message: 'If an unverified account exists with that email, a new verification link has been sent.' });
@@ -729,39 +664,7 @@ router.post('/request-signup-resend', authRateLimiter, async (req, res) => {
  *         description: Invalid or missing refresh token
  */
 router.post('/refresh', refreshRateLimiter, async (req, res) => {
-  if (!isCloud) return res.status(401).json({ error: 'Unauthorized' });
-  const refreshToken = req.cookies?.refresh_token;
-  if (!refreshToken) return res.status(401).json({ error: 'Unauthorized' });
-  try {
-    const result = await rotateRefreshToken(refreshToken);
-    if (!result) return res.status(401).json({ error: 'Unauthorized' });
-    const accessToken = generateAccessToken(result.user);
-    const refreshMaxAgeMs = Math.max(0, result.expiresAt.getTime() - Date.now());
-    setAuthCookies(res, { accessToken, refreshToken: result.token, refreshMaxAgeMs });
-    const userRow = await queryOne('SELECT id, email, name, user_key, is_admin, language, theme FROM users WHERE id = ?', [result.user.id]);
-    const u = userRow as any;
-    const refreshPayload: Record<string, unknown> = {
-      id: u.id,
-      email: u.email,
-      name: u.name,
-      user_key: u.user_key,
-      is_admin: Boolean(u.is_admin),
-      language: u.language || 'en',
-      theme: u.theme || 'auto',
-    };
-    const orgId = await getCurrentOrgId(u.id);
-    if (orgId) {
-      refreshPayload.current_org_id = orgId;
-    }
-    const orgMember = await queryOne(
-      `SELECT role FROM org_members WHERE user_id = ? ORDER BY CASE role WHEN 'owner' THEN 1 WHEN 'admin' THEN 2 WHEN 'member' THEN 3 ELSE 4 END LIMIT 1`,
-      [u.id]
-    );
-    refreshPayload.org_role = orgMember ? (orgMember as any).role : null;
-    res.json(refreshPayload);
-  } catch (err: any) {
-    res.status(401).json({ error: 'Unauthorized' });
-  }
+  return res.status(404).json({ error: 'Not found' });
 });
 
 /**
@@ -839,24 +742,16 @@ router.get('/:provider/callback', (req, res, next) => {
     // and passport-openidconnect fails before it can use userInfo endpoint
     if (err && err.message === 'ID token not present in token response') {
       try {
-        // Get provider configuration (CLOUD: from env; SELFHOSTED: from DB)
+        // Get provider configuration from database.
         let configuredIssuer: string;
         let configuredUserinfoUrl: string;
-        if (isCloud) {
-          const cloudList = getCloudProviders();
-          const cloudProvider = cloudList.find((p) => p.provider_key === provider);
-          if (!cloudProvider) throw new Error('Provider configuration not found');
-          configuredIssuer = cloudProvider.issuer_url;
-          configuredUserinfoUrl = cloudProvider.userinfo_url || `${configuredIssuer}/userinfo`;
-        } else {
-          const providerConfig = await queryOne(
-            'SELECT issuer_url, userinfo_url FROM oidc_providers WHERE provider_key = ?',
-            [provider]
-          );
-          if (!providerConfig) throw new Error('Provider configuration not found');
-          configuredIssuer = (providerConfig as any).issuer_url;
-          configuredUserinfoUrl = (providerConfig as any).userinfo_url || `${configuredIssuer}/userinfo`;
-        }
+        const providerConfig = await queryOne(
+          'SELECT issuer_url, userinfo_url FROM oidc_providers WHERE provider_key = ? AND tenant_id = ?',
+          [provider, getDefaultTenantId()]
+        );
+        if (!providerConfig) throw new Error('Provider configuration not found');
+        configuredIssuer = (providerConfig as any).issuer_url;
+        configuredUserinfoUrl = (providerConfig as any).userinfo_url || `${configuredIssuer}/userinfo`;
         
         // Get the access token from the session (stored by passport during OAuth flow)
         // passport-openidconnect stores it under a key like 'openidconnect:issuer'
@@ -920,7 +815,7 @@ router.get('/:provider/callback', (req, res, next) => {
                 async (verifyErr: any, verifiedUser: any) => {
                   if (verifyErr || !verifiedUser) {
                     console.error(`[OIDC] Verify function error:`, verifyErr);
-                    return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}${isCloud ? '/app/login' : '/login'}?error=auth_failed`);
+                    return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=auth_failed`);
                   }
                   user = verifiedUser;
                   await handleSuccess();
@@ -982,7 +877,7 @@ router.get('/:provider/callback', (req, res, next) => {
           async (verifyErr: any, verifiedUser: any) => {
             if (verifyErr || !verifiedUser) {
               console.error(`[OIDC] Verify function error:`, verifyErr);
-              return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}${isCloud ? '/app/login' : '/login'}?error=auth_failed`);
+              return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=auth_failed`);
             }
             user = verifiedUser;
             await handleSuccess();
@@ -995,7 +890,7 @@ router.get('/:provider/callback', (req, res, next) => {
           message: manualFetchError.message,
           stack: manualFetchError.stack,
         });
-        return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}${isCloud ? '/app/login' : '/login'}?error=auth_failed`);
+        return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=auth_failed`);
       }
     }
     
@@ -1022,22 +917,15 @@ router.get('/:provider/callback', (req, res, next) => {
           info: info,
         });
       }
-      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}${isCloud ? '/app/login' : '/login'}?error=${errorParam}`);
+      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=${errorParam}`);
     }
     
     async function handleSuccess() {
       const userPayload = { id: user.id, email: user.email, name: user.name, user_key: user.user_key, is_admin: user.is_admin };
-      if (isCloud) {
-        const accessToken = generateAccessToken(userPayload);
-        const { token: refreshToken, expiresAt } = await createRefreshToken(user.id);
-        const refreshMaxAgeMs = Math.max(0, expiresAt.getTime() - Date.now());
-        setAuthCookies(res, { accessToken, refreshToken, refreshMaxAgeMs });
-      } else {
-        const token = generateToken(userPayload);
-        setAuthCookies(res, { accessToken: token });
-      }
+      const token = generateToken(userPayload);
+      setAuthCookies(res, { accessToken: token });
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-      const redirectUrl = isCloud ? `${frontendUrl}/app` : frontendUrl;
+      const redirectUrl = frontendUrl;
       req.session?.destroy((sessionErr) => {
         if (sessionErr) console.error('Error destroying session:', sessionErr);
         res.redirect(redirectUrl);
@@ -1099,9 +987,6 @@ router.get('/:provider/callback', (req, res, next) => {
  */
 // Setup route - only accessible when system is not initialized. SELFHOSTED only.
 router.post('/setup', strictRateLimiter, async (req, res) => {
-  if (isCloud) {
-    return res.status(404).json({ error: 'Not found' });
-  }
   try {
     const initialized = await isInitialized();
     if (initialized) {
@@ -1176,14 +1061,7 @@ router.post('/setup', strictRateLimiter, async (req, res) => {
 
     // Automatically log in the user after successful setup
     const userPayload = { id: userId, email: normalizedEmail, name: sanitizedName, user_key: userKey, is_admin: true };
-    if (isCloud) {
-      const accessToken = generateAccessToken(userPayload);
-      const { token: refreshToken, expiresAt } = await createRefreshToken(userId);
-      const refreshMaxAgeMs = Math.max(0, expiresAt.getTime() - Date.now());
-      setAuthCookies(res, { accessToken, refreshToken, refreshMaxAgeMs });
-    } else {
-      setAuthCookies(res, { accessToken: generateToken(userPayload) });
-    }
+    setAuthCookies(res, { accessToken: generateToken(userPayload) });
 
     // Return user data (same format as login endpoint)
     res.json({

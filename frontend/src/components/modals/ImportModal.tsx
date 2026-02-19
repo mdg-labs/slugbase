@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
 import { Upload } from 'lucide-react';
 import {
   Dialog,
@@ -13,9 +12,6 @@ import { Separator } from '../ui/separator';
 import Button from '../ui/Button';
 import api from '../../api/client';
 import { useToast } from '../ui/Toast';
-import { isCloud } from '../../config/mode';
-import { appBasePath } from '../../config/api';
-import { FREE_PLAN_BOOKMARK_LIMIT } from '../../utils/plan';
 
 /**
  * Decode HTML entities safely (only common ones, no script execution)
@@ -116,13 +112,9 @@ interface ImportModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  bookmarkCount?: number;
-  bookmarkLimit?: number | null;
-  plan?: string | null;
-  freePlanGraceEndsAt?: string | null;
 }
 
-export default function ImportModal({ isOpen, onClose, onSuccess, bookmarkCount = 0, bookmarkLimit = null, plan, freePlanGraceEndsAt }: ImportModalProps) {
+export default function ImportModal({ isOpen, onClose, onSuccess }: ImportModalProps) {
   const { t } = useTranslation();
   const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -174,10 +166,6 @@ export default function ImportModal({ isOpen, onClose, onSuccess, bookmarkCount 
     }
   }
 
-  const atLimit = isCloud && plan === 'free' && bookmarkLimit != null && bookmarkCount >= bookmarkLimit &&
-    !(freePlanGraceEndsAt && new Date(freePlanGraceEndsAt).getTime() > Date.now());
-  const remaining = bookmarkLimit != null ? Math.max(0, bookmarkLimit - bookmarkCount) : null;
-
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-[460px]">
@@ -191,41 +179,22 @@ export default function ImportModal({ isOpen, onClose, onSuccess, bookmarkCount 
             {t('bookmarks.importDescription')}
           </p>
 
-          {atLimit && (
-            <div className="px-4 py-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20">
-              <p className="text-sm text-amber-800 dark:text-amber-200">{t('plan.limitBookmarks', { limit: bookmarkLimit ?? FREE_PLAN_BOOKMARK_LIMIT })}</p>
-              <Link
-                to={`${appBasePath}/admin/billing`}
-                className="mt-2 inline-block text-sm font-medium text-amber-700 dark:text-amber-300 hover:underline"
-              >
-                {t('plan.upgradeCta')}
-              </Link>
-            </div>
-          )}
-
-          {!atLimit && remaining != null && remaining < 20 && (
-            <p className="text-sm text-muted-foreground">
-              {t('plan.importLimitWarning', { remaining, limit: bookmarkLimit })}
-            </p>
-          )}
-
           <div className="border-2 border-dashed border-border rounded-lg p-6 text-center">
             <Upload className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <label className={atLimit ? 'cursor-not-allowed' : 'cursor-pointer'}>
+            <label className="cursor-pointer">
               <input
                 type="file"
                 accept=".json,.html"
                 onChange={handleFileSelect}
                 className="hidden"
-                disabled={loading || atLimit}
+                disabled={loading}
               />
               <Button
                 variant="primary"
                 icon={Upload}
-                disabled={loading || atLimit}
+                disabled={loading}
                 loading={loading}
                 onClick={() => {
-                  if (atLimit) return;
                   const input = document.querySelector('input[type="file"]') as HTMLInputElement;
                   input?.click();
                 }}

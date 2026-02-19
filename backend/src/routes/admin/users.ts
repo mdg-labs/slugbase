@@ -5,8 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
 import { validateEmail, normalizeEmail, validatePassword, validateLength, sanitizeString } from '../../utils/validation.js';
 import { generateUserKey } from '../../utils/user-key.js';
-import { isCloud } from '../../config/mode.js';
-import { deleteOrganization, getCurrentOrgId, setCurrentOrg } from '../../utils/organizations.js';
+import { getTenantId } from '../../utils/tenant.js';
 
 const router = Router();
 router.use(requireAuth());
@@ -68,22 +67,6 @@ router.use(requireAdmin());
 router.get('/', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
-    if (isCloud) {
-      const orgId = await getCurrentOrgId(authReq.user!.id);
-      if (!orgId) {
-        return res.json([]);
-      }
-      const users = await query(
-        `SELECT u.id, u.email, u.name, u.user_key, u.is_admin, u.oidc_provider, u.language, u.theme, u.created_at
-         FROM users u
-         INNER JOIN org_members om ON u.id = om.user_id
-         WHERE om.org_id = ?
-         ORDER BY u.name`,
-        [orgId]
-      );
-      const usersList = Array.isArray(users) ? users : (users ? [users] : []);
-      return res.json(usersList);
-    }
     const users = await query(
       'SELECT id, email, name, user_key, is_admin, oidc_provider, language, theme, created_at FROM users ORDER BY created_at DESC',
       []
@@ -158,19 +141,6 @@ router.get('/:id', async (req, res) => {
     );
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
-    }
-    if (isCloud) {
-      const orgId = await getCurrentOrgId(authReq.user!.id);
-      if (!orgId) {
-        return res.status(404).json({ error: 'User not found' });
-      }
-      const inOrg = await queryOne(
-        'SELECT 1 FROM org_members WHERE user_id = ? AND org_id = ?',
-        [id, orgId]
-      );
-      if (!inOrg) {
-        return res.status(404).json({ error: 'User not found' });
-      }
     }
     res.json(user);
   } catch (error: any) {
@@ -316,17 +286,6 @@ router.post('/', async (req, res) => {
       }
     }
 
-    if (isCloud) {
-      const orgId = await getCurrentOrgId(authReq.user!.id);
-      if (orgId) {
-        await execute(
-          'INSERT INTO org_members (user_id, org_id, role) VALUES (?, ?, ?)',
-          [userId, orgId, 'member']
-        );
-        await setCurrentOrg(userId, orgId);
-      }
-    }
-
     const user = await queryOne(
       'SELECT id, email, name, user_key, is_admin, oidc_provider, language, theme, created_at FROM users WHERE id = ?',
       [userId]
@@ -411,20 +370,6 @@ router.put('/:id', async (req, res) => {
     if (!existing) {
       return res.status(404).json({ error: 'User not found' });
     }
-    if (isCloud) {
-      const orgId = await getCurrentOrgId(authReq.user!.id);
-      if (!orgId) {
-        return res.status(404).json({ error: 'User not found' });
-      }
-      const inOrg = await queryOne(
-        'SELECT 1 FROM org_members WHERE user_id = ? AND org_id = ?',
-        [id, orgId]
-      );
-      if (!inOrg) {
-        return res.status(404).json({ error: 'User not found' });
-      }
-    }
-
     const updates: string[] = [];
     const params: any[] = [];
 
@@ -543,45 +488,7 @@ router.delete('/:id', async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
-    if (isCloud) {
-      const orgId = await getCurrentOrgId(authReq.user!.id);
-      if (!orgId) {
-        return res.status(404).json({ error: 'User not found' });
-      }
-      const inOrg = await queryOne(
-        'SELECT 1 FROM org_members WHERE user_id = ? AND org_id = ?',
-        [id, orgId]
-      );
-      if (!inOrg) {
-        return res.status(404).json({ error: 'User not found' });
-      }
-    }
-
-    // Detect orgs where user is sole member (for cleanup after deletion)
-    const orgsToCleanup: string[] = [];
-    if (isCloud) {
-      const userOrgs = await query('SELECT org_id FROM org_members WHERE user_id = ?', [id]);
-      const orgList = Array.isArray(userOrgs) ? userOrgs : userOrgs ? [userOrgs] : [];
-      for (const row of orgList) {
-        const oid = (row as any).org_id;
-        if (oid) {
-          const countRow = await queryOne('SELECT COUNT(*) as count FROM org_members WHERE org_id = ?', [oid]);
-          const count = parseInt((countRow as any)?.count || '0');
-          if (count === 1) orgsToCleanup.push(oid);
-        }
-      }
-    }
-
     await execute('DELETE FROM users WHERE id = ?', [id]);
-
-    // Clean up orphan orgs (user was sole member)
-    for (const orgId of orgsToCleanup) {
-      try {
-        await deleteOrganization(orgId);
-      } catch (err: any) {
-        console.warn('Org cleanup after user delete failed:', err?.message);
-      }
-    }
 
     res.json({ message: 'User deleted' });
   } catch (error: any) {
@@ -636,25 +543,12 @@ router.get('/:id/teams', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const { id } = req.params;
-    if (isCloud) {
-      const orgId = await getCurrentOrgId(authReq.user!.id);
-      if (!orgId) {
-        return res.json([]);
-      }
-      const teams = await query(
-        `SELECT t.* FROM teams t
-         INNER JOIN team_members tm ON t.id = tm.team_id
-         WHERE tm.user_id = ? AND t.org_id = ?`,
-        [id, orgId]
-      );
-      const teamsList = Array.isArray(teams) ? teams : (teams ? [teams] : []);
-      return res.json(teamsList);
-    }
+    const tenantId = getTenantId(req);
     const teams = await query(
       `SELECT t.* FROM teams t
        INNER JOIN team_members tm ON t.id = tm.team_id
-       WHERE tm.user_id = ?`,
-      [id]
+       WHERE tm.user_id = ? AND tm.tenant_id = ? AND t.tenant_id = ?`,
+      [id, tenantId, tenantId]
     );
     const teamsList = Array.isArray(teams) ? teams : (teams ? [teams] : []);
     res.json(teamsList);

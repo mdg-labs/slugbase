@@ -7,6 +7,7 @@
 
 import { execute } from '../index.js';
 
+// legacy cloud migration; no longer registered in selfhost-core
 export const migrationId = '017';
 export const migrationName = 'AI suggestions cache and feature flags';
 

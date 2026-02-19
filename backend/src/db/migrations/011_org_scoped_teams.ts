@@ -7,6 +7,7 @@
 
 import { execute, queryOne } from '../index.js';
 
+// legacy cloud migration; no longer registered in selfhost-core
 export const migrationId = '011';
 export const migrationName = 'Org-scoped teams and current org context';
 

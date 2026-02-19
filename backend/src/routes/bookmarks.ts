@@ -1,16 +1,14 @@
 import { Router } from 'express';
 import { query, queryOne, execute } from '../db/index.js';
 import { AuthRequest, requireAuth } from '../middleware/auth.js';
-import { canAccessBookmark, canModifyBookmark, canAccessFolder, canAccessTag, getTeamIdsForUser, getTeamIdsForUserInOrg } from '../auth/authorization.js';
+import { canAccessBookmark, canModifyBookmark, canAccessFolder, canAccessTag, getTeamIdsForUser } from '../auth/authorization.js';
 import { v4 as uuidv4 } from 'uuid';
-import { isCloud } from '../config/mode.js';
-import { canCreateBookmarkFreePlan, clearFreePlanGrace, FREE_BOOKMARK_LIMIT, getCurrentOrgId, getUserPlan } from '../utils/organizations.js';
-import { PLAN_ERRORS } from '../utils/plan-errors.js';
 import { CreateBookmarkInput, UpdateBookmarkInput, AiSuggestionUsed } from '../types.js';
 import { validateUrl, validateSlug, validateLength, sanitizeString, MAX_LENGTHS } from '../utils/validation.js';
 import { isAISuggestionsEnabled, getAIApiKey, getAIModel } from '../utils/ai-feature.js';
 import { sanitizeUrlForAI, callAIProvider } from '../services/ai-suggestions.js';
 import { fetchPageMetadata } from '../services/fetch-page-metadata.js';
+import { getTenantId } from '../utils/tenant.js';
 
 const router = Router();
 router.use(requireAuth());
@@ -134,7 +132,7 @@ router.get('/', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const userId = authReq.user!.id;
-    const orgId = isCloud ? await getCurrentOrgId(userId) : null;
+    const tenantId = getTenantId(req);
     const { folder_id, tag_id, sort_by, limit: limitParam, offset: offsetParam } = req.query;
 
     // Pagination: default 50, max 100
@@ -145,27 +143,24 @@ router.get('/', async (req, res) => {
     const folderIdStr = typeof folder_id === 'string' ? folder_id : undefined;
     const tagIdStr = typeof tag_id === 'string' ? tag_id : undefined;
     if (folderIdStr) {
-      const canAccess = await canAccessFolder(userId, folderIdStr, orgId);
+      const canAccess = await canAccessFolder(userId, folderIdStr, null, tenantId);
       if (!canAccess) {
         return res.status(404).json({ error: 'Folder not found' });
       }
     }
     if (tagIdStr) {
-      const canAccess = await canAccessTag(userId, tagIdStr);
+      const canAccess = await canAccessTag(userId, tagIdStr, tenantId);
       if (!canAccess) {
         return res.status(404).json({ error: 'Tag not found' });
       }
     }
 
-    // Get user's teams (org-scoped in cloud mode)
-    const teamIds = orgId
-      ? await getTeamIdsForUserInOrg(userId, orgId)
-      : await getTeamIdsForUser(userId);
+    const teamIds = await getTeamIdsForUser(userId, tenantId);
 
     // Build query for own bookmarks + shared bookmarks (directly shared with user, teams, or via shared folders)
     // In cloud mode, user shares (bus/fus) only count when owner is in same org
-    const busCond = orgId ? '(bus.user_id = ? AND b.user_id IN (SELECT user_id FROM org_members WHERE org_id = ?))' : 'bus.user_id = ?';
-    const fusCond = orgId ? '(fus.user_id = ? AND bf.folder_id IN (SELECT id FROM folders WHERE user_id IN (SELECT user_id FROM org_members WHERE org_id = ?)))' : 'fus.user_id = ?';
+    const busCond = 'bus.user_id = ?';
+    const fusCond = 'fus.user_id = ?';
     let sql = `
       SELECT DISTINCT b.*,
              CASE WHEN b.user_id = ? THEN 'own' ELSE 'shared' END as bookmark_type
@@ -175,18 +170,15 @@ router.get('/', async (req, res) => {
       LEFT JOIN bookmark_folders bf ON b.id = bf.bookmark_id
       LEFT JOIN folder_user_shares fus ON bf.folder_id = fus.folder_id
       LEFT JOIN folder_team_shares fts ON bf.folder_id = fts.folder_id
-      WHERE (b.user_id = ? 
+      WHERE b.tenant_id = ?
+        AND (b.user_id = ? 
         OR ${busCond}
         OR (bts.team_id IN (${teamIds.length > 0 ? teamIds.map(() => '?').join(',') : 'NULL'}) AND bts.team_id IS NOT NULL)
         OR ${fusCond}
         OR (fts.team_id IN (${teamIds.length > 0 ? teamIds.map(() => '?').join(',') : 'NULL'}) AND fts.team_id IS NOT NULL AND bf.folder_id IS NOT NULL))
     `;
-    const params: any[] = [userId, userId];
-    if (orgId) {
-      params.push(userId, orgId, userId, orgId);
-    } else {
-      params.push(userId, userId);
-    }
+    const params: any[] = [tenantId, userId, userId];
+    params.push(userId, userId);
     if (teamIds.length > 0) {
       params.push(...teamIds);
       params.push(...teamIds); // Second set for folder shares
@@ -215,7 +207,8 @@ router.get('/', async (req, res) => {
       LEFT JOIN bookmark_folders bf ON b.id = bf.bookmark_id
       LEFT JOIN folder_user_shares fus ON bf.folder_id = fus.folder_id
       LEFT JOIN folder_team_shares fts ON bf.folder_id = fts.folder_id
-      WHERE (b.user_id = ?
+      WHERE b.tenant_id = ?
+        AND (b.user_id = ?
         OR ${busCond}
         OR (bts.team_id IN (${teamIds.length > 0 ? teamIds.map(() => '?').join(',') : 'NULL'}) AND bts.team_id IS NOT NULL)
         OR ${fusCond}
@@ -223,12 +216,8 @@ router.get('/', async (req, res) => {
       ${folderIdStr ? 'AND b.id IN (SELECT bookmark_id FROM bookmark_folders WHERE folder_id = ?)' : ''}
       ${tagIdStr ? 'AND b.id IN (SELECT bookmark_id FROM bookmark_tags WHERE tag_id = ?)' : ''}
     `;
-    const countParams = [userId];
-    if (orgId) {
-      countParams.push(userId, orgId, userId, orgId);
-    } else {
-      countParams.push(userId, userId);
-    }
+    const countParams = [tenantId, userId];
+    countParams.push(userId, userId);
     if (teamIds.length > 0) {
       countParams.push(...teamIds, ...teamIds);
     }
@@ -518,7 +507,7 @@ router.get('/search', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const userId = authReq.user!.id;
-    const orgId = isCloud ? await getCurrentOrgId(userId) : null;
+    const tenantId = getTenantId(req);
     const { q } = req.query;
 
     if (!q || typeof q !== 'string') {
@@ -528,12 +517,10 @@ router.get('/search', async (req, res) => {
     const searchTerm = `%${q.toLowerCase()}%`;
 
     // Get user's teams for share checks (org-scoped in cloud mode)
-    const teamIds = orgId
-      ? await getTeamIdsForUserInOrg(userId, orgId)
-      : await getTeamIdsForUser(userId);
+    const teamIds = await getTeamIdsForUser(userId, tenantId);
     const teamPlaceholders = teamIds.length > 0 ? teamIds.map(() => '?').join(',') : 'NULL';
-    const busCond = orgId ? '(bus.user_id = ? AND b.user_id IN (SELECT user_id FROM org_members WHERE org_id = ?))' : 'bus.user_id = ?';
-    const fusCond = orgId ? '(fus.user_id = ? AND bf.folder_id IN (SELECT id FROM folders WHERE user_id IN (SELECT user_id FROM org_members WHERE org_id = ?)))' : 'fus.user_id = ?';
+    const busCond = 'bus.user_id = ?';
+    const fusCond = 'fus.user_id = ?';
 
     // Search bookmarks (same access as GET /: own + user share + team share + folder-based sharing)
     const bookmarkSql = `
@@ -553,11 +540,7 @@ router.get('/search', async (req, res) => {
       LIMIT 10
     `;
     const bookmarkParams: any[] = [userId, userId];
-    if (orgId) {
-      bookmarkParams.push(userId, orgId, userId, orgId);
-    } else {
-      bookmarkParams.push(userId, userId);
-    }
+    bookmarkParams.push(userId, userId);
     if (teamIds.length > 0) {
       bookmarkParams.push(...teamIds);
       bookmarkParams.push(...teamIds);
@@ -566,7 +549,7 @@ router.get('/search', async (req, res) => {
     const bookmarkResults = await query(bookmarkSql, bookmarkParams);
 
     // Search folders (same access as GET /folders: own + shared via user/team)
-    const folderFusCond = orgId ? '(fus.user_id = ? AND f.user_id IN (SELECT user_id FROM org_members WHERE org_id = ?))' : 'fus.user_id = ?';
+    const folderFusCond = 'fus.user_id = ?';
     const folderSql = `
       SELECT DISTINCT f.*, 'folder' as type
       FROM folders f
@@ -578,11 +561,7 @@ router.get('/search', async (req, res) => {
       LIMIT 5
     `;
     const folderParams: any[] = [userId];
-    if (orgId) {
-      folderParams.push(userId, orgId);
-    } else {
-      folderParams.push(userId);
-    }
+    folderParams.push(userId);
     if (teamIds.length > 0) folderParams.push(...teamIds);
     folderParams.push(searchTerm);
     const folderResults = await query(folderSql, folderParams);
@@ -651,15 +630,13 @@ router.get('/export', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const userId = authReq.user!.id;
-    const orgId = isCloud ? await getCurrentOrgId(userId) : null;
+    const tenantId = getTenantId(req);
 
     // Get all bookmarks (same access as GET /: own + user share + team share + folder-based sharing)
-    const teamIds = orgId
-      ? await getTeamIdsForUserInOrg(userId, orgId)
-      : await getTeamIdsForUser(userId);
+    const teamIds = await getTeamIdsForUser(userId, tenantId);
     const teamPlaceholders = teamIds.length > 0 ? teamIds.map(() => '?').join(',') : 'NULL';
-    const busCond = orgId ? '(bus.user_id = ? AND b.user_id IN (SELECT user_id FROM org_members WHERE org_id = ?))' : 'bus.user_id = ?';
-    const fusCond = orgId ? '(fus.user_id = ? AND bf.folder_id IN (SELECT id FROM folders WHERE user_id IN (SELECT user_id FROM org_members WHERE org_id = ?)))' : 'fus.user_id = ?';
+    const busCond = 'bus.user_id = ?';
+    const fusCond = 'fus.user_id = ?';
     const exportSql = `
       SELECT DISTINCT b.*,
              CASE WHEN b.user_id = ? THEN 'own' ELSE 'shared' END as bookmark_type
@@ -676,11 +653,7 @@ router.get('/export', async (req, res) => {
       ORDER BY b.created_at DESC
     `;
     const exportParams: any[] = [userId, userId];
-    if (orgId) {
-      exportParams.push(userId, orgId, userId, orgId);
-    } else {
-      exportParams.push(userId, userId);
-    }
+    exportParams.push(userId, userId);
     if (teamIds.length > 0) {
       exportParams.push(...teamIds);
       exportParams.push(...teamIds);
@@ -711,13 +684,13 @@ router.get('/ids', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const userId = authReq.user!.id;
-    const orgId = isCloud ? await getCurrentOrgId(userId) : null;
+    const tenantId = getTenantId(req);
     const { folder_id, tag_id, sort_by } = req.query;
 
     const folderIdStr = typeof folder_id === 'string' ? folder_id : undefined;
     const tagIdStr = typeof tag_id === 'string' ? tag_id : undefined;
     if (folderIdStr) {
-      const canAccess = await canAccessFolder(userId, folderIdStr, orgId);
+      const canAccess = await canAccessFolder(userId, folderIdStr, null, tenantId);
       if (!canAccess) {
         return res.status(404).json({ error: 'Folder not found' });
       }
@@ -729,12 +702,10 @@ router.get('/ids', async (req, res) => {
       }
     }
 
-    const teamIds = orgId
-      ? await getTeamIdsForUserInOrg(userId, orgId)
-      : await getTeamIdsForUser(userId);
+    const teamIds = await getTeamIdsForUser(userId, tenantId);
 
-    const busCond = orgId ? '(bus.user_id = ? AND b.user_id IN (SELECT user_id FROM org_members WHERE org_id = ?))' : 'bus.user_id = ?';
-    const fusCond = orgId ? '(fus.user_id = ? AND bf.folder_id IN (SELECT id FROM folders WHERE user_id IN (SELECT user_id FROM org_members WHERE org_id = ?)))' : 'fus.user_id = ?';
+    const busCond = 'bus.user_id = ?';
+    const fusCond = 'fus.user_id = ?';
     let idsSql = `
       SELECT DISTINCT b.id
       FROM bookmarks b
@@ -750,11 +721,7 @@ router.get('/ids', async (req, res) => {
         OR (fts.team_id IN (${teamIds.length > 0 ? teamIds.map(() => '?').join(',') : 'NULL'}) AND fts.team_id IS NOT NULL AND bf.folder_id IS NOT NULL))
     `;
     const idsParams: any[] = [userId];
-    if (orgId) {
-      idsParams.push(userId, orgId, userId, orgId);
-    } else {
-      idsParams.push(userId, userId);
-    }
+    idsParams.push(userId, userId);
     if (teamIds.length > 0) {
       idsParams.push(...teamIds);
       idsParams.push(...teamIds);
@@ -959,15 +926,15 @@ router.get('/:id', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const userId = authReq.user!.id;
-    const orgId = isCloud ? await getCurrentOrgId(userId) : null;
+    const tenantId = getTenantId(req);
     const { id } = req.params;
 
-    const canAccess = await canAccessBookmark(userId, id, orgId);
+    const canAccess = await canAccessBookmark(userId, id, null, tenantId);
     if (!canAccess) {
       return res.status(404).json({ error: 'Bookmark not found' });
     }
 
-    const bookmark = await queryOne('SELECT * FROM bookmarks WHERE id = ?', [id]);
+    const bookmark = await queryOne('SELECT * FROM bookmarks WHERE id = ? AND tenant_id = ?', [id, tenantId]);
     if (!bookmark) {
       return res.status(404).json({ error: 'Bookmark not found' });
     }
@@ -1073,10 +1040,10 @@ router.post('/:id/track-access', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const userId = authReq.user!.id;
-    const orgId = isCloud ? await getCurrentOrgId(userId) : null;
+    const tenantId = getTenantId(req);
     const { id } = req.params;
 
-    const canAccess = await canAccessBookmark(userId, id, orgId);
+    const canAccess = await canAccessBookmark(userId, id, null, tenantId);
     if (!canAccess) {
       return res.status(404).json({ error: 'Bookmark not found' });
     }
@@ -1086,8 +1053,8 @@ router.post('/:id/track-access', async (req, res) => {
       `UPDATE bookmarks 
        SET access_count = COALESCE(access_count, 0) + 1,
            last_accessed_at = CURRENT_TIMESTAMP
-       WHERE id = ?`,
-      [id]
+       WHERE id = ? AND tenant_id = ?`,
+      [id, tenantId]
     );
 
     res.json({ success: true });
@@ -1193,36 +1160,11 @@ router.post('/', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const userId = authReq.user!.id;
-    const orgId = isCloud ? await getCurrentOrgId(userId) : null;
+    const tenantId = getTenantId(req);
     const data: CreateBookmarkInput = req.body;
 
     if (!data.title || !data.url) {
       return res.status(400).json({ error: 'Missing required fields' });
-    }
-
-    // Cloud: enforce Free plan bookmark limit (with grace period for over-limit)
-    if (isCloud) {
-      const plan = await getUserPlan(userId);
-      if (plan === 'free') {
-        const countResult = await queryOne('SELECT COUNT(*) as count FROM bookmarks WHERE user_id = ?', [userId]);
-        const count = countResult ? parseInt((countResult as any).count) : 0;
-        const canCreate = await canCreateBookmarkFreePlan(userId, count);
-        if (!canCreate) {
-          return res.status(403).json({
-            error: PLAN_ERRORS.BOOKMARK_LIMIT.message,
-            code: PLAN_ERRORS.BOOKMARK_LIMIT.code,
-          });
-        }
-      }
-      // Cloud: Free/Personal cannot share to teams
-      if (plan === 'free' || plan === 'personal') {
-        if (data.share_all_teams || (data.team_ids && data.team_ids.length > 0)) {
-          return res.status(403).json({
-            error: PLAN_ERRORS.SHARE_TO_TEAM.message,
-            code: PLAN_ERRORS.SHARE_TO_TEAM.code,
-          });
-        }
-      }
     }
 
     // Validate and sanitize title
@@ -1255,8 +1197,8 @@ router.post('/', async (req, res) => {
       
       // Check if slug is globally unique (required for shared bookmark forwarding)
       const existing = await queryOne(
-        'SELECT id FROM bookmarks WHERE slug = ?',
-        [slug]
+        'SELECT id FROM bookmarks WHERE slug = ? AND tenant_id = ?',
+        [slug, tenantId]
       );
 
       if (existing) {
@@ -1266,16 +1208,16 @@ router.post('/', async (req, res) => {
 
     const bookmarkId = uuidv4();
     await execute(
-      `INSERT INTO bookmarks (id, user_id, title, url, slug, forwarding_enabled, pinned)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [bookmarkId, userId, sanitizedTitle, data.url, slug, data.forwarding_enabled || false, Boolean((data as any).pinned || false)]
+      `INSERT INTO bookmarks (id, tenant_id, user_id, title, url, slug, forwarding_enabled, pinned)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [bookmarkId, tenantId, userId, sanitizedTitle, data.url, slug, data.forwarding_enabled || false, Boolean((data as any).pinned || false)]
     );
 
     // Add folders
     if (data.folder_ids && data.folder_ids.length > 0) {
       // Verify user owns all folders
       for (const folderId of data.folder_ids) {
-        const folder = await queryOne('SELECT * FROM folders WHERE id = ? AND user_id = ?', [folderId, userId]);
+        const folder = await queryOne('SELECT * FROM folders WHERE id = ? AND user_id = ? AND tenant_id = ?', [folderId, userId, tenantId]);
         if (!folder) {
           return res.status(403).json({ error: `You do not own folder ${folderId}` });
         }
@@ -1289,7 +1231,7 @@ router.post('/', async (req, res) => {
     // Add tags (L1: verify user owns each tag)
     if (data.tag_ids && data.tag_ids.length > 0) {
       for (const tagId of data.tag_ids) {
-        const canAccess = await canAccessTag(userId, tagId);
+        const canAccess = await canAccessTag(userId, tagId, tenantId);
         if (!canAccess) {
           return res.status(403).json({ error: 'You do not have access to one or more of the selected tags' });
         }
@@ -1303,9 +1245,7 @@ router.post('/', async (req, res) => {
     // Add team shares
     if (data.share_all_teams) {
       // Share with all teams user is a member of (org-scoped in cloud mode)
-      const teamIds = orgId
-        ? await getTeamIdsForUserInOrg(userId, orgId)
-        : await getTeamIdsForUser(userId);
+      const teamIds = await getTeamIdsForUser(userId, tenantId);
       for (const teamId of teamIds) {
         await execute(
           'INSERT INTO bookmark_team_shares (bookmark_id, team_id) VALUES (?, ?)',
@@ -1313,20 +1253,14 @@ router.post('/', async (req, res) => {
         );
       }
     } else if (data.team_ids && data.team_ids.length > 0) {
-      // Verify user is member of all teams (and team is in org in cloud mode)
+      // Verify user is member of all teams
       for (const teamId of data.team_ids) {
         const isMember = await queryOne(
-          'SELECT * FROM team_members WHERE user_id = ? AND team_id = ?',
-          [userId, teamId]
+          'SELECT * FROM team_members WHERE user_id = ? AND team_id = ? AND tenant_id = ?',
+          [userId, teamId, tenantId]
         );
         if (!isMember) {
           return res.status(403).json({ error: `You are not a member of team ${teamId}` });
-        }
-        if (orgId) {
-          const teamInOrg = await queryOne('SELECT 1 FROM teams WHERE id = ? AND org_id = ?', [teamId, orgId]);
-          if (!teamInOrg) {
-            return res.status(403).json({ error: `Team ${teamId} is not in your organization` });
-          }
         }
         await execute(
           'INSERT INTO bookmark_team_shares (bookmark_id, team_id) VALUES (?, ?)',
@@ -1339,20 +1273,6 @@ router.post('/', async (req, res) => {
     if (data.user_ids && data.user_ids.length > 0) {
       // Don't allow sharing with self
       const filteredUserIds = data.user_ids.filter((uid) => uid !== userId);
-      if (isCloud) {
-        if (!orgId) {
-          return res.status(403).json({ error: 'No organization selected' });
-        }
-        for (const shareUserId of filteredUserIds) {
-          const inOrg = await queryOne(
-            'SELECT 1 FROM org_members WHERE user_id = ? AND org_id = ?',
-            [shareUserId, orgId]
-          );
-          if (!inOrg) {
-            return res.status(403).json({ error: 'One or more users are not in your organization' });
-          }
-        }
-      }
       for (const shareUserId of filteredUserIds) {
         // Verify user exists
         const user = await queryOne('SELECT id FROM users WHERE id = ?', [shareUserId]);
@@ -1368,7 +1288,7 @@ router.post('/', async (req, res) => {
 
     await recordAiSuggestionUsage(userId, data.ai_suggestion_used);
 
-    const bookmark = await queryOne('SELECT * FROM bookmarks WHERE id = ?', [bookmarkId]);
+    const bookmark = await queryOne('SELECT * FROM bookmarks WHERE id = ? AND tenant_id = ?', [bookmarkId, tenantId]);
     // Convert boolean fields from SQLite (0/1) to boolean
     bookmark.forwarding_enabled = Boolean(bookmark.forwarding_enabled);
     // Return null as empty string for frontend
@@ -1461,30 +1381,17 @@ router.put('/:id', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const userId = authReq.user!.id;
-    const orgId = isCloud ? await getCurrentOrgId(userId) : null;
+    const tenantId = getTenantId(req);
     const { id } = req.params;
     const data: UpdateBookmarkInput = req.body;
 
-    const canModify = await canModifyBookmark(userId, id);
+    const canModify = await canModifyBookmark(userId, id, tenantId);
     if (!canModify) {
       return res.status(404).json({ error: 'Bookmark not found' });
     }
-    const existing = await queryOne('SELECT * FROM bookmarks WHERE id = ?', [id]);
+    const existing = await queryOne('SELECT * FROM bookmarks WHERE id = ? AND tenant_id = ?', [id, tenantId]);
     if (!existing) {
       return res.status(404).json({ error: 'Bookmark not found' });
-    }
-
-    // Cloud: Free/Personal cannot share to teams
-    if (isCloud) {
-      const plan = await getUserPlan(userId);
-      if (plan === 'free' || plan === 'personal') {
-        if (data.share_all_teams || (data.team_ids && data.team_ids.length > 0)) {
-          return res.status(403).json({
-            error: PLAN_ERRORS.SHARE_TO_TEAM.message,
-            code: PLAN_ERRORS.SHARE_TO_TEAM.code,
-          });
-        }
-      }
     }
 
     // Slug validation
@@ -1504,8 +1411,8 @@ router.put('/:id', async (req, res) => {
         }
         
         const slugExists = await queryOne(
-          'SELECT id FROM bookmarks WHERE slug = ? AND id != ?',
-          [newSlug, id]
+          'SELECT id FROM bookmarks WHERE slug = ? AND id != ? AND tenant_id = ?',
+          [newSlug, id, tenantId]
         );
         if (slugExists) {
           return res.status(400).json({ error: 'Slug already exists. Slugs must be unique across all bookmarks.' });
@@ -1562,8 +1469,8 @@ router.put('/:id', async (req, res) => {
     params.push(id);
 
     await execute(
-      `UPDATE bookmarks SET ${updates.join(', ')} WHERE id = ?`,
-      params
+      `UPDATE bookmarks SET ${updates.join(', ')} WHERE id = ? AND tenant_id = ?`,
+      [...params, tenantId]
     );
 
     // Update folders if provided
@@ -1572,7 +1479,7 @@ router.put('/:id', async (req, res) => {
       if (data.folder_ids.length > 0) {
         // Verify user owns all folders
         for (const folderId of data.folder_ids) {
-          const folder = await queryOne('SELECT * FROM folders WHERE id = ? AND user_id = ?', [folderId, userId]);
+          const folder = await queryOne('SELECT * FROM folders WHERE id = ? AND user_id = ? AND tenant_id = ?', [folderId, userId, tenantId]);
           if (!folder) {
             return res.status(403).json({ error: `You do not own folder ${folderId}` });
           }
@@ -1587,7 +1494,7 @@ router.put('/:id', async (req, res) => {
     // Update tags if provided (L1: verify user owns each tag)
     if (data.tag_ids !== undefined) {
       for (const tagId of data.tag_ids) {
-        const canAccess = await canAccessTag(userId, tagId);
+        const canAccess = await canAccessTag(userId, tagId, tenantId);
         if (!canAccess) {
           return res.status(403).json({ error: 'You do not have access to one or more of the selected tags' });
         }
@@ -1603,9 +1510,7 @@ router.put('/:id', async (req, res) => {
       await execute('DELETE FROM bookmark_team_shares WHERE bookmark_id = ?', [id]);
       if (data.share_all_teams) {
         // Share with all teams user is a member of (org-scoped in cloud mode)
-        const teamIds = orgId
-          ? await getTeamIdsForUserInOrg(userId, orgId)
-          : await getTeamIdsForUser(userId);
+        const teamIds = await getTeamIdsForUser(userId, tenantId);
         for (const teamId of teamIds) {
           await execute(
             'INSERT INTO bookmark_team_shares (bookmark_id, team_id) VALUES (?, ?)',
@@ -1613,20 +1518,14 @@ router.put('/:id', async (req, res) => {
           );
         }
       } else if (data.team_ids && data.team_ids.length > 0) {
-        // Verify user is member of all teams (and team is in org in cloud mode)
+        // Verify user is member of all teams
         for (const teamId of data.team_ids) {
           const isMember = await queryOne(
-            'SELECT * FROM team_members WHERE user_id = ? AND team_id = ?',
-            [userId, teamId]
+            'SELECT * FROM team_members WHERE user_id = ? AND team_id = ? AND tenant_id = ?',
+            [userId, teamId, tenantId]
           );
           if (!isMember) {
             return res.status(403).json({ error: `You are not a member of team ${teamId}` });
-          }
-          if (orgId) {
-            const teamInOrg = await queryOne('SELECT 1 FROM teams WHERE id = ? AND org_id = ?', [teamId, orgId]);
-            if (!teamInOrg) {
-              return res.status(403).json({ error: `Team ${teamId} is not in your organization` });
-            }
           }
           await execute(
             'INSERT INTO bookmark_team_shares (bookmark_id, team_id) VALUES (?, ?)',
@@ -1642,20 +1541,6 @@ router.put('/:id', async (req, res) => {
       if (data.user_ids.length > 0) {
         // Don't allow sharing with self
         const filteredUserIds = data.user_ids.filter((uid) => uid !== userId);
-        if (isCloud) {
-          if (!orgId) {
-            return res.status(403).json({ error: 'No organization selected' });
-          }
-          for (const shareUserId of filteredUserIds) {
-            const inOrg = await queryOne(
-              'SELECT 1 FROM org_members WHERE user_id = ? AND org_id = ?',
-              [shareUserId, orgId]
-            );
-            if (!inOrg) {
-              return res.status(403).json({ error: 'One or more users are not in your organization' });
-            }
-          }
-        }
         for (const shareUserId of filteredUserIds) {
           // Verify user exists
           const user = await queryOne('SELECT id FROM users WHERE id = ?', [shareUserId]);
@@ -1672,7 +1557,7 @@ router.put('/:id', async (req, res) => {
 
     await recordAiSuggestionUsage(userId, data.ai_suggestion_used);
 
-    const bookmark = await queryOne('SELECT * FROM bookmarks WHERE id = ?', [id]);
+    const bookmark = await queryOne('SELECT * FROM bookmarks WHERE id = ? AND tenant_id = ?', [id, tenantId]);
     // Convert boolean fields from SQLite (0/1) to boolean
     bookmark.forwarding_enabled = Boolean(bookmark.forwarding_enabled);
     // Return null as empty string for frontend
@@ -1724,22 +1609,15 @@ router.delete('/:id', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const userId = authReq.user!.id;
+    const tenantId = getTenantId(req);
     const { id } = req.params;
 
-    const canModify = await canModifyBookmark(userId, id);
+    const canModify = await canModifyBookmark(userId, id, tenantId);
     if (!canModify) {
       return res.status(404).json({ error: 'Bookmark not found' });
     }
 
-    await execute('DELETE FROM bookmarks WHERE id = ?', [id]);
-
-    if (isCloud) {
-      const countResult = await queryOne('SELECT COUNT(*) as count FROM bookmarks WHERE user_id = ?', [userId]);
-      const count = countResult ? parseInt((countResult as any).count) : 0;
-      if (count <= FREE_BOOKMARK_LIMIT) {
-        await clearFreePlanGrace(userId);
-      }
-    }
+    await execute('DELETE FROM bookmarks WHERE id = ? AND tenant_id = ?', [id, tenantId]);
 
     res.json({ message: 'Bookmark deleted' });
   } catch (error: any) {
@@ -1814,6 +1692,7 @@ router.post('/import', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const userId = authReq.user!.id;
+    const tenantId = getTenantId(req);
     const { bookmarks: importBookmarks } = req.body;
 
     if (!Array.isArray(importBookmarks)) {
@@ -1833,32 +1712,8 @@ router.post('/import', async (req, res) => {
       errors: [] as string[],
     };
 
-    // Cloud: Free plan bookmark limit - get current count
-    let currentBookmarkCount = 0;
-    if (isCloud) {
-      const plan = await getUserPlan(userId);
-      if (plan === 'free') {
-        const countResult = await queryOne('SELECT COUNT(*) as count FROM bookmarks WHERE user_id = ?', [userId]);
-        currentBookmarkCount = countResult ? parseInt((countResult as any).count) : 0;
-      }
-    }
-
-    let hitLimit = false;
     for (const bookmarkData of importBookmarks) {
       try {
-        // Cloud: stop importing if at Free limit (considering grace period)
-        if (isCloud) {
-          const canCreate = await canCreateBookmarkFreePlan(userId, currentBookmarkCount);
-          if (!canCreate) {
-            if (!hitLimit) {
-              hitLimit = true;
-              results.errors.push(PLAN_ERRORS.BOOKMARK_LIMIT.message);
-            }
-            results.failed++;
-            continue;
-          }
-        }
-
         if (!bookmarkData.title || !bookmarkData.url) {
           results.failed++;
           results.errors.push(`Missing title or URL: ${JSON.stringify(bookmarkData)}`);
@@ -1892,8 +1747,8 @@ router.post('/import', async (req, res) => {
           } else {
             // Check global uniqueness (required for shared bookmark forwarding)
             const existing = await queryOne(
-              'SELECT id FROM bookmarks WHERE slug = ?',
-              [slug]
+              'SELECT id FROM bookmarks WHERE slug = ? AND tenant_id = ?',
+              [slug, tenantId]
             );
             if (existing) {
               // Skip slug if not unique globally
@@ -1904,10 +1759,11 @@ router.post('/import', async (req, res) => {
 
         const bookmarkId = uuidv4();
         await execute(
-          `INSERT INTO bookmarks (id, user_id, title, url, slug, forwarding_enabled, pinned)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO bookmarks (id, tenant_id, user_id, title, url, slug, forwarding_enabled, pinned)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             bookmarkId,
+            tenantId,
             userId,
             sanitizedTitle,
             bookmarkData.url,
@@ -1918,7 +1774,6 @@ router.post('/import', async (req, res) => {
         );
 
         results.success++;
-        if (isCloud) currentBookmarkCount++;
       } catch (error: any) {
         results.failed++;
         console.error('Import bookmark error:', error?.message || error);

@@ -14,6 +14,22 @@ export async function up() {
 
   if (DB_TYPE === 'postgresql') {
     await execute(
+      `CREATE TABLE IF NOT EXISTS ai_suggestions_cache (
+        user_id VARCHAR(255) NOT NULL,
+        canonical_url TEXT NOT NULL,
+        title TEXT NOT NULL,
+        slug VARCHAR(255),
+        tags TEXT NOT NULL,
+        language VARCHAR(10),
+        confidence DECIMAL(3,2),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, canonical_url),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )`,
+      []
+    );
+    await execute(`CREATE INDEX IF NOT EXISTS idx_ai_suggestions_cache_user ON ai_suggestions_cache(user_id)`, []);
+    await execute(
       `ALTER TABLE ai_suggestions_cache ADD COLUMN IF NOT EXISTS output_language VARCHAR(10) DEFAULT 'en'`,
       []
     );
@@ -23,6 +39,21 @@ export async function up() {
       []
     );
   } else {
+    await execute(
+      `CREATE TABLE IF NOT EXISTS ai_suggestions_cache (
+        user_id TEXT NOT NULL,
+        canonical_url TEXT NOT NULL,
+        title TEXT NOT NULL,
+        slug TEXT,
+        tags TEXT NOT NULL,
+        language TEXT,
+        confidence REAL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, canonical_url),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )`,
+      []
+    );
     await execute(
       `CREATE TABLE ai_suggestions_cache_new (
         user_id TEXT NOT NULL,

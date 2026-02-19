@@ -5,6 +5,7 @@
 
 import { execute, query, queryOne } from '../index.js';
 
+// legacy cloud migration; no longer registered in selfhost-core
 export const migrationId = '016';
 export const migrationName = 'Add free_plan_grace_ends_at for over-limit bookmark grace period';
 

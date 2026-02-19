@@ -13,7 +13,6 @@ import {
 } from 'lucide-react';
 import api from '../api/client';
 import { appBasePath } from '../config/api';
-import { isCloud } from '../config/mode';
 import {
   CommandDialog,
   CommandEmpty,
@@ -43,8 +42,7 @@ export default function GlobalSearch() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const showAdmin =
-    user?.is_admin || (isCloud && (user?.org_role === 'owner' || user?.org_role === 'admin'));
+  const showAdmin = user?.is_admin;
 
   const navigationItems: SearchResult[] = useMemo(() => [
     { type: 'navigation', title: t('bookmarks.title'), path: `${appBasePath}/bookmarks`, id: 'nav-bookmarks' },

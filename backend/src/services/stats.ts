@@ -1,10 +1,10 @@
 /**
- * Stats aggregation service for admin metrics.
- * Supports both PostgreSQL and SQLite; cloud mode adds plan breakdowns and optional Stripe metrics.
+ * Stats aggregation service for admin metrics (selfhost-core).
+ * All metrics are tenant-scoped to the default tenant.
  */
 
 import { query, queryOne } from '../db/index.js';
-import { isCloud } from '../config/mode.js';
+import { DEFAULT_TENANT_ID } from '../utils/tenant.js';
 
 const DB_TYPE = process.env.DB_TYPE || 'sqlite';
 
@@ -24,16 +24,16 @@ export async function getCoreCounts(): Promise<{
 }> {
   const [usersRes, bookmarksRes, foldersRes, tagsRes, teamSharesRes, userSharesRes] = await Promise.all([
     queryOne('SELECT COUNT(*) as c FROM users', []),
-    queryOne('SELECT COUNT(*) as c FROM bookmarks', []),
-    queryOne('SELECT COUNT(*) as c FROM folders', []),
-    queryOne('SELECT COUNT(*) as c FROM tags', []),
+    queryOne('SELECT COUNT(*) as c FROM bookmarks WHERE tenant_id = ?', [DEFAULT_TENANT_ID]),
+    queryOne('SELECT COUNT(*) as c FROM folders WHERE tenant_id = ?', [DEFAULT_TENANT_ID]),
+    queryOne('SELECT COUNT(*) as c FROM tags WHERE tenant_id = ?', [DEFAULT_TENANT_ID]),
     queryOne(
-      'SELECT (SELECT COUNT(*) FROM bookmark_team_shares) + (SELECT COUNT(*) FROM folder_team_shares) as c',
-      []
+      'SELECT (SELECT COUNT(*) FROM bookmark_team_shares WHERE tenant_id = ?) + (SELECT COUNT(*) FROM folder_team_shares WHERE tenant_id = ?) as c',
+      [DEFAULT_TENANT_ID, DEFAULT_TENANT_ID]
     ),
     queryOne(
-      'SELECT (SELECT COUNT(*) FROM bookmark_user_shares) + (SELECT COUNT(*) FROM folder_user_shares) as c',
-      []
+      'SELECT (SELECT COUNT(*) FROM bookmark_user_shares WHERE tenant_id = ?) + (SELECT COUNT(*) FROM folder_user_shares WHERE tenant_id = ?) as c',
+      [DEFAULT_TENANT_ID, DEFAULT_TENANT_ID]
     ),
   ]);
 
@@ -49,38 +49,12 @@ export async function getCoreCounts(): Promise<{
   };
 }
 
-/** Plan breakdowns (cloud only); selfhosted returns empty objects */
+/** Selfhost breakdowns */
 export async function getBreakdowns(): Promise<{
-  users_by_plan: Record<string, number>;
-  bookmarks_by_plan: Record<string, number>;
-  folders_by_plan: Record<string, number>;
-  tags_by_plan: Record<string, number>;
   shares_by_type: { team: number; user: number };
 }> {
   const sharesByType = await getSharesByType();
-
-  if (!isCloud) {
-    return {
-      users_by_plan: {},
-      bookmarks_by_plan: {},
-      folders_by_plan: {},
-      tags_by_plan: {},
-      shares_by_type: sharesByType,
-    };
-  }
-
-  const [usersByPlan, bookmarksByPlan, foldersByPlan, tagsByPlan] = await Promise.all([
-    getUsersByPlan(),
-    getBookmarksByPlan(),
-    getFoldersByPlan(),
-    getTagsByPlan(),
-  ]);
-
   return {
-    users_by_plan: usersByPlan,
-    bookmarks_by_plan: bookmarksByPlan,
-    folders_by_plan: foldersByPlan,
-    tags_by_plan: tagsByPlan,
     shares_by_type: sharesByType,
   };
 }
@@ -88,81 +62,18 @@ export async function getBreakdowns(): Promise<{
 async function getSharesByType(): Promise<{ team: number; user: number }> {
   const [teamRes, userRes] = await Promise.all([
     queryOne(
-      'SELECT (SELECT COUNT(*) FROM bookmark_team_shares) + (SELECT COUNT(*) FROM folder_team_shares) as c',
-      []
+      'SELECT (SELECT COUNT(*) FROM bookmark_team_shares WHERE tenant_id = ?) + (SELECT COUNT(*) FROM folder_team_shares WHERE tenant_id = ?) as c',
+      [DEFAULT_TENANT_ID, DEFAULT_TENANT_ID]
     ),
     queryOne(
-      'SELECT (SELECT COUNT(*) FROM bookmark_user_shares) + (SELECT COUNT(*) FROM folder_user_shares) as c',
-      []
+      'SELECT (SELECT COUNT(*) FROM bookmark_user_shares WHERE tenant_id = ?) + (SELECT COUNT(*) FROM folder_user_shares WHERE tenant_id = ?) as c',
+      [DEFAULT_TENANT_ID, DEFAULT_TENANT_ID]
     ),
   ]);
   return {
     team: parseIntOrZero((teamRes as any)?.c),
     user: parseIntOrZero((userRes as any)?.c),
   };
-}
-
-async function getUsersByPlan(): Promise<Record<string, number>> {
-  const rows = await query(
-    `SELECT o.plan, COUNT(om.user_id) as cnt
-     FROM org_members om
-     INNER JOIN organizations o ON o.id = om.org_id
-     GROUP BY o.plan`,
-    []
-  );
-  const result: Record<string, number> = {};
-  (Array.isArray(rows) ? rows : []).forEach((r: any) => {
-    result[r.plan || 'unknown'] = parseIntOrZero(r.cnt);
-  });
-  return result;
-}
-
-async function getBookmarksByPlan(): Promise<Record<string, number>> {
-  const rows = await query(
-    `SELECT o.plan, COUNT(b.id) as cnt
-     FROM bookmarks b
-     INNER JOIN org_members om ON om.user_id = b.user_id
-     INNER JOIN organizations o ON o.id = om.org_id
-     GROUP BY o.plan`,
-    []
-  );
-  const result: Record<string, number> = {};
-  (Array.isArray(rows) ? rows : []).forEach((r: any) => {
-    result[r.plan || 'unknown'] = parseIntOrZero(r.cnt);
-  });
-  return result;
-}
-
-async function getFoldersByPlan(): Promise<Record<string, number>> {
-  const rows = await query(
-    `SELECT o.plan, COUNT(f.id) as cnt
-     FROM folders f
-     INNER JOIN org_members om ON om.user_id = f.user_id
-     INNER JOIN organizations o ON o.id = om.org_id
-     GROUP BY o.plan`,
-    []
-  );
-  const result: Record<string, number> = {};
-  (Array.isArray(rows) ? rows : []).forEach((r: any) => {
-    result[r.plan || 'unknown'] = parseIntOrZero(r.cnt);
-  });
-  return result;
-}
-
-async function getTagsByPlan(): Promise<Record<string, number>> {
-  const rows = await query(
-    `SELECT o.plan, COUNT(t.id) as cnt
-     FROM tags t
-     INNER JOIN org_members om ON om.user_id = t.user_id
-     INNER JOIN organizations o ON o.id = om.org_id
-     GROUP BY o.plan`,
-    []
-  );
-  const result: Record<string, number> = {};
-  (Array.isArray(rows) ? rows : []).forEach((r: any) => {
-    result[r.plan || 'unknown'] = parseIntOrZero(r.cnt);
-  });
-  return result;
 }
 
 /** Active users: distinct users with bookmark last_accessed_at in window */
@@ -174,12 +85,12 @@ export async function getActivity(): Promise<{ active_users_7d: number; active_u
 
   const [res7d, res30d] = await Promise.all([
     queryOne(
-      `SELECT COUNT(DISTINCT user_id) as c FROM bookmarks WHERE last_accessed_at >= ${since7d}`,
-      []
+      `SELECT COUNT(DISTINCT user_id) as c FROM bookmarks WHERE tenant_id = ? AND last_accessed_at >= ${since7d}`,
+      [DEFAULT_TENANT_ID]
     ),
     queryOne(
-      `SELECT COUNT(DISTINCT user_id) as c FROM bookmarks WHERE last_accessed_at >= ${since30d}`,
-      []
+      `SELECT COUNT(DISTINCT user_id) as c FROM bookmarks WHERE tenant_id = ? AND last_accessed_at >= ${since30d}`,
+      [DEFAULT_TENANT_ID]
     ),
   ]);
 
@@ -207,16 +118,16 @@ export async function getDistributions(): Promise<{
 }> {
   const [bookmarkCounts, folderCounts, tagCounts] = await Promise.all([
     query(
-      'SELECT user_id, COUNT(*) as cnt FROM bookmarks GROUP BY user_id',
-      []
+      'SELECT user_id, COUNT(*) as cnt FROM bookmarks WHERE tenant_id = ? GROUP BY user_id',
+      [DEFAULT_TENANT_ID]
     ),
     query(
-      'SELECT user_id, COUNT(*) as cnt FROM folders GROUP BY user_id',
-      []
+      'SELECT user_id, COUNT(*) as cnt FROM folders WHERE tenant_id = ? GROUP BY user_id',
+      [DEFAULT_TENANT_ID]
     ),
     query(
-      'SELECT user_id, COUNT(*) as cnt FROM tags GROUP BY user_id',
-      []
+      'SELECT user_id, COUNT(*) as cnt FROM tags WHERE tenant_id = ? GROUP BY user_id',
+      [DEFAULT_TENANT_ID]
     ),
   ]);
 
@@ -256,14 +167,14 @@ export async function getTimeseries(): Promise<{
 
   const users30Sql = `SELECT ${dayExpr} as day, COUNT(*) as count FROM users WHERE created_at >= ${since30d} GROUP BY 1 ORDER BY 1`;
   const users90Sql = `SELECT ${dayExpr} as day, COUNT(*) as count FROM users WHERE created_at >= ${since90d} GROUP BY 1 ORDER BY 1`;
-  const bookmarks30Sql = `SELECT ${dayExpr} as day, COUNT(*) as count FROM bookmarks WHERE created_at >= ${since30d} GROUP BY 1 ORDER BY 1`;
-  const bookmarks90Sql = `SELECT ${dayExpr} as day, COUNT(*) as count FROM bookmarks WHERE created_at >= ${since90d} GROUP BY 1 ORDER BY 1`;
+  const bookmarks30Sql = `SELECT ${dayExpr} as day, COUNT(*) as count FROM bookmarks WHERE tenant_id = ? AND created_at >= ${since30d} GROUP BY 1 ORDER BY 1`;
+  const bookmarks90Sql = `SELECT ${dayExpr} as day, COUNT(*) as count FROM bookmarks WHERE tenant_id = ? AND created_at >= ${since90d} GROUP BY 1 ORDER BY 1`;
 
   const [users30, users90, bookmarks30, bookmarks90] = await Promise.all([
     query(users30Sql, []),
     query(users90Sql, []),
-    query(bookmarks30Sql, []),
-    query(bookmarks90Sql, []),
+    query(bookmarks30Sql, [DEFAULT_TENANT_ID]),
+    query(bookmarks90Sql, [DEFAULT_TENANT_ID]),
   ]);
 
   const toSeries = (rows: any[]): Array<{ day: string; count: number }> =>
@@ -280,66 +191,6 @@ export async function getTimeseries(): Promise<{
   };
 }
 
-/** Stripe payment metrics (cloud only, when Stripe configured). Returns null or { status: 'disabled' } on skip. */
-export async function getStripeStats(): Promise<{
-  mrr_cents: number;
-  charges_30d: number;
-  refunds_30d: number;
-  status: 'ok';
-} | { status: 'disabled' } | null> {
-  if (!isCloud) return { status: 'disabled' };
-  const key = process.env.STRIPE_SECRET_KEY?.trim();
-  if (!key) return { status: 'disabled' };
-
-  try {
-    const Stripe = (await import('stripe')).default;
-    const stripe = new Stripe(key);
-
-    const now = Math.floor(Date.now() / 1000);
-    const thirtyDaysAgo = now - 30 * 24 * 60 * 60;
-
-    const [subscriptions, charges, refunds] = await Promise.all([
-      stripe.subscriptions.list({ status: 'active', expand: ['data.items.data.price'] }),
-      stripe.balanceTransactions.list({
-        type: 'charge',
-        created: { gte: thirtyDaysAgo },
-        limit: 100,
-      }),
-      stripe.balanceTransactions.list({
-        type: 'refund',
-        created: { gte: thirtyDaysAgo },
-        limit: 100,
-      }),
-    ]);
-
-    let mrrCents = 0;
-    for (const sub of subscriptions.data) {
-      for (const item of sub.items.data) {
-        const price = item.price;
-        if (!price || !price.recurring) continue;
-        const amount = (price.unit_amount || 0) * (item.quantity || 1);
-        if (price.recurring.interval === 'month') {
-          mrrCents += amount;
-        } else if (price.recurring.interval === 'year') {
-          mrrCents += Math.round(amount / 12);
-        }
-      }
-    }
-
-    const chargesCount = charges.data.filter((t) => t.status === 'available' || t.status === 'pending').length;
-    const refundsCount = refunds.data.length;
-
-    return {
-      mrr_cents: mrrCents,
-      charges_30d: chargesCount,
-      refunds_30d: refundsCount,
-      status: 'ok',
-    };
-  } catch {
-    return { status: 'disabled' };
-  }
-}
-
 /** Aggregate all stats */
 export async function aggregateStats(): Promise<{
   core_counts: Awaited<ReturnType<typeof getCoreCounts>>;
@@ -347,15 +198,13 @@ export async function aggregateStats(): Promise<{
   activity: Awaited<ReturnType<typeof getActivity>>;
   distributions: Awaited<ReturnType<typeof getDistributions>>;
   timeseries: Awaited<ReturnType<typeof getTimeseries>>;
-  payments: Awaited<ReturnType<typeof getStripeStats>>;
 }> {
-  const [core_counts, breakdowns, activity, distributions, timeseries, payments] = await Promise.all([
+  const [core_counts, breakdowns, activity, distributions, timeseries] = await Promise.all([
     getCoreCounts(),
     getBreakdowns(),
     getActivity(),
     getDistributions(),
     getTimeseries(),
-    getStripeStats(),
   ]);
 
   return {
@@ -364,6 +213,5 @@ export async function aggregateStats(): Promise<{
     activity,
     distributions,
     timeseries,
-    payments,
   };
 }

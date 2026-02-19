@@ -3,7 +3,7 @@ import { query, queryOne, execute } from '../../db/index.js';
 import { AuthRequest, requireAuth, requireAdmin } from '../../middleware/auth.js';
 import { testSMTPConfig } from '../../utils/email.js';
 import { encrypt } from '../../utils/encryption.js';
-import { isCloud } from '../../config/mode.js';
+import { getTenantId } from '../../utils/tenant.js';
 
 const router = Router();
 router.use(requireAuth());
@@ -39,7 +39,8 @@ router.use(requireAdmin());
 router.get('/', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
-    const settings = await query('SELECT * FROM system_config ORDER BY key', []);
+    const tenantId = getTenantId(req);
+    const settings = await query('SELECT * FROM system_config WHERE tenant_id = ? ORDER BY key', [tenantId]);
     const settingsList = Array.isArray(settings) ? settings : (settings ? [settings] : []);
     
     // Convert array to object
@@ -101,8 +102,9 @@ router.get('/', async (req, res) => {
 router.get('/:key', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
+    const tenantId = getTenantId(req);
     const { key } = req.params;
-    const setting = await queryOne('SELECT * FROM system_config WHERE key = ?', [key]);
+    const setting = await queryOne('SELECT * FROM system_config WHERE key = ? AND tenant_id = ?', [key, tenantId]);
     if (!setting) {
       return res.status(404).json({ error: 'Setting not found' });
     }
@@ -162,6 +164,7 @@ router.get('/:key', async (req, res) => {
 router.post('/', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
+    const tenantId = getTenantId(req);
     const { key, value } = req.body;
 
     if (!key || value === undefined) {
@@ -169,11 +172,11 @@ router.post('/', async (req, res) => {
     }
 
     await execute(
-      'INSERT OR REPLACE INTO system_config (key, value) VALUES (?, ?)',
-      [key, String(value)]
+      'INSERT OR REPLACE INTO system_config (tenant_id, key, value) VALUES (?, ?, ?)',
+      [tenantId, key, String(value)]
     );
 
-    const setting = await queryOne('SELECT * FROM system_config WHERE key = ?', [key]);
+    const setting = await queryOne('SELECT * FROM system_config WHERE key = ? AND tenant_id = ?', [key, tenantId]);
     res.json({ key: (setting as any).key, value: (setting as any).value });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -217,8 +220,9 @@ router.post('/', async (req, res) => {
 router.delete('/:key', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
+    const tenantId = getTenantId(req);
     const { key } = req.params;
-    await execute('DELETE FROM system_config WHERE key = ?', [key]);
+    await execute('DELETE FROM system_config WHERE key = ? AND tenant_id = ?', [key, tenantId]);
     res.json({ message: 'Setting deleted' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -256,10 +260,6 @@ router.delete('/:key', async (req, res) => {
  */
 router.post('/smtp/test', async (req, res) => {
   const authReq = req as AuthRequest;
-
-  if (isCloud) {
-    return res.status(403).json({ error: 'SMTP configuration is managed via environment variables in CLOUD mode' });
-  }
   
   try {
     const { email } = req.body;
@@ -326,10 +326,7 @@ router.post('/smtp/test', async (req, res) => {
  */
 router.post('/smtp', async (req, res) => {
   const authReq = req as AuthRequest;
-
-  if (isCloud) {
-    return res.status(403).json({ error: 'SMTP configuration is managed via environment variables in CLOUD mode' });
-  }
+  const tenantId = getTenantId(req);
   
   try {
     const { enabled, host, port, secure, user, password, from, fromName } = req.body;
@@ -372,8 +369,8 @@ router.post('/smtp', async (req, res) => {
     // Save all settings
     for (const setting of settings) {
       await execute(
-        'INSERT OR REPLACE INTO system_config (key, value) VALUES (?, ?)',
-        [setting.key, setting.value]
+        'INSERT OR REPLACE INTO system_config (tenant_id, key, value) VALUES (?, ?, ?)',
+        [tenantId, setting.key, setting.value]
       );
     }
 
@@ -400,14 +397,12 @@ router.post('/smtp', async (req, res) => {
  *         description: Cloud mode - AI configured via env
  */
 router.get('/ai', async (req, res) => {
-  if (isCloud) {
-    return res.status(403).json({ error: 'AI configuration is managed via environment variables in CLOUD mode' });
-  }
   try {
+    const tenantId = getTenantId(req);
     const keys = ['ai_enabled', 'ai_provider', 'ai_api_key', 'ai_model'];
     const result: Record<string, string> = {};
     for (const key of keys) {
-      const row = await queryOne('SELECT value FROM system_config WHERE key = ?', [key]);
+      const row = await queryOne('SELECT value FROM system_config WHERE key = ? AND tenant_id = ?', [key, tenantId]);
       const val = row ? (row as any).value : '';
       result[key] = key === 'ai_api_key' && val ? '***SET***' : (val || '');
     }
@@ -449,35 +444,33 @@ router.get('/ai', async (req, res) => {
  *         description: Cloud mode
  */
 router.post('/ai', async (req, res) => {
-  if (isCloud) {
-    return res.status(403).json({ error: 'AI configuration is managed via environment variables in CLOUD mode' });
-  }
   try {
+    const tenantId = getTenantId(req);
     const { ai_enabled, ai_provider, ai_api_key, ai_model } = req.body;
 
     if (ai_enabled !== undefined) {
       await execute(
-        'INSERT OR REPLACE INTO system_config (key, value) VALUES (?, ?)',
-        ['ai_enabled', ai_enabled ? 'true' : 'false']
+        'INSERT OR REPLACE INTO system_config (tenant_id, key, value) VALUES (?, ?, ?)',
+        [tenantId, 'ai_enabled', ai_enabled ? 'true' : 'false']
       );
     }
     if (ai_provider !== undefined) {
       await execute(
-        'INSERT OR REPLACE INTO system_config (key, value) VALUES (?, ?)',
-        ['ai_provider', String(ai_provider)]
+        'INSERT OR REPLACE INTO system_config (tenant_id, key, value) VALUES (?, ?, ?)',
+        [tenantId, 'ai_provider', String(ai_provider)]
       );
     }
     if (ai_api_key !== undefined && ai_api_key !== null && ai_api_key.trim() !== '') {
       const encrypted = encrypt(ai_api_key.trim());
       await execute(
-        'INSERT OR REPLACE INTO system_config (key, value) VALUES (?, ?)',
-        ['ai_api_key', encrypted]
+        'INSERT OR REPLACE INTO system_config (tenant_id, key, value) VALUES (?, ?, ?)',
+        [tenantId, 'ai_api_key', encrypted]
       );
     }
     if (ai_model !== undefined) {
       await execute(
-        'INSERT OR REPLACE INTO system_config (key, value) VALUES (?, ?)',
-        ['ai_model', String(ai_model)]
+        'INSERT OR REPLACE INTO system_config (tenant_id, key, value) VALUES (?, ?, ?)',
+        [tenantId, 'ai_model', String(ai_model)]
       );
     }
 

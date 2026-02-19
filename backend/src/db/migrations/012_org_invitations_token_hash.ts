@@ -6,6 +6,7 @@
 
 import { execute } from '../index.js';
 
+// legacy cloud migration; no longer registered in selfhost-core
 export const migrationId = '012';
 export const migrationName = 'Add org_invitations.token_hash for secure storage';
 

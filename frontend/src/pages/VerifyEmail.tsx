@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../api/client';
-import { isCloud } from '../config/mode';
 import { CheckCircle, XCircle, Mail } from 'lucide-react';
 import Button from '../components/ui/Button';
 
@@ -12,9 +11,9 @@ export default function VerifyEmail() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { checkAuth } = useAuth();
-  const profilePath = isCloud ? '/app/profile' : '/profile';
-  const loginPath = isCloud ? '/app/login' : '/login';
-  const signupPath = isCloud ? '/app/signup' : '/login';
+  const profilePath = '/profile';
+  const loginPath = '/login';
+  const signupPath = '/login';
   const [status, setStatus] = useState<'verifying' | 'success' | 'error' | 'resend' | 'noToken'>('verifying');
   const [error, setError] = useState('');
   const [newEmail, setNewEmail] = useState('');
@@ -27,8 +26,8 @@ export default function VerifyEmail() {
   useEffect(() => {
     const token = searchParams.get('token');
     if (!token) {
-      setStatus(isCloud ? 'noToken' : 'error');
-      if (!isCloud) setError(t('emailVerification.tokenRequired'));
+      setStatus('error');
+      setError(t('emailVerification.tokenRequired'));
       return;
     }
 
@@ -39,25 +38,6 @@ export default function VerifyEmail() {
         setTimeout(() => navigate(loginPath), 2500);
       })
       .catch(async () => {
-        if (!isCloud) {
-          try {
-            const response = await api.get('/email-verification/verify', { params: { token } });
-            if (response.data.valid) {
-              setNewEmail(response.data.newEmail || '');
-              await api.post('/email-verification/confirm', { token });
-              setStatus('success');
-              await checkAuth();
-              setTimeout(() => navigate(profilePath), 3000);
-              return;
-            }
-          } catch {
-            // Fall through to error
-          }
-          setStatus('error');
-          setError(t('emailVerification.errorDescription'));
-          return;
-        }
-
         const statusRes = await api.get('/auth/signup-verification/status', { params: { token } }).catch(() => ({ data: { status: 'invalid' } }));
         const { status: tokenStatus, email } = statusRes.data;
         if (tokenStatus === 'expired' && email) {
@@ -226,14 +206,10 @@ export default function VerifyEmail() {
                     <Link to={loginPath} className="font-medium text-blue-600 dark:text-blue-400 hover:underline">
                       {t('signup.backToLogin')}
                     </Link>
-                    {isCloud && (
-                      <>
-                        {' · '}
-                        <Link to={signupPath} className="font-medium text-blue-600 dark:text-blue-400 hover:underline">
-                          {t('auth.signUp')}
-                        </Link>
-                      </>
-                    )}
+                    {' · '}
+                    <Link to={signupPath} className="font-medium text-blue-600 dark:text-blue-400 hover:underline">
+                      {t('auth.signUp')}
+                    </Link>
                   </p>
                 </>
               )}
@@ -261,7 +237,7 @@ export default function VerifyEmail() {
                     {t('emailVerification.backToProfile')}
                   </Button>
                 )}
-                {isCloud && error !== t('emailVerification.alreadyVerified') && (
+                {error !== t('emailVerification.alreadyVerified') && (
                   <p className="text-sm">
                     <Link to={signupPath} className="font-medium text-blue-600 dark:text-blue-400 hover:underline">
                       {t('auth.signUp')}
