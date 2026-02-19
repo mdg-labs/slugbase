@@ -247,6 +247,8 @@
     "description": "Manage your account settings and preferences",
     "accountInformation": "Account Information",
     "preferences": "Preferences",
+    "userKey": "User key",
+    "userKeyDescription": "Your unique identifier for bookmark forwarding. Share this with others so they can access your shared bookmarks.",
     "quickAccess": "Quick Access",
     "quickAccessDescription": "Use /go/<slug> in your browser for quick access to bookmarks. Manage your remembered choices when multiple bookmarks share the same slug.",
     "email": "Email",
