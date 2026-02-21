@@ -3,9 +3,10 @@
  */
 export const apiBaseUrl: string = '';
 
-/** Full URL to start OIDC login for a provider (for window.location.href in CLOUD). */
-export function getAuthProviderUrl(providerKey: string): string {
-  return apiBaseUrl ? `${apiBaseUrl}/api/auth/${providerKey}` : `/api/auth/${providerKey}`;
+/** Full URL to start OIDC login for a provider. Pass apiBaseUrl when using from context (e.g. useAppConfig().apiBaseUrl). */
+export function getAuthProviderUrl(providerKey: string, baseUrl?: string): string {
+  const url = baseUrl ?? apiBaseUrl;
+  return url ? `${url.replace(/\/$/, '')}/api/auth/${providerKey}` : `/api/auth/${providerKey}`;
 }
 
 /** Base path for app routes. */

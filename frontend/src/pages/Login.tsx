@@ -158,12 +158,6 @@ export default function Login() {
               >
                 {t('auth.forgotPassword')}
               </Link>
-              <Link
-                to="/contact"
-                className="block text-sm font-medium text-primary hover:text-primary/90"
-              >
-                {t('contact.title')}
-              </Link>
             </div>
           </form>
 

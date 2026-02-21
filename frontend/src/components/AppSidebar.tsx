@@ -28,7 +28,7 @@ import {
   SidebarSeparator,
   useSidebar,
 } from './ui/sidebar';
-import { appBasePath } from '../config/api';
+import { useAppConfig } from '../contexts/AppConfigContext';
 import type { User } from '../contexts/AuthContext';
 
 interface AppSidebarProps {
@@ -40,6 +40,7 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
   const { t } = useTranslation();
   const location = useLocation();
   const pathname = location.pathname;
+  const { appBasePath } = useAppConfig();
   const { setOpenMobile, toggleSidebar, isMobile, state } = useSidebar();
   const adminBase = `${appBasePath || ''}/admin`;
 

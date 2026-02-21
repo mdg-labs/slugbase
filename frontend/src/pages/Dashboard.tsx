@@ -10,7 +10,7 @@ import { StatCard } from '../components/StatCard';
 import { EmptyState } from '../components/EmptyState';
 import Tooltip from '../components/ui/Tooltip';
 import api from '../api/client';
-import { appBasePath } from '../config/api';
+import { useAppConfig } from '../contexts/AppConfigContext';
 import { useConfirmDialog } from '../hooks/useConfirmDialog';
 import { useToast } from '../components/ui/Toast';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
@@ -49,6 +49,7 @@ function formatLastOpened(dateStr: string): string {
 
 export default function Dashboard() {
   const { t } = useTranslation();
+  const { appBasePath } = useAppConfig();
   const { showConfirm, dialogState } = useConfirmDialog();
   const { showToast } = useToast();
   const [stats, setStats] = useState<DashboardStats | null>(null);

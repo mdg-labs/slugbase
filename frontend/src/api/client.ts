@@ -1,9 +1,46 @@
-import axios from 'axios';
+import axios, { type AxiosInstance } from 'axios';
 import * as Sentry from '@sentry/react';
 import { apiBaseUrl } from '../config/api';
 
+function baseURLFromOptions(options: { baseUrl?: string; basePath?: string } = {}): string {
+  if (options.baseUrl) return `${options.baseUrl.replace(/\/$/, '')}/api`;
+  if (options.basePath) return `${options.basePath.replace(/\/$/, '')}/api`;
+  return apiBaseUrl ? `${apiBaseUrl}/api` : '/api';
+}
+
+/**
+ * Create an API client with the given base URL/path. Used by package consumers (e.g. cloud).
+ */
+export function createApiClient(options: { baseUrl?: string; basePath?: string } = {}): AxiosInstance {
+  const client = axios.create({
+    baseURL: baseURLFromOptions(options),
+    withCredentials: true,
+  });
+  // Same CSRF and error handling as default api (simplified: no shared token state)
+  client.interceptors.request.use(async (config) => {
+    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(config.method?.toUpperCase() || '')) {
+      try {
+        const r = await client.get('/csrf-token');
+        const token = r.data?.csrfToken;
+        if (token) config.headers['X-CSRF-Token'] = token;
+      } catch {
+        // ignore
+      }
+    }
+    return config;
+  });
+  client.interceptors.response.use(
+    (r) => r,
+    (error) => {
+      if (error.response?.status >= 500) Sentry.captureException(error);
+      return Promise.reject(error);
+    }
+  );
+  return client;
+}
+
 const api = axios.create({
-  baseURL: apiBaseUrl ? `${apiBaseUrl}/api` : '/api',
+  baseURL: baseURLFromOptions({}),
   withCredentials: true,
 });
 
@@ -41,7 +78,6 @@ api.interceptors.request.use(
       // Skip CSRF for certain endpoints
       const skipCSRF = [
         '/password-reset',
-        '/contact',
         '/auth/setup',
         '/auth/login',
         '/auth/logout',

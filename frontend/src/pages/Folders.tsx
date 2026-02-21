@@ -14,7 +14,7 @@ import FolderIcon from '../components/FolderIcon';
 import { PageHeader } from '../components/PageHeader';
 import { EmptyState } from '../components/EmptyState';
 import { PageLoadingSkeleton } from '../components/ui/PageLoadingSkeleton';
-import { appBasePath } from '../config/api';
+import { useAppConfig } from '../contexts/AppConfigContext';
 
 interface Folder {
   id: string;
@@ -31,6 +31,7 @@ type SortOption = 'alphabetical' | 'recently_added';
 
 export default function Folders() {
   const { t } = useTranslation();
+  const { appBasePath } = useAppConfig();
   const { showConfirm, dialogState } = useConfirmDialog();
   const [folders, setFolders] = useState<Folder[]>([]);
   const [loading, setLoading] = useState(true);

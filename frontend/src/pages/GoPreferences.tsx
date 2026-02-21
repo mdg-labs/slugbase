@@ -5,7 +5,7 @@ import { ArrowLeft, Trash2, ExternalLink } from 'lucide-react';
 import Button from '../components/ui/Button';
 import { useToast } from '../components/ui/Toast';
 import api from '../api/client';
-import { appBasePath } from '../config/api';
+import { useAppConfig } from '../contexts/AppConfigContext';
 import { PageLoadingSkeleton } from '../components/ui/PageLoadingSkeleton';
 
 interface SlugPreference {
@@ -20,6 +20,7 @@ interface SlugPreference {
 
 export default function GoPreferences() {
   const { t } = useTranslation();
+  const { appBasePath } = useAppConfig();
   const { showToast } = useToast();
   const [preferences, setPreferences] = useState<SlugPreference[]>([]);
   const [loading, setLoading] = useState(true);

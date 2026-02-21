@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import api from '../api/client';
+import { useAppConfig } from '../contexts/AppConfigContext';
 import Button from '../components/ui/Button';
 
 const MIN_PASSWORD_LENGTH = 8;
 
 export default function Signup() {
   const { t } = useTranslation();
+  const { appBasePath } = useAppConfig();
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
@@ -58,7 +60,7 @@ export default function Signup() {
             {t('signup.successMessage')}
           </p>
           <Link
-            to="/app/login"
+            to={`${appBasePath}/login`}
             className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg"
           >
             {t('signup.backToLogin')}
@@ -160,13 +162,13 @@ export default function Signup() {
               />
               <label htmlFor="signup-accept-terms" className="text-sm text-gray-700 dark:text-gray-300">
                 {t('signup.acceptTermsPrefix')}
-                <Link to="/terms" className="text-blue-600 dark:text-blue-400 hover:underline">
+                <a href="https://docs.slugbase.app" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">
                   {t('signup.acceptTermsTerms')}
-                </Link>
+                </a>
                 {t('signup.acceptTermsAnd')}
-                <Link to="/privacy" className="text-blue-600 dark:text-blue-400 hover:underline">
+                <a href="https://docs.slugbase.app" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">
                   {t('signup.acceptTermsPrivacy')}
-                </Link>
+                </a>
                 {t('signup.acceptTermsSuffix')}
               </label>
             </div>
@@ -186,7 +188,7 @@ export default function Signup() {
           </form>
           <p className="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">
             {t('signup.alreadyHaveAccount')}{' '}
-            <Link to="/app/login" className="font-medium text-blue-600 dark:text-blue-400 hover:underline">
+            <Link to={`${appBasePath}/login`} className="font-medium text-blue-600 dark:text-blue-400 hover:underline">
               {t('signup.logIn')}
             </Link>
           </p>

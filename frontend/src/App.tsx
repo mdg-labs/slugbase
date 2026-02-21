@@ -3,12 +3,12 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { useTranslation } from 'react-i18next';
 import * as Sentry from '@sentry/react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { AppConfigProvider, useAppConfig } from './contexts/AppConfigContext';
 import { SentryDebug } from './components/SentryDebug';
 import { ToastProvider } from './components/ui/Toast';
 import { TooltipProvider } from './components/ui/tooltip-base';
 import Layout from './components/Layout';
 import api from './api/client';
-import { apiBaseUrl } from './config/api';
 
 const Setup = lazy(() => import('./pages/Setup'));
 const Login = lazy(() => import('./pages/Login'));
@@ -28,28 +28,30 @@ const PasswordReset = lazy(() => import('./pages/PasswordReset'));
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
 const SearchEngineGuide = lazy(() => import('./pages/SearchEngineGuide'));
 const GoPreferences = lazy(() => import('./pages/GoPreferences'));
-const Contact = lazy(() => import('./pages/landing/Contact'));
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const { t } = useTranslation();
+  const { appBasePath } = useAppConfig();
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="text-lg">{t('common.loading')}</div></div>;
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) return <Navigate to={`${appBasePath}/login`} replace />;
   return <>{children}</>;
 }
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const { t } = useTranslation();
+  const { appBasePath, appRootPath } = useAppConfig();
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="text-lg">{t('common.loading')}</div></div>;
-  if (!user) return <Navigate to="/login" replace />;
-  if (!user.is_admin) return <Navigate to="/" replace />;
+  if (!user) return <Navigate to={`${appBasePath}/login`} replace />;
+  if (!user.is_admin) return <Navigate to={appRootPath} replace />;
   return <>{children}</>;
 }
 
 function AppRoutes() {
   const { user, loading } = useAuth();
   const { t } = useTranslation();
+  const { appRootPath } = useAppConfig();
   const [setupStatus, setSetupStatus] = React.useState<{ initialized: boolean } | null>(null);
   const [setupLoading, setSetupLoading] = React.useState(true);
 
@@ -70,8 +72,7 @@ function AppRoutes() {
   return (
     <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="text-lg">{t('common.loading')}</div></div>}>
       <Routes>
-        <Route path="/login" element={!user ? <Login /> : <Navigate to="/" replace />} />
-        <Route path="/contact" element={!user ? <Contact /> : <Navigate to="/" replace />} />
+        <Route path="/login" element={!user ? <Login /> : <Navigate to={appRootPath} replace />} />
         <Route path="/reset-password" element={<PasswordReset />} />
         <Route path="/password-reset" element={<PasswordReset />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
@@ -103,6 +104,7 @@ function ForwardingHandler() {
   const location = useLocation();
   const { pathname } = location;
   const { t } = useTranslation();
+  const { apiBaseUrl } = useAppConfig();
 
   React.useEffect(() => {
     const match = pathname.match(/\/go\/([^/]+)/);
@@ -115,7 +117,7 @@ function ForwardingHandler() {
         ? `${apiBaseUrl}${goPath}`
         : goPath;
     window.location.href = backendUrl;
-  }, [pathname]);
+  }, [pathname, apiBaseUrl]);
 
   return (
     <div className="min-h-screen flex items-center justify-center">
@@ -136,19 +138,29 @@ function AppErrorFallback() {
   );
 }
 
-function App() {
+export interface AppProps {
+  /** Base path for app routes (e.g. '/' for self-hosted, '/app' for cloud). */
+  basePath?: string;
+  /** API base URL (e.g. '' for same-origin, or full URL if frontend is on different origin). */
+  apiBaseUrl?: string;
+}
+
+function App({ basePath, apiBaseUrl }: AppProps = {}) {
+  const appRootPath = basePath === '/' || !basePath ? '/' : basePath;
   return (
     <Sentry.ErrorBoundary fallback={<AppErrorFallback />}>
-      <BrowserRouter>
-        <AuthProvider>
-          <TooltipProvider>
-            <ToastProvider>
-              <AppRoutes />
-              <SentryDebug />
-            </ToastProvider>
-          </TooltipProvider>
-        </AuthProvider>
-      </BrowserRouter>
+      <AppConfigProvider appBasePath={basePath} apiBaseUrl={apiBaseUrl} appRootPath={appRootPath}>
+        <BrowserRouter basename={basePath ?? ''}>
+          <AuthProvider>
+            <TooltipProvider>
+              <ToastProvider>
+                <AppRoutes />
+                <SentryDebug />
+              </ToastProvider>
+            </TooltipProvider>
+          </AuthProvider>
+        </BrowserRouter>
+      </AppConfigProvider>
     </Sentry.ErrorBoundary>
   );
 }

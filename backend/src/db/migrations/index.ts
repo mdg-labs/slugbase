@@ -12,7 +12,7 @@
  * 3. Import it below and add to the migrations array
  */
 
-import { execute, query } from '../index.js';
+import { execute, query, getDbType } from '../index.js';
 import * as migration001 from './001_migrate_slug_nullable.js';
 import * as migration002 from './002_add_oidc_custom_endpoints.js';
 import * as migration003 from './003_add_bookmark_features.js';
@@ -132,8 +132,7 @@ const migrations: Migration[] = [
 
 // Ensure migrations table exists
 async function ensureMigrationsTable() {
-  const DB_TYPE = process.env.DB_TYPE || 'sqlite';
-  
+  const DB_TYPE = getDbType();
   if (DB_TYPE === 'postgresql') {
     await execute(`
       CREATE TABLE IF NOT EXISTS schema_migrations (

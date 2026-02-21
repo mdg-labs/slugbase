@@ -12,7 +12,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import api from '../api/client';
-import { appBasePath } from '../config/api';
+import { useAppConfig } from '../contexts/AppConfigContext';
 import {
   CommandDialog,
   CommandEmpty,
@@ -36,6 +36,7 @@ interface SearchResult {
 export default function GlobalSearch() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { appBasePath } = useAppConfig();
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -50,14 +51,14 @@ export default function GlobalSearch() {
     { type: 'navigation', title: t('tags.title'), path: `${appBasePath}/tags`, id: 'nav-tags' },
     { type: 'navigation', title: t('shared.title'), path: `${appBasePath}/shared`, id: 'nav-shared' },
     ...(showAdmin ? [{ type: 'navigation' as const, title: t('admin.title'), path: `${appBasePath}/admin/members`, id: 'nav-admin' }] : []),
-  ], [showAdmin, t]);
+  ], [showAdmin, t, appBasePath]);
 
   const actionItems: SearchResult[] = useMemo(() => [
     { type: 'action', title: t('bookmarks.create'), path: `${appBasePath}/bookmarks`, id: 'action-create-bookmark', action: () => navigate(`${appBasePath}/bookmarks?create=true`) },
     { type: 'action', title: t('folders.create'), path: `${appBasePath}/folders`, id: 'action-create-folder', action: () => navigate(`${appBasePath}/folders?create=true`) },
     { type: 'action', title: t('bookmarks.import'), path: `${appBasePath}/bookmarks`, id: 'action-import', action: () => navigate(`${appBasePath}/bookmarks?import=true`) },
     { type: 'action', title: t('bookmarks.export'), path: `${appBasePath}/bookmarks`, id: 'action-export', action: () => navigate(`${appBasePath}/bookmarks?export=true`) },
-  ], [t, navigate]);
+  ], [t, navigate, appBasePath]);
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {

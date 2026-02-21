@@ -5,12 +5,13 @@
   "private": true,
   "workspaces": [
     "backend",
-    "frontend"
+    "frontend",
+    "packages/core","apps/selfhosted"
   ],
   "scripts": {
     "dev": "concurrently \"npm run dev --workspace=backend\" \"npm run dev --workspace=frontend\"",
-    "build": "npm run build --workspace=backend && npm run build --workspace=frontend",
-    "start": "npm run start --workspace=backend"
+    "build": "npm run build --workspace=backend && node scripts/copy-core-dist.js && npm run build --workspace=frontend && node scripts/copy-selfhosted-public.js",
+    "start": "npm run start --workspace=slugbase-selfhosted"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

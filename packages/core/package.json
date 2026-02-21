@@ -1,0 +1,17 @@
+{
+  "name": "@slugbase/core",
+  "version": "1.0.0",
+  "description": "SlugBase core: backend and frontend entrypoints for self-hosted and cloud apps",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./types/index.js",
+    "./types": "./types/index.js",
+    "./backend": "./backend/index.js",
+    "./frontend": "./frontend/index.tsx"
+  },
+  "scripts": {},
+  "engines": {
+    "node": ">=20"
+  }
+}

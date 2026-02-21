@@ -11,7 +11,7 @@ import Select from '../components/ui/Select';
 import { PageHeader } from '../components/PageHeader';
 import { EmptyState } from '../components/EmptyState';
 import { PageLoadingSkeleton } from '../components/ui/PageLoadingSkeleton';
-import { appBasePath } from '../config/api';
+import { useAppConfig } from '../contexts/AppConfigContext';
 
 interface Tag {
   id: string;
@@ -24,6 +24,7 @@ type SortOption = 'alphabetical' | 'recently_added';
 
 export default function Tags() {
   const { t } = useTranslation();
+  const { appBasePath } = useAppConfig();
   const { showConfirm, dialogState } = useConfirmDialog();
   const [tags, setTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(true);

@@ -2,10 +2,11 @@ import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Search, Code, CheckCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import Button from '../components/ui/Button';
-import { appBasePath } from '../config/api';
+import { useAppConfig } from '../contexts/AppConfigContext';
 
 export default function SearchEngineGuide() {
   const { t } = useTranslation();
+  const { appBasePath } = useAppConfig();
 
   const baseUrl = window.location.origin;
   const goPath = '/go/%s';

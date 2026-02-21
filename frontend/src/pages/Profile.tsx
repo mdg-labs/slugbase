@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { appBasePath, apiBaseUrl } from '../config/api';
+import { useAppConfig } from '../contexts/AppConfigContext';
 import { Mail, User as UserIcon, Globe, Palette, AlertCircle, Link2, Key, Sparkles } from 'lucide-react';
 import Select from '../components/ui/Select';
 import Button from '../components/ui/Button';
@@ -21,6 +21,7 @@ interface ApiToken {
 
 export default function Profile() {
   const { t } = useTranslation();
+  const { appBasePath, apiBaseUrl } = useAppConfig();
   const { user, updateUser, checkAuth } = useAuth();
   const { showToast } = useToast();
   const [formData, setFormData] = useState({

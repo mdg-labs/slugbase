@@ -5,7 +5,7 @@ import Button from './ui/Button';
 import GlobalSearch from './GlobalSearch';
 import UserDropdown from './UserDropdown';
 import { SidebarTrigger, useSidebar } from './ui/sidebar';
-import { appBasePath } from '../config/api';
+import { useAppConfig } from '../contexts/AppConfigContext';
 import type { User } from '../contexts/AuthContext';
 
 interface TopBarProps {
@@ -14,6 +14,7 @@ interface TopBarProps {
 
 export default function TopBar({ user }: TopBarProps) {
   const { t } = useTranslation();
+  const { appBasePath } = useAppConfig();
   const { isMobile } = useSidebar();
 
   return (

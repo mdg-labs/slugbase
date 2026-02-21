@@ -19,7 +19,7 @@ import { PageLoadingSkeleton } from '../components/ui/PageLoadingSkeleton';
 import { Card } from '../components/ui/card';
 import { PageHeader } from '../components/PageHeader';
 import { useSidebar } from '../components/ui/sidebar';
-import { appBasePath } from '../config/api';
+import { useAppConfig } from '../contexts/AppConfigContext';
 
 interface Bookmark {
   id: string;
@@ -45,6 +45,7 @@ type SortOption = 'recently_added' | 'alphabetical' | 'most_used' | 'recently_ac
 
 export default function Bookmarks() {
   const { t } = useTranslation();
+  const { appBasePath } = useAppConfig();
   const { user } = useAuth();
   const { isMobile, state: sidebarState } = useSidebar();
   const [searchParams, setSearchParams] = useSearchParams();

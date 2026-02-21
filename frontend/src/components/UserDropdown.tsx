@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { User as UserIcon, LogOut, Settings } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { appBasePath } from '../config/api';
+import { useAppConfig } from '../contexts/AppConfigContext';
 import type { User } from '../contexts/AuthContext';
 import {
   DropdownMenu,
@@ -27,6 +27,7 @@ function getInitials(name: string): string {
 
 export default function UserDropdown({ user }: UserDropdownProps) {
   const { t } = useTranslation();
+  const { appBasePath } = useAppConfig();
   const { logout } = useAuth();
 
   const showAdmin = user?.is_admin;
