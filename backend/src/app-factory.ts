@@ -103,14 +103,19 @@ export function createApp(options: CreateAppOptions): express.Express {
   app.use(passport.initialize());
   app.use(passport.session());
 
-  app.use(
-    '/api-docs',
-    swaggerUi.serve,
-    swaggerUi.setup(swaggerSpec, {
-      customCss: '.swagger-ui .topbar { display: none }',
-      customSiteTitle: 'SlugBase API Documentation',
-    })
-  );
+  // Expose API docs only in development or when explicitly enabled (security: avoid exposing API structure in production)
+  const exposeApiDocs =
+    process.env.NODE_ENV !== 'production' || process.env.EXPOSE_API_DOCS === 'true';
+  if (exposeApiDocs) {
+    app.use(
+      '/api-docs',
+      swaggerUi.serve,
+      swaggerUi.setup(swaggerSpec, {
+        customCss: '.swagger-ui .topbar { display: none }',
+        customSiteTitle: 'SlugBase API Documentation',
+      })
+    );
+  }
 
   app.use('/api/csrf-token', csrfRoutes);
 

@@ -9,6 +9,7 @@ import Button from '../components/ui/Button';
 import Favicon from '../components/Favicon';
 import FolderIcon from '../components/FolderIcon';
 import { PageLoadingSkeleton } from '../components/ui/PageLoadingSkeleton';
+import { safeHref } from '../utils/safeHref';
 
 interface SharedBookmark {
   id: string;
@@ -235,7 +236,7 @@ export default function Shared() {
                   {/* Actions */}
                   <div className="pt-3 mt-auto border-t border-gray-100 dark:border-gray-700/50">
                     <a
-                      href={bookmark.url}
+                      href={safeHref(bookmark.url)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="w-full"

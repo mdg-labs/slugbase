@@ -133,7 +133,13 @@ export default function ImportModal({ isOpen, onClose, onSuccess }: ImportModalP
 
       if (file.name.endsWith('.json')) {
         const data = JSON.parse(text);
-        bookmarks = Array.isArray(data) ? data : [data];
+        if (Array.isArray(data)) {
+          bookmarks = data;
+        } else if (data && Array.isArray(data.bookmarks)) {
+          bookmarks = data.bookmarks;
+        } else {
+          bookmarks = [data];
+        }
       } else if (file.name.endsWith('.html')) {
         if (text.length > 10 * 1024 * 1024) {
           throw new Error('HTML file is too large. Maximum size is 10MB.');

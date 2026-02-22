@@ -7,6 +7,7 @@ import { useToast } from '../components/ui/Toast';
 import api from '../api/client';
 import { useAppConfig } from '../contexts/AppConfigContext';
 import { PageLoadingSkeleton } from '../components/ui/PageLoadingSkeleton';
+import { safeHref } from '../utils/safeHref';
 
 interface SlugPreference {
   slug: string;
@@ -105,7 +106,7 @@ export default function GoPreferences() {
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <a
-                    href={pref.url}
+                    href={safeHref(pref.url)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="p-2 text-gray-500 hover:text-blue-600 dark:hover:text-blue-400"

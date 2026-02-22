@@ -192,15 +192,15 @@ export default function Tags() {
           }
         />
       ) : viewMode === 'card' ? (
-        <div className={`grid grid-cols-1 gap-4 ${
+        <div className={`grid grid-cols-1 gap-3 ${
           compactMode 
-            ? 'sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6' 
-            : 'sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5'
+            ? 'sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8' 
+            : 'sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6'
         }`}>
           {sortedTags.map((tag) => (
             <div
               key={tag.id}
-              className={`group bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-purple-400 dark:hover:border-purple-500 hover:shadow-lg transition-all duration-200 flex flex-col ${compactMode ? 'p-2.5' : 'p-4'}`}
+              className={`group bg-card rounded-lg border border-border hover:border-purple-400 dark:hover:border-purple-500 hover:shadow-lg transition-all duration-200 flex flex-col ${compactMode ? 'p-2.5' : 'p-3'}`}
             >
               <Link
                 to={`${appBasePath}/bookmarks?tag_id=${tag.id}`}
@@ -208,11 +208,11 @@ export default function Tags() {
               >
                 <div className="space-y-3 flex-1 flex flex-col">
                   <div className="flex items-start gap-3">
-                    <div className={`flex-shrink-0 ${compactMode ? 'w-10 h-10' : 'w-12 h-12'} rounded-xl bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/20 flex items-center justify-center border border-purple-100 dark:border-purple-800/50`}>
-                      <TagIcon className={`${compactMode ? 'h-5 w-5' : 'h-6 w-6'} text-purple-600 dark:text-purple-400`} />
+                    <div className={`flex-shrink-0 ${compactMode ? 'w-9 h-9' : 'w-10 h-10'} rounded-xl bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/20 flex items-center justify-center border border-purple-100 dark:border-purple-800/50`}>
+                      <TagIcon className={`${compactMode ? 'h-4 w-4' : 'h-5 w-5'} text-purple-600 dark:text-purple-400`} />
                     </div>
                     <div className="flex-1 min-w-0 pt-0.5">
-                      <h3 className={`${compactMode ? 'text-xs' : 'text-[15px]'} font-medium text-gray-900 dark:text-white truncate`}>
+                      <h3 className={`${compactMode ? 'text-xs' : 'text-sm'} font-medium text-foreground truncate`}>
                         {tag.name}
                       </h3>
                     </div>
@@ -221,7 +221,7 @@ export default function Tags() {
                   <p className="text-xs text-muted-foreground">—</p>
                 </div>
               </Link>
-              <div className={`flex gap-2 pt-3 mt-auto border-t border-gray-100 dark:border-gray-700/50 ${compactMode ? 'pt-2' : ''}`}>
+              <div className={`flex gap-1.5 pt-2.5 mt-auto border-t border-border ${compactMode ? 'pt-2' : ''}`}>
                   <Button
                     variant="ghost"
                     size="sm"

@@ -22,8 +22,10 @@ Sign up for a free account at **[https://slugbase.app](https://slugbase.app)** t
 - 📥 **Import/Export** - Import bookmarks from JSON or export your collection
 - 📌 **Pinned Bookmarks** - Pin important bookmarks for quick access
 - 📈 **Usage Tracking** - Automatic tracking of bookmark access counts and last accessed time
-- 🌐 **Internationalization** - Full i18n support (English, German, French) with easy extension
+- 🌐 **Internationalization** - Full i18n support (English, German, Spanish, French, Italian, Japanese, Dutch, Polish, Portuguese, Russian, Chinese) with easy extension
 - 🌓 **Dark/Light Mode** - Auto-detect from browser or manual toggle with theme persistence
+- 🤖 **AI Bookmark Suggestions** - Optional OpenAI-powered title/description suggestions when creating bookmarks; configurable in Admin > AI Suggestions (self-hosted) or via env in Cloud
+- 🔑 **API Tokens** - Personal access tokens for API access; create and manage under Profile
 
 ### Authentication & Security
 - 🔐 **OIDC Authentication** - Login with configurable OIDC providers (Google, GitHub, etc.)
@@ -49,15 +51,22 @@ Sign up for a free account at **[https://slugbase.app](https://slugbase.app)** t
 - **Vite** for build tooling
 - **i18next** for internationalization
 - **Lucide React** for icons
+- **Radix UI** for accessible primitives (dialogs, dropdowns, etc.)
+- **cmdk** for command palette (Ctrl+K search)
+- **next-themes** for theme switching
+- **sonner** for toast notifications
+- **Sentry** for error tracking (optional)
 
 ### Backend
 - **Node.js** with Express
 - **TypeScript** throughout
 - **Passport.js** for authentication (OIDC + JWT)
 - **SQLite** (better-sqlite3) / **PostgreSQL** (pg)
+- **Zod** for validation
 - **Swagger** for API documentation
 - **Helmet** for security headers
 - **Rate Limiting** for API protection
+- **OpenAI** (optional) for AI bookmark suggestions
 
 ## Quick Start
 
@@ -66,7 +75,7 @@ Sign up for a free account at **[https://slugbase.app](https://slugbase.app)** t
 1. **Clone the repository**
 ```bash
 git clone <repository-url>
-cd slugbase
+cd slugbase-core
 ```
 
 2. **Install dependencies**
@@ -105,6 +114,17 @@ docker-compose up -d
 - Go through initial setup flow
 - Configure OIDC providers (optional)
 - Configure SMTP settings for password reset (optional)
+
+### Production without Docker
+
+1. **Build and start**
+```bash
+npm run build
+npm run start
+```
+
+2. **Access the application**
+- The app (API + frontend) is served on port 5000 via the apps/selfhosted server.
 
 ## Running modes: SELFHOSTED vs CLOUD
 
@@ -187,29 +207,33 @@ SlugBase uses an automatic migration system:
 4. **Tracking**: Applied migrations are tracked in `schema_migrations` table
 5. **Execution**: Migrations run automatically after initial schema setup
 
+Current migrations are 001–009, 013–015, 018–021 (see `backend/src/db/migrations/index.ts`; numbering gaps are legacy/cloud-only).
+
 To add a new migration:
-1. Create a new file: `backend/src/db/migrations/002_your_migration.ts`
+1. Create a new file: `backend/src/db/migrations/NNN_your_migration.ts`
 2. Export: `migrationId`, `migrationName`, `up()` function, and optionally `down()` function
 3. Import and register in `backend/src/db/migrations/index.ts`
 
 ## Project Structure
 
+The repository is an npm workspace monorepo. Production run uses either the Docker image (backend serves frontend from `/public`) or `npm run start` (apps/selfhosted server).
+
 ```
-slugbase/
-├── backend/
+slugbase-core/
+├── backend/                # Express API, auth, db, migrations
 │   ├── src/
 │   │   ├── auth/          # Authentication logic (JWT, OIDC)
 │   │   ├── config/        # Configuration files
 │   │   ├── db/            # Database layer
 │   │   │   ├── migrations/ # Database migrations
-│   │   │   ├── schema.sql  # Initial schema
-│   │   │   └── index.ts    # DB utilities
+│   │   │   ├── schema.sql # Initial schema
+│   │   │   └── index.ts   # DB utilities
 │   │   ├── middleware/    # Express middleware
 │   │   ├── routes/        # API routes
 │   │   ├── utils/         # Utility functions
 │   │   └── index.ts       # Server entry point
 │   └── package.json
-├── frontend/
+├── frontend/               # React SPA (Vite)
 │   ├── src/
 │   │   ├── api/           # API client
 │   │   ├── components/    # React components
@@ -222,8 +246,13 @@ slugbase/
 │   │   ├── pages/         # Page components
 │   │   └── utils/         # Utility functions
 │   └── package.json
+├── packages/core/          # Package consumed by apps (exports backend + frontend entrypoints)
+│   └── ...                # See docs/PACKAGE-BOUNDARIES-AND-EXPORTS.md
+├── apps/selfhosted/        # Self-hosted app: uses core package, serves API + frontend
+│   └── ...
+├── scripts/                # Build helpers (e.g. copy-core-dist.js, copy-selfhosted-public.js)
 ├── docs/                   # Documentation source
-├── docker-compose.yml      # Docker Compose config
+├── docker-compose.yml      # Docker Compose config (use docker-compose.example.yml as template)
 ├── Dockerfile              # Production Dockerfile
 └── package.json            # Root workspace config
 ```

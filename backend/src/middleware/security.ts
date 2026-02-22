@@ -143,11 +143,11 @@ export function csrfProtection(req: any, res: any, next: any) {
   const token = req.headers['x-csrf-token'] || req.body?.csrfToken;
   const cookieToken = req.cookies?._csrf;
 
-  // If no cookie token exists, generate one (for first request)
+  // If no cookie token exists, do not allow state-changing requests (CSRF hardening).
+  // Client must GET /api/csrf-token first to receive the cookie, then retry.
   if (!cookieToken) {
     generateCSRFToken(req, res);
-    // Allow first request to proceed (they'll get token in response)
-    return next();
+    return res.status(403).json({ error: 'Invalid CSRF token' });
   }
 
   // Validate token for state-changing operations

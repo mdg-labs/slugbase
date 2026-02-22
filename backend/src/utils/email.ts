@@ -30,8 +30,10 @@ function safeUrlForHref(url: string): string {
   return url;
 }
 
-/** Primary brand color (blue-600) matching app style */
-const PRIMARY_BLUE = '#2563eb';
+/** Email header background: same navy as app dark mode (#0b162A) */
+const HEADER_BG = '#0b162A';
+/** Accent color for buttons and links: app primary orange (#E64100) */
+const ACCENT_ORANGE = '#E64100';
 
 function getFrontendUrl(): string {
   return (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
@@ -55,7 +57,7 @@ function buildEmailLayout(options: BuildEmailLayoutOptions): string {
     includeLegalFooter = false,
   } = options;
   const frontendUrl = getFrontendUrl();
-  const logoUrl = `${frontendUrl}/slugbase_icon_white.svg`;
+  const logoUrl = `${frontendUrl}/slugbase_icon_white.png`;
 
   const legalFooterHtml = includeLegalFooter
     ? ` &middot; <a href="${frontendUrl}/imprint" style="color: #6b7280; text-decoration: underline;">Imprint</a> &middot; <a href="${frontendUrl}/privacy" style="color: #6b7280; text-decoration: underline;">Privacy</a>`
@@ -86,7 +88,7 @@ function buildEmailLayout(options: BuildEmailLayoutOptions): string {
         <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="max-width: 600px; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
           <!-- Header -->
           <tr>
-            <td style="padding: 32px 40px; text-align: center; background-color: ${PRIMARY_BLUE}; border-radius: 8px 8px 0 0;">
+            <td style="padding: 32px 40px; text-align: center; background-color: ${HEADER_BG}; border-radius: 8px 8px 0 0;">
               <img src="${logoUrl}" alt="SlugBase" width="40" height="40" style="display: inline-block; vertical-align: middle; margin-right: 10px;" />
               <h1 style="margin: 0; display: inline-block; vertical-align: middle; color: #ffffff; font-size: 28px; font-weight: 600; letter-spacing: -0.5px;">SlugBase</h1>
             </td>
@@ -162,13 +164,13 @@ async function getSMTPConfig(): Promise<{ config: SMTPConfig | null; error?: str
     try {
       decryptedPassword = decrypt(passwordValue);
     } catch (error: any) {
-      console.warn('SMTP password decryption failed, using as plain text:', error.message);
+      console.warn('SMTP credential decryption failed, using stored value:', error.message);
       decryptedPassword = passwordValue;
     }
 
     const trimmedPassword = decryptedPassword ? decryptedPassword.trim() : '';
     if (!trimmedPassword) {
-      console.error('SMTP password validation failed: password is empty');
+      console.error('SMTP credential validation failed: value is empty');
       return { config: null, error: 'SMTP password is empty. Please set a password in the SMTP settings.' };
     }
 
@@ -186,6 +188,15 @@ async function getSMTPConfig(): Promise<{ config: SMTPConfig | null; error?: str
     console.error('Error getting SMTP config:', error);
     return { config: null, error: `Error retrieving SMTP config: ${error.message}` };
   }
+}
+
+/**
+ * Returns whether email sending is available (SMTP configured and enabled).
+ * Used e.g. to show "Send invite" when adding users.
+ */
+export async function isEmailSendingAvailable(): Promise<boolean> {
+  const { config } = await getSMTPConfig();
+  return config != null;
 }
 
 /**
@@ -257,7 +268,7 @@ export async function sendPasswordResetEmail(email: string, resetToken: string, 
     <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin: 30px 0;">
       <tr>
         <td align="center" style="padding: 0;">
-          <a href="${safeHrefUrl}" style="display: inline-block; padding: 14px 32px; background-color: ${PRIMARY_BLUE}; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600; text-align: center; box-shadow: 0 2px 4px rgba(37, 99, 235, 0.3);">Reset Password</a>
+          <a href="${safeHrefUrl}" style="display: inline-block; padding: 14px 32px; background-color: ${ACCENT_ORANGE}; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600; text-align: center; box-shadow: 0 2px 4px rgba(230, 65, 0, 0.3);">Reset Password</a>
         </td>
       </tr>
     </table>
@@ -287,6 +298,58 @@ export async function sendPasswordResetEmail(email: string, resetToken: string, 
 }
 
 /**
+ * Send invite email (admin-invited user: set password link).
+ * Uses same link shape as password reset (/reset-password?token=...).
+ */
+export async function sendInviteEmail(
+  email: string,
+  setPasswordUrl: string,
+  recipientName?: string
+): Promise<boolean> {
+  const safeHrefUrl = safeUrlForHref(setPasswordUrl);
+  const escapedDisplayUrl = escapeHtml(setPasswordUrl);
+  const greeting = recipientName
+    ? `Hi ${escapeHtml(recipientName)},<br><br>`
+    : '';
+
+  const subject = "You're invited to SlugBase";
+  const contentHtml = `
+    <h2 style="margin: 0 0 20px; color: #1a1a1a; font-size: 24px; font-weight: 600; line-height: 1.3;">You're invited to SlugBase</h2>
+    <p style="margin: 0 0 20px; color: #4a4a4a; font-size: 16px; line-height: 1.6;">${greeting}You've been invited to join SlugBase. Click the button below to set your password and get started:</p>
+    
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin: 30px 0;">
+      <tr>
+        <td align="center" style="padding: 0;">
+          <a href="${safeHrefUrl}" style="display: inline-block; padding: 14px 32px; background-color: ${ACCENT_ORANGE}; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600; text-align: center; box-shadow: 0 2px 4px rgba(230, 65, 0, 0.3);">Set password</a>
+        </td>
+      </tr>
+    </table>
+    
+    <p style="margin: 20px 0; color: #6b7280; font-size: 14px; line-height: 1.6;">Or copy and paste this link into your browser:</p>
+    <p style="margin: 0 0 30px; padding: 12px; background-color: #f9fafb; border-radius: 4px; word-break: break-all; color: #4a4a4a; font-size: 13px; font-family: 'Courier New', monospace; line-height: 1.5;">${escapedDisplayUrl}</p>
+    
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 30px 0; background-color: #fff7ed; border-left: 4px solid ${ACCENT_ORANGE}; border-radius: 4px;">
+      <tr>
+        <td style="padding: 16px;">
+          <p style="margin: 0; color: #9a3412; font-size: 14px; line-height: 1.6; font-weight: 500;">This link will expire in 7 days.</p>
+        </td>
+      </tr>
+    </table>
+    
+    <p style="margin: 30px 0 0; color: #6b7280; font-size: 14px; line-height: 1.6;">If you did not expect this invite, you can ignore this email.</p>
+  `;
+
+  const html = buildEmailLayout({
+    contentHtml,
+    title: "You're invited to SlugBase",
+    includeLegalFooter: true,
+  });
+
+  const result = await sendEmail(email, subject, html);
+  return result.success;
+}
+
+/**
  * Send email verification email
  */
 export async function sendEmailVerificationEmail(email: string, verificationToken: string, verificationUrl: string, newEmail: string): Promise<boolean> {
@@ -302,7 +365,7 @@ export async function sendEmailVerificationEmail(email: string, verificationToke
     <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin: 30px 0;">
       <tr>
         <td align="center" style="padding: 0;">
-          <a href="${safeHrefUrl}" style="display: inline-block; padding: 14px 32px; background-color: ${PRIMARY_BLUE}; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600; text-align: center; box-shadow: 0 2px 4px rgba(37, 99, 235, 0.3);">Verify Email Address</a>
+          <a href="${safeHrefUrl}" style="display: inline-block; padding: 14px 32px; background-color: ${ACCENT_ORANGE}; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600; text-align: center; box-shadow: 0 2px 4px rgba(230, 65, 0, 0.3);">Verify Email Address</a>
         </td>
       </tr>
     </table>
@@ -310,10 +373,10 @@ export async function sendEmailVerificationEmail(email: string, verificationToke
     <p style="margin: 20px 0; color: #6b7280; font-size: 14px; line-height: 1.6;">Or copy and paste this link into your browser:</p>
     <p style="margin: 0 0 30px; padding: 12px; background-color: #f9fafb; border-radius: 4px; word-break: break-all; color: #4a4a4a; font-size: 13px; font-family: 'Courier New', monospace; line-height: 1.5;">${escapedDisplayUrl}</p>
     
-    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 30px 0; background-color: #dbeafe; border-left: 4px solid ${PRIMARY_BLUE}; border-radius: 4px;">
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 30px 0; background-color: #fff7ed; border-left: 4px solid ${ACCENT_ORANGE}; border-radius: 4px;">
       <tr>
         <td style="padding: 16px;">
-          <p style="margin: 0; color: #1e40af; font-size: 14px; line-height: 1.6; font-weight: 500;">ℹ️ This link will expire in 24 hours for security reasons.</p>
+          <p style="margin: 0; color: #9a3412; font-size: 14px; line-height: 1.6; font-weight: 500;">ℹ️ This link will expire in 24 hours for security reasons.</p>
         </td>
       </tr>
     </table>
@@ -384,7 +447,7 @@ export async function sendContactFormNotification(recipient: string, data: Conta
       <tr>
         <td style="padding: 16px; border-top: 1px solid #e5e7eb;">
           <p style="margin: 0 0 8px; color: #6b7280; font-size: 12px; font-weight: 600; text-transform: uppercase;">Email</p>
-          <p style="margin: 0;"><a href="mailto:${escapedEmail}" style="color: ${PRIMARY_BLUE}; text-decoration: none;">${escapedEmail}</a></p>
+          <p style="margin: 0;"><a href="mailto:${escapedEmail}" style="color: ${ACCENT_ORANGE}; text-decoration: none;">${escapedEmail}</a></p>
         </td>
       </tr>
       <tr>
@@ -422,7 +485,7 @@ export async function sendSignupVerificationEmail(email: string, verificationUrl
     <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin: 30px 0;">
       <tr>
         <td align="center" style="padding: 0;">
-          <a href="${safeHrefUrl}" style="display: inline-block; padding: 14px 32px; background-color: ${PRIMARY_BLUE}; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600;">Verify email</a>
+          <a href="${safeHrefUrl}" style="display: inline-block; padding: 14px 32px; background-color: ${ACCENT_ORANGE}; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600; box-shadow: 0 2px 4px rgba(230, 65, 0, 0.3);">Verify email</a>
         </td>
       </tr>
     </table>

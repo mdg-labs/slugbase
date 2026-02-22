@@ -242,7 +242,7 @@ router.get('/stats', requireAuth(), async (req, res) => {
       tag_names: (tagNamesByBookmark[b.id] || []).slice(0, 3),
     }));
 
-    // Top tags (most used, top 5)
+    // Top tags (most used, top 10)
     const topTags = await query(
       `SELECT t.id, t.name, COUNT(bt.bookmark_id) as bookmark_count
        FROM tags t
@@ -251,10 +251,36 @@ router.get('/stats', requireAuth(), async (req, res) => {
        WHERE t.user_id = ? AND t.tenant_id = ? AND b.tenant_id = ?
        GROUP BY t.id, t.name
        ORDER BY bookmark_count DESC
-       LIMIT 5`,
+       LIMIT 10`,
       [userId, tenantId, tenantId]
     );
     const topTagsList = Array.isArray(topTags) ? topTags : (topTags ? [topTags] : []);
+
+    // Quick access bookmarks: 12 most opened (by access_count); when all are 0, show 12 random.
+    const hasAnyOpened = await queryOne(
+      `SELECT 1 FROM bookmarks
+       WHERE user_id = ? AND tenant_id = ? AND slug IS NOT NULL AND slug != ''
+         AND COALESCE(access_count, 0) > 0
+       LIMIT 1`,
+      [userId, tenantId]
+    );
+    const quickAccessBookmarks = await query(
+      hasAnyOpened
+        ? `SELECT id, title, url, slug FROM bookmarks
+           WHERE user_id = ? AND tenant_id = ? AND slug IS NOT NULL AND slug != ''
+           ORDER BY COALESCE(access_count, 0) DESC, last_accessed_at DESC NULLS LAST, created_at DESC
+           LIMIT 12`
+        : `SELECT id, title, url, slug FROM bookmarks
+           WHERE user_id = ? AND tenant_id = ? AND slug IS NOT NULL AND slug != ''
+           ORDER BY RANDOM()
+           LIMIT 12`,
+      [userId, tenantId]
+    );
+    const quickAccessList = Array.isArray(quickAccessBookmarks)
+      ? quickAccessBookmarks
+      : quickAccessBookmarks
+        ? [quickAccessBookmarks]
+        : [];
 
     res.json({
       totalBookmarks,
@@ -264,6 +290,7 @@ router.get('/stats', requireAuth(), async (req, res) => {
       sharedFolders,
       recentBookmarks: recentBookmarksEnriched,
       topTags: topTagsList,
+      quickAccessBookmarks: quickAccessList,
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });

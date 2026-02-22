@@ -3,6 +3,7 @@ import Button from '../ui/Button';
 import Tooltip from '../ui/Tooltip';
 import Favicon from '../Favicon';
 import FolderIcon from '../FolderIcon';
+import { safeHref } from '../../utils/safeHref';
 
 interface Bookmark {
   id: string;
@@ -121,7 +122,7 @@ export default function BookmarkListItem({
                 </Tooltip>
               )}
               <a
-                href={bookmark.url}
+                href={safeHref(bookmark.url)}
                 target="_blank"
                 rel="noopener noreferrer"
               >

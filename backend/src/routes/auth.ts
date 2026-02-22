@@ -142,7 +142,8 @@ router.get('/providers', async (req, res) => {
     }));
     res.json(providersWithCallback);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error('Auth providers error:', error?.message ?? error);
+    res.status(500).json({ error: 'An error occurred while loading sign-in options.' });
   }
 });
 
@@ -332,7 +333,8 @@ router.post('/login', authRateLimiter, async (req, res, next) => {
     };
     res.json(payload);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error('Login error:', error?.message ?? error);
+    res.status(500).json({ error: 'An error occurred during sign in.' });
   }
 });
 
@@ -464,8 +466,8 @@ router.post('/register', authRateLimiter, async (req, res) => {
 
     return res.status(201).json({ message: 'Check your email to verify your account' });
   } catch (error: any) {
-    console.error('Register error:', error);
-    return res.status(500).json({ error: error.message || 'Registration failed' });
+    console.error('Register error:', error?.message ?? error);
+    return res.status(500).json({ error: 'Registration failed. Please try again.' });
   }
 });
 
@@ -503,8 +505,8 @@ router.post('/verify-signup', authRateLimiter, async (req, res) => {
 
     return res.json({ message: 'Email verified. You can log in.' });
   } catch (error: any) {
-    console.error('Verify-signup error:', error);
-    return res.status(500).json({ error: error.message || 'Verification failed' });
+    console.error('Verify-signup error:', error?.message ?? error);
+    return res.status(500).json({ error: 'Verification failed. Please try again.' });
   }
 });
 
@@ -594,8 +596,8 @@ router.post('/resend-signup-verification', authRateLimiter, async (req, res) => 
     await sendSignupVerificationEmail(targetEmail, verificationUrl);
     return res.json({ message: 'Verification email sent' });
   } catch (error: any) {
-    console.error('Resend signup verification error:', error);
-    return res.status(500).json({ error: error.message || 'Failed to resend verification' });
+    console.error('Resend signup verification error:', error?.message ?? error);
+    return res.status(500).json({ error: 'Failed to resend verification. Please try again.' });
   }
 });
 
@@ -645,8 +647,8 @@ router.post('/request-signup-resend', authRateLimiter, async (req, res) => {
     }
     return res.json({ message: 'If an unverified account exists with that email, a new verification link has been sent.' });
   } catch (error: any) {
-    console.error('Request signup resend error:', error);
-    return res.status(500).json({ error: error.message || 'Failed to request resend' });
+    console.error('Request signup resend error:', error?.message ?? error);
+    return res.status(500).json({ error: 'Request failed. Please try again.' });
   }
 });
 
@@ -1078,7 +1080,8 @@ router.post('/setup', strictRateLimiter, async (req, res) => {
     if (error.message && (error.message.includes('UNIQUE constraint') || error.message.includes('duplicate'))) {
       return res.status(400).json({ error: 'User with this email already exists' });
     }
-    res.status(500).json({ error: error.message });
+    console.error('Setup error:', error?.message ?? error);
+    res.status(500).json({ error: 'An error occurred during setup. Please try again.' });
   }
 });
 
@@ -1107,7 +1110,8 @@ router.get('/setup/status', async (req, res) => {
     const initialized = await isInitialized();
     res.json({ initialized });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error('Setup status error:', error?.message ?? error);
+    res.status(500).json({ error: 'An error occurred.' });
   }
 });
 

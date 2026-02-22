@@ -4,6 +4,7 @@ import Tooltip from '../ui/Tooltip';
 import Favicon from '../Favicon';
 import FolderIcon from '../FolderIcon';
 import { Badge } from '../ui/badge';
+import { safeHref } from '../../utils/safeHref';
 
 interface Bookmark {
   id: string;
@@ -78,7 +79,7 @@ export default function BookmarkCard({
         selected
           ? 'border-primary ring-2 ring-primary/20'
           : 'border-border hover:border-primary/70 hover:bg-muted/50'
-      } transition-all duration-200 flex flex-col h-full min-h-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${compact ? 'p-2.5 min-h-[200px]' : 'p-4'}`}
+      } transition-all duration-200 flex flex-col h-full min-h-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${compact ? 'p-2.5 min-h-[180px]' : 'p-3'}`}
     >
       <div className={`flex-shrink-0 space-y-3 ${compact ? 'space-y-2' : ''}`}>
         <div className="flex items-start gap-3">
@@ -91,11 +92,11 @@ export default function BookmarkCard({
               {selected ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5" />}
             </button>
           )}
-            <div className={`flex-shrink-0 ${compact ? 'w-10 h-10' : 'w-12 h-12'} rounded-xl bg-primary/20 flex items-center justify-center border border-primary/30 overflow-hidden`}>
-            <Favicon url={bookmark.url} size={compact ? 20 : 24} />
+            <div className={`flex-shrink-0 ${compact ? 'w-9 h-9' : 'w-10 h-10'} rounded-xl bg-primary/20 flex items-center justify-center border border-primary/30 overflow-hidden`}>
+            <Favicon url={bookmark.url} size={compact ? 18 : 20} />
           </div>
           <div className="flex-1 min-w-0 pt-0.5">
-            <h3 className={`${compact ? 'text-xs' : 'text-sm'} font-semibold text-gray-900 dark:text-white line-clamp-2 leading-snug mb-1.5`}>
+            <h3 className={`${compact ? 'text-xs' : 'text-sm'} font-semibold text-foreground line-clamp-2 leading-snug mb-1`}>
               {bookmark.title}
             </h3>
             {isShared && (
@@ -218,7 +219,7 @@ export default function BookmarkCard({
         </div>
 
         {bookmark.forwarding_enabled && (
-          <div className={`flex items-center gap-2 ${compact ? 'px-2 py-1.5' : 'px-3 py-2'}`}>
+          <div className={`flex items-center gap-1.5 ${compact ? 'px-2 py-1.5' : 'px-2 py-1.5'}`}>
             <Badge variant="outline" className="text-xs font-mono">
               {t('bookmarks.slug')}: /{bookmark.slug}
             </Badge>
@@ -239,7 +240,7 @@ export default function BookmarkCard({
 
       <div className="flex-1 min-h-0" />
 
-      <div className={`flex gap-2 pt-3 shrink-0 border-t border-border ${compact ? 'pt-2' : ''}`} data-card-action>
+      <div className={`flex gap-1.5 pt-2.5 shrink-0 border-t border-border ${compact ? 'pt-2' : ''}`} data-card-action>
         {onOpen ? (
           <Tooltip content={t('bookmarks.open')}>
             <Button variant="ghost" size="sm" icon={ExternalLink} className="flex-shrink-0" onClick={(e) => { e.stopPropagation(); onOpen(); }} aria-label={t('bookmarks.open')} />
@@ -247,7 +248,7 @@ export default function BookmarkCard({
         ) : (
           <Tooltip content={t('bookmarks.open')}>
             <a
-              href={bookmark.url}
+              href={safeHref(bookmark.url)}
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}

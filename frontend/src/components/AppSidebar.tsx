@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useState, useEffect } from 'react';
 import {
   Bookmark,
   Folder,
@@ -9,6 +10,7 @@ import {
   LayoutDashboard,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Github,
   Users,
   UserCog,
@@ -21,7 +23,6 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -30,6 +31,9 @@ import {
 } from './ui/sidebar';
 import { useAppConfig } from '../contexts/AppConfigContext';
 import type { User } from '../contexts/AuthContext';
+import { cn } from '@/lib/utils';
+
+const SIDEBAR_ADMIN_OPEN_KEY = 'slugbase_sidebar_admin_open';
 
 interface AppSidebarProps {
   user: User | null;
@@ -58,6 +62,15 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
     pathname === (appBasePath || '/');
 
   const showAdmin = user?.is_admin;
+  const [adminOpen, setAdminOpen] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    const stored = localStorage.getItem(SIDEBAR_ADMIN_OPEN_KEY);
+    return stored !== 'false';
+  });
+
+  useEffect(() => {
+    localStorage.setItem(SIDEBAR_ADMIN_OPEN_KEY, String(adminOpen));
+  }, [adminOpen]);
 
   const primaryNavItems = [
     { path: appBasePath || '/', label: t('dashboard.overview'), icon: LayoutDashboard },
@@ -103,32 +116,51 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
           <>
             <SidebarSeparator />
             <SidebarGroup>
-              <SidebarGroupLabel>{t('admin.title')}</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {adminNavItems.map((item) => {
-                    const Icon = item.icon;
-                    return (
-                      <SidebarMenuItem key={item.path}>
-                        <SidebarMenuButton
-                          asChild
-                          isActive={pathname === item.path}
-                          tooltip={item.label}
-                        >
-                          <Link
-                            to={item.path}
-                            onClick={handleNavClick}
-                            aria-current={pathname === item.path ? 'page' : undefined}
+              <button
+                type="button"
+                onClick={() => setAdminOpen((prev) => !prev)}
+                data-sidebar="group-label"
+                className={cn(
+                  'flex h-8 w-full shrink-0 items-center gap-2 overflow-hidden rounded-md px-2 text-left text-xs font-medium text-sidebar-foreground/70 outline-none ring-sidebar-ring transition-[margin,opacity] duration-200 ease-linear focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0',
+                  'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                  'group-data-[collapsible=icon]:-mt-8 group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:!size-8 group-data-[collapsible=icon]:!p-2 group-data-[collapsible=icon]:!rounded-lg'
+                )}
+                aria-expanded={adminOpen}
+              >
+                {adminOpen ? (
+                  <ChevronDown className="h-5 w-5 shrink-0" />
+                ) : (
+                  <ChevronRight className="h-5 w-5 shrink-0" />
+                )}
+                <span className="truncate group-data-[collapsible=icon]:hidden">{t('admin.title')}</span>
+              </button>
+              {adminOpen && (
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {adminNavItems.map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <SidebarMenuItem key={item.path}>
+                          <SidebarMenuButton
+                            asChild
+                            isActive={pathname === item.path}
+                            tooltip={item.label}
                           >
-                            <Icon className="h-5 w-5" />
-                            <span>{item.label}</span>
-                          </Link>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    );
-                  })}
-                </SidebarMenu>
-              </SidebarGroupContent>
+                            <Link
+                              to={item.path}
+                              onClick={handleNavClick}
+                              aria-current={pathname === item.path ? 'page' : undefined}
+                            >
+                              <Icon className="h-5 w-5" />
+                              <span>{item.label}</span>
+                            </Link>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      );
+                    })}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              )}
             </SidebarGroup>
           </>
         )}

@@ -14,6 +14,7 @@ import {
   TableRow,
 } from '../ui/table';
 import { Card } from '../ui/card';
+import { safeHref } from '../../utils/safeHref';
 
 interface Bookmark {
   id: string;
@@ -220,7 +221,7 @@ export default function BookmarkTableView({
                 )}
                 <TableCell className={cellClass}>
                   <a
-                    href={bookmark.url}
+                    href={safeHref(bookmark.url)}
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => { if (onOpen) { e.preventDefault(); onOpen(bookmark); } }}
@@ -237,7 +238,7 @@ export default function BookmarkTableView({
                 {!compact && (
                   <TableCell className={cellClass}>
                     <a
-                      href={bookmark.url}
+                      href={safeHref(bookmark.url)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-sm text-muted-foreground hover:text-foreground truncate max-w-xs block"
@@ -312,7 +313,7 @@ export default function BookmarkTableView({
                       </Tooltip>
                     ) : (
                       <Tooltip content={t('bookmarks.open')}>
-                        <a href={bookmark.url} target="_blank" rel="noopener noreferrer" className="flex-shrink-0">
+                        <a href={safeHref(bookmark.url)} target="_blank" rel="noopener noreferrer" className="flex-shrink-0">
                           <Button variant="ghost" size="sm" icon={ExternalLink} className={`flex-shrink-0 ${compact ? 'h-8 w-8 p-0' : 'h-8 w-8 p-0'}`} aria-label={t('bookmarks.open')} />
                         </a>
                       </Tooltip>

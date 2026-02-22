@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useSearchCommand } from '../contexts/SearchCommandContext';
 import {
   Search,
   Bookmark,
@@ -38,7 +39,7 @@ export default function GlobalSearch() {
   const navigate = useNavigate();
   const { appBasePath } = useAppConfig();
   const { user } = useAuth();
-  const [open, setOpen] = useState(false);
+  const { open, setOpen, openSearch } = useSearchCommand();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -64,12 +65,12 @@ export default function GlobalSearch() {
     function handleKeyDown(e: KeyboardEvent) {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
-        setOpen(true);
+        openSearch();
       }
     }
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [openSearch]);
 
   useEffect(() => {
     if (!query.trim()) {
@@ -169,6 +170,7 @@ export default function GlobalSearch() {
     } else if (result.type === 'action' && result.action) {
       result.action();
     } else if (result.type === 'bookmark' && result.url) {
+      api.post(`/bookmarks/${result.id}/track-access`).catch(() => {});
       window.open(result.url, '_blank', 'noopener,noreferrer');
     } else if (result.type === 'folder') {
       navigate(`${appBasePath}/bookmarks?folder_id=${result.id}`);
@@ -196,19 +198,19 @@ export default function GlobalSearch() {
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
-        className="hidden md:flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground bg-muted rounded-lg hover:bg-accent hover:text-accent-foreground transition-colors border border-border focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        onClick={openSearch}
+        className="hidden md:flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-muted-foreground bg-muted/80 hover:bg-accent/80 rounded-xl border border-border hover:border-primary/30 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
-        <Search className="h-4 w-4" />
-        <span>{t('common.search')}</span>
-        <kbd className="hidden lg:inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-semibold text-muted-foreground bg-background border border-border rounded-md">
+        <Search className="h-5 w-5 shrink-0" />
+        <span className="flex-1 truncate">{t('dashboard.searchPlaceholder')}</span>
+        <kbd className="shrink-0 inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-muted-foreground bg-background border border-border rounded">
           {navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}K
         </kbd>
       </button>
 
       <CommandDialog open={open} onOpenChange={setOpen} shouldFilter={false}>
         <CommandInput
-          placeholder={t('common.searchPlaceholder')}
+          placeholder={t('dashboard.searchPlaceholder')}
           value={query}
           onValueChange={setQuery}
         />

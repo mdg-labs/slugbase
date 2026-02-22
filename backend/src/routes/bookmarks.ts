@@ -159,6 +159,7 @@ router.get('/', async (req, res) => {
 
     // Build query for own bookmarks + shared bookmarks (directly shared with user, teams, or via shared folders)
     // In cloud mode, user shares (bus/fus) only count when owner is in same org
+    // Param order: CASE b.user_id (SELECT), then WHERE tenant_id, b.user_id, bus.user_id, [teamIds], fus.user_id, [teamIds]
     const busCond = 'bus.user_id = ?';
     const fusCond = 'fus.user_id = ?';
     let sql = `
@@ -177,11 +178,13 @@ router.get('/', async (req, res) => {
         OR ${fusCond}
         OR (fts.team_id IN (${teamIds.length > 0 ? teamIds.map(() => '?').join(',') : 'NULL'}) AND fts.team_id IS NOT NULL AND bf.folder_id IS NOT NULL))
     `;
-    const params: any[] = [tenantId, userId, userId];
-    params.push(userId, userId);
+    const params: any[] = [userId, tenantId, userId, userId];
     if (teamIds.length > 0) {
-      params.push(...teamIds);
-      params.push(...teamIds); // Second set for folder shares
+      params.push(...teamIds);   // bts.team_id IN (...)
+      params.push(userId);       // fus.user_id
+      params.push(...teamIds);   // fts.team_id IN (...)
+    } else {
+      params.push(userId);       // fus.user_id (no IN placeholders when teamIds empty)
     }
 
     if (folderIdStr) {
@@ -216,10 +219,13 @@ router.get('/', async (req, res) => {
       ${folderIdStr ? 'AND b.id IN (SELECT bookmark_id FROM bookmark_folders WHERE folder_id = ?)' : ''}
       ${tagIdStr ? 'AND b.id IN (SELECT bookmark_id FROM bookmark_tags WHERE tag_id = ?)' : ''}
     `;
-    const countParams = [tenantId, userId];
-    countParams.push(userId, userId);
+    const countParams = [tenantId, userId, userId];
     if (teamIds.length > 0) {
-      countParams.push(...teamIds, ...teamIds);
+      countParams.push(...teamIds);   // bts.team_id IN (...)
+      countParams.push(userId);       // fus.user_id
+      countParams.push(...teamIds);   // fts.team_id IN (...)
+    } else {
+      countParams.push(userId);       // fus.user_id
     }
     if (folderIdStr) countParams.push(folderIdStr);
     if (tagIdStr) countParams.push(tagIdStr);
@@ -1712,11 +1718,15 @@ router.post('/import', async (req, res) => {
       errors: [] as string[],
     };
 
+    // Cache for create-or-get folders/tags by name within this import
+    const folderNameToId = new Map<string, string>();
+    const tagNameToId = new Map<string, string>();
+
     for (const bookmarkData of importBookmarks) {
       try {
         if (!bookmarkData.title || !bookmarkData.url) {
           results.failed++;
-          results.errors.push(`Missing title or URL: ${JSON.stringify(bookmarkData)}`);
+          results.errors.push('Missing title or URL');
           continue;
         }
 
@@ -1724,7 +1734,7 @@ router.post('/import', async (req, res) => {
         const urlValidation = validateUrl(bookmarkData.url);
         if (!urlValidation.valid) {
           results.failed++;
-          results.errors.push(`Invalid URL: ${bookmarkData.url}`);
+          results.errors.push('Invalid URL');
           continue;
         }
 
@@ -1732,7 +1742,7 @@ router.post('/import', async (req, res) => {
         const titleValidation = validateLength(bookmarkData.title, 'Title', 1, MAX_LENGTHS.title);
         if (!titleValidation.valid) {
           results.failed++;
-          results.errors.push(`Invalid title: ${bookmarkData.title}`);
+          results.errors.push('Invalid title');
           continue;
         }
         const sanitizedTitle = sanitizeString(bookmarkData.title);
@@ -1772,6 +1782,58 @@ router.post('/import', async (req, res) => {
             Boolean(bookmarkData.pinned || false),
           ]
         );
+
+        // Optional: assign to folders by name (create folder if not exists)
+        const folderNames = Array.isArray(bookmarkData.folder_names) ? bookmarkData.folder_names : [];
+        for (const rawName of folderNames) {
+          const name = typeof rawName === 'string' ? rawName.trim() : '';
+          if (!name) continue;
+          const nameValidation = validateLength(name, 'Folder name', 1, MAX_LENGTHS.folderName);
+          if (!nameValidation.valid) continue;
+          const sanitizedName = sanitizeString(name);
+          let folderId: string | undefined = folderNameToId.get(sanitizedName);
+          if (!folderId) {
+            const existing = await queryOne(
+              'SELECT id FROM folders WHERE tenant_id = ? AND user_id = ? AND name = ?',
+              [tenantId, userId, sanitizedName]
+            );
+            folderId = (existing as any)?.id ?? uuidv4();
+            if (!(existing as any)?.id) {
+              await execute(
+                'INSERT INTO folders (id, tenant_id, user_id, name, icon) VALUES (?, ?, ?, ?, ?)',
+                [folderId, tenantId, userId, sanitizedName, null]
+              );
+            }
+            folderNameToId.set(sanitizedName, folderId as string);
+          }
+          await execute('INSERT INTO bookmark_folders (bookmark_id, folder_id) VALUES (?, ?)', [bookmarkId, folderId as string]);
+        }
+
+        // Optional: assign to tags by name (create tag if not exists)
+        const tagNames = Array.isArray(bookmarkData.tag_names) ? bookmarkData.tag_names : [];
+        for (const rawName of tagNames) {
+          const name = typeof rawName === 'string' ? rawName.trim() : '';
+          if (!name) continue;
+          const nameValidation = validateLength(name, 'Tag name', 1, MAX_LENGTHS.tagName);
+          if (!nameValidation.valid) continue;
+          const sanitizedName = sanitizeString(name);
+          let tagId: string | undefined = tagNameToId.get(sanitizedName);
+          if (!tagId) {
+            const existing = await queryOne(
+              'SELECT id FROM tags WHERE user_id = ? AND tenant_id = ? AND name = ?',
+              [userId, tenantId, sanitizedName]
+            );
+            tagId = (existing as any)?.id ?? uuidv4();
+            if (!(existing as any)?.id) {
+              await execute(
+                'INSERT INTO tags (id, tenant_id, user_id, name) VALUES (?, ?, ?, ?)',
+                [tagId, tenantId, userId, sanitizedName]
+              );
+            }
+            tagNameToId.set(sanitizedName, tagId as string);
+          }
+          await execute('INSERT INTO bookmark_tags (bookmark_id, tag_id) VALUES (?, ?)', [bookmarkId, tagId as string]);
+        }
 
         results.success++;
       } catch (error: any) {

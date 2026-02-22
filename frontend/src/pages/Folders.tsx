@@ -203,15 +203,15 @@ export default function Folders() {
           }
         />
       ) : viewMode === 'card' ? (
-        <div className={`grid grid-cols-1 gap-4 ${
+        <div className={`grid grid-cols-1 gap-3 ${
           compactMode 
-            ? 'sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6' 
-            : 'sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+            ? 'sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8' 
+            : 'sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6'
         }`}>
           {sortedFolders.map((folder) => (
             <div
               key={folder.id}
-              className={`group bg-card rounded-lg border border-border hover:border-primary hover:shadow-lg transition-all duration-200 flex flex-col ${compactMode ? 'p-2.5' : 'p-4'}`}
+              className={`group bg-card rounded-lg border border-border hover:border-primary hover:shadow-lg transition-all duration-200 flex flex-col ${compactMode ? 'p-2.5' : 'p-3'}`}
             >
               <Link
                 to={`${appBasePath}/bookmarks?folder_id=${folder.id}`}
@@ -219,11 +219,11 @@ export default function Folders() {
               >
                 <div className="space-y-3 flex-1 flex flex-col">
                   <div className="flex items-start gap-3">
-                    <div className={`flex-shrink-0 ${compactMode ? 'w-10 h-10' : 'w-12 h-12'} rounded-xl bg-primary/20 flex items-center justify-center border border-primary/30`}>
-                      <FolderIcon iconName={folder.icon} size={compactMode ? 20 : 24} className="text-primary" />
+                    <div className={`flex-shrink-0 ${compactMode ? 'w-9 h-9' : 'w-10 h-10'} rounded-xl bg-primary/20 flex items-center justify-center border border-primary/30`}>
+                      <FolderIcon iconName={folder.icon} size={compactMode ? 18 : 20} className="text-primary" />
                     </div>
                     <div className="flex-1 min-w-0 pt-0.5">
-                      <h3 className={`${compactMode ? 'text-xs' : 'text-[15px]'} font-medium text-gray-900 dark:text-white truncate mb-1.5`}>
+                      <h3 className={`${compactMode ? 'text-xs' : 'text-sm'} font-medium text-foreground truncate mb-1`}>
                         {folder.name}
                       </h3>
                       {folder.shared_teams && folder.shared_teams.length > 0 && (
@@ -255,7 +255,7 @@ export default function Folders() {
                 </div>
               </Link>
               {folder.folder_type === 'own' && (
-                <div className={`flex gap-2 pt-3 mt-auto border-t border-gray-100 dark:border-gray-700/50 ${compactMode ? 'pt-2' : ''}`}>
+                <div className={`flex gap-1.5 pt-2.5 mt-auto border-t border-border ${compactMode ? 'pt-2' : ''}`}>
                   <Button
                     variant="ghost"
                     size="sm"
