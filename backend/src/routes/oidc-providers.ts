@@ -1,18 +1,13 @@
 import { Router } from 'express';
 import { query, queryOne, execute } from '../db/index.js';
-import { AuthRequest, requireAuth, requireAdmin } from '../middleware/auth.js';
+import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { v4 as uuidv4 } from 'uuid';
-import { encrypt, decrypt } from '../utils/encryption.js';
+import { encrypt } from '../utils/encryption.js';
 import { reloadOIDCStrategies } from '../auth/oidc.js';
-import { isCloud } from '../config/mode.js';
 import { validateOidcUrl, validateProviderKey } from '../utils/validation.js';
+import { getTenantId } from '../utils/tenant.js';
 
 const router = Router();
-// CLOUD mode: do not expose "bring your own" OIDC; fixed providers only via env
-router.use((req, res, next) => {
-  if (isCloud) return res.status(403).json({ error: 'OIDC provider management is not available in CLOUD mode' });
-  next();
-});
 router.use(requireAuth());
 router.use(requireAdmin());
 
@@ -62,9 +57,9 @@ router.use(requireAdmin());
  */
 // Get all OIDC providers (without secrets)
 router.get('/', async (req, res) => {
-  const authReq = req as AuthRequest;
   try {
-    const providers = await query('SELECT id, provider_key, issuer_url, authorization_url, token_url, userinfo_url, scopes, auto_create_users, default_role, created_at FROM oidc_providers ORDER BY created_at DESC', []);
+    const tenantId = getTenantId(req);
+    const providers = await query('SELECT id, provider_key, issuer_url, authorization_url, token_url, userinfo_url, scopes, auto_create_users, default_role, created_at FROM oidc_providers WHERE tenant_id = ? ORDER BY created_at DESC', [tenantId]);
     const providersList = Array.isArray(providers) ? providers : (providers ? [providers] : []);
     
     // Add callback URL information for each provider to help with OIDC configuration
@@ -110,12 +105,12 @@ router.get('/', async (req, res) => {
  */
 // Get single OIDC provider (without secret)
 router.get('/:id', async (req, res) => {
-  const authReq = req as AuthRequest;
   try {
+    const tenantId = getTenantId(req);
     const { id } = req.params;
     const provider = await queryOne(
-      'SELECT id, provider_key, issuer_url, authorization_url, token_url, userinfo_url, scopes, auto_create_users, default_role, created_at FROM oidc_providers WHERE id = ?',
-      [id]
+      'SELECT id, provider_key, issuer_url, authorization_url, token_url, userinfo_url, scopes, auto_create_users, default_role, created_at FROM oidc_providers WHERE id = ? AND tenant_id = ?',
+      [id, tenantId]
     );
     if (!provider) {
       return res.status(404).json({ error: 'Provider not found' });
@@ -196,8 +191,8 @@ router.get('/:id', async (req, res) => {
  */
 // Create OIDC provider
 router.post('/', async (req, res) => {
-  const authReq = req as AuthRequest;
   try {
+    const tenantId = getTenantId(req);
     const {
       provider_key,
       client_id,
@@ -251,7 +246,7 @@ router.post('/', async (req, res) => {
     }
 
     // Check if provider_key already exists
-    const existing = await queryOne('SELECT id FROM oidc_providers WHERE provider_key = ?', [provider_key]);
+    const existing = await queryOne('SELECT id FROM oidc_providers WHERE provider_key = ? AND tenant_id = ?', [provider_key, tenantId]);
     if (existing) {
       return res.status(400).json({ error: 'Provider with this key already exists' });
     }
@@ -261,10 +256,11 @@ router.post('/', async (req, res) => {
 
     const providerId = uuidv4();
     await execute(
-      `INSERT INTO oidc_providers (id, provider_key, client_id, client_secret, issuer_url, authorization_url, token_url, userinfo_url, scopes, auto_create_users, default_role) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO oidc_providers (id, tenant_id, provider_key, client_id, client_secret, issuer_url, authorization_url, token_url, userinfo_url, scopes, auto_create_users, default_role) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         providerId,
+        tenantId,
         provider_key,
         client_id,
         encryptedSecret,
@@ -282,8 +278,8 @@ router.post('/', async (req, res) => {
     await reloadOIDCStrategies();
 
     const provider = await queryOne(
-      'SELECT id, provider_key, issuer_url, authorization_url, token_url, userinfo_url, scopes, auto_create_users, default_role, created_at FROM oidc_providers WHERE id = ?',
-      [providerId]
+      'SELECT id, provider_key, issuer_url, authorization_url, token_url, userinfo_url, scopes, auto_create_users, default_role, created_at FROM oidc_providers WHERE id = ? AND tenant_id = ?',
+      [providerId, tenantId]
     );
     
     // Add callback URL
@@ -354,8 +350,8 @@ router.post('/', async (req, res) => {
  */
 // Update OIDC provider
 router.put('/:id', async (req, res) => {
-  const authReq = req as AuthRequest;
   try {
+    const tenantId = getTenantId(req);
     const { id } = req.params;
     const {
       provider_key,
@@ -370,7 +366,7 @@ router.put('/:id', async (req, res) => {
       default_role
     } = req.body;
 
-    const existing = await queryOne('SELECT * FROM oidc_providers WHERE id = ?', [id]);
+    const existing = await queryOne('SELECT * FROM oidc_providers WHERE id = ? AND tenant_id = ?', [id, tenantId]);
     if (!existing) {
       return res.status(404).json({ error: 'Provider not found' });
     }
@@ -425,7 +421,7 @@ router.put('/:id', async (req, res) => {
 
     // Check provider_key uniqueness if changed
     if (provider_key && provider_key !== (existing as any).provider_key) {
-      const keyExists = await queryOne('SELECT id FROM oidc_providers WHERE provider_key = ? AND id != ?', [provider_key, id]);
+      const keyExists = await queryOne('SELECT id FROM oidc_providers WHERE provider_key = ? AND id != ? AND tenant_id = ?', [provider_key, id, tenantId]);
       if (keyExists) {
         return res.status(400).json({ error: 'Provider with this key already exists' });
       }
@@ -481,9 +477,9 @@ router.put('/:id', async (req, res) => {
       return res.status(400).json({ error: 'No fields to update' });
     }
 
-    params.push(id);
+    params.push(id, tenantId);
     await execute(
-      `UPDATE oidc_providers SET ${updates.join(', ')} WHERE id = ?`,
+      `UPDATE oidc_providers SET ${updates.join(', ')} WHERE id = ? AND tenant_id = ?`,
       params
     );
 
@@ -491,8 +487,8 @@ router.put('/:id', async (req, res) => {
     await reloadOIDCStrategies();
 
     const provider = await queryOne(
-      'SELECT id, provider_key, issuer_url, authorization_url, token_url, userinfo_url, scopes, auto_create_users, default_role, created_at FROM oidc_providers WHERE id = ?',
-      [id]
+      'SELECT id, provider_key, issuer_url, authorization_url, token_url, userinfo_url, scopes, auto_create_users, default_role, created_at FROM oidc_providers WHERE id = ? AND tenant_id = ?',
+      [id, tenantId]
     );
     
     // Add callback URL
@@ -546,16 +542,16 @@ router.put('/:id', async (req, res) => {
  */
 // Delete OIDC provider
 router.delete('/:id', async (req, res) => {
-  const authReq = req as AuthRequest;
   try {
+    const tenantId = getTenantId(req);
     const { id } = req.params;
 
-    const provider = await queryOne('SELECT * FROM oidc_providers WHERE id = ?', [id]);
+    const provider = await queryOne('SELECT * FROM oidc_providers WHERE id = ? AND tenant_id = ?', [id, tenantId]);
     if (!provider) {
       return res.status(404).json({ error: 'Provider not found' });
     }
 
-    await execute('DELETE FROM oidc_providers WHERE id = ?', [id]);
+    await execute('DELETE FROM oidc_providers WHERE id = ? AND tenant_id = ?', [id, tenantId]);
 
     // Reload OIDC strategies
     await reloadOIDCStrategies();

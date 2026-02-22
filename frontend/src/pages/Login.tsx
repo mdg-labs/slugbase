@@ -4,7 +4,6 @@ import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../api/client';
 import { getAuthProviderUrl } from '../config/api';
-import { isCloud } from '../config/mode';
 import { LogIn, Key } from 'lucide-react';
 import Button from '../components/ui/Button';
 
@@ -26,7 +25,7 @@ export default function Login() {
     if (user) {
       const redirectTo = searchParams.get('redirect');
       const safePath = redirectTo?.startsWith('/') && !redirectTo.startsWith('//') ? redirectTo : null;
-      navigate(safePath || (isCloud ? '/app' : '/'), { replace: true });
+      navigate(safePath || '/', { replace: true });
     }
   }, [user, navigate, searchParams]);
 
@@ -67,7 +66,7 @@ export default function Login() {
       await api.post('/auth/login', localAuth);
       const redirectTo = searchParams.get('redirect');
       const safePath = redirectTo?.startsWith('/') && !redirectTo.startsWith('//') ? redirectTo : null;
-      window.location.href = safePath || (isCloud ? '/app' : '/');
+      window.location.href = safePath || '/';
     } catch (err: any) {
       const code = err.response?.data?.code;
       const message = err.response?.data?.error;
@@ -154,25 +153,11 @@ export default function Login() {
             </Button>
             <div className="text-center space-y-2">
               <Link
-                to={isCloud ? '/app/password-reset' : '/password-reset'}
+                to="/password-reset"
                 className="block text-sm font-medium text-primary hover:text-primary/90"
               >
                 {t('auth.forgotPassword')}
               </Link>
-              <Link
-                to="/contact"
-                className="block text-sm font-medium text-primary hover:text-primary/90"
-              >
-                {t('contact.title')}
-              </Link>
-              {isCloud && (
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {t('signup.noAccount')}{' '}
-                  <Link to="/app/signup" className="font-medium text-primary hover:underline">
-                    {t('auth.signUp')}
-                  </Link>
-                </p>
-              )}
             </div>
           </form>
 

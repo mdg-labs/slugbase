@@ -14,6 +14,8 @@ import {
   TableRow,
 } from '../ui/table';
 import { Card } from '../ui/card';
+import { safeHref } from '../../utils/safeHref';
+import { formatRelativeTime, formatFullDateTime } from '../../utils/formatRelativeTime';
 
 interface Bookmark {
   id: string;
@@ -27,6 +29,8 @@ interface Bookmark {
   shared_teams?: Array<{ id: string; name: string }>;
   bookmark_type?: 'own' | 'shared';
   last_accessed_at?: string | null | undefined;
+  access_count?: number;
+  created_at?: string;
 }
 
 interface BookmarkTableViewProps {
@@ -114,16 +118,17 @@ export default function BookmarkTableView({
     );
   }
 
-  function formatDate(dateString?: string | null) {
+  function formatCreated(dateString?: string | null) {
     if (!dateString) return '-';
     const date = new Date(dateString);
-    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleDateString();
   }
 
   const cellClass = compact ? 'px-2 py-1.5' : 'px-4 py-3';
+  const headClass = compact ? 'text-[10px]' : 'text-xs';
 
   return (
-    <Card>
+    <Card className={compact ? 'overflow-x-auto' : ''}>
       <Table>
         <TableHeader>
           <TableRow>
@@ -132,6 +137,7 @@ export default function BookmarkTableView({
                 <button
                   onClick={onSelectAll}
                   className="text-primary"
+                  aria-label={t('bookmarks.selectAll')}
                 >
                   {selectedBookmarks.size === bookmarks.length ? (
                     <CheckSquare className={compact ? 'h-4 w-4' : 'h-5 w-5'} />
@@ -144,50 +150,58 @@ export default function BookmarkTableView({
             <TableHead className={cellClass}>
               <button
                 onClick={() => handleSort('title')}
-                className={`flex items-center gap-2 ${compact ? 'text-[10px]' : 'text-xs'} font-semibold uppercase tracking-wide hover:text-foreground`}
+                className={`flex items-center gap-2 ${headClass} font-semibold uppercase tracking-wide hover:text-foreground`}
               >
                 {t('bookmarks.name')}
                 {getSortIcon('title')}
               </button>
             </TableHead>
-            {!compact && (
-              <TableHead className={cellClass}>
-                <button
-                  onClick={() => handleSort('url')}
-                  className={`flex items-center gap-2 text-xs font-semibold uppercase tracking-wide hover:text-foreground`}
-                >
-                  {t('bookmarks.url')}
-                  {getSortIcon('url')}
-                </button>
-              </TableHead>
+            {compact ? (
+              <>
+                <TableHead className={`${cellClass} ${headClass} font-semibold uppercase tracking-wide`}>{t('bookmarks.folders')}</TableHead>
+                <TableHead className={`${cellClass} ${headClass} font-semibold uppercase tracking-wide`}>{t('bookmarks.tags')}</TableHead>
+                <TableHead className={`${cellClass} ${headClass} font-semibold uppercase tracking-wide`}>{t('bookmarks.clicks')}</TableHead>
+                <TableHead className={`${cellClass} ${headClass} font-semibold uppercase tracking-wide`}>{t('bookmarks.lastOpened')}</TableHead>
+                <TableHead className={`${cellClass} ${headClass} font-semibold uppercase tracking-wide`}>{t('bookmarks.sortRecentlyAdded')}</TableHead>
+              </>
+            ) : (
+              <>
+                <TableHead className={cellClass}>
+                  <button
+                    onClick={() => handleSort('url')}
+                    className={`flex items-center gap-2 text-xs font-semibold uppercase tracking-wide hover:text-foreground`}
+                  >
+                    {t('bookmarks.url')}
+                    {getSortIcon('url')}
+                  </button>
+                </TableHead>
+                <TableHead className={`${cellClass} text-xs font-semibold uppercase tracking-wide`}>
+                  {t('bookmarks.folders')}
+                </TableHead>
+                <TableHead className={`${cellClass} text-xs font-semibold uppercase tracking-wide`}>
+                  {t('bookmarks.tags')}
+                </TableHead>
+                <TableHead className={`${cellClass} text-xs font-semibold uppercase tracking-wide`}>
+                  {t('bookmarks.shared')}
+                </TableHead>
+                <TableHead className={`${cellClass} text-xs font-semibold uppercase tracking-wide`}>
+                  {t('bookmarks.clicks')}
+                </TableHead>
+                <TableHead className={cellClass}>
+                  <button
+                    onClick={() => handleSort('last_accessed')}
+                    className={`flex items-center gap-2 text-xs font-semibold uppercase tracking-wide hover:text-foreground`}
+                  >
+                    {t('bookmarks.lastOpened')}
+                    {getSortIcon('last_accessed')}
+                  </button>
+                </TableHead>
+                <TableHead className={`${cellClass} text-xs font-semibold uppercase tracking-wide`}>
+                  {t('bookmarks.sortRecentlyAdded')}
+                </TableHead>
+              </>
             )}
-            {!compact && (
-              <TableHead className={`${cellClass} text-xs font-semibold uppercase tracking-wide`}>
-                {t('bookmarks.folders')}
-              </TableHead>
-            )}
-            {!compact && (
-              <TableHead className={`${cellClass} text-xs font-semibold uppercase tracking-wide`}>
-                {t('bookmarks.tags')}
-              </TableHead>
-            )}
-            {!compact && (
-              <TableHead className={`${cellClass} text-xs font-semibold uppercase tracking-wide`}>
-                {t('bookmarks.shared')}
-              </TableHead>
-            )}
-            {!compact && (
-              <TableHead className={cellClass}>
-                <button
-                  onClick={() => handleSort('last_accessed')}
-                  className={`flex items-center gap-2 text-xs font-semibold uppercase tracking-wide hover:text-foreground`}
-                >
-                  {t('bookmarks.sortRecentlyAccessed')}
-                  {getSortIcon('last_accessed')}
-                </button>
-              </TableHead>
-            )}
-            <TableHead className={`${cellClass} text-right text-xs font-semibold uppercase tracking-wide`}>
+            <TableHead className={`${cellClass} text-right ${headClass} font-semibold uppercase tracking-wide`}>
               {t('common.actions')}
             </TableHead>
           </TableRow>
@@ -201,7 +215,7 @@ export default function BookmarkTableView({
             return (
               <TableRow
                 key={bookmark.id}
-                className={`${selectedBookmarks.has(bookmark.id) ? 'bg-primary/10' : ''} ${compact ? 'h-10' : ''}`}
+                className={`group ${selectedBookmarks.has(bookmark.id) ? 'bg-primary/10' : ''} ${compact ? 'h-10' : ''}`}
                 data-state={selectedBookmarks.has(bookmark.id) ? 'selected' : undefined}
               >
                 {bulkMode && (
@@ -209,6 +223,7 @@ export default function BookmarkTableView({
                     <button
                       onClick={() => onSelect(bookmark.id)}
                       className="text-primary"
+                      aria-label={t('bookmarks.selectAll')}
                     >
                       {selectedBookmarks.has(bookmark.id) ? (
                         <CheckSquare className={`${compact ? 'h-4 w-4' : 'h-5 w-5'}`} />
@@ -220,7 +235,7 @@ export default function BookmarkTableView({
                 )}
                 <TableCell className={cellClass}>
                   <a
-                    href={bookmark.url}
+                    href={safeHref(bookmark.url)}
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => { if (onOpen) { e.preventDefault(); onOpen(bookmark); } }}
@@ -234,72 +249,132 @@ export default function BookmarkTableView({
                     </div>
                   </a>
                 </TableCell>
-                {!compact && (
-                  <TableCell className={cellClass}>
-                    <a
-                      href={bookmark.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-muted-foreground hover:text-foreground truncate max-w-xs block"
-                    >
-                      {bookmark.url}
-                    </a>
-                  </TableCell>
-                )}
-                {!compact && (
-                  <TableCell className={cellClass}>
-                    <div className="flex flex-wrap gap-1">
-                      {bookmark.folders && bookmark.folders.length > 0 ? (
-                        bookmark.folders.slice(0, 2).map((folder) => (
-                          <Badge key={folder.id} variant="secondary" className="text-xs font-medium bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300">
-                            <FolderIcon iconName={folder.icon} size={12} className="mr-1" />
-                            {folder.name}
-                          </Badge>
-                        ))
-                      ) : (
-                        <span className="text-xs text-muted-foreground">-</span>
-                      )}
-                    </div>
-                  </TableCell>
-                )}
-                {!compact && (
-                  <TableCell className={cellClass}>
-                    <div className="flex flex-wrap gap-1">
-                      {bookmark.tags && bookmark.tags.length > 0 ? (
-                        bookmark.tags.slice(0, 3).map((tag) => (
-                          <Badge key={tag.id} variant="secondary" className="text-xs font-medium bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300">
-                            <TagIcon className="h-3 w-3 mr-1" />
-                            {tag.name}
-                          </Badge>
-                        ))
-                      ) : (
-                        <span className="text-xs text-muted-foreground">-</span>
-                      )}
-                    </div>
-                  </TableCell>
-                )}
-                {!compact && (
-                  <TableCell className={cellClass}>
-                    {isShared ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 rounded-md">
-                        <Share2 className="h-3 w-3" />
-                        {totalSharedTeams > 0 
-                          ? t('bookmarks.sharedWithTeams', { count: totalSharedTeams, teams: totalSharedTeams === 1 ? t('common.team') : t('common.teams') })
-                          : t('bookmarks.shared')}
+                {compact ? (
+                  <>
+                    <TableCell className={cellClass}>
+                      <div className="flex flex-wrap gap-0.5 max-w-[120px]">
+                        {bookmark.folders && bookmark.folders.length > 0 ? (
+                          bookmark.folders.slice(0, 1).map((folder) => (
+                            <span key={folder.id} className="text-xs text-muted-foreground truncate">
+                              <FolderIcon iconName={folder.icon} size={10} className="inline mr-0.5" />
+                              {folder.name}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-xs text-muted-foreground">-</span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className={cellClass}>
+                      <div className="flex flex-wrap gap-0.5 max-w-[100px] truncate">
+                        {bookmark.tags && bookmark.tags.length > 0 ? (
+                          <span className="text-xs text-muted-foreground truncate" title={bookmark.tags.map(t => t.name).join(', ')}>
+                            {bookmark.tags.slice(0, 2).map(t => t.name).join(', ')}
+                            {bookmark.tags.length > 2 ? ` +${bookmark.tags.length - 2}` : ''}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">-</span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className={cellClass}>
+                      <span className="text-xs text-muted-foreground">
+                        {typeof bookmark.access_count === 'number' ? bookmark.access_count : '-'}
                       </span>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">-</span>
-                    )}
-                  </TableCell>
+                    </TableCell>
+                    <TableCell className={cellClass}>
+                      {bookmark.last_accessed_at ? (
+                        <Tooltip content={formatFullDateTime(bookmark.last_accessed_at)}>
+                          <span className="text-xs text-muted-foreground cursor-help">
+                            {formatRelativeTime(bookmark.last_accessed_at)}
+                          </span>
+                        </Tooltip>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">{t('bookmarks.never')}</span>
+                      )}
+                    </TableCell>
+                    <TableCell className={cellClass}>
+                      <span className="text-xs text-muted-foreground">
+                        {formatCreated(bookmark.created_at)}
+                      </span>
+                    </TableCell>
+                  </>
+                ) : (
+                  <>
+                    <TableCell className={cellClass}>
+                      <a
+                        href={safeHref(bookmark.url)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-muted-foreground hover:text-foreground truncate max-w-xs block"
+                      >
+                        {bookmark.url}
+                      </a>
+                    </TableCell>
+                    <TableCell className={cellClass}>
+                      <div className="flex flex-wrap gap-1">
+                        {bookmark.folders && bookmark.folders.length > 0 ? (
+                          bookmark.folders.slice(0, 2).map((folder) => (
+                            <Badge key={folder.id} variant="secondary" className="text-xs font-medium bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300">
+                              <FolderIcon iconName={folder.icon} size={12} className="mr-1" />
+                              {folder.name}
+                            </Badge>
+                          ))
+                        ) : (
+                          <span className="text-xs text-muted-foreground">-</span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className={cellClass}>
+                      <div className="flex flex-wrap gap-1">
+                        {bookmark.tags && bookmark.tags.length > 0 ? (
+                          bookmark.tags.slice(0, 3).map((tag) => (
+                            <Badge key={tag.id} variant="secondary" className="text-xs font-medium bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300">
+                              <TagIcon className="h-3 w-3 mr-1" />
+                              {tag.name}
+                            </Badge>
+                          ))
+                        ) : (
+                          <span className="text-xs text-muted-foreground">-</span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className={cellClass}>
+                      {isShared ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 rounded-md">
+                          <Share2 className="h-3 w-3" />
+                          {totalSharedTeams > 0 
+                            ? t('bookmarks.sharedWithTeams', { count: totalSharedTeams, teams: totalSharedTeams === 1 ? t('common.team') : t('common.teams') })
+                            : t('bookmarks.shared')}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell className={cellClass}>
+                      <span className="text-xs text-muted-foreground">
+                        {typeof bookmark.access_count === 'number' ? bookmark.access_count : '-'}
+                      </span>
+                    </TableCell>
+                    <TableCell className={cellClass}>
+                      {bookmark.last_accessed_at ? (
+                        <Tooltip content={formatFullDateTime(bookmark.last_accessed_at)}>
+                          <span className="text-xs text-muted-foreground cursor-help">
+                            {formatRelativeTime(bookmark.last_accessed_at)}
+                          </span>
+                        </Tooltip>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">{t('bookmarks.never')}</span>
+                      )}
+                    </TableCell>
+                    <TableCell className={cellClass}>
+                      <span className="text-xs text-muted-foreground">
+                        {formatCreated(bookmark.created_at)}
+                      </span>
+                    </TableCell>
+                  </>
                 )}
-                {!compact && (
-                  <TableCell className={cellClass}>
-                    <span className="text-xs text-muted-foreground">
-                      {formatDate(bookmark.last_accessed_at)}
-                    </span>
-                  </TableCell>
-                )}
-                <TableCell className={cellClass}>
+                <TableCell className={`${cellClass} opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-200`}>
                   <div className={`flex items-center justify-end ${compact ? 'gap-1' : 'gap-2'}`}>
                     {bookmark.forwarding_enabled && (
                       <Tooltip content={`${window.location.origin}/go/${bookmark.slug}`}>
@@ -312,7 +387,7 @@ export default function BookmarkTableView({
                       </Tooltip>
                     ) : (
                       <Tooltip content={t('bookmarks.open')}>
-                        <a href={bookmark.url} target="_blank" rel="noopener noreferrer" className="flex-shrink-0">
+                        <a href={safeHref(bookmark.url)} target="_blank" rel="noopener noreferrer" className="flex-shrink-0">
                           <Button variant="ghost" size="sm" icon={ExternalLink} className={`flex-shrink-0 ${compact ? 'h-8 w-8 p-0' : 'h-8 w-8 p-0'}`} aria-label={t('bookmarks.open')} />
                         </a>
                       </Tooltip>

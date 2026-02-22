@@ -11,8 +11,7 @@ import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { canAccessBookmark } from '../auth/authorization.js';
 import { getAccessibleBookmarksBySlug } from './go-helpers.js';
 import { validateUrl, validateSlug } from '../utils/validation.js';
-import { isCloud } from '../config/mode.js';
-import { getCurrentOrgId } from '../utils/organizations.js';
+import { getTenantId } from '../utils/tenant.js';
 
 const router = Router();
 const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
@@ -20,7 +19,7 @@ const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
 
 /** Login path for redirect (unauthenticated users) - use frontend URL for SPA login page */
 function loginPath(redirectPath: string): string {
-  const path = isCloud ? '/app/login' : '/login';
+  const path = '/login';
   const encoded = encodeURIComponent(redirectPath);
   return `${frontendUrl}${path}?redirect=${encoded}`;
 }
@@ -111,6 +110,7 @@ export function handleGoSlug(req: Request, res: Response) {
   const slug = req.params.slug;
   const authReq = req as AuthRequest;
   const userId = authReq.user!.id;
+  const tenantId = getTenantId(req);
 
   const slugValidation = validateSlug(slug);
   if (!slugValidation.valid) {
@@ -118,37 +118,37 @@ export function handleGoSlug(req: Request, res: Response) {
   }
 
   (async () => {
-    const orgId = isCloud ? await getCurrentOrgId(userId) : null;
+    const orgId = null;
     // Step 1: Check remembered preference
     const pref = await queryOne(
-      'SELECT bookmark_id FROM slug_preferences WHERE user_id = ? AND slug = ?',
-      [userId, slug]
+      'SELECT bookmark_id FROM slug_preferences WHERE tenant_id = ? AND user_id = ? AND slug = ?',
+      [tenantId, userId, slug]
     );
     if (pref) {
       const bookmarkId = (pref as any).bookmark_id;
-      const hasAccess = await canAccessBookmark(userId, bookmarkId, orgId);
+      const hasAccess = await canAccessBookmark(userId, bookmarkId, orgId, tenantId);
       if (hasAccess) {
         const bookmark = await queryOne(
-          'SELECT id, url, slug, forwarding_enabled FROM bookmarks WHERE id = ?',
-          [bookmarkId]
+          'SELECT id, url, slug, forwarding_enabled FROM bookmarks WHERE id = ? AND tenant_id = ?',
+          [bookmarkId, tenantId]
         );
         if (bookmark && (bookmark as any).forwarding_enabled) {
           const url = (bookmark as any).url;
           const urlValidation = validateUrl(url);
           if (urlValidation.valid) {
             execute(
-              `UPDATE bookmarks SET access_count = COALESCE(access_count, 0) + 1, last_accessed_at = CURRENT_TIMESTAMP WHERE id = ?`,
-              [bookmarkId]
+              `UPDATE bookmarks SET access_count = COALESCE(access_count, 0) + 1, last_accessed_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?`,
+              [bookmarkId, tenantId]
             ).catch((err) => console.error('Failed to track bookmark access:', err));
             return res.redirect(302, url);
           }
         }
       }
-      await execute('DELETE FROM slug_preferences WHERE user_id = ? AND slug = ?', [userId, slug]);
+      await execute('DELETE FROM slug_preferences WHERE tenant_id = ? AND user_id = ? AND slug = ?', [tenantId, userId, slug]);
     }
 
     // Step 2: Search accessible bookmarks
-    const candidates = await getAccessibleBookmarksBySlug(userId, slug, orgId);
+    const candidates = await getAccessibleBookmarksBySlug(userId, slug, orgId, tenantId);
 
     if (candidates.length === 0) {
       return res.status(404).type('text/html').send(notFoundHtml(slug));
@@ -161,8 +161,8 @@ export function handleGoSlug(req: Request, res: Response) {
         return res.status(400).send('Invalid redirect URL');
       }
       execute(
-        `UPDATE bookmarks SET access_count = COALESCE(access_count, 0) + 1, last_accessed_at = CURRENT_TIMESTAMP WHERE id = ?`,
-        [b.id]
+        `UPDATE bookmarks SET access_count = COALESCE(access_count, 0) + 1, last_accessed_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?`,
+        [b.id, tenantId]
       ).catch((err) => console.error('Failed to track bookmark access:', err));
       return res.redirect(302, b.url);
     }
@@ -191,16 +191,17 @@ export async function handleGoRemember(
   const { slug, bookmarkId } = req.params;
   const authReq = req as AuthRequest;
   const userId = authReq.user!.id;
-  const orgId = isCloud ? await getCurrentOrgId(userId) : null;
+  const tenantId = getTenantId(req);
+  const orgId = null;
 
-  const hasAccess = await canAccessBookmark(userId, bookmarkId, orgId);
+  const hasAccess = await canAccessBookmark(userId, bookmarkId, orgId, tenantId);
   if (!hasAccess) {
     return res.status(403).send('Forbidden');
   }
 
   const bookmark = await queryOne(
-    'SELECT id, url, slug, forwarding_enabled FROM bookmarks WHERE id = ?',
-    [bookmarkId]
+    'SELECT id, url, slug, forwarding_enabled FROM bookmarks WHERE id = ? AND tenant_id = ?',
+    [bookmarkId, tenantId]
   );
   if (!bookmark || (bookmark as any).slug !== slug || !(bookmark as any).forwarding_enabled) {
     return res.status(404).send('Not Found');
@@ -212,15 +213,15 @@ export async function handleGoRemember(
   }
 
   await execute(
-    `INSERT INTO slug_preferences (user_id, slug, bookmark_id, updated_at)
-     VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-     ON CONFLICT (user_id, slug) DO UPDATE SET bookmark_id = excluded.bookmark_id, updated_at = CURRENT_TIMESTAMP`,
-    [userId, slug, bookmarkId]
+    `INSERT INTO slug_preferences (tenant_id, user_id, slug, bookmark_id, updated_at)
+     VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+     ON CONFLICT (tenant_id, user_id, slug) DO UPDATE SET bookmark_id = excluded.bookmark_id, updated_at = CURRENT_TIMESTAMP`,
+    [tenantId, userId, slug, bookmarkId]
   );
 
   execute(
-    `UPDATE bookmarks SET access_count = COALESCE(access_count, 0) + 1, last_accessed_at = CURRENT_TIMESTAMP WHERE id = ?`,
-    [bookmarkId]
+    `UPDATE bookmarks SET access_count = COALESCE(access_count, 0) + 1, last_accessed_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?`,
+    [bookmarkId, tenantId]
   ).catch((err) => console.error('Failed to track bookmark access:', err));
 
   return res.redirect(302, (bookmark as any).url);
@@ -271,14 +272,15 @@ async function getOwnerName(userId: string): Promise<string> {
 router.get('/preferences', requireAuth(), async (req, res) => {
   const authReq = req as AuthRequest;
   const userId = authReq.user!.id;
+  const tenantId = getTenantId(req);
   try {
     const rows = await query(
       `SELECT sp.slug, sp.bookmark_id, sp.created_at, sp.updated_at, b.title, b.url, b.user_id
        FROM slug_preferences sp
        INNER JOIN bookmarks b ON sp.bookmark_id = b.id
-       WHERE sp.user_id = ?
+       WHERE sp.tenant_id = ? AND sp.user_id = ? AND b.tenant_id = ?
        ORDER BY sp.slug ASC`,
-      [userId]
+      [tenantId, userId, tenantId]
     );
     const list = Array.isArray(rows) ? rows : rows ? [rows] : [];
     const result = await Promise.all(
@@ -342,7 +344,8 @@ router.get('/preferences', requireAuth(), async (req, res) => {
 router.post('/preferences', requireAuth(), async (req, res) => {
   const authReq = req as AuthRequest;
   const userId = authReq.user!.id;
-  const orgId = isCloud ? await getCurrentOrgId(userId) : null;
+  const tenantId = getTenantId(req);
+  const orgId = null;
   const { slug, bookmark_id } = req.body;
   if (!slug || !bookmark_id) {
     return res.status(400).json({ error: 'slug and bookmark_id are required' });
@@ -351,23 +354,23 @@ router.post('/preferences', requireAuth(), async (req, res) => {
   if (!slugVal.valid) {
     return res.status(400).json({ error: slugVal.error });
   }
-  const hasAccess = await canAccessBookmark(userId, bookmark_id, orgId);
+  const hasAccess = await canAccessBookmark(userId, bookmark_id, orgId, tenantId);
   if (!hasAccess) {
     return res.status(403).json({ error: 'Forbidden' });
   }
   const bookmark = await queryOne(
-    'SELECT id, slug, forwarding_enabled FROM bookmarks WHERE id = ?',
-    [bookmark_id]
+    'SELECT id, slug, forwarding_enabled FROM bookmarks WHERE id = ? AND tenant_id = ?',
+    [bookmark_id, tenantId]
   );
   if (!bookmark || (bookmark as any).slug !== slug || !(bookmark as any).forwarding_enabled) {
     return res.status(404).json({ error: 'Bookmark not found or slug mismatch' });
   }
   try {
     await execute(
-      `INSERT INTO slug_preferences (user_id, slug, bookmark_id, updated_at)
-       VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-       ON CONFLICT (user_id, slug) DO UPDATE SET bookmark_id = excluded.bookmark_id, updated_at = CURRENT_TIMESTAMP`,
-      [userId, slug, bookmark_id]
+      `INSERT INTO slug_preferences (tenant_id, user_id, slug, bookmark_id, updated_at)
+       VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+       ON CONFLICT (tenant_id, user_id, slug) DO UPDATE SET bookmark_id = excluded.bookmark_id, updated_at = CURRENT_TIMESTAMP`,
+      [tenantId, userId, slug, bookmark_id]
     );
     res.status(201).json({ slug, bookmark_id });
   } catch (error: any) {
@@ -405,6 +408,7 @@ router.post('/preferences', requireAuth(), async (req, res) => {
 router.delete('/preferences/:slug', requireAuth(), async (req, res) => {
   const authReq = req as AuthRequest;
   const userId = authReq.user!.id;
+  const tenantId = getTenantId(req);
   const { slug } = req.params;
   const slugVal = validateSlug(slug);
   if (!slugVal.valid) {
@@ -412,8 +416,8 @@ router.delete('/preferences/:slug', requireAuth(), async (req, res) => {
   }
   try {
     const result = await execute(
-      'DELETE FROM slug_preferences WHERE user_id = ? AND slug = ?',
-      [userId, slug]
+      'DELETE FROM slug_preferences WHERE tenant_id = ? AND user_id = ? AND slug = ?',
+      [tenantId, userId, slug]
     );
     const affected = (result as any)?.changes ?? (result as any)?.rowCount ?? 0;
     if (affected === 0) {

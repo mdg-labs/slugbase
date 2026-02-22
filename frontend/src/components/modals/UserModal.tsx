@@ -16,6 +16,7 @@ import { ModalFooterActions } from '../ui/ModalFooterActions';
 import { Switch } from '../ui/switch';
 import { Label } from '../ui/label';
 import { Input } from '../ui/input';
+import { useToast } from '../ui/Toast';
 
 interface User {
   id: string;
@@ -32,8 +33,11 @@ interface UserModalProps {
   onSuccess: () => void;
 }
 
+type CreateMode = 'set_password' | 'send_invite';
+
 export default function UserModal({ user, isOpen, onClose, onSuccess }: UserModalProps) {
   const { t } = useTranslation();
+  const { showToast } = useToast();
   const [formData, setFormData] = useState({
     email: '',
     name: '',
@@ -42,6 +46,8 @@ export default function UserModal({ user, isOpen, onClose, onSuccess }: UserModa
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [inviteEnabled, setInviteEnabled] = useState(false);
+  const [createMode, setCreateMode] = useState<CreateMode>('set_password');
 
   useEffect(() => {
     if (user) {
@@ -53,8 +59,20 @@ export default function UserModal({ user, isOpen, onClose, onSuccess }: UserModa
       });
     } else {
       setFormData({ email: '', name: '', password: '', is_admin: false });
+      setCreateMode('set_password');
     }
     setError('');
+  }, [user, isOpen]);
+
+  useEffect(() => {
+    if (!user && isOpen) {
+      api
+        .get('/admin/settings')
+        .then((res) => {
+          setInviteEnabled(res.data?.smtp_enabled === 'true');
+        })
+        .catch(() => setInviteEnabled(false));
+    }
   }, [user, isOpen]);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -63,15 +81,25 @@ export default function UserModal({ user, isOpen, onClose, onSuccess }: UserModa
     setError('');
 
     try {
-      const payload: any = { ...formData };
-      if (!payload.password) {
-        delete payload.password;
-      }
-
+      const payload: any = { email: formData.email, name: formData.name, is_admin: formData.is_admin };
       if (user) {
+        if (formData.password) payload.password = formData.password;
         await api.put(`/admin/users/${user.id}`, payload);
+        showToast(t('common.success'), 'success');
       } else {
-        await api.post('/admin/users', payload);
+        if (createMode === 'send_invite') {
+          payload.send_invite = true;
+        } else if (formData.password) {
+          payload.password = formData.password;
+        }
+        const response = await api.post('/admin/users', payload);
+        if (payload.send_invite && response.data?.inviteSent === false) {
+          showToast(t('admin.userCreatedInviteNotSent'), 'warning');
+        } else if (payload.send_invite && response.data?.inviteSent === true) {
+          showToast(t('admin.userCreatedInviteSent'), 'success');
+        } else {
+          showToast(t('common.success'), 'success');
+        }
       }
       onSuccess();
       onClose();
@@ -82,7 +110,12 @@ export default function UserModal({ user, isOpen, onClose, onSuccess }: UserModa
     }
   }
 
-  const isValid = formData.email.trim() && formData.name.trim() && (user ? true : formData.password.length >= 8);
+  const isCreate = !user;
+  const useInvite = isCreate && inviteEnabled && createMode === 'send_invite';
+  const isValid =
+    formData.email.trim() &&
+    formData.name.trim() &&
+    (user ? true : useInvite ? true : formData.password.length >= 8);
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -112,19 +145,56 @@ export default function UserModal({ user, isOpen, onClose, onSuccess }: UserModa
                 placeholder={t('setup.name')}
               />
             </FormFieldWrapper>
-            <FormFieldWrapper
-              label={user ? `${t('auth.password')} (${t('admin.leaveBlank')})` : t('auth.password')}
-              required={!user}
-            >
-              <Input
-                type="password"
-                minLength={8}
+            {isCreate && inviteEnabled && (
+              <div className="space-y-3">
+                <Label className="text-sm font-medium">{t('admin.createUserWith')}</Label>
+                <div className="flex flex-col gap-2" role="radiogroup" aria-label="Create user with">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="radio"
+                      id="create-set-password"
+                      name="create-mode"
+                      value="set_password"
+                      checked={createMode === 'set_password'}
+                      onChange={() => setCreateMode('set_password')}
+                      className="h-4 w-4 rounded-full border-input"
+                    />
+                    <Label htmlFor="create-set-password" className="font-normal cursor-pointer">
+                      {t('admin.setPassword')}
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="radio"
+                      id="create-send-invite"
+                      name="create-mode"
+                      value="send_invite"
+                      checked={createMode === 'send_invite'}
+                      onChange={() => setCreateMode('send_invite')}
+                      className="h-4 w-4 rounded-full border-input"
+                    />
+                    <Label htmlFor="create-send-invite" className="font-normal cursor-pointer">
+                      {t('admin.sendInviteEmail')}
+                    </Label>
+                  </div>
+                </div>
+              </div>
+            )}
+            {!useInvite && (
+              <FormFieldWrapper
+                label={user ? `${t('auth.password')} (${t('admin.leaveBlank')})` : t('auth.password')}
                 required={!user}
-                value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                placeholder={user ? t('admin.leaveBlank') : ''}
-              />
-            </FormFieldWrapper>
+              >
+                <Input
+                  type="password"
+                  minLength={8}
+                  required={!user}
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  placeholder={user ? t('admin.leaveBlank') : ''}
+                />
+              </FormFieldWrapper>
+            )}
             <div className="flex items-center justify-between rounded-lg border p-3">
               <Label htmlFor="is_admin" className="text-sm font-medium cursor-pointer flex items-center gap-2">
                 <Shield className="h-4 w-4" />

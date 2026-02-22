@@ -1,10 +1,46 @@
-import axios from 'axios';
+import axios, { type AxiosInstance } from 'axios';
 import * as Sentry from '@sentry/react';
 import { apiBaseUrl } from '../config/api';
-import { isCloud } from '../config/mode';
+
+function baseURLFromOptions(options: { baseUrl?: string; basePath?: string } = {}): string {
+  if (options.baseUrl) return `${options.baseUrl.replace(/\/$/, '')}/api`;
+  if (options.basePath) return `${options.basePath.replace(/\/$/, '')}/api`;
+  return apiBaseUrl ? `${apiBaseUrl}/api` : '/api';
+}
+
+/**
+ * Create an API client with the given base URL/path. Used by package consumers (e.g. cloud).
+ */
+export function createApiClient(options: { baseUrl?: string; basePath?: string } = {}): AxiosInstance {
+  const client = axios.create({
+    baseURL: baseURLFromOptions(options),
+    withCredentials: true,
+  });
+  // Same CSRF and error handling as default api (simplified: no shared token state)
+  client.interceptors.request.use(async (config) => {
+    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(config.method?.toUpperCase() || '')) {
+      try {
+        const r = await client.get('/csrf-token');
+        const token = r.data?.csrfToken;
+        if (token) config.headers['X-CSRF-Token'] = token;
+      } catch {
+        // ignore
+      }
+    }
+    return config;
+  });
+  client.interceptors.response.use(
+    (r) => r,
+    (error) => {
+      if (error.response?.status >= 500) Sentry.captureException(error);
+      return Promise.reject(error);
+    }
+  );
+  return client;
+}
 
 const api = axios.create({
-  baseURL: apiBaseUrl ? `${apiBaseUrl}/api` : '/api',
+  baseURL: baseURLFromOptions({}),
   withCredentials: true,
 });
 
@@ -42,7 +78,6 @@ api.interceptors.request.use(
       // Skip CSRF for certain endpoints
       const skipCSRF = [
         '/password-reset',
-        '/contact',
         '/auth/setup',
         '/auth/login',
         '/auth/logout',
@@ -51,8 +86,6 @@ api.interceptors.request.use(
         '/auth/verify-signup',
         '/auth/resend-signup-verification',
         '/auth/request-signup-resend',
-        '/billing/create-checkout-session',
-        '/billing/create-portal-session',
         '/csrf-token',
       ].some((path) => config.url?.includes(path));
 
@@ -73,20 +106,7 @@ api.interceptors.request.use(
   }
 );
 
-// Deduplicate refresh: multiple concurrent 401s share a single refresh attempt to avoid rate limiting
-let refreshPromise: Promise<boolean> | null = null;
-
-async function tryRefreshToken(): Promise<boolean> {
-  if (refreshPromise) return refreshPromise;
-  refreshPromise = api
-    .post('/auth/refresh')
-    .then(() => true)
-    .catch(() => false)
-    .finally(() => { refreshPromise = null; });
-  return refreshPromise;
-}
-
-// Response interceptor: refresh CSRF on 403; in CLOUD, refresh access token on 401 and retry
+// Response interceptor: refresh CSRF on 403.
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -97,13 +117,6 @@ api.interceptors.response.use(
         error.config.headers['X-CSRF-Token'] = csrfToken;
       }
       return api.request(error.config);
-    }
-    // Skip refresh when the failed request was /auth/refresh (avoid recursion)
-    const isAuthRefresh = (error.config?.url ?? '').includes('/auth/refresh');
-    if (isCloud && error.response?.status === 401 && error.config && !error.config._retryRefresh && !isAuthRefresh) {
-      error.config._retryRefresh = true;
-      const refreshed = await tryRefreshToken();
-      if (refreshed) return api.request(error.config);
     }
     // Report 5xx, network errors, and unexpected 4xx to Sentry (skip 401/403/404 - auth flow)
     const status = error.response?.status;

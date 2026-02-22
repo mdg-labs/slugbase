@@ -14,6 +14,7 @@ import { ModalSection } from '../ui/ModalSection';
 import { ModalFooterActions } from '../ui/ModalFooterActions';
 import { Input } from '../ui/input';
 import Button from '../ui/Button';
+import { useToast } from '../ui/Toast';
 import api from '../../api/client';
 
 interface CreateTokenModalProps {
@@ -26,6 +27,7 @@ type Step = 'form' | 'reveal';
 
 export default function CreateTokenModal({ isOpen, onClose, onCreated }: CreateTokenModalProps) {
   const { t } = useTranslation();
+  const { showToast } = useToast();
   const [step, setStep] = useState<Step>('form');
   const [name, setName] = useState('');
   const [creating, setCreating] = useState(false);
@@ -70,6 +72,7 @@ export default function CreateTokenModal({ isOpen, onClose, onCreated }: CreateT
       await navigator.clipboard.writeText(token);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+      showToast(t('common.copied'), 'success');
     } catch {
       const textarea = document.createElement('textarea');
       textarea.value = token;
@@ -79,6 +82,7 @@ export default function CreateTokenModal({ isOpen, onClose, onCreated }: CreateT
       document.body.removeChild(textarea);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+      showToast(t('common.copied'), 'success');
     }
   }
 

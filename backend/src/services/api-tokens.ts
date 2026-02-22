@@ -7,7 +7,6 @@ import crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import { query, queryOne, execute } from '../db/index.js';
 import { validateLength, sanitizeString } from '../utils/validation.js';
-import { isCloud } from '../config/mode.js';
 
 const TOKEN_PREFIX = 'sb_';
 const MAX_TOKENS_PER_USER = 10;
@@ -36,7 +35,6 @@ export interface ApiTokenUser {
   name: string;
   user_key: string;
   is_admin: boolean;
-  org_role?: 'owner' | 'admin' | 'member' | null;
 }
 
 /**
@@ -65,13 +63,6 @@ export async function validateToken(plaintext: string): Promise<ApiTokenUser | n
     user_key: r.user_key,
     is_admin: r.is_admin === true || r.is_admin === 1,
   };
-  if (isCloud) {
-    const orgMember = await queryOne(
-      `SELECT role FROM org_members WHERE user_id = ? ORDER BY CASE role WHEN 'owner' THEN 1 WHEN 'admin' THEN 2 WHEN 'member' THEN 3 ELSE 4 END LIMIT 1`,
-      [r.user_id]
-    );
-    user.org_role = orgMember ? (orgMember as any).role : null;
-  }
   return user;
 }
 
@@ -105,7 +96,8 @@ export interface CreateTokenResult {
  */
 export async function createToken(
   userId: string,
-  name: string
+  name: string,
+  tenantId: string
 ): Promise<{ success: true; data: CreateTokenResult } | { success: false; error: string }> {
   const sanitized = sanitizeString(name);
   const lengthCheck = validateLength(sanitized, 'Token name', 1, TOKEN_NAME_MAX_LENGTH);
@@ -114,8 +106,8 @@ export async function createToken(
   }
 
   const countRow = await queryOne(
-    `SELECT COUNT(*) as c FROM api_tokens WHERE user_id = ? AND revoked_at IS NULL`,
-    [userId]
+    `SELECT COUNT(*) as c FROM api_tokens WHERE user_id = ? AND tenant_id = ? AND revoked_at IS NULL`,
+    [userId, tenantId]
   );
   const count = parseInt(String((countRow as any)?.c || 0), 10);
   if (count >= MAX_TOKENS_PER_USER) {
@@ -131,8 +123,8 @@ export async function createToken(
   const now = new Date().toISOString();
 
   await execute(
-    `INSERT INTO api_tokens (id, user_id, name, token_hash, created_at) VALUES (?, ?, ?, ?, ?)`,
-    [id, userId, sanitized, tokenHash, now]
+    `INSERT INTO api_tokens (id, tenant_id, user_id, name, token_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+    [id, tenantId, userId, sanitized, tokenHash, now]
   );
 
   return {
@@ -156,10 +148,10 @@ export interface ListTokenItem {
 /**
  * List tokens for a user. Never returns plaintext; tokens are masked.
  */
-export async function listTokens(userId: string): Promise<ListTokenItem[]> {
+export async function listTokens(userId: string, tenantId: string): Promise<ListTokenItem[]> {
   const rows = await query(
-    `SELECT id, name, created_at, last_used_at FROM api_tokens WHERE user_id = ? AND revoked_at IS NULL ORDER BY created_at DESC`,
-    [userId]
+    `SELECT id, name, created_at, last_used_at FROM api_tokens WHERE user_id = ? AND tenant_id = ? AND revoked_at IS NULL ORDER BY created_at DESC`,
+    [userId, tenantId]
   );
   return (rows as any[]).map((r) => ({
     id: r.id,
@@ -174,20 +166,22 @@ export async function listTokens(userId: string): Promise<ListTokenItem[]> {
  */
 export async function revokeToken(
   userId: string,
-  tokenId: string
+  tokenId: string,
+  tenantId: string
 ): Promise<{ success: true } | { success: false; error: string }> {
   const row = await queryOne(
-    `SELECT id FROM api_tokens WHERE id = ? AND user_id = ?`,
-    [tokenId, userId]
+    `SELECT id FROM api_tokens WHERE id = ? AND user_id = ? AND tenant_id = ?`,
+    [tokenId, userId, tenantId]
   );
   if (!row) {
     return { success: false, error: 'Token not found' };
   }
   const now = new Date().toISOString();
-  await execute(`UPDATE api_tokens SET revoked_at = ? WHERE id = ? AND user_id = ?`, [
+  await execute(`UPDATE api_tokens SET revoked_at = ? WHERE id = ? AND user_id = ? AND tenant_id = ?`, [
     now,
     tokenId,
     userId,
+    tenantId,
   ]);
   return { success: true };
 }

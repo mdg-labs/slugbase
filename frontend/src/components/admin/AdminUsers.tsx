@@ -1,13 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import api from '../../api/client';
-import { Plus, Edit, Trash2, Shield, Mail, Network, UserPlus, MoreHorizontal } from 'lucide-react';
+import { Plus, Edit, Trash2, Shield, Mail, Network, MoreHorizontal } from 'lucide-react';
 import UserModal from '../modals/UserModal';
 import TeamAssignmentModal from '../modals/TeamAssignmentModal';
 import Button from '../ui/Button';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
-import { isCloud } from '../../config/mode';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,13 +33,6 @@ interface User {
   created_at: string;
 }
 
-interface OrgInfo {
-  plan: string;
-  included_seats: number;
-  member_count: number;
-  role: string;
-}
-
 export default function AdminUsers() {
   const { t } = useTranslation();
   const { showConfirm, dialogState } = useConfirmDialog();
@@ -50,23 +42,9 @@ export default function AdminUsers() {
   const [assignmentModalOpen, setAssignmentModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [selectedUserForAssignment, setSelectedUserForAssignment] = useState<User | null>(null);
-  const [org, setOrg] = useState<OrgInfo | null>(null);
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteLoading, setInviteLoading] = useState(false);
-  const [inviteError, setInviteError] = useState('');
 
   useEffect(() => {
     loadUsers();
-    if (isCloud) {
-      api.get('/organizations/me')
-        .then((res) => setOrg({
-          plan: res.data?.plan || 'free',
-          included_seats: res.data?.included_seats ?? 1,
-          member_count: res.data?.member_count ?? 0,
-          role: res.data?.role || 'member',
-        }))
-        .catch(() => setOrg(null));
-    }
   }, []);
 
   const loadUsers = async () => {
@@ -79,38 +57,6 @@ export default function AdminUsers() {
       setLoading(false);
     }
   };
-
-  const handleInvite = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!org || !inviteEmail.trim()) return;
-    setInviteLoading(true);
-    setInviteError('');
-    try {
-      const orgRes = await api.get('/organizations/me');
-      const orgId = orgRes.data?.id;
-      if (!orgId) throw new Error('No organization');
-      await api.post(`/organizations/${orgId}/invite`, { email: inviteEmail.trim() });
-      setInviteEmail('');
-      loadUsers();
-      if (isCloud) {
-        api.get('/organizations/me').then((res) =>
-          setOrg({
-            plan: res.data?.plan || 'free',
-            included_seats: res.data?.included_seats ?? 1,
-            member_count: res.data?.member_count ?? 0,
-            role: res.data?.role || 'member',
-          })
-        );
-      }
-    } catch (error: any) {
-      setInviteError(error.response?.data?.error || t('common.error'));
-    } finally {
-      setInviteLoading(false);
-    }
-  };
-
-  const canInviteMembers = isCloud && org?.plan === 'team' && (org?.member_count ?? 0) < (org?.included_seats ?? 1);
-  const canManageBilling = org?.role === 'owner' || org?.role === 'admin';
 
   const handleEdit = (user: User) => {
     setEditingUser(user);
@@ -172,47 +118,13 @@ export default function AdminUsers() {
         <div>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{t('admin.users')}</h2>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            {isCloud && org != null
-              ? t('admin.seatsUsed', { used: org.member_count, total: org.included_seats })
-              : `${users.length} ${users.length === 1 ? t('common.user') : t('common.users')}`}
+            {`${users.length} ${users.length === 1 ? t('common.user') : t('common.users')}`}
           </p>
         </div>
-        {!isCloud && (
-          <Button onClick={() => setModalOpen(true)} icon={Plus}>
-            {t('admin.addUser')}
-          </Button>
-        )}
-        {isCloud && canManageBilling && canInviteMembers && (
-          <form onSubmit={handleInvite} className="flex gap-2 items-center">
-            <input
-              type="email"
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
-              placeholder={t('auth.emailPlaceholder')}
-              className="px-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 min-w-[200px]"
-              required
-            />
-            <Button type="submit" variant="primary" disabled={inviteLoading} icon={UserPlus}>
-              {inviteLoading ? t('common.loading') : t('admin.billingInviteMember')}
-            </Button>
-          </form>
-        )}
-        {isCloud && canManageBilling && !canInviteMembers && org?.plan !== 'team' && (
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            {t('admin.billingUpgradeToInvite')}
-          </p>
-        )}
-        {isCloud && canManageBilling && !canInviteMembers && org?.plan === 'team' && org && org.member_count >= org.included_seats && (
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            {t('admin.billingTeamAtLimit')}
-          </p>
-        )}
+        <Button onClick={() => setModalOpen(true)} icon={Plus}>
+          {t('admin.addUser')}
+        </Button>
       </div>
-      {inviteError && (
-        <div className="px-4 py-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-          <p className="text-sm text-red-800 dark:text-red-200">{inviteError}</p>
-        </div>
-      )}
 
       <Card>
         <Table>

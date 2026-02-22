@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/client';
-import { appRootPath } from '../config/api';
+import { useAppConfig } from '../contexts/AppConfigContext';
 import { useAuth } from '../contexts/AuthContext';
 import { CheckCircle, UserPlus, Shield } from 'lucide-react';
 import Button from '../components/ui/Button';
@@ -10,6 +10,7 @@ import Button from '../components/ui/Button';
 export default function Setup() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { appRootPath } = useAppConfig();
   const { user, checkAuth } = useAuth();
   const [formData, setFormData] = useState({
     email: '',

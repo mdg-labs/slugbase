@@ -5,8 +5,6 @@ import { validateEmail, normalizeEmail, validateLength, sanitizeString } from '.
 import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
 import { sendEmailVerificationEmail } from '../utils/email.js';
-import { setCurrentOrg } from '../utils/organizations.js';
-import { isCloud } from '../config/mode.js';
 
 const router = Router();
 router.use(requireAuth());
@@ -48,56 +46,6 @@ router.use(requireAuth());
  *       401:
  *         description: Unauthorized
  */
-/**
- * @swagger
- * /api/users/me/current-org:
- *   put:
- *     summary: Switch current organization
- *     description: Switches the user's current organization context. Cloud mode only. Alias for PUT /api/organizations/me/switch.
- *     tags: [Users]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - org_id
- *             properties:
- *               org_id:
- *                 type: string
- *     responses:
- *       200:
- *         description: Organization switched
- *       400:
- *         description: org_id is required
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Not a member of this organization
- *       404:
- *         description: Not found (self-hosted mode)
- */
-router.put('/me/current-org', async (req, res) => {
-  if (!isCloud) {
-    return res.status(404).json({ error: 'Not found' });
-  }
-  const authReq = req as AuthRequest;
-  const userId = authReq.user!.id;
-  const { org_id } = req.body;
-  if (!org_id || typeof org_id !== 'string') {
-    return res.status(400).json({ error: 'org_id is required' });
-  }
-  const ok = await setCurrentOrg(userId, org_id);
-  if (!ok) {
-    return res.status(403).json({ error: 'You are not a member of this organization' });
-  }
-  res.json({ message: 'Organization switched', org_id });
-});
-
 // Get current user profile
 router.get('/me', async (req, res) => {
   const authReq = req as AuthRequest;

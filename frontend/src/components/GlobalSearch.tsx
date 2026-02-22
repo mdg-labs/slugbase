@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useSearchCommand } from '../contexts/SearchCommandContext';
 import {
   Search,
   Bookmark,
@@ -12,8 +13,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import api from '../api/client';
-import { appBasePath } from '../config/api';
-import { isCloud } from '../config/mode';
+import { useAppConfig } from '../contexts/AppConfigContext';
 import {
   CommandDialog,
   CommandEmpty,
@@ -37,14 +37,14 @@ interface SearchResult {
 export default function GlobalSearch() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { appBasePath } = useAppConfig();
   const { user } = useAuth();
-  const [open, setOpen] = useState(false);
+  const { open, setOpen, openSearch } = useSearchCommand();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const showAdmin =
-    user?.is_admin || (isCloud && (user?.org_role === 'owner' || user?.org_role === 'admin'));
+  const showAdmin = user?.is_admin;
 
   const navigationItems: SearchResult[] = useMemo(() => [
     { type: 'navigation', title: t('bookmarks.title'), path: `${appBasePath}/bookmarks`, id: 'nav-bookmarks' },
@@ -52,25 +52,25 @@ export default function GlobalSearch() {
     { type: 'navigation', title: t('tags.title'), path: `${appBasePath}/tags`, id: 'nav-tags' },
     { type: 'navigation', title: t('shared.title'), path: `${appBasePath}/shared`, id: 'nav-shared' },
     ...(showAdmin ? [{ type: 'navigation' as const, title: t('admin.title'), path: `${appBasePath}/admin/members`, id: 'nav-admin' }] : []),
-  ], [showAdmin, t]);
+  ], [showAdmin, t, appBasePath]);
 
   const actionItems: SearchResult[] = useMemo(() => [
     { type: 'action', title: t('bookmarks.create'), path: `${appBasePath}/bookmarks`, id: 'action-create-bookmark', action: () => navigate(`${appBasePath}/bookmarks?create=true`) },
     { type: 'action', title: t('folders.create'), path: `${appBasePath}/folders`, id: 'action-create-folder', action: () => navigate(`${appBasePath}/folders?create=true`) },
     { type: 'action', title: t('bookmarks.import'), path: `${appBasePath}/bookmarks`, id: 'action-import', action: () => navigate(`${appBasePath}/bookmarks?import=true`) },
     { type: 'action', title: t('bookmarks.export'), path: `${appBasePath}/bookmarks`, id: 'action-export', action: () => navigate(`${appBasePath}/bookmarks?export=true`) },
-  ], [t, navigate]);
+  ], [t, navigate, appBasePath]);
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
-        setOpen(true);
+        openSearch();
       }
     }
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [openSearch]);
 
   useEffect(() => {
     if (!query.trim()) {
@@ -170,6 +170,7 @@ export default function GlobalSearch() {
     } else if (result.type === 'action' && result.action) {
       result.action();
     } else if (result.type === 'bookmark' && result.url) {
+      api.post(`/bookmarks/${result.id}/track-access`).catch(() => {});
       window.open(result.url, '_blank', 'noopener,noreferrer');
     } else if (result.type === 'folder') {
       navigate(`${appBasePath}/bookmarks?folder_id=${result.id}`);
@@ -197,19 +198,19 @@ export default function GlobalSearch() {
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
-        className="hidden md:flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground bg-muted rounded-lg hover:bg-accent hover:text-accent-foreground transition-colors border border-border focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        onClick={openSearch}
+        className="hidden md:flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-muted-foreground bg-muted/80 hover:bg-accent/80 rounded-xl border border-border hover:border-primary/30 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
-        <Search className="h-4 w-4" />
-        <span>{t('common.search')}</span>
-        <kbd className="hidden lg:inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-semibold text-muted-foreground bg-background border border-border rounded-md">
+        <Search className="h-5 w-5 shrink-0" />
+        <span className="flex-1 truncate">{t('dashboard.searchPlaceholder')}</span>
+        <kbd className="shrink-0 inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-muted-foreground bg-background border border-border rounded">
           {navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}K
         </kbd>
       </button>
 
       <CommandDialog open={open} onOpenChange={setOpen} shouldFilter={false}>
         <CommandInput
-          placeholder={t('common.searchPlaceholder')}
+          placeholder={t('dashboard.searchPlaceholder')}
           value={query}
           onValueChange={setQuery}
         />

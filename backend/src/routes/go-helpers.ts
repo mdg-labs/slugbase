@@ -29,19 +29,20 @@ export interface BookmarkCandidate {
 /**
  * Get all bookmarks accessible to the user that match the slug and have forwarding enabled.
  * Returns candidates with workspace labels for collision UI.
- * @param orgId - Optional. In cloud mode, pass to scope team shares to current org.
+ * @param orgId - Legacy arg kept for compatibility.
  */
 export async function getAccessibleBookmarksBySlug(
   userId: string,
   slug: string,
-  orgId?: string | null
+  orgId?: string | null,
+  tenantId: string = 'default'
 ): Promise<BookmarkCandidate[]> {
   const teamIds = orgId
-    ? await getTeamIdsForUserInOrg(userId, orgId)
-    : await getTeamIdsForUser(userId);
+    ? await getTeamIdsForUserInOrg(userId, orgId, tenantId)
+    : await getTeamIdsForUser(userId, tenantId);
   const teamPlaceholders = teamIds.length > 0 ? teamIds.map(() => '?').join(',') : 'NULL';
-  const busCond = orgId ? '(bus.user_id = ? AND b.user_id IN (SELECT user_id FROM org_members WHERE org_id = ?))' : 'bus.user_id = ?';
-  const fusCond = orgId ? '(fus.user_id = ? AND bf.folder_id IN (SELECT id FROM folders WHERE user_id IN (SELECT user_id FROM org_members WHERE org_id = ?)))' : 'fus.user_id = ?';
+  const busCond = 'bus.user_id = ?';
+  const fusCond = 'fus.user_id = ?';
 
   const sql = `
     SELECT DISTINCT b.id, b.title, b.url, b.slug, b.user_id,
@@ -53,19 +54,16 @@ export async function getAccessibleBookmarksBySlug(
     LEFT JOIN folder_user_shares fus ON bf.folder_id = fus.folder_id
     LEFT JOIN folder_team_shares fts ON bf.folder_id = fts.folder_id
     LEFT JOIN users u ON b.user_id = u.id
-    WHERE (b.user_id = ?
+    WHERE b.tenant_id = ?
+      AND (b.user_id = ?
       OR ${busCond}
       OR (bts.team_id IN (${teamPlaceholders}) AND bts.team_id IS NOT NULL)
       OR ${fusCond}
       OR (fts.team_id IN (${teamPlaceholders}) AND fts.team_id IS NOT NULL AND bf.folder_id IS NOT NULL))
       AND b.slug = ? AND b.forwarding_enabled = TRUE
   `;
-  const params: any[] = [userId, userId];
-  if (orgId) {
-    params.push(userId, orgId, userId, orgId);
-  } else {
-    params.push(userId, userId);
-  }
+  const params: any[] = [userId, tenantId, userId];
+  params.push(userId, userId);
   if (teamIds.length > 0) {
     params.push(...teamIds);
     params.push(...teamIds);

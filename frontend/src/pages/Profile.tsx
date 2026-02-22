@@ -2,16 +2,18 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { appBasePath, apiBaseUrl } from '../config/api';
-import { Mail, User as UserIcon, Globe, Palette, AlertCircle, Link2, Building2, ArrowRightLeft, Key, Sparkles } from 'lucide-react';
+import { useAppConfig } from '../contexts/AppConfigContext';
+import { AlertCircle, Key } from 'lucide-react';
 import Select from '../components/ui/Select';
 import Button from '../components/ui/Button';
 import { Switch } from '../components/ui/switch';
 import { useToast } from '../components/ui/Toast';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import CreateTokenModal from '../components/profile/CreateTokenModal';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../components/ui/card';
+import { Badge } from '../components/ui/badge';
+import { Input } from '../components/ui/input';
 import api from '../api/client';
-import { isCloud } from '../config/mode';
 
 interface ApiToken {
   id: string;
@@ -20,8 +22,43 @@ interface ApiToken {
   last_used_at: string | null;
 }
 
+function SettingsRow({
+  label,
+  value,
+  action,
+  helper,
+  children,
+  ariaLabel,
+}: {
+  label: string;
+  value?: React.ReactNode;
+  action?: React.ReactNode;
+  helper?: React.ReactNode;
+  children?: React.ReactNode;
+  ariaLabel?: string;
+}) {
+  return (
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 py-3 border-b border-border last:border-0">
+      <div className="min-w-0 flex-1">
+        <dt className="text-sm font-medium text-foreground">{label}</dt>
+        {value !== undefined && (
+          <dd className="mt-0.5 text-sm text-muted-foreground">{value}</dd>
+        )}
+        {helper && <dd className="mt-0.5 text-xs text-muted-foreground">{helper}</dd>}
+        {children}
+      </div>
+      {action && (
+        <div className="flex-shrink-0 sm:ml-4" aria-label={ariaLabel}>
+          {action}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Profile() {
   const { t } = useTranslation();
+  const { appBasePath, apiBaseUrl } = useAppConfig();
   const { user, updateUser, checkAuth } = useAuth();
   const { showToast } = useToast();
   const [formData, setFormData] = useState({
@@ -36,8 +73,6 @@ export default function Profile() {
   const [errors, setErrors] = useState<{ email?: string; name?: string }>({});
   const [editingEmail, setEditingEmail] = useState(false);
   const [editingName, setEditingName] = useState(false);
-  const [orgs, setOrgs] = useState<{ id: string; name: string; role: string }[]>([]);
-  const [switchingOrg, setSwitchingOrg] = useState<string | null>(null);
   const [tokens, setTokens] = useState<ApiToken[]>([]);
   const [tokensLoading, setTokensLoading] = useState(true);
   const [createTokenOpen, setCreateTokenOpen] = useState(false);
@@ -63,15 +98,6 @@ export default function Profile() {
     }
   }, [user]);
 
-  useEffect(() => {
-    if (isCloud && user) {
-      api.get('/organizations').then((res) => {
-        const list = Array.isArray(res.data) ? res.data : [];
-        setOrgs(list.map((o: any) => ({ id: o.id, name: o.name, role: o.role || 'member' })));
-      }).catch(() => setOrgs([]));
-    }
-  }, [user]);
-
   const fetchTokens = useCallback(() => {
     setTokensLoading(true);
     api.get('/tokens').then((res) => {
@@ -83,28 +109,35 @@ export default function Profile() {
     if (user) fetchTokens();
   }, [user, fetchTokens]);
 
+  const preferencesDirty = user && (
+    formData.language !== (user.language || 'en') ||
+    formData.theme !== (user.theme || 'auto') ||
+    formData.ai_suggestions_enabled !== Boolean((user as { ai_suggestions_enabled?: boolean | number }).ai_suggestions_enabled ?? true)
+  );
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     setErrors({});
     try {
-      const response = await updateUser(formData) as any;
-      
-      // Check if email verification is required
-      if (response?.emailVerificationRequired) {
+      const response = (await updateUser(formData)) as unknown;
+      const data = response && typeof response === 'object' && 'emailVerificationRequired' in response
+        ? (response as { emailVerificationRequired?: boolean })
+        : null;
+      if (data?.emailVerificationRequired) {
         showToast(t('emailVerification.emailSent'), 'success');
         setEditingEmail(false);
-        // Refresh user data to get email_pending
         await checkAuth();
       } else {
         setEditingEmail(false);
         setEditingName(false);
         showToast(t('common.success'), 'success');
       }
-    } catch (error: any) {
-      console.error('Failed to update profile:', error);
-      if (error.response?.data?.error) {
-        const errorMessage = error.response.data.error;
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { error?: string } } };
+      console.error('Failed to update profile:', err);
+      if (err.response?.data?.error) {
+        const errorMessage = err.response.data.error;
         if (errorMessage.includes('email')) {
           setErrors({ email: errorMessage });
         } else if (errorMessage.includes('name') || errorMessage.includes('Name')) {
@@ -121,27 +154,14 @@ export default function Profile() {
     }
   }
 
-  async function handleSwitchOrg(orgId: string) {
-    if (switchingOrg) return;
-    setSwitchingOrg(orgId);
-    try {
-      await api.put('/organizations/me/switch', { org_id: orgId });
-      await checkAuth();
-      showToast(t('profile.orgSwitched'), 'success');
-    } catch (error: any) {
-      showToast(error.response?.data?.error || t('common.error'), 'error');
-    } finally {
-      setSwitchingOrg(null);
-    }
-  }
-
   async function handleRevokeToken(tokenId: string) {
     try {
       await api.delete(`/tokens/${tokenId}`);
-      setTokens((prev) => prev.filter((t) => t.id !== tokenId));
+      setTokens((prev) => prev.filter((tok) => tok.id !== tokenId));
       showToast(t('common.success'), 'success');
-    } catch (error: any) {
-      showToast(error.response?.data?.error || t('common.error'), 'error');
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { error?: string } } };
+      showToast(e.response?.data?.error || t('common.error'), 'error');
     } finally {
       setRevokeTokenId(null);
     }
@@ -164,7 +184,7 @@ export default function Profile() {
   if (!user) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-gray-500 dark:text-gray-400">{t('common.loading')}</div>
+        <div className="text-muted-foreground">{t('common.loading')}</div>
       </div>
     );
   }
@@ -191,347 +211,300 @@ export default function Profile() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
-          {t('profile.title')}
-        </h1>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          {t('profile.description')}
-        </p>
+      {/* Page header: title + subtitle left; signed-in summary + Admin badge right */}
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+        <div>
+          <h1 className="text-2xl font-semibold text-foreground">
+            {t('profile.title')}
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {t('profile.description')}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+          <span>
+            {t('profile.signedInAs')}: <span className="text-foreground">{user.email}</span>
+          </span>
+          {user.is_admin && (
+            <Badge variant="secondary" className="text-xs font-normal">
+              {t('profile.admin')}
+            </Badge>
+          )}
+        </div>
       </div>
 
       <div className="space-y-6">
-        {/* Account Information Section */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-          <div className="p-4">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-              {t('profile.accountInformation')}
-            </h2>
-            <div className="space-y-6">
-              {/* Email */}
-              <div className="flex items-start gap-4">
-                <div className="flex-shrink-0">
-                  <div className="h-10 w-10 rounded-lg bg-primary/20 flex items-center justify-center">
-                    <Mail className="h-5 w-5 text-primary" />
-                  </div>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-1">
-                    {t('profile.email')}
-                  </label>
-                  {editingEmail ? (
-                    <div className="space-y-1">
-                      <input
-                        type="email"
-                        value={formData.email}
-                        onChange={(e) => {
-                          setFormData({ ...formData, email: e.target.value });
-                          setErrors({ ...errors, email: undefined });
-                        }}
-                        className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-colors"
-                        placeholder={t('profile.emailPlaceholder')}
-                      />
-                      {errors.email && (
-                        <p className="text-xs text-red-600 dark:text-red-400">{errors.email}</p>
-                      )}
-                      <div className="flex gap-2 mt-2">
-                        <Button
-                          type="button"
-                          variant="primary"
-                          size="sm"
-                          onClick={handleSubmit}
-                          disabled={saving}
-                        >
-                          {saving ? t('common.loading') : t('common.save')}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setEditingEmail(false);
-                            setFormData({ ...formData, email: user?.email || '' });
-                            setErrors({ ...errors, email: undefined });
-                          }}
-                        >
-                          {t('common.cancel')}
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm text-gray-600 dark:text-gray-400 flex-1">{user.email}</p>
-                        {!user.oidc_provider && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setEditingEmail(true)}
-                          >
-                            {t('common.edit')}
-                          </Button>
-                        )}
-                      </div>
-                      {user.oidc_provider && (
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                          {t('profile.emailManagedByOIDC')}
-                        </p>
-                      )}
+        {/* Section A: Account */}
+        <Card className="border border-border bg-card shadow-sm">
+          <CardHeader>
+            <CardTitle>{t('profile.account')}</CardTitle>
+            <CardDescription>{t('profile.accountDescription')}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-0">
+            <dl className="divide-y-0">
+              {/* Email row */}
+              <SettingsRow
+                label={t('profile.email')}
+                value={
+                  editingEmail ? undefined : (
+                    <>
+                      {user.email}
                       {user.email_pending && (
-                        <div className="flex items-start gap-2 px-3 py-2 bg-primary/10 border border-primary/30 rounded-lg">
-                          <AlertCircle className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
-                          <div className="flex-1">
-                            <p className="text-xs text-foreground font-medium">
-                              {t('emailVerification.pendingTitle')}
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {t('emailVerification.pendingDescription', { email: user.email_pending })}
-                            </p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Name */}
-              <div className="flex items-start gap-4">
-                <div className="flex-shrink-0">
-                  <div className="h-10 w-10 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                    <UserIcon className="h-5 w-5 text-green-600 dark:text-green-400" />
-                  </div>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-1">
-                    {t('profile.name')}
-                  </label>
-                  {editingName ? (
-                    <div className="space-y-1">
-                      <input
-                        type="text"
-                        value={formData.name}
-                        onChange={(e) => {
-                          setFormData({ ...formData, name: e.target.value });
-                          setErrors({ ...errors, name: undefined });
-                        }}
-                        className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-colors"
-                        placeholder={t('profile.namePlaceholder')}
-                      />
-                      {errors.name && (
-                        <p className="text-xs text-red-600 dark:text-red-400">{errors.name}</p>
-                      )}
-                      <div className="flex gap-2 mt-2">
-                        <Button
-                          type="button"
-                          variant="primary"
-                          size="sm"
-                          onClick={handleSubmit}
-                          disabled={saving}
-                        >
-                          {saving ? t('common.loading') : t('common.save')}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setEditingName(false);
-                            setFormData({ ...formData, name: user?.name || '' });
-                            setErrors({ ...errors, name: undefined });
-                          }}
-                        >
-                          {t('common.cancel')}
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm text-gray-600 dark:text-gray-400 flex-1">{user.name}</p>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setEditingName(true)}
-                      >
-                        {t('common.edit')}
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Quick access / go preferences */}
-              <div className="flex items-start gap-4">
-                <div className="flex-shrink-0">
-                  <div className="h-10 w-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
-                    <Link2 className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-                  </div>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
-                    {t('profile.quickAccess')}
-                  </label>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                    {t('profile.quickAccessDescription')}
-                  </p>
-                  <Link
-                    to={`${appBasePath}/go-preferences`}
-                    className="text-sm font-medium text-primary hover:text-primary/90"
-                  >
-                    {t('goPreferences.title')} →
-                  </Link>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Organizations Section (Cloud only) */}
-        {isCloud && orgs.length > 0 && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-            <div className="p-4">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                <Building2 className="h-5 w-5 text-primary" />
-                {t('profile.yourOrganizations')}
-              </h2>
-              <ul className="space-y-2">
-                {orgs.map((org) => (
-                  <li
-                    key={org.id}
-                    className="flex items-center justify-between gap-2 py-2 px-3 rounded-lg bg-gray-50 dark:bg-gray-700/50"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                        {org.name}
-                      </span>
-                      <span className="text-xs text-gray-500 dark:text-gray-400 capitalize">
-                        {org.role}
-                      </span>
-                      {user.current_org_id === org.id && (
-                        <span className="text-xs font-medium text-primary bg-primary/20 px-2 py-0.5 rounded">
-                          {t('profile.current')}
+                        <span className="ml-2 text-primary text-xs font-medium">
+                          ({t('emailVerification.pendingTitle')})
                         </span>
                       )}
-                    </div>
-                    {user.current_org_id !== org.id && (
+                    </>
+                  )
+                }
+                helper={
+                  !editingEmail && user.oidc_provider
+                    ? t('profile.emailManagedByOIDC')
+                    : undefined
+                }
+                action={
+                  editingEmail ? (
+                    <div className="flex gap-2 mt-2 sm:mt-0">
+                      <Button
+                        type="button"
+                        variant="primary"
+                        size="sm"
+                        onClick={handleSubmit}
+                        disabled={saving}
+                        aria-label={t('common.save')}
+                      >
+                        {saving ? t('common.loading') : t('common.save')}
+                      </Button>
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleSwitchOrg(org.id)}
-                        disabled={switchingOrg === org.id}
+                        onClick={() => {
+                          setEditingEmail(false);
+                          setFormData((prev) => ({ ...prev, email: user.email || '' }));
+                          setErrors((prev) => ({ ...prev, email: undefined }));
+                        }}
+                        aria-label={t('common.cancel')}
                       >
-                        {switchingOrg === org.id ? (
-                          t('common.loading')
-                        ) : (
-                          <>
-                            <ArrowRightLeft className="h-4 w-4 mr-1" />
-                            {t('profile.switch')}
-                          </>
-                        )}
+                        {t('common.cancel')}
                       </Button>
+                    </div>
+                  ) : !user.oidc_provider ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setEditingEmail(true)}
+                      aria-label={t('profile.email')}
+                    >
+                      {t('common.edit')}
+                    </Button>
+                  ) : null
+                }
+              >
+                {editingEmail && (
+                  <div className="space-y-1 mt-2">
+                    <Input
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => {
+                        setFormData((prev) => ({ ...prev, email: e.target.value }));
+                        setErrors((prev) => ({ ...prev, email: undefined }));
+                      }}
+                      placeholder={t('profile.emailPlaceholder')}
+                      className="max-w-md"
+                      aria-label={t('profile.email')}
+                    />
+                    {errors.email && (
+                      <p className="text-xs text-destructive">{errors.email}</p>
                     )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        )}
-
-        {/* Preferences Section */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
-          <div className="p-4">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-              {t('profile.preferences')}
-            </h2>
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="flex items-start gap-4">
-                <div className="flex-shrink-0">
-                  <div className="h-10 w-10 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
-                    <Globe className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
                   </div>
-                </div>
-                <div className="flex-1">
-                  <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
-                    {t('profile.language')}
-                  </label>
-                  <Select
-                    value={formData.language}
-                    onChange={(value) => setFormData({ ...formData, language: value })}
-                    options={languageOptions}
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-start gap-4">
-                <div className="flex-shrink-0">
-                  <div className="h-10 w-10 rounded-lg bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center">
-                    <Palette className="h-5 w-5 text-pink-600 dark:text-pink-400" />
-                  </div>
-                </div>
-                <div className="flex-1">
-                  <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
-                    {t('profile.theme')}
-                  </label>
-                  <Select
-                    value={formData.theme}
-                    onChange={(value) => setFormData({ ...formData, theme: value })}
-                    options={themeOptions}
-                  />
-                </div>
-              </div>
-
-              {aiAvailable && (
-                <div className="flex items-start gap-4">
-                  <div className="flex-shrink-0">
-                    <div className="h-10 w-10 rounded-lg bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center">
-                      <Sparkles className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+                )}
+                {!editingEmail && user.email_pending && (
+                  <div className="flex items-start gap-2 px-3 py-2 bg-primary/10 border border-primary/30 rounded-lg mt-2">
+                    <AlertCircle className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-xs text-foreground font-medium">
+                        {t('emailVerification.pendingTitle')}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {t('emailVerification.pendingDescription', { email: user.email_pending })}
+                      </p>
                     </div>
                   </div>
-                  <div className="flex-1">
-                    <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                )}
+              </SettingsRow>
+
+              {/* Name row */}
+              <SettingsRow
+                label={t('profile.name')}
+                value={editingName ? undefined : user.name}
+                action={
+                  editingName ? (
+                    <div className="flex gap-2 mt-2 sm:mt-0">
+                      <Button
+                        type="button"
+                        variant="primary"
+                        size="sm"
+                        onClick={handleSubmit}
+                        disabled={saving}
+                        aria-label={t('common.save')}
+                      >
+                        {saving ? t('common.loading') : t('common.save')}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setEditingName(false);
+                          setFormData((prev) => ({ ...prev, name: user.name || '' }));
+                          setErrors((prev) => ({ ...prev, name: undefined }));
+                        }}
+                        aria-label={t('common.cancel')}
+                      >
+                        {t('common.cancel')}
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setEditingName(true)}
+                      aria-label={t('profile.name')}
+                    >
+                      {t('common.edit')}
+                    </Button>
+                  )
+                }
+              >
+                {editingName && (
+                  <div className="space-y-1 mt-2">
+                    <Input
+                      type="text"
+                      value={formData.name}
+                      onChange={(e) => {
+                        setFormData((prev) => ({ ...prev, name: e.target.value }));
+                        setErrors((prev) => ({ ...prev, name: undefined }));
+                      }}
+                      placeholder={t('profile.namePlaceholder')}
+                      className="max-w-md"
+                      aria-label={t('profile.name')}
+                    />
+                    {errors.name && (
+                      <p className="text-xs text-destructive">{errors.name}</p>
+                    )}
+                  </div>
+                )}
+              </SettingsRow>
+
+              {/* Quick Access row — muted, no primary action */}
+              <SettingsRow
+                label={t('profile.quickAccess')}
+                helper={
+                  <>
+                    {t('profile.quickAccessDescription')}{' '}
+                    <Link
+                      to={`${appBasePath}/go-preferences`}
+                      className="text-primary hover:text-primary/90 font-medium"
+                    >
+                      {t('profile.manageQuickAccess')} →
+                    </Link>
+                  </>
+                }
+              />
+            </dl>
+          </CardContent>
+        </Card>
+
+        {/* Section B: Preferences */}
+        <Card className="border border-border bg-card shadow-sm">
+          <CardHeader>
+            <CardTitle>{t('profile.preferences')}</CardTitle>
+            <CardDescription>{t('profile.preferencesDescription')}</CardDescription>
+          </CardHeader>
+          <form onSubmit={handleSubmit} id="profile-preferences-form">
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground" id="profile-language-label">
+                  {t('profile.language')}
+                </label>
+                <Select
+                  value={formData.language}
+                  onChange={(value) => setFormData((prev) => ({ ...prev, language: value }))}
+                  options={languageOptions}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground" id="profile-theme-label">
+                  {t('profile.theme')}
+                </label>
+                <Select
+                  value={formData.theme}
+                  onChange={(value) => setFormData((prev) => ({ ...prev, theme: value }))}
+                  options={themeOptions}
+                />
+              </div>
+              {aiAvailable && (
+                <div className="flex items-center justify-between gap-3 py-2">
+                  <div>
+                    <label htmlFor="ai-suggestions" className="text-sm font-medium text-foreground">
                       {t('profile.aiSuggestions')}
                     </label>
-                    <div className="flex items-center gap-3">
-                      <Switch
-                        id="ai-suggestions"
-                        checked={formData.ai_suggestions_enabled}
-                        onCheckedChange={(checked) =>
-                          setFormData({ ...formData, ai_suggestions_enabled: checked })
-                        }
-                      />
-                      <label htmlFor="ai-suggestions" className="text-sm text-gray-600 dark:text-gray-400 cursor-pointer">
-                        {t('profile.aiSuggestionsDescription')}
-                      </label>
-                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {t('profile.aiSuggestionsDescription')}
+                    </p>
                   </div>
+                  <Switch
+                    id="ai-suggestions"
+                    checked={formData.ai_suggestions_enabled}
+                    onCheckedChange={(checked) =>
+                      setFormData((prev) => ({ ...prev, ai_suggestions_enabled: checked }))
+                    }
+                    aria-label={t('profile.aiSuggestions')}
+                  />
                 </div>
               )}
+            </CardContent>
+            <CardFooter className="flex flex-row items-center justify-between gap-4">
+              <span className="text-xs text-muted-foreground">
+                {preferencesDirty ? t('profile.unsavedChanges') : null}
+              </span>
+              <Button
+                type="submit"
+                form="profile-preferences-form"
+                variant="primary"
+                disabled={saving || !preferencesDirty}
+                aria-label={t('common.save')}
+              >
+                {saving ? t('common.loading') : t('common.save')}
+              </Button>
+            </CardFooter>
+          </form>
+        </Card>
 
-              <div className="pt-2">
-                <Button type="submit" variant="primary" disabled={saving}>
-                  {saving ? t('common.loading') : t('profile.save')}
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-
-        {/* API Access Section */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-          <div className="p-4">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-              <Key className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-              {t('profile.apiAccess')}
-            </h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-              {t('profile.apiAccessDescription')}
-            </p>
-            <div className="flex items-start gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg mb-4">
-              <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-amber-800 dark:text-amber-200">
+        {/* Section C: Developer / API Access */}
+        <Card className="border border-border bg-card shadow-sm" aria-labelledby="developer-section-title">
+          <CardHeader>
+            <div className="flex flex-wrap items-center gap-2">
+              <CardTitle id="developer-section-title" className="flex items-center gap-2">
+                <Key className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                {t('profile.developerApiTitle')}
+              </CardTitle>
+              <Badge
+                variant="secondary"
+                className="text-xs font-normal bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20"
+              >
+                {t('profile.advanced')}
+              </Badge>
+            </div>
+            <CardDescription>{t('profile.developerApiDescription')}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-start gap-2 px-2.5 py-1.5 rounded-md bg-amber-500/10 border border-amber-500/20">
+              <AlertCircle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-800 dark:text-amber-200">
                 {t('profile.apiTokenWarning')}
               </p>
             </div>
@@ -539,12 +512,12 @@ export default function Profile() {
               href={apiBaseUrl ? `${apiBaseUrl}/api-docs` : '/api-docs'}
               target="_blank"
               rel="noopener noreferrer"
-                    className="text-sm font-medium text-primary hover:text-primary/90 mb-4 inline-block"
+              className="text-sm font-medium text-primary hover:text-primary/90 inline-block"
             >
               {t('profile.viewApiDocs')} →
             </a>
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-sm font-medium text-gray-900 dark:text-white">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <span className="text-sm font-medium text-foreground">
                 {t('profile.yourTokens')}
               </span>
               <Button
@@ -552,32 +525,35 @@ export default function Profile() {
                 variant="primary"
                 size="sm"
                 onClick={() => setCreateTokenOpen(true)}
+                aria-label={t('profile.createToken')}
               >
                 {t('profile.createToken')}
               </Button>
             </div>
             {tokensLoading ? (
-              <p className="text-sm text-gray-500 dark:text-gray-400">{t('common.loading')}</p>
+              <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
             ) : tokens.length === 0 ? (
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                {t('profile.noTokens')}. {t('profile.noTokensDescription')}
+              <p className="text-sm text-muted-foreground">
+                {t('profile.noTokensEmpty')}
               </p>
             ) : (
-              <ul className="space-y-2">
+              <ul className="space-y-2" role="list">
                 {tokens.map((tok) => (
                   <li
                     key={tok.id}
-                    className="flex items-center justify-between gap-2 py-2 px-3 rounded-lg bg-gray-50 dark:bg-gray-700/50"
+                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 py-2 px-3 rounded-lg bg-muted/50"
                   >
                     <div className="min-w-0 flex-1">
-                      <span className="text-sm font-medium text-gray-900 dark:text-white block truncate">
+                      <span className="text-sm font-medium text-foreground block truncate">
                         {tok.name}
                       </span>
-                      <span className="text-xs text-gray-500 dark:text-gray-400 font-mono">
+                      <span className="text-xs text-muted-foreground font-mono">
                         sb_********************************
                       </span>
-                      <span className="text-xs text-gray-500 dark:text-gray-400 block mt-1">
-                        {t('profile.lastUsed')}: {tok.last_used_at ? formatDate(tok.last_used_at) : t('profile.neverUsed')} · {t('profile.createdAt')}: {formatDate(tok.created_at)}
+                      <span className="text-xs text-muted-foreground block mt-0.5">
+                        {t('profile.createdAt')}: {formatDate(tok.created_at)}
+                        {' · '}
+                        {t('profile.lastUsed')}: {tok.last_used_at ? formatDate(tok.last_used_at) : t('profile.neverUsed')}
                       </span>
                     </div>
                     <Button
@@ -585,7 +561,8 @@ export default function Profile() {
                       variant="ghost"
                       size="sm"
                       onClick={() => setRevokeTokenId(tok.id)}
-                      className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                      className="text-destructive hover:text-destructive/90 sm:ml-auto"
+                      aria-label={`${t('profile.revokeToken')} ${tok.name}`}
                     >
                       {t('profile.revokeToken')}
                     </Button>
@@ -593,8 +570,8 @@ export default function Profile() {
                 ))}
               </ul>
             )}
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
 
       <CreateTokenModal

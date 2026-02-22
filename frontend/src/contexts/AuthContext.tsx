@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import api from '../api/client';
 import { getAuthProviderUrl } from '../config/api';
 import { useTranslation } from 'react-i18next';
+import { useAppConfig } from './AppConfigContext';
 
 export interface User {
   id: string;
@@ -12,10 +13,6 @@ export interface User {
   language: string;
   theme: string;
   ai_suggestions_enabled?: boolean;
-  /** In Cloud mode: org role (owner/admin/member) if user is in an org */
-  org_role?: 'owner' | 'admin' | 'member' | null;
-  /** In Cloud mode: current org id for multi-org context */
-  current_org_id?: string | null;
   email_pending?: string | null;
   oidc_provider?: string | null;
   oidc_sub?: string | null;
@@ -36,6 +33,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const { i18n } = useTranslation();
+  const { apiBaseUrl } = useAppConfig();
 
   useEffect(() => {
     // Apply initial theme based on browser preference before checking auth
@@ -73,7 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   function login(provider: string) {
-    window.location.href = getAuthProviderUrl(provider);
+    window.location.href = getAuthProviderUrl(provider, apiBaseUrl);
   }
 
   async function logout() {

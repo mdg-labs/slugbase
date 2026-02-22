@@ -1,17 +1,18 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import api from '../api/client';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { useConfirmDialog } from '../hooks/useConfirmDialog';
-import { Plus, Edit, Trash2, Tag as TagIcon, LayoutGrid, List } from 'lucide-react';
+import { Plus, Edit, Trash2, Tag as TagIcon, LayoutGrid, List, ChevronLeft, ChevronRight } from 'lucide-react';
 import TagModal from '../components/modals/TagModal';
 import Button from '../components/ui/Button';
 import Select from '../components/ui/Select';
 import { PageHeader } from '../components/PageHeader';
 import { EmptyState } from '../components/EmptyState';
 import { PageLoadingSkeleton } from '../components/ui/PageLoadingSkeleton';
-import { appBasePath } from '../config/api';
+import { useAppConfig } from '../contexts/AppConfigContext';
+import { FilterChips } from '../components/FilterChips';
 
 interface Tag {
   id: string;
@@ -22,9 +23,13 @@ interface Tag {
 type ViewMode = 'card' | 'list';
 type SortOption = 'alphabetical' | 'recently_added';
 
+const DEFAULT_SORT: SortOption = 'alphabetical';
+
 export default function Tags() {
   const { t } = useTranslation();
+  const { appBasePath } = useAppConfig();
   const { showConfirm, dialogState } = useConfirmDialog();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [tags, setTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -36,7 +41,16 @@ export default function Tags() {
   const [compactMode, setCompactMode] = useState(() => {
     return localStorage.getItem('tags-compact-mode') === 'true';
   });
-  const [sortBy, setSortBy] = useState<SortOption>('alphabetical');
+
+  const sortParam = searchParams.get('sort');
+  const sortBy = (sortParam === 'recently_added' || sortParam === 'alphabetical') ? sortParam : DEFAULT_SORT;
+  const PAGE_SIZE_OPTIONS = [50, 100, 200, 500] as const;
+  const limitParam = searchParams.get('limit');
+  const pageSize = (limitParam && PAGE_SIZE_OPTIONS.includes(Number(limitParam) as typeof PAGE_SIZE_OPTIONS[number]))
+    ? Number(limitParam)
+    : 50;
+  const page = Math.max(0, parseInt(searchParams.get('page') || '0', 10));
+  const [totalTags, setTotalTags] = useState(0);
 
   useEffect(() => {
     localStorage.setItem('tags-view-mode', viewMode);
@@ -48,12 +62,58 @@ export default function Tags() {
 
   useEffect(() => {
     loadTags();
-  }, [sortBy]);
+  }, [sortBy, page, pageSize]);
+
+  function updateParams(updates: { sort?: string; limit?: string; page?: string }) {
+    const params = new URLSearchParams(searchParams);
+    if (updates.sort !== undefined) {
+      if (updates.sort === DEFAULT_SORT || updates.sort === '') params.delete('sort');
+      else params.set('sort', updates.sort);
+    }
+    if (updates.limit !== undefined) {
+      if (updates.limit === '' || updates.limit === '50') params.delete('limit');
+      else params.set('limit', updates.limit);
+      params.set('page', '0');
+    }
+    if (updates.page !== undefined) {
+      if (updates.page === '0' || updates.page === '') params.delete('page');
+      else params.set('page', updates.page);
+    }
+    setSearchParams(params);
+  }
+
+  const hasActiveFilters = sortBy !== DEFAULT_SORT;
+
+  function handleRemoveFilter(key: string) {
+    if (key === 'sort') updateParams({ sort: DEFAULT_SORT });
+  }
+
+  function handleResetFilters() {
+    updateParams({ sort: DEFAULT_SORT });
+  }
+
+  const filterChips = useMemo(() => {
+    const list: { key: string; label: string; ariaLabel: string }[] = [];
+    if (sortBy !== DEFAULT_SORT) {
+      const sortLabel = sortBy === 'recently_added' ? t('tags.sortRecentlyAdded') : t('tags.sortAlphabetical');
+      list.push({ key: 'sort', label: `Sort: ${sortLabel}`, ariaLabel: t('tags.clearFilters') + ' Sort' });
+    }
+    return list;
+  }, [sortBy, t]);
 
   async function loadTags() {
     try {
-      const res = await api.get('/tags', { params: { sort_by: sortBy } });
-      setTags(res.data);
+      const res = await api.get('/tags', {
+        params: { sort_by: sortBy, limit: pageSize, offset: page * pageSize },
+      });
+      const data = res.data;
+      if (data && typeof data === 'object' && 'items' in data && 'total' in data) {
+        setTags(Array.isArray((data as { items: Tag[] }).items) ? (data as { items: Tag[] }).items : []);
+        setTotalTags(Number((data as { total: number }).total) || 0);
+      } else {
+        setTags(Array.isArray(data) ? data : []);
+        setTotalTags(Array.isArray(data) ? data.length : 0);
+      }
     } catch (error) {
       console.error('Failed to load tags:', error);
     } finally {
@@ -114,8 +174,12 @@ export default function Tags() {
       <div className="sticky top-0 z-40 space-y-4 pb-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pt-0 -mt-8 bg-background border-b shadow-sm">
         <PageHeader
           className="pt-4"
-          title={t('tags.title')}
-          subtitle={`${tags.length} ${tags.length === 1 ? t('common.tag') : t('common.tags')}`}
+          title={`${t('tags.title')} (${totalTags})`}
+          subtitle={
+            hasActiveFilters || totalTags > pageSize
+              ? t('bookmarks.showingXOfY', { x: sortedTags.length, y: totalTags })
+              : undefined
+          }
           actions={
             <Button onClick={handleCreate} icon={Plus}>
               {t('tags.create')}
@@ -123,28 +187,39 @@ export default function Tags() {
           }
         />
 
-        {/* Toolbar: Sort, View Modes */}
-        {sortedTags.length > 0 && (
-        <div className="flex flex-wrap items-center gap-3 bg-card rounded-lg border p-4 shadow-sm">
-          {/* Sort */}
+        <FilterChips
+          chips={filterChips}
+          onRemove={handleRemoveFilter}
+          onClearAll={handleResetFilters}
+          clearAllLabel={t('bookmarks.clearAllFilters')}
+          clearAllAriaLabel={t('bookmarks.clearAllFilters')}
+        />
+
+        {/* Toolbar: Sort, Page size, View Modes - same card style as Bookmarks/Folders */}
+        <div className="flex flex-wrap items-center gap-3 bg-card rounded-lg border border-border p-4 shadow-sm">
           <div className="flex items-center gap-2">
             <Select
               value={sortBy}
-              onChange={(value) => setSortBy(value as SortOption)}
+              onChange={(value) => updateParams({ sort: value as SortOption })}
               options={sortOptions}
               className="min-w-[160px]"
             />
           </div>
-
-          {/* View Mode Toggle */}
-          <div className="flex items-center gap-2 border-l border-gray-200 dark:border-gray-700 pl-3 ml-auto">
-            <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+          <div className="flex items-center gap-2">
+            <Select
+              value={String(pageSize)}
+              onChange={(value) => updateParams({ limit: value })}
+              options={PAGE_SIZE_OPTIONS.map((n) => ({ value: String(n), label: String(n) }))}
+              className="min-w-[80px]"
+            />
+            <span className="text-sm text-muted-foreground whitespace-nowrap">{t('bookmarks.perPage')}</span>
+          </div>
+          <div className="flex items-center gap-2 border-l border-border pl-3 ml-auto">
+            <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-1 border border-border">
               <button
                 onClick={() => setViewMode('card')}
                 className={`p-1.5 rounded transition-colors ${
-                  viewMode === 'card'
-                    ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm'
-                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                  viewMode === 'card' ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'
                 }`}
                 title={t('tags.viewCard')}
               >
@@ -153,9 +228,7 @@ export default function Tags() {
               <button
                 onClick={() => setViewMode('list')}
                 className={`p-1.5 rounded transition-colors ${
-                  viewMode === 'list'
-                    ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm'
-                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                  viewMode === 'list' ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'
                 }`}
                 title={t('tags.viewList')}
               >
@@ -165,9 +238,7 @@ export default function Tags() {
             <button
               onClick={() => setCompactMode(!compactMode)}
               className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
-                compactMode
-                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                compactMode ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground hover:bg-accent'
               }`}
               title={t('tags.compactMode')}
             >
@@ -175,7 +246,6 @@ export default function Tags() {
             </button>
           </div>
         </div>
-        )}
       </div>
 
       {/* Tags Display */}
@@ -191,15 +261,15 @@ export default function Tags() {
           }
         />
       ) : viewMode === 'card' ? (
-        <div className={`grid grid-cols-1 gap-4 ${
+        <div className={`grid grid-cols-1 gap-3 items-stretch ${
           compactMode 
-            ? 'sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6' 
-            : 'sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5'
+            ? 'sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8' 
+            : 'sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6'
         }`}>
           {sortedTags.map((tag) => (
             <div
               key={tag.id}
-              className={`group bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-purple-400 dark:hover:border-purple-500 hover:shadow-lg transition-all duration-200 flex flex-col ${compactMode ? 'p-2.5' : 'p-4'}`}
+              className={`group bg-card rounded-lg border border-border hover:border-primary/70 hover:bg-muted/50 hover:shadow-md transition-all duration-200 flex flex-col h-full min-h-0 ${compactMode ? 'p-2.5 min-h-[160px]' : 'p-2.5 min-h-[140px]'}`}
             >
               <Link
                 to={`${appBasePath}/bookmarks?tag_id=${tag.id}`}
@@ -207,11 +277,11 @@ export default function Tags() {
               >
                 <div className="space-y-3 flex-1 flex flex-col">
                   <div className="flex items-start gap-3">
-                    <div className={`flex-shrink-0 ${compactMode ? 'w-10 h-10' : 'w-12 h-12'} rounded-xl bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/20 flex items-center justify-center border border-purple-100 dark:border-purple-800/50`}>
-                      <TagIcon className={`${compactMode ? 'h-5 w-5' : 'h-6 w-6'} text-purple-600 dark:text-purple-400`} />
+                    <div className={`flex-shrink-0 ${compactMode ? 'w-9 h-9' : 'w-10 h-10'} rounded-xl bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/20 flex items-center justify-center border border-purple-100 dark:border-purple-800/50`}>
+                      <TagIcon className={`${compactMode ? 'h-4 w-4' : 'h-5 w-5'} text-purple-600 dark:text-purple-400`} />
                     </div>
                     <div className="flex-1 min-w-0 pt-0.5">
-                      <h3 className={`${compactMode ? 'text-xs' : 'text-[15px]'} font-medium text-gray-900 dark:text-white truncate`}>
+                      <h3 className={`${compactMode ? 'text-xs' : 'text-sm'} font-medium text-foreground truncate`}>
                         {tag.name}
                       </h3>
                     </div>
@@ -220,13 +290,14 @@ export default function Tags() {
                   <p className="text-xs text-muted-foreground">—</p>
                 </div>
               </Link>
-              <div className={`flex gap-2 pt-3 mt-auto border-t border-gray-100 dark:border-gray-700/50 ${compactMode ? 'pt-2' : ''}`}>
+              <div className={`flex gap-1.5 pt-2.5 mt-auto shrink-0 border-t border-border ${compactMode ? 'pt-2' : ''}`}>
                   <Button
                     variant="ghost"
                     size="sm"
                     icon={Edit}
+                    iconClassName="h-3.5 w-3.5 stroke-[1.5]"
                     onClick={() => handleEdit(tag)}
-                    className={`flex-1 ${compactMode ? 'text-xs px-2 py-1' : 'text-xs'}`}
+                    className="flex-1 h-8 min-w-0 text-xs"
                   >
                     {t('common.edit')}
                   </Button>
@@ -234,9 +305,10 @@ export default function Tags() {
                     variant="ghost"
                     size="sm"
                     icon={Trash2}
+                    iconClassName="h-3.5 w-3.5 stroke-[1.5]"
                     onClick={() => handleDelete(tag.id)}
                     title={t('common.delete')}
-                    className={`text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 ${compactMode ? 'px-1.5' : 'px-2'}`}
+                    className="h-8 w-8 p-0 flex-shrink-0 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                   />
                 </div>
             </div>
@@ -300,6 +372,39 @@ export default function Tags() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {totalTags > pageSize && (
+        <div className="flex flex-wrap items-center justify-between gap-3 mt-4">
+          <p className="text-sm text-muted-foreground">
+            {t('bookmarks.paginationShowing', {
+              from: page * pageSize + 1,
+              to: Math.min(page * pageSize + sortedTags.length, totalTags),
+              total: totalTags,
+            })}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              icon={ChevronLeft}
+              onClick={() => updateParams({ page: String(Math.max(0, page - 1)) })}
+              disabled={page === 0}
+            >
+              {t('bookmarks.paginationPrevious')}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              icon={ChevronRight}
+              iconPosition="right"
+              onClick={() => updateParams({ page: String(page + 1) })}
+              disabled={(page + 1) * pageSize >= totalTags}
+            >
+              {t('bookmarks.paginationNext')}
+            </Button>
+          </div>
         </div>
       )}
 

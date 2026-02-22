@@ -88,6 +88,5 @@ describe('Stats service', () => {
     assert.ok(stats.timeseries);
     assert.ok(stats.timeseries.users_30d);
     assert.ok(stats.timeseries.bookmarks_30d);
-    assert(stats.payments === null || typeof stats.payments === 'object');
   });
 });

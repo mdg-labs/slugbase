@@ -4,625 +4,810 @@
     "url": "https://github.com",
     "slug": "gh",
     "forwarding_enabled": true,
-    "pinned": true
+    "pinned": true,
+    "folder_names": ["Development"],
+    "tag_names": ["tools", "git"]
   },
   {
     "title": "Stack Overflow - Where Developers Learn, Share, & Build Careers",
     "url": "https://stackoverflow.com",
     "slug": "so",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["reference", "qna"]
   },
   {
     "title": "MDN Web Docs - Resources for developers, by developers",
     "url": "https://developer.mozilla.org",
     "slug": "mdn",
     "forwarding_enabled": true,
-    "pinned": true
+    "pinned": true,
+    "folder_names": ["Documentation"],
+    "tag_names": ["javascript", "reference", "docs"]
   },
   {
     "title": "React - A JavaScript library for building user interfaces",
     "url": "https://react.dev",
     "slug": "react",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["javascript", "frontend"]
   },
   {
     "title": "TypeScript - JavaScript with syntax for types",
     "url": "https://www.typescriptlang.org",
     "slug": "ts",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["javascript", "reference"]
   },
   {
     "title": "Tailwind CSS - Rapidly build modern websites",
     "url": "https://tailwindcss.com",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["css", "frontend"]
   },
   {
     "title": "Vite - Next Generation Frontend Tooling",
     "url": "https://vitejs.dev",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["javascript", "tools"]
   },
   {
     "title": "Node.js - JavaScript runtime built on Chrome's V8",
     "url": "https://nodejs.org",
     "slug": "node",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["javascript", "backend"]
   },
   {
     "title": "Express - Fast, unopinionated web framework for Node.js",
     "url": "https://expressjs.com",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["javascript", "backend"]
   },
   {
     "title": "PostgreSQL - The world's most advanced open source database",
     "url": "https://www.postgresql.org",
     "slug": "postgres",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development", "DevOps"],
+    "tag_names": ["database", "backend"]
   },
   {
     "title": "SQLite - A self-contained, serverless database engine",
     "url": "https://www.sqlite.org",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["database"]
   },
   {
     "title": "Docker - Accelerate how you build, share and run applications",
     "url": "https://www.docker.com",
     "slug": "docker",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["DevOps"],
+    "tag_names": ["containers", "tools"]
   },
   {
     "title": "Docusaurus - Build optimized websites quickly, focus on your content",
     "url": "https://docusaurus.io",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Documentation"],
+    "tag_names": ["docs", "javascript"]
   },
   {
     "title": "OpenAI - Creating safe AGI that benefits all of humanity",
     "url": "https://openai.com",
     "slug": "openai",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["ai"]
   },
   {
     "title": "Anthropic - AI research and products",
     "url": "https://www.anthropic.com",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "tag_names": ["ai"]
   },
   {
     "title": "Hacker News - News for hackers",
     "url": "https://news.ycombinator.com",
     "slug": "hn",
     "forwarding_enabled": true,
-    "pinned": true
+    "pinned": true,
+    "folder_names": ["News & Community"],
+    "tag_names": ["news"]
   },
   {
     "title": "Product Hunt - The best new products in tech",
     "url": "https://www.producthunt.com",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["News & Community"],
+    "tag_names": ["news"]
   },
   {
     "title": "Reddit - Dive into anything",
     "url": "https://www.reddit.com",
     "slug": "reddit",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["News & Community"],
+    "tag_names": ["community"]
   },
   {
     "title": "YouTube - Watch, share, and discover videos",
     "url": "https://www.youtube.com",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["News & Community"],
+    "tag_names": ["video"]
   },
   {
     "title": "Wikipedia - The Free Encyclopedia",
     "url": "https://www.wikipedia.org",
     "slug": "wiki",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Documentation"],
+    "tag_names": ["reference", "docs"]
   },
   {
     "title": "Google - Search the world's information",
     "url": "https://www.google.com",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "tag_names": ["search"]
   },
   {
     "title": "AWS - Amazon Web Services",
     "url": "https://aws.amazon.com",
     "slug": "aws",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["DevOps", "Platforms"],
+    "tag_names": ["cloud"]
   },
   {
     "title": "Vercel - Develop. Preview. Ship.",
     "url": "https://vercel.com",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["DevOps"],
+    "tag_names": ["cloud", "frontend"]
   },
   {
     "title": "Netlify - Build, deploy, and scale modern web projects",
     "url": "https://www.netlify.com",
     "slug": "netlify",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["DevOps"],
+    "tag_names": ["cloud"]
   },
   {
     "title": "Cloudflare - The web performance & security company",
     "url": "https://www.cloudflare.com",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["DevOps"],
+    "tag_names": ["cloud", "security"]
   },
   {
     "title": "npm - Build amazing things",
     "url": "https://www.npmjs.com",
     "slug": "npm",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["javascript", "packages"]
   },
   {
     "title": "PyPI - The Python Package Index",
     "url": "https://pypi.org",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["python", "packages"]
   },
   {
     "title": "Rust - A language empowering everyone to build reliable software",
     "url": "https://www.rust-lang.org",
     "slug": "rust",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["languages"]
   },
   {
     "title": "Go - The Go Programming Language",
     "url": "https://go.dev",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["languages"]
   },
   {
     "title": "Python - Official website",
     "url": "https://www.python.org",
     "slug": "python",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["python", "languages"]
   },
   {
     "title": "JavaScript.info - Modern JavaScript Tutorial",
     "url": "https://javascript.info",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Documentation"],
+    "tag_names": ["javascript", "reference"]
   },
   {
     "title": "CSS-Tricks - Tips, tricks, and techniques on using Cascading Style Sheets",
     "url": "https://css-tricks.com",
     "slug": "css-tricks",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Documentation"],
+    "tag_names": ["css", "reference"]
   },
   {
     "title": "Can I Use - Browser support for web technologies",
     "url": "https://caniuse.com",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["reference", "compatibility"]
   },
   {
     "title": "Web.dev - Learn web development",
     "url": "https://web.dev",
     "slug": "webdev",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Documentation"],
+    "tag_names": ["frontend", "reference"]
   },
   {
     "title": "Laravel - The PHP Framework for Web Artisans",
     "url": "https://laravel.com",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["php", "backend"]
   },
   {
     "title": "Django - The web framework for perfectionists with deadlines",
     "url": "https://www.djangoproject.com",
     "slug": "django",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["python", "backend"]
   },
   {
     "title": "Ruby on Rails - A web-application framework",
     "url": "https://rubyonrails.org",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["ruby", "backend"]
   },
   {
     "title": "Next.js - The React Framework for Production",
     "url": "https://nextjs.org",
     "slug": "nextjs",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["javascript", "frontend"]
   },
   {
     "title": "Nuxt - The Intuitive Vue Framework",
     "url": "https://nuxt.com",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["javascript", "frontend"]
   },
   {
     "title": "Svelte - Cybernetically enhanced web apps",
     "url": "https://svelte.dev",
     "slug": "svelte",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["javascript", "frontend"]
   },
   {
     "title": "Vue.js - The Progressive JavaScript Framework",
     "url": "https://vuejs.org",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["javascript", "frontend"]
   },
   {
     "title": "Angular - One framework. Mobile & desktop.",
     "url": "https://angular.io",
     "slug": "angular",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["javascript", "frontend"]
   },
   {
     "title": "GraphQL - A query language for your API",
     "url": "https://graphql.org",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["api", "reference"]
   },
   {
     "title": "REST API Tutorial - Learn REST APIs",
     "url": "https://restfulapi.net",
     "slug": "rest",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Documentation"],
+    "tag_names": ["api", "reference"]
   },
   {
     "title": "JSON - Data interchange format",
     "url": "https://www.json.org",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["reference", "data"]
   },
   {
     "title": "YAML - Human friendly data serialization standard",
     "url": "https://yaml.org",
     "slug": "yaml",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["reference", "data"]
   },
   {
     "title": "Markdown Guide - Everything you need to learn Markdown",
     "url": "https://www.markdownguide.org",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Documentation"],
+    "tag_names": ["docs", "reference"]
   },
   {
     "title": "Git - Distributed version control system",
     "url": "https://git-scm.com",
     "slug": "git",
     "forwarding_enabled": true,
-    "pinned": true
+    "pinned": true,
+    "folder_names": ["Development"],
+    "tag_names": ["git", "tools"]
   },
   {
     "title": "GitLab - The DevOps platform",
     "url": "https://about.gitlab.com",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development", "DevOps"],
+    "tag_names": ["git"]
   },
   {
     "title": "Bitbucket - Git code management",
     "url": "https://bitbucket.org",
     "slug": "bitbucket",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["git"]
   },
   {
     "title": "Jira - Issue and project tracking software",
     "url": "https://www.atlassian.com/software/jira",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Tools"],
+    "tag_names": ["project-management"]
   },
   {
     "title": "Notion - All-in-one workspace",
     "url": "https://www.notion.so",
     "slug": "notion",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Tools"],
+    "tag_names": ["productivity"]
   },
   {
     "title": "Obsidian - A knowledge base that works on local Markdown files",
     "url": "https://obsidian.md",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Tools"],
+    "tag_names": ["productivity", "docs"]
   },
   {
     "title": "Figma - The collaborative interface design tool",
     "url": "https://www.figma.com",
     "slug": "figma",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Tools"],
+    "tag_names": ["design"]
   },
   {
     "title": "Adobe Creative Cloud - Creative apps and services",
     "url": "https://www.adobe.com/creativecloud.html",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Tools"],
+    "tag_names": ["design"]
   },
   {
     "title": "Unsplash - Beautiful, free images",
     "url": "https://unsplash.com",
     "slug": "unsplash",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Tools"],
+    "tag_names": ["design", "images"]
   },
   {
     "title": "Pexels - Free stock photos",
     "url": "https://www.pexels.com",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "tag_names": ["design", "images"]
   },
   {
     "title": "Font Awesome - Icons and social logos",
     "url": "https://fontawesome.com",
     "slug": "fa",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["icons", "frontend"]
   },
   {
     "title": "Lucide - Beautiful & consistent icon toolkit",
     "url": "https://lucide.dev",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["icons", "frontend"]
   },
   {
     "title": "Google Fonts - Making the web more beautiful",
     "url": "https://fonts.google.com",
     "slug": "fonts",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["frontend", "typography"]
   },
   {
     "title": "Coolors - The super fast color schemes generator",
     "url": "https://coolors.co",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Tools"],
+    "tag_names": ["design"]
   },
   {
     "title": "Regex101 - Online regex tester and debugger",
     "url": "https://regex101.com",
     "slug": "regex",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["tools", "reference"]
   },
   {
     "title": "JSONLint - The JSON Validator",
     "url": "https://jsonlint.com",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["tools", "data"]
   },
   {
     "title": "Postman - API platform for building and using APIs",
     "url": "https://www.postman.com",
     "slug": "postman",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["api", "tools"]
   },
   {
     "title": "Insomnia - The collaborative API design platform",
     "url": "https://insomnia.rest",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["api", "tools"]
   },
   {
     "title": "Swagger - API documentation and design",
     "url": "https://swagger.io",
     "slug": "swagger",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Documentation"],
+    "tag_names": ["api", "docs"]
   },
   {
     "title": "OpenAPI Initiative - OpenAPI Specification",
     "url": "https://www.openapis.org",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Documentation"],
+    "tag_names": ["api"]
   },
   {
     "title": "Let's Encrypt - Free SSL/TLS certificates",
     "url": "https://letsencrypt.org",
     "slug": "ssl",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["DevOps", "Security"],
+    "tag_names": ["security", "tls"]
   },
   {
     "title": "OWASP - Open Web Application Security Project",
     "url": "https://owasp.org",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Security"],
+    "tag_names": ["security", "reference"]
   },
   {
     "title": "OWASP Top 10 - Most critical web application security risks",
     "url": "https://owasp.org/www-project-top-ten/",
     "slug": "owasp-top10",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Security"],
+    "tag_names": ["security", "reference"]
   },
   {
     "title": "WebAIM - Web Accessibility In Mind",
     "url": "https://webaim.org",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Documentation"],
+    "tag_names": ["accessibility", "reference"]
   },
   {
     "title": "W3C - World Wide Web Consortium",
     "url": "https://www.w3.org",
     "slug": "w3c",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Documentation"],
+    "tag_names": ["standards", "reference"]
   },
   {
     "title": "Web.dev Measure - Test your site's performance",
     "url": "https://web.dev/measure",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["performance", "tools"]
   },
   {
     "title": "PageSpeed Insights - Analyze your page's performance",
     "url": "https://pagespeed.web.dev",
     "slug": "pagespeed",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["performance", "tools"]
   },
   {
     "title": "GTmetrix - Website speed and performance optimization",
     "url": "https://gtmetrix.com",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "tag_names": ["performance", "tools"]
   },
   {
     "title": "Lighthouse - Automated auditing tool",
     "url": "https://developer.chrome.com/docs/lighthouse",
     "slug": "lighthouse",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["performance", "tools"]
   },
   {
     "title": "Chrome DevTools - Web developer tools",
     "url": "https://developer.chrome.com/docs/devtools",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["tools", "frontend"]
   },
   {
     "title": "Firefox Developer Tools - Web development tools",
     "url": "https://firefox-dev.tools",
     "slug": "firefox-devtools",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["tools", "frontend"]
   },
   {
     "title": "VS Code - Code editor redefined",
     "url": "https://code.visualstudio.com",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["tools", "editor"]
   },
   {
     "title": "JetBrains - Development tools",
     "url": "https://www.jetbrains.com",
     "slug": "jetbrains",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["tools", "editor"]
   },
   {
     "title": "Sublime Text - A sophisticated text editor",
     "url": "https://www.sublimetext.com",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "tag_names": ["tools", "editor"]
   },
   {
     "title": "Atom - A hackable text editor",
     "url": "https://atom.io",
     "slug": "atom",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "tag_names": ["tools", "editor"]
   },
   {
     "title": "Neovim - Hyperextensible Vim-based text editor",
     "url": "https://neovim.io",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "tag_names": ["tools", "editor"]
   },
   {
     "title": "Emacs - The extensible, customizable, self-documenting editor",
     "url": "https://www.gnu.org/software/emacs",
     "slug": "emacs",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["tools", "editor"]
   },
   {
     "title": "iTerm2 - Terminal emulator for macOS",
     "url": "https://iterm2.com",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["tools", "terminal"]
   },
   {
     "title": "Windows Terminal - Modern terminal application",
     "url": "https://aka.ms/terminal",
     "slug": "wt",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Development"],
+    "tag_names": ["tools", "terminal"]
   },
   {
     "title": "WSL - Windows Subsystem for Linux",
     "url": "https://learn.microsoft.com/en-us/windows/wsl",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["DevOps"],
+    "tag_names": ["tools", "linux"]
   },
   {
     "title": "Homebrew - The missing package manager for macOS",
     "url": "https://brew.sh",
     "slug": "brew",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["DevOps"],
+    "tag_names": ["tools", "packages"]
   },
   {
     "title": "Chocolatey - The package manager for Windows",
     "url": "https://chocolatey.org",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["DevOps"],
+    "tag_names": ["tools", "packages"]
   },
   {
     "title": "apt - Advanced Package Tool for Debian/Ubuntu",
     "url": "https://wiki.debian.org/Apt",
     "slug": "apt",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["DevOps"],
+    "tag_names": ["linux", "packages"]
   },
   {
     "title": "Arch Linux - A lightweight and flexible Linux distribution",
     "url": "https://archlinux.org",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Platforms"],
+    "tag_names": ["linux"]
   },
   {
     "title": "Ubuntu - The leading OS for PC, IoT and Server",
     "url": "https://ubuntu.com",
     "slug": "ubuntu",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Platforms"],
+    "tag_names": ["linux"]
   },
   {
     "title": "Fedora - The operating system for innovators",
     "url": "https://fedoraproject.org",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Platforms"],
+    "tag_names": ["linux"]
   },
   {
     "title": "macOS - Apple's operating system",
     "url": "https://www.apple.com/macos",
     "slug": "macos",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Platforms"],
+    "tag_names": ["os"]
   },
   {
     "title": "Windows - Microsoft's operating system",
     "url": "https://www.microsoft.com/windows",
     "forwarding_enabled": false,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Platforms"],
+    "tag_names": ["os"]
   },
   {
     "title": "Linux - The kernel",
     "url": "https://www.kernel.org",
     "slug": "linux",
     "forwarding_enabled": true,
-    "pinned": false
+    "pinned": false,
+    "folder_names": ["Platforms"],
+    "tag_names": ["linux", "reference"]
   }
 ]

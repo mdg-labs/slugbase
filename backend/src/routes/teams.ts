@@ -1,8 +1,7 @@
 import { Router } from 'express';
 import { query } from '../db/index.js';
 import { AuthRequest, requireAuth } from '../middleware/auth.js';
-import { isCloud } from '../config/mode.js';
-import { getCurrentOrgId } from '../utils/organizations.js';
+import { getTenantId } from '../utils/tenant.js';
 
 const router = Router();
 router.use(requireAuth());
@@ -47,27 +46,13 @@ router.get('/', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const userId = authReq.user!.id;
-    if (isCloud) {
-      const orgId = await getCurrentOrgId(userId);
-      if (!orgId) {
-        return res.json([]);
-      }
-      const teams = await query(
-        `SELECT t.* FROM teams t
-         INNER JOIN team_members tm ON t.id = tm.team_id
-         WHERE tm.user_id = ? AND t.org_id = ?
-         ORDER BY t.name`,
-        [userId, orgId]
-      );
-      const teamsList = Array.isArray(teams) ? teams : (teams ? [teams] : []);
-      return res.json(teamsList);
-    }
+    const tenantId = getTenantId(req);
     const teams = await query(
       `SELECT t.* FROM teams t
        INNER JOIN team_members tm ON t.id = tm.team_id
-       WHERE tm.user_id = ?
+       WHERE tm.user_id = ? AND tm.tenant_id = ? AND t.tenant_id = ?
        ORDER BY t.name`,
-      [userId]
+      [userId, tenantId, tenantId]
     );
     const teamsList = Array.isArray(teams) ? teams : (teams ? [teams] : []);
     res.json(teamsList);

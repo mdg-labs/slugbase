@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import api from '../api/client';
-import { appBasePath } from '../config/api';
+import { useAppConfig } from '../contexts/AppConfigContext';
 import { Mail, Key, ArrowLeft } from 'lucide-react';
 import Button from '../components/ui/Button';
 
 export default function PasswordReset() {
   const { t } = useTranslation();
+  const { appBasePath } = useAppConfig();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const token = searchParams.get('token');

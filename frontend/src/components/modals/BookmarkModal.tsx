@@ -32,6 +32,7 @@ interface Bookmark {
   url: string;
   slug: string;
   forwarding_enabled: boolean;
+  pinned?: boolean;
   owner_user_key?: string;
   folder_id?: string;
   tags?: Array<{ id: string; name: string }>;
@@ -63,6 +64,7 @@ export default function BookmarkModal({
     url: '',
     slug: '',
     forwarding_enabled: false,
+    pinned: false,
     folder_ids: [] as string[],
     tag_ids: [] as string[],
   });
@@ -153,6 +155,7 @@ export default function BookmarkModal({
         url: bookmark.url,
         slug: (bookmark.slug && !bookmark.slug.startsWith('_internal_')) ? bookmark.slug : '',
         forwarding_enabled: bookmark.forwarding_enabled,
+        pinned: bookmark.pinned ?? false,
         folder_ids: (bookmark as any).folders?.map((f: any) => f.id) || [],
         tag_ids: bookmark.tags?.map((t) => t.id) || [],
       });
@@ -163,6 +166,7 @@ export default function BookmarkModal({
         url: '',
         slug: '',
         forwarding_enabled: false,
+        pinned: false,
         folder_ids: [],
         tag_ids: [],
       });
@@ -180,6 +184,7 @@ export default function BookmarkModal({
         title: formData.title,
         url: formData.url,
         forwarding_enabled: formData.forwarding_enabled,
+        pinned: formData.pinned,
         folder_ids: formData.folder_ids.length > 0 ? formData.folder_ids : undefined,
         tag_ids: formData.tag_ids.length > 0 ? formData.tag_ids : undefined,
       };
@@ -379,6 +384,16 @@ export default function BookmarkModal({
             </div>
           </ModalSection>
 
+          <div className="flex items-center justify-between rounded-lg border p-3">
+            <Label htmlFor="pinned" className="text-sm font-medium cursor-pointer">
+              {t('bookmarks.pinned')}
+            </Label>
+            <Switch
+              id="pinned"
+              checked={formData.pinned}
+              onCheckedChange={(checked) => setFormData({ ...formData, pinned: !!checked })}
+            />
+          </div>
           <div className="flex items-center justify-between rounded-lg border p-3">
             <Label htmlFor="forwarding" className="text-sm font-medium cursor-pointer">
               {t('bookmarks.forwardingEnabled')}

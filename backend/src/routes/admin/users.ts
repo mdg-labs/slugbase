@@ -1,12 +1,13 @@
 import { Router } from 'express';
+import crypto from 'crypto';
 import { query, queryOne, execute } from '../../db/index.js';
 import { AuthRequest, requireAuth, requireAdmin } from '../../middleware/auth.js';
 import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
 import { validateEmail, normalizeEmail, validatePassword, validateLength, sanitizeString } from '../../utils/validation.js';
 import { generateUserKey } from '../../utils/user-key.js';
-import { isCloud } from '../../config/mode.js';
-import { deleteOrganization, getCurrentOrgId, setCurrentOrg } from '../../utils/organizations.js';
+import { getTenantId } from '../../utils/tenant.js';
+import { sendInviteEmail, isEmailSendingAvailable } from '../../utils/email.js';
 
 const router = Router();
 router.use(requireAuth());
@@ -68,22 +69,6 @@ router.use(requireAdmin());
 router.get('/', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
-    if (isCloud) {
-      const orgId = await getCurrentOrgId(authReq.user!.id);
-      if (!orgId) {
-        return res.json([]);
-      }
-      const users = await query(
-        `SELECT u.id, u.email, u.name, u.user_key, u.is_admin, u.oidc_provider, u.language, u.theme, u.created_at
-         FROM users u
-         INNER JOIN org_members om ON u.id = om.user_id
-         WHERE om.org_id = ?
-         ORDER BY u.name`,
-        [orgId]
-      );
-      const usersList = Array.isArray(users) ? users : (users ? [users] : []);
-      return res.json(usersList);
-    }
     const users = await query(
       'SELECT id, email, name, user_key, is_admin, oidc_provider, language, theme, created_at FROM users ORDER BY created_at DESC',
       []
@@ -159,19 +144,6 @@ router.get('/:id', async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
-    if (isCloud) {
-      const orgId = await getCurrentOrgId(authReq.user!.id);
-      if (!orgId) {
-        return res.status(404).json({ error: 'User not found' });
-      }
-      const inOrg = await queryOne(
-        'SELECT 1 FROM org_members WHERE user_id = ? AND org_id = ?',
-        [id, orgId]
-      );
-      if (!inOrg) {
-        return res.status(404).json({ error: 'User not found' });
-      }
-    }
     res.json(user);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -209,12 +181,16 @@ router.get('/:id', async (req, res) => {
  *                 type: string
  *                 format: password
  *                 minLength: 8
- *                 description: Optional password (required for local login)
+ *                 description: Optional password (required for local login). Omit when send_invite is true.
  *                 example: "securepassword123"
  *               is_admin:
  *                 type: boolean
  *                 default: false
  *                 example: false
+ *               send_invite:
+ *                 type: boolean
+ *                 default: false
+ *                 description: If true, create user without password and send invite email (SMTP must be configured).
  *     responses:
  *       201:
  *         description: User created successfully
@@ -233,6 +209,9 @@ router.get('/:id', async (req, res) => {
  *                   type: string
  *                 is_admin:
  *                   type: boolean
+ *                 inviteSent:
+ *                   type: boolean
+ *                   description: Present when send_invite was true; indicates whether invite email was sent.
  *       400:
  *         description: Missing required fields, invalid email format, or email already exists
  *       401:
@@ -240,13 +219,32 @@ router.get('/:id', async (req, res) => {
  *       403:
  *         description: Admin access required
  */
+function hashToken(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
 router.post('/', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
-    const { email, name, password, is_admin = false } = req.body;
+    const { email, name, password, is_admin = false, send_invite: sendInvite = false } = req.body;
 
     if (!email || !name) {
       return res.status(400).json({ error: 'Email and name are required' });
+    }
+
+    if (sendInvite && password) {
+      return res.status(400).json({
+        error: 'Cannot set password and send invite. Either set a password or choose "Send invite email".',
+      });
+    }
+
+    if (sendInvite) {
+      const emailAvailable = await isEmailSendingAvailable();
+      if (!emailAvailable) {
+        return res.status(400).json({
+          error: 'Invite by email is not available. Configure SMTP in Settings or set a password for the user.',
+        });
+      }
     }
 
     // Validate and normalize email
@@ -263,7 +261,7 @@ router.post('/', async (req, res) => {
     }
     const sanitizedName = sanitizeString(name);
 
-    // Validate password if provided
+    // Validate password if provided (and not invite path)
     if (password) {
       const passwordValidation = validatePassword(password);
       if (!passwordValidation.valid) {
@@ -302,7 +300,7 @@ router.post('/', async (req, res) => {
         break; // Success, exit retry loop
       } catch (error: any) {
         // If user_key collision, generate new key and retry
-        if (error.message && (error.message.includes('UNIQUE constraint') || error.message.includes('duplicate')) 
+        if (error.message && (error.message.includes('UNIQUE constraint') || error.message.includes('duplicate'))
             && error.message.includes('user_key')) {
           retries++;
           if (retries >= maxRetries) {
@@ -316,14 +314,23 @@ router.post('/', async (req, res) => {
       }
     }
 
-    if (isCloud) {
-      const orgId = await getCurrentOrgId(authReq.user!.id);
-      if (orgId) {
-        await execute(
-          'INSERT INTO org_members (user_id, org_id, role) VALUES (?, ?, ?)',
-          [userId, orgId, 'member']
-        );
-        await setCurrentOrg(userId, orgId);
+    let inviteSent = false;
+    if (sendInvite) {
+      const token = crypto.randomBytes(32).toString('hex');
+      const tokenHash = hashToken(token);
+      const tokenId = uuidv4();
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7);
+      const tokenPlaceholder = 'h:' + tokenId;
+      await execute(
+        'INSERT INTO password_reset_tokens (id, user_id, token, token_hash, expires_at) VALUES (?, ?, ?, ?, ?)',
+        [tokenId, userId, tokenPlaceholder, tokenHash, expiresAt.toISOString()]
+      );
+      const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      const setPasswordUrl = `${baseUrl}/reset-password?token=${token}`;
+      inviteSent = await sendInviteEmail(normalizedEmail, setPasswordUrl, sanitizedName);
+      if (!inviteSent) {
+        console.warn('Invite email could not be sent for new user', userId);
       }
     }
 
@@ -331,7 +338,11 @@ router.post('/', async (req, res) => {
       'SELECT id, email, name, user_key, is_admin, oidc_provider, language, theme, created_at FROM users WHERE id = ?',
       [userId]
     );
-    res.status(201).json(user);
+    const payload: any = { ...user };
+    if (sendInvite) {
+      payload.inviteSent = inviteSent;
+    }
+    res.status(201).json(payload);
   } catch (error: any) {
     if (error.message && (error.message.includes('UNIQUE constraint') || error.message.includes('duplicate'))) {
       return res.status(400).json({ error: 'User with this email already exists' });
@@ -411,20 +422,6 @@ router.put('/:id', async (req, res) => {
     if (!existing) {
       return res.status(404).json({ error: 'User not found' });
     }
-    if (isCloud) {
-      const orgId = await getCurrentOrgId(authReq.user!.id);
-      if (!orgId) {
-        return res.status(404).json({ error: 'User not found' });
-      }
-      const inOrg = await queryOne(
-        'SELECT 1 FROM org_members WHERE user_id = ? AND org_id = ?',
-        [id, orgId]
-      );
-      if (!inOrg) {
-        return res.status(404).json({ error: 'User not found' });
-      }
-    }
-
     const updates: string[] = [];
     const params: any[] = [];
 
@@ -543,45 +540,7 @@ router.delete('/:id', async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
-    if (isCloud) {
-      const orgId = await getCurrentOrgId(authReq.user!.id);
-      if (!orgId) {
-        return res.status(404).json({ error: 'User not found' });
-      }
-      const inOrg = await queryOne(
-        'SELECT 1 FROM org_members WHERE user_id = ? AND org_id = ?',
-        [id, orgId]
-      );
-      if (!inOrg) {
-        return res.status(404).json({ error: 'User not found' });
-      }
-    }
-
-    // Detect orgs where user is sole member (for cleanup after deletion)
-    const orgsToCleanup: string[] = [];
-    if (isCloud) {
-      const userOrgs = await query('SELECT org_id FROM org_members WHERE user_id = ?', [id]);
-      const orgList = Array.isArray(userOrgs) ? userOrgs : userOrgs ? [userOrgs] : [];
-      for (const row of orgList) {
-        const oid = (row as any).org_id;
-        if (oid) {
-          const countRow = await queryOne('SELECT COUNT(*) as count FROM org_members WHERE org_id = ?', [oid]);
-          const count = parseInt((countRow as any)?.count || '0');
-          if (count === 1) orgsToCleanup.push(oid);
-        }
-      }
-    }
-
     await execute('DELETE FROM users WHERE id = ?', [id]);
-
-    // Clean up orphan orgs (user was sole member)
-    for (const orgId of orgsToCleanup) {
-      try {
-        await deleteOrganization(orgId);
-      } catch (err: any) {
-        console.warn('Org cleanup after user delete failed:', err?.message);
-      }
-    }
 
     res.json({ message: 'User deleted' });
   } catch (error: any) {
@@ -636,25 +595,12 @@ router.get('/:id/teams', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const { id } = req.params;
-    if (isCloud) {
-      const orgId = await getCurrentOrgId(authReq.user!.id);
-      if (!orgId) {
-        return res.json([]);
-      }
-      const teams = await query(
-        `SELECT t.* FROM teams t
-         INNER JOIN team_members tm ON t.id = tm.team_id
-         WHERE tm.user_id = ? AND t.org_id = ?`,
-        [id, orgId]
-      );
-      const teamsList = Array.isArray(teams) ? teams : (teams ? [teams] : []);
-      return res.json(teamsList);
-    }
+    const tenantId = getTenantId(req);
     const teams = await query(
       `SELECT t.* FROM teams t
        INNER JOIN team_members tm ON t.id = tm.team_id
-       WHERE tm.user_id = ?`,
-      [id]
+       WHERE tm.user_id = ? AND tm.tenant_id = ? AND t.tenant_id = ?`,
+      [id, tenantId, tenantId]
     );
     const teamsList = Array.isArray(teams) ? teams : (teams ? [teams] : []);
     res.json(teamsList);

@@ -2,6 +2,8 @@
 
 This document covers deploying SlugBase to Fly.io with Neon PostgreSQL. The deployment uses the **combined image** (frontend + backend) so a single Fly app serves the full stack. The setup supports staging (active) and production (ready when needed), both hosted in the EU (Frankfurt).
 
+**Fly.io config:** The `fly.toml` and deploy workflows for SlugBase Cloud live in the **slugbase-cloud** repo, not in this (slugbase-core) repo. This doc describes the setup; use the slugbase-cloud repository for the actual Fly config and GitHub Actions deploy workflows.
+
 ---
 
 ## Prerequisites
@@ -20,7 +22,7 @@ This document covers deploying SlugBase to Fly.io with Neon PostgreSQL. The depl
 | `staging` | slugbase-staging  | Push, workflow_dispatch  |
 | `main`    | slugbase-prod     | Push, workflow_dispatch  |
 
-Deployment is handled by GitHub Actions (`.github/workflows/deploy-fly-staging.yml` and `deploy-fly-prod.yml`). If you previously used Fly.io's built-in GitHub integration, disable it in the Fly dashboard (App → Deployments → Settings) to avoid duplicate deploys.
+Deployment is handled by GitHub Actions in the **slugbase-cloud** repo (e.g. `deploy-fly-staging.yml` and `deploy-fly-prod.yml`). If you previously used Fly.io's built-in GitHub integration, disable it in the Fly dashboard (App → Deployments → Settings) to avoid duplicate deploys.
 
 ---
 
@@ -53,7 +55,7 @@ fly apps create slugbase-prod
 
 ## 3. Set Secrets
 
-Non-sensitive vars are in `fly.toml`. Sensitive values must be set via `fly secrets set` **before the first deploy**.
+Non-sensitive vars are in `fly.toml` (in the slugbase-cloud repo). Sensitive values must be set via `fly secrets set` **before the first deploy**.
 
 ### Required secrets
 
@@ -149,7 +151,7 @@ This triggers `.github/workflows/deploy-fly-prod.yml`. Or trigger manually: **Ac
 ### Health check failures
 
 - Ensure `/api/health` returns 200. The backend listens on port 8080.
-- Increase `grace_period` in `fly.toml` if the app needs more startup time.
+- Increase `grace_period` in `fly.toml` (in slugbase-cloud) if the app needs more startup time.
 
 ### DATABASE_URL format
 
@@ -160,12 +162,11 @@ This triggers `.github/workflows/deploy-fly-prod.yml`. Or trigger manually: **Ac
 ### Cold start / scale-to-zero
 
 - With `min_machines_running = 0`, the first request after idle may take a few seconds while a machine starts.
-- Adjust `min_machines_running` in `fly.toml` if you need always-on instances.
+- Adjust `min_machines_running` in `fly.toml` (in slugbase-cloud) if you need always-on instances.
 
 ---
 
 ## Related
 
-- [Grafana + Stats setup](https://docs.slugbase.app/infra/grafana-stats) – monitoring and business metrics
-- [GCP Terraform deployment](https://docs.slugbase.app/infra/terraform) – alternative deployment to Google Cloud
+- [Grafana + Stats setup](grafana-stats.md) – monitoring and business metrics
 - [SlugBase documentation](https://docs.slugbase.app) – general configuration and setup

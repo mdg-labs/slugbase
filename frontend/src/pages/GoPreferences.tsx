@@ -5,8 +5,9 @@ import { ArrowLeft, Trash2, ExternalLink } from 'lucide-react';
 import Button from '../components/ui/Button';
 import { useToast } from '../components/ui/Toast';
 import api from '../api/client';
-import { appBasePath } from '../config/api';
+import { useAppConfig } from '../contexts/AppConfigContext';
 import { PageLoadingSkeleton } from '../components/ui/PageLoadingSkeleton';
+import { safeHref } from '../utils/safeHref';
 
 interface SlugPreference {
   slug: string;
@@ -20,6 +21,7 @@ interface SlugPreference {
 
 export default function GoPreferences() {
   const { t } = useTranslation();
+  const { appBasePath } = useAppConfig();
   const { showToast } = useToast();
   const [preferences, setPreferences] = useState<SlugPreference[]>([]);
   const [loading, setLoading] = useState(true);
@@ -104,7 +106,7 @@ export default function GoPreferences() {
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <a
-                    href={pref.url}
+                    href={safeHref(pref.url)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="p-2 text-gray-500 hover:text-blue-600 dark:hover:text-blue-400"

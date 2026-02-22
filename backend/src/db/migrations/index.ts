@@ -12,7 +12,7 @@
  * 3. Import it below and add to the migrations array
  */
 
-import { execute, query } from '../index.js';
+import { execute, query, getDbType } from '../index.js';
 import * as migration001 from './001_migrate_slug_nullable.js';
 import * as migration002 from './002_add_oidc_custom_endpoints.js';
 import * as migration003 from './003_add_bookmark_features.js';
@@ -22,16 +22,13 @@ import * as migration006 from './006_refresh_tokens.js';
 import * as migration007 from './007_password_reset_token_hash.js';
 import * as migration008 from './008_slug_preferences.js';
 import * as migration009 from './009_signup_email_verified.js';
-import * as migration010 from './010_organizations.js';
-import * as migration011 from './011_org_scoped_teams.js';
-import * as migration012 from './012_org_invitations_token_hash.js';
 import * as migration013 from './013_signup_verification_token_hash.js';
 import * as migration014 from './014_stats_indexes.js';
 import * as migration015 from './015_api_tokens.js';
-import * as migration016 from './016_free_plan_grace_ends_at.js';
-import * as migration017 from './017_ai_suggestions.js';
 import * as migration018 from './018_ai_cache_output_language.js';
 import * as migration019 from './019_ai_suggestion_usage.js';
+import * as migration020 from './020_tenant_scope.js';
+import * as migration021 from './021_users_ai_suggestions_enabled.js';
 
 export interface Migration {
   migrationId: string;
@@ -97,24 +94,6 @@ const migrations: Migration[] = [
     down: migration009.down,
   },
   {
-    migrationId: migration010.migrationId,
-    migrationName: migration010.migrationName,
-    up: migration010.up,
-    down: migration010.down,
-  },
-  {
-    migrationId: migration011.migrationId,
-    migrationName: migration011.migrationName,
-    up: migration011.up,
-    down: migration011.down,
-  },
-  {
-    migrationId: migration012.migrationId,
-    migrationName: migration012.migrationName,
-    up: migration012.up,
-    down: migration012.down,
-  },
-  {
     migrationId: migration013.migrationId,
     migrationName: migration013.migrationName,
     up: migration013.up,
@@ -133,18 +112,6 @@ const migrations: Migration[] = [
     down: migration015.down,
   },
   {
-    migrationId: migration016.migrationId,
-    migrationName: migration016.migrationName,
-    up: migration016.up,
-    down: migration016.down,
-  },
-  {
-    migrationId: migration017.migrationId,
-    migrationName: migration017.migrationName,
-    up: migration017.up,
-    down: migration017.down,
-  },
-  {
     migrationId: migration018.migrationId,
     migrationName: migration018.migrationName,
     up: migration018.up,
@@ -156,12 +123,23 @@ const migrations: Migration[] = [
     up: migration019.up,
     down: migration019.down,
   },
+  {
+    migrationId: migration020.migrationId,
+    migrationName: migration020.migrationName,
+    up: migration020.up,
+    down: migration020.down,
+  },
+  {
+    migrationId: migration021.migrationId,
+    migrationName: migration021.migrationName,
+    up: migration021.up,
+    down: migration021.down,
+  },
 ];
 
 // Ensure migrations table exists
 async function ensureMigrationsTable() {
-  const DB_TYPE = process.env.DB_TYPE || 'sqlite';
-  
+  const DB_TYPE = getDbType();
   if (DB_TYPE === 'postgresql') {
     await execute(`
       CREATE TABLE IF NOT EXISTS schema_migrations (

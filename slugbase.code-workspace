@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../slugbase-cloud"
+		},
+		{
+			"path": "../slugbase-docs"
+		}
+	],
+	"settings": {}
+}

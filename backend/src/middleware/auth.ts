@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction, RequestHandler } from 'express';
 import passport from 'passport';
-import { isCloud } from '../config/mode.js';
 import { validateToken } from '../services/api-tokens.js';
 
 export interface AuthRequest extends Request {
@@ -10,7 +9,6 @@ export interface AuthRequest extends Request {
     name: string;
     user_key: string;
     is_admin: boolean;
-    org_role?: 'owner' | 'admin' | 'member' | null;
   };
 }
 
@@ -52,7 +50,7 @@ export function requireAuth(): RequestHandler {
 }
 
 /**
- * Middleware to authenticate and require admin (global or org admin in cloud).
+ * Middleware to authenticate and require global admin.
  * Supports JWT and API token same as requireAuth.
  */
 export function requireAdmin(): RequestHandler {
@@ -74,8 +72,7 @@ export function requireAdmin(): RequestHandler {
         return res.status(401).json({ error: 'Unauthorized' });
       }
       const isGlobalAdmin = user.is_admin === true || user.is_admin === 1;
-      const isOrgAdmin = isCloud && (user.org_role === 'owner' || user.org_role === 'admin');
-      if (!isGlobalAdmin && !isOrgAdmin) {
+      if (!isGlobalAdmin) {
         return res.status(403).json({ error: 'Forbidden' });
       }
       (req as AuthRequest).user = user;

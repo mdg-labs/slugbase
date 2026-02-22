@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import api from '../api/client';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { useConfirmDialog } from '../hooks/useConfirmDialog';
-import { Plus, Edit, Trash2, Share2, LayoutGrid, List, Folder } from 'lucide-react';
+import { Plus, Edit, Trash2, Share2, LayoutGrid, List, Folder, ChevronLeft, ChevronRight } from 'lucide-react';
 import FolderModal from '../components/modals/FolderModal';
 import ShareResourceDialog from '../components/sharing/ShareResourceDialog';
 import Button from '../components/ui/Button';
@@ -14,7 +14,9 @@ import FolderIcon from '../components/FolderIcon';
 import { PageHeader } from '../components/PageHeader';
 import { EmptyState } from '../components/EmptyState';
 import { PageLoadingSkeleton } from '../components/ui/PageLoadingSkeleton';
-import { appBasePath } from '../config/api';
+import { useAppConfig } from '../contexts/AppConfigContext';
+import { ScopeSegmentedControl } from '../components/ScopeSegmentedControl';
+import { FilterChips } from '../components/FilterChips';
 
 interface Folder {
   id: string;
@@ -29,9 +31,13 @@ interface Folder {
 type ViewMode = 'card' | 'list';
 type SortOption = 'alphabetical' | 'recently_added';
 
+const DEFAULT_SORT: SortOption = 'alphabetical';
+
 export default function Folders() {
   const { t } = useTranslation();
+  const { appBasePath } = useAppConfig();
   const { showConfirm, dialogState } = useConfirmDialog();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [folders, setFolders] = useState<Folder[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -45,7 +51,20 @@ export default function Folders() {
   const [compactMode, setCompactMode] = useState(() => {
     return localStorage.getItem('folders-compact-mode') === 'true';
   });
-  const [sortBy, setSortBy] = useState<SortOption>('alphabetical');
+
+  const scopeParam = searchParams.get('scope');
+  const scope = (scopeParam === 'mine' || scopeParam === 'shared_with_me' || scopeParam === 'shared_by_me')
+    ? scopeParam
+    : 'all';
+  const sortParam = searchParams.get('sort');
+  const sortBy = (sortParam === 'recently_added' || sortParam === 'alphabetical') ? sortParam : DEFAULT_SORT;
+  const PAGE_SIZE_OPTIONS = [50, 100, 200, 500] as const;
+  const limitParam = searchParams.get('limit');
+  const pageSize = (limitParam && PAGE_SIZE_OPTIONS.includes(Number(limitParam) as typeof PAGE_SIZE_OPTIONS[number]))
+    ? Number(limitParam)
+    : 50;
+  const page = Math.max(0, parseInt(searchParams.get('page') || '0', 10));
+  const [totalFolders, setTotalFolders] = useState(0);
 
   useEffect(() => {
     localStorage.setItem('folders-view-mode', viewMode);
@@ -57,14 +76,26 @@ export default function Folders() {
 
   useEffect(() => {
     loadData();
-  }, [sortBy]);
+  }, [sortBy, scope, page, pageSize]);
 
   async function loadData() {
     try {
-      const foldersRes = await api.get('/folders', { params: { sort_by: sortBy } });
-      // Filter to only show own folders (not shared)
-      const ownFolders = foldersRes.data.filter((f: Folder) => f.folder_type === 'own');
-      setFolders(ownFolders);
+      const foldersRes = await api.get('/folders', {
+        params: {
+          sort_by: sortBy,
+          scope: scope !== 'all' ? scope : undefined,
+          limit: pageSize,
+          offset: page * pageSize,
+        },
+      });
+      const data = foldersRes.data;
+      if (data && typeof data === 'object' && 'items' in data && 'total' in data) {
+        setFolders(Array.isArray((data as { items: Folder[] }).items) ? (data as { items: Folder[] }).items : []);
+        setTotalFolders(Number((data as { total: number }).total) || 0);
+      } else {
+        setFolders(Array.isArray(data) ? data : []);
+        setTotalFolders(Array.isArray(data) ? data.length : 0);
+      }
     } catch (error) {
       console.error('Failed to load data:', error);
     } finally {
@@ -72,10 +103,58 @@ export default function Folders() {
     }
   }
 
-  const sortedFolders = useMemo(() => {
-    // Backend already sorts, but we can do client-side sorting if needed
-    return [...folders];
-  }, [folders]);
+  function updateParams(updates: { scope?: string; sort?: string; limit?: string; page?: string }) {
+    const params = new URLSearchParams(searchParams);
+    if (updates.scope !== undefined) {
+      if (updates.scope === 'all' || updates.scope === '') params.delete('scope');
+      else params.set('scope', updates.scope);
+    }
+    if (updates.sort !== undefined) {
+      if (updates.sort === DEFAULT_SORT || updates.sort === '') params.delete('sort');
+      else params.set('sort', updates.sort);
+    }
+    if (updates.limit !== undefined) {
+      if (updates.limit === '' || updates.limit === '50') params.delete('limit');
+      else params.set('limit', updates.limit);
+      params.set('page', '0');
+    }
+    if (updates.page !== undefined) {
+      if (updates.page === '0' || updates.page === '') params.delete('page');
+      else params.set('page', updates.page);
+    }
+    setSearchParams(params);
+  }
+
+  const hasActiveFilters = scope !== 'all' || sortBy !== DEFAULT_SORT;
+
+  function handleRemoveFilter(key: string) {
+    if (key === 'scope') updateParams({ scope: 'all' });
+    else if (key === 'sort') updateParams({ sort: DEFAULT_SORT });
+  }
+
+  function handleResetFilters() {
+    updateParams({ scope: 'all', sort: DEFAULT_SORT });
+  }
+
+  const sortOptions = [
+    { value: 'alphabetical' as const, label: t('folders.sortAlphabetical') },
+    { value: 'recently_added' as const, label: t('folders.sortRecentlyAdded') },
+  ];
+
+  const filterChips = useMemo(() => {
+    const list: { key: string; label: string; ariaLabel: string }[] = [];
+    if (scope !== 'all') {
+      const scopeLabel = scope === 'mine' ? t('bookmarks.scopeMine') : scope === 'shared_with_me' ? t('common.scopeSharedWithMe') : t('common.scopeSharedByMe');
+      list.push({ key: 'scope', label: scopeLabel, ariaLabel: t('folders.clearFilters') + ' ' + scopeLabel });
+    }
+    if (sortBy !== DEFAULT_SORT) {
+      const sortLabel = sortBy === 'recently_added' ? t('folders.sortRecentlyAdded') : t('folders.sortAlphabetical');
+      list.push({ key: 'sort', label: `Sort: ${sortLabel}`, ariaLabel: t('folders.clearFilters') + ' Sort' });
+    }
+    return list;
+  }, [scope, sortBy, t]);
+
+  const sortedFolders = useMemo(() => [...folders], [folders]);
 
   function handleCreate() {
     setEditingFolder(null);
@@ -110,11 +189,6 @@ export default function Folders() {
     setEditingFolder(null);
   }
 
-  const sortOptions = [
-    { value: 'alphabetical', label: t('folders.sortAlphabetical') },
-    { value: 'recently_added', label: t('folders.sortRecentlyAdded') },
-  ];
-
   if (loading) {
     return <PageLoadingSkeleton lines={6} />;
   }
@@ -125,28 +199,60 @@ export default function Folders() {
       <div className="sticky top-0 z-40 space-y-4 pb-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pt-0 -mt-8 bg-background border-b shadow-sm">
         <PageHeader
           className="pt-4"
-          title={t('folders.title')}
-          subtitle={`${folders.length} ${folders.length === 1 ? t('common.folder') : t('common.folders')}`}
+          title={`${t('folders.title')} (${totalFolders})`}
+          subtitle={
+            hasActiveFilters || totalFolders > pageSize
+              ? t('bookmarks.showingXOfY', { x: sortedFolders.length, y: totalFolders })
+              : undefined
+          }
           actions={
-            <Button onClick={handleCreate} icon={Plus}>
-              {t('folders.create')}
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <ScopeSegmentedControl
+                value={scope}
+                onChange={(s) => updateParams({ scope: s === 'all' ? undefined : s })}
+                options={[
+                  { value: 'all', label: t('bookmarks.scopeAll') },
+                  { value: 'mine', label: t('bookmarks.scopeMine') },
+                  { value: 'shared_with_me', label: t('common.scopeSharedWithMe') },
+                  { value: 'shared_by_me', label: t('common.scopeSharedByMe') },
+                ]}
+                ariaLabel={t('bookmarks.scopeAll')}
+              />
+              <Button onClick={handleCreate} icon={Plus}>
+                {t('folders.create')}
+              </Button>
+            </div>
           }
         />
 
-        {/* Toolbar: Sort, View Modes */}
-        {sortedFolders.length > 0 && (
+        <FilterChips
+          chips={filterChips}
+          onRemove={handleRemoveFilter}
+          onClearAll={handleResetFilters}
+          clearAllLabel={t('bookmarks.clearAllFilters')}
+          clearAllAriaLabel={t('bookmarks.clearAllFilters')}
+        />
+
+        {/* Toolbar: Sort, Page size, View Modes */}
         <div className="flex flex-wrap items-center gap-3 bg-card rounded-lg border p-4 shadow-sm">
           {/* Sort */}
           <div className="flex items-center gap-2">
             <Select
               value={sortBy}
-              onChange={(value) => setSortBy(value as SortOption)}
+              onChange={(value) => updateParams({ sort: value as SortOption })}
               options={sortOptions}
               className="min-w-[160px]"
             />
           </div>
-
+          <div className="flex items-center gap-2">
+            <Select
+              value={String(pageSize)}
+              onChange={(value) => updateParams({ limit: value })}
+              options={PAGE_SIZE_OPTIONS.map((n) => ({ value: String(n), label: String(n) }))}
+              className="min-w-[80px]"
+            />
+            <span className="text-sm text-muted-foreground whitespace-nowrap">{t('bookmarks.perPage')}</span>
+          </div>
           {/* View Mode Toggle */}
           <div className="flex items-center gap-2 border-l border-gray-200 dark:border-gray-700 pl-3 ml-auto">
             <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
@@ -186,31 +292,43 @@ export default function Folders() {
             </button>
           </div>
         </div>
-        )}
       </div>
 
       {/* Folders Display */}
       {sortedFolders.length === 0 ? (
-        <EmptyState
-          icon={Folder}
-          title={t('folders.empty')}
-          description={t('folders.emptyDescription')}
-          action={
-            <Button onClick={handleCreate} variant="primary" icon={Plus}>
-              {t('folders.create')}
-            </Button>
-          }
-        />
+        hasActiveFilters ? (
+          <EmptyState
+            icon={Folder}
+            title={t('bookmarks.noMatches')}
+            description={t('folders.noMatchesDescription')}
+            action={
+              <Button onClick={handleResetFilters} variant="secondary">
+                {t('bookmarks.clearAllFilters')}
+              </Button>
+            }
+          />
+        ) : (
+          <EmptyState
+            icon={Folder}
+            title={t('folders.empty')}
+            description={t('folders.emptyDescription')}
+            action={
+              <Button onClick={handleCreate} variant="primary" icon={Plus}>
+                {t('folders.create')}
+              </Button>
+            }
+          />
+        )
       ) : viewMode === 'card' ? (
-        <div className={`grid grid-cols-1 gap-4 ${
+        <div className={`grid grid-cols-1 gap-3 items-stretch ${
           compactMode 
-            ? 'sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6' 
-            : 'sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+            ? 'sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8' 
+            : 'sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6'
         }`}>
           {sortedFolders.map((folder) => (
             <div
               key={folder.id}
-              className={`group bg-card rounded-lg border border-border hover:border-primary hover:shadow-lg transition-all duration-200 flex flex-col ${compactMode ? 'p-2.5' : 'p-4'}`}
+              className={`group bg-card rounded-lg border border-border hover:border-primary/70 hover:bg-muted/50 hover:shadow-md transition-all duration-200 flex flex-col h-full min-h-0 ${compactMode ? 'p-2.5 min-h-[160px]' : 'p-2.5 min-h-[140px]'}`}
             >
               <Link
                 to={`${appBasePath}/bookmarks?folder_id=${folder.id}`}
@@ -218,11 +336,11 @@ export default function Folders() {
               >
                 <div className="space-y-3 flex-1 flex flex-col">
                   <div className="flex items-start gap-3">
-                    <div className={`flex-shrink-0 ${compactMode ? 'w-10 h-10' : 'w-12 h-12'} rounded-xl bg-primary/20 flex items-center justify-center border border-primary/30`}>
-                      <FolderIcon iconName={folder.icon} size={compactMode ? 20 : 24} className="text-primary" />
+                    <div className={`flex-shrink-0 ${compactMode ? 'w-9 h-9' : 'w-10 h-10'} rounded-xl bg-primary/20 flex items-center justify-center border border-primary/30`}>
+                      <FolderIcon iconName={folder.icon} size={compactMode ? 18 : 20} className="text-primary" />
                     </div>
                     <div className="flex-1 min-w-0 pt-0.5">
-                      <h3 className={`${compactMode ? 'text-xs' : 'text-[15px]'} font-medium text-gray-900 dark:text-white truncate mb-1.5`}>
+                      <h3 className={`${compactMode ? 'text-xs' : 'text-sm'} font-medium text-foreground truncate mb-1`}>
                         {folder.name}
                       </h3>
                       {folder.shared_teams && folder.shared_teams.length > 0 && (
@@ -254,21 +372,23 @@ export default function Folders() {
                 </div>
               </Link>
               {folder.folder_type === 'own' && (
-                <div className={`flex gap-2 pt-3 mt-auto border-t border-gray-100 dark:border-gray-700/50 ${compactMode ? 'pt-2' : ''}`}>
+                <div className={`flex gap-1.5 pt-2.5 mt-auto shrink-0 border-t border-border ${compactMode ? 'pt-2' : ''}`}>
                   <Button
                     variant="ghost"
                     size="sm"
                     icon={Share2}
+                    iconClassName="h-3.5 w-3.5 stroke-[1.5]"
                     onClick={() => { setSharingFolder(folder); setShareDialogOpen(true); }}
                     title={t('sharing.shareFolder')}
-                    className={`${compactMode ? 'text-xs px-2 py-1' : 'text-xs'}`}
+                    className="h-8 w-8 p-0 flex-shrink-0"
                   />
                   <Button
                     variant="ghost"
                     size="sm"
                     icon={Edit}
+                    iconClassName="h-3.5 w-3.5 stroke-[1.5]"
                     onClick={() => handleEdit(folder)}
-                    className={`flex-1 ${compactMode ? 'text-xs px-2 py-1' : 'text-xs'}`}
+                    className="flex-1 h-8 min-w-0 text-xs"
                   >
                     {t('common.edit')}
                   </Button>
@@ -276,9 +396,10 @@ export default function Folders() {
                     variant="ghost"
                     size="sm"
                     icon={Trash2}
+                    iconClassName="h-3.5 w-3.5 stroke-[1.5]"
                     onClick={() => handleDelete(folder.id)}
                     title={t('common.delete')}
-                    className={`text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 ${compactMode ? 'px-1.5' : 'px-2'}`}
+                    className="h-8 w-8 p-0 flex-shrink-0 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                   />
                 </div>
               )}
@@ -397,6 +518,39 @@ export default function Folders() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {totalFolders > pageSize && sortedFolders.length > 0 && (
+        <div className="flex items-center justify-between gap-4 mt-6 py-4 border-t border-border">
+          <p className="text-sm text-muted-foreground">
+            {t('bookmarks.paginationShowing', {
+              from: page * pageSize + 1,
+              to: Math.min(page * pageSize + sortedFolders.length, totalFolders),
+              total: totalFolders,
+            })}
+          </p>
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={ChevronLeft}
+              onClick={() => updateParams({ page: String(Math.max(0, page - 1)) })}
+              disabled={page === 0}
+            >
+              {t('bookmarks.paginationPrevious')}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={ChevronRight}
+              iconPosition="right"
+              onClick={() => updateParams({ page: String(page + 1) })}
+              disabled={page * pageSize + sortedFolders.length >= totalFolders}
+            >
+              {t('bookmarks.paginationNext')}
+            </Button>
+          </div>
         </div>
       )}
 

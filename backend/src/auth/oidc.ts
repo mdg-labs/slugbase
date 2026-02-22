@@ -4,9 +4,8 @@ import { queryOne, execute, query } from '../db/index.js';
 import { v4 as uuidv4 } from 'uuid';
 import { decrypt } from '../utils/encryption.js';
 import { generateUserKey } from '../utils/user-key.js';
-import { isCloud } from '../config/mode.js';
-import { getCloudProviders } from '../config/cloud-providers.js';
-import { ensureOrgForUser } from '../utils/organizations.js';
+import type { OIDCProviderRecord, OidcConfigProvider } from '../types/oidc-provider.js';
+import { getDefaultTenantId } from '../utils/tenant.js';
 
 export function setupOIDC() {
   // Serialization for OIDC OAuth flow (sessions are only used during OAuth redirect)
@@ -26,8 +25,8 @@ export function setupOIDC() {
   });
 }
 
-/** Register a single OIDC strategy (shared by CLOUD env providers and SELFHOSTED DB providers). */
-async function registerOIDCStrategy(provider: any, clientSecret: string): Promise<void> {
+/** Register a single OIDC strategy from DB-backed configuration. */
+async function registerOIDCStrategy(provider: OIDCProviderRecord, clientSecret: string): Promise<void> {
   if (!provider.client_id || !clientSecret || !provider.issuer_url || !provider.provider_key) {
     throw new Error(`Missing required fields for provider ${provider.provider_key || provider.id}`);
   }
@@ -128,9 +127,6 @@ async function registerOIDCStrategy(provider: any, clientSecret: string): Promis
               }
 
               user = await queryOne('SELECT * FROM users WHERE id = ?', [userId]);
-              if (isCloud && user) {
-                await ensureOrgForUser(userId, name);
-              }
               return cb(null, user);
             } catch (error: any) {
               console.error(`[OIDC] Error during user creation/update:`, {
@@ -177,24 +173,22 @@ async function registerOIDCStrategy(provider: any, clientSecret: string): Promis
   passport.use(provider.provider_key, new OpenIDConnectStrategy(strategyConfig, verifyFunction as any));
 }
 
-export async function loadOIDCStrategies() {
+class DatabaseOidcConfigProvider implements OidcConfigProvider {
+  async getProviders(tenantId: string): Promise<OIDCProviderRecord[]> {
+    const providers = await query(
+      'SELECT id, provider_key, client_id, client_secret, issuer_url, authorization_url, token_url, userinfo_url, scopes, auto_create_users, default_role FROM oidc_providers WHERE tenant_id = ?',
+      [tenantId]
+    );
+    return Array.isArray(providers) ? (providers as OIDCProviderRecord[]) : (providers ? [providers as OIDCProviderRecord] : []);
+  }
+}
+
+const oidcProviderStore: OidcConfigProvider = new DatabaseOidcConfigProvider();
+
+export async function loadOIDCStrategies(tenantId: string = getDefaultTenantId()) {
   try {
-    if (isCloud) {
-      const cloudProviders = getCloudProviders();
-      for (const provider of cloudProviders) {
-        try {
-          await registerOIDCStrategy(provider, provider.client_secret);
-        } catch (providerError: any) {
-          console.error(`Error loading CLOUD OIDC provider ${provider.provider_key}:`, providerError.message || providerError);
-        }
-      }
-      return;
-    }
-
-    const providers = await query('SELECT id, provider_key, client_id, client_secret, issuer_url, authorization_url, token_url, userinfo_url, scopes, auto_create_users, default_role FROM oidc_providers', []);
-    if (!providers || providers.length === 0) return;
-
-    const providersList = Array.isArray(providers) ? providers : [providers];
+    const providersList = await oidcProviderStore.getProviders(tenantId);
+    if (providersList.length === 0) return;
     for (const provider of providersList) {
       try {
         const decryptedSecret = decrypt(provider.client_secret);
@@ -215,7 +209,7 @@ export async function reloadOIDCStrategies() {
     // Use a type assertion to access internal strategies map
     const strategies = Object.keys((passport as any)._strategies || {});
     strategies.forEach((key: string) => {
-      if (key !== 'jwt') {
+      if (key !== 'jwt' && key !== 'session') {
         try {
           passport.unuse(key);
         } catch (error: any) {

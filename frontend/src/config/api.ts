@@ -1,22 +1,16 @@
 /**
- * API base URL for requests and OAuth redirects.
- * In CLOUD mode, use VITE_API_URL (e.g. https://api.slugbase.app).
- * In SELFHOSTED, use empty string so requests are relative to current origin.
+ * Self-hosted API config always uses relative paths by default.
  */
+export const apiBaseUrl: string = '';
 
-import { isCloud } from './mode';
-
-export const apiBaseUrl: string = isCloud && import.meta.env.VITE_API_URL
-  ? (import.meta.env.VITE_API_URL as string).replace(/\/$/, '')
-  : '';
-
-/** Full URL to start OIDC login for a provider (for window.location.href in CLOUD). */
-export function getAuthProviderUrl(providerKey: string): string {
-  return apiBaseUrl ? `${apiBaseUrl}/api/auth/${providerKey}` : `/api/auth/${providerKey}`;
+/** Full URL to start OIDC login for a provider. Pass apiBaseUrl when using from context (e.g. useAppConfig().apiBaseUrl). */
+export function getAuthProviderUrl(providerKey: string, baseUrl?: string): string {
+  const url = baseUrl ?? apiBaseUrl;
+  return url ? `${url.replace(/\/$/, '')}/api/auth/${providerKey}` : `/api/auth/${providerKey}`;
 }
 
-/** Base path for app routes: '' in SELFHOSTED, '/app' in CLOUD. Use for links like to={`${appBasePath}/bookmarks`}. */
-export const appBasePath: string = isCloud ? '/app' : '';
+/** Base path for app routes. */
+export const appBasePath: string = '';
 
-/** Root path for the app (dashboard): '/' in SELFHOSTED, '/app' in CLOUD. Use for post-login/setup redirects. */
-export const appRootPath: string = isCloud ? '/app' : '/';
+/** Root path for the app (dashboard). */
+export const appRootPath: string = '/';

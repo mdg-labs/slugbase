@@ -1,21 +1,17 @@
 # SlugBase Documentation
 
-This directory contains customer-facing documentation for SlugBase, organized by deployment type.
+Full documentation for SlugBase (self-hosted and Cloud) is published at:
 
-## Structure
+**https://docs.slugbase.app**
 
-- **`selfhosted/`** – Documentation for self-hosted SlugBase instances (setup, features, admin, OIDC, etc.).
-- **`cloud/`** – Documentation for SlugBase Cloud (hosted SaaS).
-- **`infra/`** – Deployment and infrastructure (Fly.io, Terraform, Grafana).
-- **`releasing.md`** – Versioning workflow and release process.
-- **`assets/`** – Shared images and assets used by both selfhosted and cloud docs.
+- **Self-hosted**: Setup, features, admin, OIDC, and more.
+- **Cloud (SaaS)**: Overview, auth, plans, billing, and feature guides.
 
-## Local-only: `internal/`
+This repo keeps only minimal in-repo docs:
 
-The **`internal/`** folder is for private notes and is **not tracked in git** and **not synced** to the public docs site. Use it for:
-
-- Terraform and deployment runbooks
-- Environment variable reference
-- One-off operational notes
-
-See the note in `.gitignore`: `docs/internal/` is excluded from version control.
+- [STRATEGIC-DECISION-ARCHITECTURE.md](STRATEGIC-DECISION-ARCHITECTURE.md) – Long-term architecture options (A/B/C) and recommendation.
+- [PACKAGE-BOUNDARIES-AND-EXPORTS.md](PACKAGE-BOUNDARIES-AND-EXPORTS.md) – Option B: package split, exports, extension points, app-only responsibilities.
+- [releasing.md](releasing.md) – Versioning and release process.
+- [infra/](infra/) – Deployment and infrastructure (Fly.io, Grafana).
+- [UPGRADING-CLOUD.md](UPGRADING-CLOUD.md) – How to upgrade SlugBase Cloud to a new core version.
+- [SAAS-PREVENTION.md](SAAS-PREVENTION.md) – Checklist to keep core free of SaaS logic.
