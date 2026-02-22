@@ -36,6 +36,7 @@ interface DashboardStats {
   recentBookmarks: RecentBookmark[];
   topTags: Array<{ id: string; name: string; bookmark_count: number }>;
   quickAccessBookmarks?: QuickAccessBookmark[];
+  pinnedBookmarks?: QuickAccessBookmark[];
 }
 
 function getDomain(url: string): string {
@@ -178,6 +179,7 @@ export default function Dashboard() {
   }
 
   const quickAccess = stats?.quickAccessBookmarks ?? [];
+  const pinnedBookmarks = stats?.pinnedBookmarks ?? [];
 
   return (
     <div className="space-y-8">
@@ -225,6 +227,72 @@ export default function Dashboard() {
           />
         </div>
       )}
+
+      {/* Pinned bookmarks — same style as Quick Access */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
+            {t('dashboard.pinned')}
+          </h2>
+          <Link
+            to={appBasePath + '/bookmarks?pinned=true'}
+            className="text-sm font-medium text-primary hover:underline"
+          >
+            {t('dashboard.viewAll')}
+            <ArrowRight className="inline-block ml-1 h-4 w-4" />
+          </Link>
+        </div>
+        {pinnedBookmarks.length > 0 ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-3 overflow-hidden min-w-0">
+            {pinnedBookmarks.map((b) => (
+              <button
+                key={b.id}
+                type="button"
+                onClick={() => {
+                  api.post(`/bookmarks/${b.id}/track-access`).catch(() => {});
+                  window.open(b.url, '_blank', 'noopener,noreferrer');
+                }}
+                className="group flex flex-col rounded-xl border border-border bg-card p-3 hover:border-primary/50 hover:shadow-md transition-all text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <div className="flex items-start gap-2.5 mb-1.5">
+                  <div className="relative h-7 w-7 shrink-0 rounded bg-muted overflow-hidden">
+                    <img
+                      src={getFaviconUrl(b.url)}
+                      alt=""
+                      className="h-7 w-7 w-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                        (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                      }}
+                    />
+                    <span className="hidden absolute inset-0 flex items-center justify-center bg-primary/10 rounded">
+                      <Bookmark className="h-3.5 w-3.5 text-primary" />
+                    </span>
+                  </div>
+                  <p className="font-medium text-foreground line-clamp-2 text-xs flex-1 min-w-0">{b.title}</p>
+                </div>
+                <p className="text-[11px] text-primary font-mono truncate" title={b.slug ? `go/${b.slug}` : undefined}>{b.slug ? `go/${b.slug}` : getDomain(b.url)}</p>
+                <p className="text-[11px] text-muted-foreground truncate mt-0.5">{getDomain(b.url)}</p>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <Card className="border border-border bg-card shadow-sm">
+            <CardContent className="p-6">
+              <EmptyState
+                icon={Bookmark}
+                title={t('dashboard.noPinnedBookmarks')}
+                description={t('dashboard.pinFromBookmarks')}
+                action={
+                  <Link to={appBasePath + '/bookmarks'}>
+                    <Button variant="secondary">{t('dashboard.pinFromBookmarksLink')}</Button>
+                  </Link>
+                }
+              />
+            </CardContent>
+          </Card>
+        )}
+      </section>
 
       {/* Quick Access bookmarks — horizontal card grid; responsive columns and scroll on narrow */}
       <section className="space-y-3">

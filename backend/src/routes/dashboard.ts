@@ -256,7 +256,7 @@ router.get('/stats', requireAuth(), async (req, res) => {
     );
     const topTagsList = Array.isArray(topTags) ? topTags : (topTags ? [topTags] : []);
 
-    // Quick access bookmarks: 12 most opened (by access_count); when all are 0, show 12 random.
+    // Quick access bookmarks: 16 most opened (by access_count); when all are 0, show 16 random.
     const hasAnyOpened = await queryOne(
       `SELECT 1 FROM bookmarks
        WHERE user_id = ? AND tenant_id = ? AND slug IS NOT NULL AND slug != ''
@@ -269,17 +269,31 @@ router.get('/stats', requireAuth(), async (req, res) => {
         ? `SELECT id, title, url, slug FROM bookmarks
            WHERE user_id = ? AND tenant_id = ? AND slug IS NOT NULL AND slug != ''
            ORDER BY COALESCE(access_count, 0) DESC, last_accessed_at DESC NULLS LAST, created_at DESC
-           LIMIT 12`
+           LIMIT 16`
         : `SELECT id, title, url, slug FROM bookmarks
            WHERE user_id = ? AND tenant_id = ? AND slug IS NOT NULL AND slug != ''
            ORDER BY RANDOM()
-           LIMIT 12`,
+           LIMIT 16`,
       [userId, tenantId]
     );
     const quickAccessList = Array.isArray(quickAccessBookmarks)
       ? quickAccessBookmarks
       : quickAccessBookmarks
         ? [quickAccessBookmarks]
+        : [];
+
+    // Pinned bookmarks (own only, up to 16)
+    const pinnedBookmarks = await query(
+      `SELECT id, title, url, slug FROM bookmarks
+       WHERE user_id = ? AND tenant_id = ? AND pinned = 1
+       ORDER BY COALESCE(updated_at, created_at) DESC
+       LIMIT 16`,
+      [userId, tenantId]
+    );
+    const pinnedList = Array.isArray(pinnedBookmarks)
+      ? pinnedBookmarks
+      : pinnedBookmarks
+        ? [pinnedBookmarks]
         : [];
 
     res.json({
@@ -291,6 +305,7 @@ router.get('/stats', requireAuth(), async (req, res) => {
       recentBookmarks: recentBookmarksEnriched,
       topTags: topTagsList,
       quickAccessBookmarks: quickAccessList,
+      pinnedBookmarks: pinnedList,
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });

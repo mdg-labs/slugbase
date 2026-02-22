@@ -1,10 +1,11 @@
-import { Share2, Tag as TagIcon, ExternalLink, Copy, Edit, Trash2, CheckSquare, Square } from 'lucide-react';
+import { Share2, Tag as TagIcon, ExternalLink, Copy, Edit, Trash2, CheckSquare, Square, Pin } from 'lucide-react';
 import Button from '../ui/Button';
 import Tooltip from '../ui/Tooltip';
 import Favicon from '../Favicon';
 import FolderIcon from '../FolderIcon';
 import { Badge } from '../ui/badge';
 import { safeHref } from '../../utils/safeHref';
+import { formatRelativeTime, formatFullDateTime } from '../../utils/formatRelativeTime';
 
 interface Bookmark {
   id: string;
@@ -17,6 +18,9 @@ interface Bookmark {
   shared_teams?: Array<{ id: string; name: string }>;
   shared_users?: Array<{ id: string; name: string; email: string }>;
   bookmark_type?: 'own' | 'shared';
+  pinned?: boolean;
+  access_count?: number;
+  last_accessed_at?: string | null;
 }
 
 interface BookmarkCardProps {
@@ -29,6 +33,7 @@ interface BookmarkCardProps {
   onCopyUrl: () => void;
   onShare?: () => void;
   onOpen?: () => void;
+  onPinToggle?: () => void;
   bulkMode: boolean;
   t: any;
 }
@@ -43,6 +48,7 @@ export default function BookmarkCard({
   onCopyUrl,
   onShare,
   onOpen,
+  onPinToggle,
   bulkMode,
   t,
 }: BookmarkCardProps) {
@@ -78,16 +84,16 @@ export default function BookmarkCard({
       className={`group bg-card rounded-lg border ${
         selected
           ? 'border-primary ring-2 ring-primary/20'
-          : 'border-border hover:border-primary/70 hover:bg-muted/50'
-      } transition-all duration-200 flex flex-col h-full min-h-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${compact ? 'p-2.5 min-h-[180px]' : 'p-3'}`}
+          : 'border-border hover:border-primary/70 hover:bg-muted/50 hover:shadow-md'
+      } transition-all duration-200 flex flex-col h-full min-h-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${compact ? 'p-2.5 min-h-[160px]' : 'p-2.5 min-h-[140px]'}`}
     >
-      <div className={`flex-shrink-0 space-y-3 ${compact ? 'space-y-2' : ''}`}>
-        <div className="flex items-start gap-3">
+      <div className="flex-shrink-0 mb-3">
+        <div className="flex items-center gap-3">
           {bulkMode && (
             <button
               data-card-action
               onClick={(e) => { e.stopPropagation(); onSelect(); }}
-              className="flex-shrink-0 mt-0.5 text-primary"
+              className="flex-shrink-0 text-primary"
             >
               {selected ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5" />}
             </button>
@@ -95,8 +101,8 @@ export default function BookmarkCard({
             <div className={`flex-shrink-0 ${compact ? 'w-9 h-9' : 'w-10 h-10'} rounded-xl bg-primary/20 flex items-center justify-center border border-primary/30 overflow-hidden`}>
             <Favicon url={bookmark.url} size={compact ? 18 : 20} />
           </div>
-          <div className="flex-1 min-w-0 pt-0.5">
-            <h3 className={`${compact ? 'text-xs' : 'text-sm'} font-semibold text-foreground line-clamp-2 leading-snug mb-1`}>
+          <div className="flex-1 min-w-0">
+            <h3 className={`${compact ? 'text-xs font-semibold' : 'text-sm font-medium'} text-foreground line-clamp-2 leading-snug mb-1`}>
               {bookmark.title}
             </h3>
             {isShared && (
@@ -138,13 +144,10 @@ export default function BookmarkCard({
             )}
           </div>
         </div>
+      </div>
 
-        <p className="text-xs text-muted-foreground truncate flex items-center gap-1.5 px-1">
-          <ExternalLink className={`${compact ? 'h-2.5 w-2.5' : 'h-3 w-3'} flex-shrink-0 opacity-80`} />
-          <span className="truncate">{bookmark.url}</span>
-        </p>
-
-        <div className="flex flex-wrap items-center gap-1.5 min-h-[24px]">
+      <div className={`flex-1 flex flex-col min-h-0 ${compact ? 'min-h-[100px]' : 'min-h-[120px]'} space-y-2`}>
+        <div className="flex flex-wrap items-center gap-1.5 min-h-[24px] flex-shrink-0">
           {bookmark.folders && bookmark.folders.length > 0 ? (
             <>
               {bookmark.folders.slice(0, compact ? 1 : 2).map((folder) => (
@@ -181,7 +184,7 @@ export default function BookmarkCard({
           )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-1.5 min-h-[24px]">
+        <div className="flex flex-wrap items-center gap-1.5 min-h-[24px] flex-shrink-0">
           {bookmark.tags && bookmark.tags.length > 0 ? (
             <>
               {bookmark.tags.slice(0, compact ? 2 : 3).map((tag) => (
@@ -218,8 +221,23 @@ export default function BookmarkCard({
           )}
         </div>
 
+        {(typeof bookmark.access_count === 'number' || bookmark.last_accessed_at != null) && (
+          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground flex-shrink-0">
+            <span>{t('bookmarks.clicks')}: {typeof bookmark.access_count === 'number' ? bookmark.access_count : '-'}</span>
+            {bookmark.last_accessed_at ? (
+              <Tooltip content={formatFullDateTime(bookmark.last_accessed_at)}>
+                <span className="cursor-help">
+                  {t('bookmarks.lastOpened')}: {formatRelativeTime(bookmark.last_accessed_at)}
+                </span>
+              </Tooltip>
+            ) : (
+              <span>{t('bookmarks.lastOpened')}: {t('bookmarks.never')}</span>
+            )}
+          </div>
+        )}
+
         {bookmark.forwarding_enabled && (
-          <div className={`flex items-center gap-1.5 ${compact ? 'px-2 py-1.5' : 'px-2 py-1.5'}`}>
+          <div className={`flex items-center gap-1.5 flex-shrink-0 ${compact ? 'px-2 py-1.5' : 'px-2 py-1.5'}`}>
             <Badge variant="outline" className="text-xs font-mono">
               {t('bookmarks.slug')}: /{bookmark.slug}
             </Badge>
@@ -238,12 +256,10 @@ export default function BookmarkCard({
         )}
       </div>
 
-      <div className="flex-1 min-h-0" />
-
       <div className={`flex gap-1.5 pt-2.5 shrink-0 border-t border-border ${compact ? 'pt-2' : ''}`} data-card-action>
         {onOpen ? (
           <Tooltip content={t('bookmarks.open')}>
-            <Button variant="ghost" size="sm" icon={ExternalLink} className="flex-shrink-0" onClick={(e) => { e.stopPropagation(); onOpen(); }} aria-label={t('bookmarks.open')} />
+            <Button variant="ghost" size="sm" icon={ExternalLink} iconClassName="h-3.5 w-3.5 stroke-[1.5]" className="flex-shrink-0 h-8 w-8 p-0" onClick={(e) => { e.stopPropagation(); onOpen(); }} aria-label={t('bookmarks.open')} />
           </Tooltip>
         ) : (
           <Tooltip content={t('bookmarks.open')}>
@@ -254,25 +270,39 @@ export default function BookmarkCard({
               onClick={(e) => e.stopPropagation()}
               className="flex-shrink-0"
             >
-              <Button variant="ghost" size="sm" icon={ExternalLink} className="h-8 w-8 p-0" aria-label={t('bookmarks.open')} />
+              <Button variant="ghost" size="sm" icon={ExternalLink} iconClassName="h-3.5 w-3.5 stroke-[1.5]" className="h-8 w-8 p-0" aria-label={t('bookmarks.open')} />
             </a>
           </Tooltip>
         )}
         {bookmark.bookmark_type === 'own' && (
           <>
+            {onPinToggle && (
+              <Tooltip content={bookmark.pinned ? t('bookmarks.pinned') : t('bookmarks.pin')}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={Pin}
+                  iconClassName="h-3.5 w-3.5 stroke-[1.5]"
+                  className={`flex-shrink-0 h-8 w-8 p-0 ${bookmark.pinned ? 'text-primary' : ''}`}
+                  onClick={(e) => { e.stopPropagation(); onPinToggle(); }}
+                  aria-label={bookmark.pinned ? t('bookmarks.pinned') : t('bookmarks.pin')}
+                  aria-pressed={bookmark.pinned}
+                />
+              </Tooltip>
+            )}
             {onShare && (
               <Tooltip content={t('sharing.shareBookmark')}>
-                <Button variant="ghost" size="sm" icon={Share2} className={`flex-shrink-0 ${compact ? 'h-8 w-8 p-0' : ''}`} onClick={(e) => { e.stopPropagation(); onShare(); }} aria-label={t('sharing.shareBookmark')} />
+                <Button variant="ghost" size="sm" icon={Share2} iconClassName="h-3.5 w-3.5 stroke-[1.5]" className="flex-shrink-0 h-8 w-8 p-0" onClick={(e) => { e.stopPropagation(); onShare(); }} aria-label={t('sharing.shareBookmark')} />
               </Tooltip>
             )}
             <Tooltip content={t('common.edit')}>
-              <Button variant="ghost" size="sm" icon={Edit} className={`flex-shrink-0 ${compact ? 'h-8 w-8 p-0' : ''}`} onClick={(e) => { e.stopPropagation(); onEdit(); }} aria-label={t('common.edit')} />
+              <Button variant="ghost" size="sm" icon={Edit} iconClassName="h-3.5 w-3.5 stroke-[1.5]" className="flex-shrink-0 h-8 w-8 p-0" onClick={(e) => { e.stopPropagation(); onEdit(); }} aria-label={t('common.edit')} />
             </Tooltip>
             <Tooltip content={t('bookmarks.copyUrl')}>
-              <Button variant="ghost" size="sm" icon={Copy} className={`flex-shrink-0 ${compact ? 'h-8 w-8 p-0' : ''}`} onClick={(e) => { e.stopPropagation(); onCopyUrl(); }} aria-label={t('bookmarks.copyUrl')} />
+              <Button variant="ghost" size="sm" icon={Copy} iconClassName="h-3.5 w-3.5 stroke-[1.5]" className="flex-shrink-0 h-8 w-8 p-0" onClick={(e) => { e.stopPropagation(); onCopyUrl(); }} aria-label={t('bookmarks.copyUrl')} />
             </Tooltip>
             <Tooltip content={t('common.delete')}>
-              <Button variant="ghost" size="sm" icon={Trash2} className={`flex-shrink-0 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 ${compact ? 'h-8 w-8 p-0' : ''}`} onClick={(e) => { e.stopPropagation(); onDelete(); }} aria-label={t('common.delete')} />
+              <Button variant="ghost" size="sm" icon={Trash2} iconClassName="h-3.5 w-3.5 stroke-[1.5]" className="flex-shrink-0 h-8 w-8 p-0 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300" onClick={(e) => { e.stopPropagation(); onDelete(); }} aria-label={t('common.delete')} />
             </Tooltip>
           </>
         )}

@@ -133,10 +133,19 @@ router.get('/', async (req, res) => {
   try {
     const userId = authReq.user!.id;
     const tenantId = getTenantId(req);
-    const { folder_id, tag_id, sort_by, limit: limitParam, offset: offsetParam } = req.query;
+    const { folder_id, tag_id, sort_by, limit: limitParam, offset: offsetParam, scope: scopeParam, pinned: pinnedParam, q: qParam } = req.query;
 
-    // Pagination: default 50, max 100
-    const limit = Math.min(100, Math.max(1, parseInt(String(limitParam), 10) || 50));
+    // Scope: all (default) | mine | shared_with_me | shared_by_me (legacy "shared" = shared_with_me)
+    const scopeRaw = scopeParam === 'mine' || scopeParam === 'shared_with_me' || scopeParam === 'shared_by_me' || scopeParam === 'shared'
+      ? (scopeParam === 'shared' ? 'shared_with_me' : scopeParam)
+      : 'all';
+    const scope = scopeRaw as 'all' | 'mine' | 'shared_with_me' | 'shared_by_me';
+    const pinnedFilter = pinnedParam === 'true';
+    const qStr = typeof qParam === 'string' ? qParam.trim() : '';
+    const searchTerm = qStr.length > 0 ? `%${qStr.toLowerCase()}%` : null;
+
+    // Pagination: default 50, max 500
+    const limit = Math.min(500, Math.max(1, parseInt(String(limitParam), 10) || 50));
     const offset = Math.max(0, parseInt(String(offsetParam), 10) || 0);
 
     // Validate folder_id and tag_id so we don't leak other users' resources (IDOR)
@@ -201,6 +210,26 @@ router.get('/', async (req, res) => {
       params.push(tagIdStr);
     }
 
+    if (scope === 'mine') {
+      sql += ' AND b.user_id = ?';
+      params.push(userId);
+    }
+    if (scope === 'shared_with_me') {
+      sql += ' AND b.user_id != ?';
+      params.push(userId);
+    }
+    if (scope === 'shared_by_me') {
+      sql += ` AND b.user_id = ? AND (EXISTS (SELECT 1 FROM bookmark_team_shares bts WHERE bts.bookmark_id = b.id) OR EXISTS (SELECT 1 FROM bookmark_user_shares bus WHERE bus.bookmark_id = b.id))`;
+      params.push(userId);
+    }
+    if (pinnedFilter) {
+      sql += ' AND b.pinned = 1';
+    }
+    if (searchTerm) {
+      sql += ' AND (LOWER(b.title) LIKE ? OR LOWER(b.url) LIKE ? OR LOWER(COALESCE(b.slug, \'\')) LIKE ?)';
+      params.push(searchTerm, searchTerm, searchTerm);
+    }
+
     // Count query: same FROM/WHERE, no ORDER BY/LIMIT
     const countSql = `
       SELECT COUNT(DISTINCT b.id) as total
@@ -218,6 +247,11 @@ router.get('/', async (req, res) => {
         OR (fts.team_id IN (${teamIds.length > 0 ? teamIds.map(() => '?').join(',') : 'NULL'}) AND fts.team_id IS NOT NULL AND bf.folder_id IS NOT NULL))
       ${folderIdStr ? 'AND b.id IN (SELECT bookmark_id FROM bookmark_folders WHERE folder_id = ?)' : ''}
       ${tagIdStr ? 'AND b.id IN (SELECT bookmark_id FROM bookmark_tags WHERE tag_id = ?)' : ''}
+      ${scope === 'mine' ? 'AND b.user_id = ?' : ''}
+      ${scope === 'shared_with_me' ? 'AND b.user_id != ?' : ''}
+      ${scope === 'shared_by_me' ? 'AND b.user_id = ? AND (EXISTS (SELECT 1 FROM bookmark_team_shares bts WHERE bts.bookmark_id = b.id) OR EXISTS (SELECT 1 FROM bookmark_user_shares bus WHERE bus.bookmark_id = b.id))' : ''}
+      ${pinnedFilter ? 'AND b.pinned = 1' : ''}
+      ${searchTerm ? 'AND (LOWER(b.title) LIKE ? OR LOWER(b.url) LIKE ? OR LOWER(COALESCE(b.slug, \'\')) LIKE ?)' : ''}
     `;
     const countParams = [tenantId, userId, userId];
     if (teamIds.length > 0) {
@@ -229,6 +263,10 @@ router.get('/', async (req, res) => {
     }
     if (folderIdStr) countParams.push(folderIdStr);
     if (tagIdStr) countParams.push(tagIdStr);
+    if (scope === 'mine') countParams.push(userId);
+    if (scope === 'shared_with_me') countParams.push(userId);
+    if (scope === 'shared_by_me') countParams.push(userId);
+    if (searchTerm) countParams.push(searchTerm, searchTerm, searchTerm);
 
     // Add sorting
     const sortBy = sort_by as string || 'recently_added';
@@ -691,7 +729,7 @@ router.get('/ids', async (req, res) => {
   try {
     const userId = authReq.user!.id;
     const tenantId = getTenantId(req);
-    const { folder_id, tag_id, sort_by } = req.query;
+    const { folder_id, tag_id, sort_by, scope: scopeParam, pinned: pinnedParam, q: qParam } = req.query;
 
     const folderIdStr = typeof folder_id === 'string' ? folder_id : undefined;
     const tagIdStr = typeof tag_id === 'string' ? tag_id : undefined;
@@ -702,11 +740,19 @@ router.get('/ids', async (req, res) => {
       }
     }
     if (tagIdStr) {
-      const canAccess = await canAccessTag(userId, tagIdStr);
+      const canAccess = await canAccessTag(userId, tagIdStr, tenantId);
       if (!canAccess) {
         return res.status(404).json({ error: 'Tag not found' });
       }
     }
+
+    const idsScopeRaw = scopeParam === 'mine' || scopeParam === 'shared_with_me' || scopeParam === 'shared_by_me' || scopeParam === 'shared'
+      ? (scopeParam === 'shared' ? 'shared_with_me' : scopeParam)
+      : 'all';
+    const idsScope = idsScopeRaw as 'all' | 'mine' | 'shared_with_me' | 'shared_by_me';
+    const pinnedFilter = pinnedParam === 'true';
+    const qStr = typeof qParam === 'string' ? qParam.trim() : '';
+    const idsSearchTerm = qStr.length > 0 ? `%${qStr.toLowerCase()}%` : null;
 
     const teamIds = await getTeamIdsForUser(userId, tenantId);
 
@@ -739,6 +785,25 @@ router.get('/ids', async (req, res) => {
     if (tagIdStr) {
       idsSql += ' AND b.id IN (SELECT bookmark_id FROM bookmark_tags WHERE tag_id = ?)';
       idsParams.push(tagIdStr);
+    }
+    if (idsScope === 'mine') {
+      idsSql += ' AND b.user_id = ?';
+      idsParams.push(userId);
+    }
+    if (idsScope === 'shared_with_me') {
+      idsSql += ' AND b.user_id != ?';
+      idsParams.push(userId);
+    }
+    if (idsScope === 'shared_by_me') {
+      idsSql += ` AND b.user_id = ? AND (EXISTS (SELECT 1 FROM bookmark_team_shares bts WHERE bts.bookmark_id = b.id) OR EXISTS (SELECT 1 FROM bookmark_user_shares bus WHERE bus.bookmark_id = b.id))`;
+      idsParams.push(userId);
+    }
+    if (pinnedFilter) {
+      idsSql += ' AND b.pinned = 1';
+    }
+    if (idsSearchTerm) {
+      idsSql += ' AND (LOWER(b.title) LIKE ? OR LOWER(b.url) LIKE ? OR LOWER(COALESCE(b.slug, \'\')) LIKE ?)';
+      idsParams.push(idsSearchTerm, idsSearchTerm, idsSearchTerm);
     }
 
     const sortBy = sort_by as string || 'recently_added';
@@ -1793,12 +1858,15 @@ router.post('/import', async (req, res) => {
           const sanitizedName = sanitizeString(name);
           let folderId: string | undefined = folderNameToId.get(sanitizedName);
           if (!folderId) {
-            const existing = await queryOne(
+            const existingRow = await queryOne(
               'SELECT id FROM folders WHERE tenant_id = ? AND user_id = ? AND name = ?',
               [tenantId, userId, sanitizedName]
             );
-            folderId = (existing as any)?.id ?? uuidv4();
-            if (!(existing as any)?.id) {
+            const existingId = existingRow && typeof (existingRow as any).id === 'string' && (existingRow as any).id ? (existingRow as any).id : null;
+            if (existingId) {
+              folderId = existingId;
+            } else {
+              folderId = uuidv4();
               await execute(
                 'INSERT INTO folders (id, tenant_id, user_id, name, icon) VALUES (?, ?, ?, ?, ?)',
                 [folderId, tenantId, userId, sanitizedName, null]
@@ -1806,7 +1874,12 @@ router.post('/import', async (req, res) => {
             }
             folderNameToId.set(sanitizedName, folderId as string);
           }
-          await execute('INSERT INTO bookmark_folders (bookmark_id, folder_id) VALUES (?, ?)', [bookmarkId, folderId as string]);
+          if (folderId) {
+            await execute(
+              'INSERT INTO bookmark_folders (bookmark_id, folder_id, tenant_id) VALUES (?, ?, ?)',
+              [bookmarkId, folderId, tenantId]
+            );
+          }
         }
 
         // Optional: assign to tags by name (create tag if not exists)

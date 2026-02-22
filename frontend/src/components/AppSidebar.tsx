@@ -5,7 +5,6 @@ import {
   Bookmark,
   Folder,
   Tag,
-  Share2,
   Settings,
   LayoutDashboard,
   ChevronLeft,
@@ -77,7 +76,6 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
     { path: `${appBasePath}/bookmarks`, label: t('bookmarks.title'), icon: Bookmark },
     { path: `${appBasePath}/folders`, label: t('folders.title'), icon: Folder },
     { path: `${appBasePath}/tags`, label: t('tags.title'), icon: Tag },
-    { path: `${appBasePath}/shared`, label: t('shared.title'), icon: Share2 },
   ];
 
   const handleNavClick = () => {

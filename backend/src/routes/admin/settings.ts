@@ -2,8 +2,9 @@ import { Router } from 'express';
 import { query, queryOne, execute } from '../../db/index.js';
 import { AuthRequest, requireAuth, requireAdmin } from '../../middleware/auth.js';
 import { testSMTPConfig } from '../../utils/email.js';
-import { encrypt } from '../../utils/encryption.js';
+import { encrypt, decrypt } from '../../utils/encryption.js';
 import { getTenantId } from '../../utils/tenant.js';
+import { listOpenAIModels } from '../../services/ai-suggestions.js';
 
 const router = Router();
 router.use(requireAuth());
@@ -443,6 +444,54 @@ router.get('/ai', async (req, res) => {
  *       403:
  *         description: Cloud mode
  */
+/**
+ * @swagger
+ * /api/admin/settings/ai/models:
+ *   get:
+ *     summary: List available AI models (self-hosted only)
+ *     description: Returns models for the configured provider. Requires API key to be set and saved. Cloud mode returns 403.
+ *     tags: [Admin - Settings]
+ *     security:
+ *       - cookieAuth: []
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of models (id only)
+ *       400:
+ *         description: API key not set or invalid
+ *       403:
+ *         description: Cloud mode
+ */
+router.get('/ai/models', async (req, res) => {
+  try {
+    const tenantId = getTenantId(req);
+    const providerRow = await queryOne('SELECT value FROM system_config WHERE key = ? AND tenant_id = ?', ['ai_provider', tenantId]);
+    const keyRow = await queryOne('SELECT value FROM system_config WHERE key = ? AND tenant_id = ?', ['ai_api_key', tenantId]);
+    const provider = (providerRow && (providerRow as { value?: string }).value) ? String((providerRow as { value: string }).value) : 'openai';
+    const rawKey = (keyRow && (keyRow as { value?: string }).value) ? (keyRow as { value: string }).value : '';
+    if (!rawKey || rawKey.trim() === '') {
+      return res.status(400).json({ error: 'API key required to list models. Set and save your API key first.' });
+    }
+    let apiKey: string;
+    try {
+      apiKey = decrypt(rawKey);
+    } catch {
+      return res.status(400).json({ error: 'Could not read API key. Save it again and retry.' });
+    }
+    if (!apiKey || !apiKey.trim()) {
+      return res.status(400).json({ error: 'API key required to list models. Set and save your API key first.' });
+    }
+    if (provider === 'openai') {
+      const models = await listOpenAIModels(apiKey.trim());
+      return res.json({ models });
+    }
+    return res.json({ models: [] });
+  } catch (error: unknown) {
+    const err = error as { message?: string };
+    res.status(500).json({ error: err?.message ?? 'Failed to list models' });
+  }
+});
+
 router.post('/ai', async (req, res) => {
   try {
     const tenantId = getTenantId(req);

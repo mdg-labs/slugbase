@@ -6,7 +6,7 @@ import api from '../api/client';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { useConfirmDialog } from '../hooks/useConfirmDialog';
 import { useToast } from '../components/ui/Toast';
-import { Plus, LayoutGrid, List, X, CheckSquare, Download, Upload, Bookmark as BookmarkIcon, ExternalLink, FolderPlus, Tag as TagIcon, Share2, Trash2, Copy, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, LayoutGrid, List, CheckSquare, Download, Upload, Bookmark as BookmarkIcon, ExternalLink, FolderPlus, Tag as TagIcon, Share2, Trash2, Copy, ChevronLeft, ChevronRight, Pin, Search } from 'lucide-react';
 import BookmarkModal from '../components/modals/BookmarkModal';
 import ImportModal from '../components/modals/ImportModal';
 import ShareResourceDialog from '../components/sharing/ShareResourceDialog';
@@ -15,6 +15,8 @@ import Select from '../components/ui/Select';
 import BookmarkCard from '../components/bookmarks/BookmarkCard';
 import BookmarkTableView from '../components/bookmarks/BookmarkTableView';
 import { BulkMoveModal, BulkTagModal, BulkShareModal } from '../components/bookmarks/BulkActionModals';
+import { FilterChips, type FilterKey } from '../components/bookmarks/FilterChips';
+import { ScopeSegmentedControl } from '../components/ScopeSegmentedControl';
 import { PageLoadingSkeleton } from '../components/ui/PageLoadingSkeleton';
 import { Card } from '../components/ui/card';
 import { PageHeader } from '../components/PageHeader';
@@ -71,25 +73,36 @@ export default function Bookmarks() {
   const [bulkTagModalOpen, setBulkTagModalOpen] = useState(false);
   const [bulkShareModalOpen, setBulkShareModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
-  
+  const [searchInputValue, setSearchInputValue] = useState('');
+
   const selectedFolder = searchParams.get('folder_id') || '';
   const selectedTag = searchParams.get('tag_id') || '';
+  const scopeParam = searchParams.get('scope');
+  const scope = (scopeParam === 'mine' || scopeParam === 'shared_with_me' || scopeParam === 'shared_by_me' || scopeParam === 'shared')
+    ? (scopeParam === 'shared' ? 'shared_with_me' : scopeParam)
+    : 'all';
+  const pinnedFilter = searchParams.get('pinned') === 'true';
+  const searchQuery = searchParams.get('q') || '';
   const [modalOpen, setModalOpen] = useState(false);
   const [editingBookmark, setEditingBookmark] = useState<Bookmark | null>(null);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [sharingBookmark, setSharingBookmark] = useState<Bookmark | null>(null);
   const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
-  const pageSize = 50;
+  const PAGE_SIZE_OPTIONS = [50, 100, 200, 500] as const;
+  const limitParam = searchParams.get('limit');
+  const pageSize = (limitParam && PAGE_SIZE_OPTIONS.includes(Number(limitParam) as typeof PAGE_SIZE_OPTIONS[number]))
+    ? Number(limitParam)
+    : 50;
 
   useEffect(() => {
     setPage(0);
     setAllSelectedAcrossPages(false);
-  }, [selectedFolder, selectedTag, sortBy]);
+  }, [selectedFolder, selectedTag, sortBy, scope, pinnedFilter, searchQuery, pageSize]);
 
   useEffect(() => {
     loadData();
-  }, [selectedFolder, selectedTag, sortBy, page]);
+  }, [selectedFolder, selectedTag, sortBy, page, scope, pinnedFilter, searchQuery, pageSize]);
 
   // Handle query params from GlobalSearch and dashboard Edit link
   useEffect(() => {
@@ -160,6 +173,10 @@ export default function Bookmarks() {
     localStorage.setItem('bookmarks-compact-mode', compactMode.toString());
   }, [compactMode]);
 
+  useEffect(() => {
+    setSearchInputValue(searchQuery);
+  }, [searchQuery]);
+
   async function loadData() {
     try {
       const [bookmarksRes, foldersRes, tagsRes, teamsRes] = await Promise.all([
@@ -170,6 +187,9 @@ export default function Bookmarks() {
             sort_by: sortBy,
             limit: pageSize,
             offset: page * pageSize,
+            scope: scope !== 'all' ? scope : undefined,
+            pinned: pinnedFilter ? 'true' : undefined,
+            q: searchQuery.trim() || undefined,
           },
         }),
         api.get('/folders'),
@@ -179,8 +199,7 @@ export default function Bookmarks() {
       const payload = bookmarksRes.data;
       const items = payload.items ?? [];
       setTotal(payload.total ?? 0);
-      const ownBookmarks = items.filter((b: Bookmark) => b.bookmark_type === 'own');
-      setBookmarks(ownBookmarks);
+      setBookmarks(items);
       setFolders(foldersRes.data);
       setTags(tagsRes.data);
       setTeams(teamsRes.data);
@@ -193,7 +212,31 @@ export default function Bookmarks() {
 
   const displayedBookmarks = bookmarks;
 
-  const hasActiveFilters = selectedFolder || selectedTag;
+  const hasActiveFilters =
+    !!selectedFolder ||
+    !!selectedTag ||
+    scope !== 'all' ||
+    pinnedFilter ||
+    !!searchQuery.trim() ||
+    sortBy !== 'recently_added';
+
+  function updateParams(updates: Record<string, string | undefined>) {
+    const params = new URLSearchParams(searchParams);
+    (Object.entries(updates) as [string, string | undefined][]).forEach(([k, v]) => {
+      if (v === undefined || v === '') params.delete(k);
+      else params.set(k, v);
+    });
+    setSearchParams(params);
+  }
+
+  function handleRemoveFilter(key: FilterKey) {
+    if (key === 'folder_id') updateParams({ folder_id: undefined });
+    else if (key === 'tag_id') updateParams({ tag_id: undefined });
+    else if (key === 'sort') setSortBy('recently_added');
+    else if (key === 'q') updateParams({ q: undefined });
+    else if (key === 'pinned') updateParams({ pinned: undefined });
+    else if (key === 'scope') updateParams({ scope: undefined });
+  }
 
   function handleCreate() {
     setEditingBookmark(null);
@@ -203,6 +246,17 @@ export default function Bookmarks() {
   function handleEdit(bookmark: Bookmark) {
     setEditingBookmark(bookmark);
     setModalOpen(true);
+  }
+
+  async function handlePinToggle(bookmark: Bookmark) {
+    if (bookmark.bookmark_type !== 'own') return;
+    try {
+      await api.put(`/bookmarks/${bookmark.id}`, { pinned: !bookmark.pinned });
+      loadData();
+      showToast(bookmark.pinned ? t('bookmarks.unpinned') : t('bookmarks.pinned'), 'success');
+    } catch {
+      showToast(t('common.error'), 'error');
+    }
   }
 
   function handleDelete(id: string, name?: string) {
@@ -337,6 +391,7 @@ export default function Bookmarks() {
 
   function handleResetFilters() {
     setSearchParams({});
+    setSortBy('recently_added');
   }
 
   function toggleSelectBookmark(id: string) {
@@ -366,6 +421,9 @@ export default function Bookmarks() {
           folder_id: selectedFolder || undefined,
           tag_id: selectedTag || undefined,
           sort_by: sortBy,
+          scope: scope !== 'all' ? scope : undefined,
+          pinned: pinnedFilter ? 'true' : undefined,
+          q: searchQuery.trim() || undefined,
         },
       });
       const ids = res.data?.ids ?? [];
@@ -400,6 +458,38 @@ export default function Bookmarks() {
     { value: 'recently_accessed', label: t('bookmarks.sortRecentlyAccessed') },
   ];
 
+  const filterChips = (() => {
+    const list: { key: FilterKey; label: string; ariaLabel: string }[] = [];
+    if (selectedFolder) {
+      const name = folders.find((f: any) => f.id === selectedFolder)?.name ?? selectedFolder;
+      list.push({ key: 'folder_id', label: `${t('bookmarks.folder')}: ${name}`, ariaLabel: t('bookmarks.clearFilters') + ` ${t('bookmarks.folder')}: ${name}` });
+    }
+    if (selectedTag) {
+      const name = tags.find((t: any) => t.id === selectedTag)?.name ?? selectedTag;
+      list.push({ key: 'tag_id', label: `${t('bookmarks.tags')}: ${name}`, ariaLabel: t('bookmarks.clearFilters') + ` ${t('bookmarks.tags')}: ${name}` });
+    }
+    if (sortBy !== 'recently_added') {
+      const label = sortOptions.find(o => o.value === sortBy)?.label ?? sortBy;
+      list.push({ key: 'sort', label: `Sort: ${label}`, ariaLabel: t('bookmarks.clearFilters') + ' Sort' });
+    }
+    if (searchQuery.trim()) {
+      list.push({ key: 'q', label: `${t('common.search')}: ${searchQuery.trim()}`, ariaLabel: t('bookmarks.clearFilters') + ' ' + t('common.search') });
+    }
+    if (pinnedFilter) {
+      list.push({ key: 'pinned', label: t('bookmarks.pinned'), ariaLabel: t('bookmarks.clearFilters') + ' ' + t('bookmarks.pinned') });
+    }
+    if (scope === 'mine') {
+      list.push({ key: 'scope', label: t('bookmarks.scopeMine'), ariaLabel: t('bookmarks.clearFilters') + ' ' + t('bookmarks.scopeMine') });
+    }
+    if (scope === 'shared_with_me') {
+      list.push({ key: 'scope', label: t('common.scopeSharedWithMe'), ariaLabel: t('bookmarks.clearFilters') + ' ' + t('common.scopeSharedWithMe') });
+    }
+    if (scope === 'shared_by_me') {
+      list.push({ key: 'scope', label: t('common.scopeSharedByMe'), ariaLabel: t('bookmarks.clearFilters') + ' ' + t('common.scopeSharedByMe') });
+    }
+    return list;
+  })();
+
   if (loading) {
     return <PageLoadingSkeleton lines={6} />;
   }
@@ -410,10 +500,35 @@ export default function Bookmarks() {
       <div className="sticky top-0 z-40 space-y-4 pb-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pt-0 -mt-8 bg-background border-b shadow-sm">
         <PageHeader
           className="pt-4"
-          title={t('bookmarks.title')}
-          subtitle={`${total} ${total === 1 ? t('common.bookmark') : t('common.bookmarks')}`}
+          title={`${t('bookmarks.title')} (${total})`}
+          subtitle={
+            hasActiveFilters
+              ? t('bookmarks.showingXOfY', { x: displayedBookmarks.length, y: total })
+              : undefined
+          }
           actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <ScopeSegmentedControl
+              value={scope}
+              onChange={(s) => updateParams({ scope: s === 'all' ? undefined : s })}
+              options={[
+                { value: 'all', label: t('bookmarks.scopeAll') },
+                { value: 'mine', label: t('bookmarks.scopeMine') },
+                { value: 'shared_with_me', label: t('common.scopeSharedWithMe') },
+                { value: 'shared_by_me', label: t('common.scopeSharedByMe') },
+              ]}
+              ariaLabel={t('bookmarks.scopeAll')}
+            />
+            <Button
+              variant={pinnedFilter ? 'secondary' : 'ghost'}
+              size="sm"
+              icon={Pin}
+              onClick={() => updateParams({ pinned: pinnedFilter ? undefined : 'true' })}
+              title={t('bookmarks.pinned')}
+              aria-pressed={pinnedFilter}
+            >
+              <span className="hidden sm:inline">{t('bookmarks.pinned')}</span>
+            </Button>
             <Button
               variant="ghost"
               size="sm"
@@ -439,8 +554,30 @@ export default function Bookmarks() {
         }
         />
 
-        {/* Toolbar: Filters, Sort, View Modes */}
+        <FilterChips
+          chips={filterChips}
+          onRemove={(key) => handleRemoveFilter(key as FilterKey)}
+          onClearAll={handleResetFilters}
+          clearAllLabel={t('bookmarks.clearAllFilters')}
+          clearAllAriaLabel={t('bookmarks.clearAllFilters')}
+        />
+
+        {/* Toolbar: Search, Filters, Sort, View Modes */}
         <div className="flex flex-wrap items-center gap-3 bg-card rounded-lg border p-4 shadow-sm">
+        <div className="flex items-center gap-2 min-w-[200px] flex-1">
+          <Search className="h-4 w-4 text-muted-foreground flex-shrink-0" aria-hidden />
+          <input
+            type="search"
+            value={searchInputValue}
+            onChange={(e) => setSearchInputValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') updateParams({ q: (e.target as HTMLInputElement).value.trim() || undefined });
+            }}
+            placeholder={t('common.searchPlaceholder')}
+            className="flex-1 min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            aria-label={t('common.searchPlaceholder')}
+          />
+        </div>
         {/* Filters */}
         <div className="flex flex-wrap gap-3 flex-1 min-w-[200px]">
           <div className="flex-1 min-w-[180px]">
@@ -475,16 +612,6 @@ export default function Bookmarks() {
               placeholder={t('bookmarks.filterByTag')}
             />
           </div>
-          {hasActiveFilters && (
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={X}
-              onClick={handleResetFilters}
-            >
-              {t('bookmarks.resetFilters')}
-            </Button>
-          )}
         </div>
 
         {/* Sort */}
@@ -495,6 +622,20 @@ export default function Bookmarks() {
             options={sortOptions}
             className="min-w-[160px]"
           />
+        </div>
+
+        {/* Page size */}
+        <div className="flex items-center gap-2">
+          <Select
+            value={String(pageSize)}
+            onChange={(value) => {
+              updateParams({ limit: value });
+              setPage(0);
+            }}
+            options={PAGE_SIZE_OPTIONS.map((n) => ({ value: String(n), label: String(n) }))}
+            className="min-w-[80px]"
+          />
+          <span className="text-sm text-muted-foreground whitespace-nowrap">{t('bookmarks.perPage')}</span>
         </div>
 
         {/* View Mode Toggle */}
@@ -552,10 +693,10 @@ export default function Bookmarks() {
         </div>
       </div>
 
-      {/* Bulk Actions Bar - offset left on desktop to not overlap sidebar */}
+      {/* Bulk Actions Bar - sticky bottom, visible when selecting */}
       {bulkMode && (
         <div
-          className="fixed bottom-0 right-0 z-50 flex items-center justify-between bg-primary/10 border-t border-primary/30 shadow-lg p-4"
+          className="fixed bottom-0 right-0 z-50 flex items-center justify-between bg-background border-t-2 border-primary shadow-[0_-4px_12px_rgba(0,0,0,0.08)] dark:shadow-[0_-4px_12px_rgba(0,0,0,0.3)] p-4"
           style={
             !isMobile
               ? { left: sidebarState === 'expanded' ? '16rem' : '3rem' }
@@ -589,15 +730,15 @@ export default function Bookmarks() {
               </>
             ) : (
               <>
+                <span className="text-sm font-medium text-foreground">
+                  {t('bookmarks.selectedCount', { count: selectedBookmarks.size })}
+                </span>
                 <button
                   onClick={toggleSelectAll}
                   className="text-sm text-primary hover:text-primary/90"
                 >
                   {selectedBookmarks.size === displayedBookmarks.length ? t('bookmarks.deselectAll') : t('bookmarks.selectAll')}
                 </button>
-                <span className="text-sm text-gray-700 dark:text-gray-300">
-                  {t('bookmarks.selectedCount', { count: selectedBookmarks.size })}
-                </span>
               </>
             )}
           </div>
@@ -660,27 +801,35 @@ export default function Bookmarks() {
             <BookmarkIcon className="h-8 w-8 text-primary" />
           </div>
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-            {t('bookmarks.empty')}
+            {hasActiveFilters ? t('bookmarks.noMatches') : t('bookmarks.empty')}
           </h3>
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-6 text-center max-w-md">
-            {t('bookmarks.emptyDescription')}
+            {hasActiveFilters ? '' : t('bookmarks.emptyDescription')}
           </p>
           <div className="flex flex-wrap gap-3 justify-center">
-            <Button onClick={handleCreate} variant="primary" icon={Plus}>
-              {t('bookmarks.emptyCreateFirst')}
-            </Button>
-            <Button
-              variant="secondary"
-              icon={Upload}
-              onClick={() => setImportModalOpen(true)}
-            >
-              {t('bookmarks.emptyImport')}
-            </Button>
-            <Link to={`${appBasePath}/search-engine-guide`}>
-              <Button variant="ghost" icon={ExternalLink}>
-                {t('bookmarks.emptyLearnForwarding')}
+            {hasActiveFilters ? (
+              <Button onClick={handleResetFilters} variant="primary">
+                {t('bookmarks.clearFilters')}
               </Button>
-            </Link>
+            ) : (
+              <>
+                <Button onClick={handleCreate} variant="primary" icon={Plus}>
+                  {t('bookmarks.emptyCreateFirst')}
+                </Button>
+                <Button
+                  variant="secondary"
+                  icon={Upload}
+                  onClick={() => setImportModalOpen(true)}
+                >
+                  {t('bookmarks.emptyImport')}
+                </Button>
+                <Link to={`${appBasePath}/search-engine-guide`}>
+                  <Button variant="ghost" icon={ExternalLink}>
+                    {t('bookmarks.emptyLearnForwarding')}
+                  </Button>
+                </Link>
+              </>
+            )}
           </div>
         </Card>
       ) : viewMode === 'card' ? (
@@ -701,6 +850,7 @@ export default function Bookmarks() {
               onCopyUrl={() => handleCopyUrl(bookmark)}
               onShare={() => { setSharingBookmark(bookmark); setShareDialogOpen(true); }}
               onOpen={() => handleOpenBookmark(bookmark)}
+              onPinToggle={bookmark.bookmark_type === 'own' ? () => handlePinToggle(bookmark) : undefined}
               bulkMode={bulkMode}
               t={t}
             />

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import api from '../../api/client';
 import { useToast } from '../ui/Toast';
@@ -8,6 +8,11 @@ import { PageLoadingSkeleton } from '../ui/PageLoadingSkeleton';
 import { Switch } from '../ui/switch';
 import { Label } from '../ui/label';
 import { Input } from '../ui/input';
+import Select from '../ui/Select';
+
+const PROVIDER_OPTIONS = [
+  { value: 'openai', label: 'OpenAI' },
+] as const;
 
 export default function AdminAI() {
   const { t } = useTranslation();
@@ -21,12 +26,10 @@ export default function AdminAI() {
     ai_api_key: '',
     ai_api_key_set: false,
   });
+  const [models, setModels] = useState<{ id: string }[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(false);
 
-  useEffect(() => {
-    loadSettings();
-  }, []);
-
-  const loadSettings = async () => {
+  const loadSettings = useCallback(async () => {
     try {
       const res = await api.get('/admin/settings/ai');
       setSettings({
@@ -36,16 +39,55 @@ export default function AdminAI() {
         ai_api_key: '',
         ai_api_key_set: res.data.ai_api_key_set ?? false,
       });
-    } catch (err: any) {
-      if (err?.response?.status === 403) {
+    } catch (err: unknown) {
+      const e = err as { response?: { status?: number; data?: { error?: string } } };
+      if (e?.response?.status === 403) {
         setLoading(false);
         return;
       }
-      showToast(err?.response?.data?.error || t('common.error'), 'error');
+      showToast(e?.response?.data?.error || t('common.error'), 'error');
     } finally {
       setLoading(false);
     }
-  };
+  }, [showToast, t]);
+
+  useEffect(() => {
+    loadSettings();
+  }, [loadSettings]);
+
+  const loadModels = useCallback(async () => {
+    setModelsLoading(true);
+    try {
+      const res = await api.get<{ models: { id: string }[] }>('/admin/settings/ai/models');
+      setModels(Array.isArray(res.data?.models) ? res.data.models : []);
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { error?: string } } };
+      showToast(e?.response?.data?.error || t('admin.ai.modelsLoadError'), 'error');
+      setModels([]);
+    } finally {
+      setModelsLoading(false);
+    }
+  }, [showToast, t]);
+
+  useEffect(() => {
+    if (settings.ai_api_key_set && !loading) {
+      loadModels();
+    } else {
+      setModels([]);
+    }
+  }, [settings.ai_api_key_set, loading, loadModels]);
+
+  const providerOptions = PROVIDER_OPTIONS.map((p) => ({
+    value: p.value,
+    label: p.value === 'openai' ? t('admin.ai.providerOpenAI') : p.label,
+  }));
+
+  const modelOptions = models.map((m) => ({ value: m.id, label: m.id }));
+  const currentModelInList = modelOptions.some((o) => o.value === settings.ai_model);
+  const modelOptionsWithCurrent =
+    currentModelInList || !settings.ai_model
+      ? modelOptions
+      : [{ value: settings.ai_model, label: settings.ai_model }, ...modelOptions];
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,8 +101,9 @@ export default function AdminAI() {
       });
       showToast(t('common.success'), 'success');
       await loadSettings();
-    } catch (err: any) {
-      showToast(err?.response?.data?.error || t('common.error'), 'error');
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { error?: string } } };
+      showToast(e?.response?.data?.error || t('common.error'), 'error');
     } finally {
       setSaving(false);
     }
@@ -103,11 +146,10 @@ export default function AdminAI() {
             <Label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
               {t('admin.ai.provider')}
             </Label>
-            <Input
-              type="text"
+            <Select
               value={settings.ai_provider}
-              onChange={(e) => setSettings({ ...settings, ai_provider: e.target.value })}
-              placeholder="openai"
+              onChange={(value) => setSettings({ ...settings, ai_provider: value })}
+              options={providerOptions}
               className="max-w-xs"
             />
           </div>
@@ -132,11 +174,18 @@ export default function AdminAI() {
             <Label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
               {t('admin.ai.model')}
             </Label>
-            <Input
-              type="text"
+            <Select
               value={settings.ai_model}
-              onChange={(e) => setSettings({ ...settings, ai_model: e.target.value })}
-              placeholder="gpt-4o-mini"
+              onChange={(value) => setSettings({ ...settings, ai_model: value })}
+              options={modelOptionsWithCurrent}
+              placeholder={
+                !settings.ai_api_key_set
+                  ? t('admin.ai.modelPlaceholderNoKey')
+                  : modelsLoading
+                    ? t('admin.ai.modelPlaceholderLoading')
+                    : undefined
+              }
+              disabled={!settings.ai_api_key_set || modelsLoading}
               className="max-w-xs"
             />
           </div>

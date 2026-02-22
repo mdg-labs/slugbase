@@ -133,6 +133,30 @@ Rules:
 - confidence: 0.0 to 1.0 (higher when page content was provided)`;
 
 /**
+ * List OpenAI models that support chat completions (for admin model dropdown).
+ * Uses the Models API; filters to ids that typically support chat (gpt-*).
+ * @param apiKey - decrypted OpenAI API key
+ * @returns array of model ids, sorted (prefer newer first)
+ */
+export async function listOpenAIModels(apiKey: string): Promise<{ id: string }[]> {
+  const client = new OpenAI({ apiKey });
+  const models: { id: string }[] = [];
+  try {
+    const list = await client.models.list();
+    const data = (list as { data?: { id: string }[] }).data ?? [];
+    for (const m of data) {
+      if (m?.id && (m.id.startsWith('gpt-') || m.id.startsWith('o1-'))) {
+        models.push({ id: m.id });
+      }
+    }
+    models.sort((a, b) => b.id.localeCompare(a.id));
+    return models;
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Call AI provider (OpenAI) for bookmark suggestions.
  * @param sanitizedUrl - sanitized URL (domain + path, no secrets)
  * @param pageTitle - optional page title (from fetch or request)

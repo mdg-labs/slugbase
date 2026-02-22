@@ -55,12 +55,22 @@ router.use(requireAuth());
  *       401:
  *         description: Unauthorized
  */
-// Get all folders for user (own + shared)
+// Get all folders for user (own + shared), optionally filtered by scope
+// When limit is provided, returns { items, total }; otherwise returns array (backward compat)
 router.get('/', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const userId = authReq.user!.id;
     const tenantId = getTenantId(req);
+    const scopeParam = req.query.scope;
+    const scope = scopeParam === 'mine' || scopeParam === 'shared_with_me' || scopeParam === 'shared_by_me'
+      ? scopeParam
+      : 'all';
+    const limitParam = req.query.limit;
+    const offsetParam = req.query.offset;
+    const usePagination = limitParam != null && limitParam !== '';
+    const limit = usePagination ? Math.min(500, Math.max(1, parseInt(String(limitParam), 10) || 50)) : 0;
+    const offset = usePagination ? Math.max(0, parseInt(String(offsetParam), 10) || 0) : 0;
     const teamIds = await getTeamIdsForUser(userId, tenantId);
 
     // Get own folders + shared folders (via users, teams, or folder shares)
@@ -77,12 +87,48 @@ router.get('/', async (req, res) => {
         OR ${fusCond}
         OR (fts.team_id IN (${teamIds.length > 0 ? teamIds.map(() => '?').join(',') : 'NULL'}) AND fts.team_id IS NOT NULL))
     `;
-    const params: any[] = [tenantId, userId, userId];
-    params.push(userId);
+    // Placeholder order: CASE f.user_id, WHERE f.tenant_id, f.user_id, fus.user_id, [teamIds]
+    const params: any[] = [userId, tenantId, userId, userId];
     if (teamIds.length > 0) {
       params.push(...teamIds);
     }
-    
+
+    if (scope === 'mine') {
+      sql += ' AND f.user_id = ?';
+      params.push(userId);
+    }
+    if (scope === 'shared_with_me') {
+      sql += ' AND f.user_id != ?';
+      params.push(userId);
+    }
+    if (scope === 'shared_by_me') {
+      sql += ' AND f.user_id = ? AND (EXISTS (SELECT 1 FROM folder_team_shares fts WHERE fts.folder_id = f.id) OR EXISTS (SELECT 1 FROM folder_user_shares fus WHERE fus.folder_id = f.id))';
+      params.push(userId);
+    }
+
+    let total = 0;
+    if (usePagination) {
+      const countSql = `
+        SELECT COUNT(DISTINCT f.id) as total FROM folders f
+        LEFT JOIN folder_user_shares fus ON f.id = fus.folder_id
+        LEFT JOIN folder_team_shares fts ON f.id = fts.folder_id
+        WHERE f.tenant_id = ?
+          AND (f.user_id = ?
+          OR ${fusCond}
+          OR (fts.team_id IN (${teamIds.length > 0 ? teamIds.map(() => '?').join(',') : 'NULL'}) AND fts.team_id IS NOT NULL))
+        ${scope === 'mine' ? 'AND f.user_id = ?' : ''}
+        ${scope === 'shared_with_me' ? 'AND f.user_id != ?' : ''}
+        ${scope === 'shared_by_me' ? 'AND f.user_id = ? AND (EXISTS (SELECT 1 FROM folder_team_shares fts WHERE fts.folder_id = f.id) OR EXISTS (SELECT 1 FROM folder_user_shares fus WHERE fus.folder_id = f.id))' : ''}
+      `;
+      const countParams = [tenantId, userId, userId];
+      if (teamIds.length > 0) countParams.push(...teamIds);
+      if (scope === 'mine') countParams.push(userId);
+      if (scope === 'shared_with_me') countParams.push(userId);
+      if (scope === 'shared_by_me') countParams.push(userId);
+      const countRow = await queryOne(countSql, countParams);
+      total = countRow ? parseInt((countRow as any).total, 10) : 0;
+    }
+
     // Add sorting
     const sortBy = (req.query.sort_by as string) || 'alphabetical';
     switch (sortBy) {
@@ -95,10 +141,16 @@ router.get('/', async (req, res) => {
         break;
     }
 
+    if (usePagination) {
+      sql += ' LIMIT ? OFFSET ?';
+      params.push(limit, offset);
+    }
+
     const folders = await query(sql, params);
     const folderList = folders as any[];
 
     if (folderList.length === 0) {
+      if (usePagination) return res.json({ items: [], total });
       return res.json(folders);
     }
 
@@ -165,6 +217,9 @@ router.get('/', async (req, res) => {
       folder.shared_users = sharedUsersByFolder.get(folder.id) || [];
     }
 
+    if (usePagination) {
+      return res.json({ items: folderList, total });
+    }
     res.json(folders);
   } catch (error: any) {
     res.status(500).json({ error: error.message });

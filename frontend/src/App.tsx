@@ -23,7 +23,6 @@ const AdminTeamsPage = lazy(() => import('./pages/admin/AdminTeamsPage'));
 const AdminOIDCPage = lazy(() => import('./pages/admin/AdminOIDCPage'));
 const AdminSettingsPage = lazy(() => import('./pages/admin/AdminSettingsPage'));
 const AdminAIPage = lazy(() => import('./pages/admin/AdminAIPage'));
-const Shared = lazy(() => import('./pages/Shared'));
 const PasswordReset = lazy(() => import('./pages/PasswordReset'));
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
 const SearchEngineGuide = lazy(() => import('./pages/SearchEngineGuide'));
@@ -46,6 +45,12 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   if (!user) return <Navigate to={`${appBasePath}/login`} replace />;
   if (!user.is_admin) return <Navigate to={appRootPath} replace />;
   return <>{children}</>;
+}
+
+function SharedRedirect() {
+  const { appBasePath } = useAppConfig();
+  const to = `${appBasePath || ''}/bookmarks?scope=shared_with_me`;
+  return <Navigate to={to} replace />;
 }
 
 function AppRoutes() {
@@ -82,7 +87,7 @@ function AppRoutes() {
           <Route path="bookmarks" element={<Bookmarks />} />
           <Route path="folders" element={<Folders />} />
           <Route path="tags" element={<Tags />} />
-          <Route path="shared" element={<Shared />} />
+          <Route path="shared" element={<SharedRedirect />} />
           <Route path="profile" element={<Profile />} />
           <Route path="go-preferences" element={<GoPreferences />} />
           <Route path="search-engine-guide" element={<SearchEngineGuide />} />
