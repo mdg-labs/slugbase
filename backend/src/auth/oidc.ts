@@ -209,7 +209,7 @@ export async function reloadOIDCStrategies() {
     // Use a type assertion to access internal strategies map
     const strategies = Object.keys((passport as any)._strategies || {});
     strategies.forEach((key: string) => {
-      if (key !== 'jwt') {
+      if (key !== 'jwt' && key !== 'session') {
         try {
           passport.unuse(key);
         } catch (error: any) {
