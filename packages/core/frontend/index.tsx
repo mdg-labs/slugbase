@@ -1,7 +1,7 @@
 /**
  * @slugbase/core/frontend – re-exports App and createApiClient for self-hosted and cloud apps.
- * In-repo: resolves to root frontend src. Published: package must include or reference built frontend.
+ * Published package includes frontend/src (copied at publish); in-repo use copy-core-dist or alias to root frontend.
  */
 
-export { default as App } from '../../frontend/src/App';
-export { createApiClient } from '../../frontend/src/api/client';
+export { default as App } from './src/App';
+export { createApiClient } from './src/api/client';

@@ -26,3 +26,12 @@ if (existsSync(schemaSrc)) {
 mkdirSync(coreBackendDist, { recursive: true });
 cpSync(backendDist, coreBackendDist, { recursive: true });
 console.log('Copied backend/dist to packages/core/backend/dist');
+
+// Frontend src so packages/core/frontend/index.tsx (./src/App) resolves in-repo and matches published layout
+const frontendSrc = join(root, 'frontend', 'src');
+const coreFrontendSrc = join(root, 'packages', 'core', 'frontend', 'src');
+if (existsSync(frontendSrc)) {
+  mkdirSync(coreFrontendSrc, { recursive: true });
+  cpSync(frontendSrc, coreFrontendSrc, { recursive: true });
+  console.log('Copied frontend/src to packages/core/frontend/src');
+}

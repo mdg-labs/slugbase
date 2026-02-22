@@ -62,6 +62,18 @@ copy('frontend/index.js');
 copy('frontend/index.tsx');
 copy('types/index.js');
 
+// Frontend source (from repo root) so published package is self-contained for cloud
+const frontendSrc = join(root, 'frontend', 'src');
+const frontendPublic = join(root, 'frontend', 'public');
+if (existsSync(frontendSrc)) {
+  mkdirSync(join(outDir, 'frontend', 'src'), { recursive: true });
+  cpSync(frontendSrc, join(outDir, 'frontend', 'src'), { recursive: true });
+}
+if (existsSync(frontendPublic)) {
+  mkdirSync(join(outDir, 'frontend', 'public'), { recursive: true });
+  cpSync(frontendPublic, join(outDir, 'frontend', 'public'), { recursive: true });
+}
+
 console.log('Package assembled in .publish-core');
 
 // 3. Publish

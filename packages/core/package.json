@@ -1,6 +1,6 @@
 {
   "name": "@mdguggenbichler/slugbase-core",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "SlugBase core: backend and frontend entrypoints for self-hosted and cloud apps",
   "type": "module",
   "exports": {
@@ -12,5 +12,13 @@
   "scripts": {},
   "engines": {
     "node": ">=20"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18",
+    "react-router-dom": ">=6",
+    "i18next": ">=23",
+    "react-i18next": ">=13",
+    "axios": ">=1"
   }
 }
