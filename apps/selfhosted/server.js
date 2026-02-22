@@ -1,5 +1,5 @@
 /**
- * Self-hosted SlugBase server. Uses @slugbase/core/backend.
+ * Self-hosted SlugBase server. Uses @mdguggenbichler/slugbase-core/backend.
  * Load env first, then init DB, create app, register routes, serve frontend, listen.
  */
 
@@ -17,7 +17,7 @@ import {
   errorHandler,
   notFoundHandler,
   isInitialized,
-} from '@slugbase/core/backend';
+} from '@mdguggenbichler/slugbase-core/backend';
 
 validateEnvironmentVariables();
 

@@ -4,7 +4,7 @@
  */
 
 export { getConfig } from './dist/config.js';
-export { createDbPool, setDb, initDatabase } from './dist/db/index.js';
+export { createDbPool, setDb, initDatabase, getDb, getDbType, query, queryOne, execute } from './dist/db/index.js';
 export { runMigrations } from './dist/db/migrations/index.js';
 export { createApp } from './dist/app-factory.js';
 export { registerCoreRoutes } from './dist/register-routes.js';
@@ -12,4 +12,5 @@ export { DatabaseSessionStore } from './dist/utils/session-store.js';
 export { loadOIDCStrategies } from './dist/auth/oidc.js';
 export { validateEnvironmentVariables } from './dist/utils/env-validation.js';
 export { errorHandler, notFoundHandler } from './dist/middleware/error-handler.js';
+export { requireAuth } from './dist/middleware/auth.js';
 export { isInitialized } from './dist/db/index.js';

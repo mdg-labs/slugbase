@@ -11,7 +11,9 @@
   "scripts": {
     "dev": "concurrently \"npm run dev --workspace=backend\" \"npm run dev --workspace=frontend\"",
     "build": "npm run build --workspace=backend && node scripts/copy-core-dist.js && npm run build --workspace=frontend && node scripts/copy-selfhosted-public.js",
-    "start": "npm run start --workspace=slugbase-selfhosted"
+    "start": "npm run start --workspace=slugbase-selfhosted",
+    "publish:core": "node scripts/publish-core.js",
+    "publish:core:dry-run": "node scripts/publish-core.js --dry-run"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

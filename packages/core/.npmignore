@@ -1,0 +1,3 @@
+# Exclude from npm pack; do NOT ignore backend/dist (needed for install).
+*.tgz
+.DS_Store
