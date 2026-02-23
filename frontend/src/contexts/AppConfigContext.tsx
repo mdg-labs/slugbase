@@ -11,6 +11,8 @@ export interface AppConfig {
   pathPrefixForLinks: string;
   /** When true, hide Admin OIDC and SMTP/Settings (e.g. cloud uses Postmark and global OIDC). */
   hideAdminOidcAndSmtp?: boolean;
+  /** When true, Admin AI page shows only the enable/disable toggle (e.g. cloud uses env for provider/model/key). */
+  adminAiOnlyToggle?: boolean;
 }
 
 const defaultConfig: AppConfig = {
@@ -19,6 +21,7 @@ const defaultConfig: AppConfig = {
   appRootPath: defaultAppRootPath,
   pathPrefixForLinks: defaultAppBasePath,
   hideAdminOidcAndSmtp: false,
+  adminAiOnlyToggle: false,
 };
 
 const AppConfigContext = createContext<AppConfig>(defaultConfig);
@@ -31,6 +34,7 @@ export function AppConfigProvider({
   skipSetupFlow,
   pathPrefixForLinks,
   hideAdminOidcAndSmtp,
+  adminAiOnlyToggle,
 }: {
   children: React.ReactNode;
   appBasePath?: string;
@@ -41,6 +45,8 @@ export function AppConfigProvider({
   pathPrefixForLinks?: string;
   /** When true, hide Admin OIDC and SMTP/Settings (e.g. cloud). */
   hideAdminOidcAndSmtp?: boolean;
+  /** When true, Admin AI page shows only the enable/disable toggle (e.g. cloud). */
+  adminAiOnlyToggle?: boolean;
 }) {
   const base = appBasePath ?? defaultConfig.appBasePath;
   const value: AppConfig = {
@@ -50,6 +56,7 @@ export function AppConfigProvider({
     skipSetupFlow,
     pathPrefixForLinks: pathPrefixForLinks !== undefined ? pathPrefixForLinks : base,
     hideAdminOidcAndSmtp: hideAdminOidcAndSmtp ?? defaultConfig.hideAdminOidcAndSmtp,
+    adminAiOnlyToggle: adminAiOnlyToggle ?? defaultConfig.adminAiOnlyToggle,
   };
   return <AppConfigContext.Provider value={value}>{children}</AppConfigContext.Provider>;
 }

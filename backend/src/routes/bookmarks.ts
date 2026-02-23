@@ -900,12 +900,13 @@ router.post('/ai-suggest', async (req, res) => {
       return res.status(400).json({ error: urlValidation.error });
     }
 
-    const enabled = await isAISuggestionsEnabled(userId);
+    const tenantId = getTenantId(req);
+    const enabled = await isAISuggestionsEnabled(userId, tenantId);
     if (!enabled) {
       return res.status(403).json({ error: 'AI suggestions are not available' });
     }
 
-    const apiKey = await getAIApiKey();
+    const apiKey = await getAIApiKey(tenantId);
     if (!apiKey) {
       return res.status(503).json({ error: 'AI is not configured' });
     }
@@ -950,7 +951,7 @@ router.post('/ai-suggest', async (req, res) => {
         ? pageTitle.trim()
         : fetchedTitle;
 
-    const model = await getAIModel();
+    const model = await getAIModel(tenantId);
     const result = await callAIProvider(
       sanitizedUrl,
       pageTitleToUse,

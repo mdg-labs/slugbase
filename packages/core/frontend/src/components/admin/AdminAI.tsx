@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import api from '../../api/client';
 import { useToast } from '../ui/Toast';
+import { useAppConfig } from '../../contexts/AppConfigContext';
 import { Save, Sparkles } from 'lucide-react';
 import Button from '../ui/Button';
 import { PageLoadingSkeleton } from '../ui/PageLoadingSkeleton';
@@ -17,6 +18,7 @@ const PROVIDER_OPTIONS = [
 export default function AdminAI() {
   const { t } = useTranslation();
   const { showToast } = useToast();
+  const { adminAiOnlyToggle } = useAppConfig();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState({
@@ -34,10 +36,10 @@ export default function AdminAI() {
       const res = await api.get('/admin/settings/ai');
       setSettings({
         ai_enabled: res.data.ai_enabled ?? false,
-        ai_provider: res.data.ai_provider || 'openai',
-        ai_model: res.data.ai_model || 'gpt-4o-mini',
+        ai_provider: adminAiOnlyToggle ? 'openai' : (res.data.ai_provider || 'openai'),
+        ai_model: adminAiOnlyToggle ? 'gpt-4o-mini' : (res.data.ai_model || 'gpt-4o-mini'),
         ai_api_key: '',
-        ai_api_key_set: res.data.ai_api_key_set ?? false,
+        ai_api_key_set: adminAiOnlyToggle ? false : (res.data.ai_api_key_set ?? false),
       });
     } catch (err: unknown) {
       const e = err as { response?: { status?: number; data?: { error?: string } } };
@@ -61,7 +63,7 @@ export default function AdminAI() {
     } finally {
       setLoading(false);
     }
-  }, [showToast, t]);
+  }, [showToast, t, adminAiOnlyToggle]);
 
   useEffect(() => {
     loadSettings();
@@ -82,12 +84,13 @@ export default function AdminAI() {
   }, [showToast, t]);
 
   useEffect(() => {
+    if (adminAiOnlyToggle) return;
     if (settings.ai_api_key_set && !loading) {
       loadModels();
     } else {
       setModels([]);
     }
-  }, [settings.ai_api_key_set, loading, loadModels]);
+  }, [adminAiOnlyToggle, settings.ai_api_key_set, loading, loadModels]);
 
   const providerOptions = PROVIDER_OPTIONS.map((p) => ({
     value: p.value,
@@ -105,12 +108,15 @@ export default function AdminAI() {
     e.preventDefault();
     setSaving(true);
     try {
-      await api.post('/admin/settings/ai', {
-        ai_enabled: settings.ai_enabled,
-        ai_provider: settings.ai_provider,
-        ai_model: settings.ai_model,
-        ai_api_key: settings.ai_api_key || undefined,
-      });
+      const payload = adminAiOnlyToggle
+        ? { ai_enabled: settings.ai_enabled }
+        : {
+            ai_enabled: settings.ai_enabled,
+            ai_provider: settings.ai_provider,
+            ai_model: settings.ai_model,
+            ai_api_key: settings.ai_api_key || undefined,
+          };
+      await api.post('/admin/settings/ai', payload);
       showToast(t('common.success'), 'success');
       await loadSettings();
     } catch (err: unknown) {
@@ -154,53 +160,57 @@ export default function AdminAI() {
             </Label>
           </div>
 
-          <div>
-            <Label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
-              {t('admin.ai.provider')}
-            </Label>
-            <Select
-              value={settings.ai_provider}
-              onChange={(value) => setSettings({ ...settings, ai_provider: value })}
-              options={providerOptions}
-              className="max-w-xs"
-            />
-          </div>
+          {!adminAiOnlyToggle && (
+            <>
+              <div>
+                <Label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                  {t('admin.ai.provider')}
+                </Label>
+                <Select
+                  value={settings.ai_provider}
+                  onChange={(value) => setSettings({ ...settings, ai_provider: value })}
+                  options={providerOptions}
+                  className="max-w-xs"
+                />
+              </div>
 
-          <div>
-            <Label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
-              {t('admin.ai.apiKey')}
-            </Label>
-            <Input
-              type="password"
-              value={settings.ai_api_key}
-              onChange={(e) => setSettings({ ...settings, ai_api_key: e.target.value })}
-              placeholder={settings.ai_api_key_set ? t('admin.ai.apiKeyPlaceholder') : 'sk-...'}
-              className="max-w-md font-mono text-sm"
-            />
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              {settings.ai_api_key_set ? t('admin.ai.apiKeyChangeHint') : t('admin.ai.apiKeyHint')}
-            </p>
-          </div>
+              <div>
+                <Label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                  {t('admin.ai.apiKey')}
+                </Label>
+                <Input
+                  type="password"
+                  value={settings.ai_api_key}
+                  onChange={(e) => setSettings({ ...settings, ai_api_key: e.target.value })}
+                  placeholder={settings.ai_api_key_set ? t('admin.ai.apiKeyPlaceholder') : 'sk-...'}
+                  className="max-w-md font-mono text-sm"
+                />
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {settings.ai_api_key_set ? t('admin.ai.apiKeyChangeHint') : t('admin.ai.apiKeyHint')}
+                </p>
+              </div>
 
-          <div>
-            <Label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
-              {t('admin.ai.model')}
-            </Label>
-            <Select
-              value={settings.ai_model}
-              onChange={(value) => setSettings({ ...settings, ai_model: value })}
-              options={modelOptionsWithCurrent}
-              placeholder={
-                !settings.ai_api_key_set
-                  ? t('admin.ai.modelPlaceholderNoKey')
-                  : modelsLoading
-                    ? t('admin.ai.modelPlaceholderLoading')
-                    : undefined
-              }
-              disabled={!settings.ai_api_key_set || modelsLoading}
-              className="max-w-xs"
-            />
-          </div>
+              <div>
+                <Label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                  {t('admin.ai.model')}
+                </Label>
+                <Select
+                  value={settings.ai_model}
+                  onChange={(value) => setSettings({ ...settings, ai_model: value })}
+                  options={modelOptionsWithCurrent}
+                  placeholder={
+                    !settings.ai_api_key_set
+                      ? t('admin.ai.modelPlaceholderNoKey')
+                      : modelsLoading
+                        ? t('admin.ai.modelPlaceholderLoading')
+                        : undefined
+                  }
+                  disabled={!settings.ai_api_key_set || modelsLoading}
+                  className="max-w-xs"
+                />
+              </div>
+            </>
+          )}
 
           <div className="pt-2">
             <Button type="submit" variant="primary" disabled={saving}>

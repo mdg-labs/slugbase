@@ -6,6 +6,7 @@
 import { Router } from 'express';
 import { AuthRequest, requireAuth } from '../middleware/auth.js';
 import { isAISuggestionsEnabled, isAIFeatureAvailable } from '../utils/ai-feature.js';
+import { getTenantId } from '../utils/tenant.js';
 
 const router = Router();
 
@@ -40,9 +41,10 @@ router.get('/ai-suggestions', requireAuth(), async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const userId = authReq.user!.id;
+    const tenantId = getTenantId(req);
     const [enabled, available] = await Promise.all([
-      isAISuggestionsEnabled(userId),
-      isAIFeatureAvailable(userId),
+      isAISuggestionsEnabled(userId, tenantId),
+      isAIFeatureAvailable(userId, tenantId),
     ]);
     res.json({ enabled, available });
   } catch (error: any) {

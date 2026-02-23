@@ -238,9 +238,11 @@ export interface AppProps {
   skipSetupFlow?: boolean;
   /** When true, hide Admin OIDC and SMTP/Settings (e.g. cloud uses Postmark and global OIDC). */
   hideAdminOidcAndSmtp?: boolean;
+  /** When true, Admin AI page shows only the enable/disable toggle (e.g. cloud uses env for provider/model/key). */
+  adminAiOnlyToggle?: boolean;
 }
 
-function App({ basePath, apiBaseUrl, routerBasename, skipSetupFlow, hideAdminOidcAndSmtp }: AppProps = {}) {
+function App({ basePath, apiBaseUrl, routerBasename, skipSetupFlow, hideAdminOidcAndSmtp, adminAiOnlyToggle }: AppProps = {}) {
   const appRootPath = basePath === '/' || !basePath ? '/' : basePath;
   const pathPrefixForLinks = routerBasename !== undefined ? '' : (basePath ?? '');
   const content = (
@@ -254,7 +256,7 @@ function App({ basePath, apiBaseUrl, routerBasename, skipSetupFlow, hideAdminOid
   );
   return (
     <AppErrorBoundary>
-      <AppConfigProvider appBasePath={basePath} apiBaseUrl={apiBaseUrl} appRootPath={appRootPath} skipSetupFlow={skipSetupFlow} pathPrefixForLinks={pathPrefixForLinks} hideAdminOidcAndSmtp={hideAdminOidcAndSmtp}>
+      <AppConfigProvider appBasePath={basePath} apiBaseUrl={apiBaseUrl} appRootPath={appRootPath} skipSetupFlow={skipSetupFlow} pathPrefixForLinks={pathPrefixForLinks} hideAdminOidcAndSmtp={hideAdminOidcAndSmtp} adminAiOnlyToggle={adminAiOnlyToggle}>
         {routerBasename !== undefined ? (
           content
         ) : (
