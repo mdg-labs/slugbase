@@ -1,5 +1,5 @@
 /**
- * Creates the Express app with middleware (security, CORS, session, passport, tenant, CSRF, Swagger).
+ * Creates the Express app with middleware (security, CORS, session, passport, tenant, CSRF).
  * Does NOT mount API routes, static files, or error handlers — those are added by registerCoreRoutes and the app entry.
  */
 
@@ -8,7 +8,6 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import session from 'express-session';
 import passport from 'passport';
-import swaggerUi from 'swagger-ui-express';
 import { setupOIDC, loadOIDCStrategies } from './auth/oidc.js';
 import { setupJWT } from './auth/jwt.js';
 import {
@@ -17,7 +16,6 @@ import {
   redirectRateLimiter,
 } from './middleware/security.js';
 import { tenantMiddleware } from './middleware/tenant.js';
-import { swaggerSpec } from './config/swagger.js';
 import { csrfProtection } from './middleware/security.js';
 import { DatabaseSessionStore } from './utils/session-store.js';
 import csrfRoutes from './routes/csrf.js';
@@ -103,20 +101,6 @@ export function createApp(options: CreateAppOptions): express.Express {
   app.use(passport.initialize());
   app.use(passport.session());
 
-  // Expose API docs only in development or when explicitly enabled (security: avoid exposing API structure in production)
-  const exposeApiDocs =
-    process.env.NODE_ENV !== 'production' || process.env.EXPOSE_API_DOCS === 'true';
-  if (exposeApiDocs) {
-    app.use(
-      '/api-docs',
-      swaggerUi.serve,
-      swaggerUi.setup(swaggerSpec, {
-        customCss: '.swagger-ui .topbar { display: none }',
-        customSiteTitle: 'SlugBase API Documentation',
-      })
-    );
-  }
-
   app.use('/api/csrf-token', csrfRoutes);
 
   app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -130,8 +114,7 @@ export function createApp(options: CreateAppOptions): express.Express {
       req.path === '/api/auth/resend-signup-verification' ||
       req.path === '/api/auth/request-signup-resend' ||
       req.path === '/api/health' ||
-      req.path === '/api/csrf-token' ||
-      req.path.startsWith('/api-docs')
+      req.path === '/api/csrf-token'
     ) {
       return next();
     }

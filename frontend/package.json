@@ -34,7 +34,6 @@
     "react-i18next": "^13.5.0",
     "react-router-dom": "^6.21.1",
     "sonner": "^2.0.7",
-    "swagger-jsdoc": "^6.2.8",
     "tailwind-merge": "^3.4.0",
     "tailwindcss-animate": "^1.0.7"
   },

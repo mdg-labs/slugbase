@@ -42,7 +42,7 @@ async function start() {
 
     app.get('*', (req, res, next) => {
       if (process.env.NODE_ENV !== 'production') return next();
-      if (req.path.startsWith('/api/') || req.path.startsWith('/api-docs') || req.path.startsWith('/go/')) {
+      if (req.path.startsWith('/api/') || req.path.startsWith('/go/')) {
         return next();
       }
       res.sendFile(join(__dirname, '../../public/index.html'), (err) => {

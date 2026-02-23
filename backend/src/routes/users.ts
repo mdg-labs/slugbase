@@ -9,43 +9,6 @@ import { sendEmailVerificationEmail } from '../utils/email.js';
 const router = Router();
 router.use(requireAuth());
 
-/**
- * @swagger
- * /api/users/me:
- *   get:
- *     summary: Get current user profile
- *     description: Returns the authenticated user's profile information
- *     tags: [Users]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: User profile
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 id:
- *                   type: string
- *                 email:
- *                   type: string
- *                 name:
- *                   type: string
- *                 user_key:
- *                   type: string
- *                 is_admin:
- *                   type: boolean
- *                 language:
- *                   type: string
- *                   example: "en"
- *                 theme:
- *                   type: string
- *                   example: "auto"
- *       401:
- *         description: Unauthorized
- */
 // Get current user profile
 router.get('/me', async (req, res) => {
   const authReq = req as AuthRequest;
@@ -58,50 +21,6 @@ router.get('/me', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users/me:
- *   put:
- *     summary: Update user settings
- *     description: Updates the authenticated user's profile information including email, name, language, and theme preferences
- *     tags: [Users]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *                 example: "updated@example.com"
- *                 description: User's email address (must be unique)
- *               name:
- *                 type: string
- *                 example: "Updated Name"
- *                 description: User's display name
- *               language:
- *                 type: string
- *                 enum: [en, de, fr]
- *                 example: "en"
- *                 description: User's preferred language
- *               theme:
- *                 type: string
- *                 enum: [light, dark, auto]
- *                 example: "auto"
- *                 description: User's preferred theme
- *     responses:
- *       200:
- *         description: User settings updated successfully
- *       400:
- *         description: Invalid input or email already exists
- *       401:
- *         description: Unauthorized
- */
 // Update user settings
 router.put('/me', async (req, res) => {
   const authReq = req as AuthRequest;

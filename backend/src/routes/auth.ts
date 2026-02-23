@@ -102,35 +102,6 @@ function setAuthCookies(res: any, options: { accessToken: string; refreshToken?:
   res.cookie('token', options.accessToken, { ...getAuthCookieOptions(accessMaxAgeMs), maxAge: accessMaxAgeMs });
 }
 
-/**
- * @swagger
- * /api/auth/providers:
- *   get:
- *     summary: Get available OIDC providers
- *     description: Returns a list of all configured OIDC providers (public endpoint, no authentication required)
- *     tags: [Authentication]
- *     responses:
- *       200:
- *         description: List of OIDC providers
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 type: object
- *                 properties:
- *                   id:
- *                     type: string
- *                     example: "123e4567-e89b-12d3-a456-426614174000"
- *                   provider_key:
- *                     type: string
- *                     example: "google"
- *                   issuer_url:
- *                     type: string
- *                     example: "https://accounts.google.com"
- *       500:
- *         description: Server error
- */
 router.get('/providers', async (req, res) => {
   try {
     const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
@@ -147,48 +118,6 @@ router.get('/providers', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/auth/me:
- *   get:
- *     summary: Get current user information
- *     description: Returns the authenticated user's profile information
- *     tags: [Authentication]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Current user information
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 id:
- *                   type: string
- *                   example: "123e4567-e89b-12d3-a456-426614174000"
- *                 email:
- *                   type: string
- *                   example: "user@example.com"
- *                 name:
- *                   type: string
- *                   example: "John Doe"
- *                 user_key:
- *                   type: string
- *                   example: "abc12345"
- *                 is_admin:
- *                   type: boolean
- *                   example: false
- *                 language:
- *                   type: string
- *                   example: "en"
- *                 theme:
- *                   type: string
- *                   example: "auto"
- *       401:
- *         description: Unauthorized
- */
 router.get('/me', requireAuth(), async (req, res) => {
   const authReq = req as AuthRequest;
   const user = authReq.user!;
@@ -207,71 +136,6 @@ router.get('/me', requireAuth(), async (req, res) => {
   res.json(payload);
 });
 
-/**
- * @swagger
- * /api/auth/login:
- *   post:
- *     summary: Login with email and password
- *     description: Authenticate a user with email and password. Returns user information and sets an httpOnly JWT cookie.
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *               - password
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *                 example: "user@example.com"
- *               password:
- *                 type: string
- *                 format: password
- *                 example: "securepassword123"
- *     responses:
- *       200:
- *         description: Login successful
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 id:
- *                   type: string
- *                   example: "123e4567-e89b-12d3-a456-426614174000"
- *                 email:
- *                   type: string
- *                   example: "user@example.com"
- *                 name:
- *                   type: string
- *                   example: "John Doe"
- *                 user_key:
- *                   type: string
- *                   example: "abc12345"
- *                 is_admin:
- *                   type: boolean
- *                   example: false
- *                 language:
- *                   type: string
- *                   example: "en"
- *                 theme:
- *                   type: string
- *                   example: "auto"
- *         headers:
- *           Set-Cookie:
- *             description: JWT token in httpOnly cookie
- *             schema:
- *               type: string
- *               example: "token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...; HttpOnly; Secure; SameSite=Strict"
- *       400:
- *         description: Missing email or password
- *       401:
- *         description: Invalid credentials or account has no password set
- */
 // Local authentication (email/password)
 router.post('/login', authRateLimiter, async (req, res, next) => {
   try {
@@ -337,25 +201,6 @@ router.post('/login', authRateLimiter, async (req, res, next) => {
   }
 });
 
-/**
- * @swagger
- * /api/auth/logout:
- *   post:
- *     summary: Logout current user
- *     description: Clears the authentication cookie
- *     tags: [Authentication]
- *     responses:
- *       200:
- *         description: Logout successful
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "Logged out"
- */
 router.post('/logout', async (req, res) => {
   const clearOpts = getClearAuthCookieOptions();
   res.clearCookie('token', clearOpts);
@@ -651,44 +496,10 @@ router.post('/request-signup-resend', authRateLimiter, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/auth/refresh:
- *   post:
- *     summary: Refresh access token (CLOUD mode)
- *     description: Exchange refresh token cookie for new access + refresh tokens. CLOUD only.
- *     tags: [Authentication]
- *     responses:
- *       200:
- *         description: New tokens set via cookies; returns user payload
- *       401:
- *         description: Invalid or missing refresh token
- */
 router.post('/refresh', refreshRateLimiter, async (req, res) => {
   return res.status(404).json({ error: 'Not found' });
 });
 
-/**
- * @swagger
- * /api/auth/{provider}:
- *   get:
- *     summary: Initiate OIDC login
- *     description: Redirects to the OIDC provider's authentication page. This is a redirect endpoint, not a JSON API.
- *     tags: [Authentication]
- *     parameters:
- *       - in: path
- *         name: provider
- *         required: true
- *         schema:
- *           type: string
- *         description: OIDC provider key (e.g., "google", "github")
- *         example: "google"
- *     responses:
- *       302:
- *         description: Redirect to OIDC provider
- *       404:
- *         description: Provider not found
- */
 // OIDC login route
 // Note: OIDC requires sessions for the OAuth flow, so we don't use session: false here
 router.get('/:provider', async (req, res, next) => {
@@ -700,35 +511,6 @@ router.get('/:provider', async (req, res, next) => {
   passport.authenticate(provider)(req, res, next);
 });
 
-/**
- * @swagger
- * /api/auth/{provider}/callback:
- *   get:
- *     summary: OIDC callback endpoint
- *     description: Handles the OIDC provider callback after authentication. This is a redirect endpoint used by the OIDC flow.
- *     tags: [Authentication]
- *     parameters:
- *       - in: path
- *         name: provider
- *         required: true
- *         schema:
- *           type: string
- *         description: OIDC provider key
- *         example: "google"
- *       - in: query
- *         name: code
- *         schema:
- *           type: string
- *         description: Authorization code from OIDC provider
- *       - in: query
- *         name: state
- *         schema:
- *           type: string
- *         description: State parameter for CSRF protection
- *     responses:
- *       302:
- *         description: Redirect to frontend (success) or login page (error)
- */
 // OIDC callback route
 // Note: OIDC requires sessions for the OAuth flow, but we convert to JWT after authentication
 router.get('/:provider/callback', (req, res, next) => {
@@ -940,52 +722,6 @@ router.get('/:provider/callback', (req, res, next) => {
   })(req, res, next);
 });
 
-/**
- * @swagger
- * /api/auth/setup:
- *   post:
- *     summary: Initial system setup
- *     description: Creates the first admin user. Only accessible when the system is not yet initialized.
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *               - name
- *               - password
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *                 example: "admin@example.com"
- *               name:
- *                 type: string
- *                 example: "Admin User"
- *               password:
- *                 type: string
- *                 format: password
- *                 minLength: 8
- *                 example: "securepassword123"
- *     responses:
- *       200:
- *         description: Setup completed successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "Setup completed successfully. You can now log in."
- *       400:
- *         description: Invalid input or user already exists
- *       403:
- *         description: System already initialized
- */
 // Setup route - only accessible when system is not initialized. SELFHOSTED only.
 router.post('/setup', strictRateLimiter, async (req, res) => {
   try {
@@ -1084,26 +820,6 @@ router.post('/setup', strictRateLimiter, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/auth/setup/status:
- *   get:
- *     summary: Check system initialization status
- *     description: Returns whether the system has been initialized (has at least one user)
- *     tags: [Authentication]
- *     responses:
- *       200:
- *         description: System initialization status
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 initialized:
- *                   type: boolean
- *                   example: false
- *                   description: true if system has been initialized, false otherwise
- */
 router.get('/setup/status', async (req, res) => {
   try {
     const initialized = await isInitialized();

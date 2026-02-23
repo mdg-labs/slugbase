@@ -41,7 +41,7 @@ async function start() {
       res.sendFile(join(publicDir, 'index.html'));
     });
     app.get('*', (req, res, next) => {
-      if (req.path.startsWith('/api/') || req.path.startsWith('/api-docs') || req.path.startsWith('/go/')) {
+      if (req.path.startsWith('/api/') || req.path.startsWith('/go/')) {
         return next();
       }
       res.sendFile(join(publicDir, 'index.html'), (err) => {

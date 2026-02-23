@@ -6,41 +6,6 @@ import { getTenantId } from '../utils/tenant.js';
 
 const router = Router();
 
-/**
- * @swagger
- * /api/dashboard/stats:
- *   get:
- *     summary: Get dashboard statistics
- *     description: Returns statistics for the authenticated user's dashboard
- *     tags: [Dashboard]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Dashboard statistics
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 totalBookmarks:
- *                   type: number
- *                 totalFolders:
- *                   type: number
- *                 totalTags:
- *                   type: number
- *                 sharedBookmarks:
- *                   type: number
- *                 sharedFolders:
- *                   type: number
- *                 recentBookmarks:
- *                   type: array
- *                 topTags:
- *                   type: array
- *       401:
- *         description: Unauthorized
- */
 router.get('/stats', requireAuth(), async (req, res) => {
   const authReq = req as AuthRequest;
   try {

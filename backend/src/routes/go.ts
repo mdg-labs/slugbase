@@ -236,39 +236,6 @@ async function getOwnerName(userId: string): Promise<string> {
   return r.name || r.email || 'Shared';
 }
 
-/**
- * @swagger
- * /api/go/preferences:
- *   get:
- *     summary: List slug preferences
- *     description: Returns the user's slug-to-bookmark preferences for collision resolution.
- *     tags: [Go]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: List of slug preferences
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 type: object
- *                 properties:
- *                   slug:
- *                     type: string
- *                   bookmark_id:
- *                     type: string
- *                   title:
- *                     type: string
- *                   url:
- *                     type: string
- *                   workspace:
- *                     type: string
- *       401:
- *         description: Unauthorized
- */
 router.get('/preferences', requireAuth(), async (req, res) => {
   const authReq = req as AuthRequest;
   const userId = authReq.user!.id;
@@ -305,42 +272,6 @@ router.get('/preferences', requireAuth(), async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/go/preferences:
- *   post:
- *     summary: Create or update slug preference
- *     description: Sets which bookmark to use when multiple match a slug. User must have access to the bookmark.
- *     tags: [Go]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - slug
- *               - bookmark_id
- *             properties:
- *               slug:
- *                 type: string
- *               bookmark_id:
- *                 type: string
- *     responses:
- *       201:
- *         description: Preference created or updated
- *       400:
- *         description: slug and bookmark_id required
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Forbidden
- *       404:
- *         description: Bookmark not found or slug mismatch
- */
 router.post('/preferences', requireAuth(), async (req, res) => {
   const authReq = req as AuthRequest;
   const userId = authReq.user!.id;
@@ -379,32 +310,6 @@ router.post('/preferences', requireAuth(), async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/go/preferences/{slug}:
- *   delete:
- *     summary: Remove slug preference
- *     description: Removes the user's preference for a slug.
- *     tags: [Go]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: slug
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       204:
- *         description: Preference removed
- *       400:
- *         description: Invalid slug
- *       401:
- *         description: Unauthorized
- *       404:
- *         description: Preference not found
- */
 router.delete('/preferences/:slug', requireAuth(), async (req, res) => {
   const authReq = req as AuthRequest;
   const userId = authReq.user!.id;

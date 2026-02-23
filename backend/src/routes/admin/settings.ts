@@ -10,33 +10,6 @@ const router = Router();
 router.use(requireAuth());
 router.use(requireAdmin());
 
-/**
- * @swagger
- * /api/admin/settings:
- *   get:
- *     summary: Get all system settings
- *     description: Returns all system configuration settings as a key-value object. Admin only.
- *     tags: [Admin - Settings]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: System settings
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               additionalProperties:
- *                 type: string
- *               example:
- *                 setting1: "value1"
- *                 setting2: "value2"
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Admin access required
- */
 router.get('/', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
@@ -61,22 +34,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/admin/settings/ai:
- *   get:
- *     summary: Get AI settings (self-hosted only)
- *     description: Returns AI configuration. API key is masked. Cloud mode returns 403.
- *     tags: [Admin - Settings]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: AI settings
- *       403:
- *         description: Cloud mode - AI configured via env
- */
 router.get('/ai', async (req, res) => {
   try {
     const tenantId = getTenantId(req);
@@ -98,24 +55,6 @@ router.get('/ai', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/admin/settings/ai/models:
- *   get:
- *     summary: List available AI models (self-hosted only)
- *     description: Returns models for the configured provider. Requires API key to be set and saved. Cloud mode returns 403.
- *     tags: [Admin - Settings]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: List of models (id only)
- *       400:
- *         description: API key not set or invalid
- *       403:
- *         description: Cloud mode
- */
 router.get('/ai/models', async (req, res) => {
   try {
     const tenantId = getTenantId(req);
@@ -146,45 +85,6 @@ router.get('/ai/models', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/admin/settings/{key}:
- *   get:
- *     summary: Get setting by key
- *     description: Returns a specific system setting by its key. Admin only.
- *     tags: [Admin - Settings]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: key
- *         required: true
- *         schema:
- *           type: string
- *         description: Setting key
- *         example: "app_name"
- *     responses:
- *       200:
- *         description: Setting value
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 key:
- *                   type: string
- *                   example: "app_name"
- *                 value:
- *                   type: string
- *                   example: "SlugBase"
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Admin access required
- *       404:
- *         description: Setting not found
- */
 router.get('/:key', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
@@ -200,53 +100,6 @@ router.get('/:key', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/admin/settings:
- *   post:
- *     summary: Set system setting
- *     description: Creates or updates a system setting. If the key exists, it will be updated. Admin only.
- *     tags: [Admin - Settings]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - key
- *               - value
- *             properties:
- *               key:
- *                 type: string
- *                 example: "app_name"
- *                 description: Setting key (unique identifier)
- *               value:
- *                 type: string
- *                 example: "SlugBase"
- *                 description: Setting value (will be stored as string)
- *     responses:
- *       200:
- *         description: Setting saved successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 key:
- *                   type: string
- *                 value:
- *                   type: string
- *       400:
- *         description: Missing key or value
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Admin access required
- */
 router.post('/', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
@@ -269,40 +122,6 @@ router.post('/', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/admin/settings/{key}:
- *   delete:
- *     summary: Delete system setting
- *     description: Deletes a system setting by its key. Admin only.
- *     tags: [Admin - Settings]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: key
- *         required: true
- *         schema:
- *           type: string
- *         description: Setting key to delete
- *         example: "app_name"
- *     responses:
- *       200:
- *         description: Setting deleted successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "Setting deleted"
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Admin access required
- */
 router.delete('/:key', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
@@ -315,35 +134,6 @@ router.delete('/:key', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/admin/settings/smtp/test:
- *   post:
- *     summary: Test SMTP configuration
- *     description: Sends a test email to verify SMTP settings are working. Admin only.
- *     tags: [Admin - Settings]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *                 example: "test@example.com"
- *     responses:
- *       200:
- *         description: Test email sent successfully
- *       400:
- *         description: SMTP not configured or test failed
- */
 router.post('/smtp/test', async (req, res) => {
   const authReq = req as AuthRequest;
   
@@ -365,51 +155,6 @@ router.post('/smtp/test', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/admin/settings/smtp:
- *   post:
- *     summary: Update SMTP settings
- *     description: Updates SMTP configuration. Password is encrypted before storage. Admin only.
- *     tags: [Admin - Settings]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               enabled:
- *                 type: boolean
- *                 example: true
- *               host:
- *                 type: string
- *                 example: "smtp.gmail.com"
- *               port:
- *                 type: number
- *                 example: 587
- *               secure:
- *                 type: boolean
- *                 example: false
- *               user:
- *                 type: string
- *                 example: "your-email@gmail.com"
- *               password:
- *                 type: string
- *                 example: "your-password"
- *               from:
- *                 type: string
- *                 example: "noreply@example.com"
- *               fromName:
- *                 type: string
- *                 example: "SlugBase"
- *     responses:
- *       200:
- *         description: SMTP settings updated successfully
- */
 router.post('/smtp', async (req, res) => {
   const authReq = req as AuthRequest;
   const tenantId = getTenantId(req);
@@ -466,32 +211,6 @@ router.post('/smtp', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/admin/settings/ai:
- *   post:
- *     summary: Save AI settings (self-hosted only)
- *     description: Saves AI configuration. API key is encrypted. Cloud mode returns 403.
- *     tags: [Admin - Settings]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     requestBody:
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               ai_enabled: { type: boolean }
- *               ai_provider: { type: string }
- *               ai_api_key: { type: string }
- *               ai_model: { type: string }
- *     responses:
- *       200:
- *         description: AI settings saved
- *       403:
- *         description: Cloud mode
- */
 router.post('/ai', async (req, res) => {
   try {
     const tenantId = getTenantId(req);

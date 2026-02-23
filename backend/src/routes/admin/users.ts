@@ -13,59 +13,6 @@ const router = Router();
 router.use(requireAuth());
 router.use(requireAdmin());
 
-/**
- * @swagger
- * /api/admin/users:
- *   get:
- *     summary: Get all users
- *     description: Returns a list of all users in the system. Admin only.
- *     tags: [Admin - Users]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: List of users
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 type: object
- *                 properties:
- *                   id:
- *                     type: string
- *                     example: "123e4567-e89b-12d3-a456-426614174000"
- *                   email:
- *                     type: string
- *                     example: "user@example.com"
- *                   name:
- *                     type: string
- *                     example: "John Doe"
- *                   user_key:
- *                     type: string
- *                     example: "abc12345"
- *                   is_admin:
- *                     type: boolean
- *                     example: false
- *                   oidc_provider:
- *                     type: string
- *                     nullable: true
- *                     example: "google"
- *                   language:
- *                     type: string
- *                     example: "en"
- *                   theme:
- *                     type: string
- *                     example: "auto"
- *                   created_at:
- *                     type: string
- *                     format: date-time
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Admin access required
- */
 router.get('/', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
@@ -80,59 +27,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/admin/users/{id}:
- *   get:
- *     summary: Get user by ID
- *     description: Returns detailed information about a specific user. Admin only.
- *     tags: [Admin - Users]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: User ID
- *         example: "123e4567-e89b-12d3-a456-426614174000"
- *     responses:
- *       200:
- *         description: User details
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 id:
- *                   type: string
- *                 email:
- *                   type: string
- *                 name:
- *                   type: string
- *                 user_key:
- *                   type: string
- *                 is_admin:
- *                   type: boolean
- *                 oidc_provider:
- *                   type: string
- *                   nullable: true
- *                 language:
- *                   type: string
- *                 theme:
- *                   type: string
- *                 created_at:
- *                   type: string
- *                   format: date-time
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Admin access required
- *       404:
- *         description: User not found
- */
 router.get('/:id', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
@@ -150,75 +44,6 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/admin/users:
- *   post:
- *     summary: Create a new user
- *     description: Creates a new user account. Password is optional if user will use OIDC login. Admin only.
- *     tags: [Admin - Users]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *               - name
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *                 example: "newuser@example.com"
- *               name:
- *                 type: string
- *                 example: "New User"
- *               password:
- *                 type: string
- *                 format: password
- *                 minLength: 8
- *                 description: Optional password (required for local login). Omit when send_invite is true.
- *                 example: "securepassword123"
- *               is_admin:
- *                 type: boolean
- *                 default: false
- *                 example: false
- *               send_invite:
- *                 type: boolean
- *                 default: false
- *                 description: If true, create user without password and send invite email (SMTP must be configured).
- *     responses:
- *       201:
- *         description: User created successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 id:
- *                   type: string
- *                 email:
- *                   type: string
- *                 name:
- *                   type: string
- *                 user_key:
- *                   type: string
- *                 is_admin:
- *                   type: boolean
- *                 inviteSent:
- *                   type: boolean
- *                   description: Present when send_invite was true; indicates whether invite email was sent.
- *       400:
- *         description: Missing required fields, invalid email format, or email already exists
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Admin access required
- */
 function hashToken(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
@@ -351,67 +176,6 @@ router.post('/', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/admin/users/{id}:
- *   put:
- *     summary: Update user
- *     description: Updates an existing user. All fields are optional. Password will be hashed if provided. Admin only.
- *     tags: [Admin - Users]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: User ID
- *         example: "123e4567-e89b-12d3-a456-426614174000"
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *                 example: "updated@example.com"
- *               name:
- *                 type: string
- *                 example: "Updated Name"
- *               password:
- *                 type: string
- *                 format: password
- *                 minLength: 8
- *                 description: New password (will be hashed)
- *                 example: "newpassword123"
- *               is_admin:
- *                 type: boolean
- *                 example: false
- *               language:
- *                 type: string
- *                 enum: [en, de, fr]
- *                 example: "en"
- *               theme:
- *                 type: string
- *                 enum: [light, dark, auto]
- *                 example: "auto"
- *     responses:
- *       200:
- *         description: User updated successfully
- *       400:
- *         description: Invalid email format or email already exists
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Admin access required
- *       404:
- *         description: User not found
- */
 router.put('/:id', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
@@ -488,44 +252,6 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/admin/users/{id}:
- *   delete:
- *     summary: Delete user
- *     description: Deletes a user account. Cannot delete your own account. Admin only.
- *     tags: [Admin - Users]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: User ID
- *         example: "123e4567-e89b-12d3-a456-426614174000"
- *     responses:
- *       200:
- *         description: User deleted successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "User deleted"
- *       400:
- *         description: Cannot delete your own account
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Admin access required
- *       404:
- *         description: User not found
- */
 router.delete('/:id', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
@@ -548,49 +274,6 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/admin/users/{id}/teams:
- *   get:
- *     summary: Get teams for a user
- *     description: Returns all teams that a specific user is a member of. Admin only.
- *     tags: [Admin - Users]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: User ID
- *         example: "123e4567-e89b-12d3-a456-426614174000"
- *     responses:
- *       200:
- *         description: List of teams the user is a member of
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 type: object
- *                 properties:
- *                   id:
- *                     type: string
- *                   name:
- *                     type: string
- *                     example: "Development Team"
- *                   description:
- *                     type: string
- *                     nullable: true
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Admin access required
- *       404:
- *         description: User not found
- */
 router.get('/:id/teams', async (req, res) => {
   const authReq = req as AuthRequest;
   try {

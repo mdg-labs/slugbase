@@ -11,50 +11,6 @@ const router = Router();
 router.use(requireAuth());
 router.use(requireAdmin());
 
-/**
- * @swagger
- * /api/oidc-providers:
- *   get:
- *     summary: Get all OIDC providers
- *     description: Returns all configured OIDC providers (without client secrets). Admin only.
- *     tags: [Admin - OIDC Providers]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: List of OIDC providers
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 type: object
- *                 properties:
- *                   id:
- *                     type: string
- *                   provider_key:
- *                     type: string
- *                     example: "google"
- *                   issuer_url:
- *                     type: string
- *                     example: "https://accounts.google.com"
- *                   scopes:
- *                     type: string
- *                     example: "openid profile email"
- *                   auto_create_users:
- *                     type: boolean
- *                   default_role:
- *                     type: string
- *                     enum: [user, admin]
- *                   created_at:
- *                     type: string
- *                     format: date-time
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Admin access required
- */
 // Get all OIDC providers (without secrets)
 router.get('/', async (req, res) => {
   try {
@@ -75,34 +31,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/oidc-providers/{id}:
- *   get:
- *     summary: Get OIDC provider by ID
- *     description: Returns a single OIDC provider (without client secret). Admin only.
- *     tags: [Admin - OIDC Providers]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: Provider ID
- *         example: "123e4567-e89b-12d3-a456-426614174000"
- *     responses:
- *       200:
- *         description: Provider details
- *       404:
- *         description: Provider not found
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Admin access required
- */
 // Get single OIDC provider (without secret)
 router.get('/:id', async (req, res) => {
   try {
@@ -129,66 +57,6 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/oidc-providers:
- *   post:
- *     summary: Create OIDC provider
- *     description: Creates a new OIDC provider. Client secret is encrypted before storage. Admin only.
- *     tags: [Admin - OIDC Providers]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - provider_key
- *               - client_id
- *               - client_secret
- *               - issuer_url
- *             properties:
- *               provider_key:
- *                 type: string
- *                 example: "google"
- *                 description: Unique identifier for the provider
- *               client_id:
- *                 type: string
- *                 example: "123456789.apps.googleusercontent.com"
- *               client_secret:
- *                 type: string
- *                 example: "GOCSPX-secret-key"
- *                 description: Will be encrypted before storage
- *               issuer_url:
- *                 type: string
- *                 format: uri
- *                 example: "https://accounts.google.com"
- *               scopes:
- *                 type: string
- *                 default: "openid profile email"
- *                 example: "openid profile email"
- *               auto_create_users:
- *                 type: boolean
- *                 default: true
- *                 description: Automatically create users on first OIDC login
- *               default_role:
- *                 type: string
- *                 enum: [user, admin]
- *                 default: "user"
- *                 description: Default role for auto-created users
- *     responses:
- *       201:
- *         description: Provider created successfully
- *       400:
- *         description: Missing required fields, invalid default_role, or provider_key already exists
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Admin access required
- */
 // Create OIDC provider
 router.post('/', async (req, res) => {
   try {
@@ -295,59 +163,6 @@ router.post('/', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/oidc-providers/{id}:
- *   put:
- *     summary: Update OIDC provider
- *     description: Updates an existing OIDC provider. If client_secret is provided, it will be encrypted. Admin only.
- *     tags: [Admin - OIDC Providers]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: Provider ID
- *         example: "123e4567-e89b-12d3-a456-426614174000"
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               provider_key:
- *                 type: string
- *               client_id:
- *                 type: string
- *               client_secret:
- *                 type: string
- *                 description: Will be encrypted if provided
- *               issuer_url:
- *                 type: string
- *               scopes:
- *                 type: string
- *               auto_create_users:
- *                 type: boolean
- *               default_role:
- *                 type: string
- *                 enum: [user, admin]
- *     responses:
- *       200:
- *         description: Provider updated successfully
- *       400:
- *         description: Invalid default_role or provider_key already exists
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Admin access required
- *       404:
- *         description: Provider not found
- */
 // Update OIDC provider
 router.put('/:id', async (req, res) => {
   try {
@@ -504,42 +319,6 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/oidc-providers/{id}:
- *   delete:
- *     summary: Delete OIDC provider
- *     description: Deletes an OIDC provider. Admin only.
- *     tags: [Admin - OIDC Providers]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: Provider ID
- *         example: "123e4567-e89b-12d3-a456-426614174000"
- *     responses:
- *       200:
- *         description: Provider deleted successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "Provider deleted"
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Admin access required
- *       404:
- *         description: Provider not found
- */
 // Delete OIDC provider
 router.delete('/:id', async (req, res) => {
   try {

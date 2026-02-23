@@ -9,52 +9,6 @@ import { getTenantId } from '../utils/tenant.js';
 const router = Router();
 router.use(requireAuth());
 
-/**
- * @swagger
- * /api/folders:
- *   get:
- *     summary: Get all folders
- *     description: Returns all folders for the authenticated user, including own folders and folders shared via teams or users.
- *     tags: [Folders]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: List of folders
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 type: object
- *                 properties:
- *                   id:
- *                     type: string
- *                     example: "123e4567-e89b-12d3-a456-426614174000"
- *                   name:
- *                     type: string
- *                     example: "My Folder"
- *                   icon:
- *                     type: string
- *                     nullable: true
- *                     description: Lucide icon name
- *                     example: "Folder"
- *                   folder_type:
- *                     type: string
- *                     enum: [own, shared]
- *                     example: "own"
- *                   shared_teams:
- *                     type: array
- *                     items:
- *                       type: object
- *                   shared_users:
- *                     type: array
- *                     items:
- *                       type: object
- *       401:
- *         description: Unauthorized
- */
 // Get all folders for user (own + shared), optionally filtered by scope
 // When limit is provided, returns { items, total }; otherwise returns array (backward compat)
 router.get('/', async (req, res) => {
@@ -226,32 +180,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/folders/{id}:
- *   get:
- *     summary: Get folder by ID
- *     description: Returns a single folder by ID. User must own the folder or have access via sharing.
- *     tags: [Folders]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: Folder ID
- *         example: "123e4567-e89b-12d3-a456-426614174000"
- *     responses:
- *       200:
- *         description: Folder details
- *       404:
- *         description: Folder not found
- *       401:
- *         description: Unauthorized
- */
 // Get single folder (own or shared)
 router.get('/:id', async (req, res) => {
   const authReq = req as AuthRequest;
@@ -294,60 +222,6 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/folders:
- *   post:
- *     summary: Create a new folder
- *     description: Creates a new folder. Can optionally share with teams or users.
- *     tags: [Folders]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - name
- *             properties:
- *               name:
- *                 type: string
- *                 example: "My New Folder"
- *               icon:
- *                 type: string
- *                 nullable: true
- *                 description: Lucide icon name (e.g., "Folder", "Archive", "Briefcase")
- *                 example: "Folder"
- *               team_ids:
- *                 type: array
- *                 items:
- *                   type: string
- *                 description: Array of team IDs to share folder with
- *                 example: ["123e4567-e89b-12d3-a456-426614174000"]
- *               user_ids:
- *                 type: array
- *                 items:
- *                   type: string
- *                 description: Array of user IDs to share folder with
- *                 example: ["123e4567-e89b-12d3-a456-426614174000"]
- *               share_all_teams:
- *                 type: boolean
- *                 default: false
- *                 description: Share folder with all teams user is a member of
- *                 example: false
- *     responses:
- *       201:
- *         description: Folder created successfully
- *       400:
- *         description: Missing name or folder with same name already exists
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: User is not member of team
- */
 // Create folder
 router.post('/', async (req, res) => {
   const authReq = req as AuthRequest;
@@ -434,63 +308,6 @@ router.post('/', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/folders/{id}:
- *   put:
- *     summary: Update folder
- *     description: Updates an existing folder. User must own the folder.
- *     tags: [Folders]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: Folder ID
- *         example: "123e4567-e89b-12d3-a456-426614174000"
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - name
- *             properties:
- *               name:
- *                 type: string
- *                 example: "Updated Folder Name"
- *               icon:
- *                 type: string
- *                 nullable: true
- *                 example: "Archive"
- *               team_ids:
- *                 type: array
- *                 items:
- *                   type: string
- *                 description: Array of team IDs (replaces existing shares)
- *               user_ids:
- *                 type: array
- *                 items:
- *                   type: string
- *                 description: Array of user IDs (replaces existing shares)
- *               share_all_teams:
- *                 type: boolean
- *                 description: Share with all teams user is a member of
- *     responses:
- *       200:
- *         description: Folder updated successfully
- *       400:
- *         description: Missing name or folder with same name already exists
- *       401:
- *         description: Unauthorized
- *       404:
- *         description: Folder not found
- */
 // Update folder
 router.put('/:id', async (req, res) => {
   const authReq = req as AuthRequest;
@@ -592,40 +409,6 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/folders/{id}:
- *   delete:
- *     summary: Delete folder
- *     description: Deletes a folder and all bookmarks within it. User must own the folder.
- *     tags: [Folders]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: Folder ID
- *         example: "123e4567-e89b-12d3-a456-426614174000"
- *     responses:
- *       200:
- *         description: Folder deleted successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "Folder deleted"
- *       401:
- *         description: Unauthorized
- *       404:
- *         description: Folder not found
- */
 // Delete folder
 router.delete('/:id', async (req, res) => {
   const authReq = req as AuthRequest;
