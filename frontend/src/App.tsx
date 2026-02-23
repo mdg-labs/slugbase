@@ -52,6 +52,25 @@ function SharedRedirect() {
   return <Navigate to={to} replace />;
 }
 
+/** Diagnostic: catches errors in login subtree and rethrows with a prefix so cloud boundary shows where the throw came from. */
+class LoginRouteErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null };
+
+  static getDerivedStateFromError(raw: unknown): { error: Error } {
+    const msg = raw instanceof Error ? raw.message : String(raw);
+    return { error: new Error(`[LoginRoute] ${msg || '(no message)'}`) };
+  }
+
+  componentDidCatch(error: unknown, info: React.ErrorInfo) {
+    console.error('[Login route boundary]', error, info.componentStack);
+  }
+
+  render() {
+    if (this.state.error != null) throw this.state.error;
+    return this.props.children;
+  }
+}
+
 function AppRoutes() {
   const { user, loading } = useAuth();
   const { t } = useTranslation();
@@ -76,7 +95,7 @@ function AppRoutes() {
   return (
     <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="text-lg">{t('common.loading')}</div></div>}>
       <Routes>
-        <Route path="/login" element={!user ? <Login /> : <Navigate to={appRootPath} replace />} />
+        <Route path="/login" element={!user ? <LoginRouteErrorBoundary><Login /></LoginRouteErrorBoundary> : <Navigate to={appRootPath} replace />} />
         <Route path="/signup" element={!user ? <Signup /> : <Navigate to={appRootPath} replace />} />
         <Route path="/reset-password" element={<PasswordReset />} />
         <Route path="/password-reset" element={<PasswordReset />} />
