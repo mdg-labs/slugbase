@@ -229,6 +229,7 @@ export interface AppProps {
 
 function App({ basePath, apiBaseUrl, routerBasename, skipSetupFlow }: AppProps = {}) {
   const appRootPath = basePath === '/' || !basePath ? '/' : basePath;
+  const pathPrefixForLinks = routerBasename !== undefined ? '' : (basePath ?? '');
   const content = (
     <AuthProvider>
       <TooltipProvider>
@@ -240,7 +241,7 @@ function App({ basePath, apiBaseUrl, routerBasename, skipSetupFlow }: AppProps =
   );
   return (
     <AppErrorBoundary>
-      <AppConfigProvider appBasePath={basePath} apiBaseUrl={apiBaseUrl} appRootPath={appRootPath} skipSetupFlow={skipSetupFlow}>
+      <AppConfigProvider appBasePath={basePath} apiBaseUrl={apiBaseUrl} appRootPath={appRootPath} skipSetupFlow={skipSetupFlow} pathPrefixForLinks={pathPrefixForLinks}>
         {routerBasename !== undefined ? (
           content
         ) : (

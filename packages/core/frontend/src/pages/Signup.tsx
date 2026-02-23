@@ -9,7 +9,7 @@ const MIN_PASSWORD_LENGTH = 8;
 
 export default function Signup() {
   const { t } = useTranslation();
-  const { appBasePath } = useAppConfig();
+  const { pathPrefixForLinks } = useAppConfig();
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
@@ -60,7 +60,7 @@ export default function Signup() {
             {t('signup.successMessage')}
           </p>
           <Link
-            to={`${appBasePath}/login`}
+            to={`${pathPrefixForLinks}/login`}
             className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg"
           >
             {t('signup.backToLogin')}
@@ -188,7 +188,7 @@ export default function Signup() {
           </form>
           <p className="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">
             {t('signup.alreadyHaveAccount')}{' '}
-            <Link to={`${appBasePath}/login`} className="font-medium text-blue-600 dark:text-blue-400 hover:underline">
+            <Link to={`${pathPrefixForLinks}/login`} className="font-medium text-blue-600 dark:text-blue-400 hover:underline">
               {t('signup.logIn')}
             </Link>
           </p>
