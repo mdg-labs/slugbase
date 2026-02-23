@@ -5,6 +5,8 @@ export interface AppConfig {
   appBasePath: string;
   apiBaseUrl: string;
   appRootPath: string;
+  /** When true, skip the first-time setup flow (e.g. in cloud; first user registers via Signup). */
+  skipSetupFlow?: boolean;
 }
 
 const defaultConfig: AppConfig = {
@@ -20,16 +22,19 @@ export function AppConfigProvider({
   appBasePath,
   apiBaseUrl,
   appRootPath,
+  skipSetupFlow,
 }: {
   children: React.ReactNode;
   appBasePath?: string;
   apiBaseUrl?: string;
   appRootPath?: string;
+  skipSetupFlow?: boolean;
 }) {
   const value: AppConfig = {
     appBasePath: appBasePath ?? defaultConfig.appBasePath,
     apiBaseUrl: apiBaseUrl ?? defaultConfig.apiBaseUrl,
     appRootPath: appRootPath ?? defaultConfig.appRootPath,
+    skipSetupFlow,
   };
   return <AppConfigContext.Provider value={value}>{children}</AppConfigContext.Provider>;
 }

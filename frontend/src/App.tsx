@@ -74,16 +74,22 @@ class LoginRouteErrorBoundary extends Component<{ children: ReactNode }, { error
 function AppRoutes() {
   const { user, loading } = useAuth();
   const { t } = useTranslation();
-  const { appRootPath } = useAppConfig();
-  const [setupStatus, setSetupStatus] = React.useState<{ initialized: boolean } | null>(null);
-  const [setupLoading, setSetupLoading] = React.useState(true);
+  const { appRootPath, skipSetupFlow } = useAppConfig();
+  const [setupStatus, setSetupStatus] = React.useState<{ initialized: boolean } | null>(() =>
+    skipSetupFlow ? { initialized: true } : null
+  );
+  const [setupLoading, setSetupLoading] = React.useState(() => !skipSetupFlow);
 
   React.useEffect(() => {
+    if (skipSetupFlow) {
+      setSetupLoading(false);
+      return;
+    }
     api.get('/auth/setup/status')
       .then((res) => res.data)
       .then((data) => { setSetupStatus(data); setSetupLoading(false); })
       .catch(() => { setSetupStatus({ initialized: true }); setSetupLoading(false); });
-  }, []);
+  }, [skipSetupFlow]);
 
   if (setupLoading || (loading && setupStatus?.initialized)) {
     return <div className="min-h-screen flex items-center justify-center"><div className="text-lg">{t('common.loading')}</div></div>;
@@ -217,9 +223,11 @@ export interface AppProps {
   apiBaseUrl?: string;
   /** When set (e.g. "" or null), core does not render BrowserRouter; host (e.g. cloud) provides it. */
   routerBasename?: string | null;
+  /** When true, skip the first-time setup flow (e.g. in cloud; first user registers via Signup). */
+  skipSetupFlow?: boolean;
 }
 
-function App({ basePath, apiBaseUrl, routerBasename }: AppProps = {}) {
+function App({ basePath, apiBaseUrl, routerBasename, skipSetupFlow }: AppProps = {}) {
   const appRootPath = basePath === '/' || !basePath ? '/' : basePath;
   const content = (
     <AuthProvider>
@@ -232,7 +240,7 @@ function App({ basePath, apiBaseUrl, routerBasename }: AppProps = {}) {
   );
   return (
     <AppErrorBoundary>
-      <AppConfigProvider appBasePath={basePath} apiBaseUrl={apiBaseUrl} appRootPath={appRootPath}>
+      <AppConfigProvider appBasePath={basePath} apiBaseUrl={apiBaseUrl} appRootPath={appRootPath} skipSetupFlow={skipSetupFlow}>
         {routerBasename !== undefined ? (
           content
         ) : (
