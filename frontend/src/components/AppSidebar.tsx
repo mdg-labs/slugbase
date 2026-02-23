@@ -43,7 +43,7 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
   const { t } = useTranslation();
   const location = useLocation();
   const pathname = location.pathname;
-  const { appBasePath, pathPrefixForLinks } = useAppConfig();
+  const { appBasePath, pathPrefixForLinks, hideAdminOidcAndSmtp } = useAppConfig();
   const { setOpenMobile, toggleSidebar, isMobile, state } = useSidebar();
   const prefix = pathPrefixForLinks || '';
   const adminBaseFull = `${appBasePath || ''}/admin`;
@@ -52,8 +52,12 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
   const adminNavItems = [
     { pathForLink: `${adminBaseLink}/members`, pathForActive: `${adminBaseFull}/members`, label: t('admin.users'), icon: Users },
     { pathForLink: `${adminBaseLink}/teams`, pathForActive: `${adminBaseFull}/teams`, label: t('admin.teams'), icon: UserCog },
-    { pathForLink: `${adminBaseLink}/oidc`, pathForActive: `${adminBaseFull}/oidc`, label: t('admin.oidcProviders'), icon: Key },
-    { pathForLink: `${adminBaseLink}/settings`, pathForActive: `${adminBaseFull}/settings`, label: t('admin.settings'), icon: Settings },
+    ...(!hideAdminOidcAndSmtp
+      ? [
+          { pathForLink: `${adminBaseLink}/oidc`, pathForActive: `${adminBaseFull}/oidc`, label: t('admin.oidcProviders'), icon: Key },
+          { pathForLink: `${adminBaseLink}/settings`, pathForActive: `${adminBaseFull}/settings`, label: t('admin.settings'), icon: Settings },
+        ]
+      : []),
     { pathForLink: `${adminBaseLink}/ai`, pathForActive: `${adminBaseFull}/ai`, label: t('admin.ai.nav'), icon: Sparkles },
   ];
 

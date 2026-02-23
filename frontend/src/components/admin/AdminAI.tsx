@@ -45,6 +45,18 @@ export default function AdminAI() {
         setLoading(false);
         return;
       }
+      // 404 = no AI settings yet (first visit); use defaults without toasting
+      if (e?.response?.status === 404) {
+        setSettings({
+          ai_enabled: false,
+          ai_provider: 'openai',
+          ai_model: 'gpt-4o-mini',
+          ai_api_key: '',
+          ai_api_key_set: false,
+        });
+        setLoading(false);
+        return;
+      }
       showToast(e?.response?.data?.error || t('common.error'), 'error');
     } finally {
       setLoading(false);

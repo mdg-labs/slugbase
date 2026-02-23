@@ -9,6 +9,8 @@ export interface AppConfig {
   skipSetupFlow?: boolean;
   /** Prefix for Link/Navigate paths. Empty when under external Router (e.g. cloud basename="/app"); otherwise appBasePath. Use for all in-app navigation. */
   pathPrefixForLinks: string;
+  /** When true, hide Admin OIDC and SMTP/Settings (e.g. cloud uses Postmark and global OIDC). */
+  hideAdminOidcAndSmtp?: boolean;
 }
 
 const defaultConfig: AppConfig = {
@@ -16,6 +18,7 @@ const defaultConfig: AppConfig = {
   apiBaseUrl: defaultApiBaseUrl,
   appRootPath: defaultAppRootPath,
   pathPrefixForLinks: defaultAppBasePath,
+  hideAdminOidcAndSmtp: false,
 };
 
 const AppConfigContext = createContext<AppConfig>(defaultConfig);
@@ -27,6 +30,7 @@ export function AppConfigProvider({
   appRootPath,
   skipSetupFlow,
   pathPrefixForLinks,
+  hideAdminOidcAndSmtp,
 }: {
   children: React.ReactNode;
   appBasePath?: string;
@@ -35,6 +39,8 @@ export function AppConfigProvider({
   skipSetupFlow?: boolean;
   /** When set (e.g. "" when under external Router), used for Link/Navigate. Omit to use appBasePath. */
   pathPrefixForLinks?: string;
+  /** When true, hide Admin OIDC and SMTP/Settings (e.g. cloud). */
+  hideAdminOidcAndSmtp?: boolean;
 }) {
   const base = appBasePath ?? defaultConfig.appBasePath;
   const value: AppConfig = {
@@ -43,6 +49,7 @@ export function AppConfigProvider({
     appRootPath: appRootPath ?? defaultConfig.appRootPath,
     skipSetupFlow,
     pathPrefixForLinks: pathPrefixForLinks !== undefined ? pathPrefixForLinks : base,
+    hideAdminOidcAndSmtp: hideAdminOidcAndSmtp ?? defaultConfig.hideAdminOidcAndSmtp,
   };
   return <AppConfigContext.Provider value={value}>{children}</AppConfigContext.Provider>;
 }

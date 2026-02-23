@@ -76,7 +76,7 @@ class LoginRouteErrorBoundary extends Component<{ children: ReactNode }, { error
 function AppRoutes() {
   const { user, loading } = useAuth();
   const { t } = useTranslation();
-  const { appRootPath, skipSetupFlow } = useAppConfig();
+  const { appRootPath, skipSetupFlow, hideAdminOidcAndSmtp } = useAppConfig();
   const [setupStatus, setSetupStatus] = React.useState<{ initialized: boolean } | null>(() =>
     skipSetupFlow ? { initialized: true } : null
   );
@@ -122,8 +122,17 @@ function AppRoutes() {
             <Route index element={<Navigate to="members" replace />} />
             <Route path="members" element={<AdminMembersPage />} />
             <Route path="teams" element={<AdminTeamsPage />} />
-            <Route path="oidc" element={<AdminOIDCPage />} />
-            <Route path="settings" element={<AdminSettingsPage />} />
+            {hideAdminOidcAndSmtp ? (
+              <>
+                <Route path="oidc" element={<Navigate to="members" replace />} />
+                <Route path="settings" element={<Navigate to="members" replace />} />
+              </>
+            ) : (
+              <>
+                <Route path="oidc" element={<AdminOIDCPage />} />
+                <Route path="settings" element={<AdminSettingsPage />} />
+              </>
+            )}
             <Route path="ai" element={<AdminAIPage />} />
           </Route>
         </Route>
@@ -227,9 +236,11 @@ export interface AppProps {
   routerBasename?: string | null;
   /** When true, skip the first-time setup flow (e.g. in cloud; first user registers via Signup). */
   skipSetupFlow?: boolean;
+  /** When true, hide Admin OIDC and SMTP/Settings (e.g. cloud uses Postmark and global OIDC). */
+  hideAdminOidcAndSmtp?: boolean;
 }
 
-function App({ basePath, apiBaseUrl, routerBasename, skipSetupFlow }: AppProps = {}) {
+function App({ basePath, apiBaseUrl, routerBasename, skipSetupFlow, hideAdminOidcAndSmtp }: AppProps = {}) {
   const appRootPath = basePath === '/' || !basePath ? '/' : basePath;
   const pathPrefixForLinks = routerBasename !== undefined ? '' : (basePath ?? '');
   const content = (
@@ -243,7 +254,7 @@ function App({ basePath, apiBaseUrl, routerBasename, skipSetupFlow }: AppProps =
   );
   return (
     <AppErrorBoundary>
-      <AppConfigProvider appBasePath={basePath} apiBaseUrl={apiBaseUrl} appRootPath={appRootPath} skipSetupFlow={skipSetupFlow} pathPrefixForLinks={pathPrefixForLinks}>
+      <AppConfigProvider appBasePath={basePath} apiBaseUrl={apiBaseUrl} appRootPath={appRootPath} skipSetupFlow={skipSetupFlow} pathPrefixForLinks={pathPrefixForLinks} hideAdminOidcAndSmtp={hideAdminOidcAndSmtp}>
         {routerBasename !== undefined ? (
           content
         ) : (
