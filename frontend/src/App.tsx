@@ -137,14 +137,16 @@ interface AppErrorFallbackProps {
 }
 
 function AppErrorFallback({ error, onReset }: AppErrorFallbackProps) {
-  const { t } = useTranslation();
+  // Use hardcoded strings so this fallback never throws (e.g. when i18n context is missing in embedded host).
   const message = error?.message ?? (error != null ? String(error) : '');
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-4" role="alert">
-      <p className="text-lg text-gray-700 dark:text-gray-300 text-center">{t('common.error')}</p>
-      {message && (
-        <details className="w-full max-w-md text-sm text-gray-600 dark:text-gray-400" open={import.meta.env?.DEV}>
-          <summary className="cursor-pointer">{message}</summary>
+      <p className="text-lg text-gray-700 dark:text-gray-300 text-center">
+        Something went wrong loading this page. Please try again.
+      </p>
+      {(message || error?.stack) && (
+        <details className="w-full max-w-md text-sm text-gray-600 dark:text-gray-400" open>
+          <summary className="cursor-pointer">{message || 'Error details'}</summary>
           {error?.stack && <pre className="mt-2 overflow-auto whitespace-pre-wrap">{error.stack}</pre>}
         </details>
       )}
@@ -153,7 +155,7 @@ function AppErrorFallback({ error, onReset }: AppErrorFallbackProps) {
         onClick={() => (onReset ? onReset() : window.location.reload())}
         className="px-4 py-2 rounded-md bg-primary text-primary-foreground hover:opacity-90"
       >
-        {t('common.reload')}
+        Reload
       </button>
     </div>
   );
