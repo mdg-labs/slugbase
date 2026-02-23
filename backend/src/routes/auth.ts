@@ -305,11 +305,8 @@ router.post('/login', authRateLimiter, async (req, res, next) => {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
-    // Require email verification for password users (CLOUD signup flow)
     const emailVerified = (user as any).email_verified;
-    if (emailVerified === false || emailVerified === 0) {
-      return res.status(403).json({ error: 'Please verify your email', code: 'EMAIL_NOT_VERIFIED' });
-    }
+    const isVerified = emailVerified !== false && emailVerified !== 0;
 
     const userPayload = {
       id: (user as any).id,
@@ -317,6 +314,7 @@ router.post('/login', authRateLimiter, async (req, res, next) => {
       name: (user as any).name,
       user_key: (user as any).user_key,
       is_admin: (user as any).is_admin,
+      email_verified: isVerified,
     };
 
     const token = generateToken(userPayload);
@@ -328,6 +326,7 @@ router.post('/login', authRateLimiter, async (req, res, next) => {
       name: (user as any).name,
       user_key: (user as any).user_key,
       is_admin: (user as any).is_admin,
+      email_verified: isVerified,
       language: (user as any).language,
       theme: (user as any).theme,
     };
