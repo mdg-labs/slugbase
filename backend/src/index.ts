@@ -1,12 +1,10 @@
 // IMPORTANT: Load environment variables FIRST, before any other imports
 import './load-env.js';
-import './instrument.js';
 
 import express from 'express';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-import * as Sentry from '@sentry/node';
 import { validateEnvironmentVariables } from './utils/env-validation.js';
 import { initDatabase, isInitialized } from './db/index.js';
 import { loadOIDCStrategies } from './auth/oidc.js';
@@ -56,7 +54,6 @@ async function start() {
     });
 
     app.use(notFoundHandler);
-    Sentry.setupExpressErrorHandler(app);
     app.use(errorHandler);
 
     const initialized = await isInitialized();

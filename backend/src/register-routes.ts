@@ -51,12 +51,6 @@ export function registerCoreRoutes(app: express.Express, _deps?: CoreRouteDeps):
   app.use('/api', healthRoutes);
   app.use('/api/go', goRoutes);
 
-  if (process.env.SENTRY_DEBUG === 'true') {
-    app.get('/api/debug-sentry', () => {
-      throw new Error('Sentry backend test error');
-    });
-  }
-
   app.get('/go/:slug/remember/:bookmarkId', redirectRateLimiter, optionalAuthForGo, (req, res) => {
     handleGoRemember(req, res).catch((err) => {
       console.error('Go remember error:', err);

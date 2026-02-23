@@ -1,22 +1,9 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import { sentryVitePlugin } from '@sentry/vite-plugin'
 import { resolve } from 'path'
 
-const sentryPlugin =
-  process.env.SENTRY_AUTH_TOKEN && process.env.SENTRY_ORG && process.env.SENTRY_PROJECT
-    ? sentryVitePlugin({
-        org: process.env.SENTRY_ORG,
-        project: process.env.SENTRY_PROJECT,
-        authToken: process.env.SENTRY_AUTH_TOKEN,
-        sourcemaps: {
-          filesToDeleteAfterUpload: ['./**/*.map'],
-        },
-      })
-    : undefined
-
 export default defineConfig({
-  plugins: [react(), ...(sentryPlugin ? [sentryPlugin] : [])],
+  plugins: [react()],
   resolve: {
     alias: {
       '@': resolve(__dirname, './src'),

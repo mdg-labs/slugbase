@@ -10,7 +10,6 @@
     "test": "DB_PATH=:memory: node --test --import tsx test/authorization.test.ts test/go.test.ts test/stats.test.ts test/tenant-isolation.test.ts"
   },
   "dependencies": {
-    "@sentry/node": "^8.0.0",
     "@types/cookie-parser": "^1.4.10",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/nodemailer": "^7.0.4",

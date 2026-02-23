@@ -1,14 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
-import * as Sentry from '@sentry/node';
 
 /**
  * Error handling middleware
  * Prevents information disclosure in production
  */
 export function errorHandler(err: any, req: Request, res: Response, next: NextFunction) {
-  // Report to Sentry when configured (no-op when SENTRY_DSN is unset)
-  Sentry.captureException(err);
-
   // Log error details server-side
   console.error('Error:', {
     message: err.message,

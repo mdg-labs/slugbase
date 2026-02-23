@@ -1,10 +1,8 @@
-import React, { Suspense, lazy } from 'react';
+import React, { Suspense, lazy, Component, type ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import * as Sentry from '@sentry/react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AppConfigProvider, useAppConfig } from './contexts/AppConfigContext';
-import { SentryDebug } from './components/SentryDebug';
 import { ToastProvider } from './components/ui/Toast';
 import { TooltipProvider } from './components/ui/tooltip-base';
 import Layout from './components/Layout';
@@ -133,14 +131,25 @@ function ForwardingHandler() {
   );
 }
 
-function AppErrorFallback() {
+interface AppErrorFallbackProps {
+  error?: Error | null;
+  onReset?: () => void;
+}
+
+function AppErrorFallback({ error, onReset }: AppErrorFallbackProps) {
   const { t } = useTranslation();
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-4" role="alert">
       <p className="text-lg text-gray-700 dark:text-gray-300 text-center">{t('common.error')}</p>
+      {error?.message && (
+        <details className="w-full max-w-md text-sm text-gray-600 dark:text-gray-400">
+          <summary className="cursor-pointer">{error.message}</summary>
+          {error.stack && <pre className="mt-2 overflow-auto whitespace-pre-wrap">{error.stack}</pre>}
+        </details>
+      )}
       <button
         type="button"
-        onClick={() => window.location.reload()}
+        onClick={() => (onReset ? onReset() : window.location.reload())}
         className="px-4 py-2 rounded-md bg-primary text-primary-foreground hover:opacity-90"
       >
         {t('common.reload')}
@@ -149,30 +158,66 @@ function AppErrorFallback() {
   );
 }
 
+interface AppErrorBoundaryState {
+  error: Error | null;
+}
+
+class AppErrorBoundary extends Component<{ children: ReactNode }, AppErrorBoundaryState> {
+  state: AppErrorBoundaryState = { error: null };
+
+  static getDerivedStateFromError(error: Error): AppErrorBoundaryState {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error('App error boundary caught:', error, info.componentStack);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <AppErrorFallback
+          error={this.state.error}
+          onReset={() => this.setState({ error: null })}
+        />
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export interface AppProps {
   /** Base path for app routes (e.g. '/' for self-hosted, '/app' for cloud). */
   basePath?: string;
   /** API base URL (e.g. '' for same-origin, or full URL if frontend is on different origin). */
   apiBaseUrl?: string;
+  /** When set (e.g. "" or null), core does not render BrowserRouter; host (e.g. cloud) provides it. */
+  routerBasename?: string | null;
 }
 
-function App({ basePath, apiBaseUrl }: AppProps = {}) {
+function App({ basePath, apiBaseUrl, routerBasename }: AppProps = {}) {
   const appRootPath = basePath === '/' || !basePath ? '/' : basePath;
+  const content = (
+    <AuthProvider>
+      <TooltipProvider>
+        <ToastProvider>
+          <AppRoutes />
+        </ToastProvider>
+      </TooltipProvider>
+    </AuthProvider>
+  );
   return (
-    <Sentry.ErrorBoundary fallback={<AppErrorFallback />}>
+    <AppErrorBoundary>
       <AppConfigProvider appBasePath={basePath} apiBaseUrl={apiBaseUrl} appRootPath={appRootPath}>
-        <BrowserRouter basename={basePath ?? ''}>
-          <AuthProvider>
-            <TooltipProvider>
-              <ToastProvider>
-                <AppRoutes />
-                <SentryDebug />
-              </ToastProvider>
-            </TooltipProvider>
-          </AuthProvider>
-        </BrowserRouter>
+        {routerBasename !== undefined ? (
+          content
+        ) : (
+          <BrowserRouter basename={basePath ?? ''}>
+            {content}
+          </BrowserRouter>
+        )}
       </AppConfigProvider>
-    </Sentry.ErrorBoundary>
+    </AppErrorBoundary>
   );
 }
 
