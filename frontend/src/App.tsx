@@ -138,13 +138,14 @@ interface AppErrorFallbackProps {
 
 function AppErrorFallback({ error, onReset }: AppErrorFallbackProps) {
   const { t } = useTranslation();
+  const message = error?.message ?? (error != null ? String(error) : '');
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-4" role="alert">
       <p className="text-lg text-gray-700 dark:text-gray-300 text-center">{t('common.error')}</p>
-      {error?.message && (
-        <details className="w-full max-w-md text-sm text-gray-600 dark:text-gray-400">
-          <summary className="cursor-pointer">{error.message}</summary>
-          {error.stack && <pre className="mt-2 overflow-auto whitespace-pre-wrap">{error.stack}</pre>}
+      {message && (
+        <details className="w-full max-w-md text-sm text-gray-600 dark:text-gray-400" open={import.meta.env?.DEV}>
+          <summary className="cursor-pointer">{message}</summary>
+          {error?.stack && <pre className="mt-2 overflow-auto whitespace-pre-wrap">{error.stack}</pre>}
         </details>
       )}
       <button
@@ -165,11 +166,13 @@ interface AppErrorBoundaryState {
 class AppErrorBoundary extends Component<{ children: ReactNode }, AppErrorBoundaryState> {
   state: AppErrorBoundaryState = { error: null };
 
-  static getDerivedStateFromError(error: Error): AppErrorBoundaryState {
-    return { error };
+  static getDerivedStateFromError(error: unknown): AppErrorBoundaryState {
+    const normalized =
+      error instanceof Error ? error : new Error(error != null ? String(error) : 'Unknown error');
+    return { error: normalized };
   }
 
-  componentDidCatch(error: Error, info: React.ErrorInfo) {
+  componentDidCatch(error: unknown, info: React.ErrorInfo) {
     console.error('App error boundary caught:', error, info.componentStack);
   }
 

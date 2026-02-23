@@ -10,6 +10,7 @@ Full documentation for SlugBase (self-hosted and Cloud) is published at:
 This repo keeps only minimal in-repo docs:
 
 - [STRATEGIC-DECISION-ARCHITECTURE.md](STRATEGIC-DECISION-ARCHITECTURE.md) – Long-term architecture options (A/B/C) and recommendation.
+- [embedding.md](embedding.md) – **Embedding the frontend**: host contract (i18n, Router, props) when using the core App inside another app (e.g. Cloud).
 - [PACKAGE-BOUNDARIES-AND-EXPORTS.md](PACKAGE-BOUNDARIES-AND-EXPORTS.md) – Option B: package split, exports, extension points, app-only responsibilities.
 - [releasing.md](releasing.md) – Versioning and release process.
 - [infra/](infra/) – Deployment and infrastructure (Fly.io, Grafana).
