@@ -1,6 +1,6 @@
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useState, useEffect } from 'react';
 import {
   Bookmark,
   Folder,
@@ -30,7 +30,7 @@ import {
 } from './ui/sidebar';
 import { useAppConfig } from '../contexts/AppConfigContext';
 import type { User } from '../contexts/AuthContext';
-import { cn } from '@/lib/utils';
+import { cn } from '../lib/utils';
 
 const SIDEBAR_ADMIN_OPEN_KEY = 'slugbase_sidebar_admin_open';
 
@@ -43,16 +43,18 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
   const { t } = useTranslation();
   const location = useLocation();
   const pathname = location.pathname;
-  const { appBasePath } = useAppConfig();
+  const { appBasePath, pathPrefixForLinks } = useAppConfig();
   const { setOpenMobile, toggleSidebar, isMobile, state } = useSidebar();
-  const adminBase = `${appBasePath || ''}/admin`;
+  const prefix = pathPrefixForLinks || '';
+  const adminBaseFull = `${appBasePath || ''}/admin`;
+  const adminBaseLink = `${prefix}/admin`.replace(/\/+/g, '/') || '/admin';
 
   const adminNavItems = [
-    { path: `${adminBase}/members`, label: t('admin.users'), icon: Users },
-    { path: `${adminBase}/teams`, label: t('admin.teams'), icon: UserCog },
-    { path: `${adminBase}/oidc`, label: t('admin.oidcProviders'), icon: Key },
-    { path: `${adminBase}/settings`, label: t('admin.settings'), icon: Settings },
-    { path: `${adminBase}/ai`, label: t('admin.ai.nav'), icon: Sparkles },
+    { pathForLink: `${adminBaseLink}/members`, pathForActive: `${adminBaseFull}/members`, label: t('admin.users'), icon: Users },
+    { pathForLink: `${adminBaseLink}/teams`, pathForActive: `${adminBaseFull}/teams`, label: t('admin.teams'), icon: UserCog },
+    { pathForLink: `${adminBaseLink}/oidc`, pathForActive: `${adminBaseFull}/oidc`, label: t('admin.oidcProviders'), icon: Key },
+    { pathForLink: `${adminBaseLink}/settings`, pathForActive: `${adminBaseFull}/settings`, label: t('admin.settings'), icon: Settings },
+    { pathForLink: `${adminBaseLink}/ai`, pathForActive: `${adminBaseFull}/ai`, label: t('admin.ai.nav'), icon: Sparkles },
   ];
 
   const isOverviewActive =
@@ -71,11 +73,13 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
     localStorage.setItem(SIDEBAR_ADMIN_OPEN_KEY, String(adminOpen));
   }, [adminOpen]);
 
+  const rootLink = prefix || '/';
+  const rootActive = appBasePath || '/';
   const primaryNavItems = [
-    { path: appBasePath || '/', label: t('dashboard.overview'), icon: LayoutDashboard },
-    { path: `${appBasePath}/bookmarks`, label: t('bookmarks.title'), icon: Bookmark },
-    { path: `${appBasePath}/folders`, label: t('folders.title'), icon: Folder },
-    { path: `${appBasePath}/tags`, label: t('tags.title'), icon: Tag },
+    { pathForLink: rootLink, pathForActive: rootActive, label: t('dashboard.overview'), icon: LayoutDashboard },
+    { pathForLink: `${prefix}/bookmarks`.replace(/\/+/g, '/') || '/bookmarks', pathForActive: `${appBasePath || ''}/bookmarks`, label: t('bookmarks.title'), icon: Bookmark },
+    { pathForLink: `${prefix}/folders`.replace(/\/+/g, '/') || '/folders', pathForActive: `${appBasePath || ''}/folders`, label: t('folders.title'), icon: Folder },
+    { pathForLink: `${prefix}/tags`.replace(/\/+/g, '/') || '/tags', pathForActive: `${appBasePath || ''}/tags`, label: t('tags.title'), icon: Tag },
   ];
 
   const handleNavClick = () => {
@@ -85,21 +89,22 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
   };
 
   return (
+    <React.Fragment>
     <Sidebar collapsible="icon" side="left">
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
               {primaryNavItems.map((item) => (
-                <SidebarMenuItem key={item.path}>
+                <SidebarMenuItem key={item.pathForLink}>
                   <SidebarMenuButton
                     asChild
                     isActive={
-                      item.path === (appBasePath || '/') ? isOverviewActive : pathname === item.path
+                      item.pathForActive === (appBasePath || '/') ? isOverviewActive : pathname === item.pathForActive
                     }
                     tooltip={item.label}
                   >
-                    <Link to={item.path} onClick={handleNavClick} aria-current={pathname === item.path ? 'page' : undefined}>
+                    <Link to={item.pathForLink} onClick={handleNavClick} aria-current={pathname === item.pathForActive ? 'page' : undefined}>
                       <item.icon className="h-5 w-5" />
                       <span>{item.label}</span>
                     </Link>
@@ -138,16 +143,16 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
                     {adminNavItems.map((item) => {
                       const Icon = item.icon;
                       return (
-                        <SidebarMenuItem key={item.path}>
+                        <SidebarMenuItem key={item.pathForLink}>
                           <SidebarMenuButton
                             asChild
-                            isActive={pathname === item.path}
+                            isActive={pathname === item.pathForActive}
                             tooltip={item.label}
                           >
                             <Link
-                              to={item.path}
+                              to={item.pathForLink}
                               onClick={handleNavClick}
-                              aria-current={pathname === item.path ? 'page' : undefined}
+                              aria-current={pathname === item.pathForActive ? 'page' : undefined}
                             >
                               <Icon className="h-5 w-5" />
                               <span>{item.label}</span>
@@ -210,5 +215,6 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
         </SidebarGroup>
       </SidebarFooter>
     </Sidebar>
+    </React.Fragment>
   );
 }

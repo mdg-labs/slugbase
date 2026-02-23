@@ -58,7 +58,8 @@ function SettingsRow({
 
 export default function Profile() {
   const { t } = useTranslation();
-  const { appBasePath, apiBaseUrl } = useAppConfig();
+  const { pathPrefixForLinks, apiBaseUrl } = useAppConfig();
+  const prefix = (pathPrefixForLinks || '').replace(/\/+/g, '/') || '';
   const { user, updateUser, checkAuth } = useAuth();
   const { showToast } = useToast();
   const [formData, setFormData] = useState({
@@ -406,7 +407,7 @@ export default function Profile() {
                   <>
                     {t('profile.quickAccessDescription')}{' '}
                     <Link
-                      to={`${appBasePath}/go-preferences`}
+                      to={`${prefix}/go-preferences`}
                       className="text-primary hover:text-primary/90 font-medium"
                     >
                       {t('profile.manageQuickAccess')} →

@@ -61,18 +61,18 @@ const ONBOARDING_DISMISSED_KEY = 'slugbase_dashboard_onboarding_dismissed';
 
 function ProTipBanner({
   onDismiss,
-  appBasePath,
+  pathPrefix,
   t,
 }: {
   onDismiss: () => void;
-  appBasePath: string;
+  pathPrefix: string;
   t: (key: string) => string;
 }) {
   return (
     <div className="flex items-start gap-3 rounded-xl border border-border bg-card shadow-sm px-4 py-3">
       <p className="text-sm text-muted-foreground flex-1 min-w-0">
         {t('dashboard.proTipBody')}{' '}
-        <Link to={`${appBasePath}/search-engine-guide`} className="text-primary font-medium hover:underline">
+        <Link to={`${pathPrefix}/search-engine-guide`.replace(/\/+/g, '/') || '/search-engine-guide'} className="text-primary font-medium hover:underline">
           {t('dashboard.proTipLink')}
         </Link>
       </p>
@@ -92,13 +92,13 @@ function OnboardingChecklist({
   totalBookmarks,
   totalFolders,
   topTagsCount,
-  appBasePath,
+  pathPrefix,
   t,
 }: {
   totalBookmarks: number;
   totalFolders: number;
   topTagsCount: number;
-  appBasePath: string;
+  pathPrefix: string;
   t: (key: string) => string;
 }) {
   const [collapsed, setCollapsed] = useState(true);
@@ -109,10 +109,10 @@ function OnboardingChecklist({
   if (!show) return null;
 
   const steps = [
-    { done: totalBookmarks > 0, label: t('dashboard.onboardingImport'), to: `${appBasePath}/bookmarks?import=true` },
-    { done: false, label: t('dashboard.onboardingSearchEngine'), to: `${appBasePath}/search-engine-guide` },
-    { done: totalFolders > 0, label: t('dashboard.onboardingFolder'), to: `${appBasePath}/folders` },
-    { done: topTagsCount > 0, label: t('dashboard.onboardingTag'), to: `${appBasePath}/bookmarks` },
+    { done: totalBookmarks > 0, label: t('dashboard.onboardingImport'), to: `${pathPrefix}/bookmarks?import=true`.replace(/\/+/g, '/') || '/bookmarks?import=true' },
+    { done: false, label: t('dashboard.onboardingSearchEngine'), to: `${pathPrefix}/search-engine-guide`.replace(/\/+/g, '/') || '/search-engine-guide' },
+    { done: totalFolders > 0, label: t('dashboard.onboardingFolder'), to: `${pathPrefix}/folders`.replace(/\/+/g, '/') || '/folders' },
+    { done: topTagsCount > 0, label: t('dashboard.onboardingTag'), to: `${pathPrefix}/bookmarks`.replace(/\/+/g, '/') || '/bookmarks' },
   ];
 
   function handleDismiss() {
@@ -161,7 +161,8 @@ function OnboardingChecklist({
 
 export default function Dashboard() {
   const { t } = useTranslation();
-  const { appBasePath } = useAppConfig();
+  const { pathPrefixForLinks } = useAppConfig();
+  const prefix = (pathPrefixForLinks || '').replace(/\/+/g, '/') || '';
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [proTipDismissed, setProTipDismissed] = useState(() => typeof window !== 'undefined' && !!localStorage.getItem(PRO_TIP_DISMISSED_KEY));
 
@@ -190,7 +191,7 @@ export default function Dashboard() {
             localStorage.setItem(PRO_TIP_DISMISSED_KEY, '1');
             setProTipDismissed(true);
           }}
-          appBasePath={appBasePath}
+          pathPrefix={prefix}
           t={t}
         />
       )}
@@ -202,7 +203,7 @@ export default function Dashboard() {
             label={t('dashboard.statsBookmarks')}
             value={stats.totalBookmarks}
             icon={Bookmark}
-            href={appBasePath + '/bookmarks'}
+            href={prefix + '/bookmarks'}
             dense
             iconContainerClassName="bg-primary/20"
             iconColorClassName="text-primary"
@@ -211,7 +212,7 @@ export default function Dashboard() {
             label={t('dashboard.statsFolders')}
             value={stats.totalFolders}
             icon={Folder}
-            href={appBasePath + '/folders'}
+            href={prefix + '/folders'}
             dense
             iconContainerClassName="bg-primary/20"
             iconColorClassName="text-primary"
@@ -220,7 +221,7 @@ export default function Dashboard() {
             label={t('dashboard.statsTags')}
             value={stats.totalTags}
             icon={Tag}
-            href={appBasePath + '/tags'}
+            href={prefix + '/tags'}
             dense
             iconContainerClassName="bg-primary/20"
             iconColorClassName="text-primary"
@@ -235,7 +236,7 @@ export default function Dashboard() {
             {t('dashboard.pinned')}
           </h2>
           <Link
-            to={appBasePath + '/bookmarks?pinned=true'}
+            to={prefix + '/bookmarks?pinned=true'}
             className="text-sm font-medium text-primary hover:underline"
           >
             {t('dashboard.viewAll')}
@@ -284,7 +285,7 @@ export default function Dashboard() {
                 title={t('dashboard.noPinnedBookmarks')}
                 description={t('dashboard.pinFromBookmarks')}
                 action={
-                  <Link to={appBasePath + '/bookmarks'}>
+                  <Link to={prefix + '/bookmarks'}>
                     <Button variant="secondary">{t('dashboard.pinFromBookmarksLink')}</Button>
                   </Link>
                 }
@@ -301,7 +302,7 @@ export default function Dashboard() {
             {t('dashboard.quickAccess')}
           </h2>
           <Link
-            to={appBasePath + '/bookmarks'}
+            to={prefix + '/bookmarks'}
             className="text-sm font-medium text-primary hover:underline"
           >
             {t('dashboard.viewAll')}
@@ -350,7 +351,7 @@ export default function Dashboard() {
                 title={t('dashboard.noQuickAccessBookmarks')}
                 description={t('dashboard.noQuickAccessBookmarksHint')}
                 action={
-                  <Link to={`${appBasePath}/bookmarks?create=true`}>
+                  <Link to={`${prefix}/bookmarks?create=true`}>
                     <Button variant="primary" icon={Plus}>{t('bookmarks.create')}</Button>
                   </Link>
                 }
@@ -371,7 +372,7 @@ export default function Dashboard() {
               label={t('dashboard.sharedBookmarks')}
               value={stats.sharedBookmarks}
               icon={Share2}
-              href={appBasePath + '/shared'}
+              href={prefix + '/shared'}
               iconContainerClassName="bg-primary/20"
               iconColorClassName="text-primary"
             />
@@ -379,7 +380,7 @@ export default function Dashboard() {
               label={t('dashboard.sharedFolders')}
               value={stats.sharedFolders}
               icon={Share2}
-              href={appBasePath + '/shared'}
+              href={prefix + '/shared'}
               iconContainerClassName="bg-primary/20"
               iconColorClassName="text-primary"
             />
@@ -398,7 +399,7 @@ export default function Dashboard() {
             {stats.topTags.map((tag) => (
               <Link
                 key={tag.id}
-                to={`${appBasePath}/bookmarks?tag_id=${tag.id}`}
+                to={`${prefix}/bookmarks?tag_id=${tag.id}`}
                 className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-accent hover:border-primary/50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 title={t('dashboard.filterByTagHint')}
               >
@@ -418,7 +419,7 @@ export default function Dashboard() {
           totalBookmarks={stats.totalBookmarks}
           totalFolders={stats.totalFolders}
           topTagsCount={stats.topTags.length}
-          appBasePath={appBasePath}
+          pathPrefix={prefix}
           t={t}
         />
       )}

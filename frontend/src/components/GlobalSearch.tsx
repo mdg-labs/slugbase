@@ -37,7 +37,8 @@ interface SearchResult {
 export default function GlobalSearch() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { appBasePath } = useAppConfig();
+  const { pathPrefixForLinks } = useAppConfig();
+  const prefix = (pathPrefixForLinks || '').replace(/\/+/g, '/') || '';
   const { user } = useAuth();
   const { open, setOpen, openSearch } = useSearchCommand();
   const [query, setQuery] = useState('');
@@ -47,19 +48,19 @@ export default function GlobalSearch() {
   const showAdmin = user?.is_admin;
 
   const navigationItems: SearchResult[] = useMemo(() => [
-    { type: 'navigation', title: t('bookmarks.title'), path: `${appBasePath}/bookmarks`, id: 'nav-bookmarks' },
-    { type: 'navigation', title: t('folders.title'), path: `${appBasePath}/folders`, id: 'nav-folders' },
-    { type: 'navigation', title: t('tags.title'), path: `${appBasePath}/tags`, id: 'nav-tags' },
-    { type: 'navigation', title: t('shared.title'), path: `${appBasePath}/shared`, id: 'nav-shared' },
-    ...(showAdmin ? [{ type: 'navigation' as const, title: t('admin.title'), path: `${appBasePath}/admin/members`, id: 'nav-admin' }] : []),
-  ], [showAdmin, t, appBasePath]);
+    { type: 'navigation', title: t('bookmarks.title'), path: `${prefix}/bookmarks`.replace(/\/+/g, '/') || '/bookmarks', id: 'nav-bookmarks' },
+    { type: 'navigation', title: t('folders.title'), path: `${prefix}/folders`.replace(/\/+/g, '/') || '/folders', id: 'nav-folders' },
+    { type: 'navigation', title: t('tags.title'), path: `${prefix}/tags`.replace(/\/+/g, '/') || '/tags', id: 'nav-tags' },
+    { type: 'navigation', title: t('shared.title'), path: `${prefix}/shared`.replace(/\/+/g, '/') || '/shared', id: 'nav-shared' },
+    ...(showAdmin ? [{ type: 'navigation' as const, title: t('admin.title'), path: `${prefix}/admin/members`.replace(/\/+/g, '/') || '/admin/members', id: 'nav-admin' }] : []),
+  ], [showAdmin, t, prefix]);
 
   const actionItems: SearchResult[] = useMemo(() => [
-    { type: 'action', title: t('bookmarks.create'), path: `${appBasePath}/bookmarks`, id: 'action-create-bookmark', action: () => navigate(`${appBasePath}/bookmarks?create=true`) },
-    { type: 'action', title: t('folders.create'), path: `${appBasePath}/folders`, id: 'action-create-folder', action: () => navigate(`${appBasePath}/folders?create=true`) },
-    { type: 'action', title: t('bookmarks.import'), path: `${appBasePath}/bookmarks`, id: 'action-import', action: () => navigate(`${appBasePath}/bookmarks?import=true`) },
-    { type: 'action', title: t('bookmarks.export'), path: `${appBasePath}/bookmarks`, id: 'action-export', action: () => navigate(`${appBasePath}/bookmarks?export=true`) },
-  ], [t, navigate, appBasePath]);
+    { type: 'action', title: t('bookmarks.create'), path: `${prefix}/bookmarks`, id: 'action-create-bookmark', action: () => navigate(`${prefix}/bookmarks?create=true`.replace(/\/+/g, '/') || '/bookmarks?create=true') },
+    { type: 'action', title: t('folders.create'), path: `${prefix}/folders`, id: 'action-create-folder', action: () => navigate(`${prefix}/folders?create=true`.replace(/\/+/g, '/') || '/folders?create=true') },
+    { type: 'action', title: t('bookmarks.import'), path: `${prefix}/bookmarks`, id: 'action-import', action: () => navigate(`${prefix}/bookmarks?import=true`.replace(/\/+/g, '/') || '/bookmarks?import=true') },
+    { type: 'action', title: t('bookmarks.export'), path: `${prefix}/bookmarks`, id: 'action-export', action: () => navigate(`${prefix}/bookmarks?export=true`.replace(/\/+/g, '/') || '/bookmarks?export=true') },
+  ], [t, navigate, prefix]);
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -173,9 +174,9 @@ export default function GlobalSearch() {
       api.post(`/bookmarks/${result.id}/track-access`).catch(() => {});
       window.open(result.url, '_blank', 'noopener,noreferrer');
     } else if (result.type === 'folder') {
-      navigate(`${appBasePath}/bookmarks?folder_id=${result.id}`);
+      navigate(`${prefix}/bookmarks?folder_id=${result.id}`.replace(/\/+/g, '/') || `/bookmarks?folder_id=${result.id}`);
     } else if (result.type === 'tag') {
-      navigate(`${appBasePath}/bookmarks?tag_id=${result.id}`);
+      navigate(`${prefix}/bookmarks?tag_id=${result.id}`.replace(/\/+/g, '/') || `/bookmarks?tag_id=${result.id}`);
     }
   }
 

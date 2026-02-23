@@ -47,7 +47,8 @@ type SortOption = 'recently_added' | 'alphabetical' | 'most_used' | 'recently_ac
 
 export default function Bookmarks() {
   const { t } = useTranslation();
-  const { appBasePath } = useAppConfig();
+  const { pathPrefixForLinks } = useAppConfig();
+  const prefix = (pathPrefixForLinks || '').replace(/\/+/g, '/') || '';
   const { user } = useAuth();
   const { isMobile, state: sidebarState } = useSidebar();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -823,7 +824,7 @@ export default function Bookmarks() {
                 >
                   {t('bookmarks.emptyImport')}
                 </Button>
-                <Link to={`${appBasePath}/search-engine-guide`}>
+                <Link to={`${prefix}/search-engine-guide`}>
                   <Button variant="ghost" icon={ExternalLink}>
                     {t('bookmarks.emptyLearnForwarding')}
                   </Button>
@@ -921,7 +922,7 @@ export default function Bookmarks() {
               <p className="text-sm text-gray-700 dark:text-gray-300">
                 {t('bookmarks.searchEngineNote')}{' '}
                 <Link
-                  to={`${appBasePath}/search-engine-guide`}
+                  to={`${prefix}/search-engine-guide`}
                   className="text-primary hover:text-primary/90 font-medium underline"
                 >
                   {t('bookmarks.searchEngineGuideLink')}

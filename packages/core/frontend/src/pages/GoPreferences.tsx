@@ -21,7 +21,8 @@ interface SlugPreference {
 
 export default function GoPreferences() {
   const { t } = useTranslation();
-  const { appBasePath } = useAppConfig();
+  const { pathPrefixForLinks } = useAppConfig();
+  const prefix = (pathPrefixForLinks || '').replace(/\/+/g, '/') || '';
   const { showToast } = useToast();
   const [preferences, setPreferences] = useState<SlugPreference[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,7 +65,7 @@ export default function GoPreferences() {
   return (
     <div className="space-y-6 max-w-3xl">
       <div className="flex items-center gap-4">
-        <Link to={`${appBasePath}/profile`}>
+        <Link to={`${prefix}/profile`}>
           <Button variant="ghost" size="sm" icon={ArrowLeft}>
             {t('common.back')}
           </Button>

@@ -6,7 +6,8 @@ import { useAppConfig } from '../contexts/AppConfigContext';
 
 export default function SearchEngineGuide() {
   const { t } = useTranslation();
-  const { appBasePath } = useAppConfig();
+  const { pathPrefixForLinks } = useAppConfig();
+  const prefix = (pathPrefixForLinks || '').replace(/\/+/g, '/') || '';
 
   const baseUrl = window.location.origin;
   const goPath = '/go/%s';
@@ -16,7 +17,7 @@ export default function SearchEngineGuide() {
     <div className="space-y-6 max-w-4xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Link to={`${appBasePath}/bookmarks`}>
+        <Link to={`${prefix}/bookmarks`}>
           <Button variant="ghost" size="sm" icon={ArrowLeft}>
             {t('common.back')}
           </Button>

@@ -30,25 +30,27 @@ const GoPreferences = lazy(() => import('./pages/GoPreferences'));
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const { t } = useTranslation();
-  const { appBasePath } = useAppConfig();
+  const { pathPrefixForLinks } = useAppConfig();
+  const loginPath = `${pathPrefixForLinks || ''}/login`.replace(/\/+/g, '/') || '/login';
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="text-lg">{t('common.loading')}</div></div>;
-  if (!user) return <Navigate to={`${appBasePath}/login`} replace />;
+  if (!user) return <Navigate to={loginPath} replace />;
   return <>{children}</>;
 }
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const { t } = useTranslation();
-  const { appBasePath, appRootPath } = useAppConfig();
+  const { pathPrefixForLinks, appRootPath } = useAppConfig();
+  const loginPath = `${pathPrefixForLinks || ''}/login`.replace(/\/+/g, '/') || '/login';
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="text-lg">{t('common.loading')}</div></div>;
-  if (!user) return <Navigate to={`${appBasePath}/login`} replace />;
+  if (!user) return <Navigate to={loginPath} replace />;
   if (!user.is_admin) return <Navigate to={appRootPath} replace />;
   return <>{children}</>;
 }
 
 function SharedRedirect() {
-  const { appBasePath } = useAppConfig();
-  const to = `${appBasePath || ''}/bookmarks?scope=shared_with_me`;
+  const { pathPrefixForLinks } = useAppConfig();
+  const to = `${pathPrefixForLinks || ''}/bookmarks?scope=shared_with_me`.replace(/\/+/g, '/') || '/bookmarks?scope=shared_with_me';
   return <Navigate to={to} replace />;
 }
 

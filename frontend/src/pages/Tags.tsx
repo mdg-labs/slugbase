@@ -27,7 +27,8 @@ const DEFAULT_SORT: SortOption = 'alphabetical';
 
 export default function Tags() {
   const { t } = useTranslation();
-  const { appBasePath } = useAppConfig();
+  const { pathPrefixForLinks } = useAppConfig();
+  const prefix = (pathPrefixForLinks || '').replace(/\/+/g, '/') || '';
   const { showConfirm, dialogState } = useConfirmDialog();
   const [searchParams, setSearchParams] = useSearchParams();
   const [tags, setTags] = useState<Tag[]>([]);
@@ -272,7 +273,7 @@ export default function Tags() {
               className={`group bg-card rounded-lg border border-border hover:border-primary/70 hover:bg-muted/50 hover:shadow-md transition-all duration-200 flex flex-col h-full min-h-0 ${compactMode ? 'p-2.5 min-h-[160px]' : 'p-2.5 min-h-[140px]'}`}
             >
               <Link
-                to={`${appBasePath}/bookmarks?tag_id=${tag.id}`}
+                to={`${prefix}/bookmarks?tag_id=${tag.id}`}
                 className="flex-1 flex flex-col min-w-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
               >
                 <div className="space-y-3 flex-1 flex flex-col">
@@ -335,7 +336,7 @@ export default function Tags() {
                 >
                   <td className={`${compactMode ? 'px-2 py-1.5' : 'px-4 py-3'}`}>
                     <Link
-                      to={`${appBasePath}/bookmarks?tag_id=${tag.id}`}
+                      to={`${prefix}/bookmarks?tag_id=${tag.id}`}
                       className={`flex items-center ${compactMode ? 'gap-2' : 'gap-3'} hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded`}
                     >
                       <div className={`flex-shrink-0 ${compactMode ? 'w-6 h-6' : 'w-8 h-8'} rounded-lg bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/20 flex items-center justify-center border border-purple-100 dark:border-purple-800/50`}>

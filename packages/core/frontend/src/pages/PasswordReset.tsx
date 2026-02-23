@@ -8,7 +8,8 @@ import Button from '../components/ui/Button';
 
 export default function PasswordReset() {
   const { t } = useTranslation();
-  const { appBasePath } = useAppConfig();
+  const { pathPrefixForLinks } = useAppConfig();
+  const prefix = (pathPrefixForLinks || '').replace(/\/+/g, '/') || '';
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const token = searchParams.get('token');
@@ -143,7 +144,7 @@ export default function PasswordReset() {
 
             <div className="text-center">
               <Link
-                to={`${appBasePath}/login`}
+                to={`${prefix}/login`}
                 className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
               >
                 <ArrowLeft className="h-4 w-4" />
@@ -163,7 +164,7 @@ export default function PasswordReset() {
                   {t('passwordReset.invalidToken')}
                 </p>
                 <Link
-                  to={`${appBasePath}/password-reset`}
+                  to={`${prefix}/password-reset`}
                   className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
                 >
                   <ArrowLeft className="h-4 w-4" />
@@ -225,7 +226,7 @@ export default function PasswordReset() {
 
                 <div className="text-center">
                   <Link
-                    to={`${appBasePath}/login`}
+                    to={`${prefix}/login`}
                     className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
                   >
                     <ArrowLeft className="h-4 w-4" />

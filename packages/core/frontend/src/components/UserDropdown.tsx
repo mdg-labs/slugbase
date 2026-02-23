@@ -27,7 +27,8 @@ function getInitials(name: string): string {
 
 export default function UserDropdown({ user }: UserDropdownProps) {
   const { t } = useTranslation();
-  const { appBasePath } = useAppConfig();
+  const { pathPrefixForLinks } = useAppConfig();
+  const prefix = (pathPrefixForLinks || '').replace(/\/+/g, '/') || '';
   const { logout } = useAuth();
 
   const showAdmin = user?.is_admin;
@@ -59,14 +60,14 @@ export default function UserDropdown({ user }: UserDropdownProps) {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <Link to={`${appBasePath}/profile`} className="flex items-center gap-2 cursor-pointer">
+          <Link to={`${prefix}/profile`} className="flex items-center gap-2 cursor-pointer">
             <UserIcon className="h-4 w-4" />
             {t('profile.title')}
           </Link>
         </DropdownMenuItem>
         {showAdmin && (
           <DropdownMenuItem asChild>
-            <Link to={`${appBasePath}/admin/members`} className="flex items-center gap-2 cursor-pointer">
+            <Link to={`${prefix}/admin/members`} className="flex items-center gap-2 cursor-pointer">
               <Settings className="h-4 w-4" />
               {t('admin.title')}
             </Link>

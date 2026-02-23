@@ -35,7 +35,8 @@ const DEFAULT_SORT: SortOption = 'alphabetical';
 
 export default function Folders() {
   const { t } = useTranslation();
-  const { appBasePath } = useAppConfig();
+  const { pathPrefixForLinks } = useAppConfig();
+  const prefix = (pathPrefixForLinks || '').replace(/\/+/g, '/') || '';
   const { showConfirm, dialogState } = useConfirmDialog();
   const [searchParams, setSearchParams] = useSearchParams();
   const [folders, setFolders] = useState<Folder[]>([]);
@@ -331,7 +332,7 @@ export default function Folders() {
               className={`group bg-card rounded-lg border border-border hover:border-primary/70 hover:bg-muted/50 hover:shadow-md transition-all duration-200 flex flex-col h-full min-h-0 ${compactMode ? 'p-2.5 min-h-[160px]' : 'p-2.5 min-h-[140px]'}`}
             >
               <Link
-                to={`${appBasePath}/bookmarks?folder_id=${folder.id}`}
+                to={`${prefix}/bookmarks?folder_id=${folder.id}`}
                 className="flex-1 flex flex-col min-w-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
               >
                 <div className="space-y-3 flex-1 flex flex-col">
@@ -437,7 +438,7 @@ export default function Folders() {
                 >
                   <td className={`${compactMode ? 'px-2 py-1.5' : 'px-4 py-3'}`}>
                     <Link
-                      to={`${appBasePath}/bookmarks?folder_id=${folder.id}`}
+                      to={`${prefix}/bookmarks?folder_id=${folder.id}`}
                       className={`flex items-center ${compactMode ? 'gap-2' : 'gap-3'} hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded`}
                     >
                       <div className={`flex-shrink-0 ${compactMode ? 'w-6 h-6' : 'w-8 h-8'} rounded-lg bg-primary/20 flex items-center justify-center border border-primary/30`}>

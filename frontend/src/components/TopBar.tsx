@@ -14,7 +14,8 @@ interface TopBarProps {
 
 export default function TopBar({ user }: TopBarProps) {
   const { t } = useTranslation();
-  const { appBasePath } = useAppConfig();
+  const { pathPrefixForLinks } = useAppConfig();
+  const prefix = pathPrefixForLinks || '';
   const { isMobile } = useSidebar();
 
   return (
@@ -25,7 +26,7 @@ export default function TopBar({ user }: TopBarProps) {
           <SidebarTrigger className="-ml-2" aria-label={t('common.expandSidebar')} />
         )}
         <Link
-          to={appBasePath || '/'}
+          to={prefix || '/'}
           className="flex items-center gap-2 text-xl font-bold text-foreground hover:text-primary transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-lg"
         >
           <img
@@ -51,7 +52,7 @@ export default function TopBar({ user }: TopBarProps) {
 
       {/* Right: Create bookmark + Profile — right-aligned */}
       <div className="flex items-center gap-2 sm:gap-4 shrink-0 ml-auto">
-        <Link to={`${appBasePath}/bookmarks?create=true`}>
+        <Link to={`${prefix}/bookmarks?create=true`.replace(/\/+/g, '/') || '/bookmarks?create=true'}>
           <Button variant="primary" size="sm" icon={Plus}>
             <span className="hidden sm:inline">{t('bookmarks.create')}</span>
           </Button>
