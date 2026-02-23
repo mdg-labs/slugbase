@@ -11,7 +11,7 @@ import Layout from './components/Layout';
 import api from './api/client';
 
 const Setup = lazy(() => import('./pages/Setup'));
-const Login = lazy(() => import('./pages/Login'));
+import Login from './pages/Login';
 const Signup = lazy(() => import('./pages/Signup'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Bookmarks = lazy(() => import('./pages/Bookmarks'));
@@ -136,9 +136,13 @@ function ForwardingHandler() {
 function AppErrorFallback() {
   const { t } = useTranslation();
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-4">
-      <p className="text-lg text-gray-700 dark:text-gray-300">{t('common.error')}</p>
-      <button type="button" onClick={() => window.location.reload()} className="px-4 py-2 rounded-md bg-primary text-primary-foreground hover:opacity-90">
+    <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-4" role="alert">
+      <p className="text-lg text-gray-700 dark:text-gray-300 text-center">{t('common.error')}</p>
+      <button
+        type="button"
+        onClick={() => window.location.reload()}
+        className="px-4 py-2 rounded-md bg-primary text-primary-foreground hover:opacity-90"
+      >
         {t('common.reload')}
       </button>
     </div>
