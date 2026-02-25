@@ -52,7 +52,7 @@ jobs:
 
       - name: Publish to npm
         run: |
-          cd packages/slugbase-core
+          cd packages/core
           npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
