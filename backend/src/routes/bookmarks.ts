@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { query, queryOne, execute } from '../db/index.js';
+import { query, queryOne, execute, getDbType } from '../db/index.js';
 import { AuthRequest, requireAuth } from '../middleware/auth.js';
 import { canAccessBookmark, canModifyBookmark, canAccessFolder, canAccessTag, getTeamIdsForUser } from '../auth/authorization.js';
 import { v4 as uuidv4 } from 'uuid';
@@ -44,6 +44,7 @@ router.get('/', async (req, res) => {
       : 'all';
     const scope = scopeRaw as 'all' | 'mine' | 'shared_with_me' | 'shared_by_me';
     const pinnedFilter = pinnedParam === 'true';
+    const pinnedCond = getDbType() === 'postgresql' ? 'b.pinned = true' : 'b.pinned = 1';
     const qStr = typeof qParam === 'string' ? qParam.trim() : '';
     const searchTerm = qStr.length > 0 ? `%${qStr.toLowerCase()}%` : null;
 
@@ -126,7 +127,7 @@ router.get('/', async (req, res) => {
       params.push(userId);
     }
     if (pinnedFilter) {
-      sql += ' AND b.pinned = 1';
+      sql += ` AND ${pinnedCond}`;
     }
     if (searchTerm) {
       sql += ' AND (LOWER(b.title) LIKE ? OR LOWER(b.url) LIKE ? OR LOWER(COALESCE(b.slug, \'\')) LIKE ?)';
@@ -153,7 +154,7 @@ router.get('/', async (req, res) => {
       ${scope === 'mine' ? 'AND b.user_id = ?' : ''}
       ${scope === 'shared_with_me' ? 'AND b.user_id != ?' : ''}
       ${scope === 'shared_by_me' ? 'AND b.user_id = ? AND (EXISTS (SELECT 1 FROM bookmark_team_shares bts WHERE bts.bookmark_id = b.id) OR EXISTS (SELECT 1 FROM bookmark_user_shares bus WHERE bus.bookmark_id = b.id))' : ''}
-      ${pinnedFilter ? 'AND b.pinned = 1' : ''}
+      ${pinnedFilter ? `AND ${pinnedCond}` : ''}
       ${searchTerm ? 'AND (LOWER(b.title) LIKE ? OR LOWER(b.url) LIKE ? OR LOWER(COALESCE(b.slug, \'\')) LIKE ?)' : ''}
     `;
     const countParams = [tenantId, userId, userId];
@@ -561,6 +562,7 @@ router.get('/ids', async (req, res) => {
       : 'all';
     const idsScope = idsScopeRaw as 'all' | 'mine' | 'shared_with_me' | 'shared_by_me';
     const pinnedFilter = pinnedParam === 'true';
+    const pinnedCondIds = getDbType() === 'postgresql' ? 'b.pinned = true' : 'b.pinned = 1';
     const qStr = typeof qParam === 'string' ? qParam.trim() : '';
     const idsSearchTerm = qStr.length > 0 ? `%${qStr.toLowerCase()}%` : null;
 
@@ -609,7 +611,7 @@ router.get('/ids', async (req, res) => {
       idsParams.push(userId);
     }
     if (pinnedFilter) {
-      idsSql += ' AND b.pinned = 1';
+      idsSql += ` AND ${pinnedCondIds}`;
     }
     if (idsSearchTerm) {
       idsSql += ' AND (LOWER(b.title) LIKE ? OR LOWER(b.url) LIKE ? OR LOWER(COALESCE(b.slug, \'\')) LIKE ?)';

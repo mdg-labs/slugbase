@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { query, queryOne } from '../db/index.js';
+import { query, queryOne, getDbType } from '../db/index.js';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { getTeamIdsForUser } from '../auth/authorization.js';
 import { getTenantId } from '../utils/tenant.js';
@@ -12,6 +12,8 @@ router.get('/stats', requireAuth(), async (req, res) => {
     const userId = authReq.user!.id;
     const tenantId = getTenantId(req);
     const teamIds = await getTeamIdsForUser(userId, tenantId);
+    const isPg = getDbType() === 'postgresql';
+    const pinnedCondition = isPg ? 'pinned = true' : 'pinned = 1';
 
     // Total bookmarks (own only)
     const totalBookmarksResult = await queryOne(
@@ -250,7 +252,7 @@ router.get('/stats', requireAuth(), async (req, res) => {
     // Pinned bookmarks (own only, up to 16)
     const pinnedBookmarks = await query(
       `SELECT id, title, url, slug FROM bookmarks
-       WHERE user_id = ? AND tenant_id = ? AND pinned = 1
+       WHERE user_id = ? AND tenant_id = ? AND ${pinnedCondition}
        ORDER BY COALESCE(updated_at, created_at) DESC
        LIMIT 16`,
       [userId, tenantId]
