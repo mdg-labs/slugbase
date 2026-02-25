@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import api from '../../api/client';
 import { useToast } from '../ui/Toast';
 import { useAppConfig } from '../../contexts/AppConfigContext';
-import { Save, Sparkles } from 'lucide-react';
-import Button from '../ui/Button';
+import { Sparkles } from 'lucide-react';
 import { PageLoadingSkeleton } from '../ui/PageLoadingSkeleton';
 import { Switch } from '../ui/switch';
 import { Label } from '../ui/label';
@@ -20,7 +19,6 @@ export default function AdminAI() {
   const { showToast } = useToast();
   const { adminAiOnlyToggle } = useAppConfig();
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState({
     ai_enabled: false,
     ai_provider: 'openai',
@@ -107,28 +105,29 @@ export default function AdminAI() {
       ? modelOptions
       : [{ value: settings.ai_model, label: settings.ai_model }, ...modelOptions];
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      const payload = adminAiOnlyToggle
-        ? { ai_enabled: settings.ai_enabled }
-        : {
-            ai_enabled: settings.ai_enabled,
-            ai_provider: settings.ai_provider,
-            ai_model: settings.ai_model,
-            ai_api_key: settings.ai_api_key || undefined,
-          };
-      await api.post('/admin/settings/ai', payload);
-      showToast(t('common.success'), 'success');
-      await loadSettings();
-    } catch (err: unknown) {
-      const e = err as { response?: { data?: { error?: string } } };
-      showToast(e?.response?.data?.error || t('common.error'), 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
+  const saveSettings = useCallback(
+    async (payload: { ai_enabled?: boolean; ai_provider?: string; ai_model?: string; ai_api_key?: string }) => {
+      try {
+        const body = adminAiOnlyToggle
+          ? { ai_enabled: payload.ai_enabled ?? settings.ai_enabled }
+          : {
+              ...(payload.ai_enabled !== undefined && { ai_enabled: payload.ai_enabled }),
+              ...(payload.ai_provider !== undefined && { ai_provider: payload.ai_provider }),
+              ...(payload.ai_model !== undefined && { ai_model: payload.ai_model }),
+              ...(payload.ai_api_key !== undefined && payload.ai_api_key !== '' && { ai_api_key: payload.ai_api_key }),
+            };
+        if (adminAiOnlyToggle && payload.ai_enabled === undefined) return;
+        if (!adminAiOnlyToggle && Object.keys(body).length === 0) return;
+        await api.post('/admin/settings/ai', body);
+        showToast(t('common.success'), 'success');
+        await loadSettings();
+      } catch (err: unknown) {
+        const e = err as { response?: { data?: { error?: string } } };
+        showToast(e?.response?.data?.error || t('common.error'), 'error');
+      }
+    },
+    [adminAiOnlyToggle, settings.ai_enabled, showToast, t, loadSettings]
+  );
 
   if (loading) {
     return <PageLoadingSkeleton lines={8} />;
@@ -149,14 +148,15 @@ export default function AdminAI() {
           </div>
         </div>
 
-        <form onSubmit={handleSave} className="space-y-4">
+        <div className="space-y-4">
           <div className="flex items-center gap-3">
             <Switch
               id="ai-enabled"
               checked={settings.ai_enabled}
-              onCheckedChange={(checked) =>
-                setSettings({ ...settings, ai_enabled: checked })
-              }
+              onCheckedChange={(checked) => {
+                setSettings((s) => ({ ...s, ai_enabled: checked }));
+                saveSettings({ ai_enabled: checked });
+              }}
             />
             <Label htmlFor="ai-enabled" className="text-sm font-medium text-gray-900 dark:text-white cursor-pointer">
               {t('admin.ai.enabled')}
@@ -171,7 +171,10 @@ export default function AdminAI() {
                 </Label>
                 <Select
                   value={settings.ai_provider}
-                  onChange={(value) => setSettings({ ...settings, ai_provider: value })}
+                  onChange={(value) => {
+                    setSettings((s) => ({ ...s, ai_provider: value }));
+                    saveSettings({ ai_provider: value });
+                  }}
                   options={providerOptions}
                   className="max-w-xs"
                 />
@@ -184,7 +187,12 @@ export default function AdminAI() {
                 <Input
                   type="password"
                   value={settings.ai_api_key}
-                  onChange={(e) => setSettings({ ...settings, ai_api_key: e.target.value })}
+                  onChange={(e) => setSettings((s) => ({ ...s, ai_api_key: e.target.value }))}
+                  onBlur={() => {
+                    if (settings.ai_api_key.trim() !== '') {
+                      saveSettings({ ai_api_key: settings.ai_api_key });
+                    }
+                  }}
                   placeholder={settings.ai_api_key_set ? t('admin.ai.apiKeyPlaceholder') : 'sk-...'}
                   className="max-w-md font-mono text-sm"
                 />
@@ -199,7 +207,10 @@ export default function AdminAI() {
                 </Label>
                 <Select
                   value={settings.ai_model}
-                  onChange={(value) => setSettings({ ...settings, ai_model: value })}
+                  onChange={(value) => {
+                    setSettings((s) => ({ ...s, ai_model: value }));
+                    saveSettings({ ai_model: value });
+                  }}
                   options={modelOptionsWithCurrent}
                   placeholder={
                     !settings.ai_api_key_set
@@ -214,18 +225,7 @@ export default function AdminAI() {
               </div>
             </>
           )}
-
-          <div className="pt-2">
-            <Button type="submit" variant="primary" disabled={saving}>
-              {saving ? t('common.loading') : (
-                <>
-                  <Save className="h-4 w-4 mr-2 inline" />
-                  {t('common.save')}
-                </>
-              )}
-            </Button>
-          </div>
-        </form>
+        </div>
       </div>
     </div>
   );
