@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { query, queryOne, execute } from '../../db/index.js';
+import { query, queryOne, execute, upsertSystemConfig } from '../../db/index.js';
 import { AuthRequest, requireAuth, requireAdmin } from '../../middleware/auth.js';
 import { testSMTPConfig } from '../../utils/email.js';
 import { encrypt, decrypt } from '../../utils/encryption.js';
@@ -110,10 +110,7 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Key and value are required' });
     }
 
-    await execute(
-      'INSERT OR REPLACE INTO system_config (tenant_id, key, value) VALUES (?, ?, ?)',
-      [tenantId, key, String(value)]
-    );
+    await upsertSystemConfig(tenantId, key, String(value));
 
     const setting = await queryOne('SELECT * FROM system_config WHERE key = ? AND tenant_id = ?', [key, tenantId]);
     res.json({ key: (setting as any).key, value: (setting as any).value });
@@ -199,10 +196,7 @@ router.post('/smtp', async (req, res) => {
 
     // Save all settings
     for (const setting of settings) {
-      await execute(
-        'INSERT OR REPLACE INTO system_config (tenant_id, key, value) VALUES (?, ?, ?)',
-        [tenantId, setting.key, setting.value]
-      );
+      await upsertSystemConfig(tenantId, setting.key, setting.value);
     }
 
     res.json({ message: 'SMTP settings updated successfully' });
@@ -217,29 +211,17 @@ router.post('/ai', async (req, res) => {
     const { ai_enabled, ai_provider, ai_api_key, ai_model } = req.body;
 
     if (ai_enabled !== undefined) {
-      await execute(
-        'INSERT OR REPLACE INTO system_config (tenant_id, key, value) VALUES (?, ?, ?)',
-        [tenantId, 'ai_enabled', ai_enabled ? 'true' : 'false']
-      );
+      await upsertSystemConfig(tenantId, 'ai_enabled', ai_enabled ? 'true' : 'false');
     }
     if (ai_provider !== undefined) {
-      await execute(
-        'INSERT OR REPLACE INTO system_config (tenant_id, key, value) VALUES (?, ?, ?)',
-        [tenantId, 'ai_provider', String(ai_provider)]
-      );
+      await upsertSystemConfig(tenantId, 'ai_provider', String(ai_provider));
     }
     if (ai_api_key !== undefined && ai_api_key !== null && ai_api_key.trim() !== '') {
       const encrypted = encrypt(ai_api_key.trim());
-      await execute(
-        'INSERT OR REPLACE INTO system_config (tenant_id, key, value) VALUES (?, ?, ?)',
-        [tenantId, 'ai_api_key', encrypted]
-      );
+      await upsertSystemConfig(tenantId, 'ai_api_key', encrypted);
     }
     if (ai_model !== undefined) {
-      await execute(
-        'INSERT OR REPLACE INTO system_config (tenant_id, key, value) VALUES (?, ?, ?)',
-        [tenantId, 'ai_model', String(ai_model)]
-      );
+      await upsertSystemConfig(tenantId, 'ai_model', String(ai_model));
     }
 
     res.json({ message: 'AI settings updated successfully' });

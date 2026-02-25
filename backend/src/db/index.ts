@@ -121,3 +121,19 @@ export async function isInitialized(): Promise<boolean> {
   }
 }
 
+/**
+ * Upsert a system_config row by (tenant_id, key).
+ * SQLite: INSERT OR REPLACE. PostgreSQL: DELETE + INSERT (no INSERT ON CONFLICT so we work without a unique constraint).
+ */
+export async function upsertSystemConfig(tenantId: string, key: string, value: string): Promise<void> {
+  if (dbType === 'postgresql') {
+    await execute('DELETE FROM system_config WHERE tenant_id = ? AND key = ?', [tenantId, key]);
+    await execute('INSERT INTO system_config (tenant_id, key, value) VALUES (?, ?, ?)', [tenantId, key, value]);
+  } else {
+    await execute(
+      'INSERT OR REPLACE INTO system_config (tenant_id, key, value) VALUES (?, ?, ?)',
+      [tenantId, key, value]
+    );
+  }
+}
+
