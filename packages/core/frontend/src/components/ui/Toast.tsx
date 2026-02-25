@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { toast as sonnerToast } from 'sonner';
 import { Toaster } from './sonner';
 
@@ -11,28 +12,27 @@ export interface Toast {
 }
 
 export function useToast() {
-  const showToast = (
-    message: string,
-    variant: ToastVariant = 'info',
-    duration = 3000
-  ) => {
-    const options = duration > 0 ? { duration } : { duration: Infinity };
-    switch (variant) {
-      case 'success':
-        sonnerToast.success(message, options);
-        break;
-      case 'error':
-        sonnerToast.error(message, options);
-        break;
-      case 'warning':
-        sonnerToast.warning(message, options);
-        break;
-      case 'info':
-      default:
-        sonnerToast.info(message, options);
-        break;
-    }
-  };
+  const showToast = useCallback(
+    (message: string, variant: ToastVariant = 'info', duration = 3000) => {
+      const options = duration > 0 ? { duration } : { duration: Infinity };
+      switch (variant) {
+        case 'success':
+          sonnerToast.success(message, options);
+          break;
+        case 'error':
+          sonnerToast.error(message, options);
+          break;
+        case 'warning':
+          sonnerToast.warning(message, options);
+          break;
+        case 'info':
+        default:
+          sonnerToast.info(message, options);
+          break;
+      }
+    },
+    []
+  );
 
   return { showToast };
 }

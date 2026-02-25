@@ -65,9 +65,12 @@ export default function AdminAI() {
     }
   }, [showToast, t, adminAiOnlyToggle]);
 
+  // Run initial load once on mount only. Re-running when loadSettings identity changes
+  // (e.g. from i18n t) caused repeated API calls and infinite toasts on error.
   useEffect(() => {
     loadSettings();
-  }, [loadSettings]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const loadModels = useCallback(async () => {
     setModelsLoading(true);
