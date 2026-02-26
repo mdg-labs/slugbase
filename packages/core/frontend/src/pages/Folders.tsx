@@ -368,8 +368,6 @@ export default function Folders() {
                       )}
                     </div>
                   </div>
-                  {/* TODO: Add bookmark_count when backend supports it */}
-                  <p className="text-xs text-muted-foreground">—</p>
                 </div>
               </Link>
               {folder.folder_type === 'own' && (

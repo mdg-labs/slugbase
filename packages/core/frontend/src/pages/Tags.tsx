@@ -287,8 +287,6 @@ export default function Tags() {
                       </h3>
                     </div>
                   </div>
-                  {/* TODO: Add bookmark_count when backend supports it */}
-                  <p className="text-xs text-muted-foreground">—</p>
                 </div>
               </Link>
               <div className={`flex gap-1.5 pt-2.5 mt-auto shrink-0 border-t border-border ${compactMode ? 'pt-2' : ''}`}>
