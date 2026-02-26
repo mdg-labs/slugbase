@@ -387,7 +387,10 @@
     "notSharedYet": "Not shared yet",
     "emailNotAssociated": "This email is not associated with a SlugBase user yet.",
     "removeAccess": "Remove access",
-    "add": "Add"
+    "add": "Add",
+    "noUsersOrTeams": "No users or teams could be loaded. Check the Network tab for /api/users/for-sharing and /api/teams.",
+    "typeToSearchUsers": "Type at least {{count}} characters to see matching users.",
+    "selectTeamToAdd": "Select a team to share with."
   },
   "plan": {
     "limitBookmarks": "You've reached the Free plan limit ({{limit}} bookmarks). Upgrade to add more.",
