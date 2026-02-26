@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../api/client';
@@ -6,6 +6,11 @@ import { useToast } from '../ui/Toast';
 import { Save, Mail, Send } from 'lucide-react';
 import Button from '../ui/Button';
 import { PageLoadingSkeleton } from '../ui/PageLoadingSkeleton';
+import { Switch } from '../ui/switch';
+import { Label } from '../ui/label';
+
+// React in scope for package consumers that use classic JSX transform
+void React;
 
 export default function AdminSettings() {
   const { t } = useTranslation();
@@ -106,16 +111,14 @@ export default function AdminSettings() {
 
         <div className="space-y-4">
           <div className="flex items-center gap-3">
-            <input
-              type="checkbox"
+            <Switch
               id="smtp-enabled"
               checked={smtpSettings.enabled}
-              onChange={(e) => setSmtpSettings({ ...smtpSettings, enabled: e.target.checked })}
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              onCheckedChange={(checked) => setSmtpSettings({ ...smtpSettings, enabled: checked })}
             />
-            <label htmlFor="smtp-enabled" className="text-sm font-medium text-gray-900 dark:text-white">
+            <Label htmlFor="smtp-enabled" className="text-sm font-medium text-gray-900 dark:text-white cursor-pointer">
               {t('smtp.enabled')}
-            </label>
+            </Label>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -212,16 +215,14 @@ export default function AdminSettings() {
           </div>
 
           <div className="flex items-center gap-3 pt-2">
-            <input
-              type="checkbox"
+            <Switch
               id="smtp-secure"
               checked={smtpSettings.secure}
-              onChange={(e) => setSmtpSettings({ ...smtpSettings, secure: e.target.checked })}
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              onCheckedChange={(checked) => setSmtpSettings({ ...smtpSettings, secure: checked })}
             />
-            <label htmlFor="smtp-secure" className="text-sm font-medium text-gray-900 dark:text-white">
+            <Label htmlFor="smtp-secure" className="text-sm font-medium text-gray-900 dark:text-white cursor-pointer">
               {t('smtp.secure')}
-            </label>
+            </Label>
           </div>
 
           <div className="flex items-center gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
