@@ -46,7 +46,9 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
   const { appBasePath, pathPrefixForLinks, hideAdminOidcAndSmtp } = useAppConfig();
   const { setOpenMobile, toggleSidebar, isMobile, state } = useSidebar();
   const prefix = pathPrefixForLinks || '';
-  const adminBaseFull = `${appBasePath || ''}/admin`;
+  // For active matching use pathPrefixForLinks so it matches useLocation().pathname (e.g. when Router has basename="/app", pathname is "/bookmarks" not "/app/bookmarks").
+  const pathBaseForActive = pathPrefixForLinks ?? appBasePath ?? '';
+  const adminBaseFull = `${pathBaseForActive}/admin`.replace(/\/+/g, '/') || '/admin';
   const adminBaseLink = `${prefix}/admin`.replace(/\/+/g, '/') || '/admin';
 
   const adminNavItems = [
@@ -61,10 +63,11 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
     { pathForLink: `${adminBaseLink}/ai`, pathForActive: `${adminBaseFull}/ai`, label: t('admin.ai.nav'), icon: Sparkles },
   ];
 
+  const rootActivePath = pathBaseForActive || '/';
   const isOverviewActive =
-    pathname === appBasePath ||
-    pathname === appBasePath + '/' ||
-    pathname === (appBasePath || '/');
+    pathname === rootActivePath ||
+    pathname === rootActivePath + '/' ||
+    pathname === (pathBaseForActive || '/');
 
   const showAdmin = user?.is_admin;
   const [adminOpen, setAdminOpen] = useState(() => {
@@ -78,12 +81,12 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
   }, [adminOpen]);
 
   const rootLink = prefix || '/';
-  const rootActive = appBasePath || '/';
+  const rootActive = rootActivePath;
   const primaryNavItems = [
     { pathForLink: rootLink, pathForActive: rootActive, label: t('dashboard.overview'), icon: LayoutDashboard },
-    { pathForLink: `${prefix}/bookmarks`.replace(/\/+/g, '/') || '/bookmarks', pathForActive: `${appBasePath || ''}/bookmarks`, label: t('bookmarks.title'), icon: Bookmark },
-    { pathForLink: `${prefix}/folders`.replace(/\/+/g, '/') || '/folders', pathForActive: `${appBasePath || ''}/folders`, label: t('folders.title'), icon: Folder },
-    { pathForLink: `${prefix}/tags`.replace(/\/+/g, '/') || '/tags', pathForActive: `${appBasePath || ''}/tags`, label: t('tags.title'), icon: Tag },
+    { pathForLink: `${prefix}/bookmarks`.replace(/\/+/g, '/') || '/bookmarks', pathForActive: `${pathBaseForActive}/bookmarks`.replace(/\/+/g, '/') || '/bookmarks', label: t('bookmarks.title'), icon: Bookmark },
+    { pathForLink: `${prefix}/folders`.replace(/\/+/g, '/') || '/folders', pathForActive: `${pathBaseForActive}/folders`.replace(/\/+/g, '/') || '/folders', label: t('folders.title'), icon: Folder },
+    { pathForLink: `${prefix}/tags`.replace(/\/+/g, '/') || '/tags', pathForActive: `${pathBaseForActive}/tags`.replace(/\/+/g, '/') || '/tags', label: t('tags.title'), icon: Tag },
   ];
 
   const handleNavClick = () => {
@@ -104,7 +107,7 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
                   <SidebarMenuButton
                     asChild
                     isActive={
-                      item.pathForActive === (appBasePath || '/') ? isOverviewActive : pathname === item.pathForActive
+                      item.pathForActive === rootActivePath ? isOverviewActive : pathname === item.pathForActive
                     }
                     tooltip={item.label}
                   >
