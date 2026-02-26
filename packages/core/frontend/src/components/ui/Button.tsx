@@ -29,18 +29,21 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 
 const defaultIconClass = 'h-4 w-4';
 
-export default function Button({
-  variant = 'primary',
-  size = 'md',
-  icon: Icon,
-  iconPosition = 'left',
-  iconClassName = defaultIconClass,
-  loading = false,
-  children,
-  className = '',
-  disabled,
-  ...props
-}: ButtonProps) {
+const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  {
+    variant = 'primary',
+    size = 'md',
+    icon: Icon,
+    iconPosition = 'left',
+    iconClassName = defaultIconClass,
+    loading = false,
+    children,
+    className = '',
+    disabled,
+    ...props
+  },
+  ref
+) {
   const iconClass = iconClassName || defaultIconClass;
   const content = loading ? (
     <Loader2 className="h-4 w-4 animate-spin" />
@@ -54,6 +57,7 @@ export default function Button({
 
   return (
     <ShadcnButton
+      ref={ref}
       className={cn(className)}
       variant={variantMap[variant]}
       size={sizeMap[size]}
@@ -63,6 +67,9 @@ export default function Button({
       {content}
     </ShadcnButton>
   );
-}
+});
+Button.displayName = 'Button';
+
+export default Button;
 
 export { buttonVariants };
