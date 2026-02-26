@@ -172,7 +172,7 @@ export default function Tags() {
   return (
     <div className="space-y-6 pb-24">
       {/* Sticky controls bar: header + toolbar - stays visible when scrolling */}
-      <div className="sticky top-0 z-40 space-y-4 pb-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pt-0 -mt-8 bg-background border-b shadow-sm">
+      <div className="sticky top-0 z-40 space-y-4 pb-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pt-0 -mt-8 bg-background shadow-sm">
         <PageHeader
           className="pt-4"
           title={`${t('tags.title')} (${totalTags})`}
