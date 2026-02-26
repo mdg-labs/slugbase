@@ -1,0 +1,34 @@
+# Mirror this repository to Forgejo (commits, branches, tags).
+# Add secret FORGEJO_MIRROR_TOKEN (Forgejo personal access token with push rights).
+name: Mirror to Forgejo
+
+on:
+  push:
+
+jobs:
+  mirror:
+    name: Push to Forgejo
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fetch all branches and tags
+        run: |
+          git remote set-url origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          git fetch origin '+refs/heads/*:refs/heads/*' '+refs/tags/*:refs/tags/*'
+
+      - name: Push to Forgejo
+        run: |
+          remote="https://${{ secrets.FORGEJO_MIRROR_TOKEN }}@git.mdg-labs.dev/SlugBase/${{ github.event.repository.name }}.git"
+          git remote add forgejo "$remote" || true
+          git remote set-url forgejo "$remote"
+          git push forgejo --mirror
+        env:
+          FORGEJO_MIRROR_TOKEN: ${{ secrets.FORGEJO_MIRROR_TOKEN }}
