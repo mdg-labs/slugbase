@@ -146,9 +146,10 @@ export default function ShareResourceDialog({
       const msg = err.response?.data?.error || t('common.error');
       setError(msg);
       showToast(msg, 'error');
-    } finally {
       setSaving(false);
+      throw err;
     }
+    setSaving(false);
   }
 
   function handleRemoveUser(userId: string) {
@@ -162,11 +163,19 @@ export default function ShareResourceDialog({
   }
 
   function handleAddUser(userId: string) {
+    if (sharedUsers.some((u) => u.id === userId)) return;
+    const userToAdd = allUsers.find((u) => u.id === userId);
     const newUserIds = [...sharedUsers.map((u) => u.id), userId];
-    if (newUserIds.includes(userId)) return;
-    updateShares(newUserIds, sharedTeams.map((t) => t.id), false);
+    if (userToAdd) {
+      setSharedUsers((prev) => [...prev, userToAdd]);
+    }
     setPeopleDropdownOpen(false);
     setEmailInput('');
+    updateShares(newUserIds, sharedTeams.map((t) => t.id), false).catch(() => {
+      if (userToAdd) {
+        setSharedUsers((prev) => prev.filter((u) => u.id !== userId));
+      }
+    });
   }
 
   function handleAddUserByEmail() {
@@ -181,9 +190,17 @@ export default function ShareResourceDialog({
   }
 
   function handleAddTeam(teamId: string) {
+    if (sharedTeams.some((t) => t.id === teamId)) return;
+    const teamToAdd = teams.find((t) => t.id === teamId);
     const newTeamIds = [...sharedTeams.map((t) => t.id), teamId];
-    if (newTeamIds.includes(teamId)) return;
-    updateShares(sharedUsers.map((u) => u.id), newTeamIds, false);
+    if (teamToAdd) {
+      setSharedTeams((prev) => [...prev, teamToAdd]);
+    }
+    updateShares(sharedUsers.map((u) => u.id), newTeamIds, false).catch(() => {
+      if (teamToAdd) {
+        setSharedTeams((prev) => prev.filter((t) => t.id !== teamId));
+      }
+    });
   }
 
   const searchQuery = emailInput.trim().toLowerCase();
