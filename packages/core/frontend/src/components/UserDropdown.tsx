@@ -31,7 +31,7 @@ export default function UserDropdown({ user }: UserDropdownProps) {
   const prefix = (pathPrefixForLinks || '').replace(/\/+/g, '/') || '';
   const { logout } = useAuth();
 
-  const showAdmin = user?.is_admin;
+  const showAdmin = !!(user?.is_admin);
 
   if (!user) return null;
 

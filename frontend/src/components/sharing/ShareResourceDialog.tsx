@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAuth } from '../../contexts/AuthContext';
 import api from '../../api/client';
 import {
   Dialog,
@@ -56,7 +55,6 @@ export default function ShareResourceDialog({
   onSuccess,
 }: ShareResourceDialogProps) {
   const { t } = useTranslation();
-  const { user } = useAuth();
   const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -95,18 +93,21 @@ export default function ShareResourceDialog({
   }, [resourceId, resourceType, isOpen, t, showToast]);
 
   const fetchUsersAndTeams = useCallback(async () => {
+    // Fetch users and teams independently so non-admins still get teams if users endpoint fails.
     try {
-      const [usersRes, teamsRes] = await Promise.all([
-        api.get('/admin/users'),
-        api.get('/teams'),
-      ]);
+      const usersRes = await api.get('/users/for-sharing').catch(() => ({ data: [] }));
       const users = Array.isArray(usersRes.data) ? usersRes.data : [];
-      setAllUsers(users.filter((u: SharedUser) => u.id !== user?.id));
+      setAllUsers(users);
+    } catch (err) {
+      console.error('Failed to fetch users for sharing:', err);
+    }
+    try {
+      const teamsRes = await api.get('/teams');
       setTeams(teamsRes.data ?? []);
     } catch (err) {
-      console.error('Failed to fetch users/teams:', err);
+      console.error('Failed to fetch teams:', err);
     }
-  }, [user?.id]);
+  }, []);
 
   useEffect(() => {
     if (isOpen) {

@@ -69,7 +69,7 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
     pathname === rootActivePath + '/' ||
     pathname === (pathBaseForActive || '/');
 
-  const showAdmin = user?.is_admin;
+  const showAdmin = !!(user?.is_admin);
   const [adminOpen, setAdminOpen] = useState(() => {
     if (typeof window === 'undefined') return true;
     const stored = localStorage.getItem(SIDEBAR_ADMIN_OPEN_KEY);

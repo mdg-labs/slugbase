@@ -226,7 +226,7 @@ export default function Profile() {
           <span>
             {t('profile.signedInAs')}: <span className="text-foreground">{user.email}</span>
           </span>
-          {user.is_admin && (
+          {!!user.is_admin && (
             <Badge variant="secondary" className="text-xs font-normal">
               {t('profile.admin')}
             </Badge>

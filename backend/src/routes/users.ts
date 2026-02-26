@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { queryOne, execute } from '../db/index.js';
+import { query, queryOne, execute } from '../db/index.js';
 import { AuthRequest, requireAuth } from '../middleware/auth.js';
 import { validateEmail, normalizeEmail, validateLength, sanitizeString } from '../utils/validation.js';
 import { v4 as uuidv4 } from 'uuid';
@@ -8,6 +8,23 @@ import { sendEmailVerificationEmail } from '../utils/email.js';
 
 const router = Router();
 router.use(requireAuth());
+
+// List users for sharing (same tenant/org). No admin required. Used by sharing modal.
+// Core: users table has no tenant_id; returns all users except current (self-hosted single-tenant).
+router.get('/for-sharing', async (req, res) => {
+  const authReq = req as AuthRequest;
+  try {
+    const userId = authReq.user!.id;
+    const rows = await query(
+      'SELECT id, name, email FROM users WHERE id != ? ORDER BY name ASC, email ASC',
+      [userId]
+    );
+    const list = Array.isArray(rows) ? rows : (rows ? [rows] : []);
+    res.json(list);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // Get current user profile
 router.get('/me', async (req, res) => {
