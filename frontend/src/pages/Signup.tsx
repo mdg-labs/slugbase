@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import api from '../api/client';
 import { useAppConfig } from '../contexts/AppConfigContext';
 import Button from '../components/ui/Button';
+import { getDocsBaseUrl } from '../config/docs';
 
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -162,11 +163,11 @@ export default function Signup() {
               />
               <label htmlFor="signup-accept-terms" className="text-sm text-gray-700 dark:text-gray-300">
                 {t('signup.acceptTermsPrefix')}
-                <a href="https://docs.slugbase.app" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">
+                <a href={getDocsBaseUrl()} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">
                   {t('signup.acceptTermsTerms')}
                 </a>
                 {t('signup.acceptTermsAnd')}
-                <a href="https://docs.slugbase.app" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">
+                <a href={getDocsBaseUrl()} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">
                   {t('signup.acceptTermsPrivacy')}
                 </a>
                 {t('signup.acceptTermsSuffix')}

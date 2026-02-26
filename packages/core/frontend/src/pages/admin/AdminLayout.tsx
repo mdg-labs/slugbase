@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { Outlet } from 'react-router-dom';
 import { ExternalLink } from 'lucide-react';
+import { getDocsApiReferenceUrl } from '../../config/docs';
 
 export default function AdminLayout() {
   const { t } = useTranslation();
@@ -25,7 +26,7 @@ export default function AdminLayout() {
             </p>
           </div>
           <a
-            href="/api-docs"
+            href={getDocsApiReferenceUrl()}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary hover:text-primary/90 transition-colors"

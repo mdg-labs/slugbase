@@ -14,6 +14,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
 import api from '../api/client';
+import { getDocsApiReferenceUrl } from '../config/docs';
 
 interface ApiToken {
   id: string;
@@ -58,7 +59,7 @@ function SettingsRow({
 
 export default function Profile() {
   const { t } = useTranslation();
-  const { pathPrefixForLinks, apiBaseUrl } = useAppConfig();
+  const { pathPrefixForLinks } = useAppConfig();
   const prefix = (pathPrefixForLinks || '').replace(/\/+/g, '/') || '';
   const { user, updateUser, checkAuth } = useAuth();
   const { showToast } = useToast();
@@ -510,7 +511,7 @@ export default function Profile() {
               </p>
             </div>
             <a
-              href={apiBaseUrl ? `${apiBaseUrl}/api-docs` : '/api-docs'}
+              href={getDocsApiReferenceUrl()}
               target="_blank"
               rel="noopener noreferrer"
               className="text-sm font-medium text-primary hover:text-primary/90 inline-block"
