@@ -55,6 +55,23 @@ router.get('/ai', async (req, res) => {
   }
 });
 
+/** GET /admin/settings/smtp — SMTP keys only (for Settings page; no ai_* or other keys). */
+router.get('/smtp', async (req, res) => {
+  try {
+    const tenantId = getTenantId(req);
+    const smtpKeys = ['smtp_enabled', 'smtp_host', 'smtp_port', 'smtp_secure', 'smtp_user', 'smtp_password', 'smtp_from', 'smtp_from_name'];
+    const settingsObj: Record<string, string> = {};
+    for (const key of smtpKeys) {
+      const row = await queryOne('SELECT value FROM system_config WHERE key = ? AND tenant_id = ?', [key, tenantId]);
+      const val = row ? (row as any).value : '';
+      settingsObj[key] = key === 'smtp_password' && val ? '***SET***' : (val || '');
+    }
+    res.json(settingsObj);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.get('/ai/models', async (req, res) => {
   try {
     const tenantId = getTenantId(req);
