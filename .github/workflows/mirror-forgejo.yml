@@ -30,9 +30,10 @@ jobs:
           git remote add forgejo "$remote" || true
           git remote set-url forgejo "$remote"
           # Push branches (refs/remotes/origin/* -> refs/heads/*), excluding origin/HEAD
-          git for-each-ref refs/remotes/origin --format='%(refname:short)' | sed 's|^origin/||' | while read b; do
-            [ "$b" = "HEAD" ] && continue
-            git push forgejo "refs/remotes/origin/$b:refs/heads/$b"
+          git for-each-ref refs/remotes/origin --format='%(refname)' | while read ref; do
+            branch="${ref#refs/remotes/origin/}"
+            [ "$branch" = "HEAD" ] && continue
+            git push forgejo "$ref:refs/heads/$branch"
           done
           git push forgejo refs/tags/*:refs/tags/*
         env:
