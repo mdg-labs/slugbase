@@ -14,7 +14,7 @@ import { ScrollArea } from '../ui/scroll-area';
 import Button from '../ui/Button';
 import Tooltip from '../ui/Tooltip';
 import { useToast } from '../ui/Toast';
-import { UserPlus, User, Users, X } from 'lucide-react';
+import { User, Users, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface SharedUser {
@@ -343,41 +343,29 @@ export default function ShareResourceDialog({
               {allowShareToUsers && (activeTab === 'people' || !allowShareToTeams) && (
                 <div className="space-y-2">
                   <div className="relative">
-                    <div className="flex gap-2">
-                      <Input
-                        placeholder={t('admin.searchUsers')}
-                        value={emailInput}
-                        onChange={(e) => {
-                          setEmailInput(e.target.value);
+                    <Input
+                      placeholder={t('admin.searchUsers')}
+                      value={emailInput}
+                      onChange={(e) => {
+                        setEmailInput(e.target.value);
+                        setPeopleDropdownOpen(true);
+                      }}
+                      onFocus={() => {
+                        if (searchQuery.length >= MIN_CHARS_FOR_USER_DROPDOWN)
                           setPeopleDropdownOpen(true);
-                        }}
-                        onFocus={() => {
-                          if (searchQuery.length >= MIN_CHARS_FOR_USER_DROPDOWN)
-                            setPeopleDropdownOpen(true);
-                        }}
-                        onBlur={() => {
-                          setTimeout(() => setPeopleDropdownOpen(false), 150);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            handleAddUserByEmail();
-                          }
-                        }}
-                        className="flex-1"
-                        autoComplete="off"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={saving}
-                        onClick={() => handleAddUserByEmail()}
-                      >
-                        <UserPlus className="h-4 w-4" />
-                        {t('sharing.add')}
-                      </Button>
-                    </div>
+                      }}
+                      onBlur={() => {
+                        setTimeout(() => setPeopleDropdownOpen(false), 150);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAddUserByEmail();
+                        }
+                      }}
+                      className="w-full"
+                      autoComplete="off"
+                    />
                     {peopleDropdownOpen && showUserDropdown && (
                       <div
                         className="absolute top-full left-0 right-0 z-10 mt-1 max-h-48 overflow-auto rounded-md border bg-popover shadow-md"
