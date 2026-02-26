@@ -93,28 +93,29 @@ export default function ShareResourceDialog({
   }, [resourceId, resourceType, isOpen, t, showToast]);
 
   const fetchUsersAndTeams = useCallback(async () => {
-    // Fetch users: prefer non-admin endpoint so any user can add people; fallback to /admin/users for old backends.
+    // Users: prefer /users/for-sharing (no admin); fallback to /admin/users on 404/403 or other failure.
+    let users: SharedUser[] = [];
     try {
-      let users: SharedUser[] = [];
+      const res = await api.get('/users/for-sharing');
+      users = Array.isArray(res.data) ? res.data : [];
+    } catch (e: any) {
+      const status = e.response?.status;
       try {
-        const res = await api.get('/users/for-sharing');
-        users = Array.isArray(res.data) ? res.data : [];
-      } catch (e: any) {
-        if (e.response?.status === 404) {
-          const adminRes = await api.get('/admin/users');
-          const list = Array.isArray(adminRes.data) ? adminRes.data : [];
-          users = list.filter((u: SharedUser) => u.id && u.email);
-        }
+        const adminRes = await api.get('/admin/users');
+        const list = Array.isArray(adminRes.data) ? adminRes.data : [];
+        users = list.filter((u: SharedUser) => u.id && u.email);
+      } catch {
+        if (status) console.error('Sharing: users for-sharing failed', status, e.response?.data);
       }
-      setAllUsers(users);
-    } catch (err) {
-      console.error('Failed to fetch users for sharing:', err);
     }
+    setAllUsers(users);
+
     try {
       const teamsRes = await api.get('/teams');
-      setTeams(Array.isArray(teamsRes.data) ? teamsRes.data : []);
-    } catch (err) {
-      console.error('Failed to fetch teams:', err);
+      const list = teamsRes.data;
+      setTeams(Array.isArray(list) ? list : list != null ? [list] : []);
+    } catch (err: any) {
+      console.error('Failed to fetch teams:', err?.response?.status, err?.response?.data);
     }
   }, []);
 

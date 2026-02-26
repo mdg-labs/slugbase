@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAuth } from '../../contexts/AuthContext';
 import api from '../../api/client';
 import { Popover, PopoverContent, PopoverTrigger } from './popover';
 import { Switch } from './switch';
@@ -48,7 +47,6 @@ export function SharingField({
   disabled = false,
 }: SharingFieldProps) {
   const { t } = useTranslation();
-  const { user } = useAuth();
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [allUsers, setAllUsers] = useState<UserType[]>([]);
   const [userSearchQuery, setUserSearchQuery] = useState('');
@@ -62,11 +60,12 @@ export function SharingField({
 
   async function loadUsers() {
     try {
-      const response = await api.get('/admin/users');
+      // Use non-admin endpoint so any user can add people when sharing (same org/tenant).
+      const response = await api.get('/users/for-sharing');
       const users = Array.isArray(response.data) ? response.data : [];
-      setAllUsers(users.filter((u: UserType) => u.id !== user?.id));
+      setAllUsers(users);
     } catch (error) {
-      console.error('Failed to load users:', error);
+      console.error('Failed to load users for sharing:', error);
     }
   }
 
