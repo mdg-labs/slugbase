@@ -180,7 +180,7 @@ export default function Bookmarks() {
 
   async function loadData() {
     try {
-      const [bookmarksRes, foldersRes, tagsRes, teamsRes] = await Promise.all([
+      const [bookmarksSettled, foldersSettled, tagsSettled, teamsSettled] = await Promise.allSettled([
         api.get('/bookmarks', {
           params: {
             folder_id: selectedFolder || undefined,
@@ -197,13 +197,15 @@ export default function Bookmarks() {
         api.get('/tags'),
         api.get('/teams'),
       ]);
-      const payload = bookmarksRes.data;
-      const items = payload.items ?? [];
-      setTotal(payload.total ?? 0);
-      setBookmarks(items);
-      setFolders(foldersRes.data);
-      setTags(tagsRes.data);
-      setTeams(teamsRes.data);
+      if (bookmarksSettled.status === 'fulfilled') {
+        const payload = bookmarksSettled.value.data;
+        const items = payload.items ?? [];
+        setTotal(payload.total ?? 0);
+        setBookmarks(items);
+      }
+      if (foldersSettled.status === 'fulfilled') setFolders(foldersSettled.value.data ?? []);
+      if (tagsSettled.status === 'fulfilled') setTags(tagsSettled.value.data ?? []);
+      if (teamsSettled.status === 'fulfilled') setTeams(Array.isArray(teamsSettled.value.data) ? teamsSettled.value.data : []);
     } catch (error) {
       console.error('Failed to load data:', error);
     } finally {
