@@ -99,7 +99,7 @@ export function setupSecurityHeaders() {
     styleSrc: ["'self'", "'unsafe-inline'"], // Swagger UI needs inline styles
     scriptSrc: ["'self'"],
     imgSrc: ["'self'", "data:", "https:"], // Allow data URIs and HTTPS images (for favicons)
-    connectSrc: ["'self'"],
+    connectSrc: ["'self'", "https://*.ingest.sentry.io", "https://*.sentry.io"],
     fontSrc: ["'self'"],
     objectSrc: ["'none'"],
     mediaSrc: ["'self'"],
