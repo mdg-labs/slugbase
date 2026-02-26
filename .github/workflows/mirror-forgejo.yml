@@ -22,13 +22,18 @@ jobs:
       - name: Fetch all branches and tags
         run: |
           git remote set-url origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
-          git fetch origin '+refs/heads/*:refs/heads/*' '+refs/tags/*:refs/tags/*'
+          git fetch origin --tags
 
       - name: Push to Forgejo
         run: |
           remote="https://${{ secrets.FORGEJO_MIRROR_TOKEN }}@git.mdg-labs.dev/SlugBase/${{ github.event.repository.name }}.git"
           git remote add forgejo "$remote" || true
           git remote set-url forgejo "$remote"
-          git push forgejo --mirror
+          # Push branches (refs/remotes/origin/* -> refs/heads/*), excluding origin/HEAD
+          git for-each-ref refs/remotes/origin --format='%(refname:short)' | sed 's|^origin/||' | while read b; do
+            [ "$b" = "HEAD" ] && continue
+            git push forgejo "refs/remotes/origin/$b:refs/heads/$b"
+          done
+          git push forgejo refs/tags/*:refs/tags/*
         env:
           FORGEJO_MIRROR_TOKEN: ${{ secrets.FORGEJO_MIRROR_TOKEN }}
