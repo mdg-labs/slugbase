@@ -1,10 +1,16 @@
 import { useState, useMemo } from 'react';
-import { Share2, Tag as TagIcon, ExternalLink, Copy, Edit, Trash2, CheckSquare, Square, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Share2, Tag as TagIcon, ExternalLink, Copy, Edit, Trash2, CheckSquare, Square, ArrowUpDown, ArrowUp, ArrowDown, MoreHorizontal } from 'lucide-react';
 import Button from '../ui/Button';
 import Tooltip from '../ui/Tooltip';
 import Favicon from '../Favicon';
 import FolderIcon from '../FolderIcon';
 import { Badge } from '../ui/badge';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../ui/dropdown-menu';
 import {
   Table,
   TableBody,
@@ -374,38 +380,56 @@ export default function BookmarkTableView({
                     </TableCell>
                   </>
                 )}
-                <TableCell className={`${cellClass} opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-200`}>
-                  <div className={`flex items-center justify-end ${compact ? 'gap-1' : 'gap-2'}`}>
-                    {bookmark.forwarding_enabled && (
-                      <Tooltip content={`${window.location.origin}/go/${bookmark.slug}`}>
-                        <Button variant="ghost" size="sm" icon={Copy} className={`flex-shrink-0 h-8 w-8 p-0`} onClick={() => onCopyUrl(bookmark)} aria-label={t('bookmarks.copyUrl')} />
-                      </Tooltip>
-                    )}
+                <TableCell className={cellClass}>
+                  <div className={`flex items-center justify-end gap-1 min-w-[4.5rem]`}>
                     {onOpen ? (
                       <Tooltip content={t('bookmarks.open')}>
-                        <Button variant="ghost" size="sm" icon={ExternalLink} className={`flex-shrink-0 ${compact ? 'h-8 w-8 p-0' : 'h-8 w-8 p-0'}`} onClick={() => onOpen(bookmark)} aria-label={t('bookmarks.open')} />
+                        <Button variant="ghost" size="sm" icon={ExternalLink} className="h-8 w-8 p-0 flex-shrink-0" onClick={() => onOpen(bookmark)} aria-label={t('bookmarks.open')} />
                       </Tooltip>
                     ) : (
                       <Tooltip content={t('bookmarks.open')}>
                         <a href={safeHref(bookmark.url)} target="_blank" rel="noopener noreferrer" className="flex-shrink-0">
-                          <Button variant="ghost" size="sm" icon={ExternalLink} className={`flex-shrink-0 ${compact ? 'h-8 w-8 p-0' : 'h-8 w-8 p-0'}`} aria-label={t('bookmarks.open')} />
+                          <Button variant="ghost" size="sm" icon={ExternalLink} className="h-8 w-8 p-0" aria-label={t('bookmarks.open')} />
                         </a>
                       </Tooltip>
                     )}
                     {bookmark.bookmark_type === 'own' && (
-                      <>
-                        {onShare && (
-                          <Tooltip content={t('sharing.shareBookmark')}>
-                            <Button variant="ghost" size="sm" icon={Share2} className={`flex-shrink-0 ${compact ? 'h-8 w-8 p-0' : 'h-8 w-8 p-0'}`} onClick={() => onShare(bookmark)} aria-label={t('sharing.shareBookmark')} />
-                          </Tooltip>
-                        )}
-                        <Tooltip content={t('common.edit')}>
-                          <Button variant="ghost" size="sm" icon={Edit} className={`flex-shrink-0 ${compact ? 'h-8 w-8 p-0' : 'h-8 w-8 p-0'}`} onClick={() => onEdit(bookmark)} aria-label={t('common.edit')} />
-                        </Tooltip>
-                        <Tooltip content={t('common.delete')}>
-                          <Button variant="ghost" size="sm" icon={Trash2} className={`flex-shrink-0 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 ${compact ? 'h-8 w-8 p-0' : 'h-8 w-8 p-0'}`} onClick={() => onDelete(bookmark.id, bookmark.title)} aria-label={t('common.delete')} />
-                        </Tooltip>
-                      </>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            icon={MoreHorizontal}
+                            className="h-8 w-8 p-0 flex-shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
+                            aria-label={t('bookmarks.moreActions')}
+                          />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {bookmark.forwarding_enabled && (
+                            <DropdownMenuItem onClick={() => onCopyUrl(bookmark)}>
+                              <Copy className="h-4 w-4" />
+                              {t('bookmarks.copyUrl')}
+                            </DropdownMenuItem>
+                          )}
+                          {onShare && (
+                            <DropdownMenuItem onClick={() => onShare(bookmark)}>
+                              <Share2 className="h-4 w-4" />
+                              {t('sharing.shareBookmark')}
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuItem onClick={() => onEdit(bookmark)}>
+                            <Edit className="h-4 w-4" />
+                            {t('common.edit')}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => onDelete(bookmark.id, bookmark.title)}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            {t('common.delete')}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     )}
                   </div>
                 </TableCell>

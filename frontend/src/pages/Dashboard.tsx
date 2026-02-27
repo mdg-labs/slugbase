@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useEffect, useState } from 'react';
 import { Bookmark, Share2, TrendingUp, Plus, ArrowRight, X, ChevronDown, ChevronRight, CheckCircle, Folder, Tag } from 'lucide-react';
@@ -7,6 +7,7 @@ import { Card, CardContent } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { StatCard } from '../components/StatCard';
 import { EmptyState } from '../components/EmptyState';
+import BookmarkCard from '../components/bookmarks/BookmarkCard';
 import api from '../api/client';
 import { useAppConfig } from '../contexts/AppConfigContext';
 
@@ -27,6 +28,25 @@ interface QuickAccessBookmark {
   slug: string;
 }
 
+/** Map dashboard bookmark (id, title, url, slug) to full shape expected by BookmarkCard */
+function toBookmarkCardItem(b: QuickAccessBookmark, pinned: boolean) {
+  return {
+    id: b.id,
+    title: b.title,
+    url: b.url,
+    slug: b.slug || '',
+    forwarding_enabled: !!b.slug,
+    folders: [],
+    tags: [],
+    shared_teams: [],
+    shared_users: [],
+    bookmark_type: 'own' as const,
+    pinned,
+    access_count: undefined,
+    last_accessed_at: null,
+  };
+}
+
 interface DashboardStats {
   totalBookmarks: number;
   totalFolders: number;
@@ -37,23 +57,6 @@ interface DashboardStats {
   topTags: Array<{ id: string; name: string; bookmark_count: number }>;
   quickAccessBookmarks?: QuickAccessBookmark[];
   pinnedBookmarks?: QuickAccessBookmark[];
-}
-
-function getDomain(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '');
-  } catch {
-    return '';
-  }
-}
-
-function getFaviconUrl(url: string): string {
-  try {
-    const host = new URL(url).hostname;
-    return `https://www.google.com/s2/favicons?domain=${host}&sz=32`;
-  } catch {
-    return '';
-  }
 }
 
 const PRO_TIP_DISMISSED_KEY = 'slugbase_dashboard_protip_dismissed';
@@ -161,6 +164,7 @@ function OnboardingChecklist({
 
 export default function Dashboard() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { pathPrefixForLinks } = useAppConfig();
   const prefix = (pathPrefixForLinks || '').replace(/\/+/g, '/') || '';
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -204,7 +208,6 @@ export default function Dashboard() {
             value={stats.totalBookmarks}
             icon={Bookmark}
             href={prefix + '/bookmarks'}
-            dense
             iconContainerClassName="bg-primary/20"
             iconColorClassName="text-primary"
           />
@@ -213,7 +216,6 @@ export default function Dashboard() {
             value={stats.totalFolders}
             icon={Folder}
             href={prefix + '/folders'}
-            dense
             iconContainerClassName="bg-primary/20"
             iconColorClassName="text-primary"
           />
@@ -222,7 +224,6 @@ export default function Dashboard() {
             value={stats.totalTags}
             icon={Tag}
             href={prefix + '/tags'}
-            dense
             iconContainerClassName="bg-primary/20"
             iconColorClassName="text-primary"
           />
@@ -244,37 +245,26 @@ export default function Dashboard() {
           </Link>
         </div>
         {pinnedBookmarks.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-3 overflow-hidden min-w-0">
+          <div className="grid gap-3 items-stretch [grid-template-columns:repeat(auto-fill,minmax(300px,1fr))]">
             {pinnedBookmarks.map((b) => (
-              <button
+              <BookmarkCard
                 key={b.id}
-                type="button"
-                onClick={() => {
+                bookmark={toBookmarkCardItem(b, true)}
+                compact={false}
+                selected={false}
+                onSelect={() => {}}
+                onEdit={() => navigate(prefix + '/bookmarks')}
+                onDelete={() => {}}
+                onCopyUrl={() => {
+                  navigator.clipboard.writeText(b.url).catch(() => {});
+                }}
+                onOpen={() => {
                   api.post(`/bookmarks/${b.id}/track-access`).catch(() => {});
                   window.open(b.url, '_blank', 'noopener,noreferrer');
                 }}
-                className="group flex flex-col rounded-xl border border-border bg-card p-3 hover:border-primary/50 hover:shadow-md transition-all text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              >
-                <div className="flex items-start gap-2.5 mb-1.5">
-                  <div className="relative h-7 w-7 shrink-0 rounded bg-muted overflow-hidden">
-                    <img
-                      src={getFaviconUrl(b.url)}
-                      alt=""
-                      className="h-7 w-7 w-full object-cover"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none';
-                        (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
-                      }}
-                    />
-                    <span className="hidden absolute inset-0 flex items-center justify-center bg-primary/10 rounded">
-                      <Bookmark className="h-3.5 w-3.5 text-primary" />
-                    </span>
-                  </div>
-                  <p className="font-medium text-foreground line-clamp-2 text-xs flex-1 min-w-0">{b.title}</p>
-                </div>
-                <p className="text-[11px] text-primary font-mono truncate" title={b.slug ? `go/${b.slug}` : undefined}>{b.slug ? `go/${b.slug}` : getDomain(b.url)}</p>
-                <p className="text-[11px] text-muted-foreground truncate mt-0.5">{getDomain(b.url)}</p>
-              </button>
+                bulkMode={false}
+                t={t}
+              />
             ))}
           </div>
         ) : (
@@ -310,37 +300,26 @@ export default function Dashboard() {
           </Link>
         </div>
         {quickAccess.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-3 overflow-hidden min-w-0">
+          <div className="grid gap-3 items-stretch [grid-template-columns:repeat(auto-fill,minmax(300px,1fr))]">
             {quickAccess.map((b) => (
-              <button
+              <BookmarkCard
                 key={b.id}
-                type="button"
-                onClick={() => {
+                bookmark={toBookmarkCardItem(b, false)}
+                compact={false}
+                selected={false}
+                onSelect={() => {}}
+                onEdit={() => navigate(prefix + '/bookmarks')}
+                onDelete={() => {}}
+                onCopyUrl={() => {
+                  navigator.clipboard.writeText(b.url).catch(() => {});
+                }}
+                onOpen={() => {
                   api.post(`/bookmarks/${b.id}/track-access`).catch(() => {});
                   window.open(b.url, '_blank', 'noopener,noreferrer');
                 }}
-                className="group flex flex-col rounded-xl border border-border bg-card p-3 hover:border-primary/50 hover:shadow-md transition-all text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              >
-                <div className="flex items-start gap-2.5 mb-1.5">
-                  <div className="relative h-7 w-7 shrink-0 rounded bg-muted overflow-hidden">
-                    <img
-                      src={getFaviconUrl(b.url)}
-                      alt=""
-                      className="h-7 w-7 w-full object-cover"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none';
-                        (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
-                      }}
-                    />
-                    <span className="hidden absolute inset-0 flex items-center justify-center bg-primary/10 rounded">
-                      <Bookmark className="h-3.5 w-3.5 text-primary" />
-                    </span>
-                  </div>
-                  <p className="font-medium text-foreground line-clamp-2 text-xs flex-1 min-w-0">{b.title}</p>
-                </div>
-                <p className="text-[11px] text-primary font-mono truncate" title={`go/${b.slug}`}>go/{b.slug}</p>
-                <p className="text-[11px] text-muted-foreground truncate mt-0.5">{getDomain(b.url)}</p>
-              </button>
+                bulkMode={false}
+                t={t}
+              />
             ))}
           </div>
         ) : (

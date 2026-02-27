@@ -6,20 +6,18 @@ import api from '../api/client';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { useConfirmDialog } from '../hooks/useConfirmDialog';
 import { useToast } from '../components/ui/Toast';
-import { Plus, LayoutGrid, List, CheckSquare, Download, Upload, Bookmark as BookmarkIcon, ExternalLink, FolderPlus, Tag as TagIcon, Share2, Trash2, Copy, ChevronLeft, ChevronRight, Pin, Search } from 'lucide-react';
+import { Plus, Upload, Bookmark as BookmarkIcon, ExternalLink, FolderPlus, Tag as TagIcon, Share2, Trash2, Copy, ChevronLeft, ChevronRight } from 'lucide-react';
 import BookmarkModal from '../components/modals/BookmarkModal';
 import ImportModal from '../components/modals/ImportModal';
 import ShareResourceDialog from '../components/sharing/ShareResourceDialog';
 import Button from '../components/ui/Button';
-import Select from '../components/ui/Select';
 import BookmarkCard from '../components/bookmarks/BookmarkCard';
 import BookmarkTableView from '../components/bookmarks/BookmarkTableView';
 import { BulkMoveModal, BulkTagModal, BulkShareModal } from '../components/bookmarks/BulkActionModals';
-import { FilterChips, type FilterKey } from '../components/bookmarks/FilterChips';
-import { ScopeSegmentedControl } from '../components/ScopeSegmentedControl';
+import { type FilterKey } from '../components/bookmarks/FilterChips';
+import { CollectionToolbar } from '../components/collections';
 import { PageLoadingSkeleton } from '../components/ui/PageLoadingSkeleton';
 import { Card } from '../components/ui/card';
-import { PageHeader } from '../components/PageHeader';
 import { useSidebar } from '../components/ui/sidebar';
 import { useAppConfig } from '../contexts/AppConfigContext';
 
@@ -492,191 +490,98 @@ export default function Bookmarks() {
 
   return (
     <div className="space-y-6 pb-24">
-      {/* Sticky controls bar: header + filters/toolbar - stays visible when scrolling */}
-      <div className="sticky top-0 z-40 space-y-4 pb-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pt-0 -mt-8 bg-background shadow-sm">
-        <PageHeader
-          className="pt-4"
-          title={`${t('bookmarks.title')} (${total})`}
-          subtitle={
-            hasActiveFilters
-              ? t('bookmarks.showingXOfY', { x: displayedBookmarks.length, y: total })
-              : undefined
-          }
-          actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <ScopeSegmentedControl
-              value={scope}
-              onChange={(s) => updateParams({ scope: s === 'all' ? undefined : s })}
-              options={[
-                { value: 'all', label: t('bookmarks.scopeAll') },
-                { value: 'mine', label: t('bookmarks.scopeMine') },
-                { value: 'shared_with_me', label: t('common.scopeSharedWithMe') },
-                { value: 'shared_by_me', label: t('common.scopeSharedByMe') },
-              ]}
-              ariaLabel={t('bookmarks.scopeAll')}
-            />
-            <Button
-              variant={pinnedFilter ? 'secondary' : 'ghost'}
-              size="sm"
-              icon={Pin}
-              onClick={() => updateParams({ pinned: pinnedFilter ? undefined : 'true' })}
-              title={t('bookmarks.pinned')}
-              aria-pressed={pinnedFilter}
-            >
-              <span className="hidden sm:inline">{t('bookmarks.pinned')}</span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={Upload}
-              onClick={() => setImportModalOpen(true)}
-              title={t('bookmarks.import')}
-            >
-              <span className="hidden sm:inline">{t('bookmarks.import')}</span>
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={Download}
-              onClick={handleExport}
-              title={t('bookmarks.export')}
-            >
-              <span className="hidden sm:inline">{t('bookmarks.export')}</span>
-            </Button>
-            <Button onClick={handleCreate} icon={Plus}>
-              {t('bookmarks.create')}
-            </Button>
-          </div>
+      <CollectionToolbar
+        title={t('bookmarks.title')}
+        count={total}
+        subtitle={
+          hasActiveFilters
+            ? t('bookmarks.showingXOfY', { x: displayedBookmarks.length, y: total })
+            : undefined
         }
-        />
-
-        <FilterChips
-          chips={filterChips}
-          onRemove={(key) => handleRemoveFilter(key as FilterKey)}
-          onClearAll={handleResetFilters}
-          clearAllLabel={t('bookmarks.clearAllFilters')}
-          clearAllAriaLabel={t('bookmarks.clearAllFilters')}
-        />
-
-        {/* Toolbar: Search, Filters, Sort, View Modes */}
-        <div className="flex flex-wrap items-center gap-3 bg-card rounded-lg border p-4 shadow-sm">
-        <div className="flex items-center gap-2 min-w-[200px] flex-1">
-          <Search className="h-4 w-4 text-muted-foreground flex-shrink-0" aria-hidden />
-          <input
-            type="search"
-            value={searchInputValue}
-            onChange={(e) => setSearchInputValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') updateParams({ q: (e.target as HTMLInputElement).value.trim() || undefined });
-            }}
-            placeholder={t('common.searchPlaceholder')}
-            className="flex-1 min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            aria-label={t('common.searchPlaceholder')}
-          />
-        </div>
-        {/* Filters */}
-        <div className="flex flex-wrap gap-3 flex-1 min-w-[200px]">
-          <div className="flex-1 min-w-[180px]">
-            <Select
-              value={selectedFolder || ALL_FILTER}
-              onChange={(value) => {
-                const params = new URLSearchParams(searchParams);
-                if (value && value !== ALL_FILTER) {
-                  params.set('folder_id', value);
-                } else {
-                  params.delete('folder_id');
-                }
-                setSearchParams(params);
-              }}
-              options={folderOptions}
-              placeholder={t('bookmarks.filterByFolder')}
-            />
-          </div>
-          <div className="flex-1 min-w-[180px]">
-            <Select
-              value={selectedTag || ALL_FILTER}
-              onChange={(value) => {
-                const params = new URLSearchParams(searchParams);
-                if (value && value !== ALL_FILTER) {
-                  params.set('tag_id', value);
-                } else {
-                  params.delete('tag_id');
-                }
-                setSearchParams(params);
-              }}
-              options={tagOptions}
-              placeholder={t('bookmarks.filterByTag')}
-            />
-          </div>
-        </div>
-
-        {/* Sort */}
-        <div className="flex items-center gap-2">
-          <Select
-            value={sortBy}
-            onChange={(value) => setSortBy(value as SortOption)}
-            options={sortOptions}
-            className="min-w-[160px]"
-          />
-        </div>
-
-        {/* Page size */}
-        <div className="flex items-center gap-2">
-          <Select
-            value={String(pageSize)}
-            onChange={(value) => {
-              updateParams({ limit: value });
-              setPage(0);
-            }}
-            options={PAGE_SIZE_OPTIONS.map((n) => ({ value: String(n), label: String(n) }))}
-            className="min-w-[80px]"
-          />
-          <span className="text-sm text-muted-foreground whitespace-nowrap">{t('bookmarks.perPage')}</span>
-        </div>
-
-        {/* View Mode Toggle */}
-        <div className="flex items-center gap-2 border-l border-gray-200 dark:border-gray-700 pl-3">
-          <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
-            <button
-              onClick={() => setViewMode('card')}
-              className={`p-1.5 rounded transition-colors ${
-                viewMode === 'card'
-                  ? 'bg-card text-primary shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-              title={t('bookmarks.viewCard')}
-            >
-              <LayoutGrid className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => setViewMode('list')}
-              className={`p-1.5 rounded transition-colors ${
-                viewMode === 'list'
-                  ? 'bg-card text-primary shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-              title={t('bookmarks.viewList')}
-            >
-              <List className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* Bulk Select Toggle */}
-        {!bulkMode && displayedBookmarks.length > 0 && (
-          <div className="flex items-center gap-2 border-l border-gray-200 dark:border-gray-700 pl-3">
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={CheckSquare}
-              onClick={() => setBulkMode(true)}
-            >
-              {t('bookmarks.bulkSelect')}
-            </Button>
-          </div>
-        )}
-        </div>
-      </div>
+        tabs={{
+          value: scope,
+          onChange: (s) => updateParams({ scope: s === 'all' ? undefined : s }),
+          options: [
+            { value: 'all', label: t('bookmarks.scopeAll') },
+            { value: 'mine', label: t('bookmarks.scopeMine') },
+            { value: 'shared_with_me', label: t('common.scopeSharedWithMe') },
+            { value: 'shared_by_me', label: t('common.scopeSharedByMe') },
+          ],
+          ariaLabel: t('bookmarks.scopeAll'),
+        }}
+        createButton={{ label: t('bookmarks.create'), onClick: handleCreate }}
+        filterChips={{
+          chips: filterChips,
+          onRemove: (key) => handleRemoveFilter(key as FilterKey),
+          onClearAll: handleResetFilters,
+          clearAllLabel: t('bookmarks.clearAllFilters'),
+          clearAllAriaLabel: t('bookmarks.clearAllFilters'),
+        }}
+        search={{
+          value: searchInputValue,
+          onChange: setSearchInputValue,
+          onSubmit: (value) => updateParams({ q: value || undefined }),
+          placeholder: t('common.searchPlaceholder'),
+          ariaLabel: t('common.searchPlaceholder'),
+        }}
+        folderFilter={{
+          value: selectedFolder || ALL_FILTER,
+          onChange: (value) => {
+            const params = new URLSearchParams(searchParams);
+            if (value && value !== ALL_FILTER) params.set('folder_id', value);
+            else params.delete('folder_id');
+            setSearchParams(params);
+          },
+          options: folderOptions,
+          placeholder: t('bookmarks.filterByFolder'),
+        }}
+        tagFilter={{
+          value: selectedTag || ALL_FILTER,
+          onChange: (value) => {
+            const params = new URLSearchParams(searchParams);
+            if (value && value !== ALL_FILTER) params.set('tag_id', value);
+            else params.delete('tag_id');
+            setSearchParams(params);
+          },
+          options: tagOptions,
+          placeholder: t('bookmarks.filterByTag'),
+        }}
+        sort={{
+          value: sortBy,
+          onChange: (value) => setSortBy(value as SortOption),
+          options: sortOptions,
+          className: 'min-w-[160px]',
+        }}
+        perPage={{
+          value: pageSize,
+          onChange: (value) => {
+            updateParams({ limit: String(value) });
+            setPage(0);
+          },
+          options: [...PAGE_SIZE_OPTIONS],
+          label: t('bookmarks.perPage'),
+        }}
+        viewMode={{
+          value: viewMode,
+          onChange: setViewMode,
+          cardLabel: t('bookmarks.viewCard'),
+          listLabel: t('bookmarks.viewList'),
+        }}
+        pinnedToggle={{
+          active: pinnedFilter,
+          onClick: () => updateParams({ pinned: pinnedFilter ? undefined : 'true' }),
+          label: t('bookmarks.pinned'),
+        }}
+        onImport={() => setImportModalOpen(true)}
+        importLabel={t('bookmarks.import')}
+        onExport={handleExport}
+        exportLabel={t('bookmarks.export')}
+        bulkSelect={
+          !bulkMode && displayedBookmarks.length > 0
+            ? { onClick: () => setBulkMode(true), label: t('bookmarks.bulkSelect') }
+            : { onClick: () => setBulkMode(true), label: t('bookmarks.bulkSelect'), disabled: true }
+        }
+      />
 
       {/* Bulk Actions Bar - sticky bottom, visible when selecting */}
       {bulkMode && (

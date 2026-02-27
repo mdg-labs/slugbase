@@ -4,19 +4,17 @@ import { useTranslation } from 'react-i18next';
 import api from '../api/client';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { useConfirmDialog } from '../hooks/useConfirmDialog';
-import { Plus, Edit, Trash2, Share2, LayoutGrid, List, Folder, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Edit, Trash2, Share2, Folder, ChevronLeft, ChevronRight } from 'lucide-react';
 import FolderModal from '../components/modals/FolderModal';
 import ShareResourceDialog from '../components/sharing/ShareResourceDialog';
 import Button from '../components/ui/Button';
-import Select from '../components/ui/Select';
 import Tooltip from '../components/ui/Tooltip';
 import FolderIcon from '../components/FolderIcon';
-import { PageHeader } from '../components/PageHeader';
+import { CollectionToolbar } from '../components/collections';
 import { EmptyState } from '../components/EmptyState';
 import { PageLoadingSkeleton } from '../components/ui/PageLoadingSkeleton';
 import { useAppConfig } from '../contexts/AppConfigContext';
-import { ScopeSegmentedControl } from '../components/ScopeSegmentedControl';
-import { FilterChips } from '../components/FilterChips';
+import { Card } from '../components/ui/card';
 
 interface Folder {
   id: string;
@@ -49,9 +47,6 @@ export default function Folders() {
     const saved = localStorage.getItem('folders-view-mode');
     return (saved === 'list' || saved === 'card') ? saved : 'card';
   });
-  const [compactMode, setCompactMode] = useState(() => {
-    return localStorage.getItem('folders-compact-mode') === 'true';
-  });
 
   const scopeParam = searchParams.get('scope');
   const scope = (scopeParam === 'mine' || scopeParam === 'shared_with_me' || scopeParam === 'shared_by_me')
@@ -70,10 +65,6 @@ export default function Folders() {
   useEffect(() => {
     localStorage.setItem('folders-view-mode', viewMode);
   }, [viewMode]);
-
-  useEffect(() => {
-    localStorage.setItem('folders-compact-mode', compactMode.toString());
-  }, [compactMode]);
 
   useEffect(() => {
     loadData();
@@ -196,104 +187,54 @@ export default function Folders() {
 
   return (
     <div className="space-y-6 pb-24">
-      {/* Sticky controls bar: header + toolbar - stays visible when scrolling */}
-      <div className="sticky top-0 z-40 space-y-4 pb-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pt-0 -mt-8 bg-background shadow-sm">
-        <PageHeader
-          className="pt-4"
-          title={`${t('folders.title')} (${totalFolders})`}
-          subtitle={
-            hasActiveFilters || totalFolders > pageSize
-              ? t('bookmarks.showingXOfY', { x: sortedFolders.length, y: totalFolders })
-              : undefined
-          }
-          actions={
-            <div className="flex flex-wrap items-center gap-2">
-              <ScopeSegmentedControl
-                value={scope}
-                onChange={(s) => updateParams({ scope: s === 'all' ? undefined : s })}
-                options={[
-                  { value: 'all', label: t('bookmarks.scopeAll') },
-                  { value: 'mine', label: t('bookmarks.scopeMine') },
-                  { value: 'shared_with_me', label: t('common.scopeSharedWithMe') },
-                  { value: 'shared_by_me', label: t('common.scopeSharedByMe') },
-                ]}
-                ariaLabel={t('bookmarks.scopeAll')}
-              />
-              <Button onClick={handleCreate} icon={Plus}>
-                {t('folders.create')}
-              </Button>
-            </div>
-          }
-        />
-
-        <FilterChips
-          chips={filterChips}
-          onRemove={handleRemoveFilter}
-          onClearAll={handleResetFilters}
-          clearAllLabel={t('bookmarks.clearAllFilters')}
-          clearAllAriaLabel={t('bookmarks.clearAllFilters')}
-        />
-
-        {/* Toolbar: Sort, Page size, View Modes */}
-        <div className="flex flex-wrap items-center gap-3 bg-card rounded-lg border p-4 shadow-sm">
-          {/* Sort */}
-          <div className="flex items-center gap-2">
-            <Select
-              value={sortBy}
-              onChange={(value) => updateParams({ sort: value as SortOption })}
-              options={sortOptions}
-              className="min-w-[160px]"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <Select
-              value={String(pageSize)}
-              onChange={(value) => updateParams({ limit: value })}
-              options={PAGE_SIZE_OPTIONS.map((n) => ({ value: String(n), label: String(n) }))}
-              className="min-w-[80px]"
-            />
-            <span className="text-sm text-muted-foreground whitespace-nowrap">{t('bookmarks.perPage')}</span>
-          </div>
-          {/* View Mode Toggle */}
-          <div className="flex items-center gap-2 border-l border-gray-200 dark:border-gray-700 pl-3 ml-auto">
-            <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
-              <button
-                onClick={() => setViewMode('card')}
-                className={`p-1.5 rounded transition-colors ${
-                  viewMode === 'card'
-                    ? 'bg-card text-primary shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-                title={t('folders.viewCard')}
-              >
-                <LayoutGrid className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                className={`p-1.5 rounded transition-colors ${
-                  viewMode === 'list'
-                    ? 'bg-card text-primary shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-                title={t('folders.viewList')}
-              >
-                <List className="h-4 w-4" />
-              </button>
-            </div>
-            <button
-              onClick={() => setCompactMode(!compactMode)}
-              className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
-                compactMode
-                  ? 'bg-primary/20 text-primary'
-                  : 'bg-muted text-muted-foreground hover:bg-accent'
-              }`}
-              title={t('folders.compactMode')}
-            >
-              {t('folders.compactMode')}
-            </button>
-          </div>
-        </div>
-      </div>
+      <CollectionToolbar
+        title={t('folders.title')}
+        count={totalFolders}
+        subtitle={
+          hasActiveFilters || totalFolders > pageSize
+            ? t('bookmarks.showingXOfY', { x: sortedFolders.length, y: totalFolders })
+            : undefined
+        }
+        tabs={{
+          value: scope,
+          onChange: (s) => updateParams({ scope: s === 'all' ? undefined : s }),
+          options: [
+            { value: 'all', label: t('bookmarks.scopeAll') },
+            { value: 'mine', label: t('bookmarks.scopeMine') },
+            { value: 'shared_with_me', label: t('common.scopeSharedWithMe') },
+            { value: 'shared_by_me', label: t('common.scopeSharedByMe') },
+          ],
+          ariaLabel: t('bookmarks.scopeAll'),
+        }}
+        createButton={{ label: t('folders.create'), onClick: handleCreate }}
+        filterChips={{
+          chips: filterChips,
+          onRemove: handleRemoveFilter,
+          onClearAll: handleResetFilters,
+          clearAllLabel: t('bookmarks.clearAllFilters'),
+          clearAllAriaLabel: t('bookmarks.clearAllFilters'),
+        }}
+        sort={{
+          value: sortBy,
+          onChange: (value) => updateParams({ sort: value as SortOption }),
+          options: sortOptions,
+          className: 'min-w-[160px]',
+        }}
+        perPage={{
+          value: pageSize,
+          onChange: (value) => {
+            updateParams({ limit: String(value) });
+          },
+          options: [...PAGE_SIZE_OPTIONS],
+          label: t('bookmarks.perPage'),
+        }}
+        viewMode={{
+          value: viewMode,
+          onChange: setViewMode,
+          cardLabel: t('folders.viewCard'),
+          listLabel: t('folders.viewList'),
+        }}
+      />
 
       {/* Folders Display */}
       {sortedFolders.length === 0 ? (
@@ -321,109 +262,102 @@ export default function Folders() {
           />
         )
       ) : viewMode === 'card' ? (
-        <div className={`grid grid-cols-1 gap-3 items-stretch ${
-          compactMode 
-            ? 'sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8' 
-            : 'sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6'
-        }`}>
-          {sortedFolders.map((folder) => (
-            <div
-              key={folder.id}
-              className={`group bg-card rounded-lg border border-border hover:border-primary/70 hover:bg-muted/50 hover:shadow-md transition-all duration-200 flex flex-col h-full min-h-0 ${compactMode ? 'p-2.5 min-h-[160px]' : 'p-2.5 min-h-[140px]'}`}
-            >
-              <Link
-                to={`${prefix}/bookmarks?folder_id=${folder.id}`}
-                className="flex-1 flex flex-col min-w-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
+        <div className="grid gap-3 items-stretch [grid-template-columns:repeat(auto-fill,minmax(300px,1fr))]">
+          {sortedFolders.map((folder) => {
+            const isShared = (folder.shared_teams && folder.shared_teams.length > 0) || (folder.shared_users && folder.shared_users.length > 0);
+            return (
+              <Card
+                key={folder.id}
+                className="group relative flex flex-col h-[148px] cursor-pointer rounded-lg border bg-card/95 dark:bg-card/90 transition-[border-color,box-shadow] duration-150 border-border/80 hover:border-primary/80 hover:shadow-[0_2px_6px_rgba(0,0,0,0.06)] dark:border-border/70 dark:hover:border-primary/80 dark:hover:shadow-[0_2px_6px_rgba(0,0,0,0.25)] px-3 pt-0 pb-1.5 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
               >
-                <div className="space-y-3 flex-1 flex flex-col">
-                  <div className="flex items-start gap-3">
-                    <div className={`flex-shrink-0 ${compactMode ? 'w-9 h-9' : 'w-10 h-10'} rounded-xl bg-primary/20 flex items-center justify-center border border-primary/30`}>
-                      <FolderIcon iconName={folder.icon} size={compactMode ? 18 : 20} className="text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0 pt-0.5">
-                      <h3 className={`${compactMode ? 'text-xs' : 'text-sm'} font-medium text-foreground truncate mb-1`}>
-                        {folder.name}
-                      </h3>
-                      {folder.shared_teams && folder.shared_teams.length > 0 && (
-                        <Tooltip
-                          content={
-                            <div className="space-y-1">
-                              <div className="font-semibold mb-1">{t('folders.sharedWith')}</div>
-                              {folder.shared_teams.map((team) => (
-                                <div key={team.id} className="text-xs">• {team.name}</div>
-                              ))}
-                              {folder.shared_users && folder.shared_users.length > 0 && (
-                                folder.shared_users.map((user) => (
-                                  <div key={user.id} className="text-xs">• {user.name || user.email}</div>
-                                ))
-                              )}
-                            </div>
-                          }
-                        >
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 rounded-md border border-green-200 dark:border-green-800/50 cursor-help">
-                            <Share2 className="h-3 w-3" />
-                            {t('folders.shared')}
-                          </span>
-                        </Tooltip>
-                      )}
-                    </div>
+                <Link
+                  to={`${prefix}/bookmarks?folder_id=${folder.id}`}
+                  className="absolute inset-0 rounded-lg z-0 focus:outline-none"
+                  aria-label={folder.name}
+                />
+                <header className="flex-shrink-0 flex items-center gap-1.5 min-w-0 pt-3 relative z-10">
+                  <div className="flex-shrink-0 w-7 h-7 rounded-md bg-background/90 dark:bg-muted/20 flex items-center justify-center border border-border/50 overflow-hidden">
+                    <FolderIcon iconName={folder.icon} size={16} className="text-primary" />
                   </div>
-                </div>
-              </Link>
-              {folder.folder_type === 'own' && (
-                <div className={`flex gap-1.5 pt-2.5 mt-auto shrink-0 border-t border-border ${compactMode ? 'pt-2' : ''}`}>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    icon={Share2}
-                    iconClassName="h-3.5 w-3.5 stroke-[1.5]"
-                    onClick={() => { setSharingFolder(folder); setShareDialogOpen(true); }}
-                    title={t('sharing.shareFolder')}
-                    className="h-8 w-8 p-0 flex-shrink-0"
-                  />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    icon={Edit}
-                    iconClassName="h-3.5 w-3.5 stroke-[1.5]"
-                    onClick={() => handleEdit(folder)}
-                    className="flex-1 h-8 min-w-0 text-xs"
-                  >
-                    {t('common.edit')}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    icon={Trash2}
-                    iconClassName="h-3.5 w-3.5 stroke-[1.5]"
-                    onClick={() => handleDelete(folder.id)}
-                    title={t('common.delete')}
-                    className="h-8 w-8 p-0 flex-shrink-0 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                  />
-                </div>
-              )}
-            </div>
-          ))}
+                  <div className="flex-1 min-w-0 min-h-0 overflow-hidden">
+                    <h3 className="text-sm font-semibold text-foreground line-clamp-2 break-words leading-snug tracking-tight min-h-0">
+                      {folder.name}
+                    </h3>
+                  </div>
+                </header>
+                {isShared && (
+                  <div className="flex-shrink-0 mt-1.5 relative z-10">
+                    <Tooltip
+                      content={
+                        <div className="space-y-1">
+                          <div className="font-semibold mb-1">{t('folders.sharedWith')}</div>
+                          {folder.shared_teams?.map((team) => (
+                            <div key={team.id} className="text-xs">• {team.name}</div>
+                          ))}
+                          {folder.shared_users?.map((user) => (
+                            <div key={user.id} className="text-xs">• {user.name || user.email}</div>
+                          ))}
+                        </div>
+                      }
+                    >
+                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium bg-emerald-500/10 dark:bg-emerald-500/10 text-muted-foreground rounded cursor-help">
+                        <Share2 className="h-2.5 w-2.5" />
+                        {t('folders.shared')}
+                      </span>
+                    </Tooltip>
+                  </div>
+                )}
+                <div className="flex-1 min-h-0" aria-hidden />
+                {folder.folder_type === 'own' && (
+                  <footer className="flex-shrink-0 flex items-center justify-end gap-0.5 h-6 min-h-[24px] pt-2.5 relative z-10 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-150 w-[76px] ml-auto">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon={Share2}
+                      iconClassName="h-3.5 w-3.5 stroke-[1.5]"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setSharingFolder(folder); setShareDialogOpen(true); }}
+                      className="h-6 w-6 p-0 min-w-6 text-muted-foreground hover:text-foreground"
+                      title={t('sharing.shareFolder')}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon={Edit}
+                      iconClassName="h-3.5 w-3.5 stroke-[1.5]"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleEdit(folder); }}
+                      className="h-6 w-6 p-0 min-w-6 text-muted-foreground hover:text-foreground"
+                      title={t('common.edit')}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon={Trash2}
+                      iconClassName="h-3.5 w-3.5 stroke-[1.5]"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(folder.id); }}
+                      className="h-6 w-6 p-0 min-w-6 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                      title={t('common.delete')}
+                    />
+                  </footer>
+                )}
+              </Card>
+            );
+          })}
         </div>
       ) : (
         <div className="overflow-x-auto bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
           <table className="w-full">
             <thead className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
               <tr>
-                <th className={`${compactMode ? 'px-2 py-1.5' : 'px-4 py-3'} text-left ${compactMode ? 'text-[10px]' : 'text-xs'} font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide`}>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">
                   {t('folders.name')}
                 </th>
-                {!compactMode && (
-                  <th className={`${compactMode ? 'px-2 py-1.5' : 'px-4 py-3'} text-left ${compactMode ? 'text-[10px]' : 'text-xs'} font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide`}>
-                    {t('bookmarks.title')}
-                  </th>
-                )}
-                {!compactMode && (
-                  <th className={`${compactMode ? 'px-2 py-1.5' : 'px-4 py-3'} text-left ${compactMode ? 'text-[10px]' : 'text-xs'} font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide`}>
-                    {t('folders.shared')}
-                  </th>
-                )}
-                <th className={`${compactMode ? 'px-2 py-1.5' : 'px-4 py-3'} text-right ${compactMode ? 'text-[10px]' : 'text-xs'} font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide`}>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">
+                  {t('bookmarks.title')}
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">
+                  {t('folders.shared')}
+                </th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">
                   {t('common.actions')}
                 </th>
               </tr>
@@ -432,75 +366,71 @@ export default function Folders() {
               {sortedFolders.map((folder) => (
                 <tr
                   key={folder.id}
-                  className={`hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${compactMode ? 'h-10' : ''}`}
+                  className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                 >
-                  <td className={`${compactMode ? 'px-2 py-1.5' : 'px-4 py-3'}`}>
+                  <td className="px-4 py-3">
                     <Link
                       to={`${prefix}/bookmarks?folder_id=${folder.id}`}
-                      className={`flex items-center ${compactMode ? 'gap-2' : 'gap-3'} hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded`}
+                      className="flex items-center gap-3 hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
                     >
-                      <div className={`flex-shrink-0 ${compactMode ? 'w-6 h-6' : 'w-8 h-8'} rounded-lg bg-primary/20 flex items-center justify-center border border-primary/30`}>
-                        <FolderIcon iconName={folder.icon} size={compactMode ? 12 : 16} className="text-primary" />
+                      <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center border border-primary/30">
+                        <FolderIcon iconName={folder.icon} size={16} className="text-primary" />
                       </div>
-                      <div className={`font-medium text-gray-900 dark:text-white ${compactMode ? 'text-xs' : 'text-[15px]'}`}>
+                      <div className="font-medium text-gray-900 dark:text-white text-[15px]">
                         {folder.name}
                       </div>
                     </Link>
                   </td>
-                  {!compactMode && (
-                    <td className="px-4 py-3 text-xs text-muted-foreground">—</td>
-                  )}
-                  {!compactMode && (
-                    <td className={`${compactMode ? 'px-2 py-1.5' : 'px-4 py-3'}`}>
-                      {folder.shared_teams && folder.shared_teams.length > 0 ? (
-                        <Tooltip
-                          content={
-                            <div className="space-y-1">
-                              <div className="font-semibold mb-1">{t('folders.sharedWith')}</div>
-                              {folder.shared_teams.map((team) => (
-                                <div key={team.id} className="text-xs">
-                                  • {team.name}
-                                </div>
-                              ))}
-                              {folder.shared_users && folder.shared_users.length > 0 && (
-                                <>
-                                  {folder.shared_users.map((user) => (
-                                    <div key={user.id} className="text-xs">
-                                      • {user.name || user.email}
-                                    </div>
-                                  ))}
-                                </>
-                              )}
-                            </div>
-                          }
-                        >
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 rounded-md cursor-help">
-                            <Share2 className="h-3 w-3" />
-                            {t('folders.shared')}
-                          </span>
-                        </Tooltip>
-                      ) : (
-                        <span className="text-xs text-gray-500 dark:text-gray-400">-</span>
-                      )}
-                    </td>
-                  )}
-                  <td className={`${compactMode ? 'px-2 py-1.5' : 'px-4 py-3'}`}>
+                  <td className="px-4 py-3 text-xs text-muted-foreground">—</td>
+                  <td className="px-4 py-3">
+                    {folder.shared_teams && folder.shared_teams.length > 0 ? (
+                      <Tooltip
+                        content={
+                          <div className="space-y-1">
+                            <div className="font-semibold mb-1">{t('folders.sharedWith')}</div>
+                            {folder.shared_teams.map((team) => (
+                              <div key={team.id} className="text-xs">
+                                • {team.name}
+                              </div>
+                            ))}
+                            {folder.shared_users && folder.shared_users.length > 0 && (
+                              <>
+                                {folder.shared_users.map((user) => (
+                                  <div key={user.id} className="text-xs">
+                                    • {user.name || user.email}
+                                  </div>
+                                ))}
+                              </>
+                            )}
+                          </div>
+                        }
+                      >
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 rounded-md cursor-help">
+                          <Share2 className="h-3 w-3" />
+                          {t('folders.shared')}
+                        </span>
+                      </Tooltip>
+                    ) : (
+                      <span className="text-xs text-gray-500 dark:text-gray-400">-</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
                     {folder.folder_type === 'own' && (
-                      <div className={`flex items-center justify-end ${compactMode ? 'gap-1' : 'gap-2'}`}>
+                      <div className="flex items-center justify-end gap-2">
                         <Button
                           variant="ghost"
                           size="sm"
                           icon={Share2}
                           onClick={() => { setSharingFolder(folder); setShareDialogOpen(true); }}
                           title={t('sharing.shareFolder')}
-                          className={compactMode ? 'px-1 h-6' : 'px-2'}
+                          className="px-2"
                         />
                         <Button
                           variant="ghost"
                           size="sm"
                           icon={Edit}
                           onClick={() => handleEdit(folder)}
-                          className={compactMode ? 'px-1 h-6' : 'px-2'}
+                          className="px-2"
                         />
                         <Button
                           variant="ghost"
@@ -508,7 +438,7 @@ export default function Folders() {
                           icon={Trash2}
                           onClick={() => handleDelete(folder.id)}
                           title={t('common.delete')}
-                          className={`text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 ${compactMode ? 'px-1 h-6' : 'px-2'}`}
+                          className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 px-2"
                         />
                       </div>
                     )}

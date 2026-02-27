@@ -107,6 +107,7 @@
     "forwardingPreview": "転送URL",
     "forwardingPreviewDescription": "これはブックマークに転送されるURLです",
     "bulkSelect": "複数選択",
+    "moreActions": "その他の操作",
     "bulkActions": "一括操作",
     "bulkMoveToFolder": "フォルダに移動",
     "bulkAddTags": "タグを追加",

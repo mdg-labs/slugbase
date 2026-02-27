@@ -1,4 +1,5 @@
 import { X } from 'lucide-react';
+import { Badge } from './ui/badge';
 
 export interface FilterChipItem {
   key: string;
@@ -20,9 +21,10 @@ export function FilterChips({ chips, onRemove, onClearAll, clearAllLabel, clearA
   return (
     <div className="flex flex-wrap items-center gap-2">
       {chips.map(({ key, label, ariaLabel }) => (
-        <span
+        <Badge
           key={key}
-          className="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-md bg-muted text-muted-foreground text-sm border border-border"
+          variant="secondary"
+          className="inline-flex items-center gap-1.5 pl-2.5 pr-1 py-1 text-sm font-normal"
         >
           <span>{label}</span>
           <button
@@ -39,7 +41,7 @@ export function FilterChips({ chips, onRemove, onClearAll, clearAllLabel, clearA
           >
             <X className="h-3.5 w-3.5" />
           </button>
-        </span>
+        </Badge>
       ))}
       <button
         type="button"
