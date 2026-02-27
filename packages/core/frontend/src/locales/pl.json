@@ -279,6 +279,7 @@
     "noTags": "Brak tagów",
     "searchPlaceholder": "Szukaj zakładki lub nawiguj po SlugBase",
     "quickAccess": "Szybki dostęp",
+    "quickAccessSubtitle": "Najczęściej otwierane ze skrótami",
     "viewAll": "Zobacz wszystko",
     "noQuickAccessBookmarks": "Brak zakładek ze skrótami",
     "noQuickAccessBookmarksHint": "Dodaj slug do zakładki, aby zobaczyć ją tutaj i używać go/slug w przeglądarce.",

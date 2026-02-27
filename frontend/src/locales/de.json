@@ -394,6 +394,7 @@
     "createTag": "Tag erstellen",
     "searchPlaceholder": "Lesezeichen suchen oder durch SlugBase navigieren",
     "quickAccess": "Schnellzugriff",
+    "quickAccessSubtitle": "Am häufigsten mit Shortcuts geöffnet",
     "viewAll": "Alle anzeigen",
     "noQuickAccessBookmarks": "Noch keine Lesezeichen mit Shortcuts",
     "noQuickAccessBookmarksHint": "Weise einem Lesezeichen einen Slug zu, um es hier zu sehen und go/slug im Browser zu nutzen.",

@@ -405,6 +405,7 @@
     "createFolder": "Crear carpeta",
     "createTag": "Crear etiqueta",
     "quickAccess": "Acceso rápido",
+    "quickAccessSubtitle": "Más abiertos con atajos",
     "viewAll": "Ver todo",
     "noQuickAccessBookmarks": "Aún no hay marcadores con atajos",
     "noQuickAccessBookmarksHint": "Añade un slug a un marcador para verlo aquí y usar go/slug en el navegador.",

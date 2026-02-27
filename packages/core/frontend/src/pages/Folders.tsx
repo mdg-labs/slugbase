@@ -268,7 +268,7 @@ export default function Folders() {
             return (
               <Card
                 key={folder.id}
-                className="group relative flex flex-col h-[148px] cursor-pointer rounded-lg border bg-card/95 dark:bg-card/90 transition-[border-color,box-shadow] duration-150 border-border/80 hover:border-primary/80 hover:shadow-[0_2px_6px_rgba(0,0,0,0.06)] dark:border-border/70 dark:hover:border-primary/80 dark:hover:shadow-[0_2px_6px_rgba(0,0,0,0.25)] px-3 pt-0 pb-1.5 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
+                className="group relative flex flex-col h-[101px] cursor-pointer rounded-lg border bg-card/95 dark:bg-card/90 transition-[border-color,box-shadow] duration-150 border-border/80 hover:border-primary/80 hover:shadow-[0_2px_6px_rgba(0,0,0,0.06)] dark:border-border/70 dark:hover:border-primary/80 dark:hover:shadow-[0_2px_6px_rgba(0,0,0,0.25)] px-3 pt-0 pb-1.5 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
               >
                 <Link
                   to={`${prefix}/bookmarks?folder_id=${folder.id}`}

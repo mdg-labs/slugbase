@@ -279,6 +279,7 @@
     "noRecentBookmarks": "Ancora nessun segnalibro",
     "noTags": "Ancora nessun tag",
     "quickAccess": "Accesso rapido",
+    "quickAccessSubtitle": "Più aperti con scorciatoie",
     "viewAll": "Vedi tutto",
     "noQuickAccessBookmarks": "Nessun segnalibro con scorciatoia",
     "noQuickAccessBookmarksHint": "Aggiungi uno slug a un segnalibro per vederlo qui e usare go/slug nel browser.",

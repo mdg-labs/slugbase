@@ -294,6 +294,7 @@
     "noTags": "Nog geen tags",
     "searchPlaceholder": "Zoek een bladwijzer of navigeer door SlugBase",
     "quickAccess": "Snelle toegang",
+    "quickAccessSubtitle": "Meest geopend met snelkoppelingen",
     "viewAll": "Alles bekijken",
     "noQuickAccessBookmarks": "Nog geen bladwijzers met snelkoppeling",
     "noQuickAccessBookmarksHint": "Voeg een slug toe aan een bladwijzer om die hier te zien en go/slug in de browser te gebruiken.",

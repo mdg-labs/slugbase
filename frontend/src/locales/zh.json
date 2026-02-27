@@ -279,6 +279,7 @@
     "noTags": "还没有标签",
     "searchPlaceholder": "搜索书签或在 SlugBase 中导航",
     "quickAccess": "快速访问",
+    "quickAccessSubtitle": "最常通过快捷方式打开",
     "viewAll": "查看全部",
     "noQuickAccessBookmarks": "暂无带快捷方式的书签",
     "noQuickAccessBookmarksHint": "为书签添加 slug 即可在此显示，并在浏览器中使用 go/slug。",

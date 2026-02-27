@@ -214,11 +214,11 @@ export default function Tags() {
           }
         />
       ) : viewMode === 'card' ? (
-        <div className="grid gap-3 items-stretch [grid-template-columns:repeat(auto-fill,minmax(300px,1fr))]">
+        <div className="grid gap-3 items-start [grid-template-columns:repeat(auto-fill,minmax(300px,1fr))]">
           {sortedTags.map((tag) => (
             <Card
               key={tag.id}
-              className="group relative flex flex-col h-[148px] cursor-pointer rounded-lg border bg-card/95 dark:bg-card/90 transition-[border-color,box-shadow] duration-150 border-border/80 hover:border-primary/80 hover:shadow-[0_2px_6px_rgba(0,0,0,0.06)] dark:border-border/70 dark:hover:border-primary/80 dark:hover:shadow-[0_2px_6px_rgba(0,0,0,0.25)] px-3 pt-0 pb-1.5 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
+              className="group relative flex flex-col cursor-pointer rounded-lg border bg-card/95 dark:bg-card/90 transition-[border-color,box-shadow] duration-150 border-border/80 hover:border-primary/80 hover:shadow-[0_2px_6px_rgba(0,0,0,0.06)] dark:border-border/70 dark:hover:border-primary/80 dark:hover:shadow-[0_2px_6px_rgba(0,0,0,0.25)] px-3 pt-0 pb-1.5 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
             >
               <Link
                 to={`${prefix}/bookmarks?tag_id=${tag.id}`}
@@ -235,7 +235,6 @@ export default function Tags() {
                   </h3>
                 </div>
               </header>
-              <div className="flex-1 min-h-0" aria-hidden />
               <footer className="flex-shrink-0 flex items-center justify-end gap-0.5 h-6 min-h-[24px] pt-2.5 relative z-10 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-150 w-[52px] ml-auto">
                 <Button
                   variant="ghost"

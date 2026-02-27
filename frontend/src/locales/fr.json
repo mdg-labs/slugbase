@@ -294,6 +294,7 @@
     "noRecentBookmarks": "Aucun favori pour le moment",
     "noTags": "Aucun tag pour le moment",
     "quickAccess": "Accès rapide",
+    "quickAccessSubtitle": "Plus ouverts avec raccourcis",
     "viewAll": "Tout voir",
     "noQuickAccessBookmarks": "Aucun favori avec raccourci",
     "noQuickAccessBookmarksHint": "Ajoutez un slug à un favori pour le voir ici et utiliser go/slug dans le navigateur.",

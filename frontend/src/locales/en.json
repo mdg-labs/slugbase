@@ -436,6 +436,7 @@
     "createFolder": "Create Folder",
     "createTag": "Create Tag",
     "quickAccess": "Quick access",
+    "quickAccessSubtitle": "Most opened with shortcuts",
     "pinned": "Pinned",
     "noPinnedBookmarks": "No pinned bookmarks",
     "pinFromBookmarks": "Pin bookmarks from the Bookmarks page to see them here.",

@@ -279,6 +279,7 @@
     "noTags": "Ainda não há tags",
     "searchPlaceholder": "Pesquisar um favorito ou navegar pelo SlugBase",
     "quickAccess": "Acesso rápido",
+    "quickAccessSubtitle": "Mais abertos com atalhos",
     "viewAll": "Ver tudo",
     "noQuickAccessBookmarks": "Ainda não há favoritos com atalhos",
     "noQuickAccessBookmarksHint": "Adicione um slug a um favorito para vê-lo aqui e usar go/slug no navegador.",

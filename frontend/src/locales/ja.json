@@ -279,6 +279,7 @@
     "noTags": "まだタグがありません",
     "searchPlaceholder": "ブックマークを検索するか、SlugBase内を移動",
     "quickAccess": "クイックアクセス",
+    "quickAccessSubtitle": "ショートカットでよく開くもの",
     "viewAll": "すべて表示",
     "noQuickAccessBookmarks": "ショートカット付きブックマークはまだありません",
     "noQuickAccessBookmarksHint": "ブックマークにスラグを追加するとここに表示され、ブラウザで go/スラグ が使えます。",

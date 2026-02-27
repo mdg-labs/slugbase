@@ -279,6 +279,7 @@
     "noTags": "Пока нет тегов",
     "searchPlaceholder": "Поиск закладки или навигация по SlugBase",
     "quickAccess": "Быстрый доступ",
+    "quickAccessSubtitle": "Наиболее открываемые по ярлыкам",
     "viewAll": "Показать все",
     "noQuickAccessBookmarks": "Пока нет закладок с ярлыками",
     "noQuickAccessBookmarksHint": "Добавьте слаг к закладке, чтобы видеть её здесь и использовать go/слаг в браузере.",
