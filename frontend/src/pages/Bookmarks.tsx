@@ -63,9 +63,6 @@ export default function Bookmarks() {
     const saved = localStorage.getItem('bookmarks-view-mode');
     return (saved === 'list' || saved === 'card') ? saved : 'card';
   });
-  const [compactMode, setCompactMode] = useState(() => {
-    return localStorage.getItem('bookmarks-compact-mode') === 'true';
-  });
   const [sortBy, setSortBy] = useState<SortOption>('recently_added');
   const [selectedBookmarks, setSelectedBookmarks] = useState<Set<string>>(new Set());
   const [allSelectedAcrossPages, setAllSelectedAcrossPages] = useState(false);
@@ -169,10 +166,6 @@ export default function Bookmarks() {
   useEffect(() => {
     localStorage.setItem('bookmarks-view-mode', viewMode);
   }, [viewMode]);
-
-  useEffect(() => {
-    localStorage.setItem('bookmarks-compact-mode', compactMode.toString());
-  }, [compactMode]);
 
   useEffect(() => {
     setSearchInputValue(searchQuery);
@@ -667,17 +660,6 @@ export default function Bookmarks() {
               <List className="h-4 w-4" />
             </button>
           </div>
-          <button
-            onClick={() => setCompactMode(!compactMode)}
-            className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
-              compactMode
-                ? 'bg-primary/20 text-primary'
-                : 'bg-muted text-muted-foreground hover:bg-accent'
-            }`}
-            title={t('bookmarks.compactMode')}
-          >
-            {t('bookmarks.compactMode')}
-          </button>
         </div>
 
         {/* Bulk Select Toggle */}
@@ -836,16 +818,12 @@ export default function Bookmarks() {
           </div>
         </Card>
       ) : viewMode === 'card' ? (
-        <div className={`grid grid-cols-1 gap-3 items-stretch ${
-          compactMode 
-            ? 'sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8' 
-            : 'sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6'
-        }`}>
+        <div className="grid gap-3 items-stretch [grid-template-columns:repeat(auto-fill,minmax(300px,1fr))]">
           {displayedBookmarks.map((bookmark) => (
             <BookmarkCard
               key={bookmark.id}
               bookmark={bookmark}
-              compact={compactMode}
+              compact={false}
               selected={selectedBookmarks.has(bookmark.id)}
               onSelect={() => toggleSelectBookmark(bookmark.id)}
               onEdit={() => handleEdit(bookmark)}
@@ -873,7 +851,7 @@ export default function Bookmarks() {
           bulkMode={bulkMode}
           user={user}
           t={t}
-          compact={compactMode}
+          compact={false}
         />
       ) : null}
 

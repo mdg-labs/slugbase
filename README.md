@@ -38,7 +38,7 @@ Sign up for a free account at **[https://slugbase.app](https://slugbase.app)** t
 - 🐘 **PostgreSQL** - Full PostgreSQL support for larger deployments
 - 🔄 **Auto Migrations** - Automatic database migration system with version tracking
 - 🐳 **Docker Ready** - Production-ready Docker setup with multi-stage builds
-- ☁️ **GCP / Cloud Run** - Terraform and GitHub Actions (WIF) to deploy the backend to Cloud Run; see [docs/infra/](docs/infra/) for deployment options.
+- 🐳 **Backend-only image** - `Dockerfile.backend` for backend-only deployments (e.g. Cloud Run); see [docs/infra/](docs/infra/) and external docs for deployment options.
 - 🪰 **Fly.io + Neon** - Deploy backend to Fly.io with Neon PostgreSQL (EU); see [docs/infra/fly-neon.md](docs/infra/fly-neon.md)
 - 📊 **API Documentation** - Auto-generated Swagger/OpenAPI documentation
 
@@ -74,7 +74,7 @@ Sign up for a free account at **[https://slugbase.app](https://slugbase.app)** t
 
 1. **Clone the repository**
 ```bash
-git clone <repository-url>
+git clone <repository-url>   # Replace with your fork or the official repo URL
 cd slugbase-core
 ```
 
@@ -207,7 +207,7 @@ SlugBase uses an automatic migration system:
 4. **Tracking**: Applied migrations are tracked in `schema_migrations` table
 5. **Execution**: Migrations run automatically after initial schema setup
 
-Current migrations are 001–009, 013–015, 018–021 (see `backend/src/db/migrations/index.ts`; numbering gaps are legacy/cloud-only).
+Current migrations are 001–009, 013–015, 018–021 (see `backend/src/db/migrations/index.ts`). Migrations 010–012 and 016–017 are reserved/cloud-only and not registered in core.
 
 To add a new migration:
 1. Create a new file: `backend/src/db/migrations/NNN_your_migration.ts`
@@ -230,6 +230,8 @@ slugbase-core/
 │   │   │   └── index.ts   # DB utilities
 │   │   ├── middleware/    # Express middleware
 │   │   ├── routes/        # API routes
+│   │   ├── services/      # Business logic services
+│   │   ├── types/         # Backend types
 │   │   ├── utils/         # Utility functions
 │   │   └── index.ts       # Server entry point
 │   └── package.json
@@ -240,26 +242,32 @@ slugbase-core/
 │   │   │   ├── admin/     # Admin components
 │   │   │   ├── modals/    # Modal components
 │   │   │   └── ui/        # UI components
+│   │   ├── config/        # Frontend config (mode, API URL)
 │   │   ├── contexts/      # React contexts
 │   │   ├── hooks/         # Custom hooks
+│   │   ├── lib/           # Shared frontend utilities
 │   │   ├── locales/       # i18n translations
 │   │   ├── pages/         # Page components
 │   │   └── utils/         # Utility functions
 │   └── package.json
 ├── packages/core/          # Package consumed by apps (exports backend + frontend entrypoints)
-│   └── ...                # See docs/PACKAGE-BOUNDARIES-AND-EXPORTS.md
+│   └── ...                # See docs/PACKAGE-BOUNDARIES-AND-EXPORTS.md. Published as @mdguggenbichler/slugbase-core; consumed by apps/selfhosted and slugbase-cloud.
 ├── apps/selfhosted/        # Self-hosted app: uses core package, serves API + frontend
 │   └── ...
 ├── scripts/                # Build helpers (e.g. copy-core-dist.js, copy-selfhosted-public.js)
 ├── docs/                   # Documentation source
-├── docker-compose.yml      # Docker Compose config (use docker-compose.example.yml as template)
-├── Dockerfile              # Production Dockerfile
+├── docker-compose.yml      # Docker Compose config
+├── docker-compose.example.yml  # Template; copy to docker-compose.yml and customize
+├── Dockerfile              # Production Dockerfile (full app)
+├── Dockerfile.backend      # Backend-only image (e.g. Cloud Run or API-only deploy)
 └── package.json            # Root workspace config
 ```
 
 ## Documentation
 
 Visit the documentation at https://docs.slugbase.app
+
+In-repo docs: [docs/README.md](docs/README.md) (infra, package boundaries, releasing, upgrading cloud).
 
 ## API Documentation
 
