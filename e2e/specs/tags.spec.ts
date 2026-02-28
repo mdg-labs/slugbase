@@ -11,9 +11,10 @@ test.describe('Tags', () => {
       page.getByRole('heading', { level: 1, name: /^Tags/ })
     ).toBeVisible({ timeout: 10000 });
 
-    const createButton = page.getByRole('main').getByRole('button', {
-      name: /create tag/i,
-    });
+    const createButton = page
+      .getByRole('main')
+      .getByRole('button', { name: /create tag/i })
+      .first();
     await createButton.click();
 
     const modal = page.getByRole('dialog');

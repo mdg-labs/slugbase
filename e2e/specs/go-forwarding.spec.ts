@@ -26,7 +26,7 @@ test.describe('Go forwarding', () => {
 
     await modal.getByPlaceholder(/title/i).fill(`Go test ${slug}`);
     await modal.getByPlaceholder(/^url$/i).fill(targetUrl);
-    await modal.getByRole('checkbox', { name: /enable forwarding/i }).check();
+    await modal.getByRole('switch', { name: /enable forwarding/i }).click();
     await modal.getByPlaceholder(/slug/i).fill(slug);
     await modal.getByRole('button', { name: /save/i }).click();
 
