@@ -24,6 +24,7 @@ const AdminSettingsPage = lazy(() => import('./pages/admin/AdminSettingsPage'));
 const AdminAIPage = lazy(() => import('./pages/admin/AdminAIPage'));
 const PasswordReset = lazy(() => import('./pages/PasswordReset'));
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
+const VerifyEmailRequired = lazy(() => import('./pages/VerifyEmailRequired'));
 const SearchEngineGuide = lazy(() => import('./pages/SearchEngineGuide'));
 const GoPreferences = lazy(() => import('./pages/GoPreferences'));
 
@@ -108,6 +109,7 @@ function AppRoutes() {
         <Route path="/reset-password" element={<PasswordReset />} />
         <Route path="/password-reset" element={<PasswordReset />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
+        <Route path="/verify-email-required" element={<VerifyEmailRequired />} />
         <Route path="/go/:slug" element={<ForwardingHandler />} />
         <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
           <Route index element={<Dashboard />} />
@@ -243,7 +245,7 @@ export interface AppProps {
 }
 
 function App({ basePath, apiBaseUrl, routerBasename, skipSetupFlow, hideAdminOidcAndSmtp, adminAiOnlyToggle }: AppProps = {}) {
-  const appRootPath = basePath === '/' || !basePath ? '/' : basePath;
+  const appRootPath = routerBasename !== undefined ? '/' : (basePath === '/' || !basePath ? '/' : basePath);
   const pathPrefixForLinks = routerBasename !== undefined ? '' : (basePath ?? '');
   const content = (
     <AuthProvider>

@@ -13,6 +13,7 @@ import { getAuthCookieOptions, getClearAuthCookieOptions } from '../config/cooki
 import { sendSignupVerificationEmail } from '../utils/email.js';
 import crypto from 'crypto';
 import { getDefaultTenantId } from '../utils/tenant.js';
+import { isCloud } from '../config/mode.js';
 
 const router = Router();
 
@@ -171,6 +172,14 @@ router.post('/login', authRateLimiter, async (req, res, next) => {
 
     const emailVerified = (user as any).email_verified;
     const isVerified = emailVerified !== false && emailVerified !== 0;
+
+    // In cloud, block login until email is verified
+    if (isCloud && !isVerified) {
+      return res.status(403).json({
+        code: 'EMAIL_NOT_VERIFIED',
+        error: 'Please verify your email before logging in. Check your inbox for the verification link.',
+      });
+    }
 
     const userPayload = {
       id: (user as any).id,
@@ -447,10 +456,11 @@ router.post('/resend-signup-verification', authRateLimiter, async (req, res) => 
 
 /**
  * POST /auth/request-signup-resend — CLOUD only. Request resend of verification email by email (no token).
+ * Optional newEmail: if provided and different, update user email and send verification to new address.
  */
 router.post('/request-signup-resend', authRateLimiter, async (req, res) => {
   try {
-    const { email } = req.body;
+    const { email, newEmail } = req.body;
     if (!email || typeof email !== 'string') {
       return res.status(400).json({ error: 'Email is required' });
     }
@@ -463,8 +473,26 @@ router.post('/request-signup-resend', authRateLimiter, async (req, res) => {
       'SELECT id FROM users WHERE email = ? AND (email_verified = FALSE OR email_verified = 0)',
       [normalizedEmail]
     );
+    let targetEmail = normalizedEmail;
+    let emailChanged = false;
     if (user) {
       const u = user as any;
+      if (newEmail && typeof newEmail === 'string' && newEmail.trim()) {
+        const newEmailValidation = validateEmail(newEmail.trim());
+        if (!newEmailValidation.valid) {
+          return res.status(400).json({ error: newEmailValidation.error });
+        }
+        const normalizedNew = normalizeEmail(newEmail.trim());
+        if (normalizedNew !== normalizedEmail) {
+          const existing = await queryOne('SELECT id FROM users WHERE email = ?', [normalizedNew]);
+          if (existing) {
+            return res.status(400).json({ error: 'Email already registered' });
+          }
+          await execute('UPDATE users SET email = ? WHERE id = ?', [normalizedNew, u.id]);
+          targetEmail = normalizedNew;
+          emailChanged = true;
+        }
+      }
       await execute('DELETE FROM signup_verification_tokens WHERE user_id = ?', [u.id]);
       const tokenId = uuidv4();
       const newToken = crypto.randomBytes(32).toString('hex');
@@ -487,9 +515,12 @@ router.post('/request-signup-resend', authRateLimiter, async (req, res) => {
       }
       const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
       const verificationUrl = `${frontendUrl}/verify-email?token=${encodeURIComponent(newToken)}`;
-      await sendSignupVerificationEmail(normalizedEmail, verificationUrl);
+      await sendSignupVerificationEmail(targetEmail, verificationUrl);
     }
-    return res.json({ message: 'If an unverified account exists with that email, a new verification link has been sent.' });
+    return res.json({
+      message: 'If an unverified account exists with that email, a new verification link has been sent.',
+      emailChanged,
+    });
   } catch (error: any) {
     console.error('Request signup resend error:', error?.message ?? error);
     return res.status(500).json({ error: 'Request failed. Please try again.' });

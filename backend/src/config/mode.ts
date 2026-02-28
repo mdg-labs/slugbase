@@ -1,6 +1,6 @@
 /**
- * SlugBase runtime mode is now self-hosted only.
+ * SlugBase runtime mode: self-hosted (default) or cloud when SLUGBASE_MODE=cloud.
  */
-export const mode: 'selfhosted' = 'selfhosted';
-export const isCloud = false;
-export const isSelfhosted = true;
+export const isCloud = process.env.SLUGBASE_MODE === 'cloud';
+export const mode: 'selfhosted' | 'cloud' = isCloud ? 'cloud' : 'selfhosted';
+export const isSelfhosted = !isCloud;

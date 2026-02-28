@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useAppConfig } from '../contexts/AppConfigContext';
 import api from '../api/client';
 import { getAuthProviderUrl } from '../config/api';
 import { LogIn, Key } from 'lucide-react';
@@ -12,6 +13,7 @@ export default function Login() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
+  const { pathPrefixForLinks } = useAppConfig();
   const [providers, setProviders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [localAuth, setLocalAuth] = useState({
@@ -71,10 +73,11 @@ export default function Login() {
       const code = err.response?.data?.code;
       const message = err.response?.data?.error;
       if (code === 'EMAIL_NOT_VERIFIED') {
-        setError(t('auth.verifyEmailRequired'));
-      } else {
-        setError(message || t('auth.loginFailed'));
+        const verifyPath = `${pathPrefixForLinks || ''}/verify-email-required`.replace(/\/+/g, '/') || '/verify-email-required';
+        navigate(verifyPath, { replace: true, state: { email: localAuth.email } });
+        return;
       }
+      setError(message || t('auth.loginFailed'));
     } finally {
       setLocalLoading(false);
     }
