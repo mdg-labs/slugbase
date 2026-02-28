@@ -13,6 +13,12 @@ export interface AppConfig {
   hideAdminOidcAndSmtp?: boolean;
   /** When true, Admin AI page shows only the enable/disable toggle (e.g. cloud uses env for provider/model/key). */
   adminAiOnlyToggle?: boolean;
+  /** Cloud plan (e.g. free, personal, team). Set when running in cloud and plan is fetched. */
+  plan?: string;
+  /** Bookmark limit for current plan (e.g. 50 for free). null when unlimited. */
+  bookmarkLimit?: number | null;
+  /** True only when plan is team. Used to gate team sharing UI. */
+  canShareWithTeams?: boolean;
 }
 
 const defaultConfig: AppConfig = {
@@ -35,6 +41,9 @@ export function AppConfigProvider({
   pathPrefixForLinks,
   hideAdminOidcAndSmtp,
   adminAiOnlyToggle,
+  plan,
+  bookmarkLimit,
+  canShareWithTeams,
 }: {
   children: React.ReactNode;
   appBasePath?: string;
@@ -47,6 +56,12 @@ export function AppConfigProvider({
   hideAdminOidcAndSmtp?: boolean;
   /** When true, Admin AI page shows only the enable/disable toggle (e.g. cloud). */
   adminAiOnlyToggle?: boolean;
+  /** Cloud plan (e.g. free, personal, team). Pass when running in cloud. */
+  plan?: string;
+  /** Bookmark limit for current plan (e.g. 50 for free). */
+  bookmarkLimit?: number | null;
+  /** True only when plan is team. */
+  canShareWithTeams?: boolean;
 }) {
   const base = appBasePath ?? defaultConfig.appBasePath;
   const value: AppConfig = {
@@ -57,6 +72,9 @@ export function AppConfigProvider({
     pathPrefixForLinks: pathPrefixForLinks !== undefined ? pathPrefixForLinks : base,
     hideAdminOidcAndSmtp: hideAdminOidcAndSmtp ?? defaultConfig.hideAdminOidcAndSmtp,
     adminAiOnlyToggle: adminAiOnlyToggle ?? defaultConfig.adminAiOnlyToggle,
+    plan,
+    bookmarkLimit,
+    canShareWithTeams,
   };
   return <AppConfigContext.Provider value={value}>{children}</AppConfigContext.Provider>;
 }

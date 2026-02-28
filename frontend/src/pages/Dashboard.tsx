@@ -41,6 +41,14 @@ interface DashboardStats {
   topTags: Array<{ id: string; name: string; bookmark_count: number }>;
   quickAccessBookmarks?: QuickAccessBookmark[];
   pinnedBookmarks?: QuickAccessBookmark[];
+  /** Cloud: plan name (free, personal, team). */
+  plan?: string;
+  /** Cloud: bookmark limit for current plan (e.g. 50 for free), null when unlimited. */
+  bookmarkLimit?: number | null;
+  /** Cloud: true only when plan is team. */
+  canShareWithTeams?: boolean;
+  /** Cloud (free plan): total bookmarks in tenant for usage display. */
+  tenantBookmarkCount?: number;
 }
 
 const PRO_TIP_DISMISSED_KEY = 'slugbase_dashboard_protip_dismissed';
@@ -234,6 +242,15 @@ export default function Dashboard() {
             label: t('dashboard.statsBookmarks'),
             value: stats.totalBookmarks,
             href: prefix + '/bookmarks',
+            ...(stats.bookmarkLimit != null && {
+              usage: {
+                used: stats.tenantBookmarkCount ?? stats.totalBookmarks,
+                limit: stats.bookmarkLimit,
+                labelOverride: t('sharing.bookmarksUsed', { count: stats.tenantBookmarkCount ?? stats.totalBookmarks, limit: stats.bookmarkLimit }),
+                showProgress: true,
+                cta: (stats.tenantBookmarkCount ?? stats.totalBookmarks) >= stats.bookmarkLimit ? { label: t('sharing.limitBookmarks', { limit: stats.bookmarkLimit }), onClick: () => window.location.href = '/pricing' } : undefined,
+              },
+            }),
           }}
           folders={{
             label: t('dashboard.statsFolders'),

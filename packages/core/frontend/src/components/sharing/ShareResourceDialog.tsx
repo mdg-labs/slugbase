@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import api from '../../api/client';
+import { usePlan } from '../../contexts/PlanContext';
 import {
   Dialog,
   DialogContent,
@@ -60,8 +61,8 @@ export default function ShareResourceDialog({
   const [activeTab, setActiveTab] = useState<'people' | 'teams'>('people');
 
   const MIN_CHARS_FOR_USER_DROPDOWN = 3;
-
-  const allowShareToTeams = teams.length > 0;
+  const planInfo = usePlan();
+  const allowShareToTeams = planInfo ? planInfo.canShareWithTeams : teams.length > 0;
   const allowShareToUsers = true;
 
   const refreshResourceOnly = useCallback(async () => {

@@ -1,0 +1,50 @@
+/**
+ * Cloud plan context: fetches plan from /api/config/plan when in cloud and user is authenticated.
+ * Provides plan, bookmarkLimit, canShareWithTeams for gating sharing UI and showing usage.
+ */
+
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import api from '../api/client';
+import { useAuth } from './AuthContext';
+
+export interface PlanInfo {
+  plan: string;
+  bookmarkLimit: number | null;
+  canShareWithTeams: boolean;
+}
+
+const defaultPlan: PlanInfo | null = null;
+const PlanContext = createContext<PlanInfo | null>(defaultPlan);
+
+const isCloudMode = import.meta.env.VITE_SLUGBASE_MODE === 'cloud';
+
+export function PlanProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  const [planInfo, setPlanInfo] = useState<PlanInfo | null>(null);
+
+  useEffect(() => {
+    if (!isCloudMode || !user) {
+      setPlanInfo(null);
+      return;
+    }
+    api
+      .get<{ plan: string; bookmarkLimit: number | null; canShareWithTeams: boolean }>('/config/plan')
+      .then((res) => {
+        setPlanInfo({
+          plan: res.data.plan ?? 'free',
+          bookmarkLimit: res.data.bookmarkLimit ?? null,
+          canShareWithTeams: res.data.canShareWithTeams === true,
+        });
+      })
+      .catch(() => {
+        // 404 or error when not in cloud or API unavailable: treat as no plan limits (self-hosted)
+        setPlanInfo(null);
+      });
+  }, [user]);
+
+  return <PlanContext.Provider value={planInfo}>{children}</PlanContext.Provider>;
+}
+
+export function usePlan(): PlanInfo | null {
+  return useContext(PlanContext);
+}

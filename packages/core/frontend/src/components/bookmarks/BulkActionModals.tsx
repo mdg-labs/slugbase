@@ -13,6 +13,7 @@ import { Label } from '../ui/label';
 import Autocomplete from '../ui/Autocomplete';
 import SharingModal from '../modals/SharingModal';
 import api from '../../api/client';
+import { usePlan } from '../../contexts/PlanContext';
 
 interface BulkMoveModalProps {
   isOpen: boolean;
@@ -144,6 +145,8 @@ interface BulkShareModalProps {
 }
 
 export function BulkShareModal({ isOpen, onClose, onSave, teams }: BulkShareModalProps) {
+  const planInfo = usePlan();
+  const allowTeamSharing = planInfo ? planInfo.canShareWithTeams : teams.length > 0;
   return (
     <SharingModal
       isOpen={isOpen}
@@ -156,7 +159,7 @@ export function BulkShareModal({ isOpen, onClose, onSave, teams }: BulkShareModa
       }}
       teams={teams}
       type="bookmark"
-      allowTeamSharing={teams.length > 0}
+      allowTeamSharing={allowTeamSharing}
     />
   );
 }

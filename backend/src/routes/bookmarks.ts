@@ -9,6 +9,10 @@ import { isAISuggestionsEnabled, getAIApiKey, getAIModel } from '../utils/ai-fea
 import { sanitizeUrlForAI, callAIProvider } from '../services/ai-suggestions.js';
 import { fetchPageMetadata } from '../services/fetch-page-metadata.js';
 import { getTenantId } from '../utils/tenant.js';
+import { isCloud } from '../config/mode.js';
+
+/** Free plan bookmark limit (must match pricing page). Used only when isCloud. */
+const FREE_PLAN_BOOKMARK_LIMIT = 50;
 
 const router = Router();
 router.use(requireAuth());
@@ -890,6 +894,26 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
+    // Cloud: Free plan bookmark limit
+    if (isCloud && (req as any).plan === 'free') {
+      const countResult = await queryOne('SELECT COUNT(*) as count FROM bookmarks WHERE tenant_id = ?', [tenantId]);
+      const count = parseInt(String((countResult as any)?.count ?? 0), 10);
+      if (count >= FREE_PLAN_BOOKMARK_LIMIT) {
+        return res.status(403).json({
+          code: 'BOOKMARK_LIMIT_REACHED',
+          error: `You've reached the Free plan limit (${FREE_PLAN_BOOKMARK_LIMIT} bookmarks). Upgrade to add more.`,
+        });
+      }
+    }
+
+    // Cloud: Team plan required for team sharing
+    if (isCloud && (req as any).plan !== 'team' && (data.share_all_teams || (data.team_ids && data.team_ids.length > 0))) {
+      return res.status(403).json({
+        code: 'PLAN_REQUIRES_TEAM',
+        error: 'Sharing to teams is available on the Team plan.',
+      });
+    }
+
     // Validate and sanitize title
     const titleValidation = validateLength(data.title, 'Title', 1, MAX_LENGTHS.title);
     if (!titleValidation.valid) {
@@ -1155,6 +1179,12 @@ router.put('/:id', async (req, res) => {
 
     // Update team shares if provided
     if (data.share_all_teams !== undefined || data.team_ids !== undefined) {
+      if (isCloud && (req as any).plan !== 'team' && (data.share_all_teams || (data.team_ids && data.team_ids.length > 0))) {
+        return res.status(403).json({
+          code: 'PLAN_REQUIRES_TEAM',
+          error: 'Sharing to teams is available on the Team plan.',
+        });
+      }
       await execute('DELETE FROM bookmark_team_shares WHERE bookmark_id = ?', [id]);
       if (data.share_all_teams) {
         // Share with all teams user is a member of (org-scoped in cloud mode)
@@ -1256,6 +1286,25 @@ router.post('/import', async (req, res) => {
       return res.status(400).json({
         error: `Import limited to ${MAX_IMPORT_BOOKMARKS} bookmarks per request`,
       });
+    }
+
+    // Cloud: Free plan bookmark limit – reject import if it would exceed limit
+    if (isCloud && (req as any).plan === 'free') {
+      const countResult = await queryOne('SELECT COUNT(*) as count FROM bookmarks WHERE tenant_id = ?', [tenantId]);
+      const count = parseInt(String((countResult as any)?.count ?? 0), 10);
+      const remaining = FREE_PLAN_BOOKMARK_LIMIT - count;
+      if (remaining <= 0) {
+        return res.status(403).json({
+          code: 'BOOKMARK_LIMIT_REACHED',
+          error: `You've reached the Free plan limit (${FREE_PLAN_BOOKMARK_LIMIT} bookmarks). Upgrade to add more.`,
+        });
+      }
+      if (importBookmarks.length > remaining) {
+        return res.status(403).json({
+          code: 'BOOKMARK_LIMIT_REACHED',
+          error: `You can import up to ${remaining} more bookmarks (Free plan limit: ${FREE_PLAN_BOOKMARK_LIMIT}).`,
+        });
+      }
     }
 
     const results = {

@@ -6,16 +6,22 @@
   "workspaces": [
     "backend",
     "frontend",
-    "packages/core","apps/selfhosted"
+    "packages/core",
+    "apps/selfhosted"
   ],
   "scripts": {
     "dev": "concurrently \"npm run dev --workspace=backend\" \"npm run dev --workspace=frontend\"",
     "build": "npm run build --workspace=backend && node scripts/copy-core-dist.js && npm run build --workspace=frontend && node scripts/copy-selfhosted-public.js",
     "start": "npm run start --workspace=slugbase-selfhosted",
     "publish:core": "node scripts/publish-core.js",
-    "publish:core:dry-run": "node scripts/publish-core.js --dry-run"
+    "publish:core:dry-run": "node scripts/publish-core.js --dry-run",
+    "e2e": "playwright test --config=e2e/playwright.config.ts",
+    "e2e:run": "node scripts/run-e2e.js",
+    "e2e:ui": "playwright test --ui --config=e2e/playwright.config.ts"
   },
   "devDependencies": {
+    "@bigbinary/neeto-playwright-reporter": "^1.8.9",
+    "@playwright/test": "^1.49.0",
     "concurrently": "^8.2.2"
   },
   "overrides": {

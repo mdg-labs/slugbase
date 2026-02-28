@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { useTranslation } from 'react-i18next';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AppConfigProvider, useAppConfig } from './contexts/AppConfigContext';
+import { PlanProvider } from './contexts/PlanContext';
 import { ToastProvider } from './components/ui/Toast';
 import { TooltipProvider } from './components/ui/tooltip-base';
 import Layout from './components/Layout';
@@ -249,11 +250,13 @@ function App({ basePath, apiBaseUrl, routerBasename, skipSetupFlow, hideAdminOid
   const pathPrefixForLinks = routerBasename !== undefined ? '' : (basePath ?? '');
   const content = (
     <AuthProvider>
-      <TooltipProvider>
-        <ToastProvider>
-          <AppRoutes />
-        </ToastProvider>
-      </TooltipProvider>
+      <PlanProvider>
+        <TooltipProvider>
+          <ToastProvider>
+            <AppRoutes />
+          </ToastProvider>
+        </TooltipProvider>
+      </PlanProvider>
     </AuthProvider>
   );
   return (

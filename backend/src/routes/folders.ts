@@ -5,6 +5,7 @@ import { canAccessFolder, canModifyFolder, getTeamIdsForUser } from '../auth/aut
 import { v4 as uuidv4 } from 'uuid';
 import { validateLength, sanitizeString, MAX_LENGTHS } from '../utils/validation.js';
 import { getTenantId } from '../utils/tenant.js';
+import { isCloud } from '../config/mode.js';
 
 const router = Router();
 router.use(requireAuth());
@@ -260,6 +261,13 @@ router.post('/', async (req, res) => {
 
     await execute('INSERT INTO folders (id, tenant_id, user_id, name, icon) VALUES (?, ?, ?, ?, ?)', [folderId, tenantId, userId, sanitizedName, icon || null]);
 
+    // Cloud: Team plan required for folder team sharing
+    if (isCloud && (req as any).plan !== 'team' && (share_all_teams || (team_ids && team_ids.length > 0))) {
+      return res.status(403).json({
+        code: 'PLAN_REQUIRES_TEAM',
+        error: 'Folder sharing is available on the Team plan.',
+      });
+    }
     // Add team shares
     if (share_all_teams) {
       const teamIds = await getTeamIdsForUser(userId, tenantId);
@@ -357,6 +365,12 @@ router.put('/:id', async (req, res) => {
 
     // Update team shares if provided
     if (share_all_teams !== undefined || team_ids !== undefined) {
+      if (isCloud && (req as any).plan !== 'team' && (share_all_teams || (team_ids && team_ids.length > 0))) {
+        return res.status(403).json({
+          code: 'PLAN_REQUIRES_TEAM',
+          error: 'Folder sharing is available on the Team plan.',
+        });
+      }
       await execute('DELETE FROM folder_team_shares WHERE folder_id = ?', [id]);
       if (share_all_teams) {
         const teamIds = await getTeamIdsForUser(userId, tenantId);

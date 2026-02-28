@@ -3,6 +3,7 @@ import { query, queryOne, getDbType } from '../db/index.js';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { getTeamIdsForUser } from '../auth/authorization.js';
 import { getTenantId } from '../utils/tenant.js';
+import { isCloud } from '../config/mode.js';
 
 const router = Router();
 
@@ -263,7 +264,8 @@ router.get('/stats', requireAuth(), async (req, res) => {
         ? [pinnedBookmarks]
         : [];
 
-    res.json({
+    const plan = (req as any).plan as string | undefined;
+    const payload: Record<string, unknown> = {
       totalBookmarks,
       totalFolders,
       totalTags,
@@ -273,7 +275,17 @@ router.get('/stats', requireAuth(), async (req, res) => {
       topTags: topTagsList,
       quickAccessBookmarks: quickAccessList,
       pinnedBookmarks: pinnedList,
-    });
+    };
+    if (isCloud && plan) {
+      payload.plan = plan;
+      payload.bookmarkLimit = plan === 'free' ? 50 : null;
+      payload.canShareWithTeams = plan === 'team';
+      if (plan === 'free') {
+        const tenantCountResult = await queryOne('SELECT COUNT(*) as count FROM bookmarks WHERE tenant_id = ?', [tenantId]);
+        payload.tenantBookmarkCount = tenantCountResult ? parseInt(String((tenantCountResult as any).count), 10) : 0;
+      }
+    }
+    res.json(payload);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
