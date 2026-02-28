@@ -10,7 +10,7 @@ test.describe('Bookmarks', () => {
 
     await expect(page.getByRole('heading', { level: 1, name: /^Bookmarks/ })).toBeVisible({ timeout: 10000 });
 
-    const createButton = page.getByRole('button', { name: /create bookmark/i });
+    const createButton = page.getByRole('main').getByRole('button', { name: /create bookmark/i });
     await createButton.click();
 
     const modal = page.getByRole('dialog');
