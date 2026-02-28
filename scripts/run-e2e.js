@@ -88,7 +88,7 @@ function waitForHealth(url, maxAttempts = 60) {
 
 async function main() {
   console.log('Starting backend and frontend for e2e (ports %s / %s)...', E2E_BACKEND_PORT, E2E_FRONTEND_PORT);
-  const backendEnv = { ...env, PORT: E2E_BACKEND_PORT };
+  const backendEnv = { ...env, PORT: E2E_BACKEND_PORT, FRONTEND_URL: baseURL };
   backendProc = spawn('npm', ['run', 'dev', '--workspace=backend'], {
     cwd: root,
     env: backendEnv,

@@ -43,8 +43,10 @@ export function createApp(options: CreateAppOptions): express.Express {
     frontendUrl,
     'http://localhost:3000',
     'http://localhost:3001',
+    'http://localhost:3002', // e2e frontend (run-e2e.js uses port 3002)
     'http://127.0.0.1:3000',
     'http://127.0.0.1:3001',
+    'http://127.0.0.1:3002',
   ];
   const extraOrigins = (process.env.CORS_EXTRA_ORIGINS || '')
     .split(',')
