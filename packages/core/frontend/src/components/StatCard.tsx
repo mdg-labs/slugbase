@@ -76,7 +76,7 @@ export function StatCard({
           )}
           {hasUsage && (
             <p className="mt-1 text-xs text-muted-foreground">
-              {labelOverride ?? label} {used} / {limit}
+              {labelOverride ?? `${label} ${used} / ${limit}`}
             </p>
           )}
         </div>
