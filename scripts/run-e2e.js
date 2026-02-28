@@ -86,7 +86,24 @@ function waitForHealth(url, maxAttempts = 60) {
   });
 }
 
+function killPort(port) {
+  const { execSync } = require('child_process');
+  try {
+    execSync(`fuser -k ${port}/tcp 2>/dev/null || true`, { stdio: 'ignore' });
+  } catch (_) {
+    // fuser not available or failed; try lsof on macOS
+    try {
+      execSync(`lsof -ti:${port} | xargs kill -9 2>/dev/null || true`, { stdio: 'ignore' });
+    } catch (_) {}
+  }
+}
+
 async function main() {
+  console.log('Ensuring e2e ports are free...');
+  killPort(E2E_BACKEND_PORT);
+  killPort(E2E_FRONTEND_PORT);
+  await wait(1500);
+
   console.log('Starting backend and frontend for e2e (ports %s / %s)...', E2E_BACKEND_PORT, E2E_FRONTEND_PORT);
   const backendEnv = { ...env, PORT: E2E_BACKEND_PORT, FRONTEND_URL: baseURL };
   backendProc = spawn('npm', ['run', 'dev', '--workspace=backend'], {

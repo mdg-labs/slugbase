@@ -50,18 +50,6 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-function ExtraAdminRoutes() {
-  const { extraAdminRoutes } = useAppConfig();
-  if (!extraAdminRoutes?.length) return null;
-  return (
-    <>
-      {extraAdminRoutes.map(({ path, element }) => (
-        <Route key={path} path={path} element={element} />
-      ))}
-    </>
-  );
-}
-
 function SharedRedirect() {
   const { pathPrefixForLinks } = useAppConfig();
   const to = `${pathPrefixForLinks || ''}/bookmarks?scope=shared_with_me`.replace(/\/+/g, '/') || '/bookmarks?scope=shared_with_me';
@@ -90,7 +78,7 @@ class LoginRouteErrorBoundary extends Component<{ children: ReactNode }, { error
 function AppRoutes() {
   const { user, loading } = useAuth();
   const { t } = useTranslation();
-  const { appRootPath, skipSetupFlow, hideAdminOidcAndSmtp } = useAppConfig();
+  const { appRootPath, skipSetupFlow, hideAdminOidcAndSmtp, extraAdminRoutes } = useAppConfig();
   const [setupStatus, setSetupStatus] = React.useState<{ initialized: boolean } | null>(() =>
     skipSetupFlow ? { initialized: true } : null
   );
@@ -149,7 +137,9 @@ function AppRoutes() {
               </>
             )}
             <Route path="ai" element={<AdminAIPage />} />
-            <ExtraAdminRoutes />
+            {extraAdminRoutes?.map(({ path, element }) => (
+              <Route key={path} path={path} element={element} />
+            ))}
           </Route>
         </Route>
       </Routes>
