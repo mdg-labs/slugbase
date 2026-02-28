@@ -62,9 +62,9 @@ export function StatCard({
   const progressPercent = limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
 
   const content = (
-    <>
-      <div className="flex items-center justify-between">
-        <div className="min-w-0 flex-1">
+    <div className="flex items-stretch justify-between gap-3 flex-1 min-h-0">
+      <div className="min-w-0 flex-1 flex flex-col">
+        <div className="min-w-0">
           <p className={cn('text-muted-foreground', dense ? 'text-xs' : 'text-sm')}>
             {label}
           </p>
@@ -79,42 +79,46 @@ export function StatCard({
               {labelOverride ?? label} {used} / {limit}
             </p>
           )}
-          {showProgressBar && (
-            <div className="mt-2 w-full overflow-hidden rounded-full bg-primary/20">
-              <div
-                className={cn(
-                  'h-2 transition-all',
-                  progressVariant === 'warning' && 'bg-amber-500',
-                  progressVariant === 'danger' && 'bg-destructive',
-                  (progressVariant === 'normal' || !progressVariant) && 'bg-primary'
-                )}
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
-          )}
-          {cta && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                cta.onClick();
-              }}
-              className="mt-2 text-xs font-medium text-primary hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
-            >
-              {cta.label}
-            </button>
-          )}
         </div>
-        <div className={cn('shrink-0 rounded-lg', iconContainerClassName ?? 'bg-muted', dense ? 'p-2' : 'p-3')}>
-          <Icon className={cn(iconColorClassName ?? 'text-muted-foreground', dense ? 'h-5 w-5' : 'h-6 w-6')} />
-        </div>
+        {(showProgressBar || cta) && (
+          <div className="mt-auto pt-2">
+            {showProgressBar && (
+              <div className="w-full overflow-hidden rounded-full bg-primary/20">
+                <div
+                  className={cn(
+                    'h-2 transition-all',
+                    progressVariant === 'warning' && 'bg-amber-500',
+                    progressVariant === 'danger' && 'bg-destructive',
+                    (progressVariant === 'normal' || !progressVariant) && 'bg-primary'
+                  )}
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
+            )}
+            {cta && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  cta.onClick();
+                }}
+                className={cn('text-xs font-medium text-primary hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded', showProgressBar ? 'mt-2' : 'mt-0')}
+              >
+                {cta.label}
+              </button>
+            )}
+          </div>
+        )}
       </div>
-    </>
+      <div className={cn('shrink-0 rounded-lg self-center', iconContainerClassName ?? 'bg-muted', dense ? 'p-2' : 'p-3')}>
+        <Icon className={cn(iconColorClassName ?? 'text-muted-foreground', dense ? 'h-5 w-5' : 'h-6 w-6')} />
+      </div>
+    </div>
   );
 
   const cardClassName = cn(
-    'transition-colors',
+    'transition-colors h-full flex flex-col',
     href && 'cursor-pointer hover:border-primary/70 hover:bg-muted/50 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 rounded-xl',
     className
   );
@@ -123,9 +127,9 @@ export function StatCard({
 
   if (href) {
     return (
-      <Link to={href} className="block focus:outline-none">
+      <Link to={href} className="block h-full focus:outline-none">
         <Card className={cardClassName}>
-          <CardContent className={contentPadding}>
+          <CardContent className={cn(contentPadding, 'flex-1 flex flex-col min-h-0')}>
             {content}
           </CardContent>
         </Card>
@@ -135,7 +139,7 @@ export function StatCard({
 
   return (
     <Card className={cardClassName}>
-      <CardContent className={contentPadding}>
+      <CardContent className={cn(contentPadding, 'flex-1 flex flex-col min-h-0')}>
         {content}
       </CardContent>
     </Card>
