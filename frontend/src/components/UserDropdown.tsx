@@ -67,7 +67,7 @@ export default function UserDropdown({ user }: UserDropdownProps) {
         </DropdownMenuItem>
         {showAdmin && (
           <DropdownMenuItem asChild>
-            <Link to={`${prefix}/admin/members`} className="flex items-center gap-2 cursor-pointer">
+            <Link to={`${prefix}/admin`.replace(/\/+/g, '/') || '/admin'} className="flex items-center gap-2 cursor-pointer">
               <Settings className="h-4 w-4" />
               {t('admin.title')}
             </Link>

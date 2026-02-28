@@ -30,6 +30,7 @@ import {
   useSidebar,
 } from './ui/sidebar';
 import { useAppConfig } from '../contexts/AppConfigContext';
+import { usePlan } from '../contexts/PlanContext';
 import type { User } from '../contexts/AuthContext';
 import { cn } from '../lib/utils';
 
@@ -45,6 +46,7 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
   const location = useLocation();
   const pathname = location.pathname;
   const { appBasePath, pathPrefixForLinks, hideAdminOidcAndSmtp, extraAdminNavItems } = useAppConfig();
+  const planInfo = usePlan();
   const { setOpenMobile, toggleSidebar, isMobile, state } = useSidebar();
   const prefix = pathPrefixForLinks || '';
   // For active matching use pathPrefixForLinks so it matches useLocation().pathname (e.g. when Router has basename="/app", pathname is "/bookmarks" not "/app/bookmarks").
@@ -52,9 +54,16 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
   const adminBaseFull = `${pathBaseForActive}/admin`.replace(/\/+/g, '/') || '/admin';
   const adminBaseLink = `${prefix}/admin`.replace(/\/+/g, '/') || '/admin';
 
+  // In cloud, show Users and Teams only on team plan; self-hosted (planInfo null) always shows them.
+  const showAdminUsersAndTeams = !planInfo || planInfo.canShareWithTeams;
+
   const adminNavItems = [
-    { pathForLink: `${adminBaseLink}/members`, pathForActive: `${adminBaseFull}/members`, label: t('admin.users'), icon: Users },
-    { pathForLink: `${adminBaseLink}/teams`, pathForActive: `${adminBaseFull}/teams`, label: t('admin.teams'), icon: UserCog },
+    ...(showAdminUsersAndTeams
+      ? [
+          { pathForLink: `${adminBaseLink}/members`, pathForActive: `${adminBaseFull}/members`, label: t('admin.users'), icon: Users },
+          { pathForLink: `${adminBaseLink}/teams`, pathForActive: `${adminBaseFull}/teams`, label: t('admin.teams'), icon: UserCog },
+        ]
+      : []),
     ...(!hideAdminOidcAndSmtp
       ? [
           { pathForLink: `${adminBaseLink}/oidc`, pathForActive: `${adminBaseFull}/oidc`, label: t('admin.oidcProviders'), icon: Key },

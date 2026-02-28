@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { useTranslation } from 'react-i18next';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AppConfigProvider, useAppConfig } from './contexts/AppConfigContext';
-import { PlanProvider } from './contexts/PlanContext';
+import { PlanProvider, usePlan } from './contexts/PlanContext';
 import { ToastProvider } from './components/ui/Toast';
 import { TooltipProvider } from './components/ui/tooltip-base';
 import Layout from './components/Layout';
@@ -48,6 +48,17 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   if (!user) return <Navigate to={loginPath} replace />;
   if (!user.is_admin) return <Navigate to={appRootPath} replace />;
   return <>{children}</>;
+}
+
+/** Redirect /admin to first visible admin tab (e.g. in cloud free plan, Users/Teams are hidden so redirect to ai or billing). */
+function AdminIndexRedirect() {
+  const planInfo = usePlan();
+  const { extraAdminNavItems } = useAppConfig();
+  const showUsersAndTeams = !planInfo || planInfo.canShareWithTeams;
+  const firstPath = showUsersAndTeams
+    ? 'members'
+    : (extraAdminNavItems?.[0]?.path ?? 'ai');
+  return <Navigate to={firstPath} replace />;
 }
 
 function SharedRedirect() {
@@ -122,7 +133,7 @@ function AppRoutes() {
           <Route path="go-preferences" element={<GoPreferences />} />
           <Route path="search-engine-guide" element={<SearchEngineGuide />} />
           <Route path="admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
-            <Route index element={<Navigate to="members" replace />} />
+            <Route index element={<AdminIndexRedirect />} />
             <Route path="members" element={<AdminMembersPage />} />
             <Route path="teams" element={<AdminTeamsPage />} />
             {hideAdminOidcAndSmtp ? (
