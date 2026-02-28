@@ -8,7 +8,7 @@ test.describe('Bookmarks', () => {
   test('opens bookmarks page and creates a new bookmark', async ({ page }) => {
     await page.goto('/bookmarks');
 
-    await expect(page.getByRole('heading', { name: /bookmarks/i })).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('heading', { level: 1, name: /^Bookmarks/ })).toBeVisible({ timeout: 10000 });
 
     const createButton = page.getByRole('button', { name: /create bookmark/i });
     await createButton.click();
