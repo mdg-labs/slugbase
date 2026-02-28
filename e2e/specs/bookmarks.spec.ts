@@ -19,9 +19,10 @@ test.describe('Bookmarks', () => {
     const title = `E2E Bookmark ${Date.now()}`;
     const url = 'https://example.com/e2e-test';
 
-    await page.getByLabel(/title/i).fill(title);
-    await page.getByLabel(/^url$/i).fill(url);
-    await page.getByRole('button', { name: /save/i }).click();
+    // Form fields use placeholders "Title" / "URL"; labels are not wired with htmlFor so use placeholder or role within dialog
+    await modal.getByPlaceholder(/title/i).fill(title);
+    await modal.getByPlaceholder(/^url$/i).fill(url);
+    await modal.getByRole('button', { name: /save/i }).click();
 
     await expect(modal).not.toBeVisible({ timeout: 5000 });
     await expect(page.getByText(title)).toBeVisible({ timeout: 5000 });
