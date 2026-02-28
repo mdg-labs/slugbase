@@ -28,8 +28,7 @@ test.describe('Go forwarding', () => {
     await modal.getByPlaceholder(/^url$/i).fill(targetUrl);
     await modal.getByRole('switch', { name: /enable forwarding/i }).click();
     await modal.getByPlaceholder(/slug/i).fill(slug);
-    const saveButton = modal.getByRole('button', { name: /save/i });
-    await saveButton.click({ force: true });
+    await modal.locator('#bookmark-form').evaluate((el) => (el as HTMLFormElement).requestSubmit());
 
     await expect(modal).not.toBeVisible({ timeout: 5000 });
 

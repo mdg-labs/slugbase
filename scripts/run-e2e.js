@@ -9,7 +9,17 @@ const path = require('path');
 const fs = require('fs');
 
 const root = path.resolve(__dirname, '..');
-const dbPath = process.env.E2E_DB_PATH || process.env.DB_PATH || path.join(root, '.e2e-db.sqlite');
+// Unique DB path per run so e2e does not conflict with existing dev or locked files
+const defaultDbPath =
+  process.env.E2E_DB_PATH ||
+  process.env.DB_PATH ||
+  path.join(root, `.e2e-db-${Date.now()}.sqlite`);
+const dbPath = path.isAbsolute(defaultDbPath) ? defaultDbPath : path.join(root, defaultDbPath);
+
+// Dedicated ports for e2e so it does not conflict with a running dev server (3000/5000)
+const E2E_FRONTEND_PORT = process.env.E2E_FRONTEND_PORT || '3002';
+const E2E_BACKEND_PORT = process.env.E2E_BACKEND_PORT || '5002';
+const baseURL = `http://localhost:${E2E_FRONTEND_PORT}`;
 
 // 32+ char secrets for backend validation (e2e only)
 const JWT_SECRET = process.env.JWT_SECRET || 'e2e-jwt-secret-at-least-32-characters-long';
@@ -23,7 +33,7 @@ const env = {
   JWT_SECRET,
   ENCRYPTION_KEY,
   SESSION_SECRET,
-  PLAYWRIGHT_BASE_URL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000',
+  PLAYWRIGHT_BASE_URL: process.env.PLAYWRIGHT_BASE_URL || baseURL,
 };
 
 let backendProc;
@@ -77,21 +87,27 @@ function waitForHealth(url, maxAttempts = 60) {
 }
 
 async function main() {
-  console.log('Starting backend and frontend for e2e...');
+  console.log('Starting backend and frontend for e2e (ports %s / %s)...', E2E_BACKEND_PORT, E2E_FRONTEND_PORT);
+  const backendEnv = { ...env, PORT: E2E_BACKEND_PORT };
   backendProc = spawn('npm', ['run', 'dev', '--workspace=backend'], {
     cwd: root,
-    env,
+    env: backendEnv,
     stdio: 'inherit',
     shell: true,
   });
+  const frontendEnv = {
+    ...process.env,
+    PORT: E2E_FRONTEND_PORT,
+    E2E_BACKEND_URL: `http://localhost:${E2E_BACKEND_PORT}`,
+    PLAYWRIGHT_BASE_URL: env.PLAYWRIGHT_BASE_URL,
+  };
   frontendProc = spawn('npm', ['run', 'dev', '--workspace=frontend'], {
     cwd: root,
-    env: { ...process.env, PLAYWRIGHT_BASE_URL: env.PLAYWRIGHT_BASE_URL },
+    env: frontendEnv,
     stdio: 'inherit',
     shell: true,
   });
 
-  const baseURL = env.PLAYWRIGHT_BASE_URL;
   const healthURL = `${baseURL.replace(/\/$/, '')}/api/health`;
   console.log('Waiting for app at', healthURL, '...');
   await waitForHealth(healthURL);
@@ -109,7 +125,7 @@ async function main() {
   });
 
   killAll();
-  if (fs.existsSync(dbPath)) {
+  if (dbPath && fs.existsSync(dbPath)) {
     try {
       fs.unlinkSync(dbPath);
     } catch (_) {}

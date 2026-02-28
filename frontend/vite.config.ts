@@ -24,15 +24,15 @@ export default defineConfig({
     chunkSizeWarningLimit: 600,
   },
   server: {
-    port: 3000,
+    port: parseInt(process.env.PORT || '3000', 10),
     proxy: {
       '/api': {
-        target: 'http://localhost:5000',
+        target: process.env.E2E_BACKEND_URL || 'http://localhost:5000',
         changeOrigin: true
       },
       // Proxy /go slug forwarding to backend
       '/go': {
-        target: 'http://localhost:5000',
+        target: process.env.E2E_BACKEND_URL || 'http://localhost:5000',
         changeOrigin: true
       }
     }
