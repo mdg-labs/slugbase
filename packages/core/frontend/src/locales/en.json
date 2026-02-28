@@ -334,7 +334,14 @@
     "yourTokens": "Your tokens",
     "aiSuggestions": "AI suggestions",
     "aiSuggestionsDescription": "Suggest title, tags, and slug when creating bookmarks",
-    "aiSuggestionsUpgradePlan": "Available on Personal, Team, and Early Supporter plans."
+    "aiSuggestionsUpgradePlan": "Available on Personal, Team, and Early Supporter plans.",
+    "dangerZone": "Danger zone",
+    "dangerZoneDescription": "Irreversible actions. These cannot be undone.",
+    "deleteAccount": "Delete my account",
+    "deleteAccountDescription": "Permanently delete your account and all your data. This action cannot be undone.",
+    "deleteAccountConfirm": "Are you sure you want to delete your account? All your bookmarks, folders, tags, and data will be permanently deleted. This cannot be undone.",
+    "deleteAccountSuccess": "Your account has been deleted.",
+    "deleteAccountGuardMessage": "You cannot delete your account. Transfer ownership or resolve billing first."
   },
   "common": {
     "loading": "Loading...",

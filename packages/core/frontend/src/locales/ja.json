@@ -217,7 +217,14 @@
     "viewApiDocs": "APIドキュメントを見る",
     "noTokens": "APIトークンがありません",
     "noTokensDescription": "スクリプト、CLI、CI/CDからREST APIで認証するためのトークンを作成します。",
-    "yourTokens": "あなたのトークン"
+    "yourTokens": "あなたのトークン",
+    "dangerZone": "危険ゾーン",
+    "dangerZoneDescription": "元に戻せない操作です。取り消すことはできません。",
+    "deleteAccount": "アカウントを削除",
+    "deleteAccountDescription": "アカウントとすべてのデータが完全に削除されます。この操作は元に戻せません。",
+    "deleteAccountConfirm": "アカウントを削除してもよろしいですか？ブックマーク、フォルダ、タグ、データはすべて完全に削除され、元に戻せません。",
+    "deleteAccountSuccess": "アカウントが削除されました。",
+    "deleteAccountGuardMessage": "アカウントを削除できません。まず所有権を譲渡するか、請求を解決してください。"
   },
   "common": {
     "loading": "読み込み中...",

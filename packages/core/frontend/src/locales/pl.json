@@ -217,7 +217,14 @@
     "viewApiDocs": "Zobacz dokumentację API",
     "noTokens": "Brak tokenów API",
     "noTokensDescription": "Utwórz token, aby uwierzytelnić się w REST API ze skryptów, CLI lub CI/CD.",
-    "yourTokens": "Twoje tokeny"
+    "yourTokens": "Twoje tokeny",
+    "dangerZone": "Strefa niebezpieczna",
+    "dangerZoneDescription": "Nieodwracalne czynności. Nie można ich cofnąć.",
+    "deleteAccount": "Usuń moje konto",
+    "deleteAccountDescription": "Trwale usuń swoje konto i wszystkie dane. Tej czynności nie można cofnąć.",
+    "deleteAccountConfirm": "Czy na pewno chcesz usunąć konto? Wszystkie zakładki, foldery, tagi i dane zostaną trwale usunięte. Nie można tego cofnąć.",
+    "deleteAccountSuccess": "Twoje konto zostało usunięte.",
+    "deleteAccountGuardMessage": "Nie możesz usunąć konta. Najpierw przenieś własność lub rozwiąż kwestię rozliczeń."
   },
   "common": {
     "loading": "Ładowanie...",

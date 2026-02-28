@@ -23,6 +23,8 @@ export interface AppConfig {
   extraAdminNavItems?: { path: string; label: string }[];
   /** Optional extra admin route definitions (e.g. cloud billing). Generic extension. */
   extraAdminRoutes?: { path: string; element: React.ReactNode }[];
+  /** Optional guard called before allowing profile/account deletion (e.g. cloud blocks billing owner). Returns { allowed, message }. */
+  profileDeleteGuard?: () => Promise<{ allowed: boolean; message?: string }>;
 }
 
 const defaultConfig: AppConfig = {
@@ -50,6 +52,7 @@ export function AppConfigProvider({
   canShareWithTeams,
   extraAdminNavItems,
   extraAdminRoutes,
+  profileDeleteGuard,
 }: {
   children: React.ReactNode;
   appBasePath?: string;
@@ -72,6 +75,8 @@ export function AppConfigProvider({
   extraAdminNavItems?: { path: string; label: string }[];
   /** Optional extra admin route definitions (e.g. cloud billing). Generic extension. */
   extraAdminRoutes?: { path: string; element: React.ReactNode }[];
+  /** Optional guard for profile/account deletion (e.g. cloud blocks billing owner). */
+  profileDeleteGuard?: () => Promise<{ allowed: boolean; message?: string }>;
 }) {
   const base = appBasePath ?? defaultConfig.appBasePath;
   const value: AppConfig = {
@@ -87,6 +92,7 @@ export function AppConfigProvider({
     canShareWithTeams,
     extraAdminNavItems,
     extraAdminRoutes,
+    profileDeleteGuard,
   };
   return <AppConfigContext.Provider value={value}>{children}</AppConfigContext.Provider>;
 }

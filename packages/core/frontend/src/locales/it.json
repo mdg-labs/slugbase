@@ -217,7 +217,14 @@
     "viewApiDocs": "Visualizza documentazione API",
     "noTokens": "Nessun token API",
     "noTokensDescription": "Crea un token per autenticarti con l'API REST da script, CLI o CI/CD.",
-    "yourTokens": "I tuoi token"
+    "yourTokens": "I tuoi token",
+    "dangerZone": "Zona pericolosa",
+    "dangerZoneDescription": "Azioni irreversibili. Non possono essere annullate.",
+    "deleteAccount": "Elimina il mio account",
+    "deleteAccountDescription": "Elimina definitivamente il tuo account e tutti i tuoi dati. Questa azione non può essere annullata.",
+    "deleteAccountConfirm": "Sei sicuro di voler eliminare il tuo account? Tutti i segnalibri, cartelle, tag e dati verranno eliminati definitivamente. Non può essere annullato.",
+    "deleteAccountSuccess": "Il tuo account è stato eliminato.",
+    "deleteAccountGuardMessage": "Non puoi eliminare il tuo account. Trasferisci prima la proprietà o risolvi la fatturazione."
   },
   "common": {
     "loading": "Caricamento...",

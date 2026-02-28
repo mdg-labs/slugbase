@@ -308,7 +308,14 @@
     "yourTokens": "Tus tokens",
     "aiSuggestions": "Sugerencias con IA",
     "aiSuggestionsDescription": "Sugerir título, etiquetas y slug al crear marcadores",
-    "aiSuggestionsUpgradePlan": "Disponible en planes Personal, Team y Early Supporter."
+    "aiSuggestionsUpgradePlan": "Disponible en planes Personal, Team y Early Supporter.",
+    "dangerZone": "Zona de peligro",
+    "dangerZoneDescription": "Acciones irreversibles. No se pueden deshacer.",
+    "deleteAccount": "Eliminar mi cuenta",
+    "deleteAccountDescription": "Elimina permanentemente tu cuenta y todos tus datos. Esta acción no se puede deshacer.",
+    "deleteAccountConfirm": "¿Estás seguro de que quieres eliminar tu cuenta? Todos tus marcadores, carpetas, etiquetas y datos se eliminarán permanentemente. No se puede deshacer.",
+    "deleteAccountSuccess": "Tu cuenta ha sido eliminada.",
+    "deleteAccountGuardMessage": "No puedes eliminar tu cuenta. Transfiere la propiedad o resuelve la facturación primero."
   },
   "common": {
     "loading": "Cargando...",

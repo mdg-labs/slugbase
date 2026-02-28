@@ -232,7 +232,14 @@
     "viewApiDocs": "Voir la documentation API",
     "noTokens": "Aucun jeton API",
     "noTokensDescription": "Créez un jeton pour vous authentifier avec l'API REST depuis des scripts, CLI ou CI/CD.",
-    "yourTokens": "Vos jetons"
+    "yourTokens": "Vos jetons",
+    "dangerZone": "Zone de danger",
+    "dangerZoneDescription": "Actions irréversibles. Elles ne peuvent pas être annulées.",
+    "deleteAccount": "Supprimer mon compte",
+    "deleteAccountDescription": "Supprimez définitivement votre compte et toutes vos données. Cette action est irréversible.",
+    "deleteAccountConfirm": "Êtes-vous sûr de vouloir supprimer votre compte ? Tous vos favoris, dossiers, tags et données seront définitivement supprimés. Cette action est irréversible.",
+    "deleteAccountSuccess": "Votre compte a été supprimé.",
+    "deleteAccountGuardMessage": "Vous ne pouvez pas supprimer votre compte. Transférez la propriété ou réglez la facturation d'abord."
   },
   "common": {
     "loading": "Chargement...",

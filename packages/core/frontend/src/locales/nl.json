@@ -232,7 +232,14 @@
     "viewApiDocs": "API-documentatie bekijken",
     "noTokens": "Geen API-tokens",
     "noTokensDescription": "Maak een token om te authenticeren met de REST API vanuit scripts, CLI of CI/CD.",
-    "yourTokens": "Je tokens"
+    "yourTokens": "Je tokens",
+    "dangerZone": "Gevarenzone",
+    "dangerZoneDescription": "Onomkeerbare acties. Deze kunnen niet ongedaan worden gemaakt.",
+    "deleteAccount": "Mijn account verwijderen",
+    "deleteAccountDescription": "Verwijder je account en alle gegevens permanent. Deze actie kan niet ongedaan worden gemaakt.",
+    "deleteAccountConfirm": "Weet je zeker dat je je account wilt verwijderen? Al je bladwijzers, mappen, tags en gegevens worden permanent verwijderd. Dit kan niet ongedaan worden gemaakt.",
+    "deleteAccountSuccess": "Je account is verwijderd.",
+    "deleteAccountGuardMessage": "Je kunt je account niet verwijderen. Draag eerst het eigendom over of los de facturatie op."
   },
   "common": {
     "loading": "Laden...",

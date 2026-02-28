@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppConfig } from '../contexts/AppConfigContext';
 import { usePlan } from '../contexts/PlanContext';
-import { AlertCircle, Key } from 'lucide-react';
+import { AlertCircle, Key, AlertTriangle } from 'lucide-react';
 import Select from '../components/ui/Select';
 import Button from '../components/ui/Button';
 import { Switch } from '../components/ui/switch';
@@ -61,9 +61,11 @@ function SettingsRow({
 
 export default function Profile() {
   const { t } = useTranslation();
-  const { pathPrefixForLinks } = useAppConfig();
+  const navigate = useNavigate();
+  const { pathPrefixForLinks, profileDeleteGuard } = useAppConfig();
   const prefix = (pathPrefixForLinks || '').replace(/\/+/g, '/') || '';
-  const { user, updateUser, checkAuth } = useAuth();
+  const loginPath = `${prefix}/login`.replace(/\/+/g, '/') || '/login';
+  const { user, updateUser, checkAuth, logout } = useAuth();
   const planInfo = usePlan();
   const isFreePlan = planInfo?.plan === 'free';
   const { showToast } = useToast();
@@ -83,6 +85,8 @@ export default function Profile() {
   const [tokensLoading, setTokensLoading] = useState(true);
   const [createTokenOpen, setCreateTokenOpen] = useState(false);
   const [revokeTokenId, setRevokeTokenId] = useState<string | null>(null);
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
+  const [deleteAccountLoading, setDeleteAccountLoading] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -170,6 +174,38 @@ export default function Profile() {
       showToast(e.response?.data?.error || t('common.error'), 'error');
     } finally {
       setRevokeTokenId(null);
+    }
+  }
+
+  async function handleDeleteAccountClick() {
+    if (profileDeleteGuard) {
+      try {
+        const result = await profileDeleteGuard();
+        if (!result.allowed) {
+          showToast(result.message || t('profile.deleteAccountGuardMessage'), 'error');
+          return;
+        }
+      } catch {
+        showToast(t('common.error'), 'error');
+        return;
+      }
+    }
+    setDeleteAccountOpen(true);
+  }
+
+  async function handleConfirmDeleteAccount() {
+    setDeleteAccountLoading(true);
+    try {
+      await api.delete('/users/me');
+      setDeleteAccountOpen(false);
+      showToast(t('profile.deleteAccountSuccess'), 'success');
+      await logout();
+      navigate(loginPath, { replace: true });
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { error?: string } } };
+      showToast(e.response?.data?.error || t('common.error'), 'error');
+    } finally {
+      setDeleteAccountLoading(false);
     }
   }
 
@@ -582,6 +618,32 @@ export default function Profile() {
             )}
           </CardContent>
         </Card>
+
+        {/* Danger Zone: delete account */}
+        <Card className="border border-destructive/50 bg-muted/30 shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              {t('profile.dangerZone')}
+            </CardTitle>
+            <CardDescription>{t('profile.dangerZoneDescription')}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-4">
+              {t('profile.deleteAccountDescription')}
+            </p>
+            <Button
+              type="button"
+              variant="ghost"
+              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+              onClick={handleDeleteAccountClick}
+              disabled={deleteAccountLoading}
+              aria-label={t('profile.deleteAccount')}
+            >
+              {t('profile.deleteAccount')}
+            </Button>
+          </CardContent>
+        </Card>
       </div>
 
       <CreateTokenModal
@@ -597,6 +659,15 @@ export default function Profile() {
         confirmText={t('profile.revokeToken')}
         onConfirm={() => revokeTokenId && handleRevokeToken(revokeTokenId)}
         onCancel={() => setRevokeTokenId(null)}
+      />
+      <ConfirmDialog
+        isOpen={deleteAccountOpen}
+        title={t('profile.deleteAccount')}
+        message={t('profile.deleteAccountConfirm')}
+        variant="danger"
+        confirmText={t('profile.deleteAccount')}
+        onConfirm={handleConfirmDeleteAccount}
+        onCancel={() => setDeleteAccountOpen(false)}
       />
     </div>
   );
