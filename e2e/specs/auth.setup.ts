@@ -12,8 +12,8 @@ setup('authenticate', async ({ page }) => {
 
   await page.goto('/login');
   await page.getByLabel(/email/i).fill(email);
-  // Use placeholder to target login password only (page may also show signup with "Confirm Password")
-  await page.getByPlaceholder(/minimum 8 characters/i).fill(password);
+  // Use id so we target the login form only (works in all locales; placeholder is i18n)
+  await page.locator('#password').fill(password);
   await page.getByRole('button', { name: /log in|login/i }).click();
 
   await expect(page).not.toHaveURL(/\/login/);

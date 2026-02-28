@@ -19,6 +19,8 @@ export interface AppConfig {
   bookmarkLimit?: number | null;
   /** True only when plan is team. Used to gate team sharing UI. */
   canShareWithTeams?: boolean;
+  /** Optional extra admin nav items (e.g. cloud billing). Generic extension; no cloud-specific naming. */
+  extraAdminNavItems?: { path: string; label: string }[];
 }
 
 const defaultConfig: AppConfig = {
@@ -44,6 +46,7 @@ export function AppConfigProvider({
   plan,
   bookmarkLimit,
   canShareWithTeams,
+  extraAdminNavItems,
 }: {
   children: React.ReactNode;
   appBasePath?: string;
@@ -62,6 +65,8 @@ export function AppConfigProvider({
   bookmarkLimit?: number | null;
   /** True only when plan is team. */
   canShareWithTeams?: boolean;
+  /** Optional extra admin nav items (e.g. cloud billing). Generic extension. */
+  extraAdminNavItems?: { path: string; label: string }[];
 }) {
   const base = appBasePath ?? defaultConfig.appBasePath;
   const value: AppConfig = {
@@ -75,6 +80,7 @@ export function AppConfigProvider({
     plan,
     bookmarkLimit,
     canShareWithTeams,
+    extraAdminNavItems,
   };
   return <AppConfigContext.Provider value={value}>{children}</AppConfigContext.Provider>;
 }

@@ -10,14 +10,14 @@ test.describe('Login', () => {
 
     await expect(page.getByRole('heading', { name: /log in|login/i })).toBeVisible();
     await expect(page.getByLabel(/email/i)).toBeVisible();
-    await expect(page.getByPlaceholder(/minimum 8 characters/i)).toBeVisible();
+    await expect(page.locator('#password')).toBeVisible();
 
     const email = process.env.E2E_TEST_USER_EMAIL || 'e2e@test.local';
     const password = process.env.E2E_TEST_USER_PASSWORD || 'TestPassword123!';
 
     await page.getByLabel(/email/i).fill(email);
-    // Use placeholder to target login password only (page may also show signup with "Confirm Password")
-    await page.getByPlaceholder(/minimum 8 characters/i).fill(password);
+    // Use id so we target the login form only (works in all locales)
+    await page.locator('#password').fill(password);
     await page.getByRole('button', { name: /log in|login/i }).click();
 
     await expect(page).not.toHaveURL(/\/login/);
