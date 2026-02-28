@@ -444,6 +444,9 @@
   "searchEngineGuide": {
     "title": "Guida alla configurazione del motore di ricerca personalizzato",
     "description": "Scopri come configurare un motore di ricerca personalizzato nel tuo browser per accedere rapidamente ai tuoi segnalibri",
+    "tabChromium": "Basato su Chromium",
+    "tabFirefox": "Firefox",
+    "stepTitle": "Passo {{n}}",
     "howItWorks": "Come funziona",
     "howItWorksDescription": "Configurando un motore di ricerca personalizzato, puoi digitare una parola chiave (come 'go') seguita da uno slug di segnalibro nella barra degli indirizzi del browser per navigare istantaneamente a quel segnalibro.",
     "yourSearchUrl": "La tua URL di ricerca",

@@ -444,6 +444,9 @@
   "searchEngineGuide": {
     "title": "カスタム検索エンジン設定ガイド",
     "description": "ブラウザでカスタム検索エンジンを設定してブックマークにすばやくアクセスする方法を学ぶ",
+    "tabChromium": "Chromiumベース",
+    "tabFirefox": "Firefox",
+    "stepTitle": "ステップ {{n}}",
     "howItWorks": "仕組み",
     "howItWorksDescription": "カスタム検索エンジンを設定すると、ブラウザのアドレスバーにキーワード（例：'go'）に続いてブックマークスラッグを入力することで、そのブックマークに瞬時に移動できます。",
     "yourSearchUrl": "検索URL",

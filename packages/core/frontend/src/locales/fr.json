@@ -459,6 +459,9 @@
   "searchEngineGuide": {
     "title": "Guide de configuration du moteur de recherche personnalisé",
     "description": "Apprenez à configurer un moteur de recherche personnalisé dans votre navigateur pour accéder rapidement à vos favoris",
+    "tabChromium": "Basé sur Chromium",
+    "tabFirefox": "Firefox",
+    "stepTitle": "Étape {{n}}",
     "howItWorks": "Comment ça fonctionne",
     "howItWorksDescription": "En configurant un moteur de recherche personnalisé, vous pouvez taper un mot-clé (comme 'go') suivi d'un slug de favori dans la barre d'adresse de votre navigateur pour naviguer instantanément vers ce favori.",
     "yourSearchUrl": "Votre URL de recherche",

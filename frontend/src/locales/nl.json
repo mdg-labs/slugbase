@@ -459,6 +459,9 @@
   "searchEngineGuide": {
     "title": "Gids voor aangepaste zoekmachine-instelling",
     "description": "Leer hoe je een aangepaste zoekmachine in je browser instelt om snel toegang te krijgen tot je bladwijzers",
+    "tabChromium": "Chromium-gebaseerd",
+    "tabFirefox": "Firefox",
+    "stepTitle": "Stap {{n}}",
     "howItWorks": "Hoe het werkt",
     "howItWorksDescription": "Door een aangepaste zoekmachine in te stellen, kun je een trefwoord (zoals 'go') gevolgd door een bladwijzerslug in de adresbalk van je browser typen om direct naar die bladwijzer te navigeren.",
     "yourSearchUrl": "Je zoek-URL",

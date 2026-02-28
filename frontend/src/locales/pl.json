@@ -444,6 +444,9 @@
   "searchEngineGuide": {
     "title": "Przewodnik konfiguracji niestandardowej wyszukiwarki",
     "description": "Dowiedz się, jak skonfigurować niestandardową wyszukiwarkę w przeglądarce, aby szybko uzyskać dostęp do zakładek",
+    "tabChromium": "Na bazie Chromium",
+    "tabFirefox": "Firefox",
+    "stepTitle": "Krok {{n}}",
     "howItWorks": "Jak to działa",
     "howItWorksDescription": "Konfigurując niestandardową wyszukiwarkę, możesz wpisać słowo kluczowe (np. 'go'), a następnie slug zakładki w pasku adresu przeglądarki, aby natychmiast przejść do tej zakładki.",
     "yourSearchUrl": "Twój URL wyszukiwania",

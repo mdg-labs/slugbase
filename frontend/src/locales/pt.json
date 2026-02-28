@@ -444,6 +444,9 @@
   "searchEngineGuide": {
     "title": "Guia de configuração de mecanismo de pesquisa personalizado",
     "description": "Aprenda como configurar um mecanismo de pesquisa personalizado no seu navegador para acessar rapidamente seus favoritos",
+    "tabChromium": "Baseado em Chromium",
+    "tabFirefox": "Firefox",
+    "stepTitle": "Passo {{n}}",
     "howItWorks": "Como funciona",
     "howItWorksDescription": "Ao configurar um mecanismo de pesquisa personalizado, você pode digitar uma palavra-chave (como 'go') seguida de um slug de favorito na barra de endereços do navegador para navegar instantaneamente para esse favorito.",
     "yourSearchUrl": "Sua URL de pesquisa",

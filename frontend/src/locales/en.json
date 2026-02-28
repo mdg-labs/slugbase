@@ -675,6 +675,9 @@
   "searchEngineGuide": {
     "title": "Custom Search Engine Setup Guide",
     "description": "Learn how to set up a custom search engine in your browser to quickly access your bookmarks",
+    "tabChromium": "Chromium-based",
+    "tabFirefox": "Firefox",
+    "stepTitle": "Step {{n}}",
     "howItWorks": "How It Works",
     "howItWorksDescription": "By setting up a custom search engine, you can type a keyword (like 'go') followed by a bookmark slug in your browser's address bar to instantly navigate to that bookmark.",
     "yourSearchUrl": "Your Search URL",

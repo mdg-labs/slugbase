@@ -636,6 +636,9 @@
   "searchEngineGuide": {
     "title": "Guía de configuración de motor de búsqueda personalizado",
     "description": "Aprende cómo configurar un motor de búsqueda personalizado en tu navegador para acceder rápidamente a tus marcadores",
+    "tabChromium": "Basado en Chromium",
+    "tabFirefox": "Firefox",
+    "stepTitle": "Paso {{n}}",
     "howItWorks": "Cómo funciona",
     "howItWorksDescription": "Al configurar un motor de búsqueda personalizado, puedes escribir una palabra clave (como 'go') seguida de un slug de marcador en la barra de direcciones de tu navegador para navegar instantáneamente a ese marcador.",
     "yourSearchUrl": "Tu URL de búsqueda",

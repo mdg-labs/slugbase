@@ -444,6 +444,9 @@
   "searchEngineGuide": {
     "title": "自定义搜索引擎设置指南",
     "description": "了解如何在浏览器中设置自定义搜索引擎以快速访问您的书签",
+    "tabChromium": "基于 Chromium",
+    "tabFirefox": "Firefox",
+    "stepTitle": "步骤 {{n}}",
     "howItWorks": "工作原理",
     "howItWorksDescription": "通过设置自定义搜索引擎，您可以在浏览器的地址栏中输入关键字（如'go'），后跟书签别名，即可立即导航到该书签。",
     "yourSearchUrl": "您的搜索URL",

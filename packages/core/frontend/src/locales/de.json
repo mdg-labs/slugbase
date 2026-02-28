@@ -635,6 +635,9 @@
   "searchEngineGuide": {
     "title": "Anleitung zur Einrichtung benutzerdefinierter Suchmaschinen",
     "description": "So richtest du eine Suchmaschine im Browser ein und greifst schnell auf deine Lesezeichen zu",
+    "tabChromium": "Chromium-basiert",
+    "tabFirefox": "Firefox",
+    "stepTitle": "Schritt {{n}}",
     "howItWorks": "Wie es funktioniert",
     "howItWorksDescription": "Mit einer Suchmaschine tippst du in der Adresszeile z. B. 'go' plus Slug und landest direkt beim Lesezeichen.",
     "yourSearchUrl": "Ihre Such-URL",
