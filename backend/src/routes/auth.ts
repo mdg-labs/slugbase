@@ -19,6 +19,11 @@ const router = Router();
 
 const DB_TYPE = process.env.DB_TYPE || 'sqlite';
 
+/** Verification link path: in cloud the app is under /app. */
+function getVerifyEmailPath(): string {
+  return isCloud ? '/app/verify-email' : '/verify-email';
+}
+
 function hashToken(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
@@ -314,9 +319,12 @@ router.post('/register', authRateLimiter, async (req, res) => {
     }
 
     const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
-    const verificationUrl = `${frontendUrl}/verify-email?token=${encodeURIComponent(token)}`;
-    await sendSignupVerificationEmail(normalizedEmail, verificationUrl);
-
+    const verificationUrl = `${frontendUrl}${getVerifyEmailPath()}?token=${encodeURIComponent(token)}`;
+    const emailSent = await sendSignupVerificationEmail(normalizedEmail, verificationUrl);
+    if (!emailSent) {
+      console.error('Register: verification email failed to send for', normalizedEmail);
+      return res.status(500).json({ error: 'Account created but we could not send the verification email. Please try again later or contact support.' });
+    }
     return res.status(201).json({ message: 'Check your email to verify your account' });
   } catch (error: any) {
     console.error('Register error:', error?.message ?? error);
@@ -445,8 +453,12 @@ router.post('/resend-signup-verification', authRateLimiter, async (req, res) => 
       );
     }
     const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
-    const verificationUrl = `${frontendUrl}/verify-email?token=${encodeURIComponent(newToken)}`;
-    await sendSignupVerificationEmail(targetEmail, verificationUrl);
+    const verificationUrl = `${frontendUrl}${getVerifyEmailPath()}?token=${encodeURIComponent(newToken)}`;
+    const emailSent = await sendSignupVerificationEmail(targetEmail, verificationUrl);
+    if (!emailSent) {
+      console.error('Resend signup verification: email failed to send for', targetEmail);
+      return res.status(500).json({ error: 'Failed to send verification email. Please try again later.' });
+    }
     return res.json({ message: 'Verification email sent' });
   } catch (error: any) {
     console.error('Resend signup verification error:', error?.message ?? error);
@@ -514,8 +526,12 @@ router.post('/request-signup-resend', authRateLimiter, async (req, res) => {
         );
       }
       const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
-      const verificationUrl = `${frontendUrl}/verify-email?token=${encodeURIComponent(newToken)}`;
-      await sendSignupVerificationEmail(targetEmail, verificationUrl);
+      const verificationUrl = `${frontendUrl}${getVerifyEmailPath()}?token=${encodeURIComponent(newToken)}`;
+      const emailSent = await sendSignupVerificationEmail(targetEmail, verificationUrl);
+      if (!emailSent) {
+        console.error('Request signup resend: email failed to send for', targetEmail);
+        return res.status(500).json({ error: 'Failed to send verification email. Please try again later.' });
+      }
     }
     return res.json({
       message: 'If an unverified account exists with that email, a new verification link has been sent.',

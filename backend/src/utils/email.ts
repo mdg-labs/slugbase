@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer';
 import { queryOne } from '../db/index.js';
 import { decrypt } from './encryption.js';
+import { isCloud } from '../config/mode.js';
 
 /**
  * Escape HTML to prevent XSS attacks
@@ -191,22 +192,87 @@ async function getSMTPConfig(): Promise<{ config: SMTPConfig | null; error?: str
 }
 
 /**
- * Returns whether email sending is available (SMTP configured and enabled).
+ * Whether Postmark is configured (cloud mode). Used when isCloud to send verification etc.
+ */
+function isPostmarkConfigured(): boolean {
+  const apiKey = process.env.POSTMARK_API_KEY?.trim();
+  const fromEmail = process.env.POSTMARK_FROM_EMAIL?.trim();
+  return Boolean(isCloud && apiKey && fromEmail);
+}
+
+/**
+ * Send email via Postmark API (cloud mode). No dependency on postmark package; uses fetch.
+ */
+async function sendEmailViaPostmark(
+  to: string,
+  subject: string,
+  html: string,
+  text?: string
+): Promise<{ success: boolean; error?: string }> {
+  const apiKey = process.env.POSTMARK_API_KEY?.trim();
+  const fromEmail = process.env.POSTMARK_FROM_EMAIL?.trim();
+  const fromName = (process.env.POSTMARK_FROM_NAME || 'SlugBase').trim();
+  if (!apiKey || !fromEmail) {
+    return { success: false, error: 'Postmark is not configured (missing POSTMARK_API_KEY or POSTMARK_FROM_EMAIL)' };
+  }
+  const from = fromName ? `"${fromName}" <${fromEmail}>` : fromEmail;
+  const textBody = text || html.replace(/<[^>]+>/g, '').slice(0, 100000);
+  try {
+    const res = await fetch('https://api.postmarkapp.com/email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Postmark-Server-Token': apiKey,
+      },
+      body: JSON.stringify({
+        From: from,
+        To: to.trim(),
+        Subject: subject,
+        HtmlBody: html,
+        TextBody: textBody,
+      }),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      console.error('Postmark API error:', res.status, body);
+      return { success: false, error: `Postmark: ${res.status} ${body.slice(0, 200)}` };
+    }
+    const data = (await res.json()) as { MessageID?: string };
+    console.log('Email sent via Postmark:', data.MessageID);
+    return { success: true };
+  } catch (err: any) {
+    console.error('Postmark send error:', err);
+    return { success: false, error: err?.message || 'Postmark send failed' };
+  }
+}
+
+/**
+ * Returns whether email sending is available (SMTP or Postmark configured).
  * Used e.g. to show "Send invite" when adding users.
  */
 export async function isEmailSendingAvailable(): Promise<boolean> {
+  if (isPostmarkConfigured()) return true;
   const { config } = await getSMTPConfig();
   return config != null;
 }
 
 /**
- * Send email using SMTP (self-hosted).
+ * Send email using SMTP (self-hosted) or Postmark (cloud when configured).
  */
 export async function sendEmail(to: string, subject: string, html: string, text?: string): Promise<{ success: boolean; error?: string }> {
+  if (isPostmarkConfigured()) {
+    const result = await sendEmailViaPostmark(to, subject, html, text);
+    if (!result.success) {
+      console.error('Send email (Postmark) failed:', result.error);
+    }
+    return result;
+  }
   try {
     const { config, error } = await getSMTPConfig();
     if (!config) {
-      return { success: false, error: error || 'SMTP not configured or not enabled' };
+      const msg = error || 'SMTP not configured or not enabled';
+      console.error('Send email failed:', msg);
+      return { success: false, error: msg };
     }
 
     // Validate auth credentials before creating transporter
