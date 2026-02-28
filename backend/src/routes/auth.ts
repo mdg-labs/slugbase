@@ -482,7 +482,7 @@ router.post('/request-signup-resend', authRateLimiter, async (req, res) => {
     }
     const normalizedEmail = normalizeEmail(email.trim());
     const user = await queryOne(
-      'SELECT id FROM users WHERE email = ? AND (email_verified = FALSE OR email_verified = 0)',
+      'SELECT id FROM users WHERE email = ? AND (email_verified = FALSE OR email_verified IS NULL)',
       [normalizedEmail]
     );
     let targetEmail = normalizedEmail;
