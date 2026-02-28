@@ -19,9 +19,11 @@ export default function SearchEngineGuide() {
   const searchUrl = `${baseUrl}${goPath}`;
 
   const tabOptions = [
-    { value: 'chromium', label: t('searchEngineGuide.tabChromium') },
-    { value: 'firefox', label: t('searchEngineGuide.tabFirefox') },
+    { value: 'chromium', label: t('searchEngineGuide.tabChromium') || 'Chromium-based' },
+    { value: 'firefox', label: t('searchEngineGuide.tabFirefox') || 'Firefox' },
   ];
+  const pageTitle = t('searchEngineGuide.title') || 'Custom Search Engine Setup Guide';
+  const pageSubtitle = t('searchEngineGuide.description') || '';
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -33,14 +35,14 @@ export default function SearchEngineGuide() {
           </Button>
         </Link>
         <PageHeader
-          title={t('searchEngineGuide.title')}
-          subtitle={t('searchEngineGuide.description')}
+          title={pageTitle}
+          subtitle={pageSubtitle}
           actions={
             <ScopeSegmentedControl
               value={activeTab}
               onChange={(v) => setActiveTab(v as 'chromium' | 'firefox')}
               options={tabOptions}
-              ariaLabel={t('searchEngineGuide.title')}
+              ariaLabel={pageTitle}
             />
           }
         />
@@ -93,7 +95,7 @@ export default function SearchEngineGuide() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">
-                  {t('searchEngineGuide.stepTitle', { n: 1 })}
+                  {(t('searchEngineGuide.stepTitle', { n: 1 }) as string) || 'Step 1'}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -103,7 +105,7 @@ export default function SearchEngineGuide() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">
-                  {t('searchEngineGuide.stepTitle', { n: 2 })}
+                  {(t('searchEngineGuide.stepTitle', { n: 2 }) as string) || 'Step 2'}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -113,7 +115,7 @@ export default function SearchEngineGuide() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">
-                  {t('searchEngineGuide.stepTitle', { n: 3 })}
+                  {(t('searchEngineGuide.stepTitle', { n: 3 }) as string) || 'Step 3'}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -123,7 +125,7 @@ export default function SearchEngineGuide() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">
-                  {t('searchEngineGuide.stepTitle', { n: 4 })}
+                  {(t('searchEngineGuide.stepTitle', { n: 4 }) as string) || 'Step 4'}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
@@ -138,7 +140,7 @@ export default function SearchEngineGuide() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">
-                  {t('searchEngineGuide.stepTitle', { n: 5 })}
+                  {(t('searchEngineGuide.stepTitle', { n: 5 }) as string) || 'Step 5'}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -162,7 +164,7 @@ export default function SearchEngineGuide() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">
-                  {t('searchEngineGuide.stepTitle', { n: 1 })}
+                  {(t('searchEngineGuide.stepTitle', { n: 1 }) as string) || 'Step 1'}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -172,7 +174,7 @@ export default function SearchEngineGuide() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">
-                  {t('searchEngineGuide.stepTitle', { n: 2 })}
+                  {(t('searchEngineGuide.stepTitle', { n: 2 }) as string) || 'Step 2'}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -182,7 +184,7 @@ export default function SearchEngineGuide() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">
-                  {t('searchEngineGuide.stepTitle', { n: 3 })}
+                  {(t('searchEngineGuide.stepTitle', { n: 3 }) as string) || 'Step 3'}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -192,7 +194,7 @@ export default function SearchEngineGuide() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">
-                  {t('searchEngineGuide.stepTitle', { n: 4 })}
+                  {(t('searchEngineGuide.stepTitle', { n: 4 }) as string) || 'Step 4'}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
@@ -207,7 +209,7 @@ export default function SearchEngineGuide() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">
-                  {t('searchEngineGuide.stepTitle', { n: 5 })}
+                  {(t('searchEngineGuide.stepTitle', { n: 5 }) as string) || 'Step 5'}
                 </CardTitle>
               </CardHeader>
               <CardContent>
