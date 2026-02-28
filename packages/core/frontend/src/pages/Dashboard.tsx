@@ -246,9 +246,9 @@ export default function Dashboard() {
               usage: {
                 used: stats.tenantBookmarkCount ?? stats.totalBookmarks,
                 limit: stats.bookmarkLimit,
-                labelOverride: t('sharing.bookmarksUsed', { count: stats.tenantBookmarkCount ?? stats.totalBookmarks, limit: stats.bookmarkLimit }),
+                labelOverride: t('plan.bookmarksUsed', { count: stats.tenantBookmarkCount ?? stats.totalBookmarks, limit: stats.bookmarkLimit }),
                 showProgress: true,
-                cta: (stats.tenantBookmarkCount ?? stats.totalBookmarks) >= stats.bookmarkLimit ? { label: t('sharing.limitBookmarks', { limit: stats.bookmarkLimit }), onClick: () => window.location.href = '/pricing' } : undefined,
+                cta: (stats.tenantBookmarkCount ?? stats.totalBookmarks) >= stats.bookmarkLimit ? { label: t('plan.limitBookmarks', { limit: stats.bookmarkLimit }), onClick: () => window.location.href = '/pricing' } : undefined,
               },
             }),
           }}

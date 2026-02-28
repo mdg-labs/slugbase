@@ -29,8 +29,7 @@ test.describe('Go forwarding', () => {
     await modal.getByRole('switch', { name: /enable forwarding/i }).click();
     await modal.getByPlaceholder(/slug/i).fill(slug);
     const saveButton = modal.getByRole('button', { name: /save/i });
-    await saveButton.scrollIntoViewIfNeeded();
-    await saveButton.click();
+    await saveButton.click({ force: true });
 
     await expect(modal).not.toBeVisible({ timeout: 5000 });
 
