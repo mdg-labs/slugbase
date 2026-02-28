@@ -307,7 +307,14 @@
     "yourTokens": "Deine Tokens",
     "aiSuggestions": "KI-Vorschläge",
     "aiSuggestionsDescription": "Titel, Tags und Slug beim Anlegen von Lesezeichen vorschlagen",
-    "aiSuggestionsUpgradePlan": "Verfügbar im Personal-, Team- und Early-Supporter-Plan."
+    "aiSuggestionsUpgradePlan": "Verfügbar im Personal-, Team- und Early-Supporter-Plan.",
+    "dangerZone": "Gefahrenzone",
+    "dangerZoneDescription": "Unwiderrufliche Aktionen. Diese können nicht rückgängig gemacht werden.",
+    "deleteAccount": "Mein Konto löschen",
+    "deleteAccountDescription": "Ihr Konto und alle Daten werden dauerhaft gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.",
+    "deleteAccountConfirm": "Möchten Sie Ihr Konto wirklich löschen? Alle Lesezeichen, Ordner, Tags und Daten werden dauerhaft gelöscht. Dies kann nicht rückgängig gemacht werden.",
+    "deleteAccountSuccess": "Ihr Konto wurde gelöscht.",
+    "deleteAccountGuardMessage": "Sie können Ihr Konto nicht löschen. Übertragen Sie zuerst die Inhaberschaft oder regeln Sie die Abrechnung."
   },
   "common": {
     "loading": "Lädt...",

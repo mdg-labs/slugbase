@@ -250,9 +250,11 @@ export interface AppProps {
   extraAdminRoutes?: { path: string; element: ReactNode }[];
   /** Optional extra admin nav items (e.g. cloud billing). Passed to sidebar when extraAdminRoutes are used. */
   extraAdminNavItems?: { path: string; label: string }[];
+  /** Optional guard for profile/account deletion (e.g. cloud blocks billing owner). */
+  profileDeleteGuard?: () => Promise<{ allowed: boolean; message?: string }>;
 }
 
-function App({ basePath, apiBaseUrl, routerBasename, skipSetupFlow, hideAdminOidcAndSmtp, adminAiOnlyToggle, extraAdminRoutes, extraAdminNavItems }: AppProps = {}) {
+function App({ basePath, apiBaseUrl, routerBasename, skipSetupFlow, hideAdminOidcAndSmtp, adminAiOnlyToggle, extraAdminRoutes, extraAdminNavItems, profileDeleteGuard }: AppProps = {}) {
   const appRootPath = routerBasename !== undefined ? '/' : (basePath === '/' || !basePath ? '/' : basePath);
   const pathPrefixForLinks = routerBasename !== undefined ? '' : (basePath ?? '');
   const content = (
@@ -268,7 +270,7 @@ function App({ basePath, apiBaseUrl, routerBasename, skipSetupFlow, hideAdminOid
   );
   return (
     <AppErrorBoundary>
-      <AppConfigProvider appBasePath={basePath} apiBaseUrl={apiBaseUrl} appRootPath={appRootPath} skipSetupFlow={skipSetupFlow} pathPrefixForLinks={pathPrefixForLinks} hideAdminOidcAndSmtp={hideAdminOidcAndSmtp} adminAiOnlyToggle={adminAiOnlyToggle} extraAdminNavItems={extraAdminNavItems} extraAdminRoutes={extraAdminRoutes}>
+      <AppConfigProvider appBasePath={basePath} apiBaseUrl={apiBaseUrl} appRootPath={appRootPath} skipSetupFlow={skipSetupFlow} pathPrefixForLinks={pathPrefixForLinks} hideAdminOidcAndSmtp={hideAdminOidcAndSmtp} adminAiOnlyToggle={adminAiOnlyToggle} extraAdminNavItems={extraAdminNavItems} extraAdminRoutes={extraAdminRoutes} profileDeleteGuard={profileDeleteGuard}>
         {routerBasename !== undefined ? (
           content
         ) : (

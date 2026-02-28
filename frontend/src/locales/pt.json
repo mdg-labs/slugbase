@@ -217,7 +217,14 @@
     "viewApiDocs": "Ver documentação da API",
     "noTokens": "Nenhum token de API",
     "noTokensDescription": "Crie um token para se autenticar na API REST a partir de scripts, CLI ou CI/CD.",
-    "yourTokens": "Seus tokens"
+    "yourTokens": "Seus tokens",
+    "dangerZone": "Zona de perigo",
+    "dangerZoneDescription": "Ações irreversíveis. Não podem ser desfeitas.",
+    "deleteAccount": "Excluir minha conta",
+    "deleteAccountDescription": "Exclua permanentemente sua conta e todos os seus dados. Esta ação não pode ser desfeita.",
+    "deleteAccountConfirm": "Tem certeza de que deseja excluir sua conta? Todos os seus favoritos, pastas, tags e dados serão excluídos permanentemente. Isso não pode ser desfeito.",
+    "deleteAccountSuccess": "Sua conta foi excluída.",
+    "deleteAccountGuardMessage": "Você não pode excluir sua conta. Transfira a propriedade ou resolva a cobrança primeiro."
   },
   "common": {
     "loading": "Carregando...",

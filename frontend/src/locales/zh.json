@@ -217,7 +217,14 @@
     "viewApiDocs": "查看 API 文档",
     "noTokens": "暂无 API 令牌",
     "noTokensDescription": "创建令牌以通过脚本、CLI 或 CI/CD 进行 REST API 身份验证。",
-    "yourTokens": "您的令牌"
+    "yourTokens": "您的令牌",
+    "dangerZone": "危险区域",
+    "dangerZoneDescription": "不可逆操作。无法撤销。",
+    "deleteAccount": "删除我的账户",
+    "deleteAccountDescription": "永久删除您的账户及所有数据。此操作无法撤销。",
+    "deleteAccountConfirm": "确定要删除您的账户吗？您的所有书签、文件夹、标签和数据将被永久删除。无法撤销。",
+    "deleteAccountSuccess": "您的账户已删除。",
+    "deleteAccountGuardMessage": "您无法删除账户。请先转移所有权或解决账单问题。"
   },
   "common": {
     "loading": "加载中...",

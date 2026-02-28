@@ -5,6 +5,7 @@ import { validateEmail, normalizeEmail, validateLength, sanitizeString } from '.
 import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
 import { sendEmailVerificationEmail } from '../utils/email.js';
+import { getClearAuthCookieOptions } from '../config/cookies.js';
 
 const router = Router();
 router.use(requireAuth());
@@ -152,6 +153,25 @@ router.put('/me', async (req, res) => {
 
     const user = await queryOne('SELECT id, email, name, user_key, is_admin, language, theme, ai_suggestions_enabled FROM users WHERE id = ?', [userId]);
     res.json(user);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete current user account. Cascades via DB FKs (api_tokens, team_members, etc.).
+// Clears auth cookie so client is logged out.
+router.delete('/me', async (req, res) => {
+  const authReq = req as AuthRequest;
+  try {
+    const userId = authReq.user!.id;
+    const user = await queryOne('SELECT id FROM users WHERE id = ?', [userId]);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    await execute('DELETE FROM users WHERE id = ?', [userId]);
+    const clearOpts = getClearAuthCookieOptions();
+    res.clearCookie('token', clearOpts);
+    res.json({ message: 'Account deleted' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
