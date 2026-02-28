@@ -20,7 +20,7 @@ if (neetoPlaywrightReporterConfig.apiKey) {
 
 export default defineConfig({
   testDir: './specs',
-  globalSetup: './global-setup.ts',
+  globalSetup: './global-setup.mjs',
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
