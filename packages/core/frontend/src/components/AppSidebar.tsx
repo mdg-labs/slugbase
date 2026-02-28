@@ -62,6 +62,12 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
         ]
       : []),
     { pathForLink: `${adminBaseLink}/ai`, pathForActive: `${adminBaseFull}/ai`, label: t('admin.ai.nav'), icon: Sparkles },
+    ...(extraAdminNavItems ?? []).map(({ path, label }) => ({
+      pathForLink: `${adminBaseLink}/${path}`.replace(/\/+/g, '/'),
+      pathForActive: `${adminBaseFull}/${path}`.replace(/\/+/g, '/'),
+      label,
+      icon: CreditCard,
+    })),
   ];
 
   const rootActivePath = pathBaseForActive || '/';

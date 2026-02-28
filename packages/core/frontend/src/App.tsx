@@ -50,6 +50,18 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function ExtraAdminRoutes() {
+  const { extraAdminRoutes } = useAppConfig();
+  if (!extraAdminRoutes?.length) return null;
+  return (
+    <>
+      {extraAdminRoutes.map(({ path, element }) => (
+        <Route key={path} path={path} element={element} />
+      ))}
+    </>
+  );
+}
+
 function SharedRedirect() {
   const { pathPrefixForLinks } = useAppConfig();
   const to = `${pathPrefixForLinks || ''}/bookmarks?scope=shared_with_me`.replace(/\/+/g, '/') || '/bookmarks?scope=shared_with_me';
@@ -137,6 +149,7 @@ function AppRoutes() {
               </>
             )}
             <Route path="ai" element={<AdminAIPage />} />
+            <ExtraAdminRoutes />
           </Route>
         </Route>
       </Routes>
@@ -243,9 +256,13 @@ export interface AppProps {
   hideAdminOidcAndSmtp?: boolean;
   /** When true, Admin AI page shows only the enable/disable toggle (e.g. cloud uses env for provider/model/key). */
   adminAiOnlyToggle?: boolean;
+  /** Optional extra admin routes (e.g. cloud billing). Generic extension; path is segment under /admin. */
+  extraAdminRoutes?: { path: string; element: ReactNode }[];
+  /** Optional extra admin nav items (e.g. cloud billing). Passed to sidebar when extraAdminRoutes are used. */
+  extraAdminNavItems?: { path: string; label: string }[];
 }
 
-function App({ basePath, apiBaseUrl, routerBasename, skipSetupFlow, hideAdminOidcAndSmtp, adminAiOnlyToggle }: AppProps = {}) {
+function App({ basePath, apiBaseUrl, routerBasename, skipSetupFlow, hideAdminOidcAndSmtp, adminAiOnlyToggle, extraAdminRoutes, extraAdminNavItems }: AppProps = {}) {
   const appRootPath = routerBasename !== undefined ? '/' : (basePath === '/' || !basePath ? '/' : basePath);
   const pathPrefixForLinks = routerBasename !== undefined ? '' : (basePath ?? '');
   const content = (
@@ -261,7 +278,7 @@ function App({ basePath, apiBaseUrl, routerBasename, skipSetupFlow, hideAdminOid
   );
   return (
     <AppErrorBoundary>
-      <AppConfigProvider appBasePath={basePath} apiBaseUrl={apiBaseUrl} appRootPath={appRootPath} skipSetupFlow={skipSetupFlow} pathPrefixForLinks={pathPrefixForLinks} hideAdminOidcAndSmtp={hideAdminOidcAndSmtp} adminAiOnlyToggle={adminAiOnlyToggle}>
+      <AppConfigProvider appBasePath={basePath} apiBaseUrl={apiBaseUrl} appRootPath={appRootPath} skipSetupFlow={skipSetupFlow} pathPrefixForLinks={pathPrefixForLinks} hideAdminOidcAndSmtp={hideAdminOidcAndSmtp} adminAiOnlyToggle={adminAiOnlyToggle} extraAdminNavItems={extraAdminNavItems} extraAdminRoutes={extraAdminRoutes}>
         {routerBasename !== undefined ? (
           content
         ) : (

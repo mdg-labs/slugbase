@@ -15,6 +15,7 @@ import {
   UserCog,
   Key,
   Sparkles,
+  CreditCard,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -43,7 +44,7 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
   const { t } = useTranslation();
   const location = useLocation();
   const pathname = location.pathname;
-  const { appBasePath, pathPrefixForLinks, hideAdminOidcAndSmtp } = useAppConfig();
+  const { appBasePath, pathPrefixForLinks, hideAdminOidcAndSmtp, extraAdminNavItems } = useAppConfig();
   const { setOpenMobile, toggleSidebar, isMobile, state } = useSidebar();
   const prefix = pathPrefixForLinks || '';
   // For active matching use pathPrefixForLinks so it matches useLocation().pathname (e.g. when Router has basename="/app", pathname is "/bookmarks" not "/app/bookmarks").
@@ -61,6 +62,12 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
         ]
       : []),
     { pathForLink: `${adminBaseLink}/ai`, pathForActive: `${adminBaseFull}/ai`, label: t('admin.ai.nav'), icon: Sparkles },
+    ...(extraAdminNavItems ?? []).map(({ path, label }) => ({
+      pathForLink: `${adminBaseLink}/${path}`.replace(/\/+/g, '/'),
+      pathForActive: `${adminBaseFull}/${path}`.replace(/\/+/g, '/'),
+      label,
+      icon: CreditCard,
+    })),
   ];
 
   const rootActivePath = pathBaseForActive || '/';

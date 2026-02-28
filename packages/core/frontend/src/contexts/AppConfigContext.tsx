@@ -21,6 +21,8 @@ export interface AppConfig {
   canShareWithTeams?: boolean;
   /** Optional extra admin nav items (e.g. cloud billing). Generic extension; no cloud-specific naming. */
   extraAdminNavItems?: { path: string; label: string }[];
+  /** Optional extra admin route definitions (e.g. cloud billing). Generic extension. */
+  extraAdminRoutes?: { path: string; element: React.ReactNode }[];
 }
 
 const defaultConfig: AppConfig = {
@@ -47,6 +49,7 @@ export function AppConfigProvider({
   bookmarkLimit,
   canShareWithTeams,
   extraAdminNavItems,
+  extraAdminRoutes,
 }: {
   children: React.ReactNode;
   appBasePath?: string;
@@ -67,6 +70,8 @@ export function AppConfigProvider({
   canShareWithTeams?: boolean;
   /** Optional extra admin nav items (e.g. cloud billing). Generic extension. */
   extraAdminNavItems?: { path: string; label: string }[];
+  /** Optional extra admin route definitions (e.g. cloud billing). Generic extension. */
+  extraAdminRoutes?: { path: string; element: React.ReactNode }[];
 }) {
   const base = appBasePath ?? defaultConfig.appBasePath;
   const value: AppConfig = {
@@ -81,6 +86,7 @@ export function AppConfigProvider({
     bookmarkLimit,
     canShareWithTeams,
     extraAdminNavItems,
+    extraAdminRoutes,
   };
   return <AppConfigContext.Provider value={value}>{children}</AppConfigContext.Provider>;
 }
