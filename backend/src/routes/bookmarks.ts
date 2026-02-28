@@ -672,6 +672,13 @@ router.post('/ai-suggest', async (req, res) => {
     }
 
     const tenantId = getTenantId(req);
+    // Cloud: AI suggestions only on Personal, Team, and Early Supporter – not Free
+    if (isCloud && (req as any).plan === 'free') {
+      return res.status(403).json({
+        code: 'PLAN_REQUIRES_AI',
+        error: 'AI suggestions are available on Personal, Team, and Early Supporter plans.',
+      });
+    }
     const enabled = await isAISuggestionsEnabled(userId, tenantId);
     if (!enabled) {
       return res.status(403).json({ error: 'AI suggestions are not available' });

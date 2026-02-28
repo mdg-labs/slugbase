@@ -333,7 +333,8 @@
     "noTokensDescription": "Create a token to authenticate with the REST API from scripts, CLI, or CI/CD.",
     "yourTokens": "Your tokens",
     "aiSuggestions": "AI suggestions",
-    "aiSuggestionsDescription": "Suggest title, tags, and slug when creating bookmarks"
+    "aiSuggestionsDescription": "Suggest title, tags, and slug when creating bookmarks",
+    "aiSuggestionsUpgradePlan": "Available on Personal, Team, and Early Supporter plans."
   },
   "common": {
     "loading": "Loading...",

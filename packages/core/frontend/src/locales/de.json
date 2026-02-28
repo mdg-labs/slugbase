@@ -306,7 +306,8 @@
     "noTokensDescription": "Token anlegen, um dich von Skripten, CLI oder CI/CD bei der REST-API anzumelden.",
     "yourTokens": "Deine Tokens",
     "aiSuggestions": "KI-Vorschläge",
-    "aiSuggestionsDescription": "Titel, Tags und Slug beim Anlegen von Lesezeichen vorschlagen"
+    "aiSuggestionsDescription": "Titel, Tags und Slug beim Anlegen von Lesezeichen vorschlagen",
+    "aiSuggestionsUpgradePlan": "Verfügbar im Personal-, Team- und Early-Supporter-Plan."
   },
   "common": {
     "loading": "Lädt...",

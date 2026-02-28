@@ -21,7 +21,7 @@ test.describe('Folders', () => {
     await expect(modal).toBeVisible();
 
     const folderName = `E2E Folder ${Date.now()}`;
-    await modal.getByPlaceholder(/name/i).fill(folderName);
+    await modal.getByRole('textbox', { name: 'Name', exact: true }).fill(folderName);
     await modal.getByRole('button', { name: /save/i }).click();
 
     await expect(modal).not.toBeVisible({ timeout: 5000 });

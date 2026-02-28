@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppConfig } from '../contexts/AppConfigContext';
+import { usePlan } from '../contexts/PlanContext';
 import { AlertCircle, Key } from 'lucide-react';
 import Select from '../components/ui/Select';
 import Button from '../components/ui/Button';
@@ -15,6 +16,7 @@ import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
 import api from '../api/client';
 import { getDocsApiReferenceUrl } from '../config/docs';
+import { cn } from '@/lib/utils';
 
 interface ApiToken {
   id: string;
@@ -62,6 +64,8 @@ export default function Profile() {
   const { pathPrefixForLinks } = useAppConfig();
   const prefix = (pathPrefixForLinks || '').replace(/\/+/g, '/') || '';
   const { user, updateUser, checkAuth } = useAuth();
+  const planInfo = usePlan();
+  const isFreePlan = planInfo?.plan === 'free';
   const { showToast } = useToast();
   const [formData, setFormData] = useState({
     email: '',
@@ -448,24 +452,28 @@ export default function Profile() {
                   options={themeOptions}
                 />
               </div>
-              {aiAvailable && (
-                <div className="flex items-center justify-between gap-3 py-2">
+              {(aiAvailable || isFreePlan) && (
+                <div className={cn('flex items-center justify-between gap-3 py-2', isFreePlan && 'opacity-70')}>
                   <div>
                     <label htmlFor="ai-suggestions" className="text-sm font-medium text-foreground">
                       {t('profile.aiSuggestions')}
                     </label>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {t('profile.aiSuggestionsDescription')}
+                      {isFreePlan
+                        ? t('profile.aiSuggestionsUpgradePlan')
+                        : t('profile.aiSuggestionsDescription')}
                     </p>
                   </div>
-                  <Switch
-                    id="ai-suggestions"
-                    checked={formData.ai_suggestions_enabled}
-                    onCheckedChange={(checked) =>
-                      setFormData((prev) => ({ ...prev, ai_suggestions_enabled: checked }))
-                    }
-                    aria-label={t('profile.aiSuggestions')}
-                  />
+                  {!isFreePlan && (
+                    <Switch
+                      id="ai-suggestions"
+                      checked={formData.ai_suggestions_enabled}
+                      onCheckedChange={(checked) =>
+                        setFormData((prev) => ({ ...prev, ai_suggestions_enabled: checked }))
+                      }
+                      aria-label={t('profile.aiSuggestions')}
+                    />
+                  )}
                 </div>
               )}
             </CardContent>

@@ -30,10 +30,15 @@ router.get('/ai-suggestions', requireAuth(), async (req, res) => {
   try {
     const userId = authReq.user!.id;
     const tenantId = getTenantId(req);
-    const [enabled, available] = await Promise.all([
+    let [enabled, available] = await Promise.all([
       isAISuggestionsEnabled(userId, tenantId),
       isAIFeatureAvailable(userId, tenantId),
     ]);
+    // Cloud: AI suggestions only on Personal, Team, and Early Supporter (lifetime) – not Free
+    if (isCloud && (req as any).plan === 'free') {
+      enabled = false;
+      available = false;
+    }
     res.json({ enabled, available });
   } catch (error: any) {
     console.error('Config ai-suggestions error:', error);

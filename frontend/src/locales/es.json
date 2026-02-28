@@ -307,7 +307,8 @@
     "noTokensDescription": "Crea un token para autenticarte con la API REST desde scripts, CLI o CI/CD.",
     "yourTokens": "Tus tokens",
     "aiSuggestions": "Sugerencias con IA",
-    "aiSuggestionsDescription": "Sugerir título, etiquetas y slug al crear marcadores"
+    "aiSuggestionsDescription": "Sugerir título, etiquetas y slug al crear marcadores",
+    "aiSuggestionsUpgradePlan": "Disponible en planes Personal, Team y Early Supporter."
   },
   "common": {
     "loading": "Cargando...",
