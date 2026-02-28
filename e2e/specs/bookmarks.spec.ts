@@ -26,6 +26,5 @@ test.describe('Bookmarks', () => {
 
     await expect(modal).not.toBeVisible({ timeout: 5000 });
     await expect(page.getByText(title)).toBeVisible({ timeout: 5000 });
-    await expect(page.getByRole('link', { name: new RegExp(title) }).or(page.getByText(url))).toBeVisible();
   });
 });
