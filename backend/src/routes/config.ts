@@ -11,7 +11,7 @@ import { isCloud } from '../config/mode.js';
 
 const router = Router();
 
-/** GET /api/config/plan – cloud only. Returns plan, bookmarkLimit, canShareWithTeams. When !isCloud returns 404. */
+/** GET /api/config/plan – cloud only. Returns plan, bookmarkLimit, canShareWithTeams, ai_available. When !isCloud returns 404. */
 router.get('/plan', requireAuth(), (req, res) => {
   if (!isCloud) {
     return res.status(404).json({ error: 'Not available' });
@@ -22,6 +22,7 @@ router.get('/plan', requireAuth(), (req, res) => {
     plan: effectivePlan,
     bookmarkLimit: effectivePlan === 'free' ? 50 : null,
     canShareWithTeams: effectivePlan === 'team',
+    ai_available: effectivePlan !== 'free',
   });
 });
 

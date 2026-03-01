@@ -56,6 +56,8 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
 
   // In cloud, show Users and Teams only on team plan; self-hosted (planInfo null) always shows them.
   const showAdminUsersAndTeams = !planInfo || planInfo.canShareWithTeams;
+  // In cloud, show AI Suggestions only on personal/team/supporter; self-hosted always shows.
+  const showAdminAi = !planInfo || planInfo.aiAvailable;
 
   const adminNavItems = [
     ...(showAdminUsersAndTeams
@@ -70,7 +72,9 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
           { pathForLink: `${adminBaseLink}/settings`, pathForActive: `${adminBaseFull}/settings`, label: t('admin.settings'), icon: Settings },
         ]
       : []),
-    { pathForLink: `${adminBaseLink}/ai`, pathForActive: `${adminBaseFull}/ai`, label: t('admin.ai.nav'), icon: Sparkles },
+    ...(showAdminAi
+      ? [{ pathForLink: `${adminBaseLink}/ai`, pathForActive: `${adminBaseFull}/ai`, label: t('admin.ai.nav'), icon: Sparkles }]
+      : []),
     ...(extraAdminNavItems ?? []).map(({ path, label }) => ({
       pathForLink: `${adminBaseLink}/${path}`.replace(/\/+/g, '/'),
       pathForActive: `${adminBaseFull}/${path}`.replace(/\/+/g, '/'),

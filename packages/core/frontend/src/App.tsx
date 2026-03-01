@@ -50,15 +50,31 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-/** Redirect /admin to first visible admin tab (e.g. in cloud free plan, Users/Teams are hidden so redirect to ai or billing). */
+/** Redirect /admin to first visible admin tab (e.g. in cloud free plan, Users/Teams and AI may be hidden so redirect to ai, billing, or members). */
 function AdminIndexRedirect() {
   const planInfo = usePlan();
   const { extraAdminNavItems } = useAppConfig();
   const showUsersAndTeams = !planInfo || planInfo.canShareWithTeams;
+  const showAi = !planInfo || planInfo.aiAvailable;
   const firstPath = showUsersAndTeams
     ? 'members'
-    : (extraAdminNavItems?.[0]?.path ?? 'ai');
+    : showAi
+      ? 'ai'
+      : (extraAdminNavItems?.[0]?.path ?? 'ai');
   return <Navigate to={firstPath} replace />;
+}
+
+/** In cloud, /admin/ai is only available on personal/team/supporter; otherwise redirect to first admin tab. */
+function AdminAIGate() {
+  const planInfo = usePlan();
+  const { extraAdminNavItems } = useAppConfig();
+  const showAi = !planInfo || planInfo.aiAvailable;
+  if (!showAi) {
+    const showUsersAndTeams = !planInfo || planInfo.canShareWithTeams;
+    const firstPath = showUsersAndTeams ? 'members' : (extraAdminNavItems?.[0]?.path ?? 'ai');
+    return <Navigate to={firstPath} replace />;
+  }
+  return <AdminAIPage />;
 }
 
 function SharedRedirect() {
@@ -147,7 +163,7 @@ function AppRoutes() {
                 <Route path="settings" element={<AdminSettingsPage />} />
               </>
             )}
-            <Route path="ai" element={<AdminAIPage />} />
+            <Route path="ai" element={<AdminAIGate />} />
             {extraAdminRoutes?.map(({ path, element }) => (
               <Route key={path} path={path} element={element} />
             ))}

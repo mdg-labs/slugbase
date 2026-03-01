@@ -1,6 +1,6 @@
 /**
  * Cloud plan context: fetches plan from /api/config/plan when in cloud and user is authenticated.
- * Provides plan, bookmarkLimit, canShareWithTeams for gating sharing UI and showing usage.
+ * Provides plan, bookmarkLimit, canShareWithTeams, aiAvailable for gating sharing UI, AI features, and usage.
  */
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
@@ -11,6 +11,8 @@ export interface PlanInfo {
   plan: string;
   bookmarkLimit: number | null;
   canShareWithTeams: boolean;
+  /** In cloud: true when plan is personal, team, or supporter (AI suggestions available). */
+  aiAvailable: boolean;
 }
 
 const defaultPlan: PlanInfo | null = null;
@@ -28,12 +30,13 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     api
-      .get<{ plan: string; bookmarkLimit: number | null; canShareWithTeams: boolean }>('/config/plan')
+      .get<{ plan: string; bookmarkLimit: number | null; canShareWithTeams: boolean; ai_available?: boolean }>('/config/plan')
       .then((res) => {
         setPlanInfo({
           plan: res.data.plan ?? 'free',
           bookmarkLimit: res.data.bookmarkLimit ?? null,
           canShareWithTeams: res.data.canShareWithTeams === true,
+          aiAvailable: res.data.ai_available === true,
         });
       })
       .catch(() => {
