@@ -107,6 +107,8 @@
     "title": "Bookmarks",
     "create": "Create Bookmark",
     "edit": "Edit Bookmark",
+    "modalSubtitle": "Capture resource",
+    "tagsAddPlaceholder": "Add…",
     "delete": "Delete Bookmark",
     "deleteBookmark": "Delete Bookmark",
     "sharingSummary": "{{teamCount}} {{teams}}, {{userCount}} {{users}}",

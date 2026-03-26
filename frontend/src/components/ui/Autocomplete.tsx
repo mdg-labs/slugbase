@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { X } from 'lucide-react';
 import { Popover, PopoverAnchor, PopoverContent } from './popover';
 import { Input } from './input';
@@ -17,6 +18,8 @@ interface AutocompleteProps {
   options: AutocompleteOption[];
   placeholder?: string;
   onCreateNew?: (name: string) => Promise<AutocompleteOption | null>;
+  /** Surface pill chips (Obsidian bookmark modal tags) */
+  pillChips?: boolean;
   className?: string;
 }
 
@@ -26,8 +29,10 @@ export default function Autocomplete({
   options,
   placeholder = 'Type to search...',
   onCreateNew,
+  pillChips = false,
   className = '',
 }: AutocompleteProps) {
+  const { t } = useTranslation();
   const [inputValue, setInputValue] = useState('');
   const [open, setOpen] = useState(false);
   const [filteredOptions, setFilteredOptions] = useState<AutocompleteOption[]>([]);
@@ -89,22 +94,40 @@ export default function Autocomplete({
     <div className={cn('relative', className)}>
       {value.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-2">
-          {value.map((item) => (
-            <Badge
-              key={item.id}
-              variant="secondary"
-              className="pr-1 gap-1.5"
-            >
-              {item.name}
-              <button
-                type="button"
-                onClick={() => handleRemove(item.id)}
-                className="rounded-full hover:bg-surface-high p-0.5 transition-colors"
+          {value.map((item) =>
+            pillChips ? (
+              <span
+                key={item.id}
+                className="inline-flex max-w-full items-center gap-1 rounded-full bg-surface-low py-1 pl-3 pr-1 text-sm text-foreground"
               >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </Badge>
-          ))}
+                <span className="min-w-0 truncate">{item.name}</span>
+                <button
+                  type="button"
+                  onClick={() => handleRemove(item.id)}
+                  className="shrink-0 rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-surface-high hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label={`${t('common.remove')}: ${item.name}`}
+                >
+                  <X className="h-3.5 w-3.5" aria-hidden />
+                </button>
+              </span>
+            ) : (
+              <Badge
+                key={item.id}
+                variant="secondary"
+                className="gap-1.5 pr-1"
+              >
+                {item.name}
+                <button
+                  type="button"
+                  onClick={() => handleRemove(item.id)}
+                  className="rounded-full p-0.5 transition-colors hover:bg-surface-high"
+                  aria-label={`${t('common.remove')}: ${item.name}`}
+                >
+                  <X className="h-3.5 w-3.5" aria-hidden />
+                </button>
+              </Badge>
+            )
+          )}
         </div>
       )}
 

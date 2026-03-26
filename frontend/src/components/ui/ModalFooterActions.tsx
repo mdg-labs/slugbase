@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 interface ModalFooterActionsProps {
   onCancel: () => void;
   cancelLabel?: string;
+  cancelVariant?: 'outline' | 'ghost';
   submitLabel: string;
   loading?: boolean;
   submitDisabled?: boolean;
@@ -16,6 +17,7 @@ interface ModalFooterActionsProps {
 export function ModalFooterActions({
   onCancel,
   cancelLabel,
+  cancelVariant = 'outline',
   submitLabel,
   loading = false,
   submitDisabled = false,
@@ -32,7 +34,7 @@ export function ModalFooterActions({
         className
       )}
     >
-      <Button variant="outline" onClick={onCancel} type="button">
+      <Button variant={cancelVariant} onClick={onCancel} type="button">
         {cancelLabel ?? t('common.cancel')}
       </Button>
       <Button
