@@ -48,21 +48,21 @@ export default function Signup() {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-md w-full bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-lg p-6 text-center space-y-4">
+      <div className="min-h-screen flex items-center justify-center bg-background py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-md w-full bg-card rounded-lg border border-border shadow-lg p-6 text-center space-y-4">
           <div className="flex justify-center mb-4">
             <img src="/slugbase_icon_blue.svg" alt="SlugBase" className="h-16 w-16 dark:hidden" />
             <img src="/slugbase_icon_white.svg" alt="SlugBase" className="h-16 w-16 hidden dark:block" />
           </div>
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+          <h2 className="text-xl font-semibold text-foreground">
             {t('signup.successTitle')}
           </h2>
-          <p className="text-gray-600 dark:text-gray-400 text-sm">
+          <p className="text-muted-foreground text-sm">
             {t('signup.successMessage')}
           </p>
           <Link
             to={`${pathPrefixForLinks}/login`}
-            className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg"
+            className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             {t('signup.backToLogin')}
           </Link>
@@ -72,25 +72,25 @@ export default function Signup() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-background py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
           <div className="flex justify-center mb-6">
             <img src="/slugbase_icon_blue.svg" alt="SlugBase" className="h-16 w-16 dark:hidden" />
             <img src="/slugbase_icon_white.svg" alt="SlugBase" className="h-16 w-16 hidden dark:block" />
           </div>
-          <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">
+          <h2 className="text-2xl font-semibold text-foreground">
             {t('signup.title')}
           </h2>
-          <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+          <p className="mt-2 text-sm text-muted-foreground">
             {t('signup.subtitle')}
           </p>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-lg p-4">
+        <div className="bg-card rounded-lg border border-border shadow-lg p-4">
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label htmlFor="signup-email" className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+              <label htmlFor="signup-email" className="block text-sm font-semibold text-foreground mb-2">
                 {t('signup.email')}
               </label>
               <input
@@ -98,14 +98,14 @@ export default function Signup() {
                 type="email"
                 required
                 autoComplete="email"
-                className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 h-9 text-sm text-foreground bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring"
                 placeholder={t('auth.emailPlaceholder')}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
             </div>
             <div>
-              <label htmlFor="signup-name" className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+              <label htmlFor="signup-name" className="block text-sm font-semibold text-foreground mb-2">
                 {t('signup.name')}
               </label>
               <input
@@ -113,14 +113,14 @@ export default function Signup() {
                 type="text"
                 required
                 autoComplete="name"
-                className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 h-9 text-sm text-foreground bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring"
                 placeholder={t('signup.namePlaceholder')}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
             </div>
             <div>
-              <label htmlFor="signup-password" className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+              <label htmlFor="signup-password" className="block text-sm font-semibold text-foreground mb-2">
                 {t('signup.password')}
               </label>
               <input
@@ -129,15 +129,15 @@ export default function Signup() {
                 required
                 minLength={MIN_PASSWORD_LENGTH}
                 autoComplete="new-password"
-                className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 h-9 text-sm text-foreground bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring"
                 placeholder={t('setup.passwordPlaceholder')}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t('signup.passwordHint')}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{t('signup.passwordHint')}</p>
             </div>
             <div>
-              <label htmlFor="signup-confirm" className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+              <label htmlFor="signup-confirm" className="block text-sm font-semibold text-foreground mb-2">
                 {t('signup.confirmPassword')}
               </label>
               <input
@@ -146,7 +146,7 @@ export default function Signup() {
                 required
                 minLength={MIN_PASSWORD_LENGTH}
                 autoComplete="new-password"
-                className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 h-9 text-sm text-foreground bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring"
                 placeholder={t('setup.confirmPasswordPlaceholder')}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
@@ -159,15 +159,15 @@ export default function Signup() {
                 required
                 checked={acceptTerms}
                 onChange={(e) => setAcceptTerms(e.target.checked)}
-                className="mt-1 h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-ring"
               />
-              <label htmlFor="signup-accept-terms" className="text-sm text-gray-700 dark:text-gray-300">
+              <label htmlFor="signup-accept-terms" className="text-sm text-foreground">
                 {t('signup.acceptTermsPrefix')}
-                <a href={getDocsBaseUrl()} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">
+                <a href={getDocsBaseUrl()} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
                   {t('signup.acceptTermsTerms')}
                 </a>
                 {t('signup.acceptTermsAnd')}
-                <a href={getDocsBaseUrl()} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">
+                <a href={getDocsBaseUrl()} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
                   {t('signup.acceptTermsPrivacy')}
                 </a>
                 {t('signup.acceptTermsSuffix')}
@@ -187,9 +187,9 @@ export default function Signup() {
               {loading ? t('common.loading') : t('signup.submit')}
             </Button>
           </form>
-          <p className="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">
+          <p className="mt-4 text-center text-sm text-muted-foreground">
             {t('signup.alreadyHaveAccount')}{' '}
-            <Link to={`${pathPrefixForLinks}/login`} className="font-medium text-blue-600 dark:text-blue-400 hover:underline">
+            <Link to={`${pathPrefixForLinks}/login`} className="font-medium text-primary hover:underline">
               {t('signup.logIn')}
             </Link>
           </p>

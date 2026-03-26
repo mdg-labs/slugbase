@@ -247,10 +247,10 @@ export default function BookmarkTableView({
                     onClick={(e) => { if (onOpen) { e.preventDefault(); onOpen(bookmark); } }}
                     className={`flex items-center ${compact ? 'gap-2' : 'gap-3'} group/title hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded`}
                   >
-                    <div className={`flex-shrink-0 ${compact ? 'w-6 h-6' : 'w-8 h-8'} rounded-lg bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/20 flex items-center justify-center border border-blue-100 dark:border-blue-800/50 overflow-hidden`}>
+                    <div className={`flex-shrink-0 ${compact ? 'w-6 h-6' : 'w-8 h-8'} rounded-lg bg-gradient-to-br from-primary/15 to-primary/25 flex items-center justify-center border border-primary/25 overflow-hidden`}>
                       <Favicon url={bookmark.url} size={compact ? 12 : 16} />
                     </div>
-                    <div className={`font-semibold text-gray-900 dark:text-white ${compact ? 'text-xs' : 'text-[15px]'} truncate`}>
+                    <div className={`font-semibold text-foreground ${compact ? 'text-xs' : 'text-sm'} truncate`}>
                       {bookmark.title}
                     </div>
                   </a>
@@ -321,7 +321,7 @@ export default function BookmarkTableView({
                       <div className="flex flex-wrap gap-1">
                         {bookmark.folders && bookmark.folders.length > 0 ? (
                           bookmark.folders.slice(0, 2).map((folder) => (
-                            <Badge key={folder.id} variant="secondary" className="text-xs font-medium bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300">
+                            <Badge key={folder.id} variant="secondary" className="text-xs font-medium bg-primary/10 text-primary">
                               <FolderIcon iconName={folder.icon} size={12} className="mr-1" />
                               {folder.name}
                             </Badge>

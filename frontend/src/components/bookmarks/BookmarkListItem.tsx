@@ -49,31 +49,31 @@ export default function BookmarkListItem({
 
   return (
     <div
-      className={`group bg-white dark:bg-gray-800 rounded-lg border ${
+      className={`group bg-card rounded-lg border ${
         selected
-          ? 'border-blue-500 dark:border-blue-400 ring-2 ring-blue-500/20'
-          : 'border-gray-200 dark:border-gray-700 hover:border-blue-400 dark:hover:border-blue-500'
+          ? 'border-primary ring-2 ring-ring/30'
+          : 'border-border hover:border-primary/50'
       } hover:shadow transition-all duration-200 ${compact ? 'p-2.5 min-h-[80px]' : 'p-4'}`}
     >
       <div className={`flex items-center ${compact ? 'gap-3' : 'gap-4'}`}>
         {bulkMode && (
           <button
             onClick={onSelect}
-            className="flex-shrink-0 text-blue-600 dark:text-blue-400"
+            className="flex-shrink-0 text-primary"
           >
             {selected ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5" />}
           </button>
         )}
-        <div className={`flex-shrink-0 ${compact ? 'w-10 h-10' : 'w-12 h-12'} rounded-lg bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/20 flex items-center justify-center border border-blue-100 dark:border-blue-800/50 overflow-hidden`}>
+        <div className={`flex-shrink-0 ${compact ? 'w-10 h-10' : 'w-12 h-12'} rounded-lg bg-gradient-to-br from-primary/15 to-primary/25 flex items-center justify-center border border-primary/25 overflow-hidden`}>
           <Favicon url={bookmark.url} size={compact ? 20 : 24} />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
-              <h3 className={`${compact ? 'text-sm' : 'text-[15px]'} font-medium text-gray-900 dark:text-white mb-1`}>
+              <h3 className="text-sm font-medium text-foreground mb-1">
                 {bookmark.title}
               </h3>
-              <p className={`${compact ? 'text-xs' : 'text-sm'} text-gray-700 dark:text-gray-200 truncate ${compact ? 'mb-1' : 'mb-2'}`}>
+              <p className={`${compact ? 'text-xs' : 'text-sm'} text-muted-foreground truncate ${compact ? 'mb-1' : 'mb-2'}`}>
                 {bookmark.url}
               </p>
               <div className={`flex flex-wrap items-center gap-2 ${compact ? 'min-h-[24px]' : ''}`}>
@@ -81,7 +81,7 @@ export default function BookmarkListItem({
                   bookmark.folders.slice(0, 1).map((folder) => (
                     <span
                       key={folder.id}
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 ${compact ? 'text-xs' : 'text-xs'} font-medium bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-md`}
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 ${compact ? 'text-xs' : 'text-xs'} font-medium bg-primary/10 text-primary rounded-md`}
                     >
                       <FolderIcon iconName={folder.icon} size={12} />
                       {folder.name}

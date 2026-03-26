@@ -84,7 +84,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-background py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
           <div className="flex justify-center mb-6">
@@ -99,19 +99,19 @@ export default function Login() {
               className="h-16 w-16 hidden dark:block"
             />
           </div>
-          <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">
+          <h2 className="text-2xl font-semibold text-foreground">
             {t('auth.login')}
           </h2>
-          <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+          <p className="mt-2 text-sm text-muted-foreground">
             {t('app.tagline')}
           </p>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-lg p-4 space-y-6">
+        <div className="bg-card rounded-lg border border-border shadow-lg p-4 space-y-6">
           {/* Local Authentication Form */}
           <form onSubmit={handleLocalLogin} className="space-y-5">
             <div>
-              <label htmlFor="email" className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+              <label htmlFor="email" className="block text-sm font-semibold text-foreground mb-2">
                 {t('auth.email')}
               </label>
               <input
@@ -119,14 +119,14 @@ export default function Login() {
                 name="email"
                 type="email"
                 required
-                className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-colors"
+                className="w-full px-4 h-9 text-sm text-foreground bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-colors"
                 placeholder={t('auth.emailPlaceholder')}
                 value={localAuth.email}
                 onChange={(e) => setLocalAuth({ ...localAuth, email: e.target.value })}
               />
             </div>
             <div>
-              <label htmlFor="password" className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+              <label htmlFor="password" className="block text-sm font-semibold text-foreground mb-2">
                 {t('auth.password')}
               </label>
               <input
@@ -134,7 +134,7 @@ export default function Login() {
                 name="password"
                 type="password"
                 required
-                className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-colors"
+                className="w-full px-4 h-9 text-sm text-foreground bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-colors"
                 placeholder={t('auth.passwordPlaceholder')}
                 value={localAuth.password}
                 onChange={(e) => setLocalAuth({ ...localAuth, password: e.target.value })}
@@ -169,10 +169,10 @@ export default function Login() {
             <>
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-300 dark:border-gray-600"></div>
+                  <div className="w-full border-t border-border" />
                 </div>
                 <div className="relative flex justify-center text-sm">
-                  <span className="px-3 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+                  <span className="px-3 bg-card text-muted-foreground">
                     {t('auth.or')}
                   </span>
                 </div>

@@ -96,14 +96,14 @@ export default function AdminSettings() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm p-4">
+      <div className="bg-card rounded-lg border border-border shadow-sm p-4">
         <div className="flex items-center gap-2 mb-6">
-          <Mail className="h-5 w-5 text-gray-400 dark:text-gray-500" />
+          <Mail className="h-5 w-5 text-muted-foreground" />
           <div>
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+            <h2 className="text-xl font-semibold text-foreground">
               {t('smtp.title')}
             </h2>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            <p className="mt-1 text-sm text-muted-foreground">
               {t('smtp.description')}
             </p>
           </div>
@@ -116,55 +116,55 @@ export default function AdminSettings() {
               checked={smtpSettings.enabled}
               onCheckedChange={(checked) => setSmtpSettings({ ...smtpSettings, enabled: checked })}
             />
-            <Label htmlFor="smtp-enabled" className="text-sm font-medium text-gray-900 dark:text-white cursor-pointer">
+            <Label htmlFor="smtp-enabled" className="text-sm font-medium text-foreground cursor-pointer">
               {t('smtp.enabled')}
             </Label>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+              <label className="block text-sm font-semibold text-foreground mb-2">
                 {t('smtp.host')}
               </label>
               <input
                 type="text"
-                className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full px-4 h-9 text-sm text-foreground bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 placeholder={t('smtp.hostPlaceholder')}
                 value={smtpSettings.host}
                 onChange={(e) => setSmtpSettings({ ...smtpSettings, host: e.target.value })}
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+              <label className="block text-sm font-semibold text-foreground mb-2">
                 {t('smtp.port')}
               </label>
               <input
                 type="number"
-                className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full px-4 h-9 text-sm text-foreground bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 placeholder={t('smtp.portPlaceholder')}
                 value={smtpSettings.port}
                 onChange={(e) => setSmtpSettings({ ...smtpSettings, port: parseInt(e.target.value) || 587 })}
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+              <label className="block text-sm font-semibold text-foreground mb-2">
                 {t('smtp.user')}
               </label>
               <input
                 type="text"
-                className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full px-4 h-9 text-sm text-foreground bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 placeholder={t('smtp.userPlaceholder')}
                 value={smtpSettings.user}
                 onChange={(e) => setSmtpSettings({ ...smtpSettings, user: e.target.value })}
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+              <label className="block text-sm font-semibold text-foreground mb-2">
                 {t('smtp.password')}
               </label>
               <input
                 type="password"
-                className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full px-4 h-9 text-sm text-foreground bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 placeholder={passwordIsSet ? t('smtp.passwordPlaceholder') : t('smtp.passwordPlaceholder')}
                 value={smtpSettings.password}
                 onChange={(e) => {
@@ -184,29 +184,29 @@ export default function AdminSettings() {
                   }
                 }}
               />
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              <p className="mt-1 text-xs text-muted-foreground">
                 {passwordIsSet ? t('smtp.passwordChangeHint') : t('admin.leaveBlank')}
               </p>
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+              <label className="block text-sm font-semibold text-foreground mb-2">
                 {t('smtp.from')}
               </label>
               <input
                 type="email"
-                className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full px-4 h-9 text-sm text-foreground bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 placeholder={t('smtp.fromPlaceholder')}
                 value={smtpSettings.from}
                 onChange={(e) => setSmtpSettings({ ...smtpSettings, from: e.target.value })}
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+              <label className="block text-sm font-semibold text-foreground mb-2">
                 {t('smtp.fromName')}
               </label>
               <input
                 type="text"
-                className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full px-4 h-9 text-sm text-foreground bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 placeholder={t('smtp.fromNamePlaceholder')}
                 value={smtpSettings.fromName}
                 onChange={(e) => setSmtpSettings({ ...smtpSettings, fromName: e.target.value })}
@@ -220,17 +220,17 @@ export default function AdminSettings() {
               checked={smtpSettings.secure}
               onCheckedChange={(checked) => setSmtpSettings({ ...smtpSettings, secure: checked })}
             />
-            <Label htmlFor="smtp-secure" className="text-sm font-medium text-gray-900 dark:text-white cursor-pointer">
+            <Label htmlFor="smtp-secure" className="text-sm font-medium text-foreground cursor-pointer">
               {t('smtp.secure')}
             </Label>
           </div>
 
-          <div className="flex items-center gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <div className="flex items-center gap-4 pt-4 border-t border-border">
             <div className="flex-1">
-              <label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+              <label className="block text-sm font-semibold text-foreground mb-2">
                 {t('smtp.testEmail')}
               </label>
-              <div className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 border border-gray-300 dark:border-gray-600 rounded-lg">
+              <div className="px-4 py-2.5 text-sm text-muted-foreground bg-muted/50 border border-input rounded-lg">
                 {user?.email || t('common.loading')}
               </div>
             </div>

@@ -259,23 +259,23 @@ export default function Tags() {
           ))}
         </div>
       ) : (
-        <div className="overflow-x-auto bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+        <div className="overflow-x-auto bg-card rounded-lg border border-border">
           <table className="w-full">
-            <thead className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
+            <thead className="bg-muted/50 border-b border-border">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                   {t('tags.name')}
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">
+                <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                   {t('common.actions')}
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+            <tbody className="divide-y divide-border">
               {sortedTags.map((tag) => (
                 <tr
                   key={tag.id}
-                  className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                  className="hover:bg-muted/50 transition-colors"
                 >
                   <td className="px-4 py-3">
                     <Link
@@ -285,7 +285,7 @@ export default function Tags() {
                       <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/20 flex items-center justify-center border border-purple-100 dark:border-purple-800/50">
                         <TagIcon className="h-4 w-4 text-purple-600 dark:text-purple-400" />
                       </div>
-                      <div className="font-medium text-gray-900 dark:text-white text-[15px]">
+                      <div className="font-medium text-foreground text-sm">
                         {tag.name}
                       </div>
                     </Link>

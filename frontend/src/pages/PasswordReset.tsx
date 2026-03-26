@@ -84,13 +84,13 @@ export default function PasswordReset() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-background py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 dark:text-white">
+          <h2 className="mt-6 text-center text-3xl font-extrabold text-foreground">
             {t('passwordReset.title')}
           </h2>
-          <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
+          <p className="mt-2 text-center text-sm text-muted-foreground">
             {step === 'request'
               ? t('passwordReset.description')
               : t('passwordReset.resetPassword')}
@@ -112,18 +112,18 @@ export default function PasswordReset() {
         {step === 'request' ? (
           <form className="mt-8 space-y-6" onSubmit={handleRequestReset}>
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label htmlFor="email" className="block text-sm font-medium text-foreground mb-2">
                 {t('passwordReset.email')}
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                 <input
                   id="email"
                   name="email"
                   type="email"
                   autoComplete="email"
                   required
-                  className="appearance-none relative block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 rounded-lg focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                  className="appearance-none relative block w-full pl-10 pr-3 py-3 border border-input placeholder:text-muted-foreground text-foreground bg-background rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring focus:z-10 sm:text-sm"
                   placeholder={t('passwordReset.emailPlaceholder')}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -145,7 +145,7 @@ export default function PasswordReset() {
             <div className="text-center">
               <Link
                 to={`${prefix}/login`}
-                className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+                className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/90"
               >
                 <ArrowLeft className="h-4 w-4" />
                 {t('passwordReset.backToLogin')}
@@ -155,7 +155,7 @@ export default function PasswordReset() {
         ) : (
           <>
             {tokenValid === null ? (
-              <div className="text-center text-gray-500 dark:text-gray-400">
+              <div className="text-center text-muted-foreground">
                 {t('common.loading')}
               </div>
             ) : tokenValid === false ? (
@@ -165,7 +165,7 @@ export default function PasswordReset() {
                 </p>
                 <Link
                   to={`${prefix}/password-reset`}
-                  className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+                  className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/90"
                 >
                   <ArrowLeft className="h-4 w-4" />
                   {t('passwordReset.backToLogin')}
@@ -174,18 +174,18 @@ export default function PasswordReset() {
             ) : (
               <form className="mt-8 space-y-6" onSubmit={handleReset}>
                 <div>
-                  <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <label htmlFor="password" className="block text-sm font-medium text-foreground mb-2">
                     {t('passwordReset.newPassword')}
                   </label>
                   <div className="relative">
-                    <Key className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                    <Key className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                     <input
                       id="password"
                       name="password"
                       type="password"
                       autoComplete="new-password"
                       required
-                      className="appearance-none relative block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 rounded-lg focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                      className="appearance-none relative block w-full pl-10 pr-3 py-3 border border-input placeholder:text-muted-foreground text-foreground bg-background rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring focus:z-10 sm:text-sm"
                       placeholder={t('auth.passwordPlaceholder')}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
@@ -194,18 +194,18 @@ export default function PasswordReset() {
                 </div>
 
                 <div>
-                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-foreground mb-2">
                     {t('passwordReset.confirmPassword')}
                   </label>
                   <div className="relative">
-                    <Key className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                    <Key className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                     <input
                       id="confirmPassword"
                       name="confirmPassword"
                       type="password"
                       autoComplete="new-password"
                       required
-                      className="appearance-none relative block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 rounded-lg focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                      className="appearance-none relative block w-full pl-10 pr-3 py-3 border border-input placeholder:text-muted-foreground text-foreground bg-background rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring focus:z-10 sm:text-sm"
                       placeholder={t('passwordReset.confirmPassword')}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
@@ -227,7 +227,7 @@ export default function PasswordReset() {
                 <div className="text-center">
                   <Link
                     to={`${prefix}/login`}
-                    className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+                    className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/90"
                   >
                     <ArrowLeft className="h-4 w-4" />
                     {t('passwordReset.backToLogin')}
