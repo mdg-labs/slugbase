@@ -1,18 +1,19 @@
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useEffect, useState } from 'react';
-import { Share2, X, ChevronDown, ChevronRight, CheckCircle } from 'lucide-react';
-import { Card, CardContent } from '../components/ui/card';
+import { Share2, X, ChevronDown, ChevronRight, CheckCircle, Lightbulb } from 'lucide-react';
 import { StatCard } from '../components/StatCard';
 import {
-  DashboardHeader,
+  CommandBarHero,
   StatsCardsRow,
+  SlugPerformanceCard,
   PinnedSection,
   QuickAccessSection,
   MostUsedTagsSection,
 } from '../components/dashboard';
 import api from '../api/client';
 import { useAppConfig } from '../contexts/AppConfigContext';
+import { isCloud } from '../config/mode';
 
 interface RecentBookmark {
   id: string;
@@ -65,20 +66,28 @@ function ProTipBanner({
   t: (key: string) => string;
 }) {
   return (
-    <div className="flex items-start gap-3 rounded-xl border border-border bg-card shadow-sm px-4 py-3">
-      <p className="text-sm text-muted-foreground flex-1 min-w-0">
-        {t('dashboard.proTipBody')}{' '}
-        <Link
-          to={`${pathPrefix}/search-engine-guide`.replace(/\/+/g, '/') || '/search-engine-guide'}
-          className="text-primary font-medium hover:underline"
-        >
-          {t('dashboard.proTipLink')}
-        </Link>
-      </p>
+    <div className="flex items-start gap-3 rounded-xl border border-ghost border-l-4 border-l-primary bg-surface px-4 py-3 shadow-sm">
+      <Lightbulb className="h-5 w-5 shrink-0 text-primary mt-0.5" aria-hidden />
+      <div className="flex-1 min-w-0 space-y-1.5">
+        <p className="text-sm font-bold text-foreground">{t('dashboard.proTipTitle')}</p>
+        <p className="text-sm text-muted-foreground leading-relaxed">
+          {t('dashboard.proTipBeforeCode')}
+          <code className="mx-0.5 rounded-md bg-surface-low px-1.5 py-0.5 font-mono text-xs text-foreground border border-ghost align-middle">
+            {t('dashboard.proTipCode')}
+          </code>
+          {t('dashboard.proTipAfterCode')}{' '}
+          <Link
+            to={`${pathPrefix}/search-engine-guide`.replace(/\/+/g, '/') || '/search-engine-guide'}
+            className="text-primary font-medium hover:underline"
+          >
+            {t('dashboard.proTipLink')}
+          </Link>
+        </p>
+      </div>
       <button
         type="button"
         onClick={onDismiss}
-        className="shrink-0 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="shrink-0 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-surface-high transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         aria-label={t('dashboard.dismiss')}
       >
         <X className="h-4 w-4" />
@@ -139,32 +148,32 @@ function OnboardingChecklist({
   }
 
   return (
-    <Card className="border border-border bg-card shadow-sm">
+    <div className="rounded-xl border border-ghost border-l-4 border-l-primary bg-surface overflow-hidden shadow-sm">
       <button
         type="button"
         onClick={() => setCollapsed(!collapsed)}
-        className="w-full flex items-center gap-2 p-4 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset rounded-t-xl"
+        className="w-full flex items-center gap-3 p-4 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset hover:bg-surface-high/40 transition-colors"
       >
         {collapsed ? (
-          <ChevronRight className="h-5 w-5 text-muted-foreground" />
+          <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />
         ) : (
-          <ChevronDown className="h-5 w-5 text-muted-foreground" />
+          <ChevronDown className="h-5 w-5 text-muted-foreground shrink-0" />
         )}
-        <span className="font-medium text-sm">{t('dashboard.onboardingTitle')}</span>
+        <span className="text-sm font-semibold text-foreground">{t('dashboard.onboardingTitle')}</span>
       </button>
       {!collapsed && (
-        <CardContent className="pt-0 pb-4 px-4">
-          <ul className="space-y-2">
+        <div className="px-4 pb-4 pt-0 border-t border-ghost">
+          <ul className="space-y-2 pt-3">
             {steps.map((step, i) => (
               <li key={i}>
                 <Link
                   to={step.to}
-                  className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  className="flex items-center gap-3 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-lg py-1"
                 >
                   {step.done ? (
                     <CheckCircle className="h-4 w-4 text-primary shrink-0" />
                   ) : (
-                    <span className="w-4 h-4 rounded-full border border-muted-foreground shrink-0" />
+                    <span className="w-4 h-4 rounded-full border border-ghost bg-surface-low shrink-0" />
                   )}
                   <span>{step.label}</span>
                 </Link>
@@ -174,13 +183,13 @@ function OnboardingChecklist({
           <button
             type="button"
             onClick={handleDismiss}
-            className="mt-3 text-xs text-muted-foreground hover:text-foreground"
+            className="mt-4 text-xs font-medium uppercase tracking-widest text-muted-foreground hover:text-foreground"
           >
             {t('dashboard.onboardingDismiss')}
           </button>
-        </CardContent>
+        </div>
       )}
-    </Card>
+    </div>
   );
 }
 
@@ -219,7 +228,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {!proTipDismissed && (
         <ProTipBanner
           onDismiss={() => {
@@ -231,10 +240,40 @@ export default function Dashboard() {
         />
       )}
 
-      <DashboardHeader
-        title={t('dashboard.overview')}
-        subtitle={t('dashboard.overviewSubtitle')}
+      <CommandBarHero
+        title={t('dashboard.heroHeading')}
+        subtitle={t('dashboard.heroSubtitle')}
+        searchPlaceholder={t('dashboard.searchPlaceholder')}
+        shortcutHint={t('dashboard.commandSearchShortcut')}
       />
+
+      <QuickAccessSection
+        items={quickAccess}
+        pathPrefix={prefix}
+        maxItems={PINNED_QUICK_ACCESS_MAX_ITEMS}
+        subtitle={t('dashboard.quickAccessSubtitle')}
+        t={t}
+        onOpen={handleBookmarkOpen}
+        onCopyUrl={handleCopyUrl}
+      />
+
+      <div className={`grid gap-4 items-stretch ${isCloud ? 'lg:grid-cols-2' : ''}`}>
+        <SlugPerformanceCard t={t} className={isCloud ? '' : 'max-w-3xl'} />
+        {isCloud && (
+          <div className="rounded-xl border border-ghost bg-surface p-5 flex flex-col gap-4 justify-between min-h-[280px]">
+            <div>
+              <h3 className="text-lg font-semibold text-primary">{t('dashboard.aiPromoTitle')}</h3>
+              <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{t('dashboard.aiPromoDescription')}</p>
+            </div>
+            <Link
+              to="/pricing"
+              className="inline-flex items-center justify-center rounded-xl bg-primary-gradient px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-glow hover:opacity-90 transition-opacity text-center"
+            >
+              {t('dashboard.upgradeToProCta')}
+            </Link>
+          </div>
+        )}
+      </div>
 
       {stats && (
         <StatsCardsRow
@@ -274,19 +313,9 @@ export default function Dashboard() {
         onCopyUrl={handleCopyUrl}
       />
 
-      <QuickAccessSection
-        items={quickAccess}
-        pathPrefix={prefix}
-        maxItems={PINNED_QUICK_ACCESS_MAX_ITEMS}
-        subtitle={t('dashboard.quickAccessSubtitle')}
-        t={t}
-        onOpen={handleBookmarkOpen}
-        onCopyUrl={handleCopyUrl}
-      />
-
       {stats && (stats.sharedBookmarks > 0 || stats.sharedFolders > 0) && (
         <section className="space-y-3">
-          <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
+          <h2 className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
             {t('dashboard.sharedWithYou')}
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

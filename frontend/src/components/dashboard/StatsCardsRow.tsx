@@ -101,8 +101,7 @@ export interface SlugPerformanceCardProps {
  * Slug / shortcut opens over time — illustrative bars until analytics API exists.
  */
 export function SlugPerformanceCard({ t, className = '' }: SlugPerformanceCardProps) {
-  const n = SLUG_PERFORMANCE_PLACEHOLDER.length;
-  const highlightIndex = n - 1;
+  const highlightIndex = SLUG_PERFORMANCE_PLACEHOLDER.length - 1;
 
   return (
     <div
@@ -128,7 +127,7 @@ export function SlugPerformanceCard({ t, className = '' }: SlugPerformanceCardPr
               axisLine={false}
               tickLine={false}
             />
-            <YAxis hide domain={[0, 'dataMax + 4']} />
+            <YAxis hide />
             <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={36}>
               {SLUG_PERFORMANCE_PLACEHOLDER.map((_, i) => (
                 <Cell key={SLUG_PERFORMANCE_PLACEHOLDER[i].name} fill={i === highlightIndex ? PRIMARY_BAR : MUTED_BAR} />

@@ -50,7 +50,6 @@ function QuickAccessSlugCard({
   return (
     <div
       className="rounded-xl border border-ghost bg-surface p-4 flex flex-col gap-3 text-left transition-colors hover:bg-surface-high min-h-[160px]"
-      data-testid="quick-access-card"
     >
       <div className="flex items-start gap-3 min-w-0">
         <div className="shrink-0 rounded-lg border border-ghost bg-surface-low p-2">
