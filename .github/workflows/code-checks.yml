@@ -29,7 +29,7 @@ jobs:
           cache: 'npm'
       
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
       
       - name: Type check ${{ matrix.workspace }}
         run: |
@@ -54,18 +54,20 @@ jobs:
           cache: 'npm'
       
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
       
-      - name: Build backend
-        run: npm run build --workspace=backend
+      - name: Legacy cloud migrations must not be registered
+        run: node scripts/check-legacy-cloud-migrations.mjs
       
-      - name: Build frontend
-        run: npm run build --workspace=frontend
+      - name: Full monorepo build (includes core embed for npm package)
+        run: npm run build
       
       - name: Verify build artifacts
         run: |
           test -d backend/dist && echo "Backend build successful" || (echo "Backend build failed" && exit 1)
           test -d frontend/dist && echo "Frontend build successful" || (echo "Frontend build failed" && exit 1)
+          test -d packages/core/frontend/publish && echo "Core embed build successful" || (echo "Core embed missing" && exit 1)
+          test -f packages/core/frontend/publish/slugbase-core-frontend.js || (echo "Core embed JS missing" && exit 1)
 
   security-audit:
     name: Security Audit
@@ -85,7 +87,7 @@ jobs:
           cache: 'npm'
       
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
       
       - name: Run npm audit (root)
         run: npm audit --audit-level=moderate

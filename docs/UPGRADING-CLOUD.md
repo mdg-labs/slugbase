@@ -1,31 +1,48 @@
 # Upgrading SlugBase Cloud to a new core version
 
-SlugBase Cloud uses SlugBase core (this repo). **Core contains only self-hosted code and logic (multi-tenant ready).** All multi-tenant SaaS features, marketing (landing, pricing, contact, terms, privacy, imprint), and cloud-only infrastructure live in the **slugbase-cloud** repo.
+SlugBase Cloud depends on **`@mdguggenbichler/slugbase-core`**, shipped as a **vendored tarball** under `slugbase-cloud/vendor/` (built from [`packages/core`](../packages/core) in this repo). **Core** stays self-hosted product logic only; SaaS lives in **slugbase-cloud**.
 
-When you release a new version of the core, upgrade the cloud deployment as follows.
+## 1. Bump core version (optional but recommended)
 
-## 1. Release core
+Edit [`packages/core/package.json`](../packages/core/package.json) `version` so the packed filename changes (e.g. `0.1.0` → `0.1.1`).
 
-- Bump version in root `package.json` (and in `packages/slugbase-core/package.json` if you publish from there).
-- Tag and push, e.g. `git tag v1.2.0 && git push origin v1.2.0`.
-- If you use the `release-publish.yml` workflow, the `slugbase-core` npm package is published on tag.
+## 2. Pack and copy into cloud
 
-## 2. Update cloud to use the new core
+From **slugbase** repo root (sibling `slugbase-cloud`):
 
-SlugBase Cloud currently builds core from a checkout of this repo (see slugbase-cloud Dockerfile and deploy workflows). To upgrade:
+```bash
+npm run pack:cloud
+```
 
-1. **If using git checkout (current setup)**  
-   Deploy from slugbase-cloud as usual. The deploy workflow checks out `mdg-labs/slugbase` at `HEAD` of the default branch. To pin a release, change the checkout step to use a ref (e.g. `ref: v1.2.0`) instead of the default branch.
+See [PUBLISHING-CORE.md](PUBLISHING-CORE.md) for `SLUGBASE_CLOUD_ROOT` if layouts differ.
 
-2. **If using npm package (recommended)**  
-   In slugbase-cloud, add or update `"@slugbase/core": "^1.2.0"` in `package.json`, run `npm update @slugbase/core`, then run tests and deploy. Cloud should depend on the published package and **not** copy core at build time; use `createApp`, `registerCoreRoutes`, and the frontend `App` with `basePath="/app"` and optional `apiBaseUrl` as documented in [PACKAGE-BOUNDARIES-AND-EXPORTS.md](PACKAGE-BOUNDARIES-AND-EXPORTS.md).
+## 3. Wire cloud to the new tarball
 
-## 3. Test and deploy
+In **slugbase-cloud** `package.json`, set:
 
-- Run cloud tests (if any) and manual smoke tests.
-- Deploy to staging first, then production.
-- Watch for migration or config changes that might require env or schema updates.
+```json
+"@mdguggenbichler/slugbase-core": "file:./vendor/mdguggenbichler-slugbase-core-0.1.1.tgz"
+```
 
-## 4. Document the upgrade
+(use the actual filename `npm pack` produced). Then:
 
-- Note the new core version in your internal runbook or in slugbase-cloud’s release notes.
+```bash
+npm install
+```
+
+Commit `vendor/*.tgz`, `package.json`, and `package-lock.json`.
+
+## 4. Integration surface
+
+- **Backend:** `createApp`, `registerCoreRoutes`, `query`, `execute`, `requireAuth`, etc.
+- **Frontend:** `import { App } from '@mdguggenbichler/slugbase-core/frontend'` with `basePath="/app"`.
+
+See slugbase-cloud `docs/core-integration-contract.md` and [PACKAGE-BOUNDARIES-AND-EXPORTS.md](PACKAGE-BOUNDARIES-AND-EXPORTS.md).
+
+## 5. Test and deploy
+
+Build/test cloud, deploy (e.g. Fly). Docker expects `vendor/` present before `npm ci` (see slugbase-cloud `Dockerfile`).
+
+## Optional: npm registry instead of vendor
+
+You can publish manually from `.publish-core` and switch cloud to a semver; see [PUBLISHING-CORE.md](PUBLISHING-CORE.md). There is no automated publish workflow in this repo.

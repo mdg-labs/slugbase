@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:core-embed": "npx vite build --config vite.core-embed.config.ts",
     "preview": "vite preview",
     "validate:i18n": "node scripts/validate-i18n.mjs"
   },

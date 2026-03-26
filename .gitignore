@@ -48,6 +48,11 @@ docker-compose.yml
 *.tgz
 .publish-core/
 
+# Core npm package build outputs (assembled by scripts/assemble-core-package.js)
+packages/core/frontend/publish/
+packages/core/frontend/src/
+packages/core/backend/dist/
+
 # E2E
 .e2e-db.sqlite
 e2e/.auth/
@@ -66,6 +71,8 @@ coverage/
 # Cursor and private
 .cursor/
 PRD/
+.agents/
+.impeccable.md
 
 # Docs: private notes, not synced to docs repo
 docs/internal/
