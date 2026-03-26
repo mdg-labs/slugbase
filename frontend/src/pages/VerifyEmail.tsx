@@ -5,6 +5,10 @@ import { useAuth } from '../contexts/AuthContext';
 import api from '../api/client';
 import { CheckCircle, XCircle, Mail } from 'lucide-react';
 import Button from '../components/ui/Button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+
+const AUTH_CARD = 'rounded-xl border border-ghost bg-surface p-6 shadow-none';
 
 export default function VerifyEmail() {
   const { t } = useTranslation();
@@ -107,7 +111,7 @@ export default function VerifyEmail() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full bg-card rounded-lg border border-border shadow-lg p-4">
+      <div className={`max-w-md w-full ${AUTH_CARD}`}>
         <div className="text-center space-y-4">
           {status === 'verifying' && (
             <>
@@ -173,31 +177,30 @@ export default function VerifyEmail() {
                       : t('emailVerification.resendNoTokenDescription')}
                   </p>
                   <form onSubmit={status === 'resend' ? handleResendSubmit : handleRequestResendSubmit} className="space-y-4 text-left mt-4">
-                    <div>
-                      <label htmlFor="resend-email" className="block text-sm font-semibold text-foreground mb-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="resend-email" className="typography-label">
                         {t('emailVerification.editEmailLabel')}
-                      </label>
-                      <input
+                      </Label>
+                      <Input
                         id="resend-email"
                         name="email"
                         type="email"
                         required
-                        className="w-full px-4 h-9 text-sm text-foreground bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring"
                         placeholder={t('auth.emailPlaceholder')}
                         value={status === 'resend' ? resendEmail : undefined}
                         onChange={status === 'resend' ? (e) => setResendEmail(e.target.value) : undefined}
                       />
                     </div>
                     {error && (
-                      <div className="px-4 py-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                        <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
+                      <div className="px-4 py-3 rounded-xl border border-destructive/30 bg-destructive/10">
+                        <p className="text-sm text-destructive">{error}</p>
                       </div>
                     )}
                     <Button
                       type="submit"
                       variant="primary"
                       disabled={resendLoading}
-                      className="w-full"
+                      className="w-full border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
                     >
                       {resendLoading ? t('common.loading') : t('emailVerification.resendButton')}
                     </Button>
@@ -229,11 +232,11 @@ export default function VerifyEmail() {
               </p>
               <div className="pt-4 space-y-2">
                 {error === t('emailVerification.alreadyVerified') ? (
-                  <Button variant="primary" onClick={() => navigate(loginPath)}>
+                  <Button variant="primary" onClick={() => navigate(loginPath)} className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90">
                     {t('auth.login')}
                   </Button>
                 ) : (
-                  <Button variant="primary" onClick={() => navigate(profilePath)}>
+                  <Button variant="primary" onClick={() => navigate(profilePath)} className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90">
                     {t('emailVerification.backToProfile')}
                   </Button>
                 )}

@@ -84,23 +84,23 @@ export default function AdminTeams() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{t('admin.teams')}</h2>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          <h2 className="text-lg font-semibold text-foreground">{t('admin.teams')}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
             {teams.length} {teams.length === 1 ? 'team' : 'teams'}
           </p>
         </div>
-        <Button onClick={() => setModalOpen(true)} icon={Plus}>
+        <Button onClick={() => setModalOpen(true)} icon={Plus} className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90">
           {t('admin.addTeam')}
         </Button>
       </div>
 
       {teams.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 px-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-          <Users className="h-12 w-12 text-gray-400 dark:text-gray-500 mb-4" />
-          <p className="text-gray-500 dark:text-gray-400 text-lg mb-4">{t('admin.noTeamsYet')}</p>
-          <Button onClick={() => setModalOpen(true)} variant="primary" size="sm" icon={Plus}>
+        <div className="flex flex-col items-center justify-center rounded-xl border border-ghost bg-surface py-16 px-4">
+          <Users className="h-12 w-12 text-muted-foreground mb-4" />
+          <p className="text-muted-foreground text-lg mb-4">{t('admin.noTeamsYet')}</p>
+          <Button onClick={() => setModalOpen(true)} variant="primary" size="sm" icon={Plus} className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90">
             {t('admin.addTeam')}
           </Button>
         </div>
@@ -109,21 +109,21 @@ export default function AdminTeams() {
           {teams.map((team) => (
             <div
               key={team.id}
-              className="group bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-all overflow-hidden"
+              className="group overflow-hidden rounded-xl border border-ghost bg-surface shadow-none transition-colors hover:border-primary/25"
             >
               <div className="p-4 space-y-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <Users className="h-5 w-5 text-gray-400 dark:text-gray-500 flex-shrink-0" />
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white truncate">
+                    <Users className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                    <h3 className="text-lg font-semibold text-foreground truncate">
                       {team.name}
                     </h3>
                   </div>
                 </div>
                 {team.description && (
-                  <p className="text-sm text-gray-500 dark:text-gray-400">{team.description}</p>
+                  <p className="text-sm text-muted-foreground">{team.description}</p>
                 )}
-                <div className="flex gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                <div className="flex gap-2 pt-2 border-t border-ghost">
                   <Button
                     variant="ghost"
                     size="sm"

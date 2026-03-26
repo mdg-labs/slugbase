@@ -40,7 +40,7 @@ function SettingsRow({
   ariaLabel?: string;
 }) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 py-3 border-b border-border last:border-0">
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 py-3 border-b border-ghost last:border-0">
       <div className="min-w-0 flex-1">
         <dt className="text-sm font-medium text-foreground">{label}</dt>
         {value !== undefined && (
@@ -275,7 +275,7 @@ export default function Profile() {
 
       <div className="space-y-6">
         {/* Section A: Account */}
-        <Card className="border border-border bg-card shadow-sm">
+        <Card className="rounded-xl border border-ghost bg-surface shadow-none">
           <CardHeader>
             <CardTitle>{t('profile.account')}</CardTitle>
             <CardDescription>{t('profile.accountDescription')}</CardDescription>
@@ -312,6 +312,7 @@ export default function Profile() {
                         onClick={handleSubmit}
                         disabled={saving}
                         aria-label={t('common.save')}
+                        className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
                       >
                         {saving ? t('common.loading') : t('common.save')}
                       </Button>
@@ -389,6 +390,7 @@ export default function Profile() {
                         onClick={handleSubmit}
                         disabled={saving}
                         aria-label={t('common.save')}
+                        className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
                       >
                         {saving ? t('common.loading') : t('common.save')}
                       </Button>
@@ -459,7 +461,7 @@ export default function Profile() {
         </Card>
 
         {/* Section B: Preferences */}
-        <Card className="border border-border bg-card shadow-sm">
+        <Card className="rounded-xl border border-ghost bg-surface shadow-none">
           <CardHeader>
             <CardTitle>{t('profile.preferences')}</CardTitle>
             <CardDescription>{t('profile.preferencesDescription')}</CardDescription>
@@ -517,6 +519,7 @@ export default function Profile() {
                 variant="primary"
                 disabled={saving || !preferencesDirty}
                 aria-label={t('common.save')}
+                className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
               >
                 {saving ? t('common.loading') : t('common.save')}
               </Button>
@@ -525,11 +528,11 @@ export default function Profile() {
         </Card>
 
         {/* Section C: Developer / API Access */}
-        <Card className="border border-border bg-card shadow-sm" aria-labelledby="developer-section-title">
+        <Card className="rounded-xl border border-ghost bg-surface shadow-none" aria-labelledby="developer-section-title">
           <CardHeader>
             <div className="flex flex-wrap items-center gap-2">
               <CardTitle id="developer-section-title" className="flex items-center gap-2">
-                <Key className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                <Key className="h-5 w-5 text-primary" />
                 {t('profile.developerApiTitle')}
               </CardTitle>
               <Badge
@@ -566,6 +569,7 @@ export default function Profile() {
                 size="sm"
                 onClick={() => setCreateTokenOpen(true)}
                 aria-label={t('profile.createToken')}
+                className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
               >
                 {t('profile.createToken')}
               </Button>
@@ -581,7 +585,7 @@ export default function Profile() {
                 {tokens.map((tok) => (
                   <li
                     key={tok.id}
-                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 py-2 px-3 rounded-lg bg-muted/50"
+                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 py-2 px-3 rounded-xl border border-ghost bg-surface-low"
                   >
                     <div className="min-w-0 flex-1">
                       <span className="text-sm font-medium text-foreground block truncate">
@@ -614,7 +618,7 @@ export default function Profile() {
         </Card>
 
         {/* Danger Zone: delete account */}
-        <Card className="border border-destructive/50 bg-muted/30 shadow-sm">
+        <Card className="rounded-xl border border-destructive/40 bg-surface-low shadow-none">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-destructive">
               <AlertTriangle className="h-5 w-5" />

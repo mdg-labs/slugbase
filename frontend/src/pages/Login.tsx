@@ -7,6 +7,10 @@ import api from '../api/client';
 import { getAuthProviderUrl } from '../config/api';
 import { LogIn, Key } from 'lucide-react';
 import Button from '../components/ui/Button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+
+const AUTH_CARD = 'rounded-xl border border-ghost bg-surface p-6 shadow-none';
 
 export default function Login() {
   const { t } = useTranslation();
@@ -14,6 +18,7 @@ export default function Login() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const { pathPrefixForLinks } = useAppConfig();
+  const prefix = (pathPrefixForLinks || '').replace(/\/+/g, '/') || '';
   const [providers, setProviders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [localAuth, setLocalAuth] = useState({
@@ -32,7 +37,6 @@ export default function Login() {
   }, [user, navigate, searchParams]);
 
   useEffect(() => {
-    // Check for OIDC error in URL query parameters
     const errorParam = searchParams.get('error');
     if (errorParam) {
       if (errorParam === 'auth_failed') {
@@ -42,7 +46,6 @@ export default function Login() {
       } else {
         setError(t('auth.loginFailed'));
       }
-      // Remove error from URL
       searchParams.delete('error');
       setSearchParams(searchParams, { replace: true });
     }
@@ -73,7 +76,7 @@ export default function Login() {
       const code = err.response?.data?.code;
       const message = err.response?.data?.error;
       if (code === 'EMAIL_NOT_VERIFIED') {
-        const verifyPath = `${pathPrefixForLinks || ''}/verify-email-required`.replace(/\/+/g, '/') || '/verify-email-required';
+        const verifyPath = `${prefix}/verify-email-required`.replace(/\/+/g, '/') || '/verify-email-required';
         navigate(verifyPath, { replace: true, state: { email: localAuth.email } });
         return;
       }
@@ -88,14 +91,14 @@ export default function Login() {
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
           <div className="flex justify-center mb-6">
-            <img 
-              src="/slugbase_icon_blue.svg" 
-              alt="SlugBase" 
+            <img
+              src="/slugbase_icon_blue.svg"
+              alt="SlugBase"
               className="h-16 w-16 dark:hidden"
             />
-            <img 
-              src="/slugbase_icon_white.svg" 
-              alt="SlugBase" 
+            <img
+              src="/slugbase_icon_white.svg"
+              alt="SlugBase"
               className="h-16 w-16 hidden dark:block"
             />
           </div>
@@ -107,42 +110,41 @@ export default function Login() {
           </p>
         </div>
 
-        <div className="bg-card rounded-lg border border-border shadow-lg p-4 space-y-6">
-          {/* Local Authentication Form */}
+        <div className={AUTH_CARD}>
           <form onSubmit={handleLocalLogin} className="space-y-5">
-            <div>
-              <label htmlFor="email" className="block text-sm font-semibold text-foreground mb-2">
+            <div className="space-y-2">
+              <Label htmlFor="email" className="typography-label">
                 {t('auth.email')}
-              </label>
-              <input
+              </Label>
+              <Input
                 id="email"
                 name="email"
                 type="email"
                 required
-                className="w-full px-4 h-9 text-sm text-foreground bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-colors"
                 placeholder={t('auth.emailPlaceholder')}
                 value={localAuth.email}
                 onChange={(e) => setLocalAuth({ ...localAuth, email: e.target.value })}
+                autoComplete="email"
               />
             </div>
-            <div>
-              <label htmlFor="password" className="block text-sm font-semibold text-foreground mb-2">
+            <div className="space-y-2">
+              <Label htmlFor="password" className="typography-label">
                 {t('auth.password')}
-              </label>
-              <input
+              </Label>
+              <Input
                 id="password"
                 name="password"
                 type="password"
                 required
-                className="w-full px-4 h-9 text-sm text-foreground bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-colors"
                 placeholder={t('auth.passwordPlaceholder')}
                 value={localAuth.password}
                 onChange={(e) => setLocalAuth({ ...localAuth, password: e.target.value })}
+                autoComplete="current-password"
               />
             </div>
             {error && (
-              <div className="px-4 py-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
+              <div className="px-4 py-3 rounded-xl border border-destructive/30 bg-destructive/10">
+                <p className="text-sm text-destructive">{error}</p>
               </div>
             )}
             <Button
@@ -150,13 +152,13 @@ export default function Login() {
               variant="primary"
               disabled={localLoading}
               icon={LogIn}
-              className="w-full"
+              className="w-full border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
             >
               {localLoading ? t('common.loading') : t('auth.login')}
             </Button>
             <div className="text-center space-y-2">
               <Link
-                to="/password-reset"
+                to={`${prefix}/password-reset`.replace(/\/+/g, '/') || '/password-reset'}
                 className="block text-sm font-medium text-primary hover:text-primary/90"
               >
                 {t('auth.forgotPassword')}
@@ -164,15 +166,14 @@ export default function Login() {
             </div>
           </form>
 
-          {/* OIDC Providers */}
           {!loading && providers.length > 0 && (
             <>
-              <div className="relative">
+              <div className="relative my-6">
                 <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-border" />
+                  <div className="w-full border-t border-ghost" />
                 </div>
                 <div className="relative flex justify-center text-sm">
-                  <span className="px-3 bg-card text-muted-foreground">
+                  <span className="px-3 bg-surface text-muted-foreground typography-label">
                     {t('auth.or')}
                   </span>
                 </div>
@@ -184,7 +185,7 @@ export default function Login() {
                     variant="secondary"
                     icon={Key}
                     onClick={() => handleOIDCLogin(provider.provider_key)}
-                    className="w-full"
+                    className="w-full border-ghost bg-surface-high"
                   >
                     {t('auth.loginWith', { provider: provider.provider_key })}
                   </Button>

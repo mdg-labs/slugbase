@@ -24,9 +24,9 @@ interface ConfirmDialogProps {
 }
 
 const variantBorderClasses = {
-  danger: 'border-destructive/50',
-  warning: 'border-yellow-500/50',
-  default: 'border-border',
+  danger: 'border-destructive/40',
+  warning: 'border-yellow-500/40',
+  default: 'border-ghost',
 };
 
 export default function ConfirmDialog({
@@ -48,27 +48,27 @@ export default function ConfirmDialog({
 
   return (
     <AlertDialog open={isOpen} onOpenChange={(open) => !open && onCancel()}>
-      <AlertDialogContent className={`max-w-sm ${variantBorderClasses[variant]}`}>
+      <AlertDialogContent className={`max-w-sm rounded-xl border-2 bg-surface-high shadow-glow ${variantBorderClasses[variant]}`}>
         <AlertDialogHeader>
           <div className="flex items-start gap-4">
-            <div className="flex-shrink-0 text-destructive">
+            <div className={`flex-shrink-0 ${variant === 'danger' ? 'text-destructive' : 'text-primary'}`}>
               <AlertTriangle className="h-6 w-6" />
             </div>
             <div className="flex-1 min-w-0">
-              <AlertDialogTitle>{title}</AlertDialogTitle>
-              <AlertDialogDescription className="mt-2">
+              <AlertDialogTitle className="text-foreground">{title}</AlertDialogTitle>
+              <AlertDialogDescription className="mt-2 text-muted-foreground">
                 {description}
               </AlertDialogDescription>
             </div>
           </div>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={onCancel}>
+          <AlertDialogCancel onClick={onCancel} className="border-ghost bg-surface">
             {cancelText || t('common.cancel')}
           </AlertDialogCancel>
           <AlertDialogAction
             onClick={onConfirm}
-            className={variant === 'danger' ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : ''}
+            className={variant === 'danger' ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : 'border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90'}
           >
             {confirmText || t('common.confirm')}
           </AlertDialogAction>

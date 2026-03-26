@@ -101,7 +101,7 @@ export default function AdminUsers() {
           <Skeleton className="h-6 w-32" />
           <Skeleton className="h-4 w-48" />
         </div>
-        <Card>
+        <Card className="rounded-xl border border-ghost bg-surface overflow-hidden shadow-none">
           <div className="p-6 space-y-4">
             {Array.from({ length: 5 }).map((_, i) => (
               <Skeleton key={i} className="h-16 w-full" />
@@ -116,17 +116,17 @@ export default function AdminUsers() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{t('admin.users')}</h2>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          <h2 className="text-lg font-semibold text-foreground">{t('admin.users')}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
             {`${users.length} ${users.length === 1 ? t('common.user') : t('common.users')}`}
           </p>
         </div>
-        <Button onClick={() => setModalOpen(true)} icon={Plus}>
+        <Button onClick={() => setModalOpen(true)} icon={Plus} className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90">
           {t('admin.addUser')}
         </Button>
       </div>
 
-      <Card>
+      <Card className="overflow-hidden rounded-xl border border-ghost bg-surface shadow-none">
         <Table>
           <TableHeader>
             <TableRow>
@@ -170,7 +170,7 @@ export default function AdminUsers() {
                     <DropdownMenuTrigger asChild>
                       <button
                       type="button"
-                      className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent hover:text-accent-foreground"
+                      className="inline-flex items-center justify-center h-8 w-8 rounded-md text-muted-foreground hover:bg-surface-high hover:text-foreground"
                     >
                       <MoreHorizontal className="h-4 w-4" />
                       <span className="sr-only">{t('common.actions')}</span>

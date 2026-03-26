@@ -5,6 +5,10 @@ import { useAppConfig } from '../contexts/AppConfigContext';
 import api from '../api/client';
 import { Mail } from 'lucide-react';
 import Button from '../components/ui/Button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+
+const AUTH_CARD = 'rounded-xl border border-ghost bg-surface p-6 shadow-none';
 
 export default function VerifyEmailRequired() {
   const { t } = useTranslation();
@@ -74,7 +78,7 @@ export default function VerifyEmailRequired() {
           </p>
         </div>
 
-        <div className="bg-card rounded-lg border border-border shadow-lg p-4 space-y-6">
+        <div className={`${AUTH_CARD} space-y-6`}>
           {success ? (
             <div className="space-y-4 text-center">
               <div className="mx-auto w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
@@ -97,15 +101,14 @@ export default function VerifyEmailRequired() {
                   <p className="text-sm text-muted-foreground">
                     {t('auth.verifyEmailRequiredPageEmailLabel')}: <span className="font-medium text-foreground">{stateEmail}</span>
                   </p>
-                  <div>
-                    <label htmlFor="verify-email-required-new-email" className="block text-sm font-semibold text-foreground mb-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="verify-email-required-new-email" className="typography-label">
                       {t('auth.newEmailLabel')}
-                    </label>
-                    <input
+                    </Label>
+                    <Input
                       id="verify-email-required-new-email"
                       name="newEmail"
                       type="email"
-                      className="w-full px-4 h-9 text-sm text-foreground bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-colors"
                       placeholder={t('auth.newEmailPlaceholder')}
                       value={newEmail}
                       onChange={(e) => setNewEmail(e.target.value)}
@@ -116,16 +119,15 @@ export default function VerifyEmailRequired() {
                   </div>
                 </>
               ) : (
-                <div>
-                  <label htmlFor="verify-email-required-email" className="block text-sm font-semibold text-foreground mb-2">
+                <div className="space-y-2">
+                  <Label htmlFor="verify-email-required-email" className="typography-label">
                     {t('auth.verifyEmailRequiredPageEmailLabel')}
-                  </label>
-                  <input
+                  </Label>
+                  <Input
                     id="verify-email-required-email"
                     name="email"
                     type="email"
                     required
-                    className="w-full px-4 h-9 text-sm text-foreground bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-colors"
                     placeholder={t('auth.emailPlaceholder')}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -133,8 +135,8 @@ export default function VerifyEmailRequired() {
                 </div>
               )}
               {error && (
-                <div className="px-4 py-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                  <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
+                <div className="px-4 py-3 rounded-xl border border-destructive/30 bg-destructive/10">
+                  <p className="text-sm text-destructive">{error}</p>
                 </div>
               )}
               <Button
@@ -142,7 +144,7 @@ export default function VerifyEmailRequired() {
                 variant="primary"
                 disabled={loading}
                 icon={Mail}
-                className="w-full"
+                className="w-full border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
               >
                 {loading ? t('common.loading') : t('auth.resendVerificationEmail')}
               </Button>

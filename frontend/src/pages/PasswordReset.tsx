@@ -5,11 +5,16 @@ import api from '../api/client';
 import { useAppConfig } from '../contexts/AppConfigContext';
 import { Mail, Key, ArrowLeft } from 'lucide-react';
 import Button from '../components/ui/Button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+
+const AUTH_CARD = 'rounded-xl border border-ghost bg-surface p-6 shadow-none';
 
 export default function PasswordReset() {
   const { t } = useTranslation();
   const { pathPrefixForLinks } = useAppConfig();
   const prefix = (pathPrefixForLinks || '').replace(/\/+/g, '/') || '';
+  const loginPath = `${prefix}/login`.replace(/\/+/g, '/') || '/login';
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const token = searchParams.get('token');
@@ -32,7 +37,7 @@ export default function PasswordReset() {
     try {
       const response = await api.get('/password-reset/verify', { params: { token } });
       setTokenValid(response.data.valid);
-    } catch (error: any) {
+    } catch {
       setTokenValid(false);
       setMessage({ type: 'error', text: t('passwordReset.invalidToken') });
     }
@@ -47,8 +52,7 @@ export default function PasswordReset() {
       await api.post('/password-reset/request', { email });
       setMessage({ type: 'success', text: t('passwordReset.requestSent') });
       setEmail('');
-    } catch (error: any) {
-      // Always show success message to prevent email enumeration
+    } catch {
       setMessage({ type: 'success', text: t('passwordReset.requestSent') });
       setEmail('');
     } finally {
@@ -71,12 +75,13 @@ export default function PasswordReset() {
       await api.post('/password-reset/reset', { token, password });
       setMessage({ type: 'success', text: t('passwordReset.resetSuccess') });
       setTimeout(() => {
-        navigate('/login');
+        navigate(loginPath);
       }, 2000);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { error?: string } } };
       setMessage({
         type: 'error',
-        text: error.response?.data?.error || t('common.error'),
+        text: err.response?.data?.error || t('common.error'),
       });
     } finally {
       setLoading(false);
@@ -85,9 +90,9 @@ export default function PasswordReset() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
+      <div className="max-w-md w-full space-y-6">
         <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-foreground">
+          <h2 className="mt-2 text-center text-2xl font-bold tracking-tight text-foreground">
             {t('passwordReset.title')}
           </h2>
           <p className="mt-2 text-center text-sm text-muted-foreground">
@@ -99,10 +104,10 @@ export default function PasswordReset() {
 
         {message && (
           <div
-            className={`rounded-lg p-4 ${
+            className={`rounded-xl border p-4 text-sm ${
               message.type === 'success'
-                ? 'bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-200'
-                : 'bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-200'
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200'
+                : 'border-destructive/30 bg-destructive/10 text-destructive'
             }`}
           >
             {message.text}
@@ -110,61 +115,61 @@ export default function PasswordReset() {
         )}
 
         {step === 'request' ? (
-          <form className="mt-8 space-y-6" onSubmit={handleRequestReset}>
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-foreground mb-2">
-                {t('passwordReset.email')}
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  className="appearance-none relative block w-full pl-10 pr-3 py-3 border border-input placeholder:text-muted-foreground text-foreground bg-background rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring focus:z-10 sm:text-sm"
-                  placeholder={t('passwordReset.emailPlaceholder')}
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
+          <div className={AUTH_CARD}>
+            <form className="space-y-6" onSubmit={handleRequestReset}>
+              <div className="space-y-2">
+                <Label htmlFor="email" className="typography-label">
+                  {t('passwordReset.email')}
+                </Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    autoComplete="email"
+                    required
+                    className="pl-10"
+                    placeholder={t('passwordReset.emailPlaceholder')}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                </div>
               </div>
-            </div>
 
-            <div>
               <Button
                 type="submit"
                 variant="primary"
-                className="w-full"
+                className="w-full border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
                 disabled={loading}
               >
                 {t('passwordReset.requestReset')}
               </Button>
-            </div>
 
-            <div className="text-center">
-              <Link
-                to={`${prefix}/login`}
-                className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/90"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                {t('passwordReset.backToLogin')}
-              </Link>
-            </div>
-          </form>
+              <div className="text-center">
+                <Link
+                  to={loginPath}
+                  className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/90"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  {t('passwordReset.backToLogin')}
+                </Link>
+              </div>
+            </form>
+          </div>
         ) : (
           <>
             {tokenValid === null ? (
-              <div className="text-center text-muted-foreground">
+              <div className={`${AUTH_CARD} text-center text-muted-foreground`}>
                 {t('common.loading')}
               </div>
             ) : tokenValid === false ? (
-              <div className="text-center">
-                <p className="text-red-600 dark:text-red-400 mb-4">
+              <div className={`${AUTH_CARD} text-center space-y-4`}>
+                <p className="text-destructive">
                   {t('passwordReset.invalidToken')}
                 </p>
                 <Link
-                  to={`${prefix}/password-reset`}
+                  to={`${prefix}/password-reset`.replace(/\/+/g, '/') || '/password-reset'}
                   className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/90"
                 >
                   <ArrowLeft className="h-4 w-4" />
@@ -172,68 +177,68 @@ export default function PasswordReset() {
                 </Link>
               </div>
             ) : (
-              <form className="mt-8 space-y-6" onSubmit={handleReset}>
-                <div>
-                  <label htmlFor="password" className="block text-sm font-medium text-foreground mb-2">
-                    {t('passwordReset.newPassword')}
-                  </label>
-                  <div className="relative">
-                    <Key className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                    <input
-                      id="password"
-                      name="password"
-                      type="password"
-                      autoComplete="new-password"
-                      required
-                      className="appearance-none relative block w-full pl-10 pr-3 py-3 border border-input placeholder:text-muted-foreground text-foreground bg-background rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring focus:z-10 sm:text-sm"
-                      placeholder={t('auth.passwordPlaceholder')}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                    />
+              <div className={AUTH_CARD}>
+                <form className="space-y-6" onSubmit={handleReset}>
+                  <div className="space-y-2">
+                    <Label htmlFor="password" className="typography-label">
+                      {t('passwordReset.newPassword')}
+                    </Label>
+                    <div className="relative">
+                      <Key className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                      <Input
+                        id="password"
+                        name="password"
+                        type="password"
+                        autoComplete="new-password"
+                        required
+                        className="pl-10"
+                        placeholder={t('auth.passwordPlaceholder')}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                      />
+                    </div>
                   </div>
-                </div>
 
-                <div>
-                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-foreground mb-2">
-                    {t('passwordReset.confirmPassword')}
-                  </label>
-                  <div className="relative">
-                    <Key className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                    <input
-                      id="confirmPassword"
-                      name="confirmPassword"
-                      type="password"
-                      autoComplete="new-password"
-                      required
-                      className="appearance-none relative block w-full pl-10 pr-3 py-3 border border-input placeholder:text-muted-foreground text-foreground bg-background rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring focus:z-10 sm:text-sm"
-                      placeholder={t('passwordReset.confirmPassword')}
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                    />
+                  <div className="space-y-2">
+                    <Label htmlFor="confirmPassword" className="typography-label">
+                      {t('passwordReset.confirmPassword')}
+                    </Label>
+                    <div className="relative">
+                      <Key className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                      <Input
+                        id="confirmPassword"
+                        name="confirmPassword"
+                        type="password"
+                        autoComplete="new-password"
+                        required
+                        className="pl-10"
+                        placeholder={t('passwordReset.confirmPassword')}
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                      />
+                    </div>
                   </div>
-                </div>
 
-                <div>
                   <Button
                     type="submit"
                     variant="primary"
-                    className="w-full"
+                    className="w-full border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
                     disabled={loading}
                   >
                     {t('passwordReset.resetPassword')}
                   </Button>
-                </div>
 
-                <div className="text-center">
-                  <Link
-                    to={`${prefix}/login`}
-                    className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/90"
-                  >
-                    <ArrowLeft className="h-4 w-4" />
-                    {t('passwordReset.backToLogin')}
-                  </Link>
-                </div>
-              </form>
+                  <div className="text-center">
+                    <Link
+                      to={loginPath}
+                      className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/90"
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                      {t('passwordReset.backToLogin')}
+                    </Link>
+                  </div>
+                </form>
+              </div>
             )}
           </>
         )}

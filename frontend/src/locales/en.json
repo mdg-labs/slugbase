@@ -273,7 +273,8 @@
     "compactMode": "Compact Mode",
     "sortAlphabetical": "Alphabetical",
     "sortRecentlyAdded": "Recently Added",
-    "clearFilters": "Clear filters"
+    "clearFilters": "Clear filters",
+    "noMatchesDescription": "No tags match the current filters. Clear filters to see all."
   },
   "profile": {
     "title": "Profile",

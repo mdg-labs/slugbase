@@ -233,8 +233,8 @@ export default function ShareResourceDialog({
 
         {loading ? (
           <div className="py-8 space-y-4">
-            <div className="h-20 rounded-md bg-muted animate-pulse" />
-            <div className="h-20 rounded-md bg-muted animate-pulse" />
+            <div className="h-20 rounded-xl bg-surface-low animate-pulse" />
+            <div className="h-20 rounded-xl bg-surface-low animate-pulse" />
           </div>
         ) : (
           <div className="space-y-6">
@@ -245,16 +245,16 @@ export default function ShareResourceDialog({
             )}
 
             <div>
-              <h4 className="text-sm font-medium mb-2">{t('sharing.peopleWithAccess')}</h4>
+              <h4 className="typography-label mb-2">{t('sharing.peopleWithAccess')}</h4>
               {!hasShares ? (
                 <p className="text-sm text-muted-foreground">{t('sharing.notSharedYet')}</p>
               ) : (
-                <ScrollArea className="max-h-32 rounded-md border p-2">
+                <ScrollArea className="max-h-32 rounded-xl border border-ghost bg-surface-low p-2">
                   <div className="space-y-1.5">
                     {allowShareToTeams && sharedTeams.map((team) => (
                       <div
                         key={team.id}
-                        className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 bg-muted/50"
+                        className="flex items-center justify-between gap-2 rounded-lg border border-ghost/50 bg-surface px-2 py-1.5"
                       >
                         <div className="flex items-center gap-2 min-w-0">
                           <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -265,7 +265,7 @@ export default function ShareResourceDialog({
                             type="button"
                             onClick={() => handleRemoveTeam(team.id)}
                             disabled={saving}
-                            className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                            className="p-1 rounded-lg hover:bg-surface-high text-muted-foreground hover:text-foreground transition-colors"
                             aria-label={t('sharing.removeAccess')}
                           >
                             <X className="h-3.5 w-3.5" />
@@ -276,7 +276,7 @@ export default function ShareResourceDialog({
                     {sharedUsers.map((u) => (
                       <div
                         key={u.id}
-                        className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 bg-muted/50"
+                        className="flex items-center justify-between gap-2 rounded-lg border border-ghost/50 bg-surface px-2 py-1.5"
                       >
                         <div className="flex items-center gap-2 min-w-0">
                           <User className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -290,7 +290,7 @@ export default function ShareResourceDialog({
                             type="button"
                             onClick={() => handleRemoveUser(u.id)}
                             disabled={saving}
-                            className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                            className="p-1 rounded-lg hover:bg-surface-high text-muted-foreground hover:text-foreground transition-colors"
                             aria-label={t('sharing.removeAccess')}
                           >
                             <X className="h-3.5 w-3.5" />
@@ -306,14 +306,14 @@ export default function ShareResourceDialog({
             <Separator />
 
             <div>
-              <h4 className="text-sm font-medium mb-3">{t('sharing.addAccess')}</h4>
+              <h4 className="typography-label mb-3">{t('sharing.addAccess')}</h4>
               {!loading && allUsers.length === 0 && teams.length === 0 && (
                 <p className="text-xs text-amber-600 dark:text-amber-500 mb-2" role="status">
                   {t('sharing.noUsersOrTeams')}
                 </p>
               )}
               {allowShareToTeams && allowShareToUsers ? (
-                <div className="flex gap-2 border-b mb-3">
+                <div className="flex gap-2 border-b border-ghost mb-3">
                   <button
                     type="button"
                     onClick={() => setActiveTab('people')}
@@ -369,7 +369,7 @@ export default function ShareResourceDialog({
                     />
                     {peopleDropdownOpen && showUserDropdown && (
                       <div
-                        className="absolute top-full left-0 right-0 z-10 mt-1 max-h-48 overflow-auto rounded-md border bg-popover shadow-md"
+                        className="absolute top-full left-0 right-0 z-10 mt-1 max-h-48 overflow-auto rounded-xl border border-ghost bg-surface-high shadow-glow"
                         role="listbox"
                       >
                         {usersAvailableToAdd.map((u) => (
@@ -377,7 +377,7 @@ export default function ShareResourceDialog({
                             key={u.id}
                             type="button"
                             role="option"
-                            className="flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left text-sm hover:bg-accent focus:bg-accent focus:outline-none"
+                            className="flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left text-sm hover:bg-surface-low focus:bg-surface-low focus:outline-none rounded-lg"
                             onMouseDown={(e) => {
                               e.preventDefault();
                               handleAddUser(u.id);
@@ -404,14 +404,14 @@ export default function ShareResourceDialog({
                   {filteredTeams.length === 0 ? (
                     <p className="text-sm text-muted-foreground py-2">{t('common.noResults')}</p>
                   ) : (
-                    <ScrollArea className="max-h-48 rounded-md border">
+                    <ScrollArea className="max-h-48 rounded-xl border border-ghost bg-surface-low">
                       <div className="p-1 space-y-0.5">
                         {filteredTeams.map((team) => (
                           <button
                             key={team.id}
                             type="button"
                             disabled={saving}
-                            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-accent focus:bg-accent focus:outline-none disabled:opacity-50"
+                            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-surface-high focus:bg-surface-high focus:outline-none disabled:opacity-50"
                             onClick={() => handleAddTeam(team.id)}
                           >
                             <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -429,7 +429,7 @@ export default function ShareResourceDialog({
 
         <Separator />
         <div className="flex justify-end">
-          <Button variant="secondary" onClick={onClose}>
+          <Button variant="secondary" onClick={onClose} className="border-ghost bg-surface">
             {t('common.close')}
           </Button>
         </div>

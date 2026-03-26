@@ -8,6 +8,7 @@ import Button from '../ui/Button';
 import { PageLoadingSkeleton } from '../ui/PageLoadingSkeleton';
 import { Switch } from '../ui/switch';
 import { Label } from '../ui/label';
+import { Input } from '../ui/input';
 
 // React in scope for package consumers that use classic JSX transform
 void React;
@@ -96,7 +97,7 @@ export default function AdminSettings() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-card rounded-lg border border-border shadow-sm p-4">
+      <div className="rounded-xl border border-ghost bg-surface p-6 shadow-none">
         <div className="flex items-center gap-2 mb-6">
           <Mail className="h-5 w-5 text-muted-foreground" />
           <div>
@@ -122,49 +123,37 @@ export default function AdminSettings() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-semibold text-foreground mb-2">
-                {t('smtp.host')}
-              </label>
-              <input
+            <div className="space-y-2">
+              <Label className="typography-label">{t('smtp.host')}</Label>
+              <Input
                 type="text"
-                className="w-full px-4 h-9 text-sm text-foreground bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 placeholder={t('smtp.hostPlaceholder')}
                 value={smtpSettings.host}
                 onChange={(e) => setSmtpSettings({ ...smtpSettings, host: e.target.value })}
               />
             </div>
-            <div>
-              <label className="block text-sm font-semibold text-foreground mb-2">
-                {t('smtp.port')}
-              </label>
-              <input
+            <div className="space-y-2">
+              <Label className="typography-label">{t('smtp.port')}</Label>
+              <Input
                 type="number"
-                className="w-full px-4 h-9 text-sm text-foreground bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 placeholder={t('smtp.portPlaceholder')}
                 value={smtpSettings.port}
-                onChange={(e) => setSmtpSettings({ ...smtpSettings, port: parseInt(e.target.value) || 587 })}
+                onChange={(e) => setSmtpSettings({ ...smtpSettings, port: parseInt(e.target.value, 10) || 587 })}
               />
             </div>
-            <div>
-              <label className="block text-sm font-semibold text-foreground mb-2">
-                {t('smtp.user')}
-              </label>
-              <input
+            <div className="space-y-2">
+              <Label className="typography-label">{t('smtp.user')}</Label>
+              <Input
                 type="text"
-                className="w-full px-4 h-9 text-sm text-foreground bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 placeholder={t('smtp.userPlaceholder')}
                 value={smtpSettings.user}
                 onChange={(e) => setSmtpSettings({ ...smtpSettings, user: e.target.value })}
               />
             </div>
-            <div>
-              <label className="block text-sm font-semibold text-foreground mb-2">
-                {t('smtp.password')}
-              </label>
-              <input
+            <div className="space-y-2">
+              <Label className="typography-label">{t('smtp.password')}</Label>
+              <Input
                 type="password"
-                className="w-full px-4 h-9 text-sm text-foreground bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 placeholder={passwordIsSet ? t('smtp.passwordPlaceholder') : t('smtp.passwordPlaceholder')}
                 value={smtpSettings.password}
                 onChange={(e) => {
@@ -188,25 +177,19 @@ export default function AdminSettings() {
                 {passwordIsSet ? t('smtp.passwordChangeHint') : t('admin.leaveBlank')}
               </p>
             </div>
-            <div>
-              <label className="block text-sm font-semibold text-foreground mb-2">
-                {t('smtp.from')}
-              </label>
-              <input
+            <div className="space-y-2">
+              <Label className="typography-label">{t('smtp.from')}</Label>
+              <Input
                 type="email"
-                className="w-full px-4 h-9 text-sm text-foreground bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 placeholder={t('smtp.fromPlaceholder')}
                 value={smtpSettings.from}
                 onChange={(e) => setSmtpSettings({ ...smtpSettings, from: e.target.value })}
               />
             </div>
-            <div>
-              <label className="block text-sm font-semibold text-foreground mb-2">
-                {t('smtp.fromName')}
-              </label>
-              <input
+            <div className="space-y-2">
+              <Label className="typography-label">{t('smtp.fromName')}</Label>
+              <Input
                 type="text"
-                className="w-full px-4 h-9 text-sm text-foreground bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 placeholder={t('smtp.fromNamePlaceholder')}
                 value={smtpSettings.fromName}
                 onChange={(e) => setSmtpSettings({ ...smtpSettings, fromName: e.target.value })}
@@ -225,12 +208,10 @@ export default function AdminSettings() {
             </Label>
           </div>
 
-          <div className="flex items-center gap-4 pt-4 border-t border-border">
-            <div className="flex-1">
-              <label className="block text-sm font-semibold text-foreground mb-2">
-                {t('smtp.testEmail')}
-              </label>
-              <div className="px-4 py-2.5 text-sm text-muted-foreground bg-muted/50 border border-input rounded-lg">
+          <div className="flex items-center gap-4 pt-4 border-t border-ghost">
+            <div className="flex-1 space-y-2">
+              <Label className="typography-label">{t('smtp.testEmail')}</Label>
+              <div className="rounded-xl border border-ghost bg-surface-low px-4 py-2.5 text-sm text-muted-foreground">
                 {user?.email || t('common.loading')}
               </div>
             </div>
@@ -247,7 +228,7 @@ export default function AdminSettings() {
           </div>
 
           <div className="pt-4">
-            <Button variant="primary" icon={Save} onClick={handleSMTPSave}>
+            <Button variant="primary" icon={Save} onClick={handleSMTPSave} className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90">
               {t('smtp.save')}
             </Button>
           </div>

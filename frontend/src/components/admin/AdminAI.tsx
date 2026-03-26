@@ -135,14 +135,14 @@ export default function AdminAI() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm p-4">
+      <div className="rounded-xl border border-ghost bg-surface p-6 shadow-none">
         <div className="flex items-center gap-2 mb-6">
-          <Sparkles className="h-5 w-5 text-violet-500 dark:text-violet-400" />
+          <Sparkles className="h-5 w-5 text-primary" />
           <div>
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+            <h2 className="text-xl font-semibold text-foreground">
               {t('admin.ai.title')}
             </h2>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            <p className="mt-1 text-sm text-muted-foreground">
               {t('admin.ai.description')}
             </p>
           </div>
@@ -158,7 +158,7 @@ export default function AdminAI() {
                 saveSettings({ ai_enabled: checked });
               }}
             />
-            <Label htmlFor="ai-enabled" className="text-sm font-medium text-gray-900 dark:text-white cursor-pointer">
+            <Label htmlFor="ai-enabled" className="text-sm font-medium text-foreground cursor-pointer">
               {t('admin.ai.enabled')}
             </Label>
           </div>
@@ -166,7 +166,7 @@ export default function AdminAI() {
           {!adminAiOnlyToggle && (
             <>
               <div>
-                <Label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                <Label className="typography-label mb-2 block">
                   {t('admin.ai.provider')}
                 </Label>
                 <Select
@@ -181,7 +181,7 @@ export default function AdminAI() {
               </div>
 
               <div>
-                <Label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                <Label className="typography-label mb-2 block">
                   {t('admin.ai.apiKey')}
                 </Label>
                 <Input
@@ -196,13 +196,13 @@ export default function AdminAI() {
                   placeholder={settings.ai_api_key_set ? t('admin.ai.apiKeyPlaceholder') : 'sk-...'}
                   className="max-w-md font-mono text-sm"
                 />
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                <p className="mt-1 text-xs text-muted-foreground">
                   {settings.ai_api_key_set ? t('admin.ai.apiKeyChangeHint') : t('admin.ai.apiKeyHint')}
                 </p>
               </div>
 
               <div>
-                <Label className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+                <Label className="typography-label mb-2 block">
                   {t('admin.ai.model')}
                 </Label>
                 <Select

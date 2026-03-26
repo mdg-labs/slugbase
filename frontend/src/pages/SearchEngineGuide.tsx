@@ -49,7 +49,7 @@ export default function SearchEngineGuide() {
       </div>
 
       {/* How it works */}
-      <Card className="bg-primary/10 border-primary/30">
+      <Card className="rounded-xl border border-primary/30 bg-primary/10 shadow-none">
         <CardHeader>
           <CardTitle className="text-xl text-foreground">
             {t('searchEngineGuide.howItWorks')}
@@ -59,7 +59,7 @@ export default function SearchEngineGuide() {
           <p className="text-muted-foreground">
             {t('searchEngineGuide.howItWorksDescription')}
           </p>
-          <div className="bg-card rounded-lg p-4 border border-border">
+          <div className="rounded-xl border border-ghost bg-surface-low p-4">
             <div className="flex items-center gap-2 text-sm font-mono text-foreground">
               <Code className="h-4 w-4 text-primary" />
               <span className="text-primary">go</span>
@@ -70,12 +70,12 @@ export default function SearchEngineGuide() {
       </Card>
 
       {/* Your search URL */}
-      <Card>
+      <Card className="rounded-xl border border-ghost bg-surface shadow-none">
         <CardHeader>
           <CardTitle className="text-lg">{t('searchEngineGuide.yourSearchUrl')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="bg-muted rounded-lg p-4 border border-border">
+          <div className="rounded-xl border border-ghost bg-surface-low p-4">
             <code className="text-sm font-mono text-foreground break-all">{searchUrl}</code>
           </div>
           <p className="text-sm text-muted-foreground">{t('searchEngineGuide.urlNote')}</p>
@@ -92,7 +92,7 @@ export default function SearchEngineGuide() {
             {t('searchEngineGuide.chromiumDescription')}
           </p>
           <div className="space-y-4">
-            <Card>
+            <Card className="rounded-xl border border-ghost bg-surface shadow-none">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">
                   {(t('searchEngineGuide.stepTitle', { n: 1 }) as string) || 'Step 1'}
@@ -102,7 +102,7 @@ export default function SearchEngineGuide() {
                 <p className="text-foreground">{t('searchEngineGuide.chromiumStep1')}</p>
               </CardContent>
             </Card>
-            <Card>
+            <Card className="rounded-xl border border-ghost bg-surface shadow-none">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">
                   {(t('searchEngineGuide.stepTitle', { n: 2 }) as string) || 'Step 2'}
@@ -112,7 +112,7 @@ export default function SearchEngineGuide() {
                 <p className="text-foreground">{t('searchEngineGuide.chromiumStep2')}</p>
               </CardContent>
             </Card>
-            <Card>
+            <Card className="rounded-xl border border-ghost bg-surface shadow-none">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">
                   {(t('searchEngineGuide.stepTitle', { n: 3 }) as string) || 'Step 3'}
@@ -122,7 +122,7 @@ export default function SearchEngineGuide() {
                 <p className="text-foreground">{t('searchEngineGuide.chromiumStep3')}</p>
               </CardContent>
             </Card>
-            <Card>
+            <Card className="rounded-xl border border-ghost bg-surface shadow-none">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">
                   {(t('searchEngineGuide.stepTitle', { n: 4 }) as string) || 'Step 4'}
@@ -137,7 +137,7 @@ export default function SearchEngineGuide() {
                 </ul>
               </CardContent>
             </Card>
-            <Card>
+            <Card className="rounded-xl border border-ghost bg-surface shadow-none">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">
                   {(t('searchEngineGuide.stepTitle', { n: 5 }) as string) || 'Step 5'}
@@ -161,7 +161,7 @@ export default function SearchEngineGuide() {
             {t('searchEngineGuide.firefoxDescription')}
           </p>
           <div className="space-y-4">
-            <Card>
+            <Card className="rounded-xl border border-ghost bg-surface shadow-none">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">
                   {(t('searchEngineGuide.stepTitle', { n: 1 }) as string) || 'Step 1'}
@@ -171,7 +171,7 @@ export default function SearchEngineGuide() {
                 <p className="text-foreground">{t('searchEngineGuide.firefoxStep1')}</p>
               </CardContent>
             </Card>
-            <Card>
+            <Card className="rounded-xl border border-ghost bg-surface shadow-none">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">
                   {(t('searchEngineGuide.stepTitle', { n: 2 }) as string) || 'Step 2'}
@@ -181,7 +181,7 @@ export default function SearchEngineGuide() {
                 <p className="text-foreground">{t('searchEngineGuide.firefoxStep2')}</p>
               </CardContent>
             </Card>
-            <Card>
+            <Card className="rounded-xl border border-ghost bg-surface shadow-none">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">
                   {(t('searchEngineGuide.stepTitle', { n: 3 }) as string) || 'Step 3'}
@@ -191,7 +191,7 @@ export default function SearchEngineGuide() {
                 <p className="text-foreground">{t('searchEngineGuide.firefoxStep3')}</p>
               </CardContent>
             </Card>
-            <Card>
+            <Card className="rounded-xl border border-ghost bg-surface shadow-none">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">
                   {(t('searchEngineGuide.stepTitle', { n: 4 }) as string) || 'Step 4'}
@@ -206,7 +206,7 @@ export default function SearchEngineGuide() {
                 </ul>
               </CardContent>
             </Card>
-            <Card>
+            <Card className="rounded-xl border border-ghost bg-surface shadow-none">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">
                   {(t('searchEngineGuide.stepTitle', { n: 5 }) as string) || 'Step 5'}
@@ -221,7 +221,7 @@ export default function SearchEngineGuide() {
       )}
 
       {/* Usage example */}
-      <Card className="bg-primary/10 border-primary/30">
+      <Card className="rounded-xl border border-primary/30 bg-primary/10 shadow-none">
         <CardHeader>
           <CardTitle className="text-xl text-foreground">
             {t('searchEngineGuide.usageExample')}
@@ -229,7 +229,7 @@ export default function SearchEngineGuide() {
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-foreground">{t('searchEngineGuide.usageStep1')}</p>
-          <div className="bg-card rounded-lg p-3 border border-border">
+          <div className="rounded-xl border border-ghost bg-surface-low p-3">
             <code className="text-sm font-mono text-foreground">go test</code>
           </div>
           <p className="text-foreground">{t('searchEngineGuide.usageStep2')}</p>

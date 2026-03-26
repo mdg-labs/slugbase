@@ -80,24 +80,24 @@ export default function GoPreferences() {
         </div>
       </div>
 
-      <div className="bg-card rounded-lg border border-border overflow-hidden">
+      <div className="overflow-hidden rounded-xl border border-ghost bg-surface">
         {preferences.length === 0 ? (
           <div className="p-8 text-center text-muted-foreground">
             {t('goPreferences.empty')}
           </div>
         ) : (
-          <ul className="divide-y divide-border">
+          <ul className="divide-y divide-ghost">
             {preferences.map((pref) => (
               <li
                 key={pref.slug}
-                className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-muted/50"
+                className="flex items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-surface-high"
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <code className="text-sm font-mono text-primary">
                       /go/{pref.slug}
                     </code>
-                    <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">
+                    <span className="text-xs px-2 py-0.5 rounded-md border border-ghost bg-surface-low text-muted-foreground">
                       {pref.workspace}
                     </span>
                   </div>

@@ -185,7 +185,7 @@ export default function ImportModal({ isOpen, onClose, onSuccess }: ImportModalP
             {t('bookmarks.importDescription')}
           </p>
 
-          <div className="border-2 border-dashed border-border rounded-lg p-6 text-center">
+          <div className="border-2 border-dashed border-ghost rounded-xl bg-surface-low p-6 text-center">
             <Upload className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <label className="cursor-pointer">
               <input
@@ -200,6 +200,7 @@ export default function ImportModal({ isOpen, onClose, onSuccess }: ImportModalP
                 icon={Upload}
                 disabled={loading}
                 loading={loading}
+                className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
                 onClick={() => {
                   const input = document.querySelector('input[type="file"]') as HTMLInputElement;
                   input?.click();

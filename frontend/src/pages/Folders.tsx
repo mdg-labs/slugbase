@@ -15,6 +15,14 @@ import { EmptyState } from '../components/EmptyState';
 import { PageLoadingSkeleton } from '../components/ui/PageLoadingSkeleton';
 import { useAppConfig } from '../contexts/AppConfigContext';
 import { Card } from '../components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../components/ui/table';
 
 interface Folder {
   id: string;
@@ -29,6 +37,21 @@ interface Folder {
 type SortOption = 'alphabetical' | 'recently_added';
 
 const DEFAULT_SORT: SortOption = 'alphabetical';
+
+const cellClass = 'px-4 py-3';
+
+function formatShortDate(iso?: string) {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  } catch {
+    return '—';
+  }
+}
 
 export default function Folders() {
   const { t } = useTranslation();
@@ -221,7 +244,6 @@ export default function Folders() {
         moreMenuLabel={t('bookmarks.toolbarMore')}
       />
 
-      {/* Folders Display */}
       {sortedFolders.length === 0 ? (
         hasActiveFilters ? (
           <EmptyState
@@ -240,126 +262,144 @@ export default function Folders() {
             title={t('folders.empty')}
             description={t('folders.emptyDescription')}
             action={
-              <Button onClick={handleCreate} variant="primary" icon={Plus}>
+              <Button onClick={handleCreate} variant="primary" icon={Plus} className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90">
                 {t('folders.create')}
               </Button>
             }
           />
         )
       ) : (
-        <div className="grid gap-3 items-stretch [grid-template-columns:repeat(auto-fill,minmax(300px,1fr))]">
-          {sortedFolders.map((folder) => {
-            const isShared = (folder.shared_teams && folder.shared_teams.length > 0) || (folder.shared_users && folder.shared_users.length > 0);
-            return (
-              <Card
-                key={folder.id}
-                className="group relative flex flex-col h-[101px] cursor-pointer rounded-lg border bg-card/95 dark:bg-card/90 transition-[border-color,box-shadow] duration-150 border-border/80 hover:border-primary/80 hover:shadow-[0_2px_6px_rgba(0,0,0,0.06)] dark:border-border/70 dark:hover:border-primary/80 dark:hover:shadow-[0_2px_6px_rgba(0,0,0,0.25)] px-3 pt-0 pb-1.5 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
-              >
-                <Link
-                  to={`${prefix}/bookmarks?folder_id=${folder.id}`}
-                  className="absolute inset-0 rounded-lg z-0 focus:outline-none"
-                  aria-label={folder.name}
-                />
-                <header className="flex-shrink-0 flex items-center gap-1.5 min-w-0 pt-3 relative z-10">
-                  <div className="flex-shrink-0 w-7 h-7 rounded-md bg-background/90 dark:bg-muted/20 flex items-center justify-center border border-border/50 overflow-hidden">
-                    <FolderIcon iconName={folder.icon} size={16} className="text-primary" />
-                  </div>
-                  <div className="flex-1 min-w-0 min-h-0 overflow-hidden">
-                    <h3 className="text-sm font-semibold text-foreground line-clamp-2 break-words leading-snug tracking-tight min-h-0">
-                      {folder.name}
-                    </h3>
-                  </div>
-                </header>
-                {isShared && (
-                  <div className="flex-shrink-0 mt-1.5 relative z-10">
-                    <Tooltip
-                      content={
-                        <div className="space-y-1">
-                          <div className="font-semibold mb-1">{t('folders.sharedWith')}</div>
-                          {folder.shared_teams?.map((team) => (
-                            <div key={team.id} className="text-xs">• {team.name}</div>
-                          ))}
-                          {folder.shared_users?.map((user) => (
-                            <div key={user.id} className="text-xs">• {user.name || user.email}</div>
-                          ))}
+        <Card className="overflow-hidden border-ghost bg-surface">
+          <Table>
+            <TableHeader>
+              <TableRow className="border-0 hover:bg-transparent">
+                <TableHead className={cellClass}>{t('folders.name')}</TableHead>
+                <TableHead className={cellClass}>{t('folders.shared')}</TableHead>
+                <TableHead className={cellClass}>{t('profile.createdAt')}</TableHead>
+                <TableHead className={`${cellClass} text-right w-[120px]`}>{t('common.actions')}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {sortedFolders.map((folder) => {
+                const isShared = (folder.shared_teams && folder.shared_teams.length > 0) || (folder.shared_users && folder.shared_users.length > 0);
+                return (
+                  <TableRow key={folder.id} className="border-0">
+                    <TableCell className={cellClass}>
+                      <Link
+                        to={`${prefix}/bookmarks?folder_id=${folder.id}`}
+                        className="flex items-center gap-3 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      >
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-primary/25 bg-gradient-to-br from-primary/15 to-primary/25">
+                          <FolderIcon iconName={folder.icon} size={16} className="text-primary" />
                         </div>
-                      }
-                    >
-                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium bg-emerald-500/10 dark:bg-emerald-500/10 text-muted-foreground rounded cursor-help">
-                        <Share2 className="h-2.5 w-2.5" />
-                        {t('folders.shared')}
-                      </span>
-                    </Tooltip>
-                  </div>
-                )}
-                <div className="flex-1 min-h-0" aria-hidden />
-                {folder.folder_type === 'own' && (
-                  <footer className="flex-shrink-0 flex items-center justify-end gap-0.5 h-6 min-h-[24px] pt-2.5 relative z-10 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-150 w-[76px] ml-auto">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      icon={Share2}
-                      iconClassName="h-3.5 w-3.5 stroke-[1.5]"
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setSharingFolder(folder); setShareDialogOpen(true); }}
-                      className="h-6 w-6 p-0 min-w-6 text-muted-foreground hover:text-foreground"
-                      title={t('sharing.shareFolder')}
-                    />
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      icon={Edit}
-                      iconClassName="h-3.5 w-3.5 stroke-[1.5]"
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleEdit(folder); }}
-                      className="h-6 w-6 p-0 min-w-6 text-muted-foreground hover:text-foreground"
-                      title={t('common.edit')}
-                    />
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      icon={Trash2}
-                      iconClassName="h-3.5 w-3.5 stroke-[1.5]"
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDelete(folder.id); }}
-                      className="h-6 w-6 p-0 min-w-6 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                      title={t('common.delete')}
-                    />
-                  </footer>
-                )}
-              </Card>
-            );
-          })}
-        </div>
+                        <span className="text-sm font-semibold text-foreground">{folder.name}</span>
+                      </Link>
+                    </TableCell>
+                    <TableCell className={cellClass}>
+                      {isShared ? (
+                        <Tooltip
+                          content={
+                            <div className="space-y-1">
+                              <div className="font-semibold mb-1">{t('folders.sharedWith')}</div>
+                              {folder.shared_teams?.map((team) => (
+                                <div key={team.id} className="text-xs">• {team.name}</div>
+                              ))}
+                              {folder.shared_users?.map((u) => (
+                                <div key={u.id} className="text-xs">• {u.name || u.email}</div>
+                              ))}
+                            </div>
+                          }
+                        >
+                          <span className="inline-flex cursor-help items-center gap-1 rounded-full bg-surface-low px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                            <Share2 className="h-3 w-3" />
+                            {t('folders.shared')}
+                          </span>
+                        </Tooltip>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className={cellClass}>
+                      <span className="text-sm text-muted-foreground">{formatShortDate(folder.created_at)}</span>
+                    </TableCell>
+                    <TableCell className={`${cellClass} text-right`}>
+                      {folder.folder_type === 'own' ? (
+                        <div className="flex items-center justify-end gap-0.5">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            icon={Share2}
+                            iconClassName="h-3.5 w-3.5 stroke-[1.5]"
+                            onClick={() => { setSharingFolder(folder); setShareDialogOpen(true); }}
+                            className="h-8 w-8 p-0 min-w-8 text-muted-foreground hover:text-foreground"
+                            title={t('sharing.shareFolder')}
+                          />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            icon={Edit}
+                            iconClassName="h-3.5 w-3.5 stroke-[1.5]"
+                            onClick={() => handleEdit(folder)}
+                            className="h-8 w-8 p-0 min-w-8 text-muted-foreground hover:text-foreground"
+                            title={t('common.edit')}
+                          />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            icon={Trash2}
+                            iconClassName="h-3.5 w-3.5 stroke-[1.5]"
+                            onClick={() => handleDelete(folder.id)}
+                            className="h-8 w-8 p-0 min-w-8 text-destructive hover:text-destructive"
+                            title={t('common.delete')}
+                          />
+                        </div>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </Card>
       )}
 
-      {totalFolders > pageSize && sortedFolders.length > 0 && (
-        <div className="flex items-center justify-between gap-4 mt-6 py-4 border-t border-border">
-          <p className="text-sm text-muted-foreground">
-            {t('bookmarks.paginationShowing', {
-              from: page * pageSize + 1,
-              to: Math.min(page * pageSize + sortedFolders.length, totalFolders),
-              total: totalFolders,
-            })}
-          </p>
-          <div className="flex gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={ChevronLeft}
-              onClick={() => updateParams({ page: String(Math.max(0, page - 1)) })}
-              disabled={page === 0}
-            >
-              {t('bookmarks.paginationPrevious')}
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={ChevronRight}
-              iconPosition="right"
-              onClick={() => updateParams({ page: String(page + 1) })}
-              disabled={page * pageSize + sortedFolders.length >= totalFolders}
-            >
-              {t('bookmarks.paginationNext')}
-            </Button>
+      {totalFolders > 0 && sortedFolders.length > 0 && (
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-ghost bg-surface-low px-4 py-3">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
+            <span className="typography-label">{t('bookmarks.paginationTotalEntries', { count: totalFolders })}</span>
           </div>
+          {totalFolders > pageSize ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="typography-label">
+                {t('bookmarks.paginationPageOf', {
+                  current: page + 1,
+                  totalPages: Math.max(1, Math.ceil(totalFolders / pageSize)),
+                })}
+              </span>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={ChevronLeft}
+                  className="h-9 w-9 border border-ghost bg-surface p-0"
+                  onClick={() => updateParams({ page: String(Math.max(0, page - 1)) })}
+                  disabled={page === 0}
+                  aria-label={t('bookmarks.paginationPrevious')}
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={ChevronRight}
+                  className="h-9 w-9 border border-ghost bg-surface p-0"
+                  onClick={() => updateParams({ page: String(page + 1) })}
+                  disabled={page * pageSize + sortedFolders.length >= totalFolders}
+                  aria-label={t('bookmarks.paginationNext')}
+                />
+              </div>
+            </div>
+          ) : null}
         </div>
       )}
 
