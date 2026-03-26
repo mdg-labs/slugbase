@@ -54,6 +54,7 @@ interface BookmarkTableViewProps {
 }
 
 const cellClass = 'px-4 py-3';
+const headClass = `${cellClass} text-[10px] font-bold uppercase tracking-widest text-muted-foreground`;
 
 function tagPillClassName(extra = '') {
   return `inline-flex max-w-full items-center gap-1 rounded-full bg-surface-low px-2.5 py-0.5 text-xs font-medium text-muted-foreground ${extra}`;
@@ -134,10 +135,10 @@ export default function BookmarkTableView({
   }
 
   return (
-    <Card className="overflow-hidden border-ghost bg-surface">
+    <Card className="overflow-hidden rounded-2xl border border-ghost glass shadow-xl">
       <Table>
         <TableHeader>
-          <TableRow className="border-0 hover:bg-transparent">
+          <TableRow className="border-b border-ghost bg-surface-low/50 hover:bg-transparent">
             {bulkMode && (
               <TableHead className={`${cellClass} w-12`}>
                 <button
@@ -154,42 +155,42 @@ export default function BookmarkTableView({
                 </button>
               </TableHead>
             )}
-            <TableHead className={cellClass}>
+            <TableHead className={headClass}>
               <button
                 type="button"
                 onClick={() => handleSort('title')}
-                className="flex items-center gap-2 hover:text-foreground"
+                className="flex items-center gap-2 font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground"
               >
                 {t('bookmarks.name')}
                 {getSortIcon('title')}
               </button>
             </TableHead>
-            <TableHead className={cellClass}>
+            <TableHead className={headClass}>
               <button
                 type="button"
                 onClick={() => handleSort('slug')}
-                className="flex items-center gap-2 hover:text-foreground"
+                className="flex items-center gap-2 font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground"
               >
                 {t('bookmarks.slugColumn')}
                 {getSortIcon('slug')}
               </button>
             </TableHead>
-            <TableHead className={cellClass}>{t('bookmarks.folders')}</TableHead>
-            <TableHead className={cellClass}>{t('bookmarks.tags')}</TableHead>
-            <TableHead className={cellClass}>{t('bookmarks.shared')}</TableHead>
-            <TableHead className={cellClass}>{t('bookmarks.clicks')}</TableHead>
-            <TableHead className={cellClass}>
+            <TableHead className={headClass}>{t('bookmarks.folders')}</TableHead>
+            <TableHead className={headClass}>{t('bookmarks.tags')}</TableHead>
+            <TableHead className={headClass}>{t('bookmarks.shared')}</TableHead>
+            <TableHead className={headClass}>{t('bookmarks.clicks')}</TableHead>
+            <TableHead className={headClass}>
               <button
                 type="button"
                 onClick={() => handleSort('last_accessed')}
-                className="flex items-center gap-2 hover:text-foreground"
+                className="flex items-center gap-2 font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground"
               >
                 {t('bookmarks.lastOpened')}
                 {getSortIcon('last_accessed')}
               </button>
             </TableHead>
-            <TableHead className={cellClass}>{t('bookmarks.sortRecentlyAdded')}</TableHead>
-            <TableHead className={`${cellClass} text-right`}>{t('common.actions')}</TableHead>
+            <TableHead className={headClass}>{t('bookmarks.sortRecentlyAdded')}</TableHead>
+            <TableHead className={`${headClass} text-right`}>{t('common.actions')}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -202,7 +203,7 @@ export default function BookmarkTableView({
             return (
               <TableRow
                 key={bookmark.id}
-                className={`group border-0 ${selectedBookmarks.has(bookmark.id) ? 'bg-primary/10' : ''}`}
+                className={`group border-0 border-b border-ghost/30 transition-colors hover:bg-surface-high/50 ${selectedBookmarks.has(bookmark.id) ? 'bg-primary/10' : ''}`}
                 data-state={selectedBookmarks.has(bookmark.id) ? 'selected' : undefined}
               >
                 {bulkMode && (

@@ -6,17 +6,27 @@ interface PageHeaderProps {
   subtitle?: string;
   actions?: React.ReactNode;
   className?: string;
+  /** Obsidian / Stitch collection pages: heavy display title */
+  titleClassName?: string;
+  subtitleClassName?: string;
 }
 
-export function PageHeader({ title, subtitle, actions, className }: PageHeaderProps) {
+export function PageHeader({
+  title,
+  subtitle,
+  actions,
+  className,
+  titleClassName,
+  subtitleClassName,
+}: PageHeaderProps) {
   return (
-    <div className={cn('flex items-start justify-between gap-4 flex-wrap', className)}>
-      <div className="space-y-1.5">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+    <div className={cn('flex flex-wrap items-end justify-between gap-4', className)}>
+      <div className="min-w-0 space-y-1">
+        <h1 className={cn('text-2xl font-semibold tracking-tight text-foreground', titleClassName)}>
           {title}
         </h1>
         {subtitle && (
-          <p className="text-sm text-muted-foreground">
+          <p className={cn('text-sm text-muted-foreground', subtitleClassName)}>
             {subtitle}
           </p>
         )}

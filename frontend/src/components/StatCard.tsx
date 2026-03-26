@@ -22,9 +22,9 @@ interface StatCardProps {
   href?: string;
   /** Use compact padding and smaller icon for dense layouts */
   dense?: boolean;
-  /** Tailwind classes for the icon container (e.g. bg-blue-100 dark:bg-blue-900/20) */
+  /** Tailwind classes for the icon container (e.g. bg-primary/15) */
   iconContainerClassName?: string;
-  /** Tailwind classes for the icon color (e.g. text-blue-600 dark:text-blue-400) */
+  /** Tailwind classes for the icon color (e.g. text-primary) */
   iconColorClassName?: string;
   className?: string;
   /** Optional secondary line below value (e.g. "+12 this week") */

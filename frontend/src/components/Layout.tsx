@@ -37,25 +37,25 @@ export default function Layout() {
     <SearchCommandProvider>
       <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen} className="flex h-svh flex-col overflow-hidden bg-background">
         <GlobalSearch />
-        <TopBar user={user} />
-      <div className="flex min-h-0 flex-1 overflow-hidden">
-        <AppSidebar user={user} version={version} />
-        <SidebarInset className="flex min-h-0 flex-col overflow-hidden">
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <div className="min-h-full w-full px-10 py-12">
-              <Suspense
-                fallback={
-                  <div className="min-h-[400px] flex items-center justify-center">
-                    <div className="text-muted-foreground">{t('common.loading')}</div>
-                  </div>
-                }
-              >
-                <Outlet />
-              </Suspense>
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          <AppSidebar user={user} version={version} />
+          <SidebarInset className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
+            <TopBar user={user} />
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <div className="min-h-full w-full px-10 py-12">
+                <Suspense
+                  fallback={
+                    <div className="min-h-[400px] flex items-center justify-center">
+                      <div className="text-muted-foreground">{t('common.loading')}</div>
+                    </div>
+                  }
+                >
+                  <Outlet />
+                </Suspense>
+              </div>
             </div>
-          </div>
-        </SidebarInset>
-      </div>
+          </SidebarInset>
+        </div>
     </SidebarProvider>
     </SearchCommandProvider>
   );

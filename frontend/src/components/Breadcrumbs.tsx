@@ -101,9 +101,12 @@ export function Breadcrumbs({ className }: { className?: string }) {
           <li key={`${item.to}-${i}`} className="flex min-w-0 items-center gap-1.5">
             {i > 0 && <ChevronRight className="h-4 w-4 shrink-0 opacity-50" aria-hidden />}
             {i === items.length - 1 ? (
-              <span className="truncate font-medium text-foreground">{item.label}</span>
+              <span className="truncate font-bold text-primary">{item.label}</span>
             ) : (
-              <Link to={item.to} className="truncate transition-colors hover:text-foreground">
+              <Link
+                to={item.to}
+                className="truncate font-medium text-muted-foreground/80 transition-colors hover:text-foreground"
+              >
                 {item.label}
               </Link>
             )}

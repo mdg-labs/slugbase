@@ -44,32 +44,46 @@ function QuickAccessSlugCard({
   onOpen: (id: string, url: string) => void;
   onCopyUrl: (url: string) => void;
 }) {
-  const slugPath = bookmark.slug ? `/go/${bookmark.slug}` : '';
+  const slugDisplay = bookmark.slug ? `go/${bookmark.slug}` : '';
   const domain = hostnameFromUrl(bookmark.url);
 
   return (
-    <div
-      className="rounded-xl border border-ghost bg-surface p-4 flex flex-col gap-3 text-left transition-colors hover:bg-surface-high min-h-[160px]"
-    >
-      <div className="flex items-start gap-3 min-w-0">
-        <div className="shrink-0 rounded-lg border border-ghost bg-surface-low p-2">
-          <Favicon url={bookmark.url} className="h-6 w-6" />
+    <div className="group flex min-h-[200px] cursor-pointer flex-col rounded-xl border border-transparent bg-surface p-6 transition-all duration-300 hover:border-ghost hover:bg-surface-high active:scale-[0.98]">
+      <div className="mb-6 flex items-start justify-between gap-2">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-ghost bg-surface-lowest transition-colors group-hover:border-primary/30">
+          <Favicon url={bookmark.url} className="h-7 w-7" />
         </div>
-        <div className="min-w-0 flex-1 space-y-1">
-          <p className="typography-label">{categoryLabel}</p>
-          <h3 className="text-base font-semibold text-foreground line-clamp-2">{bookmark.title}</h3>
-          <p className="text-sm text-muted-foreground line-clamp-2 break-all">{bookmark.url}</p>
+        <span className="rounded bg-surface-highest px-2 py-1 text-[10px] font-black uppercase tracking-wide text-muted-foreground transition-colors group-hover:text-primary">
+          {categoryLabel}
+        </span>
+      </div>
+      <h3 className="mb-1 text-lg font-bold leading-snug text-foreground line-clamp-2">{bookmark.title}</h3>
+      <p className="mb-4 line-clamp-2 break-all text-xs text-muted-foreground">{bookmark.url}</p>
+      <div className="mt-auto flex items-center justify-between border-t border-ghost pt-4">
+        <div className="min-w-0 flex flex-col gap-0.5">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+            {t('dashboard.quickAccessMetaSlug')}
+          </span>
+          {slugDisplay ? (
+            <span className="font-mono text-sm text-primary">{slugDisplay}</span>
+          ) : (
+            <span className="text-sm text-muted-foreground">—</span>
+          )}
         </div>
+        {domain ? (
+          <div className="min-w-0 max-w-[45%] text-right">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+              {t('dashboard.quickAccessMetaDomain')}
+            </span>
+            <span className="block truncate text-xs text-foreground">{domain}</span>
+          </div>
+        ) : null}
       </div>
-      <div className="mt-auto pt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-mono text-muted-foreground">
-        {slugPath && <span className="text-primary">{slugPath}</span>}
-        {domain && <span className="truncate max-w-[140px]">{domain}</span>}
-      </div>
-      <div className="flex items-center gap-2 pt-1">
+      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-ghost/50 pt-3">
         <button
           type="button"
           onClick={() => onOpen(bookmark.id, bookmark.url)}
-          className="inline-flex items-center gap-1.5 rounded-md text-xs font-medium text-primary hover:underline"
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
         >
           <ExternalLink className="h-3.5 w-3.5" />
           {t('dashboard.openBookmark')}
@@ -77,7 +91,7 @@ function QuickAccessSlugCard({
         <button
           type="button"
           onClick={() => onCopyUrl(bookmark.url)}
-          className="inline-flex items-center gap-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
         >
           <Copy className="h-3.5 w-3.5" />
           {t('dashboard.copyUrl')}
@@ -109,21 +123,21 @@ function CreateNewSlugCard({
     <button
       type="button"
       onClick={() => navigate(to)}
-      className="rounded-xl border border-dashed border-ghost bg-transparent p-4 flex flex-col items-center justify-center gap-3 text-center min-h-[160px] transition-colors hover:bg-surface-high/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="group flex min-h-[220px] flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-ghost bg-transparent p-6 text-center transition-all duration-300 hover:border-primary/50 hover:bg-primary/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <span className="flex h-12 w-12 items-center justify-center rounded-full border border-ghost bg-surface-low text-primary">
-        <Plus className="h-6 w-6" />
+      <span className="flex h-10 w-10 items-center justify-center rounded-full border border-ghost bg-surface text-muted-foreground transition-transform group-hover:scale-110">
+        <Plus className="h-5 w-5 text-primary" />
       </span>
       <div className="space-y-1">
-        <span className="block text-base font-semibold text-foreground">{title}</span>
-        <span className="block text-sm text-muted-foreground">{description}</span>
+        <span className="block text-sm font-bold text-muted-foreground">{title}</span>
+        <span className="block text-[10px] text-muted-foreground/80">{description}</span>
       </div>
     </button>
   );
 }
 
 /**
- * Quick access: section header, 3-col grid of slug cards + create card, Obsidian styling.
+ * Quick access: Stitch-style section header, 3-col grid of slug cards + create card.
  */
 export function QuickAccessSection({
   items,
@@ -139,34 +153,32 @@ export function QuickAccessSection({
   const categoryLabel = t('dashboard.quickAccessCategory');
 
   return (
-    <section className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-2">
-          <Zap className="h-4 w-4 text-primary shrink-0" aria-hidden />
+    <section className="space-y-8">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <Zap className="h-5 w-5 shrink-0 text-primary sm:h-6 sm:w-6" aria-hidden />
           <div>
-            <h2 className="text-sm font-medium uppercase tracking-widest text-muted-foreground">
-              {t('dashboard.quickAccess')}
-            </h2>
-            {subtitle && <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>}
+            <h2 className="text-lg font-bold tracking-tight text-foreground">{t('dashboard.quickAccessSlugsTitle')}</h2>
+            {subtitle ? <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p> : null}
           </div>
         </div>
         <Link
           to={prefix + '/bookmarks'}
-          className="text-sm font-medium text-primary hover:underline inline-flex items-center gap-1"
+          className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-widest text-primary transition-colors hover:text-primary/90"
         >
           {t('dashboard.viewAll')}
-          <ArrowRight className="h-4 w-4" />
+          <ArrowRight className="h-3.5 w-3.5" aria-hidden />
         </Link>
       </div>
 
       {displayItems.length === 0 ? (
-        <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 items-stretch">
+        <div className="grid grid-cols-1 items-stretch gap-6 md:grid-cols-2 lg:grid-cols-3">
           <CreateNewSlugCard
             pathPrefix={prefix}
             title={t('dashboard.createNewSlug')}
             description={t('dashboard.createNewSlugDescription')}
           />
-          <div className="md:col-span-2 lg:col-span-2 rounded-xl border border-ghost bg-surface p-6 flex items-center justify-center min-h-[160px]">
+          <div className="flex min-h-[200px] items-center justify-center rounded-xl border border-ghost bg-surface p-6 md:col-span-2 lg:col-span-2">
             <EmptyState
               icon={Bookmark}
               title={t('dashboard.noQuickAccessBookmarks')}
@@ -182,7 +194,7 @@ export function QuickAccessSection({
           </div>
         </div>
       ) : (
-        <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 items-stretch">
+        <div className="grid grid-cols-1 items-stretch gap-6 md:grid-cols-2 lg:grid-cols-3">
           {displayItems.map((b) => (
             <QuickAccessSlugCard
               key={b.id}

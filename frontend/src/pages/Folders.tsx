@@ -39,6 +39,7 @@ type SortOption = 'alphabetical' | 'recently_added';
 const DEFAULT_SORT: SortOption = 'alphabetical';
 
 const cellClass = 'px-4 py-3';
+const headClass = `${cellClass} text-[10px] font-bold uppercase tracking-widest text-muted-foreground`;
 
 function formatShortDate(iso?: string) {
   if (!iso) return '—';
@@ -206,7 +207,7 @@ export default function Folders() {
         subtitle={
           hasActiveFilters || totalFolders > pageSize
             ? t('bookmarks.showingXOfY', { x: sortedFolders.length, y: totalFolders })
-            : undefined
+            : t('folders.pageSubtitle')
         }
         tabs={{
           value: scope,
@@ -269,21 +270,24 @@ export default function Folders() {
           />
         )
       ) : (
-        <Card className="overflow-hidden border-ghost bg-surface">
+        <Card className="overflow-hidden rounded-2xl border border-ghost glass shadow-xl">
           <Table>
             <TableHeader>
-              <TableRow className="border-0 hover:bg-transparent">
-                <TableHead className={cellClass}>{t('folders.name')}</TableHead>
-                <TableHead className={cellClass}>{t('folders.shared')}</TableHead>
-                <TableHead className={cellClass}>{t('profile.createdAt')}</TableHead>
-                <TableHead className={`${cellClass} text-right w-[120px]`}>{t('common.actions')}</TableHead>
+              <TableRow className="border-b border-ghost bg-surface-low/50 hover:bg-transparent">
+                <TableHead className={headClass}>{t('folders.name')}</TableHead>
+                <TableHead className={headClass}>{t('folders.shared')}</TableHead>
+                <TableHead className={headClass}>{t('profile.createdAt')}</TableHead>
+                <TableHead className={`${headClass} w-[120px] text-right`}>{t('common.actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {sortedFolders.map((folder) => {
                 const isShared = (folder.shared_teams && folder.shared_teams.length > 0) || (folder.shared_users && folder.shared_users.length > 0);
                 return (
-                  <TableRow key={folder.id} className="border-0">
+                  <TableRow
+                    key={folder.id}
+                    className="border-0 border-b border-ghost/30 transition-colors hover:bg-surface-high/50"
+                  >
                     <TableCell className={cellClass}>
                       <Link
                         to={`${prefix}/bookmarks?folder_id=${folder.id}`}

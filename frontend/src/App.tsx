@@ -195,7 +195,7 @@ function ForwardingHandler() {
 
   return (
     <div className="min-h-screen flex items-center justify-center">
-      <div className="text-gray-500 dark:text-gray-400">{t('common.loading')}</div>
+      <div className="text-muted-foreground">{t('common.loading')}</div>
     </div>
   );
 }
@@ -210,11 +210,11 @@ function AppErrorFallback({ error, onReset }: AppErrorFallbackProps) {
   const message = error?.message ?? (error != null ? String(error) : '');
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-4" role="alert">
-      <p className="text-lg text-gray-700 dark:text-gray-300 text-center">
+      <p className="text-lg text-foreground text-center">
         Something went wrong loading this page. Please try again.
       </p>
       {(message || error?.stack) && (
-        <details className="w-full max-w-md text-sm text-gray-600 dark:text-gray-400" open>
+        <details className="w-full max-w-md text-sm text-muted-foreground" open>
           <summary className="cursor-pointer">{message || 'Error details'}</summary>
           {error?.stack && <pre className="mt-2 overflow-auto whitespace-pre-wrap">{error.stack}</pre>}
         </details>

@@ -32,6 +32,7 @@ type SortOption = 'alphabetical' | 'recently_added';
 const DEFAULT_SORT: SortOption = 'alphabetical';
 
 const cellClass = 'px-4 py-3';
+const headClass = `${cellClass} text-[10px] font-bold uppercase tracking-widest text-muted-foreground`;
 
 function formatShortDate(iso?: string) {
   if (!iso) return '—';
@@ -179,7 +180,7 @@ export default function Tags() {
         subtitle={
           hasActiveFilters || totalTags > pageSize
             ? t('bookmarks.showingXOfY', { x: sortedTags.length, y: totalTags })
-            : undefined
+            : t('tags.pageSubtitle')
         }
         createButton={{ label: t('tags.create'), onClick: handleCreate }}
         filterChips={{
@@ -231,18 +232,21 @@ export default function Tags() {
           />
         )
       ) : (
-        <Card className="overflow-hidden border-ghost bg-surface">
+        <Card className="overflow-hidden rounded-2xl border border-ghost glass shadow-xl">
           <Table>
             <TableHeader>
-              <TableRow className="border-0 hover:bg-transparent">
-                <TableHead className={cellClass}>{t('tags.name')}</TableHead>
-                <TableHead className={cellClass}>{t('profile.createdAt')}</TableHead>
-                <TableHead className={`${cellClass} text-right w-[88px]`}>{t('common.actions')}</TableHead>
+              <TableRow className="border-b border-ghost bg-surface-low/50 hover:bg-transparent">
+                <TableHead className={headClass}>{t('tags.name')}</TableHead>
+                <TableHead className={headClass}>{t('profile.createdAt')}</TableHead>
+                <TableHead className={`${headClass} w-[88px] text-right`}>{t('common.actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {sortedTags.map((tag) => (
-                <TableRow key={tag.id} className="border-0">
+                <TableRow
+                  key={tag.id}
+                  className="border-0 border-b border-ghost/30 transition-colors hover:bg-surface-high/50"
+                >
                   <TableCell className={cellClass}>
                     <Link
                       to={`${prefix}/bookmarks?tag_id=${tag.id}`}

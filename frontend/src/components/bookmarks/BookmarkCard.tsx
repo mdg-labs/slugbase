@@ -156,10 +156,10 @@ export default function BookmarkCard({
       tabIndex={0}
       onClick={handleCardClick}
       onKeyDown={handleCardKeyDown}
-      className={`group relative flex flex-col h-[148px] cursor-pointer rounded-lg border bg-card/95 dark:bg-card/90 transition-[border-color,box-shadow] duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 px-3 pt-0 pb-1.5 ${
+      className={`group relative flex flex-col h-[148px] cursor-pointer rounded-lg border bg-card/95 transition-[border-color,box-shadow] duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 px-3 pt-0 pb-1.5 ${
         selected
           ? 'border-primary ring-2 ring-primary/20'
-          : 'border-border/80 hover:border-primary/80 hover:shadow-[0_2px_6px_rgba(0,0,0,0.06)] dark:border-border/70 dark:hover:border-primary/80 dark:hover:shadow-[0_2px_6px_rgba(0,0,0,0.25)]'
+          : 'border-border/80 hover:border-primary/80 hover:shadow-glow'
       }`}
     >
       {/* Bulk checkbox: top-right corner when bulk mode active */}
@@ -182,7 +182,7 @@ export default function BookmarkCard({
       {/* Header: icon + title; reserve right space for bulk checkbox so title never overlaps */}
       <header className={`flex-shrink-0 flex items-center gap-1.5 min-w-0 pt-3 ${bulkMode ? 'pr-8' : ''}`}>
         <div
-          className={`flex-shrink-0 ${compact ? 'w-6 h-6' : 'w-7 h-7'} rounded-md bg-background/90 dark:bg-muted/20 flex items-center justify-center border border-border/50 overflow-hidden`}
+          className={`flex-shrink-0 ${compact ? 'w-6 h-6' : 'w-7 h-7'} rounded-md bg-surface-low flex items-center justify-center border border-border/50 overflow-hidden`}
         >
           <Favicon url={bookmark.url} size={compact ? 12 : 14} />
         </div>
@@ -278,7 +278,7 @@ export default function BookmarkCard({
               </div>
             }
           >
-            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium bg-emerald-500/10 dark:bg-emerald-500/10 text-muted-foreground rounded cursor-help">
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium bg-primary/10 text-muted-foreground rounded cursor-help">
               <Share2 className="h-2.5 w-2.5" />
               {totalSharedTeams > 0
                 ? t('bookmarks.sharedWithTeams', {

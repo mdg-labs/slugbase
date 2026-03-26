@@ -91,6 +91,9 @@ export interface CollectionToolbarProps {
   moreMenuLabel?: string;
   /** Optional wrapper className */
   className?: string;
+  /** Stitch-style display title (heavy weight) */
+  titleClassName?: string;
+  subtitleClassName?: string;
 }
 
 const STICKY_CLASS =
@@ -116,6 +119,8 @@ export function CollectionToolbar({
   bulkSelect,
   moreMenuLabel = 'More',
   className,
+  titleClassName = 'text-3xl font-black tracking-tighter text-foreground sm:text-4xl',
+  subtitleClassName = 'mt-1 font-medium',
 }: CollectionToolbarProps) {
   const [moreOpen, setMoreOpen] = useState(false);
   const displayTitle = count !== undefined ? `${title} (${count})` : title;
@@ -158,6 +163,8 @@ export function CollectionToolbar({
         className="pt-4"
         title={displayTitle}
         subtitle={subtitle}
+        titleClassName={titleClassName}
+        subtitleClassName={subtitleClassName}
         actions={tabs || createButton ? headerActions : undefined}
       />
 
@@ -172,11 +179,14 @@ export function CollectionToolbar({
       )}
 
       {hasToolbarRow && (
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-ghost bg-surface p-4 shadow-sm">
-          <div className="flex flex-wrap items-center gap-3 flex-1 min-w-[200px]">
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-ghost glass p-4 shadow-xl">
+          <div className="flex min-w-[200px] flex-1 flex-wrap items-center gap-3">
             {search && (
-              <div className="flex items-center gap-2 min-w-[200px] flex-1 rounded-lg border border-ghost bg-surface-highest px-3 py-2">
-                <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+              <div className="group flex min-w-[200px] flex-1 items-center gap-2 rounded-xl border border-transparent bg-surface-low px-3 py-2 transition-colors focus-within:border-primary/30 focus-within:ring-1 focus-within:ring-primary/25">
+                <Search
+                  className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-focus-within:text-primary"
+                  aria-hidden
+                />
                 <input
                   type="search"
                   value={search.value}

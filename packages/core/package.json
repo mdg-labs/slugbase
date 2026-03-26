@@ -1,6 +1,6 @@
 {
   "name": "@mdguggenbichler/slugbase-core",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "SlugBase core: backend and frontend entrypoints for self-hosted and cloud apps",
   "type": "module",
   "exports": {

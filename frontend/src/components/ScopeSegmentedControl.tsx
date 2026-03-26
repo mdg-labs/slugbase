@@ -13,7 +13,7 @@ interface ScopeSegmentedControlProps {
 export function ScopeSegmentedControl({ value, onChange, options, ariaLabel }: ScopeSegmentedControlProps) {
   return (
     <div
-      className="flex items-center gap-0.5 rounded-lg bg-surface-low p-1"
+      className="flex flex-wrap items-center gap-0.5 rounded-full border border-ghost bg-surface-low p-1"
       role="group"
       aria-label={ariaLabel}
     >
@@ -30,7 +30,7 @@ export function ScopeSegmentedControl({ value, onChange, options, ariaLabel }: S
                 onChange(opt.value);
               }
             }}
-            className={`rounded-md px-3 py-1.5 text-sm font-semibold transition-colors ${
+            className={`rounded-full px-4 py-1.5 text-xs font-bold transition-all sm:px-5 ${
               selected
                 ? 'bg-primary text-primary-foreground shadow-glow'
                 : 'text-muted-foreground hover:bg-surface-high hover:text-foreground'

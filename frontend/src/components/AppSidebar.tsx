@@ -18,6 +18,7 @@ import {
   CreditCard,
   Share2,
   Shield,
+  Terminal,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -130,18 +131,25 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
 
   const isAdminPathActive = pathname === adminBaseFull || pathname.startsWith(`${adminBaseFull}/`);
 
+  const navItemClass =
+    'rounded-xl py-2.5 pl-2 gap-3 text-muted-foreground hover:text-foreground data-[active=true]:font-semibold [&>svg]:size-5';
+
   const brandLink = (
     <Link
       to={rootLink}
       onClick={handleNavClick}
       className={cn(
-        'flex items-center gap-2 rounded-lg px-2 py-1.5 outline-none ring-sidebar-ring transition-colors hover:bg-sidebar-accent focus-visible:ring-2',
+        'flex items-center gap-3 rounded-xl px-1 py-1 outline-none ring-sidebar-ring transition-colors hover:bg-sidebar-accent/70 focus-visible:ring-2',
         'group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0'
       )}
     >
-      <img src="/slugbase_icon_blue.svg" alt="" className="h-8 w-8 shrink-0 dark:hidden" />
-      <img src="/slugbase_icon_white.svg" alt="" className="hidden h-8 w-8 shrink-0 dark:block" />
-      <span className="truncate text-lg font-semibold tracking-tight text-sidebar-foreground group-data-[collapsible=icon]:sr-only">
+      <div
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary-gradient shadow-glow"
+        aria-hidden
+      >
+        <Terminal className="h-4 w-4 text-primary-foreground" strokeWidth={2.35} />
+      </div>
+      <span className="truncate text-xl font-black tracking-tighter text-primary group-data-[collapsible=icon]:sr-only">
         SlugBase
       </span>
     </Link>
@@ -154,7 +162,7 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
   return (
     <React.Fragment>
       <Sidebar collapsible="icon" side="left">
-        <SidebarHeader className="border-0 px-2 py-3">
+        <SidebarHeader className="border-0 px-3 py-5">
           {!isMobile && state === 'collapsed' ? (
             <Tooltip>
               <TooltipTrigger asChild>{brandLink}</TooltipTrigger>
@@ -179,13 +187,14 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
                         item.pathForActive === rootActivePath ? isOverviewActive : pathname === item.pathForActive
                       }
                       tooltip={item.label}
+                      className={navItemClass}
                     >
                       <Link
                         to={item.pathForLink}
                         onClick={handleNavClick}
                         aria-current={pathname === item.pathForActive ? 'page' : undefined}
                       >
-                        <item.icon className="h-5 w-5 shrink-0" />
+                        <item.icon className="shrink-0" />
                         <span>{item.label}</span>
                       </Link>
                     </SidebarMenuButton>
@@ -200,9 +209,14 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
               <SidebarGroupContent>
                 <SidebarMenu>
                   <SidebarMenuItem>
-                    <SidebarMenuButton asChild isActive={isAdminPathActive} tooltip={t('admin.title')}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isAdminPathActive}
+                      tooltip={t('admin.title')}
+                      className={navItemClass}
+                    >
                       <Link to={adminBaseLink} onClick={handleNavClick} aria-current={isAdminPathActive ? 'page' : undefined}>
-                        <Shield className="h-5 w-5 shrink-0" />
+                        <Shield className="shrink-0" />
                         <span>{t('admin.title')}</span>
                       </Link>
                     </SidebarMenuButton>
@@ -236,13 +250,18 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
                         const Icon = item.icon;
                         return (
                           <SidebarMenuItem key={item.pathForLink}>
-                            <SidebarMenuButton asChild isActive={pathname === item.pathForActive} tooltip={item.label}>
+                            <SidebarMenuButton
+                              asChild
+                              isActive={pathname === item.pathForActive}
+                              tooltip={item.label}
+                              className={navItemClass}
+                            >
                               <Link
                                 to={item.pathForLink}
                                 onClick={handleNavClick}
                                 aria-current={pathname === item.pathForActive ? 'page' : undefined}
                               >
-                                <Icon className="h-5 w-5 shrink-0" />
+                                <Icon className="shrink-0" />
                                 <span>{item.label}</span>
                               </Link>
                             </SidebarMenuButton>
@@ -257,7 +276,7 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
           )}
         </SidebarContent>
 
-        <SidebarFooter className="gap-2">
+        <SidebarFooter className="gap-2 border-t border-ghost pt-3">
           {user && (
             <SidebarGroup className="p-0">
               <SidebarGroupContent>
@@ -266,17 +285,19 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
                     <SidebarMenuButton
                       asChild
                       tooltip={t('profile.title')}
-                      className="h-auto min-h-9 py-2 group-data-[collapsible=icon]:!p-2"
+                      className="h-auto min-h-0 !border-l-transparent rounded-xl border-0 bg-transparent p-0 shadow-none hover:bg-transparent data-[active=true]:!border-l-transparent data-[active=true]:bg-transparent group-data-[collapsible=icon]:!p-0"
                     >
                       <Link to={profileLink} onClick={handleNavClick}>
-                        <div className="flex w-full min-w-0 items-center gap-2 group-data-[collapsible=icon]:justify-center">
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                        <div className="flex w-full min-w-0 items-center gap-3 rounded-xl border border-ghost bg-surface p-2 transition-colors hover:bg-surface-high group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:border-0 group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:hover:bg-transparent">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-ghost bg-surface-high text-xs font-semibold text-primary group-data-[collapsible=icon]:border-0 group-data-[collapsible=icon]:bg-primary/15">
                             {profileInitials}
                           </div>
                           <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
-                            <p className="truncate text-sm font-medium text-sidebar-foreground">{displayName}</p>
+                            <p className="truncate text-xs font-bold text-sidebar-foreground">{displayName}</p>
                             {planInfo ? (
-                              <p className="truncate text-xs capitalize text-muted-foreground">{planInfo.plan}</p>
+                              <p className="truncate text-[10px] capitalize tracking-wide text-muted-foreground">
+                                {planInfo.plan}
+                              </p>
                             ) : null}
                           </div>
                         </div>

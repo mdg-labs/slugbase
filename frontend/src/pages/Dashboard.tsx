@@ -66,8 +66,10 @@ function ProTipBanner({
   t: (key: string) => string;
 }) {
   return (
-    <div className="flex items-start gap-3 rounded-xl border border-ghost border-l-4 border-l-primary bg-surface px-4 py-3 shadow-sm">
-      <Lightbulb className="h-5 w-5 shrink-0 text-primary mt-0.5" aria-hidden />
+    <div className="mb-2 flex items-start gap-4 rounded-xl border border-ghost border-l-4 border-l-primary bg-surface px-5 py-4 shadow-sm">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10" aria-hidden>
+        <Lightbulb className="h-5 w-5 text-primary" />
+      </div>
       <div className="flex-1 min-w-0 space-y-1.5">
         <p className="text-sm font-bold text-foreground">{t('dashboard.proTipTitle')}</p>
         <p className="text-sm text-muted-foreground leading-relaxed">
@@ -228,7 +230,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="mx-auto max-w-6xl space-y-10 pb-2">
       {!proTipDismissed && (
         <ProTipBanner
           onDismiss={() => {
@@ -257,10 +259,10 @@ export default function Dashboard() {
         onCopyUrl={handleCopyUrl}
       />
 
-      <div className={`grid gap-4 items-stretch ${isCloud ? 'lg:grid-cols-2' : ''}`}>
+      <div className={`grid gap-6 items-stretch ${isCloud ? 'lg:grid-cols-2' : ''}`}>
         <SlugPerformanceCard t={t} className={isCloud ? '' : 'max-w-3xl'} />
         {isCloud && (
-          <div className="rounded-xl border border-ghost bg-surface p-5 flex flex-col gap-4 justify-between min-h-[280px]">
+          <div className="flex min-h-[280px] flex-col justify-between gap-4 rounded-2xl border border-ghost bg-surface p-6 shadow-xl">
             <div>
               <h3 className="text-lg font-semibold text-primary">{t('dashboard.aiPromoTitle')}</h3>
               <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{t('dashboard.aiPromoDescription')}</p>

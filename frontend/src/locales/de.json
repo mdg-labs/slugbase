@@ -106,6 +106,7 @@
   },
   "bookmarks": {
     "title": "Lesezeichen",
+    "pageSubtitle": "Lesezeichen und Kurzbefehle verwalten und öffnen.",
     "create": "Lesezeichen erstellen",
     "edit": "Lesezeichen bearbeiten",
     "delete": "Lesezeichen löschen",
@@ -203,6 +204,7 @@
   },
   "folders": {
     "title": "Ordner",
+    "pageSubtitle": "Lesezeichen bündeln und mit dem Team teilen.",
     "create": "Ordner erstellen",
     "edit": "Ordner bearbeiten",
     "delete": "Ordner löschen",
@@ -237,6 +239,7 @@
   },
   "tags": {
     "title": "Tags",
+    "pageSubtitle": "Lesezeichen beschriften und in der Bibliothek filtern.",
     "create": "Tag erstellen",
     "edit": "Tag bearbeiten",
     "delete": "Tag löschen",
@@ -410,8 +413,11 @@
     "denseView": "Kompakte Ansicht",
     "createFolder": "Ordner erstellen",
     "createTag": "Tag erstellen",
-    "searchPlaceholder": "Lesezeichen suchen oder durch SlugBase navigieren",
+    "searchPlaceholder": "Befehl eingeben oder Slugs suchen…",
     "quickAccess": "Schnellzugriff",
+    "quickAccessSlugsTitle": "Schnellzugriff-Slugs",
+    "quickAccessMetaSlug": "Slug",
+    "quickAccessMetaDomain": "Domain",
     "quickAccessSubtitle": "Am häufigsten mit Shortcuts geöffnet",
     "viewAll": "Alle anzeigen",
     "noQuickAccessBookmarks": "Noch keine Lesezeichen mit Shortcuts",

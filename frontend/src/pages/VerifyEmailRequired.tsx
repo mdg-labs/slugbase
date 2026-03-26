@@ -81,8 +81,8 @@ export default function VerifyEmailRequired() {
         <div className={`${AUTH_CARD} space-y-6`}>
           {success ? (
             <div className="space-y-4 text-center">
-              <div className="mx-auto w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
-                <Mail className="h-8 w-8 text-green-600 dark:text-green-400" />
+              <div className="mx-auto w-16 h-16 bg-primary/15 rounded-full flex items-center justify-center">
+                <Mail className="h-8 w-8 text-primary" />
               </div>
               <p className="text-sm text-muted-foreground">
                 {emailChanged ? t('auth.emailChangedResendMessage') : t('auth.resendVerificationSuccess')}

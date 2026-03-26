@@ -105,9 +105,13 @@ export function SlugPerformanceCard({ t, className = '' }: SlugPerformanceCardPr
 
   return (
     <div
-      className={`rounded-xl border border-ghost bg-surface p-5 flex flex-col gap-3 min-h-[280px] ${className}`.trim()}
+      className={`relative flex min-h-[280px] flex-col gap-3 overflow-hidden rounded-2xl border border-ghost bg-surface p-6 shadow-xl ${className}`.trim()}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div
+        className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/[0.07] to-transparent"
+        aria-hidden
+      />
+      <div className="relative z-[1] flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-lg font-semibold text-foreground">{t('dashboard.performanceTitle')}</h3>
         <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-muted-foreground">
           <span className="relative flex h-2 w-2">
@@ -117,8 +121,8 @@ export function SlugPerformanceCard({ t, className = '' }: SlugPerformanceCardPr
           {t('dashboard.liveLabel')}
         </div>
       </div>
-      <p className="text-sm text-muted-foreground">{t('dashboard.performanceSubtitle')}</p>
-      <div className="flex-1 min-h-[200px] w-full pt-2">
+      <p className="relative z-[1] text-sm text-muted-foreground">{t('dashboard.performanceSubtitle')}</p>
+      <div className="relative z-[1] flex min-h-[200px] w-full flex-1 pt-2">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={SLUG_PERFORMANCE_PLACEHOLDER} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
             <XAxis

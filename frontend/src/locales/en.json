@@ -105,6 +105,7 @@
   },
   "bookmarks": {
     "title": "Bookmarks",
+    "pageSubtitle": "Manage and access your bookmarks and shortcuts.",
     "create": "Create Bookmark",
     "edit": "Edit Bookmark",
     "modalSubtitle": "Capture resource",
@@ -222,6 +223,7 @@
   },
   "folders": {
     "title": "Folders",
+    "pageSubtitle": "Group bookmarks and share them with your team.",
     "create": "Create Folder",
     "edit": "Edit Folder",
     "delete": "Delete Folder",
@@ -258,6 +260,7 @@
   },
   "tags": {
     "title": "Tags",
+    "pageSubtitle": "Label and filter bookmarks across your library.",
     "create": "Create Tag",
     "edit": "Edit Tag",
     "delete": "Delete Tag",
@@ -428,7 +431,7 @@
     "gracePeriodExpired": "Your grace period has ended. Delete bookmarks to get under {{limit}} or upgrade to continue."
   },
   "dashboard": {
-    "searchPlaceholder": "Search for a bookmark or navigate through SlugBase",
+    "searchPlaceholder": "Type a command or search slugs…",
     "bookmarksDescription": "Manage your bookmarks",
     "foldersDescription": "Organize with folders",
     "tagsDescription": "Tag your bookmarks",
@@ -461,6 +464,9 @@
     "createFolder": "Create Folder",
     "createTag": "Create Tag",
     "quickAccess": "Quick access",
+    "quickAccessSlugsTitle": "Quick access slugs",
+    "quickAccessMetaSlug": "Slug",
+    "quickAccessMetaDomain": "Domain",
     "quickAccessSubtitle": "Most opened with shortcuts",
     "pinned": "Pinned",
     "noPinnedBookmarks": "No pinned bookmarks",

@@ -473,9 +473,9 @@ export default function Bookmarks() {
         title={t('bookmarks.title')}
         count={total}
         subtitle={
-          hasActiveFilters
+          hasActiveFilters || total > pageSize
             ? t('bookmarks.showingXOfY', { x: displayedBookmarks.length, y: total })
-            : undefined
+            : t('bookmarks.pageSubtitle')
         }
         tabs={{
           value: scope,
@@ -772,7 +772,7 @@ export default function Bookmarks() {
               </div>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm text-gray-700 dark:text-gray-300">
+              <p className="text-sm text-muted-foreground">
                 {t('bookmarks.searchEngineNote')}{' '}
                 <Link
                   to={`${prefix}/search-engine-guide`}

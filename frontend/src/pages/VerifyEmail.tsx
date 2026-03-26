@@ -129,8 +129,8 @@ export default function VerifyEmail() {
 
           {status === 'success' && (
             <>
-              <div className="mx-auto w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
-                <CheckCircle className="h-8 w-8 text-green-600 dark:text-green-400" />
+              <div className="mx-auto w-16 h-16 bg-primary/15 rounded-full flex items-center justify-center">
+                <CheckCircle className="h-8 w-8 text-primary" />
               </div>
               <h2 className="text-2xl font-semibold text-foreground">
                 {signupVerified ? t('emailVerification.signupSuccess') : t('emailVerification.success')}
@@ -150,8 +150,8 @@ export default function VerifyEmail() {
             <>
               {resendSuccess ? (
                 <>
-                  <div className="mx-auto w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
-                    <CheckCircle className="h-8 w-8 text-green-600 dark:text-green-400" />
+                  <div className="mx-auto w-16 h-16 bg-primary/15 rounded-full flex items-center justify-center">
+                    <CheckCircle className="h-8 w-8 text-primary" />
                   </div>
                   <h2 className="text-2xl font-semibold text-foreground">
                     {t('emailVerification.resendSuccess')}
@@ -165,8 +165,8 @@ export default function VerifyEmail() {
                 </>
               ) : (
                 <>
-                  <div className="mx-auto w-16 h-16 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center">
-                    <Mail className="h-8 w-8 text-amber-600 dark:text-amber-400" />
+                  <div className="mx-auto w-16 h-16 bg-surface-high rounded-full flex items-center justify-center border border-ghost">
+                    <Mail className="h-8 w-8 text-primary" />
                   </div>
                   <h2 className="text-2xl font-semibold text-foreground">
                     {t('emailVerification.resendTitle')}
@@ -221,8 +221,8 @@ export default function VerifyEmail() {
 
           {status === 'error' && (
             <>
-              <div className="mx-auto w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
-                <XCircle className="h-8 w-8 text-red-600 dark:text-red-400" />
+              <div className="mx-auto w-16 h-16 bg-destructive/15 rounded-full flex items-center justify-center">
+                <XCircle className="h-8 w-8 text-destructive" />
               </div>
               <h2 className="text-2xl font-semibold text-foreground">
                 {t('emailVerification.error')}

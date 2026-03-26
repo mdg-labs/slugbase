@@ -188,8 +188,9 @@ a:focus-visible {
 }
 
 @layer utilities {
+  /** Obsidian / Stitch-style frosted bar (command palette trigger, table shells) */
   .glass {
-    @apply bg-surface-high/70 backdrop-blur-[20px];
+    @apply border border-primary/15 bg-surface-high/70 backdrop-blur-[24px];
   }
 }
 
