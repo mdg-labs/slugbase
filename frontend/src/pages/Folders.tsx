@@ -26,7 +26,6 @@ interface Folder {
   created_at?: string;
 }
 
-type ViewMode = 'card' | 'list';
 type SortOption = 'alphabetical' | 'recently_added';
 
 const DEFAULT_SORT: SortOption = 'alphabetical';
@@ -43,11 +42,6 @@ export default function Folders() {
   const [editingFolder, setEditingFolder] = useState<Folder | null>(null);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [sharingFolder, setSharingFolder] = useState<Folder | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    const saved = localStorage.getItem('folders-view-mode');
-    return (saved === 'list' || saved === 'card') ? saved : 'card';
-  });
-
   const scopeParam = searchParams.get('scope');
   const scope = (scopeParam === 'mine' || scopeParam === 'shared_with_me' || scopeParam === 'shared_by_me')
     ? scopeParam
@@ -61,10 +55,6 @@ export default function Folders() {
     : 50;
   const page = Math.max(0, parseInt(searchParams.get('page') || '0', 10));
   const [totalFolders, setTotalFolders] = useState(0);
-
-  useEffect(() => {
-    localStorage.setItem('folders-view-mode', viewMode);
-  }, [viewMode]);
 
   useEffect(() => {
     loadData();
@@ -228,12 +218,7 @@ export default function Folders() {
           options: [...PAGE_SIZE_OPTIONS],
           label: t('bookmarks.perPage'),
         }}
-        viewMode={{
-          value: viewMode,
-          onChange: setViewMode,
-          cardLabel: t('folders.viewCard'),
-          listLabel: t('folders.viewList'),
-        }}
+        moreMenuLabel={t('bookmarks.toolbarMore')}
       />
 
       {/* Folders Display */}
@@ -261,7 +246,7 @@ export default function Folders() {
             }
           />
         )
-      ) : viewMode === 'card' ? (
+      ) : (
         <div className="grid gap-3 items-stretch [grid-template-columns:repeat(auto-fill,minmax(300px,1fr))]">
           {sortedFolders.map((folder) => {
             const isShared = (folder.shared_teams && folder.shared_teams.length > 0) || (folder.shared_users && folder.shared_users.length > 0);
@@ -342,111 +327,6 @@ export default function Folders() {
               </Card>
             );
           })}
-        </div>
-      ) : (
-        <div className="overflow-x-auto bg-card rounded-lg border border-border">
-          <table className="w-full">
-            <thead className="bg-muted/50 border-b border-border">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  {t('folders.name')}
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  {t('bookmarks.title')}
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  {t('folders.shared')}
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  {t('common.actions')}
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {sortedFolders.map((folder) => (
-                <tr
-                  key={folder.id}
-                  className="hover:bg-muted/50 transition-colors"
-                >
-                  <td className="px-4 py-3">
-                    <Link
-                      to={`${prefix}/bookmarks?folder_id=${folder.id}`}
-                      className="flex items-center gap-3 hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
-                    >
-                      <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center border border-primary/30">
-                        <FolderIcon iconName={folder.icon} size={16} className="text-primary" />
-                      </div>
-                      <div className="font-medium text-foreground text-sm">
-                        {folder.name}
-                      </div>
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground">—</td>
-                  <td className="px-4 py-3">
-                    {folder.shared_teams && folder.shared_teams.length > 0 ? (
-                      <Tooltip
-                        content={
-                          <div className="space-y-1">
-                            <div className="font-semibold mb-1">{t('folders.sharedWith')}</div>
-                            {folder.shared_teams.map((team) => (
-                              <div key={team.id} className="text-xs">
-                                • {team.name}
-                              </div>
-                            ))}
-                            {folder.shared_users && folder.shared_users.length > 0 && (
-                              <>
-                                {folder.shared_users.map((user) => (
-                                  <div key={user.id} className="text-xs">
-                                    • {user.name || user.email}
-                                  </div>
-                                ))}
-                              </>
-                            )}
-                          </div>
-                        }
-                      >
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 rounded-md cursor-help">
-                          <Share2 className="h-3 w-3" />
-                          {t('folders.shared')}
-                        </span>
-                      </Tooltip>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">-</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    {folder.folder_type === 'own' && (
-                      <div className="flex items-center justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          icon={Share2}
-                          onClick={() => { setSharingFolder(folder); setShareDialogOpen(true); }}
-                          title={t('sharing.shareFolder')}
-                          className="px-2"
-                        />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          icon={Edit}
-                          onClick={() => handleEdit(folder)}
-                          className="px-2"
-                        />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          icon={Trash2}
-                          onClick={() => handleDelete(folder.id)}
-                          title={t('common.delete')}
-                          className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 px-2"
-                        />
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       )}
 

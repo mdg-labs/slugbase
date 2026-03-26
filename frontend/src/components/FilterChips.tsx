@@ -24,7 +24,7 @@ export function FilterChips({ chips, onRemove, onClearAll, clearAllLabel, clearA
         <Badge
           key={key}
           variant="secondary"
-          className="inline-flex items-center gap-1.5 rounded-full border-0 bg-surface-low py-1 pl-2.5 pr-1 text-sm font-normal text-foreground"
+          className="inline-flex items-center gap-1.5 rounded-full border-0 bg-surface-low py-1 pl-2.5 pr-1 text-sm font-normal text-muted-foreground"
         >
           <span>{label}</span>
           <button

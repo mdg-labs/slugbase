@@ -11,7 +11,6 @@ import BookmarkModal from '../components/modals/BookmarkModal';
 import ImportModal from '../components/modals/ImportModal';
 import ShareResourceDialog from '../components/sharing/ShareResourceDialog';
 import Button from '../components/ui/Button';
-import BookmarkCard from '../components/bookmarks/BookmarkCard';
 import BookmarkTableView from '../components/bookmarks/BookmarkTableView';
 import { BulkMoveModal, BulkTagModal, BulkShareModal } from '../components/bookmarks/BulkActionModals';
 import { type FilterKey } from '../components/bookmarks/FilterChips';
@@ -40,7 +39,6 @@ interface Bookmark {
   pinned?: boolean;
 }
 
-type ViewMode = 'card' | 'list';
 type SortOption = 'recently_added' | 'alphabetical' | 'most_used' | 'recently_accessed';
 
 export default function Bookmarks() {
@@ -57,10 +55,6 @@ export default function Bookmarks() {
   const [tags, setTags] = useState<any[]>([]);
   const [teams, setTeams] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    const saved = localStorage.getItem('bookmarks-view-mode');
-    return (saved === 'list' || saved === 'card') ? saved : 'card';
-  });
   const [sortBy, setSortBy] = useState<SortOption>('recently_added');
   const [selectedBookmarks, setSelectedBookmarks] = useState<Set<string>>(new Set());
   const [allSelectedAcrossPages, setAllSelectedAcrossPages] = useState(false);
@@ -162,10 +156,6 @@ export default function Bookmarks() {
   }
 
   useEffect(() => {
-    localStorage.setItem('bookmarks-view-mode', viewMode);
-  }, [viewMode]);
-
-  useEffect(() => {
     setSearchInputValue(searchQuery);
   }, [searchQuery]);
 
@@ -240,17 +230,6 @@ export default function Bookmarks() {
   function handleEdit(bookmark: Bookmark) {
     setEditingBookmark(bookmark);
     setModalOpen(true);
-  }
-
-  async function handlePinToggle(bookmark: Bookmark) {
-    if (bookmark.bookmark_type !== 'own') return;
-    try {
-      await api.put(`/bookmarks/${bookmark.id}`, { pinned: !bookmark.pinned });
-      loadData();
-      showToast(bookmark.pinned ? t('bookmarks.unpinned') : t('bookmarks.pinned'), 'success');
-    } catch {
-      showToast(t('common.error'), 'error');
-    }
   }
 
   function handleDelete(id: string, name?: string) {
@@ -561,12 +540,7 @@ export default function Bookmarks() {
           options: [...PAGE_SIZE_OPTIONS],
           label: t('bookmarks.perPage'),
         }}
-        viewMode={{
-          value: viewMode,
-          onChange: setViewMode,
-          cardLabel: t('bookmarks.viewCard'),
-          listLabel: t('bookmarks.viewList'),
-        }}
+        moreMenuLabel={t('bookmarks.toolbarMore')}
         pinnedToggle={{
           active: pinnedFilter,
           onClick: () => updateParams({ pinned: pinnedFilter ? undefined : 'true' }),
@@ -586,34 +560,36 @@ export default function Bookmarks() {
       {/* Bulk Actions Bar - sticky bottom, visible when selecting */}
       {bulkMode && (
         <div
-          className="fixed bottom-0 right-0 z-50 flex items-center justify-between bg-background border-t-2 border-primary shadow-[0_-4px_12px_rgba(0,0,0,0.08)] dark:shadow-[0_-4px_12px_rgba(0,0,0,0.3)] p-4"
+          className="fixed bottom-0 right-0 z-50 flex flex-wrap items-center justify-between gap-4 border-t border-ghost bg-surface-high/95 p-4 backdrop-blur-sm shadow-[0_-8px_32px_rgba(0,0,0,0.12)] dark:shadow-[0_-8px_32px_rgba(0,0,0,0.35)]"
           style={
             !isMobile
               ? { left: sidebarState === 'expanded' ? '16rem' : '3rem' }
               : { left: 0 }
           }
         >
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             {(allSelectedAcrossPages || selectedBookmarks.size === total) && total > 0 ? (
               <>
-                <span className="text-sm text-gray-700 dark:text-gray-300">
+                <span className="text-sm text-muted-foreground">
                   {t('bookmarks.allSelected', { total })}
                 </span>
                 <button
+                  type="button"
                   onClick={handleDeselectAll}
-                  className="text-sm text-primary hover:text-primary/90"
+                  className="text-sm font-medium text-primary hover:text-primary/90"
                 >
                   {t('bookmarks.deselectAll')}
                 </button>
               </>
             ) : selectedBookmarks.size === displayedBookmarks.length && displayedBookmarks.length > 0 && total > pageSize ? (
               <>
-                <span className="text-sm text-gray-700 dark:text-gray-300">
+                <span className="text-sm text-muted-foreground">
                   {t('bookmarks.selectAllOnPageAndRemaining', { pageCount: displayedBookmarks.length, total })}
                 </span>
                 <button
+                  type="button"
                   onClick={handleSelectAllRemaining}
-                  className="text-sm text-primary hover:text-primary/90"
+                  className="text-sm font-medium text-primary hover:text-primary/90"
                 >
                   {t('bookmarks.selectAllRemaining', { total })}
                 </button>
@@ -624,21 +600,23 @@ export default function Bookmarks() {
                   {t('bookmarks.selectedCount', { count: selectedBookmarks.size })}
                 </span>
                 <button
+                  type="button"
                   onClick={toggleSelectAll}
-                  className="text-sm text-primary hover:text-primary/90"
+                  className="text-sm font-medium text-primary hover:text-primary/90"
                 >
                   {selectedBookmarks.size === displayedBookmarks.length ? t('bookmarks.deselectAll') : t('bookmarks.selectAll')}
                 </button>
               </>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="secondary"
               size="sm"
               icon={FolderPlus}
               onClick={() => setBulkMoveModalOpen(true)}
               disabled={selectedBookmarks.size === 0}
+              className="border-ghost bg-surface"
             >
               {t('bookmarks.bulkMoveToFolder')}
             </Button>
@@ -648,6 +626,7 @@ export default function Bookmarks() {
               icon={TagIcon}
               onClick={() => setBulkTagModalOpen(true)}
               disabled={selectedBookmarks.size === 0}
+              className="border-ghost bg-surface"
             >
               {t('bookmarks.bulkAddTags')}
             </Button>
@@ -657,6 +636,7 @@ export default function Bookmarks() {
               icon={Share2}
               onClick={() => setBulkShareModalOpen(true)}
               disabled={selectedBookmarks.size === 0}
+              className="border-ghost bg-surface"
             >
               {t('bookmarks.bulkShare')}
             </Button>
@@ -686,31 +666,32 @@ export default function Bookmarks() {
 
       {/* Bookmarks Display */}
       {displayedBookmarks.length === 0 ? (
-        <Card className="flex flex-col items-center justify-center py-20 px-4">
-          <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mb-4">
-            <BookmarkIcon className="h-8 w-8 text-primary" />
+        <Card className="flex flex-col items-center justify-center border-ghost bg-surface px-6 py-24">
+          <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-primary/15 shadow-glow">
+            <BookmarkIcon className="h-10 w-10 text-primary" />
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+          <h2 className="mb-3 text-center text-4xl font-black tracking-tight text-foreground">
             {hasActiveFilters ? t('bookmarks.noMatches') : t('bookmarks.empty')}
-          </h3>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-6 text-center max-w-md">
+          </h2>
+          <p className="mb-8 max-w-md text-center text-sm text-muted-foreground">
             {hasActiveFilters ? '' : t('bookmarks.emptyDescription')}
           </p>
-          <div className="flex flex-wrap gap-3 justify-center">
+          <div className="flex flex-wrap justify-center gap-3">
             {hasActiveFilters ? (
-              <Button onClick={handleResetFilters} variant="primary">
+              <Button onClick={handleResetFilters} variant="primary" className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90">
                 {t('bookmarks.clearFilters')}
               </Button>
             ) : (
               <>
-                <Button onClick={handleCreate} variant="primary" icon={Plus}>
+                <Button
+                  onClick={handleCreate}
+                  variant="primary"
+                  icon={Plus}
+                  className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
+                >
                   {t('bookmarks.emptyCreateFirst')}
                 </Button>
-                <Button
-                  variant="secondary"
-                  icon={Upload}
-                  onClick={() => setImportModalOpen(true)}
-                >
+                <Button variant="secondary" icon={Upload} onClick={() => setImportModalOpen(true)} className="border-ghost bg-surface-high">
                   {t('bookmarks.emptyImport')}
                 </Button>
                 <Link to={`${prefix}/search-engine-guide`}>
@@ -722,27 +703,7 @@ export default function Bookmarks() {
             )}
           </div>
         </Card>
-      ) : viewMode === 'card' ? (
-        <div className="grid gap-3 items-stretch [grid-template-columns:repeat(auto-fill,minmax(300px,1fr))]">
-          {displayedBookmarks.map((bookmark) => (
-            <BookmarkCard
-              key={bookmark.id}
-              bookmark={bookmark}
-              compact={false}
-              selected={selectedBookmarks.has(bookmark.id)}
-              onSelect={() => toggleSelectBookmark(bookmark.id)}
-              onEdit={() => handleEdit(bookmark)}
-              onDelete={() => handleDelete(bookmark.id, bookmark.title)}
-              onCopyUrl={() => handleCopyUrl(bookmark)}
-              onShare={() => { setSharingBookmark(bookmark); setShareDialogOpen(true); }}
-              onOpen={() => handleOpenBookmark(bookmark)}
-              onPinToggle={bookmark.bookmark_type === 'own' ? () => handlePinToggle(bookmark) : undefined}
-              bulkMode={bulkMode}
-              t={t}
-            />
-          ))}
-        </div>
-      ) : viewMode === 'list' ? (
+      ) : (
         <BookmarkTableView
           bookmarks={displayedBookmarks}
           selectedBookmarks={selectedBookmarks}
@@ -751,46 +712,53 @@ export default function Bookmarks() {
           onEdit={handleEdit}
           onDelete={handleDelete}
           onCopyUrl={handleCopyUrl}
-          onShare={(bookmark) => { setSharingBookmark(bookmark); setShareDialogOpen(true); }}
+          onShare={(bookmark) => {
+            setSharingBookmark(bookmark);
+            setShareDialogOpen(true);
+          }}
           onOpen={handleOpenBookmark}
           bulkMode={bulkMode}
           user={user}
           t={t}
-          compact={false}
         />
-      ) : null}
+      )}
 
-      {/* Pagination */}
-      {total > pageSize && displayedBookmarks.length > 0 && (
-        <div className="flex items-center justify-between gap-4 mt-6 py-4 border-t border-gray-200 dark:border-gray-700">
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            {t('bookmarks.paginationShowing', {
-              from: page * pageSize + 1,
-              to: Math.min(page * pageSize + displayedBookmarks.length, total),
-              total,
-            })}
-          </p>
-          <div className="flex gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={ChevronLeft}
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              disabled={page === 0}
-            >
-              {t('bookmarks.paginationPrevious')}
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={ChevronRight}
-              iconPosition="right"
-              onClick={() => setPage((p) => p + 1)}
-              disabled={page * pageSize + displayedBookmarks.length >= total}
-            >
-              {t('bookmarks.paginationNext')}
-            </Button>
+      {/* Pagination footer */}
+      {total > 0 && displayedBookmarks.length > 0 && (
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-ghost bg-surface-low px-4 py-3">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
+            <span className="typography-label">{t('bookmarks.paginationTotalEntries', { count: total })}</span>
           </div>
+          {total > pageSize ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="typography-label">
+                {t('bookmarks.paginationPageOf', {
+                  current: page + 1,
+                  totalPages: Math.max(1, Math.ceil(total / pageSize)),
+                })}
+              </span>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={ChevronLeft}
+                  className="h-9 w-9 border border-ghost bg-surface p-0"
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  disabled={page === 0}
+                  aria-label={t('bookmarks.paginationPrevious')}
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={ChevronRight}
+                  className="h-9 w-9 border border-ghost bg-surface p-0"
+                  onClick={() => setPage((p) => p + 1)}
+                  disabled={page * pageSize + displayedBookmarks.length >= total}
+                  aria-label={t('bookmarks.paginationNext')}
+                />
+              </div>
+            </div>
+          ) : null}
         </div>
       )}
 

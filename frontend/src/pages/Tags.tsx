@@ -19,7 +19,6 @@ interface Tag {
   created_at?: string;
 }
 
-type ViewMode = 'card' | 'list';
 type SortOption = 'alphabetical' | 'recently_added';
 
 const DEFAULT_SORT: SortOption = 'alphabetical';
@@ -34,11 +33,6 @@ export default function Tags() {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTag, setEditingTag] = useState<Tag | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    const saved = localStorage.getItem('tags-view-mode');
-    return (saved === 'list' || saved === 'card') ? saved : 'card';
-  });
-
   const sortParam = searchParams.get('sort');
   const sortBy = (sortParam === 'recently_added' || sortParam === 'alphabetical') ? sortParam : DEFAULT_SORT;
   const PAGE_SIZE_OPTIONS = [50, 100, 200, 500] as const;
@@ -48,10 +42,6 @@ export default function Tags() {
     : 50;
   const page = Math.max(0, parseInt(searchParams.get('page') || '0', 10));
   const [totalTags, setTotalTags] = useState(0);
-
-  useEffect(() => {
-    localStorage.setItem('tags-view-mode', viewMode);
-  }, [viewMode]);
 
   useEffect(() => {
     loadTags();
@@ -193,12 +183,7 @@ export default function Tags() {
           options: [...PAGE_SIZE_OPTIONS],
           label: t('bookmarks.perPage'),
         }}
-        viewMode={{
-          value: viewMode,
-          onChange: setViewMode,
-          cardLabel: t('tags.viewCard'),
-          listLabel: t('tags.viewList'),
-        }}
+        moreMenuLabel={t('bookmarks.toolbarMore')}
       />
 
       {/* Tags Display */}
@@ -213,7 +198,7 @@ export default function Tags() {
             </Button>
           }
         />
-      ) : viewMode === 'card' ? (
+      ) : (
         <div className="grid gap-3 items-start [grid-template-columns:repeat(auto-fill,minmax(300px,1fr))]">
           {sortedTags.map((tag) => (
             <Card
@@ -257,62 +242,6 @@ export default function Tags() {
               </footer>
             </Card>
           ))}
-        </div>
-      ) : (
-        <div className="overflow-x-auto bg-card rounded-lg border border-border">
-          <table className="w-full">
-            <thead className="bg-muted/50 border-b border-border">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  {t('tags.name')}
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  {t('common.actions')}
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {sortedTags.map((tag) => (
-                <tr
-                  key={tag.id}
-                  className="hover:bg-muted/50 transition-colors"
-                >
-                  <td className="px-4 py-3">
-                    <Link
-                      to={`${prefix}/bookmarks?tag_id=${tag.id}`}
-                      className="flex items-center gap-3 hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
-                    >
-                      <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/20 flex items-center justify-center border border-purple-100 dark:border-purple-800/50">
-                        <TagIcon className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-                      </div>
-                      <div className="font-medium text-foreground text-sm">
-                        {tag.name}
-                      </div>
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        icon={Edit}
-                        onClick={() => handleEdit(tag)}
-                        className="px-2"
-                      />
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        icon={Trash2}
-                        onClick={() => handleDelete(tag.id)}
-                        title={t('common.delete')}
-                        className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 px-2"
-                      />
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       )}
 

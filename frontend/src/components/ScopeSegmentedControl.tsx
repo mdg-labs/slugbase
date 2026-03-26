@@ -30,9 +30,9 @@ export function ScopeSegmentedControl({ value, onChange, options, ariaLabel }: S
                 onChange(opt.value);
               }
             }}
-            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+            className={`rounded-md px-3 py-1.5 text-sm font-semibold transition-colors ${
               selected
-                ? 'bg-primary/15 text-primary shadow-sm'
+                ? 'bg-primary text-primary-foreground shadow-glow'
                 : 'text-muted-foreground hover:bg-surface-high hover:text-foreground'
             }`}
             aria-pressed={selected}

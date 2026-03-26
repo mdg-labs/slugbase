@@ -1,22 +1,32 @@
 /**
  * CollectionToolbar — Reusable toolbar for collection pages (Bookmarks, Folders, Tags).
  *
- * Props API summary:
- * - Row 1 (header): title, count?, subtitle?, tabs? (scope), createButton?
- * - Row 2: filterChips? (chips + onRemove, onClearAll, labels)
- * - Row 3 (toolbar card): search?, folderFilter?, tagFilter?, sort?, perPage?, viewMode?,
- *   pinnedToggle?, onImport?, onExport?, bulkSelect?
- * Only provided props are rendered. No collection-specific logic.
+ * Row 1: title, count?, subtitle?, tabs?, createButton? (gradient primary CTA)
+ * Row 2: filterChips?
+ * Row 3: search?, folderFilter?, tagFilter?, sort? — primary filters; secondary
+ *   (per page, pinned, import/export, bulk select) live in the "more" menu.
  */
 
-import { Plus, LayoutGrid, List, CheckSquare, Download, Upload, Pin, Search } from 'lucide-react';
+import { useState } from 'react';
+import { Plus, CheckSquare, Download, Upload, Pin, Search, MoreHorizontal } from 'lucide-react';
 import { PageHeader } from '../PageHeader';
 import { ScopeSegmentedControl } from '../ScopeSegmentedControl';
 import { FilterChips, type FilterChipItem } from '../FilterChips';
 import Button from '../ui/Button';
 import Select from '../ui/Select';
-
-export type ViewModeValue = 'card' | 'list';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuCheckboxItem,
+} from '../ui/dropdown-menu';
 
 export interface CollectionToolbarProps {
   /** Row 1 */
@@ -64,18 +74,12 @@ export interface CollectionToolbarProps {
     options: { value: string; label: string }[];
     className?: string;
   };
-  /** Row 3 — utility */
+  /** Secondary — shown inside "more" menu */
   perPage?: {
     value: number;
     onChange: (value: number) => void;
     options: number[];
     label?: string;
-  };
-  viewMode?: {
-    value: ViewModeValue;
-    onChange: (value: ViewModeValue) => void;
-    cardLabel?: string;
-    listLabel?: string;
   };
   pinnedToggle?: { active: boolean; onClick: () => void; label: string };
   onImport?: () => void;
@@ -83,12 +87,14 @@ export interface CollectionToolbarProps {
   onExport?: () => void;
   exportLabel?: string;
   bulkSelect?: { onClick: () => void; label: string; disabled?: boolean };
+  /** "More" menu trigger label (i18n) */
+  moreMenuLabel?: string;
   /** Optional wrapper className */
   className?: string;
 }
 
 const STICKY_CLASS =
-  'sticky top-0 z-40 space-y-4 pb-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pt-0 -mt-8 bg-background shadow-sm';
+  'sticky top-0 z-40 space-y-4 pb-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pt-0 -mt-8 bg-background/95 backdrop-blur-sm';
 
 export function CollectionToolbar({
   title,
@@ -102,28 +108,26 @@ export function CollectionToolbar({
   tagFilter,
   sort,
   perPage,
-  viewMode,
   pinnedToggle,
   onImport,
   importLabel = 'Import',
   onExport,
   exportLabel = 'Export',
   bulkSelect,
+  moreMenuLabel = 'More',
   className,
 }: CollectionToolbarProps) {
+  const [moreOpen, setMoreOpen] = useState(false);
   const displayTitle = count !== undefined ? `${title} (${count})` : title;
 
-  const hasToolbarRow =
-    search ||
-    folderFilter ||
-    tagFilter ||
-    sort ||
+  const hasSecondary =
     perPage ||
-    viewMode ||
     pinnedToggle ||
     onImport ||
     onExport ||
     (bulkSelect && !bulkSelect.disabled);
+
+  const hasToolbarRow = search || folderFilter || tagFilter || sort || hasSecondary;
 
   const headerActions = (
     <div className="flex flex-wrap items-center gap-2">
@@ -136,7 +140,12 @@ export function CollectionToolbar({
         />
       )}
       {createButton && (
-        <Button onClick={createButton.onClick} icon={Plus}>
+        <Button
+          onClick={createButton.onClick}
+          icon={Plus}
+          variant="primary"
+          className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
+        >
           {createButton.label}
         </Button>
       )}
@@ -163,12 +172,11 @@ export function CollectionToolbar({
       )}
 
       {hasToolbarRow && (
-        <div className="flex flex-wrap items-center gap-3 bg-card rounded-lg border border-border p-4 shadow-sm">
-          {/* Primary filters — left */}
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-ghost bg-surface p-4 shadow-sm">
           <div className="flex flex-wrap items-center gap-3 flex-1 min-w-[200px]">
             {search && (
-              <div className="flex items-center gap-2 min-w-[200px] flex-1">
-                <Search className="h-4 w-4 text-muted-foreground flex-shrink-0" aria-hidden />
+              <div className="flex items-center gap-2 min-w-[200px] flex-1 rounded-lg border border-ghost bg-surface-highest px-3 py-2">
+                <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
                 <input
                   type="search"
                   value={search.value}
@@ -179,13 +187,13 @@ export function CollectionToolbar({
                     }
                   }}
                   placeholder={search.placeholder}
-                  className="flex-1 min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
                   aria-label={search.ariaLabel ?? search.placeholder}
                 />
               </div>
             )}
             {folderFilter && (
-              <div className="flex-1 min-w-[180px]">
+              <div className="min-w-[180px] flex-1">
                 <Select
                   value={folderFilter.value}
                   onChange={folderFilter.onChange}
@@ -195,7 +203,7 @@ export function CollectionToolbar({
               </div>
             )}
             {tagFilter && (
-              <div className="flex-1 min-w-[180px]">
+              <div className="min-w-[180px] flex-1">
                 <Select
                   value={tagFilter.value}
                   onChange={tagFilter.onChange}
@@ -216,77 +224,84 @@ export function CollectionToolbar({
             )}
           </div>
 
-          {/* Utility — right, visually quieter */}
-          <div className="flex flex-wrap items-center gap-3 border-l border-border pl-3 ml-auto">
-            {pinnedToggle && (
-              <Button
-                variant={pinnedToggle.active ? 'secondary' : 'ghost'}
-                size="sm"
-                icon={Pin}
-                onClick={pinnedToggle.onClick}
-                title={pinnedToggle.label}
-                aria-pressed={pinnedToggle.active}
-              >
-                <span className="hidden sm:inline">{pinnedToggle.label}</span>
-              </Button>
-            )}
-            {onImport && (
-              <Button variant="ghost" size="sm" icon={Upload} onClick={onImport} title={importLabel}>
-                <span className="hidden sm:inline">{importLabel}</span>
-              </Button>
-            )}
-            {onExport && (
-              <Button variant="ghost" size="sm" icon={Download} onClick={onExport} title={exportLabel}>
-                <span className="hidden sm:inline">{exportLabel}</span>
-              </Button>
-            )}
-            {perPage && (
-              <div className="flex items-center gap-2">
-                <Select
-                  value={String(perPage.value)}
-                  onChange={(value) => perPage.onChange(Number(value))}
-                  options={perPage.options.map((n) => ({ value: String(n), label: String(n) }))}
-                  className="min-w-[80px]"
-                />
-                <span className="text-sm text-muted-foreground whitespace-nowrap">
-                  {perPage.label ?? 'Per page'}
-                </span>
-              </div>
-            )}
-            {viewMode && (
-              <div className="flex items-center gap-1 bg-muted rounded-lg p-1 border border-border">
-                <button
-                  type="button"
-                  onClick={() => viewMode.onChange('card')}
-                  className={`p-1.5 rounded transition-colors ${
-                    viewMode.value === 'card'
-                      ? 'bg-background text-primary shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                  title={viewMode.cardLabel ?? 'Card view'}
-                >
-                  <LayoutGrid className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => viewMode.onChange('list')}
-                  className={`p-1.5 rounded transition-colors ${
-                    viewMode.value === 'list'
-                      ? 'bg-background text-primary shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                  title={viewMode.listLabel ?? 'List view'}
-                >
-                  <List className="h-4 w-4" />
-                </button>
-              </div>
-            )}
-            {bulkSelect && !bulkSelect.disabled && (
-              <Button variant="ghost" size="sm" icon={CheckSquare} onClick={bulkSelect.onClick}>
-                {bulkSelect.label}
-              </Button>
-            )}
-          </div>
+          {hasSecondary && (
+            <DropdownMenu open={moreOpen} onOpenChange={setMoreOpen}>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" icon={MoreHorizontal} className="shrink-0 border-ghost bg-surface-high">
+                  {moreMenuLabel}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[12rem]">
+                {perPage && (
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger>{perPage.label ?? 'Per page'}</DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent>
+                      <DropdownMenuRadioGroup
+                        value={String(perPage.value)}
+                        onValueChange={(v) => {
+                          perPage.onChange(Number(v));
+                          setMoreOpen(false);
+                        }}
+                      >
+                        {perPage.options.map((n) => (
+                          <DropdownMenuRadioItem key={n} value={String(n)}>
+                            {n}
+                          </DropdownMenuRadioItem>
+                        ))}
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                )}
+                {pinnedToggle && (
+                  <DropdownMenuCheckboxItem
+                    checked={pinnedToggle.active}
+                    onCheckedChange={() => pinnedToggle.onClick()}
+                    onSelect={(e) => e.preventDefault()}
+                  >
+                    <Pin className="h-4 w-4" />
+                    {pinnedToggle.label}
+                  </DropdownMenuCheckboxItem>
+                )}
+                {(onImport || onExport) && <DropdownMenuSeparator />}
+                {onImport && (
+                  <DropdownMenuItem
+                    onClick={() => {
+                      onImport();
+                      setMoreOpen(false);
+                    }}
+                  >
+                    <Upload className="h-4 w-4" />
+                    {importLabel}
+                  </DropdownMenuItem>
+                )}
+                {onExport && (
+                  <DropdownMenuItem
+                    onClick={() => {
+                      onExport();
+                      setMoreOpen(false);
+                    }}
+                  >
+                    <Download className="h-4 w-4" />
+                    {exportLabel}
+                  </DropdownMenuItem>
+                )}
+                {bulkSelect && !bulkSelect.disabled && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => {
+                        bulkSelect.onClick();
+                        setMoreOpen(false);
+                      }}
+                    >
+                      <CheckSquare className="h-4 w-4" />
+                      {bulkSelect.label}
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       )}
     </div>
