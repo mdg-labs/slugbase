@@ -16,6 +16,8 @@ import {
   Key,
   Sparkles,
   CreditCard,
+  Share2,
+  Shield,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -23,18 +25,28 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarSeparator,
   useSidebar,
 } from './ui/sidebar';
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip-base';
 import { useAppConfig } from '../contexts/AppConfigContext';
 import { usePlan } from '../contexts/PlanContext';
 import type { User } from '../contexts/AuthContext';
 import { cn } from '../lib/utils';
 
 const SIDEBAR_ADMIN_OPEN_KEY = 'slugbase_sidebar_admin_open';
+
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+  return name.slice(0, 2).toUpperCase();
+}
 
 interface AppSidebarProps {
   user: User | null;
@@ -49,14 +61,11 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
   const planInfo = usePlan();
   const { setOpenMobile, toggleSidebar, isMobile, state } = useSidebar();
   const prefix = pathPrefixForLinks || '';
-  // For active matching use pathPrefixForLinks so it matches useLocation().pathname (e.g. when Router has basename="/app", pathname is "/bookmarks" not "/app/bookmarks").
   const pathBaseForActive = pathPrefixForLinks ?? appBasePath ?? '';
   const adminBaseFull = `${pathBaseForActive}/admin`.replace(/\/+/g, '/') || '/admin';
   const adminBaseLink = `${prefix}/admin`.replace(/\/+/g, '/') || '/admin';
 
-  // In cloud, show Users and Teams only on team plan; self-hosted (planInfo null) always shows them.
   const showAdminUsersAndTeams = !planInfo || planInfo.canShareWithTeams;
-  // In cloud, show AI Suggestions only on personal/team/supporter; self-hosted always shows.
   const showAdminAi = !planInfo || planInfo.aiAvailable;
 
   const adminNavItems = [
@@ -86,7 +95,7 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
   const rootActivePath = pathBaseForActive || '/';
   const isOverviewActive =
     pathname === rootActivePath ||
-    pathname === rootActivePath + '/' ||
+    pathname === `${rootActivePath}/` ||
     pathname === (pathBaseForActive || '/');
 
   const showAdmin = !!(user?.is_admin);
@@ -102,11 +111,15 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
 
   const rootLink = prefix || '/';
   const rootActive = rootActivePath;
+  const sharedPathForLink = `${prefix}/shared`.replace(/\/+/g, '/') || '/shared';
+  const sharedPathForActive = `${pathBaseForActive}/shared`.replace(/\/+/g, '/') || '/shared';
+
   const primaryNavItems = [
     { pathForLink: rootLink, pathForActive: rootActive, label: t('dashboard.overview'), icon: LayoutDashboard },
     { pathForLink: `${prefix}/bookmarks`.replace(/\/+/g, '/') || '/bookmarks', pathForActive: `${pathBaseForActive}/bookmarks`.replace(/\/+/g, '/') || '/bookmarks', label: t('bookmarks.title'), icon: Bookmark },
     { pathForLink: `${prefix}/folders`.replace(/\/+/g, '/') || '/folders', pathForActive: `${pathBaseForActive}/folders`.replace(/\/+/g, '/') || '/folders', label: t('folders.title'), icon: Folder },
     { pathForLink: `${prefix}/tags`.replace(/\/+/g, '/') || '/tags', pathForActive: `${pathBaseForActive}/tags`.replace(/\/+/g, '/') || '/tags', label: t('tags.title'), icon: Tag },
+    { pathForLink: sharedPathForLink, pathForActive: sharedPathForActive, label: t('shared.title'), icon: Share2 },
   ];
 
   const handleNavClick = () => {
@@ -115,133 +128,202 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
     }
   };
 
+  const isAdminPathActive = pathname === adminBaseFull || pathname.startsWith(`${adminBaseFull}/`);
+
+  const brandLink = (
+    <Link
+      to={rootLink}
+      onClick={handleNavClick}
+      className={cn(
+        'flex items-center gap-2 rounded-lg px-2 py-1.5 outline-none ring-sidebar-ring transition-colors hover:bg-sidebar-accent focus-visible:ring-2',
+        'group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0'
+      )}
+    >
+      <img src="/slugbase_icon_blue.svg" alt="" className="h-8 w-8 shrink-0 dark:hidden" />
+      <img src="/slugbase_icon_white.svg" alt="" className="hidden h-8 w-8 shrink-0 dark:block" />
+      <span className="truncate text-lg font-semibold tracking-tight text-sidebar-foreground group-data-[collapsible=icon]:sr-only">
+        SlugBase
+      </span>
+    </Link>
+  );
+
+  const profileLink = `${prefix}/profile`.replace(/\/+/g, '/') || '/profile';
+  const displayName = user?.name || user?.email || '';
+  const profileInitials = displayName ? getInitials(displayName) : '?';
+
   return (
     <React.Fragment>
-    <Sidebar collapsible="icon" side="left">
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {primaryNavItems.map((item) => (
-                <SidebarMenuItem key={item.pathForLink}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={
-                      item.pathForActive === rootActivePath ? isOverviewActive : pathname === item.pathForActive
-                    }
-                    tooltip={item.label}
-                  >
-                    <Link to={item.pathForLink} onClick={handleNavClick} aria-current={pathname === item.pathForActive ? 'page' : undefined}>
-                      <item.icon className="h-5 w-5" />
-                      <span>{item.label}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+      <Sidebar collapsible="icon" side="left">
+        <SidebarHeader className="border-0 px-2 py-3">
+          {!isMobile && state === 'collapsed' ? (
+            <Tooltip>
+              <TooltipTrigger asChild>{brandLink}</TooltipTrigger>
+              <TooltipContent side="right" align="center">
+                SlugBase
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            brandLink
+          )}
+        </SidebarHeader>
 
-        {showAdmin && (
-          <>
-            <SidebarSeparator />
+        <SidebarContent>
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {primaryNavItems.map((item) => (
+                  <SidebarMenuItem key={item.pathForLink}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={
+                        item.pathForActive === rootActivePath ? isOverviewActive : pathname === item.pathForActive
+                      }
+                      tooltip={item.label}
+                    >
+                      <Link
+                        to={item.pathForLink}
+                        onClick={handleNavClick}
+                        aria-current={pathname === item.pathForActive ? 'page' : undefined}
+                      >
+                        <item.icon className="h-5 w-5 shrink-0" />
+                        <span>{item.label}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+
+          {showAdmin && !isMobile && state === 'collapsed' && (
             <SidebarGroup>
-              <button
-                type="button"
-                onClick={() => setAdminOpen((prev) => !prev)}
-                data-sidebar="group-label"
-                className={cn(
-                  'flex h-8 w-full shrink-0 items-center gap-2 overflow-hidden rounded-md px-2 text-left text-xs font-medium text-sidebar-foreground/70 outline-none ring-sidebar-ring transition-[margin,opacity] duration-200 ease-linear focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0',
-                  'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
-                  'group-data-[collapsible=icon]:-mt-8 group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:!size-8 group-data-[collapsible=icon]:!p-2 group-data-[collapsible=icon]:!rounded-lg'
-                )}
-                aria-expanded={adminOpen}
-              >
-                {adminOpen ? (
-                  <ChevronDown className="h-5 w-5 shrink-0" />
-                ) : (
-                  <ChevronRight className="h-5 w-5 shrink-0" />
-                )}
-                <span className="truncate group-data-[collapsible=icon]:hidden">{t('admin.title')}</span>
-              </button>
-              {adminOpen && (
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    {adminNavItems.map((item) => {
-                      const Icon = item.icon;
-                      return (
-                        <SidebarMenuItem key={item.pathForLink}>
-                          <SidebarMenuButton
-                            asChild
-                            isActive={pathname === item.pathForActive}
-                            tooltip={item.label}
-                          >
-                            <Link
-                              to={item.pathForLink}
-                              onClick={handleNavClick}
-                              aria-current={pathname === item.pathForActive ? 'page' : undefined}
-                            >
-                              <Icon className="h-5 w-5" />
-                              <span>{item.label}</span>
-                            </Link>
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
-                      );
-                    })}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              )}
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={isAdminPathActive} tooltip={t('admin.title')}>
+                      <Link to={adminBaseLink} onClick={handleNavClick} aria-current={isAdminPathActive ? 'page' : undefined}>
+                        <Shield className="h-5 w-5 shrink-0" />
+                        <span>{t('admin.title')}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarGroupContent>
             </SidebarGroup>
-          </>
-        )}
-      </SidebarContent>
+          )}
 
-      <SidebarFooter>
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  tooltip="GitHub Repository"
+          {showAdmin && (isMobile || state === 'expanded') && (
+            <>
+              <SidebarSeparator />
+              <SidebarGroup>
+                <button
+                  type="button"
+                  onClick={() => setAdminOpen((prev) => !prev)}
+                  data-sidebar="group-label"
+                  className={cn(
+                    'flex h-8 w-full shrink-0 items-center gap-2 overflow-hidden rounded-md px-2 text-left text-xs font-medium text-sidebar-foreground/70 outline-none ring-sidebar-ring transition-[margin,opacity] duration-200 ease-linear focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0',
+                    'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+                  )}
+                  aria-expanded={adminOpen}
                 >
-                  <a
-                    href="https://github.com/mdg-labs/slugbase"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label="GitHub Repository"
-                  >
-                    <Github className="h-5 w-5" />
-                    <span>GitHub</span>
-                    {version && state === 'expanded' && (
-                      <span className="ml-1 truncate text-xs text-muted-foreground font-mono">
-                        {version}
-                      </span>
-                    )}
-                  </a>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              {!isMobile && (
+                  {adminOpen ? <ChevronDown className="h-5 w-5 shrink-0" /> : <ChevronRight className="h-5 w-5 shrink-0" />}
+                  <span className="truncate">{t('admin.title')}</span>
+                </button>
+                {adminOpen && (
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {adminNavItems.map((item) => {
+                        const Icon = item.icon;
+                        return (
+                          <SidebarMenuItem key={item.pathForLink}>
+                            <SidebarMenuButton asChild isActive={pathname === item.pathForActive} tooltip={item.label}>
+                              <Link
+                                to={item.pathForLink}
+                                onClick={handleNavClick}
+                                aria-current={pathname === item.pathForActive ? 'page' : undefined}
+                              >
+                                <Icon className="h-5 w-5 shrink-0" />
+                                <span>{item.label}</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        );
+                      })}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                )}
+              </SidebarGroup>
+            </>
+          )}
+        </SidebarContent>
+
+        <SidebarFooter className="gap-2">
+          {user && (
+            <SidebarGroup className="p-0">
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      asChild
+                      tooltip={t('profile.title')}
+                      className="h-auto min-h-9 py-2 group-data-[collapsible=icon]:!p-2"
+                    >
+                      <Link to={profileLink} onClick={handleNavClick}>
+                        <div className="flex w-full min-w-0 items-center gap-2 group-data-[collapsible=icon]:justify-center">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                            {profileInitials}
+                          </div>
+                          <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
+                            <p className="truncate text-sm font-medium text-sidebar-foreground">{displayName}</p>
+                            {planInfo ? (
+                              <p className="truncate text-xs capitalize text-muted-foreground">{planInfo.plan}</p>
+                            ) : null}
+                          </div>
+                        </div>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          )}
+
+          <SidebarGroup className="p-0">
+            <SidebarGroupContent>
+              <SidebarMenu>
                 <SidebarMenuItem>
-                  <SidebarMenuButton
-                    onClick={toggleSidebar}
-                    tooltip={state === 'collapsed' ? t('common.expandSidebar') : t('common.collapseSidebar')}
-                    aria-label={state === 'collapsed' ? t('common.expandSidebar') : t('common.collapseSidebar')}
-                  >
-                    {state === 'collapsed' ? (
-                      <ChevronRight className="h-5 w-5" />
-                    ) : (
-                      <ChevronLeft className="h-5 w-5" />
-                    )}
-                    <span>{t('common.collapseSidebar')}</span>
+                  <SidebarMenuButton asChild tooltip="GitHub Repository">
+                    <a
+                      href="https://github.com/mdg-labs/slugbase"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label="GitHub Repository"
+                    >
+                      <Github className="h-5 w-5 shrink-0" />
+                      <span>GitHub</span>
+                      {version && state === 'expanded' && (
+                        <span className="ml-1 truncate font-mono text-xs text-muted-foreground">{version}</span>
+                      )}
+                    </a>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
-              )}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      </SidebarFooter>
-    </Sidebar>
+                {!isMobile && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      onClick={toggleSidebar}
+                      tooltip={state === 'collapsed' ? t('common.expandSidebar') : t('common.collapseSidebar')}
+                      aria-label={state === 'collapsed' ? t('common.expandSidebar') : t('common.collapseSidebar')}
+                    >
+                      {state === 'collapsed' ? <ChevronRight className="h-5 w-5 shrink-0" /> : <ChevronLeft className="h-5 w-5 shrink-0" />}
+                      <span>{t('common.collapseSidebar')}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarFooter>
+      </Sidebar>
     </React.Fragment>
   );
 }

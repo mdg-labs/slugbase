@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useSearchCommand } from '../contexts/SearchCommandContext';
 import {
-  Search,
   Bookmark,
   Folder,
   Tag,
@@ -197,18 +196,6 @@ export default function GlobalSearch() {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={openSearch}
-        className="hidden md:flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-muted-foreground bg-muted/80 hover:bg-accent/80 rounded-xl border border-border hover:border-primary/30 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-      >
-        <Search className="h-5 w-5 shrink-0" />
-        <span className="flex-1 truncate">{t('dashboard.searchPlaceholder')}</span>
-        <kbd className="shrink-0 inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-muted-foreground bg-background border border-border rounded">
-          {navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}K
-        </kbd>
-      </button>
-
       <CommandDialog open={open} onOpenChange={setOpen} shouldFilter={false}>
         <CommandInput
           placeholder={t('dashboard.searchPlaceholder')}

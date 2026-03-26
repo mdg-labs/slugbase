@@ -49,15 +49,15 @@ export default function Favicon({ url, className = '', size = 20 }: FaviconProps
 
   if (loading) {
     return (
-      <div className={`flex items-center justify-center ${className}`} style={{ width: `${size}px`, height: `${size}px` }}>
-        <div className="w-3 h-3 border-2 border-input border-t-primary rounded-full animate-spin" />
+      <div className={`flex items-center justify-center rounded-md bg-surface-low ${className}`} style={{ width: `${size}px`, height: `${size}px` }}>
+        <div className="h-3 w-3 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-primary" />
       </div>
     );
   }
 
   if (error || !faviconUrl) {
     return (
-      <div className={`flex items-center justify-center ${className}`} style={{ width: `${size}px`, height: `${size}px` }}>
+      <div className={`flex items-center justify-center rounded-md bg-primary/10 ${className}`} style={{ width: `${size}px`, height: `${size}px` }}>
         <BookmarkIcon className="text-primary" style={{ width: `${size}px`, height: `${size}px` }} />
       </div>
     );

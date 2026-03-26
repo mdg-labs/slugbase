@@ -99,7 +99,7 @@ export default function Autocomplete({
               <button
                 type="button"
                 onClick={() => handleRemove(item.id)}
-                className="rounded-full hover:bg-secondary/80 p-0.5 transition-colors"
+                className="rounded-full hover:bg-surface-high p-0.5 transition-colors"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -127,7 +127,7 @@ export default function Autocomplete({
               <button
                 type="button"
                 onClick={handleCreateNew}
-                className="w-full text-left px-3 py-2 text-sm text-primary hover:bg-accent hover:text-accent-foreground"
+                className="w-full text-left px-3 py-2 text-sm text-primary hover:bg-surface-high"
               >
                 Create &quot;{inputValue.trim()}&quot;
               </button>
@@ -141,7 +141,7 @@ export default function Autocomplete({
                   key={option.id}
                   type="button"
                   onClick={() => handleSelect(option)}
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-surface-high"
                 >
                   {option.name}
                 </button>

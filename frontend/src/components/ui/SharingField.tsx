@@ -129,11 +129,11 @@ export function SharingField({
   return (
     <div className="space-y-3">
       {label && (
-        <Label className="text-sm font-medium">{label}</Label>
+        <Label>{label}</Label>
       )}
 
       {allowTeamSharing && (
-        <div className="flex items-center justify-between rounded-lg border p-3">
+        <div className="flex items-center justify-between rounded-xl border-0 bg-surface-low p-3">
           <div>
             <p className="text-sm font-medium">{t('bookmarks.shareAllTeams')}</p>
             <p className="text-xs text-muted-foreground">
@@ -163,7 +163,7 @@ export function SharingField({
               type="button"
               onClick={() => removeTeam(team.id)}
               disabled={disabled}
-              className="rounded-full hover:bg-secondary/80 p-0.5 transition-colors focus-visible:ring-2 focus-visible:ring-ring"
+              className="rounded-full hover:bg-surface-high p-0.5 transition-colors focus-visible:ring-2 focus-visible:ring-ring"
               aria-label={t('common.remove')}
             >
               <X className="h-3.5 w-3.5" />
@@ -181,7 +181,7 @@ export function SharingField({
               type="button"
               onClick={() => removeUser(u.id)}
               disabled={disabled}
-              className="rounded-full hover:bg-secondary/80 p-0.5 transition-colors focus-visible:ring-2 focus-visible:ring-ring"
+              className="rounded-full hover:bg-surface-high p-0.5 transition-colors focus-visible:ring-2 focus-visible:ring-ring"
               aria-label={t('common.remove')}
             >
               <X className="h-3.5 w-3.5" />
@@ -240,8 +240,8 @@ export function SharingField({
                           className={cn(
                             "inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors",
                             value.team_ids.includes(team.id)
-                              ? "bg-primary text-primary-foreground"
-                              : "bg-secondary hover:bg-secondary/80"
+                              ? "bg-primary-gradient text-white"
+                              : "bg-surface-low hover:bg-surface-high"
                           )}
                         >
                           {value.team_ids.includes(team.id) && <Check className="h-3 w-3" />}
@@ -277,7 +277,7 @@ export function SharingField({
                         key={u.id}
                         type="button"
                         onClick={() => toggleUser(u.id)}
-                        className="w-full flex items-center justify-between px-2 py-1.5 rounded text-sm hover:bg-accent text-left"
+                        className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-sm hover:bg-surface-high text-left"
                       >
                         <div>
                           <p className="font-medium">{u.name}</p>

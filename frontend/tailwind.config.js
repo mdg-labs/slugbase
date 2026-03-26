@@ -7,10 +7,21 @@ export default {
   darkMode: 'class',
   theme: {
   	extend: {
+  		fontFamily: {
+  			sans: ['Inter', 'system-ui', 'sans-serif'],
+  			mono: ['"Liberation Mono"', 'ui-monospace', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+  		},
   		borderRadius: {
-  			lg: 'var(--radius)',
-  			md: 'calc(var(--radius) - 2px)',
-  			sm: 'calc(var(--radius) - 4px)'
+  			xl: 'var(--radius)',
+  			lg: '0.5rem',
+  			md: 'calc(0.75rem - 2px)',
+  			sm: 'calc(0.75rem - 4px)'
+  		},
+  		boxShadow: {
+  			glow: '0px 20px 40px rgba(159, 167, 255, 0.08)',
+  		},
+  		backgroundImage: {
+  			'primary-gradient': 'linear-gradient(135deg, #9fa7ff, #5764f1)',
   		},
   		colors: {
   			background: 'hsl(var(--background))',
@@ -46,6 +57,14 @@ export default {
   			border: 'hsl(var(--border))',
   			input: 'hsl(var(--input))',
   			ring: 'hsl(var(--ring))',
+  			surface: {
+  				lowest: 'hsl(var(--surface-lowest))',
+  				low: 'hsl(var(--surface-low))',
+  				DEFAULT: 'hsl(var(--surface))',
+  				high: 'hsl(var(--surface-high))',
+  				highest: 'hsl(var(--surface-highest))',
+  			},
+  			ghost: 'rgba(72, 72, 72, 0.15)',
   			tooltip: {
   				DEFAULT: 'hsl(var(--tooltip))',
   				foreground: 'hsl(var(--tooltip-foreground))'

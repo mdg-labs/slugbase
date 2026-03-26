@@ -32,7 +32,7 @@ export function ModalFooterActions({
         className
       )}
     >
-      <Button variant="secondary" onClick={onCancel} type="button">
+      <Button variant="outline" onClick={onCancel} type="button">
         {cancelLabel ?? t('common.cancel')}
       </Button>
       <Button

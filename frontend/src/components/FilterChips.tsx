@@ -24,7 +24,7 @@ export function FilterChips({ chips, onRemove, onClearAll, clearAllLabel, clearA
         <Badge
           key={key}
           variant="secondary"
-          className="inline-flex items-center gap-1.5 pl-2.5 pr-1 py-1 text-sm font-normal"
+          className="inline-flex items-center gap-1.5 rounded-full border-0 bg-surface-low py-1 pl-2.5 pr-1 text-sm font-normal text-foreground"
         >
           <span>{label}</span>
           <button
@@ -36,7 +36,7 @@ export function FilterChips({ chips, onRemove, onClearAll, clearAllLabel, clearA
                 onRemove(key);
               }
             }}
-            className="p-0.5 rounded hover:bg-muted-foreground/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="rounded-full p-0.5 text-muted-foreground hover:bg-surface-high hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label={ariaLabel}
           >
             <X className="h-3.5 w-3.5" />

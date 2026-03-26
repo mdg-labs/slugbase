@@ -111,15 +111,24 @@ export function StatCard({
           </div>
         )}
       </div>
-      <div className={cn('shrink-0 rounded-lg self-center', iconContainerClassName ?? 'bg-muted', dense ? 'p-2' : 'p-3')}>
-        <Icon className={cn(iconColorClassName ?? 'text-muted-foreground', dense ? 'h-5 w-5' : 'h-6 w-6')} />
+      <div
+        className={cn(
+          'shrink-0 self-center rounded-lg',
+          iconContainerClassName ?? 'bg-primary/10',
+          dense ? 'p-2' : 'p-3'
+        )}
+      >
+        <Icon
+          className={cn(iconColorClassName ?? 'text-primary', dense ? 'h-5 w-5' : 'h-6 w-6')}
+        />
       </div>
     </div>
   );
 
   const cardClassName = cn(
-    'transition-colors h-full flex flex-col',
-    href && 'cursor-pointer hover:border-primary/70 hover:bg-muted/50 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 rounded-xl',
+    'h-full flex flex-col border border-ghost transition-colors',
+    href &&
+      'cursor-pointer rounded-xl hover:border-primary/40 hover:bg-surface-high focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background',
     className
   );
 

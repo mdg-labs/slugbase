@@ -11,12 +11,12 @@ interface PageHeaderProps {
 export function PageHeader({ title, subtitle, actions, className }: PageHeaderProps) {
   return (
     <div className={cn('flex items-start justify-between gap-4 flex-wrap', className)}>
-      <div className="space-y-1">
-        <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
+      <div className="space-y-1.5">
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
           {title}
         </h1>
         {subtitle && (
-          <p className="text-sm text-gray-600 dark:text-gray-400">
+          <p className="text-sm text-muted-foreground">
             {subtitle}
           </p>
         )}

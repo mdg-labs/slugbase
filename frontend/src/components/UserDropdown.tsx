@@ -40,7 +40,7 @@ export default function UserDropdown({ user }: UserDropdownProps) {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="flex items-center justify-center w-9 h-9 rounded-full bg-secondary text-secondary-foreground font-medium text-sm hover:bg-accent hover:text-accent-foreground transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-transparent text-sm font-medium text-foreground transition-colors hover:bg-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           aria-haspopup="menu"
           aria-label={t('profile.title')}
         >
@@ -51,23 +51,23 @@ export default function UserDropdown({ user }: UserDropdownProps) {
           )}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel>
+      <DropdownMenuContent align="end" className="w-56 text-foreground">
+        <DropdownMenuLabel className="text-foreground">
           <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">{user.name}</p>
+            <p className="text-sm font-medium leading-none text-foreground">{user.name}</p>
             <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link to={`${prefix}/profile`} className="flex items-center gap-2 cursor-pointer">
+        <DropdownMenuItem asChild className="text-foreground focus:text-foreground">
+          <Link to={`${prefix}/profile`} className="flex cursor-pointer items-center gap-2 text-foreground">
             <UserIcon className="h-4 w-4" />
             {t('profile.title')}
           </Link>
         </DropdownMenuItem>
         {showAdmin && (
-          <DropdownMenuItem asChild>
-            <Link to={`${prefix}/admin`.replace(/\/+/g, '/') || '/admin'} className="flex items-center gap-2 cursor-pointer">
+          <DropdownMenuItem asChild className="text-foreground focus:text-foreground">
+            <Link to={`${prefix}/admin`.replace(/\/+/g, '/') || '/admin'} className="flex cursor-pointer items-center gap-2 text-foreground">
               <Settings className="h-4 w-4" />
               {t('admin.title')}
             </Link>
@@ -76,7 +76,7 @@ export default function UserDropdown({ user }: UserDropdownProps) {
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={() => logout()}
-          className="flex items-center gap-2 cursor-pointer text-destructive focus:text-destructive"
+          className="flex cursor-pointer items-center gap-2 text-destructive focus:text-destructive"
         >
           <LogOut className="h-4 w-4" />
           {t('auth.logout')}

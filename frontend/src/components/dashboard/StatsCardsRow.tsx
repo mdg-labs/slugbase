@@ -1,5 +1,20 @@
 import { Bookmark, Folder, Tag } from 'lucide-react';
+import { Bar, BarChart, Cell, ResponsiveContainer, XAxis, YAxis } from 'recharts';
 import { StatCard, type StatCardUsageProps } from '../StatCard';
+
+/** Placeholder series for dashboard performance widget (no org-wide analytics API yet). */
+const SLUG_PERFORMANCE_PLACEHOLDER = [
+  { name: 'Mon', value: 8 },
+  { name: 'Tue', value: 12 },
+  { name: 'Wed', value: 6 },
+  { name: 'Thu', value: 15 },
+  { name: 'Fri', value: 10 },
+  { name: 'Sat', value: 4 },
+  { name: 'Sun', value: 14 },
+];
+
+const PRIMARY_BAR = 'hsl(var(--chart-1))';
+const MUTED_BAR = 'hsl(var(--surface-high))';
 
 export interface StatItem {
   label: string;
@@ -73,6 +88,55 @@ export function StatsCardsRow({ bookmarks, folders, tags, dense }: StatsCardsRow
         progressVariant={tags.usage?.progressVariant}
         cta={tags.usage?.cta}
       />
+    </div>
+  );
+}
+
+export interface SlugPerformanceCardProps {
+  t: (key: string) => string;
+  className?: string;
+}
+
+/**
+ * Slug / shortcut opens over time — illustrative bars until analytics API exists.
+ */
+export function SlugPerformanceCard({ t, className = '' }: SlugPerformanceCardProps) {
+  const n = SLUG_PERFORMANCE_PLACEHOLDER.length;
+  const highlightIndex = n - 1;
+
+  return (
+    <div
+      className={`rounded-xl border border-ghost bg-surface p-5 flex flex-col gap-3 min-h-[280px] ${className}`.trim()}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-lg font-semibold text-foreground">{t('dashboard.performanceTitle')}</h3>
+        <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-muted-foreground">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+          </span>
+          {t('dashboard.liveLabel')}
+        </div>
+      </div>
+      <p className="text-sm text-muted-foreground">{t('dashboard.performanceSubtitle')}</p>
+      <div className="flex-1 min-h-[200px] w-full pt-2">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={SLUG_PERFORMANCE_PLACEHOLDER} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+            <XAxis
+              dataKey="name"
+              tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+              axisLine={false}
+              tickLine={false}
+            />
+            <YAxis hide domain={[0, 'dataMax + 4']} />
+            <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={36}>
+              {SLUG_PERFORMANCE_PLACEHOLDER.map((_, i) => (
+                <Cell key={SLUG_PERFORMANCE_PLACEHOLDER[i].name} fill={i === highlightIndex ? PRIMARY_BAR : MUTED_BAR} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 }

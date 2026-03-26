@@ -19,7 +19,7 @@ export function ModalSection({
       {(title || description) && (
         <div>
           {title && (
-            <h4 className="text-sm font-semibold leading-none tracking-tight">
+            <h4 className="text-lg font-semibold leading-none text-foreground">
               {title}
             </h4>
           )}
