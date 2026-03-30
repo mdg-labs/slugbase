@@ -1,6 +1,7 @@
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import crypto from 'crypto';
+import { getCsrfCookieOptions } from '../config/cookies.js';
 
 /**
  * Rate limiting configuration
@@ -158,17 +159,6 @@ export function csrfProtection(req: any, res: any, next: any) {
  */
 export function generateCSRFToken(req: any, res: any): string {
   const token = crypto.randomBytes(32).toString('hex');
-  // Only use secure cookies when actually using HTTPS (check BASE_URL)
-  const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
-  const isHttps = baseUrl.startsWith('https://');
-  const isProduction = process.env.NODE_ENV === 'production' && isHttps;
-  
-  res.cookie('_csrf', token, {
-    httpOnly: true,
-    secure: isProduction, // Only secure when using HTTPS
-    sameSite: 'strict',
-    maxAge: 24 * 60 * 60 * 1000, // 24 hours
-  });
-
+  res.cookie('_csrf', token, getCsrfCookieOptions());
   return token;
 }
