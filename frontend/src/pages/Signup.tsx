@@ -23,8 +23,13 @@ const MIN_PASSWORD_LENGTH = 8;
 export default function Signup() {
   const { t } = useTranslation();
   const { pathPrefixForLinks, signupTermsUrl, signupPrivacyUrl } = useAppConfig();
-  const termsHref = signupTermsUrl ?? getDefaultSignupTermsUrl();
-  const privacyHref = signupPrivacyUrl ?? getDefaultSignupPrivacyUrl();
+  const showLegalAcceptance = isCloud;
+  const termsHref = showLegalAcceptance
+    ? (signupTermsUrl ?? getDefaultSignupTermsUrl())
+    : '';
+  const privacyHref = showLegalAcceptance
+    ? (signupPrivacyUrl ?? getDefaultSignupPrivacyUrl())
+    : '';
   const prefix = (pathPrefixForLinks || '').replace(/\/+/g, '/') || '';
   const loginHref = `${prefix}/login`.replace(/\/+/g, '/') || '/login';
   const [email, setEmail] = useState('');
@@ -52,7 +57,7 @@ export default function Signup() {
       setError(t('setup.passwordTooShort'));
       return;
     }
-    if (!acceptTerms) {
+    if (showLegalAcceptance && !acceptTerms) {
       setError(t('signup.acceptTermsRequired'));
       return;
     }
@@ -202,37 +207,39 @@ export default function Signup() {
                 </p>
               ) : null}
             </div>
-            <div className="flex items-start gap-3">
-              <input
-                id="signup-accept-terms"
-                type="checkbox"
-                required
-                checked={acceptTerms}
-                onChange={(e) => setAcceptTerms(e.target.checked)}
-                className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-ring"
-              />
-              <label htmlFor="signup-accept-terms" className="text-sm text-foreground">
-                {t('signup.acceptTermsPrefix')}
-                <a
-                  href={termsHref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline"
-                >
-                  {t('signup.acceptTermsTerms')}
-                </a>
-                {t('signup.acceptTermsAnd')}
-                <a
-                  href={privacyHref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline"
-                >
-                  {t('signup.acceptTermsPrivacy')}
-                </a>
-                {t('signup.acceptTermsSuffix')}
-              </label>
-            </div>
+            {showLegalAcceptance ? (
+              <div className="flex items-start gap-3">
+                <input
+                  id="signup-accept-terms"
+                  type="checkbox"
+                  required
+                  checked={acceptTerms}
+                  onChange={(e) => setAcceptTerms(e.target.checked)}
+                  className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-ring"
+                />
+                <label htmlFor="signup-accept-terms" className="text-sm text-foreground">
+                  {t('signup.acceptTermsPrefix')}
+                  <a
+                    href={termsHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline"
+                  >
+                    {t('signup.acceptTermsTerms')}
+                  </a>
+                  {t('signup.acceptTermsAnd')}
+                  <a
+                    href={privacyHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline"
+                  >
+                    {t('signup.acceptTermsPrivacy')}
+                  </a>
+                  {t('signup.acceptTermsSuffix')}
+                </label>
+              </div>
+            ) : null}
             {error && (
               <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3">
                 <p className="text-sm text-destructive">{error}</p>
