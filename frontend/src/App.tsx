@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { useTranslation } from 'react-i18next';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AppConfigProvider, useAppConfig } from './contexts/AppConfigContext';
-import { PlanProvider, usePlan } from './contexts/PlanContext';
+import { PlanProvider, usePlan, showAdminAiNav } from './contexts/PlanContext';
 import { ToastProvider } from './components/ui/Toast';
 import { TooltipProvider } from './components/ui/tooltip-base';
 import Layout from './components/Layout';
@@ -55,7 +55,7 @@ function AdminIndexRedirect() {
   const planInfo = usePlan();
   const { extraAdminNavItems } = useAppConfig();
   const showUsersAndTeams = !planInfo || planInfo.canShareWithTeams;
-  const showAi = !planInfo || planInfo.aiAvailable;
+  const showAi = showAdminAiNav(planInfo);
   const firstPath = showUsersAndTeams
     ? 'members'
     : showAi
@@ -68,7 +68,7 @@ function AdminIndexRedirect() {
 function AdminAIGate() {
   const planInfo = usePlan();
   const { extraAdminNavItems } = useAppConfig();
-  const showAi = !planInfo || planInfo.aiAvailable;
+  const showAi = showAdminAiNav(planInfo);
   if (!showAi) {
     const showUsersAndTeams = !planInfo || planInfo.canShareWithTeams;
     const firstPath = showUsersAndTeams ? 'members' : (extraAdminNavItems?.[0]?.path ?? 'ai');

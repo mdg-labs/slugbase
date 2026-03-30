@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppConfig } from '../contexts/AppConfigContext';
-import { usePlan } from '../contexts/PlanContext';
+import { usePlan, isCloudMode } from '../contexts/PlanContext';
 import { AlertCircle, Key, AlertTriangle } from 'lucide-react';
 import Select from '../components/ui/Select';
 import Button from '../components/ui/Button';
@@ -118,18 +118,29 @@ export default function Profile() {
     if (user) fetchTokens();
   }, [user, fetchTokens]);
 
-  const preferencesDirty = user && (
-    formData.language !== resolveSupportedLocale(user.language) ||
-    formData.theme !== (user.theme || 'auto') ||
-    formData.ai_suggestions_enabled !== Boolean((user as { ai_suggestions_enabled?: boolean | number }).ai_suggestions_enabled ?? true)
-  );
+  const showAiSuggestionsPreference = isCloudMode
+    ? planInfo?.aiAvailable === true
+    : aiAvailable;
+
+  const preferencesDirty =
+    !!user &&
+    (formData.language !== resolveSupportedLocale(user.language) ||
+      formData.theme !== (user.theme || 'auto') ||
+      (showAiSuggestionsPreference &&
+        formData.ai_suggestions_enabled !==
+          Boolean((user as { ai_suggestions_enabled?: boolean | number }).ai_suggestions_enabled ?? true)));
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     setErrors({});
     try {
-      const response = (await updateUser(formData)) as unknown;
+      const preferencePayload = {
+        language: formData.language,
+        theme: formData.theme,
+        ...(showAiSuggestionsPreference ? { ai_suggestions_enabled: formData.ai_suggestions_enabled } : {}),
+      };
+      const response = (await updateUser(preferencePayload)) as unknown;
       const data = response && typeof response === 'object' && 'emailVerificationRequired' in response
         ? (response as { emailVerificationRequired?: boolean })
         : null;
@@ -480,7 +491,7 @@ export default function Profile() {
                   options={themeOptions}
                 />
               </div>
-              {((!planInfo && aiAvailable) || (planInfo && planInfo.plan !== 'free')) && (
+              {showAiSuggestionsPreference && (
                 <div className="flex items-center justify-between gap-3 py-2">
                   <div>
                     <label htmlFor="ai-suggestions" className="text-sm font-medium text-foreground">

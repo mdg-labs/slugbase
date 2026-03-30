@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
 import { sendEmailVerificationEmail } from '../utils/email.js';
 import { getClearAuthCookieOptions } from '../config/cookies.js';
+import { isCloud } from '../config/mode.js';
 
 const router = Router();
 router.use(requireAuth());
@@ -138,6 +139,9 @@ router.put('/me', async (req, res) => {
     }
 
     if (ai_suggestions_enabled !== undefined) {
+      if (isCloud && (req as any).plan === 'free') {
+        return res.status(403).json({ error: 'AI suggestions are not available on the free plan.' });
+      }
       const DB_TYPE = process.env.DB_TYPE || 'sqlite';
       const val = ai_suggestions_enabled === true || ai_suggestions_enabled === 'true';
       updates.push('ai_suggestions_enabled = ?');

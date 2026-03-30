@@ -18,7 +18,13 @@ export interface PlanInfo {
 const defaultPlan: PlanInfo | null = null;
 const PlanContext = createContext<PlanInfo | null>(defaultPlan);
 
-const isCloudMode = import.meta.env.VITE_SLUGBASE_MODE === 'cloud';
+export const isCloudMode = import.meta.env.VITE_SLUGBASE_MODE === 'cloud';
+
+/** Cloud: AI admin + paid-only AI UX only when plan loaded and ai_available. Self-hosted: show when plan context absent or AI allowed on plan. */
+export function showAdminAiNav(planInfo: PlanInfo | null): boolean {
+  if (isCloudMode) return planInfo?.aiAvailable === true;
+  return !planInfo || planInfo.aiAvailable;
+}
 
 export function PlanProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();

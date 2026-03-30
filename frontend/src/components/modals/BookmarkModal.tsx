@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
+import { usePlan, isCloudMode } from '../../contexts/PlanContext';
 import api from '../../api/client';
 import {
   Dialog,
@@ -59,6 +60,7 @@ export default function BookmarkModal({
 }: BookmarkModalProps) {
   const { t } = useTranslation();
   useAuth();
+  const planInfo = usePlan();
   const { showToast } = useToast();
   const [formData, setFormData] = useState({
     title: '',
@@ -97,10 +99,19 @@ export default function BookmarkModal({
 
   useEffect(() => {
     if (!isOpen) return;
-    api.get('/config/ai-suggestions')
-      .then((res) => setAiEnabled(res.data?.enabled === true))
+    if (isCloudMode && planInfo != null && !planInfo.aiAvailable) {
+      setAiEnabled(false);
+      return;
+    }
+    api
+      .get('/config/ai-suggestions')
+      .then((res) => {
+        let enabled = res.data?.enabled === true;
+        if (isCloudMode && planInfo != null && !planInfo.aiAvailable) enabled = false;
+        setAiEnabled(enabled);
+      })
       .catch(() => setAiEnabled(false));
-  }, [isOpen]);
+  }, [isOpen, planInfo]);
 
   const fetchAISuggestions = useCallback(async (url: string) => {
     if (!aiEnabled || bookmark) return;

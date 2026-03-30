@@ -33,7 +33,7 @@ import {
 } from './ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip-base';
 import { useAppConfig } from '../contexts/AppConfigContext';
-import { usePlan } from '../contexts/PlanContext';
+import { usePlan, showAdminAiNav } from '../contexts/PlanContext';
 import type { User } from '../contexts/AuthContext';
 import { cn } from '../lib/utils';
 
@@ -57,7 +57,7 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
   const adminBaseLink = `${prefix}/admin`.replace(/\/+/g, '/') || '/admin';
 
   const showAdminUsersAndTeams = !planInfo || planInfo.canShareWithTeams;
-  const showAdminAi = !planInfo || planInfo.aiAvailable;
+  const showAdminAi = showAdminAiNav(planInfo);
 
   const adminNavItems = [
     ...(showAdminUsersAndTeams
