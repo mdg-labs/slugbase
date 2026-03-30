@@ -57,8 +57,13 @@ export default function Signup() {
       <div className="min-h-screen flex items-center justify-center bg-background py-12 px-4 sm:px-6 lg:px-8">
         <div className={`max-w-md w-full ${AUTH_CARD} text-center space-y-4`}>
           <div className="flex justify-center mb-4">
-            <img src="/slugbase_icon_blue.svg" alt="SlugBase" className="h-16 w-16 dark:hidden" />
-            <img src="/slugbase_icon_white.svg" alt="SlugBase" className="h-16 w-16 hidden dark:block" />
+            <img
+              src="/slugbase_icon_purple.svg"
+              alt="SlugBase"
+              className="h-9 w-9 object-contain"
+              width={36}
+              height={36}
+            />
           </div>
           <h2 className="text-xl font-semibold text-foreground">
             {t('signup.successTitle')}
@@ -82,8 +87,13 @@ export default function Signup() {
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
           <div className="flex justify-center mb-6">
-            <img src="/slugbase_icon_blue.svg" alt="SlugBase" className="h-16 w-16 dark:hidden" />
-            <img src="/slugbase_icon_white.svg" alt="SlugBase" className="h-16 w-16 hidden dark:block" />
+            <img
+              src="/slugbase_icon_purple.svg"
+              alt="SlugBase"
+              className="h-9 w-9 object-contain"
+              width={36}
+              height={36}
+            />
           </div>
           <h2 className="text-2xl font-semibold text-foreground">
             {t('signup.title')}

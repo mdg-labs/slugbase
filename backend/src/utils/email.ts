@@ -58,7 +58,7 @@ function buildEmailLayout(options: BuildEmailLayoutOptions): string {
     includeLegalFooter = false,
   } = options;
   const frontendUrl = getFrontendUrl();
-  const logoUrl = `${frontendUrl}/slugbase_icon_white.png`;
+  const logoUrl = `${frontendUrl}/slugbase_icon_purple.png`;
 
   const legalFooterHtml = includeLegalFooter
     ? ` &middot; <a href="${frontendUrl}/imprint" style="color: #6b7280; text-decoration: underline;">Imprint</a> &middot; <a href="${frontendUrl}/privacy" style="color: #6b7280; text-decoration: underline;">Privacy</a>`

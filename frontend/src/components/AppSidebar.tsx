@@ -18,7 +18,6 @@ import {
   CreditCard,
   Share2,
   Shield,
-  Terminal,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -135,12 +134,14 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
         'group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0'
       )}
     >
-      <div
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary-gradient shadow-glow"
+      <img
+        src="/slugbase_icon_purple.svg"
+        alt=""
+        className="h-9 w-9 shrink-0 object-contain"
+        width={36}
+        height={36}
         aria-hidden
-      >
-        <Terminal className="h-4 w-4 text-primary-foreground" strokeWidth={2.35} />
-      </div>
+      />
       <span className="truncate text-xl font-black tracking-tighter text-primary group-data-[collapsible=icon]:sr-only">
         SlugBase
       </span>

@@ -92,14 +92,11 @@ export default function Login() {
         <div className="text-center">
           <div className="flex justify-center mb-6">
             <img
-              src="/slugbase_icon_blue.svg"
+              src="/slugbase_icon_purple.svg"
               alt="SlugBase"
-              className="h-16 w-16 dark:hidden"
-            />
-            <img
-              src="/slugbase_icon_white.svg"
-              alt="SlugBase"
-              className="h-16 w-16 hidden dark:block"
+              className="h-9 w-9 object-contain"
+              width={36}
+              height={36}
             />
           </div>
           <h2 className="text-2xl font-semibold text-foreground">

@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 export interface StatCardUsageProps {
   used: number;
   limit: number;
-  /** e.g. "Bookmarks used" */
+  /** Full usage line (e.g. translated "Bookmarks used: 0/50"); when set, replaces the default "{label} {used} / {limit}" line */
   labelOverride?: string;
   showProgress?: boolean;
   progressVariant?: 'normal' | 'warning' | 'danger';
@@ -32,6 +32,7 @@ interface StatCardProps {
   /** Optional usage/limit display for cloud plan; only shown when both used and limit are provided */
   used?: number;
   limit?: number;
+  /** When set with used/limit, shown as the sole usage line (see StatCardUsageProps) */
   labelOverride?: string;
   showProgress?: boolean;
   progressVariant?: 'normal' | 'warning' | 'danger';
@@ -76,7 +77,7 @@ export function StatCard({
           )}
           {hasUsage && (
             <p className="mt-1 text-xs text-muted-foreground">
-              {labelOverride ?? label} {used} / {limit}
+              {labelOverride ?? `${label} ${used} / ${limit}`}
             </p>
           )}
         </div>
