@@ -16,6 +16,7 @@ import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
 import api from '../api/client';
 import { getDocsApiReferenceUrl } from '../config/docs';
+import { resolveSupportedLocale } from '../i18n';
 
 interface ApiToken {
   id: string;
@@ -91,7 +92,7 @@ export default function Profile() {
       setFormData({
         email: user.email || '',
         name: user.name || '',
-        language: user.language || 'en',
+        language: resolveSupportedLocale(user.language),
         theme: user.theme || 'auto',
         ai_suggestions_enabled: Boolean((user as { ai_suggestions_enabled?: boolean | number }).ai_suggestions_enabled ?? true),
       });
@@ -118,7 +119,7 @@ export default function Profile() {
   }, [user, fetchTokens]);
 
   const preferencesDirty = user && (
-    formData.language !== (user.language || 'en') ||
+    formData.language !== resolveSupportedLocale(user.language) ||
     formData.theme !== (user.theme || 'auto') ||
     formData.ai_suggestions_enabled !== Boolean((user as { ai_suggestions_enabled?: boolean | number }).ai_suggestions_enabled ?? true)
   );
@@ -232,15 +233,6 @@ export default function Profile() {
   const languageOptions = [
     { value: 'en', label: t('profile.languageEnglish') },
     { value: 'de', label: t('profile.languageGerman') },
-    { value: 'fr', label: t('profile.languageFrench') },
-    { value: 'es', label: t('profile.languageSpanish') },
-    { value: 'it', label: t('profile.languageItalian') },
-    { value: 'pt', label: t('profile.languagePortuguese') },
-    { value: 'nl', label: t('profile.languageDutch') },
-    { value: 'ru', label: t('profile.languageRussian') },
-    { value: 'ja', label: t('profile.languageJapanese') },
-    { value: 'zh', label: t('profile.languageChinese') },
-    { value: 'pl', label: t('profile.languagePolish') },
   ];
 
   const themeOptions = [

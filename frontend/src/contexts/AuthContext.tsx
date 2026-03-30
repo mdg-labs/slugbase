@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import api from '../api/client';
 import { getAuthProviderUrl } from '../config/api';
 import { useTranslation } from 'react-i18next';
+import { resolveSupportedLocale } from '../i18n';
 import { useAppConfig } from './AppConfigContext';
 
 export interface User {
@@ -54,7 +55,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (user) {
-      i18n.changeLanguage(user.language);
+      i18n.changeLanguage(resolveSupportedLocale(user.language));
       applyTheme(user.theme);
     }
   }, [user, i18n]);
@@ -95,7 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await checkAuth();
       }
       if (updates.language) {
-        i18n.changeLanguage(updates.language);
+        i18n.changeLanguage(resolveSupportedLocale(updates.language));
       }
       if (updates.theme) {
         applyTheme(updates.theme);

@@ -277,7 +277,7 @@ export function SharingField({
                         key={u.id}
                         type="button"
                         onClick={() => toggleUser(u.id)}
-                        className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-sm hover:bg-surface-high text-left"
+                        className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-sm text-left transition-colors hover:bg-surface-highest focus-visible:bg-surface-highest focus-visible:outline-none"
                       >
                         <div>
                           <p className="font-medium">{u.name}</p>

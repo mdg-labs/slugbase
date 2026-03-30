@@ -6,7 +6,6 @@ import { StatCard } from '../components/StatCard';
 import {
   CommandBarHero,
   StatsCardsRow,
-  SlugPerformanceCard,
   PinnedSection,
   QuickAccessSection,
   MostUsedTagsSection,
@@ -230,7 +229,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-10 pb-2">
+    <div className="w-full min-w-0 max-w-full space-y-10 pb-2">
       {!proTipDismissed && (
         <ProTipBanner
           onDismiss={() => {
@@ -249,6 +248,16 @@ export default function Dashboard() {
         shortcutHint={t('dashboard.commandSearchShortcut')}
       />
 
+      {stats && (
+        <OnboardingChecklist
+          totalBookmarks={stats.totalBookmarks}
+          totalFolders={stats.totalFolders}
+          topTagsCount={stats.topTags.length}
+          pathPrefix={prefix}
+          t={t}
+        />
+      )}
+
       <QuickAccessSection
         items={quickAccess}
         pathPrefix={prefix}
@@ -259,57 +268,26 @@ export default function Dashboard() {
         onCopyUrl={handleCopyUrl}
       />
 
-      <div className={`grid gap-6 items-stretch ${isCloud ? 'lg:grid-cols-2' : ''}`}>
-        <SlugPerformanceCard t={t} className={isCloud ? '' : 'max-w-3xl'} />
-        {isCloud && (
-          <div className="flex min-h-[280px] flex-col justify-between gap-4 rounded-2xl border border-ghost bg-surface p-6 shadow-xl">
-            <div>
-              <h3 className="text-lg font-semibold text-primary">{t('dashboard.aiPromoTitle')}</h3>
-              <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{t('dashboard.aiPromoDescription')}</p>
-            </div>
-            <Link
-              to="/pricing"
-              className="inline-flex items-center justify-center rounded-xl bg-primary-gradient px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-glow hover:opacity-90 transition-opacity text-center"
-            >
-              {t('dashboard.upgradeToProCta')}
-            </Link>
+      {isCloud && (
+        <div className="flex min-h-[280px] flex-col justify-between gap-4 rounded-2xl border border-ghost bg-surface p-6 shadow-xl">
+          <div>
+            <h3 className="text-lg font-semibold text-primary">{t('dashboard.aiPromoTitle')}</h3>
+            <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{t('dashboard.aiPromoDescription')}</p>
           </div>
-        )}
-      </div>
-
-      {stats && (
-        <StatsCardsRow
-          bookmarks={{
-            label: t('dashboard.statsBookmarks'),
-            value: stats.totalBookmarks,
-            href: prefix + '/bookmarks',
-            ...(stats.bookmarkLimit != null && {
-              usage: {
-                used: stats.tenantBookmarkCount ?? stats.totalBookmarks,
-                limit: stats.bookmarkLimit,
-                labelOverride: t('plan.bookmarksUsed', { count: stats.tenantBookmarkCount ?? stats.totalBookmarks, limit: stats.bookmarkLimit }),
-                showProgress: true,
-                cta: (stats.tenantBookmarkCount ?? stats.totalBookmarks) >= stats.bookmarkLimit ? { label: t('plan.limitBookmarks', { limit: stats.bookmarkLimit }), onClick: () => window.location.href = '/pricing' } : undefined,
-              },
-            }),
-          }}
-          folders={{
-            label: t('dashboard.statsFolders'),
-            value: stats.totalFolders,
-            href: prefix + '/folders',
-          }}
-          tags={{
-            label: t('dashboard.statsTags'),
-            value: stats.totalTags,
-            href: prefix + '/tags',
-          }}
-        />
+          <Link
+            to="/pricing"
+            className="inline-flex items-center justify-center rounded-xl bg-primary-gradient px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-glow hover:opacity-90 transition-opacity text-center"
+          >
+            {t('dashboard.upgradeToProCta')}
+          </Link>
+        </div>
       )}
 
       <PinnedSection
         items={pinnedBookmarks}
         pathPrefix={prefix}
         maxItems={PINNED_QUICK_ACCESS_MAX_ITEMS}
+        subtitle={t('dashboard.pinnedSubtitle')}
         t={t}
         onOpen={handleBookmarkOpen}
         onCopyUrl={handleCopyUrl}
@@ -341,18 +319,37 @@ export default function Dashboard() {
         </section>
       )}
 
-      {stats && stats.topTags.length > 0 && (
-        <MostUsedTagsSection tags={stats.topTags} pathPrefix={prefix} t={t} />
+      {stats && (
+        <StatsCardsRow
+          bookmarks={{
+            label: t('dashboard.statsBookmarks'),
+            value: stats.totalBookmarks,
+            href: prefix + '/bookmarks',
+            ...(stats.bookmarkLimit != null && {
+              usage: {
+                used: stats.tenantBookmarkCount ?? stats.totalBookmarks,
+                limit: stats.bookmarkLimit,
+                labelOverride: t('plan.bookmarksUsed', { count: stats.tenantBookmarkCount ?? stats.totalBookmarks, limit: stats.bookmarkLimit }),
+                showProgress: true,
+                cta: (stats.tenantBookmarkCount ?? stats.totalBookmarks) >= stats.bookmarkLimit ? { label: t('plan.limitBookmarks', { limit: stats.bookmarkLimit }), onClick: () => window.location.href = '/pricing' } : undefined,
+              },
+            }),
+          }}
+          folders={{
+            label: t('dashboard.statsFolders'),
+            value: stats.totalFolders,
+            href: prefix + '/folders',
+          }}
+          tags={{
+            label: t('dashboard.statsTags'),
+            value: stats.totalTags,
+            href: prefix + '/tags',
+          }}
+        />
       )}
 
-      {stats && (
-        <OnboardingChecklist
-          totalBookmarks={stats.totalBookmarks}
-          totalFolders={stats.totalFolders}
-          topTagsCount={stats.topTags.length}
-          pathPrefix={prefix}
-          t={t}
-        />
+      {stats && stats.topTags.length > 0 && (
+        <MostUsedTagsSection tags={stats.topTags} pathPrefix={prefix} t={t} />
       )}
     </div>
   );

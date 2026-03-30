@@ -3,15 +3,14 @@ import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 import enTranslations from '@/locales/en.json';
 import deTranslations from '@/locales/de.json';
-import frTranslations from '@/locales/fr.json';
-import esTranslations from '@/locales/es.json';
-import itTranslations from '@/locales/it.json';
-import ptTranslations from '@/locales/pt.json';
-import nlTranslations from '@/locales/nl.json';
-import ruTranslations from '@/locales/ru.json';
-import jaTranslations from '@/locales/ja.json';
-import zhTranslations from '@/locales/zh.json';
-import plTranslations from '@/locales/pl.json';
+
+/** Locales shipped in this build; expand when more `frontend/src/locales/*.json` are added. */
+export const SUPPORTED_LOCALES = ['en', 'de'] as const;
+export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
+
+export function resolveSupportedLocale(code: string | undefined | null): SupportedLocale {
+  return code === 'de' ? 'de' : 'en';
+}
 
 i18n
   .use(LanguageDetector)
@@ -20,16 +19,8 @@ i18n
     resources: {
       en: { translation: enTranslations },
       de: { translation: deTranslations },
-      fr: { translation: frTranslations },
-      es: { translation: esTranslations },
-      it: { translation: itTranslations },
-      pt: { translation: ptTranslations },
-      nl: { translation: nlTranslations },
-      ru: { translation: ruTranslations },
-      ja: { translation: jaTranslations },
-      zh: { translation: zhTranslations },
-      pl: { translation: plTranslations },
     },
+    supportedLngs: [...SUPPORTED_LOCALES],
     fallbackLng: 'en',
     interpolation: {
       escapeValue: false,

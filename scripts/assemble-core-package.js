@@ -50,6 +50,8 @@ if (!existsSync(embedPublish)) {
   process.exit(1);
 }
 
+run('node', ['scripts/sync-core-locales.js'], root);
+
 if (existsSync(outDir)) rmSync(outDir, { recursive: true });
 mkdirSync(outDir, { recursive: true });
 
@@ -74,6 +76,7 @@ const copyInto = (srcRel, destRel) => {
 copyInto('backend/index.js');
 copyInto('backend/dist', 'backend/dist');
 copyInto('frontend/embed.js');
+copyInto('frontend/locales', 'frontend/locales');
 copyInto('frontend/publish', 'frontend/publish');
 copyInto('types/index.js');
 

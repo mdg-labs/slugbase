@@ -41,14 +41,6 @@ import { cn } from '../lib/utils';
 
 const SIDEBAR_ADMIN_OPEN_KEY = 'slugbase_sidebar_admin_open';
 
-function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length >= 2) {
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  }
-  return name.slice(0, 2).toUpperCase();
-}
-
 interface AppSidebarProps {
   user: User | null;
   version?: string | null;
@@ -154,10 +146,6 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
       </span>
     </Link>
   );
-
-  const profileLink = `${prefix}/profile`.replace(/\/+/g, '/') || '/profile';
-  const displayName = user?.name || user?.email || '';
-  const profileInitials = displayName ? getInitials(displayName) : '?';
 
   return (
     <React.Fragment>
@@ -277,38 +265,6 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
         </SidebarContent>
 
         <SidebarFooter className="gap-2 border-t border-ghost pt-3">
-          {user && (
-            <SidebarGroup className="p-0">
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      asChild
-                      tooltip={t('profile.title')}
-                      className="h-auto min-h-0 !border-l-transparent rounded-xl border-0 bg-transparent p-0 shadow-none hover:bg-transparent data-[active=true]:!border-l-transparent data-[active=true]:bg-transparent group-data-[collapsible=icon]:!p-0"
-                    >
-                      <Link to={profileLink} onClick={handleNavClick}>
-                        <div className="flex w-full min-w-0 items-center gap-3 rounded-xl border border-ghost bg-surface p-2 transition-colors hover:bg-surface-high group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:border-0 group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:hover:bg-transparent">
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-ghost bg-surface-high text-xs font-semibold text-primary group-data-[collapsible=icon]:border-0 group-data-[collapsible=icon]:bg-primary/15">
-                            {profileInitials}
-                          </div>
-                          <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
-                            <p className="truncate text-xs font-bold text-sidebar-foreground">{displayName}</p>
-                            {planInfo ? (
-                              <p className="truncate text-[10px] capitalize tracking-wide text-muted-foreground">
-                                {planInfo.plan}
-                              </p>
-                            ) : null}
-                          </div>
-                        </div>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          )}
-
           <SidebarGroup className="p-0">
             <SidebarGroupContent>
               <SidebarMenu>

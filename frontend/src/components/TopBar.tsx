@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Bell, Settings } from 'lucide-react';
+import { Settings } from 'lucide-react';
 import { SidebarTrigger, useSidebar } from './ui/sidebar';
 import UserDropdown from './UserDropdown';
 import { Breadcrumbs } from './Breadcrumbs';
@@ -39,15 +39,6 @@ export default function TopBar({ user }: TopBarProps) {
         <Breadcrumbs />
       </div>
       <div className="flex shrink-0 items-center gap-1 sm:gap-2">
-        <button
-          type="button"
-          className="flex h-9 w-9 cursor-default items-center justify-center rounded-lg text-muted-foreground opacity-50"
-          aria-label="Notifications"
-          title="Notifications"
-          disabled
-        >
-          <Bell className="h-5 w-5" />
-        </button>
         <Link
           to={settingsHref}
           className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-low hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

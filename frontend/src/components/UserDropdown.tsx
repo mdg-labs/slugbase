@@ -40,14 +40,14 @@ export default function UserDropdown({ user }: UserDropdownProps) {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-transparent text-sm font-medium text-foreground transition-colors hover:bg-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-ghost bg-surface-high text-xs font-semibold text-primary transition-colors hover:bg-surface-highest focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           aria-haspopup="menu"
           aria-label={t('profile.title')}
         >
           {user.name ? (
             getInitials(user.name)
           ) : (
-            <UserIcon className="h-5 w-5" />
+            <UserIcon className="h-5 w-5 text-primary" />
           )}
         </button>
       </DropdownMenuTrigger>
@@ -59,15 +59,15 @@ export default function UserDropdown({ user }: UserDropdownProps) {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild className="text-foreground focus:text-foreground">
-          <Link to={`${prefix}/profile`} className="flex cursor-pointer items-center gap-2 text-foreground">
+        <DropdownMenuItem asChild className="text-foreground">
+          <Link to={`${prefix}/profile`} className="flex w-full cursor-pointer items-center gap-2 text-foreground">
             <UserIcon className="h-4 w-4" />
             {t('profile.title')}
           </Link>
         </DropdownMenuItem>
         {showAdmin && (
-          <DropdownMenuItem asChild className="text-foreground focus:text-foreground">
-            <Link to={`${prefix}/admin`.replace(/\/+/g, '/') || '/admin'} className="flex cursor-pointer items-center gap-2 text-foreground">
+          <DropdownMenuItem asChild className="text-foreground">
+            <Link to={`${prefix}/admin`.replace(/\/+/g, '/') || '/admin'} className="flex w-full cursor-pointer items-center gap-2 text-foreground">
               <Settings className="h-4 w-4" />
               {t('admin.title')}
             </Link>
@@ -76,7 +76,7 @@ export default function UserDropdown({ user }: UserDropdownProps) {
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={() => logout()}
-          className="flex cursor-pointer items-center gap-2 text-destructive focus:text-destructive"
+          className="text-destructive data-[highlighted]:bg-destructive/10 data-[highlighted]:text-destructive"
         >
           <LogOut className="h-4 w-4" />
           {t('auth.logout')}

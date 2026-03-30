@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Code } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import { PageHeader } from '../components/PageHeader';
@@ -60,11 +60,10 @@ export default function SearchEngineGuide() {
             {t('searchEngineGuide.howItWorksDescription')}
           </p>
           <div className="rounded-xl border border-ghost bg-surface-low p-4">
-            <div className="flex items-center gap-2 text-sm font-mono text-foreground">
-              <Code className="h-4 w-4 text-primary" />
+            <code className="text-sm font-mono text-foreground">
               <span className="text-primary">go</span>
-              <span className="text-muted-foreground">your-slug</span>
-            </div>
+              <span className="text-muted-foreground"> your-slug</span>
+            </code>
           </div>
         </CardContent>
       </Card>

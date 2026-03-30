@@ -1,8 +1,8 @@
 export { CommandBarHero } from './CommandBarHero';
 export type { CommandBarHeroProps } from './CommandBarHero';
 
-export { StatsCardsRow, SlugPerformanceCard } from './StatsCardsRow';
-export type { StatsCardsRowProps, StatItem, SlugPerformanceCardProps } from './StatsCardsRow';
+export { StatsCardsRow } from './StatsCardsRow';
+export type { StatsCardsRowProps, StatItem } from './StatsCardsRow';
 
 export { PinnedSection } from './PinnedSection';
 export type { PinnedSectionProps, PinnedSectionBookmark } from './PinnedSection';

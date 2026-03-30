@@ -1,6 +1,6 @@
 {
   "name": "@mdguggenbichler/slugbase-core",
-  "version": "0.1.3",
+  "version": "0.1.5",
   "description": "SlugBase core: backend and frontend entrypoints for self-hosted and cloud apps",
   "type": "module",
   "exports": {
@@ -8,7 +8,9 @@
     "./types": "./types/index.js",
     "./backend": "./backend/index.js",
     "./frontend": "./frontend/embed.js",
-    "./frontend/publish/slugbase-core-frontend.css": "./frontend/publish/slugbase-core-frontend.css"
+    "./frontend/publish/slugbase-core-frontend.css": "./frontend/publish/slugbase-core-frontend.css",
+    "./frontend/locales/en.json": "./frontend/locales/en.json",
+    "./frontend/locales/de.json": "./frontend/locales/de.json"
   },
   "scripts": {},
   "engines": {
