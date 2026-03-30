@@ -14,3 +14,14 @@ export { loadOIDCStrategies } from './dist/auth/oidc.js';
 export { validateEnvironmentVariables } from './dist/utils/env-validation.js';
 export { errorHandler, notFoundHandler } from './dist/middleware/error-handler.js';
 export { requireAuth } from './dist/middleware/auth.js';
+export {
+  buildEmailLayout,
+  escapeHtml,
+  EMAIL_CALLOUT_BG,
+  EMAIL_CALLOUT_BORDER,
+  EMAIL_CALLOUT_TEXT,
+  EMAIL_HEADER_BG,
+  EMAIL_PAGE_BG,
+  EMAIL_PRIMARY,
+  EMAIL_PRIMARY_SHADOW,
+} from './dist/utils/email-layout.js';

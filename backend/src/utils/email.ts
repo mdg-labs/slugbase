@@ -2,18 +2,15 @@ import nodemailer from 'nodemailer';
 import { queryOne } from '../db/index.js';
 import { decrypt } from './encryption.js';
 import { isCloud } from '../config/mode.js';
-
-/**
- * Escape HTML to prevent XSS attacks
- */
-function escapeHtml(unsafe: string): string {
-  return unsafe
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
+import {
+  buildEmailLayout,
+  escapeHtml,
+  EMAIL_CALLOUT_BG,
+  EMAIL_CALLOUT_BORDER,
+  EMAIL_CALLOUT_TEXT,
+  EMAIL_PRIMARY,
+  EMAIL_PRIMARY_SHADOW,
+} from './email-layout.js';
 
 /**
  * Validate and escape URL for safe use in HTML href attributes
@@ -29,89 +26,6 @@ function safeUrlForHref(url: string): string {
     return '#';
   }
   return url;
-}
-
-/** Email header background: same navy as app dark mode (#0b162A) */
-const HEADER_BG = '#0b162A';
-/** Accent color for buttons and links: app primary orange (#E64100) */
-const ACCENT_ORANGE = '#E64100';
-
-function getFrontendUrl(): string {
-  return (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
-}
-
-interface BuildEmailLayoutOptions {
-  contentHtml: string;
-  title?: string;
-  footerMessage?: string;
-  includeLegalFooter?: boolean;
-}
-
-/**
- * Build a consistent email layout with header (logo + SlugBase), content, and footer.
- */
-function buildEmailLayout(options: BuildEmailLayoutOptions): string {
-  const {
-    contentHtml,
-    title = 'SlugBase',
-    footerMessage = 'This is an automated message from SlugBase. Please do not reply to this email.',
-    includeLegalFooter = false,
-  } = options;
-  const frontendUrl = getFrontendUrl();
-  const logoUrl = `${frontendUrl}/slugbase_icon_purple.png`;
-
-  const legalFooterHtml = includeLegalFooter
-    ? ` &middot; <a href="${frontendUrl}/imprint" style="color: #6b7280; text-decoration: underline;">Imprint</a> &middot; <a href="${frontendUrl}/privacy" style="color: #6b7280; text-decoration: underline;">Privacy</a>`
-    : '';
-
-  return `<!DOCTYPE html>
-<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="x-apple-disable-message-reformatting">
-  <title>${escapeHtml(title)}</title>
-  <!--[if mso]>
-  <noscript>
-    <xml>
-      <o:OfficeDocumentSettings>
-        <o:PixelsPerInch>96</o:PixelsPerInch>
-      </o:OfficeDocumentSettings>
-    </xml>
-  </noscript>
-  <![endif]-->
-</head>
-<body style="margin: 0; padding: 0; background-color: #f4f4f4; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f4f4f4;">
-    <tr>
-      <td align="center" style="padding: 40px 20px;">
-        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="max-width: 600px; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-          <!-- Header -->
-          <tr>
-            <td style="padding: 32px 40px; text-align: center; background-color: ${HEADER_BG}; border-radius: 8px 8px 0 0;">
-              <img src="${logoUrl}" alt="SlugBase" width="40" height="40" style="display: inline-block; vertical-align: middle; margin-right: 10px;" />
-              <h1 style="margin: 0; display: inline-block; vertical-align: middle; color: #ffffff; font-size: 28px; font-weight: 600; letter-spacing: -0.5px;">SlugBase</h1>
-            </td>
-          </tr>
-          <!-- Content -->
-          <tr>
-            <td style="padding: 40px;">
-              ${contentHtml}
-            </td>
-          </tr>
-          <!-- Footer -->
-          <tr>
-            <td style="padding: 30px 40px; background-color: #f9fafb; border-top: 1px solid #e5e7eb; border-radius: 0 0 8px 8px;">
-              <p style="margin: 0; color: #9ca3af; font-size: 12px; line-height: 1.6; text-align: center;">${footerMessage}${legalFooterHtml}</p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
 }
 
 interface SMTPConfig {
@@ -334,7 +248,7 @@ export async function sendPasswordResetEmail(email: string, resetToken: string, 
     <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin: 30px 0;">
       <tr>
         <td align="center" style="padding: 0;">
-          <a href="${safeHrefUrl}" style="display: inline-block; padding: 14px 32px; background-color: ${ACCENT_ORANGE}; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600; text-align: center; box-shadow: 0 2px 4px rgba(230, 65, 0, 0.3);">Reset Password</a>
+          <a href="${safeHrefUrl}" style="display: inline-block; padding: 14px 32px; background-color: ${EMAIL_PRIMARY}; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600; text-align: center; box-shadow: ${EMAIL_PRIMARY_SHADOW};">Reset Password</a>
         </td>
       </tr>
     </table>
@@ -342,10 +256,10 @@ export async function sendPasswordResetEmail(email: string, resetToken: string, 
     <p style="margin: 20px 0; color: #6b7280; font-size: 14px; line-height: 1.6;">Or copy and paste this link into your browser:</p>
     <p style="margin: 0 0 30px; padding: 12px; background-color: #f9fafb; border-radius: 4px; word-break: break-all; color: #4a4a4a; font-size: 13px; font-family: 'Courier New', monospace; line-height: 1.5;">${escapedDisplayUrl}</p>
     
-    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 30px 0; background-color: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 4px;">
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 30px 0; background-color: ${EMAIL_CALLOUT_BG}; border-left: 4px solid ${EMAIL_CALLOUT_BORDER}; border-radius: 4px;">
       <tr>
         <td style="padding: 16px;">
-          <p style="margin: 0; color: #92400e; font-size: 14px; line-height: 1.6; font-weight: 500;">⚠️ This link will expire in 1 hour for security reasons.</p>
+          <p style="margin: 0; color: ${EMAIL_CALLOUT_TEXT}; font-size: 14px; line-height: 1.6; font-weight: 500;">⚠️ This link will expire in 1 hour for security reasons.</p>
         </td>
       </tr>
     </table>
@@ -386,7 +300,7 @@ export async function sendInviteEmail(
     <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin: 30px 0;">
       <tr>
         <td align="center" style="padding: 0;">
-          <a href="${safeHrefUrl}" style="display: inline-block; padding: 14px 32px; background-color: ${ACCENT_ORANGE}; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600; text-align: center; box-shadow: 0 2px 4px rgba(230, 65, 0, 0.3);">Set password</a>
+          <a href="${safeHrefUrl}" style="display: inline-block; padding: 14px 32px; background-color: ${EMAIL_PRIMARY}; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600; text-align: center; box-shadow: ${EMAIL_PRIMARY_SHADOW};">Set password</a>
         </td>
       </tr>
     </table>
@@ -394,10 +308,10 @@ export async function sendInviteEmail(
     <p style="margin: 20px 0; color: #6b7280; font-size: 14px; line-height: 1.6;">Or copy and paste this link into your browser:</p>
     <p style="margin: 0 0 30px; padding: 12px; background-color: #f9fafb; border-radius: 4px; word-break: break-all; color: #4a4a4a; font-size: 13px; font-family: 'Courier New', monospace; line-height: 1.5;">${escapedDisplayUrl}</p>
     
-    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 30px 0; background-color: #fff7ed; border-left: 4px solid ${ACCENT_ORANGE}; border-radius: 4px;">
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 30px 0; background-color: ${EMAIL_CALLOUT_BG}; border-left: 4px solid ${EMAIL_CALLOUT_BORDER}; border-radius: 4px;">
       <tr>
         <td style="padding: 16px;">
-          <p style="margin: 0; color: #9a3412; font-size: 14px; line-height: 1.6; font-weight: 500;">This link will expire in 7 days.</p>
+          <p style="margin: 0; color: ${EMAIL_CALLOUT_TEXT}; font-size: 14px; line-height: 1.6; font-weight: 500;">This link will expire in 7 days.</p>
         </td>
       </tr>
     </table>
@@ -431,7 +345,7 @@ export async function sendEmailVerificationEmail(email: string, verificationToke
     <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin: 30px 0;">
       <tr>
         <td align="center" style="padding: 0;">
-          <a href="${safeHrefUrl}" style="display: inline-block; padding: 14px 32px; background-color: ${ACCENT_ORANGE}; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600; text-align: center; box-shadow: 0 2px 4px rgba(230, 65, 0, 0.3);">Verify Email Address</a>
+          <a href="${safeHrefUrl}" style="display: inline-block; padding: 14px 32px; background-color: ${EMAIL_PRIMARY}; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600; text-align: center; box-shadow: ${EMAIL_PRIMARY_SHADOW};">Verify Email Address</a>
         </td>
       </tr>
     </table>
@@ -439,10 +353,10 @@ export async function sendEmailVerificationEmail(email: string, verificationToke
     <p style="margin: 20px 0; color: #6b7280; font-size: 14px; line-height: 1.6;">Or copy and paste this link into your browser:</p>
     <p style="margin: 0 0 30px; padding: 12px; background-color: #f9fafb; border-radius: 4px; word-break: break-all; color: #4a4a4a; font-size: 13px; font-family: 'Courier New', monospace; line-height: 1.5;">${escapedDisplayUrl}</p>
     
-    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 30px 0; background-color: #fff7ed; border-left: 4px solid ${ACCENT_ORANGE}; border-radius: 4px;">
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 30px 0; background-color: ${EMAIL_CALLOUT_BG}; border-left: 4px solid ${EMAIL_CALLOUT_BORDER}; border-radius: 4px;">
       <tr>
         <td style="padding: 16px;">
-          <p style="margin: 0; color: #9a3412; font-size: 14px; line-height: 1.6; font-weight: 500;">ℹ️ This link will expire in 24 hours for security reasons.</p>
+          <p style="margin: 0; color: ${EMAIL_CALLOUT_TEXT}; font-size: 14px; line-height: 1.6; font-weight: 500;">ℹ️ This link will expire in 24 hours for security reasons.</p>
         </td>
       </tr>
     </table>
@@ -513,7 +427,7 @@ export async function sendContactFormNotification(recipient: string, data: Conta
       <tr>
         <td style="padding: 16px; border-top: 1px solid #e5e7eb;">
           <p style="margin: 0 0 8px; color: #6b7280; font-size: 12px; font-weight: 600; text-transform: uppercase;">Email</p>
-          <p style="margin: 0;"><a href="mailto:${escapedEmail}" style="color: ${ACCENT_ORANGE}; text-decoration: none;">${escapedEmail}</a></p>
+          <p style="margin: 0;"><a href="mailto:${escapedEmail}" style="color: ${EMAIL_PRIMARY}; text-decoration: none;">${escapedEmail}</a></p>
         </td>
       </tr>
       <tr>
@@ -551,7 +465,7 @@ export async function sendSignupVerificationEmail(email: string, verificationUrl
     <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin: 30px 0;">
       <tr>
         <td align="center" style="padding: 0;">
-          <a href="${safeHrefUrl}" style="display: inline-block; padding: 14px 32px; background-color: ${ACCENT_ORANGE}; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600; box-shadow: 0 2px 4px rgba(230, 65, 0, 0.3);">Verify email</a>
+          <a href="${safeHrefUrl}" style="display: inline-block; padding: 14px 32px; background-color: ${EMAIL_PRIMARY}; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600; box-shadow: ${EMAIL_PRIMARY_SHADOW};">Verify email</a>
         </td>
       </tr>
     </table>
