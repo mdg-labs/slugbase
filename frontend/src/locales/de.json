@@ -739,7 +739,7 @@
     "footerContact": "Kontakt",
     "footerDocs": "Dokumentation",
     "footerApp": "App",
-    "footerCopyright": "© 2024–2025 SlugBase",
+    "footerCopyright": "© {{year}} SlugBase",
     "pricingTitle": "Einfache Preise",
     "pricingSubtitle": "Kostenlos starten. Später upgraden.",
     "pricingUpgradeHint": "Wann upgraden?",

@@ -783,7 +783,7 @@
     "footerContact": "Contact",
     "footerDocs": "Documentation",
     "footerApp": "App",
-    "footerCopyright": "© 2024–2025 SlugBase",
+    "footerCopyright": "© {{year}} SlugBase",
     "pricingTitle": "Simple pricing",
     "pricingSubtitle": "Start free. Upgrade when you need more.",
     "pricingUpgradeHint": "When to upgrade?",
