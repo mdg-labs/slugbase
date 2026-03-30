@@ -6,15 +6,15 @@ Reusable toolbar for collection pages (Bookmarks, Folders, Tags). Renders only t
 
 | Prop | Type | Description |
 |------|------|-------------|
-| **Row 1 — Header** | | |
+| **Row 1 - Header** | | |
 | `title` | `string` | Page title (e.g. "Bookmarks") |
 | `count?` | `number` | Shown as "Title (count)" |
 | `subtitle?` | `string` | e.g. "Showing X of Y" |
 | `tabs?` | `{ value, onChange, options, ariaLabel? }` | Scope tabs (All / Mine / Shared) |
 | `createButton?` | `{ label, onClick }` | Primary Create button |
-| **Row 2 — Filter chips** | | |
+| **Row 2 - Filter chips** | | |
 | `filterChips?` | `{ chips, onRemove, onClearAll, clearAllLabel, clearAllAriaLabel }` | Renders when chips.length > 0 |
-| **Row 3 — Toolbar** | | |
+| **Row 3 - Toolbar** | | |
 | `search?` | `{ value, onChange, onSubmit, placeholder?, ariaLabel? }` | Search input (Enter submits) |
 | `folderFilter?` | `{ value, onChange, options, placeholder? }` | Folder select |
 | `tagFilter?` | `{ value, onChange, options, placeholder? }` | Tag select |

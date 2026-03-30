@@ -222,7 +222,7 @@ router.post('/logout', async (req, res) => {
 });
 
 /**
- * POST /auth/register — CLOUD only. Create account with email verification.
+ * POST /auth/register - CLOUD only. Create account with email verification.
  * Returns 404 when not CLOUD so SELFHOSTED never exposes public registration.
  */
 router.post('/register', authRateLimiter, async (req, res) => {
@@ -333,7 +333,7 @@ router.post('/register', authRateLimiter, async (req, res) => {
 });
 
 /**
- * POST /auth/verify-signup — CLOUD only. Verify signup token and set email_verified.
+ * POST /auth/verify-signup - CLOUD only. Verify signup token and set email_verified.
  */
 router.post('/verify-signup', authRateLimiter, async (req, res) => {
   try {
@@ -372,7 +372,7 @@ router.post('/verify-signup', authRateLimiter, async (req, res) => {
 });
 
 /**
- * GET /auth/signup-verification/status — CLOUD only. Get status of signup verification token.
+ * GET /auth/signup-verification/status - CLOUD only. Get status of signup verification token.
  */
 router.get('/signup-verification/status', authRateLimiter, async (req, res) => {
   try {
@@ -400,7 +400,7 @@ router.get('/signup-verification/status', authRateLimiter, async (req, res) => {
 });
 
 /**
- * POST /auth/resend-signup-verification — CLOUD only. Resend verification email, optionally with updated email.
+ * POST /auth/resend-signup-verification - CLOUD only. Resend verification email, optionally with updated email.
  */
 router.post('/resend-signup-verification', authRateLimiter, async (req, res) => {
   try {
@@ -467,7 +467,7 @@ router.post('/resend-signup-verification', authRateLimiter, async (req, res) => 
 });
 
 /**
- * POST /auth/request-signup-resend — CLOUD only. Request resend of verification email by email (no token).
+ * POST /auth/request-signup-resend - CLOUD only. Request resend of verification email by email (no token).
  * Optional newEmail: if provided and different, update user email and send verification to new address.
  */
 router.post('/request-signup-resend', authRateLimiter, async (req, res) => {

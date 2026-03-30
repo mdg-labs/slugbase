@@ -1,6 +1,6 @@
 /**
  * Creates the Express app with middleware (security, CORS, session, passport, tenant, CSRF).
- * Does NOT mount API routes, static files, or error handlers — those are added by registerCoreRoutes and the app entry.
+ * Does NOT mount API routes, static files, or error handlers - those are added by registerCoreRoutes and the app entry.
  */
 
 import express from 'express';

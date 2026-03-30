@@ -16,13 +16,13 @@ Reusable sections for the Overview/Dashboard page.
 
 In `StatCard` (and via `StatsCardsRow` → `StatItem.usage`), optional props for plan/usage display:
 
-- **`secondaryLine?: string`** — Text below the main value (e.g. "+12 this week").
-- **`used?: number`** — When set with `limit`, shows usage (e.g. "42 / 50").
-- **`limit?: number`** — When set with `used`, enables usage line and optional progress bar.
-- **`labelOverride?: string`** — Label for the usage line (e.g. "Bookmarks used").
-- **`showProgress?: boolean`** — Show progress bar when `used` and `limit` are set (default `true`).
-- **`progressVariant?: 'normal' | 'warning' | 'danger'`** — Bar color (primary / amber / destructive).
-- **`cta?: { label: string; onClick: () => void }`** — Optional button (e.g. "Upgrade"); only pass in cloud.
+- **`secondaryLine?: string`** - Text below the main value (e.g. "+12 this week").
+- **`used?: number`** - When set with `limit`, shows usage (e.g. "42 / 50").
+- **`limit?: number`** - When set with `used`, enables usage line and optional progress bar.
+- **`labelOverride?: string`** - Label for the usage line (e.g. "Bookmarks used").
+- **`showProgress?: boolean`** - Show progress bar when `used` and `limit` are set (default `true`).
+- **`progressVariant?: 'normal' | 'warning' | 'danger'`** - Bar color (primary / amber / destructive).
+- **`cta?: { label: string; onClick: () => void }`** - Optional button (e.g. "Upgrade"); only pass in cloud.
 
 In slugbase-core the dashboard does **not** pass `used`, `limit`, or `cta`. slugbase-cloud can pass these to show plan usage and upgrade CTA without changing layout.
 

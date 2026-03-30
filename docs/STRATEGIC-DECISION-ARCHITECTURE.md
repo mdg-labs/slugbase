@@ -4,21 +4,21 @@ This document analyzes three possible long-term architecture strategies for Slug
 
 ---
 
-## Option A — Keep Current Model (Build-Time Copy + Mode Switch)
+## Option A - Keep Current Model (Build-Time Copy + Mode Switch)
 
 **Model:** slugbase stays a standalone repo. slugbase-cloud copies slugbase at Docker build time (e.g. checkout into `./slugbase/`). Mode is controlled via env (`VITE_SLUGBASE_MODE`, `SLUGBASE_MODE`). Cloud logic is added via env, optional (unregistered) migrations, and future middleware/wrapper in slugbase-cloud.
 
 ### Pros
 
 - **Minimal change.** No new packaging, no monorepo migration, no versioning story to invent. You keep the current mental model and CI.
-- **Single source of truth.** One codebase; cloud is “same code, different build.” No drift between “core package” and “app” — they are the same thing.
+- **Single source of truth.** One codebase; cloud is “same code, different build.” No drift between “core package” and “app” - they are the same thing.
 - **Clear open-source story.** The public repo is “the app.” Contributors clone, build, run. No “which package do I change?” confusion.
 - **Upgrade path is already documented.** UPGRADING-CLOUD describes pinning core by ref (e.g. `ref: v1.2.0`); you can move from `HEAD` to tagged releases without changing architecture.
 - **Low abstraction.** No package boundaries to design or defend; mode is a build-time switch, not an API boundary.
 
 ### Cons
 
-- **Cloud layer is still mostly aspirational.** Today slugbase-cloud has no tenant/org/billing implementation; the “extension” story (middleware, optional migrations) is design, not reality. You must build that layer without a formal extension API — it’s “wrap the app and set env.”
+- **Cloud layer is still mostly aspirational.** Today slugbase-cloud has no tenant/org/billing implementation; the “extension” story (middleware, optional migrations) is design, not reality. You must build that layer without a formal extension API - it’s “wrap the app and set env.”
 - **Upgrade is manual and brittle.** Cloud CI must checkout slugbase (branch or tag), then build. Pinning to a tag requires changing the workflow ref; any change to core’s build (paths, env, Dockerfile) can break cloud’s Dockerfile. You own the coupling.
 - **Risk of env/mode creep.** As cloud features grow, the temptation to add `if (isCloud)` in core increases. SAAS-PREVENTION and cursor rules help, but the boundary is social and review-based, not structural.
 - **Two repos to coordinate.** Every cloud-only behavior (tenant resolution, billing) must live in slugbase-cloud or behind strict guards in slugbase. Cross-repo changes (e.g. “core exposes a hook for cloud”) require two PRs, two releases, and a clear contract.
@@ -26,7 +26,7 @@ This document analyzes three possible long-term architecture strategies for Slug
 ### Hidden Long-Term Risks
 
 - **Accidental coupling.** Core already contains fly.toml, unregistered migrations 010–012/016–017, and `/app/*` links in landing. Without a structural boundary, more “cloud-only” artifacts can slip in (e.g. “small” Stripe checks “only when isCloud”). Over 3–5 years, the “pure core” narrative erodes unless you enforce the boundary with tooling and process.
-- **Upgrade fatigue.** If cloud pins to a tag, you must bump the ref for every release. If cloud uses `HEAD`, you get accidental breakage when core changes. Either way, upgrades are manual and easy to defer — technical debt compounds.
+- **Upgrade fatigue.** If cloud pins to a tag, you must bump the ref for every release. If cloud uses `HEAD`, you get accidental breakage when core changes. Either way, upgrades are manual and easy to defer - technical debt compounds.
 - **No formal extension point.** “Middleware and optional migrations” is flexible but vague. New cloud requirements (e.g. rate limits per plan, webhooks) may require core changes (e.g. new hooks or config). You may end up with a de facto “cloud API” implemented ad hoc in core (guarded by `isCloud`) instead of in a dedicated layer.
 
 ### Protection Matrix (Option A)
@@ -40,7 +40,7 @@ This document analyzes three possible long-term architecture strategies for Slug
 
 ---
 
-## Option B — Extract slugbase-core as NPM Package
+## Option B - Extract slugbase-core as NPM Package
 
 **Model:** Extract backend and frontend into publishable packages (e.g. `@slugbase/core-backend`, `@slugbase/core-frontend`). slugbase (self-hosted) and slugbase-cloud (SaaS) become separate applications that depend on these packages. Both consume the same versioned core.
 
@@ -54,7 +54,7 @@ This document analyzes three possible long-term architecture strategies for Slug
 ### Cons
 
 - **Packaging and release overhead.** You must define what goes into each package, how frontend and backend packages are versioned (lockstep vs independent), and how to publish (CI on tag, manual). Build and publish pipelines get more complex.
-- **Abstraction risk.** You might over-engineer “pluggable” APIs (hooks, events) that only cloud needs, or under-design and end up with a package that is “the whole app” with no real boundary — just a versioned tarball of the current monolith. Then you get the cost of packaging without the benefit of a clean extension point.
+- **Abstraction risk.** You might over-engineer “pluggable” APIs (hooks, events) that only cloud needs, or under-design and end up with a package that is “the whole app” with no real boundary - just a versioned tarball of the current monolith. Then you get the cost of packaging without the benefit of a clean extension point.
 - **Dual consumption.** Self-hosted app and cloud app must both consume the package. If the package is “the full backend and frontend,” the “app” is thin (env and Docker). If the package is “library only,” you have to refactor core into library + app. That refactor is non-trivial.
 - **Open-source perception.** If the “main” repo is just a thin wrapper around `@slugbase/core-*`, some contributors may feel the “real” code is “hidden” in packages. Mitigation: keep app + packages in one repo and publish packages from there so the repo is still the single source of truth.
 
@@ -75,7 +75,7 @@ This document analyzes three possible long-term architecture strategies for Slug
 
 ---
 
-## Option C — Monorepo with Strict Boundaries
+## Option C - Monorepo with Strict Boundaries
 
 **Model:** Single monorepo (e.g. `apps/selfhosted`, `apps/cloud`, `apps/docs`; `packages/core`, `packages/ui`, `packages/shared`). Core is in `packages/`; self-hosted and cloud are separate apps that depend on core. Docs are an app in the same repo.
 
@@ -88,15 +88,15 @@ This document analyzes three possible long-term architecture strategies for Slug
 
 ### Cons
 
-- **Open-source perception and licensing.** One repo containing both “open core” and “private SaaS” is problematic: you can’t open-source the whole repo. So you must either (1) keep cloud in a separate private repo and only open-source part of the monorepo (which is then “multiple repos” again), or (2) have a monorepo that is entirely private and publish “core” as extracted packages — which is Option B with a monorepo layout. So “one monorepo for everything” conflicts with “core is open, cloud is private.”
+- **Open-source perception and licensing.** One repo containing both “open core” and “private SaaS” is problematic: you can’t open-source the whole repo. So you must either (1) keep cloud in a separate private repo and only open-source part of the monorepo (which is then “multiple repos” again), or (2) have a monorepo that is entirely private and publish “core” as extracted packages - which is Option B with a monorepo layout. So “one monorepo for everything” conflicts with “core is open, cloud is private.”
 - **CI complexity.** Monorepo CI must build/test the right subset, handle publish from packages, and possibly support different visibility (public vs private). You need a strategy for which parts are public and how they’re published.
-- **Contributor friendliness.** If the open-source repo is a monorepo with `apps/selfhosted` and `packages/core` but no `apps/cloud` (private elsewhere), contributors see a clear split. If the repo is private and you “open” only packages via npm, contributors don’t get “one repo to clone” — they get “npm install the package.” So the “monorepo” that includes cloud is almost certainly private, and the “open” surface is either a separate repo (current slugbase) or published packages. That reduces the “one repo” benefit for open source.
+- **Contributor friendliness.** If the open-source repo is a monorepo with `apps/selfhosted` and `packages/core` but no `apps/cloud` (private elsewhere), contributors see a clear split. If the repo is private and you “open” only packages via npm, contributors don’t get “one repo to clone” - they get “npm install the package.” So the “monorepo” that includes cloud is almost certainly private, and the “open” surface is either a separate repo (current slugbase) or published packages. That reduces the “one repo” benefit for open source.
 
 ### Hidden Long-Term Risks
 
 - **Boundary creep.** Without strict tooling, imports can creep (e.g. cloud imports from core, then core starts importing from a “shared” module that cloud also uses for billing). You need dependency rules and possibly a custom lint or dependency-cruiser config.
 - **Monorepo tooling.** You’ll want a standard (npm workspaces, pnpm, Turborepo, Nx) for tasks and caching. That’s more setup and maintenance. If the “monorepo” is really “slugbase repo + slugbase-cloud repo” with core as a package published from slugbase, you’re in Option B territory with a nicer folder structure.
-- **Open-source story.** The only way to keep “clone one repo and run the self-hosted app” is to have the open repo be either (1) the current slugbase (standalone app + optional packages) or (2) a monorepo that contains only public code (e.g. apps/selfhosted, packages/core, apps/docs) with cloud in another repo. So Option C, in practice, often collapses to “monorepo for open stuff only” and “cloud in a second repo” — which is Option A or B with a monorepo layout for the open part.
+- **Open-source story.** The only way to keep “clone one repo and run the self-hosted app” is to have the open repo be either (1) the current slugbase (standalone app + optional packages) or (2) a monorepo that contains only public code (e.g. apps/selfhosted, packages/core, apps/docs) with cloud in another repo. So Option C, in practice, often collapses to “monorepo for open stuff only” and “cloud in a second repo” - which is Option A or B with a monorepo layout for the open part.
 
 ### Protection Matrix (Option C)
 

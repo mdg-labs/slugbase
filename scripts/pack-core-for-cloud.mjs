@@ -6,7 +6,7 @@
  *   npm run pack:cloud
  *
  * Env:
- *   SLUGBASE_CLOUD_ROOT — path to slugbase-cloud repo (default: ../slugbase-cloud relative to slugbase root).
+ *   SLUGBASE_CLOUD_ROOT - path to slugbase-cloud repo (default: ../slugbase-cloud relative to slugbase root).
  *     May be absolute, or relative to slugbase root (e.g. ../slugbase-cloud).
  */
 

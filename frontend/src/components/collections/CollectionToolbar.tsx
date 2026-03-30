@@ -1,9 +1,9 @@
 /**
- * CollectionToolbar — Reusable toolbar for collection pages (Bookmarks, Folders, Tags).
+ * CollectionToolbar - Reusable toolbar for collection pages (Bookmarks, Folders, Tags).
  *
  * Row 1: title, count?, subtitle?, tabs?, createButton? (gradient primary CTA)
  * Row 2: filterChips?
- * Row 3: search?, folderFilter?, tagFilter?, sort? — primary filters; secondary
+ * Row 3: search?, folderFilter?, tagFilter?, sort? - primary filters; secondary
  *   (per page, pinned, import/export, bulk select) live in the "more" menu.
  */
 
@@ -48,7 +48,7 @@ export interface CollectionToolbarProps {
     clearAllLabel: string;
     clearAllAriaLabel: string;
   };
-  /** Row 3 — primary filters */
+  /** Row 3 - primary filters */
   search?: {
     value: string;
     onChange: (value: string) => void;
@@ -74,7 +74,7 @@ export interface CollectionToolbarProps {
     options: { value: string; label: string }[];
     className?: string;
   };
-  /** Secondary — shown inside "more" menu */
+  /** Secondary - shown inside "more" menu */
   perPage?: {
     value: number;
     onChange: (value: number) => void;

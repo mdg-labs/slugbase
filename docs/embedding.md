@@ -8,7 +8,7 @@ When embedding the core app in another host (e.g. SlugBase Cloud), the host must
 
 - The host must **initialize i18n** (e.g. `i18n.use(initReactI18next).init(...)`) with at least the core namespaces/keys (**before** rendering the core `App`).
 - Required keys include: `app`, `auth`, `common` (e.g. `common.loading`, `common.error`, `common.reload`, `auth.login`, etc.). See the core repo’s `frontend/src/locales/en.json` for the full set.
-- The core does **not** run its own `i18n.ts` when consumed via `import { App } from '@mdguggenbichler/slugbase-core/frontend'` — only `frontend/index.tsx` → `./src/App` is loaded, so the host’s i18n instance is the one used by core components.
+- The core does **not** run its own `i18n.ts` when consumed via `import { App } from '@mdguggenbichler/slugbase-core/frontend'` - only `frontend/index.tsx` → `./src/App` is loaded, so the host’s i18n instance is the one used by core components.
 
 ### 2. Router
 

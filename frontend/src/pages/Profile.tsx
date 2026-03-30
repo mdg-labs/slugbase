@@ -444,7 +444,7 @@ export default function Profile() {
                 )}
               </SettingsRow>
 
-              {/* Quick Access row — muted, no primary action */}
+              {/* Quick Access row - muted, no primary action */}
               <SettingsRow
                 label={t('profile.quickAccess')}
                 helper={

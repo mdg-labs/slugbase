@@ -55,7 +55,7 @@ router.get('/ai', async (req, res) => {
   }
 });
 
-/** GET /admin/settings/smtp — SMTP keys only (for Settings page; no ai_* or other keys). */
+/** GET /admin/settings/smtp - SMTP keys only (for Settings page; no ai_* or other keys). */
 router.get('/smtp', async (req, res) => {
   try {
     const tenantId = getTenantId(req);

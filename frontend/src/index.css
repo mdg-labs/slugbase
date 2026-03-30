@@ -1,7 +1,7 @@
 /*
  * Self-hosted fonts (no third-party font CDNs).
  * Inter: OFL, latin woff2 subsets.
- * Liberation Mono: SIL OFL — same family as https://github.com/liberationfonts/liberation-fonts
+ * Liberation Mono: SIL OFL - same family as https://github.com/liberationfonts/liberation-fonts
  *   (woff2 produced locally via fonttools from distribution TTFs).
  */
 @font-face {
@@ -82,7 +82,7 @@ a:focus-visible {
 }
 
 @layer base {
-  /* Obsidian Light — complementary palette (see refactor plan §2.4) */
+  /* Obsidian Light - complementary palette (see refactor plan §2.4) */
   :root {
     --background: 240 11.1% 96.5%;
     --foreground: 240 27.8% 14.1%;
@@ -130,7 +130,7 @@ a:focus-visible {
     --tooltip-foreground: 240 27.8% 14.1%;
   }
 
-  /* Obsidian Terminal — dark palette (see refactor plan §2.1) */
+  /* Obsidian Terminal - dark palette (see refactor plan §2.1) */
   .dark {
     --background: 0 0% 5.5%;
     --foreground: 0 0% 100%;
@@ -195,18 +195,18 @@ a:focus-visible {
 }
 
 @layer components {
-  /** Obsidian Terminal label / metadata line (refactor plan — Phase 1) */
+  /** Obsidian Terminal label / metadata line (refactor plan - Phase 1) */
   .typography-label {
     @apply text-xs font-medium uppercase tracking-widest text-muted-foreground;
   }
 
-  /** Login / Signup — sentence-case field labels (do not use global uppercase .typography-label) */
+  /** Login / Signup - sentence-case field labels (do not use global uppercase .typography-label) */
   .auth-field-label {
     @apply text-sm font-medium leading-none text-muted-foreground;
   }
 
   /**
-   * Login / Signup — subtle dot grid on page background (theme-aware, works light + dark).
+   * Login / Signup - subtle dot grid on page background (theme-aware, works light + dark).
    * Foreground at very low alpha so it never competes with content.
    */
   .auth-page-bg {

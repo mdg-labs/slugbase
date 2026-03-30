@@ -259,7 +259,7 @@ export default function BookmarkTableView({
                       </Tooltip>
                     </div>
                   ) : (
-                    <span className="text-sm text-muted-foreground">—</span>
+                    <span className="text-sm text-muted-foreground">-</span>
                   )}
                 </TableCell>
                 <TableCell className={cellClass}>
@@ -272,7 +272,7 @@ export default function BookmarkTableView({
                         </span>
                       ))
                     ) : (
-                      <span className="text-sm text-muted-foreground">—</span>
+                      <span className="text-sm text-muted-foreground">-</span>
                     )}
                   </div>
                 </TableCell>
@@ -286,7 +286,7 @@ export default function BookmarkTableView({
                         </span>
                       ))
                     ) : (
-                      <span className="text-sm text-muted-foreground">—</span>
+                      <span className="text-sm text-muted-foreground">-</span>
                     )}
                   </div>
                 </TableCell>
@@ -302,12 +302,12 @@ export default function BookmarkTableView({
                         : t('bookmarks.shared')}
                     </span>
                   ) : (
-                    <span className="text-sm text-muted-foreground">—</span>
+                    <span className="text-sm text-muted-foreground">-</span>
                   )}
                 </TableCell>
                 <TableCell className={cellClass}>
                   <span className="text-sm text-muted-foreground">
-                    {typeof bookmark.access_count === 'number' ? bookmark.access_count : '—'}
+                    {typeof bookmark.access_count === 'number' ? bookmark.access_count : '-'}
                   </span>
                 </TableCell>
                 <TableCell className={cellClass}>

@@ -42,7 +42,7 @@ const cellClass = 'px-4 py-3';
 const headClass = `${cellClass} text-[10px] font-bold uppercase tracking-widest text-muted-foreground`;
 
 function formatShortDate(iso?: string) {
-  if (!iso) return '—';
+  if (!iso) return '-';
   try {
     return new Date(iso).toLocaleDateString(undefined, {
       year: 'numeric',
@@ -50,7 +50,7 @@ function formatShortDate(iso?: string) {
       day: 'numeric',
     });
   } catch {
-    return '—';
+    return '-';
   }
 }
 
@@ -320,7 +320,7 @@ export default function Folders() {
                           </span>
                         </Tooltip>
                       ) : (
-                        <span className="text-sm text-muted-foreground">—</span>
+                        <span className="text-sm text-muted-foreground">-</span>
                       )}
                     </TableCell>
                     <TableCell className={cellClass}>
@@ -358,7 +358,7 @@ export default function Folders() {
                           />
                         </div>
                       ) : (
-                        <span className="text-sm text-muted-foreground">—</span>
+                        <span className="text-sm text-muted-foreground">-</span>
                       )}
                     </TableCell>
                   </TableRow>

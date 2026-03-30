@@ -31,7 +31,7 @@ Update `package.json` → `file:./vendor/<name>.tgz` if the filename changed (ve
 
 ## Lower-level steps
 
-- `npm run assemble:core` — build + assemble only (or `assemble:core:no-build` after you already built).
+- `npm run assemble:core` - build + assemble only (or `assemble:core:no-build` after you already built).
 - Inspect `.publish-core/` before packing if needed.
 
 ## Optional: publish to npm

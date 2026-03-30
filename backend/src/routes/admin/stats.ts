@@ -1,5 +1,5 @@
 /**
- * GET /api/admin/stats — Secret-protected system metrics.
+ * GET /api/admin/stats - Secret-protected system metrics.
  * Requires X-Stats-Secret header matching STATS_ENDPOINT_SECRET.
  */
 

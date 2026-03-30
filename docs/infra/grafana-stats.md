@@ -2,8 +2,8 @@
 
 This guide covers monitoring SlugBase with self-hosted Grafana, using either:
 
-- **Option A**: PostgreSQL data source (Neon) — direct SQL for charts
-- **Option B**: JSON API data source — consume `/api/admin/stats` for snapshot panels
+- **Option A**: PostgreSQL data source (Neon) - direct SQL for charts
+- **Option B**: JSON API data source - consume `/api/admin/stats` for snapshot panels
 
 ---
 

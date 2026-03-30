@@ -1,5 +1,5 @@
 /**
- * BookmarkCard — scan-first grid layout (Linear/Vercel style).
+ * BookmarkCard - scan-first grid layout (Linear/Vercel style).
  *
  * Density improvements:
  * - Fixed height ~148px (high-density) and tight padding fit more rows per viewport.

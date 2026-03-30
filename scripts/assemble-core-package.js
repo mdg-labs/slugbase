@@ -8,8 +8,8 @@
  *   node scripts/assemble-core-package.js --no-build    # skip npm run build (CI already built)
  *
  * Env:
- *   CORE_PACKAGE_VERSION  — if set (e.g. 1.2.3 or v1.2.3), written into assembled package.json
- *   CORE_PACKAGE_OUT      — output directory (default: .publish-core)
+ *   CORE_PACKAGE_VERSION  - if set (e.g. 1.2.3 or v1.2.3), written into assembled package.json
+ *   CORE_PACKAGE_OUT      - output directory (default: .publish-core)
  */
 
 import { readFileSync, writeFileSync, cpSync, mkdirSync, existsSync, rmSync } from 'fs';

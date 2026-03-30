@@ -61,7 +61,7 @@ export function DashboardBookmarkTile({
           {slugDisplay ? (
             <span className="font-mono text-sm text-primary">{slugDisplay}</span>
           ) : (
-            <span className="text-sm text-muted-foreground">—</span>
+            <span className="text-sm text-muted-foreground">-</span>
           )}
         </div>
         {domain ? (
