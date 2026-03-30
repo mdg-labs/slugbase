@@ -53,8 +53,6 @@ function labelForSegment(
       return t('folders.title');
     case 'tags':
       return t('tags.title');
-    case 'shared':
-      return t('shared.title');
     case 'profile':
       return t('profile.title');
     case 'go-preferences':

@@ -16,7 +16,6 @@ import {
   Key,
   Sparkles,
   CreditCard,
-  Share2,
   Shield,
 } from 'lucide-react';
 import {
@@ -103,15 +102,11 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
 
   const rootLink = prefix || '/';
   const rootActive = rootActivePath;
-  const sharedPathForLink = `${prefix}/shared`.replace(/\/+/g, '/') || '/shared';
-  const sharedPathForActive = `${pathBaseForActive}/shared`.replace(/\/+/g, '/') || '/shared';
-
   const primaryNavItems = [
     { pathForLink: rootLink, pathForActive: rootActive, label: t('dashboard.overview'), icon: LayoutDashboard },
     { pathForLink: `${prefix}/bookmarks`.replace(/\/+/g, '/') || '/bookmarks', pathForActive: `${pathBaseForActive}/bookmarks`.replace(/\/+/g, '/') || '/bookmarks', label: t('bookmarks.title'), icon: Bookmark },
     { pathForLink: `${prefix}/folders`.replace(/\/+/g, '/') || '/folders', pathForActive: `${pathBaseForActive}/folders`.replace(/\/+/g, '/') || '/folders', label: t('folders.title'), icon: Folder },
     { pathForLink: `${prefix}/tags`.replace(/\/+/g, '/') || '/tags', pathForActive: `${pathBaseForActive}/tags`.replace(/\/+/g, '/') || '/tags', label: t('tags.title'), icon: Tag },
-    { pathForLink: sharedPathForLink, pathForActive: sharedPathForActive, label: t('shared.title'), icon: Share2 },
   ];
 
   const handleNavClick = () => {

@@ -77,12 +77,6 @@ function AdminAIGate() {
   return <AdminAIPage />;
 }
 
-function SharedRedirect() {
-  const { pathPrefixForLinks } = useAppConfig();
-  const to = `${pathPrefixForLinks || ''}/bookmarks?scope=shared_with_me`.replace(/\/+/g, '/') || '/bookmarks?scope=shared_with_me';
-  return <Navigate to={to} replace />;
-}
-
 /** Diagnostic: catches errors in login subtree and rethrows with a prefix so cloud boundary shows where the throw came from. */
 class LoginRouteErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null as Error | null };
@@ -144,7 +138,6 @@ function AppRoutes() {
           <Route path="bookmarks" element={<Bookmarks />} />
           <Route path="folders" element={<Folders />} />
           <Route path="tags" element={<Tags />} />
-          <Route path="shared" element={<SharedRedirect />} />
           <Route path="profile" element={<Profile />} />
           <Route path="go-preferences" element={<GoPreferences />} />
           <Route path="search-engine-guide" element={<SearchEngineGuide />} />

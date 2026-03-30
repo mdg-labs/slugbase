@@ -303,7 +303,7 @@ export default function Dashboard() {
               label={t('dashboard.sharedBookmarks')}
               value={stats.sharedBookmarks}
               icon={Share2}
-              href={prefix + '/shared'}
+              href={`${prefix}/bookmarks?scope=shared_with_me`.replace(/\/+/g, '/') || '/bookmarks?scope=shared_with_me'}
               iconContainerClassName="bg-primary/20"
               iconColorClassName="text-primary"
             />
@@ -311,7 +311,7 @@ export default function Dashboard() {
               label={t('dashboard.sharedFolders')}
               value={stats.sharedFolders}
               icon={Share2}
-              href={prefix + '/shared'}
+              href={`${prefix}/folders?scope=shared_with_me`.replace(/\/+/g, '/') || '/folders?scope=shared_with_me'}
               iconContainerClassName="bg-primary/20"
               iconColorClassName="text-primary"
             />

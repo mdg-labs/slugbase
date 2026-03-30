@@ -50,7 +50,6 @@ export default function GlobalSearch() {
     { type: 'navigation', title: t('bookmarks.title'), path: `${prefix}/bookmarks`.replace(/\/+/g, '/') || '/bookmarks', id: 'nav-bookmarks' },
     { type: 'navigation', title: t('folders.title'), path: `${prefix}/folders`.replace(/\/+/g, '/') || '/folders', id: 'nav-folders' },
     { type: 'navigation', title: t('tags.title'), path: `${prefix}/tags`.replace(/\/+/g, '/') || '/tags', id: 'nav-tags' },
-    { type: 'navigation', title: t('shared.title'), path: `${prefix}/shared`.replace(/\/+/g, '/') || '/shared', id: 'nav-shared' },
     ...(showAdmin ? [{ type: 'navigation' as const, title: t('admin.title'), path: `${prefix}/admin`.replace(/\/+/g, '/') || '/admin', id: 'nav-admin' }] : []),
   ], [showAdmin, t, prefix]);
 
