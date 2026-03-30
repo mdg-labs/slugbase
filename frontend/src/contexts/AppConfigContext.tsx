@@ -25,9 +25,9 @@ export interface AppConfig {
   extraAdminRoutes?: { path: string; element: React.ReactNode }[];
   /** Optional guard called before allowing profile/account deletion (e.g. cloud blocks billing owner). Returns { allowed, message }. */
   profileDeleteGuard?: () => Promise<{ allowed: boolean; message?: string }>;
-  /** Signup Terms link (e.g. cloud marketing `/terms`). When unset, docs fallback is used. */
+  /** Signup Terms link (e.g. cloud marketing `/terms`). With `signupPrivacyUrl`, shows the legal checkbox; omit both for self-hosted. */
   signupTermsUrl?: string;
-  /** Signup Privacy link (e.g. cloud marketing `/privacy`). When unset, docs fallback is used. */
+  /** Signup Privacy link (e.g. cloud marketing `/privacy`). With `signupTermsUrl`, shows the legal checkbox; omit both for self-hosted. */
   signupPrivacyUrl?: string;
 }
 

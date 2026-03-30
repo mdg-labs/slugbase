@@ -6,8 +6,6 @@ import { useAppConfig } from '../contexts/AppConfigContext';
 import Button from '../components/ui/Button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import { isCloud } from '../config/mode';
-import { getDefaultSignupPrivacyUrl, getDefaultSignupTermsUrl } from '../config/docs';
 import { cn } from '../lib/utils';
 import {
   AUTH_CARD_CLASS,
@@ -23,13 +21,10 @@ const MIN_PASSWORD_LENGTH = 8;
 export default function Signup() {
   const { t } = useTranslation();
   const { pathPrefixForLinks, signupTermsUrl, signupPrivacyUrl } = useAppConfig();
-  const showLegalAcceptance = isCloud;
-  const termsHref = showLegalAcceptance
-    ? (signupTermsUrl ?? getDefaultSignupTermsUrl())
-    : '';
-  const privacyHref = showLegalAcceptance
-    ? (signupPrivacyUrl ?? getDefaultSignupPrivacyUrl())
-    : '';
+  /** Host (e.g. cloud) passes both URLs; core tarball is built self-hosted so we cannot use build-time `isCloud`. */
+  const termsHref = (signupTermsUrl ?? '').trim();
+  const privacyHref = (signupPrivacyUrl ?? '').trim();
+  const showLegalAcceptance = Boolean(termsHref && privacyHref);
   const prefix = (pathPrefixForLinks || '').replace(/\/+/g, '/') || '';
   const loginHref = `${prefix}/login`.replace(/\/+/g, '/') || '/login';
   const [email, setEmail] = useState('');

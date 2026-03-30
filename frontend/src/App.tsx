@@ -272,9 +272,9 @@ export interface AppProps {
   extraAdminNavItems?: { path: string; label: string }[];
   /** Optional guard for profile/account deletion (e.g. cloud blocks billing owner). */
   profileDeleteGuard?: () => Promise<{ allowed: boolean; message?: string }>;
-  /** Signup Terms link (e.g. cloud marketing site `/terms`). */
+  /** With `signupPrivacyUrl`, enables signup legal checkbox (e.g. cloud `/terms`). Omit both for self-hosted. */
   signupTermsUrl?: string;
-  /** Signup Privacy link (e.g. cloud marketing site `/privacy`). */
+  /** With `signupTermsUrl`, enables signup legal checkbox (e.g. cloud `/privacy`). Omit both for self-hosted. */
   signupPrivacyUrl?: string;
 }
 
