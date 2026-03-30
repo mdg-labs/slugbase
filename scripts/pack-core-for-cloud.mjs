@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * One-shot: build monorepo → assemble .publish-core → npm pack → copy .tgz to slugbase-cloud/vendor/.
+ * One-shot: build monorepo → assemble .publish-core → npm pack → copy .tgz to slugbase-cloud/vendor/
+ * and remove other mdguggenbichler-slugbase-core-*.tgz files there so only the current tarball remains.
  *
  * From slugbase repo root:
  *   npm run pack:cloud
@@ -24,6 +25,17 @@ const cloudRoot = process.env.SLUGBASE_CLOUD_ROOT
 
 const vendorDir = join(cloudRoot, 'vendor');
 const pubDir = join(root, '.publish-core');
+
+/** Only these files are pruned; README and other vendor artifacts stay. */
+const CORE_VENDOR_TGZ_RE = /^mdguggenbichler-slugbase-core-.*\.tgz$/;
+
+function removeStaleCoreTarballs(keepBaseName) {
+  for (const f of readdirSync(vendorDir)) {
+    if (!CORE_VENDOR_TGZ_RE.test(f) || f === keepBaseName) continue;
+    unlinkSync(join(vendorDir, f));
+    console.log(`pack-core-for-cloud: removed stale vendor/${f}`);
+  }
+}
 
 function run(cmd, args, cwd) {
   const r = spawnSync(cmd, args, { cwd, stdio: 'inherit', shell: false });
@@ -59,6 +71,7 @@ mkdirSync(vendorDir, { recursive: true });
 const src = join(pubDir, tgz);
 const dest = join(vendorDir, tgz);
 copyFileSync(src, dest);
+removeStaleCoreTarballs(tgz);
 
 console.log(`pack-core-for-cloud: wrote ${dest}`);
 console.log(`Next: cd "${cloudRoot}" && npm install  (then commit vendor/${tgz} + package-lock.json if needed)`);
