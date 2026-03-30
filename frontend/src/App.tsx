@@ -272,9 +272,13 @@ export interface AppProps {
   extraAdminNavItems?: { path: string; label: string }[];
   /** Optional guard for profile/account deletion (e.g. cloud blocks billing owner). */
   profileDeleteGuard?: () => Promise<{ allowed: boolean; message?: string }>;
+  /** Signup Terms link (e.g. cloud marketing site `/terms`). */
+  signupTermsUrl?: string;
+  /** Signup Privacy link (e.g. cloud marketing site `/privacy`). */
+  signupPrivacyUrl?: string;
 }
 
-function App({ basePath, apiBaseUrl, routerBasename, skipSetupFlow, hideAdminOidcAndSmtp, adminAiOnlyToggle, extraAdminRoutes, extraAdminNavItems, profileDeleteGuard }: AppProps = {}) {
+function App({ basePath, apiBaseUrl, routerBasename, skipSetupFlow, hideAdminOidcAndSmtp, adminAiOnlyToggle, extraAdminRoutes, extraAdminNavItems, profileDeleteGuard, signupTermsUrl, signupPrivacyUrl }: AppProps = {}) {
   const appRootPath = routerBasename !== undefined ? '/' : (basePath === '/' || !basePath ? '/' : basePath);
   const pathPrefixForLinks = routerBasename !== undefined ? '' : (basePath ?? '');
   const content = (
@@ -290,7 +294,7 @@ function App({ basePath, apiBaseUrl, routerBasename, skipSetupFlow, hideAdminOid
   );
   return (
     <AppErrorBoundary>
-      <AppConfigProvider appBasePath={basePath} apiBaseUrl={apiBaseUrl} appRootPath={appRootPath} skipSetupFlow={skipSetupFlow} pathPrefixForLinks={pathPrefixForLinks} hideAdminOidcAndSmtp={hideAdminOidcAndSmtp} adminAiOnlyToggle={adminAiOnlyToggle} extraAdminNavItems={extraAdminNavItems} extraAdminRoutes={extraAdminRoutes} profileDeleteGuard={profileDeleteGuard}>
+      <AppConfigProvider appBasePath={basePath} apiBaseUrl={apiBaseUrl} appRootPath={appRootPath} skipSetupFlow={skipSetupFlow} pathPrefixForLinks={pathPrefixForLinks} hideAdminOidcAndSmtp={hideAdminOidcAndSmtp} adminAiOnlyToggle={adminAiOnlyToggle} extraAdminNavItems={extraAdminNavItems} extraAdminRoutes={extraAdminRoutes} profileDeleteGuard={profileDeleteGuard} signupTermsUrl={signupTermsUrl} signupPrivacyUrl={signupPrivacyUrl}>
         {routerBasename !== undefined ? (
           content
         ) : (

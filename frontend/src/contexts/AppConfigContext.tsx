@@ -25,6 +25,10 @@ export interface AppConfig {
   extraAdminRoutes?: { path: string; element: React.ReactNode }[];
   /** Optional guard called before allowing profile/account deletion (e.g. cloud blocks billing owner). Returns { allowed, message }. */
   profileDeleteGuard?: () => Promise<{ allowed: boolean; message?: string }>;
+  /** Signup Terms link (e.g. cloud marketing `/terms`). When unset, docs fallback is used. */
+  signupTermsUrl?: string;
+  /** Signup Privacy link (e.g. cloud marketing `/privacy`). When unset, docs fallback is used. */
+  signupPrivacyUrl?: string;
 }
 
 const defaultConfig: AppConfig = {
@@ -53,6 +57,8 @@ export function AppConfigProvider({
   extraAdminNavItems,
   extraAdminRoutes,
   profileDeleteGuard,
+  signupTermsUrl,
+  signupPrivacyUrl,
 }: {
   children: React.ReactNode;
   appBasePath?: string;
@@ -77,6 +83,10 @@ export function AppConfigProvider({
   extraAdminRoutes?: { path: string; element: React.ReactNode }[];
   /** Optional guard for profile/account deletion (e.g. cloud blocks billing owner). */
   profileDeleteGuard?: () => Promise<{ allowed: boolean; message?: string }>;
+  /** Signup Terms URL (path-absolute or full URL). */
+  signupTermsUrl?: string;
+  /** Signup Privacy URL (path-absolute or full URL). */
+  signupPrivacyUrl?: string;
 }) {
   const base = appBasePath ?? defaultConfig.appBasePath;
   const value: AppConfig = {
@@ -93,6 +103,8 @@ export function AppConfigProvider({
     extraAdminNavItems,
     extraAdminRoutes,
     profileDeleteGuard,
+    signupTermsUrl,
+    signupPrivacyUrl,
   };
   return <AppConfigContext.Provider value={value}>{children}</AppConfigContext.Provider>;
 }

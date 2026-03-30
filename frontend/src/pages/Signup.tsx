@@ -6,7 +6,8 @@ import { useAppConfig } from '../contexts/AppConfigContext';
 import Button from '../components/ui/Button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import { getDocsBaseUrl } from '../config/docs';
+import { isCloud } from '../config/mode';
+import { getDefaultSignupPrivacyUrl, getDefaultSignupTermsUrl } from '../config/docs';
 import { cn } from '../lib/utils';
 import {
   AUTH_CARD_CLASS,
@@ -21,7 +22,9 @@ const MIN_PASSWORD_LENGTH = 8;
 
 export default function Signup() {
   const { t } = useTranslation();
-  const { pathPrefixForLinks } = useAppConfig();
+  const { pathPrefixForLinks, signupTermsUrl, signupPrivacyUrl } = useAppConfig();
+  const termsHref = signupTermsUrl ?? getDefaultSignupTermsUrl();
+  const privacyHref = signupPrivacyUrl ?? getDefaultSignupPrivacyUrl();
   const prefix = (pathPrefixForLinks || '').replace(/\/+/g, '/') || '';
   const loginHref = `${prefix}/login`.replace(/\/+/g, '/') || '/login';
   const [email, setEmail] = useState('');
@@ -211,7 +214,7 @@ export default function Signup() {
               <label htmlFor="signup-accept-terms" className="text-sm text-foreground">
                 {t('signup.acceptTermsPrefix')}
                 <a
-                  href={getDocsBaseUrl()}
+                  href={termsHref}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-primary hover:underline"
@@ -220,7 +223,7 @@ export default function Signup() {
                 </a>
                 {t('signup.acceptTermsAnd')}
                 <a
-                  href={getDocsBaseUrl()}
+                  href={privacyHref}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-primary hover:underline"

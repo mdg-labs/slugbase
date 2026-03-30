@@ -17,3 +17,12 @@ export function getDocsBaseUrl(): string {
   const path = isCloud ? 'cloud/overview' : 'selfhosted/intro';
   return `${DOCS_BASE}/${path}`;
 }
+
+/** Signup checkbox links when the host does not set `signupTermsUrl` / `signupPrivacyUrl` (self-hosted default). */
+export function getDefaultSignupTermsUrl(): string {
+  return `${DOCS_BASE}/${isCloud ? 'cloud/overview' : 'selfhosted/intro'}`;
+}
+
+export function getDefaultSignupPrivacyUrl(): string {
+  return `${DOCS_BASE}/${isCloud ? 'cloud/data-privacy' : 'selfhosted/intro'}`;
+}
