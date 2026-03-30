@@ -102,9 +102,9 @@ export default function Login() {
             <img
               src="/slugbase_icon_purple.svg"
               alt="SlugBase"
-              className="h-9 w-9 object-contain"
-              width={36}
-              height={36}
+              className="h-[72px] w-[72px] object-contain"
+              width={72}
+              height={72}
             />
           </div>
           <h2 className="text-2xl font-semibold text-foreground">{t('auth.login')}</h2>
