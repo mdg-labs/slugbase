@@ -199,6 +199,25 @@ a:focus-visible {
   .typography-label {
     @apply text-xs font-medium uppercase tracking-widest text-muted-foreground;
   }
+
+  /** Login / Signup — sentence-case field labels (do not use global uppercase .typography-label) */
+  .auth-field-label {
+    @apply text-sm font-medium leading-none text-muted-foreground;
+  }
+
+  /**
+   * Login / Signup — subtle dot grid on page background (theme-aware, works light + dark).
+   * Foreground at very low alpha so it never competes with content.
+   */
+  .auth-page-bg {
+    @apply bg-background;
+    background-image: radial-gradient(
+      circle at center,
+      hsl(var(--foreground) / 0.055) 0.5px,
+      transparent 0.5px
+    );
+    background-size: 20px 20px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

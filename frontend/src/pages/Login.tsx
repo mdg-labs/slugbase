@@ -9,8 +9,15 @@ import { LogIn, Key } from 'lucide-react';
 import Button from '../components/ui/Button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-
-const AUTH_CARD = 'rounded-xl border border-ghost bg-surface p-6 shadow-none';
+import { cn } from '../lib/utils';
+import {
+  AUTH_CARD_CLASS,
+  AUTH_CROSS_LINK,
+  AUTH_CROSS_LINK_FOOTER,
+  AUTH_INPUT_CLASS,
+  AUTH_PAGE_INNER,
+  AUTH_PAGE_OUTER,
+} from '../components/auth/authPageClasses';
 
 export default function Login() {
   const { t } = useTranslation();
@@ -19,6 +26,7 @@ export default function Login() {
   const { user } = useAuth();
   const { pathPrefixForLinks } = useAppConfig();
   const prefix = (pathPrefixForLinks || '').replace(/\/+/g, '/') || '';
+  const signupHref = `${prefix}/signup`.replace(/\/+/g, '/') || '/signup';
   const [providers, setProviders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [localAuth, setLocalAuth] = useState({
@@ -87,10 +95,10 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
+    <div className={AUTH_PAGE_OUTER}>
+      <div className={AUTH_PAGE_INNER}>
         <div className="text-center">
-          <div className="flex justify-center mb-6">
+          <div className="mb-6 flex justify-center">
             <img
               src="/slugbase_icon_purple.svg"
               alt="SlugBase"
@@ -99,18 +107,14 @@ export default function Login() {
               height={36}
             />
           </div>
-          <h2 className="text-2xl font-semibold text-foreground">
-            {t('auth.login')}
-          </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {t('app.tagline')}
-          </p>
+          <h2 className="text-2xl font-semibold text-foreground">{t('auth.login')}</h2>
+          <p className="mt-2 text-sm text-muted-foreground">{t('app.tagline')}</p>
         </div>
 
-        <div className={AUTH_CARD}>
+        <div className={AUTH_CARD_CLASS}>
           <form onSubmit={handleLocalLogin} className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="email" className="typography-label">
+              <Label htmlFor="email" className="auth-field-label">
                 {t('auth.email')}
               </Label>
               <Input
@@ -122,10 +126,11 @@ export default function Login() {
                 value={localAuth.email}
                 onChange={(e) => setLocalAuth({ ...localAuth, email: e.target.value })}
                 autoComplete="email"
+                className={cn(AUTH_INPUT_CLASS)}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password" className="typography-label">
+              <Label htmlFor="password" className="auth-field-label">
                 {t('auth.password')}
               </Label>
               <Input
@@ -137,10 +142,11 @@ export default function Login() {
                 value={localAuth.password}
                 onChange={(e) => setLocalAuth({ ...localAuth, password: e.target.value })}
                 autoComplete="current-password"
+                className={cn(AUTH_INPUT_CLASS)}
               />
             </div>
             {error && (
-              <div className="px-4 py-3 rounded-xl border border-destructive/30 bg-destructive/10">
+              <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3">
                 <p className="text-sm text-destructive">{error}</p>
               </div>
             )}
@@ -153,15 +159,22 @@ export default function Login() {
             >
               {localLoading ? t('common.loading') : t('auth.login')}
             </Button>
-            <div className="text-center space-y-2">
+            <div className="space-y-2 text-center">
               <Link
                 to={`${prefix}/password-reset`.replace(/\/+/g, '/') || '/password-reset'}
-                className="block text-sm font-medium text-primary hover:text-primary/90"
+                className="block text-sm font-medium text-primary hover:text-primary/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded"
               >
                 {t('auth.forgotPassword')}
               </Link>
             </div>
           </form>
+
+          <p className={AUTH_CROSS_LINK_FOOTER}>
+            {t('signup.noAccount')}{' '}
+            <Link to={signupHref} className={AUTH_CROSS_LINK}>
+              {t('auth.signUp')}
+            </Link>
+          </p>
 
           {!loading && providers.length > 0 && (
             <>
@@ -170,9 +183,7 @@ export default function Login() {
                   <div className="w-full border-t border-ghost" />
                 </div>
                 <div className="relative flex justify-center text-sm">
-                  <span className="px-3 bg-surface text-muted-foreground typography-label">
-                    {t('auth.or')}
-                  </span>
+                  <span className="typography-label bg-surface px-3 text-muted-foreground">{t('auth.or')}</span>
                 </div>
               </div>
               <div className="space-y-3">
