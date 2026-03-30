@@ -14,6 +14,7 @@ import { sendSignupVerificationEmail } from '../utils/email.js';
 import crypto from 'crypto';
 import { getDefaultTenantId } from '../utils/tenant.js';
 import { isCloud } from '../config/mode.js';
+import { buildFrontendAbsoluteUrl } from '../utils/frontend-url.js';
 
 const router = Router();
 
@@ -645,7 +646,7 @@ router.get('/:provider/callback', (req, res, next) => {
                 async (verifyErr: any, verifiedUser: any) => {
                   if (verifyErr || !verifiedUser) {
                     console.error(`[OIDC] Verify function error:`, verifyErr);
-                    return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=auth_failed`);
+                    return res.redirect(buildFrontendAbsoluteUrl('/login?error=auth_failed'));
                   }
                   user = verifiedUser;
                   await handleSuccess();
@@ -707,7 +708,7 @@ router.get('/:provider/callback', (req, res, next) => {
           async (verifyErr: any, verifiedUser: any) => {
             if (verifyErr || !verifiedUser) {
               console.error(`[OIDC] Verify function error:`, verifyErr);
-              return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=auth_failed`);
+              return res.redirect(buildFrontendAbsoluteUrl('/login?error=auth_failed'));
             }
             user = verifiedUser;
             await handleSuccess();
@@ -720,7 +721,7 @@ router.get('/:provider/callback', (req, res, next) => {
           message: manualFetchError.message,
           stack: manualFetchError.stack,
         });
-        return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=auth_failed`);
+        return res.redirect(buildFrontendAbsoluteUrl('/login?error=auth_failed'));
       }
     }
     
@@ -747,15 +748,14 @@ router.get('/:provider/callback', (req, res, next) => {
           info: info,
         });
       }
-      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/login?error=${errorParam}`);
+      return res.redirect(buildFrontendAbsoluteUrl(`/login?error=${encodeURIComponent(errorParam)}`));
     }
     
     async function handleSuccess() {
       const userPayload = { id: user.id, email: user.email, name: user.name, user_key: user.user_key, is_admin: user.is_admin };
       const token = generateToken(userPayload);
       setAuthCookies(res, { accessToken: token });
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-      const redirectUrl = frontendUrl;
+      const redirectUrl = buildFrontendAbsoluteUrl('/');
       req.session?.destroy((sessionErr) => {
         if (sessionErr) console.error('Error destroying session:', sessionErr);
         res.redirect(redirectUrl);

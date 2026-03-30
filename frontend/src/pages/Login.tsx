@@ -23,7 +23,7 @@ export default function Login() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { user } = useAuth();
+  const { user, checkAuth } = useAuth();
   const { pathPrefixForLinks } = useAppConfig();
   const prefix = (pathPrefixForLinks || '').replace(/\/+/g, '/') || '';
   const signupHref = `${prefix}/signup`.replace(/\/+/g, '/') || '/signup';
@@ -77,9 +77,10 @@ export default function Login() {
 
     try {
       await api.post('/auth/login', localAuth);
+      await checkAuth();
       const redirectTo = searchParams.get('redirect');
       const safePath = redirectTo?.startsWith('/') && !redirectTo.startsWith('//') ? redirectTo : null;
-      window.location.href = safePath || '/';
+      navigate(safePath || '/', { replace: true });
     } catch (err: any) {
       const code = err.response?.data?.code;
       const message = err.response?.data?.error;
