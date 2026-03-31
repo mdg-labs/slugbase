@@ -562,6 +562,7 @@
     "noMembers": "No members in this team",
     "noTeams": "No teams assigned to this user",
     "noTeamsYet": "No teams yet",
+    "teamsEmptyDescription": "Create teams to organize members and share folders.",
     "add": "Add",
     "members": "Members",
     "manageTeams": "Manage Teams",

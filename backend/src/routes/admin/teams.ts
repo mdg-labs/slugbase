@@ -12,7 +12,14 @@ router.get('/', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const tenantId = getTenantId(req);
-    const teams = await query('SELECT * FROM teams WHERE tenant_id = ? ORDER BY created_at DESC', [tenantId]);
+    const teams = await query(
+      `SELECT t.*,
+        (SELECT COUNT(*) FROM team_members tm WHERE tm.team_id = t.id AND tm.tenant_id = t.tenant_id) AS member_count
+       FROM teams t
+       WHERE t.tenant_id = ?
+       ORDER BY t.created_at DESC`,
+      [tenantId]
+    );
     const teamsList = Array.isArray(teams) ? teams : (teams ? [teams] : []);
     res.json(teamsList);
   } catch (error: any) {

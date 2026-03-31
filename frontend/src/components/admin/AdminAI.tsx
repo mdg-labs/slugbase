@@ -3,8 +3,8 @@ import { useTranslation } from 'react-i18next';
 import api from '../../api/client';
 import { useToast } from '../ui/Toast';
 import { useAppConfig } from '../../contexts/AppConfigContext';
-import { Sparkles } from 'lucide-react';
 import { PageLoadingSkeleton } from '../ui/PageLoadingSkeleton';
+import { PageHeader } from '../PageHeader';
 import { Switch } from '../ui/switch';
 import { Label } from '../ui/label';
 import { Input } from '../ui/input';
@@ -130,24 +130,18 @@ export default function AdminAI() {
   );
 
   if (loading) {
-    return <PageLoadingSkeleton lines={8} />;
+    return (
+      <div className="pb-24">
+        <PageLoadingSkeleton lines={8} />
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-xl border border-ghost bg-surface p-6 shadow-none">
-        <div className="flex items-center gap-2 mb-6">
-          <Sparkles className="h-5 w-5 text-primary" />
-          <div>
-            <h2 className="text-xl font-semibold text-foreground">
-              {t('admin.ai.title')}
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {t('admin.ai.description')}
-            </p>
-          </div>
-        </div>
+    <div className="space-y-6 pb-24">
+      <PageHeader title={t('admin.ai.title')} subtitle={t('admin.ai.description')} />
 
+      <div className="rounded-2xl border border-ghost bg-surface p-6 shadow-none">
         <div className="space-y-4">
           <div className="flex items-center gap-3">
             <Switch

@@ -6,6 +6,7 @@ import { useToast } from '../ui/Toast';
 import { Save, Mail, Send } from 'lucide-react';
 import Button from '../ui/Button';
 import { PageLoadingSkeleton } from '../ui/PageLoadingSkeleton';
+import { PageHeader } from '../PageHeader';
 import { Switch } from '../ui/switch';
 import { Label } from '../ui/label';
 import { Input } from '../ui/input';
@@ -92,22 +93,21 @@ export default function AdminSettings() {
   };
 
   if (loading) {
-    return <PageLoadingSkeleton lines={8} />;
+    return (
+      <div className="pb-24">
+        <PageLoadingSkeleton lines={8} />
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-xl border border-ghost bg-surface p-6 shadow-none">
-        <div className="flex items-center gap-2 mb-6">
+    <div className="space-y-6 pb-24">
+      <PageHeader title={t('admin.settings')} subtitle={t('smtp.description')} />
+
+      <div className="rounded-2xl border border-ghost bg-surface p-6 shadow-none">
+        <div className="mb-6 flex items-center gap-2">
           <Mail className="h-5 w-5 text-muted-foreground" />
-          <div>
-            <h2 className="text-xl font-semibold text-foreground">
-              {t('smtp.title')}
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {t('smtp.description')}
-            </p>
-          </div>
+          <h2 className="text-lg font-semibold text-foreground">{t('smtp.title')}</h2>
         </div>
 
         <div className="space-y-4">

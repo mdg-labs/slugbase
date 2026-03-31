@@ -3,18 +3,63 @@ import { useTranslation } from 'react-i18next';
 import api from '../../api/client';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
-import { Plus, Edit, Trash2, Users, Network } from 'lucide-react';
+import { Plus, Edit, Trash2, Users, Network, MoreHorizontal } from 'lucide-react';
 import TeamModal from '../modals/TeamModal';
 import TeamAssignmentModal from '../modals/TeamAssignmentModal';
 import Button from '../ui/Button';
-import { PageLoadingSkeleton } from '../ui/PageLoadingSkeleton';
+import { Skeleton } from '../ui/skeleton';
+import { PageHeader } from '../PageHeader';
+import { EmptyState } from '../EmptyState';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../ui/dropdown-menu';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../ui/table';
+import { Card } from '../ui/card';
+import {
+  adminTableBodyRowClass,
+  adminTableCardClass,
+  adminTableCellClass,
+  adminTableHeadClass,
+  adminTableHeaderRowClass,
+} from './adminTableTokens';
 
 interface Team {
   id: string;
   name: string;
   description: string | null;
   created_at: string;
+  member_count?: number | string;
   members?: Array<{ id: string; name: string; email: string }>;
+}
+
+function formatShortDate(iso?: string) {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  } catch {
+    return '—';
+  }
+}
+
+function memberCount(team: Team): number {
+  const raw = team.member_count;
+  if (raw === undefined || raw === null) return 0;
+  const n = typeof raw === 'number' ? raw : parseInt(String(raw), 10);
+  return Number.isFinite(n) ? n : 0;
 }
 
 export default function AdminTeams() {
@@ -78,79 +123,138 @@ export default function AdminTeams() {
     setSelectedTeamForAssignment(null);
   };
 
+  const countSubtitle = `${teams.length} ${teams.length === 1 ? t('common.team') : t('common.teams')}`;
+
   if (loading) {
-    return <PageLoadingSkeleton lines={6} />;
+    return (
+      <div className="space-y-6 pb-24">
+        <div className="space-y-2">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-4 w-64" />
+        </div>
+        <Card className={adminTableCardClass}>
+          <div className="p-6 space-y-4">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-14 w-full" />
+            ))}
+          </div>
+        </Card>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">{t('admin.teams')}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {teams.length} {teams.length === 1 ? 'team' : 'teams'}
-          </p>
-        </div>
-        <Button onClick={() => setModalOpen(true)} icon={Plus} className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90">
-          {t('admin.addTeam')}
-        </Button>
-      </div>
-
-      {teams.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-ghost bg-surface py-16 px-4">
-          <Users className="h-12 w-12 text-muted-foreground mb-4" />
-          <p className="text-muted-foreground text-lg mb-4">{t('admin.noTeamsYet')}</p>
-          <Button onClick={() => setModalOpen(true)} variant="primary" size="sm" icon={Plus} className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90">
+    <div className="space-y-6 pb-24">
+      <PageHeader
+        title={t('admin.teams')}
+        subtitle={countSubtitle}
+        actions={
+          <Button
+            onClick={() => setModalOpen(true)}
+            icon={Plus}
+            className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
+          >
             {t('admin.addTeam')}
           </Button>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {teams.map((team) => (
-            <div
-              key={team.id}
-              className="group overflow-hidden rounded-xl border border-ghost bg-surface shadow-none transition-colors hover:border-primary/25"
+        }
+      />
+
+      {teams.length === 0 ? (
+        <EmptyState
+          icon={Users}
+          title={t('admin.noTeamsYet')}
+          description={t('admin.teamsEmptyDescription')}
+          action={
+            <Button
+              onClick={() => setModalOpen(true)}
+              variant="primary"
+              icon={Plus}
+              className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
             >
-              <div className="p-4 space-y-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <Users className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-                    <h3 className="text-lg font-semibold text-foreground truncate">
-                      {team.name}
-                    </h3>
-                  </div>
-                </div>
-                {team.description && (
-                  <p className="text-sm text-muted-foreground">{team.description}</p>
-                )}
-                <div className="flex gap-2 pt-2 border-t border-ghost">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    icon={Network}
-                    onClick={() => handleManageMembers(team)}
-                    className="flex-1"
-                    title={t('admin.manageMembers')}
-                  >
-                    {t('admin.members')}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    icon={Edit}
-                    onClick={() => handleEdit(team)}
-                  />
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    icon={Trash2}
-                    onClick={() => handleDelete(team.id)}
-                  />
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+              {t('admin.addTeam')}
+            </Button>
+          }
+        />
+      ) : (
+        <Card className={adminTableCardClass}>
+          <Table>
+            <TableHeader>
+              <TableRow className={adminTableHeaderRowClass}>
+                <TableHead className={adminTableHeadClass}>{t('admin.teamName')}</TableHead>
+                <TableHead className={`${adminTableHeadClass} hidden md:table-cell`}>
+                  {t('admin.description')}
+                </TableHead>
+                <TableHead className={`${adminTableHeadClass} w-[100px]`}>{t('admin.members')}</TableHead>
+                <TableHead className={`${adminTableHeadClass} hidden sm:table-cell w-[140px]`}>
+                  {t('profile.createdAt')}
+                </TableHead>
+                <TableHead className={`${adminTableHeadClass} w-[88px] text-right`}>
+                  {t('common.actions')}
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {teams.map((team) => (
+                <TableRow key={team.id} className={adminTableBodyRowClass}>
+                  <TableCell className={adminTableCellClass}>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-gradient-to-br from-primary/15 to-primary/25">
+                        <Users className="h-4 w-4 text-primary" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-foreground truncate">{team.name}</p>
+                        {team.description ? (
+                          <p className="text-sm text-muted-foreground truncate md:hidden">{team.description}</p>
+                        ) : null}
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell className={`${adminTableCellClass} hidden md:table-cell max-w-xs`}>
+                    <span className="text-sm text-muted-foreground line-clamp-2">
+                      {team.description || '—'}
+                    </span>
+                  </TableCell>
+                  <TableCell className={`${adminTableCellClass} tabular-nums text-muted-foreground`}>
+                    {memberCount(team)}
+                  </TableCell>
+                  <TableCell className={`${adminTableCellClass} hidden sm:table-cell text-muted-foreground`}>
+                    {formatShortDate(team.created_at)}
+                  </TableCell>
+                  <TableCell className={`${adminTableCellClass} text-right`}>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-high hover:text-foreground"
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                          <span className="sr-only">{t('common.actions')}</span>
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleManageMembers(team)}>
+                          <Network className="mr-2 h-4 w-4" />
+                          {t('admin.manageMembers')}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleEdit(team)}>
+                          <Edit className="mr-2 h-4 w-4" />
+                          {t('common.edit')}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleDelete(team.id)}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          {t('common.delete')}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
       )}
 
       <TeamModal

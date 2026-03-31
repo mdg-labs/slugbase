@@ -522,6 +522,7 @@
     "noMembers": "Keine Mitglieder in diesem Team",
     "noTeams": "Diesem Benutzer sind keine Teams zugewiesen",
     "noTeamsYet": "Noch keine Teams",
+    "teamsEmptyDescription": "Lege Teams an, um Mitglieder zu gruppieren und Ordner zu teilen.",
     "add": "Hinzufügen",
     "members": "Mitglieder",
     "manageTeams": "Teams verwalten",

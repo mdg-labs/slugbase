@@ -7,6 +7,8 @@ import { Plus, Edit, Trash2, Key, Globe } from 'lucide-react';
 import OIDCProviderModal from '../modals/OIDCProviderModal';
 import Button from '../ui/Button';
 import { PageLoadingSkeleton } from '../ui/PageLoadingSkeleton';
+import { PageHeader } from '../PageHeader';
+import { EmptyState } from '../EmptyState';
 
 interface OIDCProvider {
   id: string;
@@ -73,39 +75,52 @@ export default function AdminOIDCProviders() {
   };
 
   if (loading) {
-    return <PageLoadingSkeleton lines={6} />;
+    return (
+      <div className="pb-24">
+        <PageLoadingSkeleton lines={6} />
+      </div>
+    );
   }
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">
-            {t('admin.oidcProviders')}
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {providers.length} {providers.length === 1 ? t('common.provider') : t('common.providers')}
-          </p>
-        </div>
-        <Button onClick={() => setModalOpen(true)} icon={Plus} className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90">
-          {t('admin.addProvider')}
-        </Button>
-      </div>
+  const providerSubtitle = `${providers.length} ${providers.length === 1 ? t('common.provider') : t('common.providers')}`;
 
-      {providers.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-ghost bg-surface py-16 px-4">
-          <Key className="h-12 w-12 text-muted-foreground mb-4" />
-          <p className="text-muted-foreground text-lg mb-4">{t('auth.noProviders')}</p>
-          <Button onClick={() => setModalOpen(true)} variant="primary" size="sm" icon={Plus} className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90">
+  return (
+    <div className="space-y-6 pb-24">
+      <PageHeader
+        title={t('admin.oidcProviders')}
+        subtitle={providerSubtitle}
+        actions={
+          <Button
+            onClick={() => setModalOpen(true)}
+            icon={Plus}
+            className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
+          >
             {t('admin.addProvider')}
           </Button>
-        </div>
+        }
+      />
+
+      {providers.length === 0 ? (
+        <EmptyState
+          icon={Key}
+          title={t('auth.noProviders')}
+          action={
+            <Button
+              onClick={() => setModalOpen(true)}
+              variant="primary"
+              icon={Plus}
+              className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
+            >
+              {t('admin.addProvider')}
+            </Button>
+          }
+        />
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {providers.map((provider) => (
             <div
               key={provider.id}
-              className="group overflow-hidden rounded-xl border border-ghost bg-surface shadow-none transition-colors hover:border-primary/25"
+              className="group overflow-hidden rounded-2xl border border-ghost bg-surface shadow-none transition-colors hover:border-primary/25"
             >
               <div className="p-4 space-y-4">
                 <div className="flex items-start justify-between gap-3">
