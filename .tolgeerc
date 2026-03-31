@@ -1,0 +1,10 @@
+{
+  "apiUrl": "https://toglee.mdg-labs.dev",
+  "projectId": 3,
+  "pull": {
+    "path": "frontend/src/locales/{languageTag}.json"
+  },
+  "push": {
+    "files": [{ "path": "frontend/src/locales/en.json", "language": "en" }]
+  }
+}

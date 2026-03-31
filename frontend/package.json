@@ -7,7 +7,9 @@
     "build": "tsc && vite build",
     "build:core-embed": "npx vite build --config vite.core-embed.config.ts",
     "preview": "vite preview",
-    "validate:i18n": "node scripts/validate-i18n.mjs"
+    "validate:i18n": "node scripts/validate-i18n.mjs",
+    "tolgee:pull": "cd .. && tolgee pull",
+    "tolgee:push": "cd .. && tolgee push"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.15",
@@ -22,6 +24,8 @@
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-switch": "^1.2.6",
     "@radix-ui/react-tooltip": "^1.2.8",
+    "@tolgee/i18next": "^7.0.0",
+    "@tolgee/react": "^7.0.0",
     "axios": "^1.6.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

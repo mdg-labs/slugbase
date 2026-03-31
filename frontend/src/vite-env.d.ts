@@ -3,6 +3,8 @@
 interface ImportMetaEnv {
   readonly VITE_SLUGBASE_MODE?: string;
   readonly VITE_API_URL?: string;
+  readonly VITE_TOLGEE_API_URL?: string;
+  readonly VITE_TOLGEE_API_KEY?: string;
 }
 
 interface ImportMeta {

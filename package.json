@@ -18,11 +18,14 @@
     "pack:cloud": "node scripts/pack-core-for-cloud.mjs",
     "e2e": "playwright test --config=e2e/playwright.config.ts",
     "e2e:run": "node scripts/run-e2e.js",
-    "e2e:ui": "playwright test --ui --config=e2e/playwright.config.ts"
+    "e2e:ui": "playwright test --ui --config=e2e/playwright.config.ts",
+    "tolgee:pull": "tolgee pull",
+    "tolgee:push": "tolgee push"
   },
   "devDependencies": {
     "@bigbinary/neeto-playwright-reporter": "^3.0.0-beta.7",
     "@playwright/test": "^1.49.0",
+    "@tolgee/cli": "^2.16.1",
     "concurrently": "^8.2.2"
   },
   "overrides": {
