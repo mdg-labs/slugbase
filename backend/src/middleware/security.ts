@@ -88,13 +88,31 @@ export const tokenCreateRateLimiter = isDevelopment
     });
 
 /**
+ * Normalize env to an origin allowed in CSP (https only in production).
+ * Accepts `https://host` or `https://host/path` (e.g. Umami script URL).
+ */
+function cspOriginFromEnv(raw: string | undefined, allowHttp: boolean): string | null {
+  const t = raw?.trim();
+  if (!t) return null;
+  try {
+    const u = new URL(t);
+    if (u.protocol === 'https:') return u.origin;
+    if (allowHttp && u.protocol === 'http:') return u.origin;
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+/**
  * Security headers middleware
  */
 export function setupSecurityHeaders() {
   // Only enable HSTS if we're actually using HTTPS
   const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
   const isHttps = baseUrl.startsWith('https://');
-  
+  const allowHttpCsp = process.env.NODE_ENV !== 'production';
+
   const cspDirectives: any = {
     defaultSrc: ["'self'"],
     styleSrc: ["'self'", "'unsafe-inline'"], // Swagger UI needs inline styles
@@ -106,6 +124,12 @@ export function setupSecurityHeaders() {
     mediaSrc: ["'self'"],
     frameSrc: ["'self'"], // Allow iframes for Swagger UI
   };
+
+  const umamiOrigin = cspOriginFromEnv(process.env.CSP_UMAMI_ORIGIN, allowHttpCsp);
+  if (umamiOrigin) {
+    cspDirectives.scriptSrc.push(umamiOrigin);
+    cspDirectives.connectSrc.push(umamiOrigin);
+  }
   
   // Only upgrade insecure requests when using HTTPS (set to null to disable when using HTTP)
   if (isHttps) {
