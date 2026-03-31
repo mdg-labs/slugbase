@@ -1,5 +1,5 @@
 {
-  "apiUrl": "https://toglee.mdg-labs.dev",
+  "apiUrl": "https://tolgee.mdg-labs.dev",
   "projectId": 3,
   "pull": {
     "path": "frontend/src/locales/{languageTag}.json"
