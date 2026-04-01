@@ -196,6 +196,21 @@ router.post('/login', authRateLimiter, async (req, res, next) => {
       email_verified: isVerified,
     };
 
+    // Drop any Passport session identity (e.g. prior OIDC attempt) so the next request
+    // does not deserialize a different user when the JWT cookie is absent or replaced.
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const logout = (req as AuthRequest & { logout?: (cb: (err?: unknown) => void) => void }).logout;
+        if (typeof logout === 'function') {
+          logout.call(req, (err?: unknown) => (err ? reject(err) : resolve()));
+          return;
+        }
+        resolve();
+      });
+    } catch (cleanupErr) {
+      console.error('Session cleanup before login:', cleanupErr);
+    }
+
     const token = generateToken(userPayload);
     setAuthCookies(res, { accessToken: token });
 
@@ -224,7 +239,24 @@ router.post('/login', authRateLimiter, async (req, res, next) => {
 router.post('/logout', async (req, res) => {
   const clearOpts = getClearAuthCookieOptions();
   res.clearCookie('token', clearOpts);
-  res.json({ message: 'Logged out' });
+
+  const sendLoggedOut = () => {
+    if (isCloud && req.session) {
+      delete req.session.organizationId;
+      delete req.session.tenantId;
+    }
+    res.json({ message: 'Logged out' });
+  };
+
+  const logout = (req as AuthRequest & { logout?: (cb: (err?: unknown) => void) => void }).logout;
+  if (typeof logout === 'function') {
+    logout.call(req, (err?: unknown) => {
+      if (err) console.error('Passport logout:', err);
+      sendLoggedOut();
+    });
+    return;
+  }
+  sendLoggedOut();
 });
 
 /**

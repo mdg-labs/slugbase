@@ -1,6 +1,9 @@
 import { Request, Response, NextFunction, RequestHandler } from 'express';
 import passport from 'passport';
 import { validateToken } from '../services/api-tokens.js';
+import { extractTokenFromRequest } from '../utils/jwt.js';
+
+const isCloudRuntime = process.env.SLUGBASE_MODE === 'cloud';
 
 export interface AuthRequest extends Request {
   user?: {
@@ -70,7 +73,18 @@ export function optionalAttachUser(): RequestHandler {
           const apiUser = await validateToken(token);
           if (apiUser) {
             (req as AuthRequest).user = apiUser;
+            return next();
           }
+        }
+      }
+      // Cloud: without JWT/API auth, ignore Passport-deserialized user (stale session after logout
+      // or JWT cleared). OIDC callback must keep session-backed flow intact.
+      if (isCloudRuntime) {
+        const path = req.path || '';
+        const isOidcCallback = /\/auth\/[^/]+\/callback$/.test(path);
+        const hasJwtCookieOrBearer = Boolean(extractTokenFromRequest(req));
+        if (!isOidcCallback && !hasJwtCookieOrBearer) {
+          delete (req as AuthRequest).user;
         }
       }
       next();
