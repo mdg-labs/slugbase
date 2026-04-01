@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import crypto from 'crypto';
 import { query, queryOne, execute } from '../../db/index.js';
 import { AuthRequest, requireAuth, requireAdmin } from '../../middleware/auth.js';
@@ -6,21 +6,48 @@ import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
 import { validateEmail, normalizeEmail, validatePassword, validateLength, sanitizeString } from '../../utils/validation.js';
 import { generateUserKey } from '../../utils/user-key.js';
-import { getTenantId } from '../../utils/tenant.js';
+import { getTenantId, DEFAULT_TENANT_ID } from '../../utils/tenant.js';
 import { sendInviteEmail, isEmailSendingAvailable } from '../../utils/email.js';
+import { isCloud } from '../../config/mode.js';
 
 const router = Router();
 router.use(requireAuth());
 router.use(requireAdmin());
 
+const USER_COLUMNS =
+  'id, email, name, user_key, is_admin, oidc_provider, language, theme, created_at';
+
+async function userInCurrentOrg(req: Request, targetUserId: string): Promise<boolean> {
+  if (!isCloud) return true;
+  const tenantId = getTenantId(req);
+  if (!tenantId || tenantId === DEFAULT_TENANT_ID) return false;
+  const row = await queryOne('SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?', [tenantId, targetUserId]);
+  return Boolean(row);
+}
+
 router.get('/', async (req, res) => {
-  const authReq = req as AuthRequest;
   try {
+    const tenantId = getTenantId(req);
+    if (isCloud && tenantId !== DEFAULT_TENANT_ID) {
+      const users = await query(
+        `SELECT u.id, u.email, u.name, u.user_key, u.is_admin, u.oidc_provider, u.language, u.theme, u.created_at
+         FROM users u
+         INNER JOIN org_members om ON om.user_id = u.id
+         WHERE om.org_id = ?
+         ORDER BY u.created_at DESC`,
+        [tenantId]
+      );
+      const usersList = Array.isArray(users) ? users : users ? [users] : [];
+      return res.json(usersList);
+    }
+    if (isCloud) {
+      return res.json([]);
+    }
     const users = await query(
-      'SELECT id, email, name, user_key, is_admin, oidc_provider, language, theme, created_at FROM users ORDER BY created_at DESC',
+      `SELECT ${USER_COLUMNS} FROM users ORDER BY created_at DESC`,
       []
     );
-    const usersList = Array.isArray(users) ? users : (users ? [users] : []);
+    const usersList = Array.isArray(users) ? users : users ? [users] : [];
     res.json(usersList);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -28,14 +55,13 @@ router.get('/', async (req, res) => {
 });
 
 router.get('/:id', async (req, res) => {
-  const authReq = req as AuthRequest;
   try {
     const { id } = req.params;
-    const user = await queryOne(
-      'SELECT id, email, name, user_key, is_admin, oidc_provider, language, theme, created_at FROM users WHERE id = ?',
-      [id]
-    );
+    const user = await queryOne(`SELECT ${USER_COLUMNS} FROM users WHERE id = ?`, [id]);
     if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    if (!(await userInCurrentOrg(req, id))) {
       return res.status(404).json({ error: 'User not found' });
     }
     res.json(user);
@@ -49,7 +75,6 @@ function hashToken(token: string): string {
 }
 
 router.post('/', async (req, res) => {
-  const authReq = req as AuthRequest;
   try {
     const { email, name, password, is_admin = false, send_invite: sendInvite = false } = req.body;
 
@@ -139,6 +164,15 @@ router.post('/', async (req, res) => {
       }
     }
 
+    const tenantId = getTenantId(req);
+    if (isCloud && tenantId !== DEFAULT_TENANT_ID) {
+      await execute('INSERT INTO org_members (user_id, org_id, role) VALUES (?, ?, ?)', [
+        userId,
+        tenantId,
+        'member',
+      ]);
+    }
+
     let inviteSent = false;
     if (sendInvite) {
       const token = crypto.randomBytes(32).toString('hex');
@@ -177,13 +211,15 @@ router.post('/', async (req, res) => {
 });
 
 router.put('/:id', async (req, res) => {
-  const authReq = req as AuthRequest;
   try {
     const { id } = req.params;
     const { email, name, password, is_admin, language, theme } = req.body;
 
     const existing = await queryOne('SELECT * FROM users WHERE id = ?', [id]);
     if (!existing) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    if (!(await userInCurrentOrg(req, id))) {
       return res.status(404).json({ error: 'User not found' });
     }
     const updates: string[] = [];
@@ -266,6 +302,9 @@ router.delete('/:id', async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
+    if (!(await userInCurrentOrg(req, id))) {
+      return res.status(404).json({ error: 'User not found' });
+    }
     await execute('DELETE FROM users WHERE id = ?', [id]);
 
     res.json({ message: 'User deleted' });
@@ -275,9 +314,11 @@ router.delete('/:id', async (req, res) => {
 });
 
 router.get('/:id/teams', async (req, res) => {
-  const authReq = req as AuthRequest;
   try {
     const { id } = req.params;
+    if (!(await userInCurrentOrg(req, id))) {
+      return res.status(404).json({ error: 'User not found' });
+    }
     const tenantId = getTenantId(req);
     const teams = await query(
       `SELECT t.* FROM teams t
