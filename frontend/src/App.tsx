@@ -8,6 +8,7 @@ import {
   usePlan,
   usePlanLoadState,
   showAdminAiNav,
+  showAdminMembersNav,
   showAdminTeamsNav,
   getFirstAdminRedirectPath,
   isCloudMode,
@@ -102,16 +103,25 @@ function AdminTeamsGate() {
   return <AdminTeamsPage />;
 }
 
-/** Cloud: wait for plan before showing members (avoids empty flash when TopBar links to /admin/members). */
+/** Cloud: Team plan only; same redirect pattern as Teams. */
 function AdminMembersGate() {
+  const planInfo = usePlan();
   const planLoadState = usePlanLoadState();
   const { t } = useTranslation();
+  const { extraAdminNavItems, hideAdminOidcAndSmtp } = useAppConfig();
   if (isCloudMode && planLoadState === 'loading') {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
         <div className="text-lg text-muted-foreground">{t('common.loading')}</div>
       </div>
     );
+  }
+  if (isCloudMode && !showAdminMembersNav(planInfo, planLoadState)) {
+    const firstPath = getFirstAdminRedirectPath(planInfo, planLoadState, {
+      hideAdminOidcAndSmtp: !!hideAdminOidcAndSmtp,
+      extraAdminNavItems,
+    });
+    return <Navigate to={firstPath} replace />;
   }
   return <AdminMembersPage />;
 }

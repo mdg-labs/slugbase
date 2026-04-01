@@ -43,22 +43,33 @@ export function showAdminAiNav(planInfo: PlanInfo | null): boolean {
   return !planInfo || planInfo.aiAvailable;
 }
 
-/** Admin Users tab: self-hosted always; cloud only after plan is known (any tier). */
+/** Cloud: Team plan and plan fetch finished. */
+function isCloudTeamPlanReady(planInfo: PlanInfo | null, planLoadState: PlanLoadState): boolean {
+  return planLoadState === 'ready' && planInfo?.plan === 'team';
+}
+
+/** Admin Users tab: self-hosted always; cloud Team plan only (profile covers personal settings). */
 export function showAdminMembersNav(planInfo: PlanInfo | null, planLoadState: PlanLoadState): boolean {
   if (!isCloudMode) return true;
-  return planLoadState === 'ready' && planInfo !== null;
+  return isCloudTeamPlanReady(planInfo, planLoadState);
 }
 
 /** Admin Teams tab: self-hosted always; cloud only on Team plan after load. */
 export function showAdminTeamsNav(planInfo: PlanInfo | null, planLoadState: PlanLoadState): boolean {
   if (!isCloudMode) return true;
-  return planLoadState === 'ready' && planInfo?.plan === 'team';
+  return isCloudTeamPlanReady(planInfo, planLoadState);
+}
+
+/** Mine / all / shared filters on Bookmarks and Folders (cloud: Team plan only; sharing not on lower tiers). */
+export function showBookmarkFolderScopeTabs(planInfo: PlanInfo | null, planLoadState: PlanLoadState): boolean {
+  if (!isCloudMode) return true;
+  return isCloudTeamPlanReady(planInfo, planLoadState);
 }
 
 /** Create org users / invites from admin UI: self-hosted always; cloud Team plan only. */
 export function canInviteOrgUsers(planInfo: PlanInfo | null, planLoadState: PlanLoadState): boolean {
   if (!isCloudMode) return true;
-  return planLoadState === 'ready' && planInfo?.plan === 'team';
+  return isCloudTeamPlanReady(planInfo, planLoadState);
 }
 
 /** First admin sub-route to open when the preferred tab is unavailable (index redirect, gates). */

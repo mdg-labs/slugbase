@@ -19,6 +19,7 @@ import { PageLoadingSkeleton } from '../components/ui/PageLoadingSkeleton';
 import { Card } from '../components/ui/card';
 import { useSidebar } from '../components/ui/sidebar';
 import { useAppConfig } from '../contexts/AppConfigContext';
+import { usePlan, usePlanLoadState, showBookmarkFolderScopeTabs } from '../contexts/PlanContext';
 
 interface Bookmark {
   id: string;
@@ -71,6 +72,10 @@ export default function Bookmarks() {
   const scope = (scopeParam === 'mine' || scopeParam === 'shared_with_me' || scopeParam === 'shared_by_me' || scopeParam === 'shared')
     ? (scopeParam === 'shared' ? 'shared_with_me' : scopeParam)
     : 'all';
+  const planInfo = usePlan();
+  const planLoadState = usePlanLoadState();
+  const showScopeTabs = showBookmarkFolderScopeTabs(planInfo, planLoadState);
+  const effectiveScope = showScopeTabs ? scope : 'all';
   const pinnedFilter = searchParams.get('pinned') === 'true';
   const searchQuery = searchParams.get('q') || '';
   const [modalOpen, setModalOpen] = useState(false);
@@ -86,13 +91,21 @@ export default function Bookmarks() {
     : 50;
 
   useEffect(() => {
+    if (!showScopeTabs && scope !== 'all') {
+      const params = new URLSearchParams(searchParams);
+      params.delete('scope');
+      setSearchParams(params, { replace: true });
+    }
+  }, [showScopeTabs, scope, searchParams, setSearchParams]);
+
+  useEffect(() => {
     setPage(0);
     setAllSelectedAcrossPages(false);
-  }, [selectedFolder, selectedTag, sortBy, scope, pinnedFilter, searchQuery, pageSize]);
+  }, [selectedFolder, selectedTag, sortBy, effectiveScope, pinnedFilter, searchQuery, pageSize]);
 
   useEffect(() => {
     loadData();
-  }, [selectedFolder, selectedTag, sortBy, page, scope, pinnedFilter, searchQuery, pageSize]);
+  }, [selectedFolder, selectedTag, sortBy, page, effectiveScope, pinnedFilter, searchQuery, pageSize, showScopeTabs]);
 
   // Handle query params from GlobalSearch and dashboard Edit link
   useEffect(() => {
@@ -169,14 +182,14 @@ export default function Bookmarks() {
             sort_by: sortBy,
             limit: pageSize,
             offset: page * pageSize,
-            scope: scope !== 'all' ? scope : undefined,
+            scope: effectiveScope !== 'all' ? effectiveScope : undefined,
             pinned: pinnedFilter ? 'true' : undefined,
             q: searchQuery.trim() || undefined,
           },
         }),
         api.get('/folders'),
         api.get('/tags'),
-        api.get('/teams'),
+        showScopeTabs ? api.get('/teams') : Promise.resolve({ data: [] }),
       ]);
       if (bookmarksSettled.status === 'fulfilled') {
         const payload = bookmarksSettled.value.data;
@@ -199,7 +212,7 @@ export default function Bookmarks() {
   const hasActiveFilters =
     !!selectedFolder ||
     !!selectedTag ||
-    scope !== 'all' ||
+    effectiveScope !== 'all' ||
     pinnedFilter ||
     !!searchQuery.trim() ||
     sortBy !== 'recently_added';
@@ -394,7 +407,7 @@ export default function Bookmarks() {
           folder_id: selectedFolder || undefined,
           tag_id: selectedTag || undefined,
           sort_by: sortBy,
-          scope: scope !== 'all' ? scope : undefined,
+          scope: effectiveScope !== 'all' ? effectiveScope : undefined,
           pinned: pinnedFilter ? 'true' : undefined,
           q: searchQuery.trim() || undefined,
         },
@@ -451,13 +464,13 @@ export default function Bookmarks() {
     if (pinnedFilter) {
       list.push({ key: 'pinned', label: t('bookmarks.pinned'), ariaLabel: t('bookmarks.clearFilters') + ' ' + t('bookmarks.pinned') });
     }
-    if (scope === 'mine') {
+    if (effectiveScope === 'mine') {
       list.push({ key: 'scope', label: t('bookmarks.scopeMine'), ariaLabel: t('bookmarks.clearFilters') + ' ' + t('bookmarks.scopeMine') });
     }
-    if (scope === 'shared_with_me') {
+    if (effectiveScope === 'shared_with_me') {
       list.push({ key: 'scope', label: t('common.scopeSharedWithMe'), ariaLabel: t('bookmarks.clearFilters') + ' ' + t('common.scopeSharedWithMe') });
     }
-    if (scope === 'shared_by_me') {
+    if (effectiveScope === 'shared_by_me') {
       list.push({ key: 'scope', label: t('common.scopeSharedByMe'), ariaLabel: t('bookmarks.clearFilters') + ' ' + t('common.scopeSharedByMe') });
     }
     return list;
@@ -477,17 +490,21 @@ export default function Bookmarks() {
             ? t('bookmarks.showingXOfY', { x: displayedBookmarks.length, y: total })
             : t('bookmarks.pageSubtitle')
         }
-        tabs={{
-          value: scope,
-          onChange: (s) => updateParams({ scope: s === 'all' ? undefined : s }),
-          options: [
-            { value: 'all', label: t('bookmarks.scopeAll') },
-            { value: 'mine', label: t('bookmarks.scopeMine') },
-            { value: 'shared_with_me', label: t('common.scopeSharedWithMe') },
-            { value: 'shared_by_me', label: t('common.scopeSharedByMe') },
-          ],
-          ariaLabel: t('bookmarks.scopeAll'),
-        }}
+        tabs={
+          showScopeTabs
+            ? {
+                value: scope,
+                onChange: (s) => updateParams({ scope: s === 'all' ? undefined : s }),
+                options: [
+                  { value: 'all', label: t('bookmarks.scopeAll') },
+                  { value: 'mine', label: t('bookmarks.scopeMine') },
+                  { value: 'shared_with_me', label: t('common.scopeSharedWithMe') },
+                  { value: 'shared_by_me', label: t('common.scopeSharedByMe') },
+                ],
+                ariaLabel: t('bookmarks.scopeAll'),
+              }
+            : undefined
+        }
         createButton={{ label: t('bookmarks.create'), onClick: handleCreate }}
         filterChips={{
           chips: filterChips,

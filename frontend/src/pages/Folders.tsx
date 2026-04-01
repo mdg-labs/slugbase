@@ -14,6 +14,7 @@ import { CollectionToolbar } from '../components/collections';
 import { EmptyState } from '../components/EmptyState';
 import { PageLoadingSkeleton } from '../components/ui/PageLoadingSkeleton';
 import { useAppConfig } from '../contexts/AppConfigContext';
+import { usePlan, usePlanLoadState, showBookmarkFolderScopeTabs } from '../contexts/PlanContext';
 import { Card } from '../components/ui/card';
 import {
   Table,
@@ -70,6 +71,10 @@ export default function Folders() {
   const scope = (scopeParam === 'mine' || scopeParam === 'shared_with_me' || scopeParam === 'shared_by_me')
     ? scopeParam
     : 'all';
+  const planInfo = usePlan();
+  const planLoadState = usePlanLoadState();
+  const showScopeTabs = showBookmarkFolderScopeTabs(planInfo, planLoadState);
+  const effectiveScope = showScopeTabs ? scope : 'all';
   const sortParam = searchParams.get('sort');
   const sortBy = (sortParam === 'recently_added' || sortParam === 'alphabetical') ? sortParam : DEFAULT_SORT;
   const PAGE_SIZE_OPTIONS = [50, 100, 200, 500] as const;
@@ -81,15 +86,23 @@ export default function Folders() {
   const [totalFolders, setTotalFolders] = useState(0);
 
   useEffect(() => {
+    if (!showScopeTabs && scope !== 'all') {
+      const params = new URLSearchParams(searchParams);
+      params.delete('scope');
+      setSearchParams(params, { replace: true });
+    }
+  }, [showScopeTabs, scope, searchParams, setSearchParams]);
+
+  useEffect(() => {
     loadData();
-  }, [sortBy, scope, page, pageSize]);
+  }, [sortBy, effectiveScope, page, pageSize, showScopeTabs]);
 
   async function loadData() {
     try {
       const foldersRes = await api.get('/folders', {
         params: {
           sort_by: sortBy,
-          scope: scope !== 'all' ? scope : undefined,
+          scope: effectiveScope !== 'all' ? effectiveScope : undefined,
           limit: pageSize,
           offset: page * pageSize,
         },
@@ -131,7 +144,7 @@ export default function Folders() {
     setSearchParams(params);
   }
 
-  const hasActiveFilters = scope !== 'all' || sortBy !== DEFAULT_SORT;
+  const hasActiveFilters = effectiveScope !== 'all' || sortBy !== DEFAULT_SORT;
 
   function handleRemoveFilter(key: string) {
     if (key === 'scope') updateParams({ scope: 'all' });
@@ -149,8 +162,13 @@ export default function Folders() {
 
   const filterChips = useMemo(() => {
     const list: { key: string; label: string; ariaLabel: string }[] = [];
-    if (scope !== 'all') {
-      const scopeLabel = scope === 'mine' ? t('bookmarks.scopeMine') : scope === 'shared_with_me' ? t('common.scopeSharedWithMe') : t('common.scopeSharedByMe');
+    if (showScopeTabs && effectiveScope !== 'all') {
+      const scopeLabel =
+        effectiveScope === 'mine'
+          ? t('bookmarks.scopeMine')
+          : effectiveScope === 'shared_with_me'
+            ? t('common.scopeSharedWithMe')
+            : t('common.scopeSharedByMe');
       list.push({ key: 'scope', label: scopeLabel, ariaLabel: t('folders.clearFilters') + ' ' + scopeLabel });
     }
     if (sortBy !== DEFAULT_SORT) {
@@ -158,7 +176,7 @@ export default function Folders() {
       list.push({ key: 'sort', label: `Sort: ${sortLabel}`, ariaLabel: t('folders.clearFilters') + ' Sort' });
     }
     return list;
-  }, [scope, sortBy, t]);
+  }, [showScopeTabs, effectiveScope, sortBy, t]);
 
   const sortedFolders = useMemo(() => [...folders], [folders]);
 
@@ -209,17 +227,21 @@ export default function Folders() {
             ? t('bookmarks.showingXOfY', { x: sortedFolders.length, y: totalFolders })
             : t('folders.pageSubtitle')
         }
-        tabs={{
-          value: scope,
-          onChange: (s) => updateParams({ scope: s === 'all' ? undefined : s }),
-          options: [
-            { value: 'all', label: t('bookmarks.scopeAll') },
-            { value: 'mine', label: t('bookmarks.scopeMine') },
-            { value: 'shared_with_me', label: t('common.scopeSharedWithMe') },
-            { value: 'shared_by_me', label: t('common.scopeSharedByMe') },
-          ],
-          ariaLabel: t('bookmarks.scopeAll'),
-        }}
+        tabs={
+          showScopeTabs
+            ? {
+                value: scope,
+                onChange: (s) => updateParams({ scope: s === 'all' ? undefined : s }),
+                options: [
+                  { value: 'all', label: t('bookmarks.scopeAll') },
+                  { value: 'mine', label: t('bookmarks.scopeMine') },
+                  { value: 'shared_with_me', label: t('common.scopeSharedWithMe') },
+                  { value: 'shared_by_me', label: t('common.scopeSharedByMe') },
+                ],
+                ariaLabel: t('bookmarks.scopeAll'),
+              }
+            : undefined
+        }
         createButton={{ label: t('folders.create'), onClick: handleCreate }}
         filterChips={{
           chips: filterChips,
