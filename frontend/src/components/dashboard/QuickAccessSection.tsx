@@ -69,7 +69,7 @@ export function QuickAccessSection({
               categoryLabel={categoryLabel}
               t={t}
               onOpen={onOpen}
-              onCopyUrl={onCopyUrl}
+              onCopy={() => onCopyUrl(b.url)}
             />
           ))}
         </div>

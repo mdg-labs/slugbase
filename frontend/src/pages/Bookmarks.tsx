@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -12,6 +12,7 @@ import ImportModal from '../components/modals/ImportModal';
 import ShareResourceDialog from '../components/sharing/ShareResourceDialog';
 import Button from '../components/ui/Button';
 import BookmarkTableView from '../components/bookmarks/BookmarkTableView';
+import { DashboardBookmarkTile } from '../components/dashboard/DashboardBookmarkTile';
 import { BulkMoveModal, BulkTagModal, BulkShareModal } from '../components/bookmarks/BulkActionModals';
 import { type FilterKey } from '../components/bookmarks/FilterChips';
 import { CollectionToolbar } from '../components/collections';
@@ -41,6 +42,30 @@ interface Bookmark {
 }
 
 type SortOption = 'recently_added' | 'alphabetical' | 'most_used' | 'recently_accessed';
+
+const BOOKMARKS_VIEW_STORAGE_KEY = 'slugbase_bookmarks_view';
+
+function getStoredBookmarksView(): 'cards' | 'table' {
+  if (typeof window === 'undefined') return 'cards';
+  try {
+    const v = localStorage.getItem(BOOKMARKS_VIEW_STORAGE_KEY);
+    if (v === 'table' || v === 'cards') return v;
+  } catch {
+    /* ignore */
+  }
+  return 'cards';
+}
+
+function bookmarkCategoryLabel(
+  b: Bookmark,
+  t: (key: string, options?: Record<string, unknown>) => string
+): string {
+  if (b.pinned) return t('dashboard.pinned');
+  if (b.bookmark_type === 'shared') return t('common.scopeSharedWithMe');
+  const folder = b.folders?.[0]?.name;
+  if (folder) return folder.length > 28 ? `${folder.slice(0, 27)}…` : folder;
+  return t('dashboard.quickAccessCategory');
+}
 
 export default function Bookmarks() {
   const { t } = useTranslation();
@@ -79,6 +104,11 @@ export default function Bookmarks() {
   const effectiveScope = showScopeTabs ? scope : 'all';
   const pinnedFilter = searchParams.get('pinned') === 'true';
   const searchQuery = searchParams.get('q') || '';
+  const viewFromUrl = searchParams.get('view');
+  const listView: 'cards' | 'table' = useMemo(() => {
+    if (viewFromUrl === 'table' || viewFromUrl === 'cards') return viewFromUrl;
+    return getStoredBookmarksView();
+  }, [viewFromUrl]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingBookmark, setEditingBookmark] = useState<Bookmark | null>(null);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
@@ -173,6 +203,17 @@ export default function Bookmarks() {
     setSearchInputValue(searchQuery);
   }, [searchQuery]);
 
+  useEffect(() => {
+    const v = searchParams.get('view');
+    if (v === 'cards' || v === 'table') {
+      try {
+        localStorage.setItem(BOOKMARKS_VIEW_STORAGE_KEY, v);
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [searchParams]);
+
   async function loadData() {
     try {
       const [bookmarksSettled, foldersSettled, tagsSettled, teamsSettled] = await Promise.allSettled([
@@ -225,6 +266,15 @@ export default function Bookmarks() {
       else params.set(k, v);
     });
     setSearchParams(params);
+  }
+
+  function setListView(mode: 'cards' | 'table') {
+    try {
+      localStorage.setItem(BOOKMARKS_VIEW_STORAGE_KEY, mode);
+    } catch {
+      /* ignore */
+    }
+    updateParams({ view: mode });
   }
 
   function handleRemoveFilter(key: FilterKey) {
@@ -573,6 +623,13 @@ export default function Bookmarks() {
             ? { onClick: () => setBulkMode(true), label: t('bookmarks.bulkSelect') }
             : { onClick: () => setBulkMode(true), label: t('bookmarks.bulkSelect'), disabled: true }
         }
+        viewDisplay={{
+          value: listView,
+          onChange: setListView,
+          label: t('bookmarks.viewMode'),
+          cardsLabel: t('bookmarks.viewCard'),
+          tableLabel: t('bookmarks.viewList'),
+        }}
       />
 
       {/* Bulk Actions Bar - sticky bottom, visible when selecting */}
@@ -723,6 +780,48 @@ export default function Bookmarks() {
             )}
           </div>
         </Card>
+      ) : listView === 'cards' ? (
+        <div className="grid grid-cols-1 items-stretch gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {displayedBookmarks.map((bookmark) => {
+            const isOwn = bookmark.bookmark_type !== 'shared';
+            return (
+              <DashboardBookmarkTile
+                key={bookmark.id}
+                bookmark={{
+                  id: bookmark.id,
+                  title: bookmark.title,
+                  url: bookmark.url,
+                  slug: bookmark.slug,
+                }}
+                pathPrefix={prefix}
+                categoryLabel={bookmarkCategoryLabel(bookmark, t)}
+                t={t}
+                onOpen={() => handleOpenBookmark(bookmark)}
+                onCopy={() => handleCopyUrl(bookmark)}
+                bulkMode={bulkMode}
+                selected={selectedBookmarks.has(bookmark.id)}
+                onToggleSelect={() => toggleSelectBookmark(bookmark.id)}
+                showEditLink={isOwn}
+                listActions={
+                  isOwn
+                    ? {
+                        onShare: showSharingUi
+                          ? () => {
+                              setSharingBookmark(bookmark);
+                              setShareDialogOpen(true);
+                            }
+                          : undefined,
+                        onDelete: () => handleDelete(bookmark.id, bookmark.title),
+                        shareLabel: t('sharing.shareBookmark'),
+                        deleteLabel: t('common.delete'),
+                        moreAriaLabel: t('bookmarks.moreActions'),
+                      }
+                    : undefined
+                }
+              />
+            );
+          })}
+        </div>
       ) : (
         <BookmarkTableView
           bookmarks={displayedBookmarks}

@@ -8,7 +8,7 @@
  */
 
 import { useState } from 'react';
-import { Plus, CheckSquare, Download, Upload, Pin, Search, MoreHorizontal } from 'lucide-react';
+import { Plus, CheckSquare, Check, Download, Upload, Pin, Search, MoreHorizontal } from 'lucide-react';
 import { PageHeader } from '../PageHeader';
 import { ScopeSegmentedControl } from '../ScopeSegmentedControl';
 import { FilterChips, type FilterChipItem } from '../FilterChips';
@@ -25,7 +25,6 @@ import {
   DropdownMenuSubContent,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
-  DropdownMenuCheckboxItem,
 } from '../ui/dropdown-menu';
 
 export interface CollectionToolbarProps {
@@ -87,6 +86,14 @@ export interface CollectionToolbarProps {
   onExport?: () => void;
   exportLabel?: string;
   bulkSelect?: { onClick: () => void; label: string; disabled?: boolean };
+  /** Bookmarks: cards vs table layout (submenu with radio items) */
+  viewDisplay?: {
+    value: 'cards' | 'table';
+    onChange: (value: 'cards' | 'table') => void;
+    label: string;
+    cardsLabel: string;
+    tableLabel: string;
+  };
   /** "More" menu trigger label (i18n) */
   moreMenuLabel?: string;
   /** Optional wrapper className */
@@ -117,6 +124,7 @@ export function CollectionToolbar({
   onExport,
   exportLabel = 'Export',
   bulkSelect,
+  viewDisplay,
   moreMenuLabel = 'More',
   className,
   titleClassName = 'text-3xl font-black tracking-tighter text-foreground sm:text-4xl',
@@ -130,7 +138,8 @@ export function CollectionToolbar({
     pinnedToggle ||
     onImport ||
     onExport ||
-    (bulkSelect && !bulkSelect.disabled);
+    (bulkSelect && !bulkSelect.disabled) ||
+    viewDisplay;
 
   const hasToolbarRow = search || folderFilter || tagFilter || sort || hasSecondary;
 
@@ -242,6 +251,25 @@ export function CollectionToolbar({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-[12rem]">
+                {viewDisplay && (
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger>{viewDisplay.label}</DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent>
+                      <DropdownMenuRadioGroup
+                        value={viewDisplay.value}
+                        onValueChange={(v) => {
+                          if (v === 'cards' || v === 'table') {
+                            viewDisplay.onChange(v);
+                            setMoreOpen(false);
+                          }
+                        }}
+                      >
+                        <DropdownMenuRadioItem value="cards">{viewDisplay.cardsLabel}</DropdownMenuRadioItem>
+                        <DropdownMenuRadioItem value="table">{viewDisplay.tableLabel}</DropdownMenuRadioItem>
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                )}
                 {perPage && (
                   <DropdownMenuSub>
                     <DropdownMenuSubTrigger>{perPage.label ?? 'Per page'}</DropdownMenuSubTrigger>
@@ -263,16 +291,19 @@ export function CollectionToolbar({
                   </DropdownMenuSub>
                 )}
                 {pinnedToggle && (
-                  <DropdownMenuCheckboxItem
-                    checked={pinnedToggle.active}
-                    onCheckedChange={() => pinnedToggle.onClick()}
-                    onSelect={(e) => e.preventDefault()}
+                  <DropdownMenuItem
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      pinnedToggle.onClick();
+                    }}
                   >
-                    <Pin className="h-4 w-4" />
-                    {pinnedToggle.label}
-                  </DropdownMenuCheckboxItem>
+                    <Pin className="h-4 w-4 shrink-0" aria-hidden />
+                    <span className="flex-1">{pinnedToggle.label}</span>
+                    {pinnedToggle.active ? (
+                      <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+                    ) : null}
+                  </DropdownMenuItem>
                 )}
-                {(onImport || onExport) && <DropdownMenuSeparator />}
                 {onImport && (
                   <DropdownMenuItem
                     onClick={() => {

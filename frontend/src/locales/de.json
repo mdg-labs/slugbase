@@ -176,6 +176,8 @@
     "forwardingPreview": "Weiterleitungs-URL",
     "forwardingPreviewDescription": "Diese URL leitet zu deinem Lesezeichen weiter",
     "bulkSelect": "Mehrere auswählen",
+    "select": "Auswählen",
+    "deselect": "Abwählen",
     "moreActions": "Weitere Aktionen",
     "bulkActions": "Massenaktionen",
     "bulkMoveToFolder": "In Ordner verschieben",

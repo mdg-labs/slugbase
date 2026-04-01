@@ -165,6 +165,25 @@ function AppRoutes() {
       .catch(() => { setSetupStatus({ initialized: true }); setSetupLoading(false); });
   }, [skipSetupFlow]);
 
+  /** After POST /auth/setup, the server marks initialized but this state was only read once — refetch so we mount Routes instead of staying on Setup. */
+  React.useEffect(() => {
+    if (skipSetupFlow || setupLoading || !user) return;
+    if (setupStatus == null || setupStatus.initialized !== false) return;
+    let cancelled = false;
+    api
+      .get('/auth/setup/status')
+      .then((res) => res.data)
+      .then((data) => {
+        if (!cancelled) setSetupStatus(data);
+      })
+      .catch(() => {
+        if (!cancelled) setSetupStatus({ initialized: true });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, skipSetupFlow, setupLoading, setupStatus?.initialized]);
+
   if (setupLoading || (loading && setupStatus?.initialized)) {
     return <div className="min-h-screen flex items-center justify-center"><div className="text-lg">{t('common.loading')}</div></div>;
   }
