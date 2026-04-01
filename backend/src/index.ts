@@ -10,6 +10,7 @@ import { initDatabase, isInitialized } from './db/index.js';
 import { loadOIDCStrategies } from './auth/oidc.js';
 import { createApp } from './app-factory.js';
 import { registerCoreRoutes } from './register-routes.js';
+import openapiRoutes from './routes/openapi.js';
 import { DatabaseSessionStore } from './utils/session-store.js';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
 
@@ -28,6 +29,7 @@ async function start() {
 
     const sessionStore = new DatabaseSessionStore();
     const app = createApp({ sessionStore });
+    app.use(openapiRoutes);
     registerCoreRoutes(app, {});
 
     if (process.env.NODE_ENV === 'production') {
@@ -42,7 +44,13 @@ async function start() {
 
     app.get('*', (req, res, next) => {
       if (process.env.NODE_ENV !== 'production') return next();
-      if (req.path.startsWith('/api/') || req.path.startsWith('/go/')) {
+      if (
+        req.path.startsWith('/api/') ||
+        req.path.startsWith('/go/') ||
+        req.path === '/openapi.json' ||
+        req.path === '/openapi.yaml' ||
+        req.path.startsWith('/api-docs')
+      ) {
         return next();
       }
       res.sendFile(join(__dirname, '../../public/index.html'), (err) => {

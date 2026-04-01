@@ -80,4 +80,10 @@ copyInto('frontend/locales', 'frontend/locales');
 copyInto('frontend/publish', 'frontend/publish');
 copyInto('types/index.js');
 
+const backendOpenapi = join(root, 'backend', 'openapi');
+if (existsSync(backendOpenapi)) {
+  mkdirSync(join(outDir, 'openapi'), { recursive: true });
+  cpSync(backendOpenapi, join(outDir, 'openapi'), { recursive: true });
+}
+
 console.log(`Assembled @mdguggenbichler/slugbase-core in ${outDir} (version ${pkg.version})`);

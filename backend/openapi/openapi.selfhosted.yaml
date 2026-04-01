@@ -1,0 +1,872 @@
+openapi: 3.0.3
+info:
+  title: SlugBase API (self-hosted)
+  description: |
+    HTTP API for a self-hosted SlugBase instance. Replace the server URL with your deployment base URL.
+
+    **Authentication:** Most routes accept either a session cookie (browser) after login, or `Authorization: Bearer <api_token>` from `/api/tokens`.
+
+    **CSRF:** For cookie-based sessions, non-GET requests generally require `X-CSRF-Token` from `GET /api/csrf-token` first. Some auth and password-reset routes are exempt (see code: `app-factory.ts`).
+  version: 1.0.0
+servers:
+  - url: /
+    description: Instance root (e.g. https://bookmarks.example.com)
+tags:
+  - name: CSRFHealth
+  - name: Auth
+  - name: PasswordReset
+  - name: EmailVerification
+  - name: Bookmarks
+  - name: Folders
+  - name: Tags
+  - name: Users
+  - name: Teams
+  - name: Tokens
+  - name: Config
+  - name: OIDCProviders
+  - name: AdminUsers
+  - name: AdminTeams
+  - name: AdminSettings
+  - name: AdminStats
+  - name: Dashboard
+  - name: GoPreferences
+paths:
+  /api/csrf-token:
+    get:
+      tags: [CSRFHealth]
+      summary: Get CSRF token
+      security: []
+      responses:
+        '200':
+          description: Token for X-CSRF-Token header
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  csrfToken:
+                    type: string
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/health:
+    get:
+      tags: [CSRFHealth]
+      summary: Health check
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+  /api/version:
+    get:
+      tags: [CSRFHealth]
+      summary: App version and mode
+      security: []
+      responses:
+        '200':
+          description: Version metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version: { type: string }
+                  commit: { type: string, nullable: true }
+                  mode: { type: string }
+  /api/auth/providers:
+    get:
+      tags: [Auth]
+      summary: List OIDC provider metadata
+      security: []
+      responses:
+        '200':
+          description: Providers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+  /api/auth/me:
+    get:
+      tags: [Auth]
+      summary: Current session user
+      responses:
+        '200':
+          description: User
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Email/password login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        '200':
+          description: Success
+        '401':
+          $ref: '#/components/responses/Error'
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Log out
+      responses:
+        '200':
+          description: Logged out
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      summary: Register (may be disabled on self-hosted)
+      description: Often returns 404 when registration is disabled; first user uses Setup instead.
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Created
+        '404':
+          description: Registration disabled
+  /api/auth/verify-signup:
+    post:
+      tags: [Auth]
+      summary: Verify signup token
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: OK
+  /api/auth/signup-verification/status:
+    get:
+      tags: [Auth]
+      summary: Signup verification status
+      security: []
+      parameters:
+        - in: query
+          name: email
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Status
+  /api/auth/resend-signup-verification:
+    post:
+      tags: [Auth]
+      summary: Resend signup verification
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: OK
+  /api/auth/request-signup-resend:
+    post:
+      tags: [Auth]
+      summary: Request signup resend (rate-limited)
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: OK
+  /api/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh JWT/session
+      security: []
+      responses:
+        '200':
+          description: OK
+  /api/auth/{provider}:
+    get:
+      tags: [Auth]
+      summary: Start OIDC login
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ProviderKey'
+      responses:
+        '302':
+          description: Redirect to IdP
+  /api/auth/{provider}/callback:
+    get:
+      tags: [Auth]
+      summary: OIDC callback
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/ProviderKey'
+      responses:
+        '302':
+          description: Redirect to app
+  /api/auth/setup:
+    post:
+      tags: [Auth]
+      summary: First-run setup (create admin)
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: OK
+        '400':
+          $ref: '#/components/responses/Error'
+  /api/auth/setup/status:
+    get:
+      tags: [Auth]
+      summary: Whether initial setup is complete
+      security: []
+      responses:
+        '200':
+          description: Status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  initialized:
+                    type: boolean
+  /api/password-reset/request:
+    post:
+      tags: [PasswordReset]
+      summary: Request password reset email
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+      responses:
+        '200':
+          description: OK
+  /api/password-reset/verify:
+    get:
+      tags: [PasswordReset]
+      summary: Validate reset token (query params)
+      security: []
+      responses:
+        '200':
+          description: OK
+  /api/password-reset/reset:
+    post:
+      tags: [PasswordReset]
+      summary: Complete password reset
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: OK
+  /api/email-verification/verify:
+    get:
+      tags: [EmailVerification]
+      summary: Email verification landing (query token)
+      security: []
+      responses:
+        '200':
+          description: OK
+  /api/email-verification/confirm:
+    post:
+      tags: [EmailVerification]
+      summary: Confirm email verification
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: OK
+  /api/bookmarks:
+    get:
+      tags: [Bookmarks]
+      summary: List bookmarks
+      responses:
+        '200':
+          description: Bookmarks
+    post:
+      tags: [Bookmarks]
+      summary: Create bookmark
+      responses:
+        '201':
+          description: Created
+  /api/bookmarks/search:
+    get:
+      tags: [Bookmarks]
+      summary: Search bookmarks
+      parameters:
+        - in: query
+          name: q
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Results
+  /api/bookmarks/export:
+    get:
+      tags: [Bookmarks]
+      summary: Export bookmarks
+      responses:
+        '200':
+          description: Export payload
+  /api/bookmarks/ids:
+    get:
+      tags: [Bookmarks]
+      summary: List bookmark IDs
+      responses:
+        '200':
+          description: IDs
+  /api/bookmarks/ai-suggest:
+    post:
+      tags: [Bookmarks]
+      summary: AI metadata suggestions
+      responses:
+        '200':
+          description: Suggestions
+  /api/bookmarks/import:
+    post:
+      tags: [Bookmarks]
+      summary: Import bookmarks
+      responses:
+        '200':
+          description: Import result
+  /api/bookmarks/{id}:
+    get:
+      tags: [Bookmarks]
+      summary: Get bookmark
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Bookmark
+        '404':
+          $ref: '#/components/responses/Error'
+    put:
+      tags: [Bookmarks]
+      summary: Update bookmark
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Updated
+    delete:
+      tags: [Bookmarks]
+      summary: Delete bookmark
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Deleted
+  /api/bookmarks/{id}/track-access:
+    post:
+      tags: [Bookmarks]
+      summary: Track bookmark access
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: OK
+  /api/folders:
+    get:
+      tags: [Folders]
+      summary: List folders
+      responses:
+        '200':
+          description: Folders
+    post:
+      tags: [Folders]
+      summary: Create folder
+      responses:
+        '201':
+          description: Created
+  /api/folders/{id}:
+    get:
+      tags: [Folders]
+      summary: Get folder
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Folder
+    put:
+      tags: [Folders]
+      summary: Update folder
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Updated
+    delete:
+      tags: [Folders]
+      summary: Delete folder
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Deleted
+  /api/tags:
+    get:
+      tags: [Tags]
+      summary: List tags
+      responses:
+        '200':
+          description: Tags
+    post:
+      tags: [Tags]
+      summary: Create tag
+      responses:
+        '201':
+          description: Created
+  /api/tags/{id}:
+    get:
+      tags: [Tags]
+      summary: Get tag
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Tag
+    put:
+      tags: [Tags]
+      summary: Update tag
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Updated
+    delete:
+      tags: [Tags]
+      summary: Delete tag
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Deleted
+  /api/users/for-sharing:
+    get:
+      tags: [Users]
+      summary: Users available for sharing
+      responses:
+        '200':
+          description: Users
+  /api/users/me:
+    get:
+      tags: [Users]
+      summary: Current user profile
+      responses:
+        '200':
+          description: User
+    put:
+      tags: [Users]
+      summary: Update profile
+      responses:
+        '200':
+          description: Updated
+    delete:
+      tags: [Users]
+      summary: Delete own account
+      responses:
+        '200':
+          description: Deleted
+  /api/teams:
+    get:
+      tags: [Teams]
+      summary: List teams for current user
+      responses:
+        '200':
+          description: Teams
+  /api/tokens:
+    get:
+      tags: [Tokens]
+      summary: List API tokens
+      responses:
+        '200':
+          description: Tokens (secrets not listed)
+    post:
+      tags: [Tokens]
+      summary: Create API token
+      responses:
+        '201':
+          description: Token created (secret returned once)
+        '429':
+          description: Rate limited
+  /api/tokens/{id}:
+    delete:
+      tags: [Tokens]
+      summary: Revoke token
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Revoked
+  /api/config/plan:
+    get:
+      tags: [Config]
+      summary: Plan / limits for current context
+      responses:
+        '200':
+          description: Plan info
+  /api/config/ai-suggestions:
+    get:
+      tags: [Config]
+      summary: AI suggestions availability
+      responses:
+        '200':
+          description: Feature flags
+  /api/oidc-providers:
+    get:
+      tags: [OIDCProviders]
+      summary: List OIDC providers (admin)
+      responses:
+        '200':
+          description: Providers
+    post:
+      tags: [OIDCProviders]
+      summary: Create OIDC provider (admin)
+      responses:
+        '201':
+          description: Created
+  /api/oidc-providers/{id}:
+    get:
+      tags: [OIDCProviders]
+      summary: Get OIDC provider
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Provider
+    put:
+      tags: [OIDCProviders]
+      summary: Update OIDC provider
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Updated
+    delete:
+      tags: [OIDCProviders]
+      summary: Delete OIDC provider
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Deleted
+  /api/admin/users:
+    get:
+      tags: [AdminUsers]
+      summary: List users
+      responses:
+        '200':
+          description: Users
+    post:
+      tags: [AdminUsers]
+      summary: Create user
+      responses:
+        '201':
+          description: Created
+  /api/admin/users/{id}:
+    get:
+      tags: [AdminUsers]
+      summary: Get user
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: User
+    put:
+      tags: [AdminUsers]
+      summary: Update user
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Updated
+    delete:
+      tags: [AdminUsers]
+      summary: Delete user
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Deleted
+  /api/admin/users/{id}/teams:
+    get:
+      tags: [AdminUsers]
+      summary: Teams for user
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Teams
+  /api/admin/teams:
+    get:
+      tags: [AdminTeams]
+      summary: List teams
+      responses:
+        '200':
+          description: Teams
+    post:
+      tags: [AdminTeams]
+      summary: Create team
+      responses:
+        '201':
+          description: Created
+  /api/admin/teams/{id}:
+    get:
+      tags: [AdminTeams]
+      summary: Get team
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Team
+    put:
+      tags: [AdminTeams]
+      summary: Update team
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Updated
+    delete:
+      tags: [AdminTeams]
+      summary: Delete team
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Deleted
+  /api/admin/teams/{id}/members:
+    post:
+      tags: [AdminTeams]
+      summary: Add team member
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: OK
+  /api/admin/teams/{id}/members/{userId}:
+    delete:
+      tags: [AdminTeams]
+      summary: Remove team member
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+  /api/admin/settings:
+    get:
+      tags: [AdminSettings]
+      summary: List settings keys/metadata
+      responses:
+        '200':
+          description: Settings
+    post:
+      tags: [AdminSettings]
+      summary: Set setting
+      responses:
+        '200':
+          description: OK
+  /api/admin/settings/ai:
+    get:
+      tags: [AdminSettings]
+      summary: AI settings
+      responses:
+        '200':
+          description: AI config
+    post:
+      tags: [AdminSettings]
+      summary: Update AI settings
+      responses:
+        '200':
+          description: OK
+  /api/admin/settings/smtp:
+    get:
+      tags: [AdminSettings]
+      summary: SMTP settings (sanitized)
+      responses:
+        '200':
+          description: SMTP config
+    post:
+      tags: [AdminSettings]
+      summary: Update SMTP
+      responses:
+        '200':
+          description: OK
+  /api/admin/settings/smtp/test:
+    post:
+      tags: [AdminSettings]
+      summary: Test SMTP
+      responses:
+        '200':
+          description: Test result
+  /api/admin/settings/ai/models:
+    get:
+      tags: [AdminSettings]
+      summary: List AI models
+      responses:
+        '200':
+          description: Models
+  /api/admin/settings/{key}:
+    get:
+      tags: [AdminSettings]
+      summary: Get setting by key
+      parameters:
+        - in: path
+          name: key
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Value
+    delete:
+      tags: [AdminSettings]
+      summary: Delete setting
+      parameters:
+        - in: path
+          name: key
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Deleted
+  /api/admin/stats:
+    get:
+      tags: [AdminStats]
+      summary: System metrics
+      description: Requires `X-Stats-Secret` matching `STATS_ENDPOINT_SECRET`. Returns 404 if unset or invalid.
+      security: []
+      parameters:
+        - in: header
+          name: X-Stats-Secret
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Stats
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/dashboard/stats:
+    get:
+      tags: [Dashboard]
+      summary: Dashboard statistics
+      responses:
+        '200':
+          description: Stats
+  /api/go/preferences:
+    get:
+      tags: [GoPreferences]
+      summary: List go-link preferences
+      responses:
+        '200':
+          description: Preferences
+    post:
+      tags: [GoPreferences]
+      summary: Set preference
+      responses:
+        '200':
+          description: OK
+  /api/go/preferences/{slug}:
+    delete:
+      tags: [GoPreferences]
+      summary: Remove preference for slug
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: slugbase.sid
+      description: Session cookie after login
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: API token
+  parameters:
+    IdPath:
+      in: path
+      name: id
+      required: true
+      schema:
+        type: string
+    ProviderKey:
+      in: path
+      name: provider
+      required: true
+      schema:
+        type: string
+      description: OIDC provider key
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+    Unauthorized:
+      description: Not authenticated
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+security:
+  - cookieAuth: []
+  - bearerAuth: []

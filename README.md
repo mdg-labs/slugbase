@@ -108,7 +108,7 @@ docker-compose up -d
 
 2. **Access the application**
 - Application: `http://localhost:5000`
-- API Docs: `http://localhost:5000/api-docs`
+- OpenAPI: `http://localhost:5000/openapi.json` or `/openapi.yaml`; Swagger UI: `http://localhost:5000/api-docs` (set `SLUGBASE_API_DOCS=false` to disable the UI only)
 
 3. **Complete setup**
 - Go through initial setup flow
@@ -271,10 +271,11 @@ In-repo docs: [docs/README.md](docs/README.md) (infra, package boundaries, relea
 
 ## API Documentation
 
-Interactive API documentation is available at `/api-docs` when the server is running. The API uses:
-- **JWT** tokens for authentication (except login/setup endpoints)
+Machine-readable OpenAPI 3 is served at **`/openapi.json`** and **`/openapi.yaml`** (self-hosted spec). Interactive docs (Swagger UI) are at **`/api-docs`** unless disabled with **`SLUGBASE_API_DOCS=false`**. The API uses:
+
+- **JWT** tokens and session cookies for authentication (plus **API tokens** via `Authorization: Bearer`)
 - **RESTful** design principles
-- **OpenAPI/Swagger** specification
+- Source spec: `backend/openapi/openapi.selfhosted.yaml`
 
 ## Usage Examples
 
