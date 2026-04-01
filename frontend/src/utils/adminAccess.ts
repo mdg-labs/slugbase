@@ -1,10 +1,11 @@
 import type { User } from '../contexts/AuthContext';
 
-const isCloudBuild = import.meta.env.VITE_SLUGBASE_MODE === 'cloud';
-
-/** Self-hosted: instance admin only. Cloud: instance admin or org owner/admin for current session org. */
+/**
+ * Instance admin (`is_admin`) or cloud workspace admin (`workspace_admin` from GET /auth/me).
+ * Self-hosted never sends `workspace_admin`; cloud does when the user is owner/admin of the session org.
+ * We do not require VITE_SLUGBASE_MODE here so a misconfigured cloud build still respects the API.
+ */
 export function canAccessWorkspaceAdmin(user: User | null | undefined): boolean {
   if (!user) return false;
-  if (user.is_admin) return true;
-  return isCloudBuild && !!user.workspace_admin;
+  return !!user.is_admin || !!user.workspace_admin;
 }
