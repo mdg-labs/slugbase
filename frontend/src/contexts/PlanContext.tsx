@@ -66,6 +66,12 @@ export function showBookmarkFolderScopeTabs(planInfo: PlanInfo | null, planLoadS
   return isCloudTeamPlanReady(planInfo, planLoadState);
 }
 
+/** Per-row share, bulk share, folder share control: self-hosted always; cloud Team plan only (matches canShareWithTeams). */
+export function showTeamSharingUi(planInfo: PlanInfo | null, planLoadState: PlanLoadState): boolean {
+  if (!isCloudMode) return true;
+  return planLoadState === 'ready' && planInfo?.canShareWithTeams === true;
+}
+
 /** Create org users / invites from admin UI: self-hosted always; cloud Team plan only. */
 export function canInviteOrgUsers(planInfo: PlanInfo | null, planLoadState: PlanLoadState): boolean {
   if (!isCloudMode) return true;

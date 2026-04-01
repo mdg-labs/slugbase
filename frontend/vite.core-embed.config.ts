@@ -14,6 +14,8 @@ export default defineConfig({
   define: {
     // No Sentry init in embed unless consumer sets env at their build time
     'import.meta.env.VITE_SENTRY_DSN': JSON.stringify(undefined),
+    /** Tarball primary consumer is slugbase-cloud; PlanContext gates require this. Override when packing for rare self-hosted embed tests. */
+    'import.meta.env.VITE_SLUGBASE_MODE': JSON.stringify(process.env.VITE_SLUGBASE_MODE || 'cloud'),
   },
   build: {
     lib: {

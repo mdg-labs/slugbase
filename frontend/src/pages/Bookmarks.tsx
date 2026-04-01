@@ -19,7 +19,7 @@ import { PageLoadingSkeleton } from '../components/ui/PageLoadingSkeleton';
 import { Card } from '../components/ui/card';
 import { useSidebar } from '../components/ui/sidebar';
 import { useAppConfig } from '../contexts/AppConfigContext';
-import { usePlan, usePlanLoadState, showBookmarkFolderScopeTabs } from '../contexts/PlanContext';
+import { usePlan, usePlanLoadState, showBookmarkFolderScopeTabs, showTeamSharingUi } from '../contexts/PlanContext';
 
 interface Bookmark {
   id: string;
@@ -75,6 +75,7 @@ export default function Bookmarks() {
   const planInfo = usePlan();
   const planLoadState = usePlanLoadState();
   const showScopeTabs = showBookmarkFolderScopeTabs(planInfo, planLoadState);
+  const showSharingUi = showTeamSharingUi(planInfo, planLoadState);
   const effectiveScope = showScopeTabs ? scope : 'all';
   const pinnedFilter = searchParams.get('pinned') === 'true';
   const searchQuery = searchParams.get('q') || '';
@@ -647,16 +648,18 @@ export default function Bookmarks() {
             >
               {t('bookmarks.bulkAddTags')}
             </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={Share2}
-              onClick={() => setBulkShareModalOpen(true)}
-              disabled={selectedBookmarks.size === 0}
-              className="border-ghost bg-surface"
-            >
-              {t('bookmarks.bulkShare')}
-            </Button>
+            {showSharingUi ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={Share2}
+                onClick={() => setBulkShareModalOpen(true)}
+                disabled={selectedBookmarks.size === 0}
+                className="border-ghost bg-surface"
+              >
+                {t('bookmarks.bulkShare')}
+              </Button>
+            ) : null}
             <Button
               variant="danger"
               size="sm"
@@ -729,10 +732,14 @@ export default function Bookmarks() {
           onEdit={handleEdit}
           onDelete={handleDelete}
           onCopyUrl={handleCopyUrl}
-          onShare={(bookmark) => {
-            setSharingBookmark(bookmark);
-            setShareDialogOpen(true);
-          }}
+          onShare={
+            showSharingUi
+              ? (bookmark) => {
+                  setSharingBookmark(bookmark);
+                  setShareDialogOpen(true);
+                }
+              : undefined
+          }
           onOpen={handleOpenBookmark}
           bulkMode={bulkMode}
           user={user}
@@ -814,7 +821,7 @@ export default function Bookmarks() {
         }}
       />
 
-      {sharingBookmark && (
+      {sharingBookmark && showSharingUi ? (
         <ShareResourceDialog
           resourceType="bookmark"
           resourceId={sharingBookmark.id}
@@ -823,7 +830,7 @@ export default function Bookmarks() {
           onClose={() => { setShareDialogOpen(false); setSharingBookmark(null); }}
           onSuccess={loadData}
         />
-      )}
+      ) : null}
 
       <ImportModal
         isOpen={importModalOpen}
@@ -857,7 +864,7 @@ export default function Bookmarks() {
       )}
 
       {/* Bulk Share Modal */}
-      {bulkShareModalOpen && (
+      {bulkShareModalOpen && showSharingUi ? (
         <BulkShareModal
           isOpen={bulkShareModalOpen}
           onClose={() => setBulkShareModalOpen(false)}
@@ -865,7 +872,7 @@ export default function Bookmarks() {
           teams={teams}
           t={t}
         />
-      )}
+      ) : null}
 
       <ConfirmDialog {...dialogState} />
     </div>

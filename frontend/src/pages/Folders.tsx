@@ -14,7 +14,7 @@ import { CollectionToolbar } from '../components/collections';
 import { EmptyState } from '../components/EmptyState';
 import { PageLoadingSkeleton } from '../components/ui/PageLoadingSkeleton';
 import { useAppConfig } from '../contexts/AppConfigContext';
-import { usePlan, usePlanLoadState, showBookmarkFolderScopeTabs } from '../contexts/PlanContext';
+import { usePlan, usePlanLoadState, showBookmarkFolderScopeTabs, showTeamSharingUi } from '../contexts/PlanContext';
 import { Card } from '../components/ui/card';
 import {
   Table,
@@ -74,6 +74,7 @@ export default function Folders() {
   const planInfo = usePlan();
   const planLoadState = usePlanLoadState();
   const showScopeTabs = showBookmarkFolderScopeTabs(planInfo, planLoadState);
+  const showSharingUi = showTeamSharingUi(planInfo, planLoadState);
   const effectiveScope = showScopeTabs ? scope : 'all';
   const sortParam = searchParams.get('sort');
   const sortBy = (sortParam === 'recently_added' || sortParam === 'alphabetical') ? sortParam : DEFAULT_SORT;
@@ -351,15 +352,17 @@ export default function Folders() {
                     <TableCell className={`${cellClass} text-right`}>
                       {folder.folder_type === 'own' ? (
                         <div className="flex items-center justify-end gap-0.5">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            icon={Share2}
-                            iconClassName="h-3.5 w-3.5 stroke-[1.5]"
-                            onClick={() => { setSharingFolder(folder); setShareDialogOpen(true); }}
-                            className="h-8 w-8 p-0 min-w-8 text-muted-foreground hover:text-foreground"
-                            title={t('sharing.shareFolder')}
-                          />
+                          {showSharingUi ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              icon={Share2}
+                              iconClassName="h-3.5 w-3.5 stroke-[1.5]"
+                              onClick={() => { setSharingFolder(folder); setShareDialogOpen(true); }}
+                              className="h-8 w-8 p-0 min-w-8 text-muted-foreground hover:text-foreground"
+                              title={t('sharing.shareFolder')}
+                            />
+                          ) : null}
                           <Button
                             variant="ghost"
                             size="sm"
@@ -436,7 +439,7 @@ export default function Folders() {
         onSuccess={loadData}
       />
 
-      {sharingFolder && (
+      {sharingFolder && showSharingUi ? (
         <ShareResourceDialog
           resourceType="folder"
           resourceId={sharingFolder.id}
@@ -445,7 +448,7 @@ export default function Folders() {
           onClose={() => { setShareDialogOpen(false); setSharingFolder(null); }}
           onSuccess={loadData}
         />
-      )}
+      ) : null}
 
       <ConfirmDialog {...dialogState} />
     </div>
