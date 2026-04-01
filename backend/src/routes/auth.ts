@@ -199,6 +199,11 @@ router.post('/login', authRateLimiter, async (req, res, next) => {
     const token = generateToken(userPayload);
     setAuthCookies(res, { accessToken: token });
 
+    if (isCloud && req.session) {
+      delete req.session.organizationId;
+      delete req.session.tenantId;
+    }
+
     const payload: Record<string, unknown> = {
       id: (user as any).id,
       email: (user as any).email,

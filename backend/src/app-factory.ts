@@ -16,6 +16,7 @@ import {
   redirectRateLimiter,
 } from './middleware/security.js';
 import { tenantMiddleware } from './middleware/tenant.js';
+import { optionalAttachUser } from './middleware/auth.js';
 import { csrfProtection } from './middleware/security.js';
 import { DatabaseSessionStore } from './utils/session-store.js';
 import csrfRoutes from './routes/csrf.js';
@@ -96,12 +97,17 @@ export function createApp(options: CreateAppOptions): express.Express {
   );
 
   app.use(generalRateLimiter);
-  app.use(customTenantMiddleware ?? tenantMiddleware);
 
   setupOIDC();
   setupJWT();
   app.use(passport.initialize());
   app.use(passport.session());
+  if (customTenantMiddleware) {
+    app.use(optionalAttachUser());
+    app.use(customTenantMiddleware);
+  } else {
+    app.use(tenantMiddleware);
+  }
 
   app.use('/api/csrf-token', csrfRoutes);
 

@@ -50,6 +50,35 @@ export function requireAuth(): RequestHandler {
 }
 
 /**
+ * Attach req.user when JWT or API token is valid; otherwise continue without user.
+ * Used before cloud tenant middleware so session.organizationId can be reconciled with the authenticated user.
+ */
+export function optionalAttachUser(): RequestHandler {
+  return (req: Request, res: Response, next: NextFunction) => {
+    passport.authenticate('jwt', { session: false }, async (err: any, user: any) => {
+      if (err) {
+        return next(err);
+      }
+      if (user) {
+        (req as AuthRequest).user = user;
+        return next();
+      }
+      const authHeader = req.headers.authorization;
+      if (authHeader?.startsWith('Bearer ')) {
+        const token = authHeader.substring(7);
+        if (token.startsWith('sb_')) {
+          const apiUser = await validateToken(token);
+          if (apiUser) {
+            (req as AuthRequest).user = apiUser;
+          }
+        }
+      }
+      next();
+    })(req, res, next);
+  };
+}
+
+/**
  * Middleware to authenticate and require global admin.
  * Supports JWT and API token same as requireAuth.
  */
