@@ -81,6 +81,13 @@ function hashToken(token: string): string {
 
 router.post('/', async (req, res) => {
   try {
+    const tenantIdForPlan = getTenantId(req);
+    if (isCloud && tenantIdForPlan !== DEFAULT_TENANT_ID && (req as any).plan !== 'team') {
+      return res.status(403).json({
+        error: 'Adding organization members is available on the Team plan. Upgrade to invite more members.',
+      });
+    }
+
     const { email, name, password, is_admin: bodyIsAdmin = false, send_invite: sendInvite = false } = req.body;
     const is_admin = isCloud && !isInstanceGlobalAdmin(req) ? false : bodyIsAdmin;
 

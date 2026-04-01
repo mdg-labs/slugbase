@@ -3,7 +3,15 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { useTranslation } from 'react-i18next';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AppConfigProvider, useAppConfig } from './contexts/AppConfigContext';
-import { PlanProvider, usePlan, showAdminAiNav } from './contexts/PlanContext';
+import {
+  PlanProvider,
+  usePlan,
+  usePlanLoadState,
+  showAdminAiNav,
+  showAdminTeamsNav,
+  getFirstAdminRedirectPath,
+  isCloudMode,
+} from './contexts/PlanContext';
 import { ToastProvider } from './components/ui/Toast';
 import { TooltipProvider } from './components/ui/tooltip-base';
 import Layout from './components/Layout';
@@ -51,31 +59,61 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-/** Redirect /admin to first visible admin tab (e.g. in cloud free plan, Users/Teams and AI may be hidden so redirect to ai, billing, or members). */
+/** Redirect /admin to first visible admin tab. */
 function AdminIndexRedirect() {
   const planInfo = usePlan();
-  const { extraAdminNavItems } = useAppConfig();
-  const showUsersAndTeams = !planInfo || planInfo.canShareWithTeams;
-  const showAi = showAdminAiNav(planInfo);
-  const firstPath = showUsersAndTeams
-    ? 'members'
-    : showAi
-      ? 'ai'
-      : (extraAdminNavItems?.[0]?.path ?? 'ai');
+  const planLoadState = usePlanLoadState();
+  const { extraAdminNavItems, hideAdminOidcAndSmtp } = useAppConfig();
+  const firstPath = getFirstAdminRedirectPath(planInfo, planLoadState, {
+    hideAdminOidcAndSmtp: !!hideAdminOidcAndSmtp,
+    extraAdminNavItems,
+  });
   return <Navigate to={firstPath} replace />;
 }
 
 /** In cloud, /admin/ai is only available on personal/team/supporter; otherwise redirect to first admin tab. */
 function AdminAIGate() {
   const planInfo = usePlan();
-  const { extraAdminNavItems } = useAppConfig();
+  const planLoadState = usePlanLoadState();
+  const { extraAdminNavItems, hideAdminOidcAndSmtp } = useAppConfig();
   const showAi = showAdminAiNav(planInfo);
   if (!showAi) {
-    const showUsersAndTeams = !planInfo || planInfo.canShareWithTeams;
-    const firstPath = showUsersAndTeams ? 'members' : (extraAdminNavItems?.[0]?.path ?? 'ai');
+    const firstPath = getFirstAdminRedirectPath(planInfo, planLoadState, {
+      hideAdminOidcAndSmtp: !!hideAdminOidcAndSmtp,
+      extraAdminNavItems,
+    });
     return <Navigate to={firstPath} replace />;
   }
   return <AdminAIPage />;
+}
+
+/** In cloud, /admin/teams is only available on Team plan; otherwise redirect. */
+function AdminTeamsGate() {
+  const planInfo = usePlan();
+  const planLoadState = usePlanLoadState();
+  const { extraAdminNavItems, hideAdminOidcAndSmtp } = useAppConfig();
+  if (isCloudMode && !showAdminTeamsNav(planInfo, planLoadState)) {
+    const firstPath = getFirstAdminRedirectPath(planInfo, planLoadState, {
+      hideAdminOidcAndSmtp: !!hideAdminOidcAndSmtp,
+      extraAdminNavItems,
+    });
+    return <Navigate to={firstPath} replace />;
+  }
+  return <AdminTeamsPage />;
+}
+
+/** Cloud: wait for plan before showing members (avoids empty flash when TopBar links to /admin/members). */
+function AdminMembersGate() {
+  const planLoadState = usePlanLoadState();
+  const { t } = useTranslation();
+  if (isCloudMode && planLoadState === 'loading') {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <div className="text-lg text-muted-foreground">{t('common.loading')}</div>
+      </div>
+    );
+  }
+  return <AdminMembersPage />;
 }
 
 /** Diagnostic: catches errors in login subtree and rethrows with a prefix so cloud boundary shows where the throw came from. */
@@ -144,8 +182,8 @@ function AppRoutes() {
           <Route path="search-engine-guide" element={<SearchEngineGuide />} />
           <Route path="admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
             <Route index element={<AdminIndexRedirect />} />
-            <Route path="members" element={<AdminMembersPage />} />
-            <Route path="teams" element={<AdminTeamsPage />} />
+            <Route path="members" element={<AdminMembersGate />} />
+            <Route path="teams" element={<AdminTeamsGate />} />
             {hideAdminOidcAndSmtp ? (
               <>
                 <Route path="oidc" element={<Navigate to="members" replace />} />

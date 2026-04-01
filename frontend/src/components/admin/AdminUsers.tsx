@@ -31,6 +31,13 @@ import {
   adminTableHeadClass,
   adminTableHeaderRowClass,
 } from './adminTableTokens';
+import {
+  usePlan,
+  usePlanLoadState,
+  canInviteOrgUsers,
+  showAdminTeamsNav,
+  isCloudMode,
+} from '../../contexts/PlanContext';
 
 interface User {
   id: string;
@@ -43,6 +50,10 @@ interface User {
 
 export default function AdminUsers() {
   const { t } = useTranslation();
+  const planInfo = usePlan();
+  const planLoadState = usePlanLoadState();
+  const canAddUsers = canInviteOrgUsers(planInfo, planLoadState);
+  const showTeamAssignment = showAdminTeamsNav(planInfo, planLoadState);
   const { showConfirm, dialogState } = useConfirmDialog();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -128,13 +139,17 @@ export default function AdminUsers() {
         title={t('admin.users')}
         subtitle={countSubtitle}
         actions={
-          <Button
-            onClick={() => setModalOpen(true)}
-            icon={Plus}
-            className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
-          >
-            {t('admin.addUser')}
-          </Button>
+          canAddUsers ? (
+            <Button
+              onClick={() => setModalOpen(true)}
+              icon={Plus}
+              className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
+            >
+              {t('admin.addUser')}
+            </Button>
+          ) : isCloudMode && planLoadState === 'ready' && !canAddUsers ? (
+            <p className="max-w-md text-sm text-muted-foreground">{t('admin.billingUpgradeToInvite')}</p>
+          ) : null
         }
       />
 
@@ -193,10 +208,12 @@ export default function AdminUsers() {
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => handleManageTeams(user)}>
-                        <Network className="mr-2 h-4 w-4" />
-                        {t('admin.manageTeams')}
-                      </DropdownMenuItem>
+                      {showTeamAssignment && (
+                        <DropdownMenuItem onClick={() => handleManageTeams(user)}>
+                          <Network className="mr-2 h-4 w-4" />
+                          {t('admin.manageTeams')}
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem onClick={() => handleEdit(user)}>
                         <Edit className="mr-2 h-4 w-4" />
                         {t('common.edit')}

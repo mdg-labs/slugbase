@@ -33,7 +33,13 @@ import {
 } from './ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip-base';
 import { useAppConfig } from '../contexts/AppConfigContext';
-import { usePlan, showAdminAiNav } from '../contexts/PlanContext';
+import {
+  usePlan,
+  usePlanLoadState,
+  showAdminAiNav,
+  showAdminMembersNav,
+  showAdminTeamsNav,
+} from '../contexts/PlanContext';
 import type { User } from '../contexts/AuthContext';
 import { cn } from '../lib/utils';
 import { canAccessWorkspaceAdmin } from '../utils/adminAccess';
@@ -51,21 +57,23 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
   const pathname = location.pathname;
   const { appBasePath, pathPrefixForLinks, hideAdminOidcAndSmtp, extraAdminNavItems } = useAppConfig();
   const planInfo = usePlan();
+  const planLoadState = usePlanLoadState();
   const { setOpenMobile, toggleSidebar, isMobile, state } = useSidebar();
   const prefix = pathPrefixForLinks || '';
   const pathBaseForActive = pathPrefixForLinks ?? appBasePath ?? '';
   const adminBaseFull = `${pathBaseForActive}/admin`.replace(/\/+/g, '/') || '/admin';
   const adminBaseLink = `${prefix}/admin`.replace(/\/+/g, '/') || '/admin';
 
-  const showAdminUsersAndTeams = !planInfo || planInfo.canShareWithTeams;
+  const showMembers = showAdminMembersNav(planInfo, planLoadState);
+  const showTeams = showAdminTeamsNav(planInfo, planLoadState);
   const showAdminAi = showAdminAiNav(planInfo);
 
   const adminNavItems = [
-    ...(showAdminUsersAndTeams
-      ? [
-          { pathForLink: `${adminBaseLink}/members`, pathForActive: `${adminBaseFull}/members`, label: t('admin.users'), icon: Users },
-          { pathForLink: `${adminBaseLink}/teams`, pathForActive: `${adminBaseFull}/teams`, label: t('admin.teams'), icon: UserCog },
-        ]
+    ...(showMembers
+      ? [{ pathForLink: `${adminBaseLink}/members`, pathForActive: `${adminBaseFull}/members`, label: t('admin.users'), icon: Users }]
+      : []),
+    ...(showTeams
+      ? [{ pathForLink: `${adminBaseLink}/teams`, pathForActive: `${adminBaseFull}/teams`, label: t('admin.teams'), icon: UserCog }]
       : []),
     ...(!hideAdminOidcAndSmtp
       ? [

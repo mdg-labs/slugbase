@@ -1,12 +1,21 @@
-import { Router } from 'express';
+import { Router, type Request, type Response, type NextFunction } from 'express';
 import { query, queryOne, execute } from '../../db/index.js';
 import { AuthRequest, requireAuth, requireAdmin } from '../../middleware/auth.js';
 import { v4 as uuidv4 } from 'uuid';
 import { getTenantId } from '../../utils/tenant.js';
+import { isCloud } from '../../config/mode.js';
 
 const router = Router();
 router.use(requireAuth());
 router.use(requireAdmin());
+
+function requireTeamPlanCloud(req: Request, res: Response, next: NextFunction) {
+  if (isCloud && (req as any).plan !== 'team') {
+    return res.status(403).json({ error: 'Teams are available on the Team plan.' });
+  }
+  next();
+}
+router.use(requireTeamPlanCloud);
 
 router.get('/', async (req, res) => {
   const authReq = req as AuthRequest;

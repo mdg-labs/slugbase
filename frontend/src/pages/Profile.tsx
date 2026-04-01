@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppConfig } from '../contexts/AppConfigContext';
-import { usePlan, isCloudMode } from '../contexts/PlanContext';
+import { usePlan, usePlanLoadState, isCloudMode } from '../contexts/PlanContext';
 import { AlertCircle, Key, AlertTriangle } from 'lucide-react';
 import Select from '../components/ui/Select';
 import Button from '../components/ui/Button';
@@ -68,6 +68,7 @@ export default function Profile() {
   const loginPath = `${prefix}/login`.replace(/\/+/g, '/') || '/login';
   const { user, updateUser, checkAuth, logout } = useAuth();
   const planInfo = usePlan();
+  const planLoadState = usePlanLoadState();
   const { showToast } = useToast();
   const [formData, setFormData] = useState({
     email: '',
@@ -120,7 +121,7 @@ export default function Profile() {
   }, [user, fetchTokens]);
 
   const showAiSuggestionsPreference = isCloudMode
-    ? planInfo?.aiAvailable === true
+    ? planLoadState === 'ready' && planInfo?.aiAvailable === true
     : aiAvailable;
 
   const preferencesDirty =

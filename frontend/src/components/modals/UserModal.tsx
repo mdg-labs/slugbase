@@ -13,11 +13,18 @@ import { Separator } from '../ui/separator';
 import { FormFieldWrapper } from '../ui/FormFieldWrapper';
 import { ModalSection } from '../ui/ModalSection';
 import { ModalFooterActions } from '../ui/ModalFooterActions';
+import Button from '../ui/Button';
 import { Switch } from '../ui/switch';
 import { Label } from '../ui/label';
 import { Input } from '../ui/input';
 import { useToast } from '../ui/Toast';
 import { useAuth } from '../../contexts/AuthContext';
+import {
+  isCloudMode,
+  usePlan,
+  usePlanLoadState,
+  canInviteOrgUsers,
+} from '../../contexts/PlanContext';
 
 interface User {
   id: string;
@@ -40,6 +47,8 @@ export default function UserModal({ user, isOpen, onClose, onSuccess }: UserModa
   const { t } = useTranslation();
   const { showToast } = useToast();
   const { user: currentUser } = useAuth();
+  const planInfo = usePlan();
+  const planLoadState = usePlanLoadState();
   const canSetInstanceAdmin = !!currentUser?.is_admin;
   const [formData, setFormData] = useState({
     email: '',
@@ -80,6 +89,9 @@ export default function UserModal({ user, isOpen, onClose, onSuccess }: UserModa
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (isCreate && isCloudMode && !canInviteOrgUsers(planInfo, planLoadState)) {
+      return;
+    }
     setLoading(true);
     setError('');
 
@@ -128,6 +140,10 @@ export default function UserModal({ user, isOpen, onClose, onSuccess }: UserModa
     formData.name.trim() &&
     (user ? true : useInvite ? true : formData.password.length >= 8);
 
+  const createBlockedByPlan =
+    isCreate && isCloudMode && planLoadState === 'ready' && !canInviteOrgUsers(planInfo, planLoadState);
+  const createPlanLoading = isCreate && isCloudMode && planLoadState === 'loading';
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-[460px]">
@@ -136,6 +152,13 @@ export default function UserModal({ user, isOpen, onClose, onSuccess }: UserModa
         </DialogHeader>
         <Separator />
 
+        {createPlanLoading ? (
+          <p className="py-6 text-sm text-muted-foreground">{t('common.loading')}</p>
+        ) : createBlockedByPlan ? (
+          <p className="py-2 text-sm text-muted-foreground">{t('admin.billingUpgradeToInvite')}</p>
+        ) : null}
+
+        {!createPlanLoading && !createBlockedByPlan ? (
         <form id="user-form" onSubmit={handleSubmit} className="space-y-6">
           <ModalSection>
             <FormFieldWrapper label={t('auth.email')} required error={error}>
@@ -221,16 +244,23 @@ export default function UserModal({ user, isOpen, onClose, onSuccess }: UserModa
             )}
           </ModalSection>
         </form>
+        ) : null}
 
         <Separator />
         <DialogFooter className="flex-row justify-between sm:justify-end gap-2">
-          <ModalFooterActions
-            onCancel={onClose}
-            submitLabel={t('common.save')}
-            loading={loading}
-            submitDisabled={!isValid}
-            formId="user-form"
-          />
+          {createPlanLoading || createBlockedByPlan ? (
+            <Button variant="outline" onClick={onClose} type="button">
+              {t('common.cancel')}
+            </Button>
+          ) : (
+            <ModalFooterActions
+              onCancel={onClose}
+              submitLabel={t('common.save')}
+              loading={loading}
+              submitDisabled={!isValid}
+              formId="user-form"
+            />
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

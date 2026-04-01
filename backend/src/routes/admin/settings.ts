@@ -1,14 +1,22 @@
-import { Router } from 'express';
+import { Router, type Request, type Response, type NextFunction } from 'express';
 import { query, queryOne, execute, upsertSystemConfig } from '../../db/index.js';
 import { AuthRequest, requireAuth, requireAdmin } from '../../middleware/auth.js';
 import { testSMTPConfig } from '../../utils/email.js';
 import { encrypt, decrypt } from '../../utils/encryption.js';
 import { getTenantId } from '../../utils/tenant.js';
 import { listOpenAIModels } from '../../services/ai-suggestions.js';
+import { isCloud } from '../../config/mode.js';
 
 const router = Router();
 router.use(requireAuth());
 router.use(requireAdmin());
+
+function rejectCloudFreePlanAi(req: Request, res: Response, next: NextFunction) {
+  if (isCloud && (req as any).plan === 'free') {
+    return res.status(403).json({ error: 'AI suggestions are not available on the free plan.' });
+  }
+  next();
+}
 
 router.get('/', async (req, res) => {
   const authReq = req as AuthRequest;
@@ -34,7 +42,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.get('/ai', async (req, res) => {
+router.get('/ai', rejectCloudFreePlanAi, async (req, res) => {
   try {
     const tenantId = getTenantId(req);
     const keys = ['ai_enabled', 'ai_provider', 'ai_api_key', 'ai_model'];
@@ -72,7 +80,7 @@ router.get('/smtp', async (req, res) => {
   }
 });
 
-router.get('/ai/models', async (req, res) => {
+router.get('/ai/models', rejectCloudFreePlanAi, async (req, res) => {
   try {
     const tenantId = getTenantId(req);
     const providerRow = await queryOne('SELECT value FROM system_config WHERE key = ? AND tenant_id = ?', ['ai_provider', tenantId]);
@@ -222,7 +230,7 @@ router.post('/smtp', async (req, res) => {
   }
 });
 
-router.post('/ai', async (req, res) => {
+router.post('/ai', rejectCloudFreePlanAi, async (req, res) => {
   try {
     const tenantId = getTenantId(req);
     const { ai_enabled, ai_provider, ai_api_key, ai_model } = req.body;
