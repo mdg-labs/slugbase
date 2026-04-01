@@ -6,6 +6,7 @@ import UserDropdown from './UserDropdown';
 import { Breadcrumbs } from './Breadcrumbs';
 import { useAppConfig } from '../contexts/AppConfigContext';
 import type { User } from '../contexts/AuthContext';
+import { canAccessWorkspaceAdmin } from '../utils/adminAccess';
 
 interface TopBarProps {
   user: User | null;
@@ -16,7 +17,7 @@ export default function TopBar({ user }: TopBarProps) {
   const { pathPrefixForLinks, hideAdminOidcAndSmtp } = useAppConfig();
   const prefix = (pathPrefixForLinks || '').replace(/\/+/g, '/') || '';
   const { isMobile } = useSidebar();
-  const showAdmin = !!(user?.is_admin);
+  const showAdmin = canAccessWorkspaceAdmin(user);
 
   const settingsHref = (() => {
     const profile = `${prefix}/profile`.replace(/\/+/g, '/') || '/profile';

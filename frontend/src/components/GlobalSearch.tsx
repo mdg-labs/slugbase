@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import api from '../api/client';
 import { useAppConfig } from '../contexts/AppConfigContext';
+import { canAccessWorkspaceAdmin } from '../utils/adminAccess';
 import {
   CommandDialog,
   CommandEmpty,
@@ -44,7 +45,7 @@ export default function GlobalSearch() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const showAdmin = user?.is_admin;
+  const showAdmin = canAccessWorkspaceAdmin(user);
 
   const navigationItems: SearchResult[] = useMemo(() => [
     { type: 'navigation', title: t('bookmarks.title'), path: `${prefix}/bookmarks`.replace(/\/+/g, '/') || '/bookmarks', id: 'nav-bookmarks' },

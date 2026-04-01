@@ -36,6 +36,7 @@ import { useAppConfig } from '../contexts/AppConfigContext';
 import { usePlan, showAdminAiNav } from '../contexts/PlanContext';
 import type { User } from '../contexts/AuthContext';
 import { cn } from '../lib/utils';
+import { canAccessWorkspaceAdmin } from '../utils/adminAccess';
 
 const SIDEBAR_ADMIN_OPEN_KEY = 'slugbase_sidebar_admin_open';
 
@@ -89,7 +90,7 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
     pathname === `${rootActivePath}/` ||
     pathname === (pathBaseForActive || '/');
 
-  const showAdmin = !!(user?.is_admin);
+  const showAdmin = canAccessWorkspaceAdmin(user);
   const [adminOpen, setAdminOpen] = useState(() => {
     if (typeof window === 'undefined') return true;
     const stored = localStorage.getItem(SIDEBAR_ADMIN_OPEN_KEY);

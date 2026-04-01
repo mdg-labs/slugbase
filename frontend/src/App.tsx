@@ -8,6 +8,7 @@ import { ToastProvider } from './components/ui/Toast';
 import { TooltipProvider } from './components/ui/tooltip-base';
 import Layout from './components/Layout';
 import api from './api/client';
+import { canAccessWorkspaceAdmin } from './utils/adminAccess';
 
 const Setup = lazy(() => import('./pages/Setup'));
 import Login from './pages/Login';
@@ -46,7 +47,7 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   const loginPath = `${pathPrefixForLinks || ''}/login`.replace(/\/+/g, '/') || '/login';
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="text-lg">{t('common.loading')}</div></div>;
   if (!user) return <Navigate to={loginPath} replace />;
-  if (!user.is_admin) return <Navigate to={appRootPath} replace />;
+  if (!canAccessWorkspaceAdmin(user)) return <Navigate to={appRootPath} replace />;
   return <>{children}</>;
 }
 

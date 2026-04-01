@@ -25,6 +25,11 @@ async function userInCurrentOrg(req: Request, targetUserId: string): Promise<boo
   return Boolean(row);
 }
 
+function isInstanceGlobalAdmin(req: Request): boolean {
+  const u = (req as AuthRequest).user as { is_admin?: boolean | number } | undefined;
+  return u?.is_admin === true || u?.is_admin === 1;
+}
+
 router.get('/', async (req, res) => {
   try {
     const tenantId = getTenantId(req);
@@ -76,7 +81,8 @@ function hashToken(token: string): string {
 
 router.post('/', async (req, res) => {
   try {
-    const { email, name, password, is_admin = false, send_invite: sendInvite = false } = req.body;
+    const { email, name, password, is_admin: bodyIsAdmin = false, send_invite: sendInvite = false } = req.body;
+    const is_admin = isCloud && !isInstanceGlobalAdmin(req) ? false : bodyIsAdmin;
 
     if (!email || !name) {
       return res.status(400).json({ error: 'Email and name are required' });
@@ -259,8 +265,10 @@ router.put('/:id', async (req, res) => {
       params.push(await bcrypt.hash(password, 10));
     }
     if (is_admin !== undefined) {
-      updates.push('is_admin = ?');
-      params.push(is_admin);
+      if (!isCloud || isInstanceGlobalAdmin(req)) {
+        updates.push('is_admin = ?');
+        params.push(is_admin);
+      }
     }
     if (language !== undefined) {
       updates.push('language = ?');

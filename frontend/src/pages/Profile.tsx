@@ -17,6 +17,7 @@ import { Input } from '../components/ui/input';
 import api from '../api/client';
 import { getDocsApiReferenceUrl } from '../config/docs';
 import { resolveSupportedLocale } from '../i18n';
+import { canAccessWorkspaceAdmin } from '../utils/adminAccess';
 
 interface ApiToken {
   id: string;
@@ -268,7 +269,7 @@ export default function Profile() {
           <span>
             {t('profile.signedInAs')}: <span className="text-foreground">{user.email}</span>
           </span>
-          {!!user.is_admin && (
+          {canAccessWorkspaceAdmin(user) && (
             <Badge variant="secondary" className="text-xs font-normal">
               {t('profile.admin')}
             </Badge>

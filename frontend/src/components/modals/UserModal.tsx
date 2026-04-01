@@ -17,6 +17,7 @@ import { Switch } from '../ui/switch';
 import { Label } from '../ui/label';
 import { Input } from '../ui/input';
 import { useToast } from '../ui/Toast';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface User {
   id: string;
@@ -38,6 +39,8 @@ type CreateMode = 'set_password' | 'send_invite';
 export default function UserModal({ user, isOpen, onClose, onSuccess }: UserModalProps) {
   const { t } = useTranslation();
   const { showToast } = useToast();
+  const { user: currentUser } = useAuth();
+  const canSetInstanceAdmin = !!currentUser?.is_admin;
   const [formData, setFormData] = useState({
     email: '',
     name: '',
@@ -81,9 +84,17 @@ export default function UserModal({ user, isOpen, onClose, onSuccess }: UserModa
     setError('');
 
     try {
-      const payload: any = { email: formData.email, name: formData.name, is_admin: formData.is_admin };
+      const payload: any = { email: formData.email, name: formData.name };
+      if (canSetInstanceAdmin) {
+        payload.is_admin = formData.is_admin;
+      } else {
+        payload.is_admin = false;
+      }
       if (user) {
         if (formData.password) payload.password = formData.password;
+        if (!canSetInstanceAdmin) {
+          delete payload.is_admin;
+        }
         await api.put(`/admin/users/${user.id}`, payload);
         showToast(t('common.success'), 'success');
       } else {
@@ -195,17 +206,19 @@ export default function UserModal({ user, isOpen, onClose, onSuccess }: UserModa
                 />
               </FormFieldWrapper>
             )}
-            <div className="flex items-center justify-between rounded-lg border p-3">
-              <Label htmlFor="is_admin" className="text-sm font-medium cursor-pointer flex items-center gap-2">
-                <Shield className="h-4 w-4" />
-                {t('admin.admin')}
-              </Label>
-              <Switch
-                id="is_admin"
-                checked={formData.is_admin}
-                onCheckedChange={(checked) => setFormData({ ...formData, is_admin: checked })}
-              />
-            </div>
+            {canSetInstanceAdmin && (
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <Label htmlFor="is_admin" className="text-sm font-medium cursor-pointer flex items-center gap-2">
+                  <Shield className="h-4 w-4" />
+                  {t('admin.admin')}
+                </Label>
+                <Switch
+                  id="is_admin"
+                  checked={formData.is_admin}
+                  onCheckedChange={(checked) => setFormData({ ...formData, is_admin: checked })}
+                />
+              </div>
+            )}
           </ModalSection>
         </form>
 

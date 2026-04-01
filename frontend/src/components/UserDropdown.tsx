@@ -4,6 +4,7 @@ import { User as UserIcon, LogOut, Settings } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppConfig } from '../contexts/AppConfigContext';
 import type { User } from '../contexts/AuthContext';
+import { canAccessWorkspaceAdmin } from '../utils/adminAccess';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,7 +32,7 @@ export default function UserDropdown({ user }: UserDropdownProps) {
   const prefix = (pathPrefixForLinks || '').replace(/\/+/g, '/') || '';
   const { logout } = useAuth();
 
-  const showAdmin = !!(user?.is_admin);
+  const showAdmin = canAccessWorkspaceAdmin(user);
 
   if (!user) return null;
 

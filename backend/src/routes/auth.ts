@@ -12,7 +12,7 @@ import { generateUserKey } from '../utils/user-key.js';
 import { getAuthCookieOptions, getClearAuthCookieOptions } from '../config/cookies.js';
 import { sendSignupVerificationEmail } from '../utils/email.js';
 import crypto from 'crypto';
-import { getDefaultTenantId } from '../utils/tenant.js';
+import { getDefaultTenantId, getTenantId, DEFAULT_TENANT_ID } from '../utils/tenant.js';
 import { isCloud } from '../config/mode.js';
 import { buildFrontendAbsoluteUrl } from '../utils/frontend-url.js';
 
@@ -140,6 +140,18 @@ router.get('/me', requireAuth(), async (req, res) => {
     theme: u?.theme || (user as any).theme || 'auto',
     ai_suggestions_enabled: u?.ai_suggestions_enabled !== 0 && u?.ai_suggestions_enabled !== false,
   };
+  if (isCloud) {
+    const tenantId = getTenantId(req as any);
+    let workspace_admin = false;
+    if (tenantId && tenantId !== DEFAULT_TENANT_ID) {
+      const m = await queryOne(
+        `SELECT role FROM org_members WHERE user_id = ? AND org_id = ? AND role IN ('owner', 'admin')`,
+        [user.id, tenantId]
+      );
+      workspace_admin = Boolean(m);
+    }
+    payload.workspace_admin = workspace_admin;
+  }
   res.json(payload);
 });
 

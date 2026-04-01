@@ -11,6 +11,8 @@ export interface User {
   name: string;
   user_key: string;
   is_admin: boolean;
+  /** Cloud only: owner or admin of current organization (from session org). */
+  workspace_admin?: boolean;
   language: string;
   theme: string;
   ai_suggestions_enabled?: boolean;

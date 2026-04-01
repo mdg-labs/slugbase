@@ -2,8 +2,22 @@ import { Request, Response, NextFunction, RequestHandler } from 'express';
 import passport from 'passport';
 import { validateToken } from '../services/api-tokens.js';
 import { extractTokenFromRequest } from '../utils/jwt.js';
+import { queryOne } from '../db/index.js';
+import { getTenantId, DEFAULT_TENANT_ID } from '../utils/tenant.js';
 
 const isCloudRuntime = process.env.SLUGBASE_MODE === 'cloud';
+
+/** Cloud: org owner/admin for the current session org may use tenant-scoped /api/admin routes. */
+async function isCloudWorkspaceAdmin(req: Request, userId: string): Promise<boolean> {
+  if (!isCloudRuntime) return false;
+  const tenantId = getTenantId(req);
+  if (!tenantId || tenantId === DEFAULT_TENANT_ID) return false;
+  const row = await queryOne(
+    `SELECT role FROM org_members WHERE user_id = ? AND org_id = ? AND role IN ('owner', 'admin')`,
+    [userId, tenantId]
+  );
+  return Boolean(row);
+}
 
 export interface AuthRequest extends Request {
   user?: {
@@ -93,8 +107,8 @@ export function optionalAttachUser(): RequestHandler {
 }
 
 /**
- * Middleware to authenticate and require global admin.
- * Supports JWT and API token same as requireAuth.
+ * Middleware to require instance admin (self-hosted) or, in cloud, instance admin **or**
+ * owner/admin of the current organization (session org → req.tenantId).
  */
 export function requireAdmin(): RequestHandler {
   return (req: Request, res: Response, next: NextFunction) => {
@@ -115,11 +129,19 @@ export function requireAdmin(): RequestHandler {
         return res.status(401).json({ error: 'Unauthorized' });
       }
       const isGlobalAdmin = user.is_admin === true || user.is_admin === 1;
-      if (!isGlobalAdmin) {
-        return res.status(403).json({ error: 'Forbidden' });
+      if (isGlobalAdmin) {
+        (req as AuthRequest).user = user;
+        return next();
       }
-      (req as AuthRequest).user = user;
-      next();
+      try {
+        if (await isCloudWorkspaceAdmin(req, user.id)) {
+          (req as AuthRequest).user = user;
+          return next();
+        }
+      } catch (e) {
+        return next(e);
+      }
+      return res.status(403).json({ error: 'Forbidden' });
     })(req, res, next);
   };
 }
