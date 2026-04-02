@@ -36,7 +36,7 @@ export default defineConfig({
     { name: 'setup', testMatch: /.*\.setup\.ts/ },
     {
       name: 'authenticated',
-      testIgnore: ['**/auth.spec.ts'],
+      testIgnore: ['**/auth.spec.ts', '**/password-reset.spec.ts', '**/guest-routing.spec.ts'],
       use: {
         ...devices['Desktop Chrome'],
         storageState: 'e2e/.auth/user.json',
@@ -45,7 +45,7 @@ export default defineConfig({
     },
     {
       name: 'unauthenticated',
-      testMatch: /auth\.spec\.ts/,
+      testMatch: /(auth|password-reset|guest-routing)\.spec\.ts$/,
       use: { ...devices['Desktop Chrome'] },
     },
   ],

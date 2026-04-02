@@ -130,7 +130,15 @@ export function setupSecurityHeaders() {
     cspDirectives.scriptSrc.push(umamiOrigin);
     cspDirectives.connectSrc.push(umamiOrigin);
   }
-  
+
+  // Cloudflare Turnstile (e.g. slugbase-cloud marketing contact form): widget script + iframe + fetches
+  const turnstileCspOrigin = 'https://challenges.cloudflare.com';
+  if (process.env.TURNSTILE_SECRET_KEY?.trim()) {
+    cspDirectives.scriptSrc.push(turnstileCspOrigin);
+    cspDirectives.frameSrc.push(turnstileCspOrigin);
+    cspDirectives.connectSrc.push(turnstileCspOrigin);
+  }
+
   // Only upgrade insecure requests when using HTTPS (set to null to disable when using HTTP)
   if (isHttps) {
     cspDirectives.upgradeInsecureRequests = [];
