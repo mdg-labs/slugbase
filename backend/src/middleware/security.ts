@@ -123,6 +123,8 @@ export function setupSecurityHeaders() {
     objectSrc: ["'none'"],
     mediaSrc: ["'self'"],
     frameSrc: ["'self'"], // Allow iframes for Swagger UI
+    // Turnstile may spawn workers from blob: URLs; worker-src falls back to script-src but explicit is clearer.
+    workerSrc: ["'self'", 'blob:'],
   };
 
   const umamiOrigin = cspOriginFromEnv(process.env.CSP_UMAMI_ORIGIN, allowHttpCsp);
@@ -131,13 +133,16 @@ export function setupSecurityHeaders() {
     cspDirectives.connectSrc.push(umamiOrigin);
   }
 
-  // Cloudflare Turnstile (e.g. slugbase-cloud marketing contact form): widget script + iframe + fetches
+  // Cloudflare Turnstile (e.g. marketing /contact): script, iframe, fetch, and workers from CF.
+  // Not gated on TURNSTILE_SECRET_KEY: the site key is baked in at frontend build time (VITE_*), while
+  // CSP is evaluated at runtime; if the secret were missing here, the widget would be blocked in the
+  // browser even though verification could be skipped. Self-hosted installs without Turnstile never
+  // request these URLs.
   const turnstileCspOrigin = 'https://challenges.cloudflare.com';
-  if (process.env.TURNSTILE_SECRET_KEY?.trim()) {
-    cspDirectives.scriptSrc.push(turnstileCspOrigin);
-    cspDirectives.frameSrc.push(turnstileCspOrigin);
-    cspDirectives.connectSrc.push(turnstileCspOrigin);
-  }
+  cspDirectives.scriptSrc.push(turnstileCspOrigin);
+  cspDirectives.frameSrc.push(turnstileCspOrigin);
+  cspDirectives.connectSrc.push(turnstileCspOrigin);
+  cspDirectives.workerSrc.push(turnstileCspOrigin);
 
   // Only upgrade insecure requests when using HTTPS (set to null to disable when using HTTP)
   if (isHttps) {
