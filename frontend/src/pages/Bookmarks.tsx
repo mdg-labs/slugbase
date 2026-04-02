@@ -781,7 +781,7 @@ export default function Bookmarks() {
           </div>
         </Card>
       ) : listView === 'cards' ? (
-        <div className="grid grid-cols-1 items-stretch gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 items-stretch gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {displayedBookmarks.map((bookmark) => {
             const isOwn = bookmark.bookmark_type !== 'shared';
             return (
