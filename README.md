@@ -38,8 +38,8 @@ Sign up for a free account at **[https://slugbase.app](https://slugbase.app)** t
 - 🐘 **PostgreSQL** - Full PostgreSQL support for larger deployments
 - 🔄 **Auto Migrations** - Automatic database migration system with version tracking
 - 🐳 **Docker Ready** - Production-ready Docker setup with multi-stage builds
-- 🐳 **Backend-only image** - `Dockerfile.backend` for backend-only deployments (e.g. Cloud Run); see [docs/infra/](docs/infra/) and external docs for deployment options.
-- 🪰 **Fly.io + Neon** - Deploy backend to Fly.io with Neon PostgreSQL (EU); see [docs/infra/fly-neon.md](docs/infra/fly-neon.md)
+- 🐳 **Backend-only image** - `Dockerfile.backend` for backend-only deployments (e.g. Cloud Run); see [self-hosted documentation](https://docs.slugbase.app) for deployment options.
+- 🪰 **Fly.io + Neon (SlugBase Cloud)** - Operator runbook: [Fly.io + Neon](https://github.com/mdg-labs/slugbase-docs-internal/blob/main/runbooks/runbook-fly-neon.mdx) in **slugbase-docs-internal**.
 - 📊 **API Documentation** - Auto-generated Swagger/OpenAPI documentation
 
 ## Tech Stack
@@ -251,11 +251,10 @@ slugbase-core/
 │   │   └── utils/         # Utility functions
 │   └── package.json
 ├── packages/core/          # Package consumed by apps (exports backend + frontend entrypoints)
-│   └── ...                # See docs/PACKAGE-BOUNDARIES-AND-EXPORTS.md. Published as @mdguggenbichler/slugbase-core; consumed by apps/selfhosted and slugbase-cloud.
+│   └── ...                # See slugbase-docs-internal: package boundaries doc. Published as @mdguggenbichler/slugbase-core; consumed by apps/selfhosted and slugbase-cloud.
 ├── apps/selfhosted/        # Self-hosted app: uses core package, serves API + frontend
 │   └── ...
 ├── scripts/                # Build helpers (e.g. copy-core-dist.js, copy-selfhosted-public.js)
-├── docs/                   # Documentation source
 ├── docker-compose.yml      # Docker Compose config
 ├── docker-compose.example.yml  # Template; copy to docker-compose.yml and customize
 ├── Dockerfile              # Production Dockerfile (full app)
@@ -265,9 +264,8 @@ slugbase-core/
 
 ## Documentation
 
-Visit the documentation at https://docs.slugbase.app
-
-In-repo docs: [docs/README.md](docs/README.md) (infra, package boundaries, releasing, upgrading cloud).
+- **End users & self-hosters:** [https://docs.slugbase.app](https://docs.slugbase.app)
+- **Engineering, cloud integration, and operators (private):** [slugbase-docs-internal](https://github.com/mdg-labs/slugbase-docs-internal) — core/cloud contract, packing and upgrading core, embedding the frontend, Fly + Neon, Grafana stats, release process, and related runbooks.
 
 ## API Documentation
 

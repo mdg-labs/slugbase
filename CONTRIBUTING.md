@@ -157,7 +157,7 @@ Then open a pull request on GitHub with:
 
 - **Frontend**: `frontend/src/` - React TypeScript application
 - **Backend**: `backend/src/` - Express TypeScript server
-- **Documentation**: `docs/` - User-facing documentation
+- **Documentation**: End-user and self-hosted guides live in **[slugbase-docs](https://github.com/mdg-labs/slugbase-docs)** (published at [docs.slugbase.app](https://docs.slugbase.app)). Integration and operator notes for the team live in **[slugbase-docs-internal](https://github.com/mdg-labs/slugbase-docs-internal)**.
 - **Migrations**: `backend/src/db/migrations/` - Database migrations
 
 ### Adding New Features
@@ -226,7 +226,7 @@ While we don't have automated tests yet, please:
 
 - **Issues**: Open an issue for bugs or feature requests
 - **Discussions**: Use GitHub Discussions for questions
-- **Documentation**: Check the `docs/` directory
+- **Documentation**: See [docs.slugbase.app](https://docs.slugbase.app) and, for internal integration topics, [slugbase-docs-internal](https://github.com/mdg-labs/slugbase-docs-internal)
 
 ## Recognition
 
