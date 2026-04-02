@@ -13,16 +13,21 @@ interface EmptyStateProps {
 
 export function EmptyState({ icon: Icon, title, description, action, className }: EmptyStateProps) {
   return (
-    <Card className={cn('flex flex-col items-center justify-center py-16 px-6', className)}>
-      <CardContent className="flex flex-col items-center text-center">
-        <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
-          <Icon className="h-8 w-8 text-muted-foreground" />
+    <Card
+      className={cn(
+        'flex flex-col items-center justify-center border border-ghost py-16 px-6 hover:bg-surface',
+        className
+      )}
+    >
+      <CardContent className="flex flex-col items-center text-center p-0 pt-0">
+        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+          <Icon className="h-8 w-8 text-primary" />
         </div>
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+        <h3 className="mb-2 text-xl font-semibold tracking-tight text-foreground">
           {title}
         </h3>
         {description && (
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-6 max-w-md">
+          <p className="mb-6 max-w-md text-sm leading-relaxed text-muted-foreground">
             {description}
           </p>
         )}

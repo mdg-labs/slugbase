@@ -1,6 +1,7 @@
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import crypto from 'crypto';
+import { getCsrfCookieOptions } from '../config/cookies.js';
 
 /**
  * Rate limiting configuration
@@ -87,31 +88,57 @@ export const tokenCreateRateLimiter = isDevelopment
     });
 
 /**
+ * Normalize env to an origin allowed in CSP (https only in production).
+ * Accepts `https://host` or `https://host/path` (e.g. Umami script URL).
+ */
+function cspOriginFromEnv(raw: string | undefined, allowHttp: boolean): string | null {
+  const t = raw?.trim();
+  if (!t) return null;
+  try {
+    const u = new URL(t);
+    if (u.protocol === 'https:') return u.origin;
+    if (allowHttp && u.protocol === 'http:') return u.origin;
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+/**
  * Security headers middleware
  */
 export function setupSecurityHeaders() {
   // Only enable HSTS if we're actually using HTTPS
   const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
   const isHttps = baseUrl.startsWith('https://');
-  
+  const allowHttpCsp = process.env.NODE_ENV !== 'production';
+
   const cspDirectives: any = {
     defaultSrc: ["'self'"],
     styleSrc: ["'self'", "'unsafe-inline'"], // Swagger UI needs inline styles
     scriptSrc: ["'self'"],
     imgSrc: ["'self'", "data:", "https:"], // Allow data URIs and HTTPS images (for favicons)
-    connectSrc: [
-      "'self'",
-      // Sentry error tracking (ingest endpoints vary by region)
-      "https://*.ingest.sentry.io",
-      "https://*.ingest.de.sentry.io",
-      "https://*.ingest.eu.sentry.io",
-    ],
+    connectSrc: ["'self'", "https://*.ingest.sentry.io", "https://*.sentry.io"],
     fontSrc: ["'self'"],
     objectSrc: ["'none'"],
     mediaSrc: ["'self'"],
     frameSrc: ["'self'"], // Allow iframes for Swagger UI
   };
-  
+
+  const umamiOrigin = cspOriginFromEnv(process.env.CSP_UMAMI_ORIGIN, allowHttpCsp);
+  if (umamiOrigin) {
+    cspDirectives.scriptSrc.push(umamiOrigin);
+    cspDirectives.connectSrc.push(umamiOrigin);
+  }
+
+  // Cloudflare Turnstile (e.g. slugbase-cloud marketing contact form): widget script + iframe + fetches
+  const turnstileCspOrigin = 'https://challenges.cloudflare.com';
+  if (process.env.TURNSTILE_SECRET_KEY?.trim()) {
+    cspDirectives.scriptSrc.push(turnstileCspOrigin);
+    cspDirectives.frameSrc.push(turnstileCspOrigin);
+    cspDirectives.connectSrc.push(turnstileCspOrigin);
+  }
+
   // Only upgrade insecure requests when using HTTPS (set to null to disable when using HTTP)
   if (isHttps) {
     cspDirectives.upgradeInsecureRequests = [];
@@ -164,17 +191,6 @@ export function csrfProtection(req: any, res: any, next: any) {
  */
 export function generateCSRFToken(req: any, res: any): string {
   const token = crypto.randomBytes(32).toString('hex');
-  // Only use secure cookies when actually using HTTPS (check BASE_URL)
-  const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
-  const isHttps = baseUrl.startsWith('https://');
-  const isProduction = process.env.NODE_ENV === 'production' && isHttps;
-  
-  res.cookie('_csrf', token, {
-    httpOnly: true,
-    secure: isProduction, // Only secure when using HTTPS
-    sameSite: 'strict',
-    maxAge: 24 * 60 * 60 * 1000, // 24 hours
-  });
-
+  res.cookie('_csrf', token, getCsrfCookieOptions());
   return token;
 }

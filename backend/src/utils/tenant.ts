@@ -8,8 +8,5 @@ export function getDefaultTenantId(): string {
 
 export function getTenantId(req: Request): string {
   const tenantId = (req as Request & { tenantId?: string }).tenantId;
-  if (!tenantId) {
-    throw new Error('Missing tenantId on request');
-  }
-  return tenantId;
+  return tenantId ?? DEFAULT_TENANT_ID;
 }

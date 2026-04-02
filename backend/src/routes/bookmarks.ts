@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { query, queryOne, execute } from '../db/index.js';
+import { query, queryOne, execute, getDbType } from '../db/index.js';
 import { AuthRequest, requireAuth } from '../middleware/auth.js';
 import { canAccessBookmark, canModifyBookmark, canAccessFolder, canAccessTag, getTeamIdsForUser } from '../auth/authorization.js';
 import { v4 as uuidv4 } from 'uuid';
@@ -9,6 +9,10 @@ import { isAISuggestionsEnabled, getAIApiKey, getAIModel } from '../utils/ai-fea
 import { sanitizeUrlForAI, callAIProvider } from '../services/ai-suggestions.js';
 import { fetchPageMetadata } from '../services/fetch-page-metadata.js';
 import { getTenantId } from '../utils/tenant.js';
+import { isCloud } from '../config/mode.js';
+
+/** Free plan bookmark limit (must match pricing page). Used only when isCloud. */
+const FREE_PLAN_BOOKMARK_LIMIT = 50;
 
 const router = Router();
 router.use(requireAuth());
@@ -30,103 +34,6 @@ async function recordAiSuggestionUsage(userId: string, used: AiSuggestionUsed | 
   }
 }
 
-/**
- * @swagger
- * /api/bookmarks:
- *   get:
- *     summary: Get all bookmarks
- *     description: Returns all bookmarks for the authenticated user, including own bookmarks and bookmarks shared via teams or users. Supports filtering by folder and tag.
- *     tags: [Bookmarks]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: folder_id
- *         schema:
- *           type: string
- *         description: Filter bookmarks by folder ID
- *         example: "123e4567-e89b-12d3-a456-426614174000"
- *       - in: query
- *         name: tag_id
- *         schema:
- *           type: string
- *         description: Filter bookmarks by tag ID
- *         example: "123e4567-e89b-12d3-a456-426614174000"
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *           default: 50
- *         description: Max items per page (1-100)
- *       - in: query
- *         name: offset
- *         schema:
- *           type: integer
- *           default: 0
- *         description: Number of items to skip
- *     responses:
- *       200:
- *         description: List of bookmarks
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 type: object
- *                 properties:
- *                   id:
- *                     type: string
- *                     example: "123e4567-e89b-12d3-a456-426614174000"
- *                   title:
- *                     type: string
- *                     example: "Example Bookmark"
- *                   url:
- *                     type: string
- *                     example: "https://example.com"
- *                   slug:
- *                     type: string
- *                     nullable: true
- *                     example: "example-slug"
- *                   forwarding_enabled:
- *                     type: boolean
- *                     example: true
- *                   bookmark_type:
- *                     type: string
- *                     enum: [own, shared]
- *                     example: "own"
- *                   folders:
- *                     type: array
- *                     items:
- *                       type: object
- *                       properties:
- *                         id:
- *                           type: string
- *                         name:
- *                           type: string
- *                         icon:
- *                           type: string
- *                           nullable: true
- *                   tags:
- *                     type: array
- *                     items:
- *                       type: object
- *                       properties:
- *                         id:
- *                           type: string
- *                         name:
- *                           type: string
- *                   shared_teams:
- *                     type: array
- *                     items:
- *                       type: object
- *                   shared_users:
- *                     type: array
- *                     items:
- *                       type: object
- *       401:
- *         description: Unauthorized
- */
 // Get all bookmarks for user (including shared bookmarks)
 router.get('/', async (req, res) => {
   const authReq = req as AuthRequest;
@@ -141,6 +48,7 @@ router.get('/', async (req, res) => {
       : 'all';
     const scope = scopeRaw as 'all' | 'mine' | 'shared_with_me' | 'shared_by_me';
     const pinnedFilter = pinnedParam === 'true';
+    const pinnedCond = getDbType() === 'postgresql' ? 'b.pinned = true' : 'b.pinned = 1';
     const qStr = typeof qParam === 'string' ? qParam.trim() : '';
     const searchTerm = qStr.length > 0 ? `%${qStr.toLowerCase()}%` : null;
 
@@ -223,7 +131,7 @@ router.get('/', async (req, res) => {
       params.push(userId);
     }
     if (pinnedFilter) {
-      sql += ' AND b.pinned = 1';
+      sql += ` AND ${pinnedCond}`;
     }
     if (searchTerm) {
       sql += ' AND (LOWER(b.title) LIKE ? OR LOWER(b.url) LIKE ? OR LOWER(COALESCE(b.slug, \'\')) LIKE ?)';
@@ -250,7 +158,7 @@ router.get('/', async (req, res) => {
       ${scope === 'mine' ? 'AND b.user_id = ?' : ''}
       ${scope === 'shared_with_me' ? 'AND b.user_id != ?' : ''}
       ${scope === 'shared_by_me' ? 'AND b.user_id = ? AND (EXISTS (SELECT 1 FROM bookmark_team_shares bts WHERE bts.bookmark_id = b.id) OR EXISTS (SELECT 1 FROM bookmark_user_shares bus WHERE bus.bookmark_id = b.id))' : ''}
-      ${pinnedFilter ? 'AND b.pinned = 1' : ''}
+      ${pinnedFilter ? `AND ${pinnedCond}` : ''}
       ${searchTerm ? 'AND (LOWER(b.title) LIKE ? OR LOWER(b.url) LIKE ? OR LOWER(COALESCE(b.slug, \'\')) LIKE ?)' : ''}
     `;
     const countParams = [tenantId, userId, userId];
@@ -473,79 +381,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/bookmarks/{id}:
- *   get:
- *     summary: Get bookmark by ID
- *     description: Returns a single bookmark by ID. User must own the bookmark or have access via sharing.
- *     tags: [Bookmarks]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: Bookmark ID
- *         example: "123e4567-e89b-12d3-a456-426614174000"
- *     responses:
- *       200:
- *         description: Bookmark details
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 id:
- *                   type: string
- *                 title:
- *                   type: string
- *                 url:
- *                   type: string
- *                 slug:
- *                   type: string
- *                   nullable: true
- *                 forwarding_enabled:
- *                   type: boolean
- *                 folders:
- *                   type: array
- *                 tags:
- *                   type: array
- *                 shared_teams:
- *                   type: array
- *                 shared_users:
- *                   type: array
- *       404:
- *         description: Bookmark not found
- *       401:
- *         description: Unauthorized
- */
-/**
- * @swagger
- * /api/bookmarks/search:
- *   get:
- *     summary: Search bookmarks, folders, and tags
- *     description: Global search across bookmarks, folders, and tags
- *     tags: [Bookmarks]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: q
- *         required: true
- *         schema:
- *           type: string
- *         description: Search query
- *     responses:
- *       200:
- *         description: Search results
- *       401:
- *         description: Unauthorized
- */
 // Search endpoint (must be before /:id route)
 router.get('/search', async (req, res) => {
   const authReq = req as AuthRequest;
@@ -649,26 +484,6 @@ router.get('/search', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/bookmarks/export:
- *   get:
- *     summary: Export bookmarks as JSON
- *     description: Export all user's bookmarks as JSON
- *     tags: [Bookmarks]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: JSON export of bookmarks
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *       401:
- *         description: Unauthorized
- */
 // Export bookmarks as JSON (must be before /:id route)
 router.get('/export', async (req, res) => {
   const authReq = req as AuthRequest;
@@ -751,6 +566,7 @@ router.get('/ids', async (req, res) => {
       : 'all';
     const idsScope = idsScopeRaw as 'all' | 'mine' | 'shared_with_me' | 'shared_by_me';
     const pinnedFilter = pinnedParam === 'true';
+    const pinnedCondIds = getDbType() === 'postgresql' ? 'b.pinned = true' : 'b.pinned = 1';
     const qStr = typeof qParam === 'string' ? qParam.trim() : '';
     const idsSearchTerm = qStr.length > 0 ? `%${qStr.toLowerCase()}%` : null;
 
@@ -799,7 +615,7 @@ router.get('/ids', async (req, res) => {
       idsParams.push(userId);
     }
     if (pinnedFilter) {
-      idsSql += ' AND b.pinned = 1';
+      idsSql += ` AND ${pinnedCondIds}`;
     }
     if (idsSearchTerm) {
       idsSql += ' AND (LOWER(b.title) LIKE ? OR LOWER(b.url) LIKE ? OR LOWER(COALESCE(b.slug, \'\')) LIKE ?)';
@@ -840,51 +656,6 @@ router.get('/ids', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/bookmarks/ai-suggest:
- *   post:
- *     summary: Get AI suggestions for bookmark metadata
- *     description: Returns suggested title, slug, and tags for a URL. Requires AI feature enabled. Non-blocking; bookmark creation never depends on this.
- *     tags: [Bookmarks]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [url]
- *             properties:
- *               url:
- *                 type: string
- *                 format: uri
- *               page_title:
- *                 type: string
- *     responses:
- *       200:
- *         description: AI suggestions
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 title: { type: string }
- *                 slug: { type: string }
- *                 tags: { type: array, items: { type: string } }
- *                 language: { type: string }
- *                 confidence: { type: number }
- *       400:
- *         description: Invalid URL
- *       403:
- *         description: AI feature disabled or not available for plan
- *       408:
- *         description: AI request timeout
- *       503:
- *         description: AI not configured
- */
 router.post('/ai-suggest', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
@@ -900,12 +671,20 @@ router.post('/ai-suggest', async (req, res) => {
       return res.status(400).json({ error: urlValidation.error });
     }
 
-    const enabled = await isAISuggestionsEnabled(userId);
+    const tenantId = getTenantId(req);
+    // Cloud: AI suggestions only on Personal, Team, and Early Supporter – not Free
+    if (isCloud && (req as any).plan === 'free') {
+      return res.status(403).json({
+        code: 'PLAN_REQUIRES_AI',
+        error: 'AI suggestions are available on Personal, Team, and Early Supporter plans.',
+      });
+    }
+    const enabled = await isAISuggestionsEnabled(userId, tenantId);
     if (!enabled) {
       return res.status(403).json({ error: 'AI suggestions are not available' });
     }
 
-    const apiKey = await getAIApiKey();
+    const apiKey = await getAIApiKey(tenantId);
     if (!apiKey) {
       return res.status(503).json({ error: 'AI is not configured' });
     }
@@ -950,7 +729,7 @@ router.post('/ai-suggest', async (req, res) => {
         ? pageTitle.trim()
         : fetchedTitle;
 
-    const model = await getAIModel();
+    const model = await getAIModel(tenantId);
     const result = await callAIProvider(
       sanitizedUrl,
       pageTitleToUse,
@@ -1081,31 +860,6 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/bookmarks/{id}/track-access:
- *   post:
- *     summary: Track bookmark access
- *     description: Increments access_count and updates last_accessed_at for a bookmark when it is opened
- *     tags: [Bookmarks]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: Bookmark ID
- *     responses:
- *       200:
- *         description: Access tracked successfully
- *       404:
- *         description: Bookmark not found
- *       401:
- *         description: Unauthorized
- */
 // Track bookmark access (must be before PUT /:id)
 router.post('/:id/track-access', async (req, res) => {
   const authReq = req as AuthRequest;
@@ -1135,97 +889,6 @@ router.post('/:id/track-access', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/bookmarks:
- *   post:
- *     summary: Create a new bookmark
- *     description: Creates a new bookmark. Slug is required only if forwarding is enabled. Can assign to multiple folders, tags, and share with users/teams.
- *     tags: [Bookmarks]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - title
- *               - url
- *             properties:
- *               title:
- *                 type: string
- *                 example: "Example Bookmark"
- *               url:
- *                 type: string
- *                 format: uri
- *                 example: "https://example.com"
- *               slug:
- *                 type: string
- *                 nullable: true
- *                 description: Required if forwarding_enabled is true, optional otherwise
- *                 example: "example-slug"
- *               forwarding_enabled:
- *                 type: boolean
- *                 default: false
- *                 example: true
- *               folder_ids:
- *                 type: array
- *                 items:
- *                   type: string
- *                 description: Array of folder IDs to assign bookmark to
- *                 example: ["123e4567-e89b-12d3-a456-426614174000"]
- *               tag_ids:
- *                 type: array
- *                 items:
- *                   type: string
- *                 description: Array of tag IDs to assign to bookmark
- *                 example: ["123e4567-e89b-12d3-a456-426614174000"]
- *               team_ids:
- *                 type: array
- *                 items:
- *                   type: string
- *                 description: Array of team IDs to share bookmark with
- *                 example: ["123e4567-e89b-12d3-a456-426614174000"]
- *               user_ids:
- *                 type: array
- *                 items:
- *                   type: string
- *                 description: Array of user IDs to share bookmark with
- *                 example: ["123e4567-e89b-12d3-a456-426614174000"]
- *               share_all_teams:
- *                 type: boolean
- *                 default: false
- *                 description: Share bookmark with all teams user is a member of
- *                 example: false
- *     responses:
- *       201:
- *         description: Bookmark created successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 id:
- *                   type: string
- *                 title:
- *                   type: string
- *                 url:
- *                   type: string
- *                 slug:
- *                   type: string
- *                   nullable: true
- *                 forwarding_enabled:
- *                   type: boolean
- *       400:
- *         description: Missing required fields, slug required when forwarding enabled, or slug already exists
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: User does not own folder or is not member of team
- */
 // Create bookmark
 router.post('/', async (req, res) => {
   const authReq = req as AuthRequest;
@@ -1236,6 +899,26 @@ router.post('/', async (req, res) => {
 
     if (!data.title || !data.url) {
       return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Cloud: Free plan bookmark limit
+    if (isCloud && (req as any).plan === 'free') {
+      const countResult = await queryOne('SELECT COUNT(*) as count FROM bookmarks WHERE tenant_id = ?', [tenantId]);
+      const count = parseInt(String((countResult as any)?.count ?? 0), 10);
+      if (count >= FREE_PLAN_BOOKMARK_LIMIT) {
+        return res.status(403).json({
+          code: 'BOOKMARK_LIMIT_REACHED',
+          error: `You've reached the Free plan limit (${FREE_PLAN_BOOKMARK_LIMIT} bookmarks). Upgrade to add more.`,
+        });
+      }
+    }
+
+    // Cloud: Team plan required for team sharing
+    if (isCloud && (req as any).plan !== 'team' && (data.share_all_teams || (data.team_ids && data.team_ids.length > 0))) {
+      return res.status(403).json({
+        code: 'PLAN_REQUIRES_TEAM',
+        error: 'Sharing to teams is available on the Team plan.',
+      });
     }
 
     // Validate and sanitize title
@@ -1372,81 +1055,6 @@ router.post('/', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/bookmarks/{id}:
- *   put:
- *     summary: Update bookmark
- *     description: Updates an existing bookmark. User must own the bookmark. All fields are optional.
- *     tags: [Bookmarks]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: Bookmark ID
- *         example: "123e4567-e89b-12d3-a456-426614174000"
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               title:
- *                 type: string
- *                 example: "Updated Bookmark Title"
- *               url:
- *                 type: string
- *                 format: uri
- *                 example: "https://updated-example.com"
- *               slug:
- *                 type: string
- *                 nullable: true
- *                 description: Required if forwarding_enabled is true
- *                 example: "updated-slug"
- *               forwarding_enabled:
- *                 type: boolean
- *                 example: true
- *               folder_ids:
- *                 type: array
- *                 items:
- *                   type: string
- *                 description: Array of folder IDs (replaces existing assignments)
- *               tag_ids:
- *                 type: array
- *                 items:
- *                   type: string
- *                 description: Array of tag IDs (replaces existing assignments)
- *               team_ids:
- *                 type: array
- *                 items:
- *                   type: string
- *                 description: Array of team IDs to share with (replaces existing shares)
- *               user_ids:
- *                 type: array
- *                 items:
- *                   type: string
- *                 description: Array of user IDs to share with (replaces existing shares)
- *               share_all_teams:
- *                 type: boolean
- *                 description: Share with all teams user is a member of
- *     responses:
- *       200:
- *         description: Bookmark updated successfully
- *       400:
- *         description: Slug required when forwarding enabled or slug already exists
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: User does not own folder or is not member of team
- *       404:
- *         description: Bookmark not found
- */
 // Update bookmark
 router.put('/:id', async (req, res) => {
   const authReq = req as AuthRequest;
@@ -1578,6 +1186,12 @@ router.put('/:id', async (req, res) => {
 
     // Update team shares if provided
     if (data.share_all_teams !== undefined || data.team_ids !== undefined) {
+      if (isCloud && (req as any).plan !== 'team' && (data.share_all_teams || (data.team_ids && data.team_ids.length > 0))) {
+        return res.status(403).json({
+          code: 'PLAN_REQUIRES_TEAM',
+          error: 'Sharing to teams is available on the Team plan.',
+        });
+      }
       await execute('DELETE FROM bookmark_team_shares WHERE bookmark_id = ?', [id]);
       if (data.share_all_teams) {
         // Share with all teams user is a member of (org-scoped in cloud mode)
@@ -1641,40 +1255,6 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/bookmarks/{id}:
- *   delete:
- *     summary: Delete bookmark
- *     description: Deletes a bookmark. User must own the bookmark.
- *     tags: [Bookmarks]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: Bookmark ID
- *         example: "123e4567-e89b-12d3-a456-426614174000"
- *     responses:
- *       200:
- *         description: Bookmark deleted successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "Bookmark deleted"
- *       401:
- *         description: Unauthorized
- *       404:
- *         description: Bookmark not found
- */
 // Delete bookmark
 router.delete('/:id', async (req, res) => {
   const authReq = req as AuthRequest;
@@ -1696,68 +1276,6 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/bookmarks/search:
- *   get:
- *     summary: Search bookmarks, folders, and tags
- *     description: Search across bookmarks, folders, and tags for the authenticated user
- *     tags: [Bookmarks]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: q
- *         required: true
- *         schema:
- *           type: string
- *         description: Search query
- *         example: "example"
- *     responses:
- *       200:
- *         description: Search results
- *       401:
- *         description: Unauthorized
- */
-/**
- * @swagger
- * /api/bookmarks/import:
- *   post:
- *     summary: Import bookmarks from JSON
- *     description: Import bookmarks from a JSON array
- *     tags: [Bookmarks]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               bookmarks:
- *                 type: array
- *                 items:
- *                   type: object
- *                   properties:
- *                     title:
- *                       type: string
- *                     url:
- *                       type: string
- *                     slug:
- *                       type: string
- *                     forwarding_enabled:
- *                       type: boolean
- *     responses:
- *       200:
- *         description: Import successful
- *       400:
- *         description: Invalid import data
- *       401:
- *         description: Unauthorized
- */
 // Import bookmarks from JSON
 router.post('/import', async (req, res) => {
   const authReq = req as AuthRequest;
@@ -1775,6 +1293,25 @@ router.post('/import', async (req, res) => {
       return res.status(400).json({
         error: `Import limited to ${MAX_IMPORT_BOOKMARKS} bookmarks per request`,
       });
+    }
+
+    // Cloud: Free plan bookmark limit – reject import if it would exceed limit
+    if (isCloud && (req as any).plan === 'free') {
+      const countResult = await queryOne('SELECT COUNT(*) as count FROM bookmarks WHERE tenant_id = ?', [tenantId]);
+      const count = parseInt(String((countResult as any)?.count ?? 0), 10);
+      const remaining = FREE_PLAN_BOOKMARK_LIMIT - count;
+      if (remaining <= 0) {
+        return res.status(403).json({
+          code: 'BOOKMARK_LIMIT_REACHED',
+          error: `You've reached the Free plan limit (${FREE_PLAN_BOOKMARK_LIMIT} bookmarks). Upgrade to add more.`,
+        });
+      }
+      if (importBookmarks.length > remaining) {
+        return res.status(403).json({
+          code: 'BOOKMARK_LIMIT_REACHED',
+          error: `You can import up to ${remaining} more bookmarks (Free plan limit: ${FREE_PLAN_BOOKMARK_LIMIT}).`,
+        });
+      }
     }
 
     const results = {

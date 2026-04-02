@@ -6,44 +6,40 @@
 import { Router } from 'express';
 import { AuthRequest, requireAuth } from '../middleware/auth.js';
 import { isAISuggestionsEnabled, isAIFeatureAvailable } from '../utils/ai-feature.js';
+import { getTenantId } from '../utils/tenant.js';
+import { isCloud } from '../config/mode.js';
 
 const router = Router();
 
-/**
- * @swagger
- * /api/config/ai-suggestions:
- *   get:
- *     summary: Check AI suggestions config for the current user
- *     description: Returns whether AI suggestions are enabled and if the feature is available (for profile toggle). Does not expose API keys.
- *     tags: [Config]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: AI suggestions config
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 enabled:
- *                   type: boolean
- *                   description: Whether AI suggestions are currently enabled for this user
- *                 available:
- *                   type: boolean
- *                   description: Whether the feature is available (for showing profile toggle)
- *       401:
- *         description: Unauthorized
- */
+/** GET /api/config/plan – cloud only. Returns plan, bookmarkLimit, canShareWithTeams, ai_available. When !isCloud returns 404. */
+router.get('/plan', requireAuth(), (req, res) => {
+  if (!isCloud) {
+    return res.status(404).json({ error: 'Not available' });
+  }
+  const plan = (req as any).plan as string | undefined;
+  const effectivePlan = plan ?? 'free';
+  res.json({
+    plan: effectivePlan,
+    bookmarkLimit: effectivePlan === 'free' ? 50 : null,
+    canShareWithTeams: effectivePlan === 'team',
+    ai_available: effectivePlan !== 'free',
+  });
+});
+
 router.get('/ai-suggestions', requireAuth(), async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const userId = authReq.user!.id;
-    const [enabled, available] = await Promise.all([
-      isAISuggestionsEnabled(userId),
-      isAIFeatureAvailable(userId),
+    const tenantId = getTenantId(req);
+    let [enabled, available] = await Promise.all([
+      isAISuggestionsEnabled(userId, tenantId),
+      isAIFeatureAvailable(userId, tenantId),
     ]);
+    // Cloud: AI suggestions only on Personal, Team, and Early Supporter (lifetime) – not Free
+    if (isCloud && (req as any).plan === 'free') {
+      enabled = false;
+      available = false;
+    }
     res.json({ enabled, available });
   } catch (error: any) {
     console.error('Config ai-suggestions error:', error);

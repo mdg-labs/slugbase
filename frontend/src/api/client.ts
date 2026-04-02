@@ -1,5 +1,4 @@
 import axios, { type AxiosInstance } from 'axios';
-import * as Sentry from '@sentry/react';
 import { apiBaseUrl } from '../config/api';
 
 function baseURLFromOptions(options: { baseUrl?: string; basePath?: string } = {}): string {
@@ -31,10 +30,7 @@ export function createApiClient(options: { baseUrl?: string; basePath?: string }
   });
   client.interceptors.response.use(
     (r) => r,
-    (error) => {
-      if (error.response?.status >= 500) Sentry.captureException(error);
-      return Promise.reject(error);
-    }
+    (error) => Promise.reject(error)
   );
   return client;
 }
@@ -117,15 +113,6 @@ api.interceptors.response.use(
         error.config.headers['X-CSRF-Token'] = csrfToken;
       }
       return api.request(error.config);
-    }
-    // Report 5xx, network errors, and unexpected 4xx to Sentry (skip 401/403/404 - auth flow)
-    const status = error.response?.status;
-    const shouldReport =
-      status === undefined ||
-      status >= 500 ||
-      (status >= 400 && status !== 401 && status !== 403 && status !== 404);
-    if (shouldReport) {
-      Sentry.captureException(error);
     }
     return Promise.reject(error);
   }

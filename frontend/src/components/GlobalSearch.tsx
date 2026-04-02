@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useSearchCommand } from '../contexts/SearchCommandContext';
 import {
-  Search,
   Bookmark,
   Folder,
   Tag,
@@ -14,6 +13,7 @@ import {
 } from 'lucide-react';
 import api from '../api/client';
 import { useAppConfig } from '../contexts/AppConfigContext';
+import { canAccessWorkspaceAdmin } from '../utils/adminAccess';
 import {
   CommandDialog,
   CommandEmpty,
@@ -37,29 +37,29 @@ interface SearchResult {
 export default function GlobalSearch() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { appBasePath } = useAppConfig();
+  const { pathPrefixForLinks } = useAppConfig();
+  const prefix = (pathPrefixForLinks || '').replace(/\/+/g, '/') || '';
   const { user } = useAuth();
   const { open, setOpen, openSearch } = useSearchCommand();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const showAdmin = user?.is_admin;
+  const showAdmin = canAccessWorkspaceAdmin(user);
 
   const navigationItems: SearchResult[] = useMemo(() => [
-    { type: 'navigation', title: t('bookmarks.title'), path: `${appBasePath}/bookmarks`, id: 'nav-bookmarks' },
-    { type: 'navigation', title: t('folders.title'), path: `${appBasePath}/folders`, id: 'nav-folders' },
-    { type: 'navigation', title: t('tags.title'), path: `${appBasePath}/tags`, id: 'nav-tags' },
-    { type: 'navigation', title: t('shared.title'), path: `${appBasePath}/shared`, id: 'nav-shared' },
-    ...(showAdmin ? [{ type: 'navigation' as const, title: t('admin.title'), path: `${appBasePath}/admin/members`, id: 'nav-admin' }] : []),
-  ], [showAdmin, t, appBasePath]);
+    { type: 'navigation', title: t('bookmarks.title'), path: `${prefix}/bookmarks`.replace(/\/+/g, '/') || '/bookmarks', id: 'nav-bookmarks' },
+    { type: 'navigation', title: t('folders.title'), path: `${prefix}/folders`.replace(/\/+/g, '/') || '/folders', id: 'nav-folders' },
+    { type: 'navigation', title: t('tags.title'), path: `${prefix}/tags`.replace(/\/+/g, '/') || '/tags', id: 'nav-tags' },
+    ...(showAdmin ? [{ type: 'navigation' as const, title: t('admin.title'), path: `${prefix}/admin`.replace(/\/+/g, '/') || '/admin', id: 'nav-admin' }] : []),
+  ], [showAdmin, t, prefix]);
 
   const actionItems: SearchResult[] = useMemo(() => [
-    { type: 'action', title: t('bookmarks.create'), path: `${appBasePath}/bookmarks`, id: 'action-create-bookmark', action: () => navigate(`${appBasePath}/bookmarks?create=true`) },
-    { type: 'action', title: t('folders.create'), path: `${appBasePath}/folders`, id: 'action-create-folder', action: () => navigate(`${appBasePath}/folders?create=true`) },
-    { type: 'action', title: t('bookmarks.import'), path: `${appBasePath}/bookmarks`, id: 'action-import', action: () => navigate(`${appBasePath}/bookmarks?import=true`) },
-    { type: 'action', title: t('bookmarks.export'), path: `${appBasePath}/bookmarks`, id: 'action-export', action: () => navigate(`${appBasePath}/bookmarks?export=true`) },
-  ], [t, navigate, appBasePath]);
+    { type: 'action', title: t('bookmarks.create'), path: `${prefix}/bookmarks`, id: 'action-create-bookmark', action: () => navigate(`${prefix}/bookmarks?create=true`.replace(/\/+/g, '/') || '/bookmarks?create=true') },
+    { type: 'action', title: t('folders.create'), path: `${prefix}/folders`, id: 'action-create-folder', action: () => navigate(`${prefix}/folders?create=true`.replace(/\/+/g, '/') || '/folders?create=true') },
+    { type: 'action', title: t('bookmarks.import'), path: `${prefix}/bookmarks`, id: 'action-import', action: () => navigate(`${prefix}/bookmarks?import=true`.replace(/\/+/g, '/') || '/bookmarks?import=true') },
+    { type: 'action', title: t('bookmarks.export'), path: `${prefix}/bookmarks`, id: 'action-export', action: () => navigate(`${prefix}/bookmarks?export=true`.replace(/\/+/g, '/') || '/bookmarks?export=true') },
+  ], [t, navigate, prefix]);
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -173,9 +173,9 @@ export default function GlobalSearch() {
       api.post(`/bookmarks/${result.id}/track-access`).catch(() => {});
       window.open(result.url, '_blank', 'noopener,noreferrer');
     } else if (result.type === 'folder') {
-      navigate(`${appBasePath}/bookmarks?folder_id=${result.id}`);
+      navigate(`${prefix}/bookmarks?folder_id=${result.id}`.replace(/\/+/g, '/') || `/bookmarks?folder_id=${result.id}`);
     } else if (result.type === 'tag') {
-      navigate(`${appBasePath}/bookmarks?tag_id=${result.id}`);
+      navigate(`${prefix}/bookmarks?tag_id=${result.id}`.replace(/\/+/g, '/') || `/bookmarks?tag_id=${result.id}`);
     }
   }
 
@@ -196,18 +196,6 @@ export default function GlobalSearch() {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={openSearch}
-        className="hidden md:flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-muted-foreground bg-muted/80 hover:bg-accent/80 rounded-xl border border-border hover:border-primary/30 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-      >
-        <Search className="h-5 w-5 shrink-0" />
-        <span className="flex-1 truncate">{t('dashboard.searchPlaceholder')}</span>
-        <kbd className="shrink-0 inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-muted-foreground bg-background border border-border rounded">
-          {navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}K
-        </kbd>
-      </button>
-
       <CommandDialog open={open} onOpenChange={setOpen} shouldFilter={false}>
         <CommandInput
           placeholder={t('dashboard.searchPlaceholder')}

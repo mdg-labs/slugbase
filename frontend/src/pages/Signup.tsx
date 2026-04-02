@@ -4,12 +4,29 @@ import { useTranslation } from 'react-i18next';
 import api from '../api/client';
 import { useAppConfig } from '../contexts/AppConfigContext';
 import Button from '../components/ui/Button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { cn } from '../lib/utils';
+import {
+  AUTH_CARD_CLASS,
+  AUTH_CROSS_LINK,
+  AUTH_CROSS_LINK_FOOTER,
+  AUTH_INPUT_CLASS,
+  AUTH_PAGE_INNER,
+  AUTH_PAGE_OUTER,
+} from '../components/auth/authPageClasses';
 
 const MIN_PASSWORD_LENGTH = 8;
 
 export default function Signup() {
   const { t } = useTranslation();
-  const { appBasePath } = useAppConfig();
+  const { pathPrefixForLinks, signupTermsUrl, signupPrivacyUrl } = useAppConfig();
+  /** Host (e.g. cloud) passes both URLs; core tarball is built self-hosted so we cannot use build-time `isCloud`. */
+  const termsHref = (signupTermsUrl ?? '').trim();
+  const privacyHref = (signupPrivacyUrl ?? '').trim();
+  const showLegalAcceptance = Boolean(termsHref && privacyHref);
+  const prefix = (pathPrefixForLinks || '').replace(/\/+/g, '/') || '';
+  const loginHref = `${prefix}/login`.replace(/\/+/g, '/') || '/login';
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
@@ -18,6 +35,11 @@ export default function Signup() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+
+  const minLengthMet = password.length >= MIN_PASSWORD_LENGTH;
+  const confirmDirty = confirmPassword.length > 0;
+  const passwordsMatch = password === confirmPassword;
+  const confirmInvalid = confirmDirty && !passwordsMatch;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,7 +52,7 @@ export default function Signup() {
       setError(t('setup.passwordTooShort'));
       return;
     }
-    if (!acceptTerms) {
+    if (showLegalAcceptance && !acceptTerms) {
       setError(t('signup.acceptTermsRequired'));
       return;
     }
@@ -47,148 +69,189 @@ export default function Signup() {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-md w-full bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-lg p-6 text-center space-y-4">
-          <div className="flex justify-center mb-4">
-            <img src="/slugbase_icon_blue.svg" alt="SlugBase" className="h-16 w-16 dark:hidden" />
-            <img src="/slugbase_icon_white.svg" alt="SlugBase" className="h-16 w-16 hidden dark:block" />
+      <div className={AUTH_PAGE_OUTER}>
+        <div className={AUTH_PAGE_INNER}>
+          <div className={cn(AUTH_CARD_CLASS, 'space-y-4 text-center')}>
+            <div className="mb-4 flex justify-center">
+              <img
+                src="/slugbase_icon_purple.svg"
+                alt="SlugBase"
+                className="h-[72px] w-[72px] object-contain"
+                width={72}
+                height={72}
+              />
+            </div>
+            <h2 className="text-xl font-semibold text-foreground">{t('signup.successTitle')}</h2>
+            <p className="text-sm text-muted-foreground">{t('signup.successMessage')}</p>
+            <Link
+              to={loginHref}
+              className="inline-flex items-center justify-center rounded-xl border-0 bg-primary-gradient px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-glow hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            >
+              {t('signup.backToLogin')}
+            </Link>
           </div>
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-            {t('signup.successTitle')}
-          </h2>
-          <p className="text-gray-600 dark:text-gray-400 text-sm">
-            {t('signup.successMessage')}
-          </p>
-          <Link
-            to={`${appBasePath}/login`}
-            className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg"
-          >
-            {t('signup.backToLogin')}
-          </Link>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
+    <div className={AUTH_PAGE_OUTER}>
+      <div className={AUTH_PAGE_INNER}>
         <div className="text-center">
-          <div className="flex justify-center mb-6">
-            <img src="/slugbase_icon_blue.svg" alt="SlugBase" className="h-16 w-16 dark:hidden" />
-            <img src="/slugbase_icon_white.svg" alt="SlugBase" className="h-16 w-16 hidden dark:block" />
+          <div className="mb-6 flex justify-center">
+            <img
+              src="/slugbase_icon_purple.svg"
+              alt="SlugBase"
+              className="h-[72px] w-[72px] object-contain"
+              width={72}
+              height={72}
+            />
           </div>
-          <h2 className="text-2xl font-semibold text-gray-900 dark:text-white">
-            {t('signup.title')}
-          </h2>
-          <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-            {t('signup.subtitle')}
-          </p>
+          <h2 className="text-2xl font-semibold text-foreground">{t('signup.title')}</h2>
+          <p className="mt-2 text-sm text-muted-foreground">{t('signup.subtitle')}</p>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-lg p-4">
+        <div className={AUTH_CARD_CLASS}>
           <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label htmlFor="signup-email" className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+            <div className="space-y-2">
+              <Label htmlFor="signup-email" className="auth-field-label">
                 {t('signup.email')}
-              </label>
-              <input
+              </Label>
+              <Input
                 id="signup-email"
                 type="email"
                 required
                 autoComplete="email"
-                className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder={t('auth.emailPlaceholder')}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                className={cn(AUTH_INPUT_CLASS)}
               />
             </div>
-            <div>
-              <label htmlFor="signup-name" className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+            <div className="space-y-2">
+              <Label htmlFor="signup-name" className="auth-field-label">
                 {t('signup.name')}
-              </label>
-              <input
+              </Label>
+              <Input
                 id="signup-name"
                 type="text"
                 required
                 autoComplete="name"
-                className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder={t('signup.namePlaceholder')}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                className={cn(AUTH_INPUT_CLASS)}
               />
             </div>
-            <div>
-              <label htmlFor="signup-password" className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+            <div className="space-y-2">
+              <Label htmlFor="signup-password" className="auth-field-label">
                 {t('signup.password')}
-              </label>
-              <input
+              </Label>
+              <Input
                 id="signup-password"
                 type="password"
                 required
                 minLength={MIN_PASSWORD_LENGTH}
                 autoComplete="new-password"
-                className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder={t('setup.passwordPlaceholder')}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                className={cn(AUTH_INPUT_CLASS)}
+                aria-describedby="signup-password-requirements"
               />
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t('signup.passwordHint')}</p>
+              <ul
+                id="signup-password-requirements"
+                className="space-y-1 text-xs"
+                aria-live="polite"
+              >
+                <li
+                  className={cn('flex items-center gap-2', minLengthMet ? 'text-primary' : 'text-muted-foreground')}
+                >
+                  <span aria-hidden className="inline-block w-3 shrink-0 text-center tabular-nums">
+                    {minLengthMet ? '✓' : '✗'}
+                  </span>
+                  <span>{t('signup.passwordRequirementMinLength', { count: MIN_PASSWORD_LENGTH })}</span>
+                </li>
+              </ul>
             </div>
-            <div>
-              <label htmlFor="signup-confirm" className="block text-sm font-semibold text-gray-900 dark:text-white mb-2">
+            <div className="space-y-2">
+              <Label htmlFor="signup-confirm" className="auth-field-label">
                 {t('signup.confirmPassword')}
-              </label>
-              <input
+              </Label>
+              <Input
                 id="signup-confirm"
                 type="password"
                 required
                 minLength={MIN_PASSWORD_LENGTH}
                 autoComplete="new-password"
-                className="w-full px-4 h-9 text-sm text-gray-900 dark:text-white bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder={t('setup.confirmPasswordPlaceholder')}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
+                className={cn(AUTH_INPUT_CLASS)}
+                aria-invalid={confirmInvalid}
+                aria-describedby={confirmDirty ? 'signup-password-match-hint' : undefined}
               />
+              {confirmDirty ? (
+                <p
+                  id="signup-password-match-hint"
+                  className={cn('text-xs', passwordsMatch ? 'text-primary' : 'text-destructive')}
+                  role="status"
+                >
+                  {passwordsMatch ? t('signup.passwordsMatch') : t('signup.passwordsDoNotMatch')}
+                </p>
+              ) : null}
             </div>
-            <div className="flex items-start gap-3">
-              <input
-                id="signup-accept-terms"
-                type="checkbox"
-                required
-                checked={acceptTerms}
-                onChange={(e) => setAcceptTerms(e.target.checked)}
-                className="mt-1 h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-              />
-              <label htmlFor="signup-accept-terms" className="text-sm text-gray-700 dark:text-gray-300">
-                {t('signup.acceptTermsPrefix')}
-                <a href="https://docs.slugbase.app" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">
-                  {t('signup.acceptTermsTerms')}
-                </a>
-                {t('signup.acceptTermsAnd')}
-                <a href="https://docs.slugbase.app" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">
-                  {t('signup.acceptTermsPrivacy')}
-                </a>
-                {t('signup.acceptTermsSuffix')}
-              </label>
-            </div>
+            {showLegalAcceptance ? (
+              <div className="flex items-start gap-3">
+                <input
+                  id="signup-accept-terms"
+                  type="checkbox"
+                  required
+                  checked={acceptTerms}
+                  onChange={(e) => setAcceptTerms(e.target.checked)}
+                  className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-ring"
+                />
+                <label htmlFor="signup-accept-terms" className="text-sm text-foreground">
+                  {t('signup.acceptTermsPrefix')}
+                  <a
+                    href={termsHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline"
+                  >
+                    {t('signup.acceptTermsTerms')}
+                  </a>
+                  {t('signup.acceptTermsAnd')}
+                  <a
+                    href={privacyHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline"
+                  >
+                    {t('signup.acceptTermsPrivacy')}
+                  </a>
+                  {t('signup.acceptTermsSuffix')}
+                </label>
+              </div>
+            ) : null}
             {error && (
-              <div className="px-4 py-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
+              <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3">
+                <p className="text-sm text-destructive">{error}</p>
               </div>
             )}
             <Button
               type="submit"
               variant="primary"
               disabled={loading}
-              className="w-full"
+              className="w-full border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
             >
               {loading ? t('common.loading') : t('signup.submit')}
             </Button>
           </form>
-          <p className="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">
+          <p className={AUTH_CROSS_LINK_FOOTER}>
             {t('signup.alreadyHaveAccount')}{' '}
-            <Link to={`${appBasePath}/login`} className="font-medium text-blue-600 dark:text-blue-400 hover:underline">
+            <Link to={loginHref} className={AUTH_CROSS_LINK}>
               {t('signup.logIn')}
             </Link>
           </p>

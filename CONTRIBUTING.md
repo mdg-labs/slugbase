@@ -86,7 +86,7 @@ npm run dev
 - Follow RESTful API conventions
 - Use parameterized queries (never string concatenation)
 - Add proper error handling
-- Include Swagger documentation for new endpoints
+- Update `backend/openapi/openapi.selfhosted.yaml` when you add or change documented HTTP endpoints
 
 **Styling:**
 - Use Tailwind CSS utility classes
@@ -171,7 +171,7 @@ Then open a pull request on GitHub with:
 
 2. **Backend Features**:
    - Add routes in `backend/src/routes/`
-   - Add Swagger documentation
+   - Update `backend/openapi/openapi.selfhosted.yaml` for integrator-facing endpoints
    - Handle errors properly
    - Use parameterized queries
    - Add validation

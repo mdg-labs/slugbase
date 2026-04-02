@@ -198,13 +198,13 @@ export default function FolderModal({
                       setIconSearchQuery('');
                     }
                   }}
-                  className="w-full mt-2 px-3 py-2 text-sm font-medium rounded-lg border bg-muted/50 hover:bg-muted transition-colors flex items-center justify-center gap-2"
+                  className="w-full mt-2 px-3 py-2 text-sm font-medium rounded-xl border border-ghost bg-surface-low hover:bg-surface-high transition-colors flex items-center justify-center gap-2"
                 >
                   {t('folders.useIcon')}: <code className="px-1.5 py-0.5 bg-muted rounded">{allIcons.find(icon => icon.toLowerCase() === iconSearchQuery.trim().toLowerCase())}</code>
                 </button>
               )}
 
-              <div className="grid grid-cols-8 gap-2 max-h-48 overflow-y-auto p-2 border rounded-lg mt-2">
+              <div className="grid grid-cols-8 gap-2 max-h-48 overflow-y-auto p-2 border border-ghost rounded-xl bg-surface-low mt-2">
                 <button
                   type="button"
                   onClick={() => setFormData({ ...formData, icon: '' })}

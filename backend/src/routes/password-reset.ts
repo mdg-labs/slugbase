@@ -59,32 +59,6 @@ async function findResetTokenByToken(submittedToken: string): Promise<{ row: any
   return { row, id };
 }
 
-/**
- * @swagger
- * /api/password-reset/request:
- *   post:
- *     summary: Request password reset
- *     description: Sends a password reset email to the user if the email exists and SMTP is configured
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *                 example: "user@example.com"
- *     responses:
- *       200:
- *         description: Password reset email sent (if user exists and SMTP configured)
- *       400:
- *         description: Invalid email format
- */
 router.post('/request', authRateLimiter, async (req, res) => {
   try {
     const { email } = req.body;
@@ -132,25 +106,6 @@ router.post('/request', authRateLimiter, async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/password-reset/verify:
- *   get:
- *     summary: Verify password reset token
- *     description: Checks if a password reset token is valid and not expired
- *     tags: [Authentication]
- *     parameters:
- *       - in: query
- *         name: token
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Token is valid
- *       400:
- *         description: Token is invalid or expired
- */
 router.get('/verify', async (req, res) => {
   try {
     const { token } = req.query;
@@ -178,28 +133,6 @@ router.get('/verify', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/password-reset/reset:
- *   post:
- *     summary: Reset password with token
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [token, password]
- *             properties:
- *               token: { type: string }
- *               password: { type: string }
- *     responses:
- *       200:
- *         description: Password reset successfully
- *       400:
- *         description: Invalid token, expired token, or weak password
- */
 router.post('/reset', authRateLimiter, async (req, res) => {
   try {
     const { token, password } = req.body;

@@ -167,8 +167,10 @@ const popularIcons = [
 ];
 
 export default function FolderIcon({ iconName, className = '', size = 20 }: FolderIconProps) {
+  const iconClass = className || 'text-primary';
+
   if (!iconName) {
-    return <DefaultFolderIcon className={className} style={{ width: `${size}px`, height: `${size}px` }} />;
+    return <DefaultFolderIcon className={iconClass} style={{ width: `${size}px`, height: `${size}px` }} />;
   }
 
   // Try to get the icon from lucide-react (exact match first)
@@ -197,11 +199,11 @@ export default function FolderIcon({ iconName, className = '', size = 20 }: Fold
      (typeof IconComponent === 'object' && IconComponent !== null && ((IconComponent as any).$$typeof || (IconComponent as any).render)));
 
   if (isValidComponent) {
-    return <IconComponent className={className} style={{ width: `${size}px`, height: `${size}px` }} />;
+    return <IconComponent className={iconClass} style={{ width: `${size}px`, height: `${size}px` }} />;
   }
 
   // Fallback to default folder icon
-  return <DefaultFolderIcon className={className} style={{ width: `${size}px`, height: `${size}px` }} />;
+  return <DefaultFolderIcon className={iconClass} style={{ width: `${size}px`, height: `${size}px` }} />;
 }
 
 export { popularIcons };

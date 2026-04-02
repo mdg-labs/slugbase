@@ -8,34 +8,6 @@ import { authRateLimiter } from '../middleware/security.js';
 
 const router = Router();
 
-/**
- * @swagger
- * /api/email-verification/verify:
- *   get:
- *     summary: Verify email verification token
- *     description: Checks if an email verification token is valid and not expired
- *     tags: [Authentication]
- *     parameters:
- *       - in: query
- *         name: token
- *         required: true
- *         schema:
- *           type: string
- *         description: Email verification token
- *     responses:
- *       200:
- *         description: Token is valid
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 valid:
- *                   type: boolean
- *                   example: true
- *       400:
- *         description: Token is invalid or expired
- */
 router.get('/verify', async (req, res) => {
   try {
     const { token } = req.query;
@@ -69,31 +41,6 @@ router.get('/verify', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/email-verification/confirm:
- *   post:
- *     summary: Confirm email verification with token
- *     description: Verifies and updates the user's email address using a valid verification token
- *     tags: [Authentication]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - token
- *             properties:
- *               token:
- *                 type: string
- *                 description: Email verification token
- *     responses:
- *       200:
- *         description: Email verified and updated successfully
- *       400:
- *         description: Invalid token, expired token, or email already in use
- */
 router.post('/confirm', authRateLimiter, async (req, res) => {
   try {
     const { token } = req.body;

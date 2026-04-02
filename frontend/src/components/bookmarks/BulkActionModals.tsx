@@ -13,6 +13,7 @@ import { Label } from '../ui/label';
 import Autocomplete from '../ui/Autocomplete';
 import SharingModal from '../modals/SharingModal';
 import api from '../../api/client';
+import { usePlan } from '../../contexts/PlanContext';
 
 interface BulkMoveModalProps {
   isOpen: boolean;
@@ -35,15 +36,17 @@ export function BulkMoveModal({ isOpen, onClose, onSave, folders, t }: BulkMoveM
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-[460px]">
+      <DialogContent className="max-w-[460px] border-ghost bg-surface-high">
         <DialogHeader>
-          <DialogTitle>{t('bookmarks.bulkMoveToFolder')}</DialogTitle>
+          <DialogTitle className="text-lg font-semibold tracking-tight text-foreground">
+            {t('bookmarks.bulkMoveToFolder')}
+          </DialogTitle>
         </DialogHeader>
-        <Separator />
+        <Separator className="bg-border/50" />
 
         <form id="bulk-move-form" onSubmit={handleSubmit} className="space-y-6">
           <ModalSection>
-            <Label className="text-sm font-medium mb-2 block">{t('bookmarks.folders')}</Label>
+            <Label className="typography-label mb-2 block">{t('bookmarks.folders')}</Label>
             <Autocomplete
               value={selectedFolders}
               onChange={setSelectedFolders}
@@ -53,8 +56,8 @@ export function BulkMoveModal({ isOpen, onClose, onSave, folders, t }: BulkMoveM
           </ModalSection>
         </form>
 
-        <Separator />
-        <DialogFooter className="flex-row justify-between sm:justify-end gap-2">
+        <Separator className="bg-border/50" />
+        <DialogFooter className="flex-row justify-between gap-2 sm:justify-end">
           <ModalFooterActions
             onCancel={onClose}
             submitLabel={t('common.save')}
@@ -102,15 +105,17 @@ export function BulkTagModal({ isOpen, onClose, onSave, tags, onTagCreated, t }:
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-[460px]">
+      <DialogContent className="max-w-[460px] border-ghost bg-surface-high">
         <DialogHeader>
-          <DialogTitle>{t('bookmarks.bulkAddTags')}</DialogTitle>
+          <DialogTitle className="text-lg font-semibold tracking-tight text-foreground">
+            {t('bookmarks.bulkAddTags')}
+          </DialogTitle>
         </DialogHeader>
-        <Separator />
+        <Separator className="bg-border/50" />
 
         <form id="bulk-tag-form" onSubmit={handleSubmit} className="space-y-6">
           <ModalSection>
-            <Label className="text-sm font-medium mb-2 block">{t('bookmarks.tags')}</Label>
+            <Label className="typography-label mb-2 block">{t('bookmarks.tags')}</Label>
             <Autocomplete
               value={selectedTags}
               onChange={setSelectedTags}
@@ -121,8 +126,8 @@ export function BulkTagModal({ isOpen, onClose, onSave, tags, onTagCreated, t }:
           </ModalSection>
         </form>
 
-        <Separator />
-        <DialogFooter className="flex-row justify-between sm:justify-end gap-2">
+        <Separator className="bg-border/50" />
+        <DialogFooter className="flex-row justify-between gap-2 sm:justify-end">
           <ModalFooterActions
             onCancel={onClose}
             submitLabel={t('common.save')}
@@ -144,6 +149,8 @@ interface BulkShareModalProps {
 }
 
 export function BulkShareModal({ isOpen, onClose, onSave, teams }: BulkShareModalProps) {
+  const planInfo = usePlan();
+  const allowTeamSharing = planInfo ? planInfo.canShareWithTeams : teams.length > 0;
   return (
     <SharingModal
       isOpen={isOpen}
@@ -156,7 +163,7 @@ export function BulkShareModal({ isOpen, onClose, onSave, teams }: BulkShareModa
       }}
       teams={teams}
       type="bookmark"
-      allowTeamSharing={teams.length > 0}
+      allowTeamSharing={allowTeamSharing}
     />
   );
 }

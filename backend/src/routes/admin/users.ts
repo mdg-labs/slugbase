@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import crypto from 'crypto';
 import { query, queryOne, execute } from '../../db/index.js';
 import { AuthRequest, requireAuth, requireAdmin } from '../../middleware/auth.js';
@@ -6,142 +6,67 @@ import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
 import { validateEmail, normalizeEmail, validatePassword, validateLength, sanitizeString } from '../../utils/validation.js';
 import { generateUserKey } from '../../utils/user-key.js';
-import { getTenantId } from '../../utils/tenant.js';
+import { getTenantId, DEFAULT_TENANT_ID } from '../../utils/tenant.js';
 import { sendInviteEmail, isEmailSendingAvailable } from '../../utils/email.js';
+import { isCloud } from '../../config/mode.js';
 
 const router = Router();
 router.use(requireAuth());
 router.use(requireAdmin());
 
-/**
- * @swagger
- * /api/admin/users:
- *   get:
- *     summary: Get all users
- *     description: Returns a list of all users in the system. Admin only.
- *     tags: [Admin - Users]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: List of users
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 type: object
- *                 properties:
- *                   id:
- *                     type: string
- *                     example: "123e4567-e89b-12d3-a456-426614174000"
- *                   email:
- *                     type: string
- *                     example: "user@example.com"
- *                   name:
- *                     type: string
- *                     example: "John Doe"
- *                   user_key:
- *                     type: string
- *                     example: "abc12345"
- *                   is_admin:
- *                     type: boolean
- *                     example: false
- *                   oidc_provider:
- *                     type: string
- *                     nullable: true
- *                     example: "google"
- *                   language:
- *                     type: string
- *                     example: "en"
- *                   theme:
- *                     type: string
- *                     example: "auto"
- *                   created_at:
- *                     type: string
- *                     format: date-time
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Admin access required
- */
+const USER_COLUMNS =
+  'id, email, name, user_key, is_admin, oidc_provider, language, theme, created_at';
+
+async function userInCurrentOrg(req: Request, targetUserId: string): Promise<boolean> {
+  if (!isCloud) return true;
+  const tenantId = getTenantId(req);
+  if (!tenantId || tenantId === DEFAULT_TENANT_ID) return false;
+  const row = await queryOne('SELECT 1 FROM org_members WHERE org_id = ? AND user_id = ?', [tenantId, targetUserId]);
+  return Boolean(row);
+}
+
+function isInstanceGlobalAdmin(req: Request): boolean {
+  const u = (req as AuthRequest).user as { is_admin?: boolean | number } | undefined;
+  return u?.is_admin === true || u?.is_admin === 1;
+}
+
 router.get('/', async (req, res) => {
-  const authReq = req as AuthRequest;
   try {
+    const tenantId = getTenantId(req);
+    if (isCloud && tenantId !== DEFAULT_TENANT_ID) {
+      const users = await query(
+        `SELECT u.id, u.email, u.name, u.user_key, u.is_admin, u.oidc_provider, u.language, u.theme, u.created_at
+         FROM users u
+         INNER JOIN org_members om ON om.user_id = u.id
+         WHERE om.org_id = ?
+         ORDER BY u.created_at DESC`,
+        [tenantId]
+      );
+      const usersList = Array.isArray(users) ? users : users ? [users] : [];
+      return res.json(usersList);
+    }
+    if (isCloud) {
+      return res.json([]);
+    }
     const users = await query(
-      'SELECT id, email, name, user_key, is_admin, oidc_provider, language, theme, created_at FROM users ORDER BY created_at DESC',
+      `SELECT ${USER_COLUMNS} FROM users ORDER BY created_at DESC`,
       []
     );
-    const usersList = Array.isArray(users) ? users : (users ? [users] : []);
+    const usersList = Array.isArray(users) ? users : users ? [users] : [];
     res.json(usersList);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
 });
 
-/**
- * @swagger
- * /api/admin/users/{id}:
- *   get:
- *     summary: Get user by ID
- *     description: Returns detailed information about a specific user. Admin only.
- *     tags: [Admin - Users]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: User ID
- *         example: "123e4567-e89b-12d3-a456-426614174000"
- *     responses:
- *       200:
- *         description: User details
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 id:
- *                   type: string
- *                 email:
- *                   type: string
- *                 name:
- *                   type: string
- *                 user_key:
- *                   type: string
- *                 is_admin:
- *                   type: boolean
- *                 oidc_provider:
- *                   type: string
- *                   nullable: true
- *                 language:
- *                   type: string
- *                 theme:
- *                   type: string
- *                 created_at:
- *                   type: string
- *                   format: date-time
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Admin access required
- *       404:
- *         description: User not found
- */
 router.get('/:id', async (req, res) => {
-  const authReq = req as AuthRequest;
   try {
     const { id } = req.params;
-    const user = await queryOne(
-      'SELECT id, email, name, user_key, is_admin, oidc_provider, language, theme, created_at FROM users WHERE id = ?',
-      [id]
-    );
+    const user = await queryOne(`SELECT ${USER_COLUMNS} FROM users WHERE id = ?`, [id]);
     if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    if (!(await userInCurrentOrg(req, id))) {
       return res.status(404).json({ error: 'User not found' });
     }
     res.json(user);
@@ -150,83 +75,21 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/admin/users:
- *   post:
- *     summary: Create a new user
- *     description: Creates a new user account. Password is optional if user will use OIDC login. Admin only.
- *     tags: [Admin - Users]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *               - name
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *                 example: "newuser@example.com"
- *               name:
- *                 type: string
- *                 example: "New User"
- *               password:
- *                 type: string
- *                 format: password
- *                 minLength: 8
- *                 description: Optional password (required for local login). Omit when send_invite is true.
- *                 example: "securepassword123"
- *               is_admin:
- *                 type: boolean
- *                 default: false
- *                 example: false
- *               send_invite:
- *                 type: boolean
- *                 default: false
- *                 description: If true, create user without password and send invite email (SMTP must be configured).
- *     responses:
- *       201:
- *         description: User created successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 id:
- *                   type: string
- *                 email:
- *                   type: string
- *                 name:
- *                   type: string
- *                 user_key:
- *                   type: string
- *                 is_admin:
- *                   type: boolean
- *                 inviteSent:
- *                   type: boolean
- *                   description: Present when send_invite was true; indicates whether invite email was sent.
- *       400:
- *         description: Missing required fields, invalid email format, or email already exists
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Admin access required
- */
 function hashToken(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
 router.post('/', async (req, res) => {
-  const authReq = req as AuthRequest;
   try {
-    const { email, name, password, is_admin = false, send_invite: sendInvite = false } = req.body;
+    const tenantIdForPlan = getTenantId(req);
+    if (isCloud && tenantIdForPlan !== DEFAULT_TENANT_ID && (req as any).plan !== 'team') {
+      return res.status(403).json({
+        error: 'Adding organization members is available on the Team plan. Upgrade to invite more members.',
+      });
+    }
+
+    const { email, name, password, is_admin: bodyIsAdmin = false, send_invite: sendInvite = false } = req.body;
+    const is_admin = isCloud && !isInstanceGlobalAdmin(req) ? false : bodyIsAdmin;
 
     if (!email || !name) {
       return res.status(400).json({ error: 'Email and name are required' });
@@ -314,6 +177,15 @@ router.post('/', async (req, res) => {
       }
     }
 
+    const tenantId = getTenantId(req);
+    if (isCloud && tenantId !== DEFAULT_TENANT_ID) {
+      await execute('INSERT INTO org_members (user_id, org_id, role) VALUES (?, ?, ?)', [
+        userId,
+        tenantId,
+        'member',
+      ]);
+    }
+
     let inviteSent = false;
     if (sendInvite) {
       const token = crypto.randomBytes(32).toString('hex');
@@ -351,75 +223,16 @@ router.post('/', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/admin/users/{id}:
- *   put:
- *     summary: Update user
- *     description: Updates an existing user. All fields are optional. Password will be hashed if provided. Admin only.
- *     tags: [Admin - Users]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: User ID
- *         example: "123e4567-e89b-12d3-a456-426614174000"
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *                 example: "updated@example.com"
- *               name:
- *                 type: string
- *                 example: "Updated Name"
- *               password:
- *                 type: string
- *                 format: password
- *                 minLength: 8
- *                 description: New password (will be hashed)
- *                 example: "newpassword123"
- *               is_admin:
- *                 type: boolean
- *                 example: false
- *               language:
- *                 type: string
- *                 enum: [en, de, fr]
- *                 example: "en"
- *               theme:
- *                 type: string
- *                 enum: [light, dark, auto]
- *                 example: "auto"
- *     responses:
- *       200:
- *         description: User updated successfully
- *       400:
- *         description: Invalid email format or email already exists
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Admin access required
- *       404:
- *         description: User not found
- */
 router.put('/:id', async (req, res) => {
-  const authReq = req as AuthRequest;
   try {
     const { id } = req.params;
     const { email, name, password, is_admin, language, theme } = req.body;
 
     const existing = await queryOne('SELECT * FROM users WHERE id = ?', [id]);
     if (!existing) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    if (!(await userInCurrentOrg(req, id))) {
       return res.status(404).json({ error: 'User not found' });
     }
     const updates: string[] = [];
@@ -459,8 +272,10 @@ router.put('/:id', async (req, res) => {
       params.push(await bcrypt.hash(password, 10));
     }
     if (is_admin !== undefined) {
-      updates.push('is_admin = ?');
-      params.push(is_admin);
+      if (!isCloud || isInstanceGlobalAdmin(req)) {
+        updates.push('is_admin = ?');
+        params.push(is_admin);
+      }
     }
     if (language !== undefined) {
       updates.push('language = ?');
@@ -488,44 +303,6 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/admin/users/{id}:
- *   delete:
- *     summary: Delete user
- *     description: Deletes a user account. Cannot delete your own account. Admin only.
- *     tags: [Admin - Users]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: User ID
- *         example: "123e4567-e89b-12d3-a456-426614174000"
- *     responses:
- *       200:
- *         description: User deleted successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "User deleted"
- *       400:
- *         description: Cannot delete your own account
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Admin access required
- *       404:
- *         description: User not found
- */
 router.delete('/:id', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
@@ -540,6 +317,9 @@ router.delete('/:id', async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
+    if (!(await userInCurrentOrg(req, id))) {
+      return res.status(404).json({ error: 'User not found' });
+    }
     await execute('DELETE FROM users WHERE id = ?', [id]);
 
     res.json({ message: 'User deleted' });
@@ -548,53 +328,12 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/admin/users/{id}/teams:
- *   get:
- *     summary: Get teams for a user
- *     description: Returns all teams that a specific user is a member of. Admin only.
- *     tags: [Admin - Users]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: User ID
- *         example: "123e4567-e89b-12d3-a456-426614174000"
- *     responses:
- *       200:
- *         description: List of teams the user is a member of
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 type: object
- *                 properties:
- *                   id:
- *                     type: string
- *                   name:
- *                     type: string
- *                     example: "Development Team"
- *                   description:
- *                     type: string
- *                     nullable: true
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Admin access required
- *       404:
- *         description: User not found
- */
 router.get('/:id/teams', async (req, res) => {
-  const authReq = req as AuthRequest;
   try {
     const { id } = req.params;
+    if (!(await userInCurrentOrg(req, id))) {
+      return res.status(404).json({ error: 'User not found' });
+    }
     const tenantId = getTenantId(req);
     const teams = await query(
       `SELECT t.* FROM teams t

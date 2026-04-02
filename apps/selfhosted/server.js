@@ -13,6 +13,7 @@ import {
   loadOIDCStrategies,
   createApp,
   registerCoreRoutes,
+  openapiRoutes,
   DatabaseSessionStore,
   errorHandler,
   notFoundHandler,
@@ -33,6 +34,7 @@ async function start() {
 
     const sessionStore = new DatabaseSessionStore();
     const app = createApp({ sessionStore });
+    app.use(openapiRoutes);
     registerCoreRoutes(app, {});
 
     const publicDir = join(__dirname, 'public');
@@ -41,7 +43,13 @@ async function start() {
       res.sendFile(join(publicDir, 'index.html'));
     });
     app.get('*', (req, res, next) => {
-      if (req.path.startsWith('/api/') || req.path.startsWith('/api-docs') || req.path.startsWith('/go/')) {
+      if (
+        req.path.startsWith('/api/') ||
+        req.path.startsWith('/go/') ||
+        req.path === '/openapi.json' ||
+        req.path === '/openapi.yaml' ||
+        req.path.startsWith('/api-docs')
+      ) {
         return next();
       }
       res.sendFile(join(publicDir, 'index.html'), (err) => {

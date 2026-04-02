@@ -1,51 +1,33 @@
 import { Router } from 'express';
-import { queryOne, execute } from '../db/index.js';
+import { query, queryOne, execute } from '../db/index.js';
 import { AuthRequest, requireAuth } from '../middleware/auth.js';
 import { validateEmail, normalizeEmail, validateLength, sanitizeString } from '../utils/validation.js';
 import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
 import { sendEmailVerificationEmail } from '../utils/email.js';
+import { getClearAuthCookieOptions } from '../config/cookies.js';
+import { isCloud } from '../config/mode.js';
 
 const router = Router();
 router.use(requireAuth());
 
-/**
- * @swagger
- * /api/users/me:
- *   get:
- *     summary: Get current user profile
- *     description: Returns the authenticated user's profile information
- *     tags: [Users]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: User profile
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 id:
- *                   type: string
- *                 email:
- *                   type: string
- *                 name:
- *                   type: string
- *                 user_key:
- *                   type: string
- *                 is_admin:
- *                   type: boolean
- *                 language:
- *                   type: string
- *                   example: "en"
- *                 theme:
- *                   type: string
- *                   example: "auto"
- *       401:
- *         description: Unauthorized
- */
+// List users for sharing (same tenant/org). No admin required. Used by sharing modal.
+// Core: users table has no tenant_id; returns all users except current (self-hosted single-tenant).
+router.get('/for-sharing', async (req, res) => {
+  const authReq = req as AuthRequest;
+  try {
+    const userId = authReq.user!.id;
+    const rows = await query(
+      'SELECT id, name, email FROM users WHERE id != ? ORDER BY name ASC, email ASC',
+      [userId]
+    );
+    const list = Array.isArray(rows) ? rows : (rows ? [rows] : []);
+    res.json(list);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get current user profile
 router.get('/me', async (req, res) => {
   const authReq = req as AuthRequest;
@@ -58,50 +40,6 @@ router.get('/me', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/users/me:
- *   put:
- *     summary: Update user settings
- *     description: Updates the authenticated user's profile information including email, name, language, and theme preferences
- *     tags: [Users]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *                 example: "updated@example.com"
- *                 description: User's email address (must be unique)
- *               name:
- *                 type: string
- *                 example: "Updated Name"
- *                 description: User's display name
- *               language:
- *                 type: string
- *                 enum: [en, de, fr]
- *                 example: "en"
- *                 description: User's preferred language
- *               theme:
- *                 type: string
- *                 enum: [light, dark, auto]
- *                 example: "auto"
- *                 description: User's preferred theme
- *     responses:
- *       200:
- *         description: User settings updated successfully
- *       400:
- *         description: Invalid input or email already exists
- *       401:
- *         description: Unauthorized
- */
 // Update user settings
 router.put('/me', async (req, res) => {
   const authReq = req as AuthRequest;
@@ -201,6 +139,9 @@ router.put('/me', async (req, res) => {
     }
 
     if (ai_suggestions_enabled !== undefined) {
+      if (isCloud && (req as any).plan === 'free') {
+        return res.status(403).json({ error: 'AI suggestions are not available on the free plan.' });
+      }
       const DB_TYPE = process.env.DB_TYPE || 'sqlite';
       const val = ai_suggestions_enabled === true || ai_suggestions_enabled === 'true';
       updates.push('ai_suggestions_enabled = ?');
@@ -216,6 +157,25 @@ router.put('/me', async (req, res) => {
 
     const user = await queryOne('SELECT id, email, name, user_key, is_admin, language, theme, ai_suggestions_enabled FROM users WHERE id = ?', [userId]);
     res.json(user);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete current user account. Cascades via DB FKs (api_tokens, team_members, etc.).
+// Clears auth cookie so client is logged out.
+router.delete('/me', async (req, res) => {
+  const authReq = req as AuthRequest;
+  try {
+    const userId = authReq.user!.id;
+    const user = await queryOne('SELECT id FROM users WHERE id = ?', [userId]);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    await execute('DELETE FROM users WHERE id = ?', [userId]);
+    const clearOpts = getClearAuthCookieOptions();
+    res.clearCookie('token', clearOpts);
+    res.json({ message: 'Account deleted' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

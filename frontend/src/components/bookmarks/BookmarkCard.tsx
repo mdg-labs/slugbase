@@ -1,11 +1,40 @@
-import { Share2, Tag as TagIcon, ExternalLink, Copy, Edit, Trash2, CheckSquare, Square, Pin } from 'lucide-react';
+/**
+ * BookmarkCard - scan-first grid layout (Linear/Vercel style).
+ *
+ * Density improvements:
+ * - Fixed height ~148px (high-density) and tight padding fit more rows per viewport.
+ * - Single metadata row (folder · tags · slug) reduces vertical scan and badge clutter.
+ * - Title up to 2 lines (line-clamp-2) with tooltip for full text; favicon in subtle container.
+ * - Footer actions on hover (opacity only) keep a calm default and avoid layout shift.
+ * - No dividers or heavy badges; cards are visually lighter and easier to scan.
+ */
+import {
+  Share2,
+  ExternalLink,
+  Copy,
+  Edit,
+  Trash2,
+  CheckSquare,
+  Square,
+  Pin,
+  MoreVertical,
+} from 'lucide-react';
 import Button from '../ui/Button';
 import Tooltip from '../ui/Tooltip';
 import Favicon from '../Favicon';
 import FolderIcon from '../FolderIcon';
-import { Badge } from '../ui/badge';
+import { Card } from '../ui/card';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '../ui/dropdown-menu';
 import { safeHref } from '../../utils/safeHref';
 import { formatRelativeTime, formatFullDateTime } from '../../utils/formatRelativeTime';
+
+const SEP = ' · ';
 
 interface Bookmark {
   id: string;
@@ -52,11 +81,57 @@ export default function BookmarkCard({
   bulkMode,
   t,
 }: BookmarkCardProps) {
-  const totalSharedTeams = (bookmark.shared_teams?.length || 0) +
+  const totalSharedTeams =
+    (bookmark.shared_teams?.length || 0) +
     (bookmark.folders?.reduce((sum, f) => sum + (f.shared_teams?.length || 0), 0) || 0);
-  const totalSharedUsers = (bookmark.shared_users?.length || 0) +
+  const totalSharedUsers =
+    (bookmark.shared_users?.length || 0) +
     (bookmark.folders?.reduce((sum, f) => sum + (f.shared_users?.length || 0), 0) || 0);
   const isShared = totalSharedTeams > 0 || totalSharedUsers > 0;
+
+  const folderLabel =
+    bookmark.folders && bookmark.folders.length > 0
+      ? bookmark.folders[0].name
+      : (t('bookmarks.noFolder') as string);
+  const tagNames = bookmark.tags?.slice(0, 3).map((tag) => tag.name) ?? [];
+  const tagOverflow = (bookmark.tags?.length ?? 0) > 3;
+  const tagOverflowN = (bookmark.tags?.length ?? 0) - 3;
+  const slugPart = bookmark.forwarding_enabled ? `/${bookmark.slug}` : '';
+  const metaParts: string[] = [folderLabel, ...tagNames];
+  if (tagOverflow) metaParts.push(`+${tagOverflowN}`);
+  if (slugPart) metaParts.push(slugPart);
+  const metadataLine = metaParts.join(SEP);
+
+  const hasMultipleFolders = (bookmark.folders?.length ?? 0) > 1;
+  const hasManyTags = (bookmark.tags?.length ?? 0) > 3;
+  const metaTooltipContent =
+    hasMultipleFolders || hasManyTags ? (
+      <div className="space-y-1.5 text-left">
+        {hasMultipleFolders && bookmark.folders && (
+          <div>
+            <div className="font-semibold mb-0.5 text-xs">{t('bookmarks.folders')}</div>
+            <div className="text-xs text-muted-foreground space-y-0.5">
+              {bookmark.folders.map((folder) => (
+                <div key={folder.id} className="flex items-center gap-1.5">
+                  <FolderIcon iconName={folder.icon} size={12} className="text-muted-foreground shrink-0" />
+                  {folder.name}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {hasManyTags && bookmark.tags && (
+          <div>
+            <div className="font-semibold mb-0.5 text-xs">{t('bookmarks.tags')}</div>
+            <div className="text-xs text-muted-foreground flex flex-wrap gap-1">
+              {bookmark.tags.map((tag) => (
+                <span key={tag.id}>{tag.name}</span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    ) : null;
 
   function handleCardClick(e: React.MouseEvent) {
     if (bulkMode) return;
@@ -76,237 +151,269 @@ export default function BookmarkCard({
   }
 
   return (
-    <div
+    <Card
       role="button"
       tabIndex={0}
       onClick={handleCardClick}
       onKeyDown={handleCardKeyDown}
-      className={`group bg-card rounded-lg border ${
+      className={`group relative flex flex-col h-[148px] cursor-pointer rounded-lg border bg-card/95 transition-[border-color,box-shadow] duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 px-3 pt-0 pb-1.5 ${
         selected
           ? 'border-primary ring-2 ring-primary/20'
-          : 'border-border hover:border-primary/70 hover:bg-muted/50 hover:shadow-md'
-      } transition-all duration-200 flex flex-col h-full min-h-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${compact ? 'p-2.5 min-h-[160px]' : 'p-2.5 min-h-[140px]'}`}
+          : 'border-border/80 hover:border-primary/80 hover:shadow-glow'
+      }`}
     >
-      <div className="flex-shrink-0 mb-3">
-        <div className="flex items-center gap-3">
-          {bulkMode && (
-            <button
-              data-card-action
-              onClick={(e) => { e.stopPropagation(); onSelect(); }}
-              className="flex-shrink-0 text-primary"
-            >
-              {selected ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5" />}
-            </button>
-          )}
-            <div className={`flex-shrink-0 ${compact ? 'w-9 h-9' : 'w-10 h-10'} rounded-xl bg-primary/20 flex items-center justify-center border border-primary/30 overflow-hidden`}>
-            <Favicon url={bookmark.url} size={compact ? 18 : 20} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <h3 className={`${compact ? 'text-xs font-semibold' : 'text-sm font-medium'} text-foreground line-clamp-2 leading-snug mb-1`}>
+      {/* Bulk checkbox: top-right corner when bulk mode active */}
+      {bulkMode && (
+        <div className="absolute top-3 right-3 z-10" data-card-action>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelect();
+            }}
+            className="text-primary rounded p-0.5 hover:bg-muted/50 transition-colors"
+            aria-label={selected ? t('bookmarks.deselect') : t('bookmarks.select')}
+          >
+            {selected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+          </button>
+        </div>
+      )}
+
+      {/* Header: icon + title; reserve right space for bulk checkbox so title never overlaps */}
+      <header className={`flex-shrink-0 flex items-center gap-1.5 min-w-0 pt-3 ${bulkMode ? 'pr-8' : ''}`}>
+        <div
+          className={`flex-shrink-0 ${compact ? 'w-6 h-6' : 'w-7 h-7'} rounded-md bg-surface-low flex items-center justify-center border border-border/50 overflow-hidden`}
+        >
+          <Favicon url={bookmark.url} size={compact ? 12 : 14} />
+        </div>
+        <div className="flex-1 min-w-0 min-h-0 overflow-hidden">
+          <Tooltip content={bookmark.title}>
+            <h3 className="text-sm font-semibold text-foreground line-clamp-2 break-words leading-snug tracking-tight min-h-0">
               {bookmark.title}
             </h3>
-            {isShared && (
-              <Tooltip
-                content={
-                  <div className="space-y-1">
-                    <div className="font-semibold mb-1">{t('bookmarks.sharedWith')}</div>
-                    {bookmark.shared_teams && bookmark.shared_teams.map((team) => (
-                      <div key={team.id} className="text-xs">• {team.name}</div>
-                    ))}
-                    {bookmark.shared_users && bookmark.shared_users.map((user) => (
-                      <div key={user.id} className="text-xs">• {user.name || user.email}</div>
-                    ))}
-                    {bookmark.folders && bookmark.folders.map((folder) => {
-                      const hasShares = (folder.shared_teams?.length || 0) > 0 || (folder.shared_users?.length || 0) > 0;
-                      if (!hasShares) return null;
-                      return (
-                        <div key={folder.id} className="text-xs mt-1 pt-1 border-t border-gray-700">
-                          <div className="font-semibold mb-0.5">{folder.name}:</div>
-                          {folder.shared_teams?.map((team) => (
-                            <div key={team.id} className="text-xs pl-2">• {team.name}</div>
-                          ))}
-                          {folder.shared_users?.map((user) => (
-                            <div key={user.id} className="text-xs pl-2">• {user.name || user.email}</div>
-                          ))}
-                        </div>
-                      );
-                    })}
-                  </div>
-                }
-              >
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 rounded-md border border-green-200 dark:border-green-800/50 cursor-help">
-                  <Share2 className="h-3 w-3" />
-                  {totalSharedTeams > 0
-                    ? t('bookmarks.sharedWithTeams', { count: totalSharedTeams, teams: totalSharedTeams === 1 ? t('common.team') : t('common.teams') })
-                    : t('bookmarks.shared')}
-                </span>
-              </Tooltip>
-            )}
-          </div>
+          </Tooltip>
         </div>
-      </div>
+      </header>
 
-      <div className={`flex-1 flex flex-col min-h-0 ${compact ? 'min-h-[100px]' : 'min-h-[120px]'} space-y-2`}>
-        <div className="flex flex-wrap items-center gap-1.5 min-h-[24px] flex-shrink-0">
-          {bookmark.folders && bookmark.folders.length > 0 ? (
-            <>
-              {bookmark.folders.slice(0, compact ? 1 : 2).map((folder) => (
-                <Badge key={folder.id} variant="secondary" className="text-xs font-medium bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800/50">
-                  <FolderIcon iconName={folder.icon} size={12} className="text-blue-700 dark:text-blue-300 mr-1" />
-                  {folder.name}
-                </Badge>
-              ))}
-              {bookmark.folders.length > (compact ? 1 : 2) && (
-                <Tooltip
-                  content={
-                    <div className="space-y-1">
-                      <div className="font-semibold mb-1">{t('bookmarks.folders')}</div>
-                      {bookmark.folders.map((folder) => (
-                        <div key={folder.id} className="text-xs flex items-center gap-1.5">
-                          <FolderIcon iconName={folder.icon} size={12} className="text-blue-400" />
-                          {folder.name}
-                        </div>
-                      ))}
-                    </div>
-                  }
-                >
-                  <Badge variant="secondary" className="text-xs cursor-help bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300">
-                    +{bookmark.folders.length - (compact ? 1 : 2)}
-                  </Badge>
-                </Tooltip>
+      {/* Metadata row: folder (emphasized) · tags (muted) · slug (mono, most-muted); ~8px below title */}
+      <div className="flex-shrink-0 min-h-0 min-w-0 text-[10px] truncate mt-2">
+        {metaTooltipContent ? (
+          <Tooltip content={metaTooltipContent}>
+            <p className="truncate cursor-default" title={metadataLine}>
+              <span className="font-medium text-foreground/85">{folderLabel}</span>
+              {tagNames.length > 0 && (
+                <>
+                  <span className="text-muted-foreground/50 mx-0.5">·</span>
+                  <span className="text-muted-foreground/80">{tagNames.join(SEP)}</span>
+                </>
               )}
-            </>
-          ) : (
-            <Badge variant="secondary" className="text-xs font-medium bg-gray-50 dark:bg-gray-900/20 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-800/50 opacity-60">
-              <FolderIcon iconName={null} size={12} className="text-gray-600 dark:text-gray-400 mr-1" />
-              {t('bookmarks.noFolder')}
-            </Badge>
-          )}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-1.5 min-h-[24px] flex-shrink-0">
-          {bookmark.tags && bookmark.tags.length > 0 ? (
-            <>
-              {bookmark.tags.slice(0, compact ? 2 : 3).map((tag) => (
-                <Badge key={tag.id} variant="secondary" className="text-xs font-medium bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800/50">
-                  <TagIcon className="h-3 w-3 mr-1" />
-                  {tag.name}
-                </Badge>
-              ))}
-              {bookmark.tags.length > (compact ? 2 : 3) && (
-                <Tooltip
-                  content={
-                    <div className="space-y-1">
-                      <div className="font-semibold mb-1">{t('bookmarks.tags')}</div>
-                      {bookmark.tags.map((tag) => (
-                        <div key={tag.id} className="text-xs flex items-center gap-1.5">
-                          <TagIcon className="h-3 w-3 text-purple-400" />
-                          {tag.name}
-                        </div>
-                      ))}
-                    </div>
-                  }
-                >
-                  <Badge variant="secondary" className="text-xs cursor-help bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300">
-                    +{bookmark.tags.length - (compact ? 2 : 3)}
-                  </Badge>
-                </Tooltip>
+              {tagOverflow && (
+                <>
+                  <span className="text-muted-foreground/50 mx-0.5">·</span>
+                  <span className="text-muted-foreground/70">+{tagOverflowN}</span>
+                </>
               )}
-            </>
-          ) : (
-            <Badge variant="secondary" className="text-xs font-medium bg-gray-50 dark:bg-gray-900/20 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-800/50 opacity-60">
-              <TagIcon className="h-3 w-3 mr-1" />
-              {t('bookmarks.noTags') || 'No Tags'}
-            </Badge>
-          )}
-        </div>
-
-        {(typeof bookmark.access_count === 'number' || bookmark.last_accessed_at != null) && (
-          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground flex-shrink-0">
-            <span>{t('bookmarks.clicks')}: {typeof bookmark.access_count === 'number' ? bookmark.access_count : '-'}</span>
-            {bookmark.last_accessed_at ? (
-              <Tooltip content={formatFullDateTime(bookmark.last_accessed_at)}>
-                <span className="cursor-help">
-                  {t('bookmarks.lastOpened')}: {formatRelativeTime(bookmark.last_accessed_at)}
-                </span>
-              </Tooltip>
-            ) : (
-              <span>{t('bookmarks.lastOpened')}: {t('bookmarks.never')}</span>
-            )}
-          </div>
-        )}
-
-        {bookmark.forwarding_enabled && (
-          <div className={`flex items-center gap-1.5 flex-shrink-0 ${compact ? 'px-2 py-1.5' : 'px-2 py-1.5'}`}>
-            <Badge variant="outline" className="text-xs font-mono">
-              {t('bookmarks.slug')}: /{bookmark.slug}
-            </Badge>
-            <Tooltip content={t('bookmarks.copyUrl')}>
-              <button
-                data-card-action
-                type="button"
-                onClick={(e) => { e.stopPropagation(); onCopyUrl(); }}
-                className="flex-shrink-0 p-1.5 text-muted-foreground hover:text-foreground rounded-md hover:bg-muted transition-colors"
-                aria-label={t('bookmarks.copyUrl')}
-              >
-                <Copy className="h-3.5 w-3.5" />
-              </button>
-            </Tooltip>
-          </div>
-        )}
-      </div>
-
-      <div className={`flex gap-1.5 pt-2.5 shrink-0 border-t border-border ${compact ? 'pt-2' : ''}`} data-card-action>
-        {onOpen ? (
-          <Tooltip content={t('bookmarks.open')}>
-            <Button variant="ghost" size="sm" icon={ExternalLink} iconClassName="h-3.5 w-3.5 stroke-[1.5]" className="flex-shrink-0 h-8 w-8 p-0" onClick={(e) => { e.stopPropagation(); onOpen(); }} aria-label={t('bookmarks.open')} />
+              {slugPart && (
+                <>
+                  <span className="text-muted-foreground/50 mx-0.5">·</span>
+                  <span className="font-mono text-muted-foreground/45">{slugPart}</span>
+                </>
+              )}
+            </p>
           </Tooltip>
         ) : (
-          <Tooltip content={t('bookmarks.open')}>
-            <a
-              href={safeHref(bookmark.url)}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className="flex-shrink-0"
-            >
-              <Button variant="ghost" size="sm" icon={ExternalLink} iconClassName="h-3.5 w-3.5 stroke-[1.5]" className="h-8 w-8 p-0" aria-label={t('bookmarks.open')} />
-            </a>
-          </Tooltip>
+          <p className="truncate" title={metadataLine}>
+            <span className="font-medium text-foreground/85">{folderLabel}</span>
+            {tagNames.length > 0 && (
+              <>
+                <span className="text-muted-foreground/50 mx-0.5">·</span>
+                <span className="text-muted-foreground/80">{tagNames.join(SEP)}</span>
+              </>
+            )}
+            {tagOverflow && (
+              <>
+                <span className="text-muted-foreground/50 mx-0.5">·</span>
+                <span className="text-muted-foreground/70">+{tagOverflowN}</span>
+              </>
+            )}
+            {slugPart && (
+              <>
+                <span className="text-muted-foreground/50 mx-0.5">·</span>
+                <span className="font-mono text-muted-foreground/45">{slugPart}</span>
+              </>
+            )}
+          </p>
         )}
-        {bookmark.bookmark_type === 'own' && (
-          <>
-            {onPinToggle && (
-              <Tooltip content={bookmark.pinned ? t('bookmarks.pinned') : t('bookmarks.pin')}>
+      </div>
+
+      {/* Shared chip: below meta line when bookmark is shared */}
+      {isShared && (
+        <div className="flex-shrink-0 mt-1">
+          <Tooltip
+            content={
+              <div className="space-y-1">
+                <div className="font-semibold mb-1">{t('bookmarks.sharedWith')}</div>
+                {bookmark.shared_teams?.map((team) => (
+                  <div key={team.id} className="text-xs">• {team.name}</div>
+                ))}
+                {bookmark.shared_users?.map((user) => (
+                  <div key={user.id} className="text-xs">• {user.name || user.email}</div>
+                ))}
+                {bookmark.folders?.map((folder) => {
+                  const hasShares =
+                    (folder.shared_teams?.length || 0) > 0 || (folder.shared_users?.length || 0) > 0;
+                  if (!hasShares) return null;
+                  return (
+                    <div key={folder.id} className="text-xs mt-1 pt-1 border-t border-border">
+                      <div className="font-semibold mb-0.5">{folder.name}:</div>
+                      {folder.shared_teams?.map((team) => (
+                        <div key={team.id} className="text-xs pl-2">• {team.name}</div>
+                      ))}
+                      {folder.shared_users?.map((user) => (
+                        <div key={user.id} className="text-xs pl-2">• {user.name || user.email}</div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            }
+          >
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium bg-primary/10 text-muted-foreground rounded cursor-help">
+              <Share2 className="h-2.5 w-2.5" />
+              {totalSharedTeams > 0
+                ? t('bookmarks.sharedWithTeams', {
+                    count: totalSharedTeams,
+                    teams: totalSharedTeams === 1 ? t('common.team') : t('common.teams'),
+                  })
+                : t('bookmarks.shared')}
+            </span>
+          </Tooltip>
+        </div>
+      )}
+
+      {/* Spacer: pushes footer to bottom without stretching header */}
+      <div className="flex-1 min-h-0" aria-hidden />
+
+      {/* Footer: Clicks · Last opened (left); open + kebab (right, hover-only); ~10px above */}
+      <footer className="flex-shrink-0 flex items-center justify-between gap-2 h-6 min-h-[24px] pt-2.5">
+        <div className="text-[10px] text-foreground/70 truncate min-w-0">
+          {t('bookmarks.clicks')}: {typeof bookmark.access_count === 'number' ? bookmark.access_count : '–'}
+          {SEP}
+          {bookmark.last_accessed_at ? (
+            <Tooltip content={formatFullDateTime(bookmark.last_accessed_at)}>
+              <span className="cursor-help">
+                {t('bookmarks.lastOpened')}: {formatRelativeTime(bookmark.last_accessed_at)}
+              </span>
+            </Tooltip>
+          ) : (
+            <span>{t('bookmarks.lastOpened')}: {t('bookmarks.never')}</span>
+          )}
+        </div>
+        <div
+          className="flex items-center gap-0.5 flex-shrink-0 w-[52px] justify-end opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-150"
+          data-card-action
+        >
+          <Tooltip content={t('bookmarks.open')}>
+            {onOpen ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={ExternalLink}
+                iconClassName="h-3.5 w-3.5 stroke-[1.5]"
+                className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground transition-colors min-w-6"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpen();
+                }}
+                aria-label={t('bookmarks.open')}
+              />
+            ) : (
+              <a
+                href={safeHref(bookmark.url)}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="text-muted-foreground hover:text-foreground transition-colors inline-flex items-center justify-center"
+              >
                 <Button
                   variant="ghost"
                   size="sm"
-                  icon={Pin}
-                  iconClassName="h-3.5 w-3.5 stroke-[1.5]"
-                  className={`flex-shrink-0 h-8 w-8 p-0 ${bookmark.pinned ? 'text-primary' : ''}`}
-                  onClick={(e) => { e.stopPropagation(); onPinToggle(); }}
-                  aria-label={bookmark.pinned ? t('bookmarks.pinned') : t('bookmarks.pin')}
-                  aria-pressed={bookmark.pinned}
+                  icon={ExternalLink}
+                  iconClassName="h-3 w-3 stroke-[1.5]"
+                  className="h-6 w-6 p-0 min-w-6"
+                  aria-label={t('bookmarks.open')}
                 />
-              </Tooltip>
+              </a>
             )}
-            {onShare && (
-              <Tooltip content={t('sharing.shareBookmark')}>
-                <Button variant="ghost" size="sm" icon={Share2} iconClassName="h-3.5 w-3.5 stroke-[1.5]" className="flex-shrink-0 h-8 w-8 p-0" onClick={(e) => { e.stopPropagation(); onShare(); }} aria-label={t('sharing.shareBookmark')} />
-              </Tooltip>
-            )}
-            <Tooltip content={t('common.edit')}>
-              <Button variant="ghost" size="sm" icon={Edit} iconClassName="h-3.5 w-3.5 stroke-[1.5]" className="flex-shrink-0 h-8 w-8 p-0" onClick={(e) => { e.stopPropagation(); onEdit(); }} aria-label={t('common.edit')} />
-            </Tooltip>
-            <Tooltip content={t('bookmarks.copyUrl')}>
-              <Button variant="ghost" size="sm" icon={Copy} iconClassName="h-3.5 w-3.5 stroke-[1.5]" className="flex-shrink-0 h-8 w-8 p-0" onClick={(e) => { e.stopPropagation(); onCopyUrl(); }} aria-label={t('bookmarks.copyUrl')} />
-            </Tooltip>
-            <Tooltip content={t('common.delete')}>
-              <Button variant="ghost" size="sm" icon={Trash2} iconClassName="h-3.5 w-3.5 stroke-[1.5]" className="flex-shrink-0 h-8 w-8 p-0 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300" onClick={(e) => { e.stopPropagation(); onDelete(); }} aria-label={t('common.delete')} />
-            </Tooltip>
-          </>
-        )}
-      </div>
-    </div>
+          </Tooltip>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={MoreVertical}
+                iconClassName="h-3 w-3 stroke-[1.5]"
+                className="h-6 w-6 p-0 min-w-6 text-muted-foreground hover:text-foreground transition-colors"
+                aria-label={t('bookmarks.moreActions')}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+              {bookmark.bookmark_type === 'own' && onPinToggle && (
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPinToggle();
+                  }}
+                >
+                  <Pin className="h-4 w-4" />
+                  {bookmark.pinned ? t('bookmarks.pinned') : t('bookmarks.pin')}
+                </DropdownMenuItem>
+              )}
+              {onShare && (
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onShare();
+                  }}
+                >
+                  <Share2 className="h-4 w-4" />
+                  {t('sharing.shareBookmark')}
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCopyUrl();
+                }}
+              >
+                <Copy className="h-4 w-4" />
+                {t('bookmarks.copyUrl')}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit();
+                }}
+              >
+                <Edit className="h-4 w-4" />
+                {t('common.edit')}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete();
+                }}
+                className="text-destructive focus:text-destructive"
+              >
+                <Trash2 className="h-4 w-4" />
+                {t('common.delete')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </footer>
+    </Card>
   );
 }

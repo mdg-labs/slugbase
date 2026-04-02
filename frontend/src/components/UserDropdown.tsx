@@ -4,6 +4,7 @@ import { User as UserIcon, LogOut, Settings } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppConfig } from '../contexts/AppConfigContext';
 import type { User } from '../contexts/AuthContext';
+import { canAccessWorkspaceAdmin } from '../utils/adminAccess';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,10 +28,11 @@ function getInitials(name: string): string {
 
 export default function UserDropdown({ user }: UserDropdownProps) {
   const { t } = useTranslation();
-  const { appBasePath } = useAppConfig();
+  const { pathPrefixForLinks } = useAppConfig();
+  const prefix = (pathPrefixForLinks || '').replace(/\/+/g, '/') || '';
   const { logout } = useAuth();
 
-  const showAdmin = user?.is_admin;
+  const showAdmin = canAccessWorkspaceAdmin(user);
 
   if (!user) return null;
 
@@ -39,34 +41,34 @@ export default function UserDropdown({ user }: UserDropdownProps) {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="flex items-center justify-center w-9 h-9 rounded-full bg-secondary text-secondary-foreground font-medium text-sm hover:bg-accent hover:text-accent-foreground transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-ghost bg-surface-high text-xs font-semibold text-primary transition-colors hover:bg-surface-highest focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           aria-haspopup="menu"
           aria-label={t('profile.title')}
         >
           {user.name ? (
             getInitials(user.name)
           ) : (
-            <UserIcon className="h-5 w-5" />
+            <UserIcon className="h-5 w-5 text-primary" />
           )}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel>
+      <DropdownMenuContent align="end" className="w-56 text-foreground">
+        <DropdownMenuLabel className="text-foreground">
           <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">{user.name}</p>
+            <p className="text-sm font-medium leading-none text-foreground">{user.name}</p>
             <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link to={`${appBasePath}/profile`} className="flex items-center gap-2 cursor-pointer">
+        <DropdownMenuItem asChild className="text-foreground">
+          <Link to={`${prefix}/profile`} className="flex w-full cursor-pointer items-center gap-2 text-foreground">
             <UserIcon className="h-4 w-4" />
             {t('profile.title')}
           </Link>
         </DropdownMenuItem>
         {showAdmin && (
-          <DropdownMenuItem asChild>
-            <Link to={`${appBasePath}/admin/members`} className="flex items-center gap-2 cursor-pointer">
+          <DropdownMenuItem asChild className="text-foreground">
+            <Link to={`${prefix}/admin`.replace(/\/+/g, '/') || '/admin'} className="flex w-full cursor-pointer items-center gap-2 text-foreground">
               <Settings className="h-4 w-4" />
               {t('admin.title')}
             </Link>
@@ -75,7 +77,7 @@ export default function UserDropdown({ user }: UserDropdownProps) {
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={() => logout()}
-          className="flex items-center gap-2 cursor-pointer text-destructive focus:text-destructive"
+          className="text-destructive data-[highlighted]:bg-destructive/10 data-[highlighted]:text-destructive"
         >
           <LogOut className="h-4 w-4" />
           {t('auth.logout')}

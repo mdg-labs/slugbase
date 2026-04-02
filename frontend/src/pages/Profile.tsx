@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppConfig } from '../contexts/AppConfigContext';
-import { AlertCircle, Key } from 'lucide-react';
+import { usePlan, usePlanLoadState, isCloudMode } from '../contexts/PlanContext';
+import { AlertCircle, Key, AlertTriangle } from 'lucide-react';
 import Select from '../components/ui/Select';
 import Button from '../components/ui/Button';
 import { Switch } from '../components/ui/switch';
@@ -14,6 +15,9 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
 import api from '../api/client';
+import { getDocsApiReferenceUrl } from '../config/docs';
+import { resolveSupportedLocale } from '../i18n';
+import { canAccessWorkspaceAdmin } from '../utils/adminAccess';
 
 interface ApiToken {
   id: string;
@@ -38,7 +42,7 @@ function SettingsRow({
   ariaLabel?: string;
 }) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 py-3 border-b border-border last:border-0">
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 py-3 border-b border-ghost last:border-0">
       <div className="min-w-0 flex-1">
         <dt className="text-sm font-medium text-foreground">{label}</dt>
         {value !== undefined && (
@@ -58,8 +62,13 @@ function SettingsRow({
 
 export default function Profile() {
   const { t } = useTranslation();
-  const { appBasePath, apiBaseUrl } = useAppConfig();
-  const { user, updateUser, checkAuth } = useAuth();
+  const navigate = useNavigate();
+  const { pathPrefixForLinks, profileDeleteGuard } = useAppConfig();
+  const prefix = (pathPrefixForLinks || '').replace(/\/+/g, '/') || '';
+  const loginPath = `${prefix}/login`.replace(/\/+/g, '/') || '/login';
+  const { user, updateUser, checkAuth, logout } = useAuth();
+  const planInfo = usePlan();
+  const planLoadState = usePlanLoadState();
   const { showToast } = useToast();
   const [formData, setFormData] = useState({
     email: '',
@@ -77,13 +86,15 @@ export default function Profile() {
   const [tokensLoading, setTokensLoading] = useState(true);
   const [createTokenOpen, setCreateTokenOpen] = useState(false);
   const [revokeTokenId, setRevokeTokenId] = useState<string | null>(null);
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
+  const [deleteAccountLoading, setDeleteAccountLoading] = useState(false);
 
   useEffect(() => {
     if (user) {
       setFormData({
         email: user.email || '',
         name: user.name || '',
-        language: user.language || 'en',
+        language: resolveSupportedLocale(user.language),
         theme: user.theme || 'auto',
         ai_suggestions_enabled: Boolean((user as { ai_suggestions_enabled?: boolean | number }).ai_suggestions_enabled ?? true),
       });
@@ -109,18 +120,29 @@ export default function Profile() {
     if (user) fetchTokens();
   }, [user, fetchTokens]);
 
-  const preferencesDirty = user && (
-    formData.language !== (user.language || 'en') ||
-    formData.theme !== (user.theme || 'auto') ||
-    formData.ai_suggestions_enabled !== Boolean((user as { ai_suggestions_enabled?: boolean | number }).ai_suggestions_enabled ?? true)
-  );
+  const showAiSuggestionsPreference = isCloudMode
+    ? planLoadState === 'ready' && planInfo?.aiAvailable === true
+    : aiAvailable;
+
+  const preferencesDirty =
+    !!user &&
+    (formData.language !== resolveSupportedLocale(user.language) ||
+      formData.theme !== (user.theme || 'auto') ||
+      (showAiSuggestionsPreference &&
+        formData.ai_suggestions_enabled !==
+          Boolean((user as { ai_suggestions_enabled?: boolean | number }).ai_suggestions_enabled ?? true)));
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     setErrors({});
     try {
-      const response = (await updateUser(formData)) as unknown;
+      const preferencePayload = {
+        language: formData.language,
+        theme: formData.theme,
+        ...(showAiSuggestionsPreference ? { ai_suggestions_enabled: formData.ai_suggestions_enabled } : {}),
+      };
+      const response = (await updateUser(preferencePayload)) as unknown;
       const data = response && typeof response === 'object' && 'emailVerificationRequired' in response
         ? (response as { emailVerificationRequired?: boolean })
         : null;
@@ -167,6 +189,38 @@ export default function Profile() {
     }
   }
 
+  async function handleDeleteAccountClick() {
+    if (profileDeleteGuard) {
+      try {
+        const result = await profileDeleteGuard();
+        if (!result.allowed) {
+          showToast(result.message || t('profile.deleteAccountGuardMessage'), 'error');
+          return;
+        }
+      } catch {
+        showToast(t('common.error'), 'error');
+        return;
+      }
+    }
+    setDeleteAccountOpen(true);
+  }
+
+  async function handleConfirmDeleteAccount() {
+    setDeleteAccountLoading(true);
+    try {
+      await api.delete('/users/me');
+      setDeleteAccountOpen(false);
+      showToast(t('profile.deleteAccountSuccess'), 'success');
+      await logout();
+      navigate(loginPath, { replace: true });
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { error?: string } } };
+      showToast(e.response?.data?.error || t('common.error'), 'error');
+    } finally {
+      setDeleteAccountLoading(false);
+    }
+  }
+
   function formatDate(iso: string) {
     try {
       return new Date(iso).toLocaleDateString(undefined, {
@@ -192,15 +246,6 @@ export default function Profile() {
   const languageOptions = [
     { value: 'en', label: t('profile.languageEnglish') },
     { value: 'de', label: t('profile.languageGerman') },
-    { value: 'fr', label: t('profile.languageFrench') },
-    { value: 'es', label: t('profile.languageSpanish') },
-    { value: 'it', label: t('profile.languageItalian') },
-    { value: 'pt', label: t('profile.languagePortuguese') },
-    { value: 'nl', label: t('profile.languageDutch') },
-    { value: 'ru', label: t('profile.languageRussian') },
-    { value: 'ja', label: t('profile.languageJapanese') },
-    { value: 'zh', label: t('profile.languageChinese') },
-    { value: 'pl', label: t('profile.languagePolish') },
   ];
 
   const themeOptions = [
@@ -225,7 +270,7 @@ export default function Profile() {
           <span>
             {t('profile.signedInAs')}: <span className="text-foreground">{user.email}</span>
           </span>
-          {user.is_admin && (
+          {canAccessWorkspaceAdmin(user) && (
             <Badge variant="secondary" className="text-xs font-normal">
               {t('profile.admin')}
             </Badge>
@@ -235,7 +280,7 @@ export default function Profile() {
 
       <div className="space-y-6">
         {/* Section A: Account */}
-        <Card className="border border-border bg-card shadow-sm">
+        <Card className="rounded-xl border border-ghost bg-surface shadow-none">
           <CardHeader>
             <CardTitle>{t('profile.account')}</CardTitle>
             <CardDescription>{t('profile.accountDescription')}</CardDescription>
@@ -272,6 +317,7 @@ export default function Profile() {
                         onClick={handleSubmit}
                         disabled={saving}
                         aria-label={t('common.save')}
+                        className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
                       >
                         {saving ? t('common.loading') : t('common.save')}
                       </Button>
@@ -349,6 +395,7 @@ export default function Profile() {
                         onClick={handleSubmit}
                         disabled={saving}
                         aria-label={t('common.save')}
+                        className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
                       >
                         {saving ? t('common.loading') : t('common.save')}
                       </Button>
@@ -399,14 +446,14 @@ export default function Profile() {
                 )}
               </SettingsRow>
 
-              {/* Quick Access row — muted, no primary action */}
+              {/* Quick Access row - muted, no primary action */}
               <SettingsRow
                 label={t('profile.quickAccess')}
                 helper={
                   <>
                     {t('profile.quickAccessDescription')}{' '}
                     <Link
-                      to={`${appBasePath}/go-preferences`}
+                      to={`${prefix}/go-preferences`}
                       className="text-primary hover:text-primary/90 font-medium"
                     >
                       {t('profile.manageQuickAccess')} →
@@ -419,7 +466,7 @@ export default function Profile() {
         </Card>
 
         {/* Section B: Preferences */}
-        <Card className="border border-border bg-card shadow-sm">
+        <Card className="rounded-xl border border-ghost bg-surface shadow-none">
           <CardHeader>
             <CardTitle>{t('profile.preferences')}</CardTitle>
             <CardDescription>{t('profile.preferencesDescription')}</CardDescription>
@@ -446,7 +493,7 @@ export default function Profile() {
                   options={themeOptions}
                 />
               </div>
-              {aiAvailable && (
+              {showAiSuggestionsPreference && (
                 <div className="flex items-center justify-between gap-3 py-2">
                   <div>
                     <label htmlFor="ai-suggestions" className="text-sm font-medium text-foreground">
@@ -477,6 +524,7 @@ export default function Profile() {
                 variant="primary"
                 disabled={saving || !preferencesDirty}
                 aria-label={t('common.save')}
+                className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
               >
                 {saving ? t('common.loading') : t('common.save')}
               </Button>
@@ -485,11 +533,11 @@ export default function Profile() {
         </Card>
 
         {/* Section C: Developer / API Access */}
-        <Card className="border border-border bg-card shadow-sm" aria-labelledby="developer-section-title">
+        <Card className="rounded-xl border border-ghost bg-surface shadow-none" aria-labelledby="developer-section-title">
           <CardHeader>
             <div className="flex flex-wrap items-center gap-2">
               <CardTitle id="developer-section-title" className="flex items-center gap-2">
-                <Key className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                <Key className="h-5 w-5 text-primary" />
                 {t('profile.developerApiTitle')}
               </CardTitle>
               <Badge
@@ -509,7 +557,7 @@ export default function Profile() {
               </p>
             </div>
             <a
-              href={apiBaseUrl ? `${apiBaseUrl}/api-docs` : '/api-docs'}
+              href={getDocsApiReferenceUrl()}
               target="_blank"
               rel="noopener noreferrer"
               className="text-sm font-medium text-primary hover:text-primary/90 inline-block"
@@ -526,6 +574,7 @@ export default function Profile() {
                 size="sm"
                 onClick={() => setCreateTokenOpen(true)}
                 aria-label={t('profile.createToken')}
+                className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
               >
                 {t('profile.createToken')}
               </Button>
@@ -541,7 +590,7 @@ export default function Profile() {
                 {tokens.map((tok) => (
                   <li
                     key={tok.id}
-                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 py-2 px-3 rounded-lg bg-muted/50"
+                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 py-2 px-3 rounded-xl border border-ghost bg-surface-low"
                   >
                     <div className="min-w-0 flex-1">
                       <span className="text-sm font-medium text-foreground block truncate">
@@ -572,6 +621,32 @@ export default function Profile() {
             )}
           </CardContent>
         </Card>
+
+        {/* Danger Zone: delete account */}
+        <Card className="rounded-xl border border-destructive/40 bg-surface-low shadow-none">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              {t('profile.dangerZone')}
+            </CardTitle>
+            <CardDescription>{t('profile.dangerZoneDescription')}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-4">
+              {t('profile.deleteAccountDescription')}
+            </p>
+            <Button
+              type="button"
+              variant="ghost"
+              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+              onClick={handleDeleteAccountClick}
+              disabled={deleteAccountLoading}
+              aria-label={t('profile.deleteAccount')}
+            >
+              {t('profile.deleteAccount')}
+            </Button>
+          </CardContent>
+        </Card>
       </div>
 
       <CreateTokenModal
@@ -587,6 +662,15 @@ export default function Profile() {
         confirmText={t('profile.revokeToken')}
         onConfirm={() => revokeTokenId && handleRevokeToken(revokeTokenId)}
         onCancel={() => setRevokeTokenId(null)}
+      />
+      <ConfirmDialog
+        isOpen={deleteAccountOpen}
+        title={t('profile.deleteAccount')}
+        message={t('profile.deleteAccountConfirm')}
+        variant="danger"
+        confirmText={t('profile.deleteAccount')}
+        onConfirm={handleConfirmDeleteAccount}
+        onCancel={() => setDeleteAccountOpen(false)}
       />
     </div>
   );

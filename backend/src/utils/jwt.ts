@@ -15,20 +15,25 @@ export interface JWTPayload {
   name: string;
   user_key: string;
   is_admin: boolean;
+  email_verified?: boolean;
 }
 
 /**
  * Generate a JWT token for a user (SELFHOSTED: long-lived; or generic with default 7d).
  */
 export function generateToken(user: JWTPayload): string {
+  const payload: Record<string, unknown> = {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    user_key: user.user_key,
+    is_admin: user.is_admin,
+  };
+  if (user.email_verified !== undefined) {
+    payload.email_verified = user.email_verified;
+  }
   return jwt.sign(
-    {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      user_key: user.user_key,
-      is_admin: user.is_admin,
-    },
+    payload,
     JWT_SECRET,
     { expiresIn: JWT_EXPIRES_IN } as SignOptions
   );

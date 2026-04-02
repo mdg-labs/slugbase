@@ -1,56 +1,34 @@
-import { Router } from 'express';
+import { Router, type Request, type Response, type NextFunction } from 'express';
 import { query, queryOne, execute } from '../../db/index.js';
 import { AuthRequest, requireAuth, requireAdmin } from '../../middleware/auth.js';
 import { v4 as uuidv4 } from 'uuid';
 import { getTenantId } from '../../utils/tenant.js';
+import { isCloud } from '../../config/mode.js';
 
 const router = Router();
 router.use(requireAuth());
 router.use(requireAdmin());
 
-/**
- * @swagger
- * /api/admin/teams:
- *   get:
- *     summary: Get all teams
- *     description: Returns a list of all teams in the system. Admin only.
- *     tags: [Admin - Teams]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: List of teams
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 type: object
- *                 properties:
- *                   id:
- *                     type: string
- *                     example: "123e4567-e89b-12d3-a456-426614174000"
- *                   name:
- *                     type: string
- *                     example: "Development Team"
- *                   description:
- *                     type: string
- *                     nullable: true
- *                     example: "Team for development work"
- *                   created_at:
- *                     type: string
- *                     format: date-time
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Admin access required
- */
+function requireTeamPlanCloud(req: Request, res: Response, next: NextFunction) {
+  if (isCloud && (req as any).plan !== 'team') {
+    return res.status(403).json({ error: 'Teams are available on the Team plan.' });
+  }
+  next();
+}
+router.use(requireTeamPlanCloud);
+
 router.get('/', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const tenantId = getTenantId(req);
-    const teams = await query('SELECT * FROM teams WHERE tenant_id = ? ORDER BY created_at DESC', [tenantId]);
+    const teams = await query(
+      `SELECT t.*,
+        (SELECT COUNT(*) FROM team_members tm WHERE tm.team_id = t.id AND tm.tenant_id = t.tenant_id) AS member_count
+       FROM teams t
+       WHERE t.tenant_id = ?
+       ORDER BY t.created_at DESC`,
+      [tenantId]
+    );
     const teamsList = Array.isArray(teams) ? teams : (teams ? [teams] : []);
     res.json(teamsList);
   } catch (error: any) {
@@ -58,62 +36,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/admin/teams/{id}:
- *   get:
- *     summary: Get team by ID with members
- *     description: Returns detailed information about a team including all members. Admin only.
- *     tags: [Admin - Teams]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: Team ID
- *         example: "123e4567-e89b-12d3-a456-426614174000"
- *     responses:
- *       200:
- *         description: Team with members
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 id:
- *                   type: string
- *                 name:
- *                   type: string
- *                 description:
- *                   type: string
- *                   nullable: true
- *                 created_at:
- *                   type: string
- *                   format: date-time
- *                 members:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       id:
- *                         type: string
- *                       email:
- *                         type: string
- *                       name:
- *                         type: string
- *                       is_admin:
- *                         type: boolean
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Admin access required
- *       404:
- *         description: Team not found
- */
 router.get('/:id', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
@@ -141,58 +63,6 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/admin/teams:
- *   post:
- *     summary: Create a new team
- *     description: Creates a new team. Team names must be unique. Admin only.
- *     tags: [Admin - Teams]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - name
- *             properties:
- *               name:
- *                 type: string
- *                 example: "Development Team"
- *                 description: Unique team name
- *               description:
- *                 type: string
- *                 nullable: true
- *                 example: "Team for development work"
- *     responses:
- *       201:
- *         description: Team created successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 id:
- *                   type: string
- *                 name:
- *                   type: string
- *                 description:
- *                   type: string
- *                   nullable: true
- *                 created_at:
- *                   type: string
- *                   format: date-time
- *       400:
- *         description: Missing name or team with same name already exists
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Admin access required
- */
 router.post('/', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
@@ -224,50 +94,6 @@ router.post('/', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/admin/teams/{id}:
- *   put:
- *     summary: Update team
- *     description: Updates an existing team. All fields are optional. Team names must be unique. Admin only.
- *     tags: [Admin - Teams]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: Team ID
- *         example: "123e4567-e89b-12d3-a456-426614174000"
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               name:
- *                 type: string
- *                 example: "Updated Team Name"
- *               description:
- *                 type: string
- *                 nullable: true
- *                 example: "Updated description"
- *     responses:
- *       200:
- *         description: Team updated successfully
- *       400:
- *         description: Team name already exists or no fields to update
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Admin access required
- *       404:
- *         description: Team not found
- */
 router.put('/:id', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
@@ -313,42 +139,6 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/admin/teams/{id}:
- *   delete:
- *     summary: Delete team
- *     description: Deletes a team. This removes all team memberships and team shares. Admin only.
- *     tags: [Admin - Teams]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: Team ID
- *         example: "123e4567-e89b-12d3-a456-426614174000"
- *     responses:
- *       200:
- *         description: Team deleted successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "Team deleted"
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Admin access required
- *       404:
- *         description: Team not found
- */
 router.delete('/:id', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
@@ -366,57 +156,6 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/admin/teams/{id}/members:
- *   post:
- *     summary: Add user to team
- *     description: Adds a user to a team. Admin only.
- *     tags: [Admin - Teams]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: Team ID
- *         example: "123e4567-e89b-12d3-a456-426614174000"
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - user_id
- *             properties:
- *               user_id:
- *                 type: string
- *                 description: User ID to add to the team
- *                 example: "123e4567-e89b-12d3-a456-426614174000"
- *     responses:
- *       200:
- *         description: User added to team successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "User added to team"
- *       400:
- *         description: Missing user_id or user already in team
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Admin access required
- *       404:
- *         description: Team or user not found
- */
 router.post('/:id/members', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
@@ -453,73 +192,6 @@ router.post('/:id/members', async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/admin/teams/{id}/members/{userId}:
- *   delete:
- *     summary: Remove user from team
- *     tags: [Admin - Teams]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *       - in: path
- *         name: userId
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: User removed from team
- */
-/**
- * @swagger
- * /api/admin/teams/{id}/members/{userId}:
- *   delete:
- *     summary: Remove user from team
- *     description: Removes a user from a team. Admin only.
- *     tags: [Admin - Teams]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         description: Team ID
- *         example: "123e4567-e89b-12d3-a456-426614174000"
- *       - in: path
- *         name: userId
- *         required: true
- *         schema:
- *           type: string
- *         description: User ID to remove from the team
- *         example: "123e4567-e89b-12d3-a456-426614174000"
- *     responses:
- *       200:
- *         description: User removed from team successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: "User removed from team"
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: Admin access required
- *       404:
- *         description: Team or user not found, or user not in team
- */
 router.delete('/:id/members/:userId', async (req, res) => {
   const authReq = req as AuthRequest;
   try {

@@ -1,39 +1,44 @@
-# Publishing slugbase-core to npm
+# Packing core for SlugBase Cloud
 
-The core package is published as **@mdguggenbichler/slugbase-core** (package name: slugbase-core, under your npm username scope).
+SlugBase Cloud installs **`@mdguggenbichler/slugbase-core`** from a **`.tgz` in `slugbase-cloud/vendor/`** (see slugbase-cloud `vendor/README.md`). You do **not** need npmjs for that flow.
 
-## One-time setup
+## One command (from slugbase repo root)
 
-1. **npm login**  
-   Log in with your npm account (e.g. mdguggenbichler). You can publish to your own scope without creating an org.
-
-   ```bash
-   npm login
-   ```
-
-2. **Fix 403 "Two-factor authentication or granular access token..."**  
-   npm requires either:
-
-   - **Option A (recommended):** Enable 2FA on your npm account: [Account settings](https://www.npmjs.com/settings/~/account) → enable 2FA, then run `npm login` again and complete the OTP step when publishing.
-   - **Option B:** Create a **granular access token** with:
-     - Permission: **Publish packages**
-     - Option: **Bypass 2FA** (if your org allows it)  
-     [Create token](https://www.npmjs.com/settings/~/tokens) → use it as the password when you run `npm login`, or set `NPM_TOKEN` in the environment for CI.
-
-## Publish from local
-
-From the **repo root**:
+With **slugbase** and **slugbase-cloud** as sibling directories (`../slugbase-cloud`):
 
 ```bash
-npm run publish:core
+npm run pack:cloud
 ```
 
-This builds the repo, assembles the package (including `backend/dist`) in `.publish-core/`, and runs `npm publish --access public` for `@mdguggenbichler/slugbase-core`.
+This runs `npm run build`, assembles `.publish-core/`, runs `npm pack`, and copies the tarball to `slugbase-cloud/vendor/`.
 
-- **Dry run (build + pack only):** `npm run publish:core:dry-run`
-- **Version:** Bump `version` in `packages/core/package.json` before publishing a new release.
+If your cloud repo lives elsewhere:
+
+```bash
+SLUGBASE_CLOUD_ROOT=../path/to/slugbase-cloud npm run pack:cloud
+```
+
+(`SLUGBASE_CLOUD_ROOT` can be absolute or relative to the slugbase root.)
+
+Then in **slugbase-cloud**:
+
+```bash
+cd ../slugbase-cloud   # or your path
+npm install
+```
+
+Update `package.json` → `file:./vendor/<name>.tgz` if the filename changed (version bump in `packages/core/package.json`), commit the new tarball and lockfile, deploy.
+
+## Lower-level steps
+
+- `npm run assemble:core` - build + assemble only (or `assemble:core:no-build` after you already built).
+- Inspect `.publish-core/` before packing if needed.
+
+## Optional: publish to npm
+
+If you ever want a registry install instead of `vendor/*.tgz`, bump `packages/core/package.json`, run `npm run build` and `node scripts/assemble-core-package.js --no-build`, then `cd .publish-core && npm publish --access public` (requires `npm login`). There is **no** GitHub Action for this in this repo anymore.
 
 ## Consumers
 
-- **Self-hosted app** (this repo): `apps/selfhosted` depends on `@mdguggenbichler/slugbase-core` (workspace or published).
-- **slugbase-cloud:** Add `"@mdguggenbichler/slugbase-core": "0.0.1"` (or the range you need) in `package.json` and use the backend/frontend entrypoints as documented in PACKAGE-BOUNDARIES-AND-EXPORTS.md.
+- **Self-hosted** (this repo): `apps/selfhosted` uses the workspace `packages/core`.
+- **slugbase-cloud:** `file:./vendor/*.tgz` or a published semver; see [UPGRADING-CLOUD.md](UPGRADING-CLOUD.md) and [PACKAGE-BOUNDARIES-AND-EXPORTS.md](PACKAGE-BOUNDARIES-AND-EXPORTS.md).

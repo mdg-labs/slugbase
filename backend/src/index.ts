@@ -1,17 +1,16 @@
 // IMPORTANT: Load environment variables FIRST, before any other imports
 import './load-env.js';
-import './instrument.js';
 
 import express from 'express';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-import * as Sentry from '@sentry/node';
 import { validateEnvironmentVariables } from './utils/env-validation.js';
 import { initDatabase, isInitialized } from './db/index.js';
 import { loadOIDCStrategies } from './auth/oidc.js';
 import { createApp } from './app-factory.js';
 import { registerCoreRoutes } from './register-routes.js';
+import openapiRoutes from './routes/openapi.js';
 import { DatabaseSessionStore } from './utils/session-store.js';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
 
@@ -26,10 +25,17 @@ async function start() {
     await initDatabase();
     console.log('Database initialized');
 
+    if (process.env.SLUGBASE_E2E_SEED === '1') {
+      const { ensureE2eUser } = await import('./e2e/ensure-e2e-user.js');
+      await ensureE2eUser();
+      console.log('E2E seed: test user ensured (SLUGBASE_E2E_SEED=1)');
+    }
+
     await loadOIDCStrategies();
 
     const sessionStore = new DatabaseSessionStore();
     const app = createApp({ sessionStore });
+    app.use(openapiRoutes);
     registerCoreRoutes(app, {});
 
     if (process.env.NODE_ENV === 'production') {
@@ -44,7 +50,13 @@ async function start() {
 
     app.get('*', (req, res, next) => {
       if (process.env.NODE_ENV !== 'production') return next();
-      if (req.path.startsWith('/api/') || req.path.startsWith('/api-docs') || req.path.startsWith('/go/')) {
+      if (
+        req.path.startsWith('/api/') ||
+        req.path.startsWith('/go/') ||
+        req.path === '/openapi.json' ||
+        req.path === '/openapi.yaml' ||
+        req.path.startsWith('/api-docs')
+      ) {
         return next();
       }
       res.sendFile(join(__dirname, '../../public/index.html'), (err) => {
@@ -56,7 +68,6 @@ async function start() {
     });
 
     app.use(notFoundHandler);
-    Sentry.setupExpressErrorHandler(app);
     app.use(errorHandler);
 
     const initialized = await isInitialized();

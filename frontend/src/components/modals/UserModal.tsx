@@ -13,10 +13,18 @@ import { Separator } from '../ui/separator';
 import { FormFieldWrapper } from '../ui/FormFieldWrapper';
 import { ModalSection } from '../ui/ModalSection';
 import { ModalFooterActions } from '../ui/ModalFooterActions';
+import Button from '../ui/Button';
 import { Switch } from '../ui/switch';
 import { Label } from '../ui/label';
 import { Input } from '../ui/input';
 import { useToast } from '../ui/Toast';
+import { useAuth } from '../../contexts/AuthContext';
+import {
+  isCloudMode,
+  usePlan,
+  usePlanLoadState,
+  canInviteOrgUsers,
+} from '../../contexts/PlanContext';
 
 interface User {
   id: string;
@@ -38,6 +46,10 @@ type CreateMode = 'set_password' | 'send_invite';
 export default function UserModal({ user, isOpen, onClose, onSuccess }: UserModalProps) {
   const { t } = useTranslation();
   const { showToast } = useToast();
+  const { user: currentUser } = useAuth();
+  const planInfo = usePlan();
+  const planLoadState = usePlanLoadState();
+  const canSetInstanceAdmin = !!currentUser?.is_admin;
   const [formData, setFormData] = useState({
     email: '',
     name: '',
@@ -77,13 +89,24 @@ export default function UserModal({ user, isOpen, onClose, onSuccess }: UserModa
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (isCreate && isCloudMode && !canInviteOrgUsers(planInfo, planLoadState)) {
+      return;
+    }
     setLoading(true);
     setError('');
 
     try {
-      const payload: any = { email: formData.email, name: formData.name, is_admin: formData.is_admin };
+      const payload: any = { email: formData.email, name: formData.name };
+      if (canSetInstanceAdmin) {
+        payload.is_admin = formData.is_admin;
+      } else {
+        payload.is_admin = false;
+      }
       if (user) {
         if (formData.password) payload.password = formData.password;
+        if (!canSetInstanceAdmin) {
+          delete payload.is_admin;
+        }
         await api.put(`/admin/users/${user.id}`, payload);
         showToast(t('common.success'), 'success');
       } else {
@@ -117,6 +140,10 @@ export default function UserModal({ user, isOpen, onClose, onSuccess }: UserModa
     formData.name.trim() &&
     (user ? true : useInvite ? true : formData.password.length >= 8);
 
+  const createBlockedByPlan =
+    isCreate && isCloudMode && planLoadState === 'ready' && !canInviteOrgUsers(planInfo, planLoadState);
+  const createPlanLoading = isCreate && isCloudMode && planLoadState === 'loading';
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-[460px]">
@@ -125,6 +152,13 @@ export default function UserModal({ user, isOpen, onClose, onSuccess }: UserModa
         </DialogHeader>
         <Separator />
 
+        {createPlanLoading ? (
+          <p className="py-6 text-sm text-muted-foreground">{t('common.loading')}</p>
+        ) : createBlockedByPlan ? (
+          <p className="py-2 text-sm text-muted-foreground">{t('admin.billingUpgradeToInvite')}</p>
+        ) : null}
+
+        {!createPlanLoading && !createBlockedByPlan ? (
         <form id="user-form" onSubmit={handleSubmit} className="space-y-6">
           <ModalSection>
             <FormFieldWrapper label={t('auth.email')} required error={error}>
@@ -195,29 +229,38 @@ export default function UserModal({ user, isOpen, onClose, onSuccess }: UserModa
                 />
               </FormFieldWrapper>
             )}
-            <div className="flex items-center justify-between rounded-lg border p-3">
-              <Label htmlFor="is_admin" className="text-sm font-medium cursor-pointer flex items-center gap-2">
-                <Shield className="h-4 w-4" />
-                {t('admin.admin')}
-              </Label>
-              <Switch
-                id="is_admin"
-                checked={formData.is_admin}
-                onCheckedChange={(checked) => setFormData({ ...formData, is_admin: checked })}
-              />
-            </div>
+            {canSetInstanceAdmin && (
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <Label htmlFor="is_admin" className="text-sm font-medium cursor-pointer flex items-center gap-2">
+                  <Shield className="h-4 w-4" />
+                  {t('admin.admin')}
+                </Label>
+                <Switch
+                  id="is_admin"
+                  checked={formData.is_admin}
+                  onCheckedChange={(checked) => setFormData({ ...formData, is_admin: checked })}
+                />
+              </div>
+            )}
           </ModalSection>
         </form>
+        ) : null}
 
         <Separator />
         <DialogFooter className="flex-row justify-between sm:justify-end gap-2">
-          <ModalFooterActions
-            onCancel={onClose}
-            submitLabel={t('common.save')}
-            loading={loading}
-            submitDisabled={!isValid}
-            formId="user-form"
-          />
+          {createPlanLoading || createBlockedByPlan ? (
+            <Button variant="outline" onClick={onClose} type="button">
+              {t('common.cancel')}
+            </Button>
+          ) : (
+            <ModalFooterActions
+              onCancel={onClose}
+              submitLabel={t('common.save')}
+              loading={loading}
+              submitDisabled={!isValid}
+              formId="user-form"
+            />
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -1,22 +1,9 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import { sentryVitePlugin } from '@sentry/vite-plugin'
 import { resolve } from 'path'
 
-const sentryPlugin =
-  process.env.SENTRY_AUTH_TOKEN && process.env.SENTRY_ORG && process.env.SENTRY_PROJECT
-    ? sentryVitePlugin({
-        org: process.env.SENTRY_ORG,
-        project: process.env.SENTRY_PROJECT,
-        authToken: process.env.SENTRY_AUTH_TOKEN,
-        sourcemaps: {
-          filesToDeleteAfterUpload: ['./**/*.map'],
-        },
-      })
-    : undefined
-
 export default defineConfig({
-  plugins: [react(), ...(sentryPlugin ? [sentryPlugin] : [])],
+  plugins: [react()],
   resolve: {
     alias: {
       '@': resolve(__dirname, './src'),
@@ -37,15 +24,15 @@ export default defineConfig({
     chunkSizeWarningLimit: 600,
   },
   server: {
-    port: 3000,
+    port: parseInt(process.env.PORT || '3000', 10),
     proxy: {
       '/api': {
-        target: 'http://localhost:5000',
+        target: process.env.E2E_BACKEND_URL || 'http://localhost:5000',
         changeOrigin: true
       },
       // Proxy /go slug forwarding to backend
       '/go': {
-        target: 'http://localhost:5000',
+        target: process.env.E2E_BACKEND_URL || 'http://localhost:5000',
         changeOrigin: true
       }
     }

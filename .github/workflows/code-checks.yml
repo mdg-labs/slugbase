@@ -29,7 +29,7 @@ jobs:
           cache: 'npm'
       
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
       
       - name: Type check ${{ matrix.workspace }}
         run: |
@@ -54,18 +54,20 @@ jobs:
           cache: 'npm'
       
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
       
-      - name: Build backend
-        run: npm run build --workspace=backend
+      - name: Legacy cloud migrations must not be registered
+        run: node scripts/check-legacy-cloud-migrations.mjs
       
-      - name: Build frontend
-        run: npm run build --workspace=frontend
+      - name: Full monorepo build (includes core embed for npm package)
+        run: npm run build
       
       - name: Verify build artifacts
         run: |
           test -d backend/dist && echo "Backend build successful" || (echo "Backend build failed" && exit 1)
           test -d frontend/dist && echo "Frontend build successful" || (echo "Frontend build failed" && exit 1)
+          test -d packages/core/frontend/publish && echo "Core embed build successful" || (echo "Core embed missing" && exit 1)
+          test -f packages/core/frontend/publish/slugbase-core-frontend.js || (echo "Core embed JS missing" && exit 1)
 
   security-audit:
     name: Security Audit
@@ -85,7 +87,7 @@ jobs:
           cache: 'npm'
       
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
       
       - name: Run npm audit (root)
         run: npm audit --audit-level=moderate
@@ -99,14 +101,50 @@ jobs:
         run: npm audit --workspace=frontend --audit-level=moderate
         continue-on-error: true
 
+  e2e:
+    name: E2E (Playwright)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
+
+      # Optional: Add secret NEETO_PLAYWRIGHT_REPORTER_API_KEY in repo Settings > Secrets and variables > Actions to send reports to NeetoPlaydash
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Run E2E tests (Docker image + SQLite volume)
+        run: npm run e2e:docker
+        env:
+          JWT_SECRET: "e2e-jwt-secret-at-least-32-characters-long"
+          ENCRYPTION_KEY: "e2e-encryption-key-at-least-32-chars"
+          SESSION_SECRET: "e2e-session-secret-at-least-32-characters"
+          NEETO_PLAYWRIGHT_REPORTER_API_KEY: ${{ secrets.NEETO_PLAYWRIGHT_REPORTER_API_KEY }}
+          NEETO_CI_BUILD_ID: ${{ github.run_id }}
+
   all-checks:
     name: All Checks Summary
     runs-on: ubuntu-latest
     permissions:
       contents: read
       actions: read
-    needs: [type-check, build-check, security-audit]
-    
+    needs: [type-check, build-check, security-audit, e2e]
+
     steps:
       - name: Check status
         run: echo "All code quality checks completed successfully"

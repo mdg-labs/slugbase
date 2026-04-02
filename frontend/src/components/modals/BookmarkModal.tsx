@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
+import { usePlan, isCloudMode } from '../../contexts/PlanContext';
 import api from '../../api/client';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -58,6 +60,7 @@ export default function BookmarkModal({
 }: BookmarkModalProps) {
   const { t } = useTranslation();
   useAuth();
+  const planInfo = usePlan();
   const { showToast } = useToast();
   const [formData, setFormData] = useState({
     title: '',
@@ -96,10 +99,19 @@ export default function BookmarkModal({
 
   useEffect(() => {
     if (!isOpen) return;
-    api.get('/config/ai-suggestions')
-      .then((res) => setAiEnabled(res.data?.enabled === true))
+    if (isCloudMode && planInfo != null && !planInfo.aiAvailable) {
+      setAiEnabled(false);
+      return;
+    }
+    api
+      .get('/config/ai-suggestions')
+      .then((res) => {
+        let enabled = res.data?.enabled === true;
+        if (isCloudMode && planInfo != null && !planInfo.aiAvailable) enabled = false;
+        setAiEnabled(enabled);
+      })
       .catch(() => setAiEnabled(false));
-  }, [isOpen]);
+  }, [isOpen, planInfo]);
 
   const fetchAISuggestions = useCallback(async (url: string) => {
     if (!aiEnabled || bookmark) return;
@@ -284,7 +296,12 @@ export default function BookmarkModal({
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{bookmark ? t('bookmarks.edit') : t('bookmarks.create')}</DialogTitle>
+          <DialogTitle className="text-primary text-lg font-semibold">
+            {bookmark ? t('bookmarks.edit') : t('bookmarks.create')}
+          </DialogTitle>
+          <DialogDescription className="typography-label text-center sm:text-left">
+            {t('bookmarks.modalSubtitle')}
+          </DialogDescription>
         </DialogHeader>
         <Separator />
 
@@ -349,13 +366,14 @@ export default function BookmarkModal({
               </p>
             )}
             <div>
-              <Label className="text-sm font-medium mb-2 block">{t('bookmarks.tags')}</Label>
+              <Label className="typography-label mb-2 block">{t('bookmarks.tags')}</Label>
               <Autocomplete
                 value={selectedTags}
                 onChange={handleTagChange}
                 options={tags}
-                placeholder={t('bookmarks.tags')}
+                placeholder={t('bookmarks.tagsAddPlaceholder')}
                 onCreateNew={handleCreateTag}
+                pillChips
               />
               {aiLoading && (
                 <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -415,13 +433,24 @@ export default function BookmarkModal({
                 label={t('bookmarks.slug')}
                 required
                 error={slugError}
+                htmlFor="bookmark-slug"
               >
-                <Input
-                  type="text"
-                  value={formData.slug || ''}
-                  onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
-                  placeholder={t('bookmarks.slug')}
-                />
+                <div className="flex min-h-10 w-full items-center overflow-hidden rounded-xl border border-transparent bg-surface-low transition-colors focus-within:bg-surface-lowest focus-within:border-primary/15 focus-within:ring-2 focus-within:ring-primary/20">
+                  <span
+                    className="shrink-0 select-none pl-3 font-mono text-sm text-muted-foreground"
+                    aria-hidden
+                  >
+                    go/
+                  </span>
+                  <Input
+                    id="bookmark-slug"
+                    type="text"
+                    value={formData.slug || ''}
+                    onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
+                    placeholder={t('bookmarks.slug')}
+                    className="h-10 min-w-0 flex-1 border-0 bg-transparent px-2 py-2 shadow-none focus-visible:border-transparent focus-visible:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none rounded-r-xl"
+                  />
+                </div>
                 {aiLoading && (
                   <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -481,6 +510,7 @@ export default function BookmarkModal({
         <DialogFooter className="flex-row justify-between sm:justify-end gap-2">
           <ModalFooterActions
             onCancel={onClose}
+            cancelVariant="ghost"
             submitLabel={t('common.save')}
             loading={loading}
             submitDisabled={!isValid || !!slugError}

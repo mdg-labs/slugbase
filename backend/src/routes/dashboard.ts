@@ -1,52 +1,20 @@
 import { Router } from 'express';
-import { query, queryOne } from '../db/index.js';
+import { query, queryOne, getDbType } from '../db/index.js';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { getTeamIdsForUser } from '../auth/authorization.js';
 import { getTenantId } from '../utils/tenant.js';
+import { isCloud } from '../config/mode.js';
 
 const router = Router();
 
-/**
- * @swagger
- * /api/dashboard/stats:
- *   get:
- *     summary: Get dashboard statistics
- *     description: Returns statistics for the authenticated user's dashboard
- *     tags: [Dashboard]
- *     security:
- *       - cookieAuth: []
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Dashboard statistics
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 totalBookmarks:
- *                   type: number
- *                 totalFolders:
- *                   type: number
- *                 totalTags:
- *                   type: number
- *                 sharedBookmarks:
- *                   type: number
- *                 sharedFolders:
- *                   type: number
- *                 recentBookmarks:
- *                   type: array
- *                 topTags:
- *                   type: array
- *       401:
- *         description: Unauthorized
- */
 router.get('/stats', requireAuth(), async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const userId = authReq.user!.id;
     const tenantId = getTenantId(req);
     const teamIds = await getTeamIdsForUser(userId, tenantId);
+    const isPg = getDbType() === 'postgresql';
+    const pinnedCondition = isPg ? 'pinned = true' : 'pinned = 1';
 
     // Total bookmarks (own only)
     const totalBookmarksResult = await queryOne(
@@ -285,7 +253,7 @@ router.get('/stats', requireAuth(), async (req, res) => {
     // Pinned bookmarks (own only, up to 16)
     const pinnedBookmarks = await query(
       `SELECT id, title, url, slug FROM bookmarks
-       WHERE user_id = ? AND tenant_id = ? AND pinned = 1
+       WHERE user_id = ? AND tenant_id = ? AND ${pinnedCondition}
        ORDER BY COALESCE(updated_at, created_at) DESC
        LIMIT 16`,
       [userId, tenantId]
@@ -296,7 +264,8 @@ router.get('/stats', requireAuth(), async (req, res) => {
         ? [pinnedBookmarks]
         : [];
 
-    res.json({
+    const plan = (req as any).plan as string | undefined;
+    const payload: Record<string, unknown> = {
       totalBookmarks,
       totalFolders,
       totalTags,
@@ -306,7 +275,17 @@ router.get('/stats', requireAuth(), async (req, res) => {
       topTags: topTagsList,
       quickAccessBookmarks: quickAccessList,
       pinnedBookmarks: pinnedList,
-    });
+    };
+    if (isCloud && plan) {
+      payload.plan = plan;
+      payload.bookmarkLimit = plan === 'free' ? 50 : null;
+      payload.canShareWithTeams = plan === 'team';
+      if (plan === 'free') {
+        const tenantCountResult = await queryOne('SELECT COUNT(*) as count FROM bookmarks WHERE tenant_id = ?', [tenantId]);
+        payload.tenantBookmarkCount = tenantCountResult ? parseInt(String((tenantCountResult as any).count), 10) : 0;
+      }
+    }
+    res.json(payload);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

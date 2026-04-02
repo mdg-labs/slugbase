@@ -6,6 +6,7 @@ import { SearchCommandProvider } from '../contexts/SearchCommandContext';
 import { SidebarProvider, SidebarInset } from './ui/sidebar';
 import TopBar from './TopBar';
 import AppSidebar from './AppSidebar';
+import GlobalSearch from './GlobalSearch';
 import api from '../api/client';
 
 const SIDEBAR_COLLAPSED_KEY = 'slugbase_sidebar_collapsed';
@@ -34,26 +35,27 @@ export default function Layout() {
 
   return (
     <SearchCommandProvider>
-      <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen} className="h-svh overflow-hidden bg-background flex flex-col">
-        <TopBar user={user} />
-      <div className="flex flex-1 min-h-0 overflow-hidden">
-        <AppSidebar user={user} version={version} />
-        <SidebarInset className="flex flex-col min-h-0 overflow-hidden">
-          <div className="flex-1 min-h-0 overflow-y-auto">
-            <div className="px-4 sm:px-6 lg:px-8 py-8 w-full min-h-full">
-              <Suspense
-                fallback={
-                  <div className="min-h-[400px] flex items-center justify-center">
-                    <div className="text-muted-foreground">{t('common.loading')}</div>
-                  </div>
-                }
-              >
-                <Outlet />
-              </Suspense>
+      <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen} className="flex h-svh flex-col overflow-hidden bg-background">
+        <GlobalSearch />
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          <AppSidebar user={user} version={version} />
+          <SidebarInset className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
+            <TopBar user={user} />
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <div className="min-h-full w-full px-10 py-12">
+                <Suspense
+                  fallback={
+                    <div className="min-h-[400px] flex items-center justify-center">
+                      <div className="text-muted-foreground">{t('common.loading')}</div>
+                    </div>
+                  }
+                >
+                  <Outlet />
+                </Suspense>
+              </div>
             </div>
-          </div>
-        </SidebarInset>
-      </div>
+          </SidebarInset>
+        </div>
     </SidebarProvider>
     </SearchCommandProvider>
   );

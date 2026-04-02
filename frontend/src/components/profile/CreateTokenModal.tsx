@@ -135,7 +135,7 @@ export default function CreateTokenModal({ isOpen, onClose, onCreated }: CreateT
         ) : (
           <>
             <div className="space-y-4">
-              <div className="flex items-start gap-2 rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-2">
+              <div className="flex items-start gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2">
                 <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
                 <p className="text-sm text-muted-foreground">
                   {t('profile.tokenRevealWarning')}
@@ -145,7 +145,7 @@ export default function CreateTokenModal({ isOpen, onClose, onCreated }: CreateT
                 <Input
                   readOnly
                   value={token || ''}
-                  className="font-mono text-sm truncate bg-muted"
+                  className="font-mono text-sm truncate bg-surface-low border border-ghost"
                 />
                 <Button
                   type="button"
@@ -160,7 +160,7 @@ export default function CreateTokenModal({ isOpen, onClose, onCreated }: CreateT
             </div>
             <Separator />
             <DialogFooter className="flex-row justify-end">
-              <Button type="button" variant="primary" onClick={handleClose}>
+              <Button type="button" variant="primary" onClick={handleClose} className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90">
                 {t('common.close')}
               </Button>
             </DialogFooter>

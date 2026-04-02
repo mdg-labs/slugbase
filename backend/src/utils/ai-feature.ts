@@ -1,22 +1,34 @@
 /**
- * AI suggestions feature flag logic for self-hosted runtime.
+ * AI suggestions feature flag logic.
+ * When OPENAI_API_KEY env is set, API key and model come from env (global); ai_enabled remains per-tenant in system_config.
  */
 
 import { queryOne } from '../db/index.js';
 
+const ENV_API_KEY = (process.env.OPENAI_API_KEY ?? '').trim();
+const ENV_MODEL = (process.env.AI_SUGGESTIONS_MODEL ?? '').trim();
+
 /**
  * Check if AI feature is available (org/plan/config allows it).
  * Does not consider user-level ai_suggestions_enabled.
+ * When OPENAI_API_KEY is set, returns tenant's ai_enabled from system_config; else checks ai_enabled + ai_api_key from system_config (tenant-scoped).
  */
-export async function isAIFeatureAvailable(userId: string): Promise<boolean> {
+export async function isAIFeatureAvailable(userId: string, tenantId: string): Promise<boolean> {
+  if (ENV_API_KEY) {
+    const aiEnabled = await queryOne(
+      'SELECT value FROM system_config WHERE key = ? AND tenant_id = ?',
+      ['ai_enabled', tenantId]
+    );
+    return !!(aiEnabled && (aiEnabled as any).value === 'true');
+  }
   const aiEnabled = await queryOne(
-    'SELECT value FROM system_config WHERE key = ?',
-    ['ai_enabled']
+    'SELECT value FROM system_config WHERE key = ? AND tenant_id = ?',
+    ['ai_enabled', tenantId]
   );
   if (!aiEnabled || (aiEnabled as any).value !== 'true') return false;
   const aiApiKey = await queryOne(
-    'SELECT value FROM system_config WHERE key = ?',
-    ['ai_api_key']
+    'SELECT value FROM system_config WHERE key = ? AND tenant_id = ?',
+    ['ai_api_key', tenantId]
   );
   return !!(aiApiKey && (aiApiKey as any).value);
 }
@@ -25,7 +37,7 @@ export async function isAIFeatureAvailable(userId: string): Promise<boolean> {
  * Check if AI suggestions are enabled for the user.
  * Returns false if not configured or user opted out.
  */
-export async function isAISuggestionsEnabled(userId: string): Promise<boolean> {
+export async function isAISuggestionsEnabled(userId: string, tenantId: string): Promise<boolean> {
   const userRow = await queryOne(
     'SELECT ai_suggestions_enabled FROM users WHERE id = ?',
     [userId]
@@ -36,15 +48,23 @@ export async function isAISuggestionsEnabled(userId: string): Promise<boolean> {
 
   if (!userEnabled) return false;
 
+  if (ENV_API_KEY) {
+    const aiEnabled = await queryOne(
+      'SELECT value FROM system_config WHERE key = ? AND tenant_id = ?',
+      ['ai_enabled', tenantId]
+    );
+    return !!(aiEnabled && (aiEnabled as any).value === 'true');
+  }
+
   const aiEnabled = await queryOne(
-    'SELECT value FROM system_config WHERE key = ?',
-    ['ai_enabled']
+    'SELECT value FROM system_config WHERE key = ? AND tenant_id = ?',
+    ['ai_enabled', tenantId]
   );
   if (!aiEnabled || (aiEnabled as any).value !== 'true') return false;
 
   const aiApiKey = await queryOne(
-    'SELECT value FROM system_config WHERE key = ?',
-    ['ai_api_key']
+    'SELECT value FROM system_config WHERE key = ? AND tenant_id = ?',
+    ['ai_api_key', tenantId]
   );
   if (!aiApiKey || !(aiApiKey as any).value) return false;
 
@@ -53,12 +73,13 @@ export async function isAISuggestionsEnabled(userId: string): Promise<boolean> {
 
 /**
  * Get AI API key for making requests.
- * Reads from system_config and decrypts when needed.
+ * When OPENAI_API_KEY env is set, returns it; else reads from system_config (tenant-scoped) and decrypts when needed.
  */
-export async function getAIApiKey(): Promise<string | null> {
+export async function getAIApiKey(tenantId: string): Promise<string | null> {
+  if (ENV_API_KEY) return ENV_API_KEY;
   const row = await queryOne(
-    'SELECT value FROM system_config WHERE key = ?',
-    ['ai_api_key']
+    'SELECT value FROM system_config WHERE key = ? AND tenant_id = ?',
+    ['ai_api_key', tenantId]
   );
   if (!row || !(row as any).value) return null;
   const raw = (row as any).value as string;
@@ -74,12 +95,13 @@ export async function getAIApiKey(): Promise<string | null> {
 }
 
 /**
- * Get AI model from config. Default gpt-4o-mini.
+ * Get AI model from config. When AI_SUGGESTIONS_MODEL env is set, returns it; else reads from system_config (tenant-scoped). Default gpt-4o-mini.
  */
-export async function getAIModel(): Promise<string> {
+export async function getAIModel(tenantId: string): Promise<string> {
+  if (ENV_MODEL) return ENV_MODEL;
   const row = await queryOne(
-    'SELECT value FROM system_config WHERE key = ?',
-    ['ai_model']
+    'SELECT value FROM system_config WHERE key = ? AND tenant_id = ?',
+    ['ai_model', tenantId]
   );
   return (row && (row as any).value) ? String((row as any).value) : 'gpt-4o-mini';
 }
