@@ -20,7 +20,7 @@ This document covers deploying SlugBase to Fly.io with Neon PostgreSQL. The depl
 |-----------|-------------------|--------------------------|
 | `dev`     | slugbase-staging  | Push, workflow_dispatch  |
 | `staging` | slugbase-staging  | Push, workflow_dispatch  |
-| `main`    | slugbase-prod     | Push, workflow_dispatch  |
+| `main`    | slugbase-production     | Push, workflow_dispatch  |
 
 Deployment is handled by GitHub Actions in the **slugbase-cloud** repo (e.g. `deploy-fly-staging.yml` and `deploy-fly-prod.yml`). If you previously used Fly.io's built-in GitHub integration, disable it in the Fly dashboard (App → Deployments → Settings) to avoid duplicate deploys.
 
@@ -48,7 +48,7 @@ fly apps create slugbase-staging
 Optionally create the production app (can be done later):
 
 ```bash
-fly apps create slugbase-prod
+fly apps create slugbase-production
 ```
 
 ---
@@ -102,7 +102,7 @@ fly secrets set \
 | `AI_OPENAI_API_KEY` | OpenAI API key for AI bookmark suggestions (Personal/Team plans) |
 | `AI_OPENAI_MODEL` | Model override (default: gpt-4o-mini) |
 
-**Production** (when ready): repeat the required secrets with production values for `slugbase-prod`.
+**Production** (when ready): repeat the required secrets with production values for `slugbase-production`.
 
 ---
 
@@ -142,7 +142,7 @@ git checkout main
 git push origin main
 ```
 
-This triggers `.github/workflows/deploy-fly-prod.yml`. Or trigger manually: **Actions** → **Deploy to Fly.io (Production)** → **Run workflow**. Ensure `slugbase-prod` secrets are configured (see step 3) before the first deploy.
+This triggers `.github/workflows/deploy-fly-prod.yml`. Or trigger manually: **Actions** → **Deploy to Fly.io (Production)** → **Run workflow**. Ensure `slugbase-production` secrets are configured (see step 3) before the first deploy.
 
 ---
 
