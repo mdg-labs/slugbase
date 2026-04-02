@@ -419,6 +419,7 @@
     "createFolder": "Ordner erstellen",
     "createTag": "Tag erstellen",
     "searchPlaceholder": "Befehl eingeben oder Lesezeichen suchen…",
+    "goCommandMatches": "Kurzlink",
     "quickAccess": "Schnellzugriff",
     "quickAccessBookmarksTitle": "Schnellzugriff-Lesezeichen",
     "quickAccessMetaShortcut": "Kurzbefehl",

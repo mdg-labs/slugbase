@@ -438,6 +438,7 @@
   },
   "dashboard": {
     "searchPlaceholder": "Type a command or search bookmarks",
+    "goCommandMatches": "Go",
     "bookmarksDescription": "Manage your bookmarks",
     "foldersDescription": "Organize with folders",
     "tagsDescription": "Tag your bookmarks",

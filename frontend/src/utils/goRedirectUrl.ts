@@ -2,6 +2,16 @@
  * Parse command-palette input for the same idiom as a browser custom search engine: `go <slug>`.
  * Also accepts a pasted app path `/go/<slug>`.
  */
+/**
+ * While typing a `go …` command, returns the slug prefix after `go` (may be empty).
+ * Returns null if the query is not a go-command (e.g. `google`).
+ */
+export function parseGoCommandSlugPrefix(trimmed: string): string | null {
+  const m = trimmed.match(/^go(?:$|\s+(.+))$/i);
+  if (!m) return null;
+  return m[1] != null ? m[1].trim() : '';
+}
+
 export function parseGoCommandQuery(trimmed: string): string | null {
   const goMatch = trimmed.match(/^go\s+(.+)$/i);
   if (goMatch) {

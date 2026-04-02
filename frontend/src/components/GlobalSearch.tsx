@@ -17,6 +17,7 @@ import { canAccessWorkspaceAdmin } from '../utils/adminAccess';
 import {
   absoluteUrlForGoSlug,
   parseGoCommandQuery,
+  parseGoCommandSlugPrefix,
 } from '../utils/goRedirectUrl';
 import {
   CommandDialog,
@@ -33,6 +34,7 @@ interface SearchResult {
   type: 'bookmark' | 'folder' | 'tag' | 'navigation' | 'action';
   title: string;
   url?: string;
+  slug?: string;
   icon?: string | null;
   action?: () => void;
   path?: string;
@@ -50,6 +52,13 @@ export default function GlobalSearch() {
   const [loading, setLoading] = useState(false);
 
   const showAdmin = canAccessWorkspaceAdmin(user);
+
+  const trimmedQuery = query.trim();
+  const goSlugPrefix = useMemo(
+    () => parseGoCommandSlugPrefix(trimmedQuery),
+    [trimmedQuery]
+  );
+  const isGoCommandMode = goSlugPrefix !== null;
 
   const navigationItems: SearchResult[] = useMemo(() => [
     { type: 'navigation', title: t('bookmarks.title'), path: `${prefix}/bookmarks`.replace(/\/+/g, '/') || '/bookmarks', id: 'nav-bookmarks' },
@@ -85,6 +94,48 @@ export default function GlobalSearch() {
     if (!open) {
       setResults([]);
       return;
+    }
+
+    if (goSlugPrefix !== null) {
+      const goTimeout = setTimeout(async () => {
+        setLoading(true);
+        try {
+          const bookmarksRes = await api.get('/bookmarks', { params: { limit: 500 } });
+          const bookmarksPayload = bookmarksRes.data;
+          const bookmarksItems = bookmarksPayload?.items ?? bookmarksPayload ?? [];
+          const list = Array.isArray(bookmarksItems) ? bookmarksItems : [];
+          const prefixLower = goSlugPrefix.toLowerCase();
+          const filtered = list
+            .filter((b: { slug?: string | null }) => {
+              const slug = b.slug;
+              if (slug == null || String(slug).trim() === '') return false;
+              if (!prefixLower) return true;
+              return String(slug).toLowerCase().startsWith(prefixLower);
+            })
+            .sort((a: { slug?: string }, b: { slug?: string }) =>
+              String(a.slug || '').localeCompare(String(b.slug || ''), undefined, {
+                sensitivity: 'base',
+              })
+            )
+            .slice(0, 25);
+          const goResults: SearchResult[] = filtered.map(
+            (b: { id: string; title: string; url?: string; slug?: string | null }) => ({
+              id: b.id,
+              type: 'bookmark' as const,
+              title: b.title,
+              url: b.url,
+              slug: b.slug ?? undefined,
+            })
+          );
+          setResults(goResults);
+        } catch (error) {
+          console.error('Go command bookmark load failed:', error);
+          setResults([]);
+        } finally {
+          setLoading(false);
+        }
+      }, 300);
+      return () => clearTimeout(goTimeout);
     }
 
     const searchTimeout = setTimeout(async () => {
@@ -163,7 +214,7 @@ export default function GlobalSearch() {
     }, 300);
 
     return () => clearTimeout(searchTimeout);
-  }, [query, open, navigationItems, actionItems]);
+  }, [query, open, navigationItems, actionItems, goSlugPrefix]);
 
   function handleResultClick(result: SearchResult) {
     setOpen(false);
@@ -251,6 +302,35 @@ export default function GlobalSearch() {
                 ))}
               </CommandGroup>
             </>
+          ) : isGoCommandMode ? (
+            <CommandGroup heading={t('dashboard.goCommandMatches')}>
+              {results.map((result) => (
+                <CommandItem
+                  key={`${result.type}-${result.id}`}
+                  value={`${result.type}-${result.id}-${result.title}`}
+                  onSelect={() => handleResultClick(result)}
+                >
+                  {getResultIcon(result)}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate font-medium">{result.title}</span>
+                      {result.type === 'bookmark' && (
+                        <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                      )}
+                    </div>
+                    {result.slug ? (
+                      <div className="text-xs text-muted-foreground truncate mt-0.5">
+                        go/{result.slug}
+                      </div>
+                    ) : (
+                      result.url && (
+                        <div className="text-xs text-muted-foreground truncate mt-0.5">{result.url}</div>
+                      )
+                    )}
+                  </div>
+                </CommandItem>
+              ))}
+            </CommandGroup>
           ) : (
             results.map((result) => (
               <CommandItem
