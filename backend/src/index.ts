@@ -25,6 +25,12 @@ async function start() {
     await initDatabase();
     console.log('Database initialized');
 
+    if (process.env.SLUGBASE_E2E_SEED === '1') {
+      const { ensureE2eUser } = await import('./e2e/ensure-e2e-user.js');
+      await ensureE2eUser();
+      console.log('E2E seed: test user ensured (SLUGBASE_E2E_SEED=1)');
+    }
+
     await loadOIDCStrategies();
 
     const sessionStore = new DatabaseSessionStore();

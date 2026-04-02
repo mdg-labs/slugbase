@@ -17,6 +17,7 @@
     "assemble:core:no-build": "node scripts/assemble-core-package.js --no-build",
     "pack:cloud": "node scripts/pack-core-for-cloud.mjs",
     "e2e": "playwright test --config=e2e/playwright.config.ts",
+    "e2e:docker": "bash e2e/docker/run-e2e-docker.sh",
     "e2e:run": "node scripts/run-e2e.js",
     "e2e:ui": "playwright test --ui --config=e2e/playwright.config.ts",
     "tolgee:pull": "tolgee pull",

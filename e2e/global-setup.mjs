@@ -24,7 +24,8 @@ async function waitForHealth(maxAttempts = 30, intervalMs = 1000) {
 }
 
 async function seedDatabase() {
-  const dbPath = process.env.E2E_DB_PATH;
+  /** Same file the backend uses (e2e:run sets both; local dev often only has DB_PATH). */
+  const dbPath = process.env.E2E_DB_PATH || process.env.DB_PATH;
   if (!dbPath) return;
 
   const __dirname = dirname(fileURLToPath(import.meta.url));

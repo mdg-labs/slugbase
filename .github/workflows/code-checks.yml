@@ -119,17 +119,18 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps
 
       # Optional: Add secret NEETO_PLAYWRIGHT_REPORTER_API_KEY in repo Settings > Secrets and variables > Actions to send reports to NeetoPlaydash
-      - name: Run E2E tests
-        run: npm run e2e:run
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Run E2E tests (Docker image + SQLite volume)
+        run: npm run e2e:docker
         env:
-          E2E_DB_PATH: ${{ runner.temp }}/slugbase-e2e.sqlite
-          DB_PATH: ${{ runner.temp }}/slugbase-e2e.sqlite
           JWT_SECRET: "e2e-jwt-secret-at-least-32-characters-long"
           ENCRYPTION_KEY: "e2e-encryption-key-at-least-32-chars"
           SESSION_SECRET: "e2e-session-secret-at-least-32-characters"

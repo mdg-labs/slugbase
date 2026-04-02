@@ -21,6 +21,7 @@ test.describe('Login', () => {
     await page.getByRole('button', { name: /log in|login/i }).click();
 
     await expect(page).not.toHaveURL(/\/login/);
-    await expect(page.getByRole('link', { name: /bookmarks/i })).toBeVisible({ timeout: 10000 });
+    // Sidebar + dashboard can both expose a /bookmarks link; avoid strict-mode duplicate match.
+    await expect(page.getByRole('link', { name: /^Bookmarks$/i }).first()).toBeVisible({ timeout: 10000 });
   });
 });

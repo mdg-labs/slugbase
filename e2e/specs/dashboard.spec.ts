@@ -10,6 +10,6 @@ test.describe('Dashboard', () => {
     await expect(
       page.getByRole('heading', { level: 1 }).or(page.getByRole('main'))
     ).toBeVisible({ timeout: 10000 });
-    await expect(page.getByRole('link', { name: /bookmarks/i })).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Bookmarks$/i }).first()).toBeVisible();
   });
 });
