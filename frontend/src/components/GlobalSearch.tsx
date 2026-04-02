@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -14,6 +14,10 @@ import {
 import api from '../api/client';
 import { useAppConfig } from '../contexts/AppConfigContext';
 import { canAccessWorkspaceAdmin } from '../utils/adminAccess';
+import {
+  absoluteUrlForGoSlug,
+  parseGoCommandQuery,
+} from '../utils/goRedirectUrl';
 import {
   CommandDialog,
   CommandEmpty,
@@ -37,7 +41,7 @@ interface SearchResult {
 export default function GlobalSearch() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { pathPrefixForLinks } = useAppConfig();
+  const { pathPrefixForLinks, apiBaseUrl } = useAppConfig();
   const prefix = (pathPrefixForLinks || '').replace(/\/+/g, '/') || '';
   const { user } = useAuth();
   const { open, setOpen, openSearch } = useSearchCommand();
@@ -179,6 +183,18 @@ export default function GlobalSearch() {
     }
   }
 
+  function handleCommandInputKeyDown(e: ReactKeyboardEvent<HTMLInputElement>) {
+    if (e.key !== 'Enter' || e.nativeEvent.isComposing) return;
+    const slug = parseGoCommandQuery(query.trim());
+    if (!slug) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setOpen(false);
+    setQuery('');
+    const url = absoluteUrlForGoSlug(slug, { apiBaseUrl });
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+
   function getResultIcon(result: SearchResult) {
     switch (result.type) {
       case 'bookmark':
@@ -201,6 +217,7 @@ export default function GlobalSearch() {
           placeholder={t('dashboard.searchPlaceholder')}
           value={query}
           onValueChange={setQuery}
+          onKeyDown={handleCommandInputKeyDown}
         />
         <CommandList className="max-h-[60vh]">
           <CommandEmpty>

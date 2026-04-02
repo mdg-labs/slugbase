@@ -18,6 +18,7 @@ import { TooltipProvider } from './components/ui/tooltip-base';
 import Layout from './components/Layout';
 import api from './api/client';
 import { canAccessWorkspaceAdmin } from './utils/adminAccess';
+import { absoluteUrlForGoPath } from './utils/goRedirectUrl';
 
 const Setup = lazy(() => import('./pages/Setup'));
 import Login from './pages/Login';
@@ -243,15 +244,17 @@ function ForwardingHandler() {
 
   React.useEffect(() => {
     const match = pathname.match(/\/go\/([^/]+)/);
-    const slug = match ? match[1] : '';
-    const goPath = slug ? `/go/${slug}` : '/go';
-    const isDevelopment = window.location.hostname === 'localhost';
-    const backendUrl = isDevelopment
-      ? `http://localhost:5000${goPath}`
-      : apiBaseUrl
-        ? `${apiBaseUrl}${goPath}`
-        : goPath;
-    window.location.href = backendUrl;
+    const rawSegment = match ? match[1] : '';
+    let slug = rawSegment;
+    if (rawSegment) {
+      try {
+        slug = decodeURIComponent(rawSegment);
+      } catch {
+        slug = rawSegment;
+      }
+    }
+    const goPath = rawSegment ? `/go/${encodeURIComponent(slug)}` : '/go';
+    window.location.href = absoluteUrlForGoPath(goPath, { apiBaseUrl });
   }, [pathname, apiBaseUrl]);
 
   return (
