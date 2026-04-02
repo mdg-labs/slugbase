@@ -268,8 +268,8 @@ export default function Dashboard() {
         onCopyUrl={handleCopyUrl}
       />
 
-      {isCloud && (
-        <div className="flex min-h-[280px] flex-col justify-between gap-4 rounded-2xl border border-ghost bg-surface p-6 shadow-xl">
+      {isCloud && stats?.plan === 'free' && (
+        <div className="flex flex-col gap-4 rounded-2xl border border-ghost bg-surface p-6 shadow-xl">
           <div>
             <h3 className="text-lg font-semibold text-primary">{t('dashboard.aiPromoTitle')}</h3>
             <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{t('dashboard.aiPromoDescription')}</p>
