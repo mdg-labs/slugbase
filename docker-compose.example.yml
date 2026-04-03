@@ -1,7 +1,6 @@
 services:
   slugbase:
-    image: slugbase/slugbase:latest
-    dockerfile: Dockerfile
+    image: ghcr.io/mdg-labs/slugbase:latest
     container_name: slugbase
     build: .
     ports:
