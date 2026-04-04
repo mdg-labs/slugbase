@@ -1,17 +1,18 @@
-import React, { useState, useEffect, useCallback, useId } from 'react';
+import React, { useState, useEffect, useCallback, useId, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppConfig } from '../contexts/AppConfigContext';
 import { usePlan, usePlanLoadState, isCloudMode } from '../contexts/PlanContext';
 import { AlertCircle, Key, AlertTriangle, Shield } from 'lucide-react';
-import { QRCodeSVG } from 'qrcode.react';
 import Select from '../components/ui/Select';
 import Button from '../components/ui/Button';
 import { Switch } from '../components/ui/switch';
 import { useToast } from '../components/ui/Toast';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import CreateTokenModal from '../components/profile/CreateTokenModal';
+import MfaEnrollSetupModal from '../components/profile/MfaEnrollSetupModal';
+import MfaEnrollBackupCodesModal from '../components/profile/MfaEnrollBackupCodesModal';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
@@ -28,6 +29,7 @@ import api from '../api/client';
 import { getDocsApiReferenceUrl } from '../config/docs';
 import { resolveSupportedLocale } from '../i18n';
 import { canAccessWorkspaceAdmin } from '../utils/adminAccess';
+import { copyTextToClipboard } from '../utils/copyTextToClipboard';
 
 interface ApiToken {
   id: string;
@@ -100,6 +102,8 @@ export default function Profile() {
   const [deleteAccountLoading, setDeleteAccountLoading] = useState(false);
 
   const mfaIds = useId();
+  /** Avoid calling enroll/cancel when Radix closes the setup dialog after a successful confirm. */
+  const mfaEnrollSucceededRef = useRef(false);
 
   const [mfaWizard, setMfaWizard] = useState<'idle' | 'enrolling' | 'backup_view'>('idle');
   const [mfaOtpauthUrl, setMfaOtpauthUrl] = useState<string | null>(null);
@@ -178,6 +182,7 @@ export default function Profile() {
   const normalizeTotpDigits = (raw: string) => raw.replace(/\D/g, '').slice(0, 6);
 
   const handleMfaBegin = async () => {
+    mfaEnrollSucceededRef.current = false;
     setMfaError('');
     setMfaBusy(true);
     try {
@@ -205,6 +210,10 @@ export default function Profile() {
   };
 
   const handleMfaCancelSetup = async () => {
+    if (mfaEnrollSucceededRef.current) {
+      mfaEnrollSucceededRef.current = false;
+      return;
+    }
     setMfaError('');
     setMfaBusy(true);
     try {
@@ -238,6 +247,7 @@ export default function Profile() {
         setMfaError(t('common.error'));
         return;
       }
+      mfaEnrollSucceededRef.current = true;
       setMfaBackupCodes(codes.map(String));
       setMfaBackupAck(false);
       setMfaWizard('backup_view');
@@ -262,6 +272,7 @@ export default function Profile() {
     setMfaBusy(true);
     try {
       await checkAuth();
+      mfaEnrollSucceededRef.current = false;
       setMfaWizard('idle');
       setMfaOtpauthUrl(null);
       setMfaSecretB32(null);
@@ -329,22 +340,12 @@ export default function Profile() {
     }
   };
 
-  const copySecretToClipboard = async () => {
-    if (!mfaSecretB32) return;
-    try {
-      await navigator.clipboard.writeText(mfaSecretB32);
-      showToast(t('mfa.secretCopied'), 'success');
-    } catch {
-      showToast(t('common.error'), 'error');
-    }
-  };
-
   const copyBackupCodes = async (codes: string[]) => {
-    try {
-      await navigator.clipboard.writeText(codes.join('\n'));
+    const ok = await copyTextToClipboard(codes.join('\n'));
+    if (ok) {
       showToast(t('mfa.backupCodesCopied'), 'success');
-    } catch {
-      showToast(t('common.error'), 'error');
+    } else {
+      showToast(t('mfa.copyFailed'), 'error');
     }
   };
 
@@ -820,98 +821,6 @@ export default function Profile() {
                   </p>
                 ) : null}
               </div>
-            ) : mfaWizard === 'enrolling' && mfaOtpauthUrl && mfaSecretB32 ? (
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">{t('mfa.scanQrOrEnterSecret')}</p>
-                <div className="flex justify-center rounded-xl border border-ghost bg-surface-low p-4">
-                  <QRCodeSVG value={mfaOtpauthUrl} size={200} level="M" title={t('mfa.qrAlt')} />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">{t('mfa.manualSecret')}</Label>
-                  <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-                    <code className="block flex-1 break-all rounded-lg border border-ghost bg-surface-low px-3 py-2 text-xs font-mono">
-                      {mfaSecretB32}
-                    </code>
-                    <Button type="button" variant="secondary" size="sm" onClick={copySecretToClipboard}>
-                      {t('mfa.copySecret')}
-                    </Button>
-                  </div>
-                </div>
-                <form onSubmit={handleMfaConfirmEnroll} className="space-y-3">
-                  <div className="space-y-2">
-                    <Label htmlFor={`${mfaIds}-confirm-code`}>{t('mfa.confirmCodeLabel')}</Label>
-                    <Input
-                      id={`${mfaIds}-confirm-code`}
-                      name="mfa-confirm"
-                      type="text"
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      maxLength={12}
-                      value={mfaConfirmCode}
-                      onChange={(e) => setMfaConfirmCode(e.target.value)}
-                      placeholder={t('mfa.codePlaceholder')}
-                      disabled={mfaBusy}
-                      aria-invalid={Boolean(mfaError)}
-                      className="max-w-xs"
-                    />
-                  </div>
-                  {mfaError ? (
-                    <p id={`${mfaIds}-wizard-err`} className="text-sm text-destructive" role="alert" aria-live="assertive">
-                      {mfaError}
-                    </p>
-                  ) : null}
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="submit"
-                      variant="primary"
-                      size="sm"
-                      disabled={mfaBusy}
-                      className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
-                    >
-                      {mfaBusy ? t('common.loading') : t('mfa.confirmEnrollment')}
-                    </Button>
-                    <Button type="button" variant="ghost" size="sm" disabled={mfaBusy} onClick={handleMfaCancelSetup}>
-                      {t('mfa.cancelSetup')}
-                    </Button>
-                  </div>
-                </form>
-              </div>
-            ) : mfaWizard === 'backup_view' && mfaBackupCodes ? (
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">{t('mfa.backupCodesWarning')}</p>
-                <ul className="grid gap-1 rounded-lg border border-ghost bg-surface-low p-3 font-mono text-sm" role="list">
-                  {mfaBackupCodes.map((c) => (
-                    <li key={c}>{c}</li>
-                  ))}
-                </ul>
-                <div className="flex flex-wrap gap-2">
-                  <Button type="button" variant="secondary" size="sm" onClick={() => copyBackupCodes(mfaBackupCodes)}>
-                    {t('mfa.copyAllBackupCodes')}
-                  </Button>
-                </div>
-                <div className="flex items-start gap-2">
-                  <input
-                    id={`${mfaIds}-ack`}
-                    type="checkbox"
-                    checked={mfaBackupAck}
-                    onChange={(e) => setMfaBackupAck(e.target.checked)}
-                    className="mt-1 h-4 w-4 rounded border-ghost"
-                  />
-                  <Label htmlFor={`${mfaIds}-ack`} className="text-sm font-normal leading-snug cursor-pointer">
-                    {t('mfa.backupCodesAck')}
-                  </Label>
-                </div>
-                <Button
-                  type="button"
-                  variant="primary"
-                  size="sm"
-                  disabled={!mfaBackupAck || mfaBusy}
-                  onClick={handleMfaBackupDone}
-                  className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
-                >
-                  {mfaBusy ? t('common.loading') : t('mfa.backupCodesContinue')}
-                </Button>
-              </div>
             ) : null}
           </CardContent>
         </Card>
@@ -1222,6 +1131,31 @@ export default function Profile() {
           ) : null}
         </DialogContent>
       </Dialog>
+
+      {mfaOtpauthUrl && mfaSecretB32 ? (
+        <MfaEnrollSetupModal
+          open={mfaWizard === 'enrolling'}
+          otpauthUrl={mfaOtpauthUrl}
+          secretB32={mfaSecretB32}
+          confirmCode={mfaConfirmCode}
+          onConfirmCodeChange={setMfaConfirmCode}
+          error={mfaError}
+          busy={mfaBusy}
+          onSubmit={handleMfaConfirmEnroll}
+          onCancelSetup={handleMfaCancelSetup}
+        />
+      ) : null}
+
+      {mfaBackupCodes ? (
+        <MfaEnrollBackupCodesModal
+          open={mfaWizard === 'backup_view'}
+          codes={mfaBackupCodes}
+          ack={mfaBackupAck}
+          onAckChange={setMfaBackupAck}
+          busy={mfaBusy}
+          onContinue={handleMfaBackupDone}
+        />
+      ) : null}
 
       <CreateTokenModal
         isOpen={createTokenOpen}

@@ -16,6 +16,7 @@ import { Input } from '../ui/input';
 import Button from '../ui/Button';
 import { useToast } from '../ui/Toast';
 import api from '../../api/client';
+import { copyTextToClipboard } from '../../utils/copyTextToClipboard';
 
 interface CreateTokenModalProps {
   isOpen: boolean;
@@ -68,21 +69,13 @@ export default function CreateTokenModal({ isOpen, onClose, onCreated }: CreateT
 
   async function handleCopy() {
     if (!token) return;
-    try {
-      await navigator.clipboard.writeText(token);
+    const ok = await copyTextToClipboard(token);
+    if (ok) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
       showToast(t('common.copied'), 'success');
-    } catch {
-      const textarea = document.createElement('textarea');
-      textarea.value = token;
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textarea);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-      showToast(t('common.copied'), 'success');
+    } else {
+      showToast(t('common.error'), 'error');
     }
   }
 
