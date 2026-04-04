@@ -17,7 +17,9 @@ export function createApiClient(options: { baseUrl?: string; basePath?: string }
   });
   // Same CSRF and error handling as default api (simplified: no shared token state)
   client.interceptors.request.use(async (config) => {
-    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(config.method?.toUpperCase() || '')) {
+    const method = config.method?.toUpperCase() || '';
+    const skipVerify = config.url?.includes('/auth/mfa/verify');
+    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method) && !skipVerify) {
       try {
         const r = await client.get('/csrf-token');
         const token = r.data?.csrfToken;
@@ -82,6 +84,7 @@ api.interceptors.request.use(
         '/auth/verify-signup',
         '/auth/resend-signup-verification',
         '/auth/request-signup-resend',
+        '/auth/mfa/verify',
         '/csrf-token',
       ].some((path) => config.url?.includes(path));
 

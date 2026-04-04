@@ -98,9 +98,24 @@ SlugBase uses **JWT (JSON Web Tokens)** for authentication instead of server-sid
 - Tokens are verified on every authenticated request
 - User data is fetched fresh from database on each request (for up-to-date permissions)
 
+## Multi-factor authentication (TOTP)
+
+SlugBase can require a **second factor** after a correct password or OIDC sign-in: **time-based one-time passwords (TOTP, RFC 6238)** from an authenticator app, plus **one-time backup codes** for recovery.
+
+### Threat model (summary)
+
+- **What MFA protects:** Interactive browser sessions established through the normal login or OIDC flows. An attacker who only knows the password (or compromises an OIDC session at the IdP) still needs the TOTP factor or a backup code to obtain an access JWT from the API.
+- **What MFA does not change:** **Personal API tokens** (`sb_…` from `/api/tokens`) authenticate as the user **without** an MFA step. This matches the **GitHub personal access token** model: anyone who holds the token secret can use it until the token is revoked. If you need automation while MFA is on, treat API tokens like passwords—store them in a secret manager, scope usage, and revoke when unused.
+- **Pending step-up:** After primary auth, the server may set a short-lived **`slugbase.mfa_pending`** httpOnly cookie (not an access JWT) until `POST /api/auth/mfa/verify` succeeds. That cookie must not grant access to protected API routes; only a normal access JWT or API token does.
+- **Operator hygiene:** Application logs must not contain submitted OTPs, backup codes, TOTP secrets, or `otpauth` URLs. Prefer structured event types and user identifiers for audit trails.
+
+### Lockout
+
+There is no in-product email unlock for a lost second factor in v1. Recovery is via **backup codes** or an **instance operator** (self-hosted: clear MFA columns and backup-code rows in the database per your runbook).
+
 ## API Security
 
-- All authenticated endpoints require valid JWT tokens (from cookies or Authorization header)
+- All authenticated endpoints require valid JWT tokens (from cookies or Authorization header), **or** a valid personal API token in the `Authorization` header (see MFA section: API tokens bypass interactive MFA)
 - Admin-only endpoints check `is_admin` flag from JWT payload
 - OIDC client secrets are never returned in API responses
 - Email is used as the primary identifier (unique constraint enforced)

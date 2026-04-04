@@ -22,6 +22,7 @@ import { absoluteUrlForGoPath } from './utils/goRedirectUrl';
 
 const Setup = lazy(() => import('./pages/Setup'));
 import Login from './pages/Login';
+import MfaChallenge from './pages/MfaChallenge';
 const Signup = lazy(() => import('./pages/Signup'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Bookmarks = lazy(() => import('./pages/Bookmarks'));
@@ -196,6 +197,7 @@ function AppRoutes() {
     <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="text-lg">{t('common.loading')}</div></div>}>
       <Routes>
         <Route path="/login" element={!user ? <LoginRouteErrorBoundary><Login /></LoginRouteErrorBoundary> : <Navigate to={appRootPath} replace />} />
+        <Route path="/mfa" element={!user ? <LoginRouteErrorBoundary><MfaChallenge /></LoginRouteErrorBoundary> : <Navigate to={appRootPath} replace />} />
         <Route path="/signup" element={!user ? <Signup /> : <Navigate to={appRootPath} replace />} />
         <Route path="/reset-password" element={<PasswordReset />} />
         <Route path="/password-reset" element={<PasswordReset />} />

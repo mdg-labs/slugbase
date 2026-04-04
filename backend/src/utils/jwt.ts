@@ -44,7 +44,10 @@ export function generateToken(user: JWTPayload): string {
  */
 export function verifyToken(token: string): JWTPayload | null {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as JWTPayload;
+    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as JWTPayload & { pur?: string };
+    if (decoded.pur === 'mfa_pending') {
+      return null;
+    }
     return decoded;
   } catch (error) {
     return null;

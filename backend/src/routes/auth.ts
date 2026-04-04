@@ -9,7 +9,17 @@ import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { authRateLimiter, refreshRateLimiter, strictRateLimiter } from '../middleware/security.js';
 import { validateEmail, normalizeEmail, validatePassword, validateLength, sanitizeString } from '../utils/validation.js';
 import { generateUserKey } from '../utils/user-key.js';
-import { getAuthCookieOptions, getClearAuthCookieOptions } from '../config/cookies.js';
+import {
+  getClearAuthCookieOptions,
+  MFA_PENDING_COOKIE_NAME,
+  getMfaPendingCookieOptions,
+  getClearMfaPendingCookieOptions,
+} from '../config/cookies.js';
+import { setAccessTokenCookie } from '../utils/access-token-cookie.js';
+import { signMfaPendingToken, MFA_PENDING_JWT_TTL_MS } from '../utils/mfa-pending-jwt.js';
+import { logMfaAudit } from '../utils/mfa-audit-log.js';
+import { rowMfaEnabled } from '../services/mfa-user.js';
+import { mountAuthMfaRoutes } from './auth-mfa.js';
 import { sendSignupVerificationEmail } from '../utils/email.js';
 import crypto from 'crypto';
 import { getDefaultTenantId, getTenantId, DEFAULT_TENANT_ID } from '../utils/tenant.js';
@@ -103,12 +113,6 @@ async function findSignupTokenWithEmailByToken(submittedToken: string): Promise<
   return row;
 }
 
-/** Set auth cookie for self-hosted JWT auth. */
-function setAuthCookies(res: any, options: { accessToken: string; refreshToken?: string; refreshMaxAgeMs?: number }) {
-  const accessMaxAgeMs = 7 * 24 * 60 * 60 * 1000;
-  res.cookie('token', options.accessToken, { ...getAuthCookieOptions(accessMaxAgeMs), maxAge: accessMaxAgeMs });
-}
-
 router.get('/providers', async (req, res) => {
   try {
     const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
@@ -128,7 +132,10 @@ router.get('/providers', async (req, res) => {
 router.get('/me', requireAuth(), async (req, res) => {
   const authReq = req as AuthRequest;
   const user = authReq.user!;
-  const userRow = await queryOne('SELECT id, email, name, user_key, is_admin, language, theme, ai_suggestions_enabled FROM users WHERE id = ?', [user.id]);
+  const userRow = await queryOne(
+    'SELECT id, email, name, user_key, is_admin, language, theme, ai_suggestions_enabled, mfa_enabled FROM users WHERE id = ?',
+    [user.id]
+  );
   const u = userRow as any;
   const payload: Record<string, unknown> = {
     id: user.id,
@@ -139,6 +146,7 @@ router.get('/me', requireAuth(), async (req, res) => {
     language: u?.language || (user as any).language || 'en',
     theme: u?.theme || (user as any).theme || 'auto',
     ai_suggestions_enabled: u?.ai_suggestions_enabled !== 0 && u?.ai_suggestions_enabled !== false,
+    mfa_enabled: u ? rowMfaEnabled(u as any) : false,
   };
   if (isCloud) {
     const tenantId = getTenantId(req as any);
@@ -223,8 +231,16 @@ router.post('/login', authRateLimiter, async (req, res, next) => {
       console.error('Session cleanup before login:', cleanupErr);
     }
 
+    if (rowMfaEnabled(user as any)) {
+      res.clearCookie('token', getClearAuthCookieOptions());
+      const pendingJwt = signMfaPendingToken(userPayload.id);
+      res.cookie(MFA_PENDING_COOKIE_NAME, pendingJwt, getMfaPendingCookieOptions(MFA_PENDING_JWT_TTL_MS));
+      logMfaAudit('mfa_login_stepup_required', { user_id: userPayload.id });
+      return res.status(200).json({ mfa_required: true });
+    }
+
     const token = generateToken(userPayload);
-    setAuthCookies(res, { accessToken: token });
+    setAccessTokenCookie(res, token);
 
     if (isCloud && req.session) {
       delete req.session.organizationId;
@@ -251,6 +267,7 @@ router.post('/login', authRateLimiter, async (req, res, next) => {
 router.post('/logout', async (req, res) => {
   const clearOpts = getClearAuthCookieOptions();
   res.clearCookie('token', clearOpts);
+  res.clearCookie(MFA_PENDING_COOKIE_NAME, getClearMfaPendingCookieOptions());
 
   const sendLoggedOut = () => {
     if (isCloud && req.session) {
@@ -597,6 +614,8 @@ router.post('/refresh', refreshRateLimiter, async (req, res) => {
   return res.status(404).json({ error: 'Not found' });
 });
 
+mountAuthMfaRoutes(router);
+
 // OIDC login route
 // Note: OIDC requires sessions for the OAuth flow, so we don't use session: false here
 router.get('/:provider', async (req, res, next) => {
@@ -801,9 +820,42 @@ router.get('/:provider/callback', (req, res, next) => {
     }
     
     async function handleSuccess() {
-      const userPayload = { id: user.id, email: user.email, name: user.name, user_key: user.user_key, is_admin: user.is_admin };
+      const row = await queryOne(
+        'SELECT id, email, name, user_key, is_admin, mfa_enabled, email_verified FROM users WHERE id = ?',
+        [user.id]
+      );
+      if (!row) {
+        return res.redirect(buildFrontendAbsoluteUrl('/login?error=auth_failed'));
+      }
+      const r = row as any;
+      const emailVerified = r.email_verified !== false && r.email_verified !== 0;
+
+      if (isCloud && !emailVerified) {
+        res.clearCookie('token', getClearAuthCookieOptions());
+        res.clearCookie(MFA_PENDING_COOKIE_NAME, getClearMfaPendingCookieOptions());
+        logMfaAudit('mfa_email_unverified_block', { user_id: String(r.id) });
+        const redirectUrl = buildFrontendAbsoluteUrl('/verify-email-required');
+        req.session?.destroy((sessionErr) => {
+          if (sessionErr) console.error('Error destroying session:', sessionErr);
+          res.redirect(redirectUrl);
+        });
+        return;
+      }
+
+      if (rowMfaEnabled(r)) {
+        res.clearCookie('token', getClearAuthCookieOptions());
+        const pendingJwt = signMfaPendingToken(String(r.id));
+        res.cookie(MFA_PENDING_COOKIE_NAME, pendingJwt, getMfaPendingCookieOptions(MFA_PENDING_JWT_TTL_MS));
+        const redirectUrl = buildFrontendAbsoluteUrl('/mfa');
+        req.session?.destroy((sessionErr) => {
+          if (sessionErr) console.error('Error destroying session:', sessionErr);
+          res.redirect(redirectUrl);
+        });
+        return;
+      }
+      const userPayload = { id: r.id, email: r.email, name: r.name, user_key: r.user_key, is_admin: r.is_admin };
       const token = generateToken(userPayload);
-      setAuthCookies(res, { accessToken: token });
+      setAccessTokenCookie(res, token);
       const redirectUrl = buildFrontendAbsoluteUrl('/');
       req.session?.destroy((sessionErr) => {
         if (sessionErr) console.error('Error destroying session:', sessionErr);
@@ -894,7 +946,7 @@ router.post('/setup', strictRateLimiter, async (req, res) => {
 
     // Automatically log in the user after successful setup
     const userPayload = { id: userId, email: normalizedEmail, name: sanitizedName, user_key: userKey, is_admin: true };
-    setAuthCookies(res, { accessToken: generateToken(userPayload) });
+    setAccessTokenCookie(res, generateToken(userPayload));
 
     // Return user data (same format as login endpoint)
     res.json({

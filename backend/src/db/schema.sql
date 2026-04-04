@@ -10,7 +10,10 @@ CREATE TABLE IF NOT EXISTS users (
   oidc_provider VARCHAR(255),
   language VARCHAR(10) DEFAULT 'en',
   theme VARCHAR(10) DEFAULT 'auto',
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  mfa_enabled BOOLEAN DEFAULT FALSE,
+  mfa_totp_secret_enc TEXT,
+  mfa_enrolled_at TIMESTAMP
 );
 
 -- OIDC providers table
@@ -137,6 +140,19 @@ CREATE TABLE IF NOT EXISTS system_config (
   key VARCHAR(255) PRIMARY KEY,
   value TEXT NOT NULL
 );
+
+-- MFA backup codes (hashes only; TOTP secret lives encrypted on users.mfa_totp_secret_enc)
+CREATE TABLE IF NOT EXISTS mfa_backup_codes (
+  id VARCHAR(255) PRIMARY KEY,
+  user_id VARCHAR(255) NOT NULL,
+  code_hash VARCHAR(255) NOT NULL,
+  used_at TIMESTAMP,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  UNIQUE(user_id, code_hash)
+);
+
+CREATE INDEX IF NOT EXISTS idx_mfa_backup_codes_user_id ON mfa_backup_codes(user_id);
 
 -- Password reset tokens table
 CREATE TABLE IF NOT EXISTS password_reset_tokens (

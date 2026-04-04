@@ -4,7 +4,9 @@ info:
   description: |
     HTTP API for a self-hosted SlugBase instance. Replace the server URL with your deployment base URL.
 
-    **Authentication:** Most routes accept either a session cookie (browser) after login, or `Authorization: Bearer <api_token>` from `/api/tokens`.
+    **Authentication:** Most routes accept either a session cookie (browser) after login, or `Authorization: Bearer <api_token>` from `/api/tokens`. Personal API tokens do **not** require interactive MFA when a user has TOTP enabled (same model as GitHub PATs: possession of the secret is the factor).
+
+    **MFA (TOTP):** Optional second factor after password or OIDC. Step-up uses a short-lived `slugbase.mfa_pending` cookie until `POST /api/auth/mfa/verify` succeeds. Management routes require a normal session plus CSRF where applicable.
 
     **CSRF:** For cookie-based sessions, non-GET requests generally require `X-CSRF-Token` from `GET /api/csrf-token` first. Some auth and password-reset routes are exempt (see code: `app-factory.ts`).
   version: 1.0.0
@@ -14,6 +16,7 @@ servers:
 tags:
   - name: CSRFHealth
   - name: Auth
+  - name: MFA
   - name: PasswordReset
   - name: EmailVerification
   - name: Bookmarks
@@ -98,15 +101,24 @@ paths:
     get:
       tags: [Auth]
       summary: Current session user
+      description: Requires a valid access JWT (not the MFA pending cookie alone). Includes `mfa_enabled` when the user row is loaded.
       responses:
         '200':
           description: User
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthMeResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
   /api/auth/login:
     post:
       tags: [Auth]
       summary: Email/password login
+      description: |
+        On correct password, normally returns the user object and sets the access JWT cookie.
+        If the account has MFA enabled, returns `{ "mfa_required": true }` (HTTP 200) and sets the `slugbase.mfa_pending` cookie instead of issuing an access JWT until `POST /api/auth/mfa/verify` succeeds.
+        Failed credentials always return **401** (no `mfa_required`) to avoid account enumeration.
       security: []
       requestBody:
         required: true
@@ -119,9 +131,232 @@ paths:
                 password: { type: string }
       responses:
         '200':
-          description: Success
+          description: Logged in, or MFA step-up required (see schema)
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/AuthLoginSuccess'
+                  - $ref: '#/components/schemas/AuthLoginMfaRequired'
         '401':
           $ref: '#/components/responses/Error'
+        '403':
+          description: Hosted/cloud deployments may return this when email is not verified
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorWithCode'
+  /api/auth/mfa/status:
+    get:
+      tags: [MFA]
+      summary: MFA enrollment status
+      description: Whether TOTP MFA is enabled and when it was enrolled. No secrets.
+      responses:
+        '200':
+          description: Status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MfaStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/auth/mfa/enroll/begin:
+    post:
+      tags: [MFA]
+      summary: Start MFA enrollment
+      description: |
+        Generates a TOTP secret, persists it encrypted with `mfa_enabled` still false, and returns `otpauth_url` plus Base32 `secret` for manual entry.
+        The SPA should render a QR code from `otpauth_url` locally. **409** if MFA is already fully enabled.
+      responses:
+        '200':
+          description: Enrollment data (persisted pending confirm)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MfaEnrollBeginResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: MFA already enabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MfaErrorResponse'
+        '429':
+          description: Rate limited
+  /api/auth/mfa/enroll/confirm:
+    post:
+      tags: [MFA]
+      summary: Confirm MFA enrollment
+      description: Verifies a 6-digit TOTP code against the pending secret, enables MFA, and returns one-time backup codes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+                  description: 6-digit TOTP from the authenticator app
+      responses:
+        '200':
+          description: MFA enabled; backup codes returned once
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MfaBackupCodesResponse'
+        '400':
+          description: Invalid code or no enrollment in progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MfaErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: MFA already enabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MfaErrorResponse'
+  /api/auth/mfa/enroll/cancel:
+    post:
+      tags: [MFA]
+      summary: Cancel MFA enrollment
+      description: |
+        Clears a pending (not yet confirmed) TOTP secret. Idempotent **200** if there is nothing to clear.
+        **409** if MFA is already fully enabled.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: MFA already enabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MfaErrorResponse'
+  /api/auth/mfa/disable:
+    post:
+      tags: [MFA]
+      summary: Disable MFA
+      description: |
+        Requires a valid TOTP or unused backup code. Local (password) users must also send `password`.
+        OIDC-only users omit `password`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MfaDisableRequest'
+      responses:
+        '200':
+          description: MFA disabled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+        '400':
+          description: Validation or wrong code (`code` may be `MFA_NOT_ENABLED`, `PASSWORD_REQUIRED`, `INVALID_CODE`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MfaErrorResponse'
+        '401':
+          description: Invalid password (`INVALID_PASSWORD`) or unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MfaErrorResponse'
+  /api/auth/mfa/backup/regenerate:
+    post:
+      tags: [MFA]
+      summary: Regenerate backup codes
+      description: Same trust bar as disable — invalidates all previous backup codes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MfaDisableRequest'
+      responses:
+        '200':
+          description: New backup codes (plaintext once)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MfaBackupCodesResponse'
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MfaErrorResponse'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MfaErrorResponse'
+  /api/auth/mfa/verify:
+    post:
+      tags: [MFA]
+      summary: Complete MFA step-up after login
+      description: |
+        Uses the `slugbase.mfa_pending` cookie from password login or OIDC redirect (not the access JWT).
+        On success, clears the pending cookie and sets the access JWT. Strict rate limiting applies.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+                  description: 6-digit TOTP or a 16-character lowercase hex backup code
+      responses:
+        '200':
+          description: Logged in (access cookie set)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthLoginSuccess'
+        '400':
+          description: Missing body fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MfaErrorResponse'
+        '401':
+          description: Invalid or expired pending session, or invalid code (`MFA_PENDING_INVALID`, `INVALID_CODE`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MfaErrorResponse'
+        '403':
+          description: Cloud only — email not verified after MFA
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthErrorWithCode'
+        '429':
+          description: Rate limited
   /api/auth/logout:
     post:
       tags: [Auth]
@@ -824,6 +1059,84 @@ paths:
         '200':
           description: OK
 components:
+  schemas:
+    AuthLoginMfaRequired:
+      type: object
+      required: [mfa_required]
+      properties:
+        mfa_required:
+          type: boolean
+          enum: [true]
+      description: Access JWT is not issued; complete step-up via POST /api/auth/mfa/verify
+    AuthLoginSuccess:
+      type: object
+      properties:
+        id: { type: string }
+        email: { type: string, format: email }
+        name: { type: string, nullable: true }
+        user_key: { type: string }
+        is_admin: { type: boolean }
+        email_verified: { type: boolean }
+        language: { type: string }
+        theme: { type: string }
+    AuthMeResponse:
+      allOf:
+        - $ref: '#/components/schemas/AuthLoginSuccess'
+        - type: object
+          properties:
+            ai_suggestions_enabled: { type: boolean }
+            mfa_enabled: { type: boolean }
+    AuthErrorWithCode:
+      type: object
+      properties:
+        error: { type: string }
+        code: { type: string }
+    MfaStatus:
+      type: object
+      properties:
+        enabled: { type: boolean }
+        enrolled_at:
+          type: string
+          nullable: true
+          description: ISO timestamp when MFA was enabled, if applicable
+    MfaEnrollBeginResponse:
+      type: object
+      required: [otpauth_url, secret]
+      properties:
+        otpauth_url:
+          type: string
+          description: otpauth URI for QR / authenticator import (do not log in production)
+        secret:
+          type: string
+          description: Base32 secret for manual entry
+    MfaBackupCodesResponse:
+      type: object
+      required: [backup_codes]
+      properties:
+        backup_codes:
+          type: array
+          items: { type: string }
+          description: One-time codes; shown once
+    MfaDisableRequest:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+          description: TOTP or unused backup code
+        password:
+          type: string
+          description: Required when the user has a local password (omit for OIDC-only)
+    MfaErrorResponse:
+      type: object
+      properties:
+        error: { type: string }
+        code:
+          type: string
+          description: |
+            Stable machine-readable codes include:
+            `MFA_ALREADY_ENABLED`, `INVALID_CODE`, `MFA_PENDING_INVALID`, `MFA_NO_PENDING`,
+            `MFA_NOT_ENABLED`, `PASSWORD_REQUIRED`, `INVALID_PASSWORD`.
   securitySchemes:
     cookieAuth:
       type: apiKey

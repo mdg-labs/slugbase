@@ -87,6 +87,30 @@ export const tokenCreateRateLimiter = isDevelopment
       legacyHeaders: false,
     });
 
+/** MFA step-up verify: stricter than login; count all attempts (success + failure). */
+export const mfaVerifyRateLimiter = isDevelopment
+  ? noOpRateLimiter
+  : rateLimit({
+      windowMs: 15 * 60 * 1000,
+      max: 40,
+      message: 'Too many MFA attempts. Please try again later.',
+      standardHeaders: true,
+      legacyHeaders: false,
+      skipSuccessfulRequests: false,
+    });
+
+/** MFA enroll begin: limit secret churn / DB abuse. */
+export const mfaEnrollBeginRateLimiter = isDevelopment
+  ? noOpRateLimiter
+  : rateLimit({
+      windowMs: 15 * 60 * 1000,
+      max: 25,
+      message: 'Too many MFA setup attempts. Please try again later.',
+      standardHeaders: true,
+      legacyHeaders: false,
+      skipSuccessfulRequests: false,
+    });
+
 /**
  * Normalize env to an origin allowed in CSP (https only in production).
  * Accepts `https://host` or `https://host/path` (e.g. Umami script URL).

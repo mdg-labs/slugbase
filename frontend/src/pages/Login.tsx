@@ -18,6 +18,7 @@ import {
   AUTH_PAGE_INNER,
   AUTH_PAGE_OUTER,
 } from '../components/auth/authPageClasses';
+import { safeRedirectPath } from '../utils/safeRedirectPath';
 
 export default function Login() {
   const { t } = useTranslation();
@@ -39,7 +40,7 @@ export default function Login() {
   useEffect(() => {
     if (user) {
       const redirectTo = searchParams.get('redirect');
-      const safePath = redirectTo?.startsWith('/') && !redirectTo.startsWith('//') ? redirectTo : null;
+      const safePath = safeRedirectPath(redirectTo);
       navigate(safePath || '/', { replace: true });
     }
   }, [user, navigate, searchParams]);
@@ -76,10 +77,18 @@ export default function Login() {
     setError('');
 
     try {
-      await api.post('/auth/login', localAuth);
+      const res = await api.post('/auth/login', localAuth);
+      if (res.data?.mfa_required === true) {
+        const redirectTo = searchParams.get('redirect');
+        const safePath = safeRedirectPath(redirectTo);
+        const mfaPath = `${prefix}/mfa`.replace(/\/+/g, '/') || '/mfa';
+        const qs = safePath ? `?redirect=${encodeURIComponent(safePath)}` : '';
+        navigate(`${mfaPath}${qs}`, { replace: true });
+        return;
+      }
       await checkAuth();
       const redirectTo = searchParams.get('redirect');
-      const safePath = redirectTo?.startsWith('/') && !redirectTo.startsWith('//') ? redirectTo : null;
+      const safePath = safeRedirectPath(redirectTo);
       navigate(safePath || '/', { replace: true });
     } catch (err: any) {
       const code = err.response?.data?.code;

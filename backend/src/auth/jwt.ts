@@ -25,6 +25,9 @@ export function setupJWT() {
       },
       async (req: any, payload: any, done: any) => {
         try {
+          if (payload?.pur === 'mfa_pending') {
+            return done(null, false);
+          }
           // Fetch fresh user data from database
           const user = await queryOne('SELECT * FROM users WHERE id = ?', [payload.id]);
           if (!user) {

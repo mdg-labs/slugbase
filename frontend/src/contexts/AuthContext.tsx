@@ -19,6 +19,8 @@ export interface User {
   email_pending?: string | null;
   oidc_provider?: string | null;
   oidc_sub?: string | null;
+  /** Present from GET /auth/me when authenticated. */
+  mfa_enabled?: boolean;
 }
 
 interface AuthContextType {
