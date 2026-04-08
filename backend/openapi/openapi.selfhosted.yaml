@@ -302,11 +302,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/MfaBackupCodesResponse'
         '400':
+          description: Validation or wrong code (`code` may be `MFA_NOT_ENABLED`, `PASSWORD_REQUIRED`, `INVALID_CODE`)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/MfaErrorResponse'
         '401':
+          description: Invalid password (`INVALID_PASSWORD`) or unauthenticated
           content:
             application/json:
               schema:
