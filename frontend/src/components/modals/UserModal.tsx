@@ -61,6 +61,11 @@ export default function UserModal({ user, isOpen, onClose, onSuccess }: UserModa
   const [inviteEnabled, setInviteEnabled] = useState(false);
   const [createMode, setCreateMode] = useState<CreateMode>('set_password');
 
+  const isCreate = !user;
+  const inviteChoiceAvailable = isCloudMode
+    ? planLoadState === 'ready' && planInfo?.emailInvitesAvailable === true
+    : inviteEnabled;
+
   useEffect(() => {
     if (user) {
       setFormData({
@@ -77,13 +82,22 @@ export default function UserModal({ user, isOpen, onClose, onSuccess }: UserModa
   }, [user, isOpen]);
 
   useEffect(() => {
-    if (!user && isOpen) {
+    if (isCreate && createMode === 'send_invite' && !inviteChoiceAvailable) {
+      setCreateMode('set_password');
+    }
+  }, [isCreate, createMode, inviteChoiceAvailable]);
+
+  useEffect(() => {
+    if (!user && isOpen && !isCloudMode) {
       api
         .get('/admin/settings')
         .then((res) => {
           setInviteEnabled(res.data?.smtp_enabled === 'true');
         })
         .catch(() => setInviteEnabled(false));
+    }
+    if (!user && isOpen && isCloudMode) {
+      setInviteEnabled(false);
     }
   }, [user, isOpen]);
 
@@ -133,8 +147,7 @@ export default function UserModal({ user, isOpen, onClose, onSuccess }: UserModa
     }
   }
 
-  const isCreate = !user;
-  const useInvite = isCreate && inviteEnabled && createMode === 'send_invite';
+  const useInvite = isCreate && inviteChoiceAvailable && createMode === 'send_invite';
   const isValid =
     formData.email.trim() &&
     formData.name.trim() &&
@@ -179,7 +192,7 @@ export default function UserModal({ user, isOpen, onClose, onSuccess }: UserModa
                 placeholder={t('setup.name')}
               />
             </FormFieldWrapper>
-            {isCreate && inviteEnabled && (
+            {isCreate && inviteChoiceAvailable && (
               <div className="space-y-3">
                 <Label className="text-sm font-medium">{t('admin.createUserWith')}</Label>
                 <div className="flex flex-col gap-2" role="radiogroup" aria-label="Create user with">

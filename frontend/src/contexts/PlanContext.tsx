@@ -15,6 +15,8 @@ export interface PlanInfo {
   aiAvailable: boolean;
   /** Cloud: Team plan with more than one org member (audit log UI + API). */
   auditLogAvailable?: boolean;
+  /** Cloud: Postmark (or SMTP) configured so admin can send invite emails without a password. */
+  emailInvitesAvailable?: boolean;
 }
 
 /** Self-hosted or logged-out cloud: no plan fetch. loading: cloud fetch in flight. ready: cloud fetch finished (success or pessimistic free on error). */
@@ -26,6 +28,7 @@ const FREE_FALLBACK: PlanInfo = {
   canShareWithTeams: false,
   aiAvailable: false,
   auditLogAvailable: false,
+  emailInvitesAvailable: false,
 };
 
 interface PlanContextValue {
@@ -126,6 +129,7 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
         canShareWithTeams: boolean;
         ai_available?: boolean;
         audit_log_available?: boolean;
+        email_invites_available?: boolean;
       }>('/config/plan')
       .then((res) => {
         setPlanInfo({
@@ -134,6 +138,7 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
           canShareWithTeams: res.data.canShareWithTeams === true,
           aiAvailable: res.data.ai_available === true,
           auditLogAvailable: res.data.audit_log_available === true,
+          emailInvitesAvailable: res.data.email_invites_available === true,
         });
         setPlanLoadState('ready');
       })

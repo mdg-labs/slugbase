@@ -9,10 +9,11 @@ import { isAISuggestionsEnabled, isAIFeatureAvailable } from '../utils/ai-featur
 import { getTenantId } from '../utils/tenant.js';
 import { isCloud } from '../config/mode.js';
 import { isAuditLogEnabledForRequest } from '../services/audit-log.js';
+import { isEmailSendingAvailable } from '../utils/email.js';
 
 const router = Router();
 
-/** GET /api/config/plan – cloud only. Returns plan, bookmarkLimit, canShareWithTeams, ai_available, audit_log_available. When !isCloud returns 404. */
+/** GET /api/config/plan – cloud only. Returns plan, limits, feature flags (audit log, email invites). When !isCloud returns 404. */
 router.get('/plan', requireAuth(), async (req, res) => {
   if (!isCloud) {
     return res.status(404).json({ error: 'Not available' });
@@ -25,12 +26,19 @@ router.get('/plan', requireAuth(), async (req, res) => {
   } catch {
     audit_log_available = false;
   }
+  let email_invites_available = false;
+  try {
+    email_invites_available = await isEmailSendingAvailable();
+  } catch {
+    email_invites_available = false;
+  }
   res.json({
     plan: effectivePlan,
     bookmarkLimit: effectivePlan === 'free' ? 50 : null,
     canShareWithTeams: effectivePlan === 'team',
     ai_available: effectivePlan !== 'free',
     audit_log_available,
+    email_invites_available,
   });
 });
 

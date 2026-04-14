@@ -1141,6 +1141,7 @@ components:
         canShareWithTeams: { type: boolean }
         ai_available: { type: boolean }
         audit_log_available: { type: boolean }
+        email_invites_available: { type: boolean }
     AuditLogEvent:
       type: object
       properties:
