@@ -1020,7 +1020,7 @@ paths:
     get:
       tags: [AdminAuditLog]
       summary: List audit events for current tenant
-      description: Requires admin. On cloud, returns 403 unless Team plan with more than one org member.
+      description: Requires admin. On cloud, returns 403 unless the organization is on the Team plan.
       parameters:
         - in: query
           name: limit

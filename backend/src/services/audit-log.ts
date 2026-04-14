@@ -1,6 +1,6 @@
 import type { Request } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { execute, getDbType, query, queryOne } from '../db/index.js';
+import { execute, getDbType, query } from '../db/index.js';
 import { isCloud } from '../config/mode.js';
 import { getTenantId, DEFAULT_TENANT_ID } from '../utils/tenant.js';
 
@@ -13,6 +13,10 @@ export interface AuditEventPayload {
   metadata?: Record<string, unknown> | null;
 }
 
+/**
+ * Cloud: Team plan with a real organization tenant (matches Members/Teams admin gating).
+ * Self-hosted: always on. We do not require multiple org members so solo Team workspaces still get the audit log.
+ */
 export async function isAuditLogEnabledForRequest(req: Request): Promise<boolean> {
   if (!isCloud) {
     return true;
@@ -25,16 +29,7 @@ export async function isAuditLogEnabledForRequest(req: Request): Promise<boolean
   if (!tenantId || tenantId === DEFAULT_TENANT_ID) {
     return false;
   }
-  try {
-    const row = await queryOne('SELECT COUNT(*) as c FROM org_members WHERE org_id = ?', [tenantId]);
-    const n = Number((row as { c?: string | number } | null)?.c ?? 0);
-    return n > 1;
-  } catch (e: any) {
-    if (e?.message?.includes('no such table') || e?.message?.includes('does not exist')) {
-      return false;
-    }
-    throw e;
-  }
+  return true;
 }
 
 export async function recordAuditEvent(req: Request, payload: AuditEventPayload): Promise<void> {

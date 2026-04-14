@@ -31,7 +31,7 @@
     "auditLog": {
       "nav": "Audit log",
       "title": "Audit log",
-      "description": "Recent changes to bookmarks, folders, tags, teams, and members. On SlugBase Cloud, the audit log is available on the Team plan when your organization has more than one member.",
+      "description": "Recent changes to bookmarks, folders, tags, teams, and members. On SlugBase Cloud, the audit log is available on the Team plan.",
       "colTime": "Time",
       "colActor": "Actor",
       "colAction": "Action",

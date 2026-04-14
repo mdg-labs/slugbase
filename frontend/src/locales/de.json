@@ -31,7 +31,7 @@
     "auditLog": {
       "nav": "Audit-Protokoll",
       "title": "Audit-Protokoll",
-      "description": "Letzte Änderungen an Lesezeichen, Ordnern, Tags, Teams und Mitgliedern. In SlugBase Cloud ist das Audit-Protokoll im Team-Plan verfügbar, wenn Ihre Organisation mehr als ein Mitglied hat.",
+      "description": "Letzte Änderungen an Lesezeichen, Ordnern, Tags, Teams und Mitgliedern. In SlugBase Cloud ist das Audit-Protokoll im Team-Plan verfügbar.",
       "colTime": "Zeit",
       "colActor": "Akteur",
       "colAction": "Aktion",

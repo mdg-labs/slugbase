@@ -11,7 +11,7 @@ router.get('/', async (req, res) => {
   try {
     if (!(await isAuditLogEnabledForRequest(req))) {
       return res.status(403).json({
-        error: 'Audit log is available on Cloud for Team plans with more than one member. Self-hosted includes the audit log for all admins.',
+        error: 'Audit log is available on SlugBase Cloud for the Team plan. Self-hosted includes the audit log for all admins.',
         code: 'audit_log_unavailable',
       });
     }
