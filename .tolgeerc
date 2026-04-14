@@ -1,8 +1,15 @@
 {
   "apiUrl": "https://tolgee.mdg-labs.dev",
   "projectId": 3,
+  "parser": "react",
+  "strictNamespace": false,
+  "patterns": ["frontend/src/**/*.{ts,tsx}"],
+  "sync": {
+    "continueOnWarning": true
+  },
   "pull": {
-    "path": "frontend/src/locales/{languageTag}.json"
+    "path": "frontend/src/locales",
+    "fileStructureTemplate": "{languageTag}.json"
   },
   "push": {
     "files": [{ "path": "frontend/src/locales/en.json", "language": "en" }]
