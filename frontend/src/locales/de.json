@@ -28,6 +28,19 @@
       "providerOpenAI": "OpenAI",
       "title": "AI Lesezeichen Vorschläge"
     },
+    "auditLog": {
+      "nav": "Audit-Protokoll",
+      "title": "Audit-Protokoll",
+      "description": "Letzte Änderungen an Lesezeichen, Ordnern, Tags, Teams und Mitgliedern. In SlugBase Cloud ist das Audit-Protokoll im Team-Plan verfügbar, wenn Ihre Organisation mehr als ein Mitglied hat.",
+      "colTime": "Zeit",
+      "colActor": "Akteur",
+      "colAction": "Aktion",
+      "colEntity": "Objekt",
+      "colDetails": "Details",
+      "empty": "Noch keine Audit-Ereignisse.",
+      "loadMore": "Mehr laden",
+      "loadError": "Audit-Protokoll konnte nicht geladen werden."
+    },
     "apiDocsNote": "API-Dokumentation ist als eigenständige Seite verfügbar",
     "authorizationUrl": "Autorisierungs-URL",
     "autoCreate": "Benutzer automatisch erstellen",

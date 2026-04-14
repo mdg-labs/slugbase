@@ -17,6 +17,7 @@ import {
   Sparkles,
   CreditCard,
   Shield,
+  ScrollText,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -39,6 +40,7 @@ import {
   showAdminAiNav,
   showAdminMembersNav,
   showAdminTeamsNav,
+  showAdminAuditLogNav,
 } from '../contexts/PlanContext';
 import type { User } from '../contexts/AuthContext';
 import { cn } from '../lib/utils';
@@ -66,6 +68,7 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
 
   const showMembers = showAdminMembersNav(planInfo, planLoadState);
   const showTeams = showAdminTeamsNav(planInfo, planLoadState);
+  const showAuditLog = showAdminAuditLogNav(planInfo, planLoadState);
   const showAdminAi = showAdminAiNav(planInfo);
 
   const adminNavItems = [
@@ -74,6 +77,16 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
       : []),
     ...(showTeams
       ? [{ pathForLink: `${adminBaseLink}/teams`, pathForActive: `${adminBaseFull}/teams`, label: t('admin.teams'), icon: UserCog }]
+      : []),
+    ...(showAuditLog
+      ? [
+          {
+            pathForLink: `${adminBaseLink}/audit-log`,
+            pathForActive: `${adminBaseFull}/audit-log`,
+            label: t('admin.auditLog.nav'),
+            icon: ScrollText,
+          },
+        ]
       : []),
     ...(!hideAdminOidcAndSmtp
       ? [

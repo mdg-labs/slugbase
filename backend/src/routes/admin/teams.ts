@@ -4,6 +4,7 @@ import { AuthRequest, requireAuth, requireAdmin } from '../../middleware/auth.js
 import { v4 as uuidv4 } from 'uuid';
 import { getTenantId } from '../../utils/tenant.js';
 import { isCloud } from '../../config/mode.js';
+import { recordAuditEvent } from '../../services/audit-log.js';
 
 const router = Router();
 router.use(requireAuth());
@@ -85,6 +86,12 @@ router.post('/', async (req, res) => {
     );
 
     const team = await queryOne('SELECT * FROM teams WHERE id = ? AND tenant_id = ?', [teamId, tenantId]);
+    await recordAuditEvent(req, {
+      action: 'team.created',
+      entityType: 'team',
+      entityId: teamId,
+      metadata: { name },
+    });
     res.status(201).json(team);
   } catch (error: any) {
     if (error.message && (error.message.includes('UNIQUE constraint') || error.message.includes('duplicate'))) {
@@ -133,6 +140,12 @@ router.put('/:id', async (req, res) => {
     await execute(`UPDATE teams SET ${updates.join(', ')} WHERE id = ? AND tenant_id = ?`, params);
 
     const team = await queryOne('SELECT * FROM teams WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+    await recordAuditEvent(req, {
+      action: 'team.updated',
+      entityType: 'team',
+      entityId: id,
+      metadata: { name: (team as any)?.name },
+    });
     res.json(team);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -149,6 +162,12 @@ router.delete('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Team not found' });
     }
 
+    await recordAuditEvent(req, {
+      action: 'team.deleted',
+      entityType: 'team',
+      entityId: id,
+      metadata: { name: (team as any).name },
+    });
     await execute('DELETE FROM teams WHERE id = ? AND tenant_id = ?', [id, tenantId]);
     res.json({ message: 'Team deleted' });
   } catch (error: any) {
@@ -183,6 +202,12 @@ router.post('/:id/members', async (req, res) => {
     }
 
     await execute('INSERT INTO team_members (team_id, user_id, tenant_id) VALUES (?, ?, ?)', [id, user_id, tenantId]);
+    await recordAuditEvent(req, {
+      action: 'team_member.added',
+      entityType: 'team_member',
+      entityId: id,
+      metadata: { team_id: id, user_id, team_name: (team as any).name },
+    });
     res.json({ message: 'User added to team' });
   } catch (error: any) {
     if (error.message && (error.message.includes('UNIQUE constraint') || error.message.includes('duplicate'))) {
@@ -197,7 +222,14 @@ router.delete('/:id/members/:userId', async (req, res) => {
   try {
     const { id, userId } = req.params;
     const tenantId = getTenantId(req);
+    const team = await queryOne('SELECT name FROM teams WHERE id = ? AND tenant_id = ?', [id, tenantId]);
     await execute('DELETE FROM team_members WHERE team_id = ? AND user_id = ? AND tenant_id = ?', [id, userId, tenantId]);
+    await recordAuditEvent(req, {
+      action: 'team_member.removed',
+      entityType: 'team_member',
+      entityId: id,
+      metadata: { team_id: id, user_id: userId, team_name: (team as any)?.name },
+    });
     res.json({ message: 'User removed from team' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });

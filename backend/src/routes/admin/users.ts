@@ -9,6 +9,7 @@ import { generateUserKey } from '../../utils/user-key.js';
 import { getTenantId, DEFAULT_TENANT_ID } from '../../utils/tenant.js';
 import { sendInviteEmail, isEmailSendingAvailable } from '../../utils/email.js';
 import { isCloud } from '../../config/mode.js';
+import { recordAuditEvent } from '../../services/audit-log.js';
 
 const router = Router();
 router.use(requireAuth());
@@ -214,6 +215,12 @@ router.post('/', async (req, res) => {
     if (sendInvite) {
       payload.inviteSent = inviteSent;
     }
+    await recordAuditEvent(req, {
+      action: 'org_member.created',
+      entityType: 'org_member',
+      entityId: userId,
+      metadata: { email: normalizedEmail, name: sanitizedName, invite: Boolean(sendInvite) },
+    });
     res.status(201).json(payload);
   } catch (error: any) {
     if (error.message && (error.message.includes('UNIQUE constraint') || error.message.includes('duplicate'))) {
@@ -297,6 +304,12 @@ router.put('/:id', async (req, res) => {
       'SELECT id, email, name, user_key, is_admin, oidc_provider, language, theme, created_at FROM users WHERE id = ?',
       [id]
     );
+    await recordAuditEvent(req, {
+      action: 'user.updated',
+      entityType: 'org_member',
+      entityId: id,
+      metadata: { email: (user as any)?.email, fields: Object.keys(req.body) },
+    });
     res.json(user);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -320,6 +333,12 @@ router.delete('/:id', async (req, res) => {
     if (!(await userInCurrentOrg(req, id))) {
       return res.status(404).json({ error: 'User not found' });
     }
+    await recordAuditEvent(req, {
+      action: 'org_member.deleted',
+      entityType: 'org_member',
+      entityId: id,
+      metadata: { email: (user as any).email },
+    });
     await execute('DELETE FROM users WHERE id = ?', [id]);
 
     res.json({ message: 'User deleted' });

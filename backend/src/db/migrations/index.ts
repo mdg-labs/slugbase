@@ -30,6 +30,7 @@ import * as migration019 from './019_ai_suggestion_usage.js';
 import * as migration020 from './020_tenant_scope.js';
 import * as migration021 from './021_users_ai_suggestions_enabled.js';
 import * as migration022 from './022_mfa_totp.js';
+import * as migration023 from './023_audit_events.js';
 
 export interface Migration {
   migrationId: string;
@@ -141,6 +142,12 @@ const migrations: Migration[] = [
     migrationName: migration022.migrationName,
     up: migration022.up,
     down: migration022.down,
+  },
+  {
+    migrationId: migration023.migrationId,
+    migrationName: migration023.migrationName,
+    up: migration023.up,
+    down: migration023.down,
   },
 ];
 

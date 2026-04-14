@@ -4,6 +4,7 @@ import { AuthRequest, requireAuth } from '../middleware/auth.js';
 import { v4 as uuidv4 } from 'uuid';
 import { validateLength, sanitizeString, MAX_LENGTHS } from '../utils/validation.js';
 import { getTenantId } from '../utils/tenant.js';
+import { recordAuditEvent } from '../services/audit-log.js';
 
 const router = Router();
 router.use(requireAuth());
@@ -93,6 +94,12 @@ router.post('/', async (req, res) => {
     await execute('INSERT INTO tags (id, tenant_id, user_id, name) VALUES (?, ?, ?, ?)', [tagId, tenantId, userId, sanitizedName]);
 
     const tag = await queryOne('SELECT * FROM tags WHERE id = ? AND tenant_id = ?', [tagId, tenantId]);
+    await recordAuditEvent(req, {
+      action: 'tag.created',
+      entityType: 'tag',
+      entityId: tagId,
+      metadata: { name: sanitizedName },
+    });
     res.status(201).json(tag);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -132,6 +139,12 @@ router.put('/:id', async (req, res) => {
 
     await execute('UPDATE tags SET name = ? WHERE id = ? AND tenant_id = ?', [sanitizedName, id, tenantId]);
     const updated = await queryOne('SELECT * FROM tags WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+    await recordAuditEvent(req, {
+      action: 'tag.updated',
+      entityType: 'tag',
+      entityId: id,
+      metadata: { name: sanitizedName },
+    });
     res.json(updated);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -152,6 +165,12 @@ router.delete('/:id', async (req, res) => {
     }
 
     await execute('DELETE FROM tags WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+    await recordAuditEvent(req, {
+      action: 'tag.deleted',
+      entityType: 'tag',
+      entityId: id,
+      metadata: { name: (tag as any).name },
+    });
     res.json({ message: 'Tag deleted' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });

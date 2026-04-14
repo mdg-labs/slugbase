@@ -10,6 +10,7 @@ import { sanitizeUrlForAI, callAIProvider } from '../services/ai-suggestions.js'
 import { fetchPageMetadata } from '../services/fetch-page-metadata.js';
 import { getTenantId } from '../utils/tenant.js';
 import { isCloud } from '../config/mode.js';
+import { recordAuditEvent } from '../services/audit-log.js';
 
 /** Free plan bookmark limit (must match pricing page). Used only when isCloud. */
 const FREE_PLAN_BOOKMARK_LIMIT = 50;
@@ -1049,6 +1050,12 @@ router.post('/', async (req, res) => {
     if (!bookmark.slug) {
       bookmark.slug = '';
     }
+    await recordAuditEvent(req, {
+      action: 'bookmark.created',
+      entityType: 'bookmark',
+      entityId: bookmarkId,
+      metadata: { title: sanitizedTitle, url: data.url },
+    });
     res.status(201).json(bookmark);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -1249,6 +1256,12 @@ router.put('/:id', async (req, res) => {
     if (!bookmark.slug) {
       bookmark.slug = '';
     }
+    await recordAuditEvent(req, {
+      action: 'bookmark.updated',
+      entityType: 'bookmark',
+      entityId: id,
+      metadata: { title: bookmark.title, url: bookmark.url },
+    });
     res.json(bookmark);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -1268,7 +1281,16 @@ router.delete('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Bookmark not found' });
     }
 
+    const snap = await queryOne('SELECT title, url FROM bookmarks WHERE id = ? AND tenant_id = ?', [id, tenantId]);
     await execute('DELETE FROM bookmarks WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+    if (snap) {
+      await recordAuditEvent(req, {
+        action: 'bookmark.deleted',
+        entityType: 'bookmark',
+        entityId: id,
+        metadata: { title: snap.title, url: snap.url },
+      });
+    }
 
     res.json({ message: 'Bookmark deleted' });
   } catch (error: any) {
@@ -1451,6 +1473,15 @@ router.post('/import', async (req, res) => {
         console.error('Import bookmark error:', error?.message || error);
         results.errors.push('Failed to import bookmark');
       }
+    }
+
+    if (results.success > 0) {
+      await recordAuditEvent(req, {
+        action: 'bookmark.import',
+        entityType: 'bookmark',
+        entityId: null,
+        metadata: { success: results.success, failed: results.failed },
+      });
     }
 
     res.json({

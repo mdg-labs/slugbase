@@ -10,6 +10,7 @@ import {
   showAdminAiNav,
   showAdminMembersNav,
   showAdminTeamsNav,
+  showAdminAuditLogNav,
   getFirstAdminRedirectPath,
   isCloudMode,
 } from './contexts/PlanContext';
@@ -35,6 +36,7 @@ const AdminTeamsPage = lazy(() => import('./pages/admin/AdminTeamsPage'));
 const AdminOIDCPage = lazy(() => import('./pages/admin/AdminOIDCPage'));
 const AdminSettingsPage = lazy(() => import('./pages/admin/AdminSettingsPage'));
 const AdminAIPage = lazy(() => import('./pages/admin/AdminAIPage'));
+const AdminAuditLogPage = lazy(() => import('./pages/admin/AdminAuditLogPage'));
 const PasswordReset = lazy(() => import('./pages/PasswordReset'));
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
 const VerifyEmailRequired = lazy(() => import('./pages/VerifyEmailRequired'));
@@ -103,6 +105,29 @@ function AdminTeamsGate() {
     return <Navigate to={firstPath} replace />;
   }
   return <AdminTeamsPage />;
+}
+
+/** Cloud: Team plan + 2+ org members; self-hosted always. */
+function AdminAuditLogGate() {
+  const planInfo = usePlan();
+  const planLoadState = usePlanLoadState();
+  const { t } = useTranslation();
+  const { extraAdminNavItems, hideAdminOidcAndSmtp } = useAppConfig();
+  if (isCloudMode && planLoadState === 'loading') {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <div className="text-lg text-muted-foreground">{t('common.loading')}</div>
+      </div>
+    );
+  }
+  if (isCloudMode && !showAdminAuditLogNav(planInfo, planLoadState)) {
+    const firstPath = getFirstAdminRedirectPath(planInfo, planLoadState, {
+      hideAdminOidcAndSmtp: !!hideAdminOidcAndSmtp,
+      extraAdminNavItems,
+    });
+    return <Navigate to={firstPath} replace />;
+  }
+  return <AdminAuditLogPage />;
 }
 
 /** Cloud: Team plan only; same redirect pattern as Teams. */
@@ -216,6 +241,7 @@ function AppRoutes() {
             <Route index element={<AdminIndexRedirect />} />
             <Route path="members" element={<AdminMembersGate />} />
             <Route path="teams" element={<AdminTeamsGate />} />
+            <Route path="audit-log" element={<AdminAuditLogGate />} />
             {hideAdminOidcAndSmtp ? (
               <>
                 <Route path="oidc" element={<Navigate to="members" replace />} />

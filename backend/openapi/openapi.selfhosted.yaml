@@ -31,6 +31,7 @@ tags:
   - name: AdminTeams
   - name: AdminSettings
   - name: AdminStats
+  - name: AdminAuditLog
   - name: Dashboard
   - name: GoPreferences
 paths:
@@ -776,9 +777,14 @@ paths:
     get:
       tags: [Config]
       summary: Plan / limits for current context
+      description: Returns 404 when not running in cloud mode.
       responses:
         '200':
           description: Plan info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigPlanResponse'
   /api/config/ai-suggestions:
     get:
       tags: [Config]
@@ -1010,6 +1016,40 @@ paths:
       responses:
         '200':
           description: Deleted
+  /api/admin/audit-log:
+    get:
+      tags: [AdminAuditLog]
+      summary: List audit events for current tenant
+      description: Requires admin. On cloud, returns 403 unless Team plan with more than one org member.
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - in: query
+          name: before_created_at
+          schema:
+            type: string
+        - in: query
+          name: before_id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Audit events page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLogListResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
   /api/admin/stats:
     get:
       tags: [AdminStats]
@@ -1093,6 +1133,41 @@ components:
       properties:
         error: { type: string }
         code: { type: string }
+    ConfigPlanResponse:
+      type: object
+      properties:
+        plan: { type: string }
+        bookmarkLimit: { type: integer, nullable: true }
+        canShareWithTeams: { type: boolean }
+        ai_available: { type: boolean }
+        audit_log_available: { type: boolean }
+    AuditLogEvent:
+      type: object
+      properties:
+        id: { type: string }
+        created_at: { type: string }
+        action: { type: string }
+        entity_type: { type: string }
+        entity_id: { type: string, nullable: true }
+        metadata:
+          type: object
+          additionalProperties: true
+        actor_user_id: { type: string, nullable: true }
+        actor_email: { type: string, nullable: true }
+        actor_name: { type: string, nullable: true }
+    AuditLogListResponse:
+      type: object
+      properties:
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditLogEvent'
+        next_cursor:
+          type: object
+          nullable: true
+          properties:
+            before_created_at: { type: string }
+            before_id: { type: string }
     MfaStatus:
       type: object
       properties:

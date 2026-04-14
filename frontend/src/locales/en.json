@@ -28,6 +28,19 @@
       "providerOpenAI": "OpenAI",
       "title": "AI Bookmark Suggestions"
     },
+    "auditLog": {
+      "nav": "Audit log",
+      "title": "Audit log",
+      "description": "Recent changes to bookmarks, folders, tags, teams, and members. On SlugBase Cloud, the audit log is available on the Team plan when your organization has more than one member.",
+      "colTime": "Time",
+      "colActor": "Actor",
+      "colAction": "Action",
+      "colEntity": "Entity",
+      "colDetails": "Details",
+      "empty": "No audit events yet.",
+      "loadMore": "Load more",
+      "loadError": "Could not load audit log."
+    },
     "apiDocsNote": "API documentation is available as a standalone page",
     "authorizationUrl": "Authorization URL",
     "autoCreate": "Auto Create Users",
