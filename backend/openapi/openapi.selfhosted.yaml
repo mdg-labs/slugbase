@@ -837,12 +837,43 @@ paths:
       responses:
         '200':
           description: Users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AdminUserListItem'
     post:
       tags: [AdminUsers]
       summary: Create user
       responses:
         '201':
           description: Created
+        '502':
+          $ref: '#/components/responses/Error'
+  /api/admin/users/{id}/resend-invite:
+    post:
+      tags: [AdminUsers]
+      summary: Resend invite email (pending signup, expired link)
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Invite sent; new expiry returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  invite_expires_at:
+                    type: string
+                    format: date-time
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/admin/users/{id}:
     get:
       tags: [AdminUsers]
@@ -1102,6 +1133,22 @@ paths:
           description: OK
 components:
   schemas:
+    AdminUserListItem:
+      type: object
+      description: User row returned from GET /api/admin/users (invite fields omitted when not applicable)
+      properties:
+        id: { type: string }
+        email: { type: string, format: email }
+        name: { type: string }
+        user_key: { type: string }
+        is_admin: { type: boolean }
+        oidc_provider: { type: string, nullable: true }
+        language: { type: string }
+        theme: { type: string }
+        created_at: { type: string }
+        invite_pending: { type: boolean }
+        invite_expires_at: { type: string, format: date-time, nullable: true }
+        invite_expired: { type: boolean }
     AuthLoginMfaRequired:
       type: object
       required: [mfa_required]

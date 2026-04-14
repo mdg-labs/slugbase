@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import api from '../../api/client';
-import { Plus, Edit, Trash2, Shield, Mail, Network, MoreHorizontal } from 'lucide-react';
+import { Plus, Edit, Trash2, Shield, Mail, Network, MoreHorizontal, RotateCw } from 'lucide-react';
 import UserModal from '../modals/UserModal';
 import TeamAssignmentModal from '../modals/TeamAssignmentModal';
 import Button from '../ui/Button';
@@ -38,6 +38,7 @@ import {
   showAdminTeamsNav,
   isCloudMode,
 } from '../../contexts/PlanContext';
+import { useToast } from '../ui/Toast';
 
 interface User {
   id: string;
@@ -46,10 +47,22 @@ interface User {
   is_admin: boolean;
   oidc_provider: string | null;
   created_at: string;
+  invite_pending?: boolean;
+  invite_expires_at?: string | null;
+  invite_expired?: boolean;
+}
+
+function formatInviteDate(iso: string) {
+  try {
+    return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  } catch {
+    return iso;
+  }
 }
 
 export default function AdminUsers() {
   const { t } = useTranslation();
+  const { showToast } = useToast();
   const planInfo = usePlan();
   const planLoadState = usePlanLoadState();
   const canAddUsers = canInviteOrgUsers(planInfo, planLoadState);
@@ -61,6 +74,7 @@ export default function AdminUsers() {
   const [assignmentModalOpen, setAssignmentModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [selectedUserForAssignment, setSelectedUserForAssignment] = useState<User | null>(null);
+  const [resendingId, setResendingId] = useState<string | null>(null);
 
   useEffect(() => {
     loadUsers();
@@ -85,6 +99,19 @@ export default function AdminUsers() {
   const handleManageTeams = (user: User) => {
     setSelectedUserForAssignment(user);
     setAssignmentModalOpen(true);
+  };
+
+  const handleResendInvite = async (userId: string) => {
+    setResendingId(userId);
+    try {
+      await api.post(`/admin/users/${userId}/resend-invite`);
+      showToast(t('admin.inviteResent'), 'success');
+      await loadUsers();
+    } catch (error: any) {
+      showToast(error.response?.data?.error || t('common.error'), 'error');
+    } finally {
+      setResendingId(null);
+    }
   };
 
   const handleDelete = (id: string) => {
@@ -192,6 +219,29 @@ export default function AdminUsers() {
                       {t('admin.oidcUser')}: {user.oidc_provider}
                     </p>
                   )}
+                  {user.invite_pending && (
+                    <div className="mt-1.5 space-y-1">
+                      <span
+                        className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium ${
+                          user.invite_expired
+                            ? 'bg-destructive/10 text-destructive'
+                            : 'bg-primary/10 text-primary'
+                        }`}
+                      >
+                        {user.invite_expired ? t('admin.inviteExpired') : t('admin.invitePending')}
+                      </span>
+                      {user.invite_expires_at && !user.invite_expired && (
+                        <p className="text-xs text-muted-foreground">
+                          {t('admin.inviteLinkExpires', { date: formatInviteDate(user.invite_expires_at) })}
+                        </p>
+                      )}
+                      {user.invite_expires_at && user.invite_expired && (
+                        <p className="text-xs text-muted-foreground">
+                          {t('admin.inviteExpiredOn', { date: formatInviteDate(user.invite_expires_at) })}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </TableCell>
                 <TableCell className={`${adminTableCellClass} hidden sm:table-cell text-muted-foreground`}>
                   {user.email}
@@ -218,6 +268,15 @@ export default function AdminUsers() {
                         <Edit className="mr-2 h-4 w-4" />
                         {t('common.edit')}
                       </DropdownMenuItem>
+                      {user.invite_pending && user.invite_expired && (
+                        <DropdownMenuItem
+                          onClick={() => handleResendInvite(user.id)}
+                          disabled={resendingId === user.id}
+                        >
+                          <RotateCw className="mr-2 h-4 w-4" />
+                          {resendingId === user.id ? t('common.loading') : t('admin.resendInvite')}
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem
                         onClick={() => handleDelete(user.id)}
                         className="text-destructive focus:text-destructive"

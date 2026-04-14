@@ -225,6 +225,13 @@ export async function sendEmail(to: string, subject: string, html: string, text?
       html,
     });
 
+    const accepted = (info as any)?.accepted;
+    const rejected = (info as any)?.rejected;
+    if (Array.isArray(accepted) && accepted.length === 0) {
+      const r = Array.isArray(rejected) && rejected.length ? rejected.join(', ') : 'none';
+      return { success: false, error: `SMTP did not accept the recipient (rejected: ${r})` };
+    }
+
     console.log('Email sent:', info.messageId);
     return { success: true };
   } catch (error: any) {
@@ -285,7 +292,7 @@ export async function sendInviteEmail(
   email: string,
   setPasswordUrl: string,
   recipientName?: string
-): Promise<boolean> {
+): Promise<{ success: boolean; error?: string }> {
   const safeHrefUrl = safeUrlForHref(setPasswordUrl);
   const escapedDisplayUrl = escapeHtml(setPasswordUrl);
   const greeting = recipientName
@@ -325,8 +332,7 @@ export async function sendInviteEmail(
     includeLegalFooter: true,
   });
 
-  const result = await sendEmail(email, subject, html);
-  return result.success;
+  return sendEmail(email, subject, html);
 }
 
 /**
