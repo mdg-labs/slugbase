@@ -16,6 +16,12 @@ export { validateEnvironmentVariables } from './dist/utils/env-validation.js';
 export { errorHandler, notFoundHandler } from './dist/middleware/error-handler.js';
 export { requireAuth } from './dist/middleware/auth.js';
 export {
+  recordAuditEvent,
+  recordAuditEventForTenant,
+  isAuditLogEnabledForRequest,
+  isAuditLogEnabledForTenantId,
+} from './dist/services/audit-log.js';
+export {
   buildEmailLayout,
   escapeHtml,
   EMAIL_CALLOUT_BG,

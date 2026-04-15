@@ -6,6 +6,7 @@ import { encrypt } from '../utils/encryption.js';
 import { reloadOIDCStrategies } from '../auth/oidc.js';
 import { validateOidcUrl, validateProviderKey } from '../utils/validation.js';
 import { getTenantId } from '../utils/tenant.js';
+import { recordAuditEvent } from '../services/audit-log.js';
 
 const router = Router();
 router.use(requireAuth());
@@ -149,14 +150,21 @@ router.post('/', async (req, res) => {
       'SELECT id, provider_key, issuer_url, authorization_url, token_url, userinfo_url, scopes, auto_create_users, default_role, created_at FROM oidc_providers WHERE id = ? AND tenant_id = ?',
       [providerId, tenantId]
     );
-    
+
+    await recordAuditEvent(req, {
+      action: 'oidc_provider.created',
+      entityType: 'oidc_provider',
+      entityId: providerId,
+      metadata: { provider_key },
+    });
+
     // Add callback URL
     const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
     const providerWithCallback = {
       ...provider,
       callback_url: `${baseUrl}/api/auth/${(provider as any).provider_key}/callback`,
     };
-    
+
     res.status(201).json(providerWithCallback);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -305,14 +313,21 @@ router.put('/:id', async (req, res) => {
       'SELECT id, provider_key, issuer_url, authorization_url, token_url, userinfo_url, scopes, auto_create_users, default_role, created_at FROM oidc_providers WHERE id = ? AND tenant_id = ?',
       [id, tenantId]
     );
-    
+
+    await recordAuditEvent(req, {
+      action: 'oidc_provider.updated',
+      entityType: 'oidc_provider',
+      entityId: id,
+      metadata: { provider_key: (provider as any)?.provider_key },
+    });
+
     // Add callback URL
     const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
     const providerWithCallback = {
       ...provider,
       callback_url: `${baseUrl}/api/auth/${(provider as any).provider_key}/callback`,
     };
-    
+
     res.json(providerWithCallback);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -330,10 +345,19 @@ router.delete('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Provider not found' });
     }
 
+    const providerKey = (provider as any).provider_key as string;
+
     await execute('DELETE FROM oidc_providers WHERE id = ? AND tenant_id = ?', [id, tenantId]);
 
     // Reload OIDC strategies
     await reloadOIDCStrategies();
+
+    await recordAuditEvent(req, {
+      action: 'oidc_provider.deleted',
+      entityType: 'oidc_provider',
+      entityId: id,
+      metadata: { provider_key: providerKey },
+    });
 
     res.json({ message: 'Provider deleted' });
   } catch (error: any) {

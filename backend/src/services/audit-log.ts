@@ -1,10 +1,22 @@
 import type { Request } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { execute, getDbType, query } from '../db/index.js';
+import { execute, getDbType, query, queryOne } from '../db/index.js';
 import { isCloud } from '../config/mode.js';
 import { getTenantId, DEFAULT_TENANT_ID } from '../utils/tenant.js';
 
-export type AuditEntityType = 'bookmark' | 'folder' | 'tag' | 'team' | 'org_member' | 'team_member';
+export type AuditEntityType =
+  | 'bookmark'
+  | 'folder'
+  | 'tag'
+  | 'team'
+  | 'org_member'
+  | 'team_member'
+  | 'api_token'
+  | 'oidc_provider'
+  | 'settings'
+  | 'user'
+  | 'organization'
+  | 'org_invitation';
 
 export interface AuditEventPayload {
   action: string;
@@ -13,54 +25,87 @@ export interface AuditEventPayload {
   metadata?: Record<string, unknown> | null;
 }
 
+export interface RecordAuditEventForTenantOptions {
+  /** When set (including `null`), overrides `req.user` for the actor (e.g. Stripe webhooks use `null`). */
+  actorUserId?: string | null;
+}
+
 /**
- * Cloud: Team plan with a real organization tenant (matches Members/Teams admin gating).
- * Self-hosted: always on. We do not require multiple org members so solo Team workspaces still get the audit log.
+ * Whether audit rows should be persisted for this tenant.
+ * Self-hosted: always true (single-tenant default id included).
+ * Cloud: Team plan only, real org id (not `default`).
  */
-export async function isAuditLogEnabledForRequest(req: Request): Promise<boolean> {
+export async function isAuditLogEnabledForTenantId(tenantId: string): Promise<boolean> {
   if (!isCloud) {
     return true;
   }
-  const plan = (req as Request & { plan?: string }).plan;
-  if (plan !== 'team') {
-    return false;
-  }
-  const tenantId = getTenantId(req);
   if (!tenantId || tenantId === DEFAULT_TENANT_ID) {
     return false;
   }
-  return true;
+  const row = await queryOne('SELECT plan FROM organizations WHERE id = ?', [tenantId]);
+  return row != null && (row as { plan?: string }).plan === 'team';
 }
 
-export async function recordAuditEvent(req: Request, payload: AuditEventPayload): Promise<void> {
+/**
+ * Cloud: Team plan with a real organization tenant (matches Members/Teams admin gating).
+ * Self-hosted: always on.
+ */
+export async function isAuditLogEnabledForRequest(req: Request): Promise<boolean> {
+  return isAuditLogEnabledForTenantId(getTenantId(req));
+}
+
+async function insertAuditRow(
+  tenantId: string,
+  actorUserId: string | null,
+  payload: AuditEventPayload
+): Promise<void> {
+  const id = uuidv4();
+  const meta = payload.metadata ?? {};
+  const metaStr = JSON.stringify(meta);
+  const entityId = payload.entityId ?? null;
+
+  if (getDbType() === 'postgresql') {
+    await execute(
+      `INSERT INTO audit_events (id, tenant_id, actor_user_id, action, entity_type, entity_id, metadata, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, CURRENT_TIMESTAMP)`,
+      [id, tenantId, actorUserId, payload.action, payload.entityType, entityId, metaStr]
+    );
+  } else {
+    await execute(
+      `INSERT INTO audit_events (id, tenant_id, actor_user_id, action, entity_type, entity_id, metadata, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+      [id, tenantId, actorUserId, payload.action, payload.entityType, entityId, metaStr]
+    );
+  }
+}
+
+/**
+ * Insert an audit row for a specific tenant (e.g. cloud org id for invitation accept or Stripe updates).
+ * Use `options.actorUserId: null` for non-user actors (e.g. webhooks).
+ */
+export async function recordAuditEventForTenant(
+  req: Request,
+  tenantId: string,
+  payload: AuditEventPayload,
+  options?: RecordAuditEventForTenantOptions
+): Promise<void> {
   try {
-    if (!(await isAuditLogEnabledForRequest(req))) {
+    if (!(await isAuditLogEnabledForTenantId(tenantId))) {
       return;
     }
-    const tenantId = getTenantId(req);
     const authUser = (req as Request & { user?: { id: string } }).user;
-    const actorUserId = authUser?.id ?? null;
-    const id = uuidv4();
-    const meta = payload.metadata ?? {};
-    const metaStr = JSON.stringify(meta);
-    const entityId = payload.entityId ?? null;
-
-    if (getDbType() === 'postgresql') {
-      await execute(
-        `INSERT INTO audit_events (id, tenant_id, actor_user_id, action, entity_type, entity_id, metadata, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, CURRENT_TIMESTAMP)`,
-        [id, tenantId, actorUserId, payload.action, payload.entityType, entityId, metaStr]
-      );
-    } else {
-      await execute(
-        `INSERT INTO audit_events (id, tenant_id, actor_user_id, action, entity_type, entity_id, metadata, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-        [id, tenantId, actorUserId, payload.action, payload.entityType, entityId, metaStr]
-      );
-    }
+    const actorUserId =
+      options !== undefined && Object.prototype.hasOwnProperty.call(options, 'actorUserId')
+        ? options.actorUserId ?? null
+        : authUser?.id ?? null;
+    await insertAuditRow(tenantId, actorUserId, payload);
   } catch (err) {
     console.error('audit_events insert failed:', err);
   }
+}
+
+export async function recordAuditEvent(req: Request, payload: AuditEventPayload): Promise<void> {
+  return recordAuditEventForTenant(req, getTenantId(req), payload);
 }
 
 export interface AuditEventRow {
