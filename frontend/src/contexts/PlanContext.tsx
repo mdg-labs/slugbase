@@ -13,6 +13,10 @@ export interface PlanInfo {
   canShareWithTeams: boolean;
   /** In cloud: true when plan is personal, team, or supporter (AI suggestions available). */
   aiAvailable: boolean;
+  /** Cloud: Team plan with more than one org member (audit log UI + API). */
+  auditLogAvailable?: boolean;
+  /** Cloud: Postmark (or SMTP) configured so admin can send invite emails without a password. */
+  emailInvitesAvailable?: boolean;
 }
 
 /** Self-hosted or logged-out cloud: no plan fetch. loading: cloud fetch in flight. ready: cloud fetch finished (success or pessimistic free on error). */
@@ -23,6 +27,8 @@ const FREE_FALLBACK: PlanInfo = {
   bookmarkLimit: 50,
   canShareWithTeams: false,
   aiAvailable: false,
+  auditLogAvailable: false,
+  emailInvitesAvailable: false,
 };
 
 interface PlanContextValue {
@@ -78,6 +84,12 @@ export function canInviteOrgUsers(planInfo: PlanInfo | null, planLoadState: Plan
   return isCloudTeamPlanReady(planInfo, planLoadState);
 }
 
+/** Admin audit log: self-hosted always; cloud when plan API reports audit_log_available. */
+export function showAdminAuditLogNav(planInfo: PlanInfo | null, planLoadState: PlanLoadState): boolean {
+  if (!isCloudMode) return true;
+  return planLoadState === 'ready' && planInfo?.auditLogAvailable === true;
+}
+
 /** First admin sub-route to open when the preferred tab is unavailable (index redirect, gates). */
 export function getFirstAdminRedirectPath(
   planInfo: PlanInfo | null,
@@ -111,15 +123,22 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
     setPlanLoadState('loading');
     setPlanInfo(null);
     api
-      .get<{ plan: string; bookmarkLimit: number | null; canShareWithTeams: boolean; ai_available?: boolean }>(
-        '/config/plan',
-      )
+      .get<{
+        plan: string;
+        bookmarkLimit: number | null;
+        canShareWithTeams: boolean;
+        ai_available?: boolean;
+        audit_log_available?: boolean;
+        email_invites_available?: boolean;
+      }>('/config/plan')
       .then((res) => {
         setPlanInfo({
           plan: res.data.plan ?? 'free',
           bookmarkLimit: res.data.bookmarkLimit ?? null,
           canShareWithTeams: res.data.canShareWithTeams === true,
           aiAvailable: res.data.ai_available === true,
+          auditLogAvailable: res.data.audit_log_available === true,
+          emailInvitesAvailable: res.data.email_invites_available === true,
         });
         setPlanLoadState('ready');
       })

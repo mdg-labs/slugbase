@@ -10,6 +10,7 @@ import {
   showAdminAiNav,
   showAdminMembersNav,
   showAdminTeamsNav,
+  showAdminAuditLogNav,
   getFirstAdminRedirectPath,
   isCloudMode,
 } from './contexts/PlanContext';
@@ -18,9 +19,11 @@ import { TooltipProvider } from './components/ui/tooltip-base';
 import Layout from './components/Layout';
 import api from './api/client';
 import { canAccessWorkspaceAdmin } from './utils/adminAccess';
+import { absoluteUrlForGoPath } from './utils/goRedirectUrl';
 
 const Setup = lazy(() => import('./pages/Setup'));
 import Login from './pages/Login';
+import MfaChallenge from './pages/MfaChallenge';
 const Signup = lazy(() => import('./pages/Signup'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Bookmarks = lazy(() => import('./pages/Bookmarks'));
@@ -33,6 +36,7 @@ const AdminTeamsPage = lazy(() => import('./pages/admin/AdminTeamsPage'));
 const AdminOIDCPage = lazy(() => import('./pages/admin/AdminOIDCPage'));
 const AdminSettingsPage = lazy(() => import('./pages/admin/AdminSettingsPage'));
 const AdminAIPage = lazy(() => import('./pages/admin/AdminAIPage'));
+const AdminAuditLogPage = lazy(() => import('./pages/admin/AdminAuditLogPage'));
 const PasswordReset = lazy(() => import('./pages/PasswordReset'));
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
 const VerifyEmailRequired = lazy(() => import('./pages/VerifyEmailRequired'));
@@ -101,6 +105,29 @@ function AdminTeamsGate() {
     return <Navigate to={firstPath} replace />;
   }
   return <AdminTeamsPage />;
+}
+
+/** Cloud: Team plan + 2+ org members; self-hosted always. */
+function AdminAuditLogGate() {
+  const planInfo = usePlan();
+  const planLoadState = usePlanLoadState();
+  const { t } = useTranslation();
+  const { extraAdminNavItems, hideAdminOidcAndSmtp } = useAppConfig();
+  if (isCloudMode && planLoadState === 'loading') {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <div className="text-lg text-muted-foreground">{t('common.loading')}</div>
+      </div>
+    );
+  }
+  if (isCloudMode && !showAdminAuditLogNav(planInfo, planLoadState)) {
+    const firstPath = getFirstAdminRedirectPath(planInfo, planLoadState, {
+      hideAdminOidcAndSmtp: !!hideAdminOidcAndSmtp,
+      extraAdminNavItems,
+    });
+    return <Navigate to={firstPath} replace />;
+  }
+  return <AdminAuditLogPage />;
 }
 
 /** Cloud: Team plan only; same redirect pattern as Teams. */
@@ -195,6 +222,7 @@ function AppRoutes() {
     <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="text-lg">{t('common.loading')}</div></div>}>
       <Routes>
         <Route path="/login" element={!user ? <LoginRouteErrorBoundary><Login /></LoginRouteErrorBoundary> : <Navigate to={appRootPath} replace />} />
+        <Route path="/mfa" element={!user ? <LoginRouteErrorBoundary><MfaChallenge /></LoginRouteErrorBoundary> : <Navigate to={appRootPath} replace />} />
         <Route path="/signup" element={!user ? <Signup /> : <Navigate to={appRootPath} replace />} />
         <Route path="/reset-password" element={<PasswordReset />} />
         <Route path="/password-reset" element={<PasswordReset />} />
@@ -213,6 +241,7 @@ function AppRoutes() {
             <Route index element={<AdminIndexRedirect />} />
             <Route path="members" element={<AdminMembersGate />} />
             <Route path="teams" element={<AdminTeamsGate />} />
+            <Route path="audit-log" element={<AdminAuditLogGate />} />
             {hideAdminOidcAndSmtp ? (
               <>
                 <Route path="oidc" element={<Navigate to="members" replace />} />
@@ -243,15 +272,17 @@ function ForwardingHandler() {
 
   React.useEffect(() => {
     const match = pathname.match(/\/go\/([^/]+)/);
-    const slug = match ? match[1] : '';
-    const goPath = slug ? `/go/${slug}` : '/go';
-    const isDevelopment = window.location.hostname === 'localhost';
-    const backendUrl = isDevelopment
-      ? `http://localhost:5000${goPath}`
-      : apiBaseUrl
-        ? `${apiBaseUrl}${goPath}`
-        : goPath;
-    window.location.href = backendUrl;
+    const rawSegment = match ? match[1] : '';
+    let slug = rawSegment;
+    if (rawSegment) {
+      try {
+        slug = decodeURIComponent(rawSegment);
+      } catch {
+        slug = rawSegment;
+      }
+    }
+    const goPath = rawSegment ? `/go/${encodeURIComponent(slug)}` : '/go';
+    window.location.href = absoluteUrlForGoPath(goPath, { apiBaseUrl });
   }, [pathname, apiBaseUrl]);
 
   return (

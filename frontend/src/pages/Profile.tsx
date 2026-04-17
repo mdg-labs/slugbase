@@ -1,23 +1,35 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useId, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppConfig } from '../contexts/AppConfigContext';
 import { usePlan, usePlanLoadState, isCloudMode } from '../contexts/PlanContext';
-import { AlertCircle, Key, AlertTriangle } from 'lucide-react';
+import { AlertCircle, Key, AlertTriangle, Shield } from 'lucide-react';
 import Select from '../components/ui/Select';
 import Button from '../components/ui/Button';
 import { Switch } from '../components/ui/switch';
 import { useToast } from '../components/ui/Toast';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import CreateTokenModal from '../components/profile/CreateTokenModal';
+import MfaEnrollSetupModal from '../components/profile/MfaEnrollSetupModal';
+import MfaEnrollBackupCodesModal from '../components/profile/MfaEnrollBackupCodesModal';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog';
 import api from '../api/client';
 import { getDocsApiReferenceUrl } from '../config/docs';
 import { resolveSupportedLocale } from '../i18n';
 import { canAccessWorkspaceAdmin } from '../utils/adminAccess';
+import { copyTextToClipboard } from '../utils/copyTextToClipboard';
 
 interface ApiToken {
   id: string;
@@ -89,6 +101,36 @@ export default function Profile() {
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
   const [deleteAccountLoading, setDeleteAccountLoading] = useState(false);
 
+  const mfaIds = useId();
+  /** Avoid calling enroll/cancel when Radix closes the setup dialog after a successful confirm. */
+  const mfaEnrollSucceededRef = useRef(false);
+
+  const [mfaWizard, setMfaWizard] = useState<'idle' | 'enrolling' | 'backup_view'>('idle');
+  const [mfaOtpauthUrl, setMfaOtpauthUrl] = useState<string | null>(null);
+  const [mfaSecretB32, setMfaSecretB32] = useState<string | null>(null);
+  const [mfaConfirmCode, setMfaConfirmCode] = useState('');
+  const [mfaBackupCodes, setMfaBackupCodes] = useState<string[] | null>(null);
+  const [mfaBackupAck, setMfaBackupAck] = useState(false);
+  const [mfaBusy, setMfaBusy] = useState(false);
+  const [mfaError, setMfaError] = useState('');
+
+  const [disableDlgOpen, setDisableDlgOpen] = useState(false);
+  const [disableCode, setDisableCode] = useState('');
+  const [disablePassword, setDisablePassword] = useState('');
+  const [disableNeedsPassword, setDisableNeedsPassword] = useState(false);
+  const [disableError, setDisableError] = useState('');
+  const [disableBusy, setDisableBusy] = useState(false);
+
+  const [regenDlgOpen, setRegenDlgOpen] = useState(false);
+  const [regenStep, setRegenStep] = useState<'form' | 'codes'>('form');
+  const [regenCode, setRegenCode] = useState('');
+  const [regenPassword, setRegenPassword] = useState('');
+  const [regenNeedsPassword, setRegenNeedsPassword] = useState(false);
+  const [regenError, setRegenError] = useState('');
+  const [regenBusy, setRegenBusy] = useState(false);
+  const [regenCodes, setRegenCodes] = useState<string[] | null>(null);
+  const [regenAck, setRegenAck] = useState(false);
+
   useEffect(() => {
     if (user) {
       setFormData({
@@ -119,6 +161,193 @@ export default function Profile() {
   useEffect(() => {
     if (user) fetchTokens();
   }, [user, fetchTokens]);
+
+  const resetDisableDialog = useCallback(() => {
+    setDisableCode('');
+    setDisablePassword('');
+    setDisableNeedsPassword(false);
+    setDisableError('');
+  }, []);
+
+  const resetRegenDialog = useCallback(() => {
+    setRegenStep('form');
+    setRegenCode('');
+    setRegenPassword('');
+    setRegenNeedsPassword(false);
+    setRegenError('');
+    setRegenCodes(null);
+    setRegenAck(false);
+  }, []);
+
+  const normalizeTotpDigits = (raw: string) => raw.replace(/\D/g, '').slice(0, 6);
+
+  const handleMfaBegin = async () => {
+    mfaEnrollSucceededRef.current = false;
+    setMfaError('');
+    setMfaBusy(true);
+    try {
+      const res = await api.post('/auth/mfa/enroll/begin', {});
+      const url = res.data?.otpauth_url;
+      const sec = res.data?.secret;
+      if (typeof url === 'string' && typeof sec === 'string') {
+        setMfaOtpauthUrl(url);
+        setMfaSecretB32(sec);
+        setMfaWizard('enrolling');
+        setMfaConfirmCode('');
+      } else {
+        setMfaError(t('common.error'));
+      }
+    } catch (err: unknown) {
+      const ax = err as { response?: { status?: number; data?: { error?: string } } };
+      if (ax.response?.status === 409) {
+        setMfaError(t('mfa.alreadyEnabled'));
+      } else {
+        setMfaError(ax.response?.data?.error || t('common.error'));
+      }
+    } finally {
+      setMfaBusy(false);
+    }
+  };
+
+  const handleMfaCancelSetup = async () => {
+    if (mfaEnrollSucceededRef.current) {
+      mfaEnrollSucceededRef.current = false;
+      return;
+    }
+    setMfaError('');
+    setMfaBusy(true);
+    try {
+      await api.post('/auth/mfa/enroll/cancel', {});
+    } catch {
+      /* idempotent on server */
+    } finally {
+      setMfaBusy(false);
+      setMfaWizard('idle');
+      setMfaOtpauthUrl(null);
+      setMfaSecretB32(null);
+      setMfaConfirmCode('');
+      setMfaBackupCodes(null);
+      setMfaBackupAck(false);
+    }
+  };
+
+  const handleMfaConfirmEnroll = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const digits = normalizeTotpDigits(mfaConfirmCode);
+    if (digits.length !== 6) {
+      setMfaError(t('mfa.invalidTotpLength'));
+      return;
+    }
+    setMfaError('');
+    setMfaBusy(true);
+    try {
+      const res = await api.post('/auth/mfa/enroll/confirm', { code: digits });
+      const codes = res.data?.backup_codes;
+      if (!Array.isArray(codes) || codes.length === 0) {
+        setMfaError(t('common.error'));
+        return;
+      }
+      mfaEnrollSucceededRef.current = true;
+      setMfaBackupCodes(codes.map(String));
+      setMfaBackupAck(false);
+      setMfaWizard('backup_view');
+      setMfaConfirmCode('');
+    } catch (err: unknown) {
+      const ax = err as { response?: { data?: { code?: string; error?: string } } };
+      const c = ax.response?.data?.code;
+      if (c === 'INVALID_CODE') {
+        setMfaError(t('mfa.invalidCode'));
+      } else if (c === 'MFA_ALREADY_ENABLED') {
+        setMfaError(t('mfa.alreadyEnabled'));
+      } else {
+        setMfaError(ax.response?.data?.error || t('common.error'));
+      }
+    } finally {
+      setMfaBusy(false);
+    }
+  };
+
+  const handleMfaBackupDone = async () => {
+    if (!mfaBackupAck) return;
+    setMfaBusy(true);
+    try {
+      await checkAuth();
+      mfaEnrollSucceededRef.current = false;
+      setMfaWizard('idle');
+      setMfaOtpauthUrl(null);
+      setMfaSecretB32(null);
+      setMfaBackupCodes(null);
+      setMfaBackupAck(false);
+      showToast(t('mfa.enrollComplete'), 'success');
+    } finally {
+      setMfaBusy(false);
+    }
+  };
+
+  const handleDisableSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setDisableError('');
+    setDisableBusy(true);
+    try {
+      const body: { code: string; password?: string } = { code: disableCode.trim() };
+      if (disablePassword) body.password = disablePassword;
+      await api.post('/auth/mfa/disable', body);
+      setDisableDlgOpen(false);
+      resetDisableDialog();
+      await checkAuth();
+      showToast(t('mfa.disabledSuccess'), 'success');
+    } catch (err: unknown) {
+      const ax = err as { response?: { data?: { code?: string; error?: string } } };
+      const c = ax.response?.data?.code;
+      if (c === 'PASSWORD_REQUIRED') {
+        setDisableNeedsPassword(true);
+        setDisableError(t('mfa.passwordRequired'));
+      } else {
+        setDisableError(ax.response?.data?.error || t('common.error'));
+      }
+    } finally {
+      setDisableBusy(false);
+    }
+  };
+
+  const handleRegenSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRegenError('');
+    setRegenBusy(true);
+    try {
+      const body: { code: string; password?: string } = { code: regenCode.trim() };
+      if (regenPassword) body.password = regenPassword;
+      const res = await api.post('/auth/mfa/backup/regenerate', body);
+      const codes = res.data?.backup_codes;
+      if (!Array.isArray(codes) || codes.length === 0) {
+        setRegenError(t('common.error'));
+        return;
+      }
+      setRegenCodes(codes.map(String));
+      setRegenStep('codes');
+      setRegenAck(false);
+    } catch (err: unknown) {
+      const ax = err as { response?: { data?: { code?: string; error?: string } } };
+      const c = ax.response?.data?.code;
+      if (c === 'PASSWORD_REQUIRED') {
+        setRegenNeedsPassword(true);
+        setRegenError(t('mfa.passwordRequired'));
+      } else {
+        setRegenError(ax.response?.data?.error || t('common.error'));
+      }
+    } finally {
+      setRegenBusy(false);
+    }
+  };
+
+  const copyBackupCodes = async (codes: string[]) => {
+    const ok = await copyTextToClipboard(codes.join('\n'));
+    if (ok) {
+      showToast(t('mfa.backupCodesCopied'), 'success');
+    } else {
+      showToast(t('mfa.copyFailed'), 'error');
+    }
+  };
 
   const showAiSuggestionsPreference = isCloudMode
     ? planLoadState === 'ready' && planInfo?.aiAvailable === true
@@ -253,6 +482,11 @@ export default function Profile() {
     { value: 'light', label: t('profile.themeLight') },
     { value: 'dark', label: t('profile.themeDark') },
   ];
+
+  /** SlugBase TOTP applies to password login; hide enrollment for pure OIDC unless MFA was enabled (e.g. hybrid or legacy). */
+  const showSlugbaseMfaCard = user.has_password !== false || Boolean(user.mfa_enabled);
+  const showOidcMfaManagedNote =
+    Boolean(user.oidc_provider) && user.has_password === false && !user.mfa_enabled;
 
   return (
     <div className="space-y-6">
@@ -532,6 +766,86 @@ export default function Profile() {
           </form>
         </Card>
 
+        {/* MFA (password / hybrid); pure OIDC sees SSO note instead */}
+        {showOidcMfaManagedNote ? (
+          <Card
+            className="rounded-xl border border-ghost bg-surface shadow-none"
+            aria-labelledby="mfa-sso-note-title"
+          >
+            <CardHeader>
+              <CardTitle id="mfa-sso-note-title" className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-primary" aria-hidden />
+                {t('mfa.profileSectionTitle')}
+              </CardTitle>
+              <CardDescription>{t('mfa.oidcManagedByIdp')}</CardDescription>
+            </CardHeader>
+          </Card>
+        ) : null}
+        {showSlugbaseMfaCard ? (
+          <Card className="rounded-xl border border-ghost bg-surface shadow-none" aria-labelledby="mfa-section-title">
+            <CardHeader>
+              <CardTitle id="mfa-section-title" className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-primary" aria-hidden />
+                {t('mfa.profileSectionTitle')}
+              </CardTitle>
+              <CardDescription>{t('mfa.profileSectionDescription')}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {user.mfa_enabled ? (
+                <>
+                  <p className="text-sm text-foreground">{t('mfa.enabledStatus')}</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={() => {
+                        resetDisableDialog();
+                        setDisableDlgOpen(true);
+                      }}
+                      aria-label={t('mfa.disable')}
+                    >
+                      {t('mfa.disable')}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        resetRegenDialog();
+                        setRegenDlgOpen(true);
+                      }}
+                      aria-label={t('mfa.regenerateBackupCodes')}
+                    >
+                      {t('mfa.regenerateBackupCodes')}
+                    </Button>
+                  </div>
+                </>
+              ) : mfaWizard === 'idle' ? (
+                <div className="space-y-2">
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    disabled={mfaBusy}
+                    onClick={handleMfaBegin}
+                    className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
+                    aria-label={t('mfa.startSetup')}
+                  >
+                    {mfaBusy ? t('common.loading') : t('mfa.startSetup')}
+                  </Button>
+                  {mfaError ? (
+                    <p className="text-sm text-destructive" role="alert" aria-live="assertive">
+                      {mfaError}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+        ) : null}
+
         {/* Section C: Developer / API Access */}
         <Card className="rounded-xl border border-ghost bg-surface shadow-none" aria-labelledby="developer-section-title">
           <CardHeader>
@@ -648,6 +962,221 @@ export default function Profile() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog
+        open={disableDlgOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDisableDlgOpen(false);
+            resetDisableDialog();
+          }
+        }}
+      >
+        <DialogContent className="rounded-2xl border border-ghost bg-surface-high sm:max-w-md">
+          <form onSubmit={handleDisableSubmit} className="space-y-4">
+            <DialogHeader>
+              <DialogTitle>{t('mfa.disableTitle')}</DialogTitle>
+              <DialogDescription>{t('mfa.disableDescription')}</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2">
+              <Label htmlFor={`${mfaIds}-d-code`}>{t('mfa.trustCodeLabel')}</Label>
+              <Input
+                id={`${mfaIds}-d-code`}
+                name="mfa-disable-code"
+                value={disableCode}
+                onChange={(e) => setDisableCode(e.target.value)}
+                autoComplete="one-time-code"
+                disabled={disableBusy}
+                aria-describedby={`${mfaIds}-d-hint`}
+              />
+              <p id={`${mfaIds}-d-hint`} className="text-xs text-muted-foreground">
+                {t('mfa.trustCodeHint')}
+              </p>
+            </div>
+            {disableNeedsPassword ? (
+              <div className="space-y-2">
+                <Label htmlFor={`${mfaIds}-d-pw`}>{t('auth.password')}</Label>
+                <Input
+                  id={`${mfaIds}-d-pw`}
+                  name="mfa-disable-password"
+                  type="password"
+                  value={disablePassword}
+                  onChange={(e) => setDisablePassword(e.target.value)}
+                  autoComplete="current-password"
+                  disabled={disableBusy}
+                />
+              </div>
+            ) : null}
+            {disableError ? (
+              <p className="text-sm text-destructive" role="alert" aria-live="assertive">
+                {disableError}
+              </p>
+            ) : null}
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setDisableDlgOpen(false);
+                  resetDisableDialog();
+                }}
+              >
+                {t('common.cancel')}
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={disableBusy}
+                className="bg-destructive text-destructive-foreground hover:opacity-90"
+              >
+                {disableBusy ? t('common.loading') : t('mfa.disableConfirm')}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={regenDlgOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRegenDlgOpen(false);
+            resetRegenDialog();
+          }
+        }}
+      >
+        <DialogContent className="rounded-2xl border border-ghost bg-surface-high sm:max-w-md">
+          {regenStep === 'form' ? (
+            <form onSubmit={handleRegenSubmit} className="space-y-4">
+              <DialogHeader>
+                <DialogTitle>{t('mfa.regenerateTitle')}</DialogTitle>
+                <DialogDescription>{t('mfa.regenerateDescription')}</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-2">
+                <Label htmlFor={`${mfaIds}-r-code`}>{t('mfa.trustCodeLabel')}</Label>
+                <Input
+                  id={`${mfaIds}-r-code`}
+                  name="mfa-regen-code"
+                  value={regenCode}
+                  onChange={(e) => setRegenCode(e.target.value)}
+                  autoComplete="one-time-code"
+                  disabled={regenBusy}
+                  aria-describedby={`${mfaIds}-r-hint`}
+                />
+                <p id={`${mfaIds}-r-hint`} className="text-xs text-muted-foreground">
+                  {t('mfa.trustCodeHint')}
+                </p>
+              </div>
+              {regenNeedsPassword ? (
+                <div className="space-y-2">
+                  <Label htmlFor={`${mfaIds}-r-pw`}>{t('auth.password')}</Label>
+                  <Input
+                    id={`${mfaIds}-r-pw`}
+                    name="mfa-regen-password"
+                    type="password"
+                    value={regenPassword}
+                    onChange={(e) => setRegenPassword(e.target.value)}
+                    autoComplete="current-password"
+                    disabled={regenBusy}
+                  />
+                </div>
+              ) : null}
+              {regenError ? (
+                <p className="text-sm text-destructive" role="alert" aria-live="assertive">
+                  {regenError}
+                </p>
+              ) : null}
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    setRegenDlgOpen(false);
+                    resetRegenDialog();
+                  }}
+                >
+                  {t('common.cancel')}
+                </Button>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  disabled={regenBusy}
+                  className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
+                >
+                  {regenBusy ? t('common.loading') : t('mfa.regenerateSubmit')}
+                </Button>
+              </DialogFooter>
+            </form>
+          ) : regenCodes ? (
+            <div className="space-y-4">
+              <DialogHeader>
+                <DialogTitle>{t('mfa.newBackupCodesTitle')}</DialogTitle>
+                <DialogDescription>{t('mfa.backupCodesWarning')}</DialogDescription>
+              </DialogHeader>
+              <ul className="grid max-h-48 gap-1 overflow-auto rounded-lg border border-ghost bg-surface-low p-3 font-mono text-sm" role="list">
+                {regenCodes.map((c) => (
+                  <li key={c}>{c}</li>
+                ))}
+              </ul>
+              <Button type="button" variant="secondary" size="sm" onClick={() => copyBackupCodes(regenCodes)}>
+                {t('mfa.copyAllBackupCodes')}
+              </Button>
+              <div className="flex items-start gap-2">
+                <input
+                  id={`${mfaIds}-rack`}
+                  type="checkbox"
+                  checked={regenAck}
+                  onChange={(e) => setRegenAck(e.target.checked)}
+                  className="mt-1 h-4 w-4 rounded border-ghost"
+                />
+                <Label htmlFor={`${mfaIds}-rack`} className="text-sm font-normal leading-snug cursor-pointer">
+                  {t('mfa.backupCodesAck')}
+                </Label>
+              </div>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="primary"
+                  disabled={!regenAck}
+                  className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
+                  onClick={() => {
+                    setRegenDlgOpen(false);
+                    resetRegenDialog();
+                    showToast(t('mfa.regenerateSuccess'), 'success');
+                  }}
+                >
+                  {t('common.close')}
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
+      {mfaOtpauthUrl && mfaSecretB32 ? (
+        <MfaEnrollSetupModal
+          open={mfaWizard === 'enrolling'}
+          otpauthUrl={mfaOtpauthUrl}
+          secretB32={mfaSecretB32}
+          confirmCode={mfaConfirmCode}
+          onConfirmCodeChange={setMfaConfirmCode}
+          error={mfaError}
+          busy={mfaBusy}
+          onSubmit={handleMfaConfirmEnroll}
+          onCancelSetup={handleMfaCancelSetup}
+        />
+      ) : null}
+
+      {mfaBackupCodes ? (
+        <MfaEnrollBackupCodesModal
+          open={mfaWizard === 'backup_view'}
+          codes={mfaBackupCodes}
+          ack={mfaBackupAck}
+          onAckChange={setMfaBackupAck}
+          busy={mfaBusy}
+          onContinue={handleMfaBackupDone}
+        />
+      ) : null}
 
       <CreateTokenModal
         isOpen={createTokenOpen}

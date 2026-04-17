@@ -32,11 +32,10 @@ export function generateToken(user: JWTPayload): string {
   if (user.email_verified !== undefined) {
     payload.email_verified = user.email_verified;
   }
-  return jwt.sign(
-    payload,
-    JWT_SECRET,
-    { expiresIn: JWT_EXPIRES_IN } as SignOptions
-  );
+  return jwt.sign(payload, JWT_SECRET, {
+    algorithm: 'HS256',
+    expiresIn: JWT_EXPIRES_IN,
+  } as SignOptions);
 }
 
 /**
@@ -44,7 +43,10 @@ export function generateToken(user: JWTPayload): string {
  */
 export function verifyToken(token: string): JWTPayload | null {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as JWTPayload;
+    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as JWTPayload & { pur?: string };
+    if (decoded.pur === 'mfa_pending') {
+      return null;
+    }
     return decoded;
   } catch (error) {
     return null;

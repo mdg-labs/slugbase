@@ -8,21 +8,37 @@ import { AuthRequest, requireAuth } from '../middleware/auth.js';
 import { isAISuggestionsEnabled, isAIFeatureAvailable } from '../utils/ai-feature.js';
 import { getTenantId } from '../utils/tenant.js';
 import { isCloud } from '../config/mode.js';
+import { isAuditLogEnabledForRequest } from '../services/audit-log.js';
+import { isEmailSendingAvailable } from '../utils/email.js';
 
 const router = Router();
 
-/** GET /api/config/plan – cloud only. Returns plan, bookmarkLimit, canShareWithTeams, ai_available. When !isCloud returns 404. */
-router.get('/plan', requireAuth(), (req, res) => {
+/** GET /api/config/plan – cloud only. Returns plan, limits, feature flags (audit log, email invites). When !isCloud returns 404. */
+router.get('/plan', requireAuth(), async (req, res) => {
   if (!isCloud) {
     return res.status(404).json({ error: 'Not available' });
   }
   const plan = (req as any).plan as string | undefined;
   const effectivePlan = plan ?? 'free';
+  let audit_log_available = false;
+  try {
+    audit_log_available = await isAuditLogEnabledForRequest(req);
+  } catch {
+    audit_log_available = false;
+  }
+  let email_invites_available = false;
+  try {
+    email_invites_available = await isEmailSendingAvailable();
+  } catch {
+    email_invites_available = false;
+  }
   res.json({
     plan: effectivePlan,
     bookmarkLimit: effectivePlan === 'free' ? 50 : null,
     canShareWithTeams: effectivePlan === 'team',
     ai_available: effectivePlan !== 'free',
+    audit_log_available,
+    email_invites_available,
   });
 });
 

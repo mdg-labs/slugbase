@@ -16,6 +16,7 @@ import adminUserRoutes from './routes/admin/users.js';
 import adminTeamRoutes from './routes/admin/teams.js';
 import adminSettingsRoutes from './routes/admin/settings.js';
 import adminStatsRoutes from './routes/admin/stats.js';
+import adminAuditLogRoutes from './routes/admin/audit-log.js';
 import passwordResetRoutes from './routes/password-reset.js';
 import emailVerificationRoutes from './routes/email-verification.js';
 import dashboardRoutes from './routes/dashboard.js';
@@ -47,6 +48,7 @@ export function registerCoreRoutes(app: express.Express, _deps?: CoreRouteDeps):
   app.use('/api/admin/teams', adminTeamRoutes);
   app.use('/api/admin/settings', adminSettingsRoutes);
   app.use('/api/admin/stats', adminStatsRoutes);
+  app.use('/api/admin/audit-log', adminAuditLogRoutes);
   app.use('/api/dashboard', dashboardRoutes);
   app.use('/api', healthRoutes);
   app.use('/api/go', goRoutes);

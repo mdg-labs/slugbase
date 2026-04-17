@@ -52,7 +52,9 @@ const CommandInput = React.forwardRef<
     <CommandPrimitive.Input
       ref={ref}
       className={cn(
-        "flex h-10 w-full rounded-none bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/20 focus-visible:ring-offset-0",
+        // Global input:focus-visible uses outline-offset (index.css) and loses to that specificity;
+        // use important + inset shadow so focus stays inside the field (parent has overflow-hidden).
+        "flex h-12 min-h-12 w-full rounded-none bg-transparent py-2 pl-2.5 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 focus-visible:!outline-none focus-visible:!outline-offset-0 focus-visible:shadow-[inset_0_0_0_2px_hsl(var(--ring))]",
         className
       )}
       {...props}

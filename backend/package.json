@@ -7,7 +7,7 @@
     "build": "tsc && node scripts/copy-openapi.mjs",
     "start": "node dist/index.js",
     "migrate": "tsx src/migrate.ts",
-    "test": "DB_PATH=:memory: node --test --import tsx test/authorization.test.ts test/go.test.ts test/stats.test.ts test/tenant-isolation.test.ts"
+    "test": "DB_PATH=:memory: JWT_SECRET=0123456789abcdef0123456789abcdef ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef node --test --import tsx test/authorization.test.ts test/go.test.ts test/mfa-api.test.ts test/mfa-http.test.ts test/mfa-oidc-callback-http.test.ts test/mfa-services.test.ts test/stats.test.ts test/tenant-isolation.test.ts && DB_PATH=:memory: JWT_SECRET=0123456789abcdef0123456789abcdef ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef SLUGBASE_MODE=cloud node --test --import tsx test/mfa-http-cloud.test.ts"
   },
   "dependencies": {
     "@types/cookie-parser": "^1.4.10",
@@ -27,16 +27,17 @@
     "node-cron": "^3.0.3",
     "nodemailer": "^8.0.4",
     "openai": "^6.22.0",
+    "otplib": "^13.4.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "passport-openidconnect": "^0.1.1",
     "pg": "^8.11.3",
     "postmark": "^4.0.5",
     "stripe": "^20.3.1",
+    "swagger-ui-express": "^5.0.1",
     "uuid": "^9.0.1",
     "yaml": "^2.8.3",
-    "zod": "^3.22.4",
-    "swagger-ui-express": "^5.0.1"
+    "zod": "^3.22.4"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

@@ -29,6 +29,9 @@ import * as migration018 from './018_ai_cache_output_language.js';
 import * as migration019 from './019_ai_suggestion_usage.js';
 import * as migration020 from './020_tenant_scope.js';
 import * as migration021 from './021_users_ai_suggestions_enabled.js';
+import * as migration022 from './022_mfa_totp.js';
+import * as migration023 from './023_audit_events.js';
+import * as migration024 from './024_ai_suggestions_cache_tenant_pk.js';
 
 export interface Migration {
   migrationId: string;
@@ -134,6 +137,24 @@ const migrations: Migration[] = [
     migrationName: migration021.migrationName,
     up: migration021.up,
     down: migration021.down,
+  },
+  {
+    migrationId: migration022.migrationId,
+    migrationName: migration022.migrationName,
+    up: migration022.up,
+    down: migration022.down,
+  },
+  {
+    migrationId: migration023.migrationId,
+    migrationName: migration023.migrationName,
+    up: migration023.up,
+    down: migration023.down,
+  },
+  {
+    migrationId: migration024.migrationId,
+    migrationName: migration024.migrationName,
+    up: migration024.up,
+    down: migration024.down,
   },
 ];
 

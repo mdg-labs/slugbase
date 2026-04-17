@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Shield } from 'lucide-react';
 import api from '../../api/client';
@@ -60,6 +60,12 @@ export default function UserModal({ user, isOpen, onClose, onSuccess }: UserModa
   const [error, setError] = useState('');
   const [inviteEnabled, setInviteEnabled] = useState(false);
   const [createMode, setCreateMode] = useState<CreateMode>('set_password');
+  const createModeTouchedRef = useRef(false);
+
+  const isCreate = !user;
+  const inviteChoiceAvailable = isCloudMode
+    ? planLoadState === 'ready' && planInfo?.emailInvitesAvailable === true
+    : inviteEnabled;
 
   useEffect(() => {
     if (user) {
@@ -71,19 +77,45 @@ export default function UserModal({ user, isOpen, onClose, onSuccess }: UserModa
       });
     } else {
       setFormData({ email: '', name: '', password: '', is_admin: false });
-      setCreateMode('set_password');
     }
     setError('');
   }, [user, isOpen]);
 
   useEffect(() => {
-    if (!user && isOpen) {
+    if (isOpen && !user) {
+      createModeTouchedRef.current = false;
+    }
+  }, [isOpen, user]);
+
+  useEffect(() => {
+    if (!user && isOpen && !inviteChoiceAvailable) {
+      setCreateMode('set_password');
+    }
+  }, [user, isOpen, inviteChoiceAvailable]);
+
+  useEffect(() => {
+    if (!user && isOpen && inviteChoiceAvailable && !createModeTouchedRef.current) {
+      setCreateMode('send_invite');
+    }
+  }, [user, isOpen, inviteChoiceAvailable]);
+
+  useEffect(() => {
+    if (isCreate && createMode === 'send_invite' && !inviteChoiceAvailable) {
+      setCreateMode('set_password');
+    }
+  }, [isCreate, createMode, inviteChoiceAvailable]);
+
+  useEffect(() => {
+    if (!user && isOpen && !isCloudMode) {
       api
         .get('/admin/settings')
         .then((res) => {
           setInviteEnabled(res.data?.smtp_enabled === 'true');
         })
         .catch(() => setInviteEnabled(false));
+    }
+    if (!user && isOpen && isCloudMode) {
+      setInviteEnabled(false);
     }
   }, [user, isOpen]);
 
@@ -115,10 +147,8 @@ export default function UserModal({ user, isOpen, onClose, onSuccess }: UserModa
         } else if (formData.password) {
           payload.password = formData.password;
         }
-        const response = await api.post('/admin/users', payload);
-        if (payload.send_invite && response.data?.inviteSent === false) {
-          showToast(t('admin.userCreatedInviteNotSent'), 'warning');
-        } else if (payload.send_invite && response.data?.inviteSent === true) {
+        await api.post('/admin/users', payload);
+        if (payload.send_invite) {
           showToast(t('admin.userCreatedInviteSent'), 'success');
         } else {
           showToast(t('common.success'), 'success');
@@ -133,8 +163,7 @@ export default function UserModal({ user, isOpen, onClose, onSuccess }: UserModa
     }
   }
 
-  const isCreate = !user;
-  const useInvite = isCreate && inviteEnabled && createMode === 'send_invite';
+  const useInvite = isCreate && inviteChoiceAvailable && createMode === 'send_invite';
   const isValid =
     formData.email.trim() &&
     formData.name.trim() &&
@@ -179,7 +208,7 @@ export default function UserModal({ user, isOpen, onClose, onSuccess }: UserModa
                 placeholder={t('setup.name')}
               />
             </FormFieldWrapper>
-            {isCreate && inviteEnabled && (
+            {isCreate && inviteChoiceAvailable && (
               <div className="space-y-3">
                 <Label className="text-sm font-medium">{t('admin.createUserWith')}</Label>
                 <div className="flex flex-col gap-2" role="radiogroup" aria-label="Create user with">
@@ -190,7 +219,10 @@ export default function UserModal({ user, isOpen, onClose, onSuccess }: UserModa
                       name="create-mode"
                       value="set_password"
                       checked={createMode === 'set_password'}
-                      onChange={() => setCreateMode('set_password')}
+                      onChange={() => {
+                        createModeTouchedRef.current = true;
+                        setCreateMode('set_password');
+                      }}
                       className="h-4 w-4 rounded-full border-input"
                     />
                     <Label htmlFor="create-set-password" className="font-normal cursor-pointer">
@@ -204,7 +236,10 @@ export default function UserModal({ user, isOpen, onClose, onSuccess }: UserModa
                       name="create-mode"
                       value="send_invite"
                       checked={createMode === 'send_invite'}
-                      onChange={() => setCreateMode('send_invite')}
+                      onChange={() => {
+                        createModeTouchedRef.current = true;
+                        setCreateMode('send_invite');
+                      }}
                       className="h-4 w-4 rounded-full border-input"
                     />
                     <Label htmlFor="create-send-invite" className="font-normal cursor-pointer">

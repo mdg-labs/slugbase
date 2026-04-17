@@ -121,6 +121,10 @@ export function createApp(options: CreateAppOptions): express.Express {
       req.path === '/api/auth/verify-signup' ||
       req.path === '/api/auth/resend-signup-verification' ||
       req.path === '/api/auth/request-signup-resend' ||
+      /** Cookie-based login / step-up: same exemption model as frontend `api` CSRF skip list (`client.ts`). */
+      req.path === '/api/auth/login' ||
+      req.path === '/api/auth/logout' ||
+      req.path === '/api/auth/mfa/verify' ||
       req.path === '/api/health' ||
       req.path === '/api/csrf-token'
     ) {

@@ -1,6 +1,6 @@
 import { Router, type Request } from 'express';
 import crypto from 'crypto';
-import { query, queryOne, execute } from '../../db/index.js';
+import { query, queryOne, execute, getDbType } from '../../db/index.js';
 import { AuthRequest, requireAuth, requireAdmin } from '../../middleware/auth.js';
 import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
@@ -9,6 +9,7 @@ import { generateUserKey } from '../../utils/user-key.js';
 import { getTenantId, DEFAULT_TENANT_ID } from '../../utils/tenant.js';
 import { sendInviteEmail, isEmailSendingAvailable } from '../../utils/email.js';
 import { isCloud } from '../../config/mode.js';
+import { recordAuditEvent } from '../../services/audit-log.js';
 
 const router = Router();
 router.use(requireAuth());
@@ -16,6 +17,42 @@ router.use(requireAdmin());
 
 const USER_COLUMNS =
   'id, email, name, user_key, is_admin, oidc_provider, language, theme, created_at';
+
+function unusedResetTokenSql(alias: string): string {
+  return getDbType() === 'postgresql' ? `${alias}.used IS DISTINCT FROM TRUE` : `(${alias}.used = 0 OR ${alias}.used IS NULL)`;
+}
+
+function mapUserListRow(row: Record<string, unknown>) {
+  const invitePendingRaw = row.invite_pending;
+  const invite_pending =
+    invitePendingRaw === true ||
+    invitePendingRaw === 1 ||
+    invitePendingRaw === '1' ||
+    invitePendingRaw === 'true';
+  const exp = row.invite_expires_at as string | null | undefined;
+  const invite_expires_at = exp != null && String(exp).trim() !== '' ? String(exp) : null;
+  let invite_expired = false;
+  if (invite_pending && invite_expires_at) {
+    invite_expired = Date.now() >= new Date(invite_expires_at).getTime();
+  }
+  const rest = { ...(row as Record<string, unknown>) };
+  delete rest.invite_pending;
+  delete rest.invite_expires_at;
+  return {
+    ...rest,
+    invite_pending,
+    invite_expires_at,
+    invite_expired,
+  };
+}
+
+async function rollbackNewInviteUser(userId: string, tenantId: string | null) {
+  await execute('DELETE FROM password_reset_tokens WHERE user_id = ?', [userId]);
+  if (isCloud && tenantId && tenantId !== DEFAULT_TENANT_ID) {
+    await execute('DELETE FROM org_members WHERE user_id = ? AND org_id = ?', [userId, tenantId]);
+  }
+  await execute('DELETE FROM users WHERE id = ?', [userId]);
+}
 
 async function userInCurrentOrg(req: Request, targetUserId: string): Promise<boolean> {
   if (!isCloud) return true;
@@ -30,12 +67,30 @@ function isInstanceGlobalAdmin(req: Request): boolean {
   return u?.is_admin === true || u?.is_admin === 1;
 }
 
+function isInvitePendingUser(u: { password_hash?: unknown; oidc_provider?: unknown; oidc_sub?: unknown }): boolean {
+  if (u.password_hash != null && String(u.password_hash).trim() !== '') return false;
+  if (u.oidc_provider != null && String(u.oidc_provider).trim() !== '') return false;
+  if (u.oidc_sub != null && String(u.oidc_sub).trim() !== '') return false;
+  return true;
+}
+
+const INVITE_PENDING_CASE = `CASE WHEN u.password_hash IS NULL
+  AND (u.oidc_provider IS NULL OR u.oidc_provider = '')
+  AND (u.oidc_sub IS NULL OR u.oidc_sub = '')
+  THEN 1 ELSE 0 END`;
+
 router.get('/', async (req, res) => {
   try {
+    const prtUnused = unusedResetTokenSql('prt');
+    const inviteExpirySub = `(SELECT prt.expires_at FROM password_reset_tokens prt
+      WHERE prt.user_id = u.id AND ${prtUnused}
+      ORDER BY prt.expires_at DESC LIMIT 1)`;
     const tenantId = getTenantId(req);
     if (isCloud && tenantId !== DEFAULT_TENANT_ID) {
       const users = await query(
-        `SELECT u.id, u.email, u.name, u.user_key, u.is_admin, u.oidc_provider, u.language, u.theme, u.created_at
+        `SELECT u.id, u.email, u.name, u.user_key, u.is_admin, u.oidc_provider, u.language, u.theme, u.created_at,
+         ${INVITE_PENDING_CASE} AS invite_pending,
+         ${inviteExpirySub} AS invite_expires_at
          FROM users u
          INNER JOIN org_members om ON om.user_id = u.id
          WHERE om.org_id = ?
@@ -43,17 +98,76 @@ router.get('/', async (req, res) => {
         [tenantId]
       );
       const usersList = Array.isArray(users) ? users : users ? [users] : [];
-      return res.json(usersList);
+      return res.json(usersList.map((r) => mapUserListRow(r as Record<string, unknown>)));
     }
     if (isCloud) {
       return res.json([]);
     }
     const users = await query(
-      `SELECT ${USER_COLUMNS} FROM users ORDER BY created_at DESC`,
+      `SELECT u.id, u.email, u.name, u.user_key, u.is_admin, u.oidc_provider, u.language, u.theme, u.created_at,
+       ${INVITE_PENDING_CASE} AS invite_pending,
+       ${inviteExpirySub} AS invite_expires_at
+       FROM users u ORDER BY u.created_at DESC`,
       []
     );
     const usersList = Array.isArray(users) ? users : users ? [users] : [];
-    res.json(usersList);
+    res.json(usersList.map((r) => mapUserListRow(r as Record<string, unknown>)));
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/:id/resend-invite', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const target = await queryOne(
+      'SELECT id, email, name, password_hash, oidc_provider, oidc_sub FROM users WHERE id = ?',
+      [id]
+    );
+    if (!target || !(await userInCurrentOrg(req, id))) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    const t = target as any;
+    if (!isInvitePendingUser(t)) {
+      return res.status(400).json({ error: 'User is not pending invite signup.' });
+    }
+    const emailAvailable = await isEmailSendingAvailable();
+    if (!emailAvailable) {
+      return res.status(400).json({
+        error: 'Invite by email is not available. Configure SMTP in Settings or use a deployment with outbound email.',
+      });
+    }
+    const prtTable = 'password_reset_tokens';
+    await execute(
+      `UPDATE ${prtTable} SET used = ? WHERE user_id = ? AND (${unusedResetTokenSql(prtTable)})`,
+      [true, id]
+    );
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const tokenHash = hashToken(token);
+    const tokenId = uuidv4();
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+    const tokenPlaceholder = 'h:' + tokenId;
+    await execute(
+      'INSERT INTO password_reset_tokens (id, user_id, token, token_hash, expires_at) VALUES (?, ?, ?, ?, ?)',
+      [tokenId, id, tokenPlaceholder, tokenHash, expiresAt.toISOString()]
+    );
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const setPasswordUrl = `${baseUrl}/reset-password?token=${token}`;
+    const sendResult = await sendInviteEmail(String(t.email), setPasswordUrl, String(t.name || ''));
+    if (!sendResult.success) {
+      await execute('DELETE FROM password_reset_tokens WHERE id = ?', [tokenId]);
+      const msg = sendResult.error || 'Could not send invite email';
+      return res.status(502).json({ error: msg.length > 500 ? msg.slice(0, 500) + '…' : msg });
+    }
+    await recordAuditEvent(req, {
+      action: 'org_member.invite_resent',
+      entityType: 'org_member',
+      entityId: id,
+      metadata: { email: t.email },
+    });
+    res.json({ invite_expires_at: expiresAt.toISOString() });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -186,7 +300,6 @@ router.post('/', async (req, res) => {
       ]);
     }
 
-    let inviteSent = false;
     if (sendInvite) {
       const token = crypto.randomBytes(32).toString('hex');
       const tokenHash = hashToken(token);
@@ -200,9 +313,11 @@ router.post('/', async (req, res) => {
       );
       const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
       const setPasswordUrl = `${baseUrl}/reset-password?token=${token}`;
-      inviteSent = await sendInviteEmail(normalizedEmail, setPasswordUrl, sanitizedName);
-      if (!inviteSent) {
-        console.warn('Invite email could not be sent for new user', userId);
+      const inviteResult = await sendInviteEmail(normalizedEmail, setPasswordUrl, sanitizedName);
+      if (!inviteResult.success) {
+        await rollbackNewInviteUser(userId, tenantId);
+        const msg = inviteResult.error || 'Could not send invite email';
+        return res.status(502).json({ error: msg.length > 500 ? msg.slice(0, 500) + '…' : msg });
       }
     }
 
@@ -211,9 +326,12 @@ router.post('/', async (req, res) => {
       [userId]
     );
     const payload: any = { ...user };
-    if (sendInvite) {
-      payload.inviteSent = inviteSent;
-    }
+    await recordAuditEvent(req, {
+      action: 'org_member.created',
+      entityType: 'org_member',
+      entityId: userId,
+      metadata: { email: normalizedEmail, name: sanitizedName, invite: Boolean(sendInvite) },
+    });
     res.status(201).json(payload);
   } catch (error: any) {
     if (error.message && (error.message.includes('UNIQUE constraint') || error.message.includes('duplicate'))) {
@@ -297,6 +415,12 @@ router.put('/:id', async (req, res) => {
       'SELECT id, email, name, user_key, is_admin, oidc_provider, language, theme, created_at FROM users WHERE id = ?',
       [id]
     );
+    await recordAuditEvent(req, {
+      action: 'user.updated',
+      entityType: 'org_member',
+      entityId: id,
+      metadata: { email: (user as any)?.email, fields: Object.keys(req.body) },
+    });
     res.json(user);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -320,6 +444,12 @@ router.delete('/:id', async (req, res) => {
     if (!(await userInCurrentOrg(req, id))) {
       return res.status(404).json({ error: 'User not found' });
     }
+    await recordAuditEvent(req, {
+      action: 'org_member.deleted',
+      entityType: 'org_member',
+      entityId: id,
+      metadata: { email: (user as any).email },
+    });
     await execute('DELETE FROM users WHERE id = ?', [id]);
 
     res.json({ message: 'User deleted' });

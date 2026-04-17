@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { validateLength, sanitizeString, MAX_LENGTHS } from '../utils/validation.js';
 import { getTenantId } from '../utils/tenant.js';
 import { isCloud } from '../config/mode.js';
+import { recordAuditEvent } from '../services/audit-log.js';
 
 const router = Router();
 router.use(requireAuth());
@@ -310,6 +311,12 @@ router.post('/', async (req, res) => {
     }
 
     const folder = await queryOne('SELECT * FROM folders WHERE id = ? AND tenant_id = ?', [folderId, tenantId]);
+    await recordAuditEvent(req, {
+      action: 'folder.created',
+      entityType: 'folder',
+      entityId: folderId,
+      metadata: { name: sanitizedName },
+    });
     res.status(201).json(folder);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -417,6 +424,12 @@ router.put('/:id', async (req, res) => {
     }
 
     const updated = await queryOne('SELECT * FROM folders WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+    await recordAuditEvent(req, {
+      action: 'folder.updated',
+      entityType: 'folder',
+      entityId: id,
+      metadata: { name: sanitizedName },
+    });
     res.json(updated);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -436,7 +449,16 @@ router.delete('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Folder not found' });
     }
 
+    const snap = await queryOne('SELECT name FROM folders WHERE id = ? AND tenant_id = ?', [id, tenantId]);
     await execute('DELETE FROM folders WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+    if (snap) {
+      await recordAuditEvent(req, {
+        action: 'folder.deleted',
+        entityType: 'folder',
+        entityId: id,
+        metadata: { name: (snap as any).name },
+      });
+    }
     res.json({ message: 'Folder deleted' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });

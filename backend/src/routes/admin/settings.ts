@@ -6,6 +6,7 @@ import { encrypt, decrypt } from '../../utils/encryption.js';
 import { getTenantId } from '../../utils/tenant.js';
 import { listOpenAIModels } from '../../services/ai-suggestions.js';
 import { isCloud } from '../../config/mode.js';
+import { recordAuditEvent } from '../../services/audit-log.js';
 
 const router = Router();
 router.use(requireAuth());
@@ -137,6 +138,14 @@ router.post('/', async (req, res) => {
 
     await upsertSystemConfig(tenantId, key, String(value));
 
+    const secretKey = key === 'smtp_password' || key === 'ai_api_key';
+    await recordAuditEvent(req, {
+      action: 'settings.updated',
+      entityType: 'settings',
+      entityId: key,
+      metadata: secretKey ? { key, credential_updated: true } : { key },
+    });
+
     const setting = await queryOne('SELECT * FROM system_config WHERE key = ? AND tenant_id = ?', [key, tenantId]);
     res.json({ key: (setting as any).key, value: (setting as any).value });
   } catch (error: any) {
@@ -150,6 +159,12 @@ router.delete('/:key', async (req, res) => {
     const tenantId = getTenantId(req);
     const { key } = req.params;
     await execute('DELETE FROM system_config WHERE key = ? AND tenant_id = ?', [key, tenantId]);
+    await recordAuditEvent(req, {
+      action: 'settings.deleted',
+      entityType: 'settings',
+      entityId: key,
+      metadata: { key },
+    });
     res.json({ message: 'Setting deleted' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -224,6 +239,18 @@ router.post('/smtp', async (req, res) => {
       await upsertSystemConfig(tenantId, setting.key, setting.value);
     }
 
+    const keysTouched = settings.map((s) =>
+      s.key === 'smtp_password' ? 'smtp_password' : s.key
+    );
+    await recordAuditEvent(req, {
+      action: 'settings.smtp_updated',
+      entityType: 'settings',
+      entityId: 'smtp',
+      metadata: {
+        keys: keysTouched.map((k) => (k === 'smtp_password' ? 'smtp_password(set)' : k)),
+      },
+    });
+
     res.json({ message: 'SMTP settings updated successfully' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -248,6 +275,18 @@ router.post('/ai', rejectCloudFreePlanAi, async (req, res) => {
     if (ai_model !== undefined) {
       await upsertSystemConfig(tenantId, 'ai_model', String(ai_model));
     }
+
+    const keysChanged: string[] = [];
+    if (ai_enabled !== undefined) keysChanged.push('ai_enabled');
+    if (ai_provider !== undefined) keysChanged.push('ai_provider');
+    if (ai_api_key !== undefined && ai_api_key !== null && String(ai_api_key).trim() !== '') keysChanged.push('ai_api_key');
+    if (ai_model !== undefined) keysChanged.push('ai_model');
+    await recordAuditEvent(req, {
+      action: 'settings.ai_updated',
+      entityType: 'settings',
+      entityId: 'ai',
+      metadata: { keys: keysChanged.map((k) => (k === 'ai_api_key' ? 'ai_api_key(set)' : k)) },
+    });
 
     res.json({ message: 'AI settings updated successfully' });
   } catch (error: any) {

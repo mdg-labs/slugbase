@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -15,6 +15,11 @@ import api from '../api/client';
 import { useAppConfig } from '../contexts/AppConfigContext';
 import { canAccessWorkspaceAdmin } from '../utils/adminAccess';
 import {
+  absoluteUrlForGoSlug,
+  parseGoCommandQuery,
+  parseGoCommandSlugPrefix,
+} from '../utils/goRedirectUrl';
+import {
   CommandDialog,
   CommandEmpty,
   CommandGroup,
@@ -29,6 +34,7 @@ interface SearchResult {
   type: 'bookmark' | 'folder' | 'tag' | 'navigation' | 'action';
   title: string;
   url?: string;
+  slug?: string;
   icon?: string | null;
   action?: () => void;
   path?: string;
@@ -37,7 +43,7 @@ interface SearchResult {
 export default function GlobalSearch() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { pathPrefixForLinks } = useAppConfig();
+  const { pathPrefixForLinks, apiBaseUrl } = useAppConfig();
   const prefix = (pathPrefixForLinks || '').replace(/\/+/g, '/') || '';
   const { user } = useAuth();
   const { open, setOpen, openSearch } = useSearchCommand();
@@ -46,6 +52,13 @@ export default function GlobalSearch() {
   const [loading, setLoading] = useState(false);
 
   const showAdmin = canAccessWorkspaceAdmin(user);
+
+  const trimmedQuery = query.trim();
+  const goSlugPrefix = useMemo(
+    () => parseGoCommandSlugPrefix(trimmedQuery),
+    [trimmedQuery]
+  );
+  const isGoCommandMode = goSlugPrefix !== null;
 
   const navigationItems: SearchResult[] = useMemo(() => [
     { type: 'navigation', title: t('bookmarks.title'), path: `${prefix}/bookmarks`.replace(/\/+/g, '/') || '/bookmarks', id: 'nav-bookmarks' },
@@ -81,6 +94,48 @@ export default function GlobalSearch() {
     if (!open) {
       setResults([]);
       return;
+    }
+
+    if (goSlugPrefix !== null) {
+      const goTimeout = setTimeout(async () => {
+        setLoading(true);
+        try {
+          const bookmarksRes = await api.get('/bookmarks', { params: { limit: 500 } });
+          const bookmarksPayload = bookmarksRes.data;
+          const bookmarksItems = bookmarksPayload?.items ?? bookmarksPayload ?? [];
+          const list = Array.isArray(bookmarksItems) ? bookmarksItems : [];
+          const prefixLower = goSlugPrefix.toLowerCase();
+          const filtered = list
+            .filter((b: { slug?: string | null }) => {
+              const slug = b.slug;
+              if (slug == null || String(slug).trim() === '') return false;
+              if (!prefixLower) return true;
+              return String(slug).toLowerCase().startsWith(prefixLower);
+            })
+            .sort((a: { slug?: string }, b: { slug?: string }) =>
+              String(a.slug || '').localeCompare(String(b.slug || ''), undefined, {
+                sensitivity: 'base',
+              })
+            )
+            .slice(0, 25);
+          const goResults: SearchResult[] = filtered.map(
+            (b: { id: string; title: string; url?: string; slug?: string | null }) => ({
+              id: b.id,
+              type: 'bookmark' as const,
+              title: b.title,
+              url: b.url,
+              slug: b.slug ?? undefined,
+            })
+          );
+          setResults(goResults);
+        } catch (error) {
+          console.error('Go command bookmark load failed:', error);
+          setResults([]);
+        } finally {
+          setLoading(false);
+        }
+      }, 300);
+      return () => clearTimeout(goTimeout);
     }
 
     const searchTimeout = setTimeout(async () => {
@@ -159,7 +214,7 @@ export default function GlobalSearch() {
     }, 300);
 
     return () => clearTimeout(searchTimeout);
-  }, [query, open, navigationItems, actionItems]);
+  }, [query, open, navigationItems, actionItems, goSlugPrefix]);
 
   function handleResultClick(result: SearchResult) {
     setOpen(false);
@@ -177,6 +232,18 @@ export default function GlobalSearch() {
     } else if (result.type === 'tag') {
       navigate(`${prefix}/bookmarks?tag_id=${result.id}`.replace(/\/+/g, '/') || `/bookmarks?tag_id=${result.id}`);
     }
+  }
+
+  function handleCommandInputKeyDown(e: ReactKeyboardEvent<HTMLInputElement>) {
+    if (e.key !== 'Enter' || e.nativeEvent.isComposing) return;
+    const slug = parseGoCommandQuery(query.trim());
+    if (!slug) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setOpen(false);
+    setQuery('');
+    const url = absoluteUrlForGoSlug(slug, { apiBaseUrl });
+    window.open(url, '_blank', 'noopener,noreferrer');
   }
 
   function getResultIcon(result: SearchResult) {
@@ -201,6 +268,7 @@ export default function GlobalSearch() {
           placeholder={t('dashboard.searchPlaceholder')}
           value={query}
           onValueChange={setQuery}
+          onKeyDown={handleCommandInputKeyDown}
         />
         <CommandList className="max-h-[60vh]">
           <CommandEmpty>
@@ -234,6 +302,35 @@ export default function GlobalSearch() {
                 ))}
               </CommandGroup>
             </>
+          ) : isGoCommandMode ? (
+            <CommandGroup heading={t('dashboard.goCommandMatches')}>
+              {results.map((result) => (
+                <CommandItem
+                  key={`${result.type}-${result.id}`}
+                  value={`${result.type}-${result.id}-${result.title}`}
+                  onSelect={() => handleResultClick(result)}
+                >
+                  {getResultIcon(result)}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate font-medium">{result.title}</span>
+                      {result.type === 'bookmark' && (
+                        <ExternalLink className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                      )}
+                    </div>
+                    {result.slug ? (
+                      <div className="text-xs text-muted-foreground truncate mt-0.5">
+                        go/{result.slug}
+                      </div>
+                    ) : (
+                      result.url && (
+                        <div className="text-xs text-muted-foreground truncate mt-0.5">{result.url}</div>
+                      )
+                    )}
+                  </div>
+                </CommandItem>
+              ))}
+            </CommandGroup>
           ) : (
             results.map((result) => (
               <CommandItem

@@ -10,6 +10,7 @@ import { sanitizeUrlForAI, callAIProvider } from '../services/ai-suggestions.js'
 import { fetchPageMetadata } from '../services/fetch-page-metadata.js';
 import { getTenantId } from '../utils/tenant.js';
 import { isCloud } from '../config/mode.js';
+import { recordAuditEvent } from '../services/audit-log.js';
 
 /** Free plan bookmark limit (must match pricing page). Used only when isCloud. */
 const FREE_PLAN_BOOKMARK_LIMIT = 50;
@@ -18,7 +19,7 @@ const router = Router();
 router.use(requireAuth());
 
 /** Record AI suggestion usage for analytics. Does not fail the request if insert fails (e.g. migration not run). */
-async function recordAiSuggestionUsage(userId: string, used: AiSuggestionUsed | undefined): Promise<void> {
+async function recordAiSuggestionUsage(userId: string, tenantId: string, used: AiSuggestionUsed | undefined): Promise<void> {
   if (!used || typeof used !== 'object') return;
   try {
     const id = uuidv4();
@@ -26,8 +27,8 @@ async function recordAiSuggestionUsage(userId: string, used: AiSuggestionUsed | 
     const slugUsed = Boolean(used.slug);
     const tagsUsed = Boolean(used.tags);
     await execute(
-      'INSERT INTO ai_suggestion_usage (id, user_id, title_used, slug_used, tags_used) VALUES (?, ?, ?, ?, ?)',
-      [id, userId, titleUsed, slugUsed, tagsUsed]
+      'INSERT INTO ai_suggestion_usage (id, tenant_id, user_id, title_used, slug_used, tags_used) VALUES (?, ?, ?, ?, ?, ?)',
+      [id, tenantId, userId, titleUsed, slugUsed, tagsUsed]
     );
   } catch (_err) {
     // Table may not exist yet; do not fail the bookmark request
@@ -411,18 +412,21 @@ router.get('/search', async (req, res) => {
       LEFT JOIN bookmark_folders bf ON b.id = bf.bookmark_id
       LEFT JOIN folder_user_shares fus ON bf.folder_id = fus.folder_id
       LEFT JOIN folder_team_shares fts ON bf.folder_id = fts.folder_id
-      WHERE (b.user_id = ? OR ${busCond}
+      WHERE b.tenant_id = ?
+        AND (b.user_id = ? OR ${busCond}
         OR (bts.team_id IN (${teamPlaceholders}) AND bts.team_id IS NOT NULL)
         OR ${fusCond}
         OR (fts.team_id IN (${teamPlaceholders}) AND fts.team_id IS NOT NULL AND bf.folder_id IS NOT NULL))
       AND (LOWER(b.title) LIKE ? OR LOWER(b.url) LIKE ? OR LOWER(COALESCE(b.slug, '')) LIKE ?)
       LIMIT 10
     `;
-    const bookmarkParams: any[] = [userId, userId];
-    bookmarkParams.push(userId, userId);
+    const bookmarkParams: any[] = [userId, tenantId, userId, userId];
     if (teamIds.length > 0) {
       bookmarkParams.push(...teamIds);
+      bookmarkParams.push(userId);
       bookmarkParams.push(...teamIds);
+    } else {
+      bookmarkParams.push(userId);
     }
     bookmarkParams.push(searchTerm, searchTerm, searchTerm);
     const bookmarkResults = await query(bookmarkSql, bookmarkParams);
@@ -434,12 +438,13 @@ router.get('/search', async (req, res) => {
       FROM folders f
       LEFT JOIN folder_user_shares fus ON f.id = fus.folder_id
       LEFT JOIN folder_team_shares fts ON f.id = fts.folder_id
-      WHERE (f.user_id = ? OR ${folderFusCond}
+      WHERE f.tenant_id = ?
+        AND (f.user_id = ? OR ${folderFusCond}
         OR (fts.team_id IN (${teamPlaceholders}) AND fts.team_id IS NOT NULL))
       AND LOWER(f.name) LIKE ?
       LIMIT 5
     `;
-    const folderParams: any[] = [userId];
+    const folderParams: any[] = [tenantId, userId];
     folderParams.push(userId);
     if (teamIds.length > 0) folderParams.push(...teamIds);
     folderParams.push(searchTerm);
@@ -449,9 +454,9 @@ router.get('/search', async (req, res) => {
     const tagResults = await query(
       `SELECT t.*, 'tag' as type
        FROM tags t
-       WHERE t.user_id = ? AND LOWER(t.name) LIKE ?
+       WHERE t.tenant_id = ? AND t.user_id = ? AND LOWER(t.name) LIKE ?
        LIMIT 5`,
-      [userId, searchTerm]
+      [tenantId, userId, searchTerm]
     );
 
     // Process results
@@ -505,17 +510,20 @@ router.get('/export', async (req, res) => {
       LEFT JOIN bookmark_folders bf ON b.id = bf.bookmark_id
       LEFT JOIN folder_user_shares fus ON bf.folder_id = fus.folder_id
       LEFT JOIN folder_team_shares fts ON bf.folder_id = fts.folder_id
-      WHERE (b.user_id = ? OR ${busCond}
+      WHERE b.tenant_id = ?
+        AND (b.user_id = ? OR ${busCond}
         OR (bts.team_id IN (${teamPlaceholders}) AND bts.team_id IS NOT NULL)
         OR ${fusCond}
         OR (fts.team_id IN (${teamPlaceholders}) AND fts.team_id IS NOT NULL AND bf.folder_id IS NOT NULL))
       ORDER BY b.created_at DESC
     `;
-    const exportParams: any[] = [userId, userId];
-    exportParams.push(userId, userId);
+    const exportParams: any[] = [userId, tenantId, userId, userId];
     if (teamIds.length > 0) {
       exportParams.push(...teamIds);
+      exportParams.push(userId);
       exportParams.push(...teamIds);
+    } else {
+      exportParams.push(userId);
     }
     const bookmarks = await query(exportSql, exportParams);
 
@@ -582,13 +590,14 @@ router.get('/ids', async (req, res) => {
       LEFT JOIN bookmark_folders bf ON b.id = bf.bookmark_id
       LEFT JOIN folder_user_shares fus ON bf.folder_id = fus.folder_id
       LEFT JOIN folder_team_shares fts ON bf.folder_id = fts.folder_id
-      WHERE (b.user_id = ?
+      WHERE b.tenant_id = ?
+        AND (b.user_id = ?
         OR ${busCond}
         OR (bts.team_id IN (${teamIds.length > 0 ? teamIds.map(() => '?').join(',') : 'NULL'}) AND bts.team_id IS NOT NULL)
         OR ${fusCond}
         OR (fts.team_id IN (${teamIds.length > 0 ? teamIds.map(() => '?').join(',') : 'NULL'}) AND fts.team_id IS NOT NULL AND bf.folder_id IS NOT NULL))
     `;
-    const idsParams: any[] = [userId];
+    const idsParams: any[] = [tenantId, userId];
     idsParams.push(userId, userId);
     if (teamIds.length > 0) {
       idsParams.push(...teamIds);
@@ -704,8 +713,8 @@ router.post('/ai-suggest', async (req, res) => {
         ? `AND created_at >= NOW() - INTERVAL '${cacheTtlDays} days'`
         : "AND datetime(created_at) >= datetime('now', '-7 days')";
     const cached = await queryOne(
-      `SELECT title, slug, tags, language, confidence FROM ai_suggestions_cache WHERE user_id = ? AND canonical_url = ? AND output_language = ? ${cacheCondition}`,
-      [userId, sanitizedUrl, userLanguage]
+      `SELECT title, slug, tags, language, confidence FROM ai_suggestions_cache WHERE tenant_id = ? AND user_id = ? AND canonical_url = ? AND output_language = ? ${cacheCondition}`,
+      [tenantId, userId, sanitizedUrl, userLanguage]
     );
     if (cached) {
       const tags = typeof (cached as any).tags === 'string'
@@ -749,10 +758,10 @@ router.post('/ai-suggest', async (req, res) => {
       ? JSON.stringify(result.tags)
       : JSON.stringify(result.tags);
     await execute(
-      `INSERT INTO ai_suggestions_cache (user_id, canonical_url, output_language, title, slug, tags, language, confidence)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT (user_id, canonical_url, output_language) DO UPDATE SET title = excluded.title, slug = excluded.slug, tags = excluded.tags, language = excluded.language, confidence = excluded.confidence`,
-      [userId, sanitizedUrl, userLanguage, result.title, result.slug, tagsJson, result.language, result.confidence]
+      `INSERT INTO ai_suggestions_cache (tenant_id, user_id, canonical_url, output_language, title, slug, tags, language, confidence)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (tenant_id, user_id, canonical_url, output_language) DO UPDATE SET title = excluded.title, slug = excluded.slug, tags = excluded.tags, language = excluded.language, confidence = excluded.confidence`,
+      [tenantId, userId, sanitizedUrl, userLanguage, result.title, result.slug, tagsJson, result.language, result.confidence]
     );
 
     res.json({
@@ -1040,7 +1049,7 @@ router.post('/', async (req, res) => {
       }
     }
 
-    await recordAiSuggestionUsage(userId, data.ai_suggestion_used);
+    await recordAiSuggestionUsage(userId, tenantId, data.ai_suggestion_used);
 
     const bookmark = await queryOne('SELECT * FROM bookmarks WHERE id = ? AND tenant_id = ?', [bookmarkId, tenantId]);
     // Convert boolean fields from SQLite (0/1) to boolean
@@ -1049,6 +1058,12 @@ router.post('/', async (req, res) => {
     if (!bookmark.slug) {
       bookmark.slug = '';
     }
+    await recordAuditEvent(req, {
+      action: 'bookmark.created',
+      entityType: 'bookmark',
+      entityId: bookmarkId,
+      metadata: { title: sanitizedTitle, url: data.url },
+    });
     res.status(201).json(bookmark);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -1240,7 +1255,7 @@ router.put('/:id', async (req, res) => {
       }
     }
 
-    await recordAiSuggestionUsage(userId, data.ai_suggestion_used);
+    await recordAiSuggestionUsage(userId, tenantId, data.ai_suggestion_used);
 
     const bookmark = await queryOne('SELECT * FROM bookmarks WHERE id = ? AND tenant_id = ?', [id, tenantId]);
     // Convert boolean fields from SQLite (0/1) to boolean
@@ -1249,6 +1264,12 @@ router.put('/:id', async (req, res) => {
     if (!bookmark.slug) {
       bookmark.slug = '';
     }
+    await recordAuditEvent(req, {
+      action: 'bookmark.updated',
+      entityType: 'bookmark',
+      entityId: id,
+      metadata: { title: bookmark.title, url: bookmark.url },
+    });
     res.json(bookmark);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -1268,7 +1289,16 @@ router.delete('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Bookmark not found' });
     }
 
+    const snap = await queryOne('SELECT title, url FROM bookmarks WHERE id = ? AND tenant_id = ?', [id, tenantId]);
     await execute('DELETE FROM bookmarks WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+    if (snap) {
+      await recordAuditEvent(req, {
+        action: 'bookmark.deleted',
+        entityType: 'bookmark',
+        entityId: id,
+        metadata: { title: snap.title, url: snap.url },
+      });
+    }
 
     res.json({ message: 'Bookmark deleted' });
   } catch (error: any) {
@@ -1451,6 +1481,15 @@ router.post('/import', async (req, res) => {
         console.error('Import bookmark error:', error?.message || error);
         results.errors.push('Failed to import bookmark');
       }
+    }
+
+    if (results.success > 0) {
+      await recordAuditEvent(req, {
+        action: 'bookmark.import',
+        entityType: 'bookmark',
+        entityId: null,
+        metadata: { success: results.success, failed: results.failed },
+      });
     }
 
     res.json({

@@ -71,11 +71,6 @@ coverage/
 .nyc_output/
 *.lcov
 
-# Cursor and private
-.cursor/
-PRD/
-.agents/
-.impeccable.md
 
 # Docs: private notes, not synced to docs repo
 docs/internal/

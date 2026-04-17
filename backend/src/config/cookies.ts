@@ -74,6 +74,44 @@ export function getClearAuthCookieOptions(): {
   };
 }
 
+/** HttpOnly cookie for MFA step-up JWT (plan §3). Not the access `token` cookie. */
+export const MFA_PENDING_COOKIE_NAME = 'slugbase.mfa_pending';
+
+/**
+ * Options for `slugbase.mfa_pending`: httpOnly, secure in HTTPS/prod (same rule as auth),
+ * **SameSite=Lax** (plan §3), path `/`, optional AUTH_COOKIE_DOMAIN.
+ * Pass `maxAgeMs` aligned with the pending JWT `exp` (default TTL: 5 minutes = 300_000 ms).
+ */
+export function getMfaPendingCookieOptions(maxAgeMs: number): AuthCookieOptions {
+  const domain = getOptionalAuthCookieDomain();
+  return {
+    httpOnly: true,
+    secure: cookieSecureFlag(),
+    sameSite: 'lax',
+    path: '/',
+    maxAge: maxAgeMs,
+    ...(domain ? { domain } : {}),
+  };
+}
+
+/** Match set options so `clearCookie` removes the pending cookie reliably. */
+export function getClearMfaPendingCookieOptions(): {
+  httpOnly: boolean;
+  secure: boolean;
+  sameSite: 'lax';
+  path: string;
+  domain?: string;
+} {
+  const domain = getOptionalAuthCookieDomain();
+  return {
+    httpOnly: true,
+    secure: cookieSecureFlag(),
+    sameSite: 'lax',
+    path: '/',
+    ...(domain ? { domain } : {}),
+  };
+}
+
 /**
  * CSRF (_csrf) cookie — same Domain/Secure/SameSite as auth cookies when AUTH_COOKIE_DOMAIN is set
  * so the internal admin app (separate subdomain) can obtain and send CSRF + JWT on the API host.

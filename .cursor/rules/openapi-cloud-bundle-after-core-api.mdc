@@ -1,0 +1,28 @@
+---
+description: After editing core REST routes or self-hosted OpenAPI, run slugbase-cloud openapi bundle before finishing
+globs: backend/openapi/**,backend/src/register-routes.ts,backend/src/routes/**/*.ts
+alwaysApply: false
+---
+
+# OpenAPI: refresh cloud merged spec after core API changes
+
+When you change any of the globbed files in **slugbase** in a way that affects **documented or actual integrator-facing HTTP API** (paths, methods, auth notes), you must refresh **slugbase-cloud**’s merged OpenAPI before marking the task complete.
+
+## Do this (slugbase-cloud repo)
+
+1. From **slugbase-cloud** root run:
+
+   ```bash
+   npm run openapi:bundle
+   ```
+
+2. If **`openapi/openapi.cloud.yaml`** changed, include it in the commit (with any slugbase-cloud changes).
+
+## Which core source the bundle uses
+
+- **After `npm run pack:cloud` + `npm install` in cloud** (normal core handoff): the script uses `openapi.selfhosted.yaml` from **`@mdguggenbichler/slugbase-core`** in `node_modules` — correct for shipped tarball.
+- **Only edited `openapi.selfhosted.yaml` in slugbase without packing**: set **`SLUGBASE_CORE_OPENAPI`** to the absolute path of `slugbase/backend/openapi/openapi.selfhosted.yaml` when running `openapi:bundle`, so you do not merge from a stale installed core copy.
+
+## Relation to version sync
+
+If your change also requires a **core version bump and `pack:cloud`**, follow [core-cloud-version-sync.mdc](core-cloud-version-sync.mdc) first; step **5** there already includes `npm run openapi:bundle` after `npm install`.

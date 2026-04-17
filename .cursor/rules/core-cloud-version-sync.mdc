@@ -1,0 +1,59 @@
+---
+description: After core changes, bump @mdguggenbichler/slugbase-core version, pack tarball, sync cloud
+alwaysApply: true
+---
+
+# Core → cloud: version bump, pack, and install
+
+When you **finish work in slugbase** that **affects the packaged core** (anything that ends up in `@mdguggenbichler/slugbase-core` via `assemble:core` / `pack:cloud`: `packages/core`, backend, frontend, embed, scripts that feed the assembly, etc.), **complete the handoff to slugbase-cloud** before considering the task done.
+
+Purely local-only changes that **cannot** alter the tarball (e.g. markdown-only edits with no assembly impact) do **not** require this flow. When unsure, bump and pack.
+
+## Steps (run in order)
+
+1. **Bump the core package version** in `packages/core/package.json` (`version` field). Use semver; **patch** is typical for incremental fixes (`0.1.9` → `0.1.10`).
+
+2. **Point slugbase-cloud at the new tarball name** in the **slugbase-cloud** repo root `package.json`:
+   - Dependency: `@mdguggenbichler/slugbase-core`
+   - Value must match the packed filename: `file:./vendor/mdguggenbichler-slugbase-core-<version>.tgz`  
+     Example: `"file:./vendor/mdguggenbichler-slugbase-core-0.1.10.tgz"`
+
+3. **From the slugbase repo root**, run:
+
+   ```bash
+   npm run pack:cloud
+   ```
+
+   This runs a full `npm run build`, assembles `.publish-core`, `npm pack`s, and copies the `.tgz` into **slugbase-cloud** `vendor/`.  
+   If the cloud repo is not a sibling `../slugbase-cloud`, set **`SLUGBASE_CLOUD_ROOT`** (absolute or relative to slugbase root) for that run.
+
+4. **Install in slugbase-cloud** so the lockfile and `node_modules` match the new file:
+
+   ```bash
+   cd ../slugbase-cloud && npm install
+   ```
+
+   (Use the actual cloud root path if different.)
+
+5. **Regenerate the cloud OpenAPI bundle** when the change affects the **integrator-facing HTTP API** or **`backend/openapi/openapi.selfhosted.yaml`** (cloud’s `openapi.cloud.yaml` is merged from the packaged self-hosted spec + `openapi.cloud.fragment.yaml`). From **slugbase-cloud** root:
+
+   ```bash
+   npm run openapi:bundle
+   ```
+
+   Commit **`openapi/openapi.cloud.yaml`** if it diffed. Skip this step only if the handoff could not possibly change REST paths or the self-hosted OpenAPI file (e.g. purely internal refactors with identical routes and no OpenAPI edits).
+
+   If you updated **`openapi.selfhosted.yaml`** locally but are **not** repacking yet, force the bundle to use the working-tree file (otherwise `npm run openapi:bundle` may read the older spec from `node_modules`):
+
+   ```bash
+   SLUGBASE_CORE_OPENAPI=/absolute/path/to/slugbase/backend/openapi/openapi.selfhosted.yaml npm run openapi:bundle
+   ```
+
+6. **Optional cleanup:** Remove the previous `vendor/mdguggenbichler-slugbase-core-*.tgz` if it is no longer referenced, to avoid stale artifacts.
+
+## Commit expectations
+
+- **slugbase:** `packages/core/package.json` (version) and any code changes; `pack:cloud` does not commit for you.
+- **slugbase-cloud:** updated `package.json` dependency line, new `vendor/*.tgz`, **`package-lock.json`** after `npm install`, and **`openapi/openapi.cloud.yaml`** when step 5 ran and the file changed.
+
+See also `scripts/pack-core-for-cloud.mjs` for behavior and env vars.

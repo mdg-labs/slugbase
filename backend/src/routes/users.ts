@@ -7,6 +7,7 @@ import crypto from 'crypto';
 import { sendEmailVerificationEmail } from '../utils/email.js';
 import { getClearAuthCookieOptions } from '../config/cookies.js';
 import { isCloud } from '../config/mode.js';
+import { recordAuditEvent } from '../services/audit-log.js';
 
 const router = Router();
 router.use(requireAuth());
@@ -33,8 +34,17 @@ router.get('/me', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const userId = authReq.user!.id;
-    const user = await queryOne('SELECT id, email, name, user_key, is_admin, language, theme, ai_suggestions_enabled, email_pending, oidc_provider, oidc_sub FROM users WHERE id = ?', [userId]);
-    res.json(user);
+    const row = await queryOne(
+      'SELECT id, email, name, user_key, is_admin, language, theme, ai_suggestions_enabled, email_pending, oidc_provider, oidc_sub, password_hash FROM users WHERE id = ?',
+      [userId]
+    );
+    if (!row) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    const r = row as Record<string, unknown> & { password_hash?: string | null };
+    const has_password = r.password_hash != null && String(r.password_hash).trim() !== '';
+    const { password_hash: _ph, ...safe } = r;
+    res.json({ ...safe, has_password });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -108,6 +118,13 @@ router.put('/me', async (req, res) => {
         // Send verification email to the NEW email address
         await sendEmailVerificationEmail(normalizedEmail, token, verificationUrl, normalizedEmail);
 
+        await recordAuditEvent(req, {
+          action: 'user.email_change_requested',
+          entityType: 'user',
+          entityId: userId,
+          metadata: { pending_email: normalizedEmail },
+        });
+
         // Return success but indicate email verification is required
         return res.json({
           message: 'Email change requested. Please check your new email address for a verification link.',
@@ -155,6 +172,20 @@ router.put('/me', async (req, res) => {
     params.push(userId);
     await execute(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, params);
 
+    const fieldsUpdated: string[] = [];
+    if (name !== undefined) fieldsUpdated.push('name');
+    if (language !== undefined) fieldsUpdated.push('language');
+    if (theme !== undefined) fieldsUpdated.push('theme');
+    if (ai_suggestions_enabled !== undefined) fieldsUpdated.push('ai_suggestions_enabled');
+    if (fieldsUpdated.length > 0) {
+      await recordAuditEvent(req, {
+        action: 'user.profile_updated',
+        entityType: 'user',
+        entityId: userId,
+        metadata: { fields: fieldsUpdated },
+      });
+    }
+
     const user = await queryOne('SELECT id, email, name, user_key, is_admin, language, theme, ai_suggestions_enabled FROM users WHERE id = ?', [userId]);
     res.json(user);
   } catch (error: any) {
@@ -168,10 +199,16 @@ router.delete('/me', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const userId = authReq.user!.id;
-    const user = await queryOne('SELECT id FROM users WHERE id = ?', [userId]);
+    const user = await queryOne('SELECT id, email FROM users WHERE id = ?', [userId]);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
+    await recordAuditEvent(req, {
+      action: 'user.self_deleted',
+      entityType: 'user',
+      entityId: userId,
+      metadata: { email: (user as { email?: string }).email },
+    });
     await execute('DELETE FROM users WHERE id = ?', [userId]);
     const clearOpts = getClearAuthCookieOptions();
     res.clearCookie('token', clearOpts);

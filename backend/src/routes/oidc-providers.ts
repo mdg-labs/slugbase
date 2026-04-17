@@ -4,8 +4,9 @@ import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { v4 as uuidv4 } from 'uuid';
 import { encrypt } from '../utils/encryption.js';
 import { reloadOIDCStrategies } from '../auth/oidc.js';
-import { validateOidcUrl, validateProviderKey } from '../utils/validation.js';
+import { validateOidcUrlAsync, validateProviderKey } from '../utils/validation.js';
 import { getTenantId } from '../utils/tenant.js';
+import { recordAuditEvent } from '../services/audit-log.js';
 
 const router = Router();
 router.use(requireAuth());
@@ -84,25 +85,25 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: providerKeyValidation.error });
     }
 
-    // Validate OIDC URLs (SSRF prevention)
-    const issuerValidation = validateOidcUrl(issuer_url);
+    // Validate OIDC URLs (SSRF + DNS rebind prevention)
+    const issuerValidation = await validateOidcUrlAsync(issuer_url);
     if (!issuerValidation.valid) {
       return res.status(400).json({ error: `issuer_url: ${issuerValidation.error}` });
     }
     if (authorization_url) {
-      const authUrlValidation = validateOidcUrl(authorization_url);
+      const authUrlValidation = await validateOidcUrlAsync(authorization_url);
       if (!authUrlValidation.valid) {
         return res.status(400).json({ error: `authorization_url: ${authUrlValidation.error}` });
       }
     }
     if (token_url) {
-      const tokenUrlValidation = validateOidcUrl(token_url);
+      const tokenUrlValidation = await validateOidcUrlAsync(token_url);
       if (!tokenUrlValidation.valid) {
         return res.status(400).json({ error: `token_url: ${tokenUrlValidation.error}` });
       }
     }
     if (userinfo_url) {
-      const userinfoUrlValidation = validateOidcUrl(userinfo_url);
+      const userinfoUrlValidation = await validateOidcUrlAsync(userinfo_url);
       if (!userinfoUrlValidation.valid) {
         return res.status(400).json({ error: `userinfo_url: ${userinfoUrlValidation.error}` });
       }
@@ -149,14 +150,21 @@ router.post('/', async (req, res) => {
       'SELECT id, provider_key, issuer_url, authorization_url, token_url, userinfo_url, scopes, auto_create_users, default_role, created_at FROM oidc_providers WHERE id = ? AND tenant_id = ?',
       [providerId, tenantId]
     );
-    
+
+    await recordAuditEvent(req, {
+      action: 'oidc_provider.created',
+      entityType: 'oidc_provider',
+      entityId: providerId,
+      metadata: { provider_key },
+    });
+
     // Add callback URL
     const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
     const providerWithCallback = {
       ...provider,
       callback_url: `${baseUrl}/api/auth/${(provider as any).provider_key}/callback`,
     };
-    
+
     res.status(201).json(providerWithCallback);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -199,9 +207,9 @@ router.put('/:id', async (req, res) => {
       }
     }
 
-    // Validate OIDC URLs if provided (SSRF prevention)
+    // Validate OIDC URLs if provided (SSRF + DNS rebind prevention)
     if (issuer_url) {
-      const issuerValidation = validateOidcUrl(issuer_url);
+      const issuerValidation = await validateOidcUrlAsync(issuer_url);
       if (!issuerValidation.valid) {
         return res.status(400).json({ error: `issuer_url: ${issuerValidation.error}` });
       }
@@ -209,7 +217,7 @@ router.put('/:id', async (req, res) => {
     if (authorization_url !== undefined) {
       const urlToValidate = authorization_url || '';
       if (urlToValidate) {
-        const authUrlValidation = validateOidcUrl(urlToValidate);
+        const authUrlValidation = await validateOidcUrlAsync(urlToValidate);
         if (!authUrlValidation.valid) {
           return res.status(400).json({ error: `authorization_url: ${authUrlValidation.error}` });
         }
@@ -218,7 +226,7 @@ router.put('/:id', async (req, res) => {
     if (token_url !== undefined) {
       const urlToValidate = token_url || '';
       if (urlToValidate) {
-        const tokenUrlValidation = validateOidcUrl(urlToValidate);
+        const tokenUrlValidation = await validateOidcUrlAsync(urlToValidate);
         if (!tokenUrlValidation.valid) {
           return res.status(400).json({ error: `token_url: ${tokenUrlValidation.error}` });
         }
@@ -227,7 +235,7 @@ router.put('/:id', async (req, res) => {
     if (userinfo_url !== undefined) {
       const urlToValidate = userinfo_url || '';
       if (urlToValidate) {
-        const userinfoUrlValidation = validateOidcUrl(urlToValidate);
+        const userinfoUrlValidation = await validateOidcUrlAsync(urlToValidate);
         if (!userinfoUrlValidation.valid) {
           return res.status(400).json({ error: `userinfo_url: ${userinfoUrlValidation.error}` });
         }
@@ -305,14 +313,21 @@ router.put('/:id', async (req, res) => {
       'SELECT id, provider_key, issuer_url, authorization_url, token_url, userinfo_url, scopes, auto_create_users, default_role, created_at FROM oidc_providers WHERE id = ? AND tenant_id = ?',
       [id, tenantId]
     );
-    
+
+    await recordAuditEvent(req, {
+      action: 'oidc_provider.updated',
+      entityType: 'oidc_provider',
+      entityId: id,
+      metadata: { provider_key: (provider as any)?.provider_key },
+    });
+
     // Add callback URL
     const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
     const providerWithCallback = {
       ...provider,
       callback_url: `${baseUrl}/api/auth/${(provider as any).provider_key}/callback`,
     };
-    
+
     res.json(providerWithCallback);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -330,10 +345,19 @@ router.delete('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Provider not found' });
     }
 
+    const providerKey = (provider as any).provider_key as string;
+
     await execute('DELETE FROM oidc_providers WHERE id = ? AND tenant_id = ?', [id, tenantId]);
 
     // Reload OIDC strategies
     await reloadOIDCStrategies();
+
+    await recordAuditEvent(req, {
+      action: 'oidc_provider.deleted',
+      entityType: 'oidc_provider',
+      entityId: id,
+      metadata: { provider_key: providerKey },
+    });
 
     res.json({ message: 'Provider deleted' });
   } catch (error: any) {
