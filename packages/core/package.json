@@ -26,6 +26,6 @@
     "react-router-dom": ">=6",
     "i18next": ">=23",
     "react-i18next": ">=13",
-    "axios": ">=1"
+    "axios": ">=1.15.0"
   }
 }
