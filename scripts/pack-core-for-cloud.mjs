@@ -52,7 +52,7 @@ console.log('pack-core-for-cloud: npm run build');
 run('npm', ['run', 'build'], root);
 
 console.log('pack-core-for-cloud: assemble .publish-core');
-run('node', ['scripts/assemble-core-package.js', '--no-build'], root);
+run('node', ['scripts/assemble-core-package.mjs', '--no-build'], root);
 
 for (const f of readdirSync(pubDir)) {
   if (f.endsWith('.tgz')) unlinkSync(join(pubDir, f));

@@ -4,8 +4,8 @@
  * so @mdguggenbichler/slugbase-core can export them for the hosted product (and pack) without
  * duplicating JSON in the Cloud deployment.
  *
- * Run from repo root: node scripts/sync-core-locales.js
- * Invoked automatically from assemble-core-package.js and npm run build.
+ * Run from repo root: node scripts/sync-core-locales.mjs
+ * Invoked automatically from assemble-core-package.mjs and npm run build.
  */
 
 import { readdirSync, mkdirSync, copyFileSync, existsSync } from 'fs';

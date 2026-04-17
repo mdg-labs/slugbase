@@ -11,10 +11,10 @@
   ],
   "scripts": {
     "dev": "concurrently \"npm run dev --workspace=backend\" \"npm run dev --workspace=frontend\"",
-    "build": "npm run build --workspace=backend && node scripts/copy-core-dist.js && npm run build --workspace=frontend && npm run build:core-embed --workspace=frontend && node scripts/sync-core-locales.js && node scripts/copy-selfhosted-public.js",
+    "build": "npm run build --workspace=backend && node scripts/copy-core-dist.mjs && npm run build --workspace=frontend && npm run build:core-embed --workspace=frontend && node scripts/sync-core-locales.mjs && node scripts/copy-selfhosted-public.mjs",
     "start": "npm run start --workspace=slugbase-selfhosted",
-    "assemble:core": "node scripts/assemble-core-package.js",
-    "assemble:core:no-build": "node scripts/assemble-core-package.js --no-build",
+    "assemble:core": "node scripts/assemble-core-package.mjs",
+    "assemble:core:no-build": "node scripts/assemble-core-package.mjs --no-build",
     "pack:cloud": "node scripts/pack-core-for-cloud.mjs",
     "e2e": "playwright test --config=e2e/playwright.config.ts",
     "e2e:docker": "bash e2e/docker/run-e2e-docker.sh",

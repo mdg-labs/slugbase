@@ -52,6 +52,8 @@ export async function initDatabase() {
   if (dbType === 'postgresql') {
     const pg = pool as Pool;
     schema = schema.replace(/VARCHAR\((\d+)\)/g, 'VARCHAR($1)');
+    // Naive `;` splitting breaks if a `-- ...` line comment contains `;` (see schema.sql MFA note).
+    schema = schema.replace(/--[^\r\n]*/g, '');
     const statements = schema.split(';').filter((s: string) => s.trim().length > 0);
     for (const statement of statements) {
       if (statement.trim()) {
