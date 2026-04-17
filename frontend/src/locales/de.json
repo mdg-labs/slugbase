@@ -132,7 +132,10 @@
     "userGroups": "Teams",
     "userinfoUrl": "Benutzerinfo-URL",
     "users": "Benutzer",
-    "viewApiDocs": "API-Dokumentation anzeigen"
+    "viewApiDocs": "API-Dokumentation anzeigen",
+    "apiDocsShortcuts": "Kurzlinks:",
+    "apiDocsCsrfEndpoint": "CSRF-Token",
+    "apiDocsTokensEndpoint": "Persönliche API-Tokens"
   },
   "apiDocs": {
     "description": "Vollständige API-Referenz für SlugBase. Alle Endpunkte erfordern eine Authentifizierung über JWT-Token, es sei denn, es ist anders angegeben.",
@@ -889,6 +892,9 @@
     "userKey": "Benutzerschlüssel",
     "userKeyDescription": "Ihr einzigartiger Identifikator für das Weiterleiten von Lesezeichen. Teilen Sie dies mit anderen, damit sie auf Ihre geteilten Lesezeichen zugreifen können.",
     "viewApiDocs": "API-Dokumentation anzeigen",
+    "apiDocsShortcuts": "Kurzlinks:",
+    "apiDocsCsrfEndpoint": "CSRF-Token",
+    "apiDocsTokensEndpoint": "Persönliche API-Tokens",
     "yourOrganizations": "Ihre Organisationen",
     "yourTokens": "Ihre Token"
   },

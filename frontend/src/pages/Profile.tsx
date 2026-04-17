@@ -26,7 +26,7 @@ import {
   DialogTitle,
 } from '../components/ui/dialog';
 import api from '../api/client';
-import { getDocsApiReferenceUrl } from '../config/docs';
+import { DOCS_API_OPERATIONS, getDocsApiReferenceOperationUrl, getDocsApiReferenceUrl } from '../config/docs';
 import { resolveSupportedLocale } from '../i18n';
 import { canAccessWorkspaceAdmin } from '../utils/adminAccess';
 import { copyTextToClipboard } from '../utils/copyTextToClipboard';
@@ -870,14 +870,38 @@ export default function Profile() {
                 {t('profile.apiTokenWarning')}
               </p>
             </div>
-            <a
-              href={getDocsApiReferenceUrl()}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm font-medium text-primary hover:text-primary/90 inline-block"
-            >
-              {t('profile.viewApiDocs')} →
-            </a>
+            <div className="space-y-2">
+              <a
+                href={getDocsApiReferenceUrl()}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm font-medium text-primary hover:text-primary/90 inline-block"
+              >
+                {t('profile.viewApiDocs')} →
+              </a>
+              <p className="text-xs text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span>{t('profile.apiDocsShortcuts')}</span>
+                <a
+                  href={getDocsApiReferenceOperationUrl(DOCS_API_OPERATIONS.csrfToken)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-primary hover:text-primary/90 underline-offset-2 hover:underline"
+                >
+                  {t('profile.apiDocsCsrfEndpoint')}
+                </a>
+                <span className="text-muted-foreground/70" aria-hidden>
+                  ·
+                </span>
+                <a
+                  href={getDocsApiReferenceOperationUrl(DOCS_API_OPERATIONS.listTokens)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-primary hover:text-primary/90 underline-offset-2 hover:underline"
+                >
+                  {t('profile.apiDocsTokensEndpoint')}
+                </a>
+              </p>
+            </div>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <span className="text-sm font-medium text-foreground">
                 {t('profile.yourTokens')}

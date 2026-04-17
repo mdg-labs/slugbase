@@ -132,7 +132,10 @@
     "userGroups": "Teams",
     "userinfoUrl": "UserInfo URL",
     "users": "Users",
-    "viewApiDocs": "View API Documentation"
+    "viewApiDocs": "View API Documentation",
+    "apiDocsShortcuts": "Shortcuts:",
+    "apiDocsCsrfEndpoint": "CSRF token",
+    "apiDocsTokensEndpoint": "Personal API tokens"
   },
   "apiDocs": {
     "description": "Complete API reference for SlugBase. All endpoints require authentication via JWT tokens except where noted.",
@@ -889,6 +892,9 @@
     "userKey": "User key",
     "userKeyDescription": "Your unique identifier for bookmark forwarding. Share this with others so they can access your shared bookmarks.",
     "viewApiDocs": "View API documentation",
+    "apiDocsShortcuts": "Shortcuts:",
+    "apiDocsCsrfEndpoint": "CSRF token",
+    "apiDocsTokensEndpoint": "Personal API tokens",
     "yourOrganizations": "Your organizations",
     "yourTokens": "Your tokens"
   },
