@@ -4,6 +4,13 @@
   <img src="frontend/public/slugbase_icon_purple.svg" alt="SlugBase" width="96" />
 </p>
 
+<p align="center">
+  <a href="https://docs.slugbase.app"><img src="https://img.shields.io/badge/docs-docs.slugbase.app-5d6af2?style=flat-square&logo=readthedocs&logoColor=white" alt="Documentation" /></a>
+  <a href="https://hub.docker.com/r/mdglabs/slugbase"><img src="https://img.shields.io/docker/pulls/mdglabs/slugbase?style=flat-square&logo=docker&logoColor=white&label=pulls" alt="Docker Hub pulls" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/mdg-labs/slugbase?style=flat-square" alt="License" /></a>
+  <a href="https://github.com/mdg-labs/slugbase/actions/workflows/docker-build-push.yml"><img src="https://img.shields.io/github/actions/workflow/status/mdg-labs/slugbase/docker-build-push.yml?branch=dev&logo=github&label=build&style=flat-square" alt="CI" /></a>
+</p>
+
 **Your links. Your structure. Your language. Your rules.**
 
 SlugBase is an open-source, self-hosted bookmark manager with optional link forwarding. Store and organize your bookmarks, and optionally expose them as personal short redirect URLs.
@@ -14,7 +21,7 @@ Sign up for a free account at **[slugbase.app](https://slugbase.app)** to use th
 
 ## Self-host with Docker (no clone required)
 
-The published image is **`mdglabs/slugbase`** on [Docker Hub](https://hub.docker.com/r/mdglabs/slugbase). You do **not** need this repository on disk to run it.
+The published image is **`mdglabs/slugbase`** on [Docker Hub](https://hub.docker.com/r/mdglabs/slugbase). You do **not** need this repository on disk to run it — grab the compose file from the docs and go.
 
 1. Create a directory for your deployment.
 2. Add a **`docker-compose.yml`** — copy from **[Install with Docker Compose](https://docs.slugbase.app/selfhosted/docker-compose)** in the docs (full file to paste), **or** after cloning/forking copy **`docker-compose.example.yml`** → **`docker-compose.yml`**.
@@ -34,29 +41,29 @@ More options: **[Docker](https://docs.slugbase.app/selfhosted/docker)** (single 
 
 ### Core
 
-- **Bookmarks** — Titles, URLs, optional custom slugs
-- **Link forwarding** — `/go/:slug` redirects and browser custom search (`Ctrl+K` global search)
-- **Tags and folders** — Many-to-many organization
-- **Sharing** — Bookmarks and folders with teams and users (where enabled)
-- **Import/export** — JSON and other flows
-- **i18n** — Multiple languages (see `frontend/src/locales/`)
-- **Themes** — Dark / light / system
-- **AI suggestions** — Optional OpenAI-powered title/tag/slug hints (Admin → AI on self-hosted)
-- **API tokens** — `Authorization: Bearer sb_…` for the REST API
+- 📚 **Bookmarks** — Titles, URLs, optional custom slugs
+- 🔗 **Link forwarding** — `/go/:slug` redirects and browser custom search (`Ctrl+K` global search)
+- 🏷️ **Tags and folders** — Many-to-many organization
+- 👥 **Sharing** — Bookmarks and folders with teams and users (where enabled)
+- 📥 **Import / export** — JSON and other flows
+- 🌐 **i18n** — Multiple languages (see `frontend/src/locales/`)
+- 🌓 **Themes** — Dark / light / system
+- 🤖 **AI suggestions** — Optional OpenAI-powered title/tag/slug hints (Admin → AI on self-hosted)
+- 🔑 **API tokens** — `Authorization: Bearer sb_…` for the REST API
 
 ### Authentication and security
 
-- **OIDC** — Configurable providers (self-hosted admin)
-- **Email/password** — Local accounts
-- **MFA (TOTP)** — Optional with backup codes — see **[SECURITY.md](./SECURITY.md)**
-- **Admin** — First user setup; user/team management
+- 🔐 **OIDC** — Configurable providers (self-hosted admin)
+- 🔑 **Email / password** — Local accounts
+- 🛡️ **MFA (TOTP)** — Optional with backup codes — see **[SECURITY.md](./SECURITY.md)**
+- 👨‍💼 **Admin** — First user setup; user/team management
 
 ### Data and deployment
 
-- **SQLite** default; **PostgreSQL** supported
-- **Migrations** — Automatic on startup (`backend/src/db/migrations/`)
-- **Docker** — Multi-stage **`Dockerfile`**; optional **`Dockerfile.backend`** for API-only images
-- **OpenAPI** — **`/openapi.json`**, **`/openapi.yaml`**, Swagger UI at **`/api-docs`** (disable UI with **`SLUGBASE_API_DOCS=false`**)
+- 💾 **SQLite** default; 🐘 **PostgreSQL** supported
+- 🔄 **Migrations** — Automatic on startup (`backend/src/db/migrations/`)
+- 🐳 **Docker** — Multi-stage **`Dockerfile`**; optional **`Dockerfile.backend`** for API-only images
+- 📊 **OpenAPI** — **`/openapi.json`**, **`/openapi.yaml`**, Swagger UI at **`/api-docs`** (disable UI with **`SLUGBASE_API_DOCS=false`**)
 
 Operator-focused hosting notes (Fly.io, Neon, etc.) live in the private **[slugbase-docs-internal](https://github.com/mdg-labs/slugbase-docs-internal)** repo.
 
@@ -64,8 +71,8 @@ Operator-focused hosting notes (Fly.io, Neon, etc.) live in the private **[slugb
 
 | Area | Stack |
 | --- | --- |
-| Frontend | React, TypeScript, Vite, Tailwind, React Router, i18next, Radix UI, cmdk (command palette) |
-| Backend | Node.js, Express, TypeScript, Passport (JWT + OIDC), Zod, SQLite / PostgreSQL |
+| ⚛️ Frontend | React, TypeScript, Vite, Tailwind, React Router, i18next, Radix UI, cmdk (command palette) |
+| 🖥️ Backend | Node.js, Express, TypeScript, Passport (JWT + OIDC), Zod, SQLite / PostgreSQL |
 
 ## Quick start (development)
 
@@ -135,8 +142,8 @@ slugbase/
 
 | Audience | Link |
 | --- | --- |
-| End users and self-hosters | **[docs.slugbase.app](https://docs.slugbase.app)** |
-| Operators and cloud integration (private) | **[slugbase-docs-internal](https://github.com/mdg-labs/slugbase-docs-internal)** |
+| 📖 End users and self-hosters | **[docs.slugbase.app](https://docs.slugbase.app)** |
+| 🔧 Operators and cloud integration (private) | **[slugbase-docs-internal](https://github.com/mdg-labs/slugbase-docs-internal)** |
 
 ## API
 
@@ -153,7 +160,7 @@ slugbase/
 
 ## Contributing
 
-See **[CONTRIBUTING.md](./CONTRIBUTING.md)**.
+We’d love your help — see **[CONTRIBUTING.md](./CONTRIBUTING.md)**.
 
 ## Security
 
@@ -161,7 +168,7 @@ See **[SECURITY.md](./SECURITY.md)** (threat model, MFA, reporting).
 
 ## License
 
-See **[LICENSE](./LICENSE)**.
+Released under the **MIT License** — see **[LICENSE](./LICENSE)**.
 
 ---
 
