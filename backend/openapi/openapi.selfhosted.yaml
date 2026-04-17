@@ -32,7 +32,6 @@ tags:
   - name: AdminUsers
   - name: AdminTeams
   - name: AdminSettings
-  - name: AdminStats
   - name: AdminAuditLog
   - name: Dashboard
   - name: GoPreferences
@@ -1087,23 +1086,6 @@ paths:
           $ref: '#/components/responses/Error'
         '403':
           $ref: '#/components/responses/Error'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-  /api/admin/stats:
-    get:
-      tags: [AdminStats]
-      summary: System metrics
-      description: Requires `X-Stats-Secret` matching `STATS_ENDPOINT_SECRET`. Returns 404 if unset or invalid.
-      security: []
-      parameters:
-        - in: header
-          name: X-Stats-Secret
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Stats
         '401':
           $ref: '#/components/responses/Unauthorized'
   /api/dashboard/stats:
