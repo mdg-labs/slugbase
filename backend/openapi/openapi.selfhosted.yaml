@@ -102,7 +102,7 @@ paths:
     get:
       tags: [Auth]
       summary: Current session user
-      description: Requires a valid access JWT (not the MFA pending cookie alone). Includes `mfa_enabled` when the user row is loaded.
+      description: Requires a valid access JWT (not the MFA pending cookie alone). Includes `mfa_enabled`, `has_password`, and OIDC linkage fields when the user row is loaded.
       responses:
         '200':
           description: User
@@ -457,12 +457,14 @@ paths:
     get:
       tags: [Auth]
       summary: OIDC callback
+      description: |
+        On success, issues the access JWT and redirects to the app. SlugBase does **not** run an additional TOTP step-up after OIDC; MFA is expected to be enforced by the identity provider. Email/password logins still use SlugBase MFA when enabled on the account.
       security: []
       parameters:
         - $ref: '#/components/parameters/ProviderKey'
       responses:
         '302':
-          description: Redirect to app
+          description: Redirect to app (access JWT cookie set; not the MFA-pending flow)
   /api/auth/setup:
     post:
       tags: [Auth]
@@ -729,7 +731,11 @@ paths:
       summary: Current user profile
       responses:
         '200':
-          description: User
+          description: User (includes `has_password`; password hash is never returned)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsersMeResponse'
     put:
       tags: [Users]
       summary: Update profile
@@ -1175,6 +1181,25 @@ components:
           properties:
             ai_suggestions_enabled: { type: boolean }
             mfa_enabled: { type: boolean }
+            has_password: { type: boolean, description: False when the account has no local password (e.g. OIDC-only). }
+            oidc_provider: { type: string, nullable: true }
+            oidc_sub: { type: string, nullable: true }
+    UsersMeResponse:
+      type: object
+      description: Profile row for PUT /api/users/me context; excludes password_hash
+      properties:
+        id: { type: string }
+        email: { type: string, format: email }
+        name: { type: string }
+        user_key: { type: string }
+        is_admin: { type: boolean }
+        language: { type: string }
+        theme: { type: string }
+        ai_suggestions_enabled: { type: boolean }
+        email_pending: { type: string, nullable: true }
+        oidc_provider: { type: string, nullable: true }
+        oidc_sub: { type: string, nullable: true }
+        has_password: { type: boolean, description: True if the account has a non-empty local password hash. }
     AuthErrorWithCode:
       type: object
       properties:

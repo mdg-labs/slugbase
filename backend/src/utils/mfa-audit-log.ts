@@ -15,6 +15,7 @@ export type MfaAuditEvent =
   | 'mfa_verify_success'
   | 'mfa_verify_fail'
   | 'mfa_login_stepup_required'
+  | 'mfa_login_skipped_oidc'
   | 'mfa_email_unverified_block';
 
 export function logMfaAudit(event: MfaAuditEvent, fields?: { user_id?: string }): void {

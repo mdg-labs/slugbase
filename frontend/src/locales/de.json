@@ -714,6 +714,7 @@
     "manualSecret": "Manuelle Eingabegeheimzahl",
     "newBackupCodesTitle": "Ihre neuen Sicherungscodes",
     "passwordRequired": "Geben Sie Ihr Kontopasswort ein, um fortzufahren.",
+    "oidcManagedByIdp": "Sie melden sich per SSO an. Die Zwei-Faktor-Authentifizierung wird von Ihrem Identitätsanbieter verwaltet, nicht in SlugBase.",
     "profileSectionDescription": "Schützen Sie Ihr Konto mit einer Authentifikator-App und einmaligen Sicherungscodes.",
     "profileSectionTitle": "Zwei-Faktor-Authentifizierung (TOTP)",
     "qrAlt": "QR-Code für die Einrichtung des Authentifikators",

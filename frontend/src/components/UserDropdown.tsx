@@ -1,10 +1,9 @@
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { User as UserIcon, LogOut, Settings } from 'lucide-react';
+import { User as UserIcon, LogOut } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppConfig } from '../contexts/AppConfigContext';
 import type { User } from '../contexts/AuthContext';
-import { canAccessWorkspaceAdmin } from '../utils/adminAccess';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,8 +30,6 @@ export default function UserDropdown({ user }: UserDropdownProps) {
   const { pathPrefixForLinks } = useAppConfig();
   const prefix = (pathPrefixForLinks || '').replace(/\/+/g, '/') || '';
   const { logout } = useAuth();
-
-  const showAdmin = canAccessWorkspaceAdmin(user);
 
   if (!user) return null;
 
@@ -66,14 +63,6 @@ export default function UserDropdown({ user }: UserDropdownProps) {
             {t('profile.title')}
           </Link>
         </DropdownMenuItem>
-        {showAdmin && (
-          <DropdownMenuItem asChild className="text-foreground">
-            <Link to={`${prefix}/admin`.replace(/\/+/g, '/') || '/admin'} className="flex w-full cursor-pointer items-center gap-2 text-foreground">
-              <Settings className="h-4 w-4" />
-              {t('admin.title')}
-            </Link>
-          </DropdownMenuItem>
-        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={() => logout()}

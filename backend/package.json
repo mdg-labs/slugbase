@@ -7,7 +7,7 @@
     "build": "tsc && node scripts/copy-openapi.mjs",
     "start": "node dist/index.js",
     "migrate": "tsx src/migrate.ts",
-    "test": "DB_PATH=:memory: JWT_SECRET=0123456789abcdef0123456789abcdef ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef node --test --import tsx test/authorization.test.ts test/go.test.ts test/mfa-api.test.ts test/mfa-http.test.ts test/mfa-services.test.ts test/stats.test.ts test/tenant-isolation.test.ts && DB_PATH=:memory: JWT_SECRET=0123456789abcdef0123456789abcdef ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef SLUGBASE_MODE=cloud node --test --import tsx test/mfa-http-cloud.test.ts"
+    "test": "DB_PATH=:memory: JWT_SECRET=0123456789abcdef0123456789abcdef ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef node --test --import tsx test/authorization.test.ts test/go.test.ts test/mfa-api.test.ts test/mfa-http.test.ts test/mfa-oidc-callback-http.test.ts test/mfa-services.test.ts test/stats.test.ts test/tenant-isolation.test.ts && DB_PATH=:memory: JWT_SECRET=0123456789abcdef0123456789abcdef ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef SLUGBASE_MODE=cloud node --test --import tsx test/mfa-http-cloud.test.ts"
   },
   "dependencies": {
     "@types/cookie-parser": "^1.4.10",

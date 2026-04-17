@@ -714,6 +714,7 @@
     "manualSecret": "Manual entry secret",
     "newBackupCodesTitle": "Your new backup codes",
     "passwordRequired": "Enter your account password to continue.",
+    "oidcManagedByIdp": "You sign in with SSO. Multi-factor authentication is managed by your identity provider, not in SlugBase.",
     "profileSectionDescription": "Protect your account with an authenticator app and one-time backup codes.",
     "profileSectionTitle": "Two-factor authentication (TOTP)",
     "qrAlt": "QR code for authenticator setup",

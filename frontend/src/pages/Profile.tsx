@@ -483,6 +483,11 @@ export default function Profile() {
     { value: 'dark', label: t('profile.themeDark') },
   ];
 
+  /** SlugBase TOTP applies to password login; hide enrollment for pure OIDC unless MFA was enabled (e.g. hybrid or legacy). */
+  const showSlugbaseMfaCard = user.has_password !== false || Boolean(user.mfa_enabled);
+  const showOidcMfaManagedNote =
+    Boolean(user.oidc_provider) && user.has_password === false && !user.mfa_enabled;
+
   return (
     <div className="space-y-6">
       {/* Page header: title + subtitle left; signed-in summary + Admin badge right */}
@@ -761,69 +766,85 @@ export default function Profile() {
           </form>
         </Card>
 
-        {/* MFA */}
-        <Card className="rounded-xl border border-ghost bg-surface shadow-none" aria-labelledby="mfa-section-title">
-          <CardHeader>
-            <CardTitle id="mfa-section-title" className="flex items-center gap-2">
-              <Shield className="h-5 w-5 text-primary" aria-hidden />
-              {t('mfa.profileSectionTitle')}
-            </CardTitle>
-            <CardDescription>{t('mfa.profileSectionDescription')}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {user.mfa_enabled ? (
-              <>
-                <p className="text-sm text-foreground">{t('mfa.enabledStatus')}</p>
-                <div className="flex flex-wrap gap-2">
+        {/* MFA (password / hybrid); pure OIDC sees SSO note instead */}
+        {showOidcMfaManagedNote ? (
+          <Card
+            className="rounded-xl border border-ghost bg-surface shadow-none"
+            aria-labelledby="mfa-sso-note-title"
+          >
+            <CardHeader>
+              <CardTitle id="mfa-sso-note-title" className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-primary" aria-hidden />
+                {t('mfa.profileSectionTitle')}
+              </CardTitle>
+              <CardDescription>{t('mfa.oidcManagedByIdp')}</CardDescription>
+            </CardHeader>
+          </Card>
+        ) : null}
+        {showSlugbaseMfaCard ? (
+          <Card className="rounded-xl border border-ghost bg-surface shadow-none" aria-labelledby="mfa-section-title">
+            <CardHeader>
+              <CardTitle id="mfa-section-title" className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-primary" aria-hidden />
+                {t('mfa.profileSectionTitle')}
+              </CardTitle>
+              <CardDescription>{t('mfa.profileSectionDescription')}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {user.mfa_enabled ? (
+                <>
+                  <p className="text-sm text-foreground">{t('mfa.enabledStatus')}</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={() => {
+                        resetDisableDialog();
+                        setDisableDlgOpen(true);
+                      }}
+                      aria-label={t('mfa.disable')}
+                    >
+                      {t('mfa.disable')}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        resetRegenDialog();
+                        setRegenDlgOpen(true);
+                      }}
+                      aria-label={t('mfa.regenerateBackupCodes')}
+                    >
+                      {t('mfa.regenerateBackupCodes')}
+                    </Button>
+                  </div>
+                </>
+              ) : mfaWizard === 'idle' ? (
+                <div className="space-y-2">
                   <Button
                     type="button"
-                    variant="ghost"
+                    variant="primary"
                     size="sm"
-                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                    onClick={() => {
-                      resetDisableDialog();
-                      setDisableDlgOpen(true);
-                    }}
-                    aria-label={t('mfa.disable')}
+                    disabled={mfaBusy}
+                    onClick={handleMfaBegin}
+                    className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
+                    aria-label={t('mfa.startSetup')}
                   >
-                    {t('mfa.disable')}
+                    {mfaBusy ? t('common.loading') : t('mfa.startSetup')}
                   </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => {
-                      resetRegenDialog();
-                      setRegenDlgOpen(true);
-                    }}
-                    aria-label={t('mfa.regenerateBackupCodes')}
-                  >
-                    {t('mfa.regenerateBackupCodes')}
-                  </Button>
+                  {mfaError ? (
+                    <p className="text-sm text-destructive" role="alert" aria-live="assertive">
+                      {mfaError}
+                    </p>
+                  ) : null}
                 </div>
-              </>
-            ) : mfaWizard === 'idle' ? (
-              <div className="space-y-2">
-                <Button
-                  type="button"
-                  variant="primary"
-                  size="sm"
-                  disabled={mfaBusy}
-                  onClick={handleMfaBegin}
-                  className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
-                  aria-label={t('mfa.startSetup')}
-                >
-                  {mfaBusy ? t('common.loading') : t('mfa.startSetup')}
-                </Button>
-                {mfaError ? (
-                  <p className="text-sm text-destructive" role="alert" aria-live="assertive">
-                    {mfaError}
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
+              ) : null}
+            </CardContent>
+          </Card>
+        ) : null}
 
         {/* Section C: Developer / API Access */}
         <Card className="rounded-xl border border-ghost bg-surface shadow-none" aria-labelledby="developer-section-title">

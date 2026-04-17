@@ -133,10 +133,12 @@ router.get('/me', requireAuth(), async (req, res) => {
   const authReq = req as AuthRequest;
   const user = authReq.user!;
   const userRow = await queryOne(
-    'SELECT id, email, name, user_key, is_admin, language, theme, ai_suggestions_enabled, mfa_enabled FROM users WHERE id = ?',
+    'SELECT id, email, name, user_key, is_admin, language, theme, ai_suggestions_enabled, mfa_enabled, password_hash, oidc_provider, oidc_sub FROM users WHERE id = ?',
     [user.id]
   );
   const u = userRow as any;
+  const hasPassword =
+    u?.password_hash != null && String(u.password_hash).trim() !== '';
   const payload: Record<string, unknown> = {
     id: user.id,
     email: u?.email ?? user.email,
@@ -147,6 +149,9 @@ router.get('/me', requireAuth(), async (req, res) => {
     theme: u?.theme || (user as any).theme || 'auto',
     ai_suggestions_enabled: u?.ai_suggestions_enabled !== 0 && u?.ai_suggestions_enabled !== false,
     mfa_enabled: u ? rowMfaEnabled(u as any) : false,
+    has_password: hasPassword,
+    oidc_provider: u?.oidc_provider ?? null,
+    oidc_sub: u?.oidc_sub ?? null,
   };
   if (isCloud) {
     const tenantId = getTenantId(req as any);
@@ -842,16 +847,9 @@ router.get('/:provider/callback', (req, res, next) => {
         return;
       }
 
+      // OIDC: trust the IdP for MFA; do not run SlugBase TOTP step-up (password login still uses MFA when enabled).
       if (rowMfaEnabled(r)) {
-        res.clearCookie('token', getClearAuthCookieOptions());
-        const pendingJwt = signMfaPendingToken(String(r.id));
-        res.cookie(MFA_PENDING_COOKIE_NAME, pendingJwt, getMfaPendingCookieOptions(MFA_PENDING_JWT_TTL_MS));
-        const redirectUrl = buildFrontendAbsoluteUrl('/mfa');
-        req.session?.destroy((sessionErr) => {
-          if (sessionErr) console.error('Error destroying session:', sessionErr);
-          res.redirect(redirectUrl);
-        });
-        return;
+        logMfaAudit('mfa_login_skipped_oidc', { user_id: String(r.id) });
       }
       const userPayload = { id: r.id, email: r.email, name: r.name, user_key: r.user_key, is_admin: r.is_admin };
       const token = generateToken(userPayload);

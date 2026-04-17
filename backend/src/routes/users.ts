@@ -34,8 +34,17 @@ router.get('/me', async (req, res) => {
   const authReq = req as AuthRequest;
   try {
     const userId = authReq.user!.id;
-    const user = await queryOne('SELECT id, email, name, user_key, is_admin, language, theme, ai_suggestions_enabled, email_pending, oidc_provider, oidc_sub FROM users WHERE id = ?', [userId]);
-    res.json(user);
+    const row = await queryOne(
+      'SELECT id, email, name, user_key, is_admin, language, theme, ai_suggestions_enabled, email_pending, oidc_provider, oidc_sub, password_hash FROM users WHERE id = ?',
+      [userId]
+    );
+    if (!row) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    const r = row as Record<string, unknown> & { password_hash?: string | null };
+    const has_password = r.password_hash != null && String(r.password_hash).trim() !== '';
+    const { password_hash: _ph, ...safe } = r;
+    res.json({ ...safe, has_password });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
