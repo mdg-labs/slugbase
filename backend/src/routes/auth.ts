@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { query, queryOne, execute, isInitialized } from '../db/index.js';
 import { v4 as uuidv4 } from 'uuid';
 import { reloadOIDCStrategies } from '../auth/oidc.js';
+import { getCloudOidcProviderByKey, getCloudOidcProviderRecordsFromEnv } from '../auth/oidc-env-cloud.js';
 import { generateToken } from '../utils/jwt.js';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
 import { authRateLimiter, refreshRateLimiter, strictRateLimiter } from '../middleware/security.js';
@@ -116,9 +117,23 @@ async function findSignupTokenWithEmailByToken(submittedToken: string): Promise<
 router.get('/providers', async (req, res) => {
   try {
     const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
-    const providers = await query('SELECT id, provider_key, issuer_url FROM oidc_providers WHERE tenant_id = ?', [getDefaultTenantId()]);
-    const providersList = Array.isArray(providers) ? providers : (providers ? [providers] : []);
-    const providersWithCallback = providersList.map((p: any) => ({
+    const tenantId = getDefaultTenantId();
+    const dbRows = await query('SELECT id, provider_key, issuer_url FROM oidc_providers WHERE tenant_id = ?', [tenantId]);
+    const dbList = Array.isArray(dbRows) ? dbRows : dbRows ? [dbRows] : [];
+    const envList = getCloudOidcProviderRecordsFromEnv().map((p) => ({
+      id: p.id,
+      provider_key: p.provider_key,
+      issuer_url: p.issuer_url,
+    }));
+    const byKey = new Map<string, { id: string; provider_key: string; issuer_url: string }>();
+    for (const p of dbList as { id: string; provider_key: string; issuer_url: string }[]) {
+      byKey.set(p.provider_key, p);
+    }
+    for (const p of envList) {
+      byKey.set(p.provider_key, p);
+    }
+    const providersList = Array.from(byKey.values());
+    const providersWithCallback = providersList.map((p) => ({
       ...p,
       callback_url: `${baseUrl}/api/auth/${p.provider_key}/callback`,
     }));
@@ -649,10 +664,19 @@ router.get('/:provider/callback', (req, res, next) => {
         // Get provider configuration from database.
         let configuredIssuer: string;
         let configuredUserinfoUrl: string;
-        const providerConfig = await queryOne(
+        let providerConfig = await queryOne(
           'SELECT issuer_url, userinfo_url FROM oidc_providers WHERE provider_key = ? AND tenant_id = ?',
           [provider, getDefaultTenantId()]
         );
+        if (!providerConfig) {
+          const envP = getCloudOidcProviderByKey(provider);
+          if (envP) {
+            providerConfig = {
+              issuer_url: envP.issuer_url,
+              userinfo_url: envP.userinfo_url ?? null,
+            } as { issuer_url: string; userinfo_url: string | null };
+          }
+        }
         if (!providerConfig) throw new Error('Provider configuration not found');
         configuredIssuer = (providerConfig as any).issuer_url;
         configuredUserinfoUrl = (providerConfig as any).userinfo_url || `${configuredIssuer}/userinfo`;

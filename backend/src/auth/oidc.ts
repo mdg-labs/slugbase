@@ -6,6 +6,19 @@ import { decryptSensitiveAtRest } from '../utils/encryption.js';
 import { generateUserKey } from '../utils/user-key.js';
 import type { OIDCProviderRecord, OidcConfigProvider } from '../types/oidc-provider.js';
 import { getDefaultTenantId } from '../utils/tenant.js';
+import { getCloudOidcProviderRecordsFromEnv } from './oidc-env-cloud.js';
+
+/** Merge DB providers with cloud env providers; env wins on duplicate provider_key. */
+function mergeOidcProviders(dbList: OIDCProviderRecord[], envList: OIDCProviderRecord[]): OIDCProviderRecord[] {
+  const byKey = new Map<string, OIDCProviderRecord>();
+  for (const p of dbList) {
+    byKey.set(p.provider_key, p);
+  }
+  for (const p of envList) {
+    byKey.set(p.provider_key, p);
+  }
+  return Array.from(byKey.values());
+}
 
 export function setupOIDC() {
   // Serialization for OIDC OAuth flow (sessions are only used during OAuth redirect)
@@ -187,7 +200,9 @@ const oidcProviderStore: OidcConfigProvider = new DatabaseOidcConfigProvider();
 
 export async function loadOIDCStrategies(tenantId: string = getDefaultTenantId()) {
   try {
-    const providersList = await oidcProviderStore.getProviders(tenantId);
+    const dbList = await oidcProviderStore.getProviders(tenantId);
+    const envList = getCloudOidcProviderRecordsFromEnv();
+    const providersList = mergeOidcProviders(dbList, envList);
     if (providersList.length === 0) return;
     for (const provider of providersList) {
       try {
