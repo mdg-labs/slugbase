@@ -106,10 +106,13 @@ On first start, SlugBase enters **Setup Mode**. Create your first admin user:
 
 ### Production with Docker
 
-1. **Build and run**
+Pre-built images are published to Docker Hub as **`mdglabs/slugbase`** (for example `mdglabs/slugbase:latest`). The repository ships **`docker-compose.example.yml`** — copy it to **`docker-compose.yml`**, add your **`.env`**, then start:
+
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
+
+That compose file pulls **`mdglabs/slugbase:latest`** by default. To build from source instead, add **`build: .`** to the `slugbase` service (see comments in `docker-compose.example.yml`).
 
 2. **Access the application**
 - Application: `http://localhost:5000`

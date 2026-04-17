@@ -22,7 +22,7 @@ ENV COMMIT_SHA=${COMMIT_SHA}
 
 # Frontend build-time env. Omit or set to selfhosted → single-page app at / (no landing).
 # Set VITE_SLUGBASE_MODE=cloud for landing/pricing/contact at / and app at /app.
-# Published image (CI) is built with selfhosted so GHCR image is the combined selfhosted bundle.
+# Published image (CI) is built with selfhosted so registry images are the combined selfhosted bundle.
 ARG VITE_SLUGBASE_MODE=selfhosted
 ARG VITE_API_URL=
 ARG VITE_SENTRY_DSN=
