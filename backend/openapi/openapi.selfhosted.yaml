@@ -4,7 +4,9 @@ info:
   description: |
     HTTP API for a self-hosted SlugBase instance. Replace the server URL with your deployment base URL.
 
-    **Authentication:** Most routes accept either a session cookie (browser) after login, or `Authorization: Bearer <api_token>` from `/api/tokens`. Personal API tokens do **not** require interactive MFA when a user has TOTP enabled (same model as GitHub PATs: possession of the secret is the factor).
+    **Authentication:** Most routes accept either the HttpOnly **`token`** cookie (browser) after login—same JWT you can send as `Authorization: Bearer <jwt>`—or a **personal API token** via `Authorization: Bearer sb_…` from `/api/tokens`. The separate **`slugbase.sid`** cookie is the express-session id (e.g. OIDC flows); it is **not** the access JWT cookie. For API clients and documentation playgrounds, prefer **`Authorization: Bearer sb_…`**; you do not need to send cookies when using a valid API token.
+
+    **Personal API tokens** do **not** require interactive MFA when a user has TOTP enabled (same model as GitHub PATs: possession of the secret is the factor).
 
     **MFA (TOTP):** Optional second factor after password or OIDC. Step-up uses a short-lived `slugbase.mfa_pending` cookie until `POST /api/auth/mfa/verify` succeeds. Management routes require a normal session plus CSRF where applicable.
 
@@ -1291,12 +1293,17 @@ components:
     cookieAuth:
       type: apiKey
       in: cookie
-      name: slugbase.sid
-      description: Session cookie after login
+      name: token
+      description: |
+        HttpOnly access JWT cookie set after login (same credential as `Authorization: Bearer` for the access token).
+        Not to be confused with `slugbase.sid`, which is the express-session cookie for OIDC/session state.
     bearerAuth:
       type: http
       scheme: bearer
-      bearerFormat: API token
+      bearerFormat: JWT or sb_ API token
+      description: |
+        Use `Authorization: Bearer <token>`. Personal API tokens from Profile use the `sb_` prefix.
+        You may also send the access JWT as Bearer (same value as the `token` cookie after login).
   parameters:
     IdPath:
       in: path
@@ -1331,5 +1338,4 @@ components:
               error:
                 type: string
 security:
-  - cookieAuth: []
   - bearerAuth: []
