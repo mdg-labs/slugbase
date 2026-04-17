@@ -1,5 +1,5 @@
 # Build frontend and backend
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 WORKDIR /app
 
 # Copy root package files for workspace setup
@@ -40,7 +40,7 @@ RUN npm run build --workspace=backend
 RUN cp /app/backend/src/db/schema.sql /app/backend/dist/db/schema.sql
 
 # Production image
-FROM node:20-alpine
+FROM node:22-alpine
 WORKDIR /app
 
 # Accept commit SHA as build argument and set as environment variable
@@ -59,7 +59,7 @@ COPY backend/package*.json ./backend/
 
 # Install production dependencies for backend workspace only
 WORKDIR /app
-RUN npm ci --production --legacy-peer-deps --workspace=backend
+RUN npm ci --omit=dev --legacy-peer-deps --workspace=backend
 
 # Copy built files (schema.sql is already included in dist from builder stage)
 COPY --from=builder /app/backend/dist ./backend/dist
