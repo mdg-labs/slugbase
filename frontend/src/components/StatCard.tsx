@@ -3,7 +3,7 @@ import { LucideIcon } from 'lucide-react';
 import { Card, CardContent } from './ui/card';
 import { cn } from '@/lib/utils';
 
-/** Optional usage display for plan/limit (e.g. slugbase-cloud). Only rendered when used + limit are both set. */
+/** Optional usage display for plan/limit (hosted cloud). Only rendered when used + limit are both set. */
 export interface StatCardUsageProps {
   used: number;
   limit: number;

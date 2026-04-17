@@ -24,7 +24,7 @@ In `StatCard` (and via `StatsCardsRow` → `StatItem.usage`), optional props for
 - **`progressVariant?: 'normal' | 'warning' | 'danger'`** - Bar color (primary / amber / destructive).
 - **`cta?: { label: string; onClick: () => void }`** - Optional button (e.g. "Upgrade"); only pass in cloud.
 
-In slugbase-core the dashboard does **not** pass `used`, `limit`, or `cta`. slugbase-cloud can pass these to show plan usage and upgrade CTA without changing layout.
+In core self-hosted builds the dashboard does **not** pass `used`, `limit`, or `cta`. The hosted product at slugbase.app can pass these to show plan usage and upgrade CTA without changing layout.
 
 ## Visual / UX improvements
 

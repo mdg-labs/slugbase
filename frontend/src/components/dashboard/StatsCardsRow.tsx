@@ -20,7 +20,7 @@ export interface StatsCardsRowProps {
 
 /**
  * Row of three stat cards: bookmarks, folders, tags.
- * Supports optional usage/limit/CTA per card for slugbase-cloud (pass usage in cloud only).
+ * Supports optional usage/limit/CTA per card for hosted cloud mode (pass usage in cloud only).
  */
 export function StatsCardsRow({ bookmarks, folders, tags, dense }: StatsCardsRowProps) {
   return (

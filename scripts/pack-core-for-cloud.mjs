@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 /**
- * One-shot: build monorepo → assemble .publish-core → npm pack → copy .tgz to slugbase-cloud/vendor/
+ * One-shot: build monorepo → assemble .publish-core → npm pack → copy .tgz to Cloud deployment vendor/
  * and remove other mdguggenbichler-slugbase-core-*.tgz files there so only the current tarball remains.
  *
  * From slugbase repo root:
  *   npm run pack:cloud
  *
  * Env:
- *   SLUGBASE_CLOUD_ROOT - path to slugbase-cloud repo (default: ../slugbase-cloud relative to slugbase root).
- *     May be absolute, or relative to slugbase root (e.g. ../slugbase-cloud).
+ *   SLUGBASE_CLOUD_ROOT - path to SlugBase Cloud deployment checkout (default: ../slugbase-cloud relative to slugbase root).
+ *     May be absolute, or relative to slugbase root.
  */
 
 import { spawnSync } from 'child_process';
@@ -43,8 +43,8 @@ function run(cmd, args, cwd) {
 }
 
 if (!existsSync(cloudRoot)) {
-  console.error(`pack-core-for-cloud: cloud repo not found at ${cloudRoot}`);
-  console.error('Set SLUGBASE_CLOUD_ROOT to your slugbase-cloud path (relative to slugbase root or absolute).');
+  console.error(`pack-core-for-cloud: Cloud deployment checkout not found at ${cloudRoot}`);
+  console.error('Set SLUGBASE_CLOUD_ROOT to that repo path (relative to slugbase root or absolute).');
   process.exit(1);
 }
 

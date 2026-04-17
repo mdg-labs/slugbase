@@ -4,13 +4,13 @@ alwaysApply: true
 
 # slugbase (core / self-hosted)
 
-This repository is the **open-source SlugBase application**-the codebase people run when they **self-host**. It is also the source of the **core package** that **slugbase-cloud** depends on; cloud adds a SaaS layer on top, it does not replace this tree.
+This repository is the **open-source SlugBase application**—the codebase people run when they **self-host**. It is also the source of the **core package** consumed by the **SlugBase Cloud** hosted product; the hosted layer adds SaaS on top and does not replace this tree.
 
 ## Boundaries
 
-- **No SaaS-only product logic** in this repo: billing, subscriptions, Stripe, multi-tenant org/workspace resolution, plan tiers, and plan-based feature gating belong in **slugbase-cloud** (or, when unavoidable in shared UI, behind a strict **`isCloud` / mode guard** with **zero behavioral impact** when self-hosted).
+- **No SaaS-only product logic** in this repo: billing, subscriptions, Stripe, multi-tenant org/workspace resolution, plan tiers, and plan-based feature gating belong in the **Cloud deployment** (or, when unavoidable in shared UI, behind a strict **`isCloud` / mode guard** with **zero behavioral impact** when self-hosted).
 - **Self-hosted behavior is the default.** Migrations, default migration registration, core API routes, and data model assumptions must remain correct for a **single-tenant / self-installed** deployment without cloud services.
-- **Do not** use this repo to register **cloud-only** migrations in the **default** migration list used by self-hosted installs. Cloud-specific schema or jobs live in cloud (or optional paths), not in the self-hosted migration index.
-- Prefer **slugbase-cloud** to implement SaaS by **composition** (wrapper apps, extra middleware, env such as `SLUGBASE_MODE` / `VITE_SLUGBASE_MODE`, route composition)-not by turning core routes or migrations into SaaS-specific implementations.
+- **Do not** use this repo to register **cloud-only** migrations in the **default** migration list used by self-hosted installs. Cloud-specific schema or jobs live in the Cloud deployment (or optional paths), not in the self-hosted migration index.
+- Prefer the **hosted product codebase** to implement SaaS by **composition** (wrapper apps, extra middleware, env such as `SLUGBASE_MODE` / `VITE_SLUGBASE_MODE`, route composition)—not by turning core routes or migrations into SaaS-specific implementations.
 
 For a fuller workspace picture (if maintained), see **slugbase** `.cursor/rules/workspace-architecture.mdc`.

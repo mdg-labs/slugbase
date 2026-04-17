@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Core → cloud: version bump, pack, and install
 
-When you **finish work in slugbase** that **affects the packaged core** (anything that ends up in `@mdguggenbichler/slugbase-core` via `assemble:core` / `pack:cloud`: `packages/core`, backend, frontend, embed, scripts that feed the assembly, etc.), **complete the handoff to slugbase-cloud** before considering the task done.
+When you **finish work in slugbase** that **affects the packaged core** (anything that ends up in `@mdguggenbichler/slugbase-core` via `assemble:core` / `pack:cloud`: `packages/core`, backend, frontend, embed, scripts that feed the assembly, etc.), **complete the handoff to the Cloud deployment** before considering the task done.
 
 Purely local-only changes that **cannot** alter the tarball (e.g. markdown-only edits with no assembly impact) do **not** require this flow. When unsure, bump and pack.
 
@@ -13,7 +13,7 @@ Purely local-only changes that **cannot** alter the tarball (e.g. markdown-only 
 
 1. **Bump the core package version** in `packages/core/package.json` (`version` field). Use semver; **patch** is typical for incremental fixes (`0.1.9` → `0.1.10`).
 
-2. **Point slugbase-cloud at the new tarball name** in the **slugbase-cloud** repo root `package.json`:
+2. **Point the Cloud deployment** at the new tarball name in that repo’s root `package.json`:
    - Dependency: `@mdguggenbichler/slugbase-core`
    - Value must match the packed filename: `file:./vendor/mdguggenbichler-slugbase-core-<version>.tgz`  
      Example: `"file:./vendor/mdguggenbichler-slugbase-core-0.1.10.tgz"`
@@ -24,18 +24,18 @@ Purely local-only changes that **cannot** alter the tarball (e.g. markdown-only 
    npm run pack:cloud
    ```
 
-   This runs a full `npm run build`, assembles `.publish-core`, `npm pack`s, and copies the `.tgz` into **slugbase-cloud** `vendor/`.  
-   If the cloud repo is not a sibling `../slugbase-cloud`, set **`SLUGBASE_CLOUD_ROOT`** (absolute or relative to slugbase root) for that run.
+   This runs a full `npm run build`, assembles `.publish-core`, `npm pack`s, and copies the `.tgz` into the Cloud repo’s **`vendor/`**.  
+   If the Cloud checkout is not the default sibling path, set **`SLUGBASE_CLOUD_ROOT`** (absolute or relative to slugbase root) for that run.
 
-4. **Install in slugbase-cloud** so the lockfile and `node_modules` match the new file:
+4. **Install in the Cloud deployment** so the lockfile and `node_modules` match the new file:
 
    ```bash
-   cd ../slugbase-cloud && npm install
+   cd "$SLUGBASE_CLOUD_ROOT" && npm install
    ```
 
-   (Use the actual cloud root path if different.)
+   (Use the actual Cloud repo path; default sibling layout is documented in `scripts/pack-core-for-cloud.mjs`.)
 
-5. **Regenerate the cloud OpenAPI bundle** when the change affects the **integrator-facing HTTP API** or **`backend/openapi/openapi.selfhosted.yaml`** (cloud’s `openapi.cloud.yaml` is merged from the packaged self-hosted spec + `openapi.cloud.fragment.yaml`). From **slugbase-cloud** root:
+5. **Regenerate the cloud OpenAPI bundle** when the change affects the **integrator-facing HTTP API** or **`backend/openapi/openapi.selfhosted.yaml`** (Cloud’s `openapi.cloud.yaml` is merged from the packaged self-hosted spec + `openapi.cloud.fragment.yaml`). From the **Cloud repo** root:
 
    ```bash
    npm run openapi:bundle
@@ -54,6 +54,6 @@ Purely local-only changes that **cannot** alter the tarball (e.g. markdown-only 
 ## Commit expectations
 
 - **slugbase:** `packages/core/package.json` (version) and any code changes; `pack:cloud` does not commit for you.
-- **slugbase-cloud:** updated `package.json` dependency line, new `vendor/*.tgz`, **`package-lock.json`** after `npm install`, and **`openapi/openapi.cloud.yaml`** when step 5 ran and the file changed.
+- **Cloud deployment:** updated `package.json` dependency line, new `vendor/*.tgz`, **`package-lock.json`** after `npm install`, and **`openapi/openapi.cloud.yaml`** when step 5 ran and the file changed.
 
 See also `scripts/pack-core-for-cloud.mjs` for behavior and env vars.

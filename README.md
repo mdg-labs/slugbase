@@ -65,8 +65,6 @@ More options: **[Docker](https://docs.slugbase.app/selfhosted/docker)** (single 
 - 🐳 **Docker** — Multi-stage **`Dockerfile`**; optional **`Dockerfile.backend`** for API-only images
 - 📊 **OpenAPI** — **`/openapi.json`**, **`/openapi.yaml`**, Swagger UI at **`/api-docs`** (disable UI with **`SLUGBASE_API_DOCS=false`**)
 
-Operator-focused hosting notes (Fly.io, Neon, etc.) live in the private **[slugbase-docs-internal](https://github.com/mdg-labs/slugbase-docs-internal)** repo.
-
 ## Tech stack
 
 | Area | Stack |
@@ -109,9 +107,9 @@ The core codebase supports two build/runtime profiles:
 | --- | --- | --- |
 | Mode | No `SLUGBASE_MODE` or `selfhosted` | `SLUGBASE_MODE=cloud` (backend); `VITE_SLUGBASE_MODE=cloud` (frontend build) |
 | Auth | Long-lived JWT cookie; OIDC from **Admin** | Short-lived access + refresh cookies; OIDC via env (`OIDC_*`); admin OIDC/SMTP tabs hidden |
-| URLs | App at `/` | Marketing at `/`; product often under `/app` (see **slugbase-cloud** deployment) |
+| URLs | App at `/` | Marketing at `/`; signed-in app under **`/app`** on **[slugbase.app](https://slugbase.app)** |
 
-SaaS packaging, env matrices, and embedding live in **[slugbase-cloud](https://github.com/mdg-labs/slugbase-cloud)** and **slugbase-docs-internal**. This README focuses on the open-source core.
+The hosted product at **slugbase.app** builds on this core with a separate deployment and SaaS layer. This README focuses on the open-source tree only.
 
 ## Configuration
 
@@ -140,10 +138,7 @@ slugbase/
 
 ## Documentation
 
-| Audience | Link |
-| --- | --- |
-| 📖 End users and self-hosters | **[docs.slugbase.app](https://docs.slugbase.app)** |
-| 🔧 Operators and cloud integration (private) | **[slugbase-docs-internal](https://github.com/mdg-labs/slugbase-docs-internal)** |
+📖 **[docs.slugbase.app](https://docs.slugbase.app)** — guides for self-hosting, configuration, Docker, and the REST API.
 
 ## API
 
