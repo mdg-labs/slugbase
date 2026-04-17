@@ -82,7 +82,13 @@ export PLAYWRIGHT_BASE_URL="$BASE_URL"
 # Seeding happens in the container at startup; host Playwright has no DB file to seed.
 unset E2E_DB_PATH
 
+PLAYWRIGHT_CLI="${ROOT}/node_modules/.bin/playwright"
+if [[ ! -x "$PLAYWRIGHT_CLI" ]]; then
+  echo "e2e:docker: ${PLAYWRIGHT_CLI} missing (run npm ci)" >&2
+  exit 1
+fi
+
 # Preserve Playwright exit code so CI fails correctly; EXIT trap still runs cleanup.
 PW_EXIT=0
-npx playwright test --config=e2e/playwright.config.ts "$@" || PW_EXIT=$?
+"$PLAYWRIGHT_CLI" test --config=e2e/playwright.config.ts "$@" || PW_EXIT=$?
 exit "$PW_EXIT"
