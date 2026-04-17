@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useAppConfig } from '../contexts/AppConfigContext';
 import api from '../api/client';
 import { getAuthProviderUrl } from '../config/api';
-import { LogIn, Key } from 'lucide-react';
+import { LogIn } from 'lucide-react';
 import Button from '../components/ui/Button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -19,6 +19,10 @@ import {
   AUTH_PAGE_OUTER,
 } from '../components/auth/authPageClasses';
 import { safeRedirectPath } from '../utils/safeRedirectPath';
+import {
+  OidcProviderSignInButton,
+  formatOidcProviderDisplayName,
+} from '../components/auth/OidcProviderSignInButton';
 
 export default function Login() {
   const { t } = useTranslation();
@@ -198,15 +202,14 @@ export default function Login() {
               </div>
               <div className="space-y-3">
                 {providers.map((provider) => (
-                  <Button
+                  <OidcProviderSignInButton
                     key={provider.id}
-                    variant="secondary"
-                    icon={Key}
+                    providerKey={provider.provider_key}
+                    label={t('auth.loginWith', {
+                      provider: formatOidcProviderDisplayName(provider.provider_key),
+                    })}
                     onClick={() => handleOIDCLogin(provider.provider_key)}
-                    className="w-full border-ghost bg-surface-high"
-                  >
-                    {t('auth.loginWith', { provider: provider.provider_key })}
-                  </Button>
+                  />
                 ))}
               </div>
             </>
