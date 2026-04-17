@@ -8,355 +8,160 @@
 
 SlugBase is an open-source, self-hosted bookmark manager with optional link forwarding. Store and organize your bookmarks, and optionally expose them as personal short redirect URLs.
 
-## Try SlugBase
+## Try SlugBase Cloud
 
-Sign up for a free account at **[https://slugbase.app](https://slugbase.app)** to try SlugBase Cloud without self-hosting. The Free Plan lets you explore bookmarks, folders, tags, and link forwarding.
+Sign up for a free account at **[slugbase.app](https://slugbase.app)** to use the hosted service without installing anything. The free plan lets you explore bookmarks, folders, tags, and link forwarding.
+
+## Self-host with Docker (no clone required)
+
+The published image is **`mdglabs/slugbase`** on [Docker Hub](https://hub.docker.com/r/mdglabs/slugbase). You do **not** need this repository on disk to run it.
+
+1. Create a directory for your deployment.
+2. Add a **`docker-compose.yml`** — copy from **[Install with Docker Compose](https://docs.slugbase.app/selfhosted/docker-compose)** in the docs (full file to paste), **or** after cloning/forking copy **`docker-compose.example.yml`** → **`docker-compose.yml`**.
+3. Add an **`.env`** with secrets and URLs — see **[Configuration](https://docs.slugbase.app/selfhosted/configuration)**.
+4. Run:
+
+```bash
+mkdir -p data
+docker compose up -d
+```
+
+The compose file pulls **`mdglabs/slugbase:latest`**, maps **`${PORT:-5000}:5000`**, mounts **`./data`** for SQLite, and health-checks **`/api/health`**. To **build the image from this repo** instead, clone the repo and add **`build: .`** to the `slugbase` service (see comments in **`docker-compose.example.yml`**).
+
+More options: **[Docker](https://docs.slugbase.app/selfhosted/docker)** (single container, `Dockerfile.backend`), **[reverse proxy](https://docs.slugbase.app/selfhosted/reverse-proxy)**, **[first run setup](https://docs.slugbase.app/selfhosted/first-run-setup)**.
 
 ## Features
 
-### Core Functionality
-- 📚 **Bookmark Management** - Store and organize your bookmarks with titles, URLs, and optional custom slugs
-- 🔗 **Link Forwarding** - Optional short redirect URLs via `/go/:slug` for easy sharing and browser custom search
-- 🏷️ **Tags & Folders** - Organize bookmarks with tags and folders (many-to-many relationships)
-- 👥 **Sharing** - Share bookmarks and folders with teams and individual users
-- 🔍 **Filtering & Sorting** - Filter by folder/tag, sort by date, alphabetically, usage, or access time
-- 🔎 **Global Search** - Press `Ctrl+K` to search across bookmarks, folders, and tags from anywhere
-- 📊 **View Modes** - Card view or compact list view with density controls
-- 📦 **Bulk Actions** - Select multiple bookmarks for bulk operations (move, tag, share, delete)
-- 📥 **Import/Export** - Import bookmarks from JSON or export your collection
-- 📌 **Pinned Bookmarks** - Pin important bookmarks for quick access
-- 📈 **Usage Tracking** - Automatic tracking of bookmark access counts and last accessed time
-- 🌐 **Internationalization** - Full i18n support (English, German, Spanish, French, Italian, Japanese, Dutch, Polish, Portuguese, Russian, Chinese) with easy extension
-- 🌓 **Dark/Light Mode** - Auto-detect from browser or manual toggle with theme persistence
-- 🤖 **AI Bookmark Suggestions** - Optional OpenAI-powered title/description suggestions when creating bookmarks; configurable in Admin > AI Suggestions (self-hosted) or via env in Cloud
-- 🔑 **API Tokens** - Personal access tokens for API access; create and manage under Profile
+### Core
 
-### Authentication & Security
-- 🔐 **OIDC Authentication** - Login with configurable OIDC providers (Google, GitHub, etc.)
-- 🔑 **Local Authentication** - Email/password authentication as fallback
-- 🛡️ **Password Reset** - Email-based password reset flow (SMTP configurable)
-- 👨‍💼 **Admin System** - First user becomes admin automatically; admin panel for user/team management
-- 🔒 **Multi-factor authentication (TOTP)** - Optional authenticator-app MFA with backup codes after password or OIDC sign-in; see [SECURITY.md](./SECURITY.md)
+- **Bookmarks** — Titles, URLs, optional custom slugs
+- **Link forwarding** — `/go/:slug` redirects and browser custom search (`Ctrl+K` global search)
+- **Tags and folders** — Many-to-many organization
+- **Sharing** — Bookmarks and folders with teams and users (where enabled)
+- **Import/export** — JSON and other flows
+- **i18n** — Multiple languages (see `frontend/src/locales/`)
+- **Themes** — Dark / light / system
+- **AI suggestions** — Optional OpenAI-powered title/tag/slug hints (Admin → AI on self-hosted)
+- **API tokens** — `Authorization: Bearer sb_…` for the REST API
 
-### Database & Deployment
-- 💾 **SQLite** - Default database (perfect for small deployments)
-- 🐘 **PostgreSQL** - Full PostgreSQL support for larger deployments
-- 🔄 **Auto Migrations** - Automatic database migration system with version tracking
-- 🐳 **Docker Ready** - Production-ready Docker setup with multi-stage builds
-- 🐳 **Backend-only image** - `Dockerfile.backend` for backend-only deployments (e.g. Cloud Run); see [self-hosted documentation](https://docs.slugbase.app) for deployment options.
-- 🪰 **Fly.io + Neon (SlugBase Cloud)** - Operator runbook: [Fly.io + Neon](https://github.com/mdg-labs/slugbase-docs-internal/blob/main/runbooks/runbook-fly-neon.mdx) in **slugbase-docs-internal**.
-- 📊 **API Documentation** - Auto-generated Swagger/OpenAPI documentation
+### Authentication and security
 
-## Tech Stack
+- **OIDC** — Configurable providers (self-hosted admin)
+- **Email/password** — Local accounts
+- **MFA (TOTP)** — Optional with backup codes — see **[SECURITY.md](./SECURITY.md)**
+- **Admin** — First user setup; user/team management
 
-### Frontend
-- **React** 18+ with TypeScript
-- **React Router** for navigation
-- **Tailwind CSS** for styling
-- **Vite** for build tooling
-- **i18next** for internationalization
-- **Lucide React** for icons
-- **Radix UI** for accessible primitives (dialogs, dropdowns, etc.)
-- **cmdk** for command palette (Ctrl+K search)
-- **next-themes** for theme switching
-- **sonner** for toast notifications
-- **Sentry** for error tracking (optional)
+### Data and deployment
 
-### Backend
-- **Node.js** with Express
-- **TypeScript** throughout
-- **Passport.js** for authentication (OIDC + JWT)
-- **SQLite** (better-sqlite3) / **PostgreSQL** (pg)
-- **Zod** for validation
-- **Swagger** for API documentation
-- **Helmet** for security headers
-- **Rate Limiting** for API protection
-- **OpenAI** (optional) for AI bookmark suggestions
+- **SQLite** default; **PostgreSQL** supported
+- **Migrations** — Automatic on startup (`backend/src/db/migrations/`)
+- **Docker** — Multi-stage **`Dockerfile`**; optional **`Dockerfile.backend`** for API-only images
+- **OpenAPI** — **`/openapi.json`**, **`/openapi.yaml`**, Swagger UI at **`/api-docs`** (disable UI with **`SLUGBASE_API_DOCS=false`**)
 
-## Quick Start
+Operator-focused hosting notes (Fly.io, Neon, etc.) live in the private **[slugbase-docs-internal](https://github.com/mdg-labs/slugbase-docs-internal)** repo.
 
-### Development
+## Tech stack
 
-1. **Clone the repository**
+| Area | Stack |
+| --- | --- |
+| Frontend | React, TypeScript, Vite, Tailwind, React Router, i18next, Radix UI, cmdk (command palette) |
+| Backend | Node.js, Express, TypeScript, Passport (JWT + OIDC), Zod, SQLite / PostgreSQL |
+
+## Quick start (development)
+
+For **local development** you need a git checkout:
+
 ```bash
-git clone https://github.com/mdg-labs/slugbase.git   # or your fork URL
+git clone https://github.com/mdg-labs/slugbase.git   # or your fork
 cd slugbase
-```
-
-2. **Install dependencies**
-```bash
 npm install
-```
-
-3. **Start development servers**
-```bash
 npm run dev
 ```
 
 - Backend: `http://localhost:5000`
-- Frontend: `http://localhost:3000`
+- Frontend (Vite): `http://localhost:3000`
 
-4. **Initial Setup**
-
-On first start, SlugBase enters **Setup Mode**. Create your first admin user:
-- Navigate to the setup page
-- Enter email, name, and password
-- First user automatically becomes admin
-- After setup, configure OIDC providers in the admin panel
-
-### Production with Docker
-
-Pre-built images are published to Docker Hub as **`mdglabs/slugbase`** (for example `mdglabs/slugbase:latest`). The repository ships **`docker-compose.example.yml`** — copy it to **`docker-compose.yml`**, add your **`.env`**, then start:
-
-```bash
-docker compose up -d
-```
-
-That compose file pulls **`mdglabs/slugbase:latest`** by default. To build from source instead, add **`build: .`** to the `slugbase` service (see comments in `docker-compose.example.yml`).
-
-2. **Access the application**
-- Application: `http://localhost:5000`
-- OpenAPI: `http://localhost:5000/openapi.json` or `/openapi.yaml`; Swagger UI: `http://localhost:5000/api-docs` (set `SLUGBASE_API_DOCS=false` to disable the UI only)
-
-3. **Complete setup**
-- Go through initial setup flow
-- Configure OIDC providers (optional)
-- Configure SMTP settings for password reset (optional)
+On first run with a fresh database, open the app and complete **Initial Setup** (first user becomes admin).
 
 ### Production without Docker
 
-1. **Build and start**
 ```bash
 npm run build
 npm run start
 ```
 
-2. **Access the application**
-- The app (API + frontend) is served on port 5000 via the apps/selfhosted server.
+Serves the combined API and built frontend (default port **5000**) via **`apps/selfhosted`**. Configure production **`.env`** first — see **[Configuration](https://docs.slugbase.app/selfhosted/configuration)**.
 
-## Running modes: SELFHOSTED vs CLOUD
+After **`docker compose up -d`** or **`npm run start`**, visit the app URL and finish setup; use **`/openapi.json`** or **`/api-docs`** for the API.
 
-SlugBase supports two runtime modes. **SELFHOSTED** is the default and preserves the current behavior. **CLOUD** is for a SaaS deployment (e.g. frontend on Cloudflare Pages, backend on GCP Cloud Run).
+## Runtime modes: `selfhosted` vs `cloud`
 
-### SELFHOSTED (default)
+The core codebase supports two build/runtime profiles:
 
-- No `SLUGBASE_MODE` or set to `SLUGBASE_MODE=selfhosted`.
-- Single long-lived JWT cookie; no refresh tokens.
-- OIDC providers configured in the admin panel (“bring your own”).
-- App is served at `/`; no marketing pages.
-- Docker and single-server deployments work as today.
+| | **Self-hosted (default)** | **Cloud** |
+| --- | --- | --- |
+| Mode | No `SLUGBASE_MODE` or `selfhosted` | `SLUGBASE_MODE=cloud` (backend); `VITE_SLUGBASE_MODE=cloud` (frontend build) |
+| Auth | Long-lived JWT cookie; OIDC from **Admin** | Short-lived access + refresh cookies; OIDC via env (`OIDC_*`); admin OIDC/SMTP tabs hidden |
+| URLs | App at `/` | Marketing at `/`; product often under `/app` (see **slugbase-cloud** deployment) |
 
-### CLOUD (SaaS)
-
-- Set `SLUGBASE_MODE=cloud` (backend) and build the frontend with `VITE_SLUGBASE_MODE=cloud` and `VITE_API_URL=https://api.slugbase.app` (or your API origin).
-- Short-lived access JWT (e.g. 15 min) plus refresh token in an httpOnly cookie; refresh tokens stored in the DB and rotated on use.
-- Fixed OIDC providers only: Google, Microsoft, GitHub, configured via environment variables (`OIDC_GOOGLE_CLIENT_ID`, `OIDC_GOOGLE_CLIENT_SECRET`, etc.). Admin “OIDC providers” tab is hidden. Transactional email is sent via Postmark API (`POSTMARK_SERVER_API_TOKEN`, `POSTMARK_FROM`); Admin “Settings” tab is hidden in CLOUD.
-- Marketing pages at `/`, `/pricing`, `/contact`; app at `/app` (e.g. `/app/login`, `/app/bookmarks`).
-- CORS and cookie domain (e.g. `COOKIE_DOMAIN=.slugbase.app`) must be set so the frontend (e.g. app.slugbase.app) can call the API (api.slugbase.app) with credentials.
-
-**CLOUD backend env vars:** `FRONTEND_URL`, `BASE_URL`, `JWT_SECRET`, `ENCRYPTION_KEY`; optional: `COOKIE_DOMAIN`, `JWT_ACCESS_EXPIRES_IN`, `JWT_REFRESH_EXPIRES_DAYS`, `CORS_EXTRA_ORIGINS`, OIDC_* (Google/Microsoft/GitHub), Postmark (`POSTMARK_SERVER_API_TOKEN`, `POSTMARK_FROM`, `POSTMARK_FROM_NAME`) for transactional email, and AI (`AI_OPENAI_API_KEY`, `AI_OPENAI_MODEL` default gpt-4o-mini) for bookmark suggestions.
-
-**CLOUD frontend build:** `VITE_SLUGBASE_MODE=cloud`, `VITE_API_URL=https://api.slugbase.app`.
-
-### Sharing and forwarding (SELFHOSTED and CLOUD)
-
-- **Access**: A user can access a bookmark if they own it or it is shared with them (direct user share, team share, or via a shared folder). Same rules apply to folders. Tags are not shared; they are per-user.
-- **Forwarding URL**: The canonical link for a bookmark is always `https://<your-domain>/go/<slug>`. This URL works for you and anyone the bookmark is shared with (requires login)
-- **Browser custom search**: Set up a custom search engine with URL `https://<your-domain>/go/%s` and keyword "go". Type `go <slug>` in your address bar for quick access.
-- **Remembered choices**: When multiple bookmarks could match a slug, you can save a preference. Manage under Profile → Remembered Slug Choices.
+SaaS packaging, env matrices, and embedding live in **[slugbase-cloud](https://github.com/mdg-labs/slugbase-cloud)** and **slugbase-docs-internal**. This README focuses on the open-source core.
 
 ## Configuration
 
-### Environment Variables
+Environment variables are documented in **[Configuration](https://docs.slugbase.app/selfhosted/configuration)** (URLs, secrets, database, email). Highlights:
 
-#### Database
-- `DB_TYPE` - Database type: `sqlite` (default) or `postgresql`
-- `DB_PATH` - SQLite database path (default: `./data/slugbase.db`)
-- `DATABASE_URL` - PostgreSQL connection string (for Neon etc.): `postgresql://user:pass@host/db?sslmode=require`. Alternative to individual params.
-- `DB_HOST` - PostgreSQL host (default: `localhost`) – used when `DATABASE_URL` is not set
-- `DB_PORT` - PostgreSQL port (default: `5432`)
-- `DB_NAME` - PostgreSQL database name (default: `slugbase`)
-- `DB_USER` - PostgreSQL user
-- `DB_PASSWORD` - PostgreSQL password
+- **Database:** `DB_TYPE`, `DB_PATH` (SQLite), or `DATABASE_URL` / `DB_*` (PostgreSQL)
+- **Server:** `PORT`, `NODE_ENV`, `SESSION_SECRET`, `BASE_URL`, `FRONTEND_URL`
+- **Self-hosted email:** SMTP via **Admin → Settings**
+- **AI (self-hosted):** Admin → AI Suggestions (or env where documented for cloud)
 
-#### Server
-- `PORT` - Server port (default: `5000`)
-- `NODE_ENV` - Environment: `development` or `production`
-- `SESSION_SECRET` - Session secret (change in production!)
-- `BASE_URL` - Base URL for redirects (e.g., `https://slugbase.example.com`)
-- `FRONTEND_URL` - Frontend URL for CORS (default: `http://localhost:3000`)
+## Project structure
 
-#### Email
-
-**SELFHOSTED:** SMTP is configured via Admin Settings (Settings tab). No env vars needed.
-
-**CLOUD:** Transactional email uses Postmark API (no SMTP). Set in `.env`:
-- `POSTMARK_SERVER_API_TOKEN` - Server API token from [Postmark](https://account.postmarkapp.com)
-- `POSTMARK_FROM` - Verified sender address (e.g. `noreply@slugbase.app`)
-- `POSTMARK_FROM_NAME` - From display name (default: `SlugBase`)
-
-**Both modes:**
-- `CONTACT_FORM_RECIPIENT` - Email address to receive contact form submissions (optional, per environment)
-
-#### AI Suggestions (CLOUD mode only)
-
-- `AI_OPENAI_API_KEY` - OpenAI API key for AI bookmark suggestions (optional; required for AI on Personal/Team plans)
-- `AI_OPENAI_MODEL` - Model override (default: gpt-4o-mini)
-
-**SELFHOSTED:** AI is configured via Admin > AI Suggestions tab. No env vars needed.
-
-### Database Migrations
-
-SlugBase uses an automatic migration system:
-
-1. **Migrations Location**: `backend/src/db/migrations/`
-2. **Naming Convention**: `NNN_migration_name.ts` (e.g., `001_migrate_slug_nullable.ts`)
-3. **Auto-registration**: All migrations are auto-registered on startup
-4. **Tracking**: Applied migrations are tracked in `schema_migrations` table
-5. **Execution**: Migrations run automatically after initial schema setup
-
-Current migrations are 001–009, 013–015, 018–024 (see `backend/src/db/migrations/index.ts`). Migrations 010–012 and 016–017 are reserved/cloud-only and not registered in core.
-
-To add a new migration:
-1. Create a new file: `backend/src/db/migrations/NNN_your_migration.ts`
-2. Export: `migrationId`, `migrationName`, `up()` function, and optionally `down()` function
-3. Import and register in `backend/src/db/migrations/index.ts`
-
-## Project Structure
-
-The repository is an npm workspace monorepo. Production run uses either the Docker image (backend serves frontend from `/public`) or `npm run start` (apps/selfhosted server).
+npm **workspace** monorepo — commands run from the repository root.
 
 ```
 slugbase/
-├── backend/                # Express API, auth, db, migrations
-│   ├── src/
-│   │   ├── auth/          # Authentication logic (JWT, OIDC)
-│   │   ├── config/        # Configuration files
-│   │   ├── db/            # Database layer
-│   │   │   ├── migrations/ # Database migrations
-│   │   │   ├── schema.sql # Initial schema
-│   │   │   └── index.ts   # DB utilities
-│   │   ├── middleware/    # Express middleware
-│   │   ├── routes/        # API routes
-│   │   ├── services/      # Business logic services
-│   │   ├── types/         # Backend types
-│   │   ├── utils/         # Utility functions
-│   │   └── index.ts       # Server entry point
-│   └── package.json
-├── frontend/               # React SPA (Vite)
-│   ├── src/
-│   │   ├── api/           # API client
-│   │   ├── components/    # React components
-│   │   │   ├── admin/     # Admin components
-│   │   │   ├── modals/    # Modal components
-│   │   │   └── ui/        # UI components
-│   │   ├── config/        # Frontend config (mode, API URL)
-│   │   ├── contexts/      # React contexts
-│   │   ├── hooks/         # Custom hooks
-│   │   ├── lib/           # Shared frontend utilities
-│   │   ├── locales/       # i18n translations
-│   │   ├── pages/         # Page components
-│   │   └── utils/         # Utility functions
-│   └── package.json
-├── packages/core/          # Package consumed by apps (exports backend + frontend entrypoints)
-│   └── ...                # See slugbase-docs-internal: package boundaries doc. Published as @mdguggenbichler/slugbase-core; consumed by apps/selfhosted and slugbase-cloud.
-├── apps/selfhosted/        # Self-hosted app: uses core package, serves API + frontend
-│   └── ...
-├── scripts/                # Build helpers (e.g. copy-core-dist.js, copy-selfhosted-public.js)
-├── docker-compose.yml      # Docker Compose config
-├── docker-compose.example.yml  # Template; copy to docker-compose.yml and customize
-├── Dockerfile              # Production Dockerfile (full app)
-├── Dockerfile.backend      # Backend-only image (e.g. Cloud Run or API-only deploy)
-└── package.json            # Root workspace config
+├── backend/                 # Express API, auth, DB, migrations, OpenAPI source
+├── frontend/                # React SPA (Vite)
+├── packages/core/           # Shared package (@mdguggenbichler/slugbase-core)
+├── apps/selfhosted/       # Production server: API + static frontend
+├── docker-compose.example.yml   # Template: copy to docker-compose.yml (ignored by git)
+├── Dockerfile             # Full-stack production image
+├── Dockerfile.backend     # Backend-only image
+└── package.json           # Workspace root
 ```
 
 ## Documentation
 
-- **End users & self-hosters:** [https://docs.slugbase.app](https://docs.slugbase.app)
-- **Engineering, cloud integration, and operators (private):** [slugbase-docs-internal](https://github.com/mdg-labs/slugbase-docs-internal) — core/cloud contract, packing and upgrading core, embedding the frontend, Fly + Neon, Grafana stats, release process, and related runbooks.
+| Audience | Link |
+| --- | --- |
+| End users and self-hosters | **[docs.slugbase.app](https://docs.slugbase.app)** |
+| Operators and cloud integration (private) | **[slugbase-docs-internal](https://github.com/mdg-labs/slugbase-docs-internal)** |
 
-## API Documentation
+## API
 
-Machine-readable OpenAPI 3 is served at **`/openapi.json`** and **`/openapi.yaml`** (self-hosted spec). Interactive docs (Swagger UI) are at **`/api-docs`** unless disabled with **`SLUGBASE_API_DOCS=false`**. The API uses:
+- **OpenAPI 3** — Source: **`backend/openapi/openapi.selfhosted.yaml`**; served at **`/openapi.json`** and **`/openapi.yaml`**
+- **Auth** — Session / JWT cookie **`token`**, or **`Authorization: Bearer`** (JWT or **`sb_`** API token)
 
-- **JWT** tokens and session cookies for authentication (plus **API tokens** via `Authorization: Bearer`)
-- **RESTful** design principles
-- Source spec: `backend/openapi/openapi.selfhosted.yaml`
+## Usage examples
 
-## Usage Examples
+**Forwarding:** Save a bookmark with a slug; open `{BASE_URL}/go/{slug}` (login as needed for shared items).
 
-### Creating a Bookmark with Forwarding
+**Custom search:** Use `{BASE_URL}/go/%s` as the search URL with a short keyword (e.g. `go`) — see the in-app **Search engine guide**.
 
-1. Click "Create Bookmark"
-2. Enter title and URL
-3. Optionally set a custom slug (e.g., `my-link`)
-4. Enable "Forwarding Enabled"
-5. Add folders and tags
-6. Save
-
-The bookmark will be accessible at: `{BASE_URL}/go/my-link`
-
-### Setting up Custom Search Engine
-
-1. Go to Bookmarks page
-2. Click "Learn how to set up a custom search engine" link
-3. Follow the guide for your browser
-4. Use your search URL: `{BASE_URL}/go/%s`
-5. Set keyword (e.g., `go`)
-6. Access bookmarks by typing: `go {slug}` in your address bar
-
-### Sharing Bookmarks
-
-1. Create or edit a bookmark
-2. Click the share icon
-3. Select teams or individual users
-4. Shared users will see the bookmark in their "Shared" page
-
-## Development
-
-### Building
-
-```bash
-npm run build
-```
-
-Builds both frontend and backend for production.
-
-### Adding a New Language
-
-1. Create `frontend/src/locales/{lang}.json`
-2. Copy structure from `en.json`
-3. Translate all strings
-4. Import in `frontend/src/i18n.ts`
-5. Add language option in Profile page
-
-### Adding a New Migration
-
-1. Create `backend/src/db/migrations/NNN_description.ts`
-2. Export migration functions (see existing migrations for structure)
-3. Import and register in `backend/src/db/migrations/index.ts`
-4. Migrations run automatically on next server start
-
-## Security
-
-- Passwords are hashed using bcrypt
-- JWT tokens with secure configuration
-- Helmet.js security headers
-- Rate limiting on authentication endpoints
-- CORS configuration
-- SQL injection protection (parameterized queries)
-- XSS protection (React's built-in escaping)
-- CSRF protection on state-changing operations
-
-See [SECURITY.md](./SECURITY.md) for more details.
+**Sharing:** Edit a bookmark → share → pick teams or users.
 
 ## Contributing
 
-We welcome contributions! Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines on how to contribute to SlugBase.
+See **[CONTRIBUTING.md](./CONTRIBUTING.md)**.
+
+## Security
+
+See **[SECURITY.md](./SECURITY.md)** (threat model, MFA, reporting).
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details.
+See **[LICENSE](./LICENSE)**.
 
 ---
 
