@@ -63,4 +63,56 @@ test.describe('Bookmarks', () => {
     await expect(editModal).not.toBeVisible({ timeout: 5000 });
     await expect(page.getByText(newTitle, { exact: true }).first()).toBeVisible({ timeout: 5000 });
   });
+
+  test('deletes a bookmark from the table row menu after confirm', async ({ page }) => {
+    await page.goto('/bookmarks?view=table');
+
+    await expect(page.getByRole('heading', { level: 1, name: /^Bookmarks/ })).toBeVisible({ timeout: 10000 });
+
+    const title = `E2E Delete ${Date.now()}`;
+    const url = 'https://example.com/e2e-delete';
+
+    await page.getByRole('main').getByRole('button', { name: /create bookmark/i }).click();
+    const createModal = page.getByRole('dialog');
+    await expect(createModal).toBeVisible();
+    await createModal.getByPlaceholder(/title/i).fill(title);
+    await createModal.getByPlaceholder(/^url$/i).fill(url);
+    await createModal.getByRole('button', { name: /save/i }).click();
+    await expect(createModal).not.toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole('row').filter({ hasText: title }).first()).toBeVisible({ timeout: 5000 });
+
+    const row = page.getByRole('row').filter({ hasText: title }).first();
+    await row.getByRole('button', { name: /more actions/i }).click({ force: true });
+    await page.getByRole('menuitem', { name: /^Delete$/i }).click();
+
+    const confirm = page.getByRole('alertdialog');
+    await expect(confirm).toBeVisible({ timeout: 5000 });
+    await confirm.getByRole('button', { name: /^Delete$/i }).click();
+
+    await expect(confirm).not.toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole('row').filter({ hasText: title })).toHaveCount(0);
+  });
+
+  test('search query filters bookmarks by title', async ({ page }) => {
+    const unique = `E2ESearch${Date.now()}`;
+    const title = `${unique} marker`;
+    const url = 'https://example.com/e2e-search';
+
+    await page.goto('/bookmarks?view=table');
+
+    await expect(page.getByRole('heading', { level: 1, name: /^Bookmarks/ })).toBeVisible({ timeout: 10000 });
+
+    await page.getByRole('main').getByRole('button', { name: /create bookmark/i }).click();
+    const createModal = page.getByRole('dialog');
+    await expect(createModal).toBeVisible();
+    await createModal.getByPlaceholder(/title/i).fill(title);
+    await createModal.getByPlaceholder(/^url$/i).fill(url);
+    await createModal.getByRole('button', { name: /save/i }).click();
+    await expect(createModal).not.toBeVisible({ timeout: 5000 });
+
+    await page.goto(`/bookmarks?view=table&q=${encodeURIComponent(unique)}`);
+
+    await expect(page.getByRole('heading', { level: 1, name: /^Bookmarks/ })).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('row').filter({ hasText: title }).first()).toBeVisible({ timeout: 5000 });
+  });
 });

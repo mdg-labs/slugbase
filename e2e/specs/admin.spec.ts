@@ -20,4 +20,36 @@ test.describe('Admin', () => {
       timeout: 10000,
     });
   });
+
+  test('loads teams admin page', async ({ page }) => {
+    await page.goto('/admin/teams');
+
+    await expect(page.getByRole('heading', { level: 1, name: /^Teams$/i })).toBeVisible({
+      timeout: 10000,
+    });
+  });
+
+  test('loads audit log admin page', async ({ page }) => {
+    await page.goto('/admin/audit-log');
+
+    await expect(page.getByRole('heading', { level: 1, name: /^Audit log$/i })).toBeVisible({
+      timeout: 10000,
+    });
+  });
+
+  test('loads SMTP settings admin page', async ({ page }) => {
+    await page.goto('/admin/settings');
+
+    await expect(page.getByRole('heading', { level: 1, name: /^Settings$/i })).toBeVisible({
+      timeout: 10000,
+    });
+  });
+
+  test('loads AI suggestions admin page', async ({ page }) => {
+    await page.goto('/admin/ai');
+
+    await expect(page.getByRole('heading', { level: 1, name: /AI Bookmark Suggestions/i })).toBeVisible({
+      timeout: 10000,
+    });
+  });
 });
