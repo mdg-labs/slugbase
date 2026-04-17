@@ -4,7 +4,7 @@ import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { v4 as uuidv4 } from 'uuid';
 import { encrypt } from '../utils/encryption.js';
 import { reloadOIDCStrategies } from '../auth/oidc.js';
-import { validateOidcUrl, validateProviderKey } from '../utils/validation.js';
+import { validateOidcUrlAsync, validateProviderKey } from '../utils/validation.js';
 import { getTenantId } from '../utils/tenant.js';
 import { recordAuditEvent } from '../services/audit-log.js';
 
@@ -85,25 +85,25 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: providerKeyValidation.error });
     }
 
-    // Validate OIDC URLs (SSRF prevention)
-    const issuerValidation = validateOidcUrl(issuer_url);
+    // Validate OIDC URLs (SSRF + DNS rebind prevention)
+    const issuerValidation = await validateOidcUrlAsync(issuer_url);
     if (!issuerValidation.valid) {
       return res.status(400).json({ error: `issuer_url: ${issuerValidation.error}` });
     }
     if (authorization_url) {
-      const authUrlValidation = validateOidcUrl(authorization_url);
+      const authUrlValidation = await validateOidcUrlAsync(authorization_url);
       if (!authUrlValidation.valid) {
         return res.status(400).json({ error: `authorization_url: ${authUrlValidation.error}` });
       }
     }
     if (token_url) {
-      const tokenUrlValidation = validateOidcUrl(token_url);
+      const tokenUrlValidation = await validateOidcUrlAsync(token_url);
       if (!tokenUrlValidation.valid) {
         return res.status(400).json({ error: `token_url: ${tokenUrlValidation.error}` });
       }
     }
     if (userinfo_url) {
-      const userinfoUrlValidation = validateOidcUrl(userinfo_url);
+      const userinfoUrlValidation = await validateOidcUrlAsync(userinfo_url);
       if (!userinfoUrlValidation.valid) {
         return res.status(400).json({ error: `userinfo_url: ${userinfoUrlValidation.error}` });
       }
@@ -207,9 +207,9 @@ router.put('/:id', async (req, res) => {
       }
     }
 
-    // Validate OIDC URLs if provided (SSRF prevention)
+    // Validate OIDC URLs if provided (SSRF + DNS rebind prevention)
     if (issuer_url) {
-      const issuerValidation = validateOidcUrl(issuer_url);
+      const issuerValidation = await validateOidcUrlAsync(issuer_url);
       if (!issuerValidation.valid) {
         return res.status(400).json({ error: `issuer_url: ${issuerValidation.error}` });
       }
@@ -217,7 +217,7 @@ router.put('/:id', async (req, res) => {
     if (authorization_url !== undefined) {
       const urlToValidate = authorization_url || '';
       if (urlToValidate) {
-        const authUrlValidation = validateOidcUrl(urlToValidate);
+        const authUrlValidation = await validateOidcUrlAsync(urlToValidate);
         if (!authUrlValidation.valid) {
           return res.status(400).json({ error: `authorization_url: ${authUrlValidation.error}` });
         }
@@ -226,7 +226,7 @@ router.put('/:id', async (req, res) => {
     if (token_url !== undefined) {
       const urlToValidate = token_url || '';
       if (urlToValidate) {
-        const tokenUrlValidation = validateOidcUrl(urlToValidate);
+        const tokenUrlValidation = await validateOidcUrlAsync(urlToValidate);
         if (!tokenUrlValidation.valid) {
           return res.status(400).json({ error: `token_url: ${tokenUrlValidation.error}` });
         }
@@ -235,7 +235,7 @@ router.put('/:id', async (req, res) => {
     if (userinfo_url !== undefined) {
       const urlToValidate = userinfo_url || '';
       if (urlToValidate) {
-        const userinfoUrlValidation = validateOidcUrl(urlToValidate);
+        const userinfoUrlValidation = await validateOidcUrlAsync(urlToValidate);
         if (!userinfoUrlValidation.valid) {
           return res.status(400).json({ error: `userinfo_url: ${userinfoUrlValidation.error}` });
         }

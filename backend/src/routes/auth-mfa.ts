@@ -50,7 +50,7 @@ export function mountAuthMfaRoutes(router: Router): void {
     }
   });
 
-  router.post('/mfa/enroll/confirm', requireAuth(), async (req, res) => {
+  router.post('/mfa/enroll/confirm', mfaEnrollBeginRateLimiter, requireAuth(), async (req, res) => {
     try {
       const raw = req.body?.code;
       if (!raw || typeof raw !== 'string') {
@@ -76,7 +76,7 @@ export function mountAuthMfaRoutes(router: Router): void {
     }
   });
 
-  router.post('/mfa/enroll/cancel', requireAuth(), async (req, res) => {
+  router.post('/mfa/enroll/cancel', mfaEnrollBeginRateLimiter, requireAuth(), async (req, res) => {
     try {
       const authReq = req as AuthRequest;
       const result = await enrollCancel(authReq.user!.id);
@@ -91,7 +91,7 @@ export function mountAuthMfaRoutes(router: Router): void {
     }
   });
 
-  router.post('/mfa/disable', requireAuth(), async (req, res) => {
+  router.post('/mfa/disable', mfaVerifyRateLimiter, requireAuth(), async (req, res) => {
     try {
       const code = req.body?.code;
       const password = req.body?.password;
@@ -124,7 +124,7 @@ export function mountAuthMfaRoutes(router: Router): void {
     }
   });
 
-  router.post('/mfa/backup/regenerate', requireAuth(), async (req, res) => {
+  router.post('/mfa/backup/regenerate', mfaVerifyRateLimiter, requireAuth(), async (req, res) => {
     try {
       const code = req.body?.code;
       const password = req.body?.password;

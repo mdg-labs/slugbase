@@ -1,4 +1,10 @@
+import dns from 'node:dns';
+import { isIPv4, isIPv6 } from 'node:net';
+import { promisify } from 'node:util';
 import { URL } from 'url';
+
+const resolve4 = promisify(dns.resolve4);
+const resolve6 = promisify(dns.resolve6);
 
 /**
  * Input validation utilities
@@ -202,6 +208,8 @@ function isPrivateIPv4(host: string): boolean {
   if (parts[0] === 169 && parts[1] === 254) return true;
   // 0.0.0.0/8 (current network)
   if (parts[0] === 0) return true;
+  // 224.0.0.0/4 (multicast; align with metadata fetch SSRF checks)
+  if (parts[0] >= 224 && parts[0] <= 239) return true;
   return false;
 }
 
@@ -291,6 +299,69 @@ export function validateOidcUrl(url: string): { valid: boolean; error?: string }
   } catch {
     return { valid: false, error: 'Invalid URL format' };
   }
+}
+
+/**
+ * Resolve hostname (A/AAAA) and ensure no resolved address is private/internal (DNS rebind / SSRF).
+ */
+async function resolveOidcHostname(hostname: string): Promise<void> {
+  try {
+    const [ipv4, ipv6] = await Promise.allSettled([resolve4(hostname), resolve6(hostname)]);
+    const ips: string[] = [];
+    if (ipv4.status === 'fulfilled') ips.push(...ipv4.value);
+    if (ipv6.status === 'fulfilled') ips.push(...ipv6.value);
+    for (const ip of ips) {
+      if (ip.includes('.')) {
+        if (isPrivateIPv4(ip)) {
+          throw new Error('OIDC URL cannot point to private or internal addresses');
+        }
+      } else if (isPrivateIPv6(ip)) {
+        throw new Error('OIDC URL cannot point to private or internal addresses');
+      }
+    }
+    if (ips.length === 0) {
+      throw new Error('OIDC URL host could not be resolved');
+    }
+  } catch (e: unknown) {
+    const err = e as NodeJS.ErrnoException & { message?: string };
+    if (err?.message?.startsWith('OIDC URL')) throw err;
+    if (err.code === 'ENOTFOUND' || err.code === 'ENODATA') {
+      throw new Error('OIDC URL host could not be resolved');
+    }
+    throw err;
+  }
+}
+
+/**
+ * Async OIDC URL validation: same rules as {@link validateOidcUrl}, plus DNS resolution so
+ * hostnames cannot bypass checks by resolving to private/metadata IPs (DNS rebinding).
+ */
+export async function validateOidcUrlAsync(
+  url: string
+): Promise<{ valid: boolean; error?: string }> {
+  const sync = validateOidcUrl(url);
+  if (!sync.valid) return sync;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(url.trim());
+  } catch {
+    return { valid: false, error: 'Invalid URL format' };
+  }
+
+  const host = parsed.hostname;
+  if (isIPv4(host) || isIPv6(host)) {
+    return { valid: true };
+  }
+
+  try {
+    await resolveOidcHostname(host);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Invalid OIDC URL';
+    return { valid: false, error: msg };
+  }
+
+  return { valid: true };
 }
 
 /**

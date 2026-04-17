@@ -2,7 +2,7 @@ import passport from 'passport';
 import { Strategy as OpenIDConnectStrategy, Profile } from 'passport-openidconnect';
 import { queryOne, execute, query } from '../db/index.js';
 import { v4 as uuidv4 } from 'uuid';
-import { decrypt } from '../utils/encryption.js';
+import { decryptSensitiveAtRest } from '../utils/encryption.js';
 import { generateUserKey } from '../utils/user-key.js';
 import type { OIDCProviderRecord, OidcConfigProvider } from '../types/oidc-provider.js';
 import { getDefaultTenantId } from '../utils/tenant.js';
@@ -191,7 +191,7 @@ export async function loadOIDCStrategies(tenantId: string = getDefaultTenantId()
     if (providersList.length === 0) return;
     for (const provider of providersList) {
       try {
-        const decryptedSecret = decrypt(provider.client_secret);
+        const decryptedSecret = decryptSensitiveAtRest(provider.client_secret);
         await registerOIDCStrategy(provider, decryptedSecret);
       } catch (providerError: any) {
         console.error(`Error loading OIDC provider ${provider.provider_key || provider.id}:`, providerError.message || providerError);

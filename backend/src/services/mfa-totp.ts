@@ -5,7 +5,7 @@
  */
 
 import { generateSecret, generateURI, verifySync } from 'otplib';
-import { encrypt, decrypt } from '../utils/encryption.js';
+import { encrypt, decryptSensitiveAtRest } from '../utils/encryption.js';
 
 /** ±1 thirty-second step (see plan §3). */
 const MFA_TOTP_EPOCH_TOLERANCE_SECONDS = 30;
@@ -50,7 +50,7 @@ export function encryptTotpSecretForStorage(plainSecret: string): string {
 }
 
 export function decryptTotpSecretFromStorage(encrypted: string): string {
-  return decrypt(encrypted);
+  return decryptSensitiveAtRest(encrypted);
 }
 
 /**
