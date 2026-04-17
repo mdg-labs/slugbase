@@ -8,6 +8,53 @@ import type { OIDCProviderRecord, OidcConfigProvider } from '../types/oidc-provi
 import { getDefaultTenantId } from '../utils/tenant.js';
 import { getCloudOidcProviderRecordsFromEnv } from './oidc-env-cloud.js';
 
+/**
+ * Default OAuth/OIDC HTTP endpoints for well-known issuers. Google's issuer is
+ * `https://accounts.google.com` but authorization is **not** `{issuer}/authorize` (that URL 404s);
+ * see https://developers.google.com/identity/protocols/oauth2/web-server#creatingclient
+ */
+export function getResolvedOidcEndpoints(provider: OIDCProviderRecord): {
+  authorizationURL: string;
+  tokenURL: string;
+  userInfoURL: string;
+} {
+  const authOverride = provider.authorization_url?.trim() || null;
+  const tokenOverride = provider.token_url?.trim() || null;
+  const userinfoOverride = provider.userinfo_url?.trim() || null;
+
+  const issuerRaw = (provider.issuer_url || '').trim().replace(/\/+$/, '');
+
+  let issuerHostname = '';
+  try {
+    if (issuerRaw) issuerHostname = new URL(issuerRaw).hostname;
+  } catch {
+    /* keep empty */
+  }
+
+  if (issuerHostname === 'accounts.google.com') {
+    return {
+      authorizationURL: authOverride || 'https://accounts.google.com/o/oauth2/v2/auth',
+      tokenURL: tokenOverride || 'https://oauth2.googleapis.com/token',
+      userInfoURL: userinfoOverride || 'https://openidconnect.googleapis.com/v1/userinfo',
+    };
+  }
+
+  if (issuerRaw.includes('login.microsoftonline.com') && /\/v2\.0\/?$/.test(issuerRaw)) {
+    const tenantBase = issuerRaw.replace(/\/v2\.0\/?$/, '');
+    return {
+      authorizationURL: authOverride || `${tenantBase}/oauth2/v2.0/authorize`,
+      tokenURL: tokenOverride || `${tenantBase}/oauth2/v2.0/token`,
+      userInfoURL: userinfoOverride || 'https://graph.microsoft.com/oidc/userinfo',
+    };
+  }
+
+  return {
+    authorizationURL: authOverride || `${issuerRaw}/authorize`,
+    tokenURL: tokenOverride || `${issuerRaw}/token`,
+    userInfoURL: userinfoOverride || `${issuerRaw}/userinfo`,
+  };
+}
+
 /** Merge DB providers with cloud env providers; env wins on duplicate provider_key. */
 function mergeOidcProviders(dbList: OIDCProviderRecord[], envList: OIDCProviderRecord[]): OIDCProviderRecord[] {
   const byKey = new Map<string, OIDCProviderRecord>();
@@ -169,9 +216,9 @@ async function registerOIDCStrategy(provider: OIDCProviderRecord, clientSecret: 
 
   const baseUrl = process.env.BASE_URL || 'http://localhost:5000';
   const callbackURL = `${baseUrl}/api/auth/${provider.provider_key}/callback`;
-  const authorizationURL = provider.authorization_url || `${provider.issuer_url}/authorize`;
-  const tokenURL = provider.token_url || `${provider.issuer_url}/token`;
-  const userInfoURL = provider.userinfo_url || `${provider.issuer_url}/userinfo`;
+  const { authorizationURL, tokenURL, userInfoURL } = getResolvedOidcEndpoints(provider);
+  const scopeRaw = (typeof provider.scopes === 'string' ? provider.scopes : '').split(/\s+/).filter(Boolean);
+  const scope = [...new Set(scopeRaw)];
   const strategyConfig: any = {
     issuer: provider.issuer_url,
     authorizationURL,
@@ -180,7 +227,7 @@ async function registerOIDCStrategy(provider: OIDCProviderRecord, clientSecret: 
     clientID: provider.client_id,
     clientSecret,
     callbackURL,
-    scope: (typeof provider.scopes === 'string' ? provider.scopes : '').split(' ').filter(Boolean),
+    scope,
     skipUserProfile: false,
   };
   passport.use(provider.provider_key, new OpenIDConnectStrategy(strategyConfig, verifyFunction as any));

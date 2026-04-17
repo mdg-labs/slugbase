@@ -3,7 +3,7 @@ import passport from 'passport';
 import bcrypt from 'bcryptjs';
 import { query, queryOne, execute, isInitialized } from '../db/index.js';
 import { v4 as uuidv4 } from 'uuid';
-import { reloadOIDCStrategies } from '../auth/oidc.js';
+import { reloadOIDCStrategies, getResolvedOidcEndpoints } from '../auth/oidc.js';
 import { getCloudOidcProviderByKey, getCloudOidcProviderRecordsFromEnv } from '../auth/oidc-env-cloud.js';
 import { generateToken } from '../utils/jwt.js';
 import { requireAuth, AuthRequest } from '../middleware/auth.js';
@@ -671,9 +671,10 @@ router.get('/:provider/callback', (req, res, next) => {
         if (!providerConfig) {
           const envP = getCloudOidcProviderByKey(provider);
           if (envP) {
+            const endpoints = getResolvedOidcEndpoints(envP);
             providerConfig = {
               issuer_url: envP.issuer_url,
-              userinfo_url: envP.userinfo_url ?? null,
+              userinfo_url: endpoints.userInfoURL,
             } as { issuer_url: string; userinfo_url: string | null };
           }
         }
