@@ -1,5 +1,9 @@
 # SlugBase
 
+<p align="center">
+  <img src="frontend/public/slugbase_icon_purple.svg" alt="SlugBase" width="96" />
+</p>
+
 **Your links. Your structure. Your language. Your rules.**
 
 SlugBase is an open-source, self-hosted bookmark manager with optional link forwarding. Store and organize your bookmarks, and optionally expose them as personal short redirect URLs.
@@ -32,6 +36,7 @@ Sign up for a free account at **[https://slugbase.app](https://slugbase.app)** t
 - 🔑 **Local Authentication** - Email/password authentication as fallback
 - 🛡️ **Password Reset** - Email-based password reset flow (SMTP configurable)
 - 👨‍💼 **Admin System** - First user becomes admin automatically; admin panel for user/team management
+- 🔒 **Multi-factor authentication (TOTP)** - Optional authenticator-app MFA with backup codes after password or OIDC sign-in; see [SECURITY.md](./SECURITY.md)
 
 ### Database & Deployment
 - 💾 **SQLite** - Default database (perfect for small deployments)
@@ -74,8 +79,8 @@ Sign up for a free account at **[https://slugbase.app](https://slugbase.app)** t
 
 1. **Clone the repository**
 ```bash
-git clone <repository-url>   # Replace with your fork or the official repo URL
-cd slugbase-core
+git clone https://github.com/mdg-labs/slugbase.git   # or your fork URL
+cd slugbase
 ```
 
 2. **Install dependencies**
@@ -207,7 +212,7 @@ SlugBase uses an automatic migration system:
 4. **Tracking**: Applied migrations are tracked in `schema_migrations` table
 5. **Execution**: Migrations run automatically after initial schema setup
 
-Current migrations are 001–009, 013–015, 018–021 (see `backend/src/db/migrations/index.ts`). Migrations 010–012 and 016–017 are reserved/cloud-only and not registered in core.
+Current migrations are 001–009, 013–015, 018–024 (see `backend/src/db/migrations/index.ts`). Migrations 010–012 and 016–017 are reserved/cloud-only and not registered in core.
 
 To add a new migration:
 1. Create a new file: `backend/src/db/migrations/NNN_your_migration.ts`
@@ -219,7 +224,7 @@ To add a new migration:
 The repository is an npm workspace monorepo. Production run uses either the Docker image (backend serves frontend from `/public`) or `npm run start` (apps/selfhosted server).
 
 ```
-slugbase-core/
+slugbase/
 ├── backend/                # Express API, auth, db, migrations
 │   ├── src/
 │   │   ├── auth/          # Authentication logic (JWT, OIDC)
