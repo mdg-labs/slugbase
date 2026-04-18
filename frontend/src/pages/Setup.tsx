@@ -89,9 +89,13 @@ export default function Setup() {
     <div className="flex min-h-screen min-h-dvh w-full flex-col items-center justify-center bg-[var(--bg-0)] px-4 py-10">
       <div className="w-full max-w-[440px]" style={{ maxWidth: 440 }}>
         <div className="mb-8 flex items-center gap-3">
-          <div className="grid size-8 shrink-0 place-items-center rounded-[9px] border border-[var(--accent-ring)] bg-[var(--accent-bg)]">
-            <img src="/slugbase_icon_purple.svg" alt="" className="size-[22px]" width={22} height={22} />
-          </div>
+          <img
+            src="/slugbase_icon_purple.svg"
+            alt=""
+            className="size-8 shrink-0 object-contain"
+            width={32}
+            height={32}
+          />
           <div>
             <div className="text-[15px] font-semibold tracking-[-0.01em] text-[var(--fg-0)]">{t('app.name')}</div>
             <div className="mt-0.5 text-[13px] font-medium text-[var(--fg-1)]">{t('setup.title')}</div>

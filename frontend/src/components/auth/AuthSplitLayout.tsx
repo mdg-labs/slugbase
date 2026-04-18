@@ -45,9 +45,13 @@ export function AuthSplitLayout({
           <div className="flex min-h-0 w-full flex-1 flex-col justify-center overflow-y-auto">
             <header className={authTop}>
               <div className="flex items-center gap-3">
-                <div className="grid size-8 shrink-0 place-items-center rounded-[9px] border border-[var(--accent-ring)] bg-[var(--accent-bg)]">
-                  <img src="/slugbase_icon_purple.svg" alt="" className="size-[22px]" width={22} height={22} />
-                </div>
+                <img
+                  src="/slugbase_icon_purple.svg"
+                  alt=""
+                  className="size-8 shrink-0 object-contain"
+                  width={32}
+                  height={32}
+                />
                 <span className="text-[15px] font-semibold tracking-[-0.01em] text-[var(--fg-0)]">{t('app.name')}</span>
               </div>
               {shortVersion ? (
