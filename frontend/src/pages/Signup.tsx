@@ -104,8 +104,7 @@ export default function Signup() {
   if (success) {
     return (
       <AuthSplitLayout showTabs={false}>
-        <div className="my-auto flex flex-1 flex-col justify-center">
-          <div className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-1)] p-8 text-center shadow-[var(--shadow)]">
+        <div className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-1)] p-8 text-center shadow-[var(--shadow)]">
             <h1 className={authTitle}>{t('signup.successTitle')}</h1>
             <p className={cn(authSub, 'mt-3')}>{t('signup.successMessage')}</p>
             <Link
@@ -119,7 +118,6 @@ export default function Signup() {
               <ArrowRight className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
             </Link>
           </div>
-        </div>
       </AuthSplitLayout>
     );
   }
@@ -130,7 +128,7 @@ export default function Signup() {
       showTabs
       onTabChange={(tab) => navigate(tab === 'signup' ? signupPath : loginHref, { replace: true })}
     >
-      <form onSubmit={handleSubmit} className="flex flex-1 flex-col">
+      <form onSubmit={handleSubmit} className="flex flex-col">
         <div className="mb-8">
           <h1 className={authTitle}>{isCloud ? t('signup.cloudTitle') : t('signup.title')}</h1>
           <p className={authSub}>
@@ -159,7 +157,7 @@ export default function Signup() {
           </>
         ) : null}
 
-        <div className="flex flex-1 flex-col gap-5">
+        <div className="flex flex-col gap-5">
           <div className={authField}>
             <label htmlFor="signup-email" className={authFieldLabel}>
               {t('signup.email')}

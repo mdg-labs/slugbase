@@ -42,44 +42,46 @@ export function AuthSplitLayout({
     <div className={authWrap}>
       <div className={authFormSide}>
         <div className={authFormInner}>
-          <header className={authTop}>
-            <div className="flex items-center gap-3">
-              <div className="grid size-8 shrink-0 place-items-center rounded-[9px] border border-[var(--accent-ring)] bg-[var(--accent-bg)]">
-                <img src="/slugbase_icon_purple.svg" alt="" className="size-[22px]" width={22} height={22} />
+          <div className="flex min-h-0 w-full flex-1 flex-col justify-center overflow-y-auto">
+            <header className={authTop}>
+              <div className="flex items-center gap-3">
+                <div className="grid size-8 shrink-0 place-items-center rounded-[9px] border border-[var(--accent-ring)] bg-[var(--accent-bg)]">
+                  <img src="/slugbase_icon_purple.svg" alt="" className="size-[22px]" width={22} height={22} />
+                </div>
+                <span className="text-[15px] font-semibold tracking-[-0.01em] text-[var(--fg-0)]">{t('app.name')}</span>
               </div>
-              <span className="text-[15px] font-semibold tracking-[-0.01em] text-[var(--fg-0)]">{t('app.name')}</span>
-            </div>
-            {shortVersion ? (
-              <span className="font-mono text-[10.5px] text-[var(--fg-3)]" title={shortVersion}>
-                {shortVersion}
-              </span>
+              {shortVersion ? (
+                <span className="font-mono text-[10.5px] text-[var(--fg-3)]" title={shortVersion}>
+                  {shortVersion}
+                </span>
+              ) : null}
+            </header>
+
+            {showTabs && onTabChange ? (
+              <div className={switchTabs} role="tablist" aria-label={t('auth.loginTabs')}>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === 'signin'}
+                  className={switchTabBtn(activeTab === 'signin')}
+                  onClick={() => onTabChange('signin')}
+                >
+                  {t('auth.signInTab')}
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === 'signup'}
+                  className={switchTabBtn(activeTab === 'signup')}
+                  onClick={() => onTabChange('signup')}
+                >
+                  {t('auth.signUpTab')}
+                </button>
+              </div>
             ) : null}
-          </header>
 
-          {showTabs && onTabChange ? (
-            <div className={switchTabs} role="tablist" aria-label={t('auth.loginTabs')}>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={activeTab === 'signin'}
-                className={switchTabBtn(activeTab === 'signin')}
-                onClick={() => onTabChange('signin')}
-              >
-                {t('auth.signInTab')}
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={activeTab === 'signup'}
-                className={switchTabBtn(activeTab === 'signup')}
-                onClick={() => onTabChange('signup')}
-              >
-                {t('auth.signUpTab')}
-              </button>
-            </div>
-          ) : null}
-
-          {children}
+            {children}
+          </div>
 
           <footer className={authFooter}>
             <span>© {new Date().getFullYear()} {t('app.name')}</span>

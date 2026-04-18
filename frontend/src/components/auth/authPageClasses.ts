@@ -10,7 +10,8 @@ export const authWrap =
 export const authFormSide =
   'flex min-h-screen min-h-dvh flex-col border-[var(--border)] bg-[var(--bg-0)] px-8 py-8 min-[901px]:min-h-0 min-[901px]:border-r min-[901px]:px-12';
 
-export const authFormInner = 'mx-auto w-full max-w-[440px] flex-1 flex flex-col';
+export const authFormInner =
+  'mx-auto flex min-h-0 w-full max-w-[440px] flex-1 flex-col';
 
 export const authTop =
   'mb-8 flex shrink-0 items-center justify-between gap-4';
@@ -58,7 +59,7 @@ export const authSubmit =
   'flex h-11 w-full items-center justify-between gap-2 rounded-lg border-0 bg-[var(--accent)] px-4 text-[13px] font-semibold text-white shadow-sm transition-opacity hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-0)] disabled:opacity-60';
 
 export const authFooter =
-  'mt-auto flex flex-wrap items-center justify-center gap-x-4 gap-y-2 border-t border-[var(--border-soft)] pt-8 text-[11.5px] text-[var(--fg-3)]';
+  'flex shrink-0 flex-wrap items-center justify-center gap-x-4 gap-y-2 border-t border-[var(--border-soft)] pt-8 text-[11.5px] text-[var(--fg-3)]';
 
 export const switchTabs =
   'mb-8 flex rounded-lg border border-[var(--border)] bg-[var(--bg-2)] p-1 font-mono text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--fg-3)]';

@@ -122,7 +122,7 @@ export default function Login() {
       showTabs
       onTabChange={(tab) => navigate(tab === 'signup' ? signupHref : loginPath, { replace: true })}
     >
-      <form onSubmit={handleLocalLogin} className="flex flex-1 flex-col">
+      <form onSubmit={handleLocalLogin} className="flex flex-col">
         <div className="mb-8">
           <h1 className={authTitle}>{t('auth.loginTitle')}</h1>
           <p className={authSub}>
@@ -151,7 +151,7 @@ export default function Login() {
           </>
         ) : null}
 
-        <div className="flex flex-1 flex-col gap-5">
+        <div className="flex flex-col gap-5">
           <div className={authField}>
             <label htmlFor="email" className={authFieldLabel}>
               {t('auth.email')}
