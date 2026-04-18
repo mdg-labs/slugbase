@@ -169,7 +169,6 @@ export function CollectionToolbar({
       )}
       {viewSegment && (
         <SegmentedControl
-          type="single"
           value={viewSegment.value}
           onValueChange={(v) => {
             if (v === 'cards' || v === 'table') viewSegment.onChange(v);
