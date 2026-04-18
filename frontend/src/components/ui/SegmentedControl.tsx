@@ -1,98 +1,48 @@
 "use client"
 
 import * as React from "react"
+import * as ToggleGroupPrimitive from "@radix-ui/react-toggle-group"
+import type { ToggleGroupSingleProps } from "@radix-ui/react-toggle-group"
 
 import { cn } from "@/lib/utils"
 
-type Ctx = {
-  value: string
-  onValueChange: (value: string) => void
-}
-
-const SegmentedControlContext = React.createContext<Ctx | null>(null)
-
-function useSegmentedControl() {
-  const ctx = React.useContext(SegmentedControlContext)
-  if (!ctx) {
-    throw new Error(
-      "SegmentedControlItem must be used within SegmentedControl"
-    )
-  }
-  return ctx
-}
-
-export interface SegmentedControlProps {
-  value: string
-  onValueChange: (value: string) => void
-  children: React.ReactNode
-  className?: string
-  /** Accessible label for the tablist. */
-  "aria-label"?: string
-}
-
 /**
- * Mockup `.seg` (`styles.css` L768–786). Radix-free; Phase 4 migrates callsites.
+ * Mockup `.seg` (`styles.css` L768–786). Built on Radix Toggle Group (`type="single"`).
+ * Phase 4 migrates `ScopeSegmentedControl`, Bookmarks view toggle, etc.
  */
-export function SegmentedControl({
-  value,
-  onValueChange,
-  children,
-  className,
-  "aria-label": ariaLabel,
-}: SegmentedControlProps) {
-  const ctx = React.useMemo(
-    () => ({ value, onValueChange }),
-    [value, onValueChange]
-  )
+const SegmentedControl = React.forwardRef<
+  React.ElementRef<typeof ToggleGroupPrimitive.Root>,
+  Omit<ToggleGroupSingleProps, "type">
+>(({ className, ...props }, ref) => (
+  <ToggleGroupPrimitive.Root
+    ref={ref}
+    type="single"
+    className={cn(
+      "inline-flex gap-0.5 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-2)] p-0.5",
+      className
+    )}
+    {...props}
+  />
+))
+SegmentedControl.displayName = "SegmentedControl"
 
-  return (
-    <SegmentedControlContext.Provider value={ctx}>
-      <div
-        role="tablist"
-        aria-label={ariaLabel}
-        className={cn(
-          "inline-flex gap-0.5 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-2)] p-0.5",
-          className
-        )}
-      >
-        {children}
-      </div>
-    </SegmentedControlContext.Provider>
-  )
-}
+const SegmentedControlItem = React.forwardRef<
+  React.ElementRef<typeof ToggleGroupPrimitive.Item>,
+  React.ComponentPropsWithoutRef<typeof ToggleGroupPrimitive.Item>
+>(({ className, children, ...props }, ref) => (
+  <ToggleGroupPrimitive.Item
+    ref={ref}
+    className={cn(
+      "inline-flex items-center justify-center gap-1.5 rounded px-2.5 py-1 font-mono text-[11.5px] font-medium text-[var(--fg-2)] transition-colors",
+      "hover:text-[var(--fg-0)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-0)]",
+      "data-[state=on]:bg-[var(--bg-4)] data-[state=on]:text-[var(--fg-0)]",
+      className
+    )}
+    {...props}
+  >
+    {children}
+  </ToggleGroupPrimitive.Item>
+))
+SegmentedControlItem.displayName = "SegmentedControlItem"
 
-export interface SegmentedControlItemProps {
-  value: string
-  children: React.ReactNode
-  className?: string
-  disabled?: boolean
-}
-
-export function SegmentedControlItem({
-  value,
-  children,
-  className,
-  disabled,
-}: SegmentedControlItemProps) {
-  const { value: groupValue, onValueChange } = useSegmentedControl()
-  const isSelected = groupValue === value
-
-  return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={isSelected}
-      disabled={disabled}
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded px-2.5 py-1 font-mono text-[11.5px] text-[var(--fg-2)] transition-colors",
-        "hover:text-[var(--fg-0)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-0)]",
-        isSelected && "bg-[var(--bg-4)] text-[var(--fg-0)]",
-        disabled && "pointer-events-none opacity-50",
-        className
-      )}
-      onClick={() => onValueChange(value)}
-    >
-      {children}
-    </button>
-  )
-}
+export { SegmentedControl, SegmentedControlItem }

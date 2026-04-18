@@ -3,9 +3,9 @@ import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
 
-/** Mockup `.pill` (`styles.css` L396–412). Phase 2.3: tinted bg + matching text per variant. */
+/** Mockup `.pill` (`styles.css` L396–412). Phase 2.3: 5×10 padding, 11.5px, tinted bg + text per variant. */
 const badgeVariants = cva(
-  "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11.5px] font-medium leading-snug transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-0)]",
+  "inline-flex items-center gap-1 rounded-full border px-2.5 py-[5px] text-[11.5px] font-medium leading-snug transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-0)]",
   {
     variants: {
       variant: {

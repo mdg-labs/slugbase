@@ -56,7 +56,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
           type={type}
           ref={ref}
           disabled={disabled}
-          className="min-h-0 w-full min-w-0 flex-1 bg-transparent text-[13px] text-[var(--fg-0)] outline-none placeholder:text-[var(--fg-3)] disabled:cursor-not-allowed"
+          className="min-h-0 w-full min-w-0 flex-1 bg-transparent text-[12.5px] text-[var(--fg-0)] outline-none placeholder:text-[var(--fg-3)] disabled:cursor-not-allowed"
           {...props}
         />
         {rightSlot ? (

@@ -17,7 +17,7 @@ const DropdownMenuSub = DropdownMenuPrimitive.Sub
 const DropdownMenuRadioGroup = DropdownMenuPrimitive.RadioGroup
 
 const itemBase =
-  "relative flex min-h-7 cursor-default select-none items-center gap-2 rounded-md px-3 py-1.5 text-[12px] text-[var(--fg-0)] outline-none transition-colors data-[highlighted]:bg-[var(--bg-hover)] data-[highlighted]:text-[var(--fg-0)] data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0"
+  "relative flex min-h-[28px] cursor-default select-none items-center gap-2 rounded-md px-3 py-2 text-[12px] text-[var(--fg-0)] outline-none transition-colors data-[highlighted]:bg-[var(--bg-hover)] data-[highlighted]:text-[var(--fg-0)] data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0"
 
 const DropdownMenuSubTrigger = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.SubTrigger>,
@@ -93,7 +93,7 @@ const DropdownMenuCheckboxItem = React.forwardRef<
   <DropdownMenuPrimitive.CheckboxItem
     ref={ref}
     className={cn(
-      "relative flex min-h-7 cursor-default select-none items-center rounded-md py-1.5 pl-8 pr-3 text-[12px] text-[var(--fg-0)] outline-none transition-colors data-[highlighted]:bg-[var(--bg-hover)] data-[highlighted]:text-[var(--fg-0)] data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      "relative flex min-h-[28px] cursor-default select-none items-center rounded-md py-2 pl-8 pr-3 text-[12px] text-[var(--fg-0)] outline-none transition-colors data-[highlighted]:bg-[var(--bg-hover)] data-[highlighted]:text-[var(--fg-0)] data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
       className
     )}
     checked={checked}
@@ -117,7 +117,7 @@ const DropdownMenuRadioItem = React.forwardRef<
   <DropdownMenuPrimitive.RadioItem
     ref={ref}
     className={cn(
-      "relative flex min-h-7 cursor-default select-none items-center rounded-md py-1.5 pl-8 pr-3 text-[12px] text-[var(--fg-0)] outline-none transition-colors data-[highlighted]:bg-[var(--bg-hover)] data-[highlighted]:text-[var(--fg-0)] data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      "relative flex min-h-[28px] cursor-default select-none items-center rounded-md py-2 pl-8 pr-3 text-[12px] text-[var(--fg-0)] outline-none transition-colors data-[highlighted]:bg-[var(--bg-hover)] data-[highlighted]:text-[var(--fg-0)] data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
       className
     )}
     {...props}
