@@ -6,7 +6,6 @@ import { useToast } from '../ui/Toast';
 import { useAppConfig } from '../../contexts/AppConfigContext';
 import { PageLoadingSkeleton } from '../ui/PageLoadingSkeleton';
 import { Switch } from '../ui/switch';
-import { Label } from '../ui/label';
 import { Input } from '../ui/input';
 import Select from '../ui/Select';
 import { cn } from '@/lib/utils';

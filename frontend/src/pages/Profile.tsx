@@ -551,12 +551,6 @@ export default function Profile() {
     { value: 'de', label: t('profile.languageGerman') },
   ];
 
-  const themeOptions = [
-    { value: 'auto', label: t('profile.themeAuto') },
-    { value: 'light', label: t('profile.themeLight') },
-    { value: 'dark', label: t('profile.themeDark') },
-  ];
-
   /** SlugBase TOTP applies to password login; hide enrollment for pure OIDC unless MFA was enabled (e.g. hybrid or legacy). */
   const showSlugbaseMfaCard = user.has_password !== false || Boolean(user.mfa_enabled);
   const showOidcMfaManagedNote =
