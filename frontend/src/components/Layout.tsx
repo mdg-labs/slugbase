@@ -24,7 +24,8 @@ export default function Layout() {
   }, [sidebarOpen]);
 
   useEffect(() => {
-    api.get('/version')
+    api
+      .get('/version')
       .then((res) => {
         if (res.data.commit) {
           setVersion(res.data.commit.substring(0, 7));
@@ -35,28 +36,32 @@ export default function Layout() {
 
   return (
     <SearchCommandProvider>
-      <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen} className="flex h-svh flex-col overflow-hidden bg-background">
+      <SidebarProvider
+        open={sidebarOpen}
+        onOpenChange={setSidebarOpen}
+        className="app flex min-h-svh w-full flex-col overflow-hidden bg-bg-0"
+      >
         <GlobalSearch />
-        <div className="flex min-h-0 flex-1 overflow-hidden">
+        <div className="app-main flex min-h-0 flex-1 overflow-hidden md:grid md:grid-cols-[240px_minmax(0,1fr)]">
           <AppSidebar user={user} version={version} />
-          <SidebarInset className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
-            <TopBar user={user} />
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              <div className="min-h-full w-full px-10 py-12">
-                <Suspense
-                  fallback={
-                    <div className="min-h-[400px] flex items-center justify-center">
-                      <div className="text-muted-foreground">{t('common.loading')}</div>
-                    </div>
-                  }
-                >
-                  <Outlet />
-                </Suspense>
-              </div>
+          <SidebarInset className="main relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-bg-0">
+          <TopBar user={user} />
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="min-h-full w-full max-w-[1400px] px-[26px] pb-10 pt-[22px]">
+              <Suspense
+                fallback={
+                  <div className="flex min-h-[400px] items-center justify-center">
+                    <div className="text-fg-2">{t('common.loading')}</div>
+                  </div>
+                }
+              >
+                <Outlet />
+              </Suspense>
             </div>
-          </SidebarInset>
+          </div>
+        </SidebarInset>
         </div>
-    </SidebarProvider>
+      </SidebarProvider>
     </SearchCommandProvider>
   );
 }
