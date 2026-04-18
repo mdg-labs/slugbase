@@ -201,7 +201,7 @@ export default function AdminUsers() {
               <TableRow key={user.id} className={adminTableBodyRowClass}>
                 <TableCell className={adminTableCellClass}>
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                    <Mail className="h-5 w-5 text-primary" />
+                    <Mail className="h-4 w-4 text-primary" />
                   </div>
                 </TableCell>
                 <TableCell className={adminTableCellClass}>

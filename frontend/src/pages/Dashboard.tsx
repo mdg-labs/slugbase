@@ -67,7 +67,7 @@ function ProTipBanner({
   return (
     <div className="mb-2 flex items-start gap-4 rounded-xl border border-ghost border-l-4 border-l-primary bg-surface px-5 py-4 shadow-sm">
       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10" aria-hidden>
-        <Lightbulb className="h-5 w-5 text-primary" />
+        <Lightbulb className="h-4 w-4 text-primary" />
       </div>
       <div className="flex-1 min-w-0 space-y-1.5">
         <p className="text-sm font-bold text-foreground">{t('dashboard.proTipTitle')}</p>
@@ -156,9 +156,9 @@ function OnboardingChecklist({
         className="w-full flex items-center gap-3 p-4 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset hover:bg-surface-high/40 transition-colors"
       >
         {collapsed ? (
-          <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />
+          <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
         ) : (
-          <ChevronDown className="h-5 w-5 text-muted-foreground shrink-0" />
+          <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
         )}
         <span className="text-sm font-semibold text-foreground">{t('dashboard.onboardingTitle')}</span>
       </button>

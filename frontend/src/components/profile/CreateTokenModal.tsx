@@ -86,7 +86,7 @@ export default function CreateTokenModal({ isOpen, onClose, onCreated }: CreateT
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Key className="h-5 w-5 text-primary" />
+            <Key className="h-4 w-4 text-primary" />
             {step === 'form' ? t('profile.createToken') : t('profile.tokenCreated')}
           </DialogTitle>
         </DialogHeader>

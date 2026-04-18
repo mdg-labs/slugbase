@@ -55,11 +55,11 @@ export default function BookmarkListItem({
       <div className="flex items-center gap-4">
         {bulkMode && (
           <button type="button" onClick={onSelect} className="shrink-0 text-primary">
-            {selected ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5" />}
+            {selected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
           </button>
         )}
         <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-primary/25 bg-gradient-to-br from-primary/15 to-primary/25">
-          <Favicon url={bookmark.url} size={24} />
+          <Favicon url={bookmark.url} size={16} />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-4">

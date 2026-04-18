@@ -148,9 +148,9 @@ export default function BookmarkTableView({
                   aria-label={t('bookmarks.selectAll')}
                 >
                   {selectedBookmarks.size === bookmarks.length ? (
-                    <CheckSquare className="h-5 w-5" />
+                    <CheckSquare className="h-4 w-4" />
                   ) : (
-                    <Square className="h-5 w-5" />
+                    <Square className="h-4 w-4" />
                   )}
                 </button>
               </TableHead>
@@ -215,9 +215,9 @@ export default function BookmarkTableView({
                       aria-label={t('bookmarks.selectAll')}
                     >
                       {selectedBookmarks.has(bookmark.id) ? (
-                        <CheckSquare className="h-5 w-5" />
+                        <CheckSquare className="h-4 w-4" />
                       ) : (
-                        <Square className="h-5 w-5" />
+                        <Square className="h-4 w-4" />
                       )}
                     </button>
                   </TableCell>

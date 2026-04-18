@@ -53,7 +53,7 @@ export function CommandBarHero({ title, subtitle, searchPlaceholder, shortcutHin
         className="group w-full max-w-2xl rounded-full border border-primary/20 glass shadow-glow px-6 py-5 flex items-center gap-4 text-left transition-all duration-300 hover:border-primary/35 hover:bg-surface-high/85 focus:outline-none focus-visible:border-primary/40 focus-visible:ring-4 focus-visible:ring-primary/10"
         aria-label={shortcutHint}
       >
-        <Search className="h-5 w-5 shrink-0 text-primary transition-colors group-hover:text-primary" aria-hidden />
+        <Search className="h-4 w-4 shrink-0 text-primary transition-colors group-hover:text-primary" aria-hidden />
         <span className="flex-1 truncate text-base font-medium text-muted-foreground">{searchPlaceholder}</span>
         <span className="hidden items-center gap-2 sm:inline-flex shrink-0" aria-hidden>
           <kbd className="pointer-events-none rounded-md border border-ghost bg-surface-highest px-2 py-1 font-mono text-[10px] font-bold text-muted-foreground shadow-sm">

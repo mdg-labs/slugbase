@@ -186,7 +186,7 @@ export default function ImportModal({ isOpen, onClose, onSuccess }: ImportModalP
           </p>
 
           <div className="border-2 border-dashed border-ghost rounded-xl bg-surface-low p-6 text-center">
-            <Upload className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <Upload className="h-4 w-4 text-muted-foreground mx-auto mb-4" />
             <label className="cursor-pointer">
               <input
                 type="file"

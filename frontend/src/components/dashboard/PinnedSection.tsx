@@ -36,7 +36,7 @@ export function PinnedSection({
     <section className="space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <Pin className="h-5 w-5 shrink-0 text-primary sm:h-6 sm:w-6" aria-hidden />
+          <Pin className="h-4 w-4 shrink-0 text-primary" aria-hidden />
           <div>
             <h2 className="text-lg font-bold tracking-tight text-foreground">{t('dashboard.pinned')}</h2>
             {subtitle ? <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p> : null}

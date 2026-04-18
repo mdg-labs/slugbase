@@ -774,7 +774,7 @@ export default function Profile() {
           >
             <CardHeader>
               <CardTitle id="mfa-sso-note-title" className="flex items-center gap-2">
-                <Shield className="h-5 w-5 text-primary" aria-hidden />
+                <Shield className="h-4 w-4 text-primary" aria-hidden />
                 {t('mfa.profileSectionTitle')}
               </CardTitle>
               <CardDescription>{t('mfa.oidcManagedByIdp')}</CardDescription>
@@ -785,7 +785,7 @@ export default function Profile() {
           <Card className="rounded-xl border border-ghost bg-surface shadow-none" aria-labelledby="mfa-section-title">
             <CardHeader>
               <CardTitle id="mfa-section-title" className="flex items-center gap-2">
-                <Shield className="h-5 w-5 text-primary" aria-hidden />
+                <Shield className="h-4 w-4 text-primary" aria-hidden />
                 {t('mfa.profileSectionTitle')}
               </CardTitle>
               <CardDescription>{t('mfa.profileSectionDescription')}</CardDescription>
@@ -851,7 +851,7 @@ export default function Profile() {
           <CardHeader>
             <div className="flex flex-wrap items-center gap-2">
               <CardTitle id="developer-section-title" className="flex items-center gap-2">
-                <Key className="h-5 w-5 text-primary" />
+                <Key className="h-4 w-4 text-primary" />
                 {t('profile.developerApiTitle')}
               </CardTitle>
               <Badge
@@ -964,7 +964,7 @@ export default function Profile() {
         <Card className="rounded-xl border border-destructive/40 bg-surface-low shadow-none">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-destructive">
-              <AlertTriangle className="h-5 w-5" />
+              <AlertTriangle className="h-4 w-4" />
               {t('profile.dangerZone')}
             </CardTitle>
             <CardDescription>{t('profile.dangerZoneDescription')}</CardDescription>

@@ -215,7 +215,7 @@ export default function FolderModal({
                   }`}
                   title={t('folders.noIcon')}
                 >
-                  <FolderIcon iconName={null} size={20} className="mx-auto text-muted-foreground" />
+                  <FolderIcon iconName={null} size={16} className="mx-auto text-muted-foreground" />
                 </button>
 
                 {filteredIcons.length === 0 ? (
@@ -261,7 +261,7 @@ export default function FolderModal({
                         }`}
                         title={iconName}
                       >
-                        <IconComponent className="h-5 w-5 mx-auto text-muted-foreground" />
+                        <IconComponent className="h-4 w-4 mx-auto text-muted-foreground" />
                       </button>
                     );
                   })
@@ -270,7 +270,7 @@ export default function FolderModal({
 
               {formData.icon && (
                 <div className="mt-2 flex items-center gap-2 p-2 rounded-lg border bg-muted/50">
-                  <FolderIcon iconName={formData.icon} size={20} className="text-primary" />
+                  <FolderIcon iconName={formData.icon} size={16} className="text-primary" />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium">{t('folders.selectedIcon')}</p>
                     <p className="text-xs text-muted-foreground font-mono truncate">{formData.icon}</p>

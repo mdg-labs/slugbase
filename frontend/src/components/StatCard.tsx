@@ -136,7 +136,7 @@ export function StatCard({
       >
         <Icon
           className={cn(
-            dense ? 'size-5' : 'size-5',
+            'size-4',
             iconColorClassName ?? 'text-[var(--fg-3)]'
           )}
           strokeWidth={1.75}

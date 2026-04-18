@@ -106,7 +106,7 @@ export default function AdminSettings() {
 
       <div className="rounded-2xl border border-ghost bg-surface p-6 shadow-none">
         <div className="mb-6 flex items-center gap-2">
-          <Mail className="h-5 w-5 text-muted-foreground" />
+          <Mail className="h-4 w-4 text-muted-foreground" />
           <h2 className="text-lg font-semibold text-foreground">{t('smtp.title')}</h2>
         </div>
 

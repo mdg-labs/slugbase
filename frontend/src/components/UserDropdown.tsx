@@ -45,7 +45,7 @@ export default function UserDropdown({ user }: UserDropdownProps) {
           {user.name ? (
             getInitials(user.name)
           ) : (
-            <UserIcon className="h-5 w-5 text-accent-hi" strokeWidth={1.75} />
+            <UserIcon className="h-4 w-4 text-accent-hi" strokeWidth={1.75} />
           )}
         </button>
       </DropdownMenuTrigger>

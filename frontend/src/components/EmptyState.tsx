@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Icon } from '@/components/ui/Icon';
 
 interface EmptyStateProps {
   icon: LucideIcon;
@@ -13,7 +14,7 @@ interface EmptyStateProps {
 /**
  * Mockup `.empty` (`gaps_styles.css` L628–654) — dashed tile, heading, body, primary sm CTA.
  */
-export function EmptyState({ icon: Icon, title, description, action, className }: EmptyStateProps) {
+export function EmptyState({ icon: IconComponent, title, description, action, className }: EmptyStateProps) {
   return (
     <div
       className={cn(
@@ -22,7 +23,7 @@ export function EmptyState({ icon: Icon, title, description, action, className }
       )}
     >
       <div className="ill relative grid size-[76px] place-items-center rounded-[18px] border border-dashed border-[var(--border-strong)] bg-[var(--bg-2)] text-[var(--fg-3)] after:pointer-events-none after:absolute after:-inset-2 after:rounded-[22px] after:border after:border-dashed after:border-[var(--border-soft)] after:opacity-50">
-        <Icon className="size-[26px]" strokeWidth={1.75} aria-hidden />
+        <Icon icon={IconComponent} className="size-4" aria-hidden />
       </div>
       <h4 className="m-0 text-sm font-semibold text-[var(--fg-0)]">{title}</h4>
       {description && (

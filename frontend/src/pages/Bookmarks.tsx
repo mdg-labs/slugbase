@@ -745,7 +745,7 @@ export default function Bookmarks() {
       {displayedBookmarks.length === 0 ? (
         <Card className="flex flex-col items-center justify-center border-ghost bg-surface px-6 py-24">
           <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-primary/15 shadow-glow">
-            <BookmarkIcon className="h-10 w-10 text-primary" />
+            <BookmarkIcon className="h-4 w-4 text-primary" />
           </div>
           <h2 className="mb-3 text-center text-4xl font-black tracking-tight text-foreground">
             {hasActiveFilters ? t('bookmarks.noMatches') : t('bookmarks.empty')}

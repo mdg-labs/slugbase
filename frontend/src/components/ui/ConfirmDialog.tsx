@@ -52,7 +52,7 @@ export default function ConfirmDialog({
         <AlertDialogHeader>
           <div className="flex items-start gap-4">
             <div className={`flex-shrink-0 ${variant === 'danger' ? 'text-destructive' : 'text-primary'}`}>
-              <AlertTriangle className="h-6 w-6" />
+              <AlertTriangle className="h-4 w-4" />
             </div>
             <div className="flex-1 min-w-0">
               <AlertDialogTitle className="text-foreground">{title}</AlertDialogTitle>

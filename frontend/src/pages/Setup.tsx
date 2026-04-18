@@ -70,7 +70,7 @@ export default function Setup() {
       <div className="min-h-screen flex items-center justify-center bg-background py-12 px-4">
         <div className={`max-w-md w-full ${AUTH_CARD} text-center space-y-4`}>
           <div className="mx-auto w-16 h-16 rounded-full bg-emerald-500/15 flex items-center justify-center">
-            <CheckCircle className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
+            <CheckCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
           </div>
           <h2 className="text-lg font-semibold text-foreground">
             {t('setup.success')}
@@ -170,7 +170,7 @@ export default function Setup() {
 
             <div className="rounded-xl border border-primary/25 bg-primary/10 px-4 py-3">
               <div className="flex items-start gap-2">
-                <Shield className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                <Shield className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
                 <p className="text-sm text-foreground">
                   {t('setup.adminNote')}
                 </p>

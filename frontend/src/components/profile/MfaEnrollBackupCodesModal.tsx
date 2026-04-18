@@ -55,7 +55,7 @@ export default function MfaEnrollBackupCodesModal({
       >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Shield className="h-5 w-5 text-primary" aria-hidden />
+            <Shield className="h-4 w-4 text-primary" aria-hidden />
             {t('mfa.enrollBackupTitle')}
           </DialogTitle>
           <DialogDescription>{t('mfa.backupCodesWarning')}</DialogDescription>

@@ -12,7 +12,7 @@ interface FaviconProps {
 /**
  * Mockup `.f-ico`-style tile: rounded square, mixed accent + `--bg-2` fill; image sits inside.
  */
-export default function Favicon({ url, className = '', size = 20 }: FaviconProps) {
+export default function Favicon({ url, className = '', size = 16 }: FaviconProps) {
   const [faviconUrl, setFaviconUrl] = useState<string>('');
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(true);

@@ -64,7 +64,7 @@ export default function MfaEnrollSetupModal({
       <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Shield className="h-5 w-5 text-primary" aria-hidden />
+            <Shield className="h-4 w-4 text-primary" aria-hidden />
             {t('mfa.enrollSetupTitle')}
           </DialogTitle>
           <DialogDescription>{t('mfa.scanQrOrEnterSecret')}</DialogDescription>
