@@ -3,19 +3,18 @@ import { useTranslation } from 'react-i18next';
 import api from '../../api/client';
 import { usePlan } from '../../contexts/PlanContext';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
+  Modal,
+  ModalContent,
+  ModalHead,
+  ModalBody,
+  ModalFoot,
 } from '../ui/dialog';
-import { Separator } from '../ui/separator';
 import { Input } from '../ui/input';
 import { ScrollArea } from '../ui/scroll-area';
 import Button from '../ui/Button';
 import Tooltip from '../ui/Tooltip';
 import { useToast } from '../ui/Toast';
-import { User, Users, X } from 'lucide-react';
+import { Check, Copy, Link2, Share2, User, Users, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface SharedUser {
@@ -54,6 +53,8 @@ export default function ShareResourceDialog({
   const [sharedUsers, setSharedUsers] = useState<SharedUser[]>([]);
   const [sharedTeams, setSharedTeams] = useState<SharedTeam[]>([]);
   const [resourceData, setResourceData] = useState<{ name?: string; icon?: string | null } | null>(null);
+  const [bookmarkUrl, setBookmarkUrl] = useState<string | null>(null);
+  const [copiedUrl, setCopiedUrl] = useState(false);
   const [allUsers, setAllUsers] = useState<SharedUser[]>([]);
   const [teams, setTeams] = useState<SharedTeam[]>([]);
   const [emailInput, setEmailInput] = useState('');
@@ -74,6 +75,7 @@ export default function ShareResourceDialog({
       setSharedUsers(data.shared_users ?? []);
       setSharedTeams(data.shared_teams ?? []);
       setResourceData(resourceType === 'folder' ? { name: data.name, icon: data.icon } : null);
+      setBookmarkUrl(resourceType === 'bookmark' && typeof data.url === 'string' ? data.url : null);
     } catch {
       // ignore
     }
@@ -109,6 +111,7 @@ export default function ShareResourceDialog({
       setSharedUsers(data.shared_users ?? []);
       setSharedTeams(data.shared_teams ?? []);
       setResourceData(resourceType === 'folder' ? { name: data.name, icon: data.icon } : null);
+      setBookmarkUrl(resourceType === 'bookmark' && typeof data.url === 'string' ? data.url : null);
     } else {
       setError(t('common.error'));
       showToast(t('common.error'), 'error');
@@ -223,217 +226,240 @@ export default function ShareResourceDialog({
   const title = resourceType === 'bookmark' ? t('sharing.shareBookmark') : t('sharing.shareFolder');
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-[720px]">
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{t('sharing.inviteDescription')}</DialogDescription>
-        </DialogHeader>
-        <Separator />
+    <Modal open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <ModalContent wide className="flex max-h-[90vh] flex-col p-0">
+        <ModalHead icon={Share2} title={title} />
 
-        {loading ? (
-          <div className="py-8 space-y-4">
-            <div className="h-20 rounded-xl bg-surface-low animate-pulse" />
-            <div className="h-20 rounded-xl bg-surface-low animate-pulse" />
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {error && (
-              <div className="rounded-md bg-destructive/10 text-destructive text-sm px-3 py-2">
-                {error}
-              </div>
-            )}
+        <ModalBody>
+          <p className="-mt-1 mb-4 text-[12.5px] text-[var(--fg-2)]">{t('sharing.inviteDescription')}</p>
 
-            <div>
-              <h4 className="typography-label mb-2">{t('sharing.peopleWithAccess')}</h4>
-              {!hasShares ? (
-                <p className="text-sm text-muted-foreground">{t('sharing.notSharedYet')}</p>
-              ) : (
-                <ScrollArea className="max-h-32 rounded-xl border border-ghost bg-surface-low p-2">
-                  <div className="space-y-1.5">
-                    {allowShareToTeams && sharedTeams.map((team) => (
-                      <div
-                        key={team.id}
-                        className="flex items-center justify-between gap-2 rounded-lg border border-ghost/50 bg-surface px-2 py-1.5"
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
-                          <span className="text-sm truncate">{team.name}</span>
-                        </div>
-                        <Tooltip content={t('sharing.removeAccess')}>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveTeam(team.id)}
-                            disabled={saving}
-                            className="p-1 rounded-lg hover:bg-surface-high text-muted-foreground hover:text-foreground transition-colors"
-                            aria-label={t('sharing.removeAccess')}
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        </Tooltip>
-                      </div>
-                    ))}
-                    {sharedUsers.map((u) => (
-                      <div
-                        key={u.id}
-                        className="flex items-center justify-between gap-2 rounded-lg border border-ghost/50 bg-surface px-2 py-1.5"
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <User className="h-4 w-4 shrink-0 text-muted-foreground" />
-                          <span className="text-sm truncate">{u.name || u.email}</span>
-                          {u.name && (
-                            <span className="text-xs text-muted-foreground truncate">({u.email})</span>
-                          )}
-                        </div>
-                        <Tooltip content={t('sharing.removeAccess')}>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveUser(u.id)}
-                            disabled={saving}
-                            className="p-1 rounded-lg hover:bg-surface-high text-muted-foreground hover:text-foreground transition-colors"
-                            aria-label={t('sharing.removeAccess')}
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        </Tooltip>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              )}
+          {loading ? (
+            <div className="space-y-4 py-4">
+              <div className="h-20 animate-pulse rounded-[var(--radius-sm)] bg-[var(--bg-2)]" />
+              <div className="h-20 animate-pulse rounded-[var(--radius-sm)] bg-[var(--bg-2)]" />
             </div>
-
-            <Separator />
-
-            <div>
-              <h4 className="typography-label mb-3">{t('sharing.addAccess')}</h4>
-              {!loading && allUsers.length === 0 && teams.length === 0 && (
-                <p className="text-xs text-amber-600 dark:text-amber-500 mb-2" role="status">
-                  {t('sharing.noUsersOrTeams')}
-                </p>
+          ) : (
+            <div className="space-y-6">
+              {error && (
+                <div className="rounded-[var(--radius-sm)] bg-[rgba(248,113,113,0.1)] px-3 py-2 text-[12.5px] text-[var(--danger)]">
+                  {error}
+                </div>
               )}
-              {allowShareToTeams && allowShareToUsers ? (
-                <div className="flex gap-2 border-b border-ghost mb-3">
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('people')}
-                    className={cn(
-                      'px-3 py-2 text-sm font-medium border-b-2 transition-colors',
-                      activeTab === 'people'
-                        ? 'border-primary text-primary'
-                        : 'border-transparent text-muted-foreground hover:text-foreground'
+
+              <div>
+                <h4 className="mb-2 font-mono text-[10px] font-medium uppercase tracking-[0.08em] text-[var(--fg-3)]">
+                  {t('sharing.peopleWithAccess')}
+                </h4>
+                {!hasShares ? (
+                  <p className="text-[12.5px] text-[var(--fg-2)]">{t('sharing.notSharedYet')}</p>
+                ) : (
+                  <ScrollArea className="max-h-32 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-2)] p-2">
+                    <div className="space-y-1.5">
+                      {allowShareToTeams && sharedTeams.map((team) => (
+                        <div
+                          key={team.id}
+                          className="flex items-center justify-between gap-2 rounded-md border border-[var(--border-soft)] bg-[var(--bg-1)] px-2 py-1.5"
+                        >
+                          <div className="flex min-w-0 items-center gap-2">
+                            <Users className="h-4 w-4 shrink-0 text-[var(--fg-3)]" />
+                            <span className="truncate text-[12.5px] text-[var(--fg-0)]">{team.name}</span>
+                          </div>
+                          <Tooltip content={t('sharing.removeAccess')}>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveTeam(team.id)}
+                              disabled={saving}
+                              className="rounded p-1 text-[var(--fg-3)] transition-colors hover:bg-[var(--bg-3)] hover:text-[var(--fg-0)]"
+                              aria-label={t('sharing.removeAccess')}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </Tooltip>
+                        </div>
+                      ))}
+                      {sharedUsers.map((u) => (
+                        <div
+                          key={u.id}
+                          className="flex items-center justify-between gap-2 rounded-md border border-[var(--border-soft)] bg-[var(--bg-1)] px-2 py-1.5"
+                        >
+                          <div className="flex min-w-0 items-center gap-2">
+                            <User className="h-4 w-4 shrink-0 text-[var(--fg-3)]" />
+                            <span className="truncate text-[12.5px] text-[var(--fg-0)]">{u.name || u.email}</span>
+                            {u.name ? (
+                              <span className="truncate text-[11px] text-[var(--fg-3)]">({u.email})</span>
+                            ) : null}
+                          </div>
+                          <Tooltip content={t('sharing.removeAccess')}>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveUser(u.id)}
+                              disabled={saving}
+                              className="rounded p-1 text-[var(--fg-3)] transition-colors hover:bg-[var(--bg-3)] hover:text-[var(--fg-0)]"
+                              aria-label={t('sharing.removeAccess')}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </Tooltip>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                )}
+              </div>
+
+              <div className="border-t border-[var(--border)] pt-4">
+                <h4 className="mb-3 font-mono text-[10px] font-medium uppercase tracking-[0.08em] text-[var(--fg-3)]">
+                  {t('sharing.addAccess')}
+                </h4>
+                {!loading && allUsers.length === 0 && teams.length === 0 && (
+                  <p className="mb-2 text-[11px] text-[var(--warn)]" role="status">
+                    {t('sharing.noUsersOrTeams')}
+                  </p>
+                )}
+                {allowShareToTeams && allowShareToUsers ? (
+                  <div className="mb-3 flex gap-0.5 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-2)] p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('people')}
+                      className={cn(
+                        'flex-1 rounded px-2.5 py-1 font-mono text-[11.5px] font-medium transition-colors',
+                        activeTab === 'people'
+                          ? 'bg-[var(--bg-4)] text-[var(--fg-0)]'
+                          : 'text-[var(--fg-2)] hover:text-[var(--fg-0)]'
+                      )}
+                    >
+                      {t('sharing.people')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('teams')}
+                      className={cn(
+                        'flex-1 rounded px-2.5 py-1 font-mono text-[11.5px] font-medium transition-colors',
+                        activeTab === 'teams'
+                          ? 'bg-[var(--bg-4)] text-[var(--fg-0)]'
+                          : 'text-[var(--fg-2)] hover:text-[var(--fg-0)]'
+                      )}
+                    >
+                      {t('sharing.teams')}
+                    </button>
+                  </div>
+                ) : null}
+
+                {allowShareToUsers && (activeTab === 'people' || !allowShareToTeams) && (
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <Input
+                        placeholder={t('admin.searchUsers')}
+                        value={emailInput}
+                        onChange={(e) => {
+                          setEmailInput(e.target.value);
+                          setPeopleDropdownOpen(true);
+                        }}
+                        onFocus={() => {
+                          if (searchQuery.length >= MIN_CHARS_FOR_USER_DROPDOWN)
+                            setPeopleDropdownOpen(true);
+                        }}
+                        onBlur={() => {
+                          setTimeout(() => setPeopleDropdownOpen(false), 150);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleAddUserByEmail();
+                          }
+                        }}
+                        className="w-full"
+                        autoComplete="off"
+                        leftSlot={<User className="text-[var(--fg-3)]" strokeWidth={1.75} />}
+                      />
+                      {peopleDropdownOpen && showUserDropdown && (
+                        <div
+                          className="absolute left-0 right-0 top-full z-10 mt-1 max-h-48 overflow-auto rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-2)] shadow-[var(--shadow-lg)]"
+                          role="listbox"
+                        >
+                          {usersAvailableToAdd.map((u) => (
+                            <button
+                              key={u.id}
+                              type="button"
+                              role="option"
+                              className="flex w-full flex-col items-start gap-0.5 rounded-md px-3 py-2 text-left text-[12.5px] text-[var(--fg-0)] hover:bg-[var(--accent-bg)] focus:bg-[var(--accent-bg)] focus:outline-none"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                handleAddUser(u.id);
+                              }}
+                            >
+                              <span className="font-medium">{u.name || u.email}</span>
+                              {u.name && u.email && (
+                                <span className="text-[11px] text-[var(--fg-3)]">{u.email}</span>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-[var(--fg-3)]">
+                      {t('sharing.typeToSearchUsers', { count: MIN_CHARS_FOR_USER_DROPDOWN })}
+                    </p>
+                  </div>
+                )}
+
+                {allowShareToTeams && (activeTab === 'teams' || !allowShareToUsers) && (
+                  <div className="space-y-2">
+                    <p className="text-[11px] text-[var(--fg-3)]">{t('sharing.selectTeamToAdd')}</p>
+                    {filteredTeams.length === 0 ? (
+                      <p className="py-2 text-[12.5px] text-[var(--fg-2)]">{t('common.noResults')}</p>
+                    ) : (
+                      <ScrollArea className="max-h-48 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-2)]">
+                        <div className="space-y-0.5 p-1">
+                          {filteredTeams.map((team) => (
+                            <button
+                              key={team.id}
+                              type="button"
+                              disabled={saving}
+                              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-[12.5px] text-[var(--fg-0)] hover:bg-[var(--bg-3)] focus:bg-[var(--bg-3)] focus:outline-none disabled:opacity-50"
+                              onClick={() => handleAddTeam(team.id)}
+                            >
+                              <Users className="h-4 w-4 shrink-0 text-[var(--fg-3)]" />
+                              <span>{team.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </ScrollArea>
                     )}
-                  >
-                    {t('sharing.people')}
-                  </button>
-                  <button
+                  </div>
+                )}
+              </div>
+
+              {bookmarkUrl ? (
+                <div className="flex flex-wrap items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-2)] px-3 py-2">
+                  <Link2 className="size-3.5 shrink-0 text-[var(--accent-hi)]" aria-hidden />
+                  <code className="min-w-0 flex-1 truncate font-mono text-[11px] text-[var(--fg-0)]">{bookmarkUrl}</code>
+                  <Button
                     type="button"
-                    onClick={() => setActiveTab('teams')}
-                    className={cn(
-                      'px-3 py-2 text-sm font-medium border-b-2 transition-colors',
-                      activeTab === 'teams'
-                        ? 'border-primary text-primary'
-                        : 'border-transparent text-muted-foreground hover:text-foreground'
-                    )}
+                    variant="ghost"
+                    size="sm"
+                    className="shrink-0"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(bookmarkUrl);
+                      setCopiedUrl(true);
+                      showToast(t('common.copied'), 'success');
+                      setTimeout(() => setCopiedUrl(false), 2000);
+                    }}
                   >
-                    {t('sharing.teams')}
-                  </button>
+                    {copiedUrl ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  </Button>
                 </div>
               ) : null}
-
-              {allowShareToUsers && (activeTab === 'people' || !allowShareToTeams) && (
-                <div className="space-y-2">
-                  <div className="relative">
-                    <Input
-                      placeholder={t('admin.searchUsers')}
-                      value={emailInput}
-                      onChange={(e) => {
-                        setEmailInput(e.target.value);
-                        setPeopleDropdownOpen(true);
-                      }}
-                      onFocus={() => {
-                        if (searchQuery.length >= MIN_CHARS_FOR_USER_DROPDOWN)
-                          setPeopleDropdownOpen(true);
-                      }}
-                      onBlur={() => {
-                        setTimeout(() => setPeopleDropdownOpen(false), 150);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleAddUserByEmail();
-                        }
-                      }}
-                      className="w-full"
-                      autoComplete="off"
-                    />
-                    {peopleDropdownOpen && showUserDropdown && (
-                      <div
-                        className="absolute top-full left-0 right-0 z-10 mt-1 max-h-48 overflow-auto rounded-xl border border-ghost bg-surface-high shadow-glow"
-                        role="listbox"
-                      >
-                        {usersAvailableToAdd.map((u) => (
-                          <button
-                            key={u.id}
-                            type="button"
-                            role="option"
-                            className="flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left text-sm hover:bg-surface-low focus:bg-surface-low focus:outline-none rounded-lg"
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              handleAddUser(u.id);
-                            }}
-                          >
-                            <span className="font-medium">{u.name || u.email}</span>
-                            {u.name && u.email && (
-                              <span className="text-xs text-muted-foreground">{u.email}</span>
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {t('sharing.typeToSearchUsers', { count: MIN_CHARS_FOR_USER_DROPDOWN })}
-                  </p>
-                </div>
-              )}
-
-              {allowShareToTeams && (activeTab === 'teams' || !allowShareToUsers) && (
-                <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground">{t('sharing.selectTeamToAdd')}</p>
-                  {filteredTeams.length === 0 ? (
-                    <p className="text-sm text-muted-foreground py-2">{t('common.noResults')}</p>
-                  ) : (
-                    <ScrollArea className="max-h-48 rounded-xl border border-ghost bg-surface-low">
-                      <div className="p-1 space-y-0.5">
-                        {filteredTeams.map((team) => (
-                          <button
-                            key={team.id}
-                            type="button"
-                            disabled={saving}
-                            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-surface-high focus:bg-surface-high focus:outline-none disabled:opacity-50"
-                            onClick={() => handleAddTeam(team.id)}
-                          >
-                            <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
-                            <span>{team.name}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </ScrollArea>
-                  )}
-                </div>
-              )}
             </div>
-          </div>
-        )}
+          )}
+        </ModalBody>
 
-        <Separator />
-        <div className="flex justify-end">
-          <Button variant="secondary" onClick={onClose} className="border-ghost bg-surface">
+        <ModalFoot>
+          <Button variant="ghost" type="button" size="md" onClick={onClose}>
             {t('common.close')}
           </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </ModalFoot>
+      </ModalContent>
+    </Modal>
   );
 }

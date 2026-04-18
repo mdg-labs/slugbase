@@ -1,17 +1,17 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Upload } from 'lucide-react';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
+  Modal,
+  ModalContent,
+  ModalHead,
+  ModalBody,
+  ModalFoot,
 } from '../ui/dialog';
-import { Separator } from '../ui/separator';
 import Button from '../ui/Button';
 import api from '../../api/client';
 import { useToast } from '../ui/Toast';
+import { cn } from '@/lib/utils';
 
 /**
  * Decode HTML entities safely (only common ones, no script execution)
@@ -108,6 +108,8 @@ function parseHtmlBookmarks(html: string): Array<{ title: string; url: string }>
   return bookmarks;
 }
 
+type ImportKind = 'json' | 'html';
+
 interface ImportModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -119,11 +121,10 @@ export default function ImportModal({ isOpen, onClose, onSuccess }: ImportModalP
   const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [kind, setKind] = useState<ImportKind>('json');
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  async function processFile(file: File) {
     setLoading(true);
     setError('');
 
@@ -131,7 +132,17 @@ export default function ImportModal({ isOpen, onClose, onSuccess }: ImportModalP
       const text = await file.text();
       let bookmarks: any[] = [];
 
-      if (file.name.endsWith('.json')) {
+      const isJson = file.name.endsWith('.json');
+      const isHtml = file.name.endsWith('.html');
+
+      if (kind === 'json' && !isJson) {
+        throw new Error(t('bookmarks.importWrongKindJson'));
+      }
+      if (kind === 'html' && !isHtml) {
+        throw new Error(t('bookmarks.importWrongKindHtml'));
+      }
+
+      if (isJson) {
         const data = JSON.parse(text);
         if (Array.isArray(data)) {
           bookmarks = data;
@@ -140,7 +151,7 @@ export default function ImportModal({ isOpen, onClose, onSuccess }: ImportModalP
         } else {
           bookmarks = [data];
         }
-      } else if (file.name.endsWith('.html')) {
+      } else if (isHtml) {
         if (text.length > 10 * 1024 * 1024) {
           throw new Error('HTML file is too large. Maximum size is 10MB.');
         }
@@ -168,66 +179,98 @@ export default function ImportModal({ isOpen, onClose, onSuccess }: ImportModalP
       showToast(err.response?.data?.error || err.message || t('common.error'), 'error');
     } finally {
       setLoading(false);
-      e.target.value = '';
     }
   }
 
-  return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-[720px]">
-        <DialogHeader>
-          <DialogTitle>{t('bookmarks.import')}</DialogTitle>
-        </DialogHeader>
-        <Separator />
+  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await processFile(file);
+    e.target.value = '';
+  }
 
-        <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">
+  function openPicker() {
+    inputRef.current?.click();
+  }
+
+  return (
+    <Modal open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <ModalContent wide className="flex max-h-[90vh] flex-col p-0">
+        <ModalHead icon={Upload} title={t('bookmarks.import')} />
+
+        <ModalBody>
+          <p className="-mt-1 mb-4 text-[12.5px] leading-relaxed text-[var(--fg-2)]">
             {t('bookmarks.importDescription')}
           </p>
 
-          <div className="border-2 border-dashed border-ghost rounded-xl bg-surface-low p-6 text-center">
-            <Upload className="h-4 w-4 text-muted-foreground mx-auto mb-4" />
-            <label className="cursor-pointer">
-              <input
-                type="file"
-                accept=".json,.html"
-                onChange={handleFileSelect}
-                className="hidden"
-                disabled={loading}
-              />
-              <Button
-                variant="primary"
-                icon={Upload}
-                disabled={loading}
-                loading={loading}
-                className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
-                onClick={() => {
-                  const input = document.querySelector('input[type="file"]') as HTMLInputElement;
-                  input?.click();
-                }}
-              >
-                {loading ? t('common.loading') : t('bookmarks.selectFile')}
-              </Button>
-            </label>
-            <p className="mt-2 text-xs text-muted-foreground">
-              {t('bookmarks.supportedFormats')}
-            </p>
+          <div className="mb-4 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setKind('json')}
+              className={cn(
+                'flex flex-col items-start gap-2 rounded-[var(--radius-sm)] border p-3 text-left transition-colors',
+                kind === 'json'
+                  ? 'border-[var(--accent-ring)] bg-[var(--accent-bg)] ring-1 ring-inset ring-[var(--accent-ring)]'
+                  : 'border-[var(--border)] bg-[var(--bg-2)] hover:border-[var(--border-strong)]'
+              )}
+            >
+              <span className="flex h-7 w-7 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--bg-1)] font-mono text-[11px] font-semibold text-[var(--fg-0)] ring-1 ring-inset ring-[var(--border)]">
+                SB
+              </span>
+              <span className="text-[12.5px] font-medium text-[var(--fg-0)]">{t('bookmarks.importSourceJson')}</span>
+              <span className="font-mono text-[10px] text-[var(--fg-3)]">.json</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setKind('html')}
+              className={cn(
+                'flex flex-col items-start gap-2 rounded-[var(--radius-sm)] border p-3 text-left transition-colors',
+                kind === 'html'
+                  ? 'border-[var(--accent-ring)] bg-[var(--accent-bg)] ring-1 ring-inset ring-[var(--accent-ring)]'
+                  : 'border-[var(--border)] bg-[var(--bg-2)] hover:border-[var(--border-strong)]'
+              )}
+            >
+              <span className="flex h-7 w-7 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--bg-1)] font-mono text-[11px] font-semibold text-[var(--fg-0)] ring-1 ring-inset ring-[var(--border)]">
+                HT
+              </span>
+              <span className="text-[12.5px] font-medium text-[var(--fg-0)]">{t('bookmarks.importSourceHtml')}</span>
+              <span className="font-mono text-[10px] text-[var(--fg-3)]">.html</span>
+            </button>
           </div>
 
+          <input
+            ref={inputRef}
+            type="file"
+            accept=".json,.html"
+            onChange={handleFileSelect}
+            className="hidden"
+            disabled={loading}
+          />
+
+          <button
+            type="button"
+            onClick={openPicker}
+            disabled={loading}
+            className="flex w-full flex-col items-center justify-center gap-2 rounded-[var(--radius-sm)] border border-dashed border-[var(--border-strong)] bg-[var(--bg-2)] px-4 py-8 text-center transition-colors hover:border-[var(--accent-ring)] hover:bg-[var(--bg-1)] disabled:opacity-50"
+          >
+            <Upload className="h-5 w-5 text-[var(--fg-3)]" strokeWidth={1.75} />
+            <span className="text-[12.5px] text-[var(--fg-2)]">{t('bookmarks.importDropHint')}</span>
+            <span className="font-mono text-[11px] text-[var(--fg-3)]">{t('bookmarks.importOrBrowse')}</span>
+          </button>
+
           {error && (
-            <div className="px-4 py-3 rounded-lg border bg-destructive/10 border-destructive/20">
-              <p className="text-sm text-destructive">{error}</p>
+            <div className="mt-3 rounded-[var(--radius-sm)] border border-[rgba(248,113,113,0.35)] bg-[rgba(248,113,113,0.08)] px-3 py-2">
+              <p className="text-[12.5px] text-[var(--danger)]">{error}</p>
             </div>
           )}
-        </div>
+        </ModalBody>
 
-        <Separator />
-        <DialogFooter className="flex-row justify-end">
-          <Button variant="secondary" onClick={onClose} disabled={loading}>
+        <ModalFoot className="justify-between sm:justify-end">
+          <Button variant="ghost" type="button" size="md" onClick={onClose} disabled={loading}>
             {t('common.cancel')}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </ModalFoot>
+      </ModalContent>
+    </Modal>
   );
 }

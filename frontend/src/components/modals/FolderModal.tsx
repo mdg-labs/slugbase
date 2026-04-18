@@ -3,19 +3,18 @@ import { useTranslation } from 'react-i18next';
 import api from '../../api/client';
 import { useToast } from '../ui/Toast';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
+  Modal,
+  ModalContent,
+  ModalHead,
+  ModalBody,
+  ModalFoot,
 } from '../ui/dialog';
-import { Separator } from '../ui/separator';
 import { FormFieldWrapper } from '../ui/FormFieldWrapper';
 import { ModalSection } from '../ui/ModalSection';
 import { ModalFooterActions } from '../ui/ModalFooterActions';
 import { Input } from '../ui/input';
 import FolderIcon, { popularIcons, getAllIcons } from '../FolderIcon';
-import { Search, X } from 'lucide-react';
+import { Folder, Search, X } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 
 interface Folder {
@@ -126,172 +125,175 @@ export default function FolderModal({
   const isValid = formData.name.trim();
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-[460px]">
-        <DialogHeader>
-          <DialogTitle>{folder ? t('folders.edit') : t('folders.create')}</DialogTitle>
-        </DialogHeader>
-        <Separator />
+    <Modal open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <ModalContent className="flex max-h-[90vh] max-w-[460px] flex-col p-0">
+        <ModalHead icon={Folder} title={folder ? t('folders.edit') : t('folders.create')} />
 
-        <form id="folder-form" onSubmit={handleSubmit} className="space-y-6">
-          <ModalSection>
-            <FormFieldWrapper label={t('folders.name')} required error={error}>
-              <Input
-                type="text"
-                required
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder={t('folders.name')}
-              />
-            </FormFieldWrapper>
+        <ModalBody>
+          <form id="folder-form" onSubmit={handleSubmit} className="space-y-6">
+            <ModalSection>
+              <FormFieldWrapper label={t('folders.name')} required error={error}>
+                <Input
+                  type="text"
+                  required
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder={t('folders.name')}
+                  leftSlot={<Folder strokeWidth={1.75} aria-hidden />}
+                />
+              </FormFieldWrapper>
 
-            <div>
-              <label className="block text-sm font-medium mb-2">{t('folders.icon')}</label>
-              <div className="space-y-2">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    type="text"
-                    placeholder={t('folders.searchIcons')}
-                    value={iconSearchQuery}
-                    onChange={(e) => setIconSearchQuery(e.target.value)}
-                    className="pl-9 pr-9"
-                  />
-                  {iconSearchQuery && (
+              <div>
+                <label className="mb-2 block text-[12.5px] font-medium text-[var(--fg-0)]">{t('folders.icon')}</label>
+                <div className="space-y-2">
+                  <div className="relative">
+                    <Input
+                      type="text"
+                      placeholder={t('folders.searchIcons')}
+                      value={iconSearchQuery}
+                      onChange={(e) => setIconSearchQuery(e.target.value)}
+                      leftSlot={<Search className="text-[var(--fg-3)]" strokeWidth={1.75} />}
+                      rightSlot={
+                        iconSearchQuery ? (
+                          <button
+                            type="button"
+                            onClick={() => setIconSearchQuery('')}
+                            className="rounded p-0.5 text-[var(--fg-3)] hover:text-[var(--fg-0)]"
+                            aria-label={t('common.remove')}
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        ) : null
+                      }
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] text-[var(--fg-3)]">
+                    <span>
+                      {showAllIcons
+                        ? t('folders.showingAllIcons', { count: filteredIcons.length })
+                        : t('folders.showingPopular', { count: filteredIcons.length })}
+                    </span>
                     <button
                       type="button"
-                      onClick={() => setIconSearchQuery('')}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      aria-label={t('common.remove')}
+                      onClick={() => {
+                        setShowAllIcons(!showAllIcons);
+                        setIconSearchQuery('');
+                      }}
+                      className="text-[var(--accent-hi)] hover:underline"
                     >
-                      <X className="h-4 w-4" />
+                      {showAllIcons ? t('folders.showPopularOnly') : t('folders.showAllIcons')}
                     </button>
-                  )}
+                  </div>
                 </div>
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>
-                    {showAllIcons
-                      ? t('folders.showingAllIcons', { count: filteredIcons.length })
-                      : t('folders.showingPopular', { count: filteredIcons.length })}
-                  </span>
+
+                {isValidIconName && iconSearchQuery.trim() && !filteredIcons.some(icon => icon.toLowerCase() === iconSearchQuery.trim().toLowerCase()) && (
                   <button
                     type="button"
                     onClick={() => {
-                      setShowAllIcons(!showAllIcons);
-                      setIconSearchQuery('');
-                    }}
-                    className="text-primary hover:underline"
-                  >
-                    {showAllIcons ? t('folders.showPopularOnly') : t('folders.showAllIcons')}
-                  </button>
-                </div>
-              </div>
-
-              {isValidIconName && iconSearchQuery.trim() && !filteredIcons.some(icon => icon.toLowerCase() === iconSearchQuery.trim().toLowerCase()) && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const query = iconSearchQuery.trim();
-                    const matchedIcon = allIcons.find(icon => icon.toLowerCase() === query.toLowerCase());
-                    if (matchedIcon) {
-                      setFormData({ ...formData, icon: matchedIcon });
-                      setIconSearchQuery('');
-                    }
-                  }}
-                  className="w-full mt-2 px-3 py-2 text-sm font-medium rounded-xl border border-ghost bg-surface-low hover:bg-surface-high transition-colors flex items-center justify-center gap-2"
-                >
-                  {t('folders.useIcon')}: <code className="px-1.5 py-0.5 bg-muted rounded">{allIcons.find(icon => icon.toLowerCase() === iconSearchQuery.trim().toLowerCase())}</code>
-                </button>
-              )}
-
-              <div className="grid grid-cols-8 gap-2 max-h-48 overflow-y-auto p-2 border border-ghost rounded-xl bg-surface-low mt-2">
-                <button
-                  type="button"
-                  onClick={() => setFormData({ ...formData, icon: '' })}
-                  className={`p-2 rounded-lg border-2 transition-colors ${
-                    formData.icon === ''
-                      ? 'border-primary bg-primary/10'
-                      : 'border-border hover:border-muted-foreground/50'
-                  }`}
-                  title={t('folders.noIcon')}
-                >
-                  <FolderIcon iconName={null} size={16} className="mx-auto text-muted-foreground" />
-                </button>
-
-                {filteredIcons.length === 0 ? (
-                  <div className="col-span-8 text-center py-6 text-sm text-muted-foreground">
-                    {t('folders.noIconsFound')}
-                    {!isValidIconName && iconSearchQuery.trim() && (
-                      <p className="mt-2 text-xs">{t('folders.typeIconName')}</p>
-                    )}
-                  </div>
-                ) : (
-                  filteredIcons.map((iconName) => {
-                    let IconComponent = (LucideIcons as any)[iconName];
-                    if (!IconComponent) {
-                      const iconNameLower = iconName.toLowerCase();
-                      for (const key in LucideIcons) {
-                        if (key.toLowerCase() === iconNameLower) {
-                          const candidate = (LucideIcons as any)[key];
-                          const isValid = typeof candidate === 'function' ||
-                            (candidate && typeof candidate === 'object' && (candidate.$$typeof || candidate.render));
-                          if (isValid) {
-                            IconComponent = candidate;
-                            break;
-                          }
-                        }
+                      const query = iconSearchQuery.trim();
+                      const matchedIcon = allIcons.find(icon => icon.toLowerCase() === query.toLowerCase());
+                      if (matchedIcon) {
+                        setFormData({ ...formData, icon: matchedIcon });
+                        setIconSearchQuery('');
                       }
-                    }
-
-                    const isValidComponent = IconComponent &&
-                      (typeof IconComponent === 'function' ||
-                        (typeof IconComponent === 'object' && IconComponent !== null && ((IconComponent as any).$$typeof || (IconComponent as any).render)));
-
-                    if (!isValidComponent) return null;
-
-                    return (
-                      <button
-                        key={iconName}
-                        type="button"
-                        onClick={() => setFormData({ ...formData, icon: iconName })}
-                        className={`p-2 rounded-lg border-2 transition-colors ${
-                          formData.icon === iconName
-                            ? 'border-primary bg-primary/10'
-                            : 'border-border hover:border-muted-foreground/50'
-                        }`}
-                        title={iconName}
-                      >
-                        <IconComponent className="h-4 w-4 mx-auto text-muted-foreground" />
-                      </button>
-                    );
-                  })
+                    }}
+                    className="mt-2 flex w-full items-center justify-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-2)] px-3 py-2 text-[12.5px] font-medium text-[var(--fg-0)] transition-colors hover:bg-[var(--bg-3)]"
+                  >
+                    {t('folders.useIcon')}:{' '}
+                    <code className="rounded bg-[var(--bg-1)] px-1.5 py-0.5 font-mono text-[11px]">
+                      {allIcons.find(icon => icon.toLowerCase() === iconSearchQuery.trim().toLowerCase())}
+                    </code>
+                  </button>
                 )}
-              </div>
 
-              {formData.icon && (
-                <div className="mt-2 flex items-center gap-2 p-2 rounded-lg border bg-muted/50">
-                  <FolderIcon iconName={formData.icon} size={16} className="text-primary" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium">{t('folders.selectedIcon')}</p>
-                    <p className="text-xs text-muted-foreground font-mono truncate">{formData.icon}</p>
-                  </div>
+                <div className="mt-2 grid max-h-48 grid-cols-8 gap-2 overflow-y-auto rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-2)] p-2">
                   <button
                     type="button"
                     onClick={() => setFormData({ ...formData, icon: '' })}
-                    className="text-muted-foreground hover:text-foreground"
-                    title={t('folders.clearIcon')}
-                    aria-label={t('folders.clearIcon')}
+                    className={`rounded-md border-2 p-2 transition-colors ${
+                      formData.icon === ''
+                        ? 'border-[var(--accent-ring)] bg-[var(--accent-bg)]'
+                        : 'border-transparent hover:border-[var(--border-strong)]'
+                    }`}
+                    title={t('folders.noIcon')}
                   >
-                    <X className="h-4 w-4" />
+                    <FolderIcon iconName={null} size={16} className="mx-auto text-[var(--fg-3)]" />
                   </button>
-                </div>
-              )}
-            </div>
-          </ModalSection>
-        </form>
 
-        <Separator />
-        <DialogFooter className="flex-row justify-between sm:justify-end gap-2">
+                  {filteredIcons.length === 0 ? (
+                    <div className="col-span-8 py-6 text-center text-[12.5px] text-[var(--fg-2)]">
+                      {t('folders.noIconsFound')}
+                      {!isValidIconName && iconSearchQuery.trim() && (
+                        <p className="mt-2 text-[11px]">{t('folders.typeIconName')}</p>
+                      )}
+                    </div>
+                  ) : (
+                    filteredIcons.map((iconName) => {
+                      let IconComponent = (LucideIcons as any)[iconName];
+                      if (!IconComponent) {
+                        const iconNameLower = iconName.toLowerCase();
+                        for (const key in LucideIcons) {
+                          if (key.toLowerCase() === iconNameLower) {
+                            const candidate = (LucideIcons as any)[key];
+                            const isVal = typeof candidate === 'function' ||
+                              (candidate && typeof candidate === 'object' && (candidate.$$typeof || candidate.render));
+                            if (isVal) {
+                              IconComponent = candidate;
+                              break;
+                            }
+                          }
+                        }
+                      }
+
+                      const isValidComponent = IconComponent &&
+                        (typeof IconComponent === 'function' ||
+                          (typeof IconComponent === 'object' && IconComponent !== null && ((IconComponent as any).$$typeof || (IconComponent as any).render)));
+
+                      if (!isValidComponent) return null;
+
+                      return (
+                        <button
+                          key={iconName}
+                          type="button"
+                          onClick={() => setFormData({ ...formData, icon: iconName })}
+                          className={`rounded-md border-2 p-2 transition-colors ${
+                            formData.icon === iconName
+                              ? 'border-[var(--accent-ring)] bg-[var(--accent-bg)]'
+                              : 'border-transparent hover:border-[var(--border-strong)]'
+                          }`}
+                          title={iconName}
+                        >
+                          <IconComponent className="mx-auto h-4 w-4 text-[var(--fg-2)]" />
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+
+                {formData.icon && (
+                  <div className="mt-2 flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-2)] px-2 py-2">
+                    <FolderIcon iconName={formData.icon} size={16} className="text-[var(--accent-hi)]" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] font-medium text-[var(--fg-0)]">{t('folders.selectedIcon')}</p>
+                      <p className="truncate font-mono text-[11px] text-[var(--fg-2)]">{formData.icon}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, icon: '' })}
+                      className="text-[var(--fg-3)] hover:text-[var(--fg-0)]"
+                      title={t('folders.clearIcon')}
+                      aria-label={t('folders.clearIcon')}
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </ModalSection>
+          </form>
+        </ModalBody>
+
+        <ModalFoot>
           <ModalFooterActions
             onCancel={onClose}
             submitLabel={t('common.save')}
@@ -299,8 +301,8 @@ export default function FolderModal({
             submitDisabled={!isValid}
             formId="folder-form"
           />
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </ModalFoot>
+      </ModalContent>
+    </Modal>
   );
 }

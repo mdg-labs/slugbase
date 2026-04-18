@@ -276,6 +276,12 @@
     "import": "Import",
     "importBrowser": "Import Browser Bookmarks",
     "importDescription": "Import bookmarks from a JSON or HTML file. JSON files should contain an array of bookmark objects with title and url fields.",
+    "importDropHint": "Drop a file here",
+    "importOrBrowse": "or click to browse",
+    "importSourceHtml": "Browser export (HTML)",
+    "importSourceJson": "SlugBase JSON",
+    "importWrongKindHtml": "Please choose the HTML source card and select an .html file.",
+    "importWrongKindJson": "Please choose the JSON source card and select a .json file.",
     "importHtml": "Import HTML",
     "importJson": "Import JSON",
     "importSuccess": "Imported {{success}} bookmark(s), {{failed}} failed",
@@ -349,6 +355,10 @@
     "viewList": "List View",
     "viewMode": "View Mode"
   },
+  "confirm": {
+    "typeInstructionAfter": " to confirm.",
+    "typeInstructionBefore": "Type "
+  },
   "common": {
     "actions": "Actions",
     "back": "Back",
@@ -371,6 +381,7 @@
     "expandSidebar": "Expand sidebar",
     "folder": "folder",
     "folders": "folders",
+    "hidePassword": "Hide password",
     "goTo": "Go to",
     "loading": "Loading...",
     "navigation": "Navigation",
@@ -386,6 +397,7 @@
     "save": "Save",
     "scopeSharedByMe": "Shared by me",
     "scopeSharedWithMe": "Shared with me",
+    "showPassword": "Show password",
     "search": "Search",
     "searchPlaceholder": "Search bookmarks, folders, tags...",
     "searchShortcut": "Ctrl+K",
@@ -1147,6 +1159,7 @@
     "name": "Name",
     "noMatchesDescription": "No tags match the current filters. Clear filters to see all.",
     "pageSubtitle": "Label and filter bookmarks across your library.",
+    "renameInfoStrip": "Used on <strong>{{count}}</strong> bookmarks · renaming updates them all",
     "sortAlphabetical": "Alphabetical",
     "sortRecentlyAdded": "Recently Added",
     "tagName": "Tag Name",

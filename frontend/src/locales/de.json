@@ -276,6 +276,12 @@
     "import": "Importieren",
     "importBrowser": "Browser-Lesezeichen importieren",
     "importDescription": "Lese Lesezeichen aus einer JSON- oder HTML-Datei ein. JSON-Dateien sollten ein Array von Lesezeichenobjekten mit den Feldern Titel und URL enthalten.",
+    "importDropHint": "Datei hier ablegen",
+    "importOrBrowse": "oder klicken zum Auswählen",
+    "importSourceHtml": "Browser-Export (HTML)",
+    "importSourceJson": "SlugBase JSON",
+    "importWrongKindHtml": "Bitte die HTML-Quelle wählen und eine .html-Datei auswählen.",
+    "importWrongKindJson": "Bitte die JSON-Quelle wählen und eine .json-Datei auswählen.",
     "importHtml": "HTML importieren",
     "importJson": "JSON importieren",
     "importSuccess": "Importierte {{success}} Lesezeichen, {{failed}} fehlgeschlagen",
@@ -348,6 +354,10 @@
     "viewCard": "Kartenansicht",
     "viewList": "Listenansicht",
     "viewMode": "Ansichtsmodus"
+  },
+  "confirm": {
+    "typeInstructionAfter": " ein (exakt), um zu bestätigen.",
+    "typeInstructionBefore": "Geben Sie "
   },
   "common": {
     "actions": "Aktionen",
@@ -1147,6 +1157,7 @@
     "name": "Name",
     "noMatchesDescription": "Keine Tags entsprechen den aktuellen Filtern. Filter zurücksetzen, um alle zu sehen.",
     "pageSubtitle": "Labels und filtere Lesezeichen in deiner Bibliothek.",
+    "renameInfoStrip": "Wird auf <strong>{{count}}</strong> Lesezeichen verwendet · Umbenennen aktualisiert alle",
     "sortAlphabetical": "Alphabetisch",
     "sortRecentlyAdded": "Kürzlich Hinzugefügt",
     "tagName": "Tag-Name",

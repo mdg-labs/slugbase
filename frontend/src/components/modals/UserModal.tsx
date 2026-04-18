@@ -1,20 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Shield } from 'lucide-react';
+import { Mail, User } from 'lucide-react';
 import api from '../../api/client';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
+  Modal,
+  ModalContent,
+  ModalHead,
+  ModalBody,
+  ModalFoot,
 } from '../ui/dialog';
-import { Separator } from '../ui/separator';
 import { FormFieldWrapper } from '../ui/FormFieldWrapper';
 import { ModalSection } from '../ui/ModalSection';
 import { ModalFooterActions } from '../ui/ModalFooterActions';
 import Button from '../ui/Button';
-import { Switch } from '../ui/switch';
 import { Label } from '../ui/label';
 import { Input } from '../ui/input';
 import { useToast } from '../ui/Toast';
@@ -25,6 +23,7 @@ import {
   usePlanLoadState,
   canInviteOrgUsers,
 } from '../../contexts/PlanContext';
+import { SegmentedControl, SegmentedControlItem } from '../ui/SegmentedControl';
 
 interface User {
   id: string;
@@ -174,115 +173,118 @@ export default function UserModal({ user, isOpen, onClose, onSuccess }: UserModa
   const createPlanLoading = isCreate && isCloudMode && planLoadState === 'loading';
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-[460px]">
-        <DialogHeader>
-          <DialogTitle>{user ? t('admin.editUser') : t('admin.addUser')}</DialogTitle>
-        </DialogHeader>
-        <Separator />
+    <Modal open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <ModalContent className="flex max-h-[90vh] max-w-[460px] flex-col p-0">
+        <ModalHead icon={User} title={user ? t('admin.editUser') : t('admin.addUser')} />
 
-        {createPlanLoading ? (
-          <p className="py-6 text-sm text-muted-foreground">{t('common.loading')}</p>
-        ) : createBlockedByPlan ? (
-          <p className="py-2 text-sm text-muted-foreground">{t('admin.billingUpgradeToInvite')}</p>
-        ) : null}
+        <ModalBody>
+          {createPlanLoading ? (
+            <p className="py-6 text-[12.5px] text-[var(--fg-2)]">{t('common.loading')}</p>
+          ) : createBlockedByPlan ? (
+            <p className="py-2 text-[12.5px] text-[var(--fg-2)]">{t('admin.billingUpgradeToInvite')}</p>
+          ) : null}
 
-        {!createPlanLoading && !createBlockedByPlan ? (
-        <form id="user-form" onSubmit={handleSubmit} className="space-y-6">
-          <ModalSection>
-            <FormFieldWrapper label={t('auth.email')} required error={error}>
-              <Input
-                type="email"
-                required
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                placeholder={t('auth.email')}
-              />
-            </FormFieldWrapper>
-            <FormFieldWrapper label={t('setup.name')} required>
-              <Input
-                type="text"
-                required
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder={t('setup.name')}
-              />
-            </FormFieldWrapper>
-            {isCreate && inviteChoiceAvailable && (
-              <div className="space-y-3">
-                <Label className="text-sm font-medium">{t('admin.createUserWith')}</Label>
-                <div className="flex flex-col gap-2" role="radiogroup" aria-label="Create user with">
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="radio"
-                      id="create-set-password"
-                      name="create-mode"
-                      value="set_password"
-                      checked={createMode === 'set_password'}
-                      onChange={() => {
-                        createModeTouchedRef.current = true;
-                        setCreateMode('set_password');
-                      }}
-                      className="h-4 w-4 rounded-full border-input"
-                    />
-                    <Label htmlFor="create-set-password" className="font-normal cursor-pointer">
-                      {t('admin.setPassword')}
-                    </Label>
+          {!createPlanLoading && !createBlockedByPlan ? (
+            <form id="user-form" onSubmit={handleSubmit} className="space-y-6">
+              <ModalSection>
+                <FormFieldWrapper label={t('auth.email')} required error={error}>
+                  <Input
+                    type="email"
+                    required
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    placeholder={t('auth.email')}
+                    leftSlot={<Mail strokeWidth={1.75} aria-hidden />}
+                  />
+                </FormFieldWrapper>
+                <FormFieldWrapper label={t('setup.name')} required>
+                  <Input
+                    type="text"
+                    required
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    placeholder={t('setup.name')}
+                  />
+                </FormFieldWrapper>
+                {isCreate && inviteChoiceAvailable && (
+                  <div className="space-y-3">
+                    <Label className="text-[12.5px] font-medium text-[var(--fg-0)]">{t('admin.createUserWith')}</Label>
+                    <div className="flex flex-col gap-2" role="radiogroup" aria-label="Create user with">
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="radio"
+                          id="create-set-password"
+                          name="create-mode"
+                          value="set_password"
+                          checked={createMode === 'set_password'}
+                          onChange={() => {
+                            createModeTouchedRef.current = true;
+                            setCreateMode('set_password');
+                          }}
+                          className="h-4 w-4 rounded-full border-input"
+                        />
+                        <Label htmlFor="create-set-password" className="cursor-pointer font-normal">
+                          {t('admin.setPassword')}
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="radio"
+                          id="create-send-invite"
+                          name="create-mode"
+                          value="send_invite"
+                          checked={createMode === 'send_invite'}
+                          onChange={() => {
+                            createModeTouchedRef.current = true;
+                            setCreateMode('send_invite');
+                          }}
+                          className="h-4 w-4 rounded-full border-input"
+                        />
+                        <Label htmlFor="create-send-invite" className="cursor-pointer font-normal">
+                          {t('admin.sendInviteEmail')}
+                        </Label>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="radio"
-                      id="create-send-invite"
-                      name="create-mode"
-                      value="send_invite"
-                      checked={createMode === 'send_invite'}
-                      onChange={() => {
-                        createModeTouchedRef.current = true;
-                        setCreateMode('send_invite');
-                      }}
-                      className="h-4 w-4 rounded-full border-input"
+                )}
+                {!useInvite && (
+                  <FormFieldWrapper
+                    label={user ? `${t('auth.password')} (${t('admin.leaveBlank')})` : t('auth.password')}
+                    required={!user}
+                  >
+                    <Input
+                      type="password"
+                      minLength={8}
+                      required={!user}
+                      value={formData.password}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      placeholder={user ? t('admin.leaveBlank') : ''}
                     />
-                    <Label htmlFor="create-send-invite" className="font-normal cursor-pointer">
-                      {t('admin.sendInviteEmail')}
-                    </Label>
+                  </FormFieldWrapper>
+                )}
+                {canSetInstanceAdmin && (
+                  <div className="space-y-2">
+                    <Label className="text-[12.5px] font-medium text-[var(--fg-0)]">{t('admin.admin')}</Label>
+                    <SegmentedControl
+                      value={formData.is_admin ? 'admin' : 'member'}
+                      onValueChange={(v) => setFormData({ ...formData, is_admin: v === 'admin' })}
+                      className="w-full sm:w-auto"
+                    >
+                      <SegmentedControlItem value="member" className="min-w-[100px]">
+                        {t('admin.user')}
+                      </SegmentedControlItem>
+                      <SegmentedControlItem value="admin" className="min-w-[100px]">
+                        {t('admin.admin')}
+                      </SegmentedControlItem>
+                    </SegmentedControl>
                   </div>
-                </div>
-              </div>
-            )}
-            {!useInvite && (
-              <FormFieldWrapper
-                label={user ? `${t('auth.password')} (${t('admin.leaveBlank')})` : t('auth.password')}
-                required={!user}
-              >
-                <Input
-                  type="password"
-                  minLength={8}
-                  required={!user}
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  placeholder={user ? t('admin.leaveBlank') : ''}
-                />
-              </FormFieldWrapper>
-            )}
-            {canSetInstanceAdmin && (
-              <div className="flex items-center justify-between rounded-lg border p-3">
-                <Label htmlFor="is_admin" className="text-sm font-medium cursor-pointer flex items-center gap-2">
-                  <Shield className="h-4 w-4" />
-                  {t('admin.admin')}
-                </Label>
-                <Switch
-                  id="is_admin"
-                  checked={formData.is_admin}
-                  onCheckedChange={(checked) => setFormData({ ...formData, is_admin: checked })}
-                />
-              </div>
-            )}
-          </ModalSection>
-        </form>
-        ) : null}
+                )}
+              </ModalSection>
+            </form>
+          ) : null}
+        </ModalBody>
 
-        <Separator />
-        <DialogFooter className="flex-row justify-between sm:justify-end gap-2">
+        <ModalFoot>
           {createPlanLoading || createBlockedByPlan ? (
             <Button variant="outline" onClick={onClose} type="button">
               {t('common.cancel')}
@@ -296,8 +298,8 @@ export default function UserModal({ user, isOpen, onClose, onSuccess }: UserModa
               formId="user-form"
             />
           )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </ModalFoot>
+      </ModalContent>
+    </Modal>
   );
 }

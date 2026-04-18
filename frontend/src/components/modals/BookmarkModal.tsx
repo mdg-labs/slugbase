@@ -4,23 +4,21 @@ import { useAuth } from '../../contexts/AuthContext';
 import { usePlan, isCloudMode } from '../../contexts/PlanContext';
 import api from '../../api/client';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
+  Modal,
+  ModalContent,
+  ModalHead,
+  ModalBody,
+  ModalFoot,
 } from '../ui/dialog';
-import { Separator } from '../ui/separator';
 import { FormFieldWrapper } from '../ui/FormFieldWrapper';
-import { ModalSection } from '../ui/ModalSection';
 import { ModalFooterActions } from '../ui/ModalFooterActions';
 import { Switch } from '../ui/switch';
 import { Label } from '../ui/label';
 import { Input } from '../ui/input';
 import Autocomplete from '../ui/Autocomplete';
-import { Copy, Check, Loader2, Plus } from 'lucide-react';
+import { Bookmark, Check, Copy, Link2, Loader2, Plus, Sparkles } from 'lucide-react';
 import { useToast } from '../ui/Toast';
+import { cn } from '@/lib/utils';
 
 const AI_DEBOUNCE_MS = 500;
 const isValidUrl = (url: string): boolean => {
@@ -169,7 +167,7 @@ export default function BookmarkModal({
         forwarding_enabled: bookmark.forwarding_enabled,
         pinned: bookmark.pinned ?? false,
         folder_ids: (bookmark as any).folders?.map((f: any) => f.id) || [],
-        tag_ids: bookmark.tags?.map((t) => t.id) || [],
+        tag_ids: bookmark.tags?.map((tg) => tg.id) || [],
       });
       setAiSuggestions(null);
     } else {
@@ -215,8 +213,8 @@ export default function BookmarkModal({
       if (aiSuggestions != null) {
         const titleUsed = Boolean(aiSuggestions.title && formData.title.trim() === aiSuggestions.title);
         const slugUsed = Boolean(aiSuggestions.slug && formData.slug?.trim() === aiSuggestions.slug);
-        const selectedTagsForSubmit = tags.filter((t) => formData.tag_ids.includes(t.id));
-        const selectedTagNamesLower = new Set(selectedTagsForSubmit.map((t) => t.name.toLowerCase()));
+        const selectedTagsForSubmit = tags.filter((tg) => formData.tag_ids.includes(tg.id));
+        const selectedTagNamesLower = new Set(selectedTagsForSubmit.map((tg) => tg.name.toLowerCase()));
         const tagsUsed =
           Boolean(aiSuggestions.tags?.length) &&
           aiSuggestions.tags!.every((name: string) => selectedTagNamesLower.has(name.toLowerCase()));
@@ -252,7 +250,7 @@ export default function BookmarkModal({
   const slugError = formData.forwarding_enabled && !formData.slug?.trim() ? t('bookmarks.slugRequired') : undefined;
 
   const handleTagChange = (newTags: Array<{ id: string; name: string }>) => {
-    setFormData({ ...formData, tag_ids: newTags.map((t) => t.id) });
+    setFormData({ ...formData, tag_ids: newTags.map((tg) => tg.id) });
   };
 
   const handleFolderChange = (newFolders: Array<{ id: string; name: string }>) => {
@@ -272,7 +270,7 @@ export default function BookmarkModal({
   };
 
   const handleAddTagSuggestion = async (tagName: string) => {
-    const existingByName = new Map(tags.map((t) => [t.name.toLowerCase(), t]));
+    const existingByName = new Map(tags.map((tg) => [tg.name.toLowerCase(), tg]));
     const existing = existingByName.get(tagName.toLowerCase());
     if (existing) {
       setFormData((prev) => ({
@@ -290,224 +288,218 @@ export default function BookmarkModal({
     }
   };
 
-  const selectedTagNames = new Set(selectedTags.map((t) => t.name.toLowerCase()));
+  const selectedTagNames = new Set(selectedTags.map((tg) => tg.name.toLowerCase()));
+
+  const showAiBand =
+    !bookmark &&
+    aiEnabled &&
+    (aiLoading ||
+      (aiSuggestions != null &&
+        Boolean(aiSuggestions.title || aiSuggestions.slug || (aiSuggestions.tags && aiSuggestions.tags.length > 0))));
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-[720px]">
-        <DialogHeader>
-          <DialogTitle className="text-primary text-lg font-semibold">
-            {bookmark ? t('bookmarks.edit') : t('bookmarks.create')}
-          </DialogTitle>
-          <DialogDescription className="typography-label text-center sm:text-left">
-            {t('bookmarks.modalSubtitle')}
-          </DialogDescription>
-        </DialogHeader>
-        <Separator />
+    <Modal open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <ModalContent wide className="flex max-h-[90vh] flex-col p-0">
+        <ModalHead
+          icon={Bookmark}
+          title={bookmark ? t('bookmarks.edit') : t('bookmarks.create')}
+        />
 
-        <form id="bookmark-form" onSubmit={handleSubmit} className="space-y-6">
-          <ModalSection>
-            <FormFieldWrapper
-              label={t('bookmarks.name')}
-              required
-              error={error}
+        <ModalBody>
+          <p className="-mt-1 mb-4 text-[12.5px] text-[var(--fg-2)]">{t('bookmarks.modalSubtitle')}</p>
+
+          <form id="bookmark-form" onSubmit={handleSubmit} className="space-y-0">
+            <div
+              className={cn(
+                'gap-4',
+                showAiBand ? 'grid lg:grid-cols-[minmax(0,1fr)_200px] lg:items-start' : 'flex flex-col'
+              )}
             >
-              <Input
-                type="text"
-                required
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                placeholder={t('bookmarks.name')}
-              />
-              {aiLoading && (
-                <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  {t('bookmarks.aiSuggesting')}
-                </p>
-              )}
-              {!aiLoading && aiSuggestions?.title && (
-                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                  <span className="text-xs text-muted-foreground">{t('bookmarks.aiSuggestionsLabel')}</span>
-                  <button
-                    type="button"
-                    onClick={handleAddTitleSuggestion}
-                    className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs hover:bg-muted/80 transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
-                  >
-                    <span className="max-w-[200px] truncate">{aiSuggestions.title}</span>
-                    <Plus className="h-3 w-3 shrink-0" aria-hidden />
-                  </button>
-                </div>
-              )}
-            </FormFieldWrapper>
-            <FormFieldWrapper label={t('bookmarks.url')} required>
-              <Input
-                type="url"
-                required
-                value={formData.url}
-                onChange={(e) => setFormData({ ...formData, url: e.target.value })}
-                placeholder={t('bookmarks.url')}
-              />
-            </FormFieldWrapper>
-          </ModalSection>
-
-          <Separator />
-
-          <ModalSection title={t('bookmarks.folders')}>
-            {folders.length > 0 ? (
-              <Autocomplete
-                value={selectedFolders}
-                onChange={handleFolderChange}
-                options={folders}
-                placeholder={t('bookmarks.foldersDescription')}
-              />
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                {t('bookmarks.noFoldersAvailable')}
-              </p>
-            )}
-            <div>
-              <Label className="typography-label mb-2 block">{t('bookmarks.tags')}</Label>
-              <Autocomplete
-                value={selectedTags}
-                onChange={handleTagChange}
-                options={tags}
-                placeholder={t('bookmarks.tagsAddPlaceholder')}
-                onCreateNew={handleCreateTag}
-                pillChips
-              />
-              {aiLoading && (
-                <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  {t('bookmarks.aiSuggesting')}
-                </p>
-              )}
-              {!aiLoading && aiSuggestions?.tags && aiSuggestions.tags.length > 0 && (
-                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                  <span className="text-xs text-muted-foreground">{t('bookmarks.aiSuggestionsLabel')}</span>
-                  {aiSuggestions.tags
-                    .filter((name) => !selectedTagNames.has(name.toLowerCase()))
-                    .map((tagName) => (
-                      <button
-                        key={tagName}
-                        type="button"
-                        onClick={() => handleAddTagSuggestion(tagName)}
-                        className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs hover:bg-muted/80 transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
-                      >
-                        {tagName}
-                        <Plus className="h-3 w-3 shrink-0" aria-hidden />
-                      </button>
-                    ))}
-                </div>
-              )}
-            </div>
-          </ModalSection>
-
-          <div className="flex items-center justify-between rounded-lg border p-3">
-            <Label htmlFor="pinned" className="text-sm font-medium cursor-pointer">
-              {t('bookmarks.pinned')}
-            </Label>
-            <Switch
-              id="pinned"
-              checked={formData.pinned}
-              onCheckedChange={(checked) => setFormData({ ...formData, pinned: !!checked })}
-            />
-          </div>
-          <div className="flex items-center justify-between rounded-lg border p-3">
-            <Label htmlFor="forwarding" className="text-sm font-medium cursor-pointer">
-              {t('bookmarks.forwardingEnabled')}
-            </Label>
-            <Switch
-              id="forwarding"
-              checked={formData.forwarding_enabled}
-              onCheckedChange={(checked) =>
-                setFormData({ ...formData, forwarding_enabled: checked })
-              }
-            />
-          </div>
-
-          {formData.forwarding_enabled && (
-            <>
-              <Separator />
-            <ModalSection>
-              <FormFieldWrapper
-                label={t('bookmarks.slug')}
-                required
-                error={slugError}
-                htmlFor="bookmark-slug"
-              >
-                <div className="flex min-h-10 w-full items-center overflow-hidden rounded-xl border border-transparent bg-surface-low transition-colors focus-within:bg-surface-lowest focus-within:border-primary/15 focus-within:ring-2 focus-within:ring-primary/20">
-                  <span
-                    className="shrink-0 select-none pl-3 font-mono text-sm text-muted-foreground"
-                    aria-hidden
-                  >
-                    go/
-                  </span>
+              <div className="min-w-0 space-y-4">
+                <FormFieldWrapper label={t('bookmarks.url')} required>
                   <Input
-                    id="bookmark-slug"
+                    type="url"
+                    required
+                    value={formData.url}
+                    onChange={(e) => setFormData({ ...formData, url: e.target.value })}
+                    placeholder="https://"
+                    leftSlot={<Link2 strokeWidth={1.75} aria-hidden />}
+                  />
+                </FormFieldWrapper>
+
+                <FormFieldWrapper
+                  label={t('bookmarks.name')}
+                  required
+                  error={error}
+                >
+                  <Input
                     type="text"
-                    value={formData.slug || ''}
-                    onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
-                    placeholder={t('bookmarks.slug')}
-                    className="h-10 min-w-0 flex-1 border-0 bg-transparent px-2 py-2 shadow-none focus-visible:border-transparent focus-visible:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none rounded-r-xl"
+                    required
+                    value={formData.title}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                    placeholder={t('bookmarks.name')}
+                  />
+                </FormFieldWrapper>
+
+                <div>
+                  <Label className="mb-2 block text-[12.5px] font-medium text-[var(--fg-0)]">{t('bookmarks.folders')}</Label>
+                  {folders.length > 0 ? (
+                    <Autocomplete
+                      value={selectedFolders}
+                      onChange={handleFolderChange}
+                      options={folders}
+                      placeholder={t('bookmarks.foldersDescription')}
+                    />
+                  ) : (
+                    <p className="text-[12.5px] text-[var(--fg-2)]">{t('bookmarks.noFoldersAvailable')}</p>
+                  )}
+                </div>
+
+                <div>
+                  <Label className="mb-2 block text-[12.5px] font-medium text-[var(--fg-0)]">{t('bookmarks.tags')}</Label>
+                  <Autocomplete
+                    value={selectedTags}
+                    onChange={handleTagChange}
+                    options={tags}
+                    placeholder={t('bookmarks.tagsAddPlaceholder')}
+                    onCreateNew={handleCreateTag}
+                    pillChips
                   />
                 </div>
-                {aiLoading && (
-                  <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    {t('bookmarks.aiSuggesting')}
-                  </p>
-                )}
-                {!aiLoading && aiSuggestions?.slug && (
-                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                    <span className="text-xs text-muted-foreground">{t('bookmarks.aiSuggestionsLabel')}</span>
-                    <button
-                      type="button"
-                      onClick={handleAddSlugSuggestion}
-                      className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs hover:bg-muted/80 transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
-                    >
-                      {aiSuggestions.slug}
-                      <Plus className="h-3 w-3 shrink-0" aria-hidden />
-                    </button>
-                  </div>
-                )}
-              </FormFieldWrapper>
-              {formData.slug && (
-                <div className="rounded-lg border bg-muted/50 p-3 space-y-1">
-                  <p className="text-xs font-medium text-muted-foreground">
-                    {t('bookmarks.forwardingPreview')}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <code className="flex-1 text-xs font-mono truncate">
-                      {window.location.origin}/go/{formData.slug}
-                    </code>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const url = `${window.location.origin}/go/${formData.slug}`;
-                        navigator.clipboard.writeText(url);
-                        setCopied(true);
-                        showToast(t('common.copied'), 'success');
-                        setTimeout(() => setCopied(false), 2000);
-                      }}
-                      className="p-1.5 rounded-md hover:bg-muted transition-colors focus-visible:ring-2 focus-visible:ring-ring"
-                      title={t('bookmarks.copyUrl')}
-                      aria-label={t('bookmarks.copyUrl')}
-                    >
-                      {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                    </button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {t('bookmarks.forwardingPreviewDescription')}
-                  </p>
-                </div>
-              )}
-            </ModalSection>
-            </>
-          )}
-        </form>
 
-        <Separator />
-        <DialogFooter className="flex-row justify-between sm:justify-end gap-2">
+                <div className="flex items-center justify-between rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-2)] px-3 py-2.5">
+                  <Label htmlFor="pinned" className="cursor-pointer text-[12.5px] font-medium text-[var(--fg-0)]">
+                    {t('bookmarks.pinned')}
+                  </Label>
+                  <Switch
+                    id="pinned"
+                    checked={formData.pinned}
+                    onCheckedChange={(checked) => setFormData({ ...formData, pinned: !!checked })}
+                  />
+                </div>
+                <div className="flex items-center justify-between rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-2)] px-3 py-2.5">
+                  <Label htmlFor="forwarding" className="cursor-pointer text-[12.5px] font-medium text-[var(--fg-0)]">
+                    {t('bookmarks.forwardingEnabled')}
+                  </Label>
+                  <Switch
+                    id="forwarding"
+                    checked={formData.forwarding_enabled}
+                    onCheckedChange={(checked) =>
+                      setFormData({ ...formData, forwarding_enabled: checked })
+                    }
+                  />
+                </div>
+
+                {formData.forwarding_enabled ? (
+                  <div className="space-y-4 border-t border-[var(--border)] pt-4">
+                    <FormFieldWrapper
+                      label={t('bookmarks.slug')}
+                      required
+                      error={slugError}
+                      htmlFor="bookmark-slug"
+                    >
+                      <Input
+                        id="bookmark-slug"
+                        type="text"
+                        value={formData.slug || ''}
+                        onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
+                        placeholder={t('bookmarks.slug')}
+                        leftSlot={
+                          <span className="select-none font-mono text-[11px] text-[var(--fg-3)]" aria-hidden>
+                            /go/
+                          </span>
+                        }
+                      />
+                    </FormFieldWrapper>
+                    {formData.slug ? (
+                      <div className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-2)] px-3 py-2.5">
+                        <p className="text-[11px] font-medium text-[var(--fg-2)]">{t('bookmarks.forwardingPreview')}</p>
+                        <div className="mt-1 flex items-center gap-2">
+                          <code className="min-w-0 flex-1 truncate font-mono text-[11px] text-[var(--fg-0)]">
+                            {window.location.origin}/go/{formData.slug}
+                          </code>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const u = `${window.location.origin}/go/${formData.slug}`;
+                              navigator.clipboard.writeText(u);
+                              setCopied(true);
+                              showToast(t('common.copied'), 'success');
+                              setTimeout(() => setCopied(false), 2000);
+                            }}
+                            className="rounded-md p-1.5 text-[var(--fg-3)] transition-colors hover:bg-[var(--bg-3)] hover:text-[var(--fg-0)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-ring)]"
+                            title={t('bookmarks.copyUrl')}
+                            aria-label={t('bookmarks.copyUrl')}
+                          >
+                            {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                          </button>
+                        </div>
+                        <p className="mt-1 text-[11px] text-[var(--fg-2)]">{t('bookmarks.forwardingPreviewDescription')}</p>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+
+              {showAiBand ? (
+                <aside className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-2)] p-3 lg:sticky lg:top-0">
+                  <div className="mb-2 flex items-center gap-1.5 font-mono text-[10px] font-medium uppercase tracking-[0.08em] text-[var(--fg-3)]">
+                    <Sparkles className="size-3.5 text-[var(--accent-hi)]" aria-hidden />
+                    {t('bookmarks.aiSuggestionsLabel')}
+                  </div>
+                  {aiLoading ? (
+                    <p className="flex items-center gap-1.5 text-[12px] text-[var(--fg-2)]">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      {t('bookmarks.aiSuggesting')}
+                    </p>
+                  ) : (
+                    <div className="space-y-2 text-[12px]">
+                      {aiSuggestions?.title ? (
+                        <button
+                          type="button"
+                          onClick={handleAddTitleSuggestion}
+                          className="flex w-full items-center justify-between gap-2 rounded-md border border-[var(--border-soft)] bg-[var(--bg-1)] px-2 py-1.5 text-left text-[var(--fg-0)] transition-colors hover:bg-[var(--bg-3)]"
+                        >
+                          <span className="min-w-0 truncate">{aiSuggestions.title}</span>
+                          <Plus className="h-3.5 w-3.5 shrink-0" />
+                        </button>
+                      ) : null}
+                      {aiSuggestions?.slug ? (
+                        <button
+                          type="button"
+                          onClick={handleAddSlugSuggestion}
+                          className="flex w-full items-center justify-between gap-2 rounded-md border border-[var(--border-soft)] bg-[var(--bg-1)] px-2 py-1.5 font-mono text-[11px] text-[var(--fg-0)]"
+                        >
+                          <span className="min-w-0 truncate">{aiSuggestions.slug}</span>
+                          <Plus className="h-3.5 w-3.5 shrink-0" />
+                        </button>
+                      ) : null}
+                      {aiSuggestions?.tags?.length ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {aiSuggestions.tags
+                            .filter((name) => !selectedTagNames.has(name.toLowerCase()))
+                            .map((tagName) => (
+                              <button
+                                key={tagName}
+                                type="button"
+                                onClick={() => handleAddTagSuggestion(tagName)}
+                                className="inline-flex items-center gap-1 rounded-full bg-[var(--accent-bg)] px-2 py-0.5 text-[11px] text-[var(--fg-0)] ring-1 ring-inset ring-[var(--accent-ring)]"
+                              >
+                                {tagName}
+                                <Plus className="h-3 w-3" />
+                              </button>
+                            ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+                </aside>
+              ) : null}
+            </div>
+          </form>
+        </ModalBody>
+
+        <ModalFoot>
           <ModalFooterActions
             onCancel={onClose}
             cancelVariant="ghost"
@@ -516,8 +508,8 @@ export default function BookmarkModal({
             submitDisabled={!isValid || !!slugError}
             formId="bookmark-form"
           />
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </ModalFoot>
+      </ModalContent>
+    </Modal>
   );
 }

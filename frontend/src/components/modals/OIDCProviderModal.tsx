@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Select from '../ui/Select';
-import { Key } from 'lucide-react';
+import { Copy, Eye, EyeOff, Key, Shield } from 'lucide-react';
 import api from '../../api/client';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
+  Modal,
+  ModalContent,
+  ModalHead,
+  ModalBody,
+  ModalFoot,
 } from '../ui/dialog';
-import { Separator } from '../ui/separator';
+import Button from '../ui/Button';
+import { useToast } from '../ui/Toast';
 import { FormFieldWrapper } from '../ui/FormFieldWrapper';
 import { ModalSection } from '../ui/ModalSection';
 import { ModalFooterActions } from '../ui/ModalFooterActions';
@@ -44,6 +45,8 @@ export default function OIDCProviderModal({
   onSuccess,
 }: OIDCProviderModalProps) {
   const { t } = useTranslation();
+  const { showToast } = useToast();
+  const [showSecret, setShowSecret] = useState(false);
   const [formData, setFormData] = useState({
     provider_key: '',
     client_id: '',
@@ -144,28 +147,39 @@ export default function OIDCProviderModal({
 
   const isValid = formData.provider_key.trim() && formData.issuer_url.trim() && (provider || formData.client_id.trim());
 
-  return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[calc(100vh-4rem)] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{provider ? t('admin.editProvider') : t('admin.addProvider')}</DialogTitle>
-        </DialogHeader>
-        <Separator />
+  const callbackPreview =
+    typeof window !== 'undefined'
+      ? `${window.location.origin}/api/auth/${formData.provider_key.trim() || '{key}'}/callback`
+      : '';
 
-        <form id="oidc-provider-form" onSubmit={handleSubmit} className="space-y-6">
+  async function copyCallback() {
+    if (!callbackPreview) return;
+    try {
+      await navigator.clipboard.writeText(callbackPreview);
+      showToast(t('common.copied'), 'success');
+    } catch {
+      showToast(t('common.error'), 'error');
+    }
+  }
+
+  return (
+    <Modal open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <ModalContent wide className="flex max-h-[calc(100vh-4rem)] flex-col overflow-hidden p-0">
+        <ModalHead icon={Shield} title={provider ? t('admin.editProvider') : t('admin.addProvider')} />
+
+        <ModalBody>
+          <form id="oidc-provider-form" onSubmit={handleSubmit} className="space-y-6">
           <ModalSection>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <FormFieldWrapper label={t('admin.providerKey')} required error={error}>
-                <div className="flex items-center gap-2">
-                  <Key className="h-4 w-4 text-muted-foreground" />
-                  <Input
-                    type="text"
-                    required
-                    value={formData.provider_key}
-                    onChange={(e) => setFormData({ ...formData, provider_key: e.target.value })}
-                    placeholder={t('admin.providerKey')}
-                  />
-                </div>
+                <Input
+                  type="text"
+                  required
+                  value={formData.provider_key}
+                  onChange={(e) => setFormData({ ...formData, provider_key: e.target.value })}
+                  placeholder={t('admin.providerKey')}
+                  leftSlot={<Key className="text-[var(--fg-3)]" strokeWidth={1.75} />}
+                />
               </FormFieldWrapper>
               <FormFieldWrapper label={t('admin.issuerUrl')} required>
                 <Input
@@ -173,12 +187,13 @@ export default function OIDCProviderModal({
                   required
                   value={formData.issuer_url}
                   onChange={(e) => setFormData({ ...formData, issuer_url: e.target.value })}
-                  placeholder={t('admin.issuerUrl')}
+                  placeholder="https://issuer.example.com"
+                  className="font-mono text-[11px]"
                 />
               </FormFieldWrapper>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <FormFieldWrapper
                 label={provider ? `${t('admin.clientId')} (${t('admin.leaveBlankToKeep')})` : t('admin.clientId')}
                 required={!provider}
@@ -196,10 +211,20 @@ export default function OIDCProviderModal({
                 required={!provider}
               >
                 <Input
-                  type="password"
+                  type={showSecret ? 'text' : 'password'}
                   required={!provider}
                   value={formData.client_secret}
                   onChange={(e) => setFormData({ ...formData, client_secret: e.target.value })}
+                  rightSlot={
+                    <button
+                      type="button"
+                      className="rounded p-0.5 text-[var(--fg-3)] hover:bg-[var(--bg-3)] hover:text-[var(--fg-0)]"
+                      onClick={() => setShowSecret((s) => !s)}
+                      aria-label={showSecret ? t('common.hidePassword') : t('common.showPassword')}
+                    >
+                      {showSecret ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                    </button>
+                  }
                 />
               </FormFieldWrapper>
             </div>
@@ -210,11 +235,10 @@ export default function OIDCProviderModal({
                 value={formData.scopes}
                 onChange={(e) => setFormData({ ...formData, scopes: e.target.value })}
                 placeholder="openid profile email"
+                className="font-mono text-[11px]"
               />
             </FormFieldWrapper>
           </ModalSection>
-
-          <Separator />
 
           <ModalSection title={`${t('admin.customEndpoints')} (${t('admin.optional')})`} description={t('admin.customEndpointsDescription')}>
             <div className="space-y-4">
@@ -268,8 +292,20 @@ export default function OIDCProviderModal({
           </ModalSection>
         </form>
 
-        <Separator />
-        <DialogFooter className="flex-row justify-between sm:justify-end gap-2">
+          <div className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-2)] px-3 py-2.5">
+            <p className="mb-1 font-mono text-[10px] font-medium uppercase tracking-[0.08em] text-[var(--fg-3)]">
+              {t('admin.callbackUrl')}
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <code className="min-w-0 flex-1 break-all font-mono text-[11px] text-[var(--fg-0)]">{callbackPreview}</code>
+              <Button type="button" variant="ghost" size="sm" icon={Copy} onClick={() => void copyCallback()}>
+                {t('common.copy')}
+              </Button>
+            </div>
+          </div>
+        </ModalBody>
+
+        <ModalFoot>
           <ModalFooterActions
             onCancel={onClose}
             submitLabel={t('common.save')}
@@ -277,8 +313,8 @@ export default function OIDCProviderModal({
             submitDisabled={!isValid}
             formId="oidc-provider-form"
           />
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </ModalFoot>
+      </ModalContent>
+    </Modal>
   );
 }
