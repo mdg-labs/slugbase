@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Upload } from 'lucide-react';
+import { Import, Upload } from 'lucide-react';
 import {
   Modal,
   ModalContent,
@@ -196,7 +196,7 @@ export default function ImportModal({ isOpen, onClose, onSuccess }: ImportModalP
   return (
     <Modal open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <ModalContent wide className="flex max-h-[90vh] flex-col p-0">
-        <ModalHead icon={Upload} title={t('bookmarks.import')} />
+        <ModalHead icon={Import} title={t('bookmarks.import')} />
 
         <ModalBody>
           <p className="-mt-1 mb-4 text-[12.5px] leading-relaxed text-[var(--fg-2)]">
