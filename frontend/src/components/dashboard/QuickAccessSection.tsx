@@ -31,9 +31,9 @@ export function QuickAccessSection({
   subtitle,
   t,
   onOpen,
-  onCopyUrl: _onCopyUrl,
+  onCopyUrl,
 }: QuickAccessSectionProps) {
-  void _onCopyUrl;
+  void onCopyUrl;
   const prefix = pathPrefix.replace(/\/+/g, '/') || '';
   const displayItems = items.slice(0, maxItems);
   const createBookmarksUrl = `${prefix}/bookmarks?create=true`.replace(/\/+/g, '/') || '/bookmarks?create=true';
