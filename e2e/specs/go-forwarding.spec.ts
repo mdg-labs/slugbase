@@ -16,18 +16,15 @@ test.describe('Go forwarding', () => {
       page.getByRole('heading', { level: 1, name: /^Bookmarks/ })
     ).toBeVisible({ timeout: 10000 });
 
-    const createButton = page.getByRole('main').getByRole('button', {
-      name: /create bookmark/i,
-    });
-    await createButton.click();
+    await page.getByRole('button', { name: /create bookmark/i }).first().click();
 
     const modal = page.getByRole('dialog');
     await expect(modal).toBeVisible();
 
-    await modal.getByPlaceholder(/title/i).fill(`Go test ${slug}`);
-    await modal.getByPlaceholder(/^url$/i).fill(targetUrl);
+    await modal.getByPlaceholder(/^https/i).fill(targetUrl);
+    await modal.getByPlaceholder(/^Title$/i).fill(`Go test ${slug}`);
     await modal.getByRole('switch', { name: /enable forwarding/i }).click();
-    await modal.getByPlaceholder(/slug/i).fill(slug);
+    await modal.locator('#bookmark-slug').fill(slug);
     await modal.locator('#bookmark-form').evaluate((el) => (el as HTMLFormElement).requestSubmit());
 
     await expect(modal).not.toBeVisible({ timeout: 5000 });

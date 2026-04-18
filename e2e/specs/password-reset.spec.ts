@@ -7,7 +7,9 @@ test.describe('Password reset', () => {
   test('request step shows success after submit', async ({ page }) => {
     await page.goto('/password-reset');
 
-    await expect(page.getByRole('heading', { name: /reset password/i })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: /reset your password|reset password/i })
+    ).toBeVisible();
 
     await page.getByLabel(/^email$/i).fill('nobody@example.com');
     await page.getByRole('button', { name: /send reset link/i }).click();

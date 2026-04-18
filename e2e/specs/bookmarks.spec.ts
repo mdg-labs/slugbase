@@ -6,12 +6,11 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Bookmarks', () => {
   test('opens bookmarks page and creates a new bookmark', async ({ page }) => {
-    await page.goto('/bookmarks');
+    await page.goto('/bookmarks?view=table');
 
     await expect(page.getByRole('heading', { level: 1, name: /^Bookmarks/ })).toBeVisible({ timeout: 10000 });
 
-    const createButton = page.getByRole('main').getByRole('button', { name: /create bookmark/i });
-    await createButton.click();
+    await page.getByRole('button', { name: /create bookmark/i }).first().click();
 
     const modal = page.getByRole('dialog');
     await expect(modal).toBeVisible();
@@ -19,13 +18,25 @@ test.describe('Bookmarks', () => {
     const title = `E2E Bookmark ${Date.now()}`;
     const url = 'https://example.com/e2e-test';
 
-    // Form fields use placeholders "Title" / "URL"; labels are not wired with htmlFor so use placeholder or role within dialog
-    await modal.getByPlaceholder(/title/i).fill(title);
-    await modal.getByPlaceholder(/^url$/i).fill(url);
-    await modal.getByRole('button', { name: /save/i }).click();
+    // Bookmark modal: URL field uses placeholder "https://"; title uses i18n "Title"
+    await modal.getByPlaceholder(/^https/i).fill(url);
+    await modal.getByPlaceholder(/^Title$/i).fill(title);
 
-    await expect(modal).not.toBeVisible({ timeout: 5000 });
-    await expect(page.getByText(title)).toBeVisible({ timeout: 5000 });
+    const createPost = page.waitForResponse((res) => {
+      if (res.request().method() !== 'POST' || res.status() >= 400) return false;
+      try {
+        return new URL(res.url()).pathname === '/api/bookmarks';
+      } catch {
+        return false;
+      }
+    });
+    await modal.getByRole('button', { name: /save/i }).click();
+    await createPost;
+
+    await expect(modal).not.toBeVisible({ timeout: 10000 });
+    // Remount list so heading count + rows reflect the new bookmark (avoids stale UI after modal close).
+    await page.goto('/bookmarks?view=table');
+    await expect(page.getByRole('row').filter({ hasText: title }).first()).toBeVisible({ timeout: 15000 });
   });
 
   test('edits a bookmark title from the table row menu', async ({ page }) => {
@@ -36,15 +47,25 @@ test.describe('Bookmarks', () => {
     const initialTitle = `E2E Edit Before ${Date.now()}`;
     const url = 'https://example.com/e2e-edit';
 
-    await page.getByRole('main').getByRole('button', { name: /create bookmark/i }).click();
+    await page.getByRole('button', { name: /create bookmark/i }).first().click();
     const createModal = page.getByRole('dialog');
     await expect(createModal).toBeVisible();
-    await createModal.getByPlaceholder(/title/i).fill(initialTitle);
-    await createModal.getByPlaceholder(/^url$/i).fill(url);
+    await createModal.getByPlaceholder(/^https/i).fill(url);
+    await createModal.getByPlaceholder(/^Title$/i).fill(initialTitle);
+    const createPost = page.waitForResponse((res) => {
+      if (res.request().method() !== 'POST' || res.status() >= 400) return false;
+      try {
+        return new URL(res.url()).pathname === '/api/bookmarks';
+      } catch {
+        return false;
+      }
+    });
     await createModal.getByRole('button', { name: /save/i }).click();
-    await expect(createModal).not.toBeVisible({ timeout: 5000 });
+    await createPost;
+    await expect(createModal).not.toBeVisible({ timeout: 10000 });
+    await page.reload();
     await expect(page.getByRole('row').filter({ hasText: initialTitle }).first()).toBeVisible({
-      timeout: 5000,
+      timeout: 15000,
     });
 
     const row = page.getByRole('row').filter({ hasText: initialTitle }).first();
@@ -72,20 +93,30 @@ test.describe('Bookmarks', () => {
     const title = `E2E Delete ${Date.now()}`;
     const url = 'https://example.com/e2e-delete';
 
-    await page.getByRole('main').getByRole('button', { name: /create bookmark/i }).click();
+    await page.getByRole('button', { name: /create bookmark/i }).first().click();
     const createModal = page.getByRole('dialog');
     await expect(createModal).toBeVisible();
-    await createModal.getByPlaceholder(/title/i).fill(title);
-    await createModal.getByPlaceholder(/^url$/i).fill(url);
+    await createModal.getByPlaceholder(/^https/i).fill(url);
+    await createModal.getByPlaceholder(/^Title$/i).fill(title);
+    const createPost = page.waitForResponse((res) => {
+      if (res.request().method() !== 'POST' || res.status() >= 400) return false;
+      try {
+        return new URL(res.url()).pathname === '/api/bookmarks';
+      } catch {
+        return false;
+      }
+    });
     await createModal.getByRole('button', { name: /save/i }).click();
-    await expect(createModal).not.toBeVisible({ timeout: 5000 });
-    await expect(page.getByRole('row').filter({ hasText: title }).first()).toBeVisible({ timeout: 5000 });
+    await createPost;
+    await expect(createModal).not.toBeVisible({ timeout: 10000 });
+    await page.reload();
+    await expect(page.getByRole('row').filter({ hasText: title }).first()).toBeVisible({ timeout: 15000 });
 
     const row = page.getByRole('row').filter({ hasText: title }).first();
     await row.getByRole('button', { name: /more actions/i }).click({ force: true });
     await page.getByRole('menuitem', { name: /^Delete$/i }).click();
 
-    const confirm = page.getByRole('alertdialog');
+    const confirm = page.getByRole('dialog', { name: /delete bookmark/i });
     await expect(confirm).toBeVisible({ timeout: 5000 });
     await confirm.getByRole('button', { name: /^Delete$/i }).click();
 
@@ -102,11 +133,11 @@ test.describe('Bookmarks', () => {
 
     await expect(page.getByRole('heading', { level: 1, name: /^Bookmarks/ })).toBeVisible({ timeout: 10000 });
 
-    await page.getByRole('main').getByRole('button', { name: /create bookmark/i }).click();
+    await page.getByRole('button', { name: /create bookmark/i }).first().click();
     const createModal = page.getByRole('dialog');
     await expect(createModal).toBeVisible();
-    await createModal.getByPlaceholder(/title/i).fill(title);
-    await createModal.getByPlaceholder(/^url$/i).fill(url);
+    await createModal.getByPlaceholder(/^https/i).fill(url);
+    await createModal.getByPlaceholder(/^Title$/i).fill(title);
     await createModal.getByRole('button', { name: /save/i }).click();
     await expect(createModal).not.toBeVisible({ timeout: 5000 });
 

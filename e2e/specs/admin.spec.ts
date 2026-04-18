@@ -16,7 +16,9 @@ test.describe('Admin', () => {
   test('loads OIDC providers admin page', async ({ page }) => {
     await page.goto('/admin/oidc');
 
-    await expect(page.getByRole('heading', { level: 1, name: /OIDC Providers/i })).toBeVisible({
+    await expect(
+      page.getByRole('heading', { level: 2, name: /SSO providers|OIDC providers/i })
+    ).toBeVisible({
       timeout: 10000,
     });
   });
@@ -40,7 +42,9 @@ test.describe('Admin', () => {
   test('loads SMTP settings admin page', async ({ page }) => {
     await page.goto('/admin/settings');
 
-    await expect(page.getByRole('heading', { level: 1, name: /^Settings$/i })).toBeVisible({
+    await expect(
+      page.getByRole('heading', { level: 2, name: /SMTP Email Configuration|Settings/i })
+    ).toBeVisible({
       timeout: 10000,
     });
   });
