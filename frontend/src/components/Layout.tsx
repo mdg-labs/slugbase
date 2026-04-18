@@ -47,7 +47,7 @@ export default function Layout() {
           <SidebarInset className="main relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-bg-0">
           <TopBar user={user} />
           <div className="min-h-0 flex-1 overflow-y-auto">
-            <div className="min-h-full w-full max-w-[1400px] px-[26px] pb-10 pt-[22px]">
+            <div className="min-h-full w-full px-[26px] pb-10 pt-[22px]">
               <Suspense
                 fallback={
                   <div className="flex min-h-[400px] items-center justify-center">
