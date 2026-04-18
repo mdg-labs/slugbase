@@ -75,7 +75,7 @@ export function AuthHero() {
   return (
     <div
       className={cn(
-        'relative hidden min-h-screen flex-col overflow-hidden border-l border-[var(--border)] bg-[var(--bg-1)] min-[901px]:flex',
+        'relative hidden min-h-0 flex-col overflow-hidden border-l border-[var(--border)] bg-[var(--bg-1)] min-[901px]:flex min-[901px]:h-full',
         'bg-[radial-gradient(ellipse_at_30%_20%,var(--accent-bg)_0%,transparent_55%),radial-gradient(ellipse_at_70%_80%,rgba(217,140,244,0.08)_0%,transparent_50%)]'
       )}
     >
@@ -88,7 +88,7 @@ export function AuthHero() {
           maskImage: 'radial-gradient(ellipse at center, black 20%, transparent 75%)',
         }}
       />
-      <div className="relative z-[1] flex flex-1 flex-col justify-center px-10 py-12">
+      <div className="relative z-[1] flex min-h-0 flex-1 flex-col justify-center px-10 py-12">
         <div className="mb-5 inline-flex w-fit rounded-full border border-[var(--accent-ring)] bg-[var(--accent-bg)] px-3 py-1 font-mono text-[11px] font-medium uppercase tracking-[0.06em] text-[var(--accent-hi)]">
           {chip}
         </div>
@@ -141,7 +141,7 @@ export function AuthHero() {
           ))}
         </div>
 
-        <div className="mt-auto flex items-center gap-2 pt-10 text-[12.5px] text-[var(--fg-2)]">
+        <div className="mt-10 flex items-center gap-2 text-[12.5px] text-[var(--fg-2)]">
           {!isCloud && <Github className="size-4 shrink-0 text-[var(--fg-3)]" aria-hidden />}
           <p className="min-w-0 flex-1 leading-snug">
             {footText}{' '}

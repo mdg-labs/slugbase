@@ -5,10 +5,10 @@
 
 /* --- Split-screen (Login / Signup) --- */
 export const authWrap =
-  'grid min-h-screen min-h-dvh w-full grid-cols-1 bg-[var(--bg-0)] min-[901px]:grid-cols-2';
+  'grid min-h-screen min-h-dvh w-full grid-cols-1 bg-[var(--bg-0)] min-[901px]:h-dvh min-[901px]:grid-cols-2 min-[901px]:grid-rows-1';
 
 export const authFormSide =
-  'flex min-h-screen min-h-dvh flex-col border-[var(--border)] bg-[var(--bg-0)] px-8 py-8 min-[901px]:min-h-0 min-[901px]:border-r min-[901px]:px-12';
+  'flex min-h-screen min-h-dvh flex-col border-[var(--border)] bg-[var(--bg-0)] px-8 py-8 min-[901px]:h-full min-[901px]:min-h-0 min-[901px]:border-r min-[901px]:px-12';
 
 export const authFormInner =
   'mx-auto flex min-h-0 w-full max-w-[440px] flex-1 flex-col';
