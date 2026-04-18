@@ -346,7 +346,7 @@ function AppErrorFallback({ error, onReset }: AppErrorFallbackProps) {
           <p className="mt-2 text-[13px] text-[var(--fg-2)]">
             {t('common.errorBoundaryMessage')}
             {digest ? (
-              <span className="mt-2 block font-mono text-[11px] text-[var(--fg-3)]">{String(digest)}</span>
+              <span className="mt-2 block font-mono text-[11px] text-[var(--fg-3)]">ID: {String(digest)}</span>
             ) : null}
           </p>
         </div>
