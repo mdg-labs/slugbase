@@ -1,5 +1,5 @@
-import React, { Suspense, lazy, Component, type ReactNode } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import React, { Suspense, lazy, Component, useMemo, type ReactNode } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AppConfigProvider, useAppConfig } from './contexts/AppConfigContext';
@@ -20,6 +20,9 @@ import Layout from './components/Layout';
 import api from './api/client';
 import { canAccessWorkspaceAdmin } from './utils/adminAccess';
 import { absoluteUrlForGoPath } from './utils/goRedirectUrl';
+import { authShell, authCard } from './components/auth/authPageClasses';
+import { AlertCircle } from 'lucide-react';
+import { cn } from './lib/utils';
 
 const Setup = lazy(() => import('./pages/Setup'));
 import Login from './pages/Login';
@@ -42,6 +45,7 @@ const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
 const VerifyEmailRequired = lazy(() => import('./pages/VerifyEmailRequired'));
 const SearchEngineGuide = lazy(() => import('./pages/SearchEngineGuide'));
 const GoPreferences = lazy(() => import('./pages/GoPreferences'));
+const NotFound = lazy(() => import('./pages/NotFound'));
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -258,6 +262,7 @@ function AppRoutes() {
               <Route key={path} path={path} element={element} />
             ))}
           </Route>
+          <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
     </Suspense>
@@ -266,11 +271,11 @@ function AppRoutes() {
 
 function ForwardingHandler() {
   const location = useLocation();
-  const { pathname } = location;
   const { t } = useTranslation();
   const { apiBaseUrl } = useAppConfig();
 
-  React.useEffect(() => {
+  const { displayPath, targetUrl } = useMemo(() => {
+    const pathname = location.pathname;
     const match = pathname.match(/\/go\/([^/]+)/);
     const rawSegment = match ? match[1] : '';
     let slug = rawSegment;
@@ -282,12 +287,34 @@ function ForwardingHandler() {
       }
     }
     const goPath = rawSegment ? `/go/${encodeURIComponent(slug)}` : '/go';
-    window.location.href = absoluteUrlForGoPath(goPath, { apiBaseUrl });
-  }, [pathname, apiBaseUrl]);
+    return {
+      displayPath: goPath,
+      targetUrl: absoluteUrlForGoPath(goPath, { apiBaseUrl }),
+    };
+  }, [location.pathname, apiBaseUrl]);
+
+  React.useEffect(() => {
+    window.location.href = targetUrl;
+  }, [targetUrl]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="text-muted-foreground">{t('common.loading')}</div>
+    <div className={cn(authShell, 'flex min-h-screen flex-col items-center justify-center py-16')}>
+      <div className={cn(authCard, 'max-w-[440px] text-center')}>
+        <div className="slug-trail mb-4 inline-flex justify-center" aria-hidden>
+          <span />
+          <span />
+          <span />
+          <span />
+          <span />
+          <span />
+        </div>
+        <p className="font-mono text-[12px] leading-relaxed text-[var(--fg-0)]">
+          <span className="text-[var(--accent-hi)]">{displayPath}</span>
+          <span className="text-[var(--fg-3)]"> → </span>
+          <span className="break-all text-[var(--fg-1)]">{targetUrl}</span>
+        </p>
+        <p className="mt-4 text-[12.5px] text-[var(--fg-3)]">{t('common.loading')}</p>
+      </div>
     </div>
   );
 }
@@ -298,26 +325,55 @@ interface AppErrorFallbackProps {
 }
 
 function AppErrorFallback({ error, onReset }: AppErrorFallbackProps) {
-  // Use hardcoded strings so this fallback never throws (e.g. when i18n context is missing in embedded host).
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { appRootPath } = useAppConfig();
   const message = error?.message ?? (error != null ? String(error) : '');
+  const digest = (error as Error & { digest?: string })?.digest;
+
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center gap-4 p-4" role="alert">
-      <p className="text-lg text-foreground text-center">
-        Something went wrong loading this page. Please try again.
-      </p>
-      {(message || error?.stack) && (
-        <details className="w-full max-w-md text-sm text-muted-foreground" open>
-          <summary className="cursor-pointer">{message || 'Error details'}</summary>
-          {error?.stack && <pre className="mt-2 overflow-auto whitespace-pre-wrap">{error.stack}</pre>}
-        </details>
-      )}
-      <button
-        type="button"
-        onClick={() => (onReset ? onReset() : window.location.reload())}
-        className="px-4 py-2 rounded-md bg-primary text-primary-foreground hover:opacity-90"
-      >
-        Reload
-      </button>
+    <div className={cn(authShell, 'flex min-h-screen flex-col items-center justify-center px-4 py-16')} role="alert">
+      <div className={cn(authCard, 'w-full max-w-[440px]')}>
+        <div className="mb-5 flex flex-col items-center text-center">
+          <div className="mb-3 grid size-14 place-items-center rounded-2xl border border-[rgba(248,113,113,0.35)] bg-[rgba(248,113,113,0.12)]">
+            <AlertCircle className="size-7 text-[var(--danger)]" strokeWidth={2} aria-hidden />
+          </div>
+          <h2 className="m-0 text-[18px] font-semibold text-[var(--fg-0)]">{t('common.errorTitle')}</h2>
+          <p className="mt-2 text-[13px] text-[var(--fg-2)]">
+            {t('common.errorBoundaryMessage')}
+            {digest ? (
+              <span className="mt-2 block font-mono text-[11px] text-[var(--fg-3)]">ID: {String(digest)}</span>
+            ) : null}
+          </p>
+        </div>
+        {(message || error?.stack) && (
+          <details className="mb-4 w-full text-left text-[12px] text-[var(--fg-3)]">
+            <summary className="cursor-pointer font-mono">{message || t('common.error')}</summary>
+            {error?.stack && (
+              <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-[11px]">{error.stack}</pre>
+            )}
+          </details>
+        )}
+        <div className="flex flex-wrap justify-center gap-2">
+          <button
+            type="button"
+            onClick={() => (onReset ? onReset() : window.location.reload())}
+            className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--accent-ring)] bg-[var(--accent-bg-hi)] px-4 py-2.5 text-[13px] font-medium text-[var(--accent)] hover:bg-[var(--accent-bg)]"
+          >
+            {t('common.reload')}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (onReset) onReset();
+              navigate(appRootPath, { replace: true });
+            }}
+            className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-3)] px-4 py-2.5 text-[13px] font-medium text-[var(--fg-1)] hover:bg-[var(--bg-2)]"
+          >
+            {t('common.backToDashboard')}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -380,29 +436,23 @@ export interface AppProps {
 function App({ basePath, apiBaseUrl, routerBasename, skipSetupFlow, hideAdminOidcAndSmtp, adminAiOnlyToggle, extraAdminRoutes, extraAdminNavItems, profileDeleteGuard, signupTermsUrl, signupPrivacyUrl }: AppProps = {}) {
   const appRootPath = routerBasename !== undefined ? '/' : (basePath === '/' || !basePath ? '/' : basePath);
   const pathPrefixForLinks = routerBasename !== undefined ? '' : (basePath ?? '');
-  const content = (
-    <AuthProvider>
-      <PlanProvider>
-        <TooltipProvider>
-          <ToastProvider>
-            <AppRoutes />
-          </ToastProvider>
-        </TooltipProvider>
-      </PlanProvider>
-    </AuthProvider>
+  const routes = (
+    <AppErrorBoundary>
+      <AuthProvider>
+        <PlanProvider>
+          <TooltipProvider>
+            <ToastProvider>
+              <AppRoutes />
+            </ToastProvider>
+          </TooltipProvider>
+        </PlanProvider>
+      </AuthProvider>
+    </AppErrorBoundary>
   );
   return (
-    <AppErrorBoundary>
-      <AppConfigProvider appBasePath={basePath} apiBaseUrl={apiBaseUrl} appRootPath={appRootPath} skipSetupFlow={skipSetupFlow} pathPrefixForLinks={pathPrefixForLinks} hideAdminOidcAndSmtp={hideAdminOidcAndSmtp} adminAiOnlyToggle={adminAiOnlyToggle} extraAdminNavItems={extraAdminNavItems} extraAdminRoutes={extraAdminRoutes} profileDeleteGuard={profileDeleteGuard} signupTermsUrl={signupTermsUrl} signupPrivacyUrl={signupPrivacyUrl}>
-        {routerBasename !== undefined ? (
-          content
-        ) : (
-          <BrowserRouter basename={basePath ?? ''}>
-            {content}
-          </BrowserRouter>
-        )}
-      </AppConfigProvider>
-    </AppErrorBoundary>
+    <AppConfigProvider appBasePath={basePath} apiBaseUrl={apiBaseUrl} appRootPath={appRootPath} skipSetupFlow={skipSetupFlow} pathPrefixForLinks={pathPrefixForLinks} hideAdminOidcAndSmtp={hideAdminOidcAndSmtp} adminAiOnlyToggle={adminAiOnlyToggle} extraAdminNavItems={extraAdminNavItems} extraAdminRoutes={extraAdminRoutes} profileDeleteGuard={profileDeleteGuard} signupTermsUrl={signupTermsUrl} signupPrivacyUrl={signupPrivacyUrl}>
+      {routerBasename !== undefined ? routes : <BrowserRouter basename={basePath ?? ''}>{routes}</BrowserRouter>}
+    </AppConfigProvider>
   );
 }
 

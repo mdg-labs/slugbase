@@ -150,6 +150,54 @@
     "tagline": "Ihre Links. Ihre Struktur. Ihre Sprache. Ihre Regeln."
   },
   "auth": {
+    "footerDocs": "Dokumentation",
+    "footerGitHub": "GitHub",
+    "hidePassword": "Passwort ausblenden",
+    "hero": {
+      "title": "Der Lesezeichen-Manager mit einprägsamen Slugs.",
+      "titleAccent": "einprägsamen Slugs.",
+      "desc": {
+        "selfhosted": "Speichern, taggen, sofort wiederfinden. SlugBase macht aus jedem Lesezeichen eine kurze URL, die sich Ihr Team merken kann — ohne Ordner-Chaos.",
+        "cloud": "Speichern, taggen, sofort wiederfinden. SlugBase Cloud gibt Ihrem Team einprägsame Kurz-URLs — ohne Installation oder Betrieb bei Ihnen."
+      },
+      "previewUrl": {
+        "selfhosted": "localhost:8088/go/raft",
+        "cloud": "slugbase.app/go/raft"
+      },
+      "selfhosted": {
+        "chip": "Selbst gehostet · Open Source",
+        "stat1Title": "MIT",
+        "stat1Subtitle": "Open Source",
+        "stat2Title": "Self",
+        "stat2Subtitle": "Bei Ihnen gehostet",
+        "stat3Title": "{{version}}",
+        "stat3Subtitle": "Aktuelle Version",
+        "stat3FallbackTitle": "—",
+        "stat3FallbackSubtitle": "Release",
+        "foot": "Kostenlos und offen auf GitHub — Stern dalassen, Issues melden, Roadmap mitgestalten.",
+        "footLinkLabel": "GitHub",
+        "footLinkHref": "https://github.com/mdg-labs/slugbase"
+      },
+      "cloud": {
+        "chip": "Cloud · betriebener Dienst",
+        "stat1Title": "EU",
+        "stat1Subtitle": "Hosting & Datenbank",
+        "stat2Title": "Stripe",
+        "stat2Subtitle": "Sichere Abrechnung",
+        "stat3Title": "OIDC",
+        "stat3Subtitle": "Single Sign-on",
+        "foot": "Zahlungen und Unterauftragsverarbeiter sind in unseren AGB und der Datenschutzerklärung beschrieben.",
+        "footLinkLabel": "slugbase.app",
+        "footLinkHref": "https://slugbase.app"
+      }
+    },
+    "loginTabs": "Anmelden oder registrieren",
+    "loginTitle": "Willkommen zurück",
+    "orEmail": "oder mit E-Mail",
+    "showPassword": "Passwort anzeigen",
+    "signInButton": "Anmelden",
+    "signInTab": "Anmelden",
+    "signUpTab": "Registrieren",
     "authFailed": "Authentifizierung fehlgeschlagen",
     "createAccount": "Konto erstellen",
     "email": "E-Mail",
@@ -304,6 +352,7 @@
   "common": {
     "actions": "Aktionen",
     "back": "Zurück",
+    "backToDashboard": "Zurück zur Übersicht",
     "bookmark": "Lesezeichen",
     "bookmarks": "Lesezeichen",
     "cancel": "Abbrechen",
@@ -317,6 +366,8 @@
     "delete": "Löschen",
     "edit": "Bearbeiten",
     "error": "Ein Fehler ist aufgetreten",
+    "errorBoundaryMessage": "Beim Laden dieser Seite ist etwas schiefgelaufen. Sie können neu laden oder zur Übersicht zurückkehren.",
+    "errorTitle": "Etwas ist schiefgelaufen",
     "expandSidebar": "Seitenleiste erweitern",
     "folder": "Ordner",
     "folders": "Ordner",
@@ -350,6 +401,10 @@
     "users": "Benutzer",
     "view": "Ansicht",
     "yes": "Ja"
+  },
+  "errors": {
+    "notFoundBody": "Diese URL existiert nicht oder wurde verschoben.",
+    "notFoundTitle": "Seite nicht gefunden"
   },
   "contact": {
     "email": "E-Mail",
@@ -440,6 +495,7 @@
     "yourLibrary": "Ihre Bibliothek"
   },
   "emailVerification": {
+    "continueToApp": "Weiter zu SlugBase",
     "alreadyVerified": "Dieses Konto wurde bereits verifiziert. Sie können sich einloggen.",
     "backToProfile": "Zurück zum Profil",
     "confirmFailed": "Bestätigung der E-Mail-Verifizierung fehlgeschlagen",
@@ -449,6 +505,7 @@
     "errorDescription": "Der Bestätigungslink ist ungültig oder abgelaufen.",
     "invalidLink": "Dieser Bestätigungslink ist ungültig oder abgelaufen.",
     "invalidToken": "Ungültiger oder abgelaufener Bestätigungstoken",
+    "requestNewLink": "Neuen Link anfordern",
     "pendingDescription": "Eine Bestätigungs-E-Mail wurde an {{email}} gesendet. Bitte überprüfen Sie Ihren Posteingang und klicken Sie auf den Bestätigungslink, um die Änderung abzuschließen.",
     "pendingTitle": "E-Mail-Verifizierung ausstehend",
     "redirecting": "Wird umgeleitet zu Profil...",
@@ -739,7 +796,19 @@
     "trustCodeLabel": "Authentifizierungscode oder Backup-Code",
     "verify": "Überprüfen und fortfahren"
   },
+  "passwordStrength": {
+    "tooShort": "Mindestens 8 Zeichen für ein stärkeres Passwort verwenden.",
+    "weak": "Schwach",
+    "fair": "Mittel",
+    "good": "Gut",
+    "strong": "Stark"
+  },
   "passwordReset": {
+    "requestTitle": "Passwort zurücksetzen",
+    "requestSubtitle": "Geben Sie Ihre E-Mail-Adresse ein, um einen Link zum Zurücksetzen zu erhalten",
+    "resetTitle": "Neues Passwort wählen",
+    "resetSubtitle": "Geben Sie ein neues Passwort ein und bestätigen Sie es.",
+    "updatePassword": "Passwort aktualisieren",
     "backToLogin": "Zurück zum Login",
     "confirmPassword": "Passwort bestätigen",
     "description": "Geben Sie Ihre E-Mail-Adresse ein, um einen Link zum Zurücksetzen des Passworts zu erhalten",
@@ -964,6 +1033,7 @@
     "yourSearchUrl": "Ihre Such-URL"
   },
   "setup": {
+    "subtitle": "Willkommen bei SlugBase! Erstellen Sie Ihr erstes Admin-Konto, um zu starten.",
     "adminNote": "Dieser Benutzer wird als Administrator erstellt. Sie können OIDC-Anbieter später in den Administratoreinstellungen konfigurieren.",
     "alreadyInitialized": "System bereits initialisiert",
     "confirmPassword": "Passwort bestätigen",
@@ -1010,6 +1080,7 @@
     "typeToSearchUsers": "Geben Sie mindestens {{count}} Zeichen ein, um übereinstimmende Benutzer zu sehen."
   },
   "signup": {
+    "cloudTitle": "SlugBase-Cloud-Konto erstellen",
     "acceptTermsAnd": " und die ",
     "acceptTermsPrefix": "Ich habe die gelesen und akzeptiere die ",
     "acceptTermsPrivacy": "Datenschutzbestimmungen",

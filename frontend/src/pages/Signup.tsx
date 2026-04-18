@@ -1,32 +1,48 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import api from '../api/client';
 import { useAppConfig } from '../contexts/AppConfigContext';
-import Button from '../components/ui/Button';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
+import { isCloud } from '../config/mode';
+import { getAuthProviderUrl } from '../config/api';
+import { ArrowRight, Eye, EyeOff, Lock, Mail, Sparkles, User } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { passwordStrengthScore } from '../utils/passwordStrength';
+import { PasswordStrengthMeter } from '../components/auth/PasswordStrengthMeter';
+import { AuthSplitLayout } from '../components/auth/AuthSplitLayout';
 import {
-  AUTH_CARD_CLASS,
-  AUTH_CROSS_LINK,
-  AUTH_CROSS_LINK_FOOTER,
-  AUTH_INPUT_CLASS,
-  AUTH_PAGE_INNER,
-  AUTH_PAGE_OUTER,
+  authTitle,
+  authSub,
+  oauthRow,
+  dividerLbl,
+  authField,
+  authFieldLabel,
+  authInput,
+  fieldError,
+  authSubmit,
+  checkboxRow,
+  checkbox,
+  checkboxOn,
 } from '../components/auth/authPageClasses';
+import { buttonVariants } from '@/components/ui/button-base';
+import {
+  OidcProviderSignInButton,
+  formatOidcProviderDisplayName,
+} from '../components/auth/OidcProviderSignInButton';
 
 const MIN_PASSWORD_LENGTH = 8;
 
 export default function Signup() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { pathPrefixForLinks, signupTermsUrl, signupPrivacyUrl } = useAppConfig();
-  /** Host (e.g. cloud) passes both URLs; core tarball is built self-hosted so we cannot use build-time `isCloud`. */
   const termsHref = (signupTermsUrl ?? '').trim();
   const privacyHref = (signupPrivacyUrl ?? '').trim();
   const showLegalAcceptance = Boolean(termsHref && privacyHref);
   const prefix = (pathPrefixForLinks || '').replace(/\/+/g, '/') || '';
   const loginHref = `${prefix}/login`.replace(/\/+/g, '/') || '/login';
+  const signupPath = `${prefix}/signup`.replace(/\/+/g, '/') || '/signup';
+
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
@@ -35,11 +51,27 @@ export default function Signup() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [providers, setProviders] = useState<any[]>([]);
+  const [providersLoading, setProvidersLoading] = useState(true);
 
-  const minLengthMet = password.length >= MIN_PASSWORD_LENGTH;
+  const pwScore = passwordStrengthScore(password);
   const confirmDirty = confirmPassword.length > 0;
   const passwordsMatch = password === confirmPassword;
   const confirmInvalid = confirmDirty && !passwordsMatch;
+
+  useEffect(() => {
+    api
+      .get('/auth/providers')
+      .then((res) => setProviders(res.data))
+      .catch(() => setProviders([]))
+      .finally(() => setProvidersLoading(false));
+  }, []);
+
+  const handleOIDC = (providerKey: string) => {
+    window.location.href = getAuthProviderUrl(providerKey);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,58 +99,74 @@ export default function Signup() {
     }
   };
 
+  const showOidc = !providersLoading && providers.length > 0;
+
   if (success) {
     return (
-      <div className={AUTH_PAGE_OUTER}>
-        <div className={AUTH_PAGE_INNER}>
-          <div className={cn(AUTH_CARD_CLASS, 'space-y-4 text-center')}>
-            <div className="mb-4 flex justify-center">
-              <img
-                src="/slugbase_icon_purple.svg"
-                alt="SlugBase"
-                className="h-[72px] w-[72px] object-contain"
-                width={72}
-                height={72}
-              />
-            </div>
-            <h2 className="text-xl font-semibold text-foreground">{t('signup.successTitle')}</h2>
-            <p className="text-sm text-muted-foreground">{t('signup.successMessage')}</p>
+      <AuthSplitLayout showTabs={false}>
+        <div className="my-auto flex flex-1 flex-col justify-center">
+          <div className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-1)] p-8 text-center shadow-[var(--shadow)]">
+            <h1 className={authTitle}>{t('signup.successTitle')}</h1>
+            <p className={cn(authSub, 'mt-3')}>{t('signup.successMessage')}</p>
             <Link
               to={loginHref}
-              className="inline-flex items-center justify-center rounded-xl border-0 bg-primary-gradient px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-glow hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              className={cn(
+                buttonVariants({ variant: 'primary', size: 'lg' }),
+                'mt-6 inline-flex w-full max-w-none justify-between no-underline'
+              )}
             >
-              {t('signup.backToLogin')}
+              <span>{t('signup.backToLogin')}</span>
+              <ArrowRight className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
             </Link>
           </div>
         </div>
-      </div>
+      </AuthSplitLayout>
     );
   }
 
   return (
-    <div className={AUTH_PAGE_OUTER}>
-      <div className={AUTH_PAGE_INNER}>
-        <div className="text-center">
-          <div className="mb-6 flex justify-center">
-            <img
-              src="/slugbase_icon_purple.svg"
-              alt="SlugBase"
-              className="h-[72px] w-[72px] object-contain"
-              width={72}
-              height={72}
-            />
-          </div>
-          <h2 className="text-2xl font-semibold text-foreground">{t('signup.title')}</h2>
-          <p className="mt-2 text-sm text-muted-foreground">{t('signup.subtitle')}</p>
+    <AuthSplitLayout
+      activeTab="signup"
+      showTabs
+      onTabChange={(tab) => navigate(tab === 'signup' ? signupPath : loginHref, { replace: true })}
+    >
+      <form onSubmit={handleSubmit} className="flex flex-1 flex-col">
+        <div className="mb-8">
+          <h1 className={authTitle}>{isCloud ? t('signup.cloudTitle') : t('signup.title')}</h1>
+          <p className={authSub}>
+            {t('signup.alreadyHaveAccount')}{' '}
+            <Link to={loginHref} className="font-medium text-[var(--accent-hi)] hover:underline">
+              {t('signup.logIn')}
+            </Link>
+          </p>
         </div>
 
-        <div className={AUTH_CARD_CLASS}>
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="space-y-2">
-              <Label htmlFor="signup-email" className="auth-field-label">
-                {t('signup.email')}
-              </Label>
-              <Input
+        {showOidc ? (
+          <>
+            <div className={oauthRow}>
+              {providers.map((provider) => (
+                <OidcProviderSignInButton
+                  key={provider.id}
+                  providerKey={provider.provider_key}
+                  label={t('auth.loginWith', {
+                    provider: formatOidcProviderDisplayName(provider.provider_key),
+                  })}
+                  onClick={() => handleOIDC(provider.provider_key)}
+                />
+              ))}
+            </div>
+            <div className={dividerLbl}>{t('auth.orEmail')}</div>
+          </>
+        ) : null}
+
+        <div className="flex flex-1 flex-col gap-5">
+          <div className={authField}>
+            <label htmlFor="signup-email" className={authFieldLabel}>
+              {t('signup.email')}
+            </label>
+            <div className={cn(authInput)}>
+              <Mail className="h-4 w-4 shrink-0 text-[var(--fg-3)]" aria-hidden />
+              <input
                 id="signup-email"
                 type="email"
                 required
@@ -126,14 +174,18 @@ export default function Signup() {
                 placeholder={t('auth.emailPlaceholder')}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className={cn(AUTH_INPUT_CLASS)}
+                className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[13px] text-[var(--fg-0)] outline-none placeholder:text-[var(--fg-4)]"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="signup-name" className="auth-field-label">
-                {t('signup.name')}
-              </Label>
-              <Input
+          </div>
+
+          <div className={authField}>
+            <label htmlFor="signup-name" className={authFieldLabel}>
+              {t('signup.name')}
+            </label>
+            <div className={cn(authInput)}>
+              <User className="h-4 w-4 shrink-0 text-[var(--fg-3)]" aria-hidden />
+              <input
                 id="signup-name"
                 type="text"
                 required
@@ -141,122 +193,130 @@ export default function Signup() {
                 placeholder={t('signup.namePlaceholder')}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className={cn(AUTH_INPUT_CLASS)}
+                className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[13px] text-[var(--fg-0)] outline-none placeholder:text-[var(--fg-4)]"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="signup-password" className="auth-field-label">
-                {t('signup.password')}
-              </Label>
-              <Input
+          </div>
+
+          <div className={authField}>
+            <label htmlFor="signup-password" className={authFieldLabel}>
+              {t('signup.password')}
+            </label>
+            <div className={cn(authInput)}>
+              <Lock className="h-4 w-4 shrink-0 text-[var(--fg-3)]" aria-hidden />
+              <input
                 id="signup-password"
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 required
                 minLength={MIN_PASSWORD_LENGTH}
                 autoComplete="new-password"
                 placeholder={t('setup.passwordPlaceholder')}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className={cn(AUTH_INPUT_CLASS)}
+                className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[13px] text-[var(--fg-0)] outline-none placeholder:text-[var(--fg-4)]"
                 aria-describedby="signup-password-requirements"
               />
-              <ul
-                id="signup-password-requirements"
-                className="space-y-1 text-xs"
-                aria-live="polite"
+              <button
+                type="button"
+                className="shrink-0 rounded p-1 text-[var(--fg-3)] hover:text-[var(--fg-0)]"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-pressed={showPassword}
+                aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
               >
-                <li
-                  className={cn('flex items-center gap-2', minLengthMet ? 'text-primary' : 'text-muted-foreground')}
-                >
-                  <span aria-hidden className="inline-block w-3 shrink-0 text-center tabular-nums">
-                    {minLengthMet ? '✓' : '✗'}
-                  </span>
-                  <span>{t('signup.passwordRequirementMinLength', { count: MIN_PASSWORD_LENGTH })}</span>
-                </li>
-              </ul>
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="signup-confirm" className="auth-field-label">
-                {t('signup.confirmPassword')}
-              </Label>
-              <Input
+            <PasswordStrengthMeter score={pwScore} id="signup-password-requirements" />
+          </div>
+
+          <div className={authField}>
+            <label htmlFor="signup-confirm" className={authFieldLabel}>
+              {t('signup.confirmPassword')}
+            </label>
+            <div className={cn(authInput, confirmInvalid && 'border-[rgba(248,113,113,0.5)]')}>
+              <Lock className="h-4 w-4 shrink-0 text-[var(--fg-3)]" aria-hidden />
+              <input
                 id="signup-confirm"
-                type="password"
+                type={showConfirmPassword ? 'text' : 'password'}
                 required
                 minLength={MIN_PASSWORD_LENGTH}
                 autoComplete="new-password"
                 placeholder={t('setup.confirmPasswordPlaceholder')}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className={cn(AUTH_INPUT_CLASS)}
+                className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[13px] text-[var(--fg-0)] outline-none placeholder:text-[var(--fg-4)]"
                 aria-invalid={confirmInvalid}
                 aria-describedby={confirmDirty ? 'signup-password-match-hint' : undefined}
               />
-              {confirmDirty ? (
-                <p
-                  id="signup-password-match-hint"
-                  className={cn('text-xs', passwordsMatch ? 'text-primary' : 'text-destructive')}
-                  role="status"
-                >
-                  {passwordsMatch ? t('signup.passwordsMatch') : t('signup.passwordsDoNotMatch')}
-                </p>
-              ) : null}
+              <button
+                type="button"
+                className="shrink-0 rounded p-1 text-[var(--fg-3)] hover:text-[var(--fg-0)]"
+                onClick={() => setShowConfirmPassword((v) => !v)}
+                aria-pressed={showConfirmPassword}
+                aria-label={showConfirmPassword ? t('auth.hidePassword') : t('auth.showPassword')}
+              >
+                {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
             </div>
-            {showLegalAcceptance ? (
-              <div className="flex items-start gap-3">
-                <input
-                  id="signup-accept-terms"
-                  type="checkbox"
-                  required
-                  checked={acceptTerms}
-                  onChange={(e) => setAcceptTerms(e.target.checked)}
-                  className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-ring"
-                />
-                <label htmlFor="signup-accept-terms" className="text-sm text-foreground">
-                  {t('signup.acceptTermsPrefix')}
-                  <a
-                    href={termsHref}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary hover:underline"
-                  >
-                    {t('signup.acceptTermsTerms')}
-                  </a>
-                  {t('signup.acceptTermsAnd')}
-                  <a
-                    href={privacyHref}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary hover:underline"
-                  >
-                    {t('signup.acceptTermsPrivacy')}
-                  </a>
-                  {t('signup.acceptTermsSuffix')}
-                </label>
-              </div>
+            {confirmDirty ? (
+              <p
+                id="signup-password-match-hint"
+                className={cn('text-[11px]', passwordsMatch ? 'text-[var(--success)]' : fieldError)}
+                role="status"
+              >
+              {passwordsMatch ? t('signup.passwordsMatch') : t('signup.passwordsDoNotMatch')}
+              </p>
             ) : null}
-            {error && (
-              <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3">
-                <p className="text-sm text-destructive">{error}</p>
-              </div>
-            )}
-            <Button
-              type="submit"
-              variant="primary"
-              disabled={loading}
-              className="w-full border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
-            >
-              {loading ? t('common.loading') : t('signup.submit')}
-            </Button>
-          </form>
-          <p className={AUTH_CROSS_LINK_FOOTER}>
-            {t('signup.alreadyHaveAccount')}{' '}
-            <Link to={loginHref} className={AUTH_CROSS_LINK}>
-              {t('signup.logIn')}
-            </Link>
-          </p>
+          </div>
+
+            {showLegalAcceptance ? (
+              <label className={cn(checkboxRow, 'cursor-pointer')}>
+              <input
+                  id="signup-accept-terms"
+                type="checkbox"
+                required
+                checked={acceptTerms}
+                onChange={(e) => setAcceptTerms(e.target.checked)}
+                  className={cn(checkbox, 'mt-1 accent-[var(--accent)]', acceptTerms && checkboxOn)}
+              />
+                <span className="text-[13px] leading-snug text-[var(--fg-1)]">
+                {t('signup.acceptTermsPrefix')}
+                <a
+                  href={termsHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                    className="font-medium text-[var(--accent-hi)] hover:underline"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {t('signup.acceptTermsTerms')}
+                </a>
+                {t('signup.acceptTermsAnd')}
+                <a
+                  href={privacyHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                    className="font-medium text-[var(--accent-hi)] hover:underline"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {t('signup.acceptTermsPrivacy')}
+                </a>
+                {t('signup.acceptTermsSuffix')}
+                </span>
+              </label>
+          ) : null}
+
+          {error ? (
+            <p className={cn(fieldError, 'rounded-md border border-[rgba(248,113,113,0.35)] bg-[rgba(248,113,113,0.08)] px-3 py-2')} role="alert">
+              {error}
+            </p>
+          ) : null}
+
+          <button type="submit" disabled={loading} className={authSubmit}>
+            <span>{loading ? t('common.loading') : t('signup.submit')}</span>
+            <Sparkles className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
+          </button>
         </div>
-      </div>
-    </div>
+      </form>
+    </AuthSplitLayout>
   );
 }

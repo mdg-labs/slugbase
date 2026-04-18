@@ -4,12 +4,11 @@ import { useNavigate } from 'react-router-dom';
 import api from '../api/client';
 import { useAppConfig } from '../contexts/AppConfigContext';
 import { useAuth } from '../contexts/AuthContext';
-import { CheckCircle, UserPlus, Shield } from 'lucide-react';
-import Button from '../components/ui/Button';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
-
-const AUTH_CARD = 'rounded-xl border border-ghost bg-surface p-6 shadow-none';
+import { ArrowRight, Check, Eye, EyeOff, Lock, Mail, User } from 'lucide-react';
+import { passwordStrengthScore } from '../utils/passwordStrength';
+import { PasswordStrengthMeter } from '../components/auth/PasswordStrengthMeter';
+import { authFieldLabel, authInput, fieldError, authSubmit } from '../components/auth/authPageClasses';
+import { cn } from '@/lib/utils';
 
 export default function Setup() {
   const { t } = useTranslation();
@@ -25,6 +24,10 @@ export default function Setup() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  const pwScore = passwordStrengthScore(formData.password);
 
   useEffect(() => {
     if (user) {
@@ -67,131 +70,150 @@ export default function Setup() {
 
   if (success) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background py-12 px-4">
-        <div className={`max-w-md w-full ${AUTH_CARD} text-center space-y-4`}>
-          <div className="mx-auto w-16 h-16 rounded-full bg-emerald-500/15 flex items-center justify-center">
-            <CheckCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+      <div className="flex min-h-screen min-h-dvh w-full items-center justify-center bg-[var(--bg-0)] px-4 py-10">
+        <div
+          className="w-full max-w-[440px] rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-1)] p-8 text-center shadow-[var(--shadow-lg)]"
+          style={{ padding: 32 }}
+        >
+          <div className="mx-auto mb-4 grid size-14 place-items-center rounded-2xl border border-[rgba(74,222,128,0.35)] bg-[rgba(74,222,128,0.12)]">
+            <Check className="size-7 text-[var(--success)]" strokeWidth={2} aria-hidden />
           </div>
-          <h2 className="text-lg font-semibold text-foreground">
-            {t('setup.success')}
-          </h2>
-          <p className="text-muted-foreground text-sm">
-            {t('setup.redirectingToDashboard')}
-          </p>
+          <h2 className="m-0 text-[18px] font-semibold text-[var(--fg-0)]">{t('setup.success')}</h2>
+          <p className="mt-2 text-[13px] text-[var(--fg-2)]">{t('setup.redirectingToDashboard')}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div className="text-center">
-          <div className="flex justify-center mb-6">
-            <img
-              src="/slugbase_icon_purple.svg"
-              alt="SlugBase"
-              className="h-9 w-9 object-contain"
-              width={36}
-              height={36}
-            />
+    <div className="flex min-h-screen min-h-dvh w-full flex-col items-center justify-center bg-[var(--bg-0)] px-4 py-10">
+      <div className="w-full max-w-[440px]" style={{ maxWidth: 440 }}>
+        <div className="mb-8 flex items-center gap-3">
+          <div className="grid size-8 shrink-0 place-items-center rounded-[9px] border border-[var(--accent-ring)] bg-[var(--accent-bg)]">
+            <img src="/slugbase_icon_purple.svg" alt="" className="size-[22px]" width={22} height={22} />
           </div>
-          <h2 className="text-2xl font-semibold text-foreground">
-            {t('setup.title')}
-          </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {t('setup.description')}
-          </p>
+          <div>
+            <div className="text-[15px] font-semibold tracking-[-0.01em] text-[var(--fg-0)]">{t('app.name')}</div>
+            <div className="mt-0.5 text-[13px] font-medium text-[var(--fg-1)]">{t('setup.title')}</div>
+            <p className="mt-1 text-[12.5px] text-[var(--fg-2)]">{t('setup.subtitle')}</p>
+          </div>
         </div>
 
-        <div className={AUTH_CARD}>
+        <div
+          className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-1)] shadow-[var(--shadow-lg)]"
+          style={{ padding: 32 }}
+        >
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="email" className="typography-label">
+              <label htmlFor="setup-email" className={authFieldLabel}>
                 {t('setup.email')}
-              </Label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                required
-                placeholder={t('setup.emailPlaceholder')}
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="name" className="typography-label">
-                {t('setup.name')}
-              </Label>
-              <Input
-                id="name"
-                name="name"
-                type="text"
-                required
-                placeholder={t('setup.namePlaceholder')}
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="password" className="typography-label">
-                {t('setup.password')}
-              </Label>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                required
-                minLength={8}
-                placeholder={t('setup.passwordPlaceholder')}
-                value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword" className="typography-label">
-                {t('setup.confirmPassword')}
-              </Label>
-              <Input
-                id="confirmPassword"
-                name="confirmPassword"
-                type="password"
-                required
-                minLength={8}
-                placeholder={t('setup.confirmPasswordPlaceholder')}
-                value={formData.confirmPassword}
-                onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-              />
-            </div>
-
-            <div className="rounded-xl border border-primary/25 bg-primary/10 px-4 py-3">
-              <div className="flex items-start gap-2">
-                <Shield className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-foreground">
-                  {t('setup.adminNote')}
-                </p>
+              </label>
+              <div className={authInput}>
+                <Mail className="h-4 w-4 shrink-0 text-[var(--fg-3)]" aria-hidden />
+                <input
+                  id="setup-email"
+                  name="email"
+                  type="email"
+                  required
+                  placeholder={t('setup.emailPlaceholder')}
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[13px] text-[var(--fg-0)] outline-none placeholder:text-[var(--fg-4)]"
+                />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="setup-name" className={authFieldLabel}>
+                {t('setup.name')}
+              </label>
+              <div className={authInput}>
+                <User className="h-4 w-4 shrink-0 text-[var(--fg-3)]" aria-hidden />
+                <input
+                  id="setup-name"
+                  name="name"
+                  type="text"
+                  required
+                  placeholder={t('setup.namePlaceholder')}
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[13px] text-[var(--fg-0)] outline-none placeholder:text-[var(--fg-4)]"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="setup-password" className={authFieldLabel}>
+                {t('setup.password')}
+              </label>
+              <div className={authInput}>
+                <Lock className="h-4 w-4 shrink-0 text-[var(--fg-3)]" aria-hidden />
+                <input
+                  id="setup-password"
+                  name="password"
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  minLength={8}
+                  placeholder={t('setup.passwordPlaceholder')}
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[13px] text-[var(--fg-0)] outline-none placeholder:text-[var(--fg-4)]"
+                  aria-describedby="setup-password-strength"
+                />
+                <button
+                  type="button"
+                  className="shrink-0 rounded p-1 text-[var(--fg-3)] hover:text-[var(--fg-0)]"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              <PasswordStrengthMeter score={pwScore} id="setup-password-strength" />
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="setup-confirm" className={authFieldLabel}>
+                {t('setup.confirmPassword')}
+              </label>
+              <div className={authInput}>
+                <Lock className="h-4 w-4 shrink-0 text-[var(--fg-3)]" aria-hidden />
+                <input
+                  id="setup-confirm"
+                  name="confirmPassword"
+                  type={showConfirm ? 'text' : 'password'}
+                  required
+                  minLength={8}
+                  placeholder={t('setup.confirmPasswordPlaceholder')}
+                  value={formData.confirmPassword}
+                  onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                  className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[13px] text-[var(--fg-0)] outline-none placeholder:text-[var(--fg-4)]"
+                />
+                <button
+                  type="button"
+                  className="shrink-0 rounded p-1 text-[var(--fg-3)] hover:text-[var(--fg-0)]"
+                  onClick={() => setShowConfirm((v) => !v)}
+                  aria-label={showConfirm ? t('auth.hidePassword') : t('auth.showPassword')}
+                >
+                  {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div className="rounded-[var(--radius)] border border-[var(--accent-ring)] bg-[var(--accent-bg)] px-4 py-3 text-[12.5px] leading-snug text-[var(--fg-1)]">
+              {t('setup.adminNote')}
             </div>
 
             {error && (
-              <div className="px-4 py-3 rounded-xl border border-destructive/30 bg-destructive/10">
-                <p className="text-sm text-destructive">{error}</p>
-              </div>
+              <p role="alert" className={cn(fieldError, 'rounded-md border border-[rgba(248,113,113,0.35)] bg-[rgba(248,113,113,0.08)] px-3 py-2')}>
+                {error}
+              </p>
             )}
 
-            <Button
-              type="submit"
-              variant="primary"
-              disabled={loading}
-              icon={UserPlus}
-              className="w-full border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
-            >
-              {loading ? t('common.loading') : t('setup.submit')}
-            </Button>
+            <button type="submit" disabled={loading} className={authSubmit}>
+              <span>{loading ? t('common.loading') : t('setup.submit')}</span>
+              <ArrowRight className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
+            </button>
           </form>
         </div>
       </div>

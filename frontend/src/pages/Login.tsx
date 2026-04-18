@@ -5,18 +5,20 @@ import { useAuth } from '../contexts/AuthContext';
 import { useAppConfig } from '../contexts/AppConfigContext';
 import api from '../api/client';
 import { getAuthProviderUrl } from '../config/api';
-import { LogIn } from 'lucide-react';
-import Button from '../components/ui/Button';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
+import { ArrowRight, Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { AuthSplitLayout } from '../components/auth/AuthSplitLayout';
 import {
-  AUTH_CARD_CLASS,
-  AUTH_CROSS_LINK,
-  AUTH_CROSS_LINK_FOOTER,
-  AUTH_INPUT_CLASS,
-  AUTH_PAGE_INNER,
-  AUTH_PAGE_OUTER,
+  authTitle,
+  authSub,
+  oauthRow,
+  dividerLbl,
+  authField,
+  authFieldLabel,
+  authInput,
+  authInputInvalid,
+  fieldError,
+  authSubmit,
 } from '../components/auth/authPageClasses';
 import { safeRedirectPath } from '../utils/safeRedirectPath';
 import {
@@ -32,6 +34,8 @@ export default function Login() {
   const { pathPrefixForLinks } = useAppConfig();
   const prefix = (pathPrefixForLinks || '').replace(/\/+/g, '/') || '';
   const signupHref = `${prefix}/signup`.replace(/\/+/g, '/') || '/signup';
+  const loginPath = `${prefix}/login`.replace(/\/+/g, '/') || '/login';
+  const passwordResetHref = `${prefix}/password-reset`.replace(/\/+/g, '/') || '/password-reset';
   const [providers, setProviders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [localAuth, setLocalAuth] = useState({
@@ -40,6 +44,7 @@ export default function Login() {
   });
   const [localLoading, setLocalLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -65,8 +70,9 @@ export default function Login() {
   }, [searchParams, setSearchParams, t]);
 
   useEffect(() => {
-    api.get('/auth/providers')
-      .then(res => setProviders(res.data))
+    api
+      .get('/auth/providers')
+      .then((res) => setProviders(res.data))
       .catch(() => setProviders([]))
       .finally(() => setLoading(false));
   }, []);
@@ -98,7 +104,8 @@ export default function Login() {
       const code = err.response?.data?.code;
       const message = err.response?.data?.error;
       if (code === 'EMAIL_NOT_VERIFIED') {
-        const verifyPath = `${prefix}/verify-email-required`.replace(/\/+/g, '/') || '/verify-email-required';
+        const verifyPath =
+          `${prefix}/verify-email-required`.replace(/\/+/g, '/') || '/verify-email-required';
         navigate(verifyPath, { replace: true, state: { email: localAuth.email } });
         return;
       }
@@ -108,30 +115,51 @@ export default function Login() {
     }
   };
 
+  const showOidcBlock = !loading && providers.length > 0;
+
   return (
-    <div className={AUTH_PAGE_OUTER}>
-      <div className={AUTH_PAGE_INNER}>
-        <div className="text-center">
-          <div className="mb-6 flex justify-center">
-            <img
-              src="/slugbase_icon_purple.svg"
-              alt="SlugBase"
-              className="h-[72px] w-[72px] object-contain"
-              width={72}
-              height={72}
-            />
-          </div>
-          <h2 className="text-2xl font-semibold text-foreground">{t('auth.login')}</h2>
-          <p className="mt-2 text-sm text-muted-foreground">{t('app.tagline')}</p>
+    <AuthSplitLayout
+      activeTab="signin"
+      showTabs
+      onTabChange={(tab) => navigate(tab === 'signup' ? signupHref : loginPath, { replace: true })}
+    >
+      <form onSubmit={handleLocalLogin} className="flex flex-1 flex-col">
+        <div className="mb-8">
+          <h1 className={authTitle}>{t('auth.loginTitle')}</h1>
+          <p className={authSub}>
+            {t('signup.noAccount')}{' '}
+            <Link to={signupHref} className="font-medium text-[var(--accent-hi)] hover:underline">
+              {t('auth.signUp')}
+            </Link>
+          </p>
         </div>
 
-        <div className={AUTH_CARD_CLASS}>
-          <form onSubmit={handleLocalLogin} className="space-y-5">
-            <div className="space-y-2">
-              <Label htmlFor="email" className="auth-field-label">
-                {t('auth.email')}
-              </Label>
-              <Input
+        {showOidcBlock ? (
+          <>
+            <div className={oauthRow}>
+              {providers.map((provider) => (
+                <OidcProviderSignInButton
+                  key={provider.id}
+                  providerKey={provider.provider_key}
+                  label={t('auth.loginWith', {
+                    provider: formatOidcProviderDisplayName(provider.provider_key),
+                  })}
+                  onClick={() => handleOIDCLogin(provider.provider_key)}
+                />
+              ))}
+            </div>
+            <div className={dividerLbl}>{t('auth.orEmail')}</div>
+          </>
+        ) : null}
+
+        <div className="flex flex-1 flex-col gap-5">
+          <div className={authField}>
+            <label htmlFor="email" className={authFieldLabel}>
+              {t('auth.email')}
+            </label>
+            <div className={cn(authInput)}>
+              <Mail className="h-4 w-4 shrink-0 text-[var(--fg-3)]" aria-hidden />
+              <input
                 id="email"
                 name="email"
                 type="email"
@@ -140,82 +168,60 @@ export default function Login() {
                 value={localAuth.email}
                 onChange={(e) => setLocalAuth({ ...localAuth, email: e.target.value })}
                 autoComplete="email"
-                className={cn(AUTH_INPUT_CLASS)}
+                className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[13px] text-[var(--fg-0)] outline-none placeholder:text-[var(--fg-4)]"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="password" className="auth-field-label">
+          </div>
+
+          <div className={authField}>
+            <div className="flex items-center justify-between gap-2">
+              <label htmlFor="password" className={authFieldLabel}>
                 {t('auth.password')}
-              </Label>
-              <Input
+              </label>
+              <Link
+                to={passwordResetHref}
+                className="font-mono text-[10px] font-medium uppercase tracking-wide text-[var(--accent-hi)] hover:underline"
+              >
+                {t('auth.forgotPassword')}
+              </Link>
+            </div>
+            <div className={cn(authInput)}>
+              <Lock className="h-4 w-4 shrink-0 text-[var(--fg-3)]" aria-hidden/>
+              <input
                 id="password"
                 name="password"
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 required
                 placeholder={t('auth.passwordPlaceholder')}
                 value={localAuth.password}
                 onChange={(e) => setLocalAuth({ ...localAuth, password: e.target.value })}
                 autoComplete="current-password"
-                className={cn(AUTH_INPUT_CLASS)}
+                className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[13px] text-[var(--fg-0)] outline-none placeholder:text-[var(--fg-4)]"
               />
-            </div>
-            {error && (
-              <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3">
-                <p className="text-sm text-destructive">{error}</p>
-              </div>
-            )}
-            <Button
-              type="submit"
-              variant="primary"
-              disabled={localLoading}
-              icon={LogIn}
-              className="w-full border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
-            >
-              {localLoading ? t('common.loading') : t('auth.login')}
-            </Button>
-            <div className="space-y-2 text-center">
-              <Link
-                to={`${prefix}/password-reset`.replace(/\/+/g, '/') || '/password-reset'}
-                className="block text-sm font-medium text-primary hover:text-primary/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded"
+              <button
+                type="button"
+                className="shrink-0 rounded p-1 text-[var(--fg-3)] hover:text-[var(--fg-0)]"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-pressed={showPassword}
+                aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
               >
-                {t('auth.forgotPassword')}
-              </Link>
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
             </div>
-          </form>
+          </div>
 
-          <p className={AUTH_CROSS_LINK_FOOTER}>
-            {t('signup.noAccount')}{' '}
-            <Link to={signupHref} className={AUTH_CROSS_LINK}>
-              {t('auth.signUp')}
-            </Link>
-          </p>
+          {error ? (
+            <p className={cn(fieldError, 'rounded-md border border-[rgba(248,113,113,0.35)] bg-[rgba(248,113,113,0.08)] px-3 py-2')} role="alert">
+              {error}
+            </p>
+          ) : null}
 
-          {!loading && providers.length > 0 && (
-            <>
-              <div className="relative my-6">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-ghost" />
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="typography-label bg-surface px-3 text-muted-foreground">{t('auth.or')}</span>
-                </div>
-              </div>
-              <div className="space-y-3">
-                {providers.map((provider) => (
-                  <OidcProviderSignInButton
-                    key={provider.id}
-                    providerKey={provider.provider_key}
-                    label={t('auth.loginWith', {
-                      provider: formatOidcProviderDisplayName(provider.provider_key),
-                    })}
-                    onClick={() => handleOIDCLogin(provider.provider_key)}
-                  />
-                ))}
-              </div>
-            </>
-          )}
+          <button type="submit" disabled={localLoading} className={authSubmit}>
+            <span>{localLoading ? t('common.loading') : t('auth.signInButton')}</span>
+            <ArrowRight className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
+          </button>
         </div>
-      </div>
-    </div>
+      </form>
+    </AuthSplitLayout>
   );
 }

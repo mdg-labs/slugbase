@@ -1,6 +1,6 @@
 import { Key } from 'lucide-react';
-import Button from '../ui/Button';
 import { cn } from '@/lib/utils';
+import { oauthBtn } from '@/components/auth/authPageClasses';
 
 /** Human-readable name for common IdPs (avoids raw `google` in the UI). */
 export function formatOidcProviderDisplayName(providerKey: string): string {
@@ -40,34 +40,30 @@ export interface OidcProviderSignInButtonProps {
 }
 
 /**
- * Google: recognizable “Sign in with Google” look (logo + light surface) while matching SlugBase
- * auth card rhythm (rounded-xl, focus ring). Other providers keep the secondary + key icon pattern.
+ * Mockup `oauth-btn`: full-width, provider mark + label + monospace tail (OIDC / SSO).
  */
 export function OidcProviderSignInButton({ providerKey, label, onClick }: OidcProviderSignInButtonProps) {
   const isGoogle = providerKey.toLowerCase() === 'google';
 
   if (isGoogle) {
     return (
-      <button
-        type="button"
-        onClick={onClick}
-        className={cn(
-          'flex h-11 w-full items-center justify-center gap-3 rounded-xl border px-4 text-[15px] font-medium shadow-sm transition-colors',
-          'border-[#dadce0] bg-white text-[#3c4043]',
-          'hover:bg-[#f8f9fa] hover:border-[#dadce0]',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-          'dark:border-zinc-500 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white'
-        )}
-      >
-        <GoogleMark className="h-[18px] w-[18px] shrink-0" />
-        <span>{label}</span>
+      <button type="button" onClick={onClick} className={cn(oauthBtn, 'pl-3')}>
+        <span className="flex min-w-0 flex-1 items-center gap-3">
+          <GoogleMark className="h-[18px] w-[18px] shrink-0" />
+          <span className="truncate">{label}</span>
+        </span>
+        <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--fg-3)]">Google</span>
       </button>
     );
   }
 
   return (
-    <Button variant="secondary" icon={Key} onClick={onClick} className="w-full border-ghost bg-surface-high">
-      {label}
-    </Button>
+    <button type="button" onClick={onClick} className={cn(oauthBtn, 'pl-3')}>
+      <span className="flex min-w-0 flex-1 items-center gap-3">
+        <Key className="h-4 w-4 shrink-0 text-[var(--accent-hi)]" aria-hidden />
+        <span className="truncate">{label}</span>
+      </span>
+      <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--fg-3)]">OIDC</span>
+    </button>
   );
 }

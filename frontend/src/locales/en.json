@@ -150,6 +150,54 @@
     "tagline": "Your links. Your structure. Your language. Your rules."
   },
   "auth": {
+    "footerDocs": "Docs",
+    "footerGitHub": "GitHub",
+    "hidePassword": "Hide password",
+    "hero": {
+      "title": "The bookmark manager with memorable slugs.",
+      "titleAccent": "memorable slugs.",
+      "desc": {
+        "selfhosted": "Save anything, tag it well, and get to it instantly. SlugBase turns every bookmark into a short URL your whole team can remember — no more digging through folders.",
+        "cloud": "Save anything, tag it well, and get to it instantly. SlugBase Cloud gives your team memorable short URLs with nothing to install or run yourself."
+      },
+      "previewUrl": {
+        "selfhosted": "localhost:8088/go/raft",
+        "cloud": "slugbase.app/go/raft"
+      },
+      "selfhosted": {
+        "chip": "Self-hosted · open source",
+        "stat1Title": "MIT",
+        "stat1Subtitle": "Open source",
+        "stat2Title": "Self",
+        "stat2Subtitle": "Hosted by you",
+        "stat3Title": "{{version}}",
+        "stat3Subtitle": "Current release",
+        "stat3FallbackTitle": "—",
+        "stat3FallbackSubtitle": "Release",
+        "foot": "Free and open on GitHub — star us, file issues, help shape the roadmap.",
+        "footLinkLabel": "GitHub",
+        "footLinkHref": "https://github.com/mdg-labs/slugbase"
+      },
+      "cloud": {
+        "chip": "Cloud · managed service",
+        "stat1Title": "EU",
+        "stat1Subtitle": "Hosting & database",
+        "stat2Title": "Stripe",
+        "stat2Subtitle": "Secure billing",
+        "stat3Title": "OIDC",
+        "stat3Subtitle": "Single sign-on",
+        "foot": "Payments and subprocessors are described in our Terms and Privacy Policy.",
+        "footLinkLabel": "slugbase.app",
+        "footLinkHref": "https://slugbase.app"
+      }
+    },
+    "loginTabs": "Sign in or sign up",
+    "loginTitle": "Welcome back",
+    "orEmail": "or with email",
+    "showPassword": "Show password",
+    "signInButton": "Sign in",
+    "signInTab": "Sign in",
+    "signUpTab": "Sign up",
     "authFailed": "Authentication failed",
     "createAccount": "Create account",
     "email": "Email",
@@ -304,6 +352,7 @@
   "common": {
     "actions": "Actions",
     "back": "Back",
+    "backToDashboard": "Back to dashboard",
     "bookmark": "bookmark",
     "bookmarks": "bookmarks",
     "cancel": "Cancel",
@@ -317,6 +366,8 @@
     "delete": "Delete",
     "edit": "Edit",
     "error": "An error occurred",
+    "errorBoundaryMessage": "Something went wrong while loading this page. You can reload or return to the dashboard.",
+    "errorTitle": "Something went wrong",
     "expandSidebar": "Expand sidebar",
     "folder": "folder",
     "folders": "folders",
@@ -350,6 +401,10 @@
     "users": "users",
     "view": "View",
     "yes": "Yes"
+  },
+  "errors": {
+    "notFoundBody": "This URL does not exist or was moved.",
+    "notFoundTitle": "Page not found"
   },
   "contact": {
     "email": "Email",
@@ -440,6 +495,7 @@
     "yourLibrary": "Your library"
   },
   "emailVerification": {
+    "continueToApp": "Continue to SlugBase",
     "alreadyVerified": "This account has already been verified. You can log in.",
     "backToProfile": "Back to Profile",
     "confirmFailed": "Failed to confirm email verification",
@@ -449,6 +505,7 @@
     "errorDescription": "The verification link is invalid or has expired.",
     "invalidLink": "This verification link is invalid or has expired.",
     "invalidToken": "Invalid or expired verification token",
+    "requestNewLink": "Request a new link",
     "pendingDescription": "A verification email has been sent to {{email}}. Please check your inbox and click the verification link to complete the change.",
     "pendingTitle": "Email Verification Pending",
     "redirecting": "Redirecting to profile...",
@@ -739,7 +796,19 @@
     "trustCodeLabel": "Authenticator or backup code",
     "verify": "Verify and continue"
   },
+  "passwordStrength": {
+    "tooShort": "Use at least 8 characters for a stronger password.",
+    "weak": "Weak",
+    "fair": "Fair",
+    "good": "Good",
+    "strong": "Strong"
+  },
   "passwordReset": {
+    "requestTitle": "Reset your password",
+    "requestSubtitle": "Enter your email address to receive a password reset link",
+    "resetTitle": "Choose a new password",
+    "resetSubtitle": "Enter and confirm a new password for your account.",
+    "updatePassword": "Update password",
     "backToLogin": "Back to Login",
     "confirmPassword": "Confirm Password",
     "description": "Enter your email address to receive a password reset link",
@@ -964,6 +1033,7 @@
     "yourSearchUrl": "Your Search URL"
   },
   "setup": {
+    "subtitle": "Welcome to SlugBase! Create your first admin user to get started.",
     "adminNote": "This user will be created as an administrator. You can configure OIDC providers later in the admin settings.",
     "alreadyInitialized": "System already initialized",
     "confirmPassword": "Confirm Password",
@@ -980,6 +1050,7 @@
     "redirecting": "Redirecting to login...",
     "redirectingToDashboard": "Redirecting to dashboard...",
     "submit": "Create Admin User",
+    "subtitle": "Welcome to SlugBase! Create your first admin user to get started.",
     "success": "Setup completed successfully!",
     "title": "Initial Setup"
   },
@@ -1010,6 +1081,7 @@
     "typeToSearchUsers": "Type at least {{count}} characters to see matching users."
   },
   "signup": {
+    "cloudTitle": "Create your SlugBase Cloud account",
     "acceptTermsAnd": " and the ",
     "acceptTermsPrefix": "I have read and accept the ",
     "acceptTermsPrivacy": "Privacy Policy",

@@ -3,12 +3,10 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, Link } from 'react-router-dom';
 import { useAppConfig } from '../contexts/AppConfigContext';
 import api from '../api/client';
-import { Mail } from 'lucide-react';
-import Button from '../components/ui/Button';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
-
-const AUTH_CARD = 'rounded-xl border border-ghost bg-surface p-6 shadow-none';
+import { ArrowRight, Mail } from 'lucide-react';
+import { AuthCardLayout } from '../components/auth/AuthCardLayout';
+import { authFieldLabel, authInput, fieldError, authSubmit } from '../components/auth/authPageClasses';
+import { cn } from '@/lib/utils';
 
 export default function VerifyEmailRequired() {
   const { t } = useTranslation();
@@ -22,7 +20,7 @@ export default function VerifyEmailRequired() {
   const [success, setSuccess] = useState(false);
   const [emailChanged, setEmailChanged] = useState(false);
 
-  const prefix = pathPrefixForLinks || '';
+  const prefix = (pathPrefixForLinks || '').replace(/\/+/g, '/') || '';
   const loginPath = `${prefix}/login`.replace(/\/+/g, '/') || '/login';
   const currentEmail = stateEmail || email.trim();
 
@@ -55,38 +53,25 @@ export default function VerifyEmailRequired() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div className="text-center">
-          <div className="flex justify-center mb-6">
-            <img
-              src={`/slugbase_icon_purple.svg${(import.meta as any).env?.VITE_ASSET_VERSION ? `?v=${(import.meta as any).env.VITE_ASSET_VERSION}` : ''}`}
-              alt="SlugBase"
-              className="h-9 w-9 object-contain"
-              width={36}
-              height={36}
-            />
-          </div>
-          <h2 className="text-2xl font-semibold text-foreground">
-            {t('auth.verifyEmailRequiredPageTitle')}
-          </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {t('auth.verifyEmailRequiredPageDescription')}
-          </p>
-        </div>
+    <AuthCardLayout>
+      <>
+        <h2 className="m-0 text-[18px] font-semibold text-[var(--fg-0)]">{t('auth.verifyEmailRequiredPageTitle')}</h2>
+        <p className="sub mt-1.5 text-[12.5px] leading-relaxed text-[var(--fg-2)]">
+          {t('auth.verifyEmailRequiredPageDescription')}
+        </p>
 
-        <div className={`${AUTH_CARD} space-y-6`}>
+        <div className="mt-6 border-t border-[var(--border-soft)] pt-6">
           {success ? (
             <div className="space-y-4 text-center">
-              <div className="mx-auto w-16 h-16 bg-primary/15 rounded-full flex items-center justify-center">
-                <Mail className="h-4 w-4 text-primary" />
+              <div className="mx-auto grid size-14 place-items-center rounded-2xl border border-[var(--border)] bg-[var(--bg-2)]">
+                <Mail className="size-6 text-[var(--accent-hi)]" aria-hidden />
               </div>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-[13px] text-[var(--fg-2)]">
                 {emailChanged ? t('auth.emailChangedResendMessage') : t('auth.resendVerificationSuccess')}
               </p>
               <Link
                 to={loginPath}
-                className="inline-block text-sm font-medium text-primary hover:underline"
+                className="inline-flex items-center gap-2 font-medium text-[var(--accent-hi)] hover:underline"
               >
                 {t('signup.backToLogin')}
               </Link>
@@ -95,68 +80,65 @@ export default function VerifyEmailRequired() {
             <form onSubmit={handleResend} className="space-y-5">
               {stateEmail ? (
                 <>
-                  <p className="text-sm text-muted-foreground">
-                    {t('auth.verifyEmailRequiredPageEmailLabel')}: <span className="font-medium text-foreground">{stateEmail}</span>
+                  <p className="text-[13px] text-[var(--fg-2)]">
+                    {t('auth.verifyEmailRequiredPageEmailLabel')}:{' '}
+                    <span className="font-medium text-[var(--fg-0)]">{stateEmail}</span>
                   </p>
                   <div className="space-y-2">
-                    <Label htmlFor="verify-email-required-new-email" className="typography-label">
+                    <label htmlFor="verify-email-required-new-email" className={authFieldLabel}>
                       {t('auth.newEmailLabel')}
-                    </Label>
-                    <Input
-                      id="verify-email-required-new-email"
-                      name="newEmail"
-                      type="email"
-                      placeholder={t('auth.newEmailPlaceholder')}
-                      value={newEmail}
-                      onChange={(e) => setNewEmail(e.target.value)}
-                    />
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {t('auth.newEmailHint')}
-                    </p>
+                    </label>
+                    <div className={authInput}>
+                      <input
+                        id="verify-email-required-new-email"
+                        name="newEmail"
+                        type="email"
+                        placeholder={t('auth.newEmailPlaceholder')}
+                        value={newEmail}
+                        onChange={(e) => setNewEmail(e.target.value)}
+                        className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[13px] text-[var(--fg-0)] outline-none placeholder:text-[var(--fg-4)]"
+                      />
+                    </div>
+                    <p className="text-[11.5px] text-[var(--fg-2)]">{t('auth.newEmailHint')}</p>
                   </div>
                 </>
               ) : (
                 <div className="space-y-2">
-                  <Label htmlFor="verify-email-required-email" className="typography-label">
+                  <label htmlFor="verify-email-required-email" className={authFieldLabel}>
                     {t('auth.verifyEmailRequiredPageEmailLabel')}
-                  </Label>
-                  <Input
-                    id="verify-email-required-email"
-                    name="email"
-                    type="email"
-                    required
-                    placeholder={t('auth.emailPlaceholder')}
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                  />
+                  </label>
+                  <div className={authInput}>
+                    <input
+                      id="verify-email-required-email"
+                      name="email"
+                      type="email"
+                      required
+                      placeholder={t('auth.emailPlaceholder')}
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[13px] text-[var(--fg-0)] outline-none placeholder:text-[var(--fg-4)]"
+                    />
+                  </div>
                 </div>
               )}
               {error && (
-                <div className="px-4 py-3 rounded-xl border border-destructive/30 bg-destructive/10">
-                  <p className="text-sm text-destructive">{error}</p>
-                </div>
+                <p className={cn(fieldError, 'rounded-md border border-[rgba(248,113,113,0.35)] bg-[rgba(248,113,113,0.08)] px-3 py-2')}>
+                  {error}
+                </p>
               )}
-              <Button
-                type="submit"
-                variant="primary"
-                disabled={loading}
-                icon={Mail}
-                className="w-full border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
-              >
-                {loading ? t('common.loading') : t('auth.resendVerificationEmail')}
-              </Button>
+              <button type="submit" disabled={loading} className={authSubmit}>
+                <span>{loading ? t('common.loading') : t('auth.resendVerificationEmail')}</span>
+                <ArrowRight className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
+              </button>
               <div className="text-center">
-                <Link
-                  to={loginPath}
-                  className="text-sm font-medium text-primary hover:text-primary/90"
-                >
+                <Link to={loginPath} className="text-[13px] font-medium text-[var(--accent-hi)] hover:underline">
                   {t('signup.backToLogin')}
                 </Link>
               </div>
             </form>
           )}
         </div>
-      </div>
-    </div>
+      </>
+    </AuthCardLayout>
   );
 }
