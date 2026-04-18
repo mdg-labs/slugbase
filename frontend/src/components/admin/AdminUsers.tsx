@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import api from '../../api/client';
-import { Plus, Edit, Trash2, Shield, Mail, Network, MoreHorizontal, RotateCw } from 'lucide-react';
+import { Plus, Edit, Trash2, Shield, Network, MoreHorizontal, RotateCw } from 'lucide-react';
 import UserModal from '../modals/UserModal';
 import TeamAssignmentModal from '../modals/TeamAssignmentModal';
 import Button from '../ui/Button';
@@ -39,6 +39,7 @@ import {
   isCloudMode,
 } from '../../contexts/PlanContext';
 import { useToast } from '../ui/Toast';
+import { Badge } from '../ui/badge';
 
 interface User {
   id: string;
@@ -58,6 +59,12 @@ function formatInviteDate(iso: string) {
   } catch {
     return iso;
   }
+}
+
+function userInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return `${parts[0][0] ?? ''}${parts[1][0] ?? ''}`.toUpperCase();
+  return (parts[0] || '?').slice(0, 2).toUpperCase();
 }
 
 export default function AdminUsers() {
@@ -200,8 +207,11 @@ export default function AdminUsers() {
             {users.map((user) => (
               <TableRow key={user.id} className={adminTableBodyRowClass}>
                 <TableCell className={adminTableCellClass}>
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                    <Mail className="h-4 w-4 text-primary" />
+                  <div
+                    className="avatar flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--accent-bg)] font-mono text-[12px] font-semibold text-[var(--accent-hi)]"
+                    aria-hidden
+                  >
+                    {userInitials(user.name || user.email)}
                   </div>
                 </TableCell>
                 <TableCell className={adminTableCellClass}>
@@ -221,15 +231,16 @@ export default function AdminUsers() {
                   )}
                   {user.invite_pending && (
                     <div className="mt-1.5 space-y-1">
-                      <span
-                        className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium ${
+                      <Badge
+                        variant="secondary"
+                        className={
                           user.invite_expired
-                            ? 'bg-destructive/10 text-destructive'
-                            : 'bg-primary/10 text-primary'
-                        }`}
+                            ? 'bg-[rgba(248,113,113,0.12)] text-[var(--danger)] border-[rgba(248,113,113,0.35)]'
+                            : 'border-[var(--border)] bg-[var(--accent-bg)] text-[var(--accent-hi)]'
+                        }
                       >
                         {user.invite_expired ? t('admin.inviteExpired') : t('admin.invitePending')}
-                      </span>
+                      </Badge>
                       {user.invite_expires_at && !user.invite_expired && (
                         <p className="text-xs text-muted-foreground">
                           {t('admin.inviteLinkExpires', { date: formatInviteDate(user.invite_expires_at) })}

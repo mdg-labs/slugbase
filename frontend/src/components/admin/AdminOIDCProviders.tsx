@@ -3,12 +3,20 @@ import { useTranslation } from 'react-i18next';
 import api from '../../api/client';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
-import { Plus, Edit, Trash2, Key, Globe } from 'lucide-react';
+import { Plus, Edit, Trash2, Key, Copy, MoreHorizontal, Info } from 'lucide-react';
 import OIDCProviderModal from '../modals/OIDCProviderModal';
 import Button from '../ui/Button';
 import { PageLoadingSkeleton } from '../ui/PageLoadingSkeleton';
-import { PageHeader } from '../PageHeader';
 import { EmptyState } from '../EmptyState';
+import { Badge } from '../ui/badge';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../ui/dropdown-menu';
+import { useToast } from '../ui/Toast';
+import { copyTextToClipboard } from '../../utils/copyTextToClipboard';
 
 interface OIDCProvider {
   id: string;
@@ -24,9 +32,28 @@ interface OIDCProvider {
   callback_url?: string;
 }
 
+function providerAbbrev(key: string): string {
+  const k = key.trim().toUpperCase();
+  if (k.length <= 2) return k.padEnd(2, '·');
+  if (k.includes('GOOGLE') || k === 'GOOGLE') return 'GO';
+  if (k.includes('OKTA')) return 'OK';
+  if (k.includes('AZURE') || k === 'AZUREAD') return 'AZ';
+  return k.slice(0, 2);
+}
+
+function providerColor(key: string): string {
+  const lower = key.toLowerCase();
+  if (lower.includes('google')) return '#4285F4';
+  if (lower.includes('okta')) return '#007dc1';
+  if (lower.includes('azure')) return '#0078d4';
+  if (lower.includes('auth0')) return '#eb5424';
+  return 'var(--accent)';
+}
+
 export default function AdminOIDCProviders() {
   const { t } = useTranslation();
   const { showConfirm, dialogState } = useConfirmDialog();
+  const { showToast } = useToast();
   const [providers, setProviders] = useState<OIDCProvider[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -60,9 +87,10 @@ export default function AdminOIDCProviders() {
         try {
           await api.delete(`/oidc-providers/${id}`);
           await loadProviders();
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const e = error as { response?: { data?: { error?: string } } };
           console.error('Failed to delete provider:', error);
-          alert(error.response?.data?.error || t('common.error'));
+          alert(e.response?.data?.error || t('common.error'));
         }
       },
       { variant: 'danger', confirmText: t('common.delete'), cancelText: t('common.cancel') }
@@ -74,6 +102,15 @@ export default function AdminOIDCProviders() {
     setEditingProvider(null);
   };
 
+  const copyRedirectPattern = async () => {
+    const sample = providers[0];
+    const url = sample?.callback_url
+      ? sample.callback_url
+      : `${window.location.origin}/api/auth/${sample?.provider_key ?? '{provider}'}/callback`;
+    const ok = await copyTextToClipboard(url);
+    showToast(ok ? t('common.success') : t('common.error'), ok ? 'success' : 'error');
+  };
+
   if (loading) {
     return (
       <div className="pb-24">
@@ -82,23 +119,24 @@ export default function AdminOIDCProviders() {
     );
   }
 
-  const providerSubtitle = `${providers.length} ${providers.length === 1 ? t('common.provider') : t('common.providers')}`;
-
   return (
     <div className="space-y-6 pb-24">
-      <PageHeader
-        title={t('admin.oidcProviders')}
-        subtitle={providerSubtitle}
-        actions={
-          <Button
-            onClick={() => setModalOpen(true)}
-            icon={Plus}
-            className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
-          >
-            {t('admin.addProvider')}
-          </Button>
-        }
-      />
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h2 className="text-[18px] font-semibold tracking-tight text-[var(--fg-0)]">
+            {t('admin.ssoPageTitle')}
+          </h2>
+          <p className="mt-1 text-[12.5px] text-[var(--fg-2)]">{t('admin.ssoPageSubtitle')}</p>
+        </div>
+        <Button
+          onClick={() => setModalOpen(true)}
+          icon={Plus}
+          variant="primary"
+          className="shrink-0 border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
+        >
+          {t('admin.addProvider')}
+        </Button>
+      </div>
 
       {providers.length === 0 ? (
         <EmptyState
@@ -116,74 +154,92 @@ export default function AdminOIDCProviders() {
           }
         />
       ) : (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {providers.map((provider) => (
-            <div
-              key={provider.id}
-              className="group overflow-hidden rounded-2xl border border-ghost bg-surface shadow-none transition-colors hover:border-primary/25"
-            >
-              <div className="p-4 space-y-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <Key className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                    <h3 className="text-lg font-semibold text-foreground truncate">
-                      {provider.provider_key}
-                    </h3>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Globe className="h-4 w-4 shrink-0" />
-                  <span className="truncate">{provider.issuer_url}</span>
-                </div>
-                {(provider.authorization_url || provider.token_url || provider.userinfo_url) && (
-                  <div className="text-xs text-muted-foreground space-y-1">
-                    {provider.token_url && (
-                      <div className="truncate">
-                        <span className="font-medium">Token:</span> {provider.token_url}
-                      </div>
-                    )}
-                  </div>
-                )}
-                {provider.callback_url && (
-                  <div className="rounded-xl border border-ghost bg-surface-low p-3">
-                    <div className="text-xs font-semibold text-foreground mb-1">
-                      {t('admin.callbackUrl')}:
+        <ul className="space-y-3">
+          {providers.map((provider) => {
+            const color = providerColor(provider.provider_key);
+            const abbr = providerAbbrev(provider.provider_key);
+            return (
+              <li
+                key={provider.id}
+                className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-1)] p-[14px] shadow-[var(--shadow-sm)]"
+              >
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex min-w-0 flex-1 gap-3">
+                    <div
+                      className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[var(--radius-sm)] border font-mono text-[11px] font-semibold"
+                      style={{
+                        background: `${color}20`,
+                        borderColor: `${color}55`,
+                        color,
+                      }}
+                      aria-hidden
+                    >
+                      {abbr}
                     </div>
-                    <code className="text-xs text-foreground break-all font-mono">
-                      {provider.callback_url}
-                    </code>
+                    <div className="min-w-0">
+                      <p className="truncate text-[14px] font-semibold text-[var(--fg-0)]">{provider.provider_key}</p>
+                      <p className="mt-0.5 truncate font-mono text-[11.5px] text-[var(--fg-2)]" title={provider.issuer_url}>
+                        {t('admin.issuerUrl')}: {provider.issuer_url}
+                      </p>
+                    </div>
                   </div>
-                )}
-                <div className="flex flex-wrap gap-2">
-                  <span className="rounded-full bg-surface-low px-2.5 py-1 text-xs font-medium text-muted-foreground border border-ghost">
-                    {t('admin.autoCreate')}: {provider.auto_create_users ? t('common.yes') : t('common.no')}
-                  </span>
-                  <span className="rounded-full bg-surface-low px-2.5 py-1 text-xs font-medium text-muted-foreground border border-ghost">
-                    {t('admin.defaultRole')}: {provider.default_role}
-                  </span>
+
+                  <div className="flex flex-wrap items-center justify-end gap-3 sm:gap-4">
+                    <Badge
+                      variant="secondary"
+                      className="border-[rgba(74,222,128,0.35)] bg-[rgba(74,222,128,0.1)] text-[var(--success)]"
+                    >
+                      {t('admin.oidcActive')}
+                    </Badge>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-sm)] text-[var(--fg-2)] hover:bg-[var(--bg-hover)] hover:text-[var(--fg-0)]"
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                          <span className="sr-only">{t('common.actions')}</span>
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleEdit(provider)}>
+                          <Edit className="mr-2 h-4 w-4" />
+                          {t('common.edit')}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleDelete(provider.id)}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          {t('common.delete')}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </div>
-                <div className="flex gap-2 pt-2 border-t border-ghost">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    icon={Edit}
-                    onClick={() => handleEdit(provider)}
-                    className="flex-1"
-                  >
-                    {t('common.edit')}
-                  </Button>
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    icon={Trash2}
-                    onClick={() => handleDelete(provider.id)}
-                  />
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+              </li>
+            );
+          })}
+        </ul>
       )}
+
+      <div className="rounded-[var(--radius-lg)] border border-dashed border-[var(--border-strong)] bg-[var(--bg-1)] px-4 py-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 gap-2">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-[var(--accent-hi)]" aria-hidden />
+            <div className="min-w-0">
+              <p className="text-[12px] font-medium text-[var(--fg-0)]">{t('admin.callbackUrl')}</p>
+              <code className="mt-1 block break-all font-mono text-[11px] text-[var(--fg-1)]">
+                {providers[0]?.callback_url ??
+                  `${window.location.origin}/api/auth/<${t('admin.providerKey')}>}/callback`}
+              </code>
+            </div>
+          </div>
+          <Button type="button" variant="secondary" size="sm" icon={Copy} onClick={() => void copyRedirectPattern()}>
+            {t('admin.copyRedirect')}
+          </Button>
+        </div>
+      </div>
 
       <OIDCProviderModal
         provider={editingProvider}
