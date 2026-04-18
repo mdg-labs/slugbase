@@ -16,7 +16,6 @@ import {
   authField,
   authFieldLabel,
   authInput,
-  authInputInvalid,
   fieldError,
   authSubmit,
 } from '../components/auth/authPageClasses';

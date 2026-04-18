@@ -328,7 +328,6 @@ function AppErrorFallback({ error, onReset }: AppErrorFallbackProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { appRootPath } = useAppConfig();
-  const message = error?.message ?? (error != null ? String(error) : '');
   const digest = (error as Error & { digest?: string })?.digest;
 
   return (
@@ -342,18 +341,10 @@ function AppErrorFallback({ error, onReset }: AppErrorFallbackProps) {
           <p className="mt-2 text-[13px] text-[var(--fg-2)]">
             {t('common.errorBoundaryMessage')}
             {digest ? (
-              <span className="mt-2 block font-mono text-[11px] text-[var(--fg-3)]">ID: {String(digest)}</span>
+              <span className="mt-2 block font-mono text-[11px] text-[var(--fg-3)]">{String(digest)}</span>
             ) : null}
           </p>
         </div>
-        {(message || error?.stack) && (
-          <details className="mb-4 w-full text-left text-[12px] text-[var(--fg-3)]">
-            <summary className="cursor-pointer font-mono">{message || t('common.error')}</summary>
-            {error?.stack && (
-              <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-[11px]">{error.stack}</pre>
-            )}
-          </details>
-        )}
         <div className="flex flex-wrap justify-center gap-2">
           <button
             type="button"
