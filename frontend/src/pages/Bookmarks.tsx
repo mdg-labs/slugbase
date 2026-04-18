@@ -13,7 +13,12 @@ import ShareResourceDialog from '../components/sharing/ShareResourceDialog';
 import Button from '../components/ui/Button';
 import BookmarkTableView from '../components/bookmarks/BookmarkTableView';
 import BookmarkCard from '../components/bookmarks/BookmarkCard';
-import { BulkMoveModal, BulkTagModal, BulkShareModal } from '../components/bookmarks/BulkActionModals';
+import {
+  BulkMoveModal,
+  BulkTagModal,
+  BulkShareModal,
+  bulkSelectionBarClassName,
+} from '../components/bookmarks/BulkActionModals';
 import { type FilterKey } from '../components/bookmarks/FilterChips';
 import { CollectionToolbar } from '../components/collections';
 import { PageLoadingSkeleton } from '../components/ui/PageLoadingSkeleton';
@@ -350,13 +355,16 @@ export default function Bookmarks() {
     }
   }
 
-  async function handleBulkAddTags(tagIds: string[]) {
+  async function handleBulkAddTags(tagIdsToAdd: string[], tagIdsToRemove: string[]) {
     try {
-      // Get current tags for each bookmark and merge
+      const removeSet = new Set(tagIdsToRemove);
+      const addSet = new Set(tagIdsToAdd);
       const bookmarkPromises = Array.from(selectedBookmarks).map(async (id) => {
         const bookmark = bookmarks.find(b => b.id === id);
         const currentTagIds = bookmark?.tags?.map(t => t.id) || [];
-        const mergedTagIds = [...new Set([...currentTagIds, ...tagIds])];
+        const next = new Set(currentTagIds.filter((tid) => !removeSet.has(tid)));
+        addSet.forEach((aid) => next.add(aid));
+        const mergedTagIds = [...next];
         return api.put(`/bookmarks/${id}`, { tag_ids: mergedTagIds });
       });
       await Promise.all(bookmarkPromises);
@@ -680,14 +688,23 @@ export default function Bookmarks() {
       {/* Bulk Actions Bar - sticky bottom, visible when selecting */}
       {bulkMode && (
         <div
-          className="fixed bottom-0 right-0 z-50 flex flex-wrap items-center justify-between gap-4 border-t border-ghost bg-surface-high/95 p-4 backdrop-blur-sm shadow-[0_-8px_32px_rgba(0,0,0,0.12)] dark:shadow-[0_-8px_32px_rgba(0,0,0,0.35)]"
+          className={cn(
+            'fixed bottom-4 right-4 z-50 flex max-w-[min(960px,calc(100vw-2rem))] flex-wrap items-center justify-between gap-4 rounded-[var(--radius-lg)] p-3 backdrop-blur-sm',
+            bulkSelectionBarClassName()
+          )}
           style={
             !isMobile
-              ? { left: sidebarState === 'expanded' ? '16rem' : '3rem' }
-              : { left: 0 }
+              ? { left: sidebarState === 'expanded' ? 'calc(16rem + 1rem)' : 'calc(3rem + 1rem)' }
+              : { left: '1rem' }
           }
         >
           <div className="flex flex-wrap items-center gap-3">
+            <span
+              className="flex h-[22px] min-w-[22px] shrink-0 items-center justify-center rounded-full bg-[var(--accent-hi)] px-1.5 text-[11px] font-semibold tabular-nums text-[var(--bg-0)]"
+              aria-hidden
+            >
+              {selectedBookmarks.size}
+            </span>
             {(allSelectedAcrossPages || selectedBookmarks.size === total) && total > 0 ? (
               <>
                 <span className="text-sm text-muted-foreground">
@@ -983,6 +1000,8 @@ export default function Bookmarks() {
           tags={tags}
           onTagCreated={(newTag) => setTags([...tags, newTag])}
           t={t}
+          contextBookmarks={bookmarks}
+          selectedBookmarkIds={Array.from(selectedBookmarks)}
         />
       )}
 

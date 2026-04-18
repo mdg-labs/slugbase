@@ -1,11 +1,7 @@
 import { useState, useMemo } from 'react';
 import {
-  FolderInput,
   FolderPlus,
-  Share2,
-  Tag as TagIcon,
   Tags,
-  Trash2,
 } from 'lucide-react';
 import {
   Modal,
@@ -242,11 +238,3 @@ export function bulkSelectionBarClassName(): string {
     'ring-1 ring-inset ring-[var(--accent-ring)]/30'
   );
 }
-
-export const BulkBarIcons = {
-  FolderPlus,
-  FolderInput,
-  TagIcon,
-  Share2,
-  Trash2,
-} as const;
