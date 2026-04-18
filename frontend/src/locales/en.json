@@ -778,6 +778,8 @@
     "confirmCodeLabel": "Confirm with a 6-digit code",
     "confirmEnrollment": "Confirm and enable",
     "copyAllBackupCodes": "Copy all codes",
+    "downloadBackupTxt": "Download .txt",
+    "printBackupCodes": "Print",
     "copyFailed": "Could not copy to clipboard. Copy manually or try HTTPS.",
     "copySecret": "Copy secret",
     "disable": "Disable two-factor authentication",

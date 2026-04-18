@@ -3,12 +3,11 @@ import { useTranslation } from 'react-i18next';
 import { QRCodeSVG } from 'qrcode.react';
 import { Shield } from 'lucide-react';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  Modal,
+  ModalContent,
+  ModalHead,
+  ModalBody,
+  ModalFoot,
 } from '../ui/dialog';
 import Button from '../ui/Button';
 import { Input } from '../ui/input';
@@ -43,6 +42,7 @@ export default function MfaEnrollSetupModal({
   const { t } = useTranslation();
   const { showToast } = useToast();
   const fieldId = useId();
+  const formId = `${fieldId}-mfa-enroll`;
 
   const handleOpenChange = (next: boolean) => {
     if (!next) {
@@ -60,71 +60,73 @@ export default function MfaEnrollSetupModal({
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Shield className="h-4 w-4 text-primary" aria-hidden />
-            {t('mfa.enrollSetupTitle')}
-          </DialogTitle>
-          <DialogDescription>{t('mfa.scanQrOrEnterSecret')}</DialogDescription>
-        </DialogHeader>
+    <Modal open={open} onOpenChange={handleOpenChange}>
+      <ModalContent className="flex max-w-[380px] flex-col p-0" aria-describedby={undefined}>
+        <ModalHead icon={Shield} title={t('mfa.enrollSetupTitle')} />
 
-        <div className="flex justify-center rounded-xl border border-ghost bg-surface-low p-4">
-          <QRCodeSVG value={otpauthUrl} size={200} level="M" title={t('mfa.qrAlt')} />
-        </div>
+        <form id={formId} onSubmit={onSubmit}>
+          <ModalBody>
+            <p className="-mt-1 mb-4 text-[12.5px] text-[var(--fg-2)]">{t('mfa.scanQrOrEnterSecret')}</p>
 
-        <div className="space-y-2">
-          <Label className="text-sm font-medium">{t('mfa.manualSecret')}</Label>
-          <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-            <code className="block flex-1 break-all rounded-lg border border-ghost bg-surface-low px-3 py-2 text-xs font-mono">
-              {secretB32}
-            </code>
-            <Button type="button" variant="secondary" size="sm" onClick={() => void copySecret()} disabled={busy}>
-              {t('mfa.copySecret')}
-            </Button>
-          </div>
-        </div>
+            <div className="flex justify-center rounded-[var(--radius-sm)] border border-[var(--border)] bg-white p-4">
+              <QRCodeSVG value={otpauthUrl} size={200} level="M" title={t('mfa.qrAlt')} />
+            </div>
 
-        <form onSubmit={onSubmit} className="space-y-3">
-          <div className="space-y-2">
-            <Label htmlFor={`${fieldId}-confirm-code`}>{t('mfa.confirmCodeLabel')}</Label>
-            <Input
-              id={`${fieldId}-confirm-code`}
-              name="mfa-confirm"
-              type="text"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              maxLength={12}
-              value={confirmCode}
-              onChange={(e) => onConfirmCodeChange(e.target.value)}
-              placeholder={t('mfa.codePlaceholder')}
-              disabled={busy}
-              aria-invalid={Boolean(error)}
-              className="max-w-xs"
-            />
-          </div>
-          {error ? (
-            <p id={`${fieldId}-wizard-err`} className="text-sm text-destructive" role="alert" aria-live="assertive">
-              {error}
-            </p>
-          ) : null}
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => void onCancelSetup()}>
-              {t('mfa.cancelSetup')}
-            </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              size="sm"
-              disabled={busy}
-              className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
-            >
-              {busy ? t('common.loading') : t('mfa.confirmEnrollment')}
-            </Button>
-          </DialogFooter>
+            <div className="space-y-2 pt-4">
+              <Label className="text-[12.5px] font-medium text-[var(--fg-0)]">{t('mfa.manualSecret')}</Label>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <code className="block flex-1 break-all rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-2)] px-3 py-2 font-mono text-[11px] text-[var(--fg-0)]">
+                  {secretB32}
+                </code>
+                <Button type="button" variant="secondary" size="sm" onClick={() => void copySecret()} disabled={busy}>
+                  {t('mfa.copySecret')}
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2 pt-4">
+              <Label htmlFor={`${fieldId}-confirm-code`} className="text-[12.5px]">
+                {t('mfa.confirmCodeLabel')}
+              </Label>
+              <Input
+                id={`${fieldId}-confirm-code`}
+                name="mfa-confirm"
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={12}
+                value={confirmCode}
+                onChange={(e) => onConfirmCodeChange(e.target.value)}
+                placeholder={t('mfa.codePlaceholder')}
+                disabled={busy}
+                aria-invalid={Boolean(error)}
+                className="max-w-xs font-mono"
+              />
+            </div>
+            {error ? (
+              <p id={`${fieldId}-wizard-err`} className="pt-2 text-sm text-[var(--danger)]" role="alert" aria-live="assertive">
+                {error}
+              </p>
+            ) : null}
+          </ModalBody>
+
+          <ModalFoot className="justify-between sm:justify-end">
+            <div className="flex w-full flex-wrap items-center justify-end gap-2">
+              <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => void onCancelSetup()}>
+                {t('mfa.cancelSetup')}
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                size="sm"
+                disabled={busy}
+              >
+                {busy ? t('common.loading') : t('mfa.confirmEnrollment')}
+              </Button>
+            </div>
+          </ModalFoot>
         </form>
-      </DialogContent>
-    </Dialog>
+      </ModalContent>
+    </Modal>
   );
 }

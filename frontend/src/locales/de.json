@@ -778,6 +778,8 @@
     "confirmCodeLabel": "Bestätigen Sie mit einem 6-stelligen Code",
     "confirmEnrollment": "Bestätigen und aktivieren",
     "copyAllBackupCodes": "Alle Codes kopieren",
+    "downloadBackupTxt": ".txt herunterladen",
+    "printBackupCodes": "Drucken",
     "copyFailed": "Konnte nicht in die Zwischenablage kopiert werden. Manuell kopieren oder HTTPS versuchen.",
     "copySecret": "Geheimnis kopieren",
     "disable": "Zwei-Faktor-Authentifizierung deaktivieren",

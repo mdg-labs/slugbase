@@ -1,14 +1,13 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Key, Copy, AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Copy, Key } from 'lucide-react';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
+  Modal,
+  ModalContent,
+  ModalHead,
+  ModalBody,
+  ModalFoot,
 } from '../ui/dialog';
-import { Separator } from '../ui/separator';
 import { FormFieldWrapper } from '../ui/FormFieldWrapper';
 import { ModalSection } from '../ui/ModalSection';
 import { ModalFooterActions } from '../ui/ModalFooterActions';
@@ -35,6 +34,7 @@ export default function CreateTokenModal({ isOpen, onClose, onCreated }: CreateT
   const [error, setError] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [tokenVisible, setTokenVisible] = useState(false);
 
   function reset() {
     setStep('form');
@@ -42,6 +42,7 @@ export default function CreateTokenModal({ isOpen, onClose, onCreated }: CreateT
     setError(null);
     setToken(null);
     setCopied(false);
+    setTokenVisible(false);
   }
 
   function handleClose() {
@@ -82,40 +83,38 @@ export default function CreateTokenModal({ isOpen, onClose, onCreated }: CreateT
   const isValid = name.trim().length > 0;
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Key className="h-4 w-4 text-primary" />
-            {step === 'form' ? t('profile.createToken') : t('profile.tokenCreated')}
-          </DialogTitle>
-        </DialogHeader>
-        <Separator />
+    <Modal open={isOpen} onOpenChange={(open) => !open && handleClose()}>
+      <ModalContent className="flex max-w-md flex-col p-0">
+        <ModalHead
+          icon={Key}
+          title={step === 'form' ? t('profile.createToken') : t('profile.tokenCreated')}
+        />
 
         {step === 'form' ? (
           <>
-            <form id="create-token-form" onSubmit={handleSubmit} className="space-y-6">
-              <ModalSection description={t('profile.apiAccessDescription')}>
-                <FormFieldWrapper
-                  label={t('profile.tokenName')}
-                  required
-                  error={error || undefined}
-                  htmlFor="token-name"
-                >
-                  <Input
-                    id="token-name"
-                    type="text"
+            <ModalBody>
+              <form id="create-token-form" onSubmit={handleSubmit} className="space-y-6">
+                <ModalSection description={t('profile.apiAccessDescription')}>
+                  <FormFieldWrapper
+                    label={t('profile.tokenName')}
                     required
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder={t('profile.tokenNamePlaceholder')}
-                    maxLength={100}
-                  />
-                </FormFieldWrapper>
-              </ModalSection>
-            </form>
-            <Separator />
-            <DialogFooter className="flex-row justify-between sm:justify-end gap-2">
+                    error={error || undefined}
+                    htmlFor="token-name"
+                  >
+                    <Input
+                      id="token-name"
+                      type="text"
+                      required
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder={t('profile.tokenNamePlaceholder')}
+                      maxLength={100}
+                    />
+                  </FormFieldWrapper>
+                </ModalSection>
+              </form>
+            </ModalBody>
+            <ModalFoot>
               <ModalFooterActions
                 onCancel={handleClose}
                 submitLabel={t('profile.createToken')}
@@ -123,43 +122,46 @@ export default function CreateTokenModal({ isOpen, onClose, onCreated }: CreateT
                 submitDisabled={!isValid}
                 formId="create-token-form"
               />
-            </DialogFooter>
+            </ModalFoot>
           </>
         ) : (
           <>
-            <div className="space-y-4">
-              <div className="flex items-start gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2">
-                <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-muted-foreground">
-                  {t('profile.tokenRevealWarning')}
-                </p>
+            <ModalBody>
+              <div className="space-y-4">
+                <div className="flex items-start gap-2 rounded-[var(--radius-sm)] border border-[rgba(251,191,36,0.35)] bg-[rgba(251,191,36,0.08)] px-3 py-2">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--warn)]" />
+                  <p className="text-[12.5px] text-[var(--fg-1)]">{t('profile.tokenRevealWarning')}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Input
+                    readOnly
+                    type={tokenVisible ? 'text' : 'password'}
+                    value={token || ''}
+                    className="min-w-0 flex-1 font-mono text-[12px]"
+                  />
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setTokenVisible((v) => !v)}>
+                    {tokenVisible ? t('common.hidePassword') : t('common.showPassword')}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCopy}
+                    icon={Copy}
+                  >
+                    {copied ? t('common.success') : t('profile.copyToken')}
+                  </Button>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Input
-                  readOnly
-                  value={token || ''}
-                  className="font-mono text-sm truncate bg-surface-low border border-ghost"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleCopy}
-                  icon={Copy}
-                >
-                  {copied ? t('common.success') : t('profile.copyToken')}
-                </Button>
-              </div>
-            </div>
-            <Separator />
-            <DialogFooter className="flex-row justify-end">
-              <Button type="button" variant="primary" onClick={handleClose} className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90">
+            </ModalBody>
+            <ModalFoot>
+              <Button type="button" variant="primary" size="md" onClick={handleClose}>
                 {t('common.close')}
               </Button>
-            </DialogFooter>
+            </ModalFoot>
           </>
         )}
-      </DialogContent>
-    </Dialog>
+      </ModalContent>
+    </Modal>
   );
 }
