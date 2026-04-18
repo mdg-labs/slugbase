@@ -5,6 +5,14 @@ alwaysApply: true
 
 # Core → cloud: version bump, pack, and install
 
+## Stop — bump before pack
+
+**Never run `npm run pack:cloud` until steps 1–2 below are done.** The pack script names the tarball from `packages/core/package.json` `version`. If that version was not bumped and `slugbase-cloud/package.json` was not updated to the matching `file:./vendor/mdguggenbichler-slugbase-core-<version>.tgz`, the Cloud install will reference the wrong file or a stale tarball.
+
+If you use a **multi-root Cursor workspace** (e.g. `slugbase-workspace`) where rules from this repo are easy to miss, also follow **`slugbase-workspace/.cursor/rules/core-cloud-pack-handoff.mdc`** (duplicate blocker at workspace level).
+
+---
+
 When you **finish work in slugbase** that **affects the packaged core** (anything that ends up in `@mdguggenbichler/slugbase-core` via `assemble:core` / `pack:cloud`: `packages/core`, backend, frontend, embed, scripts that feed the assembly, etc.), **complete the handoff to the Cloud deployment** before considering the task done.
 
 Purely local-only changes that **cannot** alter the tarball (e.g. markdown-only edits with no assembly impact) do **not** require this flow. When unsure, bump and pack.
