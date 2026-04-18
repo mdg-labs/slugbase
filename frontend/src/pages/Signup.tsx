@@ -105,19 +105,19 @@ export default function Signup() {
     return (
       <AuthSplitLayout showTabs={false}>
         <div className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-1)] p-8 text-center shadow-[var(--shadow)]">
-            <h1 className={authTitle}>{t('signup.successTitle')}</h1>
-            <p className={cn(authSub, 'mt-3')}>{t('signup.successMessage')}</p>
-            <Link
-              to={loginHref}
-              className={cn(
-                buttonVariants({ variant: 'primary', size: 'lg' }),
-                'mt-6 inline-flex w-full max-w-none justify-between no-underline'
-              )}
-            >
-              <span>{t('signup.backToLogin')}</span>
-              <ArrowRight className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
-            </Link>
-          </div>
+          <h1 className={authTitle}>{t('signup.successTitle')}</h1>
+          <p className={cn(authSub, 'mt-3')}>{t('signup.successMessage')}</p>
+          <Link
+            to={loginHref}
+            className={cn(
+              buttonVariants({ variant: 'primary', size: 'lg' }),
+              'mt-6 inline-flex w-full max-w-none justify-between no-underline'
+            )}
+          >
+            <span>{t('signup.backToLogin')}</span>
+            <ArrowRight className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
+          </Link>
+        </div>
       </AuthSplitLayout>
     );
   }
