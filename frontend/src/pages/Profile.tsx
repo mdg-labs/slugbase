@@ -682,6 +682,7 @@ export default function Profile() {
         </nav>
 
       <div className="min-w-0 flex-1 space-y-6">
+        <form onSubmit={handleSubmit} id="profile-preferences-form">
         {/* Section A: Account */}
         <Card id="profile-section-general" className="scroll-mt-24 rounded-xl border border-ghost bg-surface shadow-none">
           <CardHeader>
@@ -869,6 +870,16 @@ export default function Profile() {
                 label={t('profile.appBaseUrl')}
                 value={<code className="font-mono text-[12px] text-[var(--fg-1)]">{appOrigin || '—'}</code>}
               />
+
+              <SettingsRow label={t('profile.language')}>
+                <div className="mt-2 max-w-xs sm:mt-0">
+                  <Select
+                    value={formData.language}
+                    onChange={(value) => setFormData((prev) => ({ ...prev, language: value }))}
+                    options={languageOptions}
+                  />
+                </div>
+              </SettingsRow>
             </dl>
           </CardContent>
         </Card>
@@ -882,19 +893,8 @@ export default function Profile() {
             <CardTitle>{t('profile.preferences')}</CardTitle>
             <CardDescription>{t('profile.preferencesDescription')}</CardDescription>
           </CardHeader>
-          <form onSubmit={handleSubmit} id="profile-preferences-form">
             <CardContent className="space-y-6">
               <div className="tweaks-body space-y-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground" id="profile-language-label">
-                  {t('profile.language')}
-                </label>
-                <Select
-                  value={formData.language}
-                  onChange={(value) => setFormData((prev) => ({ ...prev, language: value }))}
-                  options={languageOptions}
-                />
-              </div>
               <div className="space-y-2">
                 <span className="text-sm font-medium text-foreground" id="profile-theme-label">
                   {t('profile.theme')}
@@ -970,7 +970,6 @@ export default function Profile() {
               </span>
               <Button
                 type="submit"
-                form="profile-preferences-form"
                 variant="primary"
                 disabled={saving || !preferencesDirty}
                 aria-label={t('common.save')}
@@ -979,8 +978,8 @@ export default function Profile() {
                 {saving ? t('common.loading') : t('common.save')}
               </Button>
             </CardFooter>
-          </form>
         </Card>
+        </form>
 
         {/* MFA (password / hybrid); pure OIDC sees SSO note instead */}
         {showOidcMfaManagedNote || showSlugbaseMfaCard ? (
