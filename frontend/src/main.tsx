@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import App from './App.tsx'
 import './index.css'
 import './i18n'
+import { applyAccent } from './lib/applyAccent'
 
 // Apply initial dark mode: localStorage (anonymous users) > browser preference
 const root = document.documentElement;
@@ -35,6 +36,13 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e)
     }
   }
 });
+
+const storedAccent = localStorage.getItem('slugbase_accent')
+applyAccent(
+  storedAccent && /^#[0-9A-Fa-f]{6}$/.test(storedAccent.trim())
+    ? storedAccent.trim()
+    : '#7b7ef4',
+)
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

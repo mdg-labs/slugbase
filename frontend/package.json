@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "lint": "eslint .",
     "dev": "vite",
     "build": "tsc && vite build",
     "build:core-embed": "npx vite build --config vite.core-embed.config.ts",

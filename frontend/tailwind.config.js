@@ -8,16 +8,20 @@ export default {
   theme: {
   	extend: {
   		fontFamily: {
-  			sans: ['Inter', 'system-ui', 'sans-serif'],
-  			mono: ['"Liberation Mono"', 'ui-monospace', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+  			sans: ['var(--font-sans)'],
+  			mono: ['var(--font-mono)'],
   		},
   		borderRadius: {
-  			xl: 'var(--radius)',
-  			lg: '0.5rem',
-  			md: 'calc(0.75rem - 2px)',
-  			sm: 'calc(0.75rem - 4px)'
+  			sm: 'var(--radius-sm)',
+  			DEFAULT: 'var(--radius)',
+  			md: 'calc(var(--radius) - 2px)',
+  			lg: 'var(--radius-lg)',
+  			xl: 'var(--radius-xl)',
   		},
   		boxShadow: {
+  			sm: 'var(--shadow-sm)',
+  			DEFAULT: 'var(--shadow)',
+  			lg: 'var(--shadow-lg)',
   			glow: '0px 20px 40px rgba(159, 167, 255, 0.08)',
   		},
   		backgroundImage: {
@@ -47,16 +51,48 @@ export default {
   				foreground: 'hsl(var(--muted-foreground))'
   			},
   			accent: {
-  				DEFAULT: 'hsl(var(--accent))',
-  				foreground: 'hsl(var(--accent-foreground))'
+  				DEFAULT: 'var(--accent)',
+  				foreground: 'hsl(var(--accent-foreground))',
+  				hi: 'var(--accent-hi)',
+  				bg: 'var(--accent-bg)',
+  				'bg-hi': 'var(--accent-bg-hi)',
+  				ring: 'var(--accent-ring)',
   			},
   			destructive: {
   				DEFAULT: 'hsl(var(--destructive))',
   				foreground: 'hsl(var(--destructive-foreground))'
   			},
-  			border: 'hsl(var(--border))',
+  			border: {
+  				DEFAULT: 'var(--border)',
+  				strong: 'var(--border-strong)',
+  				soft: 'var(--border-soft)',
+  			},
   			input: 'hsl(var(--input))',
   			ring: 'hsl(var(--ring))',
+  			bg: {
+  				0: 'var(--bg-0)',
+  				1: 'var(--bg-1)',
+  				2: 'var(--bg-2)',
+  				3: 'var(--bg-3)',
+  				4: 'var(--bg-4)',
+  				hover: 'var(--bg-hover)',
+  			},
+  			fg: {
+  				0: 'var(--fg-0)',
+  				1: 'var(--fg-1)',
+  				2: 'var(--fg-2)',
+  				3: 'var(--fg-3)',
+  				4: 'var(--fg-4)',
+  			},
+  			t: {
+  				violet: 'var(--t-violet)',
+  				blue: 'var(--t-blue)',
+  				cyan: 'var(--t-cyan)',
+  				green: 'var(--t-green)',
+  				amber: 'var(--t-amber)',
+  				rose: 'var(--t-rose)',
+  				pink: 'var(--t-pink)',
+  			},
   			surface: {
   				lowest: 'hsl(var(--surface-lowest))',
   				low: 'hsl(var(--surface-low))',

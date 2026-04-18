@@ -13,7 +13,9 @@
     "./frontend/locales/de.json": "./frontend/locales/de.json",
     "./openapi/openapi.selfhosted.yaml": "./openapi/openapi.selfhosted.yaml"
   },
-  "scripts": {},
+  "scripts": {
+    "lint": "eslint ."
+  },
   "engines": {
     "node": ">=20"
   },
