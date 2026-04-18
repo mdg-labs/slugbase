@@ -35,8 +35,9 @@ export function PinnedSection({
   subtitle,
   t,
   onOpen,
-  onCopyUrl,
+  onCopyUrl: _onCopyUrl,
 }: PinnedSectionProps) {
+  void _onCopyUrl;
   const prefix = pathPrefix.replace(/\/+/g, '/') || '';
   const displayItems = items.slice(0, maxItems);
   const bookmarksUrl = `${prefix}/bookmarks`.replace(/\/+/g, '/') || '/bookmarks';
