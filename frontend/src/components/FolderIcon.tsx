@@ -1,11 +1,14 @@
 import React from 'react';
 import * as LucideIcons from 'lucide-react';
 import { Folder as DefaultFolderIcon } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface FolderIconProps {
   iconName?: string | null;
   className?: string;
   size?: number;
+  /** Optional CSS color for `.f-ico` mixing + icon stroke (e.g. folder accent from API later). */
+  accentColor?: string | null;
 }
 
 // Get all available icon names from lucide-react
@@ -166,11 +169,45 @@ const popularIcons = [
   'FolderOn2',
 ];
 
-export default function FolderIcon({ iconName, className = '', size = 20 }: FolderIconProps) {
+export default function FolderIcon({
+  iconName,
+  className = '',
+  size = 20,
+  accentColor,
+}: FolderIconProps) {
   const iconClass = className || 'text-primary';
+  const showTile = size >= 16;
+  const iconPx = Math.max(10, Math.round(size * 0.52));
+  const bgStyle: React.CSSProperties = accentColor
+    ? { background: `color-mix(in srgb, ${accentColor} 32%, var(--bg-2))` }
+    : { background: 'color-mix(in srgb, var(--accent) 32%, var(--bg-2))' };
+
+  const iconStyle = (tile: boolean): React.CSSProperties => ({
+    width: tile ? iconPx : size,
+    height: tile ? iconPx : size,
+    ...(accentColor ? { color: accentColor } : {}),
+  });
+
+  const wrapTile = (node: React.ReactNode) => (
+    <span
+      className={cn(
+        'f-ico inline-grid shrink-0 place-items-center rounded-[22%] border border-[var(--border-soft)]',
+        iconClass
+      )}
+      style={{ width: size, height: size, ...bgStyle }}
+    >
+      {node}
+    </span>
+  );
 
   if (!iconName) {
-    return <DefaultFolderIcon className={iconClass} style={{ width: `${size}px`, height: `${size}px` }} />;
+    const node = (
+      <DefaultFolderIcon
+        className={showTile ? undefined : iconClass}
+        style={iconStyle(showTile)}
+      />
+    );
+    return showTile ? wrapTile(node) : node;
   }
 
   // Try to get the icon from lucide-react (exact match first)
@@ -199,11 +236,22 @@ export default function FolderIcon({ iconName, className = '', size = 20 }: Fold
      (typeof IconComponent === 'object' && IconComponent !== null && ((IconComponent as any).$$typeof || (IconComponent as any).render)));
 
   if (isValidComponent) {
-    return <IconComponent className={iconClass} style={{ width: `${size}px`, height: `${size}px` }} />;
+    const node = (
+      <IconComponent
+        className={showTile ? undefined : iconClass}
+        style={iconStyle(showTile)}
+      />
+    );
+    return showTile ? wrapTile(node) : node;
   }
 
-  // Fallback to default folder icon
-  return <DefaultFolderIcon className={iconClass} style={{ width: `${size}px`, height: `${size}px` }} />;
+  const fallback = (
+    <DefaultFolderIcon
+      className={showTile ? undefined : iconClass}
+      style={iconStyle(showTile)}
+    />
+  );
+  return showTile ? wrapTile(fallback) : fallback;
 }
 
 export { popularIcons };

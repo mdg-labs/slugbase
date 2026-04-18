@@ -174,7 +174,7 @@ export default function ImportModal({ isOpen, onClose, onSuccess }: ImportModalP
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-[460px]">
+      <DialogContent className="max-w-[720px]">
         <DialogHeader>
           <DialogTitle>{t('bookmarks.import')}</DialogTitle>
         </DialogHeader>

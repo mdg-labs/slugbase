@@ -19,14 +19,14 @@ export function FilterChips({ chips, onRemove, onClearAll, clearAllLabel, clearA
   if (chips.length === 0) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="tag-wall flex flex-wrap items-center gap-2">
       {chips.map(({ key, label, ariaLabel }) => (
         <Badge
           key={key}
           variant="secondary"
-          className="inline-flex items-center gap-1.5 rounded-full border-0 bg-surface-low py-1 pl-2.5 pr-1 text-sm font-normal text-muted-foreground"
+          className="tag-chip inline-flex h-auto items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg-1)] py-1.5 pl-2.5 pr-1 text-[12.5px] font-medium text-[var(--fg-0)] transition-[background,border-color] hover:border-[var(--border-strong)] hover:bg-[var(--bg-2)]"
         >
-          <span>{label}</span>
+          <span className="name">{label}</span>
           <button
             type="button"
             onClick={() => onRemove(key)}
@@ -36,10 +36,10 @@ export function FilterChips({ chips, onRemove, onClearAll, clearAllLabel, clearA
                 onRemove(key);
               }
             }}
-            className="rounded-full p-0.5 text-muted-foreground hover:bg-surface-high hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="rounded p-0.5 text-[var(--fg-3)] hover:bg-[var(--bg-3)] hover:text-[var(--fg-0)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-ring)]"
             aria-label={ariaLabel}
           >
-            <X className="h-3.5 w-3.5" />
+            <X className="h-3.5 w-3.5" strokeWidth={1.75} />
           </button>
         </Badge>
       ))}
@@ -52,7 +52,7 @@ export function FilterChips({ chips, onRemove, onClearAll, clearAllLabel, clearA
             onClearAll();
           }
         }}
-        className="text-sm text-muted-foreground hover:text-foreground underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded px-1"
+        className="rounded px-1 text-[12.5px] text-[var(--fg-2)] underline decoration-[var(--border-strong)] underline-offset-2 hover:text-[var(--fg-0)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-ring)]"
         aria-label={clearAllAriaLabel}
       >
         {clearAllLabel}

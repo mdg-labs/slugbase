@@ -14,10 +14,11 @@ interface ModalFooterActionsProps {
   className?: string;
 }
 
+/** Trailing ghost + primary — use inside `ModalFoot` / `DialogFooter` for mockup `.modal-foot` padding. */
 export function ModalFooterActions({
   onCancel,
   cancelLabel,
-  cancelVariant = 'outline',
+  cancelVariant = 'ghost',
   submitLabel,
   loading = false,
   submitDisabled = false,
@@ -28,13 +29,8 @@ export function ModalFooterActions({
   const { t } = useTranslation();
 
   return (
-    <div
-      className={cn(
-        'flex flex-row justify-between gap-2 sm:justify-end',
-        className
-      )}
-    >
-      <Button variant={cancelVariant} onClick={onCancel} type="button">
+    <div className={cn('flex w-full flex-wrap items-center justify-end gap-2', className)}>
+      <Button variant={cancelVariant} onClick={onCancel} type="button" size="md">
         {cancelLabel ?? t('common.cancel')}
       </Button>
       <Button
@@ -43,6 +39,7 @@ export function ModalFooterActions({
         disabled={submitDisabled || loading}
         type="submit"
         form={formId}
+        size="md"
       >
         {submitLabel}
       </Button>

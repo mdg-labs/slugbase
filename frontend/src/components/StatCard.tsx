@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom';
 import { LucideIcon } from 'lucide-react';
-import { Card, CardContent } from './ui/card';
 import { cn } from '@/lib/utils';
 
 /** Optional usage display for plan/limit (hosted cloud). Only rendered when used + limit are both set. */
@@ -39,6 +38,7 @@ interface StatCardProps {
   cta?: { label: string; onClick: () => void };
 }
 
+/** Mockup `.stat` (`styles.css` L429–464): label mono caps, large value, optional delta, spark icon. */
 export function StatCard({
   label,
   value,
@@ -63,95 +63,103 @@ export function StatCard({
   const progressPercent = limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
 
   const content = (
-    <div className="flex items-stretch justify-between gap-3 flex-1 min-h-0">
-      <div className="min-w-0 flex-1 flex flex-col">
-        <div className="min-w-0">
-          <p className={cn('text-muted-foreground', dense ? 'text-xs' : 'text-sm')}>
-            {label}
-          </p>
-          <p className={cn('font-semibold mt-1 text-foreground', dense ? 'text-xl' : 'text-2xl')}>
-            {value}
-          </p>
-          {secondaryLine && (
-            <p className="mt-0.5 text-xs text-muted-foreground">{secondaryLine}</p>
+    <>
+      <p className="label font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--fg-2)]">
+        {label}
+      </p>
+      <p
+        className={cn(
+          'value font-semibold tabular-nums tracking-[-0.02em] text-[var(--fg-0)]',
+          dense ? 'text-xl' : 'text-[26px] leading-[1.1]'
+        )}
+      >
+        {value}
+      </p>
+      {secondaryLine && (
+        <p
+          className={cn(
+            'delta mt-0.5 font-mono text-[11px]',
+            secondaryLine.trim().startsWith('+')
+              ? 'text-[var(--success)]'
+              : secondaryLine.trim().startsWith('-')
+                ? 'text-[var(--danger)]'
+                : 'text-[var(--fg-2)]'
           )}
-          {hasUsage && (
-            <p className="mt-1 text-xs text-muted-foreground">
-              {labelOverride ?? `${label} ${used} / ${limit}`}
-            </p>
+        >
+          {secondaryLine}
+        </p>
+      )}
+      {hasUsage && (
+        <p className="mt-1 font-mono text-[11px] text-[var(--fg-2)]">
+          {labelOverride ?? `${label} ${used} / ${limit}`}
+        </p>
+      )}
+      {(showProgressBar || cta) && (
+        <div className="mt-auto pt-2">
+          {showProgressBar && (
+            <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--bg-3)]">
+              <div
+                className={cn(
+                  'h-full transition-all',
+                  progressVariant === 'warning' && 'bg-[var(--warn)]',
+                  progressVariant === 'danger' && 'bg-[var(--danger)]',
+                  (progressVariant === 'normal' || !progressVariant) &&
+                    'bg-[var(--accent)]'
+                )}
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+          )}
+          {cta && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                cta.onClick();
+              }}
+              className={cn(
+                'rounded text-xs font-medium text-[var(--accent)] hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-1)]',
+                showProgressBar ? 'mt-2' : 'mt-0'
+              )}
+            >
+              {cta.label}
+            </button>
           )}
         </div>
-        {(showProgressBar || cta) && (
-          <div className="mt-auto pt-2">
-            {showProgressBar && (
-              <div className="w-full overflow-hidden rounded-full bg-primary/20">
-                <div
-                  className={cn(
-                    'h-2 transition-all',
-                    progressVariant === 'warning' && 'bg-amber-500',
-                    progressVariant === 'danger' && 'bg-destructive',
-                    (progressVariant === 'normal' || !progressVariant) && 'bg-primary'
-                  )}
-                  style={{ width: `${progressPercent}%` }}
-                />
-              </div>
-            )}
-            {cta && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  cta.onClick();
-                }}
-                className={cn('text-xs font-medium text-primary hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded', showProgressBar ? 'mt-2' : 'mt-0')}
-              >
-                {cta.label}
-              </button>
-            )}
-          </div>
-        )}
-      </div>
+      )}
       <div
         className={cn(
-          'shrink-0 self-center rounded-lg',
-          iconContainerClassName ?? 'bg-primary/10',
-          dense ? 'p-2' : 'p-3'
+          'spark pointer-events-none absolute right-3 top-3 opacity-80',
+          iconContainerClassName
         )}
       >
         <Icon
-          className={cn(iconColorClassName ?? 'text-primary', dense ? 'h-5 w-5' : 'h-6 w-6')}
+          className={cn(
+            dense ? 'size-5' : 'size-5',
+            iconColorClassName ?? 'text-[var(--fg-3)]'
+          )}
+          strokeWidth={1.75}
         />
       </div>
-    </div>
+    </>
   );
 
-  const cardClassName = cn(
-    'h-full flex flex-col border border-ghost transition-colors',
+  const shellClass = cn(
+    'stat relative flex min-h-0 flex-col gap-1 overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-1)] px-4 py-3.5',
+    dense && 'px-3 py-3',
     href &&
-      'cursor-pointer rounded-xl hover:border-primary/40 hover:bg-surface-high focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background',
+      'cursor-pointer transition-[border-color,background] hover:border-[var(--border-strong)] hover:bg-[var(--bg-2)] focus-within:ring-2 focus-within:ring-[var(--accent-ring)] focus-within:ring-offset-2 focus-within:ring-offset-[var(--bg-0)]',
     className
   );
 
-  const contentPadding = dense ? 'p-3' : 'p-4';
-
   if (href) {
     return (
-      <Link to={href} className="block h-full focus:outline-none">
-        <Card className={cardClassName}>
-          <CardContent className={cn(contentPadding, 'flex-1 flex flex-col min-h-0')}>
-            {content}
-          </CardContent>
-        </Card>
+      <Link to={href} className="block h-full min-h-0 focus:outline-none">
+        <div className={shellClass}>{content}</div>
       </Link>
     );
   }
 
-  return (
-    <Card className={cardClassName}>
-      <CardContent className={cn(contentPadding, 'flex-1 flex flex-col min-h-0')}>
-        {content}
-      </CardContent>
-    </Card>
-  );
+  return <div className={shellClass}>{content}</div>;
 }

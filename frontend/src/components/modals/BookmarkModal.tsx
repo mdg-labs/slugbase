@@ -294,7 +294,7 @@ export default function BookmarkModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-[720px]">
         <DialogHeader>
           <DialogTitle className="text-primary text-lg font-semibold">
             {bookmark ? t('bookmarks.edit') : t('bookmarks.create')}

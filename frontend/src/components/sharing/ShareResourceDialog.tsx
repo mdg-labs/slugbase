@@ -224,7 +224,7 @@ export default function ShareResourceDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-[720px]">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{t('sharing.inviteDescription')}</DialogDescription>

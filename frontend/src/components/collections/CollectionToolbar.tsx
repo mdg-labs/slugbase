@@ -14,6 +14,7 @@ import { ScopeSegmentedControl } from '../ScopeSegmentedControl';
 import { FilterChips, type FilterChipItem } from '../FilterChips';
 import Button from '../ui/Button';
 import Select from '../ui/Select';
+import { Input } from '../ui/input';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -104,7 +105,7 @@ export interface CollectionToolbarProps {
 }
 
 const STICKY_CLASS =
-  'sticky top-0 z-40 space-y-4 pb-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pt-0 -mt-8 bg-background/95 backdrop-blur-sm';
+  'sticky top-0 z-40 space-y-4 pb-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pt-0 -mt-8 bg-[var(--bg-0)]/95 backdrop-blur-sm';
 
 export function CollectionToolbar({
   title,
@@ -127,8 +128,8 @@ export function CollectionToolbar({
   viewDisplay,
   moreMenuLabel = 'More',
   className,
-  titleClassName = 'text-3xl font-black tracking-tighter text-foreground sm:text-4xl',
-  subtitleClassName = 'mt-1 font-medium',
+  titleClassName,
+  subtitleClassName,
 }: CollectionToolbarProps) {
   const [moreOpen, setMoreOpen] = useState(false);
   const displayTitle = count !== undefined ? `${title} (${count})` : title;
@@ -154,12 +155,7 @@ export function CollectionToolbar({
         />
       )}
       {createButton && (
-        <Button
-          onClick={createButton.onClick}
-          icon={Plus}
-          variant="primary"
-          className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
-        >
+        <Button onClick={createButton.onClick} icon={Plus} variant="primary">
           {createButton.label}
         </Button>
       )}
@@ -188,31 +184,26 @@ export function CollectionToolbar({
       )}
 
       {hasToolbarRow && (
-        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-ghost glass p-4 shadow-xl">
-          <div className="flex min-w-[200px] flex-1 flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex min-w-[200px] flex-1 flex-wrap items-center gap-2">
             {search && (
-              <div className="group flex min-w-[200px] flex-1 items-center gap-2 rounded-xl border border-transparent bg-surface-low px-3 py-2 transition-colors focus-within:border-primary/30 focus-within:ring-1 focus-within:ring-primary/25">
-                <Search
-                  className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-focus-within:text-primary"
-                  aria-hidden
-                />
-                <input
-                  type="search"
-                  value={search.value}
-                  onChange={(e) => search.onChange(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      search.onSubmit((e.target as HTMLInputElement).value.trim());
-                    }
-                  }}
-                  placeholder={search.placeholder}
-                  className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
-                  aria-label={search.ariaLabel ?? search.placeholder}
-                />
-              </div>
+              <Input
+                type="search"
+                value={search.value}
+                onChange={(e) => search.onChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    search.onSubmit((e.target as HTMLInputElement).value.trim());
+                  }
+                }}
+                placeholder={search.placeholder}
+                aria-label={search.ariaLabel ?? search.placeholder}
+                leftSlot={<Search className="text-[var(--fg-3)]" aria-hidden />}
+                className="min-h-9 min-w-[min(280px,100%)] flex-1 max-w-[400px]"
+              />
             )}
             {folderFilter && (
-              <div className="min-w-[180px] flex-1">
+              <div className="min-w-[160px] max-w-[200px] flex-1 sm:max-w-[220px]">
                 <Select
                   value={folderFilter.value}
                   onChange={folderFilter.onChange}
@@ -222,7 +213,7 @@ export function CollectionToolbar({
               </div>
             )}
             {tagFilter && (
-              <div className="min-w-[180px] flex-1">
+              <div className="min-w-[160px] max-w-[200px] flex-1 sm:max-w-[220px]">
                 <Select
                   value={tagFilter.value}
                   onChange={tagFilter.onChange}
@@ -232,12 +223,12 @@ export function CollectionToolbar({
               </div>
             )}
             {sort && (
-              <div className="flex items-center gap-2">
+              <div className="flex min-w-[140px] max-w-[180px] items-center gap-2 sm:max-w-[200px]">
                 <Select
                   value={sort.value}
                   onChange={sort.onChange}
                   options={sort.options}
-                  className={sort.className ?? 'min-w-[160px]'}
+                  className={sort.className ?? 'w-full min-w-0'}
                 />
               </div>
             )}
@@ -246,7 +237,7 @@ export function CollectionToolbar({
           {hasSecondary && (
             <DropdownMenu open={moreOpen} onOpenChange={setMoreOpen}>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" icon={MoreHorizontal} className="shrink-0 border-ghost bg-surface-high">
+                <Button variant="ghost" size="sm" icon={MoreHorizontal} className="shrink-0">
                   {moreMenuLabel}
                 </Button>
               </DropdownMenuTrigger>

@@ -9,13 +9,13 @@ export function PageLoadingSkeleton({ lines = 4 }: PageLoadingSkeletonProps) {
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-4 w-96" />
+        <Skeleton className="h-8 w-48 rounded-[var(--radius)]" />
+        <Skeleton className="h-4 max-w-md rounded-[var(--radius-sm)]" />
       </div>
-      <div className="rounded-xl border-0 bg-surface p-6 shadow-none">
+      <div className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-1)] p-4 sm:p-6">
         <div className="space-y-4">
           {Array.from({ length: lines }).map((_, i) => (
-            <Skeleton key={i} className="h-12 w-full" />
+            <Skeleton key={i} className="h-12 w-full rounded-[var(--radius)]" />
           ))}
         </div>
       </div>
