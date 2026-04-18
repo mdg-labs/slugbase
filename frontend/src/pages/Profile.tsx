@@ -14,6 +14,14 @@ import CreateTokenModal from '../components/profile/CreateTokenModal';
 import MfaEnrollSetupModal from '../components/profile/MfaEnrollSetupModal';
 import MfaEnrollBackupCodesModal from '../components/profile/MfaEnrollBackupCodesModal';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../components/ui/table';
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -1147,38 +1155,60 @@ export default function Profile() {
                 {t('profile.noTokensEmpty')}
               </p>
             ) : (
-              <ul className="space-y-2" role="list">
-                {tokens.map((tok) => (
-                  <li
-                    key={tok.id}
-                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 py-2 px-3 rounded-xl border border-ghost bg-surface-low"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <span className="text-sm font-medium text-foreground block truncate">
-                        {tok.name}
-                      </span>
-                      <span className="text-xs text-muted-foreground font-mono">
-                        sb_********************************
-                      </span>
-                      <span className="text-xs text-muted-foreground block mt-0.5">
-                        {t('profile.createdAt')}: {formatDate(tok.created_at)}
-                        {' · '}
-                        {t('profile.lastUsed')}: {tok.last_used_at ? formatDate(tok.last_used_at) : t('profile.neverUsed')}
-                      </span>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setRevokeTokenId(tok.id)}
-                      className="text-destructive hover:text-destructive/90 sm:ml-auto"
-                      aria-label={`${t('profile.revokeToken')} ${tok.name}`}
-                    >
-                      {t('profile.revokeToken')}
-                    </Button>
-                  </li>
-                ))}
-              </ul>
+              <div className="overflow-hidden rounded-xl border border-ghost bg-surface">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="min-w-[8rem]">{t('profile.name')}</TableHead>
+                      <TableHead className="hidden sm:table-cell">{t('profile.createdAt')}</TableHead>
+                      <TableHead className="hidden md:table-cell">{t('profile.lastUsed')}</TableHead>
+                      <TableHead className="w-[1%] text-right">
+                        <span className="sr-only">{t('common.actions')}</span>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {tokens.map((tok) => (
+                      <TableRow key={tok.id}>
+                        <TableCell className="min-w-0 max-w-[min(100%,24rem)]">
+                          <span className="text-sm font-medium text-foreground block truncate">
+                            {tok.name}
+                          </span>
+                          <span className="text-xs text-muted-foreground font-mono">
+                            sb_********************************
+                          </span>
+                          <p className="text-xs text-muted-foreground mt-1 sm:hidden">
+                            {t('profile.createdAt')}: {formatDate(tok.created_at)}
+                            <span className="text-muted-foreground/70" aria-hidden>
+                              {' · '}
+                            </span>
+                            {t('profile.lastUsed')}:{' '}
+                            {tok.last_used_at ? formatDate(tok.last_used_at) : t('profile.neverUsed')}
+                          </p>
+                        </TableCell>
+                        <TableCell className="hidden sm:table-cell text-muted-foreground whitespace-nowrap">
+                          {formatDate(tok.created_at)}
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell text-muted-foreground whitespace-nowrap">
+                          {tok.last_used_at ? formatDate(tok.last_used_at) : t('profile.neverUsed')}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setRevokeTokenId(tok.id)}
+                            className="text-destructive hover:text-destructive/90"
+                            aria-label={`${t('profile.revokeToken')} ${tok.name}`}
+                          >
+                            {t('profile.revokeToken')}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </CardContent>
         </Card>
