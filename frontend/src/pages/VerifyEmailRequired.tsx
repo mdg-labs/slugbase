@@ -88,7 +88,8 @@ export default function VerifyEmailRequired() {
                     <label htmlFor="verify-email-required-new-email" className={authFieldLabel}>
                       {t('auth.newEmailLabel')}
                     </label>
-                    <div className={authInput}>
+                    <div className={cn(authInput)}>
+                      <Mail className="h-4 w-4 shrink-0 text-[var(--fg-3)]" aria-hidden />
                       <input
                         id="verify-email-required-new-email"
                         name="newEmail"
@@ -107,7 +108,8 @@ export default function VerifyEmailRequired() {
                   <label htmlFor="verify-email-required-email" className={authFieldLabel}>
                     {t('auth.verifyEmailRequiredPageEmailLabel')}
                   </label>
-                  <div className={authInput}>
+                  <div className={cn(authInput)}>
+                    <Mail className="h-4 w-4 shrink-0 text-[var(--fg-3)]" aria-hidden />
                     <input
                       id="verify-email-required-email"
                       name="email"

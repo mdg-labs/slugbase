@@ -298,7 +298,12 @@ function ForwardingHandler() {
   }, [targetUrl]);
 
   return (
-    <div className={cn(authShell, 'flex min-h-screen flex-col items-center justify-center py-16')}>
+    <div
+      className={cn(
+        authShell,
+        'flex min-h-screen flex-col items-center justify-center bg-[var(--bg-0)] py-16'
+      )}
+    >
       <div className={cn(authCard, 'max-w-[440px] text-center')}>
         <div className="slug-trail mb-4 inline-flex justify-center" aria-hidden>
           <span />
@@ -311,7 +316,7 @@ function ForwardingHandler() {
         <p className="font-mono text-[12px] leading-relaxed text-[var(--fg-0)]">
           <span className="text-[var(--accent-hi)]">{displayPath}</span>
           <span className="text-[var(--fg-3)]"> → </span>
-          <span className="break-all text-[var(--fg-1)]">{targetUrl}</span>
+          <span className="break-all text-[var(--fg-0)]">{targetUrl}</span>
         </p>
         <p className="mt-4 text-[12.5px] text-[var(--fg-3)]">{t('common.loading')}</p>
       </div>
