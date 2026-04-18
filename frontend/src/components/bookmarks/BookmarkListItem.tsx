@@ -4,6 +4,7 @@ import Tooltip from '../ui/Tooltip';
 import Favicon from '../Favicon';
 import FolderIcon from '../FolderIcon';
 import { safeHref } from '../../utils/safeHref';
+import { cn } from '@/lib/utils';
 
 interface Bookmark {
   id: string;
@@ -46,33 +47,36 @@ export default function BookmarkListItem({
     (bookmark.folders?.reduce((sum, f) => sum + (f.shared_teams?.length || 0), 0) || 0);
   const isShared = totalSharedTeams > 0;
 
+  const urlDisplay = bookmark.url.replace(/^https?:\/\//, '');
+
   return (
     <div
-      className={`group rounded-xl border border-ghost bg-surface transition-colors ${
-        selected ? 'ring-2 ring-ring/30 ring-offset-2 ring-offset-background' : 'hover:bg-surface-high'
-      } p-4`}
+      className={cn(
+        'bm-row group rounded-md border border-transparent px-3 py-2 transition-colors',
+        selected ? 'border-[var(--accent-ring)] bg-[var(--accent-bg)]' : 'hover:border-[var(--border)] hover:bg-[var(--bg-1)]'
+      )}
     >
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
         {bulkMode && (
-          <button type="button" onClick={onSelect} className="shrink-0 text-primary">
+          <button type="button" onClick={onSelect} className="shrink-0 text-[var(--accent)]">
             {selected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
           </button>
         )}
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-primary/25 bg-gradient-to-br from-primary/15 to-primary/25">
-          <Favicon url={bookmark.url} size={16} />
+        <div className="r-ico flex h-[18px] w-[18px] shrink-0 items-center justify-center overflow-hidden rounded bg-[var(--bg-3)]">
+          <Favicon url={bookmark.url} size={12} />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
-              <h3 className="mb-1 text-sm font-medium text-foreground">{bookmark.title}</h3>
-              <p className="mb-2 truncate text-sm text-muted-foreground">{bookmark.url}</p>
-              <div className="flex min-h-[24px] flex-wrap items-center gap-2">
+              <h3 className="r-t text-[12.5px] font-medium text-[var(--fg-0)]">{bookmark.title}</h3>
+              <p className="r-u mt-0.5 truncate font-mono text-[11px] text-[var(--fg-3)]">{urlDisplay}</p>
+              <div className="mt-2 flex min-h-[24px] flex-wrap items-center gap-2">
                 {bookmark.folders && bookmark.folders.length > 0 && (
                   <>
                     {bookmark.folders.slice(0, 1).map((folder) => (
                       <span
                         key={folder.id}
-                        className="inline-flex max-w-full items-center gap-1 rounded-full bg-surface-low px-2.5 py-0.5 text-xs font-medium text-muted-foreground"
+                        className="inline-flex max-w-full items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--bg-2)] px-2 py-0.5 text-[11px] text-[var(--fg-2)]"
                       >
                         <FolderIcon iconName={folder.icon} size={12} />
                         {folder.name}
@@ -85,7 +89,7 @@ export default function BookmarkListItem({
                     {bookmark.tags.slice(0, 3).map((tag) => (
                       <span
                         key={tag.id}
-                        className="inline-flex items-center gap-1 rounded-full bg-surface-low px-2.5 py-0.5 text-xs font-medium text-muted-foreground"
+                        className="tag inline-flex items-center gap-1 rounded-[var(--radius-sm)] text-[11px] text-[var(--fg-1)]"
                       >
                         <TagIcon className="h-3 w-3 opacity-70" />
                         {tag.name}
@@ -94,7 +98,7 @@ export default function BookmarkListItem({
                   </>
                 )}
                 {isShared && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-surface-low px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--bg-2)] px-2 py-0.5 text-[11px] text-[var(--fg-2)]">
                     <Share2 className="h-3 w-3" />
                     {totalSharedTeams > 0
                       ? t('bookmarks.sharedWithTeams', {
@@ -112,7 +116,7 @@ export default function BookmarkListItem({
                   <button
                     type="button"
                     onClick={onCopyUrl}
-                    className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-surface-high hover:text-foreground"
+                    className="rounded-md p-2 text-[var(--fg-3)] transition-colors hover:bg-[var(--bg-3)] hover:text-[var(--fg-0)]"
                     title={t('bookmarks.copyUrl')}
                   >
                     <Copy className="h-4 w-4" />
@@ -133,7 +137,7 @@ export default function BookmarkListItem({
                     icon={Trash2}
                     onClick={onDelete}
                     title={t('common.delete')}
-                    className="px-2 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                    className="px-2 text-[var(--danger)] hover:text-[var(--danger)]"
                   />
                 </>
               )}

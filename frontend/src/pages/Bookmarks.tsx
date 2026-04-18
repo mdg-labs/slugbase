@@ -12,12 +12,14 @@ import ImportModal from '../components/modals/ImportModal';
 import ShareResourceDialog from '../components/sharing/ShareResourceDialog';
 import Button from '../components/ui/Button';
 import BookmarkTableView from '../components/bookmarks/BookmarkTableView';
-import { DashboardBookmarkTile } from '../components/dashboard/DashboardBookmarkTile';
+import BookmarkCard from '../components/bookmarks/BookmarkCard';
 import { BulkMoveModal, BulkTagModal, BulkShareModal } from '../components/bookmarks/BulkActionModals';
 import { type FilterKey } from '../components/bookmarks/FilterChips';
 import { CollectionToolbar } from '../components/collections';
 import { PageLoadingSkeleton } from '../components/ui/PageLoadingSkeleton';
 import { Card } from '../components/ui/card';
+import { EmptyState } from '../components/EmptyState';
+import { cn } from '@/lib/utils';
 import { useSidebar } from '../components/ui/sidebar';
 import { useAppConfig } from '../contexts/AppConfigContext';
 import { usePlan, usePlanLoadState, showBookmarkFolderScopeTabs, showTeamSharingUi } from '../contexts/PlanContext';
@@ -54,17 +56,6 @@ function getStoredBookmarksView(): 'cards' | 'table' {
     /* ignore */
   }
   return 'cards';
-}
-
-function bookmarkCategoryLabel(
-  b: Bookmark,
-  t: (key: string, options?: Record<string, unknown>) => string
-): string {
-  if (b.pinned) return t('dashboard.pinned');
-  if (b.bookmark_type === 'shared') return t('common.scopeSharedWithMe');
-  const folder = b.folders?.[0]?.name;
-  if (folder) return folder.length > 28 ? `${folder.slice(0, 27)}…` : folder;
-  return t('dashboard.quickAccessCategory');
 }
 
 export default function Bookmarks() {
@@ -420,6 +411,17 @@ export default function Bookmarks() {
     window.open(bookmark.url, '_blank', 'noopener,noreferrer');
   }
 
+  async function handlePinToggle(bookmark: Bookmark) {
+    if (bookmark.bookmark_type === 'shared') return;
+    try {
+      await api.put(`/bookmarks/${bookmark.id}`, { pinned: !bookmark.pinned });
+      await loadData();
+      showToast(t('common.success'), 'success');
+    } catch {
+      showToast(t('common.error'), 'error');
+    }
+  }
+
   function handleModalClose() {
     setModalOpen(false);
     setEditingBookmark(null);
@@ -623,14 +625,57 @@ export default function Bookmarks() {
             ? { onClick: () => setBulkMode(true), label: t('bookmarks.bulkSelect') }
             : { onClick: () => setBulkMode(true), label: t('bookmarks.bulkSelect'), disabled: true }
         }
-        viewDisplay={{
+        viewSegment={{
           value: listView,
           onChange: setListView,
-          label: t('bookmarks.viewMode'),
           cardsLabel: t('bookmarks.viewCard'),
           tableLabel: t('bookmarks.viewList'),
+          ariaLabel: t('common.view'),
+        }}
+        filtersButton={{
+          label: t('bookmarks.toolbarFilters'),
+          onClick: () => {},
         }}
       />
+
+      {tags.length > 0 && (
+        <div className="tag-wall -mt-2 mb-2 flex flex-wrap gap-1.5">
+          {tags.slice(0, 12).map((tag: { id: string; name: string; bookmark_count?: number }, idx: number) => {
+            const selected = selectedTag === tag.id;
+            const dotColor = [
+              'var(--t-violet)',
+              'var(--t-blue)',
+              'var(--t-cyan)',
+              'var(--t-green)',
+              'var(--t-amber)',
+              'var(--t-rose)',
+              'var(--t-pink)',
+            ][idx % 7];
+            return (
+              <button
+                key={tag.id}
+                type="button"
+                onClick={() => {
+                  if (selected) updateParams({ tag_id: undefined });
+                  else updateParams({ tag_id: tag.id });
+                }}
+                className={cn(
+                  'tag inline-flex cursor-pointer items-center gap-1.5 rounded-[var(--radius-sm)] border px-2 py-1 text-[12.5px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-ring)]',
+                  selected
+                    ? 'border-[var(--accent-ring)] bg-[var(--accent-bg)] text-[var(--accent-hi)] ring-1 ring-[var(--accent-ring)]'
+                    : 'border-[var(--border)] bg-[var(--bg-2)] text-[var(--fg-1)] hover:border-[var(--border-strong)]'
+                )}
+              >
+                <span className="dot h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: dotColor }} aria-hidden />
+                <span>{tag.name}</span>
+                {typeof tag.bookmark_count === 'number' ? (
+                  <span className="font-mono text-[10px] text-[var(--fg-3)]">{tag.bookmark_count}</span>
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Bulk Actions Bar - sticky bottom, visible when selecting */}
       {bulkMode && (
@@ -743,81 +788,60 @@ export default function Bookmarks() {
 
       {/* Bookmarks Display */}
       {displayedBookmarks.length === 0 ? (
-        <Card className="flex flex-col items-center justify-center border-ghost bg-surface px-6 py-24">
-          <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-primary/15 shadow-glow">
-            <BookmarkIcon className="h-4 w-4 text-primary" />
-          </div>
-          <h2 className="mb-3 text-center text-4xl font-black tracking-tight text-foreground">
-            {hasActiveFilters ? t('bookmarks.noMatches') : t('bookmarks.empty')}
-          </h2>
-          <p className="mb-8 max-w-md text-center text-sm text-muted-foreground">
-            {hasActiveFilters ? '' : t('bookmarks.emptyDescription')}
-          </p>
-          <div className="flex flex-wrap justify-center gap-3">
-            {hasActiveFilters ? (
-              <Button onClick={handleResetFilters} variant="primary" className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90">
-                {t('bookmarks.clearFilters')}
-              </Button>
-            ) : (
-              <>
-                <Button
-                  onClick={handleCreate}
-                  variant="primary"
-                  icon={Plus}
-                  className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
-                >
-                  {t('bookmarks.emptyCreateFirst')}
+        <Card className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-1)]">
+          <EmptyState
+            icon={BookmarkIcon}
+            title={hasActiveFilters ? t('bookmarks.noMatches') : t('bookmarks.empty')}
+            description={hasActiveFilters ? undefined : t('bookmarks.emptyDescription')}
+            action={
+              hasActiveFilters ? (
+                <Button onClick={handleResetFilters} variant="primary" size="sm">
+                  {t('bookmarks.clearFilters')}
                 </Button>
-                <Button variant="secondary" icon={Upload} onClick={() => setImportModalOpen(true)} className="border-ghost bg-surface-high">
-                  {t('bookmarks.emptyImport')}
-                </Button>
-                <Link to={`${prefix}/search-engine-guide`}>
-                  <Button variant="ghost" icon={ExternalLink}>
-                    {t('bookmarks.emptyLearnForwarding')}
+              ) : (
+                <div className="flex flex-wrap justify-center gap-2">
+                  <Button onClick={handleCreate} variant="primary" size="sm" icon={Plus}>
+                    {t('bookmarks.emptyCreateFirst')}
                   </Button>
-                </Link>
-              </>
-            )}
-          </div>
+                  <Button variant="secondary" size="sm" icon={Upload} onClick={() => setImportModalOpen(true)}>
+                    {t('bookmarks.emptyImport')}
+                  </Button>
+                  <Link to={`${prefix}/search-engine-guide`}>
+                    <Button variant="ghost" size="sm" icon={ExternalLink}>
+                      {t('bookmarks.emptyLearnForwarding')}
+                    </Button>
+                  </Link>
+                </div>
+              )
+            }
+          />
         </Card>
       ) : listView === 'cards' ? (
-        <div className="grid grid-cols-1 items-stretch gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="bm-grid grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {displayedBookmarks.map((bookmark) => {
             const isOwn = bookmark.bookmark_type !== 'shared';
             return (
-              <DashboardBookmarkTile
+              <BookmarkCard
                 key={bookmark.id}
-                bookmark={{
-                  id: bookmark.id,
-                  title: bookmark.title,
-                  url: bookmark.url,
-                  slug: bookmark.slug,
-                }}
-                pathPrefix={prefix}
-                categoryLabel={bookmarkCategoryLabel(bookmark, t)}
-                t={t}
-                onOpen={() => handleOpenBookmark(bookmark)}
-                onCopy={() => handleCopyUrl(bookmark)}
+                bookmark={bookmark}
+                compact={false}
                 bulkMode={bulkMode}
                 selected={selectedBookmarks.has(bookmark.id)}
-                onToggleSelect={() => toggleSelectBookmark(bookmark.id)}
-                showEditLink={isOwn}
-                listActions={
-                  isOwn
-                    ? {
-                        onShare: showSharingUi
-                          ? () => {
-                              setSharingBookmark(bookmark);
-                              setShareDialogOpen(true);
-                            }
-                          : undefined,
-                        onDelete: () => handleDelete(bookmark.id, bookmark.title),
-                        shareLabel: t('sharing.shareBookmark'),
-                        deleteLabel: t('common.delete'),
-                        moreAriaLabel: t('bookmarks.moreActions'),
+                onSelect={() => toggleSelectBookmark(bookmark.id)}
+                onEdit={() => handleEdit(bookmark)}
+                onDelete={() => handleDelete(bookmark.id, bookmark.title)}
+                onCopyUrl={() => handleCopyUrl(bookmark)}
+                onShare={
+                  isOwn && showSharingUi
+                    ? () => {
+                        setSharingBookmark(bookmark);
+                        setShareDialogOpen(true);
                       }
                     : undefined
                 }
+                onOpen={() => handleOpenBookmark(bookmark)}
+                onPinToggle={isOwn ? () => handlePinToggle(bookmark) : undefined}
+                t={t}
               />
             );
           })}

@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useEffect, useState } from 'react';
-import { Share2, X, ChevronDown, ChevronRight, CheckCircle, Lightbulb } from 'lucide-react';
+import { Share2, X, ChevronDown, ChevronRight, CheckCircle, Lightbulb, Upload, Download } from 'lucide-react';
 import { StatCard } from '../components/StatCard';
 import {
   CommandBarHero,
@@ -13,6 +13,10 @@ import {
 import api from '../api/client';
 import { useAppConfig } from '../contexts/AppConfigContext';
 import { isCloud } from '../config/mode';
+import { PageHeader } from '../components/PageHeader';
+import Button from '../components/ui/Button';
+import ImportModal from '../components/modals/ImportModal';
+import { useToast } from '../components/ui/Toast';
 
 interface RecentBookmark {
   id: string;
@@ -65,21 +69,21 @@ function ProTipBanner({
   t: (key: string) => string;
 }) {
   return (
-    <div className="mb-2 flex items-start gap-4 rounded-xl border border-ghost border-l-4 border-l-primary bg-surface px-5 py-4 shadow-sm">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10" aria-hidden>
-        <Lightbulb className="h-4 w-4 text-primary" />
+    <div className="mb-2 flex items-start gap-4 rounded-[var(--radius-lg)] border border-[var(--border)] border-l-4 border-l-[var(--accent)] bg-[var(--bg-1)] bg-gradient-to-br from-[var(--bg-1)] to-[var(--accent-bg)] px-5 py-4 shadow-[var(--shadow-sm)]">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius)] bg-[var(--accent-bg)]" aria-hidden>
+        <Lightbulb className="h-4 w-4 text-[var(--accent-hi)]" />
       </div>
       <div className="flex-1 min-w-0 space-y-1.5">
-        <p className="text-sm font-bold text-foreground">{t('dashboard.proTipTitle')}</p>
-        <p className="text-sm text-muted-foreground leading-relaxed">
+        <p className="text-sm font-semibold text-[var(--fg-0)]">{t('dashboard.proTipTitle')}</p>
+        <p className="text-sm text-[var(--fg-2)] leading-relaxed">
           {t('dashboard.proTipBeforeCode')}
-          <code className="mx-0.5 rounded-md bg-surface-low px-1.5 py-0.5 font-mono text-xs text-foreground border border-ghost align-middle">
+          <code className="mx-0.5 rounded-[var(--radius-sm)] bg-[var(--bg-2)] px-1.5 py-0.5 font-mono text-xs text-[var(--fg-0)] border border-[var(--border)] align-middle">
             {t('dashboard.proTipCode')}
           </code>
           {t('dashboard.proTipAfterCode')}{' '}
           <Link
             to={`${pathPrefix}/search-engine-guide`.replace(/\/+/g, '/') || '/search-engine-guide'}
-            className="text-primary font-medium hover:underline"
+            className="font-medium text-[var(--accent-hi)] hover:underline"
           >
             {t('dashboard.proTipLink')}
           </Link>
@@ -88,7 +92,7 @@ function ProTipBanner({
       <button
         type="button"
         onClick={onDismiss}
-        className="shrink-0 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-surface-high transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="shrink-0 p-1 rounded-[var(--radius-sm)] text-[var(--fg-3)] hover:text-[var(--fg-0)] hover:bg-[var(--bg-hover)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-ring)]"
         aria-label={t('dashboard.dismiss')}
       >
         <X className="h-4 w-4" />
@@ -149,21 +153,21 @@ function OnboardingChecklist({
   }
 
   return (
-    <div className="rounded-xl border border-ghost border-l-4 border-l-primary bg-surface overflow-hidden shadow-sm">
+    <div className="rounded-[var(--radius-lg)] border border-[var(--border)] border-l-4 border-l-[var(--accent)] bg-[var(--bg-1)] bg-gradient-to-r from-[var(--bg-1)] to-[var(--accent-bg)] overflow-hidden shadow-[var(--shadow-sm)]">
       <button
         type="button"
         onClick={() => setCollapsed(!collapsed)}
-        className="w-full flex items-center gap-3 p-4 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset hover:bg-surface-high/40 transition-colors"
+        className="w-full flex items-center gap-3 p-4 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-ring)] focus-visible:ring-inset hover:bg-[var(--bg-hover)] transition-colors"
       >
         {collapsed ? (
           <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
         ) : (
           <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
         )}
-        <span className="text-sm font-semibold text-foreground">{t('dashboard.onboardingTitle')}</span>
+        <span className="text-sm font-semibold text-[var(--fg-0)]">{t('dashboard.onboardingTitle')}</span>
       </button>
       {!collapsed && (
-        <div className="px-4 pb-4 pt-0 border-t border-ghost">
+        <div className="px-4 pb-4 pt-0 border-t border-[var(--border-soft)]">
           <ul className="space-y-2 pt-3">
             {steps.map((step, i) => (
               <li key={i}>
@@ -196,9 +200,11 @@ function OnboardingChecklist({
 
 export default function Dashboard() {
   const { t } = useTranslation();
+  const { showToast } = useToast();
   const { pathPrefixForLinks } = useAppConfig();
   const prefix = (pathPrefixForLinks || '').replace(/\/+/g, '/') || '';
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [importModalOpen, setImportModalOpen] = useState(false);
   const [proTipDismissed, setProTipDismissed] = useState(
     () => typeof window !== 'undefined' && !!localStorage.getItem(PRO_TIP_DISMISSED_KEY)
   );
@@ -228,8 +234,80 @@ export default function Dashboard() {
     navigator.clipboard.writeText(url).catch(() => {});
   }
 
+  function handleExport() {
+    api.get('/bookmarks/export')
+      .then((response) => {
+        const dataStr = JSON.stringify(response.data, null, 2);
+        const dataBlob = new Blob([dataStr], { type: 'application/json' });
+        const urlObj = URL.createObjectURL(dataBlob);
+        const link = document.createElement('a');
+        link.href = urlObj;
+        link.download = `slugbase-bookmarks-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(urlObj);
+        showToast(t('common.success'), 'success');
+      })
+      .catch(() => {
+        showToast(t('common.error'), 'error');
+      });
+  }
+
   return (
-    <div className="w-full min-w-0 max-w-full space-y-10 pb-2">
+    <div className="w-full min-w-0 max-w-full space-y-8 pb-2">
+      <PageHeader
+        title={t('dashboard.heroHeading')}
+        subtitle={t('dashboard.heroSubtitle')}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="ghost" size="sm" icon={Upload} onClick={() => setImportModalOpen(true)}>
+              {t('bookmarks.import')}
+            </Button>
+            <Button type="button" variant="ghost" size="sm" icon={Download} onClick={handleExport}>
+              {t('bookmarks.export')}
+            </Button>
+          </div>
+        }
+      />
+
+      {stats && (
+        <StatsCardsRow
+          bookmarks={{
+            label: t('dashboard.statsBookmarks'),
+            value: stats.totalBookmarks,
+            href: prefix + '/bookmarks',
+            ...(stats.bookmarkLimit != null && {
+              usage: {
+                used: stats.tenantBookmarkCount ?? stats.totalBookmarks,
+                limit: stats.bookmarkLimit,
+                labelOverride: t('plan.bookmarksUsed', { count: stats.tenantBookmarkCount ?? stats.totalBookmarks, limit: stats.bookmarkLimit }),
+                showProgress: true,
+                cta: (stats.tenantBookmarkCount ?? stats.totalBookmarks) >= stats.bookmarkLimit ? { label: t('plan.limitBookmarks', { limit: stats.bookmarkLimit }), onClick: () => { window.location.href = '/pricing'; } } : undefined,
+              },
+            }),
+          }}
+          folders={{
+            label: t('dashboard.statsFolders'),
+            value: stats.totalFolders,
+            href: prefix + '/folders',
+          }}
+          tags={{
+            label: t('dashboard.statsTags'),
+            value: stats.totalTags,
+            href: prefix + '/tags',
+          }}
+        />
+      )}
+
+      <CommandBarHero
+        title={t('dashboard.heroHeading')}
+        subtitle={t('dashboard.heroSubtitle')}
+        searchPlaceholder={t('dashboard.searchPlaceholder')}
+        shortcutHint={t('dashboard.commandSearchShortcut')}
+        showTitleBlock={false}
+      />
+
       {!proTipDismissed && (
         <ProTipBanner
           onDismiss={() => {
@@ -240,13 +318,6 @@ export default function Dashboard() {
           t={t}
         />
       )}
-
-      <CommandBarHero
-        title={t('dashboard.heroHeading')}
-        subtitle={t('dashboard.heroSubtitle')}
-        searchPlaceholder={t('dashboard.searchPlaceholder')}
-        shortcutHint={t('dashboard.commandSearchShortcut')}
-      />
 
       {stats && (
         <OnboardingChecklist
@@ -269,14 +340,14 @@ export default function Dashboard() {
       />
 
       {isCloud && stats?.plan === 'free' && (
-        <div className="flex flex-col gap-4 rounded-2xl border border-ghost bg-surface p-6 shadow-xl">
+        <div className="flex flex-col gap-4 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-1)] bg-gradient-to-br from-[var(--bg-1)] to-[var(--accent-bg)] p-6 shadow-[var(--shadow)]">
           <div>
-            <h3 className="text-lg font-semibold text-primary">{t('dashboard.aiPromoTitle')}</h3>
-            <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{t('dashboard.aiPromoDescription')}</p>
+            <h3 className="text-lg font-semibold text-[var(--accent-hi)]">{t('dashboard.aiPromoTitle')}</h3>
+            <p className="mt-2 text-[13px] text-[var(--fg-2)] leading-relaxed">{t('dashboard.aiPromoDescription')}</p>
           </div>
           <Link
             to="/pricing"
-            className="inline-flex items-center justify-center rounded-xl bg-primary-gradient px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-glow hover:opacity-90 transition-opacity text-center"
+            className="inline-flex items-center justify-center rounded-[var(--radius)] bg-[var(--accent-bg-hi)] px-4 py-2.5 text-[13px] font-semibold text-[var(--accent)] border border-[var(--accent-ring)] hover:bg-[var(--accent-bg)] transition-colors text-center"
           >
             {t('dashboard.upgradeToProCta')}
           </Link>
@@ -304,53 +375,32 @@ export default function Dashboard() {
               value={stats.sharedBookmarks}
               icon={Share2}
               href={`${prefix}/bookmarks?scope=shared_with_me`.replace(/\/+/g, '/') || '/bookmarks?scope=shared_with_me'}
-              iconContainerClassName="bg-primary/20"
-              iconColorClassName="text-primary"
+              iconContainerClassName="bg-[var(--accent-bg)]"
+              iconColorClassName="text-[var(--accent-hi)]"
             />
             <StatCard
               label={t('dashboard.sharedFolders')}
               value={stats.sharedFolders}
               icon={Share2}
               href={`${prefix}/folders?scope=shared_with_me`.replace(/\/+/g, '/') || '/folders?scope=shared_with_me'}
-              iconContainerClassName="bg-primary/20"
-              iconColorClassName="text-primary"
+              iconContainerClassName="bg-[var(--accent-bg)]"
+              iconColorClassName="text-[var(--accent-hi)]"
             />
           </div>
         </section>
       )}
 
-      {stats && (
-        <StatsCardsRow
-          bookmarks={{
-            label: t('dashboard.statsBookmarks'),
-            value: stats.totalBookmarks,
-            href: prefix + '/bookmarks',
-            ...(stats.bookmarkLimit != null && {
-              usage: {
-                used: stats.tenantBookmarkCount ?? stats.totalBookmarks,
-                limit: stats.bookmarkLimit,
-                labelOverride: t('plan.bookmarksUsed', { count: stats.tenantBookmarkCount ?? stats.totalBookmarks, limit: stats.bookmarkLimit }),
-                showProgress: true,
-                cta: (stats.tenantBookmarkCount ?? stats.totalBookmarks) >= stats.bookmarkLimit ? { label: t('plan.limitBookmarks', { limit: stats.bookmarkLimit }), onClick: () => window.location.href = '/pricing' } : undefined,
-              },
-            }),
-          }}
-          folders={{
-            label: t('dashboard.statsFolders'),
-            value: stats.totalFolders,
-            href: prefix + '/folders',
-          }}
-          tags={{
-            label: t('dashboard.statsTags'),
-            value: stats.totalTags,
-            href: prefix + '/tags',
-          }}
-        />
-      )}
-
       {stats && stats.topTags.length > 0 && (
         <MostUsedTagsSection tags={stats.topTags} pathPrefix={prefix} t={t} />
       )}
+
+      <ImportModal
+        isOpen={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        onSuccess={() => {
+          loadStats();
+        }}
+      />
     </div>
   );
 }

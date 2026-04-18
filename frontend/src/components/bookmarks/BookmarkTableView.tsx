@@ -135,10 +135,10 @@ export default function BookmarkTableView({
   }
 
   return (
-    <Card className="overflow-hidden rounded-2xl border border-ghost glass shadow-xl">
-      <Table>
+    <Card className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-1)] p-0.5 shadow-[var(--shadow-sm)]">
+      <Table className="bm-list">
         <TableHeader>
-          <TableRow className="border-b border-ghost bg-surface-low/50 hover:bg-transparent">
+          <TableRow className="bm-row head border-b border-[var(--border-soft)] bg-transparent hover:bg-transparent">
             {bulkMode && (
               <TableHead className={`${cellClass} w-12`}>
                 <button
@@ -203,7 +203,7 @@ export default function BookmarkTableView({
             return (
               <TableRow
                 key={bookmark.id}
-                className={`group border-0 border-b border-ghost/30 transition-colors hover:bg-surface-high/50 ${selectedBookmarks.has(bookmark.id) ? 'bg-primary/10' : ''}`}
+                className={`group border-0 border-b border-[var(--border-soft)] transition-colors hover:bg-[var(--bg-1)] ${selectedBookmarks.has(bookmark.id) ? 'bg-[var(--accent-bg)]' : ''}`}
                 data-state={selectedBookmarks.has(bookmark.id) ? 'selected' : undefined}
               >
                 {bulkMode && (

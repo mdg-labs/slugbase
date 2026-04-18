@@ -7,12 +7,13 @@
  *   (per page, pinned, import/export, bulk select) live in the "more" menu.
  */
 
-import { useState } from 'react';
-import { Plus, CheckSquare, Check, Download, Upload, Pin, Search, MoreHorizontal } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Plus, CheckSquare, Check, Download, Upload, Pin, Search, MoreHorizontal, LayoutGrid, List, Filter } from 'lucide-react';
 import { PageHeader } from '../PageHeader';
 import { ScopeSegmentedControl } from '../ScopeSegmentedControl';
 import { FilterChips, type FilterChipItem } from '../FilterChips';
 import Button from '../ui/Button';
+import { SegmentedControl, SegmentedControlItem } from '../ui/SegmentedControl';
 import Select from '../ui/Select';
 import { Input } from '../ui/input';
 import {
@@ -87,7 +88,16 @@ export interface CollectionToolbarProps {
   onExport?: () => void;
   exportLabel?: string;
   bulkSelect?: { onClick: () => void; label: string; disabled?: boolean };
-  /** Bookmarks: cards vs table layout (submenu with radio items) */
+  /** Bookmarks: cards vs table — inline `.seg` (Phase 4) */
+  viewSegment?: {
+    value: 'cards' | 'table';
+    onChange: (value: 'cards' | 'table') => void;
+    cardsLabel: string;
+    tableLabel: string;
+    ariaLabel?: string;
+  };
+  filtersButton?: { label: string; onClick: () => void };
+  /** Legacy: cards vs table in More menu (omit when `viewSegment` is set) */
   viewDisplay?: {
     value: 'cards' | 'table';
     onChange: (value: 'cards' | 'table') => void;
@@ -125,13 +135,16 @@ export function CollectionToolbar({
   onExport,
   exportLabel = 'Export',
   bulkSelect,
+  viewSegment,
   viewDisplay,
+  filtersButton,
   moreMenuLabel = 'More',
   className,
   titleClassName,
   subtitleClassName,
 }: CollectionToolbarProps) {
   const [moreOpen, setMoreOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const displayTitle = count !== undefined ? `${title} (${count})` : title;
 
   const hasSecondary =
@@ -140,7 +153,7 @@ export function CollectionToolbar({
     onImport ||
     onExport ||
     (bulkSelect && !bulkSelect.disabled) ||
-    viewDisplay;
+    (viewDisplay && !viewSegment);
 
   const hasToolbarRow = search || folderFilter || tagFilter || sort || hasSecondary;
 
@@ -153,6 +166,26 @@ export function CollectionToolbar({
           options={tabs.options}
           ariaLabel={tabs.ariaLabel}
         />
+      )}
+      {viewSegment && (
+        <SegmentedControl
+          type="single"
+          value={viewSegment.value}
+          onValueChange={(v) => {
+            if (v === 'cards' || v === 'table') viewSegment.onChange(v);
+          }}
+          aria-label={viewSegment.ariaLabel ?? 'View mode'}
+          className="inline-flex"
+        >
+          <SegmentedControlItem value="cards" aria-label={viewSegment.cardsLabel}>
+            <LayoutGrid className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+            <span className="hidden md:inline">{viewSegment.cardsLabel}</span>
+          </SegmentedControlItem>
+          <SegmentedControlItem value="table" aria-label={viewSegment.tableLabel}>
+            <List className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+            <span className="hidden md:inline">{viewSegment.tableLabel}</span>
+          </SegmentedControlItem>
+        </SegmentedControl>
       )}
       {createButton && (
         <Button onClick={createButton.onClick} icon={Plus} variant="primary">
@@ -188,6 +221,8 @@ export function CollectionToolbar({
           <div className="flex min-w-[200px] flex-1 flex-wrap items-center gap-2">
             {search && (
               <Input
+                ref={searchInputRef}
+                id="collection-toolbar-search"
                 type="search"
                 value={search.value}
                 onChange={(e) => search.onChange(e.target.value)}
@@ -201,6 +236,21 @@ export function CollectionToolbar({
                 leftSlot={<Search className="text-[var(--fg-3)]" aria-hidden />}
                 className="min-h-9 min-w-[min(280px,100%)] flex-1 max-w-[400px]"
               />
+            )}
+            {filtersButton && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                icon={Filter}
+                className="shrink-0"
+                onClick={() => {
+                  filtersButton.onClick();
+                  searchInputRef.current?.focus();
+                }}
+              >
+                {filtersButton.label}
+              </Button>
             )}
             {folderFilter && (
               <div className="min-w-[160px] max-w-[200px] flex-1 sm:max-w-[220px]">

@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { TrendingUp } from 'lucide-react';
-import { Badge } from '../ui/badge';
+import { Card } from '../ui/card';
 
 export interface MostUsedTagsSectionTag {
   id: string;
@@ -15,8 +15,7 @@ export interface MostUsedTagsSectionProps {
 }
 
 /**
- * Most used tags section: title, clickable tag chips linking to bookmarks filtered by tag.
- * Improved spacing and visual rhythm.
+ * Most used tags — `tag-wall` inside elevated card (mockup dashboard).
  */
 export function MostUsedTagsSection({ tags, pathPrefix, t }: MostUsedTagsSectionProps) {
   const prefix = pathPrefix.replace(/\/+/g, '/') || '';
@@ -25,25 +24,26 @@ export function MostUsedTagsSection({ tags, pathPrefix, t }: MostUsedTagsSection
 
   return (
     <section className="space-y-3">
-      <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground flex items-center gap-2">
-        <TrendingUp className="h-4 w-4" />
+      <div className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.06em] text-[var(--fg-3)]">
+        <TrendingUp className="h-3.5 w-3.5 text-[var(--fg-2)]" strokeWidth={1.75} aria-hidden />
         {t('dashboard.topTags')}
-      </h2>
-      <div className="flex flex-wrap gap-2.5">
-        {tags.map((tag) => (
-          <Link
-            key={tag.id}
-            to={`${prefix}/bookmarks?tag_id=${tag.id}`}
-            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-accent hover:border-primary/50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            title={t('dashboard.filterByTagHint')}
-          >
-            <span>{tag.name}</span>
-            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-normal">
-              {tag.bookmark_count}
-            </Badge>
-          </Link>
-        ))}
       </div>
+      <Card className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-1)] p-4 shadow-[var(--shadow-sm)]">
+        <div className="tag-wall flex flex-wrap gap-1.5">
+          {tags.map((tag) => (
+            <Link
+              key={tag.id}
+              to={`${prefix}/bookmarks?tag_id=${tag.id}`}
+              className="tag inline-flex cursor-pointer items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-2)] px-2 py-1 text-[12.5px] transition-colors hover:border-[var(--accent-ring)] hover:bg-[var(--accent-bg)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-ring)]"
+              title={t('dashboard.filterByTagHint')}
+            >
+              <span className="dot inline-block h-1.5 w-1.5 rounded-full bg-[var(--accent)]" aria-hidden />
+              <span className="text-[var(--fg-1)]">{tag.name}</span>
+              <span className="font-mono text-[10px] text-[var(--fg-3)]">{tag.bookmark_count}</span>
+            </Link>
+          ))}
+        </div>
+      </Card>
     </section>
   );
 }
