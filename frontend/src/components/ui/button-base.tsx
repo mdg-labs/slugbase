@@ -4,28 +4,32 @@ import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
 
+/** Matches `styles.css` `.btn` (L322–349); Phase 2.1 variant split (neutral default vs primary). */
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-[var(--radius-sm)] font-medium transition-[background,border-color,color,opacity] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-0)] disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
   {
     variants: {
       variant: {
         default:
-          "bg-primary-gradient text-white shadow-none hover:opacity-95 active:opacity-90",
+          "border border-[var(--border)] bg-[var(--bg-3)] text-[var(--fg-1)] shadow-none hover:bg-[var(--bg-2)] hover:text-[var(--fg-0)] hover:border-[var(--border-strong)]",
+        primary:
+          "border border-[var(--accent-ring)] bg-[var(--accent-bg-hi)] text-[var(--accent)] shadow-none hover:bg-[var(--accent-bg)] hover:text-[var(--accent-hi)]",
         destructive:
-          "bg-destructive text-destructive-foreground shadow-none hover:bg-destructive/90",
+          "border border-transparent bg-[rgba(248,113,113,0.12)] text-[var(--danger)] shadow-none hover:border-[rgba(248,113,113,0.3)] hover:bg-[rgba(248,113,113,0.16)]",
         outline:
-          "border border-ghost bg-transparent text-foreground shadow-none hover:bg-surface-high/50",
+          "border border-[var(--border)] bg-transparent text-[var(--fg-1)] shadow-none hover:bg-[var(--bg-hover)] hover:text-[var(--fg-0)] hover:border-[var(--border-strong)]",
         secondary:
-          "border border-ghost bg-transparent text-foreground shadow-none hover:bg-surface-high/50",
+          "border border-[var(--border)] bg-[var(--bg-2)] text-[var(--fg-1)] shadow-none hover:bg-[var(--bg-3)] hover:text-[var(--fg-0)] hover:border-[var(--border-strong)]",
         ghost:
-          "bg-transparent text-primary shadow-none hover:-translate-y-px active:translate-y-0 motion-reduce:transform-none",
-        link: "text-primary underline-offset-4 hover:underline rounded-none",
+          "border border-transparent bg-transparent text-[var(--fg-2)] shadow-none hover:bg-[var(--bg-hover)] hover:text-[var(--fg-0)]",
+        link: "rounded-none border-0 bg-transparent text-[var(--accent)] underline-offset-4 hover:underline",
       },
       size: {
-        default: "h-10 px-4 py-2",
-        sm: "h-8 rounded-xl px-3 text-xs",
-        lg: "h-11 rounded-xl px-8",
-        icon: "h-10 w-10",
+        default:
+          "min-h-0 px-[11px] py-[6px] text-[13px] leading-none [&_svg]:size-[14px]",
+        sm: "min-h-0 px-2.5 py-[5px] text-[11.5px] leading-none [&_svg]:size-3.5",
+        lg: "min-h-0 px-8 py-2.5 text-[13px] leading-none [&_svg]:size-[14px]",
+        icon: "size-7 min-h-7 min-w-[28px] p-[6px] [&_svg]:size-[14px]",
       },
     },
     defaultVariants: {
@@ -46,7 +50,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     const Comp = asChild ? Slot : "button"
     return (
       <Comp
-        className={cn(buttonVariants({ variant, size, className }))}
+        className={cn(buttonVariants({ variant, size }), className)}
         ref={ref}
         {...props}
       />
