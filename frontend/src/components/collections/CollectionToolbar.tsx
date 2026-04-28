@@ -3,7 +3,7 @@
  *
  * Row 1: title, count?, subtitle?, tabs?, createButton? (gradient primary CTA)
  * Row 2: filterChips?
- * Row 3: search?, folderFilter?, tagFilter?, sort? - primary filters; secondary
+ * Row 3: search?, folderFilter?, tagFilter? (omit when tags use pills elsewhere), sort? — primary filters; secondary
  *   (per page, pinned, import/export, bulk select) live in the "more" menu.
  */
 

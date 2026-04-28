@@ -88,7 +88,19 @@ export default function Bookmarks() {
   const [searchInputValue, setSearchInputValue] = useState('');
 
   const selectedFolder = searchParams.get('folder_id') || '';
-  const selectedTag = searchParams.get('tag_id') || '';
+  const selectedTagIds = useMemo(() => {
+    const raw = searchParams.getAll('tag_id');
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const id of raw) {
+      const t = id.trim();
+      if (!t || seen.has(t)) continue;
+      seen.add(t);
+      out.push(t);
+    }
+    return out;
+  }, [searchParams]);
+  const tagFilterKey = selectedTagIds.join('\u0001');
   const scopeParam = searchParams.get('scope');
   const scope = (scopeParam === 'mine' || scopeParam === 'shared_with_me' || scopeParam === 'shared_by_me' || scopeParam === 'shared')
     ? (scopeParam === 'shared' ? 'shared_with_me' : scopeParam)
@@ -128,11 +140,11 @@ export default function Bookmarks() {
   useEffect(() => {
     setPage(0);
     setAllSelectedAcrossPages(false);
-  }, [selectedFolder, selectedTag, sortBy, effectiveScope, pinnedFilter, searchQuery, pageSize]);
+  }, [selectedFolder, tagFilterKey, sortBy, effectiveScope, pinnedFilter, searchQuery, pageSize]);
 
   useEffect(() => {
     loadData();
-  }, [selectedFolder, selectedTag, sortBy, page, effectiveScope, pinnedFilter, searchQuery, pageSize, showScopeTabs]);
+  }, [selectedFolder, tagFilterKey, sortBy, page, effectiveScope, pinnedFilter, searchQuery, pageSize, showScopeTabs]);
 
   // Handle query params from GlobalSearch and dashboard Edit link
   useEffect(() => {
@@ -212,19 +224,19 @@ export default function Bookmarks() {
 
   async function loadData() {
     try {
+      const bookmarkQs = new URLSearchParams();
+      if (selectedFolder) bookmarkQs.set('folder_id', selectedFolder);
+      selectedTagIds.forEach((id) => bookmarkQs.append('tag_id', id));
+      bookmarkQs.set('sort_by', sortBy);
+      bookmarkQs.set('limit', String(pageSize));
+      bookmarkQs.set('offset', String(page * pageSize));
+      if (effectiveScope !== 'all') bookmarkQs.set('scope', effectiveScope);
+      if (pinnedFilter) bookmarkQs.set('pinned', 'true');
+      const qTrim = searchQuery.trim();
+      if (qTrim) bookmarkQs.set('q', qTrim);
+
       const [bookmarksSettled, foldersSettled, tagsSettled, teamsSettled] = await Promise.allSettled([
-        api.get('/bookmarks', {
-          params: {
-            folder_id: selectedFolder || undefined,
-            tag_id: selectedTag || undefined,
-            sort_by: sortBy,
-            limit: pageSize,
-            offset: page * pageSize,
-            scope: effectiveScope !== 'all' ? effectiveScope : undefined,
-            pinned: pinnedFilter ? 'true' : undefined,
-            q: searchQuery.trim() || undefined,
-          },
-        }),
+        api.get('/bookmarks', { params: bookmarkQs }),
         api.get('/folders'),
         api.get('/tags'),
         showScopeTabs ? api.get('/teams') : Promise.resolve({ data: [] }),
@@ -249,7 +261,7 @@ export default function Bookmarks() {
 
   const hasActiveFilters =
     !!selectedFolder ||
-    !!selectedTag ||
+    selectedTagIds.length > 0 ||
     effectiveScope !== 'all' ||
     pinnedFilter ||
     !!searchQuery.trim() ||
@@ -275,7 +287,11 @@ export default function Bookmarks() {
 
   function handleRemoveFilter(key: FilterKey) {
     if (key === 'folder_id') updateParams({ folder_id: undefined });
-    else if (key === 'tag_id') updateParams({ tag_id: undefined });
+    else if (key === 'tag_id') {
+      const params = new URLSearchParams(searchParams);
+      params.delete('tag_id');
+      setSearchParams(params);
+    }
     else if (key === 'sort') setSortBy('recently_added');
     else if (key === 'q') updateParams({ q: undefined });
     else if (key === 'pinned') updateParams({ pinned: undefined });
@@ -463,16 +479,16 @@ export default function Bookmarks() {
 
   async function handleSelectAllRemaining() {
     try {
-      const res = await api.get('/bookmarks/ids', {
-        params: {
-          folder_id: selectedFolder || undefined,
-          tag_id: selectedTag || undefined,
-          sort_by: sortBy,
-          scope: effectiveScope !== 'all' ? effectiveScope : undefined,
-          pinned: pinnedFilter ? 'true' : undefined,
-          q: searchQuery.trim() || undefined,
-        },
-      });
+      const idsQs = new URLSearchParams();
+      if (selectedFolder) idsQs.set('folder_id', selectedFolder);
+      selectedTagIds.forEach((id) => idsQs.append('tag_id', id));
+      idsQs.set('sort_by', sortBy);
+      if (effectiveScope !== 'all') idsQs.set('scope', effectiveScope);
+      if (pinnedFilter) idsQs.set('pinned', 'true');
+      const qTrim = searchQuery.trim();
+      if (qTrim) idsQs.set('q', qTrim);
+
+      const res = await api.get('/bookmarks/ids', { params: idsQs });
       const ids = res.data?.ids ?? [];
       setSelectedBookmarks(prev => new Set([...prev, ...ids]));
       setAllSelectedAcrossPages(true);
@@ -498,6 +514,17 @@ export default function Bookmarks() {
     ...tags.map((t) => ({ value: t.id, label: t.name })),
   ];
 
+  /** Pills below toolbar — selected tags first (URL order), then others up to 12. */
+  const tagWallTags = useMemo(() => {
+    if (tags.length === 0) return [];
+    const max = 12;
+    const byId = new Map(tags.map((tg: { id: string }) => [tg.id, tg]));
+    const selectedOrdered = selectedTagIds.map((id) => byId.get(id)).filter(Boolean) as typeof tags;
+    const selSet = new Set(selectedTagIds);
+    const rest = tags.filter((tg: { id: string }) => !selSet.has(tg.id));
+    return [...selectedOrdered, ...rest].slice(0, max);
+  }, [tags, selectedTagIds]);
+
   const sortOptions = [
     { value: 'recently_added', label: t('bookmarks.sortRecentlyAdded') },
     { value: 'alphabetical', label: t('bookmarks.sortAlphabetical') },
@@ -511,10 +538,7 @@ export default function Bookmarks() {
       const name = folders.find((f: any) => f.id === selectedFolder)?.name ?? selectedFolder;
       list.push({ key: 'folder_id', label: `${t('bookmarks.folder')}: ${name}`, ariaLabel: t('bookmarks.clearFilters') + ` ${t('bookmarks.folder')}: ${name}` });
     }
-    if (selectedTag) {
-      const name = tags.find((t: any) => t.id === selectedTag)?.name ?? selectedTag;
-      list.push({ key: 'tag_id', label: `${t('bookmarks.tags')}: ${name}`, ariaLabel: t('bookmarks.clearFilters') + ` ${t('bookmarks.tags')}: ${name}` });
-    }
+    // Tag filter: omit chip row — selection is shown on tag pills below (avoid duplicate with dropdown + chip).
     if (sortBy !== 'recently_added') {
       const label = sortOptions.find(o => o.value === sortBy)?.label ?? sortBy;
       list.push({ key: 'sort', label: `Sort: ${label}`, ariaLabel: t('bookmarks.clearFilters') + ' Sort' });
@@ -592,17 +616,21 @@ export default function Bookmarks() {
           options: folderOptions,
           placeholder: t('bookmarks.filterByFolder'),
         }}
-        tagFilter={{
-          value: selectedTag || ALL_FILTER,
-          onChange: (value) => {
-            const params = new URLSearchParams(searchParams);
-            if (value && value !== ALL_FILTER) params.set('tag_id', value);
-            else params.delete('tag_id');
-            setSearchParams(params);
-          },
-          options: tagOptions,
-          placeholder: t('bookmarks.filterByTag'),
-        }}
+        tagFilter={
+          tags.length > 0
+            ? undefined
+            : {
+                value: selectedTagIds[0] || ALL_FILTER,
+                onChange: (value) => {
+                  const params = new URLSearchParams(searchParams);
+                  params.delete('tag_id');
+                  if (value && value !== ALL_FILTER) params.append('tag_id', value);
+                  setSearchParams(params);
+                },
+                options: tagOptions,
+                placeholder: t('bookmarks.filterByTag'),
+              }
+        }
         sort={{
           value: sortBy,
           onChange: (value) => setSortBy(value as SortOption),
@@ -640,16 +668,12 @@ export default function Bookmarks() {
           tableLabel: t('bookmarks.viewList'),
           ariaLabel: t('common.view'),
         }}
-        filtersButton={{
-          label: t('bookmarks.toolbarFilters'),
-          onClick: () => {},
-        }}
       />
 
-      {tags.length > 0 && (
-        <div className="tag-wall -mt-2 mb-2 flex flex-wrap gap-1.5">
-          {tags.slice(0, 12).map((tag: { id: string; name: string; bookmark_count?: number }, idx: number) => {
-            const selected = selectedTag === tag.id;
+      {tagWallTags.length > 0 && (
+        <div className="tag-wall -mt-2 mb-2 flex flex-wrap gap-1.5" role="toolbar" aria-label={t('bookmarks.filterByTag')}>
+          {tagWallTags.map((tag: { id: string; name: string; bookmark_count?: number }, idx: number) => {
+            const selected = selectedTagIds.includes(tag.id);
             const dotColor = [
               'var(--t-violet)',
               'var(--t-blue)',
@@ -664,8 +688,13 @@ export default function Bookmarks() {
                 key={tag.id}
                 type="button"
                 onClick={() => {
-                  if (selected) updateParams({ tag_id: undefined });
-                  else updateParams({ tag_id: tag.id });
+                  const params = new URLSearchParams(searchParams);
+                  params.delete('tag_id');
+                  const next = new Set(selectedTagIds);
+                  if (selected) next.delete(tag.id);
+                  else next.add(tag.id);
+                  next.forEach((id) => params.append('tag_id', id));
+                  setSearchParams(params);
                 }}
                 className={cn(
                   'tag inline-flex cursor-pointer items-center gap-1.5 rounded-[var(--radius-sm)] border px-2 py-1 text-[12.5px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-ring)]',
