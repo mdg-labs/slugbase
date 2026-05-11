@@ -8,6 +8,7 @@ import TopBar from './TopBar';
 import AppSidebar from './AppSidebar';
 import GlobalSearch from './GlobalSearch';
 import api from '../api/client';
+import { shortDisplayLabel } from '../utils/versionDisplay';
 
 const SIDEBAR_COLLAPSED_KEY = 'slugbase_sidebar_collapsed';
 
@@ -27,9 +28,8 @@ export default function Layout() {
     api
       .get('/version')
       .then((res) => {
-        if (res.data.commit) {
-          setVersion(res.data.commit.substring(0, 7));
-        }
+        const label = shortDisplayLabel(res.data?.version, res.data?.commit);
+        if (label) setVersion(label);
       })
       .catch(() => {});
   }, []);

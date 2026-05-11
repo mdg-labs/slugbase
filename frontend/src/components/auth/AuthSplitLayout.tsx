@@ -11,6 +11,7 @@ import {
   switchTabBtn,
 } from '@/components/auth/authPageClasses';
 import api from '@/api/client';
+import { shortDisplayLabel, versionDisplayTitle } from '@/utils/versionDisplay';
 
 export interface AuthSplitLayoutProps {
   activeTab?: 'signin' | 'signup';
@@ -26,16 +27,23 @@ export function AuthSplitLayout({
   children,
 }: AuthSplitLayoutProps) {
   const { t } = useTranslation();
-  const [shortVersion, setShortVersion] = useState<string | null>(null);
+  const [displayVersion, setDisplayVersion] = useState<string | null>(null);
+  const [versionTitle, setVersionTitle] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     api
       .get('/version')
       .then((res) => {
+        const v = res.data?.version as string | undefined;
         const c = res.data?.commit as string | undefined;
-        if (c) setShortVersion(c.substring(0, 7));
+        const label = shortDisplayLabel(v, c);
+        setDisplayVersion(label);
+        setVersionTitle(versionDisplayTitle(v, c));
       })
-      .catch(() => setShortVersion(null));
+      .catch(() => {
+        setDisplayVersion(null);
+        setVersionTitle(undefined);
+      });
   }, []);
 
   return (
@@ -54,9 +62,12 @@ export function AuthSplitLayout({
                 />
                 <span className="text-[15px] font-semibold tracking-[-0.01em] text-[var(--fg-0)]">{t('app.name')}</span>
               </div>
-              {shortVersion ? (
-                <span className="font-mono text-[10.5px] text-[var(--fg-3)]" title={shortVersion}>
-                  {shortVersion}
+              {displayVersion ? (
+                <span
+                  className="font-mono text-[10.5px] text-[var(--fg-3)]"
+                  title={versionTitle ?? displayVersion}
+                >
+                  {displayVersion}
                 </span>
               ) : null}
             </header>

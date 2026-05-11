@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ExternalLink, Github } from 'lucide-react';
 import { isCloud } from '@/config/mode';
 import api from '@/api/client';
+import { primaryVersionOrCommit } from '@/utils/versionDisplay';
 import { cn } from '@/lib/utils';
 
 /**
@@ -16,9 +17,7 @@ export function AuthHero() {
     api
       .get('/version')
       .then((res) => {
-        const ver = (res.data?.version as string | undefined)?.trim();
-        const commit = (res.data?.commit as string | undefined)?.trim();
-        const raw = ver || commit || '';
+        const raw = primaryVersionOrCommit(res.data?.version, res.data?.commit);
         if (raw) setVersion(raw);
       })
       .catch(() => setVersion(null));
