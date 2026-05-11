@@ -10,7 +10,7 @@ import {
   Users,
   ExternalLink,
 } from 'lucide-react';
-import { DOCS_API_OPERATIONS, getDocsApiReferenceOperationUrl, getDocsApiReferenceUrl } from '../../config/docs';
+import { getDocsApiReferenceUrl } from '../../config/docs';
 import { useAppConfig } from '../../contexts/AppConfigContext';
 import {
   showAdminAiNav,
@@ -87,28 +87,6 @@ export default function AdminLayout() {
 
       <div className="border-t border-[var(--border-soft)] pt-4">
         <p className="text-[12px] leading-relaxed text-[var(--fg-3)]">{t('admin.apiDocsNote')}</p>
-        <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-[var(--fg-3)]">
-          <span>{t('admin.apiDocsShortcuts')}</span>
-          <a
-            href={getDocsApiReferenceOperationUrl(DOCS_API_OPERATIONS.csrfToken)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-mono text-[11px] text-[var(--fg-2)] underline-offset-2 hover:text-[var(--accent-hi)] hover:underline"
-          >
-            {t('admin.apiDocsCsrfEndpoint')}
-          </a>
-          <span aria-hidden className="text-[var(--fg-4)]">
-            ·
-          </span>
-          <a
-            href={getDocsApiReferenceOperationUrl(DOCS_API_OPERATIONS.listTokens)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-mono text-[11px] text-[var(--fg-2)] underline-offset-2 hover:text-[var(--accent-hi)] hover:underline"
-          >
-            {t('admin.apiDocsTokensEndpoint')}
-          </a>
-        </p>
         <a
           href={getDocsApiReferenceUrl()}
           target="_blank"

@@ -6,6 +6,7 @@ import {
   Folder,
   Tag,
   LayoutDashboard,
+  Shield,
   ChevronLeft,
   ChevronRight,
   Github,
@@ -29,6 +30,7 @@ import { useAppConfig } from '../contexts/AppConfigContext';
 import { useSearchCommand } from '../contexts/SearchCommandContext';
 import type { User } from '../contexts/AuthContext';
 import { cn } from '../lib/utils';
+import { canAccessWorkspaceAdmin } from '../utils/adminAccess';
 
 function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/);
@@ -52,6 +54,9 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
   const { openSearch } = useSearchCommand();
   const prefix = pathPrefixForLinks || '';
   const pathBaseForActive = pathPrefixForLinks ?? appBasePath ?? '';
+  const adminBaseFull = `${pathBaseForActive}/admin`.replace(/\/+/g, '/') || '/admin';
+  const adminBaseLink = `${prefix}/admin`.replace(/\/+/g, '/') || '/admin';
+  const showAdmin = canAccessWorkspaceAdmin(user);
 
   const rootActivePath = pathBaseForActive || '/';
   const isOverviewActive =
@@ -61,11 +66,26 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
 
   const rootLink = prefix || '/';
   const rootActive = rootActivePath;
-  const primaryNavItems = [
+  const primaryNavItems: Array<{
+    pathForLink: string;
+    pathForActive: string;
+    label: string;
+    icon: typeof LayoutDashboard;
+    matchesPath?: (path: string) => boolean;
+  }> = [
     { pathForLink: rootLink, pathForActive: rootActive, label: t('dashboard.overview'), icon: LayoutDashboard },
     { pathForLink: `${prefix}/bookmarks`.replace(/\/+/g, '/') || '/bookmarks', pathForActive: `${pathBaseForActive}/bookmarks`.replace(/\/+/g, '/') || '/bookmarks', label: t('bookmarks.title'), icon: Bookmark },
     { pathForLink: `${prefix}/folders`.replace(/\/+/g, '/') || '/folders', pathForActive: `${pathBaseForActive}/folders`.replace(/\/+/g, '/') || '/folders', label: t('folders.title'), icon: Folder },
     { pathForLink: `${prefix}/tags`.replace(/\/+/g, '/') || '/tags', pathForActive: `${pathBaseForActive}/tags`.replace(/\/+/g, '/') || '/tags', label: t('tags.title'), icon: Tag },
+    ...(showAdmin
+      ? [{
+          pathForLink: adminBaseLink,
+          pathForActive: adminBaseFull,
+          label: t('admin.title'),
+          icon: Shield,
+          matchesPath: (path: string) => path === adminBaseFull || path.startsWith(`${adminBaseFull}/`),
+        }]
+      : []),
   ];
 
   const profileLink = `${prefix}/profile`.replace(/\/+/g, '/') || '/profile';
@@ -143,23 +163,30 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
               <SidebarMenu className="gap-px px-2">
                 {primaryNavItems.map((item) => (
                   <SidebarMenuItem key={item.pathForLink}>
+                    {(() => {
+                      const isActive = item.matchesPath
+                        ? item.matchesPath(pathname)
+                        : item.pathForActive === rootActivePath
+                          ? isOverviewActive
+                          : pathname === item.pathForActive;
+                      return (
                     <SidebarMenuButton
                       asChild
-                      isActive={
-                        item.pathForActive === rootActivePath ? isOverviewActive : pathname === item.pathForActive
-                      }
+                      isActive={isActive}
                       tooltip={item.label}
                       className={itemClass}
                     >
                       <Link
                         to={item.pathForLink}
                         onClick={handleNavClick}
-                        aria-current={pathname === item.pathForActive ? 'page' : undefined}
+                        aria-current={isActive ? 'page' : undefined}
                       >
                         <item.icon className="shrink-0" strokeWidth={1.75} />
                         <span>{item.label}</span>
                       </Link>
                     </SidebarMenuButton>
+                      );
+                    })()}
                   </SidebarMenuItem>
                 ))}
               </SidebarMenu>

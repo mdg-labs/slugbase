@@ -30,9 +30,20 @@ tags:
   - name: Config
   - name: OIDCProviders
   - name: AdminUsers
+    description: |
+      Instance directory: user listing and invites. **Self-hosted:** requires `is_admin`. **SlugBase Cloud:**
+      users in the current org with owner/admin role may access org-scoped user APIs when `requireAdmin` passes.
+      A normal member JWT is not sufficient.
   - name: AdminTeams
+    description: |
+      Instance directory for teams. Same privilege model as **AdminUsers** (`is_admin` self-hosted; org owner/admin in cloud for tenant-scoped routes).
   - name: AdminSettings
+    description: |
+      Instance settings (SMTP, OIDC-related instance config, AI keys). **Self-hosted:** `is_admin` only.
+      **Cloud:** org owner/admin for org-scoped settings; instance-level settings may require global admin — see server `requireAdmin` implementation.
   - name: AdminAuditLog
+    description: |
+      Audit log read API. Requires the same admin privileges as other Admin\* routes (`is_admin` or cloud org admin as applicable).
   - name: Dashboard
   - name: GoPreferences
 paths:
@@ -554,6 +565,38 @@ paths:
       responses:
         '200':
           description: OK
+  /api/bookmarks/favicon:
+    get:
+      tags: [Bookmarks]
+      summary: Proxy favicon for a site (SSRF-safe)
+      description: |
+        Returns `/favicon.ico` bytes for the host of the given bookmark URL. Used by the UI under strict CSP (`img-src` without arbitrary https).
+      parameters:
+        - in: query
+          name: site
+          required: true
+          schema:
+            type: string
+            format: uri
+          description: Full bookmark URL (same validation as stored bookmark URLs)
+      responses:
+        '200':
+          description: Image bytes
+          content:
+            image/x-icon:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          description: Favicon not available or not an image
+        '401':
+          $ref: '#/components/responses/Unauthorized'
   /api/bookmarks:
     get:
       tags: [Bookmarks]

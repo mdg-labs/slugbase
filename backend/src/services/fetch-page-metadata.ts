@@ -38,7 +38,8 @@ function isPrivateIPv6(ip: string): boolean {
   return false;
 }
 
-async function resolveAndCheckHost(hostname: string): Promise<void> {
+/** Exported for SSRF-safe favicon fetch; same rules as metadata fetcher. */
+export async function resolveAndCheckHost(hostname: string): Promise<void> {
   try {
     const [ipv4, ipv6] = await Promise.allSettled([
       resolve4(hostname),

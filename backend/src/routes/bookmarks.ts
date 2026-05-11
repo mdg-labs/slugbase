@@ -8,6 +8,7 @@ import { validateUrl, validateSlug, validateLength, sanitizeString, MAX_LENGTHS 
 import { isAISuggestionsEnabled, getAIApiKey, getAIModel } from '../utils/ai-feature.js';
 import { sanitizeUrlForAI, callAIProvider } from '../services/ai-suggestions.js';
 import { fetchPageMetadata } from '../services/fetch-page-metadata.js';
+import { fetchFaviconForSite } from '../services/fetch-favicon.js';
 import { getTenantId } from '../utils/tenant.js';
 import { isCloud } from '../config/mode.js';
 import { recordAuditEvent } from '../services/audit-log.js';
@@ -16,6 +17,35 @@ import { recordAuditEvent } from '../services/audit-log.js';
 const FREE_PLAN_BOOKMARK_LIMIT = 50;
 
 const router = Router();
+
+/**
+ * Same-origin favicon proxy for UI tiles (avoids broad CSP img-src https: wildcard).
+ * Query: site — full bookmark URL (validated like bookmark url field).
+ */
+router.get('/favicon', requireAuth(), async (req, res) => {
+  try {
+    const raw = req.query.site;
+    const site = typeof raw === 'string' ? raw.trim() : '';
+    if (!site) {
+      return res.status(400).send('site query required');
+    }
+    const urlCheck = validateUrl(site);
+    if (!urlCheck.valid) {
+      return res.status(400).send('Invalid site URL');
+    }
+    const out = await fetchFaviconForSite(site);
+    if (!out) {
+      return res.status(404).end();
+    }
+    res.setHeader('Content-Type', out.contentType);
+    res.setHeader('Cache-Control', 'private, max-age=86400');
+    res.send(out.body);
+  } catch (e) {
+    console.error('GET /api/bookmarks/favicon', e);
+    res.status(500).end();
+  }
+});
+
 router.use(requireAuth());
 
 /** Normalize Express `tag_id` query (`string | string[]`) to ordered unique non-empty IDs (AND semantics when multiple). */

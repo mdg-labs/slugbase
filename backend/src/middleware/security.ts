@@ -16,7 +16,7 @@ export const authRateLimiter = isDevelopment
   ? noOpRateLimiter
   : rateLimit({
       windowMs: 15 * 60 * 1000, // 15 minutes
-      max: 300, // Limit each IP to 300 failed auth attempts per windowMs
+      max: 50, // Failed auth attempts per IP per window (login, register, reset-adjacent, etc.)
       message: 'Too many authentication attempts, please try again later.',
       standardHeaders: true,
       legacyHeaders: false,
@@ -137,11 +137,27 @@ export function setupSecurityHeaders() {
   const isHttps = baseUrl.startsWith('https://');
   const allowHttpCsp = process.env.NODE_ENV !== 'production';
 
+  const imgSrc: string[] = ["'self'", "data:"];
+  const extraImg = (process.env.CSP_IMG_SRC_EXTRA || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  for (const entry of extraImg) {
+    try {
+      const u = new URL(entry);
+      if (u.protocol === 'https:' || (allowHttpCsp && u.protocol === 'http:')) {
+        imgSrc.push(u.origin);
+      }
+    } catch {
+      /* ignore invalid */
+    }
+  }
+
   const cspDirectives: any = {
     defaultSrc: ["'self'"],
     styleSrc: ["'self'", "'unsafe-inline'"], // Swagger UI needs inline styles
     scriptSrc: ["'self'"],
-    imgSrc: ["'self'", "data:", "https:"], // Allow data URIs and HTTPS images (for favicons)
+    imgSrc,
     connectSrc: ["'self'", "https://*.ingest.sentry.io", "https://*.sentry.io"],
     fontSrc: ["'self'"],
     objectSrc: ["'none'"],

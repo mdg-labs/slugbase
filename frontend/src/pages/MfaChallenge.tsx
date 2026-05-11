@@ -110,7 +110,8 @@ export default function MfaChallenge() {
             onChange={(e) => setCode(e.target.value)}
             className={cn(
               otpInput,
-              'px-3 outline-none focus-visible:border-[var(--accent-ring)] focus-visible:shadow-[0_0_0_3px_var(--accent-bg)]',
+              'px-3 text-[16px] tracking-[0.2em] placeholder:text-[13px] placeholder:font-normal placeholder:tracking-normal',
+              'outline-none focus-visible:border-[var(--accent-ring)] focus-visible:shadow-[0_0_0_3px_var(--accent-bg)]',
               error && 'border-[rgba(248,113,113,0.5)]'
             )}
             aria-invalid={Boolean(error)}
