@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: "Question / Support"
+    url: "https://docs.slugbase.app"
+    about: "Check the documentation first for setup, usage, and troubleshooting."
+  - name: "Support (Email)"
+    url: "https://slugbase.app/contact"
+    about: "For support requests, use the contact page instead of opening a GitHub issue."

@@ -1,18 +1,28 @@
-name: Bug Report
+name: "🐛 Bug Report"
 description: Report a bug or unexpected behavior
-title: "[Bug]: "
+title: "[Bug] "
 labels: ["bug"]
 body:
   - type: textarea
-    id: description
+    id: environment
     attributes:
-      label: Description
-      description: A clear and concise description of the bug
-      placeholder: Describe what happened...
+      label: Environment (Cloud / Self-hosted + Version)
+      description: Tell us where this happened.
+      placeholder: |
+        - Deployment: Cloud or Self-hosted
+        - Version: e.g. 0.1.10
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser
+      description: Browser and version (if relevant).
+      placeholder: e.g. Chrome 136, Firefox 127
     validations:
       required: true
   - type: textarea
-    id: steps
+    id: steps_to_reproduce
     attributes:
       label: Steps to Reproduce
       description: Steps to reproduce the behavior
@@ -23,25 +33,17 @@ body:
     validations:
       required: true
   - type: textarea
-    id: expected
+    id: expected_actual
     attributes:
-      label: Expected Behavior
-      description: What you expected to happen
-      placeholder: Describe what you expected...
+      label: Expected / Actual
+      description: What did you expect, and what happened instead?
+      placeholder: |
+        Expected:
+        Actual:
     validations:
       required: true
   - type: textarea
-    id: environment
+    id: screenshots
     attributes:
-      label: Environment
-      description: Environment information
-      placeholder: |
-        - OS: [e.g. Linux, Windows, macOS]
-        - Browser: [e.g. Chrome, Firefox]
-        - Version: [e.g. 1.0.0]
-      value: |
-        - OS:
-        - Browser:
-        - Version:
-    validations:
-      required: false
+      label: Screenshots (optional)
+      description: Drag and drop screenshots if they help explain the issue.

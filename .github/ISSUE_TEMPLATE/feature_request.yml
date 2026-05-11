@@ -1,29 +1,39 @@
-name: Feature Request
+name: "✨ Feature Request"
 description: Suggest a new feature or enhancement
-title: "[Feature]: "
+title: "[Feature] "
 labels: ["enhancement"]
 body:
   - type: textarea
-    id: description
+    id: problem_statement
     attributes:
-      label: Feature Description
-      description: A clear and concise description of the feature
-      placeholder: Describe the feature you'd like to see...
+      label: Problem Statement
+      description: "I'm trying to... but..."
+      placeholder: |
+        I'm trying to ...
+        but ...
     validations:
       required: true
   - type: textarea
-    id: motivation
+    id: proposed_solution
     attributes:
-      label: Motivation
-      description: Why is this feature useful?
-      placeholder: Explain why this feature would be valuable...
+      label: Proposed Solution
+      description: What should happen instead?
+      placeholder: Describe your preferred solution...
     validations:
       required: true
   - type: textarea
-    id: alternatives
+    id: alternatives_considered
     attributes:
-      label: Alternatives
-      description: Any alternative solutions or features you've considered
+      label: Alternatives Considered
+      description: Any workaround or alternative approach you've considered.
       placeholder: Describe any alternatives you've considered...
     validations:
       required: false
+  - type: textarea
+    id: use_case
+    attributes:
+      label: Use Case (who benefits?)
+      description: Wer profitiert davon? Which users or teams benefit most?
+      placeholder: Describe who benefits and in which scenario...
+    validations:
+      required: true
