@@ -1,0 +1,238 @@
+name: Auto Release on Version Bump
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - package.json
+      - CHANGELOG.md
+
+# Opt into Node.js 24 for actions that still bundle Node 20 (e.g. checkout) until defaults switch.
+# https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  auto-release:
+    name: Create release from package version bump
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+
+      - name: Detect version bump
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CURRENT_VERSION="$(node -p "require('./package.json').version")"
+          echo "current_version=${CURRENT_VERSION}" >> "$GITHUB_OUTPUT"
+
+          if git rev-parse "v${CURRENT_VERSION}" >/dev/null 2>&1; then
+            echo "Version tag v${CURRENT_VERSION} already exists; skipping."
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          LAST_TAG="$(git tag --list 'v*' --sort=-v:refname | head -n 1 || true)"
+          if [ -n "${LAST_TAG}" ]; then
+            LAST_VERSION="${LAST_TAG#v}"
+          else
+            LAST_VERSION="0.0.0"
+          fi
+
+          echo "last_tag=${LAST_TAG}" >> "$GITHUB_OUTPUT"
+          echo "last_version=${LAST_VERSION}" >> "$GITHUB_OUTPUT"
+
+          export CURRENT_VERSION LAST_VERSION
+          node <<'NODE'
+          const fs = require("fs");
+          const semver = (v) => v.split(".").map((n) => Number.parseInt(n, 10));
+          const cmp = (a, b) => {
+            for (let i = 0; i < 3; i++) {
+              if (a[i] > b[i]) return 1;
+              if (a[i] < b[i]) return -1;
+            }
+            return 0;
+          };
+
+          const current = process.env.CURRENT_VERSION;
+          const last = process.env.LAST_VERSION;
+          const valid = /^\d+\.\d+\.\d+$/;
+
+          if (!valid.test(current)) {
+            console.error(`Current version is not plain semver: ${current}`);
+            process.exit(1);
+          }
+          if (!valid.test(last)) {
+            console.error(`Last version is not plain semver: ${last}`);
+            process.exit(1);
+          }
+
+          const isHigher = cmp(semver(current), semver(last)) === 1;
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `should_release=${isHigher}\n`);
+          NODE
+
+      - name: Build release context
+        if: steps.detect.outputs.should_release == 'true'
+        id: context
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          LAST_TAG="${{ steps.detect.outputs.last_tag }}"
+          CURRENT_VERSION="${{ steps.detect.outputs.current_version }}"
+
+          if [ -n "${LAST_TAG}" ]; then
+            RANGE="${LAST_TAG}..HEAD"
+          else
+            RANGE="$(git rev-list --max-parents=0 HEAD)..HEAD"
+          fi
+
+          git log --no-merges --date=short --pretty=format:'- %s (%h, %ad)' "${RANGE}" > commits.txt
+          if [ ! -s commits.txt ]; then
+            echo "- No commits found in release range." > commits.txt
+          fi
+
+          awk '
+            BEGIN { in_section=0; printing=0; }
+            /^## \[Unreleased\]/ { in_section=1; next }
+            /^## \[/ && in_section==1 { in_section=0 }
+            in_section==1 { print }
+          ' CHANGELOG.md > changelog_unreleased.txt
+
+          if [ ! -s changelog_unreleased.txt ]; then
+            echo "(No Unreleased section details found in CHANGELOG.md)" > changelog_unreleased.txt
+          fi
+
+          {
+            echo "version=${CURRENT_VERSION}"
+            echo "range=${RANGE}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Generate release notes with OpenAI
+        if: steps.detect.outputs.should_release == 'true'
+        id: notes
+        uses: actions/github-script@v7
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          VERSION: ${{ steps.context.outputs.version }}
+          RANGE: ${{ steps.context.outputs.range }}
+        with:
+          script: |
+            const fs = require("fs");
+            const commits = fs.readFileSync("commits.txt", "utf8");
+            const unreleased = fs.readFileSync("changelog_unreleased.txt", "utf8");
+            const fallbackNotes = [
+              "## Highlights",
+              "- Automated release notes fallback generated from commit history.",
+              "",
+              "## Changelog (Unreleased)",
+              unreleased.trim() || "(No Unreleased section details found in CHANGELOG.md)",
+              "",
+              "## Commits",
+              commits.trim() || "- No commits found in release range."
+            ].join("\n");
+
+            if (!process.env.OPENAI_API_KEY) {
+              core.warning("Missing OPENAI_API_KEY; using fallback release notes.");
+              fs.writeFileSync("release_notes.md", fallbackNotes + "\n");
+              core.setOutput("body", fallbackNotes);
+              return;
+            }
+
+            const prompt = [
+              "You are generating GitHub release notes for SlugBase.",
+              "Return plain markdown only.",
+              "Use this structure:",
+              "## Highlights",
+              "- ...",
+              "",
+              "## Changes",
+              "### Added",
+              "- ...",
+              "### Changed",
+              "- ...",
+              "### Fixed",
+              "- ...",
+              "### Security",
+              "- ...",
+              "",
+              "Rules:",
+              "- Prioritize user-facing changes and operator-relevant deployment changes.",
+              "- Incorporate CHANGELOG 'Unreleased' items if present.",
+              "- Do not invent features.",
+              "- If a subsection has no meaningful items, omit that subsection.",
+              "",
+              `Target version: v${process.env.VERSION}`,
+              `Git range: ${process.env.RANGE}`,
+              "",
+              "CHANGELOG Unreleased content:",
+              unreleased,
+              "",
+              "Commits in range:",
+              commits
+            ].join("\n");
+
+            try {
+              const response = await fetch("https://api.openai.com/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
+                },
+                body: JSON.stringify({
+                  model: "gpt-4o-mini",
+                  temperature: 0.2,
+                  messages: [
+                    { role: "system", content: "You write concise, accurate release notes in markdown." },
+                    { role: "user", content: prompt }
+                  ]
+                })
+              });
+
+              if (!response.ok) {
+                const text = await response.text();
+                throw new Error(`OpenAI request failed (${response.status}): ${text}`);
+              }
+
+              const data = await response.json();
+              const content = data?.choices?.[0]?.message?.content?.trim();
+              if (!content) {
+                throw new Error("OpenAI returned empty release notes.");
+              }
+
+              fs.writeFileSync("release_notes.md", content + "\n");
+              core.setOutput("body", content);
+            } catch (error) {
+              core.warning(`OpenAI generation failed; using fallback notes. ${error.message}`);
+              fs.writeFileSync("release_notes.md", fallbackNotes + "\n");
+              core.setOutput("body", fallbackNotes);
+            }
+
+      - name: Create tag and GitHub release
+        if: steps.detect.outputs.should_release == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.detect.outputs.current_version }}
+          name: v${{ steps.detect.outputs.current_version }}
+          target_commitish: ${{ github.sha }}
+          body_path: release_notes.md
+          generate_release_notes: false
+          draft: false
+          prerelease: false
+
+      - name: No release created
+        if: steps.detect.outputs.should_release != 'true'
+        run: echo "No higher package.json version detected. Skipping release."
