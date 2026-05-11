@@ -1,6 +1,20 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import api from '../../api/client';
+import { PageLoadingSkeleton } from '../../components/ui/PageLoadingSkeleton';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../../components/ui/table';
+import { Card } from '../../components/ui/card';
+import { Badge } from '../../components/ui/badge';
+import { EmptyState } from '../../components/EmptyState';
+import { ScrollText } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 type AuditEvent = {
   id: string;
@@ -13,6 +27,20 @@ type AuditEvent = {
   actor_email: string | null;
   actor_name: string | null;
 };
+
+function actionBadgeClass(action: string): string {
+  const a = action.toLowerCase();
+  if (a.includes('delete') || a.includes('remove')) {
+    return 'border-[rgba(248,113,113,0.35)] bg-[rgba(248,113,113,0.12)] text-[var(--danger)]';
+  }
+  if (a.includes('create') || a.includes('add') || a.includes('invite')) {
+    return 'border-[rgba(74,222,128,0.35)] bg-[rgba(74,222,128,0.12)] text-[var(--success)]';
+  }
+  if (a.includes('update') || a.includes('edit') || a.includes('change')) {
+    return 'border-[rgba(96,165,250,0.35)] bg-[rgba(96,165,250,0.15)] text-[var(--info)]';
+  }
+  return 'border-[var(--border)] bg-[var(--bg-3)] text-[var(--fg-1)]';
+}
 
 export default function AdminAuditLogPage() {
   const { t } = useTranslation();
@@ -68,8 +96,9 @@ export default function AdminAuditLogPage() {
     setError(null);
     try {
       await fetchPage(nextCursor, true);
-    } catch (err: any) {
-      const msg = err.response?.data?.error ?? err.message ?? t('admin.auditLog.loadError');
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { error?: string } }; message?: string };
+      const msg = e.response?.data?.error ?? e.message ?? t('admin.auditLog.loadError');
       setError(typeof msg === 'string' ? msg : t('admin.auditLog.loadError'));
     } finally {
       setLoadingMore(false);
@@ -87,59 +116,73 @@ export default function AdminAuditLogPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">{t('admin.auditLog.title')}</h1>
-        <p className="mt-2 text-sm text-muted-foreground">{t('admin.auditLog.description')}</p>
+        <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-[var(--fg-0)]">{t('admin.auditLog.title')}</h1>
+        <p className="mt-2 text-[12.5px] leading-relaxed text-[var(--fg-2)]">{t('admin.auditLog.description')}</p>
       </div>
 
       {error && (
-        <div className="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <div className="rounded-[var(--radius-lg)] border border-[rgba(248,113,113,0.4)] bg-[rgba(248,113,113,0.08)] px-4 py-3 text-[13px] text-[var(--danger)]">
           {error}
         </div>
       )}
 
       {loading ? (
-        <div className="text-muted-foreground">{t('common.loading')}</div>
+        <PageLoadingSkeleton lines={6} />
       ) : events.length === 0 ? (
-        <div className="rounded-xl border border-ghost bg-surface-low px-4 py-8 text-center text-sm text-muted-foreground">
-          {t('admin.auditLog.empty')}
-        </div>
+        <EmptyState icon={ScrollText} title={t('admin.auditLog.title')} description={t('admin.auditLog.empty')} />
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-ghost bg-card">
-          <table className="w-full min-w-[640px] text-left text-sm">
-            <thead className="border-b border-ghost bg-surface-low/80 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              <tr>
-                <th className="px-4 py-3">{t('admin.auditLog.colTime')}</th>
-                <th className="px-4 py-3">{t('admin.auditLog.colActor')}</th>
-                <th className="px-4 py-3">{t('admin.auditLog.colAction')}</th>
-                <th className="px-4 py-3">{t('admin.auditLog.colEntity')}</th>
-                <th className="px-4 py-3">{t('admin.auditLog.colDetails')}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-ghost">
+        <Card className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-1)] p-0 shadow-none">
+          <Table>
+            <TableHeader>
+              <TableRow className="border-[var(--border-soft)] bg-[var(--bg-2)] hover:bg-[var(--bg-2)]">
+                <TableHead className="font-mono text-[11px] uppercase tracking-wide text-[var(--fg-2)]">
+                  {t('admin.auditLog.colTime')}
+                </TableHead>
+                <TableHead className="font-mono text-[11px] uppercase tracking-wide text-[var(--fg-2)]">
+                  {t('admin.auditLog.colActor')}
+                </TableHead>
+                <TableHead className="font-mono text-[11px] uppercase tracking-wide text-[var(--fg-2)]">
+                  {t('admin.auditLog.colAction')}
+                </TableHead>
+                <TableHead className="font-mono text-[11px] uppercase tracking-wide text-[var(--fg-2)]">
+                  {t('admin.auditLog.colEntity')}
+                </TableHead>
+                <TableHead className="min-w-[160px] font-mono text-[11px] uppercase tracking-wide text-[var(--fg-2)]">
+                  {t('admin.auditLog.colDetails')}
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {events.map((e) => (
-                <tr key={e.id} className="align-top">
-                  <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
+                <TableRow key={e.id} className="align-top border-[var(--border-soft)] hover:bg-[var(--bg-hover)]">
+                  <TableCell className="whitespace-nowrap text-[12px] text-[var(--fg-2)]">
                     {e.created_at ? new Date(e.created_at).toLocaleString() : '—'}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="font-medium text-foreground">{e.actor_name || e.actor_email || '—'}</div>
+                  </TableCell>
+                  <TableCell className="max-w-[200px]">
+                    <div className="font-medium text-[var(--fg-0)]">{e.actor_name || e.actor_email || '—'}</div>
                     {e.actor_email && e.actor_name ? (
-                      <div className="text-xs text-muted-foreground">{e.actor_email}</div>
+                      <div className="text-[11px] text-[var(--fg-2)]">{e.actor_email}</div>
                     ) : null}
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs">{e.action}</td>
-                  <td className="px-4 py-3 text-xs">
-                    <span className="text-muted-foreground">{e.entity_type}</span>
-                    {e.entity_id ? <div className="mt-0.5 font-mono text-[11px] break-all">{e.entity_id}</div> : null}
-                  </td>
-                  <td className="max-w-md px-4 py-3 font-mono text-[11px] text-muted-foreground break-all">
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className={cn('font-mono text-[10px]', actionBadgeClass(e.action))}>
+                      {e.action}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-[12px]">
+                    <span className="text-[var(--fg-2)]">{e.entity_type}</span>
+                    {e.entity_id ? (
+                      <div className="mt-0.5 break-all font-mono text-[11px] text-[var(--fg-1)]">{e.entity_id}</div>
+                    ) : null}
+                  </TableCell>
+                  <TableCell className="max-w-[min(100vw,420px)] break-all font-mono text-[11px] text-[var(--fg-2)]">
                     {formatMeta(e.metadata || {})}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
+        </Card>
       )}
 
       {!loading && nextCursor ? (
@@ -147,7 +190,7 @@ export default function AdminAuditLogPage() {
           type="button"
           onClick={() => void loadMore()}
           disabled={loadingMore}
-          className="rounded-xl border border-ghost bg-surface px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-surface-high disabled:opacity-50"
+          className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-1)] px-4 py-2 text-[13px] font-medium text-[var(--fg-0)] transition-colors hover:bg-[var(--bg-hover)] disabled:opacity-50"
         >
           {loadingMore ? t('common.loading') : t('admin.auditLog.loadMore')}
         </button>

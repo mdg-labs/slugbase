@@ -8,6 +8,7 @@ import api from '../api/client';
 import { useAppConfig } from '../contexts/AppConfigContext';
 import { PageLoadingSkeleton } from '../components/ui/PageLoadingSkeleton';
 import { safeHref } from '../utils/safeHref';
+import { Badge } from '../components/ui/badge';
 
 interface SlugPreference {
   slug: string;
@@ -64,53 +65,49 @@ export default function GoPreferences() {
 
   return (
     <div className="space-y-6 max-w-3xl">
-      <div className="flex items-center gap-4">
-        <Link to={`${prefix}/profile`}>
-          <Button variant="ghost" size="sm" icon={ArrowLeft}>
-            {t('common.back')}
-          </Button>
-        </Link>
-        <div>
-          <h1 className="text-2xl font-semibold text-foreground">
-            {t('goPreferences.title')}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {t('goPreferences.description')}
-          </p>
+      <div className="page-head flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-4">
+          <Link to={`${prefix}/profile`} className="shrink-0">
+            <Button variant="ghost" size="sm" icon={ArrowLeft}>
+              {t('common.back')}
+            </Button>
+          </Link>
+          <div className="min-w-0">
+            <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-[var(--fg-0)]">
+              {t('goPreferences.title')}
+            </h1>
+            <p className="mt-1 text-[12.5px] text-[var(--fg-2)]">{t('goPreferences.description')}</p>
+          </div>
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-ghost bg-surface">
+      <div className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-1)] shadow-[var(--shadow-sm)]">
         {preferences.length === 0 ? (
-          <div className="p-8 text-center text-muted-foreground">
-            {t('goPreferences.empty')}
-          </div>
+          <div className="px-6 py-12 text-center text-[13px] text-[var(--fg-2)]">{t('goPreferences.empty')}</div>
         ) : (
-          <ul className="divide-y divide-ghost">
+          <ul className="divide-y divide-[var(--border-soft)]">
             {preferences.map((pref) => (
               <li
                 key={pref.slug}
-                className="flex items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-surface-high"
+                className="flex flex-col gap-3 px-4 py-3 transition-colors hover:bg-[var(--bg-hover)] sm:flex-row sm:items-center sm:justify-between"
               >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <code className="text-sm font-mono text-primary">
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <code className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-2)] px-2 py-0.5 font-mono text-[12px] text-[var(--accent-hi)]">
                       /go/{pref.slug}
                     </code>
-                    <span className="text-xs px-2 py-0.5 rounded-md border border-ghost bg-surface-low text-muted-foreground">
+                    <Badge variant="secondary" className="font-mono text-[10px] text-[var(--fg-2)]">
                       {pref.workspace}
-                    </span>
+                    </Badge>
                   </div>
-                  <p className="mt-1 text-sm text-muted-foreground truncate">
-                    {pref.title}
-                  </p>
+                  <p className="truncate text-[13px] text-[var(--fg-1)]">{pref.title}</p>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center justify-end gap-1 shrink-0">
                   <a
                     href={safeHref(pref.url)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="p-2 text-muted-foreground hover:text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-sm)] text-[var(--fg-2)] hover:bg-[var(--bg-2)] hover:text-[var(--accent-hi)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-ring)]"
                     title={t('common.open')}
                   >
                     <ExternalLink className="h-4 w-4" />
@@ -121,7 +118,7 @@ export default function GoPreferences() {
                     icon={Trash2}
                     onClick={() => handleRemove(pref.slug)}
                     disabled={deleting === pref.slug}
-                    className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                    className="text-[var(--danger)] hover:bg-[rgba(248,113,113,0.08)] hover:text-[var(--danger)]"
                     title={t('common.remove')}
                   />
                 </div>

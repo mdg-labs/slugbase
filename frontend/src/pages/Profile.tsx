@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppConfig } from '../contexts/AppConfigContext';
 import { usePlan, usePlanLoadState, isCloudMode } from '../contexts/PlanContext';
-import { AlertCircle, Key, AlertTriangle, Shield } from 'lucide-react';
+import { AlertCircle, Key, AlertTriangle, Shield, Upload, Download } from 'lucide-react';
 import Select from '../components/ui/Select';
 import Button from '../components/ui/Button';
 import { Switch } from '../components/ui/switch';
@@ -14,6 +14,14 @@ import CreateTokenModal from '../components/profile/CreateTokenModal';
 import MfaEnrollSetupModal from '../components/profile/MfaEnrollSetupModal';
 import MfaEnrollBackupCodesModal from '../components/profile/MfaEnrollBackupCodesModal';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../components/ui/table';
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -26,10 +34,38 @@ import {
   DialogTitle,
 } from '../components/ui/dialog';
 import api from '../api/client';
-import { getDocsApiReferenceUrl } from '../config/docs';
+import { DOCS_API_OPERATIONS, getDocsApiReferenceOperationUrl, getDocsApiReferenceUrl } from '../config/docs';
 import { resolveSupportedLocale } from '../i18n';
 import { canAccessWorkspaceAdmin } from '../utils/adminAccess';
 import { copyTextToClipboard } from '../utils/copyTextToClipboard';
+import { applyAccent } from '../lib/applyAccent';
+import { SegmentedControl, SegmentedControlItem } from '../components/ui/SegmentedControl';
+import ImportModal from '../components/modals/ImportModal';
+
+const BOOKMARKS_VIEW_STORAGE_KEY = 'slugbase_bookmarks_view';
+
+const ACCENT_PRESETS = ['#7b7ef4', '#60a5fa', '#4ade80', '#fbbf24', '#f87171', '#f472b6'] as const;
+
+function profileInitials(name: string, email: string) {
+  const n = name.trim();
+  if (n) {
+    const p = n.split(/\s+/).filter(Boolean);
+    if (p.length >= 2) return `${p[0][0] ?? ''}${p[1][0] ?? ''}`.toUpperCase();
+    return p[0].slice(0, 2).toUpperCase();
+  }
+  return email.slice(0, 2).toUpperCase();
+}
+
+function getStoredBookmarksView(): 'cards' | 'table' {
+  if (typeof window === 'undefined') return 'cards';
+  try {
+    const v = localStorage.getItem(BOOKMARKS_VIEW_STORAGE_KEY);
+    if (v === 'table' || v === 'cards') return v;
+  } catch {
+    /* ignore */
+  }
+  return 'cards';
+}
 
 interface ApiToken {
   id: string;
@@ -101,6 +137,11 @@ export default function Profile() {
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
   const [deleteAccountLoading, setDeleteAccountLoading] = useState(false);
 
+  const [dashStats, setDashStats] = useState<{ totalBookmarks: number } | null>(null);
+  const [slugRouteCount, setSlugRouteCount] = useState<number | null>(null);
+  const [bookmarksView, setBookmarksView] = useState<'cards' | 'table'>(() => getStoredBookmarksView());
+  const [importModalOpen, setImportModalOpen] = useState(false);
+
   const mfaIds = useId();
   /** Avoid calling enroll/cancel when Radix closes the setup dialog after a successful confirm. */
   const mfaEnrollSucceededRef = useRef(false);
@@ -161,6 +202,26 @@ export default function Profile() {
   useEffect(() => {
     if (user) fetchTokens();
   }, [user, fetchTokens]);
+
+  useEffect(() => {
+    if (!user) return;
+    api
+      .get<{ totalBookmarks?: number }>('/dashboard/stats')
+      .then((res) => setDashStats({ totalBookmarks: res.data?.totalBookmarks ?? 0 }))
+      .catch(() => setDashStats(null));
+    api
+      .get<unknown[]>('/go/preferences')
+      .then((res) => setSlugRouteCount(Array.isArray(res.data) ? res.data.length : 0))
+      .catch(() => setSlugRouteCount(null));
+  }, [user]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(BOOKMARKS_VIEW_STORAGE_KEY, bookmarksView);
+    } catch {
+      /* ignore */
+    }
+  }, [bookmarksView]);
 
   const resetDisableDialog = useCallback(() => {
     setDisableCode('');
@@ -450,6 +511,27 @@ export default function Profile() {
     }
   }
 
+  function handleExportBookmarks() {
+    api
+      .get('/bookmarks/export')
+      .then((response) => {
+        const dataStr = JSON.stringify(response.data, null, 2);
+        const dataBlob = new Blob([dataStr], { type: 'application/json' });
+        const urlObj = URL.createObjectURL(dataBlob);
+        const link = document.createElement('a');
+        link.href = urlObj;
+        link.download = `slugbase-bookmarks-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(urlObj);
+        showToast(t('common.success'), 'success');
+      })
+      .catch(() => {
+        showToast(t('common.error'), 'error');
+      });
+  }
+
   function formatDate(iso: string) {
     try {
       return new Date(iso).toLocaleDateString(undefined, {
@@ -477,44 +559,140 @@ export default function Profile() {
     { value: 'de', label: t('profile.languageGerman') },
   ];
 
-  const themeOptions = [
-    { value: 'auto', label: t('profile.themeAuto') },
-    { value: 'light', label: t('profile.themeLight') },
-    { value: 'dark', label: t('profile.themeDark') },
-  ];
-
   /** SlugBase TOTP applies to password login; hide enrollment for pure OIDC unless MFA was enabled (e.g. hybrid or legacy). */
   const showSlugbaseMfaCard = user.has_password !== false || Boolean(user.mfa_enabled);
   const showOidcMfaManagedNote =
     Boolean(user.oidc_provider) && user.has_password === false && !user.mfa_enabled;
 
+  const appOrigin =
+    typeof window !== 'undefined' ? `${window.location.origin}${prefix || ''}`.replace(/\/+$/, '') || window.location.origin : '';
+
   return (
-    <div className="space-y-6">
-      {/* Page header: title + subtitle left; signed-in summary + Admin badge right */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
-        <div>
-          <h1 className="text-2xl font-semibold text-foreground">
-            {t('profile.title')}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {t('profile.description')}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-          <span>
-            {t('profile.signedInAs')}: <span className="text-foreground">{user.email}</span>
-          </span>
-          {canAccessWorkspaceAdmin(user) && (
-            <Badge variant="secondary" className="text-xs font-normal">
-              {t('profile.admin')}
-            </Badge>
-          )}
+    <div className="space-y-8">
+      <div className="profile-head rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-1)] p-6 shadow-[var(--shadow-sm)]">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex min-w-0 gap-4">
+            <div
+              className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--accent-bg)] font-mono text-lg font-semibold text-[var(--accent-hi)]"
+              aria-hidden
+            >
+              {profileInitials(user.name || '', user.email)}
+            </div>
+            <div className="min-w-0 space-y-1">
+              <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-[var(--fg-0)]">{user.name || '—'}</h1>
+              <p className="text-[13px] text-[var(--fg-2)]">{user.email}</p>
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                {canAccessWorkspaceAdmin(user) && (
+                  <Badge variant="secondary" className="text-[11px] font-normal">
+                    {t('profile.admin')}
+                  </Badge>
+                )}
+                {user.oidc_provider ? (
+                  <Badge variant="outline" className="text-[11px] font-normal border-[var(--border)] text-[var(--fg-2)]">
+                    {user.oidc_provider}
+                  </Badge>
+                ) : null}
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => document.getElementById('profile-section-general')?.scrollIntoView({ behavior: 'smooth' })}
+            >
+              {t('profile.editProfile')}
+            </Button>
+            {user.has_password ? (
+              <Link
+                to={`${prefix}/password-reset`.replace(/\/+/g, '/')}
+                className="inline-flex h-8 items-center rounded-[var(--radius-sm)] px-3 text-[13px] font-medium text-[var(--fg-1)] hover:bg-[var(--bg-hover)] hover:text-[var(--fg-0)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-ring)]"
+              >
+                {t('profile.changePassword')}
+              </Link>
+            ) : null}
+          </div>
         </div>
       </div>
 
-      <div className="space-y-6">
+      {(dashStats || slugRouteCount !== null) && (
+        <div className="stats grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="stat rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-1)] px-4 py-3">
+            <p className="font-mono text-[10px] uppercase tracking-wide text-[var(--fg-3)]">{t('profile.statBookmarks')}</p>
+            <p className="mt-1 tabular-nums text-[20px] font-semibold text-[var(--fg-0)]">
+              {dashStats?.totalBookmarks ?? '—'}
+            </p>
+          </div>
+          <div className="stat rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-1)] px-4 py-3">
+            <p className="font-mono text-[10px] uppercase tracking-wide text-[var(--fg-3)]">{t('profile.statSlugs')}</p>
+            <p className="mt-1 tabular-nums text-[20px] font-semibold text-[var(--fg-0)]">
+              {slugRouteCount ?? '—'}
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Card className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-1)] shadow-none">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-[15px]">{t('profile.membershipsTitle')}</CardTitle>
+            <CardDescription>{t('profile.membershipsDescription')}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-[13px] text-[var(--fg-1)]">
+              {isCloudMode && planLoadState === 'ready'
+                ? t('profile.membershipsCloudPlan', { plan: planInfo?.plan ?? '—' })
+                : t('profile.membershipsSelfHosted')}
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-1)] shadow-none">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-[15px]">{t('profile.shortcutsTitle')}</CardTitle>
+            <CardDescription>{t('profile.shortcutsDescription')}</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2 text-[13px]">
+            <Link className="font-medium text-[var(--accent-hi)] hover:underline" to={`${prefix}/go-preferences`}>
+              {t('profile.manageQuickAccess')} →
+            </Link>
+            <Link className="font-medium text-[var(--accent-hi)] hover:underline" to={`${prefix}/search-engine-guide`}>
+              {t('searchEngineGuide.title')} →
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="settings-layout flex flex-col gap-8 lg:flex-row lg:items-start">
+        <nav
+          className="settings-nav flex flex-row flex-wrap gap-1 lg:w-52 lg:flex-col lg:flex-nowrap"
+          aria-label={t('profile.settingsNavLabel')}
+        >
+          {(
+            [
+              ['general', t('profile.sectionGeneral')],
+              ['appearance', t('profile.sectionAppearance')],
+              ['security', t('profile.sectionSecurity')],
+              ['tokens', t('profile.sectionApiTokens')],
+              ['data', t('profile.sectionDataPrivacy')],
+              ['integrations', t('profile.sectionIntegrations')],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => document.getElementById(`profile-section-${key}`)?.scrollIntoView({ behavior: 'smooth' })}
+              className="sb-item rounded-[var(--radius)] px-2.5 py-2 text-left text-[13px] text-[var(--fg-1)] hover:bg-[var(--bg-hover)] hover:text-[var(--fg-0)]"
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+
+      <div className="min-w-0 flex-1 space-y-6">
+        <form onSubmit={handleSubmit} id="profile-preferences-form">
         {/* Section A: Account */}
-        <Card className="rounded-xl border border-ghost bg-surface shadow-none">
+        <Card id="profile-section-general" className="scroll-mt-24 rounded-xl border border-ghost bg-surface shadow-none">
           <CardHeader>
             <CardTitle>{t('profile.account')}</CardTitle>
             <CardDescription>{t('profile.accountDescription')}</CardDescription>
@@ -695,38 +873,83 @@ export default function Profile() {
                   </>
                 }
               />
+
+              <SettingsRow
+                label={t('profile.appBaseUrl')}
+                value={<code className="font-mono text-[12px] text-[var(--fg-1)]">{appOrigin || '—'}</code>}
+              />
+
+              <SettingsRow label={t('profile.language')}>
+                <div className="mt-2 max-w-xs sm:mt-0">
+                  <Select
+                    value={formData.language}
+                    onChange={(value) => setFormData((prev) => ({ ...prev, language: value }))}
+                    options={languageOptions}
+                  />
+                </div>
+              </SettingsRow>
             </dl>
           </CardContent>
         </Card>
 
-        {/* Section B: Preferences */}
-        <Card className="rounded-xl border border-ghost bg-surface shadow-none">
+        {/* Section B: Preferences / Appearance */}
+        <Card
+          id="profile-section-appearance"
+          className="scroll-mt-24 rounded-xl border border-ghost bg-surface shadow-none tweaks"
+        >
           <CardHeader>
             <CardTitle>{t('profile.preferences')}</CardTitle>
             <CardDescription>{t('profile.preferencesDescription')}</CardDescription>
           </CardHeader>
-          <form onSubmit={handleSubmit} id="profile-preferences-form">
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
+              <div className="tweaks-body space-y-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground" id="profile-language-label">
-                  {t('profile.language')}
-                </label>
-                <Select
-                  value={formData.language}
-                  onChange={(value) => setFormData((prev) => ({ ...prev, language: value }))}
-                  options={languageOptions}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground" id="profile-theme-label">
+                <span className="text-sm font-medium text-foreground" id="profile-theme-label">
                   {t('profile.theme')}
-                </label>
-                <Select
+                </span>
+                <SegmentedControl
                   value={formData.theme}
-                  onChange={(value) => setFormData((prev) => ({ ...prev, theme: value }))}
-                  options={themeOptions}
-                />
+                  onValueChange={(v) => v && setFormData((prev) => ({ ...prev, theme: v }))}
+                  className="flex-wrap"
+                  aria-labelledby="profile-theme-label"
+                >
+                  <SegmentedControlItem value="auto">{t('profile.themeAuto')}</SegmentedControlItem>
+                  <SegmentedControlItem value="light">{t('profile.themeLight')}</SegmentedControlItem>
+                  <SegmentedControlItem value="dark">{t('profile.themeDark')}</SegmentedControlItem>
+                </SegmentedControl>
               </div>
+
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-foreground">{t('profile.accentColor')}</p>
+                <div className="swatches flex flex-wrap gap-2">
+                  {ACCENT_PRESETS.map((hex) => (
+                    <button
+                      key={hex}
+                      type="button"
+                      className="swatch h-7 w-7 rounded-full border-2 border-[var(--border)] shadow-[var(--shadow-sm)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-ring)]"
+                      style={{ background: hex }}
+                      onClick={() => applyAccent(hex)}
+                      aria-label={hex}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <span className="text-sm font-medium text-foreground" id="profile-bm-view-label">
+                  {t('profile.defaultBookmarkView')}
+                </span>
+                <SegmentedControl
+                  value={bookmarksView}
+                  onValueChange={(v) => v && setBookmarksView(v as 'cards' | 'table')}
+                  className="flex-wrap"
+                  aria-labelledby="profile-bm-view-label"
+                >
+                  <SegmentedControlItem value="cards">{t('bookmarks.viewCard')}</SegmentedControlItem>
+                  <SegmentedControlItem value="table">{t('bookmarks.viewList')}</SegmentedControlItem>
+                </SegmentedControl>
+              </div>
+
               {showAiSuggestionsPreference && (
                 <div className="flex items-center justify-between gap-3 py-2">
                   <div>
@@ -747,6 +970,7 @@ export default function Profile() {
                   />
                 </div>
               )}
+              </div>
             </CardContent>
             <CardFooter className="flex flex-row items-center justify-between gap-4">
               <span className="text-xs text-muted-foreground">
@@ -754,7 +978,6 @@ export default function Profile() {
               </span>
               <Button
                 type="submit"
-                form="profile-preferences-form"
                 variant="primary"
                 disabled={saving || !preferencesDirty}
                 aria-label={t('common.save')}
@@ -763,10 +986,12 @@ export default function Profile() {
                 {saving ? t('common.loading') : t('common.save')}
               </Button>
             </CardFooter>
-          </form>
         </Card>
+        </form>
 
         {/* MFA (password / hybrid); pure OIDC sees SSO note instead */}
+        {showOidcMfaManagedNote || showSlugbaseMfaCard ? (
+        <section id="profile-section-security" className="scroll-mt-24 space-y-6">
         {showOidcMfaManagedNote ? (
           <Card
             className="rounded-xl border border-ghost bg-surface shadow-none"
@@ -774,7 +999,7 @@ export default function Profile() {
           >
             <CardHeader>
               <CardTitle id="mfa-sso-note-title" className="flex items-center gap-2">
-                <Shield className="h-5 w-5 text-primary" aria-hidden />
+                <Shield className="h-4 w-4 text-primary" aria-hidden />
                 {t('mfa.profileSectionTitle')}
               </CardTitle>
               <CardDescription>{t('mfa.oidcManagedByIdp')}</CardDescription>
@@ -785,7 +1010,7 @@ export default function Profile() {
           <Card className="rounded-xl border border-ghost bg-surface shadow-none" aria-labelledby="mfa-section-title">
             <CardHeader>
               <CardTitle id="mfa-section-title" className="flex items-center gap-2">
-                <Shield className="h-5 w-5 text-primary" aria-hidden />
+                <Shield className="h-4 w-4 text-primary" aria-hidden />
                 {t('mfa.profileSectionTitle')}
               </CardTitle>
               <CardDescription>{t('mfa.profileSectionDescription')}</CardDescription>
@@ -845,13 +1070,19 @@ export default function Profile() {
             </CardContent>
           </Card>
         ) : null}
+        </section>
+        ) : null}
 
         {/* Section C: Developer / API Access */}
-        <Card className="rounded-xl border border-ghost bg-surface shadow-none" aria-labelledby="developer-section-title">
+        <Card
+          id="profile-section-tokens"
+          className="scroll-mt-24 rounded-xl border border-ghost bg-surface shadow-none"
+          aria-labelledby="developer-section-title"
+        >
           <CardHeader>
             <div className="flex flex-wrap items-center gap-2">
               <CardTitle id="developer-section-title" className="flex items-center gap-2">
-                <Key className="h-5 w-5 text-primary" />
+                <Key className="h-4 w-4 text-primary" />
                 {t('profile.developerApiTitle')}
               </CardTitle>
               <Badge
@@ -870,14 +1101,38 @@ export default function Profile() {
                 {t('profile.apiTokenWarning')}
               </p>
             </div>
-            <a
-              href={getDocsApiReferenceUrl()}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm font-medium text-primary hover:text-primary/90 inline-block"
-            >
-              {t('profile.viewApiDocs')} →
-            </a>
+            <div className="space-y-2">
+              <a
+                href={getDocsApiReferenceUrl()}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm font-medium text-primary hover:text-primary/90 inline-block"
+              >
+                {t('profile.viewApiDocs')} →
+              </a>
+              <p className="text-xs text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span>{t('profile.apiDocsShortcuts')}</span>
+                <a
+                  href={getDocsApiReferenceOperationUrl(DOCS_API_OPERATIONS.csrfToken)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-primary hover:text-primary/90 underline-offset-2 hover:underline"
+                >
+                  {t('profile.apiDocsCsrfEndpoint')}
+                </a>
+                <span className="text-muted-foreground/70" aria-hidden>
+                  ·
+                </span>
+                <a
+                  href={getDocsApiReferenceOperationUrl(DOCS_API_OPERATIONS.listTokens)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-primary hover:text-primary/90 underline-offset-2 hover:underline"
+                >
+                  {t('profile.apiDocsTokensEndpoint')}
+                </a>
+              </p>
+            </div>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <span className="text-sm font-medium text-foreground">
                 {t('profile.yourTokens')}
@@ -900,68 +1155,138 @@ export default function Profile() {
                 {t('profile.noTokensEmpty')}
               </p>
             ) : (
-              <ul className="space-y-2" role="list">
-                {tokens.map((tok) => (
-                  <li
-                    key={tok.id}
-                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 py-2 px-3 rounded-xl border border-ghost bg-surface-low"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <span className="text-sm font-medium text-foreground block truncate">
-                        {tok.name}
-                      </span>
-                      <span className="text-xs text-muted-foreground font-mono">
-                        sb_********************************
-                      </span>
-                      <span className="text-xs text-muted-foreground block mt-0.5">
-                        {t('profile.createdAt')}: {formatDate(tok.created_at)}
-                        {' · '}
-                        {t('profile.lastUsed')}: {tok.last_used_at ? formatDate(tok.last_used_at) : t('profile.neverUsed')}
-                      </span>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setRevokeTokenId(tok.id)}
-                      className="text-destructive hover:text-destructive/90 sm:ml-auto"
-                      aria-label={`${t('profile.revokeToken')} ${tok.name}`}
-                    >
-                      {t('profile.revokeToken')}
-                    </Button>
-                  </li>
-                ))}
-              </ul>
+              <div className="overflow-hidden rounded-xl border border-ghost bg-surface">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="min-w-[8rem]">{t('profile.name')}</TableHead>
+                      <TableHead className="hidden sm:table-cell">{t('profile.createdAt')}</TableHead>
+                      <TableHead className="hidden md:table-cell">{t('profile.lastUsed')}</TableHead>
+                      <TableHead className="w-[1%] text-right">
+                        <span className="sr-only">{t('common.actions')}</span>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {tokens.map((tok) => (
+                      <TableRow key={tok.id}>
+                        <TableCell className="min-w-0 max-w-[min(100%,24rem)]">
+                          <span className="text-sm font-medium text-foreground block truncate">
+                            {tok.name}
+                          </span>
+                          <span className="text-xs text-muted-foreground font-mono">
+                            sb_********************************
+                          </span>
+                          <p className="text-xs text-muted-foreground mt-1 sm:hidden">
+                            {t('profile.createdAt')}: {formatDate(tok.created_at)}
+                            <span className="text-muted-foreground/70" aria-hidden>
+                              {' · '}
+                            </span>
+                            {t('profile.lastUsed')}:{' '}
+                            {tok.last_used_at ? formatDate(tok.last_used_at) : t('profile.neverUsed')}
+                          </p>
+                        </TableCell>
+                        <TableCell className="hidden sm:table-cell text-muted-foreground whitespace-nowrap">
+                          {formatDate(tok.created_at)}
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell text-muted-foreground whitespace-nowrap">
+                          {tok.last_used_at ? formatDate(tok.last_used_at) : t('profile.neverUsed')}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setRevokeTokenId(tok.id)}
+                            className="text-destructive hover:text-destructive/90"
+                            aria-label={`${t('profile.revokeToken')} ${tok.name}`}
+                          >
+                            {t('profile.revokeToken')}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Danger Zone: delete account */}
-        <Card className="rounded-xl border border-destructive/40 bg-surface-low shadow-none">
+        <Card
+          id="profile-section-integrations"
+          className="scroll-mt-24 rounded-xl border border-ghost bg-surface shadow-none"
+        >
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-destructive">
-              <AlertTriangle className="h-5 w-5" />
-              {t('profile.dangerZone')}
-            </CardTitle>
-            <CardDescription>{t('profile.dangerZoneDescription')}</CardDescription>
+            <CardTitle>{t('profile.sectionIntegrations')}</CardTitle>
+            <CardDescription>{t('profile.integrationsDescription')}</CardDescription>
           </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground mb-4">
-              {t('profile.deleteAccountDescription')}
+          <CardContent className="space-y-3 text-sm text-[var(--fg-1)]">
+            <p>
+              {user.oidc_provider
+                ? t('profile.integrationOidc', { provider: user.oidc_provider })
+                : t('profile.integrationsPassword')}
             </p>
-            <Button
-              type="button"
-              variant="ghost"
-              className="text-destructive hover:text-destructive hover:bg-destructive/10"
-              onClick={handleDeleteAccountClick}
-              disabled={deleteAccountLoading}
-              aria-label={t('profile.deleteAccount')}
-            >
-              {t('profile.deleteAccount')}
-            </Button>
           </CardContent>
         </Card>
+
+        <div id="profile-section-data" className="scroll-mt-24 space-y-6">
+          <Card className="rounded-xl border border-ghost bg-surface shadow-none">
+            <CardHeader>
+              <CardTitle>{t('profile.dataImportExport')}</CardTitle>
+              <CardDescription>{t('profile.dataImportExportDescription')}</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                icon={Upload}
+                onClick={() => setImportModalOpen(true)}
+              >
+                {t('bookmarks.import')}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                icon={Download}
+                onClick={handleExportBookmarks}
+              >
+                {t('bookmarks.export')}
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-xl border border-destructive/40 bg-surface-low shadow-none">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-destructive">
+                <AlertTriangle className="h-4 w-4" />
+                {t('profile.dangerZone')}
+              </CardTitle>
+              <CardDescription>{t('profile.dangerZoneDescription')}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground mb-4">
+                {t('profile.deleteAccountDescription')}
+              </p>
+              <Button
+                type="button"
+                variant="ghost"
+                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                onClick={handleDeleteAccountClick}
+                disabled={deleteAccountLoading}
+                aria-label={t('profile.deleteAccount')}
+              >
+                {t('profile.deleteAccount')}
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
       </div>
+      </div>
+
+      <ImportModal isOpen={importModalOpen} onClose={() => setImportModalOpen(false)} onSuccess={() => setImportModalOpen(false)} />
 
       <Dialog
         open={disableDlgOpen}

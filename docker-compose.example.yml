@@ -1,8 +1,8 @@
 services:
   slugbase:
-    image: ghcr.io/mdg-labs/slugbase:latest
+    image: mdglabs/slugbase:latest
     container_name: slugbase
-    build: .
+    # To build from this repo instead of pulling: add `build: .` (Compose builds and tags as the image above).
     ports:
       - "${PORT:-5000}:5000"
     env_file:

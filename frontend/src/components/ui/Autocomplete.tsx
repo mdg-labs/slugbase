@@ -144,18 +144,21 @@ export default function Autocomplete({
             className="w-full"
           />
         </PopoverAnchor>
-        <PopoverContent className="w-[var(--radix-popover-anchor-width)] p-0" align="start">
+        <PopoverContent
+          className="w-[var(--radix-popover-anchor-width)] overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-2)] p-1 shadow-[var(--shadow-lg)]"
+          align="start"
+        >
           <ScrollArea className="max-h-60">
             {filteredOptions.length === 0 && onCreateNew && inputValue.trim() ? (
               <button
                 type="button"
                 onClick={handleCreateNew}
-                className="w-full text-left px-3 py-2 text-sm text-primary transition-colors hover:bg-surface-highest focus-visible:bg-surface-highest focus-visible:outline-none"
+                className="w-full rounded-[6px] px-2.5 py-[7px] text-left text-[13px] text-[var(--accent-hi)] transition-colors hover:bg-[var(--accent-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-ring)]"
               >
                 Create &quot;{inputValue.trim()}&quot;
               </button>
             ) : filteredOptions.length === 0 ? (
-              <div className="px-3 py-2 text-sm text-muted-foreground">
+              <div className="px-2.5 py-2 text-[13px] text-[var(--fg-3)]">
                 No options found
               </div>
             ) : (
@@ -164,7 +167,7 @@ export default function Autocomplete({
                   key={option.id}
                   type="button"
                   onClick={() => handleSelect(option)}
-                  className="w-full text-left px-3 py-2 text-sm transition-colors hover:bg-surface-highest focus-visible:bg-surface-highest focus-visible:outline-none"
+                  className="w-full rounded-[6px] px-2.5 py-[7px] text-left text-[13px] text-[var(--fg-0)] transition-colors hover:bg-[var(--accent-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-ring)]"
                 >
                   {option.name}
                 </button>

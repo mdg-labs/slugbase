@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Share2 } from 'lucide-react';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
+  Modal,
+  ModalContent,
+  ModalHead,
+  ModalBody,
+  ModalFoot,
 } from '../ui/dialog';
-import { Separator } from '../ui/separator';
 import { ModalFooterActions } from '../ui/ModalFooterActions';
 import { SharingField } from '../ui/SharingField';
 
@@ -66,31 +66,29 @@ export default function SharingModal({
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{t('bookmarks.shareWithTeams')}</DialogTitle>
-        </DialogHeader>
-        <Separator />
+    <Modal open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <ModalContent className="flex max-h-[90vh] max-w-lg flex-col p-0">
+        <ModalHead icon={Share2} title={t('bookmarks.shareWithTeams')} />
 
-        <form id="sharing-form" onSubmit={(e) => { e.preventDefault(); handleSave(); }} className="space-y-6">
-          <SharingField
-            value={sharing}
-            onChange={setSharing}
-            teams={teams}
-            allowTeamSharing={allowTeamSharing}
-          />
-        </form>
+        <ModalBody>
+          <form id="sharing-form" onSubmit={(e) => { e.preventDefault(); handleSave(); }} className="space-y-6">
+            <SharingField
+              value={sharing}
+              onChange={setSharing}
+              teams={teams}
+              allowTeamSharing={allowTeamSharing}
+            />
+          </form>
+        </ModalBody>
 
-        <Separator />
-        <DialogFooter className="flex-row justify-between sm:justify-end gap-2">
+        <ModalFoot>
           <ModalFooterActions
             onCancel={onClose}
             submitLabel={t('common.save')}
             formId="sharing-form"
           />
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </ModalFoot>
+      </ModalContent>
+    </Modal>
   );
 }

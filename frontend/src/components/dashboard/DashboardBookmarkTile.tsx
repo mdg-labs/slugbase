@@ -84,7 +84,7 @@ export function DashboardBookmarkTile({
     <div className={shellClass}>
       <div className="mb-6 flex items-start justify-between gap-2">
         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-ghost bg-surface-lowest transition-colors group-hover:border-primary/30">
-          <Favicon url={bookmark.url} className="h-7 w-7" />
+          <Favicon url={bookmark.url} size={16} />
         </div>
         <div className="flex shrink-0 items-start gap-2">
           <span className="rounded bg-surface-highest px-2 py-1 text-[10px] font-black uppercase tracking-wide text-muted-foreground transition-colors group-hover:text-primary">
@@ -100,7 +100,7 @@ export function DashboardBookmarkTile({
               className="-mr-1 rounded p-1 text-primary transition-colors hover:bg-surface-high"
               aria-label={selected ? t('bookmarks.deselect') : t('bookmarks.select')}
             >
-              {selected ? <CheckSquare className="h-5 w-5" /> : <Square className="h-5 w-5" />}
+              {selected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
             </button>
           ) : null}
         </div>

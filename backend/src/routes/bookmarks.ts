@@ -18,6 +18,22 @@ const FREE_PLAN_BOOKMARK_LIMIT = 50;
 const router = Router();
 router.use(requireAuth());
 
+/** Normalize Express `tag_id` query (`string | string[]`) to ordered unique non-empty IDs (AND semantics when multiple). */
+function parseTagIdsFromQuery(tag_id: unknown): string[] {
+  if (tag_id === undefined || tag_id === null) return [];
+  const raw = Array.isArray(tag_id) ? tag_id : [tag_id];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const x of raw) {
+    if (typeof x !== 'string') continue;
+    const id = x.trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
+
 /** Record AI suggestion usage for analytics. Does not fail the request if insert fails (e.g. migration not run). */
 async function recordAiSuggestionUsage(userId: string, tenantId: string, used: AiSuggestionUsed | undefined): Promise<void> {
   if (!used || typeof used !== 'object') return;
@@ -59,15 +75,15 @@ router.get('/', async (req, res) => {
 
     // Validate folder_id and tag_id so we don't leak other users' resources (IDOR)
     const folderIdStr = typeof folder_id === 'string' ? folder_id : undefined;
-    const tagIdStr = typeof tag_id === 'string' ? tag_id : undefined;
+    const tagIds = parseTagIdsFromQuery(tag_id);
     if (folderIdStr) {
       const canAccess = await canAccessFolder(userId, folderIdStr, null, tenantId);
       if (!canAccess) {
         return res.status(404).json({ error: 'Folder not found' });
       }
     }
-    if (tagIdStr) {
-      const canAccess = await canAccessTag(userId, tagIdStr, tenantId);
+    for (const tid of tagIds) {
+      const canAccess = await canAccessTag(userId, tid, tenantId);
       if (!canAccess) {
         return res.status(404).json({ error: 'Tag not found' });
       }
@@ -110,13 +126,13 @@ router.get('/', async (req, res) => {
       params.push(folderIdStr);
     }
 
-    if (tagIdStr) {
+    for (const tid of tagIds) {
       sql += `
         AND b.id IN (
           SELECT bookmark_id FROM bookmark_tags WHERE tag_id = ?
         )
       `;
-      params.push(tagIdStr);
+      params.push(tid);
     }
 
     if (scope === 'mine') {
@@ -155,7 +171,7 @@ router.get('/', async (req, res) => {
         OR ${fusCond}
         OR (fts.team_id IN (${teamIds.length > 0 ? teamIds.map(() => '?').join(',') : 'NULL'}) AND fts.team_id IS NOT NULL AND bf.folder_id IS NOT NULL))
       ${folderIdStr ? 'AND b.id IN (SELECT bookmark_id FROM bookmark_folders WHERE folder_id = ?)' : ''}
-      ${tagIdStr ? 'AND b.id IN (SELECT bookmark_id FROM bookmark_tags WHERE tag_id = ?)' : ''}
+      ${tagIds.map(() => 'AND b.id IN (SELECT bookmark_id FROM bookmark_tags WHERE tag_id = ?)').join('\n      ')}
       ${scope === 'mine' ? 'AND b.user_id = ?' : ''}
       ${scope === 'shared_with_me' ? 'AND b.user_id != ?' : ''}
       ${scope === 'shared_by_me' ? 'AND b.user_id = ? AND (EXISTS (SELECT 1 FROM bookmark_team_shares bts WHERE bts.bookmark_id = b.id) OR EXISTS (SELECT 1 FROM bookmark_user_shares bus WHERE bus.bookmark_id = b.id))' : ''}
@@ -171,7 +187,7 @@ router.get('/', async (req, res) => {
       countParams.push(userId);       // fus.user_id
     }
     if (folderIdStr) countParams.push(folderIdStr);
-    if (tagIdStr) countParams.push(tagIdStr);
+    for (const tid of tagIds) countParams.push(tid);
     if (scope === 'mine') countParams.push(userId);
     if (scope === 'shared_with_me') countParams.push(userId);
     if (scope === 'shared_by_me') countParams.push(userId);
@@ -555,15 +571,15 @@ router.get('/ids', async (req, res) => {
     const { folder_id, tag_id, sort_by, scope: scopeParam, pinned: pinnedParam, q: qParam } = req.query;
 
     const folderIdStr = typeof folder_id === 'string' ? folder_id : undefined;
-    const tagIdStr = typeof tag_id === 'string' ? tag_id : undefined;
+    const tagIds = parseTagIdsFromQuery(tag_id);
     if (folderIdStr) {
       const canAccess = await canAccessFolder(userId, folderIdStr, null, tenantId);
       if (!canAccess) {
         return res.status(404).json({ error: 'Folder not found' });
       }
     }
-    if (tagIdStr) {
-      const canAccess = await canAccessTag(userId, tagIdStr, tenantId);
+    for (const tid of tagIds) {
+      const canAccess = await canAccessTag(userId, tid, tenantId);
       if (!canAccess) {
         return res.status(404).json({ error: 'Tag not found' });
       }
@@ -607,9 +623,9 @@ router.get('/ids', async (req, res) => {
       idsSql += ' AND b.id IN (SELECT bookmark_id FROM bookmark_folders WHERE folder_id = ?)';
       idsParams.push(folderIdStr);
     }
-    if (tagIdStr) {
+    for (const tid of tagIds) {
       idsSql += ' AND b.id IN (SELECT bookmark_id FROM bookmark_tags WHERE tag_id = ?)';
-      idsParams.push(tagIdStr);
+      idsParams.push(tid);
     }
     if (idsScope === 'mine') {
       idsSql += ' AND b.user_id = ?';

@@ -4,8 +4,9 @@ import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
 
+/** Mockup `.field label` (`styles.css` L716–724): mono uppercase, `--fg-2`, 11px. */
 const labelVariants = cva(
-  "text-sm font-medium leading-none text-foreground peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+  "font-mono text-[11px] font-normal uppercase leading-none tracking-[0.04em] text-[var(--fg-2)] peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
 )
 
 const Label = React.forwardRef<

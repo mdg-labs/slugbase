@@ -4,8 +4,8 @@
  * Used by pack-core-for-cloud.mjs and for manual inspection of `.publish-core/`.
  *
  * Usage (from repo root):
- *   node scripts/assemble-core-package.js
- *   node scripts/assemble-core-package.js --no-build    # skip npm run build (CI already built)
+ *   node scripts/assemble-core-package.mjs
+ *   node scripts/assemble-core-package.mjs --no-build    # skip npm run build (CI already built)
  *
  * Env:
  *   CORE_PACKAGE_VERSION  - if set (e.g. 1.2.3 or v1.2.3), written into assembled package.json
@@ -50,7 +50,7 @@ if (!existsSync(embedPublish)) {
   process.exit(1);
 }
 
-run('node', ['scripts/sync-core-locales.js'], root);
+run('node', ['scripts/sync-core-locales.mjs'], root);
 
 if (existsSync(outDir)) rmSync(outDir, { recursive: true });
 mkdirSync(outDir, { recursive: true });

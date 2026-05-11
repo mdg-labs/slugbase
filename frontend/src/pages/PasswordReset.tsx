@@ -1,20 +1,21 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
+import { ArrowLeft, ArrowRight, Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import api from '../api/client';
 import { useAppConfig } from '../contexts/AppConfigContext';
-import { Mail, Key, ArrowLeft } from 'lucide-react';
-import Button from '../components/ui/Button';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
-
-const AUTH_CARD = 'rounded-xl border border-ghost bg-surface p-6 shadow-none';
+import { passwordStrengthScore } from '../utils/passwordStrength';
+import { PasswordStrengthMeter } from '../components/auth/PasswordStrengthMeter';
+import { AuthCardLayout } from '../components/auth/AuthCardLayout';
+import { authField, authFieldLabel, authInput, fieldError, authSubmit } from '../components/auth/authPageClasses';
+import { cn } from '../lib/utils';
 
 export default function PasswordReset() {
   const { t } = useTranslation();
   const { pathPrefixForLinks } = useAppConfig();
   const prefix = (pathPrefixForLinks || '').replace(/\/+/g, '/') || '';
   const loginPath = `${prefix}/login`.replace(/\/+/g, '/') || '/login';
+  const resetPath = `${prefix}/password-reset`.replace(/\/+/g, '/') || '/password-reset';
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const token = searchParams.get('token');
@@ -26,6 +27,13 @@ export default function PasswordReset() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [tokenValid, setTokenValid] = useState<boolean | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  const pwScore = passwordStrengthScore(password);
+  const confirmDirty = step === 'reset' && confirmPassword.length > 0;
+  const passwordsMatch = password === confirmPassword;
+  const confirmInvalid = confirmDirty && !passwordsMatch;
 
   useEffect(() => {
     if (token) {
@@ -89,160 +97,188 @@ export default function PasswordReset() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-6">
-        <div>
-          <h2 className="mt-2 text-center text-2xl font-bold tracking-tight text-foreground">
-            {t('passwordReset.title')}
+    <AuthCardLayout>
+      {step === 'request' ? (
+        <>
+          <h2 className="m-0 text-[18px] font-semibold tracking-[-0.015em] text-[var(--fg-0)]">
+            {t('passwordReset.requestTitle')}
           </h2>
-          <p className="mt-2 text-center text-sm text-muted-foreground">
-            {step === 'request'
-              ? t('passwordReset.description')
-              : t('passwordReset.resetPassword')}
-          </p>
-        </div>
+          <p className="sub mt-1.5 text-[12.5px] leading-relaxed text-[var(--fg-2)]">{t('passwordReset.requestSubtitle')}</p>
 
-        {message && (
-          <div
-            className={`rounded-xl border p-4 text-sm ${
-              message.type === 'success'
-                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200'
-                : 'border-destructive/30 bg-destructive/10 text-destructive'
-            }`}
-          >
-            {message.text}
-          </div>
-        )}
+          {message && (
+            <div
+              className={cn(
+                'mt-4 rounded-[var(--radius)] border p-3 text-[13px]',
+                message.type === 'success'
+                  ? 'border-[rgba(74,222,128,0.35)] bg-[rgba(74,222,128,0.08)] text-[var(--success)]'
+                  : 'border-[rgba(248,113,113,0.35)] bg-[rgba(248,113,113,0.08)] text-[var(--danger)]'
+              )}
+            >
+              {message.text}
+            </div>
+          )}
 
-        {step === 'request' ? (
-          <div className={AUTH_CARD}>
-            <form className="space-y-6" onSubmit={handleRequestReset}>
-              <div className="space-y-2">
-                <Label htmlFor="email" className="typography-label">
-                  {t('passwordReset.email')}
-                </Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                  <Input
-                    id="email"
-                    name="email"
-                    type="email"
-                    autoComplete="email"
-                    required
-                    className="pl-10"
-                    placeholder={t('passwordReset.emailPlaceholder')}
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                  />
-                </div>
+          <form className="mt-5 space-y-5" onSubmit={handleRequestReset}>
+            <div className="space-y-2">
+              <label htmlFor="pr-email" className={authFieldLabel}>
+                {t('passwordReset.email')}
+              </label>
+              <div className={cn(authInput)}>
+                <Mail className="h-4 w-4 shrink-0 text-[var(--fg-3)]" aria-hidden />
+                <input
+                  id="pr-email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  placeholder={t('passwordReset.emailPlaceholder')}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[13px] text-[var(--fg-0)] outline-none placeholder:text-[var(--fg-4)]"
+                />
               </div>
+            </div>
 
-              <Button
-                type="submit"
-                variant="primary"
-                className="w-full border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
-                disabled={loading}
+            <button type="submit" disabled={loading} className={authSubmit}>
+              <span>{loading ? t('common.loading') : t('passwordReset.requestReset')}</span>
+              <ArrowRight className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
+            </button>
+
+            <div className="text-center">
+              <Link
+                to={loginPath}
+                className="inline-flex items-center gap-2 text-[13px] font-medium text-[var(--accent-hi)] hover:underline"
               >
-                {t('passwordReset.requestReset')}
-              </Button>
+                <ArrowLeft className="h-4 w-4" />
+                {t('passwordReset.backToLogin')}
+              </Link>
+            </div>
+          </form>
+        </>
+      ) : (
+        <>
+          {tokenValid === null ? (
+            <p className="text-center text-[13px] text-[var(--fg-2)]">{t('common.loading')}</p>
+          ) : tokenValid === false ? (
+            <div className="space-y-4 text-center">
+              <p className={fieldError}>{t('passwordReset.invalidToken')}</p>
+              <Link
+                to={resetPath}
+                className="inline-flex items-center gap-2 text-[13px] font-medium text-[var(--accent-hi)] hover:underline"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                {t('passwordReset.backToLogin')}
+              </Link>
+            </div>
+          ) : (
+            <>
+              <h2 className="m-0 text-[18px] font-semibold tracking-[-0.015em] text-[var(--fg-0)]">
+                {t('passwordReset.resetTitle')}
+              </h2>
+              <p className="sub mt-1.5 text-[12.5px] leading-relaxed text-[var(--fg-2)]">{t('passwordReset.resetSubtitle')}</p>
 
-              <div className="text-center">
-                <Link
-                  to={loginPath}
-                  className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/90"
+              {message && (
+                <div
+                  className={cn(
+                    'mt-4 rounded-[var(--radius)] border p-3 text-[13px]',
+                    message.type === 'success'
+                      ? 'border-[rgba(74,222,128,0.35)] bg-[rgba(74,222,128,0.08)] text-[var(--success)]'
+                      : 'border-[rgba(248,113,113,0.35)] bg-[rgba(248,113,113,0.08)] text-[var(--danger)]'
+                  )}
                 >
-                  <ArrowLeft className="h-4 w-4" />
-                  {t('passwordReset.backToLogin')}
-                </Link>
-              </div>
-            </form>
-          </div>
-        ) : (
-          <>
-            {tokenValid === null ? (
-              <div className={`${AUTH_CARD} text-center text-muted-foreground`}>
-                {t('common.loading')}
-              </div>
-            ) : tokenValid === false ? (
-              <div className={`${AUTH_CARD} text-center space-y-4`}>
-                <p className="text-destructive">
-                  {t('passwordReset.invalidToken')}
-                </p>
-                <Link
-                  to={`${prefix}/password-reset`.replace(/\/+/g, '/') || '/password-reset'}
-                  className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/90"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                  {t('passwordReset.backToLogin')}
-                </Link>
-              </div>
-            ) : (
-              <div className={AUTH_CARD}>
-                <form className="space-y-6" onSubmit={handleReset}>
-                  <div className="space-y-2">
-                    <Label htmlFor="password" className="typography-label">
-                      {t('passwordReset.newPassword')}
-                    </Label>
-                    <div className="relative">
-                      <Key className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                      <Input
-                        id="password"
-                        name="password"
-                        type="password"
-                        autoComplete="new-password"
-                        required
-                        className="pl-10"
-                        placeholder={t('auth.passwordPlaceholder')}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                      />
-                    </div>
-                  </div>
+                  {message.text}
+                </div>
+              )}
 
-                  <div className="space-y-2">
-                    <Label htmlFor="confirmPassword" className="typography-label">
-                      {t('passwordReset.confirmPassword')}
-                    </Label>
-                    <div className="relative">
-                      <Key className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                      <Input
-                        id="confirmPassword"
-                        name="confirmPassword"
-                        type="password"
-                        autoComplete="new-password"
-                        required
-                        className="pl-10"
-                        placeholder={t('passwordReset.confirmPassword')}
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                      />
-                    </div>
-                  </div>
-
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    className="w-full border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
-                    disabled={loading}
-                  >
-                    {t('passwordReset.resetPassword')}
-                  </Button>
-
-                  <div className="text-center">
-                    <Link
-                      to={loginPath}
-                      className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/90"
+              <form className="mt-5 space-y-5" onSubmit={handleReset}>
+                <div className={authField}>
+                  <label htmlFor="pr-password" className={authFieldLabel}>
+                    {t('passwordReset.newPassword')}
+                  </label>
+                  <div className={cn(authInput)}>
+                    <Lock className="h-4 w-4 shrink-0 text-[var(--fg-3)]" aria-hidden />
+                    <input
+                      id="pr-password"
+                      name="password"
+                      type={showPassword ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      required
+                      placeholder={t('auth.passwordPlaceholder')}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[13px] text-[var(--fg-0)] outline-none placeholder:text-[var(--fg-4)]"
+                      aria-describedby="pr-password-strength"
+                    />
+                    <button
+                      type="button"
+                      className="shrink-0 rounded p-1 text-[var(--fg-3)] hover:text-[var(--fg-0)]"
+                      onClick={() => setShowPassword((v) => !v)}
+                      aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
                     >
-                      <ArrowLeft className="h-4 w-4" />
-                      {t('passwordReset.backToLogin')}
-                    </Link>
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
                   </div>
-                </form>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </div>
+                  <PasswordStrengthMeter score={pwScore} id="pr-password-strength" />
+                </div>
+
+                <div className="space-y-2">
+                  <label htmlFor="pr-confirm" className={authFieldLabel}>
+                    {t('passwordReset.confirmPassword')}
+                  </label>
+                  <div className={cn(authInput, confirmInvalid && 'border-[rgba(248,113,113,0.5)]')}>
+                    <Lock className="h-4 w-4 shrink-0 text-[var(--fg-3)]" aria-hidden />
+                    <input
+                      id="pr-confirm"
+                      name="confirmPassword"
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      required
+                      placeholder={t('passwordReset.confirmPassword')}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[13px] text-[var(--fg-0)] outline-none placeholder:text-[var(--fg-4)]"
+                      aria-invalid={confirmInvalid}
+                      aria-describedby={confirmDirty ? 'pr-confirm-hint' : undefined}
+                    />
+                    <button
+                      type="button"
+                      className="shrink-0 rounded p-1 text-[var(--fg-3)] hover:text-[var(--fg-0)]"
+                      onClick={() => setShowConfirmPassword((v) => !v)}
+                      aria-label={showConfirmPassword ? t('auth.hidePassword') : t('auth.showPassword')}
+                    >
+                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  {confirmDirty ? (
+                    <p
+                      id="pr-confirm-hint"
+                      className={cn('text-[11px]', passwordsMatch ? 'text-[var(--success)]' : fieldError)}
+                      role="status"
+                    >
+                      {passwordsMatch ? t('signup.passwordsMatch') : t('signup.passwordsDoNotMatch')}
+                    </p>
+                  ) : null}
+                </div>
+
+                <button type="submit" disabled={loading} className={authSubmit}>
+                  <span>{loading ? t('common.loading') : t('passwordReset.updatePassword')}</span>
+                  <ArrowRight className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
+                </button>
+
+                <div className="text-center">
+                  <Link
+                    to={loginPath}
+                    className="inline-flex items-center gap-2 text-[13px] font-medium text-[var(--accent-hi)] hover:underline"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    {t('passwordReset.backToLogin')}
+                  </Link>
+                </div>
+              </form>
+            </>
+          )}
+        </>
+      )}
+    </AuthCardLayout>
   );
 }

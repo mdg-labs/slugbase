@@ -18,12 +18,15 @@ import {
   Square,
   Pin,
   MoreVertical,
+  Link2,
+  Eye,
+  Star,
 } from 'lucide-react';
 import Button from '../ui/Button';
 import Tooltip from '../ui/Tooltip';
 import Favicon from '../Favicon';
 import FolderIcon from '../FolderIcon';
-import { Card } from '../ui/card';
+import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,7 +35,6 @@ import {
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
 import { safeHref } from '../../utils/safeHref';
-import { formatRelativeTime, formatFullDateTime } from '../../utils/formatRelativeTime';
 
 const SEP = ' · ';
 
@@ -110,10 +112,10 @@ export default function BookmarkCard({
         {hasMultipleFolders && bookmark.folders && (
           <div>
             <div className="font-semibold mb-0.5 text-xs">{t('bookmarks.folders')}</div>
-            <div className="text-xs text-muted-foreground space-y-0.5">
+            <div className="space-y-0.5 text-xs text-[var(--fg-2)]">
               {bookmark.folders.map((folder) => (
                 <div key={folder.id} className="flex items-center gap-1.5">
-                  <FolderIcon iconName={folder.icon} size={12} className="text-muted-foreground shrink-0" />
+                  <FolderIcon iconName={folder.icon} size={12} className="shrink-0 text-[var(--fg-3)]" />
                   {folder.name}
                 </div>
               ))}
@@ -123,7 +125,7 @@ export default function BookmarkCard({
         {hasManyTags && bookmark.tags && (
           <div>
             <div className="font-semibold mb-0.5 text-xs">{t('bookmarks.tags')}</div>
-            <div className="text-xs text-muted-foreground flex flex-wrap gap-1">
+            <div className="flex flex-wrap gap-1 text-xs text-[var(--fg-2)]">
               {bookmark.tags.map((tag) => (
                 <span key={tag.id}>{tag.name}</span>
               ))}
@@ -150,28 +152,36 @@ export default function BookmarkCard({
     }
   }
 
+  const urlDisplay = (() => {
+    try {
+      return bookmark.url.replace(/^https?:\/\//, '');
+    } catch {
+      return bookmark.url;
+    }
+  })();
+
+  const firstFolder = bookmark.folders?.[0];
+
   return (
-    <Card
+    <div
       role="button"
       tabIndex={0}
       onClick={handleCardClick}
       onKeyDown={handleCardKeyDown}
-      className={`group relative flex flex-col h-[148px] cursor-pointer rounded-lg border bg-card/95 transition-[border-color,box-shadow] duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 px-3 pt-0 pb-1.5 ${
-        selected
-          ? 'border-primary ring-2 ring-primary/20'
-          : 'border-border/80 hover:border-primary/80 hover:shadow-glow'
-      }`}
+      className={cn(
+        'group relative flex min-h-[168px] cursor-pointer flex-col gap-2.5 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-1)] p-3 transition-[border-color,background,transform] duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-0)]',
+        selected ? 'border-[var(--accent)] ring-2 ring-[var(--accent-ring)]' : 'hover:border-[var(--border-strong)] hover:bg-[var(--bg-2)]'
+      )}
     >
-      {/* Bulk checkbox: top-right corner when bulk mode active */}
       {bulkMode && (
-        <div className="absolute top-3 right-3 z-10" data-card-action>
+        <div className="absolute right-2 top-2 z-10" data-card-action>
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
               onSelect();
             }}
-            className="text-primary rounded p-0.5 hover:bg-muted/50 transition-colors"
+            className="rounded p-0.5 text-[var(--accent)] transition-colors hover:bg-[var(--bg-3)]"
             aria-label={selected ? t('bookmarks.deselect') : t('bookmarks.select')}
           >
             {selected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
@@ -179,181 +189,32 @@ export default function BookmarkCard({
         </div>
       )}
 
-      {/* Header: icon + title; reserve right space for bulk checkbox so title never overlaps */}
-      <header className={`flex-shrink-0 flex items-center gap-1.5 min-w-0 pt-3 ${bulkMode ? 'pr-8' : ''}`}>
+      <div className={cn('bm-head flex items-start gap-2.5', bulkMode && 'pr-7')}>
         <div
-          className={`flex-shrink-0 ${compact ? 'w-6 h-6' : 'w-7 h-7'} rounded-md bg-surface-low flex items-center justify-center border border-border/50 overflow-hidden`}
+          className={cn(
+            'bm-ico flex shrink-0 items-center justify-center overflow-hidden rounded-[7px] bg-[var(--bg-3)]',
+            compact ? 'h-7 w-7' : 'h-8 w-8'
+          )}
         >
           <Favicon url={bookmark.url} size={compact ? 12 : 14} />
         </div>
-        <div className="flex-1 min-w-0 min-h-0 overflow-hidden">
+        <div className="bm-title-wrap min-w-0 flex-1">
           <Tooltip content={bookmark.title}>
-            <h3 className="text-sm font-semibold text-foreground line-clamp-2 break-words leading-snug tracking-tight min-h-0">
+            <h3 className="bm-title line-clamp-2 text-[13px] font-medium leading-snug tracking-[-0.005em] text-[var(--fg-0)]">
               {bookmark.title}
             </h3>
           </Tooltip>
+          <p className="bm-url mt-0.5 truncate font-mono text-[10.5px] text-[var(--fg-3)]">{urlDisplay}</p>
         </div>
-      </header>
-
-      {/* Metadata row: folder (emphasized) · tags (muted) · slug (mono, most-muted); ~8px below title */}
-      <div className="flex-shrink-0 min-h-0 min-w-0 text-[10px] truncate mt-2">
-        {metaTooltipContent ? (
-          <Tooltip content={metaTooltipContent}>
-            <p className="truncate cursor-default" title={metadataLine}>
-              <span className="font-medium text-foreground/85">{folderLabel}</span>
-              {tagNames.length > 0 && (
-                <>
-                  <span className="text-muted-foreground/50 mx-0.5">·</span>
-                  <span className="text-muted-foreground/80">{tagNames.join(SEP)}</span>
-                </>
-              )}
-              {tagOverflow && (
-                <>
-                  <span className="text-muted-foreground/50 mx-0.5">·</span>
-                  <span className="text-muted-foreground/70">+{tagOverflowN}</span>
-                </>
-              )}
-              {slugPart && (
-                <>
-                  <span className="text-muted-foreground/50 mx-0.5">·</span>
-                  <span className="font-mono text-muted-foreground/45">{slugPart}</span>
-                </>
-              )}
-            </p>
-          </Tooltip>
-        ) : (
-          <p className="truncate" title={metadataLine}>
-            <span className="font-medium text-foreground/85">{folderLabel}</span>
-            {tagNames.length > 0 && (
-              <>
-                <span className="text-muted-foreground/50 mx-0.5">·</span>
-                <span className="text-muted-foreground/80">{tagNames.join(SEP)}</span>
-              </>
-            )}
-            {tagOverflow && (
-              <>
-                <span className="text-muted-foreground/50 mx-0.5">·</span>
-                <span className="text-muted-foreground/70">+{tagOverflowN}</span>
-              </>
-            )}
-            {slugPart && (
-              <>
-                <span className="text-muted-foreground/50 mx-0.5">·</span>
-                <span className="font-mono text-muted-foreground/45">{slugPart}</span>
-              </>
-            )}
-          </p>
-        )}
-      </div>
-
-      {/* Shared chip: below meta line when bookmark is shared */}
-      {isShared && (
-        <div className="flex-shrink-0 mt-1">
-          <Tooltip
-            content={
-              <div className="space-y-1">
-                <div className="font-semibold mb-1">{t('bookmarks.sharedWith')}</div>
-                {bookmark.shared_teams?.map((team) => (
-                  <div key={team.id} className="text-xs">• {team.name}</div>
-                ))}
-                {bookmark.shared_users?.map((user) => (
-                  <div key={user.id} className="text-xs">• {user.name || user.email}</div>
-                ))}
-                {bookmark.folders?.map((folder) => {
-                  const hasShares =
-                    (folder.shared_teams?.length || 0) > 0 || (folder.shared_users?.length || 0) > 0;
-                  if (!hasShares) return null;
-                  return (
-                    <div key={folder.id} className="text-xs mt-1 pt-1 border-t border-border">
-                      <div className="font-semibold mb-0.5">{folder.name}:</div>
-                      {folder.shared_teams?.map((team) => (
-                        <div key={team.id} className="text-xs pl-2">• {team.name}</div>
-                      ))}
-                      {folder.shared_users?.map((user) => (
-                        <div key={user.id} className="text-xs pl-2">• {user.name || user.email}</div>
-                      ))}
-                    </div>
-                  );
-                })}
-              </div>
-            }
-          >
-            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium bg-primary/10 text-muted-foreground rounded cursor-help">
-              <Share2 className="h-2.5 w-2.5" />
-              {totalSharedTeams > 0
-                ? t('bookmarks.sharedWithTeams', {
-                    count: totalSharedTeams,
-                    teams: totalSharedTeams === 1 ? t('common.team') : t('common.teams'),
-                  })
-                : t('bookmarks.shared')}
-            </span>
-          </Tooltip>
-        </div>
-      )}
-
-      {/* Spacer: pushes footer to bottom without stretching header */}
-      <div className="flex-1 min-h-0" aria-hidden />
-
-      {/* Footer: Clicks · Last opened (left); open + kebab (right, hover-only); ~10px above */}
-      <footer className="flex-shrink-0 flex items-center justify-between gap-2 h-6 min-h-[24px] pt-2.5">
-        <div className="text-[10px] text-foreground/70 truncate min-w-0">
-          {t('bookmarks.clicks')}: {typeof bookmark.access_count === 'number' ? bookmark.access_count : '–'}
-          {SEP}
-          {bookmark.last_accessed_at ? (
-            <Tooltip content={formatFullDateTime(bookmark.last_accessed_at)}>
-              <span className="cursor-help">
-                {t('bookmarks.lastOpened')}: {formatRelativeTime(bookmark.last_accessed_at)}
-              </span>
-            </Tooltip>
-          ) : (
-            <span>{t('bookmarks.lastOpened')}: {t('bookmarks.never')}</span>
-          )}
-        </div>
-        <div
-          className="flex items-center gap-0.5 flex-shrink-0 w-[52px] justify-end opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-150"
-          data-card-action
-        >
-          <Tooltip content={t('bookmarks.open')}>
-            {onOpen ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                icon={ExternalLink}
-                iconClassName="h-3.5 w-3.5 stroke-[1.5]"
-                className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground transition-colors min-w-6"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onOpen();
-                }}
-                aria-label={t('bookmarks.open')}
-              />
-            ) : (
-              <a
-                href={safeHref(bookmark.url)}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="text-muted-foreground hover:text-foreground transition-colors inline-flex items-center justify-center"
-              >
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  icon={ExternalLink}
-                  iconClassName="h-3 w-3 stroke-[1.5]"
-                  className="h-6 w-6 p-0 min-w-6"
-                  aria-label={t('bookmarks.open')}
-                />
-              </a>
-            )}
-          </Tooltip>
+        <div className="bm-menu opacity-0 transition-opacity group-hover:opacity-100" data-card-action>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
                 size="sm"
                 icon={MoreVertical}
-                iconClassName="h-3 w-3 stroke-[1.5]"
-                className="h-6 w-6 p-0 min-w-6 text-muted-foreground hover:text-foreground transition-colors"
+                iconClassName="h-3.5 w-3.5 stroke-[1.75]"
+                className="h-7 w-7 p-0 text-[var(--fg-3)] hover:bg-[var(--bg-3)] hover:text-[var(--fg-0)]"
                 aria-label={t('bookmarks.moreActions')}
                 onClick={(e) => e.stopPropagation()}
               />
@@ -413,7 +274,133 @@ export default function BookmarkCard({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+      </div>
+
+      {metaTooltipContent ? (
+        <Tooltip content={metaTooltipContent}>
+          <p className="line-clamp-2 min-h-0 cursor-default text-[11.5px] leading-snug text-[var(--fg-2)]" title={metadataLine}>
+            {metadataLine}
+          </p>
+        </Tooltip>
+      ) : (
+        <p className="line-clamp-2 text-[11.5px] leading-snug text-[var(--fg-2)]" title={metadataLine}>
+          {folderLabel}
+          {tagNames.length > 0 ? ` · ${tagNames.join(', ')}` : ''}
+        </p>
+      )}
+
+      <div className="bm-meta flex flex-wrap items-center gap-1.5">
+        {bookmark.forwarding_enabled && bookmark.slug ? (
+          <span className="bm-slug inline-flex items-center gap-1 font-mono text-[10.5px]">
+            <Link2 className="h-2.5 w-2.5 shrink-0 opacity-80" aria-hidden />
+            /go/{bookmark.slug}
+          </span>
+        ) : null}
+        {bookmark.tags?.slice(0, 2).map((tag) => (
+          <span key={tag.id} className="tag inline-flex items-center gap-1 rounded-[var(--radius-sm)] text-[11px] text-[var(--fg-1)]">
+            <span className="dot h-1 w-1 rounded-full bg-[var(--accent)]" aria-hidden />
+            {tag.name}
+          </span>
+        ))}
+        {(bookmark.tags?.length ?? 0) > 2 && (
+          <span className="font-mono text-[10px] text-[var(--fg-3)]">+{(bookmark.tags?.length ?? 0) - 2}</span>
+        )}
+      </div>
+
+      {isShared && (
+        <div className="flex-shrink-0">
+          <Tooltip
+            content={
+              <div className="space-y-1">
+                <div className="mb-1 font-semibold">{t('bookmarks.sharedWith')}</div>
+                {bookmark.shared_teams?.map((team) => (
+                  <div key={team.id} className="text-xs">
+                    • {team.name}
+                  </div>
+                ))}
+                {bookmark.shared_users?.map((user) => (
+                  <div key={user.id} className="text-xs">
+                    • {user.name || user.email}
+                  </div>
+                ))}
+                {bookmark.folders?.map((folder) => {
+                  const hasShares =
+                    (folder.shared_teams?.length || 0) > 0 || (folder.shared_users?.length || 0) > 0;
+                  if (!hasShares) return null;
+                  return (
+                    <div key={folder.id} className="mt-1 border-t border-[var(--border)] pt-1 text-xs">
+                      <div className="mb-0.5 font-semibold">{folder.name}:</div>
+                      {folder.shared_teams?.map((team) => (
+                        <div key={team.id} className="pl-2 text-xs">
+                          • {team.name}
+                        </div>
+                      ))}
+                      {folder.shared_users?.map((user) => (
+                        <div key={user.id} className="pl-2 text-xs">
+                          • {user.name || user.email}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            }
+          >
+            <span className="inline-flex cursor-help items-center gap-0.5 rounded-[var(--radius-sm)] bg-[var(--accent-bg)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--fg-2)]">
+              <Share2 className="h-2.5 w-2.5" />
+              {totalSharedTeams > 0
+                ? t('bookmarks.sharedWithTeams', {
+                    count: totalSharedTeams,
+                    teams: totalSharedTeams === 1 ? t('common.team') : t('common.teams'),
+                  })
+                : t('bookmarks.shared')}
+            </span>
+          </Tooltip>
+        </div>
+      )}
+
+      <footer className="bm-foot mt-auto flex items-center gap-1.5 border-t border-dashed border-[var(--border-soft)] pt-2 font-mono text-[10.5px] text-[var(--fg-3)]">
+        {firstFolder ? (
+          <span className="folder inline-flex max-w-[45%] items-center gap-1 truncate text-[var(--fg-2)]">
+            <FolderIcon iconName={firstFolder.icon} size={10} className="shrink-0 text-[var(--fg-3)]" />
+            <span className="truncate">{firstFolder.name}</span>
+          </span>
+        ) : (
+          <span className="text-[var(--fg-3)]">{folderLabel}</span>
+        )}
+        {bookmark.pinned ? <Star className="h-3 w-3 shrink-0 fill-[var(--warn)] text-[var(--warn)]" aria-hidden /> : null}
+        <span className="hits ml-auto inline-flex items-center gap-0.5">
+          <Eye className="h-2.5 w-2.5 opacity-80" aria-hidden />
+          {typeof bookmark.access_count === 'number' ? bookmark.access_count : '–'}
+        </span>
+        <Tooltip content={t('bookmarks.open')}>
+          {onOpen ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={ExternalLink}
+              iconClassName="h-3.5 w-3.5 stroke-[1.75]"
+              className="ml-1 h-6 w-6 shrink-0 p-0 text-[var(--fg-3)] hover:text-[var(--fg-0)]"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpen();
+              }}
+              aria-label={t('bookmarks.open')}
+            />
+          ) : (
+            <a href={safeHref(bookmark.url)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={ExternalLink}
+                iconClassName="h-3 w-3 stroke-[1.75]"
+                className="h-6 w-6 p-0"
+                aria-label={t('bookmarks.open')}
+              />
+            </a>
+          )}
+        </Tooltip>
       </footer>
-    </Card>
+    </div>
   );
 }

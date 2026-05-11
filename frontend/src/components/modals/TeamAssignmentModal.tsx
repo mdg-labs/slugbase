@@ -2,16 +2,15 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import api from '../../api/client';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
+  Modal,
+  ModalContent,
+  ModalHead,
+  ModalBody,
+  ModalFoot,
 } from '../ui/dialog';
-import { Separator } from '../ui/separator';
 import { Input } from '../ui/input';
 import Button from '../ui/Button';
-import { UserPlus, X, Users, Search } from 'lucide-react';
+import { UserRound, UserPlus, X, Users, Search } from 'lucide-react';
 
 interface Team {
   id: string;
@@ -141,16 +140,16 @@ export default function TeamAssignmentModal({
     const availableTeams = filterTeams(allTeams.filter((t) => !userTeamIds.has(t.id)));
 
     return (
-      <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-        <DialogContent className="max-w-2xl max-h-[calc(100vh-4rem)] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{t('admin.manageTeamsTitle', { userName })}</DialogTitle>
-          </DialogHeader>
-          <Separator />
+      <Modal open={isOpen} onOpenChange={(open) => !open && onClose()}>
+        <ModalContent wide className="flex max-h-[calc(100vh-4rem)] flex-col overflow-hidden p-0">
+          <ModalHead icon={UserRound} title={t('admin.manageTeamsTitle', { userName })} />
 
           {loading ? (
-            <div className="text-center py-8 text-muted-foreground">{t('common.loading')}</div>
+            <ModalBody>
+              <div className="py-8 text-center text-[12.5px] text-[var(--fg-2)]">{t('common.loading')}</div>
+            </ModalBody>
           ) : (
+            <ModalBody>
             <div className="space-y-6">
               <div>
                 <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
@@ -234,16 +233,16 @@ export default function TeamAssignmentModal({
                 )}
               </div>
             </div>
+            </ModalBody>
           )}
 
-          <Separator />
-          <DialogFooter className="flex-row justify-end">
-            <Button variant="secondary" onClick={onClose}>
+          <ModalFoot>
+            <Button variant="ghost" type="button" size="md" onClick={onClose}>
               {t('common.close')}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </ModalFoot>
+        </ModalContent>
+      </Modal>
     );
   }
 
@@ -251,16 +250,16 @@ export default function TeamAssignmentModal({
   const availableUsers = filterUsers(allUsers.filter((u) => !memberIds.has(u.id)));
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[calc(100vh-4rem)] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{t('admin.manageMembersTitle', { teamName })}</DialogTitle>
-        </DialogHeader>
-        <Separator />
+    <Modal open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <ModalContent wide className="flex max-h-[calc(100vh-4rem)] flex-col overflow-hidden p-0">
+        <ModalHead icon={Users} title={t('admin.manageMembersTitle', { teamName })} />
 
         {loading ? (
-          <div className="text-center py-8 text-muted-foreground">{t('common.loading')}</div>
+          <ModalBody>
+            <div className="py-8 text-center text-[12.5px] text-[var(--fg-2)]">{t('common.loading')}</div>
+          </ModalBody>
         ) : (
+          <ModalBody>
           <div className="space-y-6">
             <div>
               <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
@@ -340,15 +339,15 @@ export default function TeamAssignmentModal({
               )}
             </div>
           </div>
+          </ModalBody>
         )}
 
-        <Separator />
-        <DialogFooter className="flex-row justify-end">
-          <Button variant="secondary" onClick={onClose}>
+        <ModalFoot>
+          <Button variant="ghost" type="button" size="md" onClick={onClose}>
             {t('common.close')}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </ModalFoot>
+      </ModalContent>
+    </Modal>
   );
 }

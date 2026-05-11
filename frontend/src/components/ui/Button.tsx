@@ -4,8 +4,8 @@ import { Button as ShadcnButton, buttonVariants } from './button-base';
 import { cn } from '@/lib/utils';
 
 const variantMap = {
-  primary: 'default',
-  secondary: 'secondary',
+  primary: 'primary',
+  secondary: 'default',
   danger: 'destructive',
   ghost: 'ghost',
   outline: 'outline',

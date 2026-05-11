@@ -157,6 +157,12 @@ export function setupSecurityHeaders() {
     cspDirectives.connectSrc.push(umamiOrigin);
   }
 
+  // Bugsink / Sentry-compatible browser SDK (POST envelope). connect-src only — no scripts from ingest host.
+  const bugsinkOrigin = cspOriginFromEnv(process.env.CSP_BUGSINK_ORIGIN, allowHttpCsp);
+  if (bugsinkOrigin) {
+    cspDirectives.connectSrc.push(bugsinkOrigin);
+  }
+
   // Cloudflare Turnstile (e.g. marketing /contact): script, iframe, fetch, and workers from CF.
   // Not gated on TURNSTILE_SECRET_KEY: the site key is baked in at frontend build time (VITE_*), while
   // CSP is evaluated at runtime; if the secret were missing here, the widget would be blocked in the

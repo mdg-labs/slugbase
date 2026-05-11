@@ -1,12 +1,13 @@
 "use client"
 
 import * as React from "react"
+import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { type DialogProps } from "@radix-ui/react-dialog"
 import { Command as CommandPrimitive } from "cmdk"
 import { Search } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { Dialog, DialogContent } from "@/components/ui/dialog"
+import { Dialog, DialogPortal, DialogOverlay } from "@/components/ui/dialog"
 
 const Command = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive>,
@@ -15,7 +16,7 @@ const Command = React.forwardRef<
   <CommandPrimitive
     ref={ref}
     className={cn(
-      "flex h-full w-full flex-col overflow-hidden rounded-xl border border-ghost bg-surface-high/80 text-popover-foreground shadow-glow backdrop-blur-[24px]",
+      "flex h-full w-full flex-col overflow-hidden rounded-lg border border-border-strong bg-bg-1 text-fg-0 shadow-lg",
       className
     )}
     {...props}
@@ -26,19 +27,52 @@ Command.displayName = CommandPrimitive.displayName
 interface CommandDialogProps extends DialogProps {
   /** Disable cmdk's built-in filtering (e.g. for async search) */
   shouldFilter?: boolean
+  /** Controlled cmdk value (selected row) for keyboard shortcuts */
+  commandValue?: string
+  onCommandValueChange?: (value: string) => void
+  onCommandKeyDown?: React.KeyboardEventHandler<HTMLDivElement>
 }
 
-const CommandDialog = ({ children, shouldFilter = true, ...props }: CommandDialogProps) => {
+const CommandDialog = ({
+  children,
+  shouldFilter = true,
+  commandValue,
+  onCommandValueChange,
+  onCommandKeyDown,
+  ...props
+}: CommandDialogProps) => {
   return (
     <Dialog {...props}>
-      <DialogContent className="overflow-hidden border-0 bg-transparent p-0 gap-0 max-w-xl shadow-none sm:rounded-2xl outline-none [&:focus]:outline-none [&:focus-visible]:outline-none">
-        <Command
-          shouldFilter={shouldFilter}
-          className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5"
+      <DialogPortal>
+        <DialogOverlay className="z-50 bg-[rgba(0,0,0,0.55)] backdrop-blur-[4px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+        <DialogPrimitive.Content
+          className={cn(
+            "fixed left-1/2 top-[14vh] z-[51] w-[min(640px,92vw)] max-w-[640px] -translate-x-1/2 gap-0 overflow-hidden border-0 bg-transparent p-0 shadow-none outline-none",
+            "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 duration-200"
+          )}
+          onOpenAutoFocus={(e) => e.preventDefault()}
         >
-          {children}
-        </Command>
-      </DialogContent>
+          <DialogPrimitive.Title className="sr-only">Command palette</DialogPrimitive.Title>
+          <DialogPrimitive.Description className="sr-only">
+            Search bookmarks, folders, and navigation
+          </DialogPrimitive.Description>
+          <Command
+            shouldFilter={shouldFilter}
+            value={commandValue}
+            onValueChange={onCommandValueChange}
+            onKeyDown={onCommandKeyDown}
+            className={cn(
+              "[&_[cmdk-group-heading]]:px-2.5 [&_[cmdk-group-heading]]:py-2.5 [&_[cmdk-group-heading]]:font-mono [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-[0.08em] [&_[cmdk-group-heading]]:text-fg-3",
+              "[&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-group]]:px-1.5 [&_[cmdk-group]]:pb-1.5",
+              "[&_[cmdk-input-wrapper]_svg]:h-4 [&_[cmdk-input-wrapper]_svg]:w-4",
+              "[&_[cmdk-input]]:min-h-0 [&_[cmdk-input]]:text-sm",
+              "[&_[cmdk-item]]:gap-2.5 [&_[cmdk-item]]:px-2.5 [&_[cmdk-item]]:py-2 [&_[cmdk-item]]:text-[13px] [&_[cmdk-item]_svg]:h-[15px] [&_[cmdk-item]_svg]:w-[15px]"
+            )}
+          >
+            {children}
+          </Command>
+        </DialogPrimitive.Content>
+      </DialogPortal>
     </Dialog>
   )
 }
@@ -47,18 +81,23 @@ const CommandInput = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive.Input>,
   React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input>
 >(({ className, ...props }, ref) => (
-  <div className="flex items-center border-b border-ghost px-3 pr-10" cmdk-input-wrapper="">
-    <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+  <div
+    className="flex items-center gap-2.5 border-b border-border px-3.5 py-3"
+    cmdk-input-wrapper=""
+  >
+    <Search className="h-4 w-4 shrink-0 text-fg-2" aria-hidden />
     <CommandPrimitive.Input
       ref={ref}
       className={cn(
-        // Global input:focus-visible uses outline-offset (index.css) and loses to that specificity;
-        // use important + inset shadow so focus stays inside the field (parent has overflow-hidden).
-        "flex h-12 min-h-12 w-full rounded-none bg-transparent py-2 pl-2.5 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 focus-visible:!outline-none focus-visible:!outline-offset-0 focus-visible:shadow-[inset_0_0_0_2px_hsl(var(--ring))]",
+        "flex w-full flex-1 rounded-none border-0 bg-transparent py-0.5 pl-0 text-sm text-fg-0 outline-none placeholder:text-fg-3 disabled:cursor-not-allowed disabled:opacity-50",
+        "focus-visible:outline-none",
         className
       )}
       {...props}
     />
+    <span className="kbd shrink-0 rounded border border-border bg-bg-3 px-1.5 py-0.5 font-mono text-[10.5px] leading-snug text-fg-2">
+      esc
+    </span>
   </div>
 ))
 
@@ -70,7 +109,7 @@ const CommandList = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <CommandPrimitive.List
     ref={ref}
-    className={cn("max-h-[300px] overflow-y-auto overflow-x-hidden", className)}
+    className={cn("max-h-[50vh] overflow-y-auto overflow-x-hidden p-1.5", className)}
     {...props}
   />
 ))
@@ -83,7 +122,7 @@ const CommandEmpty = React.forwardRef<
 >((props, ref) => (
   <CommandPrimitive.Empty
     ref={ref}
-    className="py-6 text-center text-sm text-muted-foreground"
+    className="py-6 text-center text-sm text-fg-2"
     {...props}
   />
 ))
@@ -96,10 +135,7 @@ const CommandGroup = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <CommandPrimitive.Group
     ref={ref}
-    className={cn(
-      "overflow-hidden p-1 text-foreground [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground",
-      className
-    )}
+    className={cn("overflow-hidden text-fg-0", className)}
     {...props}
   />
 ))
@@ -112,7 +148,7 @@ const CommandSeparator = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <CommandPrimitive.Separator
     ref={ref}
-    className={cn("-mx-1 h-px bg-ghost", className)}
+    className={cn("-mx-1 my-1 h-px bg-border-soft", className)}
     {...props}
   />
 ))
@@ -125,7 +161,9 @@ const CommandItem = React.forwardRef<
   <CommandPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex cursor-default gap-2 select-none items-center rounded-lg px-2 py-2 text-sm outline-none transition-colors data-[disabled=true]:pointer-events-none data-[selected=true]:bg-surface-highest data-[selected=true]:text-foreground data-[disabled=true]:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+      "relative flex cursor-default select-none items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] text-fg-0 outline-none transition-colors",
+      "data-[disabled=true]:pointer-events-none data-[selected=true]:bg-accent-bg data-[selected=true]:text-fg-0 data-[disabled=true]:opacity-50",
+      "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:text-fg-2 data-[selected=true]:[&_svg]:text-accent-hi",
       className
     )}
     {...props}
@@ -141,7 +179,7 @@ const CommandShortcut = ({
   return (
     <span
       className={cn(
-        "ml-auto text-xs tracking-widest text-muted-foreground",
+        "ml-auto text-xs tracking-widest text-fg-3",
         className
       )}
       {...props}

@@ -68,6 +68,10 @@
     "billingUpgrade": "Upgrade",
     "billingUpgradeToInvite": "Upgrade to Team plan to invite more members.",
     "callbackUrl": "Callback URL",
+    "copyRedirect": "Copy",
+    "oidcActive": "Active",
+    "ssoPageSubtitle": "Configure OpenID Connect providers for workspace sign-in.",
+    "ssoPageTitle": "SSO providers",
     "clientId": "Client ID",
     "clientIdRequired": "Client ID is required when creating a new provider",
     "clientSecret": "Client Secret",
@@ -132,7 +136,10 @@
     "userGroups": "Teams",
     "userinfoUrl": "UserInfo URL",
     "users": "Users",
-    "viewApiDocs": "View API Documentation"
+    "viewApiDocs": "View API Documentation",
+    "apiDocsShortcuts": "Shortcuts:",
+    "apiDocsCsrfEndpoint": "CSRF token",
+    "apiDocsTokensEndpoint": "Personal API tokens"
   },
   "apiDocs": {
     "description": "Complete API reference for SlugBase. All endpoints require authentication via JWT tokens except where noted.",
@@ -143,6 +150,54 @@
     "tagline": "Your links. Your structure. Your language. Your rules."
   },
   "auth": {
+    "footerDocs": "Docs",
+    "footerGitHub": "GitHub",
+    "hidePassword": "Hide password",
+    "hero": {
+      "title": "The bookmark manager with memorable slugs.",
+      "titleAccent": "memorable slugs.",
+      "desc": {
+        "selfhosted": "Save anything, tag it well, and get to it instantly. SlugBase turns every bookmark into a short URL your whole team can remember — no more digging through folders.",
+        "cloud": "Save anything, tag it well, and get to it instantly. SlugBase Cloud gives your team memorable short URLs with nothing to install or run yourself."
+      },
+      "previewUrl": {
+        "selfhosted": "localhost:8088/go/raft",
+        "cloud": "slugbase.app/go/raft"
+      },
+      "selfhosted": {
+        "chip": "Self-hosted · open source",
+        "stat1Title": "MIT",
+        "stat1Subtitle": "Open source",
+        "stat2Title": "Self",
+        "stat2Subtitle": "Hosted by you",
+        "stat3Title": "{{version}}",
+        "stat3Subtitle": "Current release",
+        "stat3FallbackTitle": "—",
+        "stat3FallbackSubtitle": "Release",
+        "foot": "Free and open on GitHub — star us, file issues, help shape the roadmap.",
+        "footLinkLabel": "GitHub",
+        "footLinkHref": "https://github.com/mdg-labs/slugbase"
+      },
+      "cloud": {
+        "chip": "Cloud · managed service",
+        "stat1Title": "EU",
+        "stat1Subtitle": "Hosting & database",
+        "stat2Title": "Stripe",
+        "stat2Subtitle": "Secure billing",
+        "stat3Title": "OIDC",
+        "stat3Subtitle": "Single sign-on",
+        "foot": "Payments and subprocessors are described in our Terms and Privacy Policy.",
+        "footLinkLabel": "slugbase.app",
+        "footLinkHref": "https://slugbase.app"
+      }
+    },
+    "loginTabs": "Sign in or sign up",
+    "loginTitle": "Welcome back",
+    "orEmail": "or with email",
+    "showPassword": "Show password",
+    "signInButton": "Sign in",
+    "signInTab": "Sign in",
+    "signUpTab": "Sign up",
     "authFailed": "Authentication failed",
     "createAccount": "Create account",
     "email": "Email",
@@ -180,6 +235,9 @@
     "allTags": "All Tags",
     "bulkActions": "Bulk Actions",
     "bulkAddTags": "Add Tags",
+    "bulkRemoveTagsOptional": "Remove tags (optional)",
+    "bulkRemoveTagsPlaceholder": "Tags to remove…",
+    "bulkTagPreview": "{{willGet}} will get new tags, {{already}} already have all selected tags ({{total}} selected).",
     "bulkDelete": "Delete Selected",
     "bulkMoveToFolder": "Move to Folder",
     "bulkSelect": "Select Multiple",
@@ -221,6 +279,12 @@
     "import": "Import",
     "importBrowser": "Import Browser Bookmarks",
     "importDescription": "Import bookmarks from a JSON or HTML file. JSON files should contain an array of bookmark objects with title and url fields.",
+    "importDropHint": "Drop a file here",
+    "importOrBrowse": "or click to browse",
+    "importSourceHtml": "Browser export (HTML)",
+    "importSourceJson": "SlugBase JSON",
+    "importWrongKindHtml": "Please choose the HTML source card and select an .html file.",
+    "importWrongKindJson": "Please choose the JSON source card and select a .json file.",
     "importHtml": "Import HTML",
     "importJson": "Import JSON",
     "importSuccess": "Imported {{success}} bookmark(s), {{failed}} failed",
@@ -286,6 +350,7 @@
     "teams": "teams",
     "title": "Bookmarks",
     "toolbarMore": "More",
+    "toolbarFilters": "Filters",
     "unpinned": "Unpinned",
     "url": "URL",
     "users": "users",
@@ -293,9 +358,14 @@
     "viewList": "List View",
     "viewMode": "View Mode"
   },
+  "confirm": {
+    "typeInstructionAfter": " to confirm.",
+    "typeInstructionBefore": "Type "
+  },
   "common": {
     "actions": "Actions",
     "back": "Back",
+    "backToDashboard": "Back to dashboard",
     "bookmark": "bookmark",
     "bookmarks": "bookmarks",
     "cancel": "Cancel",
@@ -309,9 +379,12 @@
     "delete": "Delete",
     "edit": "Edit",
     "error": "An error occurred",
+    "errorBoundaryMessage": "Something went wrong while loading this page. You can reload or return to the dashboard.",
+    "errorTitle": "Something went wrong",
     "expandSidebar": "Expand sidebar",
     "folder": "folder",
     "folders": "folders",
+    "hidePassword": "Hide password",
     "goTo": "Go to",
     "loading": "Loading...",
     "navigation": "Navigation",
@@ -327,6 +400,7 @@
     "save": "Save",
     "scopeSharedByMe": "Shared by me",
     "scopeSharedWithMe": "Shared with me",
+    "showPassword": "Show password",
     "search": "Search",
     "searchPlaceholder": "Search bookmarks, folders, tags...",
     "searchShortcut": "Ctrl+K",
@@ -342,6 +416,10 @@
     "users": "users",
     "view": "View",
     "yes": "Yes"
+  },
+  "errors": {
+    "notFoundBody": "This URL does not exist or was moved.",
+    "notFoundTitle": "Page not found"
   },
   "contact": {
     "email": "Email",
@@ -432,6 +510,7 @@
     "yourLibrary": "Your library"
   },
   "emailVerification": {
+    "continueToApp": "Continue to SlugBase",
     "alreadyVerified": "This account has already been verified. You can log in.",
     "backToProfile": "Back to Profile",
     "confirmFailed": "Failed to confirm email verification",
@@ -441,6 +520,7 @@
     "errorDescription": "The verification link is invalid or has expired.",
     "invalidLink": "This verification link is invalid or has expired.",
     "invalidToken": "Invalid or expired verification token",
+    "requestNewLink": "Request a new link",
     "pendingDescription": "A verification email has been sent to {{email}}. Please check your inbox and click the verification link to complete the change.",
     "pendingTitle": "Email Verification Pending",
     "redirecting": "Redirecting to profile...",
@@ -698,6 +778,8 @@
     "confirmCodeLabel": "Confirm with a 6-digit code",
     "confirmEnrollment": "Confirm and enable",
     "copyAllBackupCodes": "Copy all codes",
+    "downloadBackupTxt": "Download .txt",
+    "printBackupCodes": "Print",
     "copyFailed": "Could not copy to clipboard. Copy manually or try HTTPS.",
     "copySecret": "Copy secret",
     "disable": "Disable two-factor authentication",
@@ -731,7 +813,19 @@
     "trustCodeLabel": "Authenticator or backup code",
     "verify": "Verify and continue"
   },
+  "passwordStrength": {
+    "tooShort": "Use at least 8 characters for a stronger password.",
+    "weak": "Weak",
+    "fair": "Fair",
+    "good": "Good",
+    "strong": "Strong"
+  },
   "passwordReset": {
+    "requestTitle": "Reset your password",
+    "requestSubtitle": "Enter your email address to receive a password reset link",
+    "resetTitle": "Choose a new password",
+    "resetSubtitle": "Enter and confirm a new password for your account.",
+    "updatePassword": "Update password",
     "backToLogin": "Back to Login",
     "confirmPassword": "Confirm Password",
     "description": "Enter your email address to receive a password reset link",
@@ -880,6 +974,31 @@
     "themeAuto": "Auto",
     "themeDark": "Dark",
     "themeLight": "Light",
+    "accentColor": "Accent color",
+    "appBaseUrl": "App base URL",
+    "changePassword": "Change password",
+    "defaultBookmarkView": "Default bookmark view",
+    "dataImportExport": "Data import & export",
+    "dataImportExportDescription": "Import a SlugBase JSON export or a browser HTML bookmark file. Export downloads your workspace as JSON.",
+    "editProfile": "Edit profile",
+    "integrationOidc": "You sign in with {{provider}}.",
+    "integrationsDescription": "Connected services for your account.",
+    "integrationsPassword": "You use email and password sign-in. Browser extensions and additional integrations appear here when available.",
+    "membershipsCloudPlan": "Your organization is on the {{plan}} plan.",
+    "membershipsDescription": "Where you work in SlugBase Cloud.",
+    "membershipsSelfHosted": "Self-hosted workspace — your bookmarks stay on your server.",
+    "membershipsTitle": "Membership",
+    "sectionApiTokens": "API tokens",
+    "sectionAppearance": "Appearance",
+    "sectionDataPrivacy": "Data & privacy",
+    "sectionGeneral": "General",
+    "sectionIntegrations": "Integrations",
+    "sectionSecurity": "Security",
+    "settingsNavLabel": "Profile sections",
+    "shortcutsDescription": "Shortcuts to SlugBase tools related to your account.",
+    "shortcutsTitle": "Shortcuts",
+    "statBookmarks": "Bookmarks",
+    "statSlugs": "/go routes saved",
     "title": "Profile",
     "tokenCreated": "Token created",
     "tokenName": "Token name",
@@ -889,6 +1008,9 @@
     "userKey": "User key",
     "userKeyDescription": "Your unique identifier for bookmark forwarding. Share this with others so they can access your shared bookmarks.",
     "viewApiDocs": "View API documentation",
+    "apiDocsShortcuts": "Shortcuts:",
+    "apiDocsCsrfEndpoint": "CSRF token",
+    "apiDocsTokensEndpoint": "Personal API tokens",
     "yourOrganizations": "Your organizations",
     "yourTokens": "Your tokens"
   },
@@ -928,6 +1050,7 @@
     "yourSearchUrl": "Your Search URL"
   },
   "setup": {
+    "subtitle": "Welcome to SlugBase! Create your first admin user to get started.",
     "adminNote": "This user will be created as an administrator. You can configure OIDC providers later in the admin settings.",
     "alreadyInitialized": "System already initialized",
     "confirmPassword": "Confirm Password",
@@ -944,6 +1067,7 @@
     "redirecting": "Redirecting to login...",
     "redirectingToDashboard": "Redirecting to dashboard...",
     "submit": "Create Admin User",
+    "subtitle": "Welcome to SlugBase! Create your first admin user to get started.",
     "success": "Setup completed successfully!",
     "title": "Initial Setup"
   },
@@ -974,6 +1098,7 @@
     "typeToSearchUsers": "Type at least {{count}} characters to see matching users."
   },
   "signup": {
+    "cloudTitle": "Create your SlugBase Cloud account",
     "acceptTermsAnd": " and the ",
     "acceptTermsPrefix": "I have read and accept the ",
     "acceptTermsPrivacy": "Privacy Policy",
@@ -1021,6 +1146,7 @@
     "testFailed": "Failed to send test email",
     "testSent": "Test email sent successfully!",
     "title": "SMTP Email Configuration",
+    "togglePasswordVisibility": "Show or hide SMTP password",
     "user": "Username/Email",
     "userPlaceholder": "your-email@gmail.com"
   },
@@ -1038,6 +1164,7 @@
     "name": "Name",
     "noMatchesDescription": "No tags match the current filters. Clear filters to see all.",
     "pageSubtitle": "Label and filter bookmarks across your library.",
+    "renameInfoStrip": "Used on <strong>{{count}}</strong> bookmarks · renaming updates them all",
     "sortAlphabetical": "Alphabetical",
     "sortRecentlyAdded": "Recently Added",
     "tagName": "Tag Name",

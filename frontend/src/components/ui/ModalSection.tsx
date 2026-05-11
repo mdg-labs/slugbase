@@ -8,6 +8,7 @@ interface ModalSectionProps {
   className?: string;
 }
 
+/** Labelled modal block — uses mockup `.field` label rhythm (`styles.css` L715–724). */
 export function ModalSection({
   title,
   description,
@@ -15,16 +16,16 @@ export function ModalSection({
   className,
 }: ModalSectionProps) {
   return (
-    <div className={cn('space-y-3', className)}>
+    <div className={cn('field mb-4 last:mb-0', className)}>
       {(title || description) && (
-        <div>
+        <div className="mb-3">
           {title && (
-            <h4 className="text-lg font-semibold leading-none text-foreground">
+            <div className="mb-1.5 block font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--fg-2)]">
               {title}
-            </h4>
+            </div>
           )}
           {description && (
-            <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+            <p className="text-[12.5px] leading-relaxed text-[var(--fg-2)]">{description}</p>
           )}
         </div>
       )}

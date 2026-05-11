@@ -8,7 +8,9 @@ test.describe('Login', () => {
   test('shows login page and signs in with email and password', async ({ page }) => {
     await page.goto('/login');
 
-    await expect(page.getByRole('heading', { name: /log in|login/i })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: /welcome back|log in|login/i })
+    ).toBeVisible();
     await expect(page.getByLabel(/email/i)).toBeVisible();
     await expect(page.locator('#password')).toBeVisible();
 
@@ -18,7 +20,7 @@ test.describe('Login', () => {
     await page.getByLabel(/email/i).fill(email);
     // Use id so we target the login form only (works in all locales)
     await page.locator('#password').fill(password);
-    await page.getByRole('button', { name: /log in|login/i }).click();
+    await page.getByRole('button', { name: /sign in|log in|login/i }).click();
 
     await expect(page).not.toHaveURL(/\/login/);
     // Sidebar + dashboard can both expose a /bookmarks link; avoid strict-mode duplicate match.

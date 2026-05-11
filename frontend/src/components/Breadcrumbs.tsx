@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ChevronRight } from 'lucide-react';
+import { FolderOpen } from 'lucide-react';
 import { useAppConfig } from '@/contexts/AppConfigContext';
 import { cn } from '@/lib/utils';
 
@@ -93,18 +93,22 @@ export function Breadcrumbs({ className }: { className?: string }) {
         })();
 
   return (
-    <nav aria-label="Breadcrumb" className={cn('flex min-w-0 items-center text-sm text-muted-foreground', className)}>
-      <ol className="flex min-w-0 list-none flex-wrap items-center gap-1.5 p-0 m-0">
+    <nav aria-label="Breadcrumb" className={cn('crumbs flex min-w-0 items-center text-[12.5px]', className)}>
+      <ol className="m-0 flex min-w-0 list-none flex-wrap items-center gap-1.5 p-0">
+        <li className="flex shrink-0 items-center text-fg-2" aria-hidden>
+          <FolderOpen className="h-3.5 w-3.5" strokeWidth={1.75} />
+        </li>
         {items.map((item, i) => (
           <li key={`${item.to}-${i}`} className="flex min-w-0 items-center gap-1.5">
-            {i > 0 && <ChevronRight className="h-4 w-4 shrink-0 opacity-50" aria-hidden />}
+            {i > 0 && (
+              <span className="shrink-0 text-fg-3" aria-hidden>
+                /
+              </span>
+            )}
             {i === items.length - 1 ? (
-              <span className="truncate font-bold text-primary">{item.label}</span>
+              <span className="here truncate font-medium text-fg-0">{item.label}</span>
             ) : (
-              <Link
-                to={item.to}
-                className="truncate font-medium text-muted-foreground/80 transition-colors hover:text-foreground"
-              >
+              <Link to={item.to} className="truncate font-medium text-fg-2 transition-colors hover:text-fg-0">
                 {item.label}
               </Link>
             )}

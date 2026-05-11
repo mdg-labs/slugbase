@@ -1,22 +1,14 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { ArrowRight } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppConfig } from '../contexts/AppConfigContext';
 import api from '../api/client';
-import { LogIn } from 'lucide-react';
-import Button from '../components/ui/Button';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
-import { cn } from '../lib/utils';
 import { safeRedirectPath } from '../utils/safeRedirectPath';
-import {
-  AUTH_CARD_CLASS,
-  AUTH_CROSS_LINK,
-  AUTH_INPUT_CLASS,
-  AUTH_PAGE_INNER,
-  AUTH_PAGE_OUTER,
-} from '../components/auth/authPageClasses';
+import { AuthCardLayout } from '../components/auth/AuthCardLayout';
+import { fieldError, authSubmit, otpInput } from '../components/auth/authPageClasses';
+import { cn } from '../lib/utils';
 
 export default function MfaChallenge() {
   const { t } = useTranslation();
@@ -77,7 +69,8 @@ export default function MfaChallenge() {
       const message = ax.response?.data?.error;
 
       if (apiCode === 'EMAIL_NOT_VERIFIED') {
-        const verifyPath = `${prefix}/verify-email-required`.replace(/\/+/g, '/') || '/verify-email-required';
+        const verifyPath =
+          `${prefix}/verify-email-required`.replace(/\/+/g, '/') || '/verify-email-required';
         navigate(verifyPath, { replace: true });
         return;
       }
@@ -94,82 +87,69 @@ export default function MfaChallenge() {
   };
 
   return (
-    <div className={AUTH_PAGE_OUTER}>
-      <div className={AUTH_PAGE_INNER}>
-        <div className="text-center">
-          <div className="mb-6 flex justify-center">
-            <img
-              src="/slugbase_icon_purple.svg"
-              alt="SlugBase"
-              className="h-[72px] w-[72px] object-contain"
-              width={72}
-              height={72}
-            />
+    <AuthCardLayout>
+      <h2 className="m-0 text-[18px] font-semibold tracking-[-0.015em] text-[var(--fg-0)]">{t('mfa.challengeTitle')}</h2>
+      <p className="sub mt-1.5 text-[12.5px] leading-relaxed text-[var(--fg-2)]">{t('mfa.challengeDescription')}</p>
+
+      <form onSubmit={handleSubmit} className="mt-5 space-y-5" noValidate>
+        <div className="space-y-2">
+          <label htmlFor={codeId} className="font-mono text-[11px] font-medium uppercase tracking-[0.04em] text-[var(--fg-3)]">
+            {t('mfa.codeLabel')}
+          </label>
+          <input
+            id={codeId}
+            name="code"
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            autoCorrect="off"
+            spellCheck={false}
+            maxLength={32}
+            placeholder={t('mfa.codePlaceholder')}
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            className={cn(
+              otpInput,
+              'px-3 outline-none focus-visible:border-[var(--accent-ring)] focus-visible:shadow-[0_0_0_3px_var(--accent-bg)]',
+              error && 'border-[rgba(248,113,113,0.5)]'
+            )}
+            aria-invalid={Boolean(error)}
+            aria-describedby={error ? `${hintId} ${errorId}` : hintId}
+            aria-errormessage={error ? errorId : undefined}
+            disabled={submitting}
+          />
+          <p id={hintId} className="text-[11.5px] text-[var(--fg-2)]">
+            {t('mfa.challengeHint')}
+          </p>
+        </div>
+
+        {error ? (
+          <div
+            ref={liveRef}
+            id={errorId}
+            role="alert"
+            aria-live="assertive"
+            tabIndex={-1}
+            className={cn(fieldError, 'rounded-md border border-[rgba(248,113,113,0.35)] bg-[rgba(248,113,113,0.08)] px-3 py-2 outline-none')}
+          >
+            {error}
           </div>
-          <h1 className="text-2xl font-semibold text-foreground">{t('mfa.challengeTitle')}</h1>
-          <p className="mt-2 text-sm text-muted-foreground">{t('mfa.challengeDescription')}</p>
-        </div>
+        ) : null}
 
-        <div className={AUTH_CARD_CLASS}>
-          <form onSubmit={handleSubmit} className="space-y-5" noValidate>
-            <div className="space-y-2">
-              <Label htmlFor={codeId} className="auth-field-label">
-                {t('mfa.codeLabel')}
-              </Label>
-              <Input
-                id={codeId}
-                name="code"
-                type="text"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                autoCorrect="off"
-                spellCheck={false}
-                maxLength={32}
-                placeholder={t('mfa.codePlaceholder')}
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                className={cn(AUTH_INPUT_CLASS)}
-                aria-invalid={Boolean(error)}
-                aria-describedby={error ? `${hintId} ${errorId}` : hintId}
-                aria-errormessage={error ? errorId : undefined}
-                disabled={submitting}
-              />
-              <p id={hintId} className="text-xs text-muted-foreground">
-                {t('mfa.challengeHint')}
-              </p>
-            </div>
+        <button type="submit" disabled={submitting} className={authSubmit}>
+          <span>{submitting ? t('common.loading') : t('mfa.verify')}</span>
+          <ArrowRight className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
+        </button>
 
-            {error ? (
-              <div
-                ref={liveRef}
-                id={errorId}
-                role="alert"
-                aria-live="assertive"
-                tabIndex={-1}
-                className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 outline-none"
-              >
-                <p className="text-sm text-destructive">{error}</p>
-              </div>
-            ) : null}
-
-            <Button
-              type="submit"
-              variant="primary"
-              disabled={submitting}
-              icon={LogIn}
-              className="w-full border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
-            >
-              {submitting ? t('common.loading') : t('mfa.verify')}
-            </Button>
-
-            <p className="text-center text-sm text-muted-foreground">
-              <Link to={loginHref} className={AUTH_CROSS_LINK}>
-                {t('mfa.backToLogin')}
-              </Link>
-            </p>
-          </form>
-        </div>
-      </div>
-    </div>
+        <p className="!mt-6 text-center text-[12.5px] text-[var(--fg-2)]">
+          <Link
+            to={loginHref}
+            className="font-medium text-[var(--accent-hi)] hover:underline"
+          >
+            {t('mfa.backToLogin')}
+          </Link>
+        </p>
+      </form>
+    </AuthCardLayout>
   );
 }

@@ -16,22 +16,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '../ui/table';
 import { Card } from '../ui/card';
-import {
-  adminTableBodyRowClass,
-  adminTableCardClass,
-  adminTableCellClass,
-  adminTableHeadClass,
-  adminTableHeaderRowClass,
-} from './adminTableTokens';
+import { adminTableCardClass } from './adminTableTokens';
+import { cn } from '@/lib/utils';
 
 interface Team {
   id: string;
@@ -60,6 +47,12 @@ function memberCount(team: Team): number {
   if (raw === undefined || raw === null) return 0;
   const n = typeof raw === 'number' ? raw : parseInt(String(raw), 10);
   return Number.isFinite(n) ? n : 0;
+}
+
+function teamAccent(name: string): { hue: number } {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
+  return { hue: Math.abs(h) % 360 };
 }
 
 export default function AdminTeams() {
@@ -176,85 +169,104 @@ export default function AdminTeams() {
           }
         />
       ) : (
-        <Card className={adminTableCardClass}>
-          <Table>
-            <TableHeader>
-              <TableRow className={adminTableHeaderRowClass}>
-                <TableHead className={adminTableHeadClass}>{t('admin.teamName')}</TableHead>
-                <TableHead className={`${adminTableHeadClass} hidden md:table-cell`}>
-                  {t('admin.description')}
-                </TableHead>
-                <TableHead className={`${adminTableHeadClass} w-[100px]`}>{t('admin.members')}</TableHead>
-                <TableHead className={`${adminTableHeadClass} hidden sm:table-cell w-[140px]`}>
-                  {t('profile.createdAt')}
-                </TableHead>
-                <TableHead className={`${adminTableHeadClass} w-[88px] text-right`}>
-                  {t('common.actions')}
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {teams.map((team) => (
-                <TableRow key={team.id} className={adminTableBodyRowClass}>
-                  <TableCell className={adminTableCellClass}>
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-gradient-to-br from-primary/15 to-primary/25">
-                        <Users className="h-4 w-4 text-primary" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-foreground truncate">{team.name}</p>
-                        {team.description ? (
-                          <p className="text-sm text-muted-foreground truncate md:hidden">{team.description}</p>
-                        ) : null}
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className={`${adminTableCellClass} hidden md:table-cell max-w-xs`}>
-                    <span className="text-sm text-muted-foreground line-clamp-2">
-                      {team.description || '—'}
-                    </span>
-                  </TableCell>
-                  <TableCell className={`${adminTableCellClass} tabular-nums text-muted-foreground`}>
-                    {memberCount(team)}
-                  </TableCell>
-                  <TableCell className={`${adminTableCellClass} hidden sm:table-cell text-muted-foreground`}>
-                    {formatShortDate(team.created_at)}
-                  </TableCell>
-                  <TableCell className={`${adminTableCellClass} text-right`}>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button
-                          type="button"
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-high hover:text-foreground"
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                          <span className="sr-only">{t('common.actions')}</span>
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleManageMembers(team)}>
-                          <Network className="mr-2 h-4 w-4" />
-                          {t('admin.manageMembers')}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleEdit(team)}>
-                          <Edit className="mr-2 h-4 w-4" />
-                          {t('common.edit')}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => handleDelete(team.id)}
-                          className="text-destructive focus:text-destructive"
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          {t('common.delete')}
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Card>
+        <div className="folder-grid grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {teams.map((team) => {
+            const { hue } = teamAccent(team.name);
+            const mc = memberCount(team);
+            return (
+              <Card
+                key={team.id}
+                className={cn(
+                  adminTableCardClass,
+                  'folder-card flex flex-col gap-4 p-4 transition-colors hover:border-[var(--border-strong)]',
+                )}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div
+                    className="f-ico flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius)] border border-[var(--border)]"
+                    style={{
+                      background: `linear-gradient(135deg, hsl(${hue} 42% 24% / 0.9), hsl(${hue} 38% 16% / 0.95))`,
+                      color: `hsl(${hue} 72% 68%)`,
+                    }}
+                    aria-hidden
+                  >
+                    <Users className="h-4 w-4" strokeWidth={1.75} />
+                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius-sm)] text-[var(--fg-2)] hover:bg-[var(--bg-hover)] hover:text-[var(--fg-0)]"
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                        <span className="sr-only">{t('common.actions')}</span>
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => handleManageMembers(team)}>
+                        <Network className="mr-2 h-4 w-4" />
+                        {t('admin.manageMembers')}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleEdit(team)}>
+                        <Edit className="mr-2 h-4 w-4" />
+                        {t('common.edit')}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => handleDelete(team.id)}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        {t('common.delete')}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+
+                <div className="min-w-0 space-y-1">
+                  <h3 className="truncate text-[14px] font-semibold text-[var(--fg-0)]">{team.name}</h3>
+                  <p className="line-clamp-2 min-h-[2.5rem] text-[12.5px] leading-snug text-[var(--fg-2)]">
+                    {team.description?.trim() ? team.description : '—'}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 border-t border-[var(--border-soft)] pt-3">
+                  <div>
+                    <p className="font-mono text-[10px] uppercase tracking-wide text-[var(--fg-3)]">
+                      {t('admin.members')}
+                    </p>
+                    <p className="tabular-nums text-[13px] text-[var(--fg-0)]">{mc}</p>
+                  </div>
+                  <div>
+                    <p className="font-mono text-[10px] uppercase tracking-wide text-[var(--fg-3)]">
+                      {t('folders.title')}
+                    </p>
+                    <p className="tabular-nums text-[13px] text-[var(--fg-3)]">—</p>
+                  </div>
+                  <div>
+                    <p className="font-mono text-[10px] uppercase tracking-wide text-[var(--fg-3)]">
+                      {t('bookmarks.title')}
+                    </p>
+                    <p className="tabular-nums text-[13px] text-[var(--fg-3)]">—</p>
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-[var(--fg-3)]">
+                  {t('profile.createdAt')}: {formatShortDate(team.created_at)}
+                </p>
+
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="mt-auto w-full"
+                  onClick={() => handleManageMembers(team)}
+                >
+                  {t('admin.manageMembers')}
+                </Button>
+              </Card>
+            );
+          })}
+        </div>
       )}
 
       <TeamModal

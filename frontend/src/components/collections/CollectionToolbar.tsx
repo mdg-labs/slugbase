@@ -3,17 +3,19 @@
  *
  * Row 1: title, count?, subtitle?, tabs?, createButton? (gradient primary CTA)
  * Row 2: filterChips?
- * Row 3: search?, folderFilter?, tagFilter?, sort? - primary filters; secondary
+ * Row 3: search?, folderFilter?, tagFilter? (omit when tags use pills elsewhere), sort? — primary filters; secondary
  *   (per page, pinned, import/export, bulk select) live in the "more" menu.
  */
 
-import { useState } from 'react';
-import { Plus, CheckSquare, Check, Download, Upload, Pin, Search, MoreHorizontal } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Plus, CheckSquare, Check, Download, Upload, Pin, Search, MoreHorizontal, LayoutGrid, List, Filter } from 'lucide-react';
 import { PageHeader } from '../PageHeader';
 import { ScopeSegmentedControl } from '../ScopeSegmentedControl';
 import { FilterChips, type FilterChipItem } from '../FilterChips';
 import Button from '../ui/Button';
+import { SegmentedControl, SegmentedControlItem } from '../ui/SegmentedControl';
 import Select from '../ui/Select';
+import { Input } from '../ui/input';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -86,7 +88,16 @@ export interface CollectionToolbarProps {
   onExport?: () => void;
   exportLabel?: string;
   bulkSelect?: { onClick: () => void; label: string; disabled?: boolean };
-  /** Bookmarks: cards vs table layout (submenu with radio items) */
+  /** Bookmarks: cards vs table — inline `.seg` (Phase 4) */
+  viewSegment?: {
+    value: 'cards' | 'table';
+    onChange: (value: 'cards' | 'table') => void;
+    cardsLabel: string;
+    tableLabel: string;
+    ariaLabel?: string;
+  };
+  filtersButton?: { label: string; onClick: () => void };
+  /** Legacy: cards vs table in More menu (omit when `viewSegment` is set) */
   viewDisplay?: {
     value: 'cards' | 'table';
     onChange: (value: 'cards' | 'table') => void;
@@ -104,7 +115,7 @@ export interface CollectionToolbarProps {
 }
 
 const STICKY_CLASS =
-  'sticky top-0 z-40 space-y-4 pb-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pt-0 -mt-8 bg-background/95 backdrop-blur-sm';
+  'sticky top-0 z-40 space-y-4 pb-4 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pt-0 -mt-8 bg-[var(--bg-0)]/95 backdrop-blur-sm';
 
 export function CollectionToolbar({
   title,
@@ -124,13 +135,16 @@ export function CollectionToolbar({
   onExport,
   exportLabel = 'Export',
   bulkSelect,
+  viewSegment,
   viewDisplay,
+  filtersButton,
   moreMenuLabel = 'More',
   className,
-  titleClassName = 'text-3xl font-black tracking-tighter text-foreground sm:text-4xl',
-  subtitleClassName = 'mt-1 font-medium',
+  titleClassName,
+  subtitleClassName,
 }: CollectionToolbarProps) {
   const [moreOpen, setMoreOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const displayTitle = count !== undefined ? `${title} (${count})` : title;
 
   const hasSecondary =
@@ -139,7 +153,7 @@ export function CollectionToolbar({
     onImport ||
     onExport ||
     (bulkSelect && !bulkSelect.disabled) ||
-    viewDisplay;
+    (viewDisplay && !viewSegment);
 
   const hasToolbarRow = search || folderFilter || tagFilter || sort || hasSecondary;
 
@@ -153,13 +167,27 @@ export function CollectionToolbar({
           ariaLabel={tabs.ariaLabel}
         />
       )}
-      {createButton && (
-        <Button
-          onClick={createButton.onClick}
-          icon={Plus}
-          variant="primary"
-          className="border-0 bg-primary-gradient text-primary-foreground shadow-glow hover:opacity-90"
+      {viewSegment && (
+        <SegmentedControl
+          value={viewSegment.value}
+          onValueChange={(v) => {
+            if (v === 'cards' || v === 'table') viewSegment.onChange(v);
+          }}
+          aria-label={viewSegment.ariaLabel ?? 'View mode'}
+          className="inline-flex"
         >
+          <SegmentedControlItem value="cards" aria-label={viewSegment.cardsLabel}>
+            <LayoutGrid className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+            <span className="hidden md:inline">{viewSegment.cardsLabel}</span>
+          </SegmentedControlItem>
+          <SegmentedControlItem value="table" aria-label={viewSegment.tableLabel}>
+            <List className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+            <span className="hidden md:inline">{viewSegment.tableLabel}</span>
+          </SegmentedControlItem>
+        </SegmentedControl>
+      )}
+      {createButton && (
+        <Button onClick={createButton.onClick} icon={Plus} variant="primary">
           {createButton.label}
         </Button>
       )}
@@ -188,31 +216,43 @@ export function CollectionToolbar({
       )}
 
       {hasToolbarRow && (
-        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-ghost glass p-4 shadow-xl">
-          <div className="flex min-w-[200px] flex-1 flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex min-w-[200px] flex-1 flex-wrap items-center gap-2">
             {search && (
-              <div className="group flex min-w-[200px] flex-1 items-center gap-2 rounded-xl border border-transparent bg-surface-low px-3 py-2 transition-colors focus-within:border-primary/30 focus-within:ring-1 focus-within:ring-primary/25">
-                <Search
-                  className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-focus-within:text-primary"
-                  aria-hidden
-                />
-                <input
-                  type="search"
-                  value={search.value}
-                  onChange={(e) => search.onChange(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      search.onSubmit((e.target as HTMLInputElement).value.trim());
-                    }
-                  }}
-                  placeholder={search.placeholder}
-                  className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
-                  aria-label={search.ariaLabel ?? search.placeholder}
-                />
-              </div>
+              <Input
+                ref={searchInputRef}
+                id="collection-toolbar-search"
+                type="search"
+                value={search.value}
+                onChange={(e) => search.onChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    search.onSubmit((e.target as HTMLInputElement).value.trim());
+                  }
+                }}
+                placeholder={search.placeholder}
+                aria-label={search.ariaLabel ?? search.placeholder}
+                leftSlot={<Search className="text-[var(--fg-3)]" aria-hidden />}
+                className="min-h-9 min-w-[min(280px,100%)] flex-1 max-w-[400px]"
+              />
+            )}
+            {filtersButton && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                icon={Filter}
+                className="shrink-0"
+                onClick={() => {
+                  filtersButton.onClick();
+                  searchInputRef.current?.focus();
+                }}
+              >
+                {filtersButton.label}
+              </Button>
             )}
             {folderFilter && (
-              <div className="min-w-[180px] flex-1">
+              <div className="min-w-[160px] max-w-[200px] flex-1 sm:max-w-[220px]">
                 <Select
                   value={folderFilter.value}
                   onChange={folderFilter.onChange}
@@ -222,7 +262,7 @@ export function CollectionToolbar({
               </div>
             )}
             {tagFilter && (
-              <div className="min-w-[180px] flex-1">
+              <div className="min-w-[160px] max-w-[200px] flex-1 sm:max-w-[220px]">
                 <Select
                   value={tagFilter.value}
                   onChange={tagFilter.onChange}
@@ -232,12 +272,12 @@ export function CollectionToolbar({
               </div>
             )}
             {sort && (
-              <div className="flex items-center gap-2">
+              <div className="flex min-w-[140px] max-w-[180px] items-center gap-2 sm:max-w-[200px]">
                 <Select
                   value={sort.value}
                   onChange={sort.onChange}
                   options={sort.options}
-                  className={sort.className ?? 'min-w-[160px]'}
+                  className={sort.className ?? 'w-full min-w-0'}
                 />
               </div>
             )}
@@ -246,7 +286,7 @@ export function CollectionToolbar({
           {hasSecondary && (
             <DropdownMenu open={moreOpen} onOpenChange={setMoreOpen}>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" icon={MoreHorizontal} className="shrink-0 border-ghost bg-surface-high">
+                <Button variant="ghost" size="sm" icon={MoreHorizontal} className="shrink-0">
                   {moreMenuLabel}
                 </Button>
               </DropdownMenuTrigger>

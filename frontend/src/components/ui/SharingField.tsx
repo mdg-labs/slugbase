@@ -4,11 +4,10 @@ import api from '../../api/client';
 import { Popover, PopoverContent, PopoverTrigger } from './popover';
 import { Switch } from './switch';
 import { Label } from './label';
-import { Badge } from './badge';
 import { Input } from './input';
 import { ScrollArea } from './scroll-area';
 import Button from './Button';
-import { Users, User, Search, X, Check, UserPlus } from 'lucide-react';
+import { Users, User, Search, X, UserPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Team {
@@ -38,6 +37,13 @@ interface SharingFieldProps {
   disabled?: boolean;
 }
 
+function initialsFrom(name: string) {
+  const p = name.trim().split(/\s+/).filter(Boolean);
+  if (p.length === 0) return '?';
+  if (p.length === 1) return p[0]!.slice(0, 2).toUpperCase();
+  return (p[0]![0]! + p[1]![0]!).toUpperCase();
+}
+
 export function SharingField({
   value,
   onChange,
@@ -60,7 +66,6 @@ export function SharingField({
 
   async function loadUsers() {
     try {
-      // Use non-admin endpoint so any user can add people when sharing (same org/tenant).
       const response = await api.get('/users/for-sharing');
       const users = Array.isArray(response.data) ? response.data : [];
       setAllUsers(users);
@@ -128,17 +133,13 @@ export function SharingField({
 
   return (
     <div className="space-y-3">
-      {label && (
-        <Label>{label}</Label>
-      )}
+      {label && <Label>{label}</Label>}
 
       {allowTeamSharing && (
-        <div className="flex items-center justify-between rounded-xl border-0 bg-surface-low p-3">
-          <div>
-            <p className="text-sm font-medium">{t('bookmarks.shareAllTeams')}</p>
-            <p className="text-xs text-muted-foreground">
-              {t('bookmarks.shareAllTeamsDescription')}
-            </p>
+        <div className="flex items-center justify-between gap-3 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-2)] px-3 py-3">
+          <div className="min-w-0">
+            <p className="text-[12.5px] font-medium text-[var(--fg-0)]">{t('bookmarks.shareAllTeams')}</p>
+            <p className="text-[11px] text-[var(--fg-2)]">{t('bookmarks.shareAllTeamsDescription')}</p>
           </div>
           <Switch
             checked={value.share_all_teams}
@@ -148,57 +149,69 @@ export function SharingField({
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-col gap-1">
         {value.share_all_teams && (
-          <Badge variant="secondary">All teams</Badge>
+          <div className="flex items-center gap-2.5 rounded-md border border-[var(--border-soft)] px-2.5 py-2">
+            <span className="avatar flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--accent-bg)] text-[10px] font-semibold text-[var(--accent-hi)] ring-1 ring-[var(--accent-ring)]">
+              <Users className="size-3.5" strokeWidth={1.75} aria-hidden />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="text-[12.5px] font-medium text-[var(--fg-0)]">{t('bookmarks.shareAllTeams')}</div>
+              <div className="text-[10.5px] text-[var(--fg-3)]">{t('common.teams')}</div>
+            </div>
+          </div>
         )}
         {selectedTeams.map((team) => (
-          <Badge
+          <div
             key={team.id}
-            variant="secondary"
-            className="pr-1 gap-1.5"
+            className="flex items-center gap-2.5 rounded-md border border-[var(--border-soft)] px-2.5 py-2"
           >
-            {team.name}
+            <span className="avatar flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--bg-3)] font-mono text-[10px] font-medium text-[var(--fg-0)]">
+              {initialsFrom(team.name)}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="text-[12.5px] font-medium text-[var(--fg-0)]">{team.name}</div>
+              <div className="text-[10.5px] text-[var(--fg-3)]">{t('common.team')}</div>
+            </div>
             <button
               type="button"
               onClick={() => removeTeam(team.id)}
               disabled={disabled}
-              className="rounded-full hover:bg-surface-high p-0.5 transition-colors focus-visible:ring-2 focus-visible:ring-ring"
+              className="rounded p-1 text-[var(--fg-3)] hover:bg-[var(--bg-3)] hover:text-[var(--fg-0)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-ring)]"
               aria-label={t('common.remove')}
             >
-              <X className="h-3.5 w-3.5" />
+              <X className="size-3.5" strokeWidth={1.75} />
             </button>
-          </Badge>
+          </div>
         ))}
         {selectedUsers.map((u) => (
-          <Badge
+          <div
             key={u.id}
-            variant="secondary"
-            className="pr-1 gap-1.5"
+            className="flex items-center gap-2.5 rounded-md border border-[var(--border-soft)] px-2.5 py-2"
           >
-            {u.name}
+            <span className="avatar flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--bg-3)] font-mono text-[10px] font-medium text-[var(--fg-0)]">
+              {initialsFrom(u.name || u.email)}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[12.5px] font-medium text-[var(--fg-0)]">{u.name}</div>
+              <div className="truncate text-[10.5px] text-[var(--fg-3)]">{u.email}</div>
+            </div>
             <button
               type="button"
               onClick={() => removeUser(u.id)}
               disabled={disabled}
-              className="rounded-full hover:bg-surface-high p-0.5 transition-colors focus-visible:ring-2 focus-visible:ring-ring"
+              className="rounded p-1 text-[var(--fg-3)] hover:bg-[var(--bg-3)] hover:text-[var(--fg-0)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-ring)]"
               aria-label={t('common.remove')}
             >
-              <X className="h-3.5 w-3.5" />
+              <X className="size-3.5" strokeWidth={1.75} />
             </button>
-          </Badge>
+          </div>
         ))}
       </div>
 
       <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
         <PopoverTrigger asChild>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={disabled}
-            className="h-8"
-          >
+          <Button type="button" variant="ghost" size="sm" disabled={disabled} className="h-8">
             <UserPlus className="h-4 w-4" />
             {hasSelected
               ? value.share_all_teams
@@ -212,24 +225,25 @@ export function SharingField({
               : t('bookmarks.shareWithTeams')}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-80 max-h-[400px] p-0" align="start">
-          <div className="p-2 space-y-3">
+        <PopoverContent
+          className="w-80 max-h-[400px] overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-2)] p-0 shadow-[var(--shadow-lg)]"
+          align="start"
+        >
+          <div className="space-y-3 p-2">
             {allowTeamSharing && !value.share_all_teams && (
               <>
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+                  <p className="mb-2 flex items-center gap-1.5 font-mono text-[10px] font-medium uppercase tracking-[0.08em] text-[var(--fg-3)]">
                     <Users className="h-3.5 w-3.5" />
                     {t('bookmarks.shareWithTeams')}
                   </p>
-                  <div className="relative mb-2">
-                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                    <Input
-                      placeholder={t('admin.searchTeams')}
-                      value={teamSearchQuery}
-                      onChange={(e) => setTeamSearchQuery(e.target.value)}
-                      className="pl-8 h-8"
-                    />
-                  </div>
+                  <Input
+                    placeholder={t('admin.searchTeams')}
+                    value={teamSearchQuery}
+                    onChange={(e) => setTeamSearchQuery(e.target.value)}
+                    leftSlot={<Search className="text-[var(--fg-3)]" />}
+                    className="mb-2 h-8"
+                  />
                   <ScrollArea className="max-h-32">
                     <div className="flex flex-wrap gap-1.5">
                       {filteredTeams.map((team) => (
@@ -238,13 +252,12 @@ export function SharingField({
                           type="button"
                           onClick={() => toggleTeam(team.id)}
                           className={cn(
-                            "inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors",
+                            'inline-flex items-center gap-1.5 rounded-[6px] px-2.5 py-[7px] text-[13px] transition-colors',
                             value.team_ids.includes(team.id)
-                              ? "bg-primary-gradient text-white"
-                              : "bg-surface-low hover:bg-surface-high"
+                              ? 'bg-[var(--accent-bg)] text-[var(--fg-0)]'
+                              : 'text-[var(--fg-0)] hover:bg-[var(--accent-bg)]'
                           )}
                         >
-                          {value.team_ids.includes(team.id) && <Check className="h-3 w-3" />}
                           {team.name}
                         </button>
                       ))}
@@ -255,21 +268,19 @@ export function SharingField({
             )}
 
             <div>
-              <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+              <p className="mb-2 flex items-center gap-1.5 font-mono text-[10px] font-medium uppercase tracking-[0.08em] text-[var(--fg-3)]">
                 <User className="h-3.5 w-3.5" />
                 {t('bookmarks.shareWithUsers')}
               </p>
-              <div className="relative mb-2">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                <Input
-                  placeholder={t('admin.searchUsers')}
-                  value={userSearchQuery}
-                  onChange={(e) => setUserSearchQuery(e.target.value)}
-                  className="pl-8 h-8"
-                />
-              </div>
+              <Input
+                placeholder={t('admin.searchUsers')}
+                value={userSearchQuery}
+                onChange={(e) => setUserSearchQuery(e.target.value)}
+                leftSlot={<Search className="text-[var(--fg-3)]" />}
+                className="mb-2 h-8"
+              />
               <ScrollArea className="max-h-32">
-                <div className="space-y-1">
+                <div className="flex flex-col gap-0.5">
                   {filteredUsers
                     .filter((u) => !value.user_ids.includes(u.id))
                     .map((u) => (
@@ -277,13 +288,13 @@ export function SharingField({
                         key={u.id}
                         type="button"
                         onClick={() => toggleUser(u.id)}
-                        className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-sm text-left transition-colors hover:bg-surface-highest focus-visible:bg-surface-highest focus-visible:outline-none"
+                        className="flex w-full items-center justify-between gap-2 rounded-[6px] px-2.5 py-[7px] text-left text-[13px] text-[var(--fg-0)] transition-colors hover:bg-[var(--accent-bg)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-ring)]"
                       >
-                        <div>
+                        <div className="min-w-0">
                           <p className="font-medium">{u.name}</p>
-                          <p className="text-xs text-muted-foreground">{u.email}</p>
+                          <p className="text-[11px] text-[var(--fg-3)]">{u.email}</p>
                         </div>
-                        <UserPlus className="h-3.5 w-3.5" />
+                        <UserPlus className="h-3.5 w-3.5 shrink-0 text-[var(--fg-2)]" />
                       </button>
                     ))}
                 </div>

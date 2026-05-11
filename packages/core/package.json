@@ -1,6 +1,6 @@
 {
   "name": "@mdguggenbichler/slugbase-core",
-  "version": "0.1.59",
+  "version": "0.1.76",
   "description": "SlugBase core: backend and frontend entrypoints for self-hosted and cloud apps",
   "type": "module",
   "exports": {
@@ -13,7 +13,9 @@
     "./frontend/locales/de.json": "./frontend/locales/de.json",
     "./openapi/openapi.selfhosted.yaml": "./openapi/openapi.selfhosted.yaml"
   },
-  "scripts": {},
+  "scripts": {
+    "lint": "eslint ."
+  },
   "engines": {
     "node": ">=20"
   },
@@ -26,6 +28,6 @@
     "react-router-dom": ">=6",
     "i18next": ">=23",
     "react-i18next": ">=13",
-    "axios": ">=1.15.0"
+    "axios": ">=1.15.2"
   }
 }

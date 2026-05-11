@@ -135,10 +135,10 @@ export default function BookmarkTableView({
   }
 
   return (
-    <Card className="overflow-hidden rounded-2xl border border-ghost glass shadow-xl">
-      <Table>
+    <Card className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-1)] p-0.5 shadow-[var(--shadow-sm)]">
+      <Table className="bm-list">
         <TableHeader>
-          <TableRow className="border-b border-ghost bg-surface-low/50 hover:bg-transparent">
+          <TableRow className="bm-row head border-b border-[var(--border-soft)] bg-transparent hover:bg-transparent">
             {bulkMode && (
               <TableHead className={`${cellClass} w-12`}>
                 <button
@@ -148,9 +148,9 @@ export default function BookmarkTableView({
                   aria-label={t('bookmarks.selectAll')}
                 >
                   {selectedBookmarks.size === bookmarks.length ? (
-                    <CheckSquare className="h-5 w-5" />
+                    <CheckSquare className="h-4 w-4" />
                   ) : (
-                    <Square className="h-5 w-5" />
+                    <Square className="h-4 w-4" />
                   )}
                 </button>
               </TableHead>
@@ -203,7 +203,7 @@ export default function BookmarkTableView({
             return (
               <TableRow
                 key={bookmark.id}
-                className={`group border-0 border-b border-ghost/30 transition-colors hover:bg-surface-high/50 ${selectedBookmarks.has(bookmark.id) ? 'bg-primary/10' : ''}`}
+                className={`group border-0 border-b border-[var(--border-soft)] transition-colors hover:bg-[var(--bg-1)] ${selectedBookmarks.has(bookmark.id) ? 'bg-[var(--accent-bg)]' : ''}`}
                 data-state={selectedBookmarks.has(bookmark.id) ? 'selected' : undefined}
               >
                 {bulkMode && (
@@ -215,9 +215,9 @@ export default function BookmarkTableView({
                       aria-label={t('bookmarks.selectAll')}
                     >
                       {selectedBookmarks.has(bookmark.id) ? (
-                        <CheckSquare className="h-5 w-5" />
+                        <CheckSquare className="h-4 w-4" />
                       ) : (
-                        <Square className="h-5 w-5" />
+                        <Square className="h-4 w-4" />
                       )}
                     </button>
                   </TableCell>

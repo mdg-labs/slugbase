@@ -141,7 +141,7 @@ CREATE TABLE IF NOT EXISTS system_config (
   value TEXT NOT NULL
 );
 
--- MFA backup codes (hashes only; TOTP secret lives encrypted on users.mfa_totp_secret_enc)
+-- MFA backup codes (hashes only — TOTP secret lives encrypted on users.mfa_totp_secret_enc)
 CREATE TABLE IF NOT EXISTS mfa_backup_codes (
   id VARCHAR(255) PRIMARY KEY,
   user_id VARCHAR(255) NOT NULL,

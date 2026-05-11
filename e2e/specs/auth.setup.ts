@@ -14,7 +14,7 @@ setup('authenticate', async ({ page }) => {
   await page.getByLabel(/email/i).fill(email);
   // Use id so we target the login form only (works in all locales; placeholder is i18n)
   await page.locator('#password').fill(password);
-  await page.getByRole('button', { name: /log in|login/i }).click();
+  await page.getByRole('button', { name: /sign in|log in|login/i }).click();
 
   await expect(page).not.toHaveURL(/\/login/);
   await page.context().storageState({ path: authFile });

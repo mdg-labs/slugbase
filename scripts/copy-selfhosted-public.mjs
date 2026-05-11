@@ -12,7 +12,7 @@ const frontendDist = join(root, 'frontend', 'dist');
 const selfhostedPublic = join(root, 'apps', 'selfhosted', 'public');
 
 if (!existsSync(frontendDist)) {
-  console.warn('scripts/copy-selfhosted-public.js: frontend/dist not found. Run frontend build first.');
+  console.warn('scripts/copy-selfhosted-public.mjs: frontend/dist not found. Run frontend build first.');
   process.exit(0);
 }
 mkdirSync(selfhostedPublic, { recursive: true });

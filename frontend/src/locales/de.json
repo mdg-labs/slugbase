@@ -68,6 +68,10 @@
     "billingUpgrade": "Upgrade",
     "billingUpgradeToInvite": "Upgrade auf den Team-Plan, um weitere Mitglieder einzuladen.",
     "callbackUrl": "Callback-URL",
+    "copyRedirect": "Kopieren",
+    "oidcActive": "Aktiv",
+    "ssoPageSubtitle": "OpenID-Connect-Anbieter für die Anmeldung am Arbeitsbereich konfigurieren.",
+    "ssoPageTitle": "SSO-Anbieter",
     "clientId": "Kunden-ID",
     "clientIdRequired": "Client-ID ist erforderlich, wenn ein neuer Anbieter erstellt wird",
     "clientSecret": "Client-Geheimnis",
@@ -132,7 +136,10 @@
     "userGroups": "Teams",
     "userinfoUrl": "Benutzerinfo-URL",
     "users": "Benutzer",
-    "viewApiDocs": "API-Dokumentation anzeigen"
+    "viewApiDocs": "API-Dokumentation anzeigen",
+    "apiDocsShortcuts": "Kurzlinks:",
+    "apiDocsCsrfEndpoint": "CSRF-Token",
+    "apiDocsTokensEndpoint": "Persönliche API-Tokens"
   },
   "apiDocs": {
     "description": "Vollständige API-Referenz für SlugBase. Alle Endpunkte erfordern eine Authentifizierung über JWT-Token, es sei denn, es ist anders angegeben.",
@@ -143,6 +150,54 @@
     "tagline": "Ihre Links. Ihre Struktur. Ihre Sprache. Ihre Regeln."
   },
   "auth": {
+    "footerDocs": "Dokumentation",
+    "footerGitHub": "GitHub",
+    "hidePassword": "Passwort ausblenden",
+    "hero": {
+      "title": "Der Lesezeichen-Manager mit einprägsamen Slugs.",
+      "titleAccent": "einprägsamen Slugs.",
+      "desc": {
+        "selfhosted": "Speichern, taggen, sofort wiederfinden. SlugBase macht aus jedem Lesezeichen eine kurze URL, die sich Ihr Team merken kann — ohne Ordner-Chaos.",
+        "cloud": "Speichern, taggen, sofort wiederfinden. SlugBase Cloud gibt Ihrem Team einprägsame Kurz-URLs — ohne Installation oder Betrieb bei Ihnen."
+      },
+      "previewUrl": {
+        "selfhosted": "localhost:8088/go/raft",
+        "cloud": "slugbase.app/go/raft"
+      },
+      "selfhosted": {
+        "chip": "Selbst gehostet · Open Source",
+        "stat1Title": "MIT",
+        "stat1Subtitle": "Open Source",
+        "stat2Title": "Self",
+        "stat2Subtitle": "Bei Ihnen gehostet",
+        "stat3Title": "{{version}}",
+        "stat3Subtitle": "Aktuelle Version",
+        "stat3FallbackTitle": "—",
+        "stat3FallbackSubtitle": "Release",
+        "foot": "Kostenlos und offen auf GitHub — Stern dalassen, Issues melden, Roadmap mitgestalten.",
+        "footLinkLabel": "GitHub",
+        "footLinkHref": "https://github.com/mdg-labs/slugbase"
+      },
+      "cloud": {
+        "chip": "Cloud · betriebener Dienst",
+        "stat1Title": "EU",
+        "stat1Subtitle": "Hosting & Datenbank",
+        "stat2Title": "Stripe",
+        "stat2Subtitle": "Sichere Abrechnung",
+        "stat3Title": "OIDC",
+        "stat3Subtitle": "Single Sign-on",
+        "foot": "Zahlungen und Unterauftragsverarbeiter sind in unseren AGB und der Datenschutzerklärung beschrieben.",
+        "footLinkLabel": "slugbase.app",
+        "footLinkHref": "https://slugbase.app"
+      }
+    },
+    "loginTabs": "Anmelden oder registrieren",
+    "loginTitle": "Willkommen zurück",
+    "orEmail": "oder mit E-Mail",
+    "showPassword": "Passwort anzeigen",
+    "signInButton": "Anmelden",
+    "signInTab": "Anmelden",
+    "signUpTab": "Registrieren",
     "authFailed": "Authentifizierung fehlgeschlagen",
     "createAccount": "Konto erstellen",
     "email": "E-Mail",
@@ -180,6 +235,9 @@
     "allTags": "Alle Tags",
     "bulkActions": "Massenaktionen",
     "bulkAddTags": "Tags hinzufügen",
+    "bulkRemoveTagsOptional": "Tags entfernen (optional)",
+    "bulkRemoveTagsPlaceholder": "Zu entfernende Tags…",
+    "bulkTagPreview": "{{willGet}} erhalten neue Tags, {{already}} haben bereits alle gewählten Tags ({{total}} ausgewählt).",
     "bulkDelete": "Ausgewählte löschen",
     "bulkMoveToFolder": "In Ordner verschieben",
     "bulkSelect": "Mehrere auswählen",
@@ -221,6 +279,12 @@
     "import": "Importieren",
     "importBrowser": "Browser-Lesezeichen importieren",
     "importDescription": "Lese Lesezeichen aus einer JSON- oder HTML-Datei ein. JSON-Dateien sollten ein Array von Lesezeichenobjekten mit den Feldern Titel und URL enthalten.",
+    "importDropHint": "Datei hier ablegen",
+    "importOrBrowse": "oder klicken zum Auswählen",
+    "importSourceHtml": "Browser-Export (HTML)",
+    "importSourceJson": "SlugBase JSON",
+    "importWrongKindHtml": "Bitte die HTML-Quelle wählen und eine .html-Datei auswählen.",
+    "importWrongKindJson": "Bitte die JSON-Quelle wählen und eine .json-Datei auswählen.",
     "importHtml": "HTML importieren",
     "importJson": "JSON importieren",
     "importSuccess": "Importierte {{success}} Lesezeichen, {{failed}} fehlgeschlagen",
@@ -286,6 +350,7 @@
     "teams": "Teams",
     "title": "Lesezeichen",
     "toolbarMore": "Mehr",
+    "toolbarFilters": "Filter",
     "unpinned": "Entfernt",
     "url": "URL",
     "users": "Benutzer",
@@ -293,9 +358,14 @@
     "viewList": "Listenansicht",
     "viewMode": "Ansichtsmodus"
   },
+  "confirm": {
+    "typeInstructionAfter": " ein (exakt), um zu bestätigen.",
+    "typeInstructionBefore": "Geben Sie "
+  },
   "common": {
     "actions": "Aktionen",
     "back": "Zurück",
+    "backToDashboard": "Zurück zur Übersicht",
     "bookmark": "Lesezeichen",
     "bookmarks": "Lesezeichen",
     "cancel": "Abbrechen",
@@ -309,9 +379,12 @@
     "delete": "Löschen",
     "edit": "Bearbeiten",
     "error": "Ein Fehler ist aufgetreten",
+    "errorBoundaryMessage": "Beim Laden dieser Seite ist etwas schiefgelaufen. Sie können neu laden oder zur Übersicht zurückkehren.",
+    "errorTitle": "Etwas ist schiefgelaufen",
     "expandSidebar": "Seitenleiste erweitern",
     "folder": "Ordner",
     "folders": "Ordner",
+    "hidePassword": "Passwort verbergen",
     "goTo": "Gehe zu",
     "loading": "Laden...",
     "navigation": "Navigation",
@@ -327,6 +400,7 @@
     "save": "Speichern",
     "scopeSharedByMe": "Von mir geteilt",
     "scopeSharedWithMe": "Mit mir geteilt",
+    "showPassword": "Passwort anzeigen",
     "search": "Suche",
     "searchPlaceholder": "Suche Lesezeichen, Ordner, Tags...",
     "searchShortcut": "Strg+K",
@@ -342,6 +416,10 @@
     "users": "Benutzer",
     "view": "Ansicht",
     "yes": "Ja"
+  },
+  "errors": {
+    "notFoundBody": "Diese URL existiert nicht oder wurde verschoben.",
+    "notFoundTitle": "Seite nicht gefunden"
   },
   "contact": {
     "email": "E-Mail",
@@ -432,6 +510,7 @@
     "yourLibrary": "Ihre Bibliothek"
   },
   "emailVerification": {
+    "continueToApp": "Weiter zu SlugBase",
     "alreadyVerified": "Dieses Konto wurde bereits verifiziert. Sie können sich einloggen.",
     "backToProfile": "Zurück zum Profil",
     "confirmFailed": "Bestätigung der E-Mail-Verifizierung fehlgeschlagen",
@@ -441,6 +520,7 @@
     "errorDescription": "Der Bestätigungslink ist ungültig oder abgelaufen.",
     "invalidLink": "Dieser Bestätigungslink ist ungültig oder abgelaufen.",
     "invalidToken": "Ungültiger oder abgelaufener Bestätigungstoken",
+    "requestNewLink": "Neuen Link anfordern",
     "pendingDescription": "Eine Bestätigungs-E-Mail wurde an {{email}} gesendet. Bitte überprüfen Sie Ihren Posteingang und klicken Sie auf den Bestätigungslink, um die Änderung abzuschließen.",
     "pendingTitle": "E-Mail-Verifizierung ausstehend",
     "redirecting": "Wird umgeleitet zu Profil...",
@@ -698,6 +778,8 @@
     "confirmCodeLabel": "Bestätigen Sie mit einem 6-stelligen Code",
     "confirmEnrollment": "Bestätigen und aktivieren",
     "copyAllBackupCodes": "Alle Codes kopieren",
+    "downloadBackupTxt": ".txt herunterladen",
+    "printBackupCodes": "Drucken",
     "copyFailed": "Konnte nicht in die Zwischenablage kopiert werden. Manuell kopieren oder HTTPS versuchen.",
     "copySecret": "Geheimnis kopieren",
     "disable": "Zwei-Faktor-Authentifizierung deaktivieren",
@@ -731,7 +813,19 @@
     "trustCodeLabel": "Authentifizierungscode oder Backup-Code",
     "verify": "Überprüfen und fortfahren"
   },
+  "passwordStrength": {
+    "tooShort": "Mindestens 8 Zeichen für ein stärkeres Passwort verwenden.",
+    "weak": "Schwach",
+    "fair": "Mittel",
+    "good": "Gut",
+    "strong": "Stark"
+  },
   "passwordReset": {
+    "requestTitle": "Passwort zurücksetzen",
+    "requestSubtitle": "Geben Sie Ihre E-Mail-Adresse ein, um einen Link zum Zurücksetzen zu erhalten",
+    "resetTitle": "Neues Passwort wählen",
+    "resetSubtitle": "Geben Sie ein neues Passwort ein und bestätigen Sie es.",
+    "updatePassword": "Passwort aktualisieren",
     "backToLogin": "Zurück zum Login",
     "confirmPassword": "Passwort bestätigen",
     "description": "Geben Sie Ihre E-Mail-Adresse ein, um einen Link zum Zurücksetzen des Passworts zu erhalten",
@@ -880,6 +974,31 @@
     "themeAuto": "Automatisch",
     "themeDark": "dunkel",
     "themeLight": "Hell",
+    "accentColor": "Akzentfarbe",
+    "appBaseUrl": "App-Basis-URL",
+    "changePassword": "Passwort ändern",
+    "defaultBookmarkView": "Standard-Lesezeichenansicht",
+    "dataImportExport": "Daten importieren & exportieren",
+    "dataImportExportDescription": "SlugBase-JSON oder eine Browser-HTML-Lesezeichendatei importieren. Export speichert die Arbeitsumgebung als JSON.",
+    "editProfile": "Profil bearbeiten",
+    "integrationOidc": "Sie melden sich mit {{provider}} an.",
+    "integrationsDescription": "Verbundene Dienste für Ihr Konto.",
+    "integrationsPassword": "Sie nutzen E-Mail- und Passwort-Anmeldung. Browser-Erweiterungen und weitere Integrationen erscheinen hier, sobald verfügbar.",
+    "membershipsCloudPlan": "Ihre Organisation nutzt den Tarif {{plan}}.",
+    "membershipsDescription": "Wo Sie in SlugBase Cloud arbeiten.",
+    "membershipsSelfHosted": "Self-Hosted-Arbeitsbereich — Ihre Lesezeichen bleiben auf Ihrem Server.",
+    "membershipsTitle": "Mitgliedschaft",
+    "sectionApiTokens": "API-Tokens",
+    "sectionAppearance": "Erscheinungsbild",
+    "sectionDataPrivacy": "Daten & Privatsphäre",
+    "sectionGeneral": "Allgemein",
+    "sectionIntegrations": "Integrationen",
+    "sectionSecurity": "Sicherheit",
+    "settingsNavLabel": "Profilbereiche",
+    "shortcutsDescription": "Verknüpfungen zu SlugBase-Funktionen rund um Ihr Konto.",
+    "shortcutsTitle": "Verknüpfungen",
+    "statBookmarks": "Lesezeichen",
+    "statSlugs": "Gespeicherte /go-Routen",
     "title": "Profil",
     "tokenCreated": "Token erstellt",
     "tokenName": "Tokenname",
@@ -889,6 +1008,9 @@
     "userKey": "Benutzerschlüssel",
     "userKeyDescription": "Ihr einzigartiger Identifikator für das Weiterleiten von Lesezeichen. Teilen Sie dies mit anderen, damit sie auf Ihre geteilten Lesezeichen zugreifen können.",
     "viewApiDocs": "API-Dokumentation anzeigen",
+    "apiDocsShortcuts": "Kurzlinks:",
+    "apiDocsCsrfEndpoint": "CSRF-Token",
+    "apiDocsTokensEndpoint": "Persönliche API-Tokens",
     "yourOrganizations": "Ihre Organisationen",
     "yourTokens": "Ihre Token"
   },
@@ -928,6 +1050,7 @@
     "yourSearchUrl": "Ihre Such-URL"
   },
   "setup": {
+    "subtitle": "Willkommen bei SlugBase! Erstellen Sie Ihr erstes Admin-Konto, um zu starten.",
     "adminNote": "Dieser Benutzer wird als Administrator erstellt. Sie können OIDC-Anbieter später in den Administratoreinstellungen konfigurieren.",
     "alreadyInitialized": "System bereits initialisiert",
     "confirmPassword": "Passwort bestätigen",
@@ -944,6 +1067,7 @@
     "redirecting": "Wird umgeleitet zu Anmeldeseite...",
     "redirectingToDashboard": "Weiterleitung zum Dashboard...",
     "submit": "Admin-Benutzer erstellen",
+    "subtitle": "Willkommen bei SlugBase! Erstellen Sie Ihren ersten Admin-Benutzer, um zu starten.",
     "success": "Einrichtung erfolgreich abgeschlossen!",
     "title": "Ersteinrichtung"
   },
@@ -974,6 +1098,7 @@
     "typeToSearchUsers": "Geben Sie mindestens {{count}} Zeichen ein, um übereinstimmende Benutzer zu sehen."
   },
   "signup": {
+    "cloudTitle": "SlugBase-Cloud-Konto erstellen",
     "acceptTermsAnd": " und die ",
     "acceptTermsPrefix": "Ich habe die gelesen und akzeptiere die ",
     "acceptTermsPrivacy": "Datenschutzbestimmungen",
@@ -1021,6 +1146,7 @@
     "testFailed": "Test-E-Mail konnte nicht gesendet werden",
     "testSent": "Test-E-Mail erfolgreich gesendet!",
     "title": "SMTP-E-Mail-Konfiguration",
+    "togglePasswordVisibility": "SMTP-Passwort ein- oder ausblenden",
     "user": "Benutzername/E-Mail",
     "userPlaceholder": "deine-email@gmail.com"
   },
@@ -1038,6 +1164,7 @@
     "name": "Name",
     "noMatchesDescription": "Keine Tags entsprechen den aktuellen Filtern. Filter zurücksetzen, um alle zu sehen.",
     "pageSubtitle": "Labels und filtere Lesezeichen in deiner Bibliothek.",
+    "renameInfoStrip": "Wird auf <strong>{{count}}</strong> Lesezeichen verwendet · Umbenennen aktualisiert alle",
     "sortAlphabetical": "Alphabetisch",
     "sortRecentlyAdded": "Kürzlich Hinzugefügt",
     "tagName": "Tag-Name",

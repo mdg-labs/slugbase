@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Copy backend dist into packages/core so that @slugbase/core/backend can re-export.
- * Run after building the backend (e.g. from root: npm run build --workspace=backend && node scripts/copy-core-dist.js).
+ * Run after building the backend (e.g. from root: npm run build --workspace=backend && node scripts/copy-core-dist.mjs).
  */
 
 import { cpSync, mkdirSync, existsSync } from 'fs';
@@ -15,7 +15,7 @@ const schemaSrc = join(root, 'backend', 'src', 'db', 'schema.sql');
 const schemaDest = join(backendDist, 'db', 'schema.sql');
 
 if (!existsSync(backendDist)) {
-  console.warn('scripts/copy-core-dist.js: backend/dist not found. Run npm run build --workspace=backend first.');
+  console.warn('scripts/copy-core-dist.mjs: backend/dist not found. Run npm run build --workspace=backend first.');
   process.exit(0);
 }
 // initDatabase() reads schema.sql from dist/db/; include it so published package has it

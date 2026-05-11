@@ -20,21 +20,34 @@ export function PageHeader({
   subtitleClassName,
 }: PageHeaderProps) {
   return (
-    <div className={cn('flex flex-wrap items-end justify-between gap-4', className)}>
-      <div className="min-w-0 space-y-1">
-        <h1 className={cn('text-2xl font-semibold tracking-tight text-foreground', titleClassName)}>
+    <div
+      className={cn(
+        'page-head mb-[18px] flex flex-wrap items-end gap-4',
+        className
+      )}
+    >
+      <div className="min-w-0">
+        <h1
+          className={cn(
+            'm-0 text-[22px] font-semibold tracking-[-0.02em] text-[var(--fg-0)]',
+            titleClassName
+          )}
+        >
           {title}
         </h1>
         {subtitle && (
-          <p className={cn('text-sm text-muted-foreground', subtitleClassName)}>
+          <p
+            className={cn(
+              'sub mt-0.5 text-[12.5px] text-[var(--fg-2)]',
+              subtitleClassName
+            )}
+          >
             {subtitle}
           </p>
         )}
       </div>
       {actions && (
-        <div className="flex items-center gap-2">
-          {actions}
-        </div>
+        <div className="actions ml-auto flex flex-wrap items-center gap-2">{actions}</div>
       )}
     </div>
   );

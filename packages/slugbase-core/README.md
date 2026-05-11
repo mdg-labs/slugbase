@@ -1,5 +1,3 @@
-# slugbase-core (legacy folder - not published for SlugBase Cloud)
+# slugbase-core (legacy folder - not published for the hosted product)
 
-**SlugBase Cloud** consumes **`@mdguggenbichler/slugbase-core`** from [`packages/core`](../core), packed with `npm run pack:cloud` into slugbase-cloud `vendor/` (see [Packing core for SlugBase Cloud](https://github.com/mdg-labs/slugbase-docs-internal/blob/main/docs/publishing-core-for-cloud.mdx); optional manual `npm publish` from `.publish-core`).
-
-This `packages/slugbase-core` directory was an older packaging layout. It is **not** the publish target anymore.
+The **`@mdguggenbichler/slugbase-core`** package is built from [`packages/core`](../core) via `npm run pack:cloud` for the hosted SlugBase product. This `packages/slugbase-core` directory was an older packaging layout and is **not** the publish target anymore.

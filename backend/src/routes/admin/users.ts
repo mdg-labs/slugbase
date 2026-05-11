@@ -10,6 +10,7 @@ import { getTenantId, DEFAULT_TENANT_ID } from '../../utils/tenant.js';
 import { sendInviteEmail, isEmailSendingAvailable } from '../../utils/email.js';
 import { isCloud } from '../../config/mode.js';
 import { recordAuditEvent } from '../../services/audit-log.js';
+import { spinOffCloudUserFromOrg } from '../../services/cloud-spin-off-user.js';
 
 const router = Router();
 router.use(requireAuth());
@@ -444,6 +445,43 @@ router.delete('/:id', async (req, res) => {
     if (!(await userInCurrentOrg(req, id))) {
       return res.status(404).json({ error: 'User not found' });
     }
+
+    if (isCloud) {
+      const fromTenantId = getTenantId(req);
+      if (!fromTenantId || fromTenantId === DEFAULT_TENANT_ID) {
+        return res.status(400).json({ error: 'No organization context' });
+      }
+      const membership = await queryOne('SELECT role FROM org_members WHERE user_id = ? AND org_id = ?', [
+        id,
+        fromTenantId,
+      ]);
+      if ((membership as { role?: string } | null)?.role === 'owner') {
+        return res.status(403).json({ error: 'Cannot remove the organization owner.' });
+      }
+
+      const { newOrgId } = await spinOffCloudUserFromOrg({
+        userId: id,
+        fromTenantId,
+        userEmail: String((user as { email?: string }).email || ''),
+      });
+
+      await recordAuditEvent(req, {
+        action: 'org_member.removed_to_personal_workspace',
+        entityType: 'org_member',
+        entityId: id,
+        metadata: {
+          email: (user as any).email,
+          from_org: fromTenantId,
+          to_org: newOrgId,
+        },
+      });
+
+      return res.json({
+        message: 'User removed from organization; personal workspace created.',
+        new_org_id: newOrgId,
+      });
+    }
+
     await recordAuditEvent(req, {
       action: 'org_member.deleted',
       entityType: 'org_member',
