@@ -254,7 +254,15 @@ router.post('/login', authRateLimiter, async (req, res, next) => {
     if (rowMfaEnabled(user as any)) {
       res.clearCookie('token', getClearAuthCookieOptions());
       const pendingJwt = signMfaPendingToken(userPayload.id);
-      res.cookie(MFA_PENDING_COOKIE_NAME, pendingJwt, getMfaPendingCookieOptions(MFA_PENDING_JWT_TTL_MS));
+      const mfaPendingOpts = getMfaPendingCookieOptions(MFA_PENDING_JWT_TTL_MS);
+      res.cookie(MFA_PENDING_COOKIE_NAME, pendingJwt, {
+        httpOnly: true,
+        secure: mfaPendingOpts.secure,
+        sameSite: 'lax',
+        path: '/',
+        maxAge: MFA_PENDING_JWT_TTL_MS,
+        ...(mfaPendingOpts.domain != null ? { domain: mfaPendingOpts.domain } : {}),
+      });
       logMfaAudit('mfa_login_stepup_required', { user_id: userPayload.id });
       return res.status(200).json({ mfa_required: true });
     }

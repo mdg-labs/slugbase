@@ -11,6 +11,7 @@ import {
   EMAIL_PRIMARY,
   EMAIL_PRIMARY_SHADOW,
 } from './email-layout.js';
+import { htmlToPlainTextSnippet } from './html-plain-text.js';
 
 /**
  * Validate and escape URL for safe use in HTML href attributes
@@ -130,7 +131,7 @@ async function sendEmailViaPostmark(
     return { success: false, error: 'Postmark is not configured (missing POSTMARK_API_KEY or POSTMARK_FROM_EMAIL)' };
   }
   const from = fromName ? `"${fromName}" <${fromEmail}>` : fromEmail;
-  const textBody = text || html.replace(/<[^>]+>/g, '').slice(0, 100000);
+  const textBody = text || htmlToPlainTextSnippet(html, 100_000);
   try {
     const res = await fetch('https://api.postmarkapp.com/email', {
       method: 'POST',
@@ -212,16 +213,11 @@ export async function sendEmail(to: string, subject: string, html: string, text?
     console.log('Creating SMTP transporter with:', { host: config.host, port: config.port, secure: config.secure });
     const transporter = nodemailer.createTransport(transportConfig);
 
-    const stripHtml = (htmlContent: string): string => {
-      if (htmlContent.length > 100000) htmlContent = htmlContent.substring(0, 100000);
-      return htmlContent.replace(/<[^>]{0,1000}>/g, '');
-    };
-
     const info = await transporter.sendMail({
       from: `"${config.fromName}" <${config.from}>`,
       to,
       subject,
-      text: text || stripHtml(html),
+      text: text || htmlToPlainTextSnippet(html, 100_000),
       html,
     });
 

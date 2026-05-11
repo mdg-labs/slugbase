@@ -39,13 +39,24 @@ export function getResolvedOidcEndpoints(provider: OIDCProviderRecord): {
     };
   }
 
-  if (issuerRaw.includes('login.microsoftonline.com') && /\/v2\.0\/?$/.test(issuerRaw)) {
-    const tenantBase = issuerRaw.replace(/\/v2\.0\/?$/, '');
-    return {
-      authorizationURL: authOverride || `${tenantBase}/oauth2/v2.0/authorize`,
-      tokenURL: tokenOverride || `${tenantBase}/oauth2/v2.0/token`,
-      userInfoURL: userinfoOverride || 'https://graph.microsoft.com/oidc/userinfo',
-    };
+  if (issuerHostname === 'login.microsoftonline.com') {
+    let issuerParsed: URL | null = null;
+    try {
+      issuerParsed = new URL(issuerRaw);
+    } catch {
+      issuerParsed = null;
+    }
+    if (issuerParsed) {
+      const segments = issuerParsed.pathname.replace(/\/+$/, '').split('/').filter(Boolean);
+      if (segments.length === 2 && segments[1]!.toLowerCase() === 'v2.0') {
+        const tenantBase = `${issuerParsed.origin}/${segments[0]}`;
+        return {
+          authorizationURL: authOverride || `${tenantBase}/oauth2/v2.0/authorize`,
+          tokenURL: tokenOverride || `${tenantBase}/oauth2/v2.0/token`,
+          userInfoURL: userinfoOverride || 'https://graph.microsoft.com/oidc/userinfo',
+        };
+      }
+    }
   }
 
   return {

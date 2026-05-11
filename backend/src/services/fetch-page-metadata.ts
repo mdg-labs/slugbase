@@ -5,6 +5,7 @@
 
 import dns from 'dns';
 import { promisify } from 'util';
+import { decodeBasicHtmlEntitiesOnce } from '../utils/html-plain-text.js';
 
 const resolve4 = promisify(dns.resolve4);
 const resolve6 = promisify(dns.resolve6);
@@ -78,12 +79,7 @@ function extractMetadataFromHtml(html: string): PageMetadata {
   // <title>...</title>
   const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
   if (titleMatch?.[1]) {
-    result.title = titleMatch[1]
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
+    result.title = decodeBasicHtmlEntitiesOnce(titleMatch[1])
       .replace(/\s+/g, ' ')
       .trim()
       .slice(0, 500);
@@ -93,12 +89,7 @@ function extractMetadataFromHtml(html: string): PageMetadata {
   const descMatch = html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)["']/i)
     || html.match(/<meta[^>]+content=["']([^"']*)["'][^>]+name=["']description["']/i);
   if (descMatch?.[1]) {
-    result.description = descMatch[1]
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
+    result.description = decodeBasicHtmlEntitiesOnce(descMatch[1])
       .replace(/\s+/g, ' ')
       .trim()
       .slice(0, 1000);
@@ -109,14 +100,14 @@ function extractMetadataFromHtml(html: string): PageMetadata {
     const ogTitle = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']*)["']/i)
       || html.match(/<meta[^>]+content=["']([^"']*)["'][^>]+property=["']og:title["']/i);
     if (ogTitle?.[1]) {
-      result.title = ogTitle[1].replace(/\s+/g, ' ').trim().slice(0, 500);
+      result.title = decodeBasicHtmlEntitiesOnce(ogTitle[1]).replace(/\s+/g, ' ').trim().slice(0, 500);
     }
   }
   if (!result.description) {
     const ogDesc = html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']*)["']/i)
       || html.match(/<meta[^>]+content=["']([^"']*)["'][^>]+property=["']og:description["']/i);
     if (ogDesc?.[1]) {
-      result.description = ogDesc[1].replace(/\s+/g, ' ').trim().slice(0, 1000);
+      result.description = decodeBasicHtmlEntitiesOnce(ogDesc[1]).replace(/\s+/g, ' ').trim().slice(0, 1000);
     }
   }
 
@@ -124,7 +115,7 @@ function extractMetadataFromHtml(html: string): PageMetadata {
   const ogSiteName = html.match(/<meta[^>]+property=["']og:site_name["'][^>]+content=["']([^"']*)["']/i)
     || html.match(/<meta[^>]+content=["']([^"']*)["'][^>]+property=["']og:site_name["']/i);
   if (ogSiteName?.[1]) {
-    result.siteName = ogSiteName[1].replace(/\s+/g, ' ').trim().slice(0, 200);
+    result.siteName = decodeBasicHtmlEntitiesOnce(ogSiteName[1]).replace(/\s+/g, ' ').trim().slice(0, 200);
   }
 
   return result;
@@ -165,7 +156,7 @@ export async function fetchPageMetadata(url: string): Promise<PageMetadata | nul
 
   try {
     let response: Response | null = null;
-    let currentUrl = trimmed;
+    let currentUrl = parsed.href;
     let redirectCount = 0;
 
     while (redirectCount <= MAX_REDIRECTS) {
