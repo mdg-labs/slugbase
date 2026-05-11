@@ -1,6 +1,6 @@
 {
   "name": "slugbase",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Self-hosted bookmark manager with optional link forwarding",
   "private": true,
   "workspaces": [
