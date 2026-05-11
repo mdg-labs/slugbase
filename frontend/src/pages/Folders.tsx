@@ -160,21 +160,13 @@ export default function Folders() {
 
   const filterChips = useMemo(() => {
     const list: { key: string; label: string; ariaLabel: string }[] = [];
-    if (showScopeTabs && effectiveScope !== 'all') {
-      const scopeLabel =
-        effectiveScope === 'mine'
-          ? t('bookmarks.scopeMine')
-          : effectiveScope === 'shared_with_me'
-            ? t('common.scopeSharedWithMe')
-            : t('common.scopeSharedByMe');
-      list.push({ key: 'scope', label: scopeLabel, ariaLabel: t('folders.clearFilters') + ' ' + scopeLabel });
-    }
+    // Scope is shown in the dedicated sharing/scope tabs above; skip duplicate active-filter chips.
     if (sortBy !== DEFAULT_SORT) {
       const sortLabel = sortBy === 'recently_added' ? t('folders.sortRecentlyAdded') : t('folders.sortAlphabetical');
       list.push({ key: 'sort', label: `Sort: ${sortLabel}`, ariaLabel: t('folders.clearFilters') + ' Sort' });
     }
     return list;
-  }, [showScopeTabs, effectiveScope, sortBy, t]);
+  }, [sortBy, t]);
 
   const sortedFolders = useMemo(() => [...folders], [folders]);
   const visibleFolders = useMemo(() => {

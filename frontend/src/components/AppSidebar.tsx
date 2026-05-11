@@ -1,23 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   Bookmark,
   Folder,
   Tag,
-  Settings,
   LayoutDashboard,
   ChevronLeft,
   ChevronRight,
-  ChevronDown,
   Github,
-  Users,
-  UserCog,
-  Key,
-  Sparkles,
-  CreditCard,
-  Shield,
-  ScrollText,
   Search,
   Settings2,
 } from 'lucide-react';
@@ -31,25 +22,13 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarSeparator,
   useSidebar,
 } from './ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip-base';
 import { useAppConfig } from '../contexts/AppConfigContext';
 import { useSearchCommand } from '../contexts/SearchCommandContext';
-import {
-  usePlan,
-  usePlanLoadState,
-  showAdminAiNav,
-  showAdminMembersNav,
-  showAdminTeamsNav,
-  showAdminAuditLogNav,
-} from '../contexts/PlanContext';
 import type { User } from '../contexts/AuthContext';
 import { cn } from '../lib/utils';
-import { canAccessWorkspaceAdmin } from '../utils/adminAccess';
-
-const SIDEBAR_ADMIN_OPEN_KEY = 'slugbase_sidebar_admin_open';
 
 function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/);
@@ -68,71 +47,17 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
   const { t } = useTranslation();
   const location = useLocation();
   const pathname = location.pathname;
-  const { appBasePath, pathPrefixForLinks, hideAdminOidcAndSmtp, extraAdminNavItems } = useAppConfig();
-  const planInfo = usePlan();
-  const planLoadState = usePlanLoadState();
+  const { appBasePath, pathPrefixForLinks } = useAppConfig();
   const { setOpenMobile, toggleSidebar, isMobile, state } = useSidebar();
   const { openSearch } = useSearchCommand();
   const prefix = pathPrefixForLinks || '';
   const pathBaseForActive = pathPrefixForLinks ?? appBasePath ?? '';
-  const adminBaseFull = `${pathBaseForActive}/admin`.replace(/\/+/g, '/') || '/admin';
-  const adminBaseLink = `${prefix}/admin`.replace(/\/+/g, '/') || '/admin';
-
-  const showMembers = showAdminMembersNav(planInfo, planLoadState);
-  const showTeams = showAdminTeamsNav(planInfo, planLoadState);
-  const showAuditLog = showAdminAuditLogNav(planInfo, planLoadState);
-  const showAdminAi = showAdminAiNav(planInfo);
-
-  const adminNavItems = [
-    ...(showMembers
-      ? [{ pathForLink: `${adminBaseLink}/members`, pathForActive: `${adminBaseFull}/members`, label: t('admin.users'), icon: Users }]
-      : []),
-    ...(showTeams
-      ? [{ pathForLink: `${adminBaseLink}/teams`, pathForActive: `${adminBaseFull}/teams`, label: t('admin.teams'), icon: UserCog }]
-      : []),
-    ...(showAuditLog
-      ? [
-          {
-            pathForLink: `${adminBaseLink}/audit-log`,
-            pathForActive: `${adminBaseFull}/audit-log`,
-            label: t('admin.auditLog.nav'),
-            icon: ScrollText,
-          },
-        ]
-      : []),
-    ...(!hideAdminOidcAndSmtp
-      ? [
-          { pathForLink: `${adminBaseLink}/oidc`, pathForActive: `${adminBaseFull}/oidc`, label: t('admin.oidcProviders'), icon: Key },
-          { pathForLink: `${adminBaseLink}/settings`, pathForActive: `${adminBaseFull}/settings`, label: t('admin.settings'), icon: Settings },
-        ]
-      : []),
-    ...(showAdminAi
-      ? [{ pathForLink: `${adminBaseLink}/ai`, pathForActive: `${adminBaseFull}/ai`, label: t('admin.ai.nav'), icon: Sparkles }]
-      : []),
-    ...(extraAdminNavItems ?? []).map(({ path, label }) => ({
-      pathForLink: `${adminBaseLink}/${path}`.replace(/\/+/g, '/'),
-      pathForActive: `${adminBaseFull}/${path}`.replace(/\/+/g, '/'),
-      label,
-      icon: CreditCard,
-    })),
-  ];
 
   const rootActivePath = pathBaseForActive || '/';
   const isOverviewActive =
     pathname === rootActivePath ||
     pathname === `${rootActivePath}/` ||
     pathname === (pathBaseForActive || '/');
-
-  const showAdmin = canAccessWorkspaceAdmin(user);
-  const [adminOpen, setAdminOpen] = useState(() => {
-    if (typeof window === 'undefined') return true;
-    const stored = localStorage.getItem(SIDEBAR_ADMIN_OPEN_KEY);
-    return stored !== 'false';
-  });
-
-  useEffect(() => {
-    localStorage.setItem(SIDEBAR_ADMIN_OPEN_KEY, String(adminOpen));
-  }, [adminOpen]);
 
   const rootLink = prefix || '/';
   const rootActive = rootActivePath;
@@ -150,8 +75,6 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
       setOpenMobile(false);
     }
   };
-
-  const isAdminPathActive = pathname === adminBaseFull || pathname.startsWith(`${adminBaseFull}/`);
 
   const itemClass = cn(
     'relative gap-2.5 rounded-md border-l-2 border-transparent px-2 py-1.5 text-[13px] text-fg-1',
@@ -171,8 +94,8 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
         'group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2 group-data-[collapsible=icon]:py-3'
       )}
     >
-      <div className="grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-lg border border-accent-ring bg-accent-bg">
-        <img src="/slugbase_icon_purple.svg" alt="" className="h-6 w-6 object-contain" width={24} height={24} aria-hidden />
+      <div className="grid h-8 w-8 shrink-0 place-items-center overflow-hidden">
+        <img src="/slugbase_icon_purple.svg" alt="" className="h-7 w-7 object-contain" width={28} height={28} aria-hidden />
       </div>
       <div className="min-w-0 flex-1 group-data-[collapsible=icon]:sr-only">
         <div className="text-sm font-semibold tracking-tight text-fg-0">SlugBase</div>
@@ -243,78 +166,6 @@ export default function AppSidebar({ user, version = null }: AppSidebarProps) {
             </SidebarGroupContent>
           </SidebarGroup>
 
-          {showAdmin && !isMobile && state === 'collapsed' && (
-            <SidebarGroup className="px-0 py-1">
-              <SidebarGroupContent>
-                <SidebarMenu className="gap-px px-2">
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={isAdminPathActive}
-                      tooltip={t('admin.title')}
-                      className={itemClass}
-                    >
-                      <Link to={adminBaseLink} onClick={handleNavClick} aria-current={isAdminPathActive ? 'page' : undefined}>
-                        <Shield className="shrink-0" strokeWidth={1.75} />
-                        <span>{t('admin.title')}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          )}
-
-          {showAdmin && (isMobile || state === 'expanded') && (
-            <>
-              <SidebarSeparator className="bg-border-soft" />
-              <SidebarGroup className="px-0 py-1">
-                <button
-                  type="button"
-                  onClick={() => setAdminOpen((prev) => !prev)}
-                  data-sidebar="group-label"
-                  className={cn(
-                    'sb-section flex h-8 w-full shrink-0 items-center justify-between overflow-hidden px-2.5 pb-1 pt-3 font-mono text-[10px] font-normal uppercase tracking-[0.08em] text-fg-3 outline-none ring-sidebar-ring transition-[margin,opacity] duration-200 ease-linear focus-visible:ring-2',
-                    'hover:text-fg-2'
-                  )}
-                  aria-expanded={adminOpen}
-                >
-                  <span className="flex items-center gap-1.5 truncate">
-                    {adminOpen ? <ChevronDown className="h-4 w-4 shrink-0" strokeWidth={1.75} /> : <ChevronRight className="h-4 w-4 shrink-0" strokeWidth={1.75} />}
-                    {t('admin.title')}
-                  </span>
-                </button>
-                {adminOpen && (
-                  <SidebarGroupContent>
-                    <SidebarMenu className="gap-px px-2">
-                      {adminNavItems.map((item) => {
-                        const Icon = item.icon;
-                        return (
-                          <SidebarMenuItem key={item.pathForLink}>
-                            <SidebarMenuButton
-                              asChild
-                              isActive={pathname === item.pathForActive}
-                              tooltip={item.label}
-                              className={itemClass}
-                            >
-                              <Link
-                                to={item.pathForLink}
-                                onClick={handleNavClick}
-                                aria-current={pathname === item.pathForActive ? 'page' : undefined}
-                              >
-                                <Icon className="shrink-0" strokeWidth={1.75} />
-                                <span>{item.label}</span>
-                              </Link>
-                            </SidebarMenuButton>
-                          </SidebarMenuItem>
-                        );
-                      })}
-                    </SidebarMenu>
-                  </SidebarGroupContent>
-                )}
-              </SidebarGroup>
-            </>
-          )}
         </SidebarContent>
 
         <SidebarFooter className="mt-auto gap-0 border-t border-border-soft p-0 pt-1">

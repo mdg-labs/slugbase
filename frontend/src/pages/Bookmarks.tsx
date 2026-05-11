@@ -549,15 +549,7 @@ export default function Bookmarks() {
     if (pinnedFilter) {
       list.push({ key: 'pinned', label: t('bookmarks.pinned'), ariaLabel: t('bookmarks.clearFilters') + ' ' + t('bookmarks.pinned') });
     }
-    if (effectiveScope === 'mine') {
-      list.push({ key: 'scope', label: t('bookmarks.scopeMine'), ariaLabel: t('bookmarks.clearFilters') + ' ' + t('bookmarks.scopeMine') });
-    }
-    if (effectiveScope === 'shared_with_me') {
-      list.push({ key: 'scope', label: t('common.scopeSharedWithMe'), ariaLabel: t('bookmarks.clearFilters') + ' ' + t('common.scopeSharedWithMe') });
-    }
-    if (effectiveScope === 'shared_by_me') {
-      list.push({ key: 'scope', label: t('common.scopeSharedByMe'), ariaLabel: t('bookmarks.clearFilters') + ' ' + t('common.scopeSharedByMe') });
-    }
+    // Scope is shown in the dedicated sharing/scope tabs above; skip duplicate active-filter chips.
     return list;
   })();
 
