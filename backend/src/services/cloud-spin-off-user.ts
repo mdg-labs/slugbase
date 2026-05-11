@@ -74,6 +74,7 @@ export interface SpinOffCloudUserParams {
 
 export interface SpinOffCloudUserResult {
   newOrgId: string;
+  newOrgName: string;
 }
 
 /**
@@ -139,5 +140,5 @@ export async function spinOffCloudUserFromOrg(params: SpinOffCloudUserParams): P
     await ex(`UPDATE ai_suggestion_usage SET tenant_id = ? WHERE user_id = ? AND tenant_id = ?`, [newOrgId, userId, fromTenantId]);
   });
 
-  return { newOrgId };
+  return { newOrgId, newOrgName: orgName };
 }

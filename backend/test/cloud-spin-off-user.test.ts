@@ -54,10 +54,14 @@ describe('Cloud spin-off user from org', () => {
     await initDatabase();
     await ensureCloudOrgTables();
 
-    const tenantMw: express.RequestHandler = (req, _res, next) => {
+    const tenantMw: express.RequestHandler = async (req, _res, next) => {
       const id = req.headers['x-org-id'];
       if (typeof id === 'string' && id.trim()) {
-        (req as express.Request & { tenantId?: string }).tenantId = id.trim();
+        const tenantId = id.trim();
+        (req as express.Request & { tenantId?: string; plan?: string }).tenantId = tenantId;
+        const org = await queryOne('SELECT plan FROM organizations WHERE id = ?', [tenantId]);
+        (req as express.Request & { plan?: string }).plan =
+          (org as { plan?: string } | null)?.plan ?? 'free';
       }
       next();
     };
@@ -107,7 +111,7 @@ describe('Cloud spin-off user from org', () => {
       [bm, orgOld, uMember, 'Hi', 'https://example.com', 'my-slug', 0]
     );
 
-    const { newOrgId } = await spinOffCloudUserFromOrg({
+    const { newOrgId, newOrgName } = await spinOffCloudUserFromOrg({
       userId: uMember,
       fromTenantId: orgOld,
       userEmail: `m-${uMember.slice(0, 6)}@t.local`,
@@ -121,6 +125,7 @@ describe('Cloud spin-off user from org', () => {
 
     const bmRow = await queryOne('SELECT tenant_id FROM bookmarks WHERE id = ?', [bm]);
     assert.strictEqual((bmRow as { tenant_id: string }).tenant_id, newOrgId);
+    assert.ok(newOrgName.includes("'s workspace"));
   });
 
   it('DELETE admin user: 403 when target is org owner', async () => {
@@ -207,5 +212,46 @@ describe('Cloud spin-off user from org', () => {
 
     const userStill = await queryOne('SELECT id FROM users WHERE id = ?', [uMember]);
     assert.ok(userStill);
+  });
+
+  it('DELETE admin user: 403 when org is not Team plan', async () => {
+    const orgFree = uuidv4();
+    const uAdmin = uuidv4();
+    const uMember = uuidv4();
+    const hash = await bcrypt.hash('x', 4);
+    await execute(`INSERT INTO organizations (id, name, plan, included_seats) VALUES (?, ?, 'free', 5)`, [
+      orgFree,
+      'Solo-ish',
+    ]);
+    await execute(
+      `INSERT INTO users (id, email, name, user_key, password_hash) VALUES (?, ?, ?, ?, ?)`,
+      [uAdmin, `d-${uAdmin.slice(0, 6)}@t.local`, 'Adm', `k-d-${uAdmin.slice(0, 6)}`, hash]
+    );
+    await execute(
+      `INSERT INTO users (id, email, name, user_key, password_hash) VALUES (?, ?, ?, ?, ?)`,
+      [uMember, `e-${uMember.slice(0, 6)}@t.local`, 'Mem', `k-e-${uMember.slice(0, 6)}`, hash]
+    );
+    await execute(`INSERT INTO org_members (user_id, org_id, role) VALUES (?, ?, 'owner')`, [uAdmin, orgFree]);
+    await execute(`INSERT INTO org_members (user_id, org_id, role) VALUES (?, ?, 'member')`, [uMember, orgFree]);
+
+    const jwtTok = generateToken({
+      id: uAdmin,
+      email: `d-${uAdmin.slice(0, 6)}@t.local`,
+      name: 'Adm',
+      user_key: `k-d-${uAdmin.slice(0, 6)}`,
+      is_admin: false,
+    });
+    const csrf = await getCsrfAuthHeaders(baseUrl);
+    const resDel = await fetch(`${baseUrl}/api/admin/users/${uMember}`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${jwtTok}`,
+        'x-org-id': orgFree,
+        ...csrf,
+      },
+    });
+    assert.strictEqual(resDel.status, 403);
+    const errBody = (await resDel.json()) as { error?: string };
+    assert.ok(String(errBody.error || '').includes('Team plan'));
   });
 });

@@ -21,6 +21,8 @@ export {
   isAuditLogEnabledForRequest,
   isAuditLogEnabledForTenantId,
 } from './dist/services/audit-log.js';
+export { spinOffCloudUserFromOrg } from './dist/services/cloud-spin-off-user.js';
+export { invalidateUserAuth } from './dist/services/auth-revocation.js';
 export {
   buildEmailLayout,
   escapeHtml,
