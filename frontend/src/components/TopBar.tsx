@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, Search } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { SidebarTrigger, useSidebar } from './ui/sidebar';
 import UserDropdown from './UserDropdown';
 import { Breadcrumbs } from './Breadcrumbs';
 import type { User } from '../contexts/AuthContext';
-import { useSearchCommand } from '../contexts/SearchCommandContext';
 import BookmarkModal from './modals/BookmarkModal';
 import api from '../api/client';
 
@@ -16,7 +15,6 @@ interface TopBarProps {
 export default function TopBar({ user }: TopBarProps) {
   const { t } = useTranslation();
   const { isMobile } = useSidebar();
-  const { openSearch } = useSearchCommand();
   const [bookmarkModalOpen, setBookmarkModalOpen] = useState(false);
   const [folders, setFolders] = useState<Array<{ id: string; name: string }>>([]);
   const [tags, setTags] = useState<Array<{ id: string; name: string }>>([]);
@@ -46,17 +44,6 @@ export default function TopBar({ user }: TopBarProps) {
           <Breadcrumbs className="crumbs min-w-0" />
         </div>
         <div className="actions flex shrink-0 items-center gap-2">
-          <button
-            type="button"
-            onClick={() => openSearch()}
-            className="inline-flex items-center gap-1.5 rounded-md border border-transparent px-2.5 py-1.5 text-xs font-medium text-fg-2 transition-colors hover:bg-bg-hover hover:text-fg-0"
-          >
-            <Search className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
-            <span className="hidden sm:inline">{t('dashboard.searchPlaceholder')}</span>
-            <span className="hidden rounded border border-border bg-bg-3 px-1.5 py-0.5 font-mono text-[10.5px] leading-snug text-fg-2 sm:inline">
-              ⌘K
-            </span>
-          </button>
           <button
             type="button"
             onClick={() => setBookmarkModalOpen(true)}
