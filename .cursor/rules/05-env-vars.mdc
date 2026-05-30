@@ -1,9 +1,9 @@
 ---
-description: Every new env var must be registered via Phase CLI, added to .env.example, validated in the app config schema, and documented before commit
+description: Every new env var must be registered via Infisical, added to .env.example, validated in the app config schema, and documented before commit
 alwaysApply: true
 ---
 
-# New environment variables — Phase-first workflow
+# New environment variables — Infisical-first workflow
 
 When introducing **any** new env var, complete all four steps below in the **same task commit**. The verifier (Layer 3c) checks all four. Grounded in spec §15 (configuration model).
 
@@ -16,9 +16,13 @@ When introducing **any** new env var, complete all four steps below in the **sam
 
 ## Required steps (in order)
 
-### 1. Set the value via Phase CLI (use the `phase-cli` skill)
+### 1. Set the value in Infisical `development` via CLI
 
-Follow the `phase-cli` skill to set the key in the `development` environment. For security-critical values (secrets, keys) that you shouldn't invent: **stop and ask the user** rather than generating a placeholder and committing code that references it.
+```bash
+infisical secrets set <KEY>=<value> --env=development --projectId=<from .infisical.json>
+```
+
+For security-critical values (secrets, keys) that you shouldn't invent: **stop and ask the user** rather than generating a placeholder and committing code that references it.
 
 | Pattern | Example |
 |---|---|
@@ -26,6 +30,7 @@ Follow the `phase-cli` skill to set the key in the `development` environment. Fo
 | Boolean toggle | `PUBLIC_REGISTRATION=false` |
 | Optional / empty | `SENTRY_DSN=` |
 | Generated secret | `SESSION_SECRET=$(openssl rand -hex 32)` (run once, reuse) |
+| Tolgee API key | Ask user — project-specific |
 
 ### 2. Add the key to `.env.example`
 
@@ -68,8 +73,8 @@ Spec §15 lists the full set of required configuration categories:
 For any task that adds env-var references, verify:
 
 ```bash
-# Key exists in Phase development
-phase secrets get <KEY> --env development
+# Key exists in Infisical development
+infisical secrets get <KEY> --env=development
 
 # Key is in .env.example
 rg -n "^<KEY>=" .env.example
@@ -86,8 +91,9 @@ All four must pass. Missing any one fails the task.
 
 - **Hardcoded fallbacks for security-critical config** (`SESSION_SECRET || 'hardcoded'`) — use schema validation to enforce presence instead.
 - **Committing `.env` / `.env.local` with real values** — only `.env.example` is allowed.
-- **Partial registration** — code references the var but Phase + `.env.example` + schema + docs are not all updated.
+- **Partial registration** — code references the var but Infisical + `.env.example` + schema + docs are not all updated.
 - **Inventing values for unknown secrets** — stop and ask the user.
+- **Setting `staging` or `production` secrets from a developer machine** — those flow via the operator's Infisical UI / OIDC sync.
 
 ## Required spec §15 secrets (never omit or soft-default)
 

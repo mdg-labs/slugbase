@@ -37,3 +37,14 @@ _added: 2026-05-31_
 
 Tech stack (framework, ORM, migration tool) not yet decided — see spec §19 and §11.9. The DB MIGRATIONS block in prompt-templates.md is currently generic. Once stack is chosen, update: prompt-templates.md MIGRATIONS block, doc-index.md verification commands, 00-project.mdc tech stack section, and add framework-specific rules (e.g. prisma.mdc, backend.mdc, typescript.mdc).
 _added: 2026-05-31_
+
+## Confirmed tooling decisions (2026-05-31)
+
+| Concern | Tool | Notes |
+|---|---|---|
+| Secrets management | **Infisical** | Same setup as Dispatch One; envs: `development` / `staging` / `production`; OIDC sync for prod |
+| Translations | **Tolgee** | v1: en + de (spec §17); externalized message catalogs; Tolgee SDK integration (framework TBD) |
+
+Rules touched: `00-project.mdc` (tech-stack section), `05-env-vars.mdc` (Infisical workflow), `10-i18n.mdc` (new — Tolgee rule).
+Once Tolgee project is initialized, add `TOLGEE_PROJECT_ID` to the key inventory in `05-env-vars.mdc`.
+_added: 2026-05-31_

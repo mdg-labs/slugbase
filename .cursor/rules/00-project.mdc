@@ -14,8 +14,8 @@ A bookmark manager with built-in URL shortening and keyboard-driven launcher —
 - **Database:** Two engines on identical schema — embedded file-based (self-hosted default) + networked relational (hosted default) — spec §11.9
 - **Auth:** Server-side sessions (no JWT access/refresh); TOTP MFA; OIDC/SSO — spec §5
 - **Billing:** Stripe (hosted); no-op billing (self-hosted) — spec §11.4
-- **i18n:** English + German at launch — spec §17
-- **Secrets:** Phase CLI — use the `phase-cli` skill for secrets management
+- **i18n:** English + German at launch; externalized message catalogs via **Tolgee** — spec §17
+- **Secrets:** **Infisical** (same setup as Dispatch One) — envs: `development` / `staging` / `production`; use `infisical run --env=development -- <command>` locally
 - **Bot protection:** Cloudflare Turnstile (hosted default); no-op (self-hosted) — spec §11.8
 
 ## Repository state
