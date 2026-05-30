@@ -29,6 +29,12 @@ A bookmark manager with built-in URL shortening and keyboard-driven launcher —
 
 Self-hosted: **combined container image**, single port, operator's own infrastructure — spec §14.2.
 
+### CI/CD (settled — spec §22, decision #35)
+
+Single workflow file: `.github/workflows/ci-cd.yml`. **GitHub-hosted runners** (`ubuntu-latest`). Branches: `staging` and `main`.
+Secrets via Infisical OIDC (`Infisical/secrets-action`) — only `INFISICAL_DOMAIN` and `INFISICAL_OIDC_IDENTITY_ID` live in GHA secrets.
+Stages: CI checks → staging deploy (push `staging`) → prepare release (push `main`) → production deploy (release published) → GHCR self-hosted image push.
+
 ## Repository state
 
 This repo currently contains only docs. Application code is built phase-by-phase from `docs/slugbase-development-roadmap.md` (plan file — to be drafted). When unsure what phase we're in, read the roadmap.

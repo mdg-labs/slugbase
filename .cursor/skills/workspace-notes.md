@@ -33,6 +33,15 @@ _added: 2026-05-31_
 Never introduce `isCloud`, `SLUGBASE_MODE`, or any deployment-mode conditional in application logic. Differences between hosted and self-hosted are expressed via (a) the entitlements engine (spec §11.5) and (b) interface implementation selection. Verifier Layer 3e fails on any deployment-mode branch found in committed code.
 _added: 2026-05-31_
 
+## CI/CD pipeline (2026-05-31)
+
+Single file: `.github/workflows/ci-cd.yml`. GitHub-hosted runners (`ubuntu-latest`). Modelled on Dispatch One pattern.
+Triggers: PR → `staging`/`main` · push `staging` (staging deploy) · push `main` (prepare release) · release published (production deploy) · `workflow_dispatch`.
+Secrets: Infisical OIDC via `Infisical/secrets-action` — only two GHA secrets: `INFISICAL_DOMAIN` + `INFISICAL_OIDC_IDENTITY_ID`.
+Key differences from Dispatch One: hosted runners (no Docker cleanup), no worker service, no admin package in v1, self-hosted GHCR image build on release.
+Spec: §22. Resolved decision #35.
+_added: 2026-05-31_
+
 ## Stack decisions pending
 
 Tech stack (framework, ORM, migration tool) not yet decided — see spec §19 and §11.9. The DB MIGRATIONS block in prompt-templates.md is currently generic. Once stack is chosen, update: prompt-templates.md MIGRATIONS block, doc-index.md verification commands, 00-project.mdc tech stack section, and add framework-specific rules (e.g. prisma.mdc, backend.mdc, typescript.mdc).

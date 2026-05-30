@@ -653,6 +653,107 @@ Every item below was previously an open question and is now **settled** and inte
 33. **i18n tooling (settled):** Tolgee is the translation-management platform. Message catalogs are externalized through the Tolgee SDK; `TOLGEE_API_KEY` and `TOLGEE_PROJECT_ID` are Infisical-managed secrets. (Section 17, rule 10-i18n.mdc.)
 34. **Secrets management tooling (settled):** Infisical is the secrets manager for all environments (`development` / `staging` / `production`). Operators set `staging` and `production` secrets via the Infisical UI or OIDC sync; developers use `infisical run --env=development` locally. (Section 15, rule 05-env-vars.mdc.)
 
+35. **CI/CD pipeline (settled):** GitHub Actions on hosted runners; single workflow file (`.github/workflows/ci-cd.yml`); branches `staging` and `main`. (Section 22.)
+
+---
+
+## 22. CI/CD Pipeline
+
+A single GitHub Actions workflow file (`.github/workflows/ci-cd.yml`) covers the full lifecycle from pull-request checks through production deployment. The design follows the Dispatch One pipeline pattern, adapted for SlugBase's package layout and the hosted GitHub Actions runners (the repo is public).
+
+### 22.1 Runners and concurrency
+
+**GitHub-hosted runners** (`ubuntu-latest`) are used throughout. Because each job runs in a fresh ephemeral VM, Docker cleanup and concurrency group protection for self-hosted runners are unnecessary and are omitted.
+
+Concurrency: in-progress runs are cancelled for PR and `staging`-push triggers; production deploys (triggered by a published release) are never cancelled.
+
+### 22.2 Triggers
+
+| Event | Branches / types | Jobs fired |
+|---|---|---|
+| `pull_request` | targeting `staging` or `main` | CI checks (+ E2E when `staging → main`) |
+| `push` | `staging` | CI checks → staging deploy |
+| `push` | `main` | CI checks → prepare release |
+| `release` published | — | Production deploy |
+| `workflow_dispatch` | — | Manual trigger (full run) |
+
+### 22.3 CI checks (all PRs and pushes)
+
+Run on every trigger before any deployment gate. Order within the job:
+
+1. `pnpm install --frozen-lockfile`
+2. **Fast-fail checks (no secrets, no build):** lint → typecheck → unit tests
+3. Fetch secrets from Infisical (`development` env, OIDC method)
+4. Build
+5. Pack and upload build artifacts (retention: 1 day)
+6. Integration tests (using the development-env secrets)
+7. `pnpm audit --audit-level=high` (dependency audit)
+
+### 22.4 E2E (Playwright)
+
+Runs only on the `staging → main` pull request (i.e. the release-candidate PR). Depends on CI checks passing. Downloads the CI build artifacts rather than rebuilding. Runs against a managed local stack. Timeout: 45 minutes.
+
+### 22.5 Staging deploy (push to `staging`)
+
+Ordered pipeline, with server and web/marketing builds running **in parallel** for speed:
+
+| Step | Description |
+|---|---|
+| 1 | GitHub Deployment record — start |
+| 2a (parallel) | Build API/back-end with `staging` Infisical secrets |
+| 2b (parallel) | Build web client + marketing site bundles with `staging` Infisical secrets |
+| 3 | Database migration (`migrate:deploy`) — after 2a, before Fly deploy |
+| 4a | Deploy API to **Fly.io** `fra` (`flyctl deploy --remote-only`) |
+| 4b | Deploy web client to **Cloudflare Workers** via `wrangler deploy` (with retry) — after migration + 2b |
+| 4c | Deploy marketing site to **Cloudflare Workers** via `wrangler deploy` (with retry) — after migration + 2b |
+| 5 | Smoke: `GET /health` and `/version` endpoints on all deployed surfaces |
+| 6 | GitHub Deployment record — finish (success/failure) |
+
+### 22.6 Prepare release (push to `main`)
+
+Runs after CI checks pass. Only proceeds if `package.json` version is greater than the latest git tag.
+
+1. Check version bump (compare `package.json` version against latest `v*` tag).
+2. Fetch `staging` Infisical secrets.
+3. Verify translations: `tolgee pull --check` — fails the job if any default-locale key is missing a translation.
+4. Generate changelog from `git log` since last tag (conventional commits).
+5. Create annotated git tag `vX.Y.Z` and push.
+6. Create **draft** GitHub Release (changelog as body) — a human publishes it to trigger production.
+
+### 22.7 Production deploy (release published)
+
+Triggered when a draft release is manually published. Idempotent: compares the release tag against `DEPLOYED_VERSION` (a repository Actions variable); skips the deploy if already deployed.
+
+| Step | Description |
+|---|---|
+| 1 | Idempotency check |
+| 2 | GitHub Deployment record — start |
+| 3 | Build all packages from the release tag with `production` Infisical secrets; upload Sentry source maps (if `SENTRY_AUTH_TOKEN` is set) |
+| 4 | Database migration against production Neon |
+| 5a | Deploy API to **Fly.io** `fra` |
+| 5b | Deploy web client to **Cloudflare Workers** |
+| 5c | Deploy marketing site to **Cloudflare Workers** |
+| 6 | Smoke: health endpoint on Fly API + web client health check on Workers |
+| 7 | GitHub Deployment record — finish |
+| 8 | Write release tag to `DEPLOYED_VERSION` repository variable |
+
+### 22.8 Self-hosted container image
+
+On `release` published (same trigger as the hosted production deploy), the workflow also builds and pushes the **combined container image** (API + bundled web client) to the GitHub Container Registry (`ghcr.io`), tagged `vX.Y.Z` and `latest`. This is the artefact self-hosters pull and run.
+
+### 22.9 Secrets in CI
+
+All environment secrets are fetched from Infisical via the `Infisical/secrets-action` using **OIDC** (no long-lived tokens in GitHub Actions secrets). The only GitHub Actions secrets stored in the repository are:
+- `INFISICAL_DOMAIN` — the Infisical instance URL
+- `INFISICAL_OIDC_IDENTITY_ID` — the machine identity for OIDC auth
+
+### 22.10 What is not in this pipeline
+
+- Self-hosted runner Docker cleanup (not needed on ephemeral hosted runners)
+- Concurrency guards for runner disk space (not needed)
+- A separate admin console deploy (no admin console in v1 — Fast-Follow)
+- A background worker service deploy (SlugBase has no separate worker process; background work is handled within the API process)
+
 ---
 
 ## Assumptions carried forward
