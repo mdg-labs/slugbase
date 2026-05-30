@@ -486,6 +486,23 @@ Self-hosted behavior is entirely configuration-driven (see Section 15): required
 
 The deployment is expected to sit behind a reverse proxy terminating TLS. The configured public base URL and front-end origin must match the externally reachable HTTPS addresses, the app must be told how many proxy hops to trust, and cross-origin allowances are configurable. Documentation provides proxy examples.
 
+### 14.7 Hosted Deployment Topology (settled)
+
+The hosted service uses a split deployment: the **web client** is served from the edge, the **API/back-end** runs as a container in EU-Frankfurt, and the **database** is Neon Postgres in the same region.
+
+| Layer | Platform | Region / notes |
+|---|---|---|
+| **Web client (frontend)** | Cloudflare Workers | Global edge; static assets + SSR served from CF network |
+| **API / back-end** | Fly.io (`fra` — Frankfurt, DE) | Container image (API-only variant from §14.2); ~600 km from Vienna; primary EU serving region |
+| **Database (hosted)** | Neon Postgres (`aws-eu-central-1` — Frankfurt, DE) | Same AWS region as Fly.io `fra`; colocation keeps query latency sub-1 ms within the DC |
+| **Marketing site** | Cloudflare Workers (static, separately built, §19, decision 28) | Global edge; independently deployable from the app |
+
+**Rationale for Fly.io over Railway:** Railway's only EU region is Amsterdam (`europe-west4-drams3a`, ~1200 km from Vienna). Neon Postgres has no Amsterdam region; colocating API and DB on Railway EU would require cross-region hops on every query. Fly.io Frankfurt is the closest EU region to Austria and shares the same Frankfurt AWS zone as Neon.
+
+**Self-hosted is unaffected:** self-hosted users continue to run the combined container image (§14.2) on their own infrastructure. The split topology described here is exclusively for the operator-run hosted service.
+
+**CORS and origin configuration:** `APP_BASE_URL` points to the Fly.io app URL (or a custom domain in front of it); `FRONTEND_ORIGIN` points to the Cloudflare Workers frontend origin. Both are required secrets (§15) validated at startup.
+
 ---
 
 ## 15. Configuration Model
@@ -630,7 +647,11 @@ Every item below was previously an open question and is now **settled** and inte
 25. **Greenfield rebuild** with a single new **forward-only migration history**; migrating existing instance data is a separate workstream, out of scope here.
 26. **Both DB engines** ship on an identical schema/migration story; the embedded file-based engine is a deliberate self-host selling point.
 27. **One concrete implementation per interface in v1**, with the seam in place: SMTP (mail, both deployments), one AI provider, Stripe (billing), Cloudflare Turnstile (challenge), the existing analytics/error-reporting sinks behind no-op-able interfaces. Multiple providers per interface is Fast-Follow.
-28. **Marketing site** is a static site, separately built and deployed, in the same repo; framework and hosting target are roadmap details.
+28. **Marketing site** is a static site, separately built and deployed, in the same repo; deployed to **Cloudflare Workers** (same platform as the web client).
+31. **Hosted deployment topology (settled):** web client on Cloudflare Workers (edge); API/back-end on Fly.io Frankfurt (`fra`); database on Neon Postgres Frankfurt (`aws-eu-central-1`). Railway was rejected — its only EU region (Amsterdam) has no collocated Neon region, causing cross-region DB latency. Self-hosted uses the combined container image (§14.2) and is unaffected. (Section 14.7.)
+32. **Hosted database engine (settled):** Neon Postgres (`aws-eu-central-1`) for the hosted deployment. Self-hosted defaults to the embedded file-based database with an optional networked Postgres path (§14.1, decision 26). The application schema and migration history are identical across both engines.
+33. **i18n tooling (settled):** Tolgee is the translation-management platform. Message catalogs are externalized through the Tolgee SDK; `TOLGEE_API_KEY` and `TOLGEE_PROJECT_ID` are Infisical-managed secrets. (Section 17, rule 10-i18n.mdc.)
+34. **Secrets management tooling (settled):** Infisical is the secrets manager for all environments (`development` / `staging` / `production`). Operators set `staging` and `production` secrets via the Infisical UI or OIDC sync; developers use `infisical run --env=development` locally. (Section 15, rule 05-env-vars.mdc.)
 
 ---
 

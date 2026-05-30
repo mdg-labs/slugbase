@@ -48,3 +48,18 @@ _added: 2026-05-31_
 Rules touched: `00-project.mdc` (tech-stack section), `05-env-vars.mdc` (Infisical workflow), `10-i18n.mdc` (new — Tolgee rule).
 Once Tolgee project is initialized, add `TOLGEE_PROJECT_ID` to the key inventory in `05-env-vars.mdc`.
 _added: 2026-05-31_
+
+## Hosted infrastructure topology (2026-05-31)
+
+| Layer | Platform | Region |
+|---|---|---|
+| Web client (frontend) | **Cloudflare Workers** | Global edge |
+| API / back-end | **Fly.io** app — `fra` | Frankfurt, DE |
+| Database | **Neon Postgres** — `aws-eu-central-1` | Frankfurt, DE (same AWS zone as Fly `fra`) |
+| Marketing site | **Cloudflare Workers** | Global edge; separately built — spec §19 |
+
+Fly.io `fra` chosen over Railway because Railway's only EU region (Amsterdam) has no collocated Neon Postgres region → cross-region DB latency on every query.
+Self-hosted: combined container image, unaffected by hosted topology.
+Key env vars: `APP_BASE_URL` = Fly.io app domain (or custom), `FRONTEND_ORIGIN` = CF Workers domain.
+Spec: §14.7, resolved decisions 31–32.
+_added: 2026-05-31_

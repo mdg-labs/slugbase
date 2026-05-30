@@ -7,16 +7,27 @@ alwaysApply: true
 
 A bookmark manager with built-in URL shortening and keyboard-driven launcher — save bookmarks, assign short slugs, and jump to any URL from the address bar or command palette (`/go/<slug>`). Deployed as a managed hosted service and a self-hosted install from one codebase.
 
-## Tech stack (decisions pending — update as stack is chosen)
+## Tech stack (framework/ORM TBD — update when chosen)
 
 - **Single repo:** pnpm workspace monorepo (spec §2.2)
 - **Packages:** backend API · web client · shared types/contracts · shared UI · marketing site (static, separately built) · docs (spec §19)
-- **Database:** Two engines on identical schema — embedded file-based (self-hosted default) + networked relational (hosted default) — spec §11.9
+- **Database:** Two engines on identical schema — embedded file-based (self-hosted default) · **Neon Postgres `aws-eu-central-1`** (hosted) — spec §11.9, decision #32
 - **Auth:** Server-side sessions (no JWT access/refresh); TOTP MFA; OIDC/SSO — spec §5
 - **Billing:** Stripe (hosted); no-op billing (self-hosted) — spec §11.4
-- **i18n:** English + German at launch; externalized message catalogs via **Tolgee** — spec §17
-- **Secrets:** **Infisical** (same setup as Dispatch One) — envs: `development` / `staging` / `production`; use `infisical run --env=development -- <command>` locally
+- **i18n:** English + German at launch; externalized message catalogs via **Tolgee** — spec §17, decision #33
+- **Secrets:** **Infisical** — envs: `development` / `staging` / `production`; use `infisical run --env=development -- <command>` locally — decision #34
 - **Bot protection:** Cloudflare Turnstile (hosted default); no-op (self-hosted) — spec §11.8
+
+### Hosted infrastructure (settled — spec §14.7, decisions #31–32)
+
+| Layer | Platform | Region |
+|---|---|---|
+| Web client | **Cloudflare Workers** | Global edge |
+| API / back-end | **Fly.io** (`fra`) | Frankfurt, DE |
+| Database | **Neon Postgres** (`aws-eu-central-1`) | Frankfurt, DE |
+| Marketing site | **Cloudflare Workers** | Global edge; separately built |
+
+Self-hosted: **combined container image**, single port, operator's own infrastructure — spec §14.2.
 
 ## Repository state
 
