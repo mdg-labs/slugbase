@@ -654,6 +654,7 @@ Every item below was previously an open question and is now **settled** and inte
 34. **Secrets management tooling (settled):** Infisical is the secrets manager for all environments (`development` / `staging` / `production`). Operators set `staging` and `production` secrets via the Infisical UI or OIDC sync; developers use `infisical run --env=development` locally. (Section 15, rule 05-env-vars.mdc.)
 
 35. **CI/CD pipeline (settled):** GitHub Actions on hosted runners; single workflow file (`.github/workflows/ci-cd.yml`); branches `staging` and `main`. (Section 22.)
+36. **Design system and UI prototype (settled):** A clickable V1 design prototype in `docs/design-prototype/V1/` is the **visual and interaction-design source of truth** (design language, screen anatomy, states, copy tone). The MVP spec remains the **product source of truth** — where the prototype conflicts with the spec, the spec wins. Design tokens (periwinkle accent `#7782f7`, dark-first, IBM Plex Sans/Mono) are defined in `docs/design-prototype/V1/colors_and_type.css`. (Section 23.)
 
 ---
 
@@ -753,6 +754,91 @@ All environment secrets are fetched from Infisical via the `Infisical/secrets-ac
 - Concurrency guards for runner disk space (not needed)
 - A separate admin console deploy (no admin console in v1 — Fast-Follow)
 - A background worker service deploy (SlugBase has no separate worker process; background work is handled within the API process)
+
+---
+
+## 23. Design System and UI Prototype Reference
+
+A clickable HTML/React design prototype lives in `docs/design-prototype/V1/`. It is the **visual and interaction-design source of truth**: it defines the design language, the anatomy of every screen, component states, micro-interactions, and the intended copy tone. It is *not* the product source of truth — feature scope, entitlements, tenancy, security, and data model are governed by Sections 1–22 of this spec. **Where the prototype and this spec disagree, this spec wins** (the known conflicts are catalogued in §23.4).
+
+The prototype is a static, data-mocked artefact (React via CDN + Babel-in-browser, `localStorage` for demo state, fake data in `prototype/data.js`). It must be re-implemented in the real stack against the Tolgee message catalog (§17) — never by copying its hard-coded English strings.
+
+### 23.1 Design tokens (authoritative)
+
+Defined in `docs/design-prototype/V1/colors_and_type.css`. These are the canonical design tokens for the rebuild:
+
+- **Accent:** periwinkle `#7782f7` (dark) / `#5b66e8` (light). This is the spec's "accent color" (§18, §15 user preferences) default.
+- **Mode:** **dark-first** — dark is the primary product theme; light is defined for parity. Theme options are light / dark / auto (matches §18 and the user theme preference in §15).
+- **Surfaces:** layered hierarchy `--canvas` → `--base` → `--raised` → `--raised-2` → `--overlay`, with hairline borders rather than heavy shadows.
+- **Semantic colors:** success `#45c98a`, warning `#e6b24e`, danger `#f0686b`.
+- **Typography:** **IBM Plex Sans** for UI; **IBM Plex Mono** for slugs, shortcuts, code, and metadata. Compact, dense, developer-tool type scale (13px UI body default).
+- **Spacing:** 4px base scale (`--sp-1` … `--sp-12`). **Radii:** modest 4–12px. **Motion:** 110/170/230ms easing tokens.
+- **Brand assets:** `docs/design-prototype/V1/assets/slugbase_icon.svg` (and `.png`).
+
+Implementation note: these tokens become the foundation of the shared UI package (§19). Components must consume token variables, never hard-coded hex values.
+
+### 23.2 Screen and flow inventory (prototype → spec)
+
+| Surface | Prototype file(s) | Spec section |
+|---|---|---|
+| Design tokens / theming | `colors_and_type.css` | §18 |
+| App shell (sidebar, workspace switcher, entitlement meter) | `prototype/Sidebar.jsx`, `App.jsx`, `app.css` | §4, §10, §12 |
+| Bookmarks list (card grid + table, bulk actions, pager, skeleton, empty) | `prototype/BookmarkViews.jsx`, `App.jsx`, `Bookmarks.html` | §6 |
+| Dashboard / Home (stats, quick-access slugs, pinned, tag cloud, sharing, onboarding checklist) | `prototype/DashboardApp.jsx`, `Dashboard.html` | §10 |
+| Folders (scopes, sharing labels, row actions) | `prototype/FoldersApp.jsx`, `Folders.html` | §6, §9 |
+| Tags | `prototype/TagsApp.jsx`, `Tags.html` | §6 |
+| Command palette (default / search / no-results / go-mode / disambiguation) | `prototype/PaletteApp.jsx`, `Palette.jsx`, `Palette.html` | §7, §8 |
+| Slug resolution + disambiguation | `prototype/PaletteApp.jsx` (go-mode), `EdgePages.jsx` (`SlugDisambig`) | §8 |
+| Auth (sign-in, MFA, register, verify email, password reset, set-password, first-run setup) | `prototype/AuthApp.jsx`, `AuthKit.jsx`, `auth.css` | §5 |
+| Onboarding flow + workspace create/switch | `prototype/EdgeFlows.jsx` | §5.2, §10 |
+| Settings shell + nav | `prototype/SettingsApp.jsx`, `SettingsShell.jsx`, `settings.css` | §10 |
+| Account settings (profile, password, MFA enroll/backup codes, API tokens, preferences) | `prototype/SettingsAccount.jsx` | §5 |
+| Workspace settings (general, SMTP, AI, OIDC; hosted vs self-hosted variants) | `prototype/SettingsWorkspace.jsx` | §10, §11.1, §11.3, §11.6, §15 |
+| Members & teams (roles, invites, seats, ownership transfer) | `prototype/SettingsMembers.jsx` | §9, §12 |
+| Audit log (filters, pagination, entitlement gate) | `prototype/SettingsAudit.jsx` | §12 |
+| Plans & billing (plan table, supporter offer, cancel/downgrade, seats, invoices) | `prototype/SettingsBilling.jsx` | §12 |
+| Error pages (404 / 403 / 500), app + marketing variants | `prototype/EdgePages.jsx`, `EdgeStates.html` | §18 |
+| Marketing site (landing, pricing, contact + Turnstile, legal: Impressum/AGB/Datenschutz) | `marketing/*.jsx`, `marketing/Marketing.html`, `marketing.css` | §2.3, §11.8, §17 |
+
+### 23.3 Patterns to carry into the build
+
+These prototype conventions are endorsed as the intended UX baseline (they realise §18's "polished, accessible, keyboard-friendly" requirement):
+
+- **Keyboard-first:** `⌘K`/`Ctrl-K` palette everywhere; single-key shortcuts (`C` new bookmark, `N` new folder, `G`/`T` grid/table, `Esc` clear). The palette's **`go <slug>` mode** is the in-app expression of the redirect feature (§8).
+- **Slug disambiguation:** when a slug resolves to multiple accessible bookmarks, present a chooser with an "always use this one" option that persists a slug preference (§8, data model "Slug preference").
+- **Entitlement surfacing:** sidebar usage meter, approaching-cap and at-cap banners, upsell modal, and plan gates — all entitlement-driven, never deployment-mode-driven (§12.4, §15).
+- **Shown-once secrets:** backup codes and freshly created API tokens use the "store this now, shown once" pattern (§5).
+- **Security-aware copy:** auth screens use non-enumerating language ("we always respond the same way") for reset/verify (§5).
+- **Self-hosted vs hosted variants:** SMTP and OIDC panels are hidden when operator-managed; first-run setup screen for empty instances (§5.2, §14.3, §15) — driven by config/interface selection, not a code branch.
+- **Destructive-action confirmations**, toasts, loading skeletons, and empty states are part of the baseline (§18).
+
+### 23.4 Known prototype↔spec divergences (spec wins)
+
+The prototype was designed before some decisions were finalised. When building, **follow the spec, not the prototype**, on these points:
+
+1. **Plan name: "Pro" → "Personal".** Parts of the prototype app shell (`Sidebar.jsx`, `App.jsx` upsell, `data.js`, `EdgeFlows.jsx`) label the paid individual tier **"Pro"**; the billing and marketing screens correctly call it **"Personal"**. The canonical name is **Personal** (§12.1). Use "Personal" everywhere.
+2. **Free bookmark cap = 50, not 100.** `data.js`/`DashboardApp.jsx` mock a 100-bookmark cap (94/100). The canonical Free cap is **50 per workspace** (§12.1, decision 14) — as the billing/marketing screens correctly show.
+3. **No folder cap.** The prototype pricing tables list "Folders: Free 3 / unlimited". Folders are **not an entitlement** (§12.2); there is no folder limit on any plan. Drop the folder cap.
+4. **API tokens are not plan-gated.** Pricing tables show "API access" as Personal+ only. Personal API tokens are a **core authentication feature for all authenticated users** (§5); they are not in the entitlements list (§12.2). Do not gate them by plan.
+5. **No custom domains / "custom slug domains" entitlement in v1.** Marketing and upsell copy advertise "custom slug domains" / "custom forwarding domain". Custom domains and subdomain-/path-based addressing are **out of scope / Fast-Follow** (§20, decision 4). Slugs themselves are available to everyone; there is no custom-domain plan feature in v1.
+6. **No workspace identifier in URLs (v1).** `SettingsWorkspace.jsx` shows a "Workspace identifier — used in URLs" field and an error page uses a `/workspaces/acme/...` path. v1 resolves the active workspace **via the session**, not via URL path/subdomain (decision 4). Treat URL-based tenancy as a Fast-Follow-only forward hook; do not ship the URL-identifier field in v1.
+7. **"Up to 25 members" is illustrative.** The exact Team base-seat count is a **Fast-Follow config detail** (§12.2, decision 17), not a fixed 25.
+8. **Prices are illustrative and config-driven.** `$4` / `$9` / `$59` and the supporter deadline are placeholders; concrete pricing lives in deployment configuration and the marketing site, never hard-coded in application logic (§12.1).
+9. **Subprocessor copy in legal pages.** The prototype's Datenschutz lists "Hetzner Cloud (Hosting)". The settled hosted infrastructure is **Fly.io (Frankfurt) + Neon Postgres + Cloudflare Workers** (§14.7); the legal/subprocessor copy must be updated to match actual subprocessors before launch.
+10. **Forwarding domain string.** `go.slugbase.app` is the prototype's placeholder redirect host; the real value is deployment configuration (the public base URL, §15), not a hard-coded constant.
+
+### 23.5 Spec features under-represented in the prototype (build with the prototype's design language)
+
+These v1 requirements are either stubbed or absent in the prototype. They must still be built for v1, using the prototype's established design language and components:
+
+- **Bookmark create/edit modal** (modal-only editing, decision 19) — the prototype stubs "New bookmark" as a toast. Build the full create/edit modal including URL, title, slug, folder, tags, pin, forwarding flag, and sharing (§6).
+- **AI suggestions inline UI** — the prototype exposes AI *settings* but not the in-modal "suggest slug/tags/folder" experience, language-aware, with the per-user opt-out honoured (§6, §11.3, §17).
+- **Import / export surface** — beyond the onboarding drop-zone, build the Settings import (JSON + Netscape HTML, success/failure counts, cap-aware) and the **lossless export** (§13).
+- **Slug-preference management screen** — the disambiguation UI links to "manage remembered slug preferences"; build that management view (§8, data model "Slug preference").
+- **Forwarding management surface** — the sidebar has a "Forwarding" item with no page; define/build it or remove it to match the spec's slug/redirect model (§8). 
+- **Full internationalisation (EN/DE)** — the prototype has a language preference control but hard-coded English strings. All UI text must come from the Tolgee catalog with a German translation (§17).
+- **Consent / cookie mechanism** — the privacy/consent gating for analytics and error reporting on the hosted service (§18) is not in the prototype.
+- **Contact-form backend wiring** — the prototype renders the Turnstile widget and form; wire it to the public contact endpoint behind the challenge interface (§2.3, §11.1, §11.8).
 
 ---
 

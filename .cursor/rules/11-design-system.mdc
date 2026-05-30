@@ -1,0 +1,49 @@
+---
+description: UI work must follow the V1 design prototype (docs/design-prototype/V1/) and its design tokens; the MVP spec wins on any product conflict. Spec §23.
+alwaysApply: true
+---
+
+# SlugBase Design System — Prototype-anchored UI (spec §23)
+
+## Two sources, clear precedence
+
+| Source | Authority |
+|---|---|
+| `docs/design-prototype/V1/` | **Visual & interaction-design source of truth** — design language, screen anatomy, component states, copy tone |
+| `docs/slugbase-mvp-spec.md` | **Product source of truth** — scope, entitlements, tenancy, security, data model |
+
+**On any conflict, the spec wins.** The known conflicts are catalogued in spec §23.4 — read it before building UI.
+
+## Design tokens (authoritative — `docs/design-prototype/V1/colors_and_type.css`)
+
+- **Accent:** periwinkle `#7782f7` (dark) / `#5b66e8` (light) — the default workspace accent.
+- **Dark-first:** dark is the primary theme; light is parity. Themes: light / dark / auto.
+- **Type:** **IBM Plex Sans** (UI) + **IBM Plex Mono** (slugs, shortcuts, code, metadata). Dense 13px UI body scale.
+- **Surfaces:** `--canvas` → `--base` → `--raised` → `--raised-2` → `--overlay`; hairline borders over heavy shadows.
+- **Semantic:** success `#45c98a` · warning `#e6b24e` · danger `#f0686b`.
+- **Spacing:** 4px base (`--sp-*`). **Radii:** 4–12px. **Motion:** 110/170/230ms easing tokens.
+- **Brand:** `docs/design-prototype/V1/assets/slugbase_icon.svg`.
+
+**Always consume token variables — never hard-code hex/px values that duplicate a token.** Tokens belong in the shared UI package (spec §19).
+
+## Before building any UI task
+
+1. Find the matching prototype file(s) in the screen map (spec §23.2).
+2. Re-implement against tokens + the Tolgee message catalog (rule `10-i18n.mdc`) — **never copy the prototype's hard-coded English strings**.
+3. Check spec §23.4 (divergences) and §23.5 (under-built features) — the prototype is pre-final on these points.
+
+## Divergences — follow the SPEC, not the prototype (spec §23.4)
+
+- Paid individual tier is **"Personal"**, never "Pro".
+- Free bookmark cap is **50**, not 100.
+- **No folder cap**; **API tokens are not plan-gated**; **no custom-domain entitlement** in v1.
+- **No workspace identifier in URLs** in v1 — active workspace resolves via the session.
+- Prices, seat counts, and `go.slugbase.app` are **illustrative/config-driven**, never hard-coded.
+
+## Endorsed UX patterns (spec §23.3)
+
+Keyboard-first (`⌘K` palette + single-key shortcuts), palette `go <slug>` mode, slug disambiguation with "always use this" preference, entitlement-driven banners/meters/gates (never deployment-mode branches), shown-once secrets (backup codes, API tokens), non-enumerating auth copy, destructive-action confirmations, toasts, skeletons, empty states.
+
+## Prototype tech is NOT the build target
+
+The prototype is React-via-CDN + Babel-in-browser + `localStorage` + mocked `data.js`. It demonstrates **design and behaviour only**. Build in the real stack (framework TBD — spec §19) with real data, real auth/sessions (spec §5), and entitlement enforcement on the server (spec §12.4).

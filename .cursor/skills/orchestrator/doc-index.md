@@ -42,6 +42,12 @@ Reference sections as `§N` or heading, e.g. `spec §5`, `spec §11.4`, `spec §
 | `spec §19` | Repository and package layout |
 | `spec §20` | Explicitly out of scope for v1 (Fast-Follow list) |
 | `spec §21` | Resolved decisions log |
+| `spec §22` | CI/CD pipeline (GitHub Actions, single workflow file) |
+| `spec §23` | Design system + UI prototype reference (`docs/design-prototype/V1/`); §23.4 = divergences where spec wins |
+
+## UI / design source
+
+`docs/design-prototype/V1/` is the **visual & interaction source of truth** (design tokens in `colors_and_type.css`; screens mapped in spec §23.2). The MVP spec is the **product source of truth** — on any conflict, spec wins (catalogued in spec §23.4). Any UI task must reference the matching prototype file(s) **and** check §23.4/§23.5 before building.
 
 ## Jira issue keys (board tracking)
 
