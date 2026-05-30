@@ -1,0 +1,65 @@
+---
+description: Prisma schema-first migrations, naming, no hand edits
+globs: apps/backend/prisma/**
+alwaysApply: false
+---
+
+# Prisma
+
+## Schema is the contract
+
+`apps/backend/prisma/schema.prisma` is the single source of truth. If it's not in the schema, **it doesn't exist**.
+
+## Migration workflow
+
+```bash
+# After editing schema.prisma:
+pnpm migrate:dev --name <snake_case_description>
+
+# In CI / deploy:
+pnpm migrate:deploy
+```
+
+- **Never** run `prisma db push` in production.
+- **Never** edit a migration file after it's been committed. If something is wrong, generate a new migration.
+- Migration directory naming: `<timestamp>_<snake_case_description>/` (Prisma generates this — do not rename).
+
+## Naming
+
+| Item | Convention |
+|---|---|
+| Model | `PascalCase` (`Player`, `AllianceMessage`) |
+| Table (via `@@map`) | `snake_case` (`players`, `alliance_messages`) |
+| Field | `camelCase` in Prisma, `snake_case` in DB via `@map` |
+| Enum | `SCREAMING_SNAKE_CASE` for values |
+| Migration name | `add_<thing>`, `index_<thing>`, `drop_<thing>` |
+
+```prisma
+model AllianceMessage {
+  id        String   @id @default(cuid())
+  playerId  String   @map("player_id")
+  message   String   @db.VarChar(500)
+  sentAt    DateTime @default(now()) @map("sent_at")
+
+  @@index([allianceId, sentAt])
+  @@map("alliance_messages")
+}
+```
+
+## Indexes
+
+- Add `@@index` for every query path used by the app. Justify in the schema doc.
+- Use PostGIS `Unsupported("geometry(Point, 4326)")` + GIST index for spatial fields where needed (`Station.location`, `Incident.location`, `WorldPoi.location`).
+
+## Queries
+
+- Always parameterised — Prisma client methods only.
+- No `$queryRawUnsafe` with interpolated values.
+- Use `select` to limit fields when working with large rows.
+- Use `findFirst({ where: { id, playerId } })` for ownership checks (returns null instead of throwing on mismatch).
+
+## Forbidden
+
+- Hand-written SQL migrations outside Prisma's generated files.
+- Schema additions that don't have a corresponding migration in the same PR.
+- Storing secrets, full JWTs, or PII beyond what's already in the schema.

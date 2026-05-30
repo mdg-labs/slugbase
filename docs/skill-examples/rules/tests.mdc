@@ -1,0 +1,66 @@
+---
+description: Test conventions — deterministic, mock clock, WS event awaits, factory fixtures
+globs: **/*.spec.ts, **/*.e2e-spec.ts
+alwaysApply: false
+---
+
+# Tests
+
+## Layers
+
+| Layer | Tool | Location |
+|---|---|---|
+| Unit | Vitest | `*.spec.ts` colocated with source |
+| Integration | Vitest + Supertest | `apps/<app>/test/*.e2e-spec.ts` |
+| Data validation | Vitest + Zod | `packages/data/test/` |
+| E2E | Playwright | `e2e/` at repo root |
+
+## Determinism
+
+- **No real time.** Use the mock `GameClockService` (injected via NestJS testing module) or a fake timer (`vi.useFakeTimers()`). Never `await new Promise(r => setTimeout(r, …))` to advance game logic.
+- **No randomness without a seed.** Spawn engine, weighted rolls — pass a seeded RNG in tests.
+- **No real network.** OSRM mocked via `ROUTING_MOCK=true`; outbound calls forbidden.
+
+## Fixtures
+
+```typescript
+import { makePlayer, makeStation, makeVehicle } from '../test/factory';
+
+const player = await makePlayer(prisma, { credits: 500_000 });
+const station = await makeStation(prisma, { playerId: player.id, type: 'FIRE_STATION' });
+const hlf = await makeVehicle(prisma, { stationId: station.id, type: 'HLF_20' });
+```
+
+Factories live in `apps/<app>/test/factory.ts`. Never inline `prisma.player.create(...)` in tests — drift between tests is the #1 cause of flake.
+
+## WS tests
+
+- Connect a client, await **specific events** by predicate — never sleep.
+
+```typescript
+// ❌ flaky
+await new Promise(r => setTimeout(r, 500));
+expect(receivedEvents).toContain('INCIDENT_SPAWNED');
+
+// ✅ deterministic
+const spawned = await waitForEvent(socket, 'INCIDENT_SPAWNED', { timeoutMs: 2000 });
+expect(spawned.incidentId).toBeDefined();
+```
+
+## Required coverage per task
+
+Per `testing §12`: every new game rule from `impl-spec` or `engineering-decisions` must have at least one unit test **before** its task can be marked done. The verifier checks this in Layer 3.
+
+## E2E (Playwright)
+
+- Reuses auth via a stored state fixture — no `await page.fill(...)` for login in every test.
+- Locator strategy: `getByRole`, `getByTestId`. Avoid CSS selectors that depend on Tailwind class output.
+- 2 retries on CI, 0 locally. Trace on failure.
+- Base URL from `E2E_BASE_URL`.
+
+## Forbidden
+
+- `setTimeout`/`setInterval` to wait for state changes
+- Tests that depend on the order of other tests
+- Hitting real OSRM, real Sentry, real Tolgee, or real production URLs
+- Committed `it.only` / `describe.only`

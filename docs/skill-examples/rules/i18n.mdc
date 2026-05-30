@@ -1,0 +1,86 @@
+---
+description: i18n with next-intl + Tolgee — no hardcoded strings, description required
+globs: apps/web/**/*.ts, apps/web/**/*.tsx
+alwaysApply: false
+---
+
+# i18n (next-intl + Tolgee)
+
+Every player-facing string in the web app goes through the i18n system. See `decisions §21` and roadmap task `P7-00`.
+
+## The rule
+
+- **No hardcoded English** in any `.tsx`. Even single words.
+- Every key has a **description** explaining UI location + dynamic variables.
+- Fallback language is always `en`. Missing `de` strings fall back silently.
+
+## Adding a string
+
+```tsx
+import { useT } from '@/lib/i18n';
+
+export function ConfirmDispatchButton() {
+  const t = useT('incidents');
+  return <button>{t('panel.dispatch.confirm')}</button>;
+}
+```
+
+In the key definition file (`apps/web/lib/i18n/keys/incidents.json`):
+
+```json
+{
+  "panel.dispatch.confirm": {
+    "defaultValue": "Confirm Dispatch",
+    "description": "Primary CTA at the bottom of the incident dispatch panel. Submits the staged assignments via WebSocket CONFIRM_DISPATCH."
+  }
+}
+```
+
+## Namespaces
+
+Match the file structure under `apps/web/public/locales/{en,de}/`:
+
+- `common` — shared UI (buttons, generic labels)
+- `incidents` — incident-related strings
+- `vehicles` — vehicle-related strings
+- `ui` — navigation, layout chrome
+
+## Dynamic variables
+
+Always use ICU message syntax for interpolation:
+
+```json
+{
+  "vehicle.eta": {
+    "defaultValue": "{minutes} min ETA",
+    "description": "Vehicle estimated time of arrival. {minutes} is the integer minute count, shown in the vehicle selection card."
+  }
+}
+```
+
+## Vehicle / incident / training names
+
+These come from `packages/data` as `nameEn` / `nameDe` fields. Select by current locale in a helper:
+
+```typescript
+const label = locale === 'de' ? vehicleDef.nameDe : vehicleDef.nameEn;
+```
+
+Never duplicate vehicle/incident names into i18n keys — they're already in the data package.
+
+## Tolgee CLI
+
+```bash
+tolgee-cli push    # upload new keys + descriptions
+tolgee-cli pull    # pull translations into locales/
+tolgee-cli pull --check  # CI: fail if missing keys
+```
+
+CI runs `--check` in the `prepare` job of `ci-cd.yml`.
+
+## Forbidden
+
+- `<button>Confirm Dispatch</button>` — hardcoded English
+- Keys without descriptions
+- Generic key names like `str_001` or `button.text`
+- Hardcoded German anywhere (the dev language is English)

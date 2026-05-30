@@ -1,0 +1,72 @@
+---
+description: Link every task commit to a Jira DO issue (or roadmap ID) for Development panel traceability — no Smart Commit commands in messages
+alwaysApply: true
+---
+
+# Jira commit linking
+
+Every **task-related** commit must include a work-item key so Jira's **Development** panel (commits / branches / PRs) links correctly when GitHub is connected. See [Atlassian Smart Commits](https://support.atlassian.com/jira-software-cloud/docs/process-issues-with-smart-commits/) — we use **issue keys only**, not smart-command syntax.
+
+## Required subject format
+
+```
+<type>(<scope>)[<ISSUE-KEY>]: <imperative summary>
+```
+
+| Part | Rule |
+|------|------|
+| `<type>` | Conventional Commits: `feat`, `fix`, `chore`, `refactor`, `docs`, `test`, `ci`, `build`, `perf` |
+| `<scope>` | Same allowed scopes as `01-git-workflow.mdc` (`web`, `backend`, `worker`, …) |
+| `[<ISSUE-KEY>]` | **Mandatory** on task commits — square brackets, uppercase project key |
+| Summary | Imperative mood; whole subject ≤72 chars |
+
+### Issue key precedence
+
+1. **Jira leaf issue** — `[DO-N]` when the task exists on board (orchestrator JIRA SYNC, user named `DO-*`, or roadmap row has a Jira mirror via `Roadmap ID`)
+2. **Roadmap only** — `[P2-01]` when no Jira issue exists yet
+3. **Combined batch** — primary leaf key in brackets; list siblings in session memory (e.g. `[DO-24]` for shared-file batch touching DO-24/25/26)
+
+### Examples
+
+```bash
+# GOOD — Jira work
+feat(web)[DO-129]: add Playwright auth fixture
+fix(worker)[DO-128]: skip expiry while vehicles en route
+
+# Session memory is gitignored — do NOT use chore(memory)[DO-N] commits.
+# Verifiers post Done/FAIL summaries to Jira (orchestrator jira-board.md).
+
+# GOOD — roadmap-only (no Jira mirror)
+feat(auth)[P2-01]: add register endpoint with bcrypt cost 12
+
+# GOOD — verifier / plan (key matches task)
+chore(plan)[DO-133]: mark P8-07 verified
+
+# BAD — key at end (old format)
+feat(web): add auth fixture (DO-129)
+
+# BAD — missing key on task work
+feat(web): add auth fixture
+
+# BAD — smart commit commands (MCP owns Jira sync)
+feat(web)[DO-129]: add fixture #time 2h #comment done
+```
+
+## Smart Commits — do NOT use in commit messages
+
+Jira sync (status, worklog, comments) is handled by **MCP** in orchestrated runs (`addWorklogToJiraIssue`, `transitionJiraIssue`, `addCommentToJiraIssue`). Never put these in commit subjects or bodies:
+
+- `#time`, `#comment`, `#resolve`, `#close`, or any `#<transition>` command
+
+Issue keys alone link commits to work items; smart commands would **duplicate** worklogs and can transition issues at the wrong time.
+
+## Exceptions (no issue key required)
+
+- Pure repo hygiene with **no** task ID: `chore(repo): bump turbo to 2.x` (rare; prefer a DO issue when in doubt)
+- Merge commits from integration: `chore(repo)[DO-47]: integrate orchestrator batch`
+
+## Enforcement
+
+- **Execution agents:** both session-memory and implementation commits include `[DO-N]` or `[P*-*]`
+- **Verifiers:** Layer 3 — FAIL if a task commit subject lacks a valid issue key when Jira sync was in scope
+- **Orchestrator prompts:** pass leaf `DO-N` in GIT block; see `.cursor/skills/orchestrator/prompt-templates.md`

@@ -1,0 +1,55 @@
+---
+description: Never dismiss Dependabot security alerts manually — fix and commit instead
+alwaysApply: true
+---
+
+# Dependabot alert resolution policy
+
+## Rule
+
+**Never dismiss a Dependabot alert via the GitHub UI or API** (`/repos/{owner}/{repo}/dependabot/alerts/{number}` `PATCH state=dismissed`).
+
+The correct resolution is to **upgrade the vulnerable dependency** and land the fix on the default branch (`staging` → merged to `main`). GitHub auto-closes the alert when it detects the vulnerability is no longer present in the dependency graph.
+
+## Why
+
+- Manual dismissal hides the vulnerability without removing it — the code remains exploitable.
+- Auto-close via commit creates an auditable record (commit SHA, PR, merge time) linked to the alert.
+- Dismissals require a justification that is often wrong or misleading when the real fix is a bump.
+
+## Correct workflow
+
+1. Read the alert: identify the package, the vulnerable version range, and the patched version.
+2. Upgrade the package in the relevant `package.json` (`pnpm update <pkg>@<patched>` or edit manually + `pnpm install`).
+3. Confirm the lockfile (`pnpm-lock.yaml`) no longer pins the vulnerable version.
+4. Run the full CI gate (`pnpm lint && pnpm typecheck && pnpm test:unit && pnpm test:data && NODE_ENV=production pnpm build && pnpm test:integration && pnpm audit --audit-level=high`).
+5. Commit with a conventional message: `fix(deps)[DO-N]: bump <pkg> to <version> (CVE-XXXX-XXXX)`.
+6. The alert auto-closes once the commit lands on the default branch.
+
+## Dismissal is only acceptable when
+
+- The vulnerability does not affect this project's usage (e.g. server-only code path in a browser-only dep) **AND**
+- The user has explicitly reviewed the CVE details and confirmed the dismissal **AND**
+- The dismissal reason and justification are documented in the alert comment before dismissing.
+
+Even then, prefer a version bump if one is available.
+
+## This rule applies to ALL agents — human, orchestrator, and sub-agents
+
+**No sub-agent may dismiss a Dependabot alert**, even when instructed to "resolve" or "close" alerts. The only accepted resolution action is a version bump commit. If a sub-agent cannot perform the bump (e.g. CI gate fails), it must report `blocked` — never dismiss.
+
+## Anti-patterns
+
+```
+# ❌ NEVER — dismisses without fixing (FORBIDDEN for humans AND all sub-agents)
+gh api repos/mdg-labs/dispatch-one/dependabot/alerts/7 \
+  -X PATCH -f state=dismissed -f dismissed_reason=tolerable_risk
+
+# ❌ NEVER — dismisses via gh CLI shorthand
+gh api -X PATCH -f state=dismissed repos/mdg-labs/dispatch-one/dependabot/alerts/7
+
+# ✅ CORRECT — fix + commit; GitHub auto-closes the alert on default branch merge
+pnpm update express@5.1.0 --filter @dispatch-one/backend
+git add apps/backend/package.json pnpm-lock.yaml
+git commit -m "fix(deps)[DO-N]: bump express to 5.1.0 (CVE-2024-29041)"
+```

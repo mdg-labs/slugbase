@@ -1,0 +1,69 @@
+---
+description: Next.js (App Router) frontend — components, state, tokens, no localStorage tokens
+globs: apps/web/**/*.ts, apps/web/**/*.tsx
+alwaysApply: false
+---
+
+# Web app (Next.js)
+
+## Components
+
+- **Functional only.** No class components.
+- File name = component name in `PascalCase.tsx`.
+- One component per file unless a tightly-coupled sub-component is private to the parent.
+- Default export only for Next.js route files (`page.tsx`, `layout.tsx`, `loading.tsx`, `error.tsx`).
+
+## State
+
+| Concern | Tool |
+|---|---|
+| Server data + cache | TanStack Query |
+| Live WebSocket state | Zustand store in `apps/web/lib/store/` |
+| Form state | React Hook Form |
+| Theme / locale | next-intl + Tolgee |
+
+Never duplicate server state into Zustand — the cache is the source of truth for fetched data.
+
+## Auth token storage
+
+```typescript
+// ❌ persistent
+localStorage.setItem('accessToken', token);
+sessionStorage.setItem('accessToken', token);
+
+// ✅ in memory only
+const accessToken = useAuthStore((s) => s.accessToken);
+```
+
+On 401: silent refresh via `POST /auth/refresh` (cookie-based). On failure: redirect to `/login`.
+
+## Design tokens
+
+Use Tailwind classes mapped to design-system tokens. **Never hardcode hex.**
+
+```tsx
+// ❌
+<div style={{ color: '#F59E0B' }} />
+
+// ✅
+<div className="text-amber-500" />   // or whatever the token resolves to
+```
+
+Branch colours are mixed with surface, never full-saturation as a fill except on map markers (see `design-system §2.1`).
+
+## Error boundary
+
+A global `ErrorBoundary` lives in `app/layout.tsx`. Wrap individual feature panels in their own boundary if they can fail independently (map, dispatch panel).
+
+## Performance
+
+- `useMemo` / `useCallback` only when profiling shows it matters.
+- MapLibre vehicle markers interpolate client-side from `Dispatch.routeGeometry` + `dispatchedAt` — no server polling.
+- Use `<Suspense>` with skeletons for lazy panels.
+
+## Forbidden
+
+- Hardcoded English UI strings — every string goes through `useT` (see `i18n.mdc`).
+- Inline `<script>` (CSP forbids it).
+- Direct DOM manipulation (`document.querySelector`); use refs + state.
+- Importing from `apps/backend` or `apps/worker`.

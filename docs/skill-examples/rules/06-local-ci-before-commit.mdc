@@ -1,0 +1,64 @@
+---
+description: Require local CI checks only for code-impacting commits
+alwaysApply: true
+---
+
+# Local CI Gate Before Commit
+
+Before creating a commit, run the checks below and confirm success.
+
+## Gate trigger: code-impacting changes only
+
+Run the **full CI gate** only when staged changes are in directories/files that are actually exercised by the CI commands (`lint`, `typecheck`, `test:*`, `build`, `audit`).
+
+Use **directory-first matching** (not file-extension matching).
+
+Require the full gate if any staged path is in:
+
+- `apps/**`
+- `packages/**`
+- `e2e/**`
+- `infra/**`
+- `scripts/**`
+- `.github/scripts/**`
+
+Also require the full gate if any staged path is one of these shared root files used by CI scripts:
+
+- `package.json`
+- `pnpm-lock.yaml`
+- `pnpm-workspace.yaml`
+- `turbo.json`
+
+## Non-code changes (full gate not required)
+
+If staged changes are only non-code operational/docs files, skip the full gate.
+
+Typical examples:
+
+- `docs/**`, `README.md`, `*.md`
+- `.cursor/**` rule/skill/memory files
+- `.github/workflows/**`
+- other repo metadata that does not affect shipped runtime code
+
+For these commits, run **targeted validation only** for changed files where applicable (for example: YAML parse for workflow edits, `bash -n` for shell script edits), and report that the full gate was intentionally skipped because no code-impacting paths changed.
+
+## Full gate (default)
+
+When code-impacting files are staged, run this sequence in order:
+
+```bash
+pnpm lint && \
+pnpm typecheck && \
+pnpm test:unit && \
+pnpm test:data && \
+NODE_ENV=production pnpm build && \
+pnpm test:integration && \
+pnpm audit --audit-level=high
+```
+
+## Enforcement
+
+- If any full-gate command fails, **do not commit**.
+- Fix failures first, then rerun the full gate from the start.
+- After a full-gate commit, explicitly report that the full gate passed.
+- Do not skip the full gate for code-impacting changes because failures are "likely unrelated".

@@ -1,0 +1,57 @@
+---
+description: File, directory, ID, enum, and database naming conventions
+alwaysApply: true
+---
+
+# Naming conventions
+
+## Files & directories
+
+| Item | Convention | Example |
+|---|---|---|
+| Directories | `kebab-case` | `apps/web/`, `packages/data/` |
+| TypeScript source files | `kebab-case.ts` (NestJS suffixes allowed) | `incidents.service.ts`, `jwt.guard.ts`, `dispatch.gateway.ts` |
+| React component files | `PascalCase.tsx` | `IncidentPanel.tsx`, `StatusPill.tsx` |
+| Test files (unit) | colocated `*.spec.ts` | `incidents.service.spec.ts` |
+| Test files (integration) | `apps/<app>/test/*.e2e-spec.ts` | `auth.e2e-spec.ts` |
+| Static JSON content | `kebab-case.json` | `fire-service.json`, `cross-branch.json` |
+| Prisma migrations | timestamp + `snake_case` description | `20260520143012_add_alliance_treasury/` |
+| Env variable names | `SCREAMING_SNAKE_CASE` | `JWT_ACCESS_SECRET` |
+| Public Next.js env | prefix `NEXT_PUBLIC_` | `NEXT_PUBLIC_API_URL` |
+| Markdown docs | `kebab-case.md` | `dispatch-one-mvp-implementation-spec.md` |
+
+## Code identifiers
+
+| Item | Convention | Example |
+|---|---|---|
+| TypeScript types & interfaces | `PascalCase` | `IncidentTemplate`, `VehicleDef` |
+| TypeScript variables & functions | `camelCase` | `computeWorkDuration`, `tryClaimVehicle` |
+| Constants | `SCREAMING_SNAKE_CASE` | `ONE_GAME_MONTH_MS` |
+| React components | `PascalCase` | `<RequirementsTable />` |
+| Hooks | `useCamelCase` | `useGameClock`, `useT` |
+| Vehicle / skill / incident / course IDs | ASCII `SCREAMING_SNAKE_CASE` | `HLF_20`, `OPS_INCIDENT_CAP`, `FIRE_05`, `BREATHING_APPARATUS` |
+| WebSocket event names | `SCREAMING_SNAKE_CASE` | `CONFIRM_DISPATCH`, `INCIDENT_SPAWNED` |
+| Redis key namespaces | `kebab-case` with `:` segments | `lock:vehicle:{id}`, `player:{id}:inventory` |
+
+## Database (Prisma)
+
+- Model names: `PascalCase` (`Player`, `AllianceMessage`)
+- Table names: `snake_case` via `@@map` (`players`, `alliance_messages`)
+- Column names: `snake_case` via `@map` (`assigned_vehicle_id`, `created_at`)
+- Enum values: `SCREAMING_SNAKE_CASE` (`EN_ROUTE`, `INCIDENT_COMPLETED`)
+
+## ID normalisation
+
+The user-facing display "HLF 20" maps to the canonical ID `HLF_20`. Never use the display form anywhere in code, JSON, types, or DB. `packages/utils/normalizeVehicleTypeId(display)` is the single converter.
+
+## Anti-patterns
+
+```typescript
+// ❌ file naming
+IncidentsService.ts     → ✅ incidents.service.ts
+incident_panel.tsx      → ✅ IncidentPanel.tsx
+
+// ❌ ID format
+const id = 'hlf-20';    → ✅ const id = 'HLF_20';
+const id = 'HLF 20';    → ✅ const id = 'HLF_20';
+```

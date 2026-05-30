@@ -1,0 +1,46 @@
+---
+description: Documentation hygiene — don't break references, update last-updated, preserve precedence
+globs: docs/**/*.md
+alwaysApply: false
+---
+
+# Docs
+
+The `docs/` folder is the project spec. The development roadmap and orchestrator skill cite specific sections by number — **renaming sections breaks references**.
+
+## Rules
+
+1. **Don't renumber existing sections** (`§4`, `§6.3`, etc.). If you add a section, append at the end or use a sub-section.
+2. **Don't rename files.** Other docs and the doc coverage matrix reference them by exact filename.
+3. **Don't change the spec precedence order** in `dispatch-one-development-roadmap.md §1.3` and `.cursor/skills/orchestrator/doc-index.md` without confirming with the user.
+4. Update the **"Last updated: <Month YYYY>"** line at the bottom of any spec doc you change.
+5. When you add a new product or engineering decision, also update the **Doc coverage matrix** in `dispatch-one-development-roadmap.md §2` so traceability stays correct.
+
+## Adding a new task to the roadmap
+
+Use the same task format as existing tasks:
+
+```
+### P<phase>-<nn> — <short title>
+
+- [ ] Status
+- Deps: <task ids or none>
+- Doc Ref: <shorthand from doc-index.md §3>
+- Tests: <exact command(s) the verifier should run>
+- Acceptance criteria:
+  - <concrete, testable>
+```
+
+Update phase summary table + doc coverage matrix in the same edit.
+
+## When in doubt
+
+If a content change touches behaviour rules (incident lifecycle, dispatch flow, schema, API events), **propose it as a diff first** and ask before committing — these changes ripple across the roadmap and may invalidate already-verified tasks.
+
+## Forbidden
+
+- Renaming a doc file
+- Renumbering existing sections
+- Deleting or rewording a closed roadmap task (`[x]`) without flagging it
+- Removing the precedence list or doc coverage matrix
+- Adding a new spec doc without registering it in `doc-index.md` and the precedence list

@@ -1,0 +1,42 @@
+---
+description: Dispatch One project identity, doc precedence, and current-phase awareness
+alwaysApply: true
+---
+
+# Dispatch One
+
+A modern, mobile-first emergency dispatch game (Leitstellenspiel-style) built in TypeScript.
+
+## Tech stack
+
+- **Frontend**: Next.js (App Router) on Cloudflare Pages, MapLibre + Protomaps, Tailwind, Zustand, TanStack Query, Socket.IO client, next-intl + Tolgee
+- **Backend**: NestJS on Fly.io (REST `/api/v1` + Socket.IO gateway)
+- **Worker**: NestJS standalone on Fly.io (spawn engine, salary tick, schedulers)
+- **Data**: Neon Postgres + PostGIS, Prisma, Upstash Redis, OSRM (self-hosted)
+- **Secrets**: Infisical (envs: `development` / `staging` / `production`)
+- **Repo**: pnpm + Turborepo monorepo
+
+## Repository state
+
+This repo currently contains **only docs**. Application code is built phase-by-phase from `docs/dispatch-one-development-roadmap.md` (the plan file). When unsure what phase we're in, read the roadmap.
+
+## Spec doc precedence (when docs conflict)
+
+1. `docs/dispatch-one-decisions.md` — product behaviour
+2. `docs/dispatch-one-mvp-implementation-spec.md` — implementation contract
+3. `docs/dispatch-one-engineering-decisions.md` — engine, time, spawn, routing
+4. `docs/dispatch-one-architecture.md` — infra, security, Infisical, CI/CD
+5. `docs/dispatch-one-design-system.md` — UI / UX
+6. `docs/dispatch-one-api-design.md` — WebSocket events
+7. `docs/dispatch-one-schema.md` — Prisma schema
+8. `docs/dispatch-one-testing.md` — test strategy
+9. Content sources: `dispatch-one-incidents.md`, `vehicles-*.md`, `dispatch-one-skill-tree.md`
+10. `docs/claude_design/V1/` — visual reference only, never feature spec
+
+## Hard rules
+
+- If a behaviour is not defined in a spec doc, **ask before guessing**.
+- Never invent fields, endpoints, events, or IDs that are not in `impl-spec`, `api-design`, or `schema`.
+- Vehicle / skill / incident IDs are canonical `SCREAMING_SNAKE_CASE` ASCII (`HLF_20`, not `HLF 20`).
+- All player-facing strings are i18n keys — no hardcoded English.
+- Single repo, no submodules.

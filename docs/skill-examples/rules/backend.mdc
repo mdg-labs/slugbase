@@ -1,0 +1,74 @@
+---
+description: NestJS backend & worker conventions — modules, DTOs, guards, rate limit, transactions
+globs: apps/backend/**/*.ts, apps/worker/**/*.ts
+alwaysApply: false
+---
+
+# Backend & worker (NestJS)
+
+## Module layout (`apps/backend/src/`)
+
+```
+modules/<feature>/
+  <feature>.controller.ts   ← REST surface; thin; delegates to service
+  <feature>.service.ts      ← business logic; pure where possible
+  <feature>.module.ts
+  dto/
+    <action>.dto.ts          ← class-validator DTOs
+  <feature>.service.spec.ts  ← unit (mock prisma + redis)
+```
+
+Integration tests live in `apps/backend/test/<feature>.e2e-spec.ts` (Testcontainers Postgres + Redis).
+
+## Controllers
+
+- Always specify HTTP verb + status decorator (`@Post()`, `@HttpCode(201)`).
+- Always extract `playerId` from JWT via decorator (`@CurrentPlayer()`) — never trust body / query.
+- DTOs are `class-validator` classes; reject extra fields with `forbidNonWhitelisted: true` (set globally).
+
+```typescript
+@Post()
+@HttpCode(201)
+async create(
+  @CurrentPlayer() playerId: string,
+  @Body() dto: BuildStationDto,
+): Promise<StationDto> {
+  return this.stations.build(playerId, dto);
+}
+```
+
+## Authorization
+
+Every mutation checks ownership in the service:
+
+```typescript
+async upgrade(playerId: string, id: string, dto: UpgradeStationDto) {
+  const station = await this.prisma.station.findFirst({
+    where: { id, playerId },         // 404 instead of 403 — no information leak
+  });
+  if (!station) throw new NotFoundException();
+  // ...
+}
+```
+
+## Transactions & locks
+
+- Multi-row state changes (dispatch, completion, salary): single Prisma `$transaction`.
+- Concurrent claims: Redis `SETNX` with PX TTL **before** opening the transaction (`engineering §6`).
+
+## Rate limiting
+
+Decorate or wrap action handlers with the shared rate limiter; limits per `engineering §10`. Auth endpoints return `429`; in-game actions emit `ACTION_REJECTED`.
+
+## Worker tasks
+
+- One scheduled job per file under `apps/worker/src/jobs/`.
+- Acquire `lock:worker:<job>` (SETNX) before running — prevents duplicate ticks if multiple workers exist.
+- Use `GameClockService` for any time-based logic; never inline `Date.now()` for game rules.
+
+## Forbidden
+
+- `console.log` (use injected `Logger`/pino).
+- `prisma.$queryRawUnsafe` with interpolation.
+- Returning the password hash, refresh token, or full JWT in any response.
+- Mutations that don't go through `class-validator` DTOs.

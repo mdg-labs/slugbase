@@ -1,0 +1,112 @@
+---
+description: GitHub Actions workflows — pinned actions, OIDC, env gating, no long-lived secrets
+globs: .github/workflows/*.yml, .github/workflows/*.yaml
+alwaysApply: false
+---
+
+# GitHub Actions
+
+## Workflow inventory (only these files)
+
+Single consolidated file: `.github/workflows/ci-cd.yml` (replaced `ci.yml`, `prepare-release.yml`, `deploy-production.yml` in DO-199/DO-201).
+
+| Trigger | Jobs |
+|---|---|
+| `pull_request` to `staging`/`main` | `ci` → `e2e` |
+| `push` to `staging` | `ci` → `e2e` → `deployment-staging-start` → **`build-server-staging`** + **`build-web-staging`** + **`deploy-admin`** (parallel) → `migrate-staging` (needs server) + `deploy-web-staging` + `deploy-marketing` (need web) → `deploy-fly-staging` (needs migrate) → `smoke-staging` → `deployment-staging-finish` |
+| `push` to `main` (version ≥ 1.0.0 and bumped vs latest `v*` tag) | `prepare` (create annotated tag + draft GitHub Release; skips tag/draft when root version < 1.0.0) |
+| `release` `published` | `check-not-deployed` → `deployment-production-start` → `build-production` (compiles all + web OpenNext bundle + artifact upload) → `migrate-production` + `deploy-web-production` (downloads artifact, no rebuild) → `deploy-fly-production` (needs migrate) → `smoke-production` → `deployment-production-finish` → `record-deployed-version` |
+
+**Deployment gatekeeper jobs:** `deployment-staging-start` / `deployment-staging-finish` and `deployment-production-start` / `deployment-production-finish` use `chrnorm/deployment-action` + `chrnorm/deployment-status` to create/update GitHub Deployment records. One record per environment per run. GitHub-for-Atlassian links each deployment to all `DO-*` issues in the commit range.
+
+`.jira/config.yml` maps `staging` and `production` to Jira deployment environment types. Must be on `main` to activate.
+
+Do **not** use `workflow_run` to chain staging deploy — the listener workflow must exist on the repo default branch (`main`), which breaks while app code lives only on `staging`. Use `needs: ci` + `if: push to staging` in `ci-cd.yml` instead.
+
+Anything else: ask before adding.
+
+## Secrets
+
+- All secrets fetched via the Infisical action with **OIDC** — no long-lived `GITHUB_TOKEN`-stored secrets except `secrets.GITHUB_TOKEN` for repo API use.
+- Env mapping: `ci-cd.yml` `ci` job → `development`; staging deploy jobs → `staging`; production deploy jobs → `production`.
+- Never `echo "$SECRET"` to logs.
+
+```yaml
+- uses: Infisical/secrets-action@<SHA>
+  with:
+    method: oidc
+    project-slug: dispatch-one
+    env-slug: staging
+```
+
+## Action pinning
+
+- Pin every external action to a full **commit SHA**, not a major-tag, for supply-chain safety.
+- Exception: GitHub-owned actions (`actions/checkout`, `actions/setup-node`, etc.) use major version tags (Node 24 runtime: v6 / v8).
+- App build/test steps install **Node 22** via `setup-node` `node-version: 22` — the action runtime (Node 24) is separate from the app Node version.
+- Self-hosted runners must be **≥ 2.327.1** for Node 24 action binaries (current: 2.334.0).
+- Do **not** set `ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION` in any workflow.
+
+## Local composite action (`.github/actions/setup`)
+
+GitHub resolves `./.github/actions/setup` **before** any composite steps run. On self-hosted runners with a clean `_work` directory, the action files are missing unless the job checked out first — checkout inside the composite action is too late.
+
+**Required pattern** for every job that uses the local setup action:
+
+```yaml
+steps:
+  - uses: actions/checkout@v6
+    # with: ref / fetch-depth when needed (production tag, prepare release tags)
+
+  - name: Setup workspace
+    uses: ./.github/actions/setup
+    with:
+      skip-checkout: 'true'
+      # infisical-env-slug, etc.
+```
+
+Fly/smoke jobs that only need scripts + Infisical keep inline `actions/checkout@v6` (no setup composite).
+
+```yaml
+# ✅ Current pinned versions (Node 24 runtimes)
+- uses: actions/checkout@v6
+- uses: actions/setup-node@v6
+  with:
+    node-version: 22           # app Node version stays 22
+    cache: pnpm
+- uses: actions/upload-artifact@v6
+- uses: actions/download-artifact@v8
+- uses: pnpm/action-setup@d15e628ca66d93ee5f352c71671a7bc6a97af5c9  # v6.0.8
+- uses: Infisical/secrets-action@77ab1f4ccd183a543cb5b42435fbd181189f4995  # v1.0.16
+- uses: chrnorm/deployment-action@fe2fba14b486343ce6893cff73b80e153063917a  # releases/v1
+- uses: chrnorm/deployment-status@598d987f3a8dec3817b995f810e6de7c06c92106  # releases/v1
+
+# ❌
+- uses: third-party/action@master
+- uses: third-party/action@v1
+- uses: actions/checkout@v4    # Node 20 — deprecated
+```
+
+- Fly deploys: `bash .github/scripts/setup-flyctl.sh` (retries; do not use setup-flyctl action — ECONNRESET on self-hosted)
+- Fly matrix job `deploy-fly-staging` / `deploy-fly-production` (backend + worker in parallel); do **not** put all deploy jobs in one `concurrency` group — that serializes/cancels them
+- Staging pushes: workflow `cancel-in-progress: true` on `refs/heads/staging` so overlapping runs do not leave Fly jobs cancelled mid-queue
+- CF Workers: `wrangler deploy --config wrangler.jsonc` from app dirs — OpenNext builds to `.open-next/worker.js`; `wrangler.jsonc` declares `nodejs_compat`, `ASSETS` binding, and `WORKER_SELF_REFERENCE` service binding.
+
+## Job structure
+
+- Checkout with `fetch-depth: 0` only when needed (release tagging).
+- pnpm setup → cache → `pnpm install --frozen-lockfile` → tasks.
+- Production deploy job: `environment: production` (required reviewer per `architecture §6.5`).
+
+## Forbidden
+
+- `if: always()` on a deploy step (can publish broken builds).
+- `workflow_dispatch` on production without a clear break-glass justification in the PR.
+- Triggering production deploy on `release.created` or draft edits — only `published`.
+- Deploying anything if `ci-cd.yml` `ci` job failed on the same commit SHA.
+
+## Production deploy guardrails
+
+- Checkout `${{ github.event.release.tag_name }}` (not `main` HEAD).
+- Compare to `DEPLOYED_VERSION` (Fly env or workflow var) — skip if already deployed.
+- All Fly app names from `architecture §3` naming convention.

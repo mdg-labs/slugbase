@@ -1,0 +1,4 @@
+# Active agent sessions
+
+Sessions in flight live here as `<SESSION-ID>.md`.
+Verified sessions are moved to `../archive/` by the verifier.

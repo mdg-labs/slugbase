@@ -1,0 +1,65 @@
+---
+description: TypeScript code style — strict, typed, import order, no console
+globs: **/*.ts, **/*.tsx
+alwaysApply: false
+---
+
+# TypeScript
+
+## Strict typing
+
+- `strict: true` everywhere (already in `packages/config/tsconfig/base.json`).
+- **No `any`.** If absolutely necessary, justify in a code comment + session memory entry.
+- Prefer `unknown` over `any` for boundary types, then narrow with type guards.
+- Use Zod schemas for runtime validation at trust boundaries (REST DTOs are class-validator; WS payloads are Zod).
+
+## Exports
+
+- **No default exports** except for Next.js route components (`page.tsx`, `layout.tsx`, `loading.tsx`, `error.tsx`).
+- Named exports only — keeps refactoring + grep predictable.
+
+## Imports
+
+Ordered by ESLint:
+
+1. Node built-ins (`node:fs`, `node:path`)
+2. External packages (`@nestjs/common`, `react`, `next-intl`)
+3. Internal monorepo (`@dispatch-one/types`, `@dispatch-one/utils`, `@dispatch-one/data`)
+4. Relative (`./...`, `../...`)
+
+Within a group, alphabetical. Type-only imports use `import type { ... }`.
+
+## Logging
+
+- **No `console.log` / `console.error`** in committed source (test files exempt).
+- Backend + worker use `pino` via the shared logger. Frontend uses `console` only inside development-only debug helpers gated by `NODE_ENV === 'development'`.
+
+## Error handling
+
+```typescript
+// ❌ swallow
+try { await fetchRoute(from, to); } catch {}
+
+// ❌ generic re-throw
+try { ... } catch (e) { throw e; }
+
+// ✅ contextual
+try {
+  return await osrm.route(from, to);
+} catch (cause) {
+  logger.warn({ from, to, cause }, 'osrm.route_failed_fallback_haversine');
+  return haversineRoute(from, to);
+}
+```
+
+## TODOs
+
+- `// TODO(<TASK-ID>): <reason>` — only for explicit deferrals recorded in session memory.
+- No naked `// TODO` or `// FIXME` left in committed code.
+
+## Misc
+
+- Prefer `const` over `let`; never `var`.
+- No `enum` — use `as const` objects + union types unless interop with Prisma enums is needed.
+- Async functions over `.then()` chains.
+- No `setTimeout` for game logic — use the `GameClockService` or scheduled events.

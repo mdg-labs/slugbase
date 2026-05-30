@@ -1,0 +1,128 @@
+---
+description: Workflow rule — every new env var must be registered in Infisical `development` (and pushed to `.env.example`, the Zod schema, and architecture §4.1) before commit
+alwaysApply: true
+---
+
+# New environment variables — Infisical-first workflow
+
+When introducing **any** new env var anywhere in the codebase, you MUST complete all four registration steps below in the same task. The verifier (Layer 3c) checks for all four.
+
+## This rule fires when you
+
+- Reference `process.env.X`, `process.env['X']`, `import.meta.env.X`, or `Bun.env.X` for an `X` that isn't already in `.env.example`
+- Add a `NEXT_PUBLIC_*` value to web code
+- Add a field to a per-app Zod env schema (`apps/<app>/src/config/env.schema.ts`)
+- Add a row to `.env.example`
+- Add a row to `docs/dispatch-one-architecture.md §4.1`
+
+If any of those happen, all four steps below apply.
+
+## Required steps (in order)
+
+### 1. Set the value in Infisical `development` via CLI
+
+```bash
+infisical secrets set <KEY>=<value> --env=development --projectId=<from .infisical.json>
+```
+
+Use the localhost / Docker-Compose variant for development values:
+
+| Pattern | Example |
+|---|---|
+| URL pointing to local container | `REDIS_URL=redis://localhost:6379` |
+| Docker-network DNS (only inside containers) | not used in `development` — those are staging-side |
+| Boolean toggle | `ROUTING_MOCK=true` or `ROUTING_MOCK=false` |
+| Optional / empty | `SENTRY_DSN=` |
+| Generated dev secret | `JWT_ACCESS_SECRET=$(openssl rand -hex 32)` (run once; reuse across restarts) |
+
+If the value isn't obvious from context (e.g. a 3rd-party API key, an arbitrary feature toggle), **stop and ask the user** — do not invent one and do not commit the new code yet.
+
+### 2. Add the key to `.env.example` at the repo root
+
+Key name only, **no value**:
+
+```diff
+# .env.example
++ NEW_THING=
+```
+
+### 3. Add the key to the per-app Zod env schema
+
+Startup must fail-fast with a clear error if missing/invalid — no silent defaults:
+
+```ts
+export const envSchema = z.object({
+  // ... existing keys
+  NEW_THING: z.string().url(),         // strict where possible
+  // or
+  OPTIONAL_THING: z.string().optional(),
+});
+```
+
+### 4. Document the key in `docs/dispatch-one-architecture.md §4.1`
+
+One row in the key-inventory table:
+
+```
+| NEW_THING | one-line purpose | development, staging, production |
+```
+
+The last column lists which Infisical environments need a value. `development` is set by you in step 1; `staging` and `production` are populated by the operator (or in P9-00 for production) — but the row must list them.
+
+## Verifier checks (Layer 3c)
+
+The verifier runs these for any task that adds env-var references:
+
+```bash
+# Key exists in Infisical development
+infisical secrets get <KEY> --env=development
+
+# Key is in .env.example
+rg -n "^<KEY>=" .env.example
+
+# Key is in at least one Zod schema
+rg -n "\\b<KEY>\\b" "apps/*/src/config/env.schema.ts"
+
+# Key is in architecture §4.1
+rg -n "\\| ${KEY} \\|" docs/dispatch-one-architecture.md
+```
+
+All four must succeed. Missing any one fails the task.
+
+## Forbidden
+
+- **Hardcoded fallbacks** for runtime config: `process.env.NEW_THING || 'localhost:1234'` — use the Zod schema to enforce presence instead. Sensible defaults belong **in the schema** (`z.string().default(...)`), never in usage sites.
+- **Committing `.env` / `.env.local` with real values** — only `.env.example` (key names only) is allowed.
+- **Setting `staging` or `production` secrets from a developer machine** — those flow via the operator's Infisical UI and the OIDC sync (H-06) / P9-00.
+- **Skipping the architecture §4.1 update** — orphan keys break the operator's onboarding workflow.
+- **Adding a key only to one of the four artefacts** — partial registration is the most common failure mode and the verifier explicitly catches it.
+
+## Worked example — adding `OSRM_PBF_URL`
+
+```bash
+# 1. Infisical (dev)
+infisical secrets set OSRM_PBF_URL=https://download.geofabrik.de/europe/germany/berlin-latest.osm.pbf --env=development
+
+# 2. .env.example
+echo 'OSRM_PBF_URL=' >> .env.example
+
+# 3. apps/backend/src/config/env.schema.ts
+#    OSRM_PBF_URL: z.string().url().optional(),
+
+# 4. docs/dispatch-one-architecture.md §4.1
+#    | OSRM_PBF_URL | OSM extract URL for local OSRM prep (default: Geofabrik Berlin) | development |
+
+# Stage + commit ONLY the code/doc changes — no .env file
+git add .env.example apps/backend/src/config/env.schema.ts docs/dispatch-one-architecture.md <source files referencing OSRM_PBF_URL>
+git commit -m "feat(infra): add OSRM_PBF_URL for local OSRM extract (P0-09)"
+```
+
+## Removing an env var
+
+The same rule applies in reverse: when you delete the last reference to a key, also remove it from `.env.example`, the Zod schemas, and architecture §4.1, **and** clear it from Infisical:
+
+```bash
+infisical secrets delete OLD_THING --env=development
+```
+
+Staging / production cleanup is handled by the operator.

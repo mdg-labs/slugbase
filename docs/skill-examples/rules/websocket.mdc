@@ -1,0 +1,65 @@
+---
+description: Socket.IO gateway + client rules — typed payloads, Zod parse, server-side rooms
+globs: apps/backend/**/*gateway*.ts, apps/backend/**/*ws*.ts, apps/backend/**/*socket*.ts, apps/backend/**/*events.emitter.ts, apps/backend/test/ws*, apps/web/src/lib/ws/**, apps/web/src/providers/GameSocketProvider.tsx
+alwaysApply: false
+---
+
+# WebSocket
+
+Source of truth for event names and payloads: `docs/dispatch-one-api-design.md §4`. Shared types: `packages/types/src/events.ts`.
+
+## Event naming
+
+`SCREAMING_SNAKE_CASE` matching the doc exactly: `CONFIRM_DISPATCH`, `INCIDENT_SPAWNED`, `VEHICLE_STATUS_CHANGED`, `ACTION_REJECTED`, `DISPATCH_CONFIRMED`.
+
+## Server (backend gateway)
+
+- Validate every inbound event with **Zod**. Reject malformed payloads via `ACTION_REJECTED`.
+- Validate `Origin` header on connect — must match CORS allowlist.
+- Validate JWT on connect; reject otherwise. Per-socket expiry timer (`engineering §9`).
+- **Server joins rooms.** Never trust client `socket.join(...)` requests.
+
+```typescript
+@SubscribeMessage('CONFIRM_DISPATCH')
+async handleConfirmDispatch(
+  @ConnectedSocket() socket: AuthedSocket,
+  @MessageBody() raw: unknown,
+) {
+  const parsed = ConfirmDispatchSchema.safeParse(raw);
+  if (!parsed.success) {
+    socket.emit('ACTION_REJECTED', { action: 'CONFIRM_DISPATCH', reason: 'invalid_payload' });
+    return;
+  }
+  // ... rate-limit, then handler
+}
+```
+
+## Rooms
+
+- `player:{playerId}` — personal events
+- `alliance:{allianceId}` — alliance chat, shared incidents
+- `region:{regionId}` — community events
+- `broadcast` — server-wide announcements
+
+Join server-side only on connect / membership change. Leave on disconnect (Socket.IO handles this automatically for the socket's rooms).
+
+## Client
+
+- Connect with `auth: { token }`. Refresh token via REST `/auth/refresh`, then emit `AUTH_REFRESH` over the existing socket — never reconnect just to refresh.
+- After reconnect: re-sync state via `GET /me/bootstrap`.
+- Type all inbound event handlers against `@dispatch-one/types` payloads — no `any`.
+
+## Rate limiting
+
+WS events that mutate state are rate-limited per `engineering §10`. Limit checks happen **after** Zod validation, **before** business logic.
+
+## Concurrency
+
+For shared resources (alliance dispatches): acquire `lock:vehicle:{id}` / `lock:incident:{id}:slot:{n}` via Redis `SETNX` with PX TTL before validating + writing (`engineering §6`).
+
+## Forbidden
+
+- Inline event names as string literals scattered across files — import from `@dispatch-one/types` constants.
+- Trusting client-supplied `playerId` or `allianceId` — always derive from JWT/membership lookup.
+- Emitting from controllers — use the gateway / Redis Pub/Sub.
+- Mutating DB state without an enclosing Prisma `$transaction` for multi-row changes.

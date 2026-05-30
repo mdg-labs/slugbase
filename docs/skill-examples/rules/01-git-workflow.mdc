@@ -1,0 +1,66 @@
+---
+description: Git branch policy, commit format, staging rules, never-push default
+alwaysApply: true
+---
+
+# Git workflow
+
+## Branches
+
+| Branch | Role |
+|---|---|
+| `staging` | Integration / implementation branch — all feature work lands here |
+| `main` | Production-ready — only updated by merging `staging` + bumping version |
+
+- Feature work happens directly on `staging` (no per-task branches needed) unless the user asks otherwise.
+- Production deploys are triggered by **published** GitHub Releases, not by pushing to `main`.
+
+## Commit messages (Conventional Commits)
+
+Subject ≤72 chars, imperative mood, **scoped**. **Task commits must link a work item** in square brackets — see `07-jira-commit-linking.mdc`.
+
+```
+feat(<area>)[DO-123]: <summary>
+fix(<area>)[DO-123]: <summary>
+chore(<area>)[DO-123]: <summary>
+refactor(<area>)[P2-01]: <summary>   # roadmap-only when no Jira mirror
+docs(<area>)[DO-123]: <summary>
+test(<area>)[DO-123]: <summary>
+ci(<area>)[DO-123]: <summary>
+build(<area>)[DO-123]: <summary>
+perf(<area>)[DO-123]: <summary>
+```
+
+Use `[DO-N]` when the task is on Jira; `[P*-*]` only when no Jira issue exists. Do **not** use Smart Commit commands (`#time`, `#comment`, `#resolve`) — Jira status/worklog via MCP only.
+
+**Allowed scopes**: `repo`, `ci`, `web`, `backend`, `worker`, `data`, `utils`, `types`, `config`, `prisma`, `auth`, `incidents`, `dispatch`, `vehicles`, `personnel`, `stations`, `skills`, `alliance`, `notifications`, `i18n`, `infra`, `plan`, `memory`.
+
+Plan-file verifier commits: `chore(plan)[DO-123]: mark P8-07 verified` / `chore(plan)[P8-07]: mark P8-07 verified` (prefer `[DO-N]` when mirrored).
+
+Session memory (`.cursor/skills/agent-memory/`) is **gitignored** — local working notes only. Verifiers post outcomes to Jira; do not commit session files.
+
+## Staging rules
+
+- **Never** `git add .` or `git add -A`. Always stage explicit paths.
+- One task = **one implementation commit** (or plan-file verifier commit when applicable). No session memory commits.
+- Never amend commits that have been pushed.
+
+## Push policy
+
+**Never push** unless the user explicitly asks. Local commits only.
+This includes never running `git push --force`, `git push --tags`, or any push command in scripts or hooks.
+
+## Examples
+
+```bash
+# GOOD
+git add apps/backend/src/modules/auth/auth.service.ts \
+        apps/backend/src/modules/auth/auth.service.spec.ts
+git commit -m "feat(auth)[P2-01]: add register endpoint with bcrypt cost 12"
+
+# BAD — blanket staging
+git add .
+
+# BAD — no scope / no task id
+git commit -m "added auth"
+```

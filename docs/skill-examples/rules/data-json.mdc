@@ -1,0 +1,69 @@
+---
+description: Static game data JSON — canonical IDs, nameEn/nameDe, Zod-validated
+globs: packages/data/**/*.json
+alwaysApply: false
+---
+
+# Static game data
+
+All JSON under `packages/data/src/vehicles/` and `packages/data/src/incidents/` is **validated at package build time** via Zod. Build fails on invalid input.
+
+## Rules
+
+1. **Canonical IDs only.** `SCREAMING_SNAKE_CASE` ASCII. No spaces, no umlauts.
+   - ✅ `HLF_20`, `FuStW_DGL`, `FIRE_05`, `ONBOARDING_01`
+   - ❌ `HLF 20`, `FüStW DGL`, `fire-05`
+2. **Both languages required.** Every entity with a player-facing name has `nameEn` AND `nameDe`. Empty string is not acceptable.
+3. **No duplicate IDs.** Across all files in the same category (vehicles share one namespace, incidents share another).
+4. **All cross-references must resolve.**
+   - Every `escalatesTo` template ID exists.
+   - Every `vehicleTypes[]` in a requirement group references a real vehicle ID.
+   - Every `fulfills[]` key on a vehicle is used by at least one incident.
+5. **Branch matches placement.** `branch: 'FIRE_SERVICE'` only in `fire-service.json`, etc.
+6. **`NEA_50` / `NEA_200` live in `technical-relief.json`**, not Fire (per `engineering §20`).
+
+## Required fields
+
+### Vehicle
+
+```json
+{
+  "id": "HLF_20",
+  "nameEn": "Heavy Rescue Fire Engine 20",
+  "nameDe": "Hilfeleistungslöschgruppenfahrzeug 20",
+  "branch": "FIRE_SERVICE",
+  "cost": 450000,
+  "requiredCrew": 9,
+  "returnTimeMinutes": 20,
+  "fulfills": ["FIRE_ENGINE", "HLF_20"],
+  "prerequisites": { "training": ["BREATHING_APPARATUS"] }
+}
+```
+
+### Incident template
+
+```json
+{
+  "id": "FIRE_05",
+  "nameEn": "Apartment Fire",
+  "nameDe": "Wohnungsbrand",
+  "branch": "FIRE_SERVICE",
+  "severity": "MEDIUM",
+  "fixed": true,
+  "baseRequirements": [{ "kind": "any_of", "vehicleTypes": ["HLF_20", "HLF_10", "LF_10"], "count": 1 }],
+  "dynamicRolls": [],
+  "durationMinutes": 60,
+  "reactTimerMinutes": 8,
+  "randomEscalationPct": 15,
+  "escalatesTo": "FIRE_06",
+  "baseCredits": 8000,
+  "weight": 1
+}
+```
+
+## Forbidden
+
+- Display strings as IDs (`"HLF 20"`).
+- Missing translations (`nameDe: ""` or omitted).
+- References to vehicles/incidents that don't exist.
+- Embedded comments — JSON does not support them; use `dispatch-one-incidents.md` for prose.

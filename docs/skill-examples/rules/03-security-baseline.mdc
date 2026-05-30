@@ -1,0 +1,69 @@
+---
+description: Security defaults that apply to every change — secrets, logging, auth, input handling
+alwaysApply: true
+---
+
+# Security baseline
+
+These rules apply to **every** change. The verifier (Layer 3c) checks them on every task.
+
+## Secrets
+
+- **Never commit `.env`, `.env.local`, or any file containing real secrets.** Only `.env.example` (key names, no values) is allowed.
+- **Never paste secret values** into code, comments, docs, or chat output.
+- All secrets come from **Infisical**:
+  - Local dev: `infisical run --env=development -- <command>`
+  - CI: Infisical OIDC actions, env-scoped
+  - Fly runtime: Infisical → Fly secret sync
+- Required Infisical envs: `development`, `staging`, `production`. Never share values across envs.
+- **Adding a new env var?** Follow the four-step Infisical-first workflow in `05-env-vars-infisical.mdc`. Partial registration (e.g. code references the var but Infisical doesn't have it) fails Layer 3c verification.
+
+## Logging
+
+Never log any of:
+
+- `password`, `passwordHash`
+- `accessToken`, `refreshToken`, full `Authorization` headers, full cookies
+- `JWT_*`, `*_SECRET`, raw `DATABASE_URL` (redact query string)
+
+Pino redact list must cover all of the above. Sentry `beforeSend` drops the same fields.
+
+## Auth
+
+- Access tokens: JWT bearer, **15 min** TTL, signed with `JWT_ACCESS_SECRET`.
+- Refresh tokens: HttpOnly + Secure + SameSite=Strict cookie, path `/auth/refresh` only, 30-day TTL, rotated on every refresh.
+- Client stores access token in **memory only** — never `localStorage` or `sessionStorage`.
+- bcrypt cost factor 12 for password hashing.
+- WS auth: JWT in `socket.handshake.auth.token`; per-socket expiry timer; `AUTH_REFRESH` over open socket.
+
+## Input handling
+
+- All REST bodies validated by `class-validator` DTOs (`whitelist: true, forbidNonWhitelisted: true`).
+- All WS payloads parsed by Zod; reject malformed with `ACTION_REJECTED`.
+- Sanitize every free-text field that can render in HTML (chat, station name, vehicle name, dispatch center name, alliance name + description, vehicle category labels) — strip `<`, `>`, `<script>`.
+- All DB queries via **Prisma** parameterised methods. No raw SQL outside reviewed migrations.
+- Every mutation checks the JWT `playerId` matches the resource owner (or verified alliance membership).
+
+## Network
+
+- HTTPS everywhere; HSTS on production.
+- CORS allowlist per env (Infisical) — never `*`.
+- Helmet on backend with strict CSP; map tile origin allowlisted.
+- WebSocket `Origin` header validated against the same allowlist.
+- Rate limiting per `engineering §10`.
+
+## Anti-patterns
+
+```typescript
+// ❌ logging secrets
+logger.info({ token: accessToken, user });
+
+// ❌ token in localStorage
+localStorage.setItem('access_token', token);
+
+// ❌ raw SQL with interpolation
+prisma.$queryRawUnsafe(`SELECT * FROM players WHERE id = '${id}'`);
+
+// ✅ parameterised
+prisma.player.findUnique({ where: { id } });
+```
