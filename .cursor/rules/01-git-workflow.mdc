@@ -1,0 +1,71 @@
+---
+description: Git branch policy, commit format, main branch rules, never-push default
+alwaysApply: true
+---
+
+# Git workflow
+
+## Branches
+
+| Branch | Role |
+|---|---|
+| `main` | Integration / development branch — all feature work lands here |
+
+- Feature work happens directly on `main` unless the user asks for task branches (Lane P).
+- Release branching and production deploy strategy will be defined once the self-hosted deployment story is operationalized (spec §14).
+
+## Commit messages (Conventional Commits)
+
+Subject ≤72 chars, imperative mood, **scoped**. **Task commits must link a work item** in square brackets — see `07-jira-commit-linking.mdc`.
+
+```
+feat(<scope>)[SB-123]: <imperative summary>
+fix(<scope>)[SB-123]: <summary>
+chore(<scope>)[SB-123]: <summary>
+refactor(<scope>)[P2-01]: <summary>   # roadmap-only when no Jira mirror
+docs(<scope>)[SB-123]: <summary>
+test(<scope>)[SB-123]: <summary>
+ci(<scope>)[SB-123]: <summary>
+build(<scope>)[SB-123]: <summary>
+perf(<scope>)[SB-123]: <summary>
+```
+
+Use `[SB-N]` when the task is on Jira; `[P*-*]` only when no Jira issue exists yet. Do **not** use Smart Commit commands (`#time`, `#comment`, `#resolve`) — Jira sync via MCP only.
+
+**Allowed scopes**: `repo`, `ci`, `web`, `backend`, `marketing`, `docs`, `bookmarks`, `slugs`, `go`, `folders`, `tags`, `workspaces`, `auth`, `mfa`, `oidc`, `sessions`, `billing`, `entitlements`, `admin`, `search`, `import`, `export`, `i18n`, `infra`, `plan`, `memory`
+
+Plan-file verifier commits: `chore(plan)[SB-N]: mark P1-03 verified` (prefer `[SB-N]` when a Jira mirror exists).
+
+Session memory (`.cursor/skills/agent-memory/`) is **gitignored** — local working notes only. Verifiers post outcomes to Jira; never commit session files.
+
+## Commit rules
+
+- **Never** `git add .` or `git add -A`. Always stage explicit paths.
+- One task = **one implementation commit** (or one plan-file verifier commit when applicable). No session memory commits.
+- Never amend commits that have been pushed.
+
+## Push policy
+
+**Never push** unless the user explicitly asks. Local commits only.
+This includes never running `git push --force`, `git push --tags`, or any push command in scripts or hooks.
+
+## Examples
+
+```bash
+# GOOD
+git add packages/backend/src/auth/session.service.ts \
+        packages/backend/src/auth/session.service.spec.ts
+git commit -m "feat(auth)[SB-12]: add server-side session store with configurable TTL"
+
+# GOOD — roadmap-only (no Jira mirror yet)
+feat(workspaces)[P2-01]: implement workspace creation with entitlement check
+
+# BAD — blanket staging
+git add .
+
+# BAD — no scope / no task key
+git commit -m "added auth"
+
+# BAD — old key format (trailing parens)
+feat(auth): add session store (SB-12)
+```

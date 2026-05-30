@@ -1,0 +1,70 @@
+---
+description: When and how to use the orchestrator skill and development roadmap
+alwaysApply: true
+---
+
+# Orchestrator & roadmap
+
+SlugBase is built **task-by-task** from `docs/slugbase-development-roadmap.md`. Sub-agents implement tasks; a verifier checks them; checkboxes get ticked.
+
+## Use the orchestrator skill when
+
+- The user asks to "orchestrate", "delegate", "run the roadmap", "implement phase X", or "execute tasks autonomously"
+- Multi-step work spans several tasks
+
+In that case, follow `.cursor/skills/orchestrator/SKILL.md`. Do not improvise.
+
+## Use the roadmap directly when
+
+- You're implementing a single task and the user already pointed at a Task ID (e.g. `P1-01`)
+- You're checking dependencies or what's next
+
+Open `docs/slugbase-development-roadmap.md`, search the Task ID, read the row (Doc Ref + acceptance criteria + Tests).
+
+## Task lifecycle (plan-file mode)
+
+```
+- [ ] not started
+- [~] awaiting verification    ← Lane S: execution agent (if plan file in WRITE SCOPE)
+                               ← Lane P: orchestrator at batch start
+- [x] verified                 ← Lane S: task verifier on main
+                               ← Lane P: staging batch verifier after integration
+- [!] failed — <reason>        ← verifier only
+```
+
+If you're acting as the orchestrator chat: never edit checkboxes during normal flow except **Lane P batch prep** (`[~]` at batch start). Verifiers update `[x]` / `[!]`.
+
+**Parallel batches (Lane P):** execution in isolated worktrees (`best-of-n-runner`); integration merges to `main`. See orchestrator SKILL.md § Parallelism.
+
+## Jira board status (when orchestrating)
+
+Project **SB** on `mdg-labs.atlassian.net`. Commit subjects use Jira key in brackets: `[SB-12]`.
+
+- **Execution agents** → set **In Progress** on leaf issue(s) and epic parent when dispatching a child (first action, before code); set **In Review** before verifier handoff
+- **Verification agents** → set **Done** only after all layers PASS; FAIL → **Ready** + comment
+- Execution prompts must **not** include the Done transition ID — see `.cursor/skills/orchestrator/jira-board.md`
+
+## Universal acceptance criteria (every task)
+
+Even when not listed in a task row, the verifier applies:
+
+- File / directory naming (`04-naming.mdc`)
+- Conventional commits with `[SB-N]` (`01-git-workflow.mdc`, `07-jira-commit-linking.mdc`)
+- TypeScript strict, no `any`, no `console.log` (when TypeScript is in scope)
+- Security defaults — server-side sessions, no logged secrets, server-side validation (`03-security-baseline.mdc`)
+- i18n — every UI string via the i18n layer, no hardcoded strings (spec §17)
+- No `isCloud` / deployment-mode branches — use entitlement checks and interface selection (spec §15)
+
+## Explicit non-goals (v1 out of scope — spec §20)
+
+If a request targets any item below, **flag it** and ask whether to defer to Fast-Follow:
+
+- Dedicated operator / super-admin console
+- Soft-delete / trash for user deletions
+- Subdomain- or path-based tenancy
+- Browser extension or bookmarklet
+- Public / anonymous slug resolution or share pages
+- Drag-and-drop reordering, notifications center
+- AI features beyond field suggestions (no summaries, auto-categorization, chat)
+- Additional provider implementations per interface (only one per interface in v1)
+- First-class backup/restore beyond enriched export + volume copy

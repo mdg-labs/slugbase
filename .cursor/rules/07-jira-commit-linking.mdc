@@ -1,0 +1,69 @@
+---
+description: Link every task commit to a Jira SB issue (or roadmap ID) for Development panel traceability — no Smart Commit commands in messages
+alwaysApply: true
+---
+
+# Jira commit linking
+
+Every **task-related** commit must include a work-item key so Jira's **Development** panel (commits / branches / PRs) links correctly when GitHub is connected.
+
+## Required subject format
+
+```
+<type>(<scope>)[<ISSUE-KEY>]: <imperative summary>
+```
+
+| Part | Rule |
+|---|---|
+| `<type>` | Conventional Commits: `feat`, `fix`, `chore`, `refactor`, `docs`, `test`, `ci`, `build`, `perf` |
+| `<scope>` | Allowed scopes from `01-git-workflow.mdc` (`bookmarks`, `auth`, `billing`, `go`, …) |
+| `[<ISSUE-KEY>]` | **Mandatory** on task commits — square brackets, uppercase `SB-N` |
+| Summary | Imperative mood; whole subject ≤72 chars |
+
+### Issue key precedence
+
+1. **Jira leaf issue** — `[SB-N]` when the task exists on the board (orchestrator JIRA SYNC, user named `SB-*`, or roadmap row has a Jira mirror via `Roadmap ID` field)
+2. **Roadmap only** — `[P2-01]` when no Jira issue exists yet
+3. **Combined batch** — primary leaf key in brackets; list siblings in session memory
+
+### Examples
+
+```bash
+# GOOD — Jira work
+feat(auth)[SB-12]: add server-side session store with configurable TTL
+fix(slugs)[SB-31]: resolve collision disambiguation when shared bookmark deleted
+
+# GOOD — roadmap-only (no Jira mirror)
+feat(workspaces)[P2-01]: implement workspace creation with entitlement check
+
+# GOOD — plan-file verifier commit
+chore(plan)[SB-12]: mark P1-03 verified
+
+# BAD — key at end (old format)
+feat(auth): add session store (SB-12)
+
+# BAD — missing key on task work
+feat(auth): add session store
+
+# BAD — Smart Commit commands (MCP owns Jira sync)
+feat(auth)[SB-12]: add session store #time 2h #comment done
+```
+
+## Smart Commits — NEVER use in commit messages
+
+Jira sync (status, worklog, comments) is handled by **MCP** in orchestrated runs. Never put these in commit subjects or bodies:
+
+- `#time`, `#comment`, `#resolve`, `#close`, or any `#<transition>` command
+
+Issue keys alone link commits to work items; smart commands would duplicate worklogs and transition issues at the wrong time.
+
+## Exceptions (no issue key required)
+
+- Pure repo hygiene with no task ID: `chore(repo): init pnpm workspace` (rare; prefer an SB issue when in doubt)
+- Integration merge commits: `chore(repo)[SB-N]: integrate orchestrator batch (<BATCH_ID>)`
+
+## Enforcement
+
+- **Execution agents:** implementation commits include `[SB-N]` or `[P*-*]`
+- **Verifiers:** Layer 3 — FAIL if a task commit subject lacks a valid issue key when Jira sync was in scope
+- **Orchestrator prompts:** pass leaf `SB-N` in the GIT block; see `.cursor/skills/orchestrator/prompt-templates.md`

@@ -1,0 +1,42 @@
+---
+description: SlugBase project identity, doc precedence, and current-phase awareness
+alwaysApply: true
+---
+
+# SlugBase
+
+A bookmark manager with built-in URL shortening and keyboard-driven launcher — save bookmarks, assign short slugs, and jump to any URL from the address bar or command palette (`/go/<slug>`). Deployed as a managed hosted service and a self-hosted install from one codebase.
+
+## Tech stack (decisions pending — update as stack is chosen)
+
+- **Single repo:** pnpm workspace monorepo (spec §2.2)
+- **Packages:** backend API · web client · shared types/contracts · shared UI · marketing site (static, separately built) · docs (spec §19)
+- **Database:** Two engines on identical schema — embedded file-based (self-hosted default) + networked relational (hosted default) — spec §11.9
+- **Auth:** Server-side sessions (no JWT access/refresh); TOTP MFA; OIDC/SSO — spec §5
+- **Billing:** Stripe (hosted); no-op billing (self-hosted) — spec §11.4
+- **i18n:** English + German at launch — spec §17
+- **Secrets:** Phase CLI — use the `phase-cli` skill for secrets management
+- **Bot protection:** Cloudflare Turnstile (hosted default); no-op (self-hosted) — spec §11.8
+
+## Repository state
+
+This repo currently contains only docs. Application code is built phase-by-phase from `docs/slugbase-development-roadmap.md` (plan file — to be drafted). When unsure what phase we're in, read the roadmap.
+
+## Spec doc precedence (when docs conflict)
+
+1. `docs/slugbase-mvp-spec.md` — single source of truth: product vision, architecture, data model, interface contracts, billing, security, self-hosted story, resolved decisions
+
+*(Additional docs — engineering decisions, API design, schema reference, testing strategy — to be added alongside the roadmap.)*
+
+## Hard rules
+
+- If a behaviour is not defined in a spec doc, **ask before guessing**.
+- Never invent fields, endpoints, flows, or plans not present in the spec.
+- **"Workspace"** is the only tenant term — "organization" is deprecated (spec §3, decision #1).
+- **"Folder"** is the only container term — no "collection" (spec §3, decision #2).
+- **"Pinning"** is the only prominence mechanism — no "favorites" anywhere (spec §3, decision #3).
+- Bookmark editing is modal-only — no dedicated detail route (spec §6.2, decision #19).
+- Slugs are private to a workspace — no anonymous `/go` resolution in v1 (spec §8.2, decision #23).
+- All user-facing strings must be i18n keys — no hardcoded English or German (spec §17).
+- Single repo, no submodules, pnpm throughout — no npm or yarn lockfiles (spec §2.2).
+- Self-hosted and cloud are the **same code path** — no `isCloud`/deployment-mode branches in app logic (spec §1, §15).

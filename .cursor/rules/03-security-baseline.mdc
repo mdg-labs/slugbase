@@ -1,0 +1,96 @@
+---
+description: Security defaults that apply to every change — sessions, secrets, logging, CSRF, SSRF, encryption
+alwaysApply: true
+---
+
+# Security baseline
+
+These rules apply to **every** change. The verifier (Layer 3c) checks them on every task. Grounded in spec §5 (auth), §11.10 (SSRF), §11.11 (encryption), §15 (config), §18 (security NFRs).
+
+## Secrets
+
+- **Never commit `.env`, `.env.local`, or any file containing real secrets.** Only `.env.example` (key names, no values) is allowed.
+- **Never paste secret values** into code, comments, docs, or chat output.
+- Secrets management uses the **Phase CLI** — use the `phase-cli` skill for the correct workflow.
+- Required security secrets: session-signing secret, at-rest encryption key — app validates at startup and **refuses to run insecurely in production** (spec §15).
+- Adding a new env var? Follow `05-env-vars.mdc`. Partial registration fails Layer 3c.
+
+## Logging
+
+Never log any of:
+
+- `password`, `passwordHash`
+- `sessionToken`, `apiToken`, full `Authorization` headers, full cookies
+- `*_SECRET`, `*_KEY`, raw database connection strings (redact query string)
+- MFA secrets, backup codes, OIDC client secrets
+
+## Auth — server-side sessions (non-negotiable, spec §5.3, decision #9)
+
+SlugBase uses **server-side sessions only**. The old JWT-access + cloud-only-refresh model is **dropped and must not be reintroduced**.
+
+- Sessions: HTTP-only cookie, backed by server-side session store; configurable TTL; individual revocation.
+- Active-workspace selection lives in the session (spec §4.3).
+- **Personal API tokens:** long-lived, stored as hashes, individually named. They bypass MFA but do NOT get cookie sessions (spec §5.3).
+- **Forbidden:** JWT in cookies, access tokens in `localStorage`/`sessionStorage`, refresh-token rotation over the wire.
+
+## CSRF
+
+Mutating API requests require CSRF protection. Explicit exempt allowlist (spec §5.8):
+`login`, `logout`, `MFA verification`, `setup`, `registration`, `password reset`, `health`, `CSRF token endpoint`.
+
+All other mutations must carry the CSRF token. Never widen this allowlist without explicit spec backing.
+
+## Input handling
+
+- All request bodies validated server-side; reject unknown/extra fields.
+- All DB queries via the data-access abstraction — no raw SQL interpolation (spec §11.9).
+- Every mutation verifies workspace membership and resource ownership before acting (spec §5.9).
+- Free-text fields that render in HTML: strip `<`, `>`, `<script>` before persist/render.
+
+## Outbound HTTP / SSRF (spec §§6.4, 11.10)
+
+All server-initiated outbound HTTP (metadata fetch, favicon fetch, future webhooks) goes through the shared **SSRF-safe egress interface** — host validation, private-range blocking, timeouts, size limits, caching. **Never bypass this path** for any outbound request.
+
+```typescript
+// ❌ direct fetch — bypasses SSRF-safe egress
+const res = await fetch(userSuppliedUrl);
+
+// ✅ use the fetch interface
+const res = await this.fetchService.get(url);
+```
+
+## Encryption at rest (spec §11.11)
+
+Sensitive at-rest values — SMTP credentials, AI credentials, OIDC client secrets, MFA secrets — are encrypted via the crypto interface. **Never store these as plain text** in the database or settings records.
+
+## Transport and cookies (spec §§5.8, 14.6)
+
+- HTTPS everywhere; cookie `HttpOnly`, `Secure`, `SameSite` set appropriately.
+- Proxy trust is configurable; the public base URL must match the real externally reachable HTTPS address.
+- CORS allowlist per environment — never `*`.
+
+## Rate limiting (spec §18)
+
+Required on: `login`, token creation, `registration`, `password reset`. Returns 429 / equivalent error.
+
+## Anti-patterns
+
+```typescript
+// ❌ old JWT model — forbidden
+res.cookie('access_token', jwt, { httpOnly: true });
+localStorage.setItem('access_token', token);
+
+// ❌ deployment-mode branch — use entitlements engine instead
+if (process.env.DEPLOYMENT_MODE === 'cloud') { ... }
+// ✅
+if (await this.entitlements.can(workspace, 'team-sharing')) { ... }
+
+// ❌ raw SQL interpolation
+db.query(`SELECT * FROM bookmarks WHERE workspace_id = '${id}'`);
+
+// ❌ bypassing SSRF-safe egress
+fetch(url);  // must go through fetch interface
+
+// ❌ plain-text credential storage
+await db.settings.set({ smtpPassword: plain });
+```

@@ -1,0 +1,72 @@
+---
+description: File, directory, env variable, database, and product vocabulary naming conventions
+alwaysApply: true
+---
+
+# Naming conventions
+
+## Files & directories
+
+| Item | Convention | Example |
+|---|---|---|
+| Directories | `kebab-case` | `packages/backend/`, `packages/web/`, `packages/shared-types/` |
+| TypeScript source files | `kebab-case.ts` (framework suffixes allowed) | `session.service.ts`, `bookmarks.controller.ts`, `slug.resolver.ts` |
+| React component files | `PascalCase.tsx` | `BookmarkCard.tsx`, `CommandPalette.tsx`, `SlugBadge.tsx` |
+| Test files (unit) | colocated `*.spec.ts` | `session.service.spec.ts`, `entitlements.service.spec.ts` |
+| Test files (integration / e2e) | `*.e2e-spec.ts` | `bookmarks.e2e-spec.ts` |
+| Static JSON / data | `kebab-case.json` | `plans.json`, `default-config.json` |
+| Markdown docs | `kebab-case.md` | `slugbase-mvp-spec.md`, `slugbase-development-roadmap.md` |
+| Env variable names | `SCREAMING_SNAKE_CASE` | `SESSION_SECRET`, `ENCRYPTION_KEY`, `STRIPE_SECRET_KEY` |
+| Public client env | prefix `NEXT_PUBLIC_` (or framework equivalent) | `NEXT_PUBLIC_API_URL` |
+
+## Code identifiers
+
+| Item | Convention | Example |
+|---|---|---|
+| TypeScript types & interfaces | `PascalCase` | `WorkspaceRole`, `BookmarkDto`, `EntitlementSet` |
+| TypeScript variables & functions | `camelCase` | `resolveSlug`, `getActiveWorkspace`, `checkEntitlement` |
+| Constants | `SCREAMING_SNAKE_CASE` | `FREE_BOOKMARK_CAP`, `MAX_API_TOKENS_PER_USER` |
+| React components | `PascalCase` | `<SlugCard />`, `<CommandPalette />`, `<WorkspaceSwitcher />` |
+| Hooks | `useCamelCase` | `useActiveWorkspace`, `useCommandPalette`, `useEntitlements` |
+
+## Database
+
+- Model names: `PascalCase` (`Workspace`, `Bookmark`, `SlugPreference`, `ApiToken`)
+- Table names: `snake_case` via mapping (`workspaces`, `bookmarks`, `slug_preferences`, `api_tokens`)
+- Column names: `snake_case` (`workspace_id`, `created_at`, `forwarding_enabled`, `plan_archived`)
+- Enum values: `SCREAMING_SNAKE_CASE` (`OWNER`, `ADMIN`, `MEMBER`)
+- Migration names: `add_<thing>`, `index_<thing>`, `drop_<thing>` — tooling generates the timestamp; **never create migration directories by hand**
+
+## Product vocabulary (spec §3, decisions #1–3 — enforced everywhere)
+
+| ✅ Correct | ❌ Forbidden |
+|---|---|
+| `workspace` | `organization`, `org`, `tenant` |
+| `folder` | `collection` |
+| `pinned` / `pinning` | `favorite`, `starred`, `bookmarked` |
+| `member` | `user` (when referring to workspace membership) |
+| `slug` | `alias`, `shortlink`, `keyword` |
+| `forwarding` / `go` | `redirect` (in user-facing copy) |
+| `workspace admin` | `org admin` |
+| `instance-wide admin` | `super admin`, `site admin` |
+
+## Domain areas (for issue summaries, commit scopes, and bug prefixes)
+
+`Bookmarks` · `Slugs` · `Go` · `Folders` · `Tags` · `Workspaces` · `Auth` · `MFA` · `OIDC` · `Sessions` · `Billing` · `Entitlements` · `Admin` · `Dashboard` · `Search` · `Import` · `Export` · `Marketing` · `i18n` · `CI` · `Infra` · `API`
+
+## Anti-patterns
+
+```typescript
+// ❌ product vocabulary violations
+interface Organization { ... }      → ✅ interface Workspace { ... }
+const isFavorite = bookmark.fav;    → ✅ const isPinned = bookmark.pinned;
+type Collection = { ... }           → ✅ type Folder = { ... }
+
+// ❌ file naming
+SessionService.ts                   → ✅ session.service.ts
+bookmark_card.tsx                   → ✅ BookmarkCard.tsx
+
+// ❌ deployment-mode constant
+const isCloud = process.env.SLUGBASE_MODE === 'cloud';
+// ✅ use entitlements engine (spec §11.5, §15)
+```

@@ -1,0 +1,57 @@
+---
+description: Require local CI checks for code-impacting commits
+alwaysApply: true
+---
+
+# Local CI gate before commit
+
+Before creating a commit, run the checks below and confirm success.
+
+## Gate trigger: code-impacting changes only
+
+Run the **full CI gate** when staged changes are in directories/files exercised by CI commands:
+
+- `packages/**`
+- `apps/**`
+- `e2e/**`
+- `infra/**`
+- `scripts/**`
+- `.github/scripts/**`
+
+Also require the full gate for these shared root files:
+
+- `package.json`
+- `pnpm-lock.yaml`
+- `pnpm-workspace.yaml`
+- `turbo.json` (if present)
+
+## Non-code changes (full gate not required)
+
+Skip the full gate when staged changes are only in:
+
+- `docs/**`, `*.md`
+- `.cursor/**` (rules, skills, memory files)
+- `.github/workflows/**`
+- Other repo metadata that does not affect shipped runtime code
+
+For these commits, run **targeted validation only** (e.g. YAML parse for workflow edits) and report that the full gate was intentionally skipped.
+
+## Full gate (update once stack is decided)
+
+When code-impacting files are staged:
+
+```bash
+pnpm lint && \
+pnpm typecheck && \
+pnpm test:unit && \
+pnpm build && \
+pnpm test:integration
+```
+
+**Stack note:** Exact commands will be defined when the tech stack is chosen (spec §19 package layout). Mark any undefined command as `n/a` and note which were skipped. Add `pnpm audit --audit-level=high` once dependencies are established.
+
+## Enforcement
+
+- If any full-gate command fails, **do not commit**. Fix failures first, then rerun from the start.
+- After a full-gate commit, explicitly report that the full gate passed.
+- Do not skip the full gate for code-impacting changes because failures are "likely unrelated".

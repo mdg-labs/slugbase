@@ -1,2 +1,4 @@
 # cursor
 docs/skill-examples/agent-memory/
+.cursor/skills/agent-memory/active/
+.cursor/skills/agent-memory/archive/
