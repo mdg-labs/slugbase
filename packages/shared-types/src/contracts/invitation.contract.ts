@@ -51,7 +51,20 @@ export const AcceptInvitationResponseSchema = z
   })
   .strict();
 
-export type Invitation = z.infer<typeof InvitationSchema>;
+export const PendingInvitationViewSchema = z
+  .object({
+    id: z.string(),
+    workspaceId: z.string(),
+    invitedEmail: z.string().email(),
+    role: InvitationRoleSchema,
+    invitedByUserId: z.string(),
+    invitedByName: z.string(),
+    expiresAt: z.string().datetime(),
+    createdAt: z.string().datetime(),
+  })
+  .strict();
+
+export type PendingInvitationView = z.infer<typeof PendingInvitationViewSchema>;
 export type InvitationMetadata = z.infer<typeof InvitationMetadataSchema>;
 export type CreateInvitationBody = z.infer<typeof CreateInvitationBodySchema>;
 export type AcceptInvitationBody = z.infer<typeof AcceptInvitationBodySchema>;
@@ -94,5 +107,40 @@ export const invitationContract = c.router({
       422: z.object({ message: z.string() }).strict(),
     },
     summary: "Accept a workspace invitation — creates account if needed (public)",
+  },
+  listPendingInvitations: {
+    method: "GET",
+    path: "/workspace/invitations",
+    responses: {
+      200: z.array(PendingInvitationViewSchema),
+      403: z.object({ message: z.string() }).strict(),
+    },
+    summary: "List pending invitations for the active workspace",
+  },
+  resendInvitation: {
+    method: "POST",
+    path: "/workspace/invitations/:id/resend",
+    pathParams: z.object({ id: z.string() }),
+    body: c.noBody(),
+    responses: {
+      200: PendingInvitationViewSchema,
+      403: z.object({ message: z.string() }).strict(),
+      404: z.object({ message: z.string() }).strict(),
+      409: z.object({ message: z.string() }).strict(),
+    },
+    summary: "Resend a pending workspace invitation",
+  },
+  revokeInvitation: {
+    method: "DELETE",
+    path: "/workspace/invitations/:id",
+    pathParams: z.object({ id: z.string() }),
+    body: c.noBody(),
+    responses: {
+      204: c.noBody(),
+      403: z.object({ message: z.string() }).strict(),
+      404: z.object({ message: z.string() }).strict(),
+      409: z.object({ message: z.string() }).strict(),
+    },
+    summary: "Revoke a pending workspace invitation",
   },
 });

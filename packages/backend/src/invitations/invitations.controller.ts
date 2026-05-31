@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   Inject,
@@ -16,8 +17,11 @@ import { SkipCsrf } from "../auth/csrf/skip-csrf.decorator.js";
 import { ConfigService } from "../config/config.service.js";
 import { SESSION_COOKIE } from "../sessions/session-constants.js";
 import { SESSION_USER_ID_KEY, SessionGuard } from "../sessions/session.guard.js";
+import { ActiveWorkspace } from "../workspaces/active-workspace.decorator.js";
+import { TenantGuard, TENANT_USER_ID_KEY } from "../workspaces/tenant.guard.js";
+import type { WorkspaceRecord } from "../workspaces/workspace.types.js";
 import { WorkspacesService } from "../workspaces/workspaces.service.js";
-import type { AcceptInvitationDto, CreateInvitationDto, InvitationMetadata } from "./invitations.service.js";
+import type { AcceptInvitationDto, CreateInvitationDto, InvitationMetadata, PendingInvitationView } from "./invitations.service.js";
 import { InvitationsService } from "./invitations.service.js";
 import type { WorkspaceInvitationRecord } from "./invitation.types.js";
 
@@ -45,6 +49,41 @@ export class InvitationsController {
     const userId = req[SESSION_USER_ID_KEY] as string;
     await this.workspaces.requireWorkspaceRole(workspaceId, userId, "ADMIN");
     return this.invitations.createInvitation(workspaceId, userId, body);
+  }
+
+  @Get("workspace/invitations")
+  @HttpCode(200)
+  @UseGuards(TenantGuard)
+  async listPendingInvitations(
+    @ActiveWorkspace() workspace: WorkspaceRecord,
+    @Req() req: Request & Record<string, unknown>,
+  ): Promise<PendingInvitationView[]> {
+    const userId = req[TENANT_USER_ID_KEY] as string;
+    return this.invitations.listPendingInvitations(workspace.id, userId);
+  }
+
+  @Post("workspace/invitations/:id/resend")
+  @HttpCode(200)
+  @UseGuards(TenantGuard)
+  async resendInvitation(
+    @ActiveWorkspace() workspace: WorkspaceRecord,
+    @Req() req: Request & Record<string, unknown>,
+    @Param("id") invitationId: string,
+  ): Promise<PendingInvitationView> {
+    const userId = req[TENANT_USER_ID_KEY] as string;
+    return this.invitations.resendInvitation(workspace.id, invitationId, userId);
+  }
+
+  @Delete("workspace/invitations/:id")
+  @HttpCode(204)
+  @UseGuards(TenantGuard)
+  async revokeInvitation(
+    @ActiveWorkspace() workspace: WorkspaceRecord,
+    @Req() req: Request & Record<string, unknown>,
+    @Param("id") invitationId: string,
+  ): Promise<void> {
+    const userId = req[TENANT_USER_ID_KEY] as string;
+    await this.invitations.revokeInvitation(workspace.id, invitationId, userId);
   }
 
   /**

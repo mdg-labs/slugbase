@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 
 import {
   ConflictException,
+  ForbiddenException,
   HttpException,
   HttpStatus,
   Inject,
@@ -59,6 +60,17 @@ export interface AcceptInvitationResult {
   userId: string;
   workspaceId: string;
   cookieValue: string;
+}
+
+export interface PendingInvitationView {
+  id: string;
+  workspaceId: string;
+  invitedEmail: string;
+  role: InvitationRole;
+  invitedByUserId: string;
+  invitedByName: string;
+  expiresAt: Date;
+  createdAt: Date;
 }
 
 @Injectable()
@@ -156,6 +168,154 @@ export class InvitationsService {
     }
 
     return invitation;
+  }
+
+  async listPendingInvitations(
+    workspaceId: string,
+    requesterId: string,
+  ): Promise<PendingInvitationView[]> {
+    const workspace = await this.workspaceRepo.findById(workspaceId);
+    if (!workspace) throw new NotFoundException("Workspace not found");
+
+    await this.requireAdmin(workspaceId, requesterId);
+
+    const pending = await this.invitationRepo.findPendingByWorkspace(workspaceId);
+    const views: PendingInvitationView[] = [];
+
+    for (const invitation of pending) {
+      const inviter = await this.accounts.findById(invitation.invitedByUserId);
+      views.push({
+        id: invitation.id,
+        workspaceId: invitation.workspaceId,
+        invitedEmail: invitation.invitedEmail,
+        role: invitation.role,
+        invitedByUserId: invitation.invitedByUserId,
+        invitedByName: inviter?.name ?? "Unknown",
+        expiresAt: invitation.expiresAt,
+        createdAt: invitation.createdAt,
+      });
+    }
+
+    return views;
+  }
+
+  async resendInvitation(
+    workspaceId: string,
+    invitationId: string,
+    requesterId: string,
+  ): Promise<PendingInvitationView> {
+    const workspace = await this.workspaceRepo.findById(workspaceId);
+    if (!workspace) throw new NotFoundException("Workspace not found");
+
+    this.entitlements.assertCan(workspace, "workspace-members");
+    await this.requireAdmin(workspaceId, requesterId);
+
+    const invitation = await this.invitationRepo.findById(invitationId);
+    if (!invitation || invitation.workspaceId !== workspaceId) {
+      throw new NotFoundException("Invitation not found");
+    }
+    if (invitation.acceptedAt !== null) {
+      throw new ConflictException("This invitation has already been accepted");
+    }
+
+    const plaintext = generateInvitationToken();
+    const tokenHash = hashInvitationToken(plaintext);
+    const expiresAt = new Date(Date.now() + INVITATION_TTL_MS);
+
+    const updated = await this.invitationRepo.updateTokenAndExpiry(
+      invitationId,
+      tokenHash,
+      expiresAt,
+    );
+    if (!updated) {
+      throw new NotFoundException("Invitation not found after update");
+    }
+
+    await this.sendInvitationEmail(updated, plaintext, requesterId);
+
+    const inviter = await this.accounts.findById(updated.invitedByUserId);
+    return {
+      id: updated.id,
+      workspaceId: updated.workspaceId,
+      invitedEmail: updated.invitedEmail,
+      role: updated.role,
+      invitedByUserId: updated.invitedByUserId,
+      invitedByName: inviter?.name ?? "Unknown",
+      expiresAt: updated.expiresAt,
+      createdAt: updated.createdAt,
+    };
+  }
+
+  async revokeInvitation(
+    workspaceId: string,
+    invitationId: string,
+    requesterId: string,
+  ): Promise<void> {
+    await this.requireAdmin(workspaceId, requesterId);
+
+    const invitation = await this.invitationRepo.findById(invitationId);
+    if (!invitation || invitation.workspaceId !== workspaceId) {
+      throw new NotFoundException("Invitation not found");
+    }
+    if (invitation.acceptedAt !== null) {
+      throw new ConflictException("This invitation has already been accepted");
+    }
+
+    const deleted = await this.invitationRepo.deleteById(invitationId);
+    if (!deleted) {
+      throw new NotFoundException("Invitation not found");
+    }
+  }
+
+  private async requireAdmin(
+    workspaceId: string,
+    requesterId: string,
+  ): Promise<void> {
+    const requester = await this.memberRepo.findByWorkspaceAndUser(
+      workspaceId,
+      requesterId,
+    );
+    if (!requester || requester.role === "MEMBER") {
+      throw new ForbiddenException("Insufficient role for this operation");
+    }
+  }
+
+  private async sendInvitationEmail(
+    invitation: WorkspaceInvitationRecord,
+    plaintext: string,
+    inviterUserId: string,
+  ): Promise<void> {
+    const workspace = await this.workspaceRepo.findById(invitation.workspaceId);
+    if (!workspace) return;
+
+    const inviter = await this.accounts.findById(inviterUserId);
+    const baseUrl = this.config.get("APP_BASE_URL");
+    const inviteUrl = `${baseUrl}/invitations/${plaintext}`;
+
+    if (this.mail.isAvailable()) {
+      try {
+        await this.mail.send({
+          to: invitation.invitedEmail,
+          subject: `You've been invited to ${workspace.name} on SlugBase`,
+          text: [
+            `${inviter?.name ?? "Someone"} has invited you to join "${workspace.name}" on SlugBase as ${invitation.role}.`,
+            "",
+            "Accept your invitation:",
+            inviteUrl,
+            "",
+            `This invitation expires in ${String(INVITATION_TTL_DAYS)} days.`,
+            "",
+            "If you did not expect this invitation, you can safely ignore this email.",
+          ].join("\n"),
+          type: "workspace_invitation",
+        });
+      } catch (err) {
+        this.logger.error(
+          "Failed to send invitation email",
+          { workspaceId: invitation.workspaceId, invitedEmail: invitation.invitedEmail, err },
+        );
+      }
+    }
   }
 
   /**
