@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   UseGuards,
 } from "@nestjs/common";
@@ -16,7 +17,11 @@ import type { Request } from "express";
 import { ActiveWorkspace } from "../workspaces/active-workspace.decorator.js";
 import { TenantGuard, TENANT_USER_ID_KEY } from "../workspaces/tenant.guard.js";
 import type { WorkspaceRecord } from "../workspaces/workspace.types.js";
-import type { CreateBookmarkData, UpdateBookmarkData } from "./bookmark.types.js";
+import type {
+  CreateBookmarkData,
+  ListBookmarksQuery,
+  UpdateBookmarkData,
+} from "./bookmark.types.js";
 import { BookmarksService } from "./bookmarks.service.js";
 
 @Controller("bookmarks")
@@ -25,6 +30,28 @@ export class BookmarksController {
   constructor(
     @Inject(BookmarksService) private readonly bookmarks: BookmarksService,
   ) {}
+
+  @Get()
+  @HttpCode(200)
+  async listBookmarks(
+    @ActiveWorkspace() workspace: WorkspaceRecord,
+    @Req() req: Request & Record<string, unknown>,
+    @Query() query: ListBookmarksQuery,
+  ) {
+    const userId = req[TENANT_USER_ID_KEY] as string;
+    return this.bookmarks.listBookmarks(workspace, userId, query);
+  }
+
+  @Get("select-all-ids")
+  @HttpCode(200)
+  async selectAllBookmarkIds(
+    @ActiveWorkspace() workspace: WorkspaceRecord,
+    @Req() req: Request & Record<string, unknown>,
+    @Query() query: ListBookmarksQuery,
+  ) {
+    const userId = req[TENANT_USER_ID_KEY] as string;
+    return this.bookmarks.selectAllBookmarkIds(workspace, userId, query);
+  }
 
   @Post()
   @HttpCode(201)

@@ -1,3 +1,5 @@
+import type { BookmarkScope, BookmarkSort } from "./bookmark.validation.js";
+
 export interface BookmarkRecord {
   id: string;
   workspaceId: string;
@@ -45,4 +47,39 @@ export interface CreateSlugPreferenceData {
   userId: string;
   slug: string;
   bookmarkId: string;
+}
+
+/** Raw HTTP query — scope/sort/tagIds are parsed in the service before listing. */
+export interface ListBookmarksQuery {
+  q?: string;
+  folderId?: string;
+  tagIds?: string | string[];
+  pinned?: boolean | string;
+  scope?: string;
+  sort?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface ParsedListBookmarksQuery {
+  q?: string;
+  folderId?: string;
+  tagIds?: string[];
+  pinned?: boolean;
+  scope: BookmarkScope;
+  sort: BookmarkSort;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface PaginatedBookmarks {
+  items: BookmarkRecord[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface BookmarkIdsResult {
+  ids: string[];
+  total: number;
 }

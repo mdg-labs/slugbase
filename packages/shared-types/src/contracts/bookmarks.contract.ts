@@ -54,13 +54,78 @@ export const TogglePinBodySchema = z
   })
   .strict();
 
+export const BookmarkListSchema = z
+  .object({
+    items: z.array(BookmarkSchema),
+    total: z.number().int().nonnegative(),
+    page: z.number().int().positive(),
+    pageSize: z.number().int().positive(),
+  })
+  .strict();
+
+export const BookmarkIdsSchema = z
+  .object({
+    ids: z.array(z.string()),
+    total: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export const BookmarkListQuerySchema = z
+  .object({
+    q: z.string().optional(),
+    folderId: z.string().optional(),
+    tagIds: z.union([z.string(), z.array(z.string())]).optional(),
+    pinned: z
+      .union([z.literal("true"), z.literal("false")])
+      .optional()
+      .transform((v) => (v === undefined ? undefined : v === "true")),
+    scope: z
+      .enum(["all", "mine", "shared-with-me", "shared-by-me"])
+      .optional(),
+    sort: z
+      .enum([
+        "created-desc",
+        "title-asc",
+        "access-count-desc",
+        "last-accessed-desc",
+      ])
+      .optional(),
+    page: z.coerce.number().int().positive().optional(),
+    pageSize: z.coerce.number().int().positive().max(100).optional(),
+  })
+  .strict();
+
 export type Bookmark = z.infer<typeof BookmarkSchema>;
+export type BookmarkList = z.infer<typeof BookmarkListSchema>;
+export type BookmarkIds = z.infer<typeof BookmarkIdsSchema>;
 export type CreateBookmarkBody = z.infer<typeof CreateBookmarkBodySchema>;
 export type UpdateBookmarkBody = z.infer<typeof UpdateBookmarkBodySchema>;
 
 const errorSchema = z.object({ message: z.string() }).strict();
 
 export const bookmarksContract = c.router({
+  listBookmarks: {
+    method: "GET",
+    path: "/bookmarks",
+    query: BookmarkListQuerySchema,
+    responses: {
+      200: BookmarkListSchema,
+      400: errorSchema,
+    },
+    summary:
+      "List bookmarks with filter, sort, and pagination (plan-archived excluded)",
+  },
+  selectAllBookmarkIds: {
+    method: "GET",
+    path: "/bookmarks/select-all-ids",
+    query: BookmarkListQuerySchema,
+    responses: {
+      200: BookmarkIdsSchema,
+      400: errorSchema,
+    },
+    summary:
+      "Return IDs matching the current list filters for bulk select-all",
+  },
   createBookmark: {
     method: "POST",
     path: "/bookmarks",

@@ -12,13 +12,21 @@ import { WorkspaceDataGuard } from "../workspaces/workspace-data.guard.js";
 import type { WorkspaceRecord } from "../workspaces/workspace.types.js";
 import { BookmarkRepository } from "./bookmark.repository.js";
 import type {
+  BookmarkIdsResult,
   BookmarkRecord,
   CreateBookmarkData,
+  ListBookmarksQuery,
+  PaginatedBookmarks,
+  ParsedListBookmarksQuery,
   UpdateBookmarkData,
 } from "./bookmark.types.js";
 import {
   assertSlugValid,
   normalizeOptionalSlug,
+  parseBookmarkScope,
+  parseBookmarkSort,
+  parsePinned,
+  parseTagIds,
   sanitizeBookmarkTitle,
 } from "./bookmark.validation.js";
 
@@ -57,6 +65,30 @@ export class BookmarksService {
       forwardingEnabled,
       pinned: dto.pinned ?? false,
     });
+  }
+
+  async listBookmarks(
+    workspace: WorkspaceRecord,
+    userId: string,
+    query: ListBookmarksQuery,
+  ): Promise<PaginatedBookmarks> {
+    const parsed = this.parseListQuery(query);
+    const result = await this.repo.list(workspace.id, userId, parsed);
+    return {
+      ...result,
+      items: result.items.map((item) =>
+        this.wsDataGuard.verifyOwnership(workspace.id, item),
+      ),
+    };
+  }
+
+  async selectAllBookmarkIds(
+    workspace: WorkspaceRecord,
+    userId: string,
+    query: ListBookmarksQuery,
+  ): Promise<BookmarkIdsResult> {
+    const parsed = this.parseListQuery(query);
+    return this.repo.listIds(workspace.id, userId, parsed);
   }
 
   async getBookmark(
@@ -172,6 +204,32 @@ export class BookmarksService {
     bookmarkId: string,
   ): Promise<number> {
     return this.repo.countSlugPreferencesForBookmark(workspaceId, bookmarkId);
+  }
+
+  private parseListQuery(query: ListBookmarksQuery): ParsedListBookmarksQuery {
+    let scope;
+    let sort;
+    let pinned;
+    try {
+      scope = parseBookmarkScope(query.scope);
+      sort = parseBookmarkSort(query.sort);
+      pinned = parsePinned(query.pinned);
+    } catch (err) {
+      throw new BadRequestException(
+        err instanceof Error ? err.message : "Invalid list query",
+      );
+    }
+
+    return {
+      q: query.q,
+      folderId: query.folderId,
+      tagIds: parseTagIds(query.tagIds),
+      pinned,
+      scope,
+      sort,
+      page: query.page,
+      pageSize: query.pageSize,
+    };
   }
 
   private async requireOwnedBookmark(

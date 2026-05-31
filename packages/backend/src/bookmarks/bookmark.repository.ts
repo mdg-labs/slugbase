@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, like, or, sql, type SQL } from "drizzle-orm";
 
 import type {
   DrizzleClient,
@@ -25,12 +25,22 @@ import {
   type WorkspaceOwned,
 } from "../db/workspace-scoped.repository.js";
 import type {
+  BookmarkIdsResult,
   BookmarkRecord,
   CreateBookmarkData,
   CreateSlugPreferenceData,
+  PaginatedBookmarks,
+  ParsedListBookmarksQuery,
   SlugPreferenceRecord,
   UpdateBookmarkData,
 } from "./bookmark.types.js";
+import {
+  DEFAULT_BOOKMARK_PAGE_SIZE,
+  type BookmarkScope,
+  type BookmarkSort,
+  parsePage,
+  parsePageSize,
+} from "./bookmark.validation.js";
 
 type BookmarkRow = WorkspaceOwned & {
   id: string;
@@ -70,6 +80,110 @@ function toBookmarkRecord(row: BookmarkRow): BookmarkRecord {
     updatedAt:
       row.updatedAt instanceof Date ? row.updatedAt : new Date(row.updatedAt),
   };
+}
+
+function escapeLikePattern(q: string): string {
+  return q.replace(/[%_\\]/g, "\\$&");
+}
+
+function scopeCondition(
+  scope: BookmarkScope,
+  userId: string,
+  bookmarksTable: typeof sqliteBookmarks | typeof pgBookmarks,
+): SQL {
+  switch (scope) {
+    case "mine":
+    case "all":
+      // Sharing grants extend this in a later task; until then, own bookmarks only.
+      return eq(bookmarksTable.userId, userId);
+    case "shared-with-me":
+    case "shared-by-me":
+      return sql`1 = 0`;
+    default:
+      return eq(bookmarksTable.userId, userId);
+  }
+}
+
+function orderByForSort(
+  sort: BookmarkSort,
+  bookmarksTable: typeof sqliteBookmarks | typeof pgBookmarks,
+) {
+  switch (sort) {
+    case "title-asc":
+      return asc(bookmarksTable.title);
+    case "access-count-desc":
+      return desc(bookmarksTable.accessCount);
+    case "last-accessed-desc":
+      return [
+        asc(sql`${bookmarksTable.lastAccessedAt} IS NULL`),
+        desc(bookmarksTable.lastAccessedAt),
+      ];
+    case "created-desc":
+    default:
+      return desc(bookmarksTable.createdAt);
+  }
+}
+
+function buildListConditions(
+  workspaceId: string,
+  userId: string,
+  query: ParsedListBookmarksQuery,
+  bookmarksTable: typeof sqliteBookmarks | typeof pgBookmarks,
+  bookmarkFoldersTable: typeof sqliteBookmarkFolders | typeof pgBookmarkFolders,
+  bookmarkTagsTable: typeof sqliteBookmarkTags | typeof pgBookmarkTags,
+): SQL[] {
+  const conditions: SQL[] = [
+    eq(bookmarksTable.workspaceId, workspaceId),
+    eq(bookmarksTable.planArchived, false),
+    scopeCondition(query.scope, userId, bookmarksTable),
+  ];
+
+  if (query.pinned !== undefined) {
+    conditions.push(eq(bookmarksTable.pinned, query.pinned));
+  }
+
+  if (query.folderId) {
+    conditions.push(
+      sql`exists (
+        select 1 from ${bookmarkFoldersTable}
+        where ${bookmarkFoldersTable.bookmarkId} = ${bookmarksTable.id}
+          and ${bookmarkFoldersTable.folderId} = ${query.folderId}
+          and ${bookmarkFoldersTable.workspaceId} = ${workspaceId}
+      )`,
+    );
+  }
+
+  if (query.tagIds && query.tagIds.length > 0) {
+    const tagCount = query.tagIds.length;
+    conditions.push(
+      sql`${bookmarksTable.id} in (
+        select ${bookmarkTagsTable.bookmarkId}
+        from ${bookmarkTagsTable}
+        where ${bookmarkTagsTable.workspaceId} = ${workspaceId}
+          and ${bookmarkTagsTable.tagId} in (${sql.join(
+            query.tagIds.map((id) => sql`${id}`),
+            sql`, `,
+          )})
+        group by ${bookmarkTagsTable.bookmarkId}
+        having count(distinct ${bookmarkTagsTable.tagId}) = ${tagCount}
+      )`,
+    );
+  }
+
+  const searchPattern =
+    query.q && query.q.trim().length > 0
+      ? `%${escapeLikePattern(query.q.trim())}%`
+      : null;
+  if (searchPattern) {
+    const searchClause = or(
+      like(bookmarksTable.title, searchPattern),
+      like(bookmarksTable.url, searchPattern),
+      like(bookmarksTable.slug, searchPattern),
+    );
+    if (searchClause) conditions.push(searchClause);
+  }
+
+  return conditions;
 }
 
 function toSlugPreferenceRecord(row: {
@@ -191,6 +305,155 @@ export class BookmarkRepository extends WorkspaceScopedRepository<BookmarkRecord
       )
       .limit(1);
     return rows[0] ? toBookmarkRecord(rows[0]) : null;
+  }
+
+  async list(
+    workspaceId: string,
+    userId: string,
+    query: ParsedListBookmarksQuery,
+  ): Promise<PaginatedBookmarks> {
+    const page = parsePage(query.page);
+    const pageSize = parsePageSize(query.pageSize ?? DEFAULT_BOOKMARK_PAGE_SIZE);
+    const offset = (page - 1) * pageSize;
+    const orderBy = orderByForSort(
+      query.sort,
+      this.dialect === "sqlite" ? sqliteBookmarks : pgBookmarks,
+    );
+    const orderByClause = Array.isArray(orderBy) ? orderBy : [orderBy];
+
+    if (this.dialect === "sqlite") {
+      const sqliteDb = this.db as SqliteDrizzleClient;
+      const conditions = buildListConditions(
+        workspaceId,
+        userId,
+        query,
+        sqliteBookmarks,
+        sqliteBookmarkFolders,
+        sqliteBookmarkTags,
+      );
+      const whereClause = and(...conditions);
+
+      const countRow = sqliteDb
+        .select({ count: sql<number>`count(*)` })
+        .from(sqliteBookmarks)
+        .where(whereClause)
+        .get();
+      const total = countRow?.count ?? 0;
+
+      const rows = sqliteDb
+        .select()
+        .from(sqliteBookmarks)
+        .where(whereClause)
+        .orderBy(...orderByClause)
+        .limit(pageSize)
+        .offset(offset)
+        .all();
+
+      return {
+        items: rows.map(toBookmarkRecord),
+        total,
+        page,
+        pageSize,
+      };
+    }
+
+    const pgDb = this.db as PostgresDrizzleClient;
+    const conditions = buildListConditions(
+      workspaceId,
+      userId,
+      query,
+      pgBookmarks,
+      pgBookmarkFolders,
+      pgBookmarkTags,
+    );
+    const whereClause = and(...conditions);
+
+    const countRows = await pgDb
+      .select({ count: sql<number>`count(*)` })
+      .from(pgBookmarks)
+      .where(whereClause);
+    const total = countRows[0]?.count ?? 0;
+
+    const rows = await pgDb
+      .select()
+      .from(pgBookmarks)
+      .where(whereClause)
+      .orderBy(...orderByClause)
+      .limit(pageSize)
+      .offset(offset);
+
+    return {
+      items: rows.map(toBookmarkRecord),
+      total,
+      page,
+      pageSize,
+    };
+  }
+
+  async listIds(
+    workspaceId: string,
+    userId: string,
+    query: ParsedListBookmarksQuery,
+  ): Promise<BookmarkIdsResult> {
+    const orderBy = orderByForSort(
+      query.sort,
+      this.dialect === "sqlite" ? sqliteBookmarks : pgBookmarks,
+    );
+    const orderByClause = Array.isArray(orderBy) ? orderBy : [orderBy];
+
+    if (this.dialect === "sqlite") {
+      const sqliteDb = this.db as SqliteDrizzleClient;
+      const conditions = buildListConditions(
+        workspaceId,
+        userId,
+        query,
+        sqliteBookmarks,
+        sqliteBookmarkFolders,
+        sqliteBookmarkTags,
+      );
+      const whereClause = and(...conditions);
+
+      const countRow = sqliteDb
+        .select({ count: sql<number>`count(*)` })
+        .from(sqliteBookmarks)
+        .where(whereClause)
+        .get();
+      const total = countRow?.count ?? 0;
+
+      const rows = sqliteDb
+        .select({ id: sqliteBookmarks.id })
+        .from(sqliteBookmarks)
+        .where(whereClause)
+        .orderBy(...orderByClause)
+        .all();
+
+      return { ids: rows.map((r) => r.id), total };
+    }
+
+    const pgDb = this.db as PostgresDrizzleClient;
+    const conditions = buildListConditions(
+      workspaceId,
+      userId,
+      query,
+      pgBookmarks,
+      pgBookmarkFolders,
+      pgBookmarkTags,
+    );
+    const whereClause = and(...conditions);
+
+    const countRows = await pgDb
+      .select({ count: sql<number>`count(*)` })
+      .from(pgBookmarks)
+      .where(whereClause);
+    const total = countRows[0]?.count ?? 0;
+
+    const rows = await pgDb
+      .select({ id: pgBookmarks.id })
+      .from(pgBookmarks)
+      .where(whereClause)
+      .orderBy(...orderByClause);
+
+    return { ids: rows.map((r) => r.id), total };
   }
 
   async findBySlug(

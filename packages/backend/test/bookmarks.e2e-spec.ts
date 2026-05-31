@@ -7,7 +7,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AppModule } from "../src/app.module.js";
 import { AccountsService } from "../src/accounts/accounts.service.js";
 import { BookmarksService } from "../src/bookmarks/bookmarks.service.js";
+import { FoldersService } from "../src/folders/folders.service.js";
 import { runMigrations } from "../src/db/migrate/run-migrations.js";
+import { TagsService } from "../src/tags/tags.service.js";
 import { applyTestEnv, clearTestEnv } from "../src/test-utils/test-env.js";
 import { WorkspaceMembersService } from "../src/workspaces/workspace-members.service.js";
 import { WorkspacesService } from "../src/workspaces/workspaces.service.js";
@@ -17,6 +19,8 @@ describe("Bookmarks (integration)", () => {
   let app: INestApplication | undefined;
   let cleanup: () => Promise<void> = async () => {};
   let bookmarksService: BookmarksService;
+  let foldersService: FoldersService;
+  let tagsService: TagsService;
   let workspacesService: WorkspacesService;
   let membersService: WorkspaceMembersService;
 
@@ -40,6 +44,8 @@ describe("Bookmarks (integration)", () => {
 
     const accountsService = moduleRef.get(AccountsService);
     bookmarksService = moduleRef.get(BookmarksService);
+    foldersService = moduleRef.get(FoldersService);
+    tagsService = moduleRef.get(TagsService);
     workspacesService = moduleRef.get(WorkspacesService);
     membersService = moduleRef.get(WorkspaceMembersService);
 
@@ -189,6 +195,185 @@ describe("Bookmarks (integration)", () => {
       );
       expect(updated.accessCount).toBeGreaterThanOrEqual(1);
       expect(updated.lastAccessedAt).not.toBeNull();
+    });
+  });
+
+  describe("listing filter, sort, pagination, select-all-ids", () => {
+    let folderId: string;
+    let tagAId: string;
+    let tagBId: string;
+    let alphaId: string;
+    let betaId: string;
+    let gammaId: string;
+    let archivedId: string;
+
+    beforeAll(async () => {
+      const folder = await foldersService.createFolder(workspace, ownerUserId, {
+        name: "List Filter Folder",
+      });
+      folderId = folder.id;
+
+      const tagA = await tagsService.createTag(workspace, ownerUserId, {
+        name: "list-alpha-tag",
+      });
+      tagAId = tagA.id;
+      const tagB = await tagsService.createTag(workspace, ownerUserId, {
+        name: "list-beta-tag",
+      });
+      tagBId = tagB.id;
+
+      const alpha = await bookmarksService.createBookmark(workspace, ownerUserId, {
+        title: "Alpha Docs",
+        url: "https://alpha.example.com",
+        slug: "alpha-docs",
+        pinned: true,
+      });
+      alphaId = alpha.id;
+      await foldersService.addBookmarkToFolder(
+        workspace,
+        ownerUserId,
+        folderId,
+        alphaId,
+      );
+      await tagsService.addBookmarkToTag(workspace, ownerUserId, tagAId, alphaId);
+      await tagsService.addBookmarkToTag(workspace, ownerUserId, tagBId, alphaId);
+
+      const beta = await bookmarksService.createBookmark(workspace, ownerUserId, {
+        title: "Beta Guide",
+        url: "https://beta.example.com/guide",
+      });
+      betaId = beta.id;
+      await foldersService.addBookmarkToFolder(
+        workspace,
+        ownerUserId,
+        folderId,
+        betaId,
+      );
+      await tagsService.addBookmarkToTag(workspace, ownerUserId, tagAId, betaId);
+
+      const gamma = await bookmarksService.createBookmark(workspace, ownerUserId, {
+        title: "Gamma Notes",
+        url: "https://gamma.example.com",
+      });
+      gammaId = gamma.id;
+      bookmarksService.recordAccess(workspace, ownerUserId, gammaId);
+      bookmarksService.recordAccess(workspace, ownerUserId, gammaId);
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      bookmarksService.recordAccess(workspace, ownerUserId, betaId);
+      await new Promise((resolve) => setTimeout(resolve, 150));
+
+      const archived = await bookmarksService.createBookmark(workspace, ownerUserId, {
+        title: "Archived Hidden",
+        url: "https://archived.example.com",
+      });
+      archivedId = archived.id;
+      await bookmarksService.updateBookmark(workspace, ownerUserId, archivedId, {
+        planArchived: true,
+      });
+    });
+
+    it("filters by folder, tags (AND), pinned, and search query", async () => {
+      const inFolder = await bookmarksService.listBookmarks(workspace, ownerUserId, {
+        folderId,
+      });
+      expect(inFolder.total).toBeGreaterThanOrEqual(2);
+      expect(inFolder.items.map((b) => b.id).sort()).toEqual(
+        [alphaId, betaId].sort(),
+      );
+      expect(inFolder.items.every((b) => !b.planArchived)).toBe(true);
+
+      const bothTags = await bookmarksService.listBookmarks(workspace, ownerUserId, {
+        tagIds: [tagAId, tagBId],
+      });
+      expect(bothTags.items.map((b) => b.id)).toEqual([alphaId]);
+
+      const pinnedOnly = await bookmarksService.listBookmarks(workspace, ownerUserId, {
+        pinned: true,
+      });
+      expect(pinnedOnly.items.some((b) => b.id === alphaId)).toBe(true);
+      expect(pinnedOnly.items.every((b) => b.pinned)).toBe(true);
+
+      const search = await bookmarksService.listBookmarks(workspace, ownerUserId, {
+        q: "beta",
+      });
+      expect(search.items.map((b) => b.id)).toEqual([betaId]);
+    });
+
+    it("excludes plan-archived bookmarks from list and select-all-ids", async () => {
+      const list = await bookmarksService.listBookmarks(workspace, ownerUserId, {});
+      expect(list.items.some((b) => b.id === archivedId)).toBe(false);
+
+      const ids = await bookmarksService.selectAllBookmarkIds(
+        workspace,
+        ownerUserId,
+        {},
+      );
+      expect(ids.ids).not.toContain(archivedId);
+    });
+
+    it("sorts by title, access count, and last accessed", async () => {
+      const byTitle = await bookmarksService.listBookmarks(workspace, ownerUserId, {
+        sort: "title-asc",
+        pageSize: 50,
+      });
+      const titles = byTitle.items.map((b) => b.title);
+      const sorted = [...titles].sort((a, b) => a.localeCompare(b));
+      expect(titles).toEqual(sorted);
+
+      const gamma = await bookmarksService.getBookmark(workspace, ownerUserId, gammaId);
+      const beta = await bookmarksService.getBookmark(workspace, ownerUserId, betaId);
+      expect(gamma.accessCount).toBeGreaterThan(beta.accessCount);
+      if (gamma.lastAccessedAt == null || beta.lastAccessedAt == null) {
+        throw new Error("expected last accessed timestamps");
+      }
+      expect(gamma.lastAccessedAt.getTime()).toBeLessThan(beta.lastAccessedAt.getTime());
+
+      const byUsage = await bookmarksService.listBookmarks(workspace, ownerUserId, {
+        folderId,
+        sort: "access-count-desc",
+      });
+      expect(byUsage.items[0]?.id).toBe(betaId);
+
+      const byAccessed = await bookmarksService.listBookmarks(workspace, ownerUserId, {
+        folderId,
+        sort: "last-accessed-desc",
+      });
+      expect(byAccessed.items[0]?.id).toBe(betaId);
+    });
+
+    it("paginates results with stable totals", async () => {
+      const page1 = await bookmarksService.listBookmarks(workspace, ownerUserId, {
+        page: 1,
+        pageSize: 2,
+        sort: "title-asc",
+      });
+      expect(page1.items).toHaveLength(2);
+      expect(page1.page).toBe(1);
+      expect(page1.pageSize).toBe(2);
+      expect(page1.total).toBeGreaterThanOrEqual(3);
+
+      const page2 = await bookmarksService.listBookmarks(workspace, ownerUserId, {
+        page: 2,
+        pageSize: 2,
+        sort: "title-asc",
+      });
+      expect(page2.items.length).toBeGreaterThanOrEqual(1);
+      const page1Ids = new Set(page1.items.map((b) => b.id));
+      expect(page2.items.every((b) => !page1Ids.has(b.id))).toBe(true);
+    });
+
+    it("select-all-ids matches list filters across pages", async () => {
+      const list = await bookmarksService.listBookmarks(workspace, ownerUserId, {
+        folderId,
+        sort: "title-asc",
+      });
+      const allIds = await bookmarksService.selectAllBookmarkIds(
+        workspace,
+        ownerUserId,
+        { folderId, sort: "title-asc" },
+      );
+      expect(allIds.total).toBe(list.total);
+      expect(allIds.ids.sort()).toEqual(list.items.map((b) => b.id).sort());
     });
   });
 
