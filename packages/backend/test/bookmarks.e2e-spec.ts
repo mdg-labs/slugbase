@@ -13,6 +13,7 @@ import { TagsService } from "../src/tags/tags.service.js";
 import { applyTestEnv, clearTestEnv } from "../src/test-utils/test-env.js";
 import { WorkspaceMembersService } from "../src/workspaces/workspace-members.service.js";
 import { WorkspacesService } from "../src/workspaces/workspaces.service.js";
+import { FREE_BOOKMARK_CAP } from "../src/entitlements/entitlements.service.js";
 import { createTestDatabase } from "./test-database.js";
 
 describe("Bookmarks (integration)", () => {
@@ -23,6 +24,7 @@ describe("Bookmarks (integration)", () => {
   let tagsService: TagsService;
   let workspacesService: WorkspacesService;
   let membersService: WorkspaceMembersService;
+  let accountsService: AccountsService;
 
   let ownerUserId: string;
   let memberUserId: string;
@@ -42,7 +44,8 @@ describe("Bookmarks (integration)", () => {
     app = moduleRef.createNestApplication();
     await app.init();
 
-    const accountsService = moduleRef.get(AccountsService);
+    const accounts = moduleRef.get(AccountsService);
+    accountsService = accounts;
     bookmarksService = moduleRef.get(BookmarksService);
     foldersService = moduleRef.get(FoldersService);
     tagsService = moduleRef.get(TagsService);
@@ -374,6 +377,72 @@ describe("Bookmarks (integration)", () => {
       );
       expect(allIds.total).toBe(list.total);
       expect(allIds.ids.sort()).toEqual(list.items.map((b) => b.id).sort());
+    });
+  });
+
+  describe("Free bookmark cap enforcement", () => {
+    let capOwnerUserId: string;
+    let freeCapWorkspace: Awaited<ReturnType<WorkspacesService["getWorkspace"]>>;
+    let personalCapWorkspace: Awaited<ReturnType<WorkspacesService["getWorkspace"]>>;
+
+    beforeAll(async () => {
+      const capOwner = await accountsService.registerAccount({
+        email: "bookmark-cap-owner@example.com",
+        name: "Cap Owner",
+        password: "password-abc-123",
+      });
+      capOwnerUserId = capOwner.id;
+
+      freeCapWorkspace = await workspacesService.createWorkspace(
+        { name: "Free Cap Workspace", slug: "free-cap-ws", plan: "free" },
+        capOwnerUserId,
+      );
+
+      personalCapWorkspace = await workspacesService.createWorkspace(
+        {
+          name: "Personal Cap Workspace",
+          slug: "personal-cap-ws",
+          plan: "personal",
+        },
+        capOwnerUserId,
+      );
+    });
+
+    it("allows creating up to the Free cap on a free workspace", async () => {
+      for (let i = 0; i < FREE_BOOKMARK_CAP; i += 1) {
+        const bookmark = await bookmarksService.createBookmark(
+          freeCapWorkspace,
+          capOwnerUserId,
+          {
+            title: `Free bookmark ${String(i + 1)}`,
+            url: `https://free-cap.example.com/${String(i + 1)}`,
+          },
+        );
+        expect(bookmark.id).toBeTruthy();
+      }
+    });
+
+    it("blocks the 51st bookmark on a free workspace at cap", async () => {
+      await expect(
+        bookmarksService.createBookmark(freeCapWorkspace, capOwnerUserId, {
+          title: "Over cap",
+          url: "https://free-cap.example.com/over",
+        }),
+      ).rejects.toThrow(`Free plan limit of ${String(FREE_BOOKMARK_CAP)} bookmarks`);
+    });
+
+    it("allows creating beyond the Free cap on a personal workspace", async () => {
+      for (let i = 0; i < FREE_BOOKMARK_CAP + 1; i += 1) {
+        const bookmark = await bookmarksService.createBookmark(
+          personalCapWorkspace,
+          capOwnerUserId,
+          {
+            title: `Personal bookmark ${String(i + 1)}`,
+            url: `https://personal-cap.example.com/${String(i + 1)}`,
+          },
+        );
+        expect(bookmark.id).toBeTruthy();
+      }
     });
   });
 

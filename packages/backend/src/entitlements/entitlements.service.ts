@@ -45,4 +45,31 @@ export class EntitlementsService {
       );
     }
   }
+
+  /**
+   * Returns true when the workspace may create another active bookmark.
+   * Unlimited plans bypass the cap; Free is limited to FREE_BOOKMARK_CAP active bookmarks.
+   */
+  canCreateBookmark(
+    workspace: Pick<WorkspaceRecord, "plan">,
+    activeBookmarkCount: number,
+  ): boolean {
+    if (this.can(workspace, "unlimited-bookmarks")) return true;
+    return activeBookmarkCount < FREE_BOOKMARK_CAP;
+  }
+
+  /**
+   * Asserts bookmark creation is allowed for the workspace at the given active count.
+   * Throws ForbiddenException with an actionable message when the Free cap is reached.
+   */
+  assertCanCreateBookmark(
+    workspace: Pick<WorkspaceRecord, "plan">,
+    activeBookmarkCount: number,
+  ): void {
+    if (this.canCreateBookmark(workspace, activeBookmarkCount)) return;
+
+    throw new ForbiddenException(
+      `This workspace has reached the Free plan limit of ${String(FREE_BOOKMARK_CAP)} bookmarks. Upgrade to Personal for unlimited bookmarks.`,
+    );
+  }
 }

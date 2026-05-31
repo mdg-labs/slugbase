@@ -8,6 +8,7 @@ import {
 } from "@nestjs/common";
 
 import { DbService } from "../db/db.service.js";
+import { EntitlementsService } from "../entitlements/entitlements.service.js";
 import { WorkspaceDataGuard } from "../workspaces/workspace-data.guard.js";
 import type { WorkspaceRecord } from "../workspaces/workspace.types.js";
 import { BookmarkRepository } from "./bookmark.repository.js";
@@ -37,6 +38,7 @@ export class BookmarksService {
   constructor(
     @Inject(DbService) db: DbService,
     @Inject(WorkspaceDataGuard) private readonly wsDataGuard: WorkspaceDataGuard,
+    @Inject(EntitlementsService) private readonly entitlements: EntitlementsService,
   ) {
     this.repo = new BookmarkRepository(db.getOrm(), db.dialect);
   }
@@ -57,6 +59,9 @@ export class BookmarksService {
 
     this.validateSlugFields(slug, forwardingEnabled);
     await this.assertSlugAvailable(workspace.id, slug, null);
+
+    const activeCount = await this.repo.countActiveInWorkspace(workspace.id);
+    this.entitlements.assertCanCreateBookmark(workspace, activeCount);
 
     return this.repo.create(workspace.id, userId, {
       title,

@@ -129,4 +129,54 @@ describe("EntitlementsService", () => {
       },
     );
   });
+
+  describe("canCreateBookmark()", () => {
+    it("returns true for personal workspace regardless of count", () => {
+      expect(service.canCreateBookmark(personalWorkspace, 0)).toBe(true);
+      expect(service.canCreateBookmark(personalWorkspace, 50)).toBe(true);
+      expect(service.canCreateBookmark(personalWorkspace, 100)).toBe(true);
+    });
+
+    it("returns true for free workspace below cap", () => {
+      expect(service.canCreateBookmark(freeWorkspace, 0)).toBe(true);
+      expect(service.canCreateBookmark(freeWorkspace, 49)).toBe(true);
+    });
+
+    it("returns false for free workspace at or over cap", () => {
+      expect(service.canCreateBookmark(freeWorkspace, 50)).toBe(false);
+      expect(service.canCreateBookmark(freeWorkspace, 51)).toBe(false);
+    });
+  });
+
+  describe("assertCanCreateBookmark()", () => {
+    it("does not throw for personal workspace at high count", () => {
+      expect(() => {
+        service.assertCanCreateBookmark(personalWorkspace, 100);
+      }).not.toThrow();
+    });
+
+    it("does not throw for free workspace below cap", () => {
+      expect(() => {
+        service.assertCanCreateBookmark(freeWorkspace, 49);
+      }).not.toThrow();
+    });
+
+    it("throws ForbiddenException for free workspace at cap", () => {
+      expect(() => {
+        service.assertCanCreateBookmark(freeWorkspace, 50);
+      }).toThrow(ForbiddenException);
+    });
+
+    it("throws ForbiddenException with cap value in message", () => {
+      let caught: unknown;
+      try {
+        service.assertCanCreateBookmark(freeWorkspace, 50);
+      } catch (err) {
+        caught = err;
+      }
+      expect(caught).toBeInstanceOf(ForbiddenException);
+      expect((caught as ForbiddenException).message).toContain("50");
+      expect((caught as ForbiddenException).message).toContain("Upgrade");
+    });
+  });
 });

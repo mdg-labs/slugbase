@@ -276,6 +276,34 @@ export class BookmarkRepository extends WorkspaceScopedRepository<BookmarkRecord
     return this.assertOwnership(workspaceId, row ? toBookmarkRecord(row) : null);
   }
 
+  /** Counts non-archived bookmarks in the workspace (spec §12.5 — cap applies to active bookmarks). */
+  async countActiveInWorkspace(workspaceId: string): Promise<number> {
+    if (this.dialect === "sqlite") {
+      const row = (this.db as SqliteDrizzleClient)
+        .select({ count: sql<number>`count(*)` })
+        .from(sqliteBookmarks)
+        .where(
+          and(
+            eq(sqliteBookmarks.workspaceId, workspaceId),
+            eq(sqliteBookmarks.planArchived, false),
+          ),
+        )
+        .get();
+      return row?.count ?? 0;
+    }
+
+    const rows = await (this.db as PostgresDrizzleClient)
+      .select({ count: sql<number>`count(*)` })
+      .from(pgBookmarks)
+      .where(
+        and(
+          eq(pgBookmarks.workspaceId, workspaceId),
+          eq(pgBookmarks.planArchived, false),
+        ),
+      );
+    return rows[0]?.count ?? 0;
+  }
+
   async findById(
     workspaceId: string,
     bookmarkId: string,
