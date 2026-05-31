@@ -9,6 +9,14 @@ export {
   type MailMessageType,
   type MailService,
 } from "./contracts/mail.contract.js";
+export {
+  AiSuggestError,
+  AiUnavailableError,
+  type AiPageMetadata,
+  type AiService,
+  type AiSuggestionRequest,
+  type AiSuggestions,
+} from "./contracts/ai.contract.js";
 export { apiContract, authContract, healthContract, mfaContract } from "./contracts/index.js";
 export {
   LoginBodySchema,
