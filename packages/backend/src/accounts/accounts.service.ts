@@ -84,4 +84,9 @@ export class AccountsService {
   async markEmailVerified(id: string): Promise<void> {
     return this.repo.updateEmailVerified(id, true);
   }
+
+  async updatePassword(id: string, newPassword: string): Promise<void> {
+    const passwordHash = await this.passwordService.hashPassword(newPassword);
+    return this.repo.updatePasswordHash(id, passwordHash);
+  }
 }

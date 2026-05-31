@@ -215,6 +215,26 @@ export class AccountRepository {
       .where(eq(pgUserAccounts.id, id));
   }
 
+  async updatePasswordHash(id: string, passwordHash: string): Promise<void> {
+    const updatedAt = Date.now();
+
+    if (this.dialect === "sqlite") {
+      const sqliteDb = this.db as SqliteDrizzleClient;
+      sqliteDb
+        .update(sqliteUserAccounts)
+        .set({ passwordHash, updatedAt: new Date(updatedAt) })
+        .where(eq(sqliteUserAccounts.id, id))
+        .run();
+      return;
+    }
+
+    const pgDb = this.db as PostgresDrizzleClient;
+    await pgDb
+      .update(pgUserAccounts)
+      .set({ passwordHash, updatedAt })
+      .where(eq(pgUserAccounts.id, id));
+  }
+
   /**
    * Creates an account for a federated (OIDC) user.
    * Uses a sentinel password hash so the row satisfies the NOT NULL constraint;
