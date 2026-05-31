@@ -3,6 +3,8 @@ import { bookmarkFolders } from "./bookmark-folder.schema.pg.js";
 import { bookmarkTags } from "./bookmark-tag.schema.pg.js";
 import { bookmarks } from "./bookmark.schema.pg.js";
 import { tags } from "./tag.schema.pg.js";
+import { teamMemberships } from "./team-membership.schema.pg.js";
+import { teams } from "./team.schema.pg.js";
 import { folders } from "./folder.schema.pg.js";
 import { apiTokens } from "./api-token.schema.pg.js";
 import { emailVerificationTokens } from "./email-verification-token.schema.pg.js";
@@ -23,6 +25,8 @@ export { bookmarkFolders } from "./bookmark-folder.schema.pg.js";
 export { bookmarkTags } from "./bookmark-tag.schema.pg.js";
 export { bookmarks } from "./bookmark.schema.pg.js";
 export { tags } from "./tag.schema.pg.js";
+export { teamMemberships } from "./team-membership.schema.pg.js";
+export { teams } from "./team.schema.pg.js";
 export { folders } from "./folder.schema.pg.js";
 export { apiTokens } from "./api-token.schema.pg.js";
 export { emailVerificationTokens } from "./email-verification-token.schema.pg.js";
@@ -46,6 +50,8 @@ export const pgSchema = {
   bookmarks,
   folders,
   tags,
+  teamMemberships,
+  teams,
   apiTokens,
   emailVerificationTokens,
   mfaBackupCodes,

@@ -4,6 +4,8 @@ import { bookmarkFolders } from "./bookmark-folder.schema.js";
 import { bookmarkTags } from "./bookmark-tag.schema.js";
 import { bookmarks } from "./bookmark.schema.js";
 import { tags } from "./tag.schema.js";
+import { teamMemberships } from "./team-membership.schema.js";
+import { teams } from "./team.schema.js";
 import { folders } from "./folder.schema.js";
 import { apiTokens } from "./api-token.schema.js";
 import { emailVerificationTokens } from "./email-verification-token.schema.js";
@@ -24,6 +26,8 @@ export { bookmarkFolders } from "./bookmark-folder.schema.js";
 export { bookmarkTags } from "./bookmark-tag.schema.js";
 export { bookmarks } from "./bookmark.schema.js";
 export { tags } from "./tag.schema.js";
+export { teamMemberships } from "./team-membership.schema.js";
+export { teams } from "./team.schema.js";
 export { folders } from "./folder.schema.js";
 export { apiTokens } from "./api-token.schema.js";
 export { emailVerificationTokens } from "./email-verification-token.schema.js";
@@ -46,6 +50,8 @@ export const schema = {
   bookmarks,
   folders,
   tags,
+  teamMemberships,
+  teams,
   apiTokens,
   emailVerificationTokens,
   mfaBackupCodes,
