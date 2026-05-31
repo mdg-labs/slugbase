@@ -501,6 +501,16 @@ The hosted service uses a split deployment: the **web client** is served from th
 
 **Self-hosted is unaffected:** self-hosted users continue to run the combined container image (§14.2) on their own infrastructure. The split topology described here is exclusively for the operator-run hosted service.
 
+**App / Worker naming (settled — decision #51):** every operator-run platform app (Fly.io app names and Cloudflare Worker script names) follows **`slugbase-<env>-<app>`**, where `<env>` matches the Infisical environment name (`staging` / `production`) and `<app>` is `api`, `web`, or `marketing`:
+
+| App | Platform | Staging name | Production name |
+|---|---|---|---|
+| API / back-end | Fly.io (`fra`) | `slugbase-staging-api` | `slugbase-production-api` |
+| Web client | Cloudflare Workers | `slugbase-staging-web` | `slugbase-production-web` |
+| Marketing site | Cloudflare Workers | `slugbase-staging-marketing` | `slugbase-production-marketing` |
+
+There is **no `development` deployment** — local development runs the dev servers directly (Infisical `development` env). These are **platform app/script identifiers, not public hostnames**; public domains (and `APP_BASE_URL` / `FRONTEND_ORIGIN`) are configured separately. The self-hosted combined image is published to GHCR and is not subject to this scheme.
+
 **CORS and origin configuration:** `APP_BASE_URL` points to the Fly.io app URL (or a custom domain in front of it); `FRONTEND_ORIGIN` points to the Cloudflare Workers frontend origin. Both are required secrets (§15) validated at startup.
 
 ---
@@ -693,6 +703,7 @@ Every item below was previously an open question and is now **settled** and inte
 48. **Background work (settled):** in-process within the API — no separate worker process or external broker (§22.10, §6.3).
 49. **AI provider, v1 (settled):** OpenAI behind the vendor-neutral AI interface (§11.2); swapping providers is Fast-Follow.
 50. **Package layout (settled):** pnpm workspace packages `backend`, `web`, `marketing`, `shared-types`, `ui`, plus `docs`; the canonical web-package name is `web` (not `web-client`); marketing and app are separately buildable. (Section 19.)
+51. **Platform app naming (settled):** operator-run Fly.io apps and Cloudflare Worker scripts are named `slugbase-<env>-<app>` — `<env>` ∈ {`staging`, `production`} (matching Infisical env names; no `development` deployment), `<app>` ∈ {`api`, `web`, `marketing`}. These are platform identifiers, not public hostnames. Self-hosted GHCR image is exempt. (Section 14.7.)
 
 ---
 

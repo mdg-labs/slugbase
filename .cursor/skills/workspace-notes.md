@@ -93,5 +93,6 @@ _added: 2026-05-31_
 Fly.io `fra` chosen over Railway because Railway's only EU region (Amsterdam) has no collocated Neon Postgres region → cross-region DB latency on every query.
 Self-hosted: combined container image, unaffected by hosted topology.
 Key env vars: `APP_BASE_URL` = Fly.io app domain (or custom), `FRONTEND_ORIGIN` = CF Workers domain.
-Spec: §14.7, resolved decisions 31–32.
+**App naming** (decision #51): `slugbase-<env>-<app>` — Fly.io app + CF Worker script names. Set: `slugbase-staging-api` (Fly), `slugbase-staging-web` (CF), `slugbase-staging-marketing` (CF), `slugbase-production-api` (Fly), `slugbase-production-web` (CF), `slugbase-production-marketing` (CF). `<env>` matches Infisical env (`staging`/`production`); **no `development` deployment** (local dev only). These are platform identifiers, not public hostnames. Self-hosted GHCR image is exempt. **No Fly/CF apps exist yet — created during infra setup.**
+Spec: §14.7, resolved decisions 31–32, 51.
 _added: 2026-05-31_

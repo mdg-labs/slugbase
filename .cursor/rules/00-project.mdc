@@ -35,6 +35,8 @@ A bookmark manager with built-in URL shortening and keyboard-driven launcher —
 | Database | **Neon Postgres** (`aws-eu-central-1`) | Frankfurt, DE |
 | Marketing site | **Cloudflare Workers** | Global edge; separately built |
 
+**App naming** (Fly.io apps + CF Worker scripts): `slugbase-<env>-<app>`, `<env>` ∈ {`staging`, `production`}, `<app>` ∈ {`api`, `web`, `marketing`} — e.g. `slugbase-staging-api`, `slugbase-production-web`. No `development` deployment (local dev only). Platform identifiers, not public hostnames — spec §14.7, decision #51.
+
 Self-hosted: **combined container image**, single port, operator's own infrastructure — spec §14.2.
 
 ### CI/CD (settled — spec §22, decision #35)
