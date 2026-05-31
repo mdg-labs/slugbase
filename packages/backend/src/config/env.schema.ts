@@ -1,5 +1,24 @@
 import { z } from "zod";
 
+/** Parses env-style booleans; `z.coerce.boolean()` treats the string `"false"` as true. */
+function parseEnvBoolean(value: unknown, defaultValue: boolean): boolean {
+  if (value === undefined || value === null || value === "") {
+    return defaultValue;
+  }
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true" || normalized === "1") return true;
+    if (normalized === "false" || normalized === "0") return false;
+  }
+  return Boolean(value);
+}
+
+const envBoolean = (defaultValue: boolean) =>
+  z.preprocess((value) => parseEnvBoolean(value, defaultValue), z.boolean());
+
 const requiredSecretsSchema = z
   .object({
     SESSION_SECRET: z.string().min(32),
@@ -48,6 +67,8 @@ const optionalFlagsSchema = z
     RATE_LIMIT_LOGIN_TTL_SECONDS: z.coerce.number().int().positive().default(900),
     RATE_LIMIT_TOKEN_CREATION_MAX: z.coerce.number().int().positive().default(20),
     RATE_LIMIT_TOKEN_CREATION_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
+    // OpenAPI interactive docs (spec §18) — optional Scalar UI at GET /docs
+    OPENAPI_INTERACTIVE_DOCS: envBoolean(true),
   })
   .strict()
   .superRefine((flags, ctx) => {
@@ -122,6 +143,7 @@ function readFlagsInput(env: NodeJS.ProcessEnv) {
     RATE_LIMIT_LOGIN_TTL_SECONDS: env.RATE_LIMIT_LOGIN_TTL_SECONDS,
     RATE_LIMIT_TOKEN_CREATION_MAX: env.RATE_LIMIT_TOKEN_CREATION_MAX,
     RATE_LIMIT_TOKEN_CREATION_TTL_SECONDS: env.RATE_LIMIT_TOKEN_CREATION_TTL_SECONDS,
+    OPENAPI_INTERACTIVE_DOCS: env.OPENAPI_INTERACTIVE_DOCS,
   };
 }
 
