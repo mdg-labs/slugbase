@@ -76,9 +76,11 @@ _added: 2026-05-31_
 DB migrations: **Drizzle Kit** (`drizzle-kit generate` to create, `drizzle-kit migrate` to apply) — one forward-only history; never hand-write SQL or use `drizzle-kit push`. Rules/skills updated to match: `00-project.mdc`, `06-local-ci-before-commit.mdc`, `10-i18n.mdc`, `11-design-system.mdc`, orchestrator `doc-index.md` + `prompt-templates.md` + `SKILL.md`.
 _added: 2026-05-31_
 
-## Infisical env slug is `dev` not `development` (2026-05-31)
+## Infisical env slugs: `dev`, `staging`, `prod` (2026-05-31, updated 2026-05-31)
 
-The local Infisical CLI env slug for the development environment is **`dev`**, not `development`. Using `--env=development` returns 404. All `infisical secrets set` and `infisical run` commands must use `--env=dev`. The Infisical UI shows the env as "Development" but the CLI slug is `dev`.
+Infisical environment slugs are **`dev`**, **`staging`**, **`prod`** — NOT `development`, `staging`, `production`. Using the long form returns 404. Applies to:
+- Local CLI: `infisical run --env=dev -- <cmd>` and `infisical secrets set ... --env=dev`
+- CI workflow (`ci-cd.yml`): `env-slug: dev` for the CI/checks job; `env-slug: staging` for staging deploy; `env-slug: prod` for production deploy
 _added: 2026-05-31_
 
 ## Confirmed tooling decisions (2026-05-31)

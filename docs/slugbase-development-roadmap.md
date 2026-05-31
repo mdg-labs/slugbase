@@ -248,7 +248,7 @@ Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit w
 - **AC:** filter by folder/tags/pinned/scope; query match on title/url/slug; sort recent/alpha/most-used/recently-accessed; pagination (def §2); companion IDs endpoint for select-all; plan-archived excluded everywhere.
 - **Tests:** integration: each filter/sort; pagination bounds; IDs endpoint matches list.
 - **Files:** `packages/backend/src/bookmarks/**`
-- **Doc Ref:** spec §6.5; def §2 · **Deps:** P3-02, P3-03 · **Status:** [ ]
+- **Doc Ref:** spec §6.5; def §2 · **Deps:** P3-02, P3-03 · **Status:** [x]
 
 ### P3-05 — Bulk actions — BE · Lane P
 - **AC:** bulk delete / move-to-folder / add-tags (with merge preview) / share (where available); respect ownership + authorization; works with explicit selection and select-all-ids.
