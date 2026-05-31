@@ -4,6 +4,7 @@ import { apiTokenContract } from "./api-token.contract.js";
 import { authContract } from "./auth.contract.js";
 import { healthContract } from "./health.contract.js";
 import { mfaContract } from "./mfa.contract.js";
+import { workspaceContract } from "./workspace.contract.js";
 
 const c = initContract();
 
@@ -12,9 +13,11 @@ export const apiContract = c.router({
   ...authContract,
   ...mfaContract,
   ...apiTokenContract,
+  ...workspaceContract,
 });
 
 export { apiTokenContract } from "./api-token.contract.js";
 export { authContract } from "./auth.contract.js";
 export { healthContract } from "./health.contract.js";
 export { mfaContract } from "./mfa.contract.js";
+export { workspaceContract } from "./workspace.contract.js";
