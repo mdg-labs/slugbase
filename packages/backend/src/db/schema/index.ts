@@ -4,6 +4,7 @@ import { emailVerificationTokens } from "./email-verification-token.schema.js";
 import { mfaBackupCodes } from "./mfa-backup-code.schema.js";
 import { oidcAccounts } from "./oidc-account.schema.js";
 import { oidcProviders } from "./oidc-provider.schema.js";
+import { passwordResetTokens } from "./password-reset-token.schema.js";
 import { sessions } from "./session.schema.js";
 import { userAccounts } from "./user-account.schema.js";
 import { workspaceInvitations } from "./workspace-invitation.schema.js";
@@ -16,6 +17,7 @@ export { emailVerificationTokens } from "./email-verification-token.schema.js";
 export { mfaBackupCodes } from "./mfa-backup-code.schema.js";
 export { oidcAccounts } from "./oidc-account.schema.js";
 export { oidcProviders } from "./oidc-provider.schema.js";
+export { passwordResetTokens } from "./password-reset-token.schema.js";
 export { sessions } from "./session.schema.js";
 export { userAccounts } from "./user-account.schema.js";
 export { workspaceInvitations } from "./workspace-invitation.schema.js";
@@ -29,6 +31,7 @@ export const schema = {
   mfaBackupCodes,
   oidcAccounts,
   oidcProviders,
+  passwordResetTokens,
   sessions,
   userAccounts,
   workspaceInvitations,

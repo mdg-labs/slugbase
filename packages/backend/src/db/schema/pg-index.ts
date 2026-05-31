@@ -4,6 +4,7 @@ import { mfaBackupCodes } from "./mfa-backup-code.schema.pg.js";
 import { instanceMetadata } from "./system.schema.pg.js";
 import { oidcAccounts } from "./oidc-account.schema.pg.js";
 import { oidcProviders } from "./oidc-provider.schema.pg.js";
+import { passwordResetTokens } from "./password-reset-token.schema.pg.js";
 import { sessions } from "./session.schema.pg.js";
 import { userAccounts } from "./user-account.schema.pg.js";
 import { workspaceInvitations } from "./workspace-invitation.schema.pg.js";
@@ -16,6 +17,7 @@ export { mfaBackupCodes } from "./mfa-backup-code.schema.pg.js";
 export { instanceMetadata } from "./system.schema.pg.js";
 export { oidcAccounts } from "./oidc-account.schema.pg.js";
 export { oidcProviders } from "./oidc-provider.schema.pg.js";
+export { passwordResetTokens } from "./password-reset-token.schema.pg.js";
 export { sessions } from "./session.schema.pg.js";
 export { userAccounts } from "./user-account.schema.pg.js";
 export { workspaceInvitations } from "./workspace-invitation.schema.pg.js";
@@ -29,6 +31,7 @@ export const pgSchema = {
   mfaBackupCodes,
   oidcAccounts,
   oidcProviders,
+  passwordResetTokens,
   sessions,
   userAccounts,
   workspaceInvitations,
