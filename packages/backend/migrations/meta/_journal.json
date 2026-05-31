@@ -8,6 +8,13 @@
       "when": 1780194726071,
       "tag": "0000_good_nuke",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1780218658697,
+      "tag": "0001_giant_vengeance",
+      "breakpoints": true
     }
   ]
 }

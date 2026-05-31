@@ -24,6 +24,8 @@ const optionalFlagsSchema = z
     SMTP_USER: z.string().min(1).optional(),
     SMTP_PASS: z.string().min(1).optional(),
     SMTP_FROM: z.string().min(1).optional(),
+    // Session TTL (spec §5.3, def §3) — sliding window; default 30 days
+    SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),
   })
   .strict()
   .superRefine((flags, ctx) => {
@@ -81,6 +83,7 @@ function readFlagsInput(env: NodeJS.ProcessEnv) {
     SMTP_USER: env.SMTP_USER,
     SMTP_PASS: env.SMTP_PASS,
     SMTP_FROM: env.SMTP_FROM,
+    SESSION_TTL_DAYS: env.SESSION_TTL_DAYS,
   };
 }
 

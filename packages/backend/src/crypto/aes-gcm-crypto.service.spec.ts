@@ -19,6 +19,7 @@ function createCryptoService(overrides: Partial<AppConfig> = {}): AesGcmCryptoSe
     SERVE_WEB_CLIENT: false,
     SMTP_PORT: 587,
     SMTP_SECURE: false,
+    SESSION_TTL_DAYS: 30,
     nodeEnv: "test",
     isProduction: false,
     ...overrides,
