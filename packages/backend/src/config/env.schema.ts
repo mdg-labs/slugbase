@@ -48,6 +48,10 @@ const optionalFlagsSchema = z
     RATE_LIMIT_LOGIN_TTL_SECONDS: z.coerce.number().int().positive().default(900),
     RATE_LIMIT_TOKEN_CREATION_MAX: z.coerce.number().int().positive().default(20),
     RATE_LIMIT_TOKEN_CREATION_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
+    // Cloudflare Turnstile challenge (spec §11.8, §15) — optional; no-op challenge when absent
+    TURNSTILE_SECRET_KEY: z.string().min(1).optional(),
+    // Skip challenge verification in development (spec §11.8) — defaults true when NODE_ENV !== production
+    CHALLENGE_DEV_SKIP: z.coerce.boolean().optional(),
   })
   .strict()
   .superRefine((flags, ctx) => {
@@ -122,6 +126,8 @@ function readFlagsInput(env: NodeJS.ProcessEnv) {
     RATE_LIMIT_LOGIN_TTL_SECONDS: env.RATE_LIMIT_LOGIN_TTL_SECONDS,
     RATE_LIMIT_TOKEN_CREATION_MAX: env.RATE_LIMIT_TOKEN_CREATION_MAX,
     RATE_LIMIT_TOKEN_CREATION_TTL_SECONDS: env.RATE_LIMIT_TOKEN_CREATION_TTL_SECONDS,
+    TURNSTILE_SECRET_KEY: env.TURNSTILE_SECRET_KEY,
+    CHALLENGE_DEV_SKIP: env.CHALLENGE_DEV_SKIP,
   };
 }
 
