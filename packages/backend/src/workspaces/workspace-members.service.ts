@@ -7,8 +7,10 @@ import {
   UnprocessableEntityException,
 } from "@nestjs/common";
 
+import { AccountsService } from "../accounts/accounts.service.js";
 import { DbService } from "../db/db.service.js";
 import { WorkspaceMemberRepository } from "./workspace-member.repository.js";
+import type { WorkspaceMemberView } from "./workspace-members.types.js";
 import {
   ROLE_HIERARCHY,
   type WorkspaceMemberRecord,
@@ -19,7 +21,10 @@ import {
 export class WorkspaceMembersService {
   private readonly repo: WorkspaceMemberRepository;
 
-  constructor(@Inject(DbService) private readonly db: DbService) {
+  constructor(
+    @Inject(DbService) private readonly db: DbService,
+    @Inject(AccountsService) private readonly accounts: AccountsService,
+  ) {
     this.repo = new WorkspaceMemberRepository(db.getOrm(), db.dialect);
   }
 
@@ -92,6 +97,56 @@ export class WorkspaceMembersService {
 
   async listMembers(workspaceId: string): Promise<WorkspaceMemberRecord[]> {
     return this.repo.findAllByWorkspace(workspaceId);
+  }
+
+  async listMemberViews(workspaceId: string): Promise<WorkspaceMemberView[]> {
+    const members = await this.repo.findAllByWorkspace(workspaceId);
+    const views: WorkspaceMemberView[] = [];
+
+    for (const member of members) {
+      const account = await this.accounts.findById(member.userId);
+      views.push({
+        id: member.id,
+        workspaceId: member.workspaceId,
+        userId: member.userId,
+        role: member.role,
+        joinedAt: member.joinedAt,
+        name: account?.name ?? "Unknown",
+        email: account?.email ?? "",
+      });
+    }
+
+    return views;
+  }
+
+  /**
+   * Transfers workspace ownership from the requester to another member.
+   * The requester becomes ADMIN; the target becomes OWNER (spec §10.1).
+   */
+  async transferOwnership(
+    workspaceId: string,
+    targetUserId: string,
+    requesterId: string,
+  ): Promise<WorkspaceMemberView[]> {
+    await this.requireRequesterRole(workspaceId, requesterId, "OWNER");
+
+    if (targetUserId === requesterId) {
+      throw new UnprocessableEntityException("Cannot transfer ownership to yourself");
+    }
+
+    const target = await this.repo.findByWorkspaceAndUser(workspaceId, targetUserId);
+    if (!target) {
+      throw new NotFoundException("Member not found");
+    }
+
+    if (target.role === "OWNER") {
+      return this.listMemberViews(workspaceId);
+    }
+
+    await this.repo.update(workspaceId, requesterId, { role: "ADMIN" });
+    await this.repo.update(workspaceId, targetUserId, { role: "OWNER" });
+
+    return this.listMemberViews(workspaceId);
   }
 
   async updateMemberRole(

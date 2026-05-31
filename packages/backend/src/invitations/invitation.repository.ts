@@ -166,4 +166,85 @@ export class InvitationRepository {
       .set({ acceptedAt: nowMs })
       .where(eq(pgInvitations.id, id));
   }
+
+  async findById(id: string): Promise<WorkspaceInvitationRecord | null> {
+    if (this.dialect === "sqlite") {
+      const row = (this.db as SqliteDrizzleClient)
+        .select()
+        .from(sqliteInvitations)
+        .where(eq(sqliteInvitations.id, id))
+        .get();
+      return row ? toRecord(row) : null;
+    }
+    const rows = await (this.db as PostgresDrizzleClient)
+      .select()
+      .from(pgInvitations)
+      .where(eq(pgInvitations.id, id))
+      .limit(1);
+    return rows[0] ? toRecord(rows[0]) : null;
+  }
+
+  async findPendingByWorkspace(
+    workspaceId: string,
+  ): Promise<WorkspaceInvitationRecord[]> {
+    if (this.dialect === "sqlite") {
+      const rows = (this.db as SqliteDrizzleClient)
+        .select()
+        .from(sqliteInvitations)
+        .where(
+          and(
+            eq(sqliteInvitations.workspaceId, workspaceId),
+            isNull(sqliteInvitations.acceptedAt),
+          ),
+        )
+        .all();
+      return rows.map(toRecord);
+    }
+    const rows = await (this.db as PostgresDrizzleClient)
+      .select()
+      .from(pgInvitations)
+      .where(
+        and(
+          eq(pgInvitations.workspaceId, workspaceId),
+          isNull(pgInvitations.acceptedAt),
+        ),
+      );
+    return rows.map(toRecord);
+  }
+
+  async updateTokenAndExpiry(
+    id: string,
+    tokenHash: string,
+    expiresAt: Date,
+  ): Promise<WorkspaceInvitationRecord | null> {
+    if (this.dialect === "sqlite") {
+      (this.db as SqliteDrizzleClient)
+        .update(sqliteInvitations)
+        .set({ tokenHash, expiresAt })
+        .where(eq(sqliteInvitations.id, id))
+        .run();
+      return this.findById(id);
+    }
+    const rows = await (this.db as PostgresDrizzleClient)
+      .update(pgInvitations)
+      .set({ tokenHash, expiresAt: expiresAt.getTime() })
+      .where(eq(pgInvitations.id, id))
+      .returning();
+    return rows[0] ? toRecord(rows[0]) : null;
+  }
+
+  async deleteById(id: string): Promise<boolean> {
+    if (this.dialect === "sqlite") {
+      const result = (this.db as SqliteDrizzleClient)
+        .delete(sqliteInvitations)
+        .where(eq(sqliteInvitations.id, id))
+        .run();
+      return result.changes > 0;
+    }
+    const rows = await (this.db as PostgresDrizzleClient)
+      .delete(pgInvitations)
+      .where(eq(pgInvitations.id, id))
+      .returning({ id: pgInvitations.id });
+    return rows.length > 0;
+  }
 }

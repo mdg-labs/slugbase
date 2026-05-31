@@ -3,7 +3,7 @@ import { z } from "zod";
 
 const c = initContract();
 
-export const WorkspacePlanSchema = z.enum(["free", "personal"]);
+export const WorkspacePlanSchema = z.enum(["free", "personal", "team"]);
 export const WorkspaceMemberRoleSchema = z.enum(["OWNER", "ADMIN", "MEMBER"]);
 
 export const WorkspaceSchema = z
@@ -67,7 +67,25 @@ export const UpdateMemberRoleBodySchema = z
   .strict();
 
 export type WorkspacePlan = z.infer<typeof WorkspacePlanSchema>;
-export type WorkspaceMemberRole = z.infer<typeof WorkspaceMemberRoleSchema>;
+export const WorkspaceMemberViewSchema = z
+  .object({
+    id: z.string(),
+    workspaceId: z.string(),
+    userId: z.string(),
+    role: WorkspaceMemberRoleSchema,
+    joinedAt: z.string().datetime(),
+    name: z.string(),
+    email: z.string().email(),
+  })
+  .strict();
+
+export const TransferOwnershipBodySchema = z
+  .object({
+    targetUserId: z.string(),
+  })
+  .strict();
+
+export type WorkspaceMemberView = z.infer<typeof WorkspaceMemberViewSchema>;
 export type Workspace = z.infer<typeof WorkspaceSchema>;
 export type WorkspaceMember = z.infer<typeof WorkspaceMemberSchema>;
 export type CreateWorkspaceBody = z.infer<typeof CreateWorkspaceBodySchema>;
@@ -173,5 +191,52 @@ export const workspaceContract = c.router({
       422: z.object({ message: z.string() }).strict(),
     },
     summary: "Remove a member from a workspace",
+  },
+  listMemberViews: {
+    method: "GET",
+    path: "/members",
+    responses: {
+      200: z.array(WorkspaceMemberViewSchema),
+      403: z.object({ message: z.string() }).strict(),
+    },
+    summary: "List workspace members with profile details (ADMIN+)",
+  },
+  updateMemberViewRole: {
+    method: "PATCH",
+    path: "/members/:userId",
+    pathParams: z.object({ userId: z.string() }),
+    body: UpdateMemberRoleBodySchema,
+    responses: {
+      200: WorkspaceMemberViewSchema,
+      403: z.object({ message: z.string() }).strict(),
+      404: z.object({ message: z.string() }).strict(),
+      422: z.object({ message: z.string() }).strict(),
+    },
+    summary: "Update a member role (OWNER only)",
+  },
+  removeActiveMember: {
+    method: "DELETE",
+    path: "/members/:userId",
+    pathParams: z.object({ userId: z.string() }),
+    body: c.noBody(),
+    responses: {
+      204: c.noBody(),
+      403: z.object({ message: z.string() }).strict(),
+      404: z.object({ message: z.string() }).strict(),
+      422: z.object({ message: z.string() }).strict(),
+    },
+    summary: "Remove a member from the active workspace",
+  },
+  transferOwnership: {
+    method: "POST",
+    path: "/members/transfer-ownership",
+    body: TransferOwnershipBodySchema,
+    responses: {
+      200: z.array(WorkspaceMemberViewSchema),
+      403: z.object({ message: z.string() }).strict(),
+      404: z.object({ message: z.string() }).strict(),
+      422: z.object({ message: z.string() }).strict(),
+    },
+    summary: "Transfer workspace ownership to another member",
   },
 });
