@@ -271,16 +271,32 @@ CallMcpTool plugin-atlassian-atlassian / addWorklogToJiraIssue
 
 ## Epic pattern
 
+SlugBase uses a 3-level hierarchy: **Epic = roadmap phase** → **Story = deliverable** → **Sub-task = commit-sized leaf**. A Story with no Sub-tasks is itself the leaf (an *atomic* Story).
+
 ```text
-SB-8 (Epic — Server-side session infrastructure)
-├── SB-9  (Backend Task — session store implementation)
-├── SB-10 (Backend Task — session middleware + workspace context)
-└── SB-11 (Frontend Task — workspace switcher UI)
+SB-8 (Epic — P3 Bookmarks, slugs, search & AI)
+├── SB-30 (Story — Bookmark domain)                 ← atomic leaf (no subtasks)
+├── SB-31 (Story — Slugs & /go)                      ← atomic leaf
+└── SB-40 (Story — Auth UI)                          ← parent of subtasks
+    ├── SB-41 (Sub-task — auth shell + sign-in)       ← leaf
+    ├── SB-42 (Sub-task — MFA challenge screen)       ← leaf
+    └── SB-43 (Sub-task — register + verify)          ← leaf
 ```
 
-- Implement **leaf** issues; pass each leaf key to execution + verifier prompts.
-- Epic **In Progress**: execution sets epic when any subtask starts.
-- Epic **Done**: last subtask verifier (or orchestrator recovery).
+**Enumerate the leaf set for an epic** (the things to actually implement):
+
+```jql
+# Stories under the epic
+project = "SB" AND parent = SB-8
+# Sub-tasks under a parent Story (run once per Story that has children)
+project = "SB" AND parent = SB-40
+```
+
+Leaf set = atomic Stories (no children) **+** all Sub-tasks. Batch leaves by `depends on` links + Lane.
+
+- Implement **leaf** issues; pass each leaf key to execution + verifier prompts. A parent Story is never implemented directly — only its Sub-tasks.
+- Epic **In Progress**: execution sets epic when any leaf starts; set the parent **Story** In Progress too when implementing one of its Sub-tasks.
+- Epic **Done**: last leaf verifier marks the parent Story Done (when its last Sub-task passes) and the Epic Done (when its last Story passes) — or orchestrator recovery.
 
 ## MCP tools by role
 
