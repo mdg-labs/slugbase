@@ -48,4 +48,8 @@ export class AccountsService {
   async findById(id: string): Promise<AccountRecord | null> {
     return this.repo.findById(id);
   }
+
+  async markEmailVerified(id: string): Promise<void> {
+    return this.repo.updateEmailVerified(id, true);
+  }
 }

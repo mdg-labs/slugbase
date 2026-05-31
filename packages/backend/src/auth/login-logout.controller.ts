@@ -76,8 +76,14 @@ export class LoginLogoutController {
       return { mfaRequired: true };
     }
 
+    const sessionData: Record<string, unknown> = {};
+    if (!account.emailVerified) {
+      sessionData["emailVerificationPending"] = true;
+    }
+
     const { cookieValue } = await this.sessions.createSession({
       userId: account.id,
+      data: sessionData,
     });
 
     res.cookie(SESSION_COOKIE, cookieValue, {

@@ -6,9 +6,17 @@ import { ApiTokensModule } from "./api-tokens/api-tokens.module.js";
 import { CsrfModule } from "./csrf/csrf.module.js";
 import { LoginLogoutController } from "./login-logout.controller.js";
 import { MfaModule } from "./mfa/mfa.module.js";
+import { EmailVerificationModule } from "./verification/email-verification.module.js";
 
 @Module({
-  imports: [CsrfModule, AccountsModule, SessionsModule, MfaModule, ApiTokensModule],
+  imports: [
+    CsrfModule,
+    AccountsModule,
+    SessionsModule,
+    MfaModule,
+    ApiTokensModule,
+    EmailVerificationModule,
+  ],
   controllers: [LoginLogoutController],
 })
 export class AuthModule {}

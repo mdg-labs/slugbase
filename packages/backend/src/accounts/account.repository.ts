@@ -175,4 +175,24 @@ export class AccountRepository {
       .set({ ...patch, updatedAt })
       .where(eq(pgUserAccounts.id, id));
   }
+
+  async updateEmailVerified(id: string, emailVerified: boolean): Promise<void> {
+    const updatedAt = Date.now();
+
+    if (this.dialect === "sqlite") {
+      const sqliteDb = this.db as SqliteDrizzleClient;
+      sqliteDb
+        .update(sqliteUserAccounts)
+        .set({ emailVerified, updatedAt: new Date(updatedAt) })
+        .where(eq(sqliteUserAccounts.id, id))
+        .run();
+      return;
+    }
+
+    const pgDb = this.db as PostgresDrizzleClient;
+    await pgDb
+      .update(pgUserAccounts)
+      .set({ emailVerified, updatedAt })
+      .where(eq(pgUserAccounts.id, id));
+  }
 }
