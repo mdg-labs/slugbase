@@ -1,3 +1,4 @@
+import { useTolgee } from "@tolgee/react";
 import {
   createContext,
   useCallback,
@@ -8,6 +9,8 @@ import {
   type ReactNode,
 } from "react";
 
+import type { BookmarkModalAiContext } from "./ai/bookmark-modal-ai.types.js";
+import { DEFAULT_BOOKMARK_MODAL_AI_CONTEXT } from "./ai/bookmark-modal-ai.types.js";
 import { BookmarkModal } from "./BookmarkModal.js";
 import {
   loadBookmarkModalOptions,
@@ -36,12 +39,16 @@ export type BookmarkModalProviderProps = {
     payload: BookmarkModalSubmitPayload,
     initial?: BookmarkModalInitialBookmark,
   ) => Promise<void>;
+  /** When omitted, AI suggestions stay disabled until wired from session/workspace loaders. */
+  aiContext?: Partial<BookmarkModalAiContext>;
 };
 
 export function BookmarkModalProvider({
   children,
   onSubmit = submitBookmarkModal,
+  aiContext: aiContextOverride,
 }: BookmarkModalProviderProps) {
+  const tolgee = useTolgee(["language"]);
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"create" | "edit">("create");
   const [bookmark, setBookmark] = useState<BookmarkModalInitialBookmark | undefined>();
@@ -120,6 +127,15 @@ export function BookmarkModalProvider({
     [bookmark, onSubmit],
   );
 
+  const aiContext = useMemo<BookmarkModalAiContext>(
+    () => ({
+      ...DEFAULT_BOOKMARK_MODAL_AI_CONTEXT,
+      outputLanguage: tolgee.getLanguage() || "en",
+      ...aiContextOverride,
+    }),
+    [aiContextOverride, tolgee],
+  );
+
   const value = useMemo(
     () => ({
       open,
@@ -143,6 +159,7 @@ export function BookmarkModalProvider({
         tags={tags}
         onSubmit={handleSubmit}
         isSubmitting={isSubmitting}
+        aiContext={aiContext}
       />
     </BookmarkModalContext.Provider>
   );

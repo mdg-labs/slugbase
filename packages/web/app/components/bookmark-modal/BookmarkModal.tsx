@@ -9,6 +9,12 @@ import {
 import { useTranslate } from "@tolgee/react";
 import { useEffect, useId, useState } from "react";
 
+import { BookmarkModalAiSuggestion } from "./ai/BookmarkModalAiSuggestion.js";
+import { BookmarkModalAiTagSuggestions } from "./ai/BookmarkModalAiTagSuggestions.js";
+import type { BookmarkModalAiContext } from "./ai/bookmark-modal-ai.types.js";
+import { DEFAULT_BOOKMARK_MODAL_AI_CONTEXT } from "./ai/bookmark-modal-ai.types.js";
+import type { FetchAiSuggestionsFn } from "./ai/bookmark-modal-ai.types.js";
+import { useBookmarkModalAiSuggestions } from "./ai/use-bookmark-modal-ai-suggestions.js";
 import type {
   BookmarkModalFieldErrors,
   BookmarkModalFolderOption,
@@ -49,6 +55,8 @@ export type BookmarkModalProps = {
   tags: BookmarkModalTagOption[];
   onSubmit: (payload: BookmarkModalSubmitPayload) => Promise<void>;
   isSubmitting?: boolean;
+  aiContext?: BookmarkModalAiContext;
+  fetchAiSuggestions?: FetchAiSuggestionsFn;
 };
 
 export function BookmarkModal({
@@ -60,6 +68,8 @@ export function BookmarkModal({
   tags,
   onSubmit,
   isSubmitting = false,
+  aiContext = DEFAULT_BOOKMARK_MODAL_AI_CONTEXT,
+  fetchAiSuggestions,
 }: BookmarkModalProps) {
   const { t } = useTranslate();
   const formId = useId();
@@ -71,6 +81,13 @@ export function BookmarkModal({
   const [values, setValues] = useState<BookmarkModalFormValues>(EMPTY_BOOKMARK_FORM);
   const [errors, setErrors] = useState<BookmarkModalFieldErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const ai = useBookmarkModalAiSuggestions({
+    open,
+    url: values.url,
+    aiContext,
+    fetchSuggestions: fetchAiSuggestions,
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -118,6 +135,18 @@ export function BookmarkModal({
     values.slug.trim().length > 0 && values.forwardingEnabled
       ? `/go/${values.slug.trim()}`
       : null;
+
+  const suggestions = ai.status === "ready" ? ai.suggestions : null;
+  const showTitleSuggestion =
+    suggestions != null &&
+    suggestions.title.trim().length > 0 &&
+    values.title.trim() !== suggestions.title.trim();
+  const showSlugSuggestion =
+    suggestions != null &&
+    suggestions.slug.trim().length > 0 &&
+    values.slug.trim() !== suggestions.slug.trim().toLowerCase();
+  const showTagSuggestions =
+    suggestions != null && suggestions.tags.length > 0 && tags.length > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -176,6 +205,30 @@ export function BookmarkModal({
               {errors.title ? (
                 <FieldError id={titleErrorId}>{errors.title}</FieldError>
               ) : null}
+              {showTitleSuggestion ? (
+                <BookmarkModalAiSuggestion
+                  fieldLabel={t("bookmark.modal.title_label")}
+                  value={suggestions.title}
+                  onApply={() => {
+                    setValues((current) => ({
+                      ...current,
+                      title: suggestions.title,
+                    }));
+                  }}
+                />
+              ) : null}
+              {ai.enabled && ai.status === "loading" ? (
+                <p
+                  className="text-fg-subtle"
+                  style={{
+                    fontSize: "var(--text-small)",
+                    lineHeight: "var(--lh-small)",
+                  }}
+                  data-testid="bookmark-modal-ai-loading"
+                >
+                  {t("bookmark.modal.ai.loading")}
+                </p>
+              ) : null}
             </div>
 
             <div className="flex flex-col gap-sp-2">
@@ -207,6 +260,18 @@ export function BookmarkModal({
                 />
               </div>
               {errors.slug ? <FieldError id={slugErrorId}>{errors.slug}</FieldError> : null}
+              {showSlugSuggestion ? (
+                <BookmarkModalAiSuggestion
+                  fieldLabel={t("bookmark.modal.slug_label")}
+                  value={suggestions.slug}
+                  onApply={() => {
+                    setValues((current) => ({
+                      ...current,
+                      slug: suggestions.slug.toLowerCase(),
+                    }));
+                  }}
+                />
+              ) : null}
               {slugPreview ? (
                 <p
                   className="font-mono text-accent-text"
@@ -280,7 +345,23 @@ export function BookmarkModal({
                     {t("bookmark.modal.tags_empty")}
                   </p>
                 ) : (
-                  <div className="flex max-h-36 flex-col gap-sp-2 overflow-y-auto rounded-md border border-[color:var(--border-subtle)] bg-raised p-sp-3">
+                  <div className="flex flex-col gap-sp-3">
+                    {showTagSuggestions ? (
+                      <BookmarkModalAiTagSuggestions
+                        suggestedNames={suggestions.tags}
+                        tags={tags}
+                        selectedTagIds={values.tagIds}
+                        onToggleTag={(tagId) => {
+                          setValues((current) => ({
+                            ...current,
+                            tagIds: current.tagIds.includes(tagId)
+                              ? current.tagIds.filter((id) => id !== tagId)
+                              : [...current.tagIds, tagId],
+                          }));
+                        }}
+                      />
+                    ) : null}
+                    <div className="flex max-h-36 flex-col gap-sp-2 overflow-y-auto rounded-md border border-[color:var(--border-subtle)] bg-raised p-sp-3">
                     {tags.map((tag) => (
                       <label
                         key={tag.id}
@@ -308,6 +389,7 @@ export function BookmarkModal({
                         </span>
                       </label>
                     ))}
+                    </div>
                   </div>
                 )}
               </fieldset>

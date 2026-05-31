@@ -243,6 +243,10 @@ export const staticMessages = {
       "Slug must start with a letter or number and use lowercase letters, numbers, and hyphens only.",
     "bookmark.modal.error.slug_reserved": "That slug is reserved and cannot be used.",
     "bookmark.modal.error.submit_failed": "Could not save the bookmark. Try again.",
+    "bookmark.modal.ai.loading": "Fetching AI suggestions…",
+    "bookmark.modal.ai.suggestion_label": "Suggested {field}:",
+    "bookmark.modal.ai.apply": "Apply",
+    "bookmark.modal.ai.tags_hint": "Suggested tags — select to apply:",
   },
   de: {
     "app.shell.brand": "SlugBase",
@@ -506,6 +510,10 @@ export const staticMessages = {
       "Dieser Slug ist reserviert und kann nicht verwendet werden.",
     "bookmark.modal.error.submit_failed":
       "Das Lesezeichen konnte nicht gespeichert werden. Versuche es erneut.",
+    "bookmark.modal.ai.loading": "KI-Vorschläge werden geladen…",
+    "bookmark.modal.ai.suggestion_label": "Vorschlag für {field}:",
+    "bookmark.modal.ai.apply": "Übernehmen",
+    "bookmark.modal.ai.tags_hint": "Vorgeschlagene Tags — zum Übernehmen auswählen:",
   },
 } as const;
 
