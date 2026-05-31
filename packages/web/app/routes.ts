@@ -5,5 +5,7 @@ export default [
   route("logout", "routes/auth/logout.tsx"),
   route("mfa", "routes/auth/mfa.tsx"),
   route("mfa/enroll", "routes/auth/mfa-enroll.tsx"),
+  route("register", "routes/auth/register.tsx"),
+  route("setup", "routes/setup/setup.tsx"),
   layout("routes/app-layout.tsx", [index("routes/home.tsx")]),
 ] satisfies RouteConfig;

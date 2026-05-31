@@ -298,6 +298,16 @@ export default function LoginRoute() {
                 : t("auth.login.submit")}
             </button>
           </Form>
+
+          <p
+            className="mt-sp-6 text-center text-fg-subtle"
+            style={{ fontSize: "var(--text-small)", lineHeight: "var(--lh-small)" }}
+          >
+            {t("auth.login.no_account_prompt")}{" "}
+            <a href="/register" className="text-accent-text hover:underline">
+              {t("auth.login.no_account_link")}
+            </a>
+          </p>
         </div>
       </div>
     </div>
