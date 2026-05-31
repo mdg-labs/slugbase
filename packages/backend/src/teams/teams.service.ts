@@ -6,6 +6,8 @@ import {
 } from "@nestjs/common";
 
 import { DbService } from "../db/db.service.js";
+import { AuditActions } from "../audit/audit.actions.js";
+import { AuditService } from "../audit/audit.service.js";
 import { WorkspaceDataGuard } from "../workspaces/workspace-data.guard.js";
 import { WorkspaceMembersService } from "../workspaces/workspace-members.service.js";
 import type { WorkspaceRecord } from "../workspaces/workspace.types.js";
@@ -35,6 +37,7 @@ export class TeamsService {
     @Inject(WorkspacesService) private readonly workspaces: WorkspacesService,
     @Inject(WorkspaceMembersService)
     private readonly workspaceMembers: WorkspaceMembersService,
+    @Inject(AuditService) private readonly audit: AuditService,
   ) {
     this.teamRepo = new TeamRepository(db.getOrm(), db.dialect);
   }
@@ -58,6 +61,14 @@ export class TeamsService {
       name,
       description,
       memberIds: dto.memberIds,
+    });
+    await this.audit.recordEvent({
+      workspaceId: workspace.id,
+      actorUserId: requesterId,
+      action: AuditActions.team.created,
+      entityType: "team",
+      entityId: team.id,
+      metadata: { name: team.name },
     });
     return this.wsDataGuard.verifyOwnership(workspace.id, team);
   }
@@ -124,6 +135,14 @@ export class TeamsService {
     });
 
     if (!updated) throw new NotFoundException("Team not found");
+    await this.audit.recordEvent({
+      workspaceId: workspace.id,
+      actorUserId: requesterId,
+      action: AuditActions.team.updated,
+      entityType: "team",
+      entityId: updated.id,
+      metadata: { name: updated.name },
+    });
     return this.wsDataGuard.verifyOwnership(workspace.id, updated);
   }
 
@@ -133,8 +152,16 @@ export class TeamsService {
     teamId: string,
   ): Promise<void> {
     await this.requireTeamAdmin(workspace.id, requesterId);
-    await this.requireTeam(workspace, teamId);
+    const team = await this.requireTeam(workspace, teamId);
     await this.teamRepo.delete(workspace.id, teamId);
+    await this.audit.recordEvent({
+      workspaceId: workspace.id,
+      actorUserId: requesterId,
+      action: AuditActions.team.deleted,
+      entityType: "team",
+      entityId: team.id,
+      metadata: { name: team.name },
+    });
   }
 
   async setTeamMembers(

@@ -6,12 +6,18 @@ import type { EntitlementCapability } from "./entitlements.service.js";
 
 const freeWorkspace = { plan: "free" as const };
 const personalWorkspace = { plan: "personal" as const };
+const teamWorkspace = { plan: "team" as const };
 
-const allCapabilities: EntitlementCapability[] = [
+const personalCapabilities: EntitlementCapability[] = [
   "team-sharing",
   "unlimited-bookmarks",
   "custom-slug-rules",
   "workspace-members",
+];
+
+const allCapabilities: EntitlementCapability[] = [
+  ...personalCapabilities,
+  "audit-log",
 ];
 
 describe("EntitlementsService", () => {
@@ -34,10 +40,23 @@ describe("EntitlementsService", () => {
     });
 
     describe("personal workspace", () => {
-      it.each(allCapabilities)(
+      it.each(personalCapabilities)(
         "returns true for capability %s",
         (capability) => {
           expect(service.can(personalWorkspace, capability)).toBe(true);
+        },
+      );
+
+      it("returns false for audit-log", () => {
+        expect(service.can(personalWorkspace, "audit-log")).toBe(false);
+      });
+    });
+
+    describe("team workspace", () => {
+      it.each(allCapabilities)(
+        "returns true for capability %s",
+        (capability) => {
+          expect(service.can(teamWorkspace, capability)).toBe(true);
         },
       );
     });
@@ -111,11 +130,26 @@ describe("EntitlementsService", () => {
       }).toThrow(ForbiddenException);
     });
 
-    it.each(allCapabilities)(
+    it.each(personalCapabilities)(
       "does not throw for personal workspace capability %s",
       (capability) => {
         expect(() => {
           service.assertCan(personalWorkspace, capability);
+        }).not.toThrow();
+      },
+    );
+
+    it("throws ForbiddenException for personal workspace audit-log", () => {
+      expect(() => {
+        service.assertCan(personalWorkspace, "audit-log");
+      }).toThrow(ForbiddenException);
+    });
+
+    it.each(allCapabilities)(
+      "does not throw for team workspace capability %s",
+      (capability) => {
+        expect(() => {
+          service.assertCan(teamWorkspace, capability);
         }).not.toThrow();
       },
     );

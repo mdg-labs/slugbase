@@ -1,4 +1,4 @@
-export type WorkspacePlan = "free" | "personal";
+export type WorkspacePlan = "free" | "personal" | "team";
 export type WorkspaceMemberRole = "OWNER" | "ADMIN" | "MEMBER";
 
 export const ROLE_HIERARCHY: Record<WorkspaceMemberRole, number> = {

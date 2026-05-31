@@ -1,3 +1,4 @@
+import { auditEvents } from "./audit-event.schema.pg.js";
 import { aiSuggestionCache } from "./ai-suggestion-cache.schema.pg.js";
 import { bookmarkFolders } from "./bookmark-folder.schema.pg.js";
 import { bookmarkTeamShares } from "./bookmark-team-share.schema.pg.js";
@@ -24,6 +25,7 @@ import { workspaceInvitations } from "./workspace-invitation.schema.pg.js";
 import { workspaceMembers } from "./workspace-member.schema.pg.js";
 import { workspaces } from "./workspace.schema.pg.js";
 
+export { auditEvents } from "./audit-event.schema.pg.js";
 export { aiSuggestionCache } from "./ai-suggestion-cache.schema.pg.js";
 export { bookmarkFolders } from "./bookmark-folder.schema.pg.js";
 export { bookmarkTeamShares } from "./bookmark-team-share.schema.pg.js";
@@ -51,6 +53,7 @@ export { workspaceMembers } from "./workspace-member.schema.pg.js";
 export { workspaces } from "./workspace.schema.pg.js";
 
 export const pgSchema = {
+  auditEvents,
   aiSuggestionCache,
   instanceMetadata,
   bookmarkFolders,

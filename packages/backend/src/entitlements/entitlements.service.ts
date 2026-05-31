@@ -6,7 +6,8 @@ export type EntitlementCapability =
   | "team-sharing"
   | "unlimited-bookmarks"
   | "custom-slug-rules"
-  | "workspace-members";
+  | "workspace-members"
+  | "audit-log";
 
 /** Free workspace bookmark cap (spec §23.4, def §2). */
 export const FREE_BOOKMARK_CAP = 50;
@@ -18,6 +19,13 @@ const PLAN_CAPABILITIES: Record<WorkspacePlan, Set<EntitlementCapability>> = {
     "unlimited-bookmarks",
     "custom-slug-rules",
     "workspace-members",
+  ]),
+  team: new Set([
+    "team-sharing",
+    "unlimited-bookmarks",
+    "custom-slug-rules",
+    "workspace-members",
+    "audit-log",
   ]),
 };
 
