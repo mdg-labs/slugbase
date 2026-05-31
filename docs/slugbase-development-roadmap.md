@@ -334,7 +334,7 @@ Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit w
 - **AC:** bookmark/folder → team/user share grants; centralized authorization (owner R/W; shared = read; folder share transitively exposes contained bookmarks); applied consistently across list/read/redirect/search/bulk.
 - **Tests:** integration: shared read visible; non-shared denied; folder-share transitivity; `/go` honors sharing.
 - **Files:** `packages/backend/src/sharing/**`, `packages/backend/src/common/authz/**`
-- **Doc Ref:** spec §5.9, §6, §7.1, §16 · **Deps:** P4-01, P3-07 · **Status:** [ ]
+- **Doc Ref:** spec §5.9, §6, §7.1, §16 · **Deps:** P4-01, P3-07 · **Status:** [x]
 
 ### P4-03 — Sharing UI + scope filters — FE · Lane P
 - **AC:** share controls on bookmarks/folders; scope filters (all / mine / shared-with-me / shared-by-me); sharing labels; entitlement-gated visibility.
