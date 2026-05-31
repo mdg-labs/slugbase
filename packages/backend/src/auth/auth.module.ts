@@ -6,6 +6,7 @@ import { ApiTokensModule } from "./api-tokens/api-tokens.module.js";
 import { CsrfModule } from "./csrf/csrf.module.js";
 import { LoginLogoutController } from "./login-logout.controller.js";
 import { MfaModule } from "./mfa/mfa.module.js";
+import { OidcModule } from "./oidc/oidc.module.js";
 import { EmailVerificationModule } from "./verification/email-verification.module.js";
 
 @Module({
@@ -16,6 +17,7 @@ import { EmailVerificationModule } from "./verification/email-verification.modul
     MfaModule,
     ApiTokensModule,
     EmailVerificationModule,
+    OidcModule,
   ],
   controllers: [LoginLogoutController],
 })

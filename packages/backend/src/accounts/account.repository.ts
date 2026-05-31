@@ -10,7 +10,11 @@ import type {
 import type { DbDialect } from "../db/dialect/dialect.js";
 import { userAccounts as sqliteUserAccounts } from "../db/schema/index.js";
 import { userAccounts as pgUserAccounts } from "../db/schema/pg-index.js";
-import type { AccountRecord, CreateAccountData } from "./account.types.js";
+import type {
+  AccountRecord,
+  CreateAccountData,
+  CreateOidcAccountRepoData,
+} from "./account.types.js";
 
 function nowMs(): number {
   return Date.now();
@@ -194,5 +198,60 @@ export class AccountRepository {
       .update(pgUserAccounts)
       .set({ emailVerified, updatedAt })
       .where(eq(pgUserAccounts.id, id));
+  }
+
+  /**
+   * Creates an account for a federated (OIDC) user.
+   * Uses a sentinel password hash so the row satisfies the NOT NULL constraint;
+   * direct password auth will never succeed for this account.
+   */
+  async createOidc(data: CreateOidcAccountRepoData): Promise<AccountRecord> {
+    const id = randomUUID();
+    const now = nowMs();
+    const OIDC_SENTINEL_HASH = "oidc:no-password";
+
+    const values = {
+      id,
+      email: data.email,
+      name: data.name,
+      passwordHash: OIDC_SENTINEL_HASH,
+      language: data.language ?? "en",
+      theme: data.theme ?? "auto",
+      isInstanceAdmin: false,
+      mfaState: "not_enrolled",
+      aiOptOut: false,
+      emailVerified: data.emailVerified,
+    };
+
+    if (this.dialect === "sqlite") {
+      const sqliteDb = this.db as SqliteDrizzleClient;
+      sqliteDb
+        .insert(sqliteUserAccounts)
+        .values({
+          ...values,
+          createdAt: new Date(now),
+          updatedAt: new Date(now),
+        })
+        .run();
+
+      const row = sqliteDb
+        .select()
+        .from(sqliteUserAccounts)
+        .where(eq(sqliteUserAccounts.id, id))
+        .get();
+
+      if (!row) throw new Error("Failed to create OIDC account");
+      return toRecord(row);
+    }
+
+    const pgDb = this.db as PostgresDrizzleClient;
+    const rows = await pgDb
+      .insert(pgUserAccounts)
+      .values({ ...values, createdAt: now, updatedAt: now })
+      .returning();
+
+    const row = rows[0];
+    if (!row) throw new Error("Failed to create OIDC account");
+    return toRecord(row);
   }
 }

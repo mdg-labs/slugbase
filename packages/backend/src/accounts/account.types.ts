@@ -25,3 +25,11 @@ export interface CreateAccountData {
   isInstanceAdmin?: boolean;
   aiOptOut?: boolean;
 }
+
+export interface CreateOidcAccountRepoData {
+  email: string;
+  name: string;
+  emailVerified: boolean;
+  language?: string;
+  theme?: string;
+}

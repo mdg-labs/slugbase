@@ -13,6 +13,14 @@ export interface RegisterAccountDto {
   theme?: string;
 }
 
+export interface CreateOidcAccountDto {
+  email: string;
+  name: string;
+  emailVerified: boolean;
+  language?: string;
+  theme?: string;
+}
+
 @Injectable()
 export class AccountsService {
   private readonly repo: AccountRepository;
@@ -39,6 +47,24 @@ export class AccountsService {
       theme: dto.theme,
     };
     return this.repo.create(data);
+  }
+
+  /**
+   * Creates a user account for an OIDC-federated user.
+   * Uses a placeholder password hash since OIDC users authenticate via IdP only.
+   */
+  async createOidcAccount(dto: CreateOidcAccountDto): Promise<AccountRecord> {
+    const existing = await this.repo.findByEmail(dto.email);
+    if (existing) {
+      throw new ConflictException("An account with this email already exists");
+    }
+    return this.repo.createOidc({
+      email: dto.email,
+      name: dto.name,
+      emailVerified: dto.emailVerified,
+      language: dto.language,
+      theme: dto.theme,
+    });
   }
 
   async findByEmail(email: string): Promise<AccountRecord | null> {
