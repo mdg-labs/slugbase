@@ -110,7 +110,7 @@ Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit w
 - **AC:** API-only + combined (API + bundled web) images; single port; mounted volume for embedded DB; health/version reachable in-container.
 - **Tests:** image builds; container smoke hits `/health` + `/version`.
 - **Files:** `Dockerfile`, `Dockerfile.api`, `.dockerignore`, `fly.toml`, worker config
-- **Doc Ref:** spec §14.2, §22.8; eng §10 · **Deps:** P1-03, P1-08 · **Status:** [ ]
+- **Doc Ref:** spec §14.2, §22.8; eng §10 · **Deps:** P1-03, P1-08 · **Status:** [x]
 
 ---
 
