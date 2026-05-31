@@ -147,7 +147,7 @@ Bump `<package_name>` to `>= <patched_version>`.
 If transitive: add to `pnpm.overrides` in root `package.json` and run `pnpm install`.
 If direct: upgrade in the affected workspace `package.json` directly.
 
-The commit must land on `main` for GitHub to auto-close the alert.
+The commit must land on **`staging`** (development integration branch) for GitHub to auto-close the alert when `staging` is the scanned default branch — promote to `main` only via release.
 See `.cursor/rules/08-dependabot-alerts.mdc` for the correct fix workflow.
 ```
 

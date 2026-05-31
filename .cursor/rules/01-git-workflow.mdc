@@ -1,5 +1,5 @@
 ---
-description: Git branch policy, commit format, main branch rules, never-push default
+description: Git branch policy — staging for development, main protected; commit format; never-push default
 alwaysApply: true
 ---
 
@@ -9,10 +9,12 @@ alwaysApply: true
 
 | Branch | Role |
 |---|---|
-| `main` | Integration / development branch — all feature work lands here |
+| `staging` | **Development integration branch** — all feature work and orchestrator-verified commits land here |
+| `main` | **Protected production branch** on GitHub — release line only; not for day-to-day development |
 
-- Feature work happens directly on `main` unless the user asks for task branches (Lane P).
-- Release branching and production deploy strategy will be defined once the self-hosted deployment story is operationalized (spec §14).
+- Feature work happens on **`staging`** (Lane S serial) or isolated `orchestrator/<TASK-ID>` branches (Lane P), merged into `staging` after verify.
+- **`main` is protected on GitHub.** Agents and orchestrator runs must **never push to `main`** until an explicit release promotion workflow exists.
+- Promoting `staging` → `main` is operator-only (release); not part of routine task orchestration.
 
 ## Commit messages (Conventional Commits)
 
@@ -49,7 +51,10 @@ Session memory (`.cursor/skills/agent-memory/`) is **gitignored** — local work
 ## Push policy
 
 **Never push** unless the user explicitly asks. Local commits only.
-This includes never running `git push --force`, `git push --tags`, or any push command in scripts or hooks.
+
+**Never push to `main` on GitHub** — not even when the user asks for a push during development. For now, the only valid remote target for task work is **`staging`** (or a Lane P task branch).
+
+This includes never running `git push --force`, `git push --tags`, or any push to `main` in scripts or hooks.
 
 ## Examples
 

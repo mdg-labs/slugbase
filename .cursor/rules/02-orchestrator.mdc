@@ -27,14 +27,14 @@ Open `docs/slugbase-development-roadmap.md`, search the Task ID, read the row (D
 - [ ] not started
 - [~] awaiting verification    ← Lane S: execution agent (if plan file in WRITE SCOPE)
                                ← Lane P: orchestrator at batch start
-- [x] verified                 ← Lane S: task verifier on main
+- [x] verified                 ← Lane S: task verifier on staging
                                ← Lane P: staging batch verifier after integration
 - [!] failed — <reason>        ← verifier only
 ```
 
 If you're acting as the orchestrator chat: never edit checkboxes during normal flow except **Lane P batch prep** (`[~]` at batch start). Verifiers update `[x]` / `[!]`.
 
-**Parallel batches (Lane P):** execution in isolated worktrees (`best-of-n-runner`); integration merges to `main`. See orchestrator SKILL.md § Parallelism.
+**Parallel batches (Lane P):** execution in isolated worktrees (`best-of-n-runner`); integration merges to **`staging`**. See orchestrator SKILL.md § Parallelism. **Never push to `main`.**
 
 ## Jira board status (when orchestrating)
 

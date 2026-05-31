@@ -65,13 +65,13 @@ JIRA TIME TRACKING (mandatory when JIRA SYNC block is present):
 
 ---
 
-## Execution agent — Lane S (serial on main, plan-file mode)
+## Execution agent — Lane S (serial on staging, plan-file mode)
 
 ```text
 MODE: plan-file
 LANE: S
 TARGET REPO: /home/michael/projects/slugbase
-WORK BRANCH: main
+WORK BRANCH: staging
 PLAN FILE: /home/michael/projects/slugbase/docs/slugbase-development-roadmap.md
 TASK ID: <e.g. P1-03>
 SESSION ID: <TASK-ID>-<YYYYMMDD>-<4hex>
@@ -102,10 +102,10 @@ DOC REFERENCE (read these — do not receive pasted content):
 - Index: /home/michael/projects/slugbase/.cursor/skills/orchestrator/doc-index.md
 
 GIT:
-- Work on branch `main`. If not on main, stop and report blocked.
+- Work on branch `staging`. If not on staging, stop and report blocked.
 - One commit: implementation task files only (session memory is gitignored — never staged)
 - Stage explicit paths only (`git add <path> …`). Never `git add .` or `-A`. Never stage `.cursor/skills/agent-memory/**`.
-- Never push unless the user explicitly requested push in this orchestration run.
+- Never push to `main`. When pushing is explicitly requested, target `staging` only.
 - Commit messages: `feat(<scope>)[SB-N]: <summary>` or `fix(<scope>)[P*-*]: <summary>` (roadmap-only). Subject ≤72 chars. No Smart Commit `#time` / `#comment` — MCP only. See `07-jira-commit-linking.mdc`.
 
 SECRETS / COMMANDS:
@@ -162,7 +162,7 @@ LANE: P
 TARGET REPO: /home/michael/projects/slugbase
 WORK BRANCH: orchestrator/<TASK-ID>
 WORKTREE: <subagent worktree path, e.g. ../slugbase-wt-<TASK-ID>>
-STAGING_BASE_SHA: <pin — do not rebase onto main>
+STAGING_BASE_SHA: <pin — do not rebase onto staging>
 BATCH_ID: <YYYYMMDD>-<4hex>
 PLAN FILE: /home/michael/projects/slugbase/docs/slugbase-development-roadmap.md (READ ONLY)
 TASK ID: <e.g. P2-05>
@@ -185,7 +185,7 @@ DOC REFERENCE (read these):
 
 GIT:
 - All work in WORKTREE on WORK BRANCH only.
-- Branch from STAGING_BASE_SHA. Never checkout, merge, or commit to `main`.
+- Branch from STAGING_BASE_SHA. Never checkout, merge, or commit to `staging` during Lane P execution.
 - One commit on WORK BRANCH: implementation task files only
 - Stage explicit paths only. Never `git add .` or `-A`.
 - Never push.
@@ -213,7 +213,7 @@ WRITE SCOPE:
 
 DO NOT TOUCH:
 - PLAN FILE
-- `main` branch
+- `staging` branch (Lane P execution must not checkout staging — task branches only)
 - <paths outside task scope>
 
 ACCEPTANCE CRITERIA:
@@ -238,7 +238,7 @@ Same as Lane S except: no plan checkbox update; TASK from orchestrator todo; acc
 
 ---
 
-## Execution agent — Jira mode (Lane S on main)
+## Execution agent — Jira mode (Lane S on staging)
 
 Use when the user names a Jira issue key (`SB-12`), URL, or epic child.
 
@@ -246,7 +246,7 @@ Use when the user names a Jira issue key (`SB-12`), URL, or epic child.
 MODE: Jira
 LANE: S
 TARGET REPO: /home/michael/projects/slugbase
-WORK BRANCH: main
+WORK BRANCH: staging
 ISSUE KEY: <e.g. SB-12>
 SESSION ID: <ISSUE-KEY>-<YYYYMMDD>-<4hex>
 EPIC: <parent key e.g. SB-8 or none>
@@ -284,7 +284,8 @@ DOC REFERENCE (read these):
 - Index: .cursor/skills/orchestrator/doc-index.md
 
 GIT:
-- Branch main; one implementation commit; explicit git add only; never stage `.cursor/skills/agent-memory/**`
+- Branch staging; one implementation commit; explicit git add only; never stage `.cursor/skills/agent-memory/**`
+- Never push to `main`. When pushing is explicitly requested, target `staging` only.
 - Commit: `feat(<scope>)[SB-N]: <summary>` — key required. No Smart Commit. See `07-jira-commit-linking.mdc`.
 - Infisical for env when needed (`infisical run --env=development`)
 
@@ -307,13 +308,13 @@ REQUIRED OUTPUT:
 
 ---
 
-## Verification agent — Lane S (task verifier on main)
+## Verification agent — Lane S (task verifier on staging)
 
 ```text
 MODE: plan-file | chat | Jira
 LANE: S
 TARGET REPO: /home/michael/projects/slugbase
-WORK BRANCH: main
+WORK BRANCH: staging
 PLAN FILE: <path or n/a>
 SESSION ID: <same as execution>
 
@@ -432,7 +433,7 @@ REQUIRED OUTPUT:
 MODE: integration
 LANE: P
 TARGET REPO: /home/michael/projects/slugbase
-WORK BRANCH: main
+WORK BRANCH: staging
 BATCH_ID: <id>
 STAGING_BASE_SHA: <sha at batch start>
 MERGE ORDER: <TASK-ID list, dependency order first>
@@ -441,17 +442,17 @@ BRANCH-PASS TASKS:
 - <TASK-ID>: branch orchestrator/<TASK-ID> @ <tip SHA>
 
 GIT:
-- checkout main
+- checkout staging
 - For each branch-PASS task in MERGE ORDER:
     git merge --no-ff orchestrator/<TASK-ID> -m "chore(repo)[SB-N]: integrate <TASK-ID> (<BATCH_ID>)"
 - On first conflict → STOP; report conflict files; do not partial-merge
-- Do not rewrite implementation commits; do not edit PLAN FILE; never push
+- Do not rewrite implementation commits; do not edit PLAN FILE; never push to `main`
 
-WRITE SCOPE: main (merge commits only)
+WRITE SCOPE: staging (merge commits only)
 
 REQUIRED OUTPUT:
 1. Per-task merge result (merged | skipped-fail | conflict)
-2. Final main HEAD SHA
+2. Final staging HEAD SHA
 3. Conflict details if stopped
 4. Status: done | blocked
 ```
@@ -464,7 +465,7 @@ REQUIRED OUTPUT:
 MODE: plan-file | chat
 LANE: P (batch verify)
 TARGET REPO: /home/michael/projects/slugbase
-WORK BRANCH: main
+WORK BRANCH: staging
 BATCH_ID: <id>
 PLAN FILE: /home/michael/projects/slugbase/docs/slugbase-development-roadmap.md
 

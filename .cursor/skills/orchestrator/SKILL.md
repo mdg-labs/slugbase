@@ -12,7 +12,8 @@ The main agent in this chat is a **dispatcher only**. It reads the **roadmap** a
 | Item | Value |
 |---|---|
 | Repo | `/home/michael/projects/slugbase` |
-| Integration branch | `main` (all verified work lands here) |
+| Integration branch | `staging` (all verified work lands here) |
+| Production branch | `main` — **protected on GitHub**; no development; **never push** from agents |
 | Task branch (Lane P) | `orchestrator/<TASK-ID>` (isolated; merged after verify PASS) |
 | Worktree (Lane P) | Sibling dir `../slugbase-wt-<TASK-ID>` or subagent-managed |
 | Plan file | `docs/slugbase-development-roadmap.md` |
@@ -22,7 +23,7 @@ The main agent in this chat is a **dispatcher only**. It reads the **roadmap** a
 | Session memory | `.cursor/skills/agent-memory/active/<SESSION-ID>.md` — **local only** (gitignored) |
 | Prompt templates | [prompt-templates.md](prompt-templates.md) |
 
-**Single-repo model.** Session memory and implementation commits live in `slugbase`. Lane S commits directly on `main`; Lane P commits on task branches first, then integration merges to `main`.
+**Single-repo model.** Session memory and implementation commits live in `slugbase`. Lane S commits directly on **`staging`**; Lane P commits on task branches first, then integration merges to **`staging`**. **`main` is off-limits** for development and pushes.
 
 ---
 
@@ -51,7 +52,7 @@ The main agent in this chat is a **dispatcher only**. It reads the **roadmap** a
 - Paste spec doc bodies into sub-agent prompts — pass paths and `§` section refs
 - Paste entire full Jira ADF description bodies — extract AC, file paths, doc refs, and deps
 - Dispatch Lane P and Lane S tasks in the same batch
-- Allow execution agents to commit to `main` during an in-flight Lane P batch
+- Allow execution agents to commit to **`staging`** during an in-flight Lane P batch (integration agent only — merge commits)
 
 ---
 
@@ -94,7 +95,7 @@ Default to **plan-file mode** only when the user asks for roadmap work and did n
 5. **Jira:** load issue(s) via MCP `getJiraIssue` or `searchJiraIssuesUsingJql` (`parent = SB-N` for epic children). Resolve transition IDs via `getTransitionsForJiraIssue` once per session.
 6. Confirm with user (briefly if intent is clear): mode, batch, lane (S vs P), commits in scope, Jira sync ON/OFF.
 
-**Commits:** Orchestrated runs default to **local commits per task** for traceability. **Never push** unless the user explicitly asks.
+**Commits:** Orchestrated runs default to **local commits per task** on **`staging`** (Lane S) or task branches (Lane P). **Never push** unless the user explicitly asks — and **never push to `main`**.
 
 **Jira sync (default ON):** Orchestrator resolves `cloudId`, issue key(s), and transition IDs via MCP, then passes **role-specific** JIRA SYNC blocks — execution prompts get **In Progress only** (no `transitionIdDone`); verifier prompts get **Done**. Sub-agents perform the updates — orchestrator does **not** call `transitionJiraIssue` itself unless recovering from a sub-agent failure. Skip only if user says **"don't update Jira"**.
 
@@ -140,7 +141,7 @@ When user asks to implement an **epic** (parent task with subtasks):
 | Type | Use when |
 |---|---|
 | `best-of-n-runner` | **Lane P execution** — isolated git worktree + branch per task |
-| `generalPurpose` | Lane S implementation; branch verify; main batch verify; integration conflict analysis |
+| `generalPurpose` | Lane S implementation; branch verify; staging batch verify; integration conflict analysis |
 | `shell` | Worktree prep/cleanup; integration merges; one-offs |
 | `explore` | Read-only discovery to unblock scope definition |
 | `ci-investigator` | Single failing CI check on a PR |
@@ -163,9 +164,9 @@ Not valid for unrelated cleanup, broad formatting, or dependency churn. **Lane P
 
 ## Parallelism — Lane S / P / B
 
-| Lane | When | Where agents work | Who touches `main` |
+| Lane | When | Where agents work | Who touches `staging` |
 |---|---|---|---|
-| **S — Serial** | Single task; uncertain overlap; migrations; shared contracts; integration conflicts | `main` working tree | Execution + verifier |
+| **S — Serial** | Single task; uncertain overlap; migrations; shared contracts; integration conflicts | `staging` working tree | Execution + verifier |
 | **P — Parallel isolated** | 2–3 tasks; deps satisfied; disjoint WRITE scopes; no shared-file contention | **Worktree + `orchestrator/<TASK-ID>` per task** | Integration agent + batch verifier only |
 | **B — Blocked** | Same file must change in multiple tasks in one batch | — | Serialize, split batch, or run Lane S one at a time |
 
@@ -173,8 +174,8 @@ Not valid for unrelated cleanup, broad formatting, or dependency churn. **Lane P
 
 **Lane P hard rules:**
 
-- Execution agents **never** checkout or commit to `main`.
-- Pin batch base: record `STAGING_BASE_SHA` at batch start; task branches fork from that SHA.
+- Execution agents **never** checkout or commit to **`staging`** during Lane P execution (task branches only).
+- Pin batch base: record `STAGING_BASE_SHA` at batch start (**current `staging` HEAD**); task branches fork from that SHA.
 - Branch verifiers **never** edit the plan file.
 - Batch verifier is the **only** agent that sets `[x]` / `[!]` for Lane P tasks.
 - Never run Lane P and Lane S in the same batch.
@@ -192,7 +193,7 @@ Always: **execute batch → verify (per task) → integrate (Lane P) → batch v
 | Field | Example |
 |---|---|
 | `BATCH_ID` | `20260531-a3f1` |
-| `STAGING_BASE_SHA` | `abc123…` (current `main` HEAD) |
+| `STAGING_BASE_SHA` | `abc123…` (current **`staging`** HEAD) |
 | Per task | `TASK-ID`, `SESSION ID`, branch `orchestrator/<TASK-ID>`, worktree path |
 
 ### Flow
@@ -205,7 +206,7 @@ Always: **execute batch → verify (per task) → integrate (Lane P) → batch v
 5. Orchestrator: spawn one branch verifier per completed task (in that task's worktree)
 6. Branch verifier PASS → report to orchestrator; no plan file write; Jira Done comment is the handoff record
 7. Branch verifier FAIL → append VERIFICATION FAILED in local session memory; do not merge
-8. Integration agent: merge PASS branches onto main (dependency order, one at a time)
+8. Integration agent: merge PASS branches onto **`staging`** (dependency order, one at a time)
 9. Batch verifier: post-merge smoke checks; [x] integrated tasks; [!] branch-failed tasks
 10. Cleanup agent (shell): remove worktrees; delete merged task branches
 ```
@@ -215,21 +216,21 @@ Always: **execute batch → verify (per task) → integrate (Lane P) → batch v
 ```text
 Branch:    orchestrator/<TASK-ID>
 Worktree:  ../slugbase-wt-<TASK-ID>   # sibling of repo root, or subagent-managed path
-Base:      STAGING_BASE_SHA           # do not chase moving main during execution
+Base:      STAGING_BASE_SHA           # do not chase moving staging during execution
 ```
 
 ---
 
 ## Execution agents
 
-### Lane S (serial on `main`)
+### Lane S (serial on `staging`)
 
 1. **Jira (first action when JIRA SYNC present):** `transitionJiraIssue` → **In Progress** for every listed leaf key **and** epic parent key
 2. **Session memory** — create `active/<SESSION-ID>.md`; record `started` timestamp
 3. **Implementation** — task files only
 4. **Pre-handoff** — set `ended` + `duration`; `addWorklogToJiraIssue` on each leaf key; `transitionJiraIssue` → **In Review** → **single implementation commit** (task files only; never commit session memory)
 
-Never push. Stage explicit paths only. Stop if branch ≠ `main`.
+Never push to **`main`**. When pushing is explicitly requested, target **`staging`** only. Stage explicit paths only. Stop if branch ≠ **`staging`**.
 
 Execution may set `[~]` only when plan file is in WRITE SCOPE. Never `[x]`.
 
@@ -240,7 +241,7 @@ Execution may set `[~]` only when plan file is in WRITE SCOPE. Never `[x]`.
 Same flow on **`orchestrator/<TASK-ID>` only** — one implementation commit per task.
 
 - Work only in assigned worktree / branch.
-- Never checkout `main`, never merge, never push.
+- Never checkout **`staging`**, never merge, never push (during Lane P execution).
 - Plan file: **read-only**.
 - If `git status` shows unexpected changes outside WRITE SCOPE → `blocked`.
 
@@ -261,7 +262,7 @@ Do **not** commit `.cursor/skills/agent-memory/**` — gitignored local notes on
 
 Never reuse a verifier thread across batches. Spawn **fresh** verifiers.
 
-### Lane S — task verifier (on `main`)
+### Lane S — task verifier (on `staging`)
 
 One verifier after execution. Input: session ID, commit SHAs, WRITE scopes, committed paths, acceptance criteria, doc refs.
 
@@ -298,9 +299,9 @@ Mark `n/a` for commands not yet defined. Stop if any defined check fails. Use In
 
 ## Integration agent
 
-Spawn after all branch verifiers complete. Only agent that commits to `main` during a Lane P batch (merge commits).
+Spawn after all branch verifiers complete. Only agent that commits to **`staging`** during a Lane P batch (merge commits).
 
-Merge `orchestrator/<TASK-ID>` into `main` with `--no-ff`, one task at a time. On conflict → **stop**; report conflict files.
+Merge `orchestrator/<TASK-ID>` into **`staging`** with `--no-ff`, one task at a time. On conflict → **stop**; report conflict files. Never push to **`main`**.
 
 ---
 
@@ -310,7 +311,7 @@ After batch closes, spawn a **shell** agent:
 
 ```bash
 git worktree remove ../slugbase-wt-<TASK-ID>   # per task
-git branch -d orchestrator/<TASK-ID>           # only after merged to main
+git branch -d orchestrator/<TASK-ID>           # only after merged to staging
 ```
 
 ---
@@ -474,7 +475,9 @@ Orchestrator may read/write. Sub-agents may read; write only if task WRITE SCOPE
 - Reusing SESSION ID across different tasks
 - Reusing verifier thread across batches
 - Marking `[x]` or todo `completed` before verifier PASS
-- **Lane P execution agents committing to `main`**
+- **Lane P execution agents committing to `staging`** (during execution — integration agent merges only)
+- **Pushing to `main`** on GitHub — forbidden for all agents
+- **Lane S work on any branch other than `staging`**
 - **Branch verifiers editing the plan file**
 - **Parallel Lane P without `best-of-n-runner` or equivalent worktree isolation**
 - **Dispatching Lane P and Lane S in the same batch**
