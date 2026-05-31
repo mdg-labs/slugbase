@@ -1,6 +1,6 @@
 {
-  "workspaceId": "",
+  "workspaceId": "2fe453ac-31a6-459f-adaf-a8d57fec3441",
   "projectSlug": "slugbase-cloud",
-  "defaultEnvironment": "development",
+  "defaultEnvironment": "dev",
   "gitBranchToEnvironmentMapping": {}
 }

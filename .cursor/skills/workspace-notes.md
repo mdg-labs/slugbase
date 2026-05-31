@@ -2,6 +2,11 @@
 
 Durable project memory for orchestrator and sub-agents. Transient task notes belong in local session memory (gitignored), not here.
 
+## Git branches — development on staging (2026-05-31)
+
+**`staging`** = development integration branch (Lane S commits, Lane P merges). **`main`** = protected production branch on GitHub — agents never push to `main`. SB-3 scaffold cherry-picked onto `staging` as `778368d` after branch realignment.
+_added: 2026-05-31_
+
 ## Jira SB project — live constants (verified 2026-05-31)
 
 Site: `mdg-labs.atlassian.net` · cloudId: `mdg-labs.atlassian.net` (hostname shorthand)
