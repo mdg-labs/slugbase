@@ -89,6 +89,13 @@ Keys are registered incrementally per task (rule `05-env-vars`). Full categories
 | `RATE_LIMIT_TOKEN_CREATION_TTL_SECONDS` | Window size in seconds for the `user-hour` throttler | `/api` | `development` | `3600` (1 hr) |
 | `OPENAI_API_KEY` | OpenAI API credential for AI bookmark suggestions (spec §11.2) | `/api` | `development` (optional); hosted `staging`/`production` | Empty = AI disabled (no-op); self-hosted BYO key may also be set via encrypted workspace settings |
 | `OPENAI_MODEL` | OpenAI chat model id for suggestions | `/api` | `development` | `gpt-4o-mini` (default) |
+| `STRIPE_SECRET_KEY` | Stripe API secret for hosted billing (spec §11.4) | `/api` | `staging`/`production` (hosted) | Empty = no-op billing / full entitlements (self-host) |
+| `STRIPE_PRICE_PERSONAL` | Stripe price id for Personal recurring checkout | `/api` | hosted | Config-driven; not hard-coded in app logic (§12.1) |
+| `STRIPE_PRICE_TEAM` | Stripe price id for Team recurring checkout | `/api` | hosted | Config-driven |
+| `STRIPE_PRICE_TEAM_EXTRA_SEAT` | Stripe price id for Team extra-seat quantity updates | `/api` | hosted | Optional; config-driven |
+| `STRIPE_PRICE_SUPPORTER` | Stripe price id for one-time supporter / lifetime purchase | `/api` | hosted | Grants Personal entitlement permanently (§12.1) |
+| `TEAM_BASE_SEATS` | Included seats on Team plan | `/api` | hosted | Default `5` (def §5); Fast-Follow tuning |
+| `SUPPORTER_PROMOTION_END` | ISO-8601 end of supporter promotion window | `/api` | hosted | Optional; empty = no deadline enforced in app |
 
 ---
 

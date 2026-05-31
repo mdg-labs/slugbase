@@ -29,6 +29,13 @@ const optionalFlagsSchema = z
     OPENAI_MODEL: z.string().min(1).default("gpt-4o-mini"),
     // Stripe billing (spec §11.4, §15) — optional; no-op billing / full entitlements when absent
     STRIPE_SECRET_KEY: z.string().min(1).optional(),
+    // Config-driven Stripe price ids (spec §12.1, def §6) — not hard-coded in app logic
+    STRIPE_PRICE_PERSONAL: z.string().min(1).optional(),
+    STRIPE_PRICE_TEAM: z.string().min(1).optional(),
+    STRIPE_PRICE_TEAM_EXTRA_SEAT: z.string().min(1).optional(),
+    STRIPE_PRICE_SUPPORTER: z.string().min(1).optional(),
+    TEAM_BASE_SEATS: z.coerce.number().int().positive().default(5),
+    SUPPORTER_PROMOTION_END: z.string().min(1).optional(),
     // Session TTL (spec §5.3, def §3) — sliding window; default 30 days
     SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),
     // MFA TOTP issuer label shown in authenticator apps (spec §5.7)
@@ -98,6 +105,12 @@ function readFlagsInput(env: NodeJS.ProcessEnv) {
     OPENAI_API_KEY: env.OPENAI_API_KEY,
     OPENAI_MODEL: env.OPENAI_MODEL,
     STRIPE_SECRET_KEY: env.STRIPE_SECRET_KEY,
+    STRIPE_PRICE_PERSONAL: env.STRIPE_PRICE_PERSONAL,
+    STRIPE_PRICE_TEAM: env.STRIPE_PRICE_TEAM,
+    STRIPE_PRICE_TEAM_EXTRA_SEAT: env.STRIPE_PRICE_TEAM_EXTRA_SEAT,
+    STRIPE_PRICE_SUPPORTER: env.STRIPE_PRICE_SUPPORTER,
+    TEAM_BASE_SEATS: env.TEAM_BASE_SEATS,
+    SUPPORTER_PROMOTION_END: env.SUPPORTER_PROMOTION_END,
     SESSION_TTL_DAYS: env.SESSION_TTL_DAYS,
     MFA_TOTP_ISSUER: env.MFA_TOTP_ISSUER,
     RATE_LIMIT_LOGIN_MAX: env.RATE_LIMIT_LOGIN_MAX,

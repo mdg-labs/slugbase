@@ -5,6 +5,7 @@ import { ConfigModule } from "../config/config.module.js";
 import { ConfigService } from "../config/config.service.js";
 import { BILLING, STRIPE_CLIENT } from "./billing.tokens.js";
 import { BillingProfileService } from "./billing-profile.service.js";
+import { PlansModule } from "./plans/plans.module.js";
 import { NoopBillingService } from "./noop-billing.service.js";
 import { StripeBillingService, type StripeBillingClient } from "./stripe-billing.service.js";
 
@@ -15,7 +16,7 @@ import { StripeBillingService, type StripeBillingClient } from "./stripe-billing
  */
 @Global()
 @Module({
-  imports: [ConfigModule],
+  imports: [ConfigModule, PlansModule],
   providers: [
     NoopBillingService,
     StripeBillingService,
@@ -43,7 +44,7 @@ import { StripeBillingService, type StripeBillingClient } from "./stripe-billing
       inject: [ConfigService, StripeBillingService, NoopBillingService],
     },
   ],
-  exports: [BILLING, BillingProfileService, NoopBillingService, StripeBillingService],
+  exports: [BILLING, BillingProfileService, NoopBillingService, StripeBillingService, PlansModule],
 })
 export class BillingModule {}
 

@@ -2,8 +2,8 @@ import { ForbiddenException } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
 
 import { BillingProfileService } from "../billing/billing-profile.service.js";
+import type { EntitlementCapability } from "@slugbase/shared-types";
 import { EntitlementsService, FREE_BOOKMARK_CAP } from "./entitlements.service.js";
-import type { EntitlementCapability } from "./entitlements.service.js";
 
 const freeWorkspace = { plan: "free" as const };
 const personalWorkspace = { plan: "personal" as const };
@@ -11,6 +11,8 @@ const teamWorkspace = { plan: "team" as const };
 
 const personalCapabilities: EntitlementCapability[] = [
   "unlimited-bookmarks",
+  "ai-suggestions",
+  "multiple-workspaces",
   "custom-slug-rules",
 ];
 
@@ -92,7 +94,7 @@ describe("EntitlementsService", () => {
         }).toThrow(ForbiddenException);
       });
 
-      it("throws ForbiddenException with message containing plan name", () => {
+      it("throws ForbiddenException with message containing plan display name", () => {
         let caught: unknown;
         try {
           service.assertCan(freeWorkspace, "unlimited-bookmarks");
@@ -100,7 +102,7 @@ describe("EntitlementsService", () => {
           caught = err;
         }
         expect(caught).toBeInstanceOf(ForbiddenException);
-        expect((caught as ForbiddenException).message).toContain("free");
+        expect((caught as ForbiddenException).message).toContain("Free");
       });
 
       it.each(personalCapabilities)(
@@ -182,6 +184,30 @@ describe("EntitlementsService", () => {
         }).toThrow(ForbiddenException);
       });
     });
+
+    describe("canCreateWorkspace()", () => {
+      it("allows a free account with no owned workspaces", () => {
+        expect(service.canCreateWorkspace(0, [])).toBe(true);
+      });
+
+      it("blocks a free account that already owns one workspace", () => {
+        expect(service.canCreateWorkspace(1, ["free"])).toBe(false);
+      });
+
+      it("allows additional workspaces when the account has a paid entitlement", () => {
+        expect(service.canCreateWorkspace(2, ["free", "personal"])).toBe(true);
+      });
+    });
+
+    describe("canOwnMultipleWorkspaces()", () => {
+      it("returns false when all owned workspaces are free", () => {
+        expect(service.canOwnMultipleWorkspaces(["free"])).toBe(false);
+      });
+
+      it("returns true when any owned workspace is personal (including supporter-granted)", () => {
+        expect(service.canOwnMultipleWorkspaces(["free", "personal"])).toBe(true);
+      });
+    });
   });
 
   describe("self-host billing — plan gating disabled", () => {
@@ -196,5 +222,10 @@ describe("EntitlementsService", () => {
         }).not.toThrow();
       },
     );
+
+    it("allows unrestricted workspace creation", () => {
+      expect(service.canCreateWorkspace(10, ["free"])).toBe(true);
+      expect(service.canOwnMultipleWorkspaces(["free"])).toBe(true);
+    });
   });
 });

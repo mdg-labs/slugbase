@@ -1,44 +1,14 @@
 import { ForbiddenException, Inject, Injectable } from "@nestjs/common";
+import type { EntitlementCapability } from "@slugbase/shared-types";
 
 import { BillingProfileService } from "../billing/billing-profile.service.js";
+import { getPlanDefinition } from "../billing/plans/plan-catalog.js";
+import { TEAM_ONLY_CAPABILITIES } from "../billing/plans/entitlement-sets.js";
+import { resolveEntitlementsForPlan } from "../billing/plans/resolve-plan-entitlements.js";
 import type { WorkspacePlan, WorkspaceRecord } from "../workspaces/workspace.types.js";
 
-export type EntitlementCapability =
-  | "team-sharing"
-  | "team-admin"
-  | "unlimited-bookmarks"
-  | "custom-slug-rules"
-  | "workspace-members"
-  | "audit-log";
-
-/** Free workspace bookmark cap (spec §23.4, def §2). */
-export const FREE_BOOKMARK_CAP = 50;
-
-const PERSONAL_CAPABILITIES: EntitlementCapability[] = [
-  "unlimited-bookmarks",
-  "custom-slug-rules",
-];
-
-const TEAM_CAPABILITIES: EntitlementCapability[] = [
-  ...PERSONAL_CAPABILITIES,
-  "team-sharing",
-  "team-admin",
-  "workspace-members",
-  "audit-log",
-];
-
-const PLAN_CAPABILITIES: Record<WorkspacePlan, Set<EntitlementCapability>> = {
-  free: new Set(),
-  personal: new Set(PERSONAL_CAPABILITIES),
-  team: new Set(TEAM_CAPABILITIES),
-};
-
-const TEAM_ONLY_CAPABILITIES = new Set<EntitlementCapability>([
-  "team-sharing",
-  "team-admin",
-  "workspace-members",
-  "audit-log",
-]);
+export type { EntitlementCapability } from "@slugbase/shared-types";
+export { FREE_BOOKMARK_CAP } from "../billing/plans/entitlement-sets.js";
 
 @Injectable()
 export class EntitlementsService {
@@ -55,7 +25,7 @@ export class EntitlementsService {
     if (!this.billingProfile.isPlanGatingEnabled()) {
       return true;
     }
-    return PLAN_CAPABILITIES[workspace.plan].has(capability);
+    return resolveEntitlementsForPlan(workspace.plan).capabilities.has(capability);
   }
 
   /**
@@ -73,7 +43,7 @@ export class EntitlementsService {
       : "Upgrade to Personal or higher.";
 
     throw new ForbiddenException(
-      `Plan "${workspace.plan}" does not include capability "${capability}". ${upgradeHint}`,
+      `Plan "${getPlanDefinition(workspace.plan).displayName}" does not include capability "${capability}". ${upgradeHint}`,
     );
   }
 
@@ -86,7 +56,9 @@ export class EntitlementsService {
     activeBookmarkCount: number,
   ): boolean {
     if (this.can(workspace, "unlimited-bookmarks")) return true;
-    return activeBookmarkCount < FREE_BOOKMARK_CAP;
+    const cap = resolveEntitlementsForPlan(workspace.plan).bookmarkCap;
+    if (cap === null) return true;
+    return activeBookmarkCount < cap;
   }
 
   /**
@@ -100,7 +72,35 @@ export class EntitlementsService {
     if (this.canCreateBookmark(workspace, activeBookmarkCount)) return;
 
     throw new ForbiddenException(
-      `This workspace has reached the Free plan limit of ${String(FREE_BOOKMARK_CAP)} bookmarks. Upgrade to Personal for unlimited bookmarks.`,
+      `This workspace has reached the Free plan limit of ${String(resolveEntitlementsForPlan("free").bookmarkCap)} bookmarks. Upgrade to Personal for unlimited bookmarks.`,
     );
+  }
+
+  /**
+   * Returns true when the account may create/own another workspace (spec §12.2).
+   * Self-host bypasses limits; Free accounts are capped at one owned workspace unless
+   * they hold a paid entitlement on any owned workspace.
+   */
+  canCreateWorkspace(ownedWorkspaceCount: number, ownedPlans: WorkspacePlan[]): boolean {
+    if (!this.billingProfile.isPlanGatingEnabled()) {
+      return true;
+    }
+    if (this.canOwnMultipleWorkspaces(ownedPlans)) {
+      return true;
+    }
+    const cap = resolveEntitlementsForPlan("free").workspacesPerAccount;
+    if (cap === null) return true;
+    return ownedWorkspaceCount < cap;
+  }
+
+  /**
+   * Returns true when the acting account has a paid entitlement allowing multiple workspaces.
+   * Checks whether any owned workspace is on a paid plan.
+   */
+  canOwnMultipleWorkspaces(ownedPlans: WorkspacePlan[]): boolean {
+    if (!this.billingProfile.isPlanGatingEnabled()) {
+      return true;
+    }
+    return ownedPlans.some((plan) => resolveEntitlementsForPlan(plan).capabilities.has("multiple-workspaces"));
   }
 }

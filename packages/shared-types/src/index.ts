@@ -18,6 +18,13 @@ export {
   type AiSuggestions,
 } from "./contracts/ai.contract.js";
 export {
+  EntitlementCapabilitySchema,
+  type EntitlementCapability,
+  type EntitlementSet,
+  type PlanDefinition,
+  type PlanId,
+} from "./contracts/entitlements.contract.js";
+export {
   BillingProviderError,
   BillingSeatFloorError,
   BillingUnavailableError,

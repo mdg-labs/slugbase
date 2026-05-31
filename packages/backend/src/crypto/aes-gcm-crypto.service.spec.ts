@@ -26,6 +26,7 @@ function createCryptoService(overrides: Partial<AppConfig> = {}): AesGcmCryptoSe
     RATE_LIMIT_LOGIN_TTL_SECONDS: 900,
     RATE_LIMIT_TOKEN_CREATION_MAX: 20,
     RATE_LIMIT_TOKEN_CREATION_TTL_SECONDS: 3600,
+    TEAM_BASE_SEATS: 5,
     nodeEnv: "test",
     isProduction: false,
     ...overrides,
