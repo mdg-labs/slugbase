@@ -101,6 +101,23 @@ export type BookmarkIds = z.infer<typeof BookmarkIdsSchema>;
 export type CreateBookmarkBody = z.infer<typeof CreateBookmarkBodySchema>;
 export type UpdateBookmarkBody = z.infer<typeof UpdateBookmarkBodySchema>;
 
+export const BookmarkMetadataSchema = z
+  .object({
+    title: z.string().nullable(),
+    description: z.string().nullable(),
+    siteName: z.string().nullable(),
+    faviconUrl: z.string().nullable(),
+  })
+  .strict();
+
+export const FetchBookmarkMetadataQuerySchema = z
+  .object({
+    url: z.string().min(1).max(2048),
+  })
+  .strict();
+
+export type BookmarkMetadata = z.infer<typeof BookmarkMetadataSchema>;
+
 const errorSchema = z.object({ message: z.string() }).strict();
 
 export const bookmarksContract = c.router({
@@ -197,5 +214,37 @@ export const bookmarksContract = c.router({
       403: errorSchema,
     },
     summary: "Record bookmark access asynchronously (never blocks)",
+  },
+  fetchBookmarkMetadata: {
+    method: "GET",
+    path: "/bookmarks/metadata",
+    query: FetchBookmarkMetadataQuerySchema,
+    responses: {
+      200: BookmarkMetadataSchema,
+      400: errorSchema,
+      403: errorSchema,
+      404: errorSchema,
+      502: errorSchema,
+      504: errorSchema,
+    },
+    summary:
+      "Fetch SSRF-safe page metadata (title, description, site name, favicon URL)",
+  },
+  fetchBookmarkFavicon: {
+    method: "GET",
+    path: "/bookmarks/favicon",
+    query: FetchBookmarkMetadataQuerySchema,
+    responses: {
+      200: c.otherResponse({
+        contentType: "application/octet-stream",
+        body: c.type<Uint8Array>(),
+      }),
+      400: errorSchema,
+      403: errorSchema,
+      404: errorSchema,
+      502: errorSchema,
+      504: errorSchema,
+    },
+    summary: "Proxy destination favicon through SSRF-safe fetch",
   },
 });
