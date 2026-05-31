@@ -11,6 +11,7 @@ export interface RegisterAccountDto {
   password: string;
   language?: string;
   theme?: string;
+  isInstanceAdmin?: boolean;
 }
 
 export interface CreateOidcAccountDto {
@@ -45,6 +46,7 @@ export class AccountsService {
       passwordHash,
       language: dto.language,
       theme: dto.theme,
+      isInstanceAdmin: dto.isInstanceAdmin,
     };
     return this.repo.create(data);
   }
@@ -73,6 +75,10 @@ export class AccountsService {
 
   async findById(id: string): Promise<AccountRecord | null> {
     return this.repo.findById(id);
+  }
+
+  async countAll(): Promise<number> {
+    return this.repo.countAll();
   }
 
   async markEmailVerified(id: string): Promise<void> {

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { eq } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 
 import type {
   DrizzleClient,
@@ -155,6 +155,21 @@ export class AccountRepository {
     const row = rows[0];
     if (!row) return null;
     return toRecord(row);
+  }
+
+  async countAll(): Promise<number> {
+    if (this.dialect === "sqlite") {
+      const sqliteDb = this.db as SqliteDrizzleClient;
+      const row = sqliteDb
+        .select({ value: count() })
+        .from(sqliteUserAccounts)
+        .get();
+      return row?.value ?? 0;
+    }
+
+    const pgDb = this.db as PostgresDrizzleClient;
+    const rows = await pgDb.select({ value: count() }).from(pgUserAccounts);
+    return rows[0]?.value ?? 0;
   }
 
   async updateMfa(
