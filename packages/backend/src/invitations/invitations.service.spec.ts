@@ -138,12 +138,13 @@ describe("duplicate invitation prevention", () => {
 // Entitlement gate for free plan (pure logic — no NestJS)
 // ---------------------------------------------------------------------------
 
-describe("entitlement gate — free plan cannot invite members", () => {
-  type Plan = "free" | "personal";
+describe("entitlement gate — Team plan required to invite members on hosted", () => {
+  type Plan = "free" | "personal" | "team";
 
   const PLAN_CAPABILITIES: Record<Plan, Set<string>> = {
     free: new Set(),
-    personal: new Set(["workspace-members"]),
+    personal: new Set(),
+    team: new Set(["workspace-members"]),
   };
 
   function canInviteMembers(plan: Plan): boolean {
@@ -154,8 +155,12 @@ describe("entitlement gate — free plan cannot invite members", () => {
     expect(canInviteMembers("free")).toBe(false);
   });
 
-  it("personal plan can invite members", () => {
-    expect(canInviteMembers("personal")).toBe(true);
+  it("personal plan cannot invite members", () => {
+    expect(canInviteMembers("personal")).toBe(false);
+  });
+
+  it("team plan can invite members", () => {
+    expect(canInviteMembers("team")).toBe(true);
   });
 });
 

@@ -34,12 +34,16 @@ describe("Invitations (integration)", () => {
   let ownerCsrfCookie: string;
   let freeWorkspaceId: string;
   let personalWorkspaceId: string;
+  let teamWorkspaceId: string;
 
   beforeAll(async () => {
     const testDatabase = await createTestDatabase();
     cleanup = testDatabase.cleanup;
     await runMigrations(testDatabase.databaseUrl);
-    applyTestEnv({ DATABASE_URL: testDatabase.databaseUrl });
+    applyTestEnv({
+      DATABASE_URL: testDatabase.databaseUrl,
+      STRIPE_SECRET_KEY: "sk_test_hosted_plan_gating",
+    });
 
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
@@ -75,9 +79,15 @@ describe("Invitations (integration)", () => {
     );
     personalWorkspaceId = personalWs.id;
 
+    const teamWs = await workspacesService.createWorkspace(
+      { name: "Team Workspace", slug: "team-ws-invites", plan: "team", planSeats: 10 },
+      ownerUserId,
+    );
+    teamWorkspaceId = teamWs.id;
+
     const { cookieValue } = await sessions.createSession({
       userId: ownerUserId,
-      data: { activeWorkspaceId: personalWorkspaceId },
+      data: { activeWorkspaceId: teamWorkspaceId },
     });
     const sessionCookieStr = `${SESSION_COOKIE}=${cookieValue}`;
     ownerSessionCookie = sessionCookieStr;
@@ -112,7 +122,7 @@ describe("Invitations (integration)", () => {
   async function createKnownInvitation(
     email: string,
     role: "ADMIN" | "MEMBER" = "MEMBER",
-    workspaceId: string = personalWorkspaceId,
+    workspaceId: string = teamWorkspaceId,
   ): Promise<{ plaintext: string }> {
     const plaintext = randomBytes(32).toString("hex");
     const tokenHash = hashInvitationToken(plaintext);
@@ -143,14 +153,26 @@ describe("Invitations (integration)", () => {
     });
   });
 
-  // ---------------------------------------------------------------------------
-  // POST /workspaces/:id/invitations — personal plan creates invitation
-  // ---------------------------------------------------------------------------
-
-  describe("POST /workspaces/:id/invitations — personal plan creates invitation", () => {
-    it("returns 201 with invitation metadata", async () => {
+  describe("POST /workspaces/:id/invitations — personal plan → 403", () => {
+    it("returns 403 when workspace is on personal plan", async () => {
       const res = await request(server())
         .post(`/workspaces/${personalWorkspaceId}/invitations`)
+        .set("Cookie", `${ownerSessionCookie}; ${ownerCsrfCookie}`)
+        .set("x-csrf-token", ownerCsrfToken)
+        .send({ email: "blocked-personal@example.com", role: "MEMBER" });
+
+      expect(res.status).toBe(403);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // POST /workspaces/:id/invitations — team plan creates invitation
+  // ---------------------------------------------------------------------------
+
+  describe("POST /workspaces/:id/invitations — team plan creates invitation", () => {
+    it("returns 201 with invitation metadata", async () => {
+      const res = await request(server())
+        .post(`/workspaces/${teamWorkspaceId}/invitations`)
         .set("Cookie", `${ownerSessionCookie}; ${ownerCsrfCookie}`)
         .set("x-csrf-token", ownerCsrfToken)
         .send({ email: "created-invite@example.com", role: "MEMBER" });
@@ -166,7 +188,7 @@ describe("Invitations (integration)", () => {
         expiresAt: string;
         createdAt: string;
       };
-      expect(body.workspaceId).toBe(personalWorkspaceId);
+      expect(body.workspaceId).toBe(teamWorkspaceId);
       expect(body.invitedEmail).toBe("created-invite@example.com");
       expect(body.role).toBe("MEMBER");
       expect(body.invitedByUserId).toBe(ownerUserId);
@@ -176,7 +198,7 @@ describe("Invitations (integration)", () => {
 
     it("returns 409 when a pending invitation already exists for the same email", async () => {
       const res = await request(server())
-        .post(`/workspaces/${personalWorkspaceId}/invitations`)
+        .post(`/workspaces/${teamWorkspaceId}/invitations`)
         .set("Cookie", `${ownerSessionCookie}; ${ownerCsrfCookie}`)
         .set("x-csrf-token", ownerCsrfToken)
         .send({ email: "created-invite@example.com", role: "MEMBER" });
@@ -186,7 +208,7 @@ describe("Invitations (integration)", () => {
 
     it("returns 401 when session is absent but CSRF is valid", async () => {
       const res = await request(server())
-        .post(`/workspaces/${personalWorkspaceId}/invitations`)
+        .post(`/workspaces/${teamWorkspaceId}/invitations`)
         .set("Cookie", ownerCsrfCookie)
         .set("x-csrf-token", ownerCsrfToken)
         .send({ email: "noauth@example.com", role: "MEMBER" });
@@ -218,8 +240,8 @@ describe("Invitations (integration)", () => {
         role: string;
         expiresAt: string;
       };
-      expect(body.workspaceId).toBe(personalWorkspaceId);
-      expect(body.workspaceName).toBe("Personal Workspace");
+      expect(body.workspaceId).toBe(teamWorkspaceId);
+      expect(body.workspaceName).toBe("Team Workspace");
       expect(body.inviterName).toBe("Invite Owner");
       expect(body.invitedEmail).toBe("metadata@example.com");
       expect(body.role).toBe("MEMBER");
@@ -255,7 +277,7 @@ describe("Invitations (integration)", () => {
 
       expect(res.status).toBe(200);
       const body = res.body as { userId: string; workspaceId: string };
-      expect(body.workspaceId).toBe(personalWorkspaceId);
+      expect(body.workspaceId).toBe(teamWorkspaceId);
       expect(typeof body.userId).toBe("string");
 
       const setCookie = res.headers["set-cookie"] as string[] | string | undefined;
@@ -267,7 +289,7 @@ describe("Invitations (integration)", () => {
       expect(cookies.some((c) => c.startsWith(`${SESSION_COOKIE}=`))).toBe(true);
 
       const memberWorkspaces = await workspacesService.listUserWorkspaces(body.userId);
-      expect(memberWorkspaces.some((ws) => ws.id === personalWorkspaceId)).toBe(true);
+      expect(memberWorkspaces.some((ws) => ws.id === teamWorkspaceId)).toBe(true);
     });
 
     it("returns 409 when invitation was already accepted", async () => {
@@ -335,10 +357,10 @@ describe("Invitations (integration)", () => {
       });
 
       expect(result.userId).toBeTruthy();
-      expect(result.workspaceId).toBe(personalWorkspaceId);
+      expect(result.workspaceId).toBe(teamWorkspaceId);
 
       const memberWorkspaces = await workspacesService.listUserWorkspaces(result.userId);
-      expect(memberWorkspaces.some((ws) => ws.id === personalWorkspaceId)).toBe(true);
+      expect(memberWorkspaces.some((ws) => ws.id === teamWorkspaceId)).toBe(true);
     });
   });
 });

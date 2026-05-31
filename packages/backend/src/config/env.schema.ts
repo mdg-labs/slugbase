@@ -27,6 +27,8 @@ const optionalFlagsSchema = z
     // OpenAI AI suggestions (spec §11.2, §15) — optional; no-op AI used when absent
     OPENAI_API_KEY: z.string().min(1).optional(),
     OPENAI_MODEL: z.string().min(1).default("gpt-4o-mini"),
+    // Stripe billing (spec §11.4, §15) — optional; no-op billing / full entitlements when absent
+    STRIPE_SECRET_KEY: z.string().min(1).optional(),
     // Session TTL (spec §5.3, def §3) — sliding window; default 30 days
     SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),
     // MFA TOTP issuer label shown in authenticator apps (spec §5.7)
@@ -95,6 +97,7 @@ function readFlagsInput(env: NodeJS.ProcessEnv) {
     SMTP_FROM: env.SMTP_FROM,
     OPENAI_API_KEY: env.OPENAI_API_KEY,
     OPENAI_MODEL: env.OPENAI_MODEL,
+    STRIPE_SECRET_KEY: env.STRIPE_SECRET_KEY,
     SESSION_TTL_DAYS: env.SESSION_TTL_DAYS,
     MFA_TOTP_ISSUER: env.MFA_TOTP_ISSUER,
     RATE_LIMIT_LOGIN_MAX: env.RATE_LIMIT_LOGIN_MAX,

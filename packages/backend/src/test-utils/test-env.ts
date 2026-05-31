@@ -5,6 +5,7 @@ const testEnvKeys = [
   "DATABASE_URL",
   "APP_BASE_URL",
   "FRONTEND_ORIGIN",
+  "STRIPE_SECRET_KEY",
 ] as const;
 
 export const validTestEnv: NodeJS.ProcessEnv = {

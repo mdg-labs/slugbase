@@ -23,6 +23,7 @@ import { WorkspaceMemberRepository } from "../workspaces/workspace-member.reposi
 import { WorkspaceRepository } from "../workspaces/workspace.repository.js";
 import { InvitationRepository } from "./invitation.repository.js";
 import type { InvitationRole, WorkspaceInvitationRecord } from "./invitation.types.js";
+import { assertMemberInvitationsEntitlement } from "./invitations.entitlements.js";
 
 /** Invitation token TTL: 7 days (spec §4.2, def §5). */
 export const INVITATION_TTL_DAYS = 7;
@@ -108,7 +109,7 @@ export class InvitationsService {
     const workspace = await this.workspaceRepo.findById(workspaceId);
     if (!workspace) throw new NotFoundException("Workspace not found");
 
-    this.entitlements.assertCan(workspace, "workspace-members");
+    assertMemberInvitationsEntitlement(this.entitlements, workspace);
 
     const existing = await this.invitationRepo.findPendingByWorkspaceAndEmail(
       workspaceId,
@@ -177,6 +178,7 @@ export class InvitationsService {
     const workspace = await this.workspaceRepo.findById(workspaceId);
     if (!workspace) throw new NotFoundException("Workspace not found");
 
+    assertMemberInvitationsEntitlement(this.entitlements, workspace);
     await this.requireAdmin(workspaceId, requesterId);
 
     const pending = await this.invitationRepo.findPendingByWorkspace(workspaceId);
@@ -207,7 +209,7 @@ export class InvitationsService {
     const workspace = await this.workspaceRepo.findById(workspaceId);
     if (!workspace) throw new NotFoundException("Workspace not found");
 
-    this.entitlements.assertCan(workspace, "workspace-members");
+    assertMemberInvitationsEntitlement(this.entitlements, workspace);
     await this.requireAdmin(workspaceId, requesterId);
 
     const invitation = await this.invitationRepo.findById(invitationId);
@@ -251,6 +253,10 @@ export class InvitationsService {
     invitationId: string,
     requesterId: string,
   ): Promise<void> {
+    const workspace = await this.workspaceRepo.findById(workspaceId);
+    if (!workspace) throw new NotFoundException("Workspace not found");
+
+    assertMemberInvitationsEntitlement(this.entitlements, workspace);
     await this.requireAdmin(workspaceId, requesterId);
 
     const invitation = await this.invitationRepo.findById(invitationId);
@@ -384,6 +390,11 @@ export class InvitationsService {
     if (invitation.expiresAt <= new Date()) {
       throw new HttpException("This invitation has expired", HttpStatus.GONE);
     }
+
+    const workspace = await this.workspaceRepo.findById(invitation.workspaceId);
+    if (!workspace) throw new NotFoundException("Workspace not found");
+
+    assertMemberInvitationsEntitlement(this.entitlements, workspace);
 
     let account = await this.accounts.findByEmail(invitation.invitedEmail);
 

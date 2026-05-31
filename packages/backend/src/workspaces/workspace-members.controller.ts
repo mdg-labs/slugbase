@@ -14,7 +14,9 @@ import {
 import type { Request } from "express";
 
 import { ActiveWorkspace } from "./active-workspace.decorator.js";
+import { EntitlementsService } from "../entitlements/entitlements.service.js";
 import { TenantGuard, TENANT_USER_ID_KEY } from "./tenant.guard.js";
+import { assertTeamAdminEntitlement } from "./workspace-members.entitlements.js";
 import type {
   TransferOwnershipBody,
   UpdateMemberRoleBody,
@@ -31,6 +33,7 @@ export class WorkspaceMembersController {
     @Inject(WorkspaceMembersService)
     private readonly members: WorkspaceMembersService,
     @Inject(WorkspacesService) private readonly workspaces: WorkspacesService,
+    @Inject(EntitlementsService) private readonly entitlements: EntitlementsService,
   ) {}
 
   @Get()
@@ -39,6 +42,7 @@ export class WorkspaceMembersController {
     @ActiveWorkspace() workspace: WorkspaceRecord,
     @Req() req: Request & Record<string, unknown>,
   ): Promise<WorkspaceMemberView[]> {
+    assertTeamAdminEntitlement(this.entitlements, workspace);
     const userId = req[TENANT_USER_ID_KEY] as string;
     await this.workspaces.requireWorkspaceRole(workspace.id, userId, "ADMIN");
     return this.members.listMemberViews(workspace.id);
@@ -52,6 +56,7 @@ export class WorkspaceMembersController {
     @Param("userId") memberUserId: string,
     @Body() body: UpdateMemberRoleBody,
   ): Promise<WorkspaceMemberView> {
+    assertTeamAdminEntitlement(this.entitlements, workspace);
     const requesterId = req[TENANT_USER_ID_KEY] as string;
     await this.workspaces.requireWorkspaceRole(workspace.id, requesterId, "OWNER");
 
@@ -76,6 +81,7 @@ export class WorkspaceMembersController {
     @Req() req: Request & Record<string, unknown>,
     @Param("userId") memberUserId: string,
   ): Promise<void> {
+    assertTeamAdminEntitlement(this.entitlements, workspace);
     const requesterId = req[TENANT_USER_ID_KEY] as string;
     await this.workspaces.requireWorkspaceRole(workspace.id, requesterId, "ADMIN");
     await this.members.removeMember(workspace.id, memberUserId, requesterId);
@@ -88,6 +94,7 @@ export class WorkspaceMembersController {
     @Req() req: Request & Record<string, unknown>,
     @Body() body: TransferOwnershipBody,
   ): Promise<WorkspaceMemberView[]> {
+    assertTeamAdminEntitlement(this.entitlements, workspace);
     const requesterId = req[TENANT_USER_ID_KEY] as string;
     return this.members.transferOwnership(
       workspace.id,

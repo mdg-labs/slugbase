@@ -55,7 +55,10 @@ describe("Audit log (integration)", () => {
     const testDatabase = await createTestDatabase();
     cleanup = testDatabase.cleanup;
     await runMigrations(testDatabase.databaseUrl);
-    applyTestEnv({ DATABASE_URL: testDatabase.databaseUrl });
+    applyTestEnv({
+      DATABASE_URL: testDatabase.databaseUrl,
+      STRIPE_SECRET_KEY: "sk_test_hosted_plan_gating",
+    });
 
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],

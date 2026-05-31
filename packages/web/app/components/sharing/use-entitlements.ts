@@ -2,7 +2,7 @@ import type { EntitlementCapability, WorkspacePlan } from "./sharing.types.js";
 
 const PLAN_CAPABILITIES: Record<WorkspacePlan, Set<EntitlementCapability>> = {
   free: new Set(),
-  personal: new Set(["team-sharing"]),
+  personal: new Set(),
   team: new Set(["team-sharing"]),
 };
 

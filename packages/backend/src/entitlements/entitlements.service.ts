@@ -1,9 +1,11 @@
-import { ForbiddenException, Injectable } from "@nestjs/common";
+import { ForbiddenException, Inject, Injectable } from "@nestjs/common";
 
+import { BillingProfileService } from "../billing/billing-profile.service.js";
 import type { WorkspacePlan, WorkspaceRecord } from "../workspaces/workspace.types.js";
 
 export type EntitlementCapability =
   | "team-sharing"
+  | "team-admin"
   | "unlimited-bookmarks"
   | "custom-slug-rules"
   | "workspace-members"
@@ -12,30 +14,47 @@ export type EntitlementCapability =
 /** Free workspace bookmark cap (spec §23.4, def §2). */
 export const FREE_BOOKMARK_CAP = 50;
 
+const PERSONAL_CAPABILITIES: EntitlementCapability[] = [
+  "unlimited-bookmarks",
+  "custom-slug-rules",
+];
+
+const TEAM_CAPABILITIES: EntitlementCapability[] = [
+  ...PERSONAL_CAPABILITIES,
+  "team-sharing",
+  "team-admin",
+  "workspace-members",
+  "audit-log",
+];
+
 const PLAN_CAPABILITIES: Record<WorkspacePlan, Set<EntitlementCapability>> = {
   free: new Set(),
-  personal: new Set([
-    "team-sharing",
-    "unlimited-bookmarks",
-    "custom-slug-rules",
-    "workspace-members",
-  ]),
-  team: new Set([
-    "team-sharing",
-    "unlimited-bookmarks",
-    "custom-slug-rules",
-    "workspace-members",
-    "audit-log",
-  ]),
+  personal: new Set(PERSONAL_CAPABILITIES),
+  team: new Set(TEAM_CAPABILITIES),
 };
+
+const TEAM_ONLY_CAPABILITIES = new Set<EntitlementCapability>([
+  "team-sharing",
+  "team-admin",
+  "workspace-members",
+  "audit-log",
+]);
 
 @Injectable()
 export class EntitlementsService {
+  constructor(
+    @Inject(BillingProfileService)
+    private readonly billingProfile: BillingProfileService,
+  ) {}
+
   /**
    * Returns true when the workspace's plan grants the requested capability.
-   * Synchronous — reads from the workspace object already in memory.
+   * Self-host (billing no-op) bypasses plan limits — all capabilities pass.
    */
   can(workspace: Pick<WorkspaceRecord, "plan">, capability: EntitlementCapability): boolean {
+    if (!this.billingProfile.isPlanGatingEnabled()) {
+      return true;
+    }
     return PLAN_CAPABILITIES[workspace.plan].has(capability);
   }
 
@@ -47,11 +66,15 @@ export class EntitlementsService {
     workspace: Pick<WorkspaceRecord, "plan">,
     capability: EntitlementCapability,
   ): void {
-    if (!this.can(workspace, capability)) {
-      throw new ForbiddenException(
-        `Plan "${workspace.plan}" does not include capability "${capability}". Upgrade to Personal or higher.`,
-      );
-    }
+    if (this.can(workspace, capability)) return;
+
+    const upgradeHint = TEAM_ONLY_CAPABILITIES.has(capability)
+      ? "Upgrade to Team."
+      : "Upgrade to Personal or higher.";
+
+    throw new ForbiddenException(
+      `Plan "${workspace.plan}" does not include capability "${capability}". ${upgradeHint}`,
+    );
   }
 
   /**

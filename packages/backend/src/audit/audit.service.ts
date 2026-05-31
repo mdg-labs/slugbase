@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ForbiddenException,
   Inject,
   Injectable,
 } from "@nestjs/common";
@@ -18,6 +17,7 @@ import type {
   PaginatedAuditEvents,
   RecordAuditEventData,
 } from "./audit.types.js";
+import { assertAuditLogEntitlement } from "./audit.entitlements.js";
 import {
   parseAuditEntityType,
   parseAuditSort,
@@ -61,7 +61,7 @@ export class AuditService {
     requesterId: string,
     query: ListAuditEventsQuery,
   ): Promise<PaginatedAuditEvents> {
-    this.entitlements.assertCan(workspace, "audit-log");
+    assertAuditLogEntitlement(this.entitlements, workspace);
     await this.workspaces.requireWorkspaceRole(workspace.id, requesterId, "ADMIN");
 
     let entityType;
@@ -121,12 +121,8 @@ export class AuditService {
     };
   }
 
-  /** Used by tests and future entitlement wiring (SB-61). */
+  /** Used by tests and entitlement wiring (SB-61). */
   assertCanReadAuditLog(workspace: Pick<WorkspaceRecord, "plan">): void {
-    if (!this.entitlements.can(workspace, "audit-log")) {
-      throw new ForbiddenException(
-        `Plan "${workspace.plan}" does not include capability "audit-log". Upgrade to Team or higher.`,
-      );
-    }
+    assertAuditLogEntitlement(this.entitlements, workspace);
   }
 }

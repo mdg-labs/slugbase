@@ -5,9 +5,10 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 
-import { DbService } from "../db/db.service.js";
 import { AuditActions } from "../audit/audit.actions.js";
 import { AuditService } from "../audit/audit.service.js";
+import { DbService } from "../db/db.service.js";
+import { EntitlementsService } from "../entitlements/entitlements.service.js";
 import { WorkspaceDataGuard } from "../workspaces/workspace-data.guard.js";
 import { WorkspaceMembersService } from "../workspaces/workspace-members.service.js";
 import type { WorkspaceRecord } from "../workspaces/workspace.types.js";
@@ -26,6 +27,7 @@ import {
   sanitizeTeamDescription,
   sanitizeTeamName,
 } from "./team.validation.js";
+import { assertTeamAdminEntitlement } from "./teams.entitlements.js";
 
 @Injectable()
 export class TeamsService {
@@ -38,6 +40,7 @@ export class TeamsService {
     @Inject(WorkspaceMembersService)
     private readonly workspaceMembers: WorkspaceMembersService,
     @Inject(AuditService) private readonly audit: AuditService,
+    @Inject(EntitlementsService) private readonly entitlements: EntitlementsService,
   ) {
     this.teamRepo = new TeamRepository(db.getOrm(), db.dialect);
   }
@@ -47,6 +50,7 @@ export class TeamsService {
     requesterId: string,
     dto: CreateTeamData,
   ): Promise<TeamRecord> {
+    assertTeamAdminEntitlement(this.entitlements, workspace);
     await this.requireTeamAdmin(workspace.id, requesterId);
 
     const name = sanitizeTeamName(dto.name.trim());
@@ -115,6 +119,7 @@ export class TeamsService {
     teamId: string,
     patch: UpdateTeamData,
   ): Promise<TeamRecord> {
+    assertTeamAdminEntitlement(this.entitlements, workspace);
     await this.requireTeamAdmin(workspace.id, requesterId);
     const existing = await this.requireTeam(workspace, teamId);
 
@@ -151,6 +156,7 @@ export class TeamsService {
     requesterId: string,
     teamId: string,
   ): Promise<void> {
+    assertTeamAdminEntitlement(this.entitlements, workspace);
     await this.requireTeamAdmin(workspace.id, requesterId);
     const team = await this.requireTeam(workspace, teamId);
     await this.teamRepo.delete(workspace.id, teamId);
@@ -170,6 +176,7 @@ export class TeamsService {
     teamId: string,
     userIds: string[],
   ): Promise<TeamRecord> {
+    assertTeamAdminEntitlement(this.entitlements, workspace);
     await this.requireTeamAdmin(workspace.id, requesterId);
     await this.requireTeam(workspace, teamId);
     await this.assertWorkspaceMembers(workspace.id, userIds);
@@ -186,6 +193,7 @@ export class TeamsService {
     teamId: string,
     userId: string,
   ): Promise<TeamRecord> {
+    assertTeamAdminEntitlement(this.entitlements, workspace);
     await this.requireTeamAdmin(workspace.id, requesterId);
     await this.requireTeam(workspace, teamId);
     await this.assertWorkspaceMembers(workspace.id, [userId]);
@@ -202,6 +210,7 @@ export class TeamsService {
     teamId: string,
     userId: string,
   ): Promise<TeamRecord> {
+    assertTeamAdminEntitlement(this.entitlements, workspace);
     await this.requireTeamAdmin(workspace.id, requesterId);
     await this.requireTeam(workspace, teamId);
     await this.teamRepo.removeTeamMember(workspace.id, teamId, userId);

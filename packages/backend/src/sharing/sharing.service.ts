@@ -9,10 +9,12 @@ import {
 import { AccountsService } from "../accounts/accounts.service.js";
 import { BookmarkRepository } from "../bookmarks/bookmark.repository.js";
 import { DbService } from "../db/db.service.js";
+import { EntitlementsService } from "../entitlements/entitlements.service.js";
 import { FolderRepository } from "../folders/folder.repository.js";
 import { TeamRepository } from "../teams/team.repository.js";
 import { WorkspaceMembersService } from "../workspaces/workspace-members.service.js";
 import type { WorkspaceRecord } from "../workspaces/workspace.types.js";
+import { assertTeamSharingEntitlement } from "./sharing.entitlements.js";
 import { SharingRepository } from "./sharing.repository.js";
 import type {
   GrantShareData,
@@ -32,6 +34,7 @@ export class SharingService {
     @Inject(WorkspaceMembersService)
     private readonly workspaceMembers: WorkspaceMembersService,
     @Inject(AccountsService) private readonly accounts: AccountsService,
+    @Inject(EntitlementsService) private readonly entitlements: EntitlementsService,
   ) {
     const orm = db.getOrm();
     const dialect = db.dialect;
@@ -45,6 +48,7 @@ export class SharingService {
     workspace: WorkspaceRecord,
     requesterUserId: string,
   ): Promise<ShareTargetsRecord> {
+    assertTeamSharingEntitlement(this.entitlements, workspace);
     await this.workspaceMembers.getMember(workspace.id, requesterUserId);
 
     const [members, teamsPage] = await Promise.all([
@@ -94,6 +98,7 @@ export class SharingService {
     bookmarkId: string,
     dto: GrantShareData,
   ): Promise<ShareGrantRecord> {
+    assertTeamSharingEntitlement(this.entitlements, workspace);
     await this.requireBookmarkOwner(workspace.id, ownerUserId, bookmarkId);
     await this.assertShareTarget(workspace.id, ownerUserId, dto);
 
@@ -153,6 +158,7 @@ export class SharingService {
     folderId: string,
     dto: GrantShareData,
   ): Promise<ShareGrantRecord> {
+    assertTeamSharingEntitlement(this.entitlements, workspace);
     await this.requireFolderOwner(workspace.id, ownerUserId, folderId);
     await this.assertShareTarget(workspace.id, ownerUserId, dto);
 
