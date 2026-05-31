@@ -13,9 +13,9 @@ SlugBase ships **English (en) and German (de)** at v1. Every string surfaced in 
 
 | Tool | Purpose |
 |---|---|
-| **Tolgee** | Translation-management platform; source of truth for all message catalogs |
-| `TOLGEE_API_KEY` | Infisical key — never hard-code, never log |
-| `TOLGEE_PROJECT_ID` | Infisical key — identifies the SlugBase project in Tolgee |
+| **Tolgee** | Translation-management platform; source of truth for all message catalogs. **Self-hosted instance `https://tolgee.mdg-labs.dev`; SlugBase project `4` (`/projects/4`)** |
+| `TOLGEE_API_KEY` | Infisical key (Tolgee PAT) — never hard-code, never log |
+| `TOLGEE_PROJECT_ID` | `4` — identifies the SlugBase project in the Tolgee instance |
 
 The **Tolgee React SDK** handles runtime key resolution in the web client (**React Router v7**, decision #39). Server-rendered strings resolve through the same catalog so SSR and client output match. The Astro marketing site consumes the same Tolgee project for its EN/DE copy.
 
@@ -47,9 +47,9 @@ When invoking the AI-suggest feature, pass the user's resolved locale as the `ou
 
 | Key | `.env.example` placeholder | Description |
 |---|---|---|
-| `TOLGEE_API_KEY` | `TOLGEE_API_KEY=` | Tolgee Personal Access Token (server-side SDK calls and CLI) |
-| `TOLGEE_PROJECT_ID` | `TOLGEE_PROJECT_ID=` | Numeric project ID in the Tolgee workspace |
-| `VITE_TOLGEE_API_URL` | `VITE_TOLGEE_API_URL=https://app.tolgee.io` | Client-exposed (Vite/React Router v7 prefix); change to self-hosted Tolgee if applicable |
+| `TOLGEE_API_KEY` | `TOLGEE_API_KEY=` | Tolgee Personal Access Token (server-side SDK calls and CLI) — secret, value only in Infisical |
+| `TOLGEE_PROJECT_ID` | `TOLGEE_PROJECT_ID=4` | SlugBase project in the Tolgee instance (`https://tolgee.mdg-labs.dev/projects/4`) |
+| `VITE_TOLGEE_API_URL` | `VITE_TOLGEE_API_URL=https://tolgee.mdg-labs.dev` | Client-exposed (Vite/React Router v7 prefix); self-hosted Tolgee instance |
 
 Register all three via `infisical secrets set ... --env=development` and add the `.env.example` stubs before writing any Tolgee-consuming code.
 

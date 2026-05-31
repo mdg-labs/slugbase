@@ -75,11 +75,10 @@ _added: 2026-05-31_
 
 | Concern | Tool | Notes |
 |---|---|---|
-| Secrets management | **Infisical** | Same setup as Dispatch One; envs: `development` / `staging` / `production`; OIDC sync for prod |
-| Translations | **Tolgee** | v1: en + de (spec §17); externalized message catalogs; Tolgee React SDK in the `web` (React Router v7) app + shared Tolgee project for Astro marketing |
+| Secrets management | **Infisical** | Self-hosted `https://secrets.mdg-labs.dev/`; project slug `slugbase-cloud`; envs `development` / `staging` / `production` (currently **empty** — seed as keys are registered); local `infisical run --env=development -- <cmd>`; CI OIDC via `Infisical/secrets-action`. **Phase CLI not used.** |
+| Translations | **Tolgee** | v1: en + de (spec §17); self-hosted `https://tolgee.mdg-labs.dev`, project **4** (`TOLGEE_PROJECT_ID=4`, `VITE_TOLGEE_API_URL=https://tolgee.mdg-labs.dev`); Tolgee React SDK in the `web` (React Router v7) app + shared Tolgee project for the Astro marketing site |
 
-Rules touched: `00-project.mdc` (tech-stack section), `05-env-vars.mdc` (Infisical workflow), `10-i18n.mdc` (new — Tolgee rule).
-Once Tolgee project is initialized, add `TOLGEE_PROJECT_ID` to the key inventory in `05-env-vars.mdc`.
+Rules touched: `00-project.mdc` (tech-stack + tooling), `05-env-vars.mdc` (Infisical project + workflow), `10-i18n.mdc` (Tolgee instance/project). `TOLGEE_PROJECT_ID=4` is recorded in the `10-i18n.mdc` key inventory.
 _added: 2026-05-31_
 
 ## Hosted infrastructure topology (2026-05-31)

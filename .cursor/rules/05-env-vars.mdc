@@ -7,6 +7,16 @@ alwaysApply: true
 
 When introducing **any** new env var, complete all four steps below in the **same task commit**. The verifier (Layer 3c) checks all four. Grounded in spec §15 (configuration model).
 
+## Infisical project (this repo)
+
+| Field | Value |
+|---|---|
+| Instance URL | `https://secrets.mdg-labs.dev/` (self-hosted) |
+| Project slug | `slugbase-cloud` |
+| Environments | `development` · `staging` · `production` |
+
+The project is currently **empty** — seed `development` as you register keys (step 1). Point the local CLI at the self-hosted instance once (`infisical login --domain https://secrets.mdg-labs.dev`), then select the project via the committed `.infisical.json` (or `--projectId`). **Phase CLI is not used — Infisical only** (decision #34). CI fetches secrets via OIDC (`Infisical/secrets-action`); only `INFISICAL_DOMAIN` and `INFISICAL_OIDC_IDENTITY_ID` live in GitHub Actions secrets (spec §22.9).
+
 ## This rule fires when you
 
 - Reference a new env var in application code
@@ -19,7 +29,8 @@ When introducing **any** new env var, complete all four steps below in the **sam
 ### 1. Set the value in Infisical `development` via CLI
 
 ```bash
-infisical secrets set <KEY>=<value> --env=development --projectId=<from .infisical.json>
+# instance domain is set once via `infisical login --domain https://secrets.mdg-labs.dev`
+infisical secrets set <KEY>=<value> --env=development --projectId=<slugbase-cloud projectId from .infisical.json>
 ```
 
 For security-critical values (secrets, keys) that you shouldn't invent: **stop and ask the user** rather than generating a placeholder and committing code that references it.
@@ -30,7 +41,7 @@ For security-critical values (secrets, keys) that you shouldn't invent: **stop a
 | Boolean toggle | `PUBLIC_REGISTRATION=false` |
 | Optional / empty | `SENTRY_DSN=` |
 | Generated secret | `SESSION_SECRET=$(openssl rand -hex 32)` (run once, reuse) |
-| Tolgee API key | Ask user — project-specific |
+| Tolgee API key | `TOLGEE_API_KEY=<PAT>` — generate in Tolgee (`https://tolgee.mdg-labs.dev`, project `4`); ask the user for the PAT, never invent |
 
 ### 2. Add the key to `.env.example`
 

@@ -22,8 +22,8 @@ A bookmark manager with built-in URL shortening and keyboard-driven launcher —
 - **Auth:** server-side sessions (DB-backed, no JWT access/refresh); TOTP MFA (otplib); OIDC/SSO; **argon2id** password hashing; double-submit CSRF — spec §5
 - **Billing:** Stripe (hosted); no-op billing (self-hosted) — spec §11.4
 - **AI:** **OpenAI** behind the vendor-neutral AI interface — spec §11.2, decision #49
-- **i18n:** English + German at launch; externalized message catalogs via **Tolgee** — spec §17, decision #33
-- **Secrets:** **Infisical** — envs: `development` / `staging` / `production`; use `infisical run --env=development -- <command>` locally — decision #34
+- **i18n:** English + German at launch; **Tolgee** (self-hosted `https://tolgee.mdg-labs.dev`, project `4`) — spec §17, decision #33
+- **Secrets:** **Infisical** (self-hosted `https://secrets.mdg-labs.dev/`, project `slugbase-cloud`, envs `development` / `staging` / `production`); `infisical run --env=development -- <command>` locally — decision #34
 - **Bot protection:** Cloudflare Turnstile (hosted default); no-op (self-hosted) — spec §11.8
 
 ### Hosted infrastructure (settled — spec §14.7, decisions #31–32)
