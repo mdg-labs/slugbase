@@ -72,7 +72,7 @@ The repository is a **pnpm workspace** (a pnpm monorepo). Internal packages (for
 
 ### 2.3 Marketing site is a separate static site within the repo
 
-The public marketing surface (landing page, pricing, contact, legal/terms/privacy/imprint, and similar non-application pages) is a **separate static site** that lives inside the same repository as its own workspace package. It is **separately built and deployed**, independent of the application runtime. The site's framework and hosting target are roadmap details and are intentionally left open here; what is fixed is that it is a static site, in the same repo, built and deployed separately from the application. The application itself contains no marketing pages; the only product-marketing-adjacent surface allowed inside the application is what is strictly needed for sign-in context (for example, a side panel on the login screen), and even that is data-driven, not a marketing page. The marketing site's **contact form** calls a small public endpoint on the application (see Sections 11.1 and 11.8) and is protected by the challenge (bot-protection) interface.
+The public marketing surface (landing page, pricing, contact, legal/terms/privacy/imprint, and similar non-application pages) is a **separate static site** that lives inside the same repository as its own workspace package. It is **separately built and deployed**, independent of the application runtime. The site is built with **Astro** (a static, zero-JS-by-default site generator) and deployed to **Cloudflare Workers** (decisions #28, #40); what is fixed is that it is a static site, in the same repo, built and deployed separately from the application. The application itself contains no marketing pages; the only product-marketing-adjacent surface allowed inside the application is what is strictly needed for sign-in context (for example, a side panel on the login screen), and even that is data-driven, not a marketing page. The marketing site's **contact form** calls a small public endpoint on the application (see Sections 11.1 and 11.8) and is protected by the challenge (bot-protection) interface.
 
 ### 2.4 Documentation lives in the source repo
 
@@ -180,7 +180,7 @@ These paths are not contradictory: setup creates the very first account; invitat
 
 The product uses **server-side sessions** as its single session strategy, **identical on both deployments**. The old model (a JWT access cookie everywhere plus a cloud-only refresh-token flow) is **dropped entirely**. Server-side sessions give immediate revocation and clean multi-device logout, and the active-workspace selection already lives server-side, so the session is the natural home for it.
 
-- **Primary web session:** Established on login, carried in an HTTP-only cookie, backed by a server-side session store. Sessions have a configurable lifetime and can be revoked individually (enabling "log out everywhere"). The session also carries transient state such as in-progress federated-login handshakes and the active-workspace selection.
+- **Primary web session:** Established on login, carried in an HTTP-only cookie, backed by a **database-backed** server-side session store (no Redis/external cache, so a bare self-host install needs no extra services — decision #46). Sessions have a configurable lifetime and can be revoked individually (enabling "log out everywhere"). The session also carries transient state such as in-progress federated-login handshakes and the active-workspace selection.
 - **Personal API tokens:** Long-lived, user-created tokens (prefixed and stored only as hashes) for programmatic API access. Tokens are limited in number per user, individually named, track last-use, and can be revoked. API tokens bypass the interactive MFA step (they represent an already-trusted credential); this trade-off is documented.
 
 ### 5.4 Passwords and credentials
@@ -349,7 +349,7 @@ Each capability that reaches outside the application is defined here **as a cont
 ### 11.2 AI suggestions (AI interface)
 
 - **Responsibility:** Given a destination URL (and optionally fetched page metadata) and a desired output language, return suggested bookmark fields — a title, a slug candidate, a set of tags, a detected language, and a confidence indicator. The contract also reports whether AI is available for the current context. Results are cacheable by (workspace, user, canonical URL, output language) for a bounded period, and usage can be recorded for analytics.
-- **v1 implementation:** A single AI provider, behind a vendor-neutral contract. **Self-hosted:** admins supply their own credential and model via the admin UI; disabled until configured. **Hosted:** the operator supplies the credential via deployment configuration, and per-workspace availability is gated by entitlements with a per-workspace enable toggle. Users can individually opt out on either deployment.
+- **v1 implementation:** **OpenAI**, behind a vendor-neutral contract (decision #49) — no application code depends on OpenAI specifics; alternative providers are Fast-Follow. **Self-hosted:** admins supply their own credential and model via the admin UI; disabled until configured. **Hosted:** the operator supplies the credential via deployment configuration, and per-workspace availability is gated by entitlements with a per-workspace enable toggle. Users can individually opt out on either deployment.
 - **Swappable:** Yes. The contract assumes no particular vendor, model naming, or request shape; the application asks for "suggestions for this URL" and gets a structured result.
 
 ### 11.3 Authentication / identity federation (auth-provider interface)
@@ -389,7 +389,7 @@ The **entitlements engine** is the linchpin that replaces the old deployment-mod
 ### 11.9 Persistence (database interface)
 
 - **Responsibility:** Provide relational persistence for all application data via a single internal data-access abstraction, supporting more than one engine on an **identical schema and migration story**.
-- **v1 implementation:** **Both engines ship in v1.** An **embedded file-based engine** is the self-hosted default (zero external dependency, single-node) and is a **deliberate self-hosting selling point**. A **networked relational engine** is the hosted default. Both run the same schema and the same forward-only migrations.
+- **v1 implementation:** **Both engines ship in v1.** An **embedded file-based engine** is the self-hosted default (zero external dependency, single-node) and is a **deliberate self-hosting selling point**. A **networked relational engine** is the hosted default. Both run the same schema and the same forward-only migrations. The data-access abstraction is implemented with **Drizzle ORM** plus a **thin in-house dialect layer** that keeps embedded **SQLite** (the self-host default, for users who prefer a single-file DB) and **Neon Postgres** (hosted) on one logical schema; **Drizzle Kit** owns the single forward-only migration history (decision #41).
 - **Swappable:** Yes — application code targets the data-access abstraction, not a specific engine.
 
 ### 11.10 Outbound HTTP egress (fetch interface)
@@ -569,19 +569,41 @@ The product is multilingual. v1 ships **English and German**; the rebuild keeps 
 
 ---
 
-## 19. Repository and Package Layout (Conceptual)
+## 19. Technology Stack and Package Layout (settled)
 
-As a pnpm workspace in a single repository, the conceptual members are:
+The stack below is fixed for v1 (recorded compactly as decisions #37–#50 in §21). It names tool/framework choices only — no code or schemas — consistent with the rest of this document.
 
-- **The application back-end** (API, tenancy, auth, domain logic, entitlements, interface implementations).
-- **The web client** (the signed-in application UI).
-- **A shared package** for cross-cutting types/contracts (including the interface contracts and the API/OpenAPI types) used by both back-end and client.
-- **A shared UI/component package** if it aids reuse.
-- **The marketing site** (a separate static site, independently built and deployed).
-- **The documentation** (customer/operator docs and a clearly separated internal-engineering section).
-- *(Fast-Follow)* **An operator console** package, if and when the operator console is built.
+### 19.1 Stack
 
-The exact package boundaries are an implementation detail for the roadmap; what is fixed is that all of these live in one repo, use pnpm, and that the marketing site and the application are separately buildable.
+| Concern | v1 choice | Notes |
+|---|---|---|
+| Language | **TypeScript** (strict, no `any`) | All packages. |
+| Backend | **NestJS** | Its module/DI system hosts the config-selected interface implementations (§2.6, §11) — interface swapping replaces deployment-mode branching; OpenAPI is generated from the contracts (§18). Runs as a Node container on Fly.io (§14.7). |
+| Web client | **React Router v7** (framework mode) | The same app runs on Cloudflare Workers (hosted edge SSR, §14.7) **and** as a Node server inside the combined self-host image (§14.2) — one codebase, two adapters (§1, §15). |
+| Marketing site | **Astro** (static) | Zero-JS-by-default; deployed to Cloudflare Workers; separately built (§2.3, decision #28). |
+| Persistence | **Drizzle ORM** (+ **Drizzle Kit**) | Behind the data-access abstraction (§11.9); a thin in-house dialect layer keeps embedded **SQLite** (self-host default) and **Neon Postgres** (hosted) on one logical schema and one forward-only migration history (§16, decisions #25/#26/#32). |
+| Validation / contracts | **Zod** + **ts-rest** | Server-side validation and env schemas (Zod, rule `05-env-vars`); a single typed REST contract in `shared-types` generates the OpenAPI description (§18) and is consumed by both backend and web client. |
+| UI | **Tailwind** + **Radix** + **cmdk** | Tailwind bridged to the prototype design tokens (§23.1); components consume token variables only (rule `11-design-system`). `cmdk` realises the `⌘K` palette + `go` mode (§9). |
+| Tests | **Vitest** + **Supertest** + **Playwright** | Unit/integration (Vitest/Supertest) and e2e (Playwright, §22.4); these pin the CI-gate commands (§22.3). |
+| Build | **Turborepo** | Cached lint/typecheck/test/build pipelines over the pnpm workspace (`turbo.json`). |
+| Sessions | **DB-backed** server-side store | No Redis/external cache (§5.3, §14.5). |
+| Security primitives | **argon2id** · **otplib** TOTP · **double-submit CSRF** | §5.4, §5.7, §5.8. |
+| Background work | **In-process** (no separate worker/broker) | §22.10, §6.3. |
+| AI provider (v1) | **OpenAI** | Behind the vendor-neutral AI interface (§11.2); swapping providers is Fast-Follow. |
+
+### 19.2 Packages
+
+As a pnpm workspace in a single repository:
+
+- **`packages/backend`** — the NestJS API: tenancy, auth/sessions, domain logic, entitlements, and all external-interface implementations (§11).
+- **`packages/web`** — the React Router v7 signed-in web application. *(Canonical web-package name; `web-client` is not used.)*
+- **`packages/marketing`** — the Astro static marketing site, independently built and deployed (§2.3).
+- **`packages/shared-types`** — cross-cutting Zod/ts-rest contracts, the external-interface contracts, and the generated API/OpenAPI types, consumed by both backend and web.
+- **`packages/ui`** — the shared component library and the design tokens (§23.1).
+- **`docs/`** — customer/operator documentation plus a clearly separated internal-engineering section.
+- *(Fast-Follow)* an **operator console** package, if and when it is built (§10.2, §20).
+
+All members live in one repo, use pnpm, and the marketing site and the application are separately buildable.
 
 ---
 
@@ -655,6 +677,22 @@ Every item below was previously an open question and is now **settled** and inte
 
 35. **CI/CD pipeline (settled):** GitHub Actions on hosted runners; single workflow file (`.github/workflows/ci-cd.yml`); branches `staging` and `main`. (Section 22.)
 36. **Design system and UI prototype (settled):** A clickable V1 design prototype in `docs/design-prototype/V1/` is the **visual and interaction-design source of truth** (design language, screen anatomy, states, copy tone). The MVP spec remains the **product source of truth** — where the prototype conflicts with the spec, the spec wins. Design tokens (periwinkle accent `#7782f7`, dark-first, IBM Plex Sans/Mono) are defined in `docs/design-prototype/V1/colors_and_type.css`. (Section 23.)
+
+**Technology stack**
+37. **Language (settled):** TypeScript everywhere, strict mode, no `any`. (Section 19.)
+38. **Backend framework (settled):** NestJS — its module/DI system hosts the config-selected external-interface implementations (§2.6, §11), replacing deployment-mode branching, and generates the OpenAPI description (§18); runs as a Node container on Fly.io (§14.7). (Section 19.)
+39. **Web client (settled):** React Router v7 (framework mode) — the same app runs on Cloudflare Workers (hosted edge SSR) and as a Node server inside the combined self-host image (§14.2). (Sections 14.7, 19.)
+40. **Marketing site framework (settled):** Astro (static, zero-JS-by-default), deployed to Cloudflare Workers, separately built (§2.3, decision #28). (Section 19.)
+41. **Persistence (settled):** Drizzle ORM behind the data-access abstraction (§11.9), with a thin in-house dialect layer keeping embedded SQLite (self-host default) and Neon Postgres (hosted) on one logical schema; Drizzle Kit owns the single forward-only migration history (decisions #25/#26/#32). (Sections 11.9, 16, 19.)
+42. **Validation & API contracts (settled):** Zod for all server-side validation and env schemas (rule `05-env-vars`); ts-rest contracts in `shared-types` generate the OpenAPI description (§18) and are consumed by backend and web client. (Section 19.)
+43. **UI system (settled):** Tailwind CSS bridged to the prototype design tokens (`colors_and_type.css`, §23.1) + Radix UI primitives + cmdk for the command palette; components consume token variables only. (Sections 19, 23, rule `11-design-system`.)
+44. **Tests (settled):** Vitest (unit + integration) + Supertest (API) + Playwright (e2e, §22.4); these pin the CI-gate commands (§22.3). (Section 19.)
+45. **Build orchestration (settled):** Turborepo over the pnpm workspace (`turbo.json`). (Sections 2.2, 19.)
+46. **Session store (settled):** database-backed server-side sessions — no Redis/external cache — so a bare self-host install needs no extra services. (Sections 5.3, 14.5.)
+47. **Security primitives (settled):** argon2id (password hashing, §5.4), otplib TOTP + QR (MFA, §5.7), double-submit-token CSRF over the §5.8 exempt allowlist.
+48. **Background work (settled):** in-process within the API — no separate worker process or external broker (§22.10, §6.3).
+49. **AI provider, v1 (settled):** OpenAI behind the vendor-neutral AI interface (§11.2); swapping providers is Fast-Follow.
+50. **Package layout (settled):** pnpm workspace packages `backend`, `web`, `marketing`, `shared-types`, `ui`, plus `docs`; the canonical web-package name is `web` (not `web-client`); marketing and app are separately buildable. (Section 19.)
 
 ---
 

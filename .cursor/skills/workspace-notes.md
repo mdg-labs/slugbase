@@ -50,9 +50,25 @@ Tokens (`colors_and_type.css`): accent periwinkle `#7782f7`, dark-first, IBM Ple
 Prototype is React-via-CDN/Babel/localStorage/mock data — demonstrates design only, not the build target. Re-implement against Tolgee catalog (no copying English strings).
 _added: 2026-05-31_
 
-## Stack decisions pending
+## Stack decisions (settled 2026-05-31 — spec §19, decisions #37–#50)
 
-Tech stack (framework, ORM, migration tool) not yet decided — see spec §19 and §11.9. The DB MIGRATIONS block in prompt-templates.md is currently generic. Once stack is chosen, update: prompt-templates.md MIGRATIONS block, doc-index.md verification commands, 00-project.mdc tech stack section, and add framework-specific rules (e.g. prisma.mdc, backend.mdc, typescript.mdc).
+| Concern | Choice |
+|---|---|
+| Language | TypeScript (strict, no `any`) |
+| Backend | NestJS (DI hosts the config-selected external interfaces) |
+| Web client | React Router v7 (framework mode) — CF Workers (hosted) + Node (self-host image) |
+| Marketing | Astro (static) on CF Workers |
+| Persistence | Drizzle ORM + Drizzle Kit; thin dialect layer over SQLite (self-host) + Neon Postgres (hosted) |
+| Contracts/validation | Zod + ts-rest (in `shared-types`) → OpenAPI |
+| UI | Tailwind (token-bridged) + Radix + cmdk |
+| Tests | Vitest + Supertest (unit/integration) + Playwright (e2e, CI only) |
+| Build | Turborepo over the pnpm workspace |
+| Sessions | DB-backed server-side (no Redis) |
+| Security | argon2id · otplib TOTP · double-submit CSRF |
+| AI provider (v1) | OpenAI behind the AI interface |
+| Packages | `backend` · `web` · `marketing` · `shared-types` · `ui` · `docs` |
+
+DB migrations: **Drizzle Kit** (`drizzle-kit generate` to create, `drizzle-kit migrate` to apply) — one forward-only history; never hand-write SQL or use `drizzle-kit push`. Rules/skills updated to match: `00-project.mdc`, `06-local-ci-before-commit.mdc`, `10-i18n.mdc`, `11-design-system.mdc`, orchestrator `doc-index.md` + `prompt-templates.md` + `SKILL.md`.
 _added: 2026-05-31_
 
 ## Confirmed tooling decisions (2026-05-31)
@@ -60,7 +76,7 @@ _added: 2026-05-31_
 | Concern | Tool | Notes |
 |---|---|---|
 | Secrets management | **Infisical** | Same setup as Dispatch One; envs: `development` / `staging` / `production`; OIDC sync for prod |
-| Translations | **Tolgee** | v1: en + de (spec §17); externalized message catalogs; Tolgee SDK integration (framework TBD) |
+| Translations | **Tolgee** | v1: en + de (spec §17); externalized message catalogs; Tolgee React SDK in the `web` (React Router v7) app + shared Tolgee project for Astro marketing |
 
 Rules touched: `00-project.mdc` (tech-stack section), `05-env-vars.mdc` (Infisical workflow), `10-i18n.mdc` (new — Tolgee rule).
 Once Tolgee project is initialized, add `TOLGEE_PROJECT_ID` to the key inventory in `05-env-vars.mdc`.

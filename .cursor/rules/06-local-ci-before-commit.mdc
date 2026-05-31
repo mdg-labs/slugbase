@@ -36,19 +36,20 @@ Skip the full gate when staged changes are only in:
 
 For these commits, run **targeted validation only** (e.g. YAML parse for workflow edits) and report that the full gate was intentionally skipped.
 
-## Full gate (update once stack is decided)
+## Full gate
 
-When code-impacting files are staged:
+When code-impacting files are staged, run (via Turborepo across the workspace):
 
 ```bash
 pnpm lint && \
 pnpm typecheck && \
 pnpm test:unit && \
 pnpm build && \
-pnpm test:integration
+pnpm test:integration && \
+pnpm audit --audit-level=high
 ```
 
-**Stack note:** Exact commands will be defined when the tech stack is chosen (spec §19 package layout). Mark any undefined command as `n/a` and note which were skipped. Add `pnpm audit --audit-level=high` once dependencies are established.
+**Stack note (settled — spec §19):** `lint`/`typecheck`/`test:unit`/`build`/`test:integration` are root Turborepo tasks fanning out to `backend` (NestJS), `web` (React Router v7), `marketing` (Astro), `shared-types`, and `ui`. Unit/integration use **Vitest** (+ Supertest for the API). **Playwright e2e is not part of the local gate** — it runs only on the `staging → main` PR in CI (spec §22.4). If a package legitimately has no task yet, mark that command `n/a` and note it; do not invent skips for code-impacting changes.
 
 ## Enforcement
 

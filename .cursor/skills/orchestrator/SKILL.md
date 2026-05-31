@@ -277,14 +277,14 @@ pnpm typecheck   # or n/a
 pnpm test:unit   # or n/a
 ```
 
-Mark `n/a` for commands not yet defined. Stop if any defined check fails. Use Phase CLI when env required.
+Mark `n/a` for commands not yet defined. Stop if any defined check fails. Use Infisical (`infisical run --env=development`) when env required.
 
 **Layer 3 — Logic review:**
 
 - 3a. Each acceptance criterion — genuinely implemented?
 - 3b. Doc contract — spec `§` deviations with file:line + fix hint
 - 3c. Security baseline — server-side sessions (not JWT), no logged secrets, SSRF-safe egress, encrypted at-rest secrets, CSRF exempt list not widened; no deployment-mode branches (03-security-baseline.mdc)
-- 3c2. Env vars — any new var fully registered (Phase + .env.example + schema + docs)? (05-env-vars.mdc)
+- 3c2. Env vars — any new var fully registered (Infisical + .env.example + schema + docs)? (05-env-vars.mdc)
 - 3c3. Jira commit link — subject includes `[SB-N]` or `[P*-*]`; no Smart Commit commands (07-jira-commit-linking.mdc)
 - 3d. DB migrations — hand-written migration SQL or hand-created migration directories → **FAIL**
 - 3e. Stubs, TODO/FIXME, placeholder values, `isCloud`/deployment-mode branches → **FAIL**
@@ -420,7 +420,7 @@ _agent: verification_
 
 Path: `.cursor/skills/workspace-notes.md`
 
-Store only durable knowledge: conventions, build/test quirks, Phase CLI notes, recurring verify failures, Lane P merge conflict patterns.
+Store only durable knowledge: conventions, build/test quirks, Infisical/env notes, recurring verify failures, Lane P merge conflict patterns.
 
 ```markdown
 ## <topic>

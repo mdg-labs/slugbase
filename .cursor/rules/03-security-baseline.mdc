@@ -11,7 +11,7 @@ These rules apply to **every** change. The verifier (Layer 3c) checks them on ev
 
 - **Never commit `.env`, `.env.local`, or any file containing real secrets.** Only `.env.example` (key names, no values) is allowed.
 - **Never paste secret values** into code, comments, docs, or chat output.
-- Secrets management uses the **Phase CLI** — use the `phase-cli` skill for the correct workflow.
+- Secrets management uses **Infisical** (decision #34) — see `05-env-vars.mdc` for the workflow (`infisical run --env=development -- <command>` locally; OIDC sync for staging/production).
 - Required security secrets: session-signing secret, at-rest encryption key — app validates at startup and **refuses to run insecurely in production** (spec §15).
 - Adding a new env var? Follow `05-env-vars.mdc`. Partial registration fails Layer 3c.
 

@@ -46,4 +46,4 @@ Keyboard-first (`⌘K` palette + single-key shortcuts), palette `go <slug>` mode
 
 ## Prototype tech is NOT the build target
 
-The prototype is React-via-CDN + Babel-in-browser + `localStorage` + mocked `data.js`. It demonstrates **design and behaviour only**. Build in the real stack (framework TBD — spec §19) with real data, real auth/sessions (spec §5), and entitlement enforcement on the server (spec §12.4).
+The prototype is React-via-CDN + Babel-in-browser + `localStorage` + mocked `data.js`. It demonstrates **design and behaviour only**. Build in the real stack — **React Router v7** + **Tailwind** (token-bridged) + **Radix** + **cmdk** (spec §19) — with real data, real auth/sessions (spec §5), and entitlement enforcement on the server (spec §12.4).

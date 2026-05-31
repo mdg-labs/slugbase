@@ -7,13 +7,21 @@ alwaysApply: true
 
 A bookmark manager with built-in URL shortening and keyboard-driven launcher — save bookmarks, assign short slugs, and jump to any URL from the address bar or command palette (`/go/<slug>`). Deployed as a managed hosted service and a self-hosted install from one codebase.
 
-## Tech stack (framework/ORM TBD — update when chosen)
+## Tech stack (settled — spec §19, decisions #37–#50)
 
-- **Single repo:** pnpm workspace monorepo (spec §2.2)
-- **Packages:** backend API · web client · shared types/contracts · shared UI · marketing site (static, separately built) · docs (spec §19)
-- **Database:** Two engines on identical schema — embedded file-based (self-hosted default) · **Neon Postgres `aws-eu-central-1`** (hosted) — spec §11.9, decision #32
-- **Auth:** Server-side sessions (no JWT access/refresh); TOTP MFA; OIDC/SSO — spec §5
+- **Single repo:** pnpm workspace monorepo with **Turborepo** task pipelines (spec §2.2, §19)
+- **Language:** **TypeScript** (strict, no `any`) everywhere (spec §19, decision #37)
+- **Backend:** **NestJS** — its DI/module system hosts the config-selected external interfaces (no deployment-mode branching) and generates OpenAPI; runs as a Node container on Fly.io — spec §19, §2.6, §11, §14.7
+- **Web client:** **React Router v7** (framework mode) — same app runs on Cloudflare Workers (hosted) and as Node inside the self-host image — spec §19, §14.7
+- **Marketing:** **Astro** (static, zero-JS-by-default) on Cloudflare Workers — spec §2.3, §19
+- **Persistence:** **Drizzle ORM** + **Drizzle Kit** behind the data-access abstraction; a thin dialect layer keeps embedded **SQLite** (self-hosted default) and **Neon Postgres `aws-eu-central-1`** (hosted) on one schema/migration history — spec §11.9, §16, decisions #32/#41
+- **Contracts/validation:** **Zod** + **ts-rest** in `shared-types`; generates the OpenAPI description — spec §18, §19
+- **UI:** **Tailwind** (token-bridged to `colors_and_type.css`) + **Radix** primitives + **cmdk** palette — spec §23, rule `11-design-system`
+- **Tests:** **Vitest** + **Supertest** (unit/integration) + **Playwright** (e2e) — spec §22.4
+- **Packages:** `backend` · `web` · `marketing` · `shared-types` · `ui` · `docs` (spec §19)
+- **Auth:** server-side sessions (DB-backed, no JWT access/refresh); TOTP MFA (otplib); OIDC/SSO; **argon2id** password hashing; double-submit CSRF — spec §5
 - **Billing:** Stripe (hosted); no-op billing (self-hosted) — spec §11.4
+- **AI:** **OpenAI** behind the vendor-neutral AI interface — spec §11.2, decision #49
 - **i18n:** English + German at launch; externalized message catalogs via **Tolgee** — spec §17, decision #33
 - **Secrets:** **Infisical** — envs: `development` / `staging` / `production`; use `infisical run --env=development -- <command>` locally — decision #34
 - **Bot protection:** Cloudflare Turnstile (hosted default); no-op (self-hosted) — spec §11.8

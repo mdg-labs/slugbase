@@ -39,7 +39,7 @@ Reference sections as `§N` or heading, e.g. `spec §5`, `spec §11.4`, `spec §
 | `spec §16` | Data model (conceptual entities and relationships) |
 | `spec §17` | Internationalization (English + German) |
 | `spec §18` | Non-functional requirements (security, privacy, performance, observability, API) |
-| `spec §19` | Repository and package layout |
+| `spec §19` | Technology stack + package layout (settled: NestJS, React Router v7, Astro, Drizzle, Zod/ts-rest, Tailwind/Radix/cmdk, Vitest/Playwright, Turborepo) |
 | `spec §20` | Explicitly out of scope for v1 (Fast-Follow list) |
 | `spec §21` | Resolved decisions log |
 | `spec §22` | CI/CD pipeline (GitHub Actions, single workflow file) |
@@ -61,17 +61,18 @@ Primary keys: `SB-*` on project **SB** (`https://mdg-labs.atlassian.net/browse/S
 
 **Execution agents** set Jira **In Progress** (+ **In Review** before handoff) on leaf and epic parent when subtask; **verification agents** set **Done** after PASS — see [jira-board.md](jira-board.md).
 
-## Default verification commands (update once stack is chosen)
+## Default verification commands (settled — spec §19)
 
-Run from the repo root. Mark as `n/a` when not yet defined for the current phase.
+Run from the repo root (Turborepo fans out to all packages). Mark a command `n/a` only when a package legitimately has no such task yet — never to skip a defined check.
 
 | Check | Command |
 |---|---|
 | lint | `pnpm lint` |
 | typecheck | `pnpm typecheck` |
-| unit | `pnpm test:unit` |
-| integration | `pnpm test:integration` |
+| unit | `pnpm test:unit` (Vitest) |
+| integration | `pnpm test:integration` (Vitest + Supertest) |
 | build | `pnpm build` |
 | security audit | `pnpm audit --audit-level=high` |
+| e2e (CI only) | `pnpm test:e2e` (Playwright) — runs on the `staging → main` PR, **not** in per-task verification (spec §22.4) |
 
-**Stack note:** Exact commands depend on the tech stack decision (spec §19). Verifier marks Layer 2 as `n/a` for commands not yet defined.
+**Stack note (settled):** backend = NestJS · web = React Router v7 · marketing = Astro · persistence = Drizzle ORM + Drizzle Kit. Local env via Infisical (`infisical run --env=development`).

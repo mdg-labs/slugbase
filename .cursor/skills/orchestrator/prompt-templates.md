@@ -23,17 +23,17 @@ Copy this block into **every** execution agent prompt without omission:
 DB MIGRATIONS — MANDATORY (schema-first; no exceptions):
 - The schema definition is the single source of truth. If it is not in the schema, it does not exist.
 - DB change workflow (ONLY this order):
-  1. Edit the schema definition file
-  2. Generate migration via the project's migration CLI tool (see stack docs — TBD pending tech decision, spec §11.9)
-  3. Commit schema file + the tool-generated migration together
+  1. Edit the Drizzle schema definition file
+  2. Generate the migration with **Drizzle Kit** (`drizzle-kit generate`, typically wrapped as a `pnpm db:generate` script) — never hand-write SQL
+  3. Commit the schema file + the Drizzle Kit-generated migration together
 - FORBIDDEN — immediate FAIL / blocked if attempted:
   - Hand-writing migration SQL files
   - Creating migration directories by hand
   - Editing or renaming generated migration files after creation
-  - Using "push" / "sync" commands that bypass the migration history
+  - Using `drizzle-kit push` / any "push"/"sync" command that bypasses the migration history
   - Schema changes without a corresponding generated migration in the same commit
-- If the migration tool cannot run (DB down, env missing) → report blocked; do NOT hand-write SQL as a workaround
-- Stack note: migration tooling will be defined once the tech stack is chosen (spec §11.9). Orchestrator will update this block with the concrete commands.
+- If Drizzle Kit cannot run (DB down, env missing) → report blocked; do NOT hand-write SQL as a workaround
+- Stack note (settled, spec §11.9): migrations are owned by **Drizzle Kit** over the Drizzle schema (`drizzle-kit generate` to create, `drizzle-kit migrate` to apply). One forward-only history shared by embedded SQLite (self-host) and Neon Postgres (hosted).
 ```
 
 ---
@@ -109,18 +109,18 @@ GIT:
 - Commit messages: `feat(<scope>)[SB-N]: <summary>` or `fix(<scope>)[P*-*]: <summary>` (roadmap-only). Subject ≤72 chars. No Smart Commit `#time` / `#comment` — MCP only. See `07-jira-commit-linking.mdc`.
 
 SECRETS / COMMANDS:
-- Local tests/dev that need env: use Phase CLI (phase-cli skill)
+- Local tests/dev that need env: use Infisical (`infisical run --env=development -- <cmd>`); see `05-env-vars.mdc`
 - Do not commit `.env` or secret exports
 
 DB MIGRATIONS — MANDATORY (schema-first; no exceptions):
 - The schema definition is the single source of truth. If it is not in the schema, it does not exist.
 - DB change workflow (ONLY this order):
-  1. Edit the schema definition file
-  2. Generate migration via the project's migration CLI tool
-  3. Commit schema file + the tool-generated migration together
-- FORBIDDEN: hand-writing migration SQL, creating migration directories by hand, editing generated files, schema changes without a migration in the same commit
-- If migration tool cannot run → report blocked; do NOT hand-write SQL
-- Stack note: tooling TBD (spec §11.9)
+  1. Edit the Drizzle schema definition file
+  2. Generate the migration with Drizzle Kit (`drizzle-kit generate`)
+  3. Commit schema file + the Drizzle Kit-generated migration together
+- FORBIDDEN: hand-writing migration SQL, creating migration directories by hand, editing generated files, `drizzle-kit push`, schema changes without a migration in the same commit
+- If Drizzle Kit cannot run → report blocked; do NOT hand-write SQL
+- Stack note (settled): Drizzle Kit owns migrations (`drizzle-kit generate` / `migrate`); one forward-only history (spec §11.9)
 
 READ SCOPE:
 - PLAN FILE
@@ -195,7 +195,7 @@ GIT:
 PLAN FILE: READ ONLY. Do not set `[~]`, `[x]`, or `[!]`.
 
 SECRETS / COMMANDS:
-- Local tests/dev: use Phase CLI (phase-cli skill)
+- Local tests/dev: use Infisical (`infisical run --env=development -- <cmd>`); see `05-env-vars.mdc`
 - Do not commit `.env` or secret exports
 
 DB MIGRATIONS — MANDATORY (schema-first; no exceptions):
@@ -286,7 +286,7 @@ DOC REFERENCE (read these):
 GIT:
 - Branch main; one implementation commit; explicit git add only; never stage `.cursor/skills/agent-memory/**`
 - Commit: `feat(<scope>)[SB-N]: <summary>` — key required. No Smart Commit. See `07-jira-commit-linking.mdc`.
-- Phase CLI for env when needed
+- Infisical for env when needed (`infisical run --env=development`)
 
 DB MIGRATIONS — MANDATORY (schema-first; no exceptions):
 <copy verbatim DB MIGRATIONS block>
@@ -360,13 +360,13 @@ LAYER 2 — Automated checks from TARGET REPO:
 - lint: pnpm lint (or n/a)
 - typecheck: pnpm typecheck (or n/a)
 - test: <from plan row Tests column, else doc-index defaults>
-Use Phase CLI when env required. Stop if any defined check fails.
+Use Infisical (`infisical run --env=development`) when env required. Stop if any defined check fails.
 
 LAYER 3 — Logic review:
 3a. Each acceptance criterion — genuinely implemented?
 3b. Doc contract — spec section deviations with file:line + fix hint
 3c. Security baseline — sessions (not JWT), no logged secrets, SSRF-safe egress, encrypted at-rest secrets, CSRF (03-security-baseline.mdc)
-3c2. Env vars — any new env var fully registered in Phase + .env.example + schema + docs? (05-env-vars.mdc)
+3c2. Env vars — any new env var fully registered in Infisical + .env.example + schema + docs? (05-env-vars.mdc)
 3c3. Jira commit link — subject includes `[SB-N]` or `[P*-*]`; no Smart Commit commands (07-jira-commit-linking.mdc)
 3d. DB migrations — hand-written migration SQL or hand-created directories → FAIL
 3e. Stubs, TODO/FIXME, placeholder values, deployment-mode branches (`isCloud`) → FAIL
@@ -473,7 +473,7 @@ TASK OUTCOMES:
 
 CHECKS:
 1. Confirm branch verifiers reported Jira Done comments + worklogs for integrated tasks
-2. Post-merge smoke: pnpm lint, pnpm typecheck (Phase CLI for env when needed)
+2. Post-merge smoke: pnpm lint, pnpm typecheck (Infisical for env when needed)
 3. If smoke fails → FAIL batch; do not mark [x]
 
 PLAN FILE:

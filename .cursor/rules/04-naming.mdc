@@ -17,7 +17,7 @@ alwaysApply: true
 | Static JSON / data | `kebab-case.json` | `plans.json`, `default-config.json` |
 | Markdown docs | `kebab-case.md` | `slugbase-mvp-spec.md`, `slugbase-development-roadmap.md` |
 | Env variable names | `SCREAMING_SNAKE_CASE` | `SESSION_SECRET`, `ENCRYPTION_KEY`, `STRIPE_SECRET_KEY` |
-| Public client env | prefix `NEXT_PUBLIC_` (or framework equivalent) | `NEXT_PUBLIC_API_URL` |
+| Public client env | framework prefix — `VITE_` (the `web` app, React Router v7/Vite) / `PUBLIC_` (Astro `marketing`) | `VITE_API_URL`, `PUBLIC_CONTACT_ENDPOINT` |
 
 ## Code identifiers
 
