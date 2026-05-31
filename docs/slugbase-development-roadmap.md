@@ -394,7 +394,7 @@ Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit w
 - **AC:** plan table, supporter offer, cancel/downgrade, seat management, invoices; config-driven prices; "Personal" not "Pro"; no folder cap / no custom-domain entitlement (§23.4).
 - **Tests:** component: plan table from config; upgrade/cancel flows (mocked).
 - **Files:** `packages/web/app/routes/settings/billing/**`
-- **Doc Ref:** spec §12; proto (`SettingsBilling.jsx`); §23.4; rule `10`,`11` · **Deps:** P5-03 · **Status:** [ ]
+- **Doc Ref:** spec §12; proto (`SettingsBilling.jsx`); §23.4; rule `10`,`11` · **Deps:** P5-03 · **Status:** [x]
 
 ### P5-06 — Aggregate-stats endpoint (secret-protected) — BE · Lane P
 - **AC:** shared-secret-protected aggregate operational stats endpoint (hosted operator observability); no PII; secret via Infisical.
