@@ -106,6 +106,13 @@ Keys are registered incrementally per task (rule `05-env-vars`). Full categories
 | `VITE_SUPPORTER_PROMOTION_END` | ISO-8601 supporter offer deadline (display + countdown) | `/web` | hosted | Optional |
 | `VITE_TEAM_BASE_SEATS` | Included Team seats shown in plan table | `/web` | hosted | Default `5` |
 | `VITE_FREE_BOOKMARK_CAP` | Free cap shown in billing meter/table | `/web` | hosted | Default `50` |
+| `SENTRY_DSN` | Sentry ingest DSN for API error reporting (spec §11.7) | `/api` | `development` (optional); hosted `staging`/`production` | Empty = no-op (self-host default) |
+| `SENTRY_ENVIRONMENT` | Sentry environment tag override | `/api` | optional | Defaults to `NODE_ENV` |
+| `SENTRY_RELEASE` | Sentry release identifier (deploy version) | `/api` | optional | Empty = omitted from SDK init |
+| `SENTRY_AUTH_TOKEN` | Sentry auth token for source map upload at build time | `/api` | CI / release build only | Empty = skip upload; do not commit |
+| `SENTRY_ORG` | Sentry organization slug for source map upload | `/api` | CI / release build only | Required with `SENTRY_AUTH_TOKEN` |
+| `SENTRY_PROJECT` | Sentry project slug for source map upload | `/api` | CI / release build only | Required with `SENTRY_AUTH_TOKEN` |
+| `VITE_SENTRY_DSN` | Public Sentry DSN for web client error reporting | `/web` | hosted optional | Empty = client SDK not initialized |
 
 ---
 

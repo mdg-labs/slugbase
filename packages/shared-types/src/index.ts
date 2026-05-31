@@ -10,6 +10,10 @@ export {
   type MailService,
 } from "./contracts/mail.contract.js";
 export {
+  type ErrorCaptureContext,
+  type ErrorReportingService,
+} from "./contracts/error-reporting.contract.js";
+export {
   AiSuggestError,
   AiUnavailableError,
   type AiPageMetadata,

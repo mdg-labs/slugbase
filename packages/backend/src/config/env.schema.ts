@@ -48,6 +48,10 @@ const optionalFlagsSchema = z
     RATE_LIMIT_LOGIN_TTL_SECONDS: z.coerce.number().int().positive().default(900),
     RATE_LIMIT_TOKEN_CREATION_MAX: z.coerce.number().int().positive().default(20),
     RATE_LIMIT_TOKEN_CREATION_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
+    // Error reporting (spec §11.7, §15) — optional; no-op used when SENTRY_DSN is absent
+    SENTRY_DSN: z.string().min(1).optional(),
+    SENTRY_ENVIRONMENT: z.string().min(1).optional(),
+    SENTRY_RELEASE: z.string().min(1).optional(),
   })
   .strict()
   .superRefine((flags, ctx) => {
@@ -122,6 +126,9 @@ function readFlagsInput(env: NodeJS.ProcessEnv) {
     RATE_LIMIT_LOGIN_TTL_SECONDS: env.RATE_LIMIT_LOGIN_TTL_SECONDS,
     RATE_LIMIT_TOKEN_CREATION_MAX: env.RATE_LIMIT_TOKEN_CREATION_MAX,
     RATE_LIMIT_TOKEN_CREATION_TTL_SECONDS: env.RATE_LIMIT_TOKEN_CREATION_TTL_SECONDS,
+    SENTRY_DSN: env.SENTRY_DSN,
+    SENTRY_ENVIRONMENT: env.SENTRY_ENVIRONMENT,
+    SENTRY_RELEASE: env.SENTRY_RELEASE,
   };
 }
 
