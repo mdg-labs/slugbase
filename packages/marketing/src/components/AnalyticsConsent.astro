@@ -1,0 +1,87 @@
+---
+const umamiHost = import.meta.env.PUBLIC_UMAMI_HOST?.replace(/\/$/, "") ?? "";
+const umamiWebsiteId = import.meta.env.PUBLIC_UMAMI_WEBSITE_ID ?? "";
+const analyticsEnabled = umamiHost.length > 0 && umamiWebsiteId.length > 0;
+---
+
+{analyticsEnabled && (
+  <>
+    <div
+      id="marketing-consent-banner"
+      class="marketing-consent-banner"
+      role="dialog"
+      aria-live="polite"
+      hidden
+    >
+      <p class="marketing-consent-banner__message" data-consent-message-en>
+        We use privacy-friendly analytics to understand product usage. You can accept or decline optional tracking.
+      </p>
+      <p class="marketing-consent-banner__message" data-consent-message-de hidden>
+        Wir nutzen datenschutzfreundliche Analytics, um die Produktnutzung zu verstehen. Du kannst optionales Tracking akzeptieren oder ablehnen.
+      </p>
+      <div class="marketing-consent-banner__actions">
+        <button type="button" class="marketing-consent-banner__decline" data-consent-decline>
+          <span data-consent-decline-en>Decline</span>
+          <span data-consent-decline-de hidden>Ablehnen</span>
+        </button>
+        <button type="button" class="marketing-consent-banner__accept" data-consent-accept>
+          <span data-consent-accept-en>Accept analytics</span>
+          <span data-consent-accept-de hidden>Analytics akzeptieren</span>
+        </button>
+      </div>
+    </div>
+    <script
+      define:vars={{ umamiHost, umamiWebsiteId }}
+      is:inline
+    >
+      (function () {
+        const storageKey = "slugbase_analytics_consent";
+        const locale = document.documentElement.lang === "de" ? "de" : "en";
+        const banner = document.getElementById("marketing-consent-banner");
+        if (!banner) return;
+
+        function setLocaleVisibility() {
+          banner.querySelectorAll("[data-consent-message-en], [data-consent-accept-en], [data-consent-decline-en]").forEach((el) => {
+            el.hidden = locale !== "en";
+          });
+          banner.querySelectorAll("[data-consent-message-de], [data-consent-accept-de], [data-consent-decline-de]").forEach((el) => {
+            el.hidden = locale !== "de";
+          });
+        }
+
+        function loadTracker() {
+          if (document.querySelector('script[data-website-id="' + umamiWebsiteId + '"]')) {
+            return;
+          }
+          const script = document.createElement("script");
+          script.defer = true;
+          script.src = umamiHost + "/script.js";
+          script.dataset.websiteId = umamiWebsiteId;
+          document.head.appendChild(script);
+        }
+
+        function applyConsent(granted) {
+          localStorage.setItem(storageKey, granted ? "granted" : "denied");
+          banner.hidden = true;
+          if (granted) {
+            loadTracker();
+          }
+        }
+
+        setLocaleVisibility();
+        const stored = localStorage.getItem(storageKey);
+        if (stored === "granted") {
+          loadTracker();
+          return;
+        }
+        if (stored === "denied") {
+          return;
+        }
+
+        banner.hidden = false;
+        banner.querySelector("[data-consent-accept]")?.addEventListener("click", () => applyConsent(true));
+        banner.querySelector("[data-consent-decline]")?.addEventListener("click", () => applyConsent(false));
+      })();
+    </script>
+  </>
+)}

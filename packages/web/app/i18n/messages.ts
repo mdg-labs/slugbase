@@ -536,6 +536,11 @@ export const staticMessages = {
     "folders.list.empty_body":
       "Try clearing filters or widening the sharing scope.",
     "folders.list.bookmark_count": "{count} bookmarks",
+    "consent.banner.aria_label": "Analytics consent",
+    "consent.banner.message":
+      "We use privacy-friendly analytics to understand product usage. You can accept or decline optional tracking.",
+    "consent.banner.accept": "Accept analytics",
+    "consent.banner.decline": "Decline",
   },
   de: {
     "app.shell.brand": "SlugBase",
@@ -1093,6 +1098,11 @@ export const staticMessages = {
     "folders.list.empty_body":
       "Versuche, Filter zu löschen oder den Freigabe-Umfang zu erweitern.",
     "folders.list.bookmark_count": "{count} Lesezeichen",
+    "consent.banner.aria_label": "Analytics-Einwilligung",
+    "consent.banner.message":
+      "Wir nutzen datenschutzfreundliche Analytics, um die Produktnutzung zu verstehen. Du kannst optionales Tracking akzeptieren oder ablehnen.",
+    "consent.banner.accept": "Analytics akzeptieren",
+    "consent.banner.decline": "Ablehnen",
   },
 } as const;
 

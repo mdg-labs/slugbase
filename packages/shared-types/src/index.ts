@@ -14,6 +14,10 @@ export {
   type ErrorReportingService,
 } from "./contracts/error-reporting.contract.js";
 export {
+  type AnalyticsEventContext,
+  type AnalyticsService,
+} from "./contracts/analytics.contract.js";
+export {
   AiSuggestError,
   AiUnavailableError,
   type AiPageMetadata,
