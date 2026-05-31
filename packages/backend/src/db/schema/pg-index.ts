@@ -1,3 +1,4 @@
+import { aiSuggestionCache } from "./ai-suggestion-cache.schema.pg.js";
 import { bookmarkFolders } from "./bookmark-folder.schema.pg.js";
 import { bookmarkTags } from "./bookmark-tag.schema.pg.js";
 import { bookmarks } from "./bookmark.schema.pg.js";
@@ -17,6 +18,7 @@ import { workspaceInvitations } from "./workspace-invitation.schema.pg.js";
 import { workspaceMembers } from "./workspace-member.schema.pg.js";
 import { workspaces } from "./workspace.schema.pg.js";
 
+export { aiSuggestionCache } from "./ai-suggestion-cache.schema.pg.js";
 export { bookmarkFolders } from "./bookmark-folder.schema.pg.js";
 export { bookmarkTags } from "./bookmark-tag.schema.pg.js";
 export { bookmarks } from "./bookmark.schema.pg.js";
@@ -37,6 +39,7 @@ export { workspaceMembers } from "./workspace-member.schema.pg.js";
 export { workspaces } from "./workspace.schema.pg.js";
 
 export const pgSchema = {
+  aiSuggestionCache,
   instanceMetadata,
   bookmarkFolders,
   bookmarkTags,

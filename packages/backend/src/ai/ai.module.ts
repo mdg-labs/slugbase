@@ -3,6 +3,7 @@ import { Global, Module } from "@nestjs/common";
 import { ConfigModule } from "../config/config.module.js";
 import { ConfigService } from "../config/config.service.js";
 import { CryptoModule } from "../crypto/crypto.module.js";
+import { AiSuggestionCacheModule } from "./cache/ai-suggestion-cache.module.js";
 import { AI, OPENAI_HTTP } from "./ai.tokens.js";
 import { NoopAiService } from "./noop-ai.service.js";
 import { OpenAiAiService } from "./openai-ai.service.js";
@@ -15,7 +16,7 @@ import { OpenAiAiService } from "./openai-ai.service.js";
  */
 @Global()
 @Module({
-  imports: [ConfigModule, CryptoModule],
+  imports: [ConfigModule, CryptoModule, AiSuggestionCacheModule],
   providers: [
     NoopAiService,
     OpenAiAiService,
@@ -35,6 +36,6 @@ import { OpenAiAiService } from "./openai-ai.service.js";
       inject: [ConfigService, OpenAiAiService, NoopAiService],
     },
   ],
-  exports: [AI, OpenAiAiService, NoopAiService],
+  exports: [AI, OpenAiAiService, NoopAiService, AiSuggestionCacheModule],
 })
 export class AiModule {}
