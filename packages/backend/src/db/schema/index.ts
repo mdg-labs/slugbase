@@ -1,6 +1,8 @@
 import { instanceMetadata } from "../system.schema.js";
 import { bookmarkFolders } from "./bookmark-folder.schema.js";
+import { bookmarkTags } from "./bookmark-tag.schema.js";
 import { bookmarks } from "./bookmark.schema.js";
+import { tags } from "./tag.schema.js";
 import { folders } from "./folder.schema.js";
 import { apiTokens } from "./api-token.schema.js";
 import { emailVerificationTokens } from "./email-verification-token.schema.js";
@@ -17,7 +19,9 @@ import { workspaces } from "./workspace.schema.js";
 
 export { instanceMetadata } from "../system.schema.js";
 export { bookmarkFolders } from "./bookmark-folder.schema.js";
+export { bookmarkTags } from "./bookmark-tag.schema.js";
 export { bookmarks } from "./bookmark.schema.js";
+export { tags } from "./tag.schema.js";
 export { folders } from "./folder.schema.js";
 export { apiTokens } from "./api-token.schema.js";
 export { emailVerificationTokens } from "./email-verification-token.schema.js";
@@ -35,8 +39,10 @@ export { workspaces } from "./workspace.schema.js";
 export const schema = {
   instanceMetadata,
   bookmarkFolders,
+  bookmarkTags,
   bookmarks,
   folders,
+  tags,
   apiTokens,
   emailVerificationTokens,
   mfaBackupCodes,

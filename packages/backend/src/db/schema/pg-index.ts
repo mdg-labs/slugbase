@@ -1,5 +1,7 @@
 import { bookmarkFolders } from "./bookmark-folder.schema.pg.js";
+import { bookmarkTags } from "./bookmark-tag.schema.pg.js";
 import { bookmarks } from "./bookmark.schema.pg.js";
+import { tags } from "./tag.schema.pg.js";
 import { folders } from "./folder.schema.pg.js";
 import { apiTokens } from "./api-token.schema.pg.js";
 import { emailVerificationTokens } from "./email-verification-token.schema.pg.js";
@@ -16,7 +18,9 @@ import { workspaceMembers } from "./workspace-member.schema.pg.js";
 import { workspaces } from "./workspace.schema.pg.js";
 
 export { bookmarkFolders } from "./bookmark-folder.schema.pg.js";
+export { bookmarkTags } from "./bookmark-tag.schema.pg.js";
 export { bookmarks } from "./bookmark.schema.pg.js";
+export { tags } from "./tag.schema.pg.js";
 export { folders } from "./folder.schema.pg.js";
 export { apiTokens } from "./api-token.schema.pg.js";
 export { emailVerificationTokens } from "./email-verification-token.schema.pg.js";
@@ -35,8 +39,10 @@ export { workspaces } from "./workspace.schema.pg.js";
 export const pgSchema = {
   instanceMetadata,
   bookmarkFolders,
+  bookmarkTags,
   bookmarks,
   folders,
+  tags,
   apiTokens,
   emailVerificationTokens,
   mfaBackupCodes,
