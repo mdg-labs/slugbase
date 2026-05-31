@@ -5,9 +5,21 @@
   "type": "module",
   "scripts": {
     "lint": "eslint src/",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
-    "build": "tsc -p tsconfig.json",
-    "test:unit": "vitest run --passWithNoTests",
-    "test:integration": "vitest run --passWithNoTests"
+    "typecheck": "astro check",
+    "build": "astro build",
+    "dev": "astro dev",
+    "preview": "astro preview",
+    "test:unit": "vitest run --config vitest.config.ts",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
+  },
+  "dependencies": {
+    "@slugbase/ui": "workspace:^",
+    "@tolgee/web": "^7.1.0",
+    "astro": "^5.7.10"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.4",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.1"
   }
 }

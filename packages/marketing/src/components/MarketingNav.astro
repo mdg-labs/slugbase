@@ -1,0 +1,39 @@
+---
+import { getRelativeLocaleUrl } from "astro:i18n";
+import { t, type SupportedLocale } from "../i18n/tolgee.js";
+
+interface Props {
+  appOrigin: string;
+}
+
+const { appOrigin } = Astro.props;
+const locale = Astro.currentLocale as SupportedLocale;
+const alternateLocale: SupportedLocale = locale === "en" ? "de" : "en";
+const homeHref = getRelativeLocaleUrl(locale, "/");
+const pricingHref = getRelativeLocaleUrl(locale, "/pricing");
+const contactHref = getRelativeLocaleUrl(locale, "/contact");
+const alternateHref = getRelativeLocaleUrl(alternateLocale, "/");
+const signInHref = appOrigin ? `${appOrigin}/auth/login` : "#";
+const getStartedHref = appOrigin ? `${appOrigin}/auth/register` : "#";
+---
+
+<nav class="mk-nav" aria-label={t(locale, "marketing.nav.brand")}>
+  <div class="mk-c mk-nav-inner">
+    <a class="mk-nav-logo" href={homeHref}>
+      <img src="/slugbase_icon.svg" width="26" height="26" alt="" />
+      <span>{t(locale, "marketing.nav.brand")}</span>
+    </a>
+    <div class="mk-nav-links">
+      <a class="mk-nav-link" href={`${homeHref}#features`}>{t(locale, "marketing.nav.features")}</a>
+      <a class="mk-nav-link" href={pricingHref}>{t(locale, "marketing.nav.pricing")}</a>
+      <a class="mk-nav-link" href={contactHref}>{t(locale, "marketing.nav.contact")}</a>
+    </div>
+    <div class="mk-nav-ctas">
+      <a class="mk-btn mk-btn--ghost mk-btn--sm" href={alternateHref} lang={alternateLocale}>
+        {alternateLocale.toUpperCase()}
+      </a>
+      <a class="mk-btn mk-btn--ghost mk-btn--sm" href={signInHref}>{t(locale, "marketing.nav.sign_in")}</a>
+      <a class="mk-btn mk-btn--primary mk-btn--sm" href={getStartedHref}>{t(locale, "marketing.nav.get_started")}</a>
+    </div>
+  </div>
+</nav>

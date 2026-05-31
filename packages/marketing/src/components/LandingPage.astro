@@ -1,0 +1,13 @@
+---
+import LandingSections from "./LandingSections.astro";
+import MarketingLayout from "../layouts/MarketingLayout.astro";
+import { t, type SupportedLocale } from "../i18n/tolgee.js";
+
+const locale = Astro.currentLocale as SupportedLocale;
+const appOrigin = import.meta.env.PUBLIC_FRONTEND_ORIGIN ?? "";
+const title = `${t(locale, "marketing.nav.brand")} — ${t(locale, "marketing.landing.hero_title")} ${t(locale, "marketing.landing.hero_title_accent")}`;
+---
+
+<MarketingLayout title={title}>
+  <LandingSections appOrigin={appOrigin} />
+</MarketingLayout>

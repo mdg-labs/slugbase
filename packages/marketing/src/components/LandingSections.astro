@@ -1,0 +1,142 @@
+---
+import { t, type SupportedLocale } from "../i18n/tolgee.js";
+
+interface Props {
+  appOrigin: string;
+}
+
+const { appOrigin } = Astro.props;
+const locale = Astro.currentLocale as SupportedLocale;
+const getStartedHref = appOrigin ? `${appOrigin}/auth/register` : "#";
+
+const features = [
+  {
+    titleKey: "marketing.landing.feature_folders_title" as const,
+    descKey: "marketing.landing.feature_folders_desc" as const,
+  },
+  {
+    titleKey: "marketing.landing.feature_tags_title" as const,
+    descKey: "marketing.landing.feature_tags_desc" as const,
+  },
+  {
+    titleKey: "marketing.landing.feature_pinned_title" as const,
+    descKey: "marketing.landing.feature_pinned_desc" as const,
+  },
+  {
+    titleKey: "marketing.landing.feature_sharing_title" as const,
+    descKey: "marketing.landing.feature_sharing_desc" as const,
+  },
+];
+
+const slugChecks = [
+  "marketing.landing.slug_check_1" as const,
+  "marketing.landing.slug_check_2" as const,
+  "marketing.landing.slug_check_3" as const,
+];
+---
+
+<section class="mk-hero">
+  <div class="mk-c">
+    <div class="mk-hero-tag">{t(locale, "marketing.landing.hero_tag")}</div>
+    <h1 class="mk-h1">
+      {t(locale, "marketing.landing.hero_title")}<br />
+      <span class="mk-accent">{t(locale, "marketing.landing.hero_title_accent")}</span>
+    </h1>
+    <p class="mk-hero-sub">{t(locale, "marketing.landing.hero_subtitle")}</p>
+    <div class="mk-hero-ctas">
+      <a class="mk-btn mk-btn--primary mk-btn--lg" href={getStartedHref}>
+        {t(locale, "marketing.landing.cta_primary")}
+      </a>
+      <a class="mk-btn mk-btn--secondary mk-btn--lg" href="#self-host">
+        {t(locale, "marketing.landing.cta_secondary")}
+      </a>
+    </div>
+  </div>
+</section>
+
+<section class="mk-section mk-section--alt">
+  <div class="mk-c">
+    <div class="mk-split">
+      <div class="mk-split-text">
+        <span class="mk-eyebrow">{t(locale, "marketing.landing.slug_eyebrow")}</span>
+        <h2 class="mk-h2">{t(locale, "marketing.landing.slug_title")}</h2>
+        <p>{t(locale, "marketing.landing.slug_body")}</p>
+        <ul class="mk-list-check">
+          {slugChecks.map((key) => (
+            <li>
+              <span class="mk-check" aria-hidden="true">✓</span>
+              {t(locale, key)}
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div class="mk-browser" aria-hidden="true">
+        <div class="mk-browser-chrome">
+          <div class="mk-browser-dots">
+            <div class="mk-browser-dot" style="background: var(--danger, #f0686b)"></div>
+            <div class="mk-browser-dot" style="background: var(--warning, #e6b24e)"></div>
+            <div class="mk-browser-dot" style="background: var(--success)"></div>
+          </div>
+          <div class="mk-url-bar">
+            <span>go.example.app/</span>
+            <span class="slug-part">react19</span>
+          </div>
+        </div>
+        <div class="mk-url-redirect">
+          <span>→ react.dev/blog/react-19</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="mk-section" id="features">
+  <div class="mk-c">
+    <div class="mk-section-head">
+      <span class="mk-eyebrow">{t(locale, "marketing.landing.features_eyebrow")}</span>
+      <h2 class="mk-h2">{t(locale, "marketing.landing.features_title")}</h2>
+      <p class="mk-body">{t(locale, "marketing.landing.features_body")}</p>
+    </div>
+    <div class="mk-features">
+      {features.map(({ titleKey, descKey }) => (
+        <article class="mk-feat">
+          <div class="mk-feat-icon" aria-hidden="true">◆</div>
+          <h3>{t(locale, titleKey)}</h3>
+          <p>{t(locale, descKey)}</p>
+        </article>
+      ))}
+    </div>
+  </div>
+</section>
+
+<section class="mk-section--cta" id="self-host">
+  <div class="mk-c mk-cta-inner">
+    <h2 class="mk-h2">{t(locale, "marketing.landing.cta_final_title")}</h2>
+    <p class="mk-body">{t(locale, "marketing.landing.cta_final_body")}</p>
+    <div class="mk-hero-ctas">
+      <a class="mk-btn mk-btn--primary mk-btn--lg" href={getStartedHref}>
+        {t(locale, "marketing.landing.cta_final_primary")}
+      </a>
+      <a class="mk-btn mk-btn--ghost mk-btn--lg" href="#self-host">
+        {t(locale, "marketing.landing.cta_final_secondary")}
+      </a>
+    </div>
+  </div>
+</section>
+
+<style>
+  .mk-check {
+    color: var(--success-text);
+    flex: none;
+    font-weight: var(--weight-semi);
+  }
+
+  .mk-cta-inner {
+    text-align: center;
+  }
+
+  .mk-cta-inner .mk-body {
+    margin: var(--sp-5) auto var(--sp-8);
+    max-width: 420px;
+  }
+</style>
