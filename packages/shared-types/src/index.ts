@@ -46,7 +46,19 @@ export {
   type BillingSubscriptionState,
   type BillingSubscriptionStatus,
 } from "./contracts/billing.contract.js";
-export { apiContract, authContract, healthContract, mfaContract } from "./contracts/index.js";
+export { apiContract, accountContract, authContract, healthContract, mfaContract } from "./contracts/index.js";
+export {
+  AccountSettingsResponseSchema,
+  ALLOWED_ACCENT_COLORS,
+  type AllowedAccentColor,
+  UpdateAccountPasswordBodySchema,
+  UpdateAccountPreferencesBodySchema,
+  UpdateAccountProfileBodySchema,
+  type AccountSettingsResponse,
+  type UpdateAccountPasswordBody,
+  type UpdateAccountPreferencesBody,
+  type UpdateAccountProfileBody,
+} from "./contracts/account.contract.js";
 export {
   LoginBodySchema,
   LoginResponseSchema,

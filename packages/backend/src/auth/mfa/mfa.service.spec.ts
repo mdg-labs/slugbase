@@ -28,6 +28,7 @@ function makeAccount(overrides: Partial<AccountRecord> = {}): AccountRecord {
     passwordHash: "",
     language: "en",
     theme: "auto",
+    accentColor: null,
     isInstanceAdmin: false,
     mfaState: "not_enrolled",
     mfaTotpSecretEncrypted: null,
