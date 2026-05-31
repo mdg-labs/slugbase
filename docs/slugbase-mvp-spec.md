@@ -511,6 +511,8 @@ The hosted service uses a split deployment: the **web client** is served from th
 
 There is **no `development` deployment** — local development runs the dev servers directly (Infisical `development` env). These are **platform app/script identifiers, not public hostnames**; public domains (and `APP_BASE_URL` / `FRONTEND_ORIGIN`) are configured separately. The self-hosted combined image is published to GHCR and is not subject to this scheme.
 
+**Staging scale-to-zero (current posture):** `slugbase-staging-api` runs **scaled to zero** on Fly.io (`auto_stop_machines` enabled, `min_machines_running = 0`) to save cost — it stops when idle and cold-starts on the next request, with startup latency tolerated on staging. Production (`slugbase-production-api`) stays warm (`min_machines_running ≥ 1`). This is a current cost posture, revisited as traffic grows; the Workers-hosted `web`/`marketing` surfaces scale to zero natively.
+
 **CORS and origin configuration:** `APP_BASE_URL` points to the Fly.io app URL (or a custom domain in front of it); `FRONTEND_ORIGIN` points to the Cloudflare Workers frontend origin. Both are required secrets (§15) validated at startup.
 
 ---
