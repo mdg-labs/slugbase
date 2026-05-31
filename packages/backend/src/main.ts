@@ -10,7 +10,7 @@ import { validateEnvConfig } from "./config/env.schema.js";
 
 export async function bootstrap(): Promise<void> {
   const startupConfig = validateEnvConfig(process.env);
-  runMigrations(startupConfig.DATABASE_URL);
+  await runMigrations(startupConfig.DATABASE_URL);
 
   const app = await NestFactory.create(AppModule, { logger: ["error", "warn"] });
   const config = app.get(ConfigService);

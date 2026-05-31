@@ -6,7 +6,6 @@ import {
 } from "@nestjs/common";
 
 import { ConfigService } from "../config/config.service.js";
-import type { DbClientPort } from "./db.interface.js";
 import { DbService } from "./db.service.js";
 import { DB_CLIENT } from "./db.tokens.js";
 import { createDbClient } from "./dialect/create-client.js";
@@ -14,7 +13,7 @@ import { InstanceMetadataRepository } from "./instance-metadata.repository.js";
 
 interface DbClientRegistration {
   service: DbService;
-  close: () => void;
+  close: () => void | Promise<void>;
 }
 
 @Global()
@@ -42,8 +41,8 @@ interface DbClientRegistration {
     {
       provide: InstanceMetadataRepository,
       inject: [DbService],
-      useFactory: (db: DbClientPort): InstanceMetadataRepository =>
-        new InstanceMetadataRepository(db.getOrm()),
+      useFactory: (db: DbService): InstanceMetadataRepository =>
+        new InstanceMetadataRepository(db.getOrm(), db.dialect),
     },
   ],
   exports: [DbService, InstanceMetadataRepository],
@@ -51,7 +50,7 @@ interface DbClientRegistration {
 export class DbModule implements OnModuleDestroy {
   constructor(@Inject(DB_CLIENT) private readonly registration: DbClientRegistration) {}
 
-  onModuleDestroy(): void {
-    this.registration.close();
+  async onModuleDestroy(): Promise<void> {
+    await this.registration.close();
   }
 }

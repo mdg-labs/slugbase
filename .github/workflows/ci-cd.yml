@@ -67,8 +67,59 @@ jobs:
           NODE_ENV: production
         run: pnpm build
 
-      - name: Integration tests
-        run: pnpm test:integration
-
       - name: Dependency audit
         run: pnpm audit --audit-level=high
+
+  integration:
+    name: CI · Integration (${{ matrix.db_engine }})
+    needs: ci
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        db_engine: [sqlite, postgres]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: slugbase
+          POSTGRES_PASSWORD: slugbase
+          POSTGRES_DB: slugbase_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U slugbase -d slugbase_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@d15e628ca66d93ee5f352c71671a7bc6a97af5c9 # v4.0.0
+        with:
+          version: 9.15.4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Fetch secrets from Infisical
+        uses: Infisical/secrets-action@77ab1f4ccd183a543cb5b42435fbd181189f4995 # v1.0.16
+        with:
+          method: oidc
+          domain: ${{ secrets.INFISICAL_DOMAIN }}
+          identity-id: ${{ secrets.INFISICAL_OIDC_IDENTITY_ID }}
+          project-slug: slugbase-cloud
+          env-slug: development
+
+      - name: Integration tests
+        env:
+          DATABASE_URL: ${{ matrix.db_engine == 'postgres' && 'postgresql://slugbase:slugbase@localhost:5432/slugbase_test' || '' }}
+        run: pnpm test:integration

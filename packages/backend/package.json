@@ -26,6 +26,7 @@
     "@slugbase/shared-types": "workspace:^",
     "better-sqlite3": "^11.10.0",
     "drizzle-orm": "^0.45.2",
+    "postgres": "^3.4.7",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "zod": "^3.25.76"

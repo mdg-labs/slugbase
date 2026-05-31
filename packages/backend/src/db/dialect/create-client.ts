@@ -1,6 +1,10 @@
 import Database from "better-sqlite3";
 import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
+import { drizzle as drizzlePostgres } from "drizzle-orm/postgres-js";
+import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 
+import { pgSchema, type PgAppSchema } from "../schema/pg-index.js";
 import { schema, type AppSchema } from "../schema/index.js";
 import {
   parseSqliteFilePath,
@@ -8,12 +12,14 @@ import {
   type DbDialect,
 } from "./dialect.js";
 
-export type DrizzleClient = BetterSQLite3Database<AppSchema>;
+export type SqliteDrizzleClient = BetterSQLite3Database<AppSchema>;
+export type PostgresDrizzleClient = PostgresJsDatabase<PgAppSchema>;
+export type DrizzleClient = SqliteDrizzleClient | PostgresDrizzleClient;
 
 export interface DbClientHandle {
   client: DrizzleClient;
   dialect: DbDialect;
-  close: () => void;
+  close: () => void | Promise<void>;
 }
 
 export function createDbClient(databaseUrl: string): DbClientHandle {
@@ -33,7 +39,14 @@ export function createDbClient(databaseUrl: string): DbClientHandle {
     };
   }
 
-  throw new Error(
-    "Postgres persistence is not wired in this release slice — use sqlite DATABASE_URL",
-  );
+  const sql = postgres(databaseUrl, { max: 1 });
+  const client = drizzlePostgres(sql, { schema: pgSchema });
+
+  return {
+    client,
+    dialect,
+    close: async () => {
+      await sql.end({ timeout: 5 });
+    },
+  };
 }
