@@ -15,5 +15,6 @@ export default [
     route("bookmarks", "routes/bookmarks/index.tsx"),
     route("folders", "routes/folders/index.tsx"),
     route("settings/members", "routes/settings/members/index.tsx"),
+    route("settings/billing", "routes/settings/billing/index.tsx"),
   ]),
 ] satisfies RouteConfig;

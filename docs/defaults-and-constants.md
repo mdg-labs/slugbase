@@ -98,6 +98,14 @@ Keys are registered incrementally per task (rule `05-env-vars`). Full categories
 | `TEAM_BASE_SEATS` | Included seats on Team plan | `/api` | hosted | Default `5` (def §5); Fast-Follow tuning |
 | `SUPPORTER_PROMOTION_END` | ISO-8601 end of supporter promotion window | `/api` | hosted | Optional; empty = no deadline enforced in app |
 | `DOWNGRADE_GRACE_PERIOD_DAYS` | Days after billing period end before overflow archive (spec §12.5, def §5) | `/api` | `development` | Default `7` |
+| `VITE_BILLING_ENABLED` | Show hosted billing settings UI | `/web` | hosted `development`/`staging`/`production` | `false` on self-host |
+| `VITE_PLAN_PRICE_PERSONAL_MONTHLY` | Display price for Personal (monthly) in billing UI | `/web` | hosted | Illustrative; marketing-aligned |
+| `VITE_PLAN_PRICE_PERSONAL_YEARLY` | Display price for Personal (yearly) in billing UI | `/web` | hosted | Illustrative |
+| `VITE_PLAN_PRICE_TEAM_SEAT` | Display price per Team seat in billing UI | `/web` | hosted | Illustrative |
+| `VITE_PLAN_PRICE_SUPPORTER` | Display price for supporter one-time offer | `/web` | hosted | Illustrative |
+| `VITE_SUPPORTER_PROMOTION_END` | ISO-8601 supporter offer deadline (display + countdown) | `/web` | hosted | Optional |
+| `VITE_TEAM_BASE_SEATS` | Included Team seats shown in plan table | `/web` | hosted | Default `5` |
+| `VITE_FREE_BOOKMARK_CAP` | Free cap shown in billing meter/table | `/web` | hosted | Default `50` |
 
 ---
 

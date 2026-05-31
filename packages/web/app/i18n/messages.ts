@@ -325,6 +325,126 @@ export const staticMessages = {
     "settings.members.toast_team_member_added": "Member added to team",
     "settings.members.toast_team_member_removed": "Member removed from team",
     "settings.members.error_generic": "Something went wrong. Please try again.",
+    // Settings — plans & billing
+    "settings.billing.page_title": "Plans & billing",
+    "settings.billing.page_subtitle": "Manage your subscription for {workspace}.",
+    "settings.billing.unavailable_title": "Billing is not available",
+    "settings.billing.unavailable_body":
+      "This instance does not use hosted billing. Plan limits are managed by your operator.",
+    "settings.billing.unavailable_back_action": "Back to dashboard",
+    "settings.billing.owner_only_notice":
+      "Only the workspace owner can change plans, seats, or billing details.",
+    "settings.billing.tab_plan": "Plan",
+    "settings.billing.tab_seats": "Seats",
+    "settings.billing.tab_history": "Billing history",
+    "settings.billing.plan_name_free": "Free",
+    "settings.billing.plan_name_personal": "Personal",
+    "settings.billing.plan_name_team": "Team",
+    "settings.billing.plan_period_forever": "forever",
+    "settings.billing.plan_period_monthly": "/mo",
+    "settings.billing.plan_period_seat_monthly": "/seat/mo",
+    "settings.billing.plan_current_label": "Current plan",
+    "settings.billing.plan_upgrade_action": "Upgrade to {plan}",
+    "settings.billing.plan_downgrade_action": "Downgrade to {plan}",
+    "settings.billing.compare_heading": "Compare plans",
+    "settings.billing.compare_subtitle":
+      "All plans include forwarding slugs, themes, and keyboard-driven navigation.",
+    "settings.billing.compare_features_heading": "Features",
+    "settings.billing.feature.bookmarks": "Bookmarks",
+    "settings.billing.feature.ai_suggestions": "AI suggestions",
+    "settings.billing.feature.workspaces": "Workspaces you can own",
+    "settings.billing.feature.team_sharing": "Team sharing",
+    "settings.billing.feature.members": "Included members",
+    "settings.billing.feature.audit_log": "Audit log",
+    "settings.billing.feature.unlimited": "Unlimited",
+    "settings.billing.feature_included_aria": "Included",
+    "settings.billing.current_free_price": "$0 forever",
+    "settings.billing.current_permanent_price": "{price} one-time · Personal forever",
+    "settings.billing.current_personal_price":
+      "{price}/mo · Next renewal {date}",
+    "settings.billing.current_team_price":
+      "{seats} seats · {price}/seat/mo · Renews {date}",
+    "settings.billing.current_cancelled_price": "Access ends {date} · Returns to Free",
+    "settings.billing.period_end_unknown": "end of billing period",
+    "settings.billing.meter_usage": "{used} / {cap} bookmarks",
+    "settings.billing.meter_remaining": "{count} remaining",
+    "settings.billing.approaching_cap_body":
+      "You have used {used} of {cap} bookmarks on Free. Upgrade to Personal for unlimited saves.",
+    "settings.billing.at_cap_body":
+      "New bookmarks are blocked on Free ({cap} cap). Upgrade to keep saving.",
+    "settings.billing.archived_title": "{count} bookmarks are archived",
+    "settings.billing.archived_body":
+      "After downgrading, bookmarks over the {cap} Free cap are preserved but hidden until you upgrade again.",
+    "settings.billing.archived_upgrade_action": "Upgrade to Personal — {price}/mo",
+    "settings.billing.cancelled_notice":
+      "Your subscription is cancelled. Full access continues until {date}.",
+    "settings.billing.reactivate_action": "Reactivate subscription",
+    "settings.billing.upgrade_team_action": "Upgrade to Team",
+    "settings.billing.downgrade_personal_action": "Downgrade to Personal",
+    "settings.billing.cancel_open_action": "Cancel subscription",
+    "settings.billing.cancel_title": "Cancel your subscription?",
+    "settings.billing.cancel_body":
+      "Your plan stays active until {date}. After that, your workspace returns to Free. Over-cap bookmarks are archived, not deleted.",
+    "settings.billing.cancel_overflow_note":
+      "{count} bookmarks may be archived when you return to the {cap} Free cap.",
+    "settings.billing.cancel_confirm_step_one": "Yes, cancel subscription",
+    "settings.billing.cancel_keep_action": "Keep subscription",
+    "settings.billing.cancel_confirm_final": "Confirm cancellation",
+    "settings.billing.cancel_back_action": "Go back",
+    "settings.billing.supporter_heading": "Early supporter offer",
+    "settings.billing.supporter_subtitle":
+      "A one-time, time-limited offer that grants Personal permanently.",
+    "settings.billing.supporter_eyebrow": "Early supporter offer",
+    "settings.billing.supporter_price_subtitle": "one time · yours forever",
+    "settings.billing.supporter_body":
+      "Get everything in Personal — unlimited bookmarks and multiple workspaces — permanently. No subscription.",
+    "settings.billing.supporter_claim_action": "Claim lifetime access — {price}",
+    "settings.billing.supporter_countdown_label": "Offer ends in",
+    "settings.billing.supporter_countdown_days": "days",
+    "settings.billing.supporter_countdown_hours": "hrs",
+    "settings.billing.supporter_countdown_minutes": "min",
+    "settings.billing.supporter_countdown_seconds": "sec",
+    "settings.billing.seats_team_only_body":
+      "Seat management is available on the Team plan.",
+    "settings.billing.seats_upgrade_team_action": "Upgrade to Team",
+    "settings.billing.seats_included_label": "Included seats (base plan)",
+    "settings.billing.seats_extra_label": "Purchased extra seats",
+    "settings.billing.seats_total_label": "Total seats",
+    "settings.billing.seats_in_use_label": "Seats in use",
+    "settings.billing.seats_add_heading": "Add seats",
+    "settings.billing.seats_add_body":
+      "Extra seats are billed at {price}/seat/month, prorated for the current period.",
+    "settings.billing.seats_add_label": "Seats to add",
+    "settings.billing.seats_add_preview": "→ {total} total seats",
+    "settings.billing.seats_add_no_change": "No change",
+    "settings.billing.seats_add_confirm": "Confirm seat change",
+    "settings.billing.seats_remove_heading": "Remove seats",
+    "settings.billing.seats_remove_body":
+      "Seats cannot be reduced below the current member count ({members}).",
+    "settings.billing.seats_remove_floor":
+      "Remove members first, then reduce seats below {members}.",
+    "settings.billing.seats_remove_confirm": "Apply seat reduction",
+    "settings.billing.history_payment_heading": "Payment method",
+    "settings.billing.history_payment_body":
+      "Managed via the external billing portal.",
+    "settings.billing.history_payment_managed":
+      "Update your card and payment details in the billing portal.",
+    "settings.billing.history_payment_empty":
+      "No payment method on file. Add one when you upgrade.",
+    "settings.billing.history_invoices_heading": "Invoices",
+    "settings.billing.history_invoices_body":
+      "Past payments and PDF downloads are available in the billing portal.",
+    "settings.billing.history_invoices_portal_hint":
+      "Open the billing portal to view and download invoices.",
+    "settings.billing.history_invoices_empty":
+      "No invoices yet. They appear here after you subscribe.",
+    "settings.billing.portal_heading": "Billing portal",
+    "settings.billing.portal_body":
+      "Manage your subscription, update payment details, and download receipts via Stripe.",
+    "settings.billing.portal_open_action": "Manage billing",
+    "settings.billing.toast_seats_updated": "Seat count updated to {total}",
+    "settings.billing.toast_subscription_kept": "Subscription kept",
+    "settings.billing.error_generic": "Something went wrong. Please try again.",
     // Bookmark modal
     "bookmark.modal.title_create": "New bookmark",
     "bookmark.modal.title_edit": "Edit bookmark",
@@ -757,6 +877,127 @@ export const staticMessages = {
     "settings.members.toast_team_member_added": "Mitglied zum Team hinzugefügt",
     "settings.members.toast_team_member_removed": "Mitglied aus Team entfernt",
     "settings.members.error_generic": "Etwas ist schiefgelaufen. Bitte erneut versuchen.",
+    // Settings — plans & billing
+    "settings.billing.page_title": "Tarife & Abrechnung",
+    "settings.billing.page_subtitle": "Abonnement für {workspace} verwalten.",
+    "settings.billing.unavailable_title": "Abrechnung nicht verfügbar",
+    "settings.billing.unavailable_body":
+      "Diese Instanz nutzt keine gehostete Abrechnung. Tariflimits werden vom Betreiber verwaltet.",
+    "settings.billing.unavailable_back_action": "Zurück zur Übersicht",
+    "settings.billing.owner_only_notice":
+      "Nur der Workspace-Inhaber kann Tarife, Plätze oder Abrechnungsdaten ändern.",
+    "settings.billing.tab_plan": "Tarif",
+    "settings.billing.tab_seats": "Plätze",
+    "settings.billing.tab_history": "Abrechnungsverlauf",
+    "settings.billing.plan_name_free": "Free",
+    "settings.billing.plan_name_personal": "Personal",
+    "settings.billing.plan_name_team": "Team",
+    "settings.billing.plan_period_forever": "dauerhaft",
+    "settings.billing.plan_period_monthly": "/Monat",
+    "settings.billing.plan_period_seat_monthly": "/Platz/Monat",
+    "settings.billing.plan_current_label": "Aktueller Tarif",
+    "settings.billing.plan_upgrade_action": "Upgrade auf {plan}",
+    "settings.billing.plan_downgrade_action": "Downgrade auf {plan}",
+    "settings.billing.compare_heading": "Tarife vergleichen",
+    "settings.billing.compare_subtitle":
+      "Alle Tarife enthalten Weiterleitungs-Slugs, Themes und Tastatursteuerung.",
+    "settings.billing.compare_features_heading": "Funktionen",
+    "settings.billing.feature.bookmarks": "Lesezeichen",
+    "settings.billing.feature.ai_suggestions": "KI-Vorschläge",
+    "settings.billing.feature.workspaces": "Eigene Workspaces",
+    "settings.billing.feature.team_sharing": "Team-Freigaben",
+    "settings.billing.feature.members": "Enthaltene Mitglieder",
+    "settings.billing.feature.audit_log": "Audit-Log",
+    "settings.billing.feature.unlimited": "Unbegrenzt",
+    "settings.billing.feature_included_aria": "Enthalten",
+    "settings.billing.current_free_price": "0 € dauerhaft",
+    "settings.billing.current_permanent_price": "{price} einmalig · Personal dauerhaft",
+    "settings.billing.current_personal_price":
+      "{price}/Monat · Nächste Verlängerung {date}",
+    "settings.billing.current_team_price":
+      "{seats} Plätze · {price}/Platz/Monat · Verlängert am {date}",
+    "settings.billing.current_cancelled_price":
+      "Zugang endet am {date} · Wechsel zurück zu Free",
+    "settings.billing.period_end_unknown": "Ende des Abrechnungszeitraums",
+    "settings.billing.meter_usage": "{used} / {cap} Lesezeichen",
+    "settings.billing.meter_remaining": "{count} verbleibend",
+    "settings.billing.approaching_cap_body":
+      "Sie haben {used} von {cap} Lesezeichen im Free-Tarif genutzt. Upgraden Sie auf Personal für unbegrenzte Speicherung.",
+    "settings.billing.at_cap_body":
+      "Neue Lesezeichen sind im Free-Tarif blockiert ({cap} Limit). Upgraden Sie, um weiter zu speichern.",
+    "settings.billing.archived_title": "{count} Lesezeichen sind archiviert",
+    "settings.billing.archived_body":
+      "Nach einem Downgrade werden Lesezeichen über dem Free-Limit von {cap} erhalten, aber ausgeblendet, bis Sie erneut upgraden.",
+    "settings.billing.archived_upgrade_action": "Upgrade auf Personal — {price}/Monat",
+    "settings.billing.cancelled_notice":
+      "Ihr Abonnement ist gekündigt. Voller Zugang bleibt bis {date}.",
+    "settings.billing.reactivate_action": "Abonnement reaktivieren",
+    "settings.billing.upgrade_team_action": "Upgrade auf Team",
+    "settings.billing.downgrade_personal_action": "Downgrade auf Personal",
+    "settings.billing.cancel_open_action": "Abonnement kündigen",
+    "settings.billing.cancel_title": "Abonnement kündigen?",
+    "settings.billing.cancel_body":
+      "Ihr Tarif bleibt bis {date} aktiv. Danach wechselt der Workspace zurück zu Free. Überlimit-Lesezeichen werden archiviert, nicht gelöscht.",
+    "settings.billing.cancel_overflow_note":
+      "{count} Lesezeichen können archiviert werden, wenn Sie zum Free-Limit von {cap} zurückkehren.",
+    "settings.billing.cancel_confirm_step_one": "Ja, Abonnement kündigen",
+    "settings.billing.cancel_keep_action": "Abonnement behalten",
+    "settings.billing.cancel_confirm_final": "Kündigung bestätigen",
+    "settings.billing.cancel_back_action": "Zurück",
+    "settings.billing.supporter_heading": "Early-Supporter-Angebot",
+    "settings.billing.supporter_subtitle":
+      "Ein einmaliges, zeitlich begrenztes Angebot für dauerhaftes Personal.",
+    "settings.billing.supporter_eyebrow": "Early-Supporter-Angebot",
+    "settings.billing.supporter_price_subtitle": "einmalig · dauerhaft",
+    "settings.billing.supporter_body":
+      "Alles aus Personal — unbegrenzte Lesezeichen und mehrere Workspaces — dauerhaft. Kein Abonnement.",
+    "settings.billing.supporter_claim_action": "Lifetime-Zugang sichern — {price}",
+    "settings.billing.supporter_countdown_label": "Angebot endet in",
+    "settings.billing.supporter_countdown_days": "Tage",
+    "settings.billing.supporter_countdown_hours": "Std",
+    "settings.billing.supporter_countdown_minutes": "Min",
+    "settings.billing.supporter_countdown_seconds": "Sek",
+    "settings.billing.seats_team_only_body":
+      "Platzverwaltung ist im Team-Tarif verfügbar.",
+    "settings.billing.seats_upgrade_team_action": "Upgrade auf Team",
+    "settings.billing.seats_included_label": "Enthaltene Plätze (Basistarif)",
+    "settings.billing.seats_extra_label": "Zusätzlich gekaufte Plätze",
+    "settings.billing.seats_total_label": "Plätze gesamt",
+    "settings.billing.seats_in_use_label": "Belegte Plätze",
+    "settings.billing.seats_add_heading": "Plätze hinzufügen",
+    "settings.billing.seats_add_body":
+      "Zusätzliche Plätze werden mit {price}/Platz/Monat anteilig für den aktuellen Zeitraum berechnet.",
+    "settings.billing.seats_add_label": "Plätze hinzufügen",
+    "settings.billing.seats_add_preview": "→ {total} Plätze gesamt",
+    "settings.billing.seats_add_no_change": "Keine Änderung",
+    "settings.billing.seats_add_confirm": "Platzänderung bestätigen",
+    "settings.billing.seats_remove_heading": "Plätze entfernen",
+    "settings.billing.seats_remove_body":
+      "Plätze können nicht unter die aktuelle Mitgliederzahl ({members}) reduziert werden.",
+    "settings.billing.seats_remove_floor":
+      "Entfernen Sie zuerst Mitglieder, bevor Sie unter {members} Plätze reduzieren.",
+    "settings.billing.seats_remove_confirm": "Platzreduktion anwenden",
+    "settings.billing.history_payment_heading": "Zahlungsmethode",
+    "settings.billing.history_payment_body":
+      "Verwaltung über das externe Abrechnungsportal.",
+    "settings.billing.history_payment_managed":
+      "Aktualisieren Sie Karte und Zahlungsdaten im Abrechnungsportal.",
+    "settings.billing.history_payment_empty":
+      "Keine Zahlungsmethode hinterlegt. Beim Upgrade hinzufügen.",
+    "settings.billing.history_invoices_heading": "Rechnungen",
+    "settings.billing.history_invoices_body":
+      "Vergangene Zahlungen und PDF-Downloads sind im Abrechnungsportal verfügbar.",
+    "settings.billing.history_invoices_portal_hint":
+      "Öffnen Sie das Abrechnungsportal, um Rechnungen anzuzeigen und herunterzuladen.",
+    "settings.billing.history_invoices_empty":
+      "Noch keine Rechnungen. Sie erscheinen nach dem Abonnement.",
+    "settings.billing.portal_heading": "Abrechnungsportal",
+    "settings.billing.portal_body":
+      "Abonnement verwalten, Zahlungsdaten aktualisieren und Belege über Stripe herunterladen.",
+    "settings.billing.portal_open_action": "Abrechnung verwalten",
+    "settings.billing.toast_seats_updated": "Platzanzahl auf {total} aktualisiert",
+    "settings.billing.toast_subscription_kept": "Abonnement beibehalten",
+    "settings.billing.error_generic": "Etwas ist schiefgelaufen. Bitte erneut versuchen.",
     // Bookmark modal
     "bookmark.modal.title_create": "Neues Lesezeichen",
     "bookmark.modal.title_edit": "Lesezeichen bearbeiten",
