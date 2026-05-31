@@ -8,13 +8,16 @@ import {
   Post,
   Req,
   UnauthorizedException,
+  UseGuards,
 } from "@nestjs/common";
+import { SkipThrottle } from "@nestjs/throttler";
 import type { Request } from "express";
 
 import { AccountsService } from "../../accounts/accounts.service.js";
 import { SessionService } from "../../sessions/session.service.js";
 import { SkipCsrf } from "../csrf/skip-csrf.decorator.js";
 import { SESSION_COOKIE } from "../login-logout.controller.js";
+import { IpThrottlerGuard } from "../rate-limit/ip-throttler.guard.js";
 import { MfaService } from "./mfa.service.js";
 
 interface EnrolStartBody {
@@ -96,6 +99,8 @@ export class MfaController {
    */
   @Post("challenge")
   @HttpCode(200)
+  @UseGuards(IpThrottlerGuard)
+  @SkipThrottle({ "user-hour": true })
   async challenge(
     @Req() req: Request,
     @Body() body: ChallengeBody,

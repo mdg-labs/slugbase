@@ -11,11 +11,14 @@ import {
   Post,
   Req,
   UnauthorizedException,
+  UseGuards,
 } from "@nestjs/common";
+import { SkipThrottle } from "@nestjs/throttler";
 import type { Request } from "express";
 
 import { SessionService } from "../../sessions/session.service.js";
 import { SESSION_COOKIE } from "../login-logout.controller.js";
+import { UserThrottlerGuard } from "../rate-limit/user-throttler.guard.js";
 import { ApiTokenService } from "./api-token.service.js";
 import type { ApiTokenSummary } from "./api-token.types.js";
 
@@ -42,6 +45,8 @@ export class ApiTokenController {
    */
   @Post()
   @HttpCode(201)
+  @UseGuards(UserThrottlerGuard)
+  @SkipThrottle({ ip: true })
   async createToken(
     @Req() req: Request,
     @Body() body: CreateTokenBody,

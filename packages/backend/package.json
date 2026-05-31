@@ -23,6 +23,7 @@
     "@nestjs/common": "^11.1.3",
     "@nestjs/core": "^11.1.3",
     "@nestjs/platform-express": "^11.1.3",
+    "@nestjs/throttler": "^6.5.0",
     "@react-router/express": "^7.16.0",
     "@slugbase/shared-types": "workspace:^",
     "@types/cookie-parser": "^1.4.10",

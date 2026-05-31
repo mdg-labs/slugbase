@@ -10,6 +10,7 @@ import {
   UnauthorizedException,
   UseGuards,
 } from "@nestjs/common";
+import { SkipThrottle } from "@nestjs/throttler";
 import type { Request, Response } from "express";
 
 import { AccountsService } from "../accounts/accounts.service.js";
@@ -20,6 +21,7 @@ import { SessionGuard, SESSION_USER_ID_KEY } from "../sessions/session.guard.js"
 import { SessionService } from "../sessions/session.service.js";
 import { SkipCsrf } from "./csrf/skip-csrf.decorator.js";
 import { MfaService } from "./mfa/mfa.service.js";
+import { IpThrottlerGuard } from "./rate-limit/ip-throttler.guard.js";
 import type { MeResponse } from "@slugbase/shared-types";
 
 export { SESSION_COOKIE };
@@ -46,6 +48,8 @@ export class LoginLogoutController {
 
   @Post("login")
   @HttpCode(200)
+  @UseGuards(IpThrottlerGuard)
+  @SkipThrottle({ "user-hour": true })
   async login(
     @Body() body: LoginBody,
     @Res({ passthrough: true }) res: Response,

@@ -1,4 +1,5 @@
 import { Controller, Get, Inject, Res } from "@nestjs/common";
+import { SkipThrottle } from "@nestjs/throttler";
 import type { Response } from "express";
 
 import { ConfigService } from "../../config/config.service.js";
@@ -9,6 +10,7 @@ const CSRF_COOKIE = "csrf_token";
 
 @Controller("auth")
 @SkipCsrf()
+@SkipThrottle({ ip: true, "user-hour": true })
 export class CsrfController {
   constructor(
     @Inject(CsrfService) private readonly csrfService: CsrfService,

@@ -5,12 +5,15 @@ import {
   Inject,
   Post,
   Res,
+  UseGuards,
 } from "@nestjs/common";
+import { SkipThrottle } from "@nestjs/throttler";
 import type { Response } from "express";
 
 import { ConfigService } from "../../config/config.service.js";
 import { SESSION_COOKIE } from "../login-logout.controller.js";
 import { SkipCsrf } from "../csrf/skip-csrf.decorator.js";
+import { IpThrottlerGuard } from "../rate-limit/ip-throttler.guard.js";
 import { RegistrationService, type RegisterDto } from "./registration.service.js";
 
 interface RegisterResponse {
@@ -28,6 +31,8 @@ export class RegistrationController {
 
   @Post("register")
   @HttpCode(201)
+  @UseGuards(IpThrottlerGuard)
+  @SkipThrottle({ "user-hour": true })
   async register(
     @Body() body: RegisterDto,
     @Res({ passthrough: true }) res: Response,

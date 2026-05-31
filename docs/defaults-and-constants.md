@@ -83,6 +83,10 @@ Keys are registered incrementally per task (rule `05-env-vars`). Full categories
 | `WEB_CLIENT_SERVER_BUILD` | Absolute path to the RR7 server build entry (`index.js`) | `/api` | Required when `SERVE_WEB_CLIENT=true` | Optional when web serving disabled; combined image uses `/app/packages/web/build/server/index.js` |
 | `SESSION_TTL_DAYS` | Session sliding-window TTL in days (spec §5.3, def §3) | `/api` | `development` | `30` (default); integer |
 | `MFA_TOTP_ISSUER` | Authenticator app issuer label for TOTP (spec §5.7) | `/api` | `development` | `SlugBase` (default) |
+| `RATE_LIMIT_LOGIN_MAX` | Max requests per window for login / register / MFA challenge (per IP) — spec §18, def §4 | `/api` | `development` | `10` (default) |
+| `RATE_LIMIT_LOGIN_TTL_SECONDS` | Window size in seconds for the `ip` throttler | `/api` | `development` | `900` (15 min) |
+| `RATE_LIMIT_TOKEN_CREATION_MAX` | Max token-creation requests per window (per session) — spec §18, def §4 | `/api` | `development` | `20` (default) |
+| `RATE_LIMIT_TOKEN_CREATION_TTL_SECONDS` | Window size in seconds for the `user-hour` throttler | `/api` | `development` | `3600` (1 hr) |
 
 ---
 
