@@ -13,7 +13,16 @@
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build": "tsc -p tsconfig.json",
-    "test:unit": "vitest run --passWithNoTests",
+    "openapi:generate": "pnpm build && node dist/scripts/generate-openapi.js",
+    "test:unit": "vitest run",
     "test:integration": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@ts-rest/core": "^3.52.1",
+    "@ts-rest/open-api": "^3.52.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1"
   }
 }

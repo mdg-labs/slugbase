@@ -9,5 +9,8 @@
     "build": "tsc -p tsconfig.json",
     "test:unit": "vitest run --passWithNoTests",
     "test:integration": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@slugbase/shared-types": "workspace:^"
   }
 }
