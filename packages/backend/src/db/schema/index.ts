@@ -1,5 +1,7 @@
 import { instanceMetadata } from "../system.schema.js";
+import { bookmarkFolders } from "./bookmark-folder.schema.js";
 import { bookmarks } from "./bookmark.schema.js";
+import { folders } from "./folder.schema.js";
 import { apiTokens } from "./api-token.schema.js";
 import { emailVerificationTokens } from "./email-verification-token.schema.js";
 import { mfaBackupCodes } from "./mfa-backup-code.schema.js";
@@ -14,7 +16,9 @@ import { workspaceMembers } from "./workspace-member.schema.js";
 import { workspaces } from "./workspace.schema.js";
 
 export { instanceMetadata } from "../system.schema.js";
+export { bookmarkFolders } from "./bookmark-folder.schema.js";
 export { bookmarks } from "./bookmark.schema.js";
+export { folders } from "./folder.schema.js";
 export { apiTokens } from "./api-token.schema.js";
 export { emailVerificationTokens } from "./email-verification-token.schema.js";
 export { mfaBackupCodes } from "./mfa-backup-code.schema.js";
@@ -30,7 +34,9 @@ export { workspaces } from "./workspace.schema.js";
 
 export const schema = {
   instanceMetadata,
+  bookmarkFolders,
   bookmarks,
+  folders,
   apiTokens,
   emailVerificationTokens,
   mfaBackupCodes,

@@ -9,10 +9,12 @@ import type {
 } from "../db/dialect/create-client.js";
 import type { DbDialect } from "../db/dialect/dialect.js";
 import {
+  bookmarkFolders as sqliteBookmarkFolders,
   bookmarks as sqliteBookmarks,
   slugPreferences as sqliteSlugPreferences,
 } from "../db/schema/index.js";
 import {
+  bookmarkFolders as pgBookmarkFolders,
   bookmarks as pgBookmarks,
   slugPreferences as pgSlugPreferences,
 } from "../db/schema/pg-index.js";
@@ -268,6 +270,7 @@ export class BookmarkRepository extends WorkspaceScopedRepository<BookmarkRecord
 
   async delete(workspaceId: string, bookmarkId: string): Promise<void> {
     await this.deleteSlugPreferencesForBookmark(workspaceId, bookmarkId);
+    await this.deleteBookmarkFolderLinksForBookmark(workspaceId, bookmarkId);
 
     if (this.dialect === "sqlite") {
       (this.db as SqliteDrizzleClient)
@@ -404,6 +407,33 @@ export class BookmarkRepository extends WorkspaceScopedRepository<BookmarkRecord
         ),
       );
     return rows[0]?.count ?? 0;
+  }
+
+  private async deleteBookmarkFolderLinksForBookmark(
+    workspaceId: string,
+    bookmarkId: string,
+  ): Promise<void> {
+    if (this.dialect === "sqlite") {
+      (this.db as SqliteDrizzleClient)
+        .delete(sqliteBookmarkFolders)
+        .where(
+          and(
+            eq(sqliteBookmarkFolders.workspaceId, workspaceId),
+            eq(sqliteBookmarkFolders.bookmarkId, bookmarkId),
+          ),
+        )
+        .run();
+      return;
+    }
+
+    await (this.db as PostgresDrizzleClient)
+      .delete(pgBookmarkFolders)
+      .where(
+        and(
+          eq(pgBookmarkFolders.workspaceId, workspaceId),
+          eq(pgBookmarkFolders.bookmarkId, bookmarkId),
+        ),
+      );
   }
 
   private async deleteSlugPreferencesForBookmark(
