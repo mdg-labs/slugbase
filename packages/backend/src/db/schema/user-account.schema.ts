@@ -19,6 +19,7 @@ export const userAccounts = sqliteTable(
       .notNull()
       .default(false),
     mfaState: text("mfa_state").notNull().default("not_enrolled"),
+    mfaTotpSecretEncrypted: text("mfa_totp_secret_encrypted"),
     aiOptOut: integer("ai_opt_out", { mode: "boolean" })
       .notNull()
       .default(false),

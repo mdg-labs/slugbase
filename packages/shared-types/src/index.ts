@@ -9,7 +9,7 @@ export {
   type MailMessageType,
   type MailService,
 } from "./contracts/mail.contract.js";
-export { apiContract, healthContract } from "./contracts/index.js";
+export { apiContract, authContract, healthContract, mfaContract } from "./contracts/index.js";
 export {
   HealthResponseSchema,
   VersionResponseSchema,

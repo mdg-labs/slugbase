@@ -25,6 +25,7 @@ function toRecord(row: {
   theme: string;
   isInstanceAdmin: boolean | number;
   mfaState: string;
+  mfaTotpSecretEncrypted: string | null;
   aiOptOut: boolean | number;
   emailVerified: boolean | number;
   createdAt: Date | number;
@@ -39,6 +40,7 @@ function toRecord(row: {
     theme: row.theme,
     isInstanceAdmin: Boolean(row.isInstanceAdmin),
     mfaState: row.mfaState as AccountRecord["mfaState"],
+    mfaTotpSecretEncrypted: row.mfaTotpSecretEncrypted ?? null,
     aiOptOut: Boolean(row.aiOptOut),
     emailVerified: Boolean(row.emailVerified),
     createdAt: new Date(
@@ -149,5 +151,28 @@ export class AccountRepository {
     const row = rows[0];
     if (!row) return null;
     return toRecord(row);
+  }
+
+  async updateMfa(
+    id: string,
+    patch: { mfaState: string; mfaTotpSecretEncrypted?: string | null },
+  ): Promise<void> {
+    const updatedAt = Date.now();
+
+    if (this.dialect === "sqlite") {
+      const sqliteDb = this.db as SqliteDrizzleClient;
+      sqliteDb
+        .update(sqliteUserAccounts)
+        .set({ ...patch, updatedAt: new Date(updatedAt) })
+        .where(eq(sqliteUserAccounts.id, id))
+        .run();
+      return;
+    }
+
+    const pgDb = this.db as PostgresDrizzleClient;
+    await pgDb
+      .update(pgUserAccounts)
+      .set({ ...patch, updatedAt })
+      .where(eq(pgUserAccounts.id, id));
   }
 }

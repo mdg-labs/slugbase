@@ -11,6 +11,7 @@ export const userAccounts = pgTable(
     theme: text("theme").notNull().default("auto"),
     isInstanceAdmin: boolean("is_instance_admin").notNull().default(false),
     mfaState: text("mfa_state").notNull().default("not_enrolled"),
+    mfaTotpSecretEncrypted: text("mfa_totp_secret_encrypted"),
     aiOptOut: boolean("ai_opt_out").notNull().default(false),
     emailVerified: boolean("email_verified").notNull().default(false),
     createdAt: bigint("created_at", { mode: "number" }).notNull(),

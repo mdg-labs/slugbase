@@ -9,6 +9,7 @@ export interface AccountRecord {
   theme: string;
   isInstanceAdmin: boolean;
   mfaState: MfaState;
+  mfaTotpSecretEncrypted: string | null;
   aiOptOut: boolean;
   emailVerified: boolean;
   createdAt: Date;

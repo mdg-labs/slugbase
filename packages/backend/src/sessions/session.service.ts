@@ -100,4 +100,12 @@ export class SessionService {
   async revokeAllSessions(userId: string): Promise<void> {
     await this.repo.deleteAllByUserId(userId);
   }
+
+  /** Replaces the data payload of an existing session. */
+  async updateSessionData(
+    sessionId: string,
+    data: Record<string, unknown>,
+  ): Promise<void> {
+    await this.repo.updateData(sessionId, JSON.stringify(data), Date.now());
+  }
 }

@@ -160,4 +160,22 @@ export class SessionRepository {
     const pgDb = this.db as PostgresDrizzleClient;
     await pgDb.delete(pgSessions).where(eq(pgSessions.userId, userId));
   }
+
+  async updateData(id: string, data: string, nowMs: number): Promise<void> {
+    if (this.dialect === "sqlite") {
+      const sqliteDb = this.db as SqliteDrizzleClient;
+      sqliteDb
+        .update(sqliteSessions)
+        .set({ data, lastActivityAt: new Date(nowMs) })
+        .where(eq(sqliteSessions.id, id))
+        .run();
+      return;
+    }
+
+    const pgDb = this.db as PostgresDrizzleClient;
+    await pgDb
+      .update(pgSessions)
+      .set({ data, lastActivityAt: nowMs })
+      .where(eq(pgSessions.id, id));
+  }
 }

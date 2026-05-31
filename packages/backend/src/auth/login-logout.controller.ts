@@ -15,6 +15,7 @@ import { PasswordService } from "../accounts/password.service.js";
 import { ConfigService } from "../config/config.service.js";
 import { SessionService } from "../sessions/session.service.js";
 import { SkipCsrf } from "./csrf/skip-csrf.decorator.js";
+import { MfaService } from "./mfa/mfa.service.js";
 
 export const SESSION_COOKIE = "slb_session";
 
@@ -22,6 +23,10 @@ interface LoginBody {
   email: string;
   password: string;
 }
+
+type LoginResult =
+  | { userId: string; mfaRequired?: never }
+  | { mfaRequired: true; userId?: never };
 
 @Controller("auth")
 @SkipCsrf()
@@ -31,6 +36,7 @@ export class LoginLogoutController {
     @Inject(PasswordService) private readonly passwords: PasswordService,
     @Inject(SessionService) private readonly sessions: SessionService,
     @Inject(ConfigService) private readonly config: ConfigService,
+    @Inject(MfaService) private readonly mfa: MfaService,
   ) {}
 
   @Post("login")
@@ -38,7 +44,7 @@ export class LoginLogoutController {
   async login(
     @Body() body: LoginBody,
     @Res({ passthrough: true }) res: Response,
-  ): Promise<{ userId: string }> {
+  ): Promise<LoginResult> {
     const { email, password } = body;
 
     const account = await this.accounts.findByEmail(email);
@@ -52,6 +58,22 @@ export class LoginLogoutController {
     );
     if (!valid) {
       throw new UnauthorizedException("Invalid email or password");
+    }
+
+    if (account.mfaState === "enrolled") {
+      const { cookieValue } = await this.sessions.createSession({
+        userId: account.id,
+        data: { mfaPending: true },
+      });
+
+      res.cookie(SESSION_COOKIE, cookieValue, {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: this.config.get("isProduction"),
+      });
+
+      return { mfaRequired: true };
     }
 
     const { cookieValue } = await this.sessions.createSession({

@@ -81,6 +81,7 @@ Keys are registered incrementally per task (rule `05-env-vars`). Full categories
 | `SERVE_WEB_CLIENT` | When `true`, Nest serves the bundled React Router v7 web client on the same port via `@react-router/express` (combined self-host image) | `/api` | `development` (optional local combined-mode testing); combined Docker image | `false` for local API-only dev; combined `Dockerfile` sets `true` |
 | `WEB_CLIENT_SERVER_BUILD` | Absolute path to the RR7 server build entry (`index.js`) | `/api` | Required when `SERVE_WEB_CLIENT=true` | Optional when web serving disabled; combined image uses `/app/packages/web/build/server/index.js` |
 | `SESSION_TTL_DAYS` | Session sliding-window TTL in days (spec §5.3, def §3) | `/api` | `development` | `30` (default); integer |
+| `MFA_TOTP_ISSUER` | Authenticator app issuer label for TOTP (spec §5.7) | `/api` | `development` | `SlugBase` (default) |
 
 ---
 
