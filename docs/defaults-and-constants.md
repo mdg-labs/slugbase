@@ -72,6 +72,17 @@ Per spec §12.1 and §23.4: prices, the supporter price/deadline, and exact seat
 
 ---
 
+## 7. Environment variables — config reference inventory (spec §15)
+
+Keys are registered incrementally per task (rule `05-env-vars`). Full categories live in spec §15.
+
+| Key | Purpose | Infisical folder | Environments | Default / notes |
+|---|---|---|---|---|
+| `SERVE_WEB_CLIENT` | When `true`, Nest serves the bundled React Router v7 web client on the same port via `@react-router/express` (combined self-host image) | `/api` | `development` (optional local combined-mode testing); combined Docker image | `false` for local API-only dev; combined `Dockerfile` sets `true` |
+| `WEB_CLIENT_SERVER_BUILD` | Absolute path to the RR7 server build entry (`index.js`) | `/api` | Required when `SERVE_WEB_CLIENT=true` | Optional when web serving disabled; combined image uses `/app/packages/web/build/server/index.js` |
+
+---
+
 ## Change policy
 
 - Changing a **config** value: update the deployment configuration / config schema default + this table. No code logic change.
