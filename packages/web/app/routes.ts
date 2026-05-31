@@ -9,5 +9,6 @@ export default [
   route("setup", "routes/setup/setup.tsx"),
   route("forgot-password", "routes/auth/forgot-password.tsx"),
   route("reset-password", "routes/auth/reset-password.tsx"),
+  route("api/search", "routes/api/search.ts"),
   layout("routes/app-layout.tsx", [index("routes/home.tsx")]),
 ] satisfies RouteConfig;

@@ -11,3 +11,4 @@ export { resolveTheme, readStoredThemePreference, persistThemePreference } from 
 export { ThemeProvider, useTheme, type ThemeContextValue, type ThemeProviderProps } from "./theme/theme-context.js";
 export { AppShell, type AppShellProps } from "./components/AppShell.js";
 export { ThemeSwitcher, type ThemeSwitcherLabels, type ThemeSwitcherProps } from "./components/ThemeSwitcher.js";
+export { Kbd, type KbdProps } from "./components/Kbd.js";
