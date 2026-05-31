@@ -7,7 +7,7 @@ import {
 } from "@nestjs/common";
 import type { Request } from "express";
 
-import { SESSION_COOKIE } from "../auth/login-logout.controller.js";
+import { SESSION_COOKIE } from "./session-constants.js";
 import { SessionService } from "./session.service.js";
 import type { SessionData } from "./session.types.js";
 

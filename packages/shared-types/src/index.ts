@@ -11,6 +11,16 @@ export {
 } from "./contracts/mail.contract.js";
 export { apiContract, authContract, healthContract, mfaContract } from "./contracts/index.js";
 export {
+  LoginBodySchema,
+  LoginResponseSchema,
+  LogoutResponseSchema,
+  MeResponseSchema,
+  type LoginBody,
+  type LoginResponse,
+  type LogoutResponse,
+  type MeResponse,
+} from "./contracts/auth.contract.js";
+export {
   HealthResponseSchema,
   VersionResponseSchema,
   type HealthResponse,

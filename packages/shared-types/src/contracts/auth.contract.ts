@@ -22,9 +22,20 @@ export const LogoutResponseSchema = z
   })
   .strict();
 
+export const MeResponseSchema = z
+  .object({
+    id: z.string(),
+    email: z.string(),
+    name: z.string(),
+    mfaState: z.enum(["not_enrolled", "pending", "enrolled"]),
+    emailVerified: z.boolean(),
+  })
+  .strict();
+
 export type LoginBody = z.infer<typeof LoginBodySchema>;
 export type LoginResponse = z.infer<typeof LoginResponseSchema>;
 export type LogoutResponse = z.infer<typeof LogoutResponseSchema>;
+export type MeResponse = z.infer<typeof MeResponseSchema>;
 
 export const authContract = c.router({
   login: {
@@ -45,5 +56,14 @@ export const authContract = c.router({
       200: LogoutResponseSchema,
     },
     summary: "Logout and revoke the current session",
+  },
+  me: {
+    method: "GET",
+    path: "/auth/me",
+    responses: {
+      200: MeResponseSchema,
+      401: z.object({ message: z.string() }).strict(),
+    },
+    summary: "Get the current authenticated user",
   },
 });

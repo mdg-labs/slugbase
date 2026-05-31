@@ -1,23 +1,28 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   Inject,
   Post,
   Req,
   Res,
   UnauthorizedException,
+  UseGuards,
 } from "@nestjs/common";
 import type { Request, Response } from "express";
 
 import { AccountsService } from "../accounts/accounts.service.js";
 import { PasswordService } from "../accounts/password.service.js";
 import { ConfigService } from "../config/config.service.js";
+import { SESSION_COOKIE } from "../sessions/session-constants.js";
+import { SessionGuard, SESSION_USER_ID_KEY } from "../sessions/session.guard.js";
 import { SessionService } from "../sessions/session.service.js";
 import { SkipCsrf } from "./csrf/skip-csrf.decorator.js";
 import { MfaService } from "./mfa/mfa.service.js";
+import type { MeResponse } from "@slugbase/shared-types";
 
-export const SESSION_COOKIE = "slb_session";
+export { SESSION_COOKIE };
 
 interface LoginBody {
   email: string;
@@ -94,6 +99,21 @@ export class LoginLogoutController {
     });
 
     return { userId: account.id };
+  }
+
+  @Get("me")
+  @UseGuards(SessionGuard)
+  async me(@Req() req: Request): Promise<MeResponse> {
+    const userId = (req as unknown as Record<string, unknown>)[SESSION_USER_ID_KEY] as string;
+    const account = await this.accounts.findById(userId);
+    if (!account) throw new UnauthorizedException();
+    return {
+      id: account.id,
+      email: account.email,
+      name: account.name,
+      mfaState: account.mfaState,
+      emailVerified: account.emailVerified,
+    };
   }
 
   @Post("logout")
