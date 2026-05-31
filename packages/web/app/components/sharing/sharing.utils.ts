@@ -14,7 +14,7 @@ export function parseSharingScope(value: string | null | undefined): SharingScop
   return "all";
 }
 
-export function resolveBookmarkSharingScope(
+export function resolveResourceSharingScope(
   ownerUserId: string,
   currentUserId: string,
   shareGrantCount = 0,
@@ -28,7 +28,7 @@ export function resolveBookmarkSharingScope(
   return "mine";
 }
 
-export function buildBookmarkListQuery(params: {
+export function buildScopedListQuery(params: {
   scope: SharingScope;
   q?: string;
   page?: number;

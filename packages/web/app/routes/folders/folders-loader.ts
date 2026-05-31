@@ -1,45 +1,40 @@
 import type { SharingScope } from "../../components/sharing/sharing.types.js";
-import { buildScopedListQuery, parseSharingScope } from "../../components/sharing/sharing.utils.js";
+import {
+  buildScopedListQuery,
+  parseSharingScope,
+} from "../../components/sharing/sharing.utils.js";
 
 const getApiBaseUrl = (): string => process.env["API_BASE_URL"] ?? "";
 
-export type BookmarkListItem = {
+export type FolderListItem = {
   id: string;
   userId: string;
-  title: string;
-  url: string;
-  slug: string | null;
-  forwardingEnabled: boolean;
-  pinned: boolean;
-  accessCount: number;
-  lastAccessedAt: string | null;
+  name: string;
+  icon: string | null;
+  bookmarkCount: number;
   shareGrantCount: number;
 };
 
-export type BookmarkListData = {
+export type FolderListData = {
   scope: SharingScope;
   q: string;
   page: number;
   pageSize: number;
   sort: string;
   total: number;
-  items: BookmarkListItem[];
+  items: FolderListItem[];
 };
 
-interface ApiBookmark {
+interface ApiFolder {
   id: string;
   userId: string;
-  title: string;
-  url: string;
-  slug: string | null;
-  forwardingEnabled: boolean;
-  pinned: boolean;
-  accessCount: number;
-  lastAccessedAt: string | null;
+  name: string;
+  icon: string | null;
+  bookmarkCount: number;
 }
 
-interface PaginatedBookmarks {
-  items: ApiBookmark[];
+interface PaginatedFolders {
+  items: ApiFolder[];
   total: number;
   page: number;
   pageSize: number;
@@ -58,17 +53,17 @@ async function fetchJson<T>(request: Request, path: string): Promise<T | null> {
   }
 }
 
-export async function loadBookmarkListData(
+export async function loadFolderListData(
   request: Request,
-): Promise<BookmarkListData | null> {
+): Promise<FolderListData | null> {
   const url = new URL(request.url);
   const scope = parseSharingScope(url.searchParams.get("scope"));
   const q = url.searchParams.get("q") ?? "";
   const page = Number(url.searchParams.get("page") ?? "1");
   const pageSize = Number(url.searchParams.get("pageSize") ?? "12");
-  const sort = url.searchParams.get("sort") ?? "created-desc";
+  const sort = url.searchParams.get("sort") ?? "name-asc";
 
-  const listPath = `/bookmarks${buildScopedListQuery({
+  const listPath = `/folders${buildScopedListQuery({
     scope,
     q: q || undefined,
     page: Number.isFinite(page) ? page : 1,
@@ -76,23 +71,21 @@ export async function loadBookmarkListData(
     sort,
   })}`;
 
-  const list = await fetchJson<PaginatedBookmarks>(request, listPath);
+  const list = await fetchJson<PaginatedFolders>(request, listPath);
   if (!list) return null;
 
-  const ownedIds = list.items
-    .filter((item) => item.userId)
-    .map((item) => item.id);
+  const ownedIds = list.items.map((item) => item.id);
 
   const shareCounts = new Map<string, number>();
   if (ownedIds.length > 0) {
     await Promise.all(
-      ownedIds.map(async (bookmarkId) => {
+      ownedIds.map(async (folderId) => {
         const shares = await fetchJson<{ grants: Array<{ id: string }> }>(
           request,
-          `/sharing/bookmarks/${bookmarkId}`,
+          `/sharing/folders/${folderId}`,
         );
         if (shares) {
-          shareCounts.set(bookmarkId, shares.grants.length);
+          shareCounts.set(folderId, shares.grants.length);
         }
       }),
     );
@@ -112,7 +105,7 @@ export async function loadBookmarkListData(
   };
 }
 
-export function buildBookmarkListSearch(params: {
+export function buildFolderListSearch(params: {
   scope?: SharingScope;
   q?: string;
   page?: number;

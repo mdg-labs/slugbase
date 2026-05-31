@@ -13,5 +13,6 @@ export default [
   layout("routes/app-layout.tsx", [
     index("routes/dashboard/index.tsx"),
     route("bookmarks", "routes/bookmarks/index.tsx"),
+    route("folders", "routes/folders/index.tsx"),
   ]),
 ] satisfies RouteConfig;

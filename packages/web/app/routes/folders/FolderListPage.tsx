@@ -9,13 +9,13 @@ import type { SharingScope } from "../../components/sharing/sharing.types.js";
 import { resolveResourceSharingScope } from "../../components/sharing/sharing.utils.js";
 import { useWorkspaceEntitlements } from "../../components/sharing/use-workspace-entitlements.js";
 import {
-  buildBookmarkListSearch,
-  type BookmarkListData,
-} from "./bookmarks-loader.js";
+  buildFolderListSearch,
+  type FolderListData,
+} from "./folders-loader.js";
 
-export function BookmarkListPage() {
+export function FolderListPage() {
   const { t } = useTranslate();
-  const data = useLoaderData<BookmarkListData>();
+  const data = useLoaderData<FolderListData>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { currentUserId, canShare } = useWorkspaceEntitlements();
@@ -28,7 +28,7 @@ export function BookmarkListPage() {
       next.set("scope", scope);
     }
     next.delete("page");
-    void navigate(`/bookmarks?${next.toString()}`);
+    void navigate(`/folders?${next.toString()}`);
   };
 
   return (
@@ -39,87 +39,85 @@ export function BookmarkListPage() {
             className="font-semibold text-fg"
             style={{ fontSize: "var(--text-h1)", lineHeight: "var(--lh-h1)" }}
           >
-            {t("bookmarks.list.title")}
+            {t("folders.list.title")}
           </h1>
           <p className="mt-sp-2 text-fg-muted" style={{ fontSize: "var(--text-body)" }}>
-            {t("bookmarks.list.subtitle", { count: data.total })}
+            {t("folders.list.subtitle", { count: data.total })}
           </p>
         </div>
       </header>
 
       <div
         className="flex flex-wrap items-center gap-sp-4 rounded-lg border border-[color:var(--border)] bg-[color:var(--raised)] px-sp-5 py-sp-4"
-        data-testid="bookmark-list-toolbar"
+        data-testid="folder-list-toolbar"
       >
         <Form method="get" className="flex min-w-[14rem] flex-1 items-center gap-sp-3">
           <input type="hidden" name="scope" value={data.scope === "all" ? "" : data.scope} />
           <input
             name="q"
             defaultValue={data.q}
-            placeholder={t("bookmarks.list.search_placeholder")}
+            placeholder={t("folders.list.search_placeholder")}
             className="min-w-0 flex-1 rounded-md border border-[color:var(--border)] bg-[color:var(--base)] px-sp-4 py-sp-3 text-fg"
-            data-testid="bookmark-list-search"
+            data-testid="folder-list-search"
           />
           <Button type="submit" variant="secondary">
-            {t("bookmarks.list.search_action")}
+            {t("folders.list.search_action")}
           </Button>
         </Form>
 
         {canShare ? (
-          <ScopeFilter value={data.scope} onChange={updateScope} />
+          <ScopeFilter
+            value={data.scope}
+            onChange={updateScope}
+            resourceKind="folder"
+          />
         ) : null}
       </div>
 
       {data.items.length === 0 ? (
         <div
           className="rounded-lg border border-dashed border-[color:var(--border)] px-sp-8 py-sp-10 text-center"
-          data-testid="bookmark-list-empty"
+          data-testid="folder-list-empty"
         >
-          <p className="font-medium text-fg">{t("bookmarks.list.empty_title")}</p>
-          <p className="mt-sp-2 text-fg-muted">{t("bookmarks.list.empty_body")}</p>
+          <p className="font-medium text-fg">{t("folders.list.empty_title")}</p>
+          <p className="mt-sp-2 text-fg-muted">{t("folders.list.empty_body")}</p>
         </div>
       ) : (
-        <ul className="grid gap-sp-4" data-testid="bookmark-list">
-          {data.items.map((bookmark) => {
+        <ul className="grid gap-sp-4" data-testid="folder-list">
+          {data.items.map((folder) => {
             const itemScope = resolveResourceSharingScope(
-              bookmark.userId,
+              folder.userId,
               currentUserId,
-              bookmark.shareGrantCount,
+              folder.shareGrantCount,
             );
             return (
               <li
-                key={bookmark.id}
+                key={folder.id}
                 className="flex flex-wrap items-center gap-sp-4 rounded-lg border border-[color:var(--border)] bg-[color:var(--raised)] px-sp-5 py-sp-4"
-                data-testid={`bookmark-list-item-${bookmark.id}`}
+                data-testid={`folder-list-item-${folder.id}`}
                 data-scope={itemScope}
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-sp-3">
-                    <p className="truncate font-medium text-fg">{bookmark.title}</p>
+                    <p className="truncate font-medium text-fg">{folder.name}</p>
                     <ScopeIcon scope={itemScope} />
                     <SharingLabel
                       scope={itemScope}
-                      shareGrantCount={bookmark.shareGrantCount}
+                      shareGrantCount={folder.shareGrantCount}
                     />
                   </div>
-                  <p className="truncate text-small text-fg-muted">{bookmark.url}</p>
-                  {bookmark.slug ? (
-                    <p
-                      className="mt-sp-1 font-mono text-small text-fg-subtle"
-                      data-testid={`bookmark-slug-${bookmark.id}`}
-                    >
-                      /go/{bookmark.slug}
-                    </p>
-                  ) : null}
+                  <p className="text-small text-fg-muted">
+                    {t("folders.list.bookmark_count", { count: folder.bookmarkCount })}
+                  </p>
                 </div>
                 <ShareControls
-                  resourceKind="bookmark"
-                  resourceId={bookmark.id}
-                  resourceTitle={bookmark.title}
-                  ownerUserId={bookmark.userId}
+                  resourceKind="folder"
+                  resourceId={folder.id}
+                  resourceTitle={folder.name}
+                  ownerUserId={folder.userId}
                   compact
                   onUpdated={() => {
-                    void navigate(`/bookmarks${buildBookmarkListSearch({
+                    void navigate(`/folders${buildFolderListSearch({
                       scope: data.scope,
                       q: data.q || undefined,
                       page: data.page,

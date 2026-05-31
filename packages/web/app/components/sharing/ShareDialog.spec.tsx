@@ -66,4 +66,21 @@ describe("ShareDialog", () => {
       expect(view.getByText("Alex Member")).toBeTruthy();
     });
   });
+
+  it("renders share targets after loading for folders", async () => {
+    const view = render(
+      <ShareDialog
+        open
+        onOpenChange={vi.fn()}
+        resourceKind="folder"
+        resourceId="folder-1"
+        resourceTitle="Reading list"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(view.getByTestId("share-dialog")).toBeTruthy();
+      expect(view.getByTestId("share-dialog-target-select")).toBeTruthy();
+    });
+  });
 });

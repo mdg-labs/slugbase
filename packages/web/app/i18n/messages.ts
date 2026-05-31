@@ -311,6 +311,7 @@ export const staticMessages = {
     "bookmark.modal.ai.tags_hint": "Suggested tags — select to apply:",
     // Sharing
     "sharing.scope.all": "All bookmarks",
+    "sharing.scope.all_folders": "All folders",
     "sharing.scope.mine": "Only me",
     "sharing.scope.shared_with_me": "Shared with me",
     "sharing.scope.shared_by_me": "Shared by me",
@@ -346,6 +347,15 @@ export const staticMessages = {
     "bookmarks.list.empty_title": "No bookmarks match",
     "bookmarks.list.empty_body":
       "Try clearing filters or widening the sharing scope.",
+    // Folders list
+    "folders.list.title": "Folders",
+    "folders.list.subtitle": "{count} folders",
+    "folders.list.search_placeholder": "Search folder name…",
+    "folders.list.search_action": "Search",
+    "folders.list.empty_title": "No folders match",
+    "folders.list.empty_body":
+      "Try clearing filters or widening the sharing scope.",
+    "folders.list.bookmark_count": "{count} bookmarks",
   },
   de: {
     "app.shell.brand": "SlugBase",
@@ -679,6 +689,7 @@ export const staticMessages = {
     "bookmark.modal.ai.apply": "Übernehmen",
     "bookmark.modal.ai.tags_hint": "Vorgeschlagene Tags — zum Übernehmen auswählen:",
     "sharing.scope.all": "Alle Lesezeichen",
+    "sharing.scope.all_folders": "Alle Ordner",
     "sharing.scope.mine": "Nur ich",
     "sharing.scope.shared_with_me": "Mit mir geteilt",
     "sharing.scope.shared_by_me": "Von mir geteilt",
@@ -713,6 +724,14 @@ export const staticMessages = {
     "bookmarks.list.empty_title": "Keine passenden Lesezeichen",
     "bookmarks.list.empty_body":
       "Versuche, Filter zu löschen oder den Freigabe-Umfang zu erweitern.",
+    "folders.list.title": "Ordner",
+    "folders.list.subtitle": "{count} Ordner",
+    "folders.list.search_placeholder": "Ordnername suchen…",
+    "folders.list.search_action": "Suchen",
+    "folders.list.empty_title": "Keine passenden Ordner",
+    "folders.list.empty_body":
+      "Versuche, Filter zu löschen oder den Freigabe-Umfang zu erweitern.",
+    "folders.list.bookmark_count": "{count} Lesezeichen",
   },
 } as const;
 

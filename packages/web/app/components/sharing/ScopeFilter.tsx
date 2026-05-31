@@ -1,20 +1,30 @@
 import { useTranslate } from "@tolgee/react";
 import { useEffect, useRef, useState } from "react";
 
-import { SHARING_SCOPE_OPTIONS, type SharingScope } from "./sharing.types.js";
+import {
+  SHARING_SCOPE_OPTIONS,
+  type ShareResourceKind,
+  type SharingScope,
+} from "./sharing.types.js";
 import { getSharingScopeOption } from "./sharing-scope-option.js";
 
 export type ScopeFilterProps = {
   value: SharingScope;
   onChange: (scope: SharingScope) => void;
   disabled?: boolean;
+  resourceKind?: ShareResourceKind;
 };
 
-export function ScopeFilter({ value, onChange, disabled = false }: ScopeFilterProps) {
+export function ScopeFilter({
+  value,
+  onChange,
+  disabled = false,
+  resourceKind = "bookmark",
+}: ScopeFilterProps) {
   const { t } = useTranslate();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  const current = getSharingScopeOption(value);
+  const current = getSharingScopeOption(value, resourceKind);
 
   useEffect(() => {
     if (!open) return;
@@ -67,7 +77,9 @@ export function ScopeFilter({ value, onChange, disabled = false }: ScopeFilterPr
           >
             {t("sharing.scope.menu_heading")}
           </p>
-          {SHARING_SCOPE_OPTIONS.map((option) => (
+          {SHARING_SCOPE_OPTIONS.map((option) => {
+            const resolved = getSharingScopeOption(option.id, resourceKind);
+            return (
             <button
               key={option.id}
               type="button"
@@ -86,14 +98,15 @@ export function ScopeFilter({ value, onChange, disabled = false }: ScopeFilterPr
               }}
             >
               <ScopeGlyph icon={option.icon} />
-              <span className="flex-1">{t(option.labelKey)}</span>
+              <span className="flex-1">{t(resolved.labelKey)}</span>
               {value === option.id ? (
                 <span aria-hidden className="text-accent-text">
                   ✓
                 </span>
               ) : null}
             </button>
-          ))}
+            );
+          })}
         </div>
       ) : null}
     </div>
