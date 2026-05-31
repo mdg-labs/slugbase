@@ -101,6 +101,65 @@ export type BookmarkIds = z.infer<typeof BookmarkIdsSchema>;
 export type CreateBookmarkBody = z.infer<typeof CreateBookmarkBodySchema>;
 export type UpdateBookmarkBody = z.infer<typeof UpdateBookmarkBodySchema>;
 
+const bulkListFiltersSchema = BookmarkListQuerySchema.omit({
+  page: true,
+  pageSize: true,
+});
+
+export const BulkSelectionBodySchema = bulkListFiltersSchema
+  .extend({
+    bookmarkIds: z.array(z.string()).optional(),
+    selectAll: z.literal(true).optional(),
+  })
+  .strict()
+  .refine(
+    (value) => {
+      const hasIds = (value.bookmarkIds?.length ?? 0) > 0;
+      const hasSelectAll = value.selectAll === true;
+      return (hasIds || hasSelectAll) && !(hasIds && hasSelectAll);
+    },
+    { message: "Provide bookmarkIds or selectAll: true, not both" },
+  );
+
+export const BulkResultSchema = z
+  .object({
+    processed: z.number().int().nonnegative(),
+    skipped: z.number().int().nonnegative(),
+    skippedIds: z.array(z.string()),
+  })
+  .strict();
+
+export const BulkPinBodySchema = BulkSelectionBodySchema.and(
+  z.object({ pinned: z.boolean() }).strict(),
+);
+
+export const BulkMoveToFolderBodySchema = BulkSelectionBodySchema.and(
+  z.object({ folderId: z.string() }).strict(),
+);
+
+export const BulkTagsBodySchema = BulkSelectionBodySchema.and(
+  z
+    .object({
+      tagIds: z.array(z.string()).min(1),
+    })
+    .strict(),
+);
+
+export const BulkAddTagsPreviewSchema = z
+  .object({
+    total: z.number().int().nonnegative(),
+    tags: z.array(
+      z
+        .object({
+          tagId: z.string(),
+          alreadyTagged: z.number().int().nonnegative(),
+          newlyTagged: z.number().int().nonnegative(),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+
 const errorSchema = z.object({ message: z.string() }).strict();
 
 export const bookmarksContract = c.router({
@@ -197,5 +256,73 @@ export const bookmarksContract = c.router({
       403: errorSchema,
     },
     summary: "Record bookmark access asynchronously (never blocks)",
+  },
+  bulkDeleteBookmarks: {
+    method: "POST",
+    path: "/bookmarks/bulk/delete",
+    body: BulkSelectionBodySchema,
+    responses: {
+      200: BulkResultSchema,
+      400: errorSchema,
+    },
+    summary: "Bulk hard-delete owned bookmarks; skips unauthorized IDs",
+  },
+  bulkPinBookmarks: {
+    method: "POST",
+    path: "/bookmarks/bulk/pin",
+    body: BulkPinBodySchema,
+    responses: {
+      200: BulkResultSchema,
+      400: errorSchema,
+    },
+    summary: "Bulk set pinned state on owned bookmarks",
+  },
+  bulkMoveBookmarksToFolder: {
+    method: "POST",
+    path: "/bookmarks/bulk/move-to-folder",
+    body: BulkMoveToFolderBodySchema,
+    responses: {
+      200: BulkResultSchema,
+      400: errorSchema,
+      403: errorSchema,
+      404: errorSchema,
+    },
+    summary: "Bulk add owned bookmarks to a folder",
+  },
+  bulkAddTagsToBookmarks: {
+    method: "POST",
+    path: "/bookmarks/bulk/add-tags",
+    body: BulkTagsBodySchema,
+    responses: {
+      200: BulkResultSchema,
+      400: errorSchema,
+      403: errorSchema,
+      404: errorSchema,
+    },
+    summary: "Bulk add tags to owned bookmarks",
+  },
+  previewBulkAddTagsToBookmarks: {
+    method: "POST",
+    path: "/bookmarks/bulk/add-tags/preview",
+    body: BulkTagsBodySchema,
+    responses: {
+      200: BulkAddTagsPreviewSchema,
+      400: errorSchema,
+      403: errorSchema,
+      404: errorSchema,
+    },
+    summary: "Preview tag merge counts before bulk add-tags",
+  },
+  bulkRemoveTagsFromBookmarks: {
+    method: "POST",
+    path: "/bookmarks/bulk/remove-tags",
+    body: BulkTagsBodySchema,
+    responses: {
+      200: BulkResultSchema,
+      400: errorSchema,
+      403: errorSchema,
+      404: errorSchema,
+    },
+    summary: "Bulk remove tags from owned bookmarks",
   },
 });
