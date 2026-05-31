@@ -9,6 +9,7 @@ import { invitationContract } from "./invitation.contract.js";
 import { mfaContract } from "./mfa.contract.js";
 import { registrationContract } from "./registration.contract.js";
 import { setupContract } from "./setup.contract.js";
+import { slugsContract } from "./slugs.contract.js";
 import { tagsContract } from "./tags.contract.js";
 import { workspaceContract } from "./workspace.contract.js";
 
@@ -22,6 +23,7 @@ export const apiContract = c.router({
   ...bookmarksContract,
   ...foldersContract,
   ...tagsContract,
+  ...slugsContract,
   ...workspaceContract,
   ...registrationContract,
   ...setupContract,
@@ -37,5 +39,6 @@ export { invitationContract } from "./invitation.contract.js";
 export { mfaContract } from "./mfa.contract.js";
 export { registrationContract } from "./registration.contract.js";
 export { setupContract } from "./setup.contract.js";
+export { slugsContract } from "./slugs.contract.js";
 export { tagsContract } from "./tags.contract.js";
 export { workspaceContract } from "./workspace.contract.js";
