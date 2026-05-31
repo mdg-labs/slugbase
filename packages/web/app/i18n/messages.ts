@@ -29,6 +29,45 @@ export const staticMessages = {
     "auth.brand.subline":
       "Save, organize, and forward your links from a single keyboard-driven workspace.",
     "auth.brand.footer": "Self-hosted · Open source",
+    // Auth — MFA challenge
+    "mfa.challenge.title": "Two-factor authentication",
+    "mfa.challenge.subtitle_totp":
+      "Enter the 6-digit code from your authenticator app to finish signing in.",
+    "mfa.challenge.subtitle_backup":
+      "Enter one of your single-use backup codes. Each code works only once.",
+    "mfa.challenge.label_code": "Authentication code",
+    "mfa.challenge.label_backup_code": "Backup code",
+    "mfa.challenge.placeholder_backup": "XXXX-XXXX-XXXX",
+    "mfa.challenge.submit": "Verify and continue",
+    "mfa.challenge.submit_loading": "Verifying…",
+    "mfa.challenge.toggle_use_backup": "Use a backup code instead",
+    "mfa.challenge.toggle_use_totp": "Use your authenticator app instead",
+    "mfa.challenge.back_to_signin": "Back to sign in",
+    "mfa.challenge.error_invalid":
+      "Verification failed. Please check your code and try again.",
+    "mfa.challenge.error_generic": "Something went wrong. Please try again.",
+    "mfa.challenge.code_input_aria": "Authentication code input",
+    "mfa.challenge.digit_aria": "Digit {n}",
+    // Auth — MFA enrollment
+    "mfa.enroll.title": "Set up two-factor authentication",
+    "mfa.enroll.subtitle":
+      "Scan this QR code with your authenticator app, then enter the 6-digit confirmation code.",
+    "mfa.enroll.qr_alt": "QR code for authenticator app",
+    "mfa.enroll.text_secret_label": "Can\u2019t scan? Enter this code manually:",
+    "mfa.enroll.label_confirm_code": "Confirmation code",
+    "mfa.enroll.submit_confirm": "Activate MFA",
+    "mfa.enroll.submit_loading": "Activating\u2026",
+    "mfa.enroll.error_invalid": "Code is incorrect. Please try again.",
+    "mfa.enroll.error_generic": "Something went wrong. Please try again.",
+    // Auth — MFA backup codes
+    "mfa.backup_codes.title": "Save your backup codes",
+    "mfa.backup_codes.warning":
+      "These codes are shown only once. Save them somewhere safe \u2014 you will need them if you lose access to your authenticator app.",
+    "mfa.backup_codes.copy": "Copy all codes",
+    "mfa.backup_codes.copied": "Copied!",
+    "mfa.backup_codes.confirm_label":
+      "I have saved my backup codes in a safe place",
+    "mfa.backup_codes.submit": "Continue",
   },
   de: {
     "app.shell.brand": "SlugBase",
@@ -62,6 +101,49 @@ export const staticMessages = {
     "auth.brand.subline":
       "Speichere, organisiere und leite deine Links aus einem tastaturgesteuerten Arbeitsbereich weiter.",
     "auth.brand.footer": "Self-hosted · Open Source",
+    // Auth — MFA challenge
+    "mfa.challenge.title": "Zwei-Faktor-Authentifizierung",
+    "mfa.challenge.subtitle_totp":
+      "Gib den 6-stelligen Code aus deiner Authentifizierungs-App ein, um die Anmeldung abzuschlie\u00dfen.",
+    "mfa.challenge.subtitle_backup":
+      "Gib einen deiner Einmal-Backup-Codes ein. Jeder Code ist nur einmal verwendbar.",
+    "mfa.challenge.label_code": "Authentifizierungscode",
+    "mfa.challenge.label_backup_code": "Backup-Code",
+    "mfa.challenge.placeholder_backup": "XXXX-XXXX-XXXX",
+    "mfa.challenge.submit": "Verifizieren und fortfahren",
+    "mfa.challenge.submit_loading": "Wird verifiziert\u2026",
+    "mfa.challenge.toggle_use_backup":
+      "Stattdessen einen Backup-Code verwenden",
+    "mfa.challenge.toggle_use_totp":
+      "Stattdessen die Authentifizierungs-App verwenden",
+    "mfa.challenge.back_to_signin": "Zur\u00fcck zur Anmeldung",
+    "mfa.challenge.error_invalid":
+      "Verifizierung fehlgeschlagen. Bitte \u00fcberpr\u00fcfe deinen Code und versuche es erneut.",
+    "mfa.challenge.error_generic":
+      "Etwas ist schiefgelaufen. Bitte versuche es erneut.",
+    "mfa.challenge.code_input_aria": "Authentifizierungscode-Eingabe",
+    "mfa.challenge.digit_aria": "Ziffer {n}",
+    // Auth — MFA enrollment
+    "mfa.enroll.title": "Zwei-Faktor-Authentifizierung einrichten",
+    "mfa.enroll.subtitle":
+      "Scanne diesen QR-Code mit deiner Authentifizierungs-App und gib dann den 6-stelligen Best\u00e4tigungscode ein.",
+    "mfa.enroll.qr_alt": "QR-Code f\u00fcr die Authentifizierungs-App",
+    "mfa.enroll.text_secret_label": "Kein Scan m\u00f6glich? Gib diesen Code manuell ein:",
+    "mfa.enroll.label_confirm_code": "Best\u00e4tigungscode",
+    "mfa.enroll.submit_confirm": "MFA aktivieren",
+    "mfa.enroll.submit_loading": "Wird aktiviert\u2026",
+    "mfa.enroll.error_invalid": "Code ist falsch. Bitte versuche es erneut.",
+    "mfa.enroll.error_generic":
+      "Etwas ist schiefgelaufen. Bitte versuche es erneut.",
+    // Auth — MFA backup codes
+    "mfa.backup_codes.title": "Backup-Codes speichern",
+    "mfa.backup_codes.warning":
+      "Diese Codes werden nur einmal angezeigt. Bewahre sie an einem sicheren Ort auf \u2014 du ben\u00f6tigst sie, wenn du keinen Zugriff mehr auf deine Authentifizierungs-App hast.",
+    "mfa.backup_codes.copy": "Alle Codes kopieren",
+    "mfa.backup_codes.copied": "Kopiert!",
+    "mfa.backup_codes.confirm_label":
+      "Ich habe meine Backup-Codes an einem sicheren Ort gespeichert",
+    "mfa.backup_codes.submit": "Fortfahren",
   },
 } as const;
 
