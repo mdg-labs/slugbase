@@ -1,3 +1,8 @@
+export {
+  CryptoDecryptError,
+  CryptoEncryptError,
+  type CryptoService,
+} from "./contracts/crypto.contract.js";
 export { apiContract, healthContract } from "./contracts/index.js";
 export {
   HealthResponseSchema,
