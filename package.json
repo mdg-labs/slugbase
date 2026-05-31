@@ -11,7 +11,9 @@
     "typecheck": "turbo run typecheck",
     "test:unit": "turbo run test:unit",
     "test:integration": "turbo run test:integration",
-    "build": "turbo run build"
+    "build": "turbo run build",
+    "db:generate": "pnpm --filter @slugbase/backend db:generate",
+    "db:migrate": "pnpm --filter @slugbase/backend db:migrate"
   },
   "devDependencies": {
     "@eslint/js": "^9.28.0",

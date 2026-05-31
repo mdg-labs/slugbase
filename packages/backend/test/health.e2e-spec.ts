@@ -2,23 +2,39 @@ import "reflect-metadata";
 
 import { type INestApplication } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { Server } from "node:http";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { AppModule } from "../src/app.module.js";
 import { validateEnvConfig } from "../src/config/env.schema.js";
+import { runMigrations } from "../src/db/migrate/run-migrations.js";
 import {
   applyTestEnv,
   clearTestEnv,
   productionEnvWithoutSessionSecret,
 } from "../src/test-utils/test-env.js";
 
+let tempDir: string;
+let databaseUrl: string;
+
+async function initTestDatabase(): Promise<void> {
+  tempDir = await mkdtemp(join(tmpdir(), "slugbase-health-"));
+  const dbPath = join(tempDir, "health.sqlite");
+  databaseUrl = `sqlite://${dbPath}`;
+  runMigrations(databaseUrl);
+}
+
 describe("health and version (integration)", () => {
-  let app: INestApplication;
+  let app: INestApplication | undefined;
 
   beforeAll(async () => {
-    applyTestEnv();
+    await initTestDatabase();
+    applyTestEnv({ DATABASE_URL: databaseUrl });
+
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
     }).compile();
@@ -28,8 +44,11 @@ describe("health and version (integration)", () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    if (app) {
+      await app.close();
+    }
     clearTestEnv();
+    await rm(tempDir, { recursive: true, force: true });
   });
 
   it("GET /health returns 200 with ok status", async () => {

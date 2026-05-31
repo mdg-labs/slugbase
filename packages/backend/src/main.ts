@@ -5,8 +5,13 @@ import { fileURLToPath } from "node:url";
 
 import { AppModule } from "./app.module.js";
 import { ConfigService } from "./config/config.service.js";
+import { runMigrations } from "./db/migrate/run-migrations.js";
+import { validateEnvConfig } from "./config/env.schema.js";
 
 export async function bootstrap(): Promise<void> {
+  const startupConfig = validateEnvConfig(process.env);
+  runMigrations(startupConfig.DATABASE_URL);
+
   const app = await NestFactory.create(AppModule, { logger: ["error", "warn"] });
   const config = app.get(ConfigService);
   await app.listen(config.get("PORT"));
