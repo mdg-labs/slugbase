@@ -15,6 +15,13 @@
       "when": 1780218658697,
       "tag": "0001_giant_vengeance",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1780220924331,
+      "tag": "0002_old_metal_master",
+      "breakpoints": true
     }
   ]
 }

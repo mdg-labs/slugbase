@@ -26,6 +26,7 @@
     "@react-router/express": "^7.16.0",
     "@slugbase/shared-types": "workspace:^",
     "@types/cookie-parser": "^1.4.10",
+    "argon2": "^0.44.0",
     "better-sqlite3": "^11.10.0",
     "compression": "^1.8.1",
     "cookie-parser": "^1.4.7",

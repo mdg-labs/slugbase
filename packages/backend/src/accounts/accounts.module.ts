@@ -1,4 +1,10 @@
 import { Module } from "@nestjs/common";
 
-@Module({})
+import { AccountsService } from "./accounts.service.js";
+import { PasswordService } from "./password.service.js";
+
+@Module({
+  providers: [AccountsService, PasswordService],
+  exports: [AccountsService, PasswordService],
+})
 export class AccountsModule {}
