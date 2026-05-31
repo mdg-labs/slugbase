@@ -104,7 +104,7 @@ Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit w
 - **AC:** workflow with PR/push triggers (`staging`,`main`); CI job: install → lint/typecheck/unit → Infisical OIDC fetch → build → integration → `pnpm audit`; only `INFISICAL_DOMAIN`+`INFISICAL_OIDC_IDENTITY_ID` as GHA secrets.
 - **Tests:** workflow YAML validates; CI green on the P1 scaffold.
 - **Files:** `.github/workflows/ci-cd.yml`, `.github/actions/**`
-- **Doc Ref:** spec §22.1–22.3, §22.9; eng §7, §8, §10 · **Deps:** P1-01 · **Status:** [ ]
+- **Doc Ref:** spec §22.1–22.3, §22.9; eng §7, §8, §10 · **Deps:** P1-01 · **Status:** [x]
 
 ### P1-10 — Container images (combined + API-only) — Infra · Lane P
 - **AC:** API-only + combined (API + bundled web) images; single port; mounted volume for embedded DB; health/version reachable in-container.
