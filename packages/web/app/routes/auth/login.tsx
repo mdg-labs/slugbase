@@ -1,7 +1,7 @@
 import { useTranslate } from "@tolgee/react";
 import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { Form, redirect, useActionData, useNavigation } from "react-router";
+import { Form, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
 import { getSessionUser } from "../../lib/session-client.js";
 
 const API_BASE_URL = () => process.env["API_BASE_URL"] ?? "";
@@ -10,7 +10,9 @@ const API_BASE_URL = () => process.env["API_BASE_URL"] ?? "";
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await getSessionUser(request);
   if (user) return redirect("/");
-  return {};
+  const url = new URL(request.url);
+  const passwordReset = url.searchParams.get("reset") === "success";
+  return { passwordReset };
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -60,6 +62,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
 export default function LoginRoute() {
   const { t } = useTranslate();
+  const { passwordReset } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
@@ -181,6 +184,24 @@ export default function LoginRoute() {
           </div>
 
           <Form method="post" className="flex flex-col gap-sp-5" noValidate>
+            {/* Password reset success banner */}
+            {passwordReset && (
+              <div
+                role="status"
+                className="flex items-start gap-sp-3 rounded-md border border-[color:var(--success-subtle)] bg-[color:var(--success-subtle)] px-sp-4 py-sp-3"
+              >
+                <p
+                  className="text-success-text"
+                  style={{
+                    fontSize: "var(--text-small)",
+                    lineHeight: "var(--lh-small)",
+                  }}
+                >
+                  {t("auth.login.reset_success")}
+                </p>
+              </div>
+            )}
+
             {/* Error banner */}
             {error && (
               <div
