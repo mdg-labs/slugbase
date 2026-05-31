@@ -1,5 +1,24 @@
 import { z } from "zod";
 
+/** Parses env-style booleans; `z.coerce.boolean()` treats the string `"false"` as true. */
+function parseEnvBoolean(value: unknown, defaultValue: boolean): boolean {
+  if (value === undefined || value === null || value === "") {
+    return defaultValue;
+  }
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true" || normalized === "1") return true;
+    if (normalized === "false" || normalized === "0") return false;
+  }
+  return Boolean(value);
+}
+
+const envBoolean = (defaultValue: boolean) =>
+  z.preprocess((value) => parseEnvBoolean(value, defaultValue), z.boolean());
+
 const requiredSecretsSchema = z
   .object({
     SESSION_SECRET: z.string().min(32),
@@ -56,6 +75,8 @@ const optionalFlagsSchema = z
     SENTRY_DSN: z.string().min(1).optional(),
     SENTRY_ENVIRONMENT: z.string().min(1).optional(),
     SENTRY_RELEASE: z.string().min(1).optional(),
+    // OpenAPI interactive docs (spec §18) — optional Scalar UI at GET /docs
+    OPENAPI_INTERACTIVE_DOCS: envBoolean(true),
   })
   .strict()
   .superRefine((flags, ctx) => {
@@ -135,6 +156,7 @@ function readFlagsInput(env: NodeJS.ProcessEnv) {
     SENTRY_DSN: env.SENTRY_DSN,
     SENTRY_ENVIRONMENT: env.SENTRY_ENVIRONMENT,
     SENTRY_RELEASE: env.SENTRY_RELEASE,
+    OPENAPI_INTERACTIVE_DOCS: env.OPENAPI_INTERACTIVE_DOCS,
   };
 }
 

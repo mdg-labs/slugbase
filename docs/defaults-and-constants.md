@@ -87,6 +87,7 @@ Keys are registered incrementally per task (rule `05-env-vars`). Full categories
 | `RATE_LIMIT_LOGIN_TTL_SECONDS` | Window size in seconds for the `ip` throttler | `/api` | `development` | `900` (15 min) |
 | `RATE_LIMIT_TOKEN_CREATION_MAX` | Max token-creation requests per window (per session) — spec §18, def §4 | `/api` | `development` | `20` (default) |
 | `RATE_LIMIT_TOKEN_CREATION_TTL_SECONDS` | Window size in seconds for the `user-hour` throttler | `/api` | `development` | `3600` (1 hr) |
+| `OPENAPI_INTERACTIVE_DOCS` | When `true`, serves Scalar interactive API docs at `GET /docs`; `GET /openapi.json` is always published (spec §18) | `/api` | `development` | `true` (default); set `false` to disable interactive UI |
 | `OPENAI_API_KEY` | OpenAI API credential for AI bookmark suggestions (spec §11.2) | `/api` | `development` (optional); hosted `staging`/`production` | Empty = AI disabled (no-op); self-hosted BYO key may also be set via encrypted workspace settings |
 | `OPENAI_MODEL` | OpenAI chat model id for suggestions | `/api` | `development` | `gpt-4o-mini` (default) |
 | `STRIPE_SECRET_KEY` | Stripe API secret for hosted billing (spec §11.4) | `/api` | `staging`/`production` (hosted) | Empty = no-op billing / full entitlements (self-host) |
