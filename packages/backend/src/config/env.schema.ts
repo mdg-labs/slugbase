@@ -17,6 +17,13 @@ const optionalFlagsSchema = z
     PORT: z.coerce.number().int().positive().default(3000),
     SERVE_WEB_CLIENT: z.coerce.boolean().default(false),
     WEB_CLIENT_SERVER_BUILD: z.string().min(1).optional(),
+    // SMTP transport (spec §11.1, §15) — optional; no-op mail used when SMTP_HOST is absent
+    SMTP_HOST: z.string().min(1).optional(),
+    SMTP_PORT: z.coerce.number().int().positive().default(587),
+    SMTP_SECURE: z.coerce.boolean().default(false),
+    SMTP_USER: z.string().min(1).optional(),
+    SMTP_PASS: z.string().min(1).optional(),
+    SMTP_FROM: z.string().min(1).optional(),
   })
   .strict()
   .superRefine((flags, ctx) => {
@@ -68,6 +75,12 @@ function readFlagsInput(env: NodeJS.ProcessEnv) {
     PORT: env.PORT,
     SERVE_WEB_CLIENT: env.SERVE_WEB_CLIENT,
     WEB_CLIENT_SERVER_BUILD: env.WEB_CLIENT_SERVER_BUILD,
+    SMTP_HOST: env.SMTP_HOST,
+    SMTP_PORT: env.SMTP_PORT,
+    SMTP_SECURE: env.SMTP_SECURE,
+    SMTP_USER: env.SMTP_USER,
+    SMTP_PASS: env.SMTP_PASS,
+    SMTP_FROM: env.SMTP_FROM,
   };
 }
 

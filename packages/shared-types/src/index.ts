@@ -3,6 +3,12 @@ export {
   CryptoEncryptError,
   type CryptoService,
 } from "./contracts/crypto.contract.js";
+export {
+  MailSendError,
+  type MailMessage,
+  type MailMessageType,
+  type MailService,
+} from "./contracts/mail.contract.js";
 export { apiContract, healthContract } from "./contracts/index.js";
 export {
   HealthResponseSchema,
