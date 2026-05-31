@@ -1,8 +1,7 @@
 import { Controller, Get, Inject, Res } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
 import type { Response } from "express";
 
-import type { AppConfig } from "../../config/env.schema.js";
+import { ConfigService } from "../../config/config.service.js";
 import { CsrfService } from "./csrf.service.js";
 import { SkipCsrf } from "./skip-csrf.decorator.js";
 
@@ -13,7 +12,7 @@ const CSRF_COOKIE = "csrf_token";
 export class CsrfController {
   constructor(
     @Inject(CsrfService) private readonly csrfService: CsrfService,
-    private readonly config: ConfigService<AppConfig>,
+    private readonly config: ConfigService,
   ) {}
 
   @Get("csrf-token")
@@ -25,7 +24,7 @@ export class CsrfController {
       httpOnly: false,
       sameSite: "lax",
       path: "/",
-      secure: this.config.get("isProduction") ?? false,
+      secure: this.config.get("isProduction"),
     });
     return { csrfToken: token };
   }
