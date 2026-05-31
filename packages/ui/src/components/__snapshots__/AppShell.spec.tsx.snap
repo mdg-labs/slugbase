@@ -1,0 +1,50 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`AppShell > matches base layout snapshot 1`] = `
+<div>
+  <div
+    class="flex min-h-screen bg-canvas font-sans text-body text-fg"
+    data-testid="app-shell"
+  >
+    <aside
+      class="flex w-56 shrink-0 flex-col border-r border-[color:var(--border)] bg-base"
+      data-testid="app-shell-sidebar"
+    >
+      <div
+        class="border-b border-[color:var(--border-subtle)] px-sp-6 py-sp-5"
+      >
+        <p
+          class="t-h3"
+        >
+          SlugBase
+        </p>
+        <p
+          class="t-small mt-sp-4"
+        >
+          Personal workspace
+        </p>
+      </div>
+      <nav
+        aria-label="Personal workspace"
+        class="flex-1 px-sp-4 py-sp-5"
+      />
+    </aside>
+    <div
+      class="flex min-w-0 flex-1 flex-col"
+    >
+      <header
+        class="flex items-center justify-end gap-sp-5 border-b border-[color:var(--border-subtle)] bg-base px-sp-6 py-sp-5"
+        data-testid="app-shell-header"
+      />
+      <main
+        class="flex-1 bg-canvas p-sp-8"
+        data-testid="app-shell-main"
+      >
+        <p>
+          Content
+        </p>
+      </main>
+    </div>
+  </div>
+</div>
+`;

@@ -1,9 +1,14 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "outDir": "dist",
-    "rootDir": "src"
+    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "rootDirs": [".", "./.react-router/types"],
+    "noEmit": true,
+    "types": ["vite/client"]
   },
-  "include": ["src/**/*.ts"],
-  "references": [{ "path": "../shared-types" }]
+  "include": ["app/**/*", ".react-router/types/**/*"],
+  "references": [{ "path": "../ui" }]
 }

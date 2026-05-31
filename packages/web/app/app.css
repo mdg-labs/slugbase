@@ -1,0 +1,5 @@
+@import "@slugbase/ui/styles/colors-and-type.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

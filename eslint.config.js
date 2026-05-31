@@ -21,7 +21,13 @@ export default tseslint.config(
     },
   },
   {
-    ignores: ["**/dist/**", "**/node_modules/**", "**/.turbo/**"],
+    ignores: [
+      "**/dist/**",
+      "**/node_modules/**",
+      "**/.turbo/**",
+      "**/.react-router/**",
+      "packages/web/build/**",
+    ],
   },
   {
     files: ["packages/backend/src/**/*.module.ts"],

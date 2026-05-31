@@ -9,6 +9,8 @@ docs/example.ci-cd.yml
 # dependencies & build
 node_modules/
 dist/
+build/
+.react-router/
 .turbo/
 *.tsbuildinfo
 
