@@ -8,6 +8,7 @@ import type { SessionService } from "../sessions/session.service.js";
 import type { EmailVerificationService } from "../auth/verification/email-verification.service.js";
 import type { WorkspacesService } from "../workspaces/workspaces.service.js";
 import type { WorkspaceRecord } from "../workspaces/workspace.types.js";
+import { EMPTY_WORKSPACE_BILLING } from "../workspaces/workspace.types.js";
 
 function makeWorkspace(overrides: Partial<WorkspaceRecord> = {}): WorkspaceRecord {
   return {
@@ -17,6 +18,7 @@ function makeWorkspace(overrides: Partial<WorkspaceRecord> = {}): WorkspaceRecor
     plan: "free",
     planSeats: null,
     planArchived: false,
+    ...EMPTY_WORKSPACE_BILLING,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,

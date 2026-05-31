@@ -90,6 +90,7 @@ Keys are registered incrementally per task (rule `05-env-vars`). Full categories
 | `OPENAI_API_KEY` | OpenAI API credential for AI bookmark suggestions (spec §11.2) | `/api` | `development` (optional); hosted `staging`/`production` | Empty = AI disabled (no-op); self-hosted BYO key may also be set via encrypted workspace settings |
 | `OPENAI_MODEL` | OpenAI chat model id for suggestions | `/api` | `development` | `gpt-4o-mini` (default) |
 | `STRIPE_SECRET_KEY` | Stripe API secret for hosted billing (spec §11.4) | `/api` | `staging`/`production` (hosted) | Empty = no-op billing / full entitlements (self-host) |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret for idempotent event processing (spec §11.4) | `/api` | hosted | Required when Stripe billing is enabled |
 | `STRIPE_PRICE_PERSONAL` | Stripe price id for Personal recurring checkout | `/api` | hosted | Config-driven; not hard-coded in app logic (§12.1) |
 | `STRIPE_PRICE_TEAM` | Stripe price id for Team recurring checkout | `/api` | hosted | Config-driven |
 | `STRIPE_PRICE_TEAM_EXTRA_SEAT` | Stripe price id for Team extra-seat quantity updates | `/api` | hosted | Optional; config-driven |

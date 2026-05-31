@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import type { BillingCheckoutMode, BillingPlan } from "@slugbase/shared-types";
 
 import { ConfigService } from "../../config/config.service.js";
@@ -19,7 +19,7 @@ export interface PlanPriceConfig {
  */
 @Injectable()
 export class PlanConfigService {
-  constructor(private readonly config: ConfigService) {}
+  constructor(@Inject(ConfigService) private readonly config: ConfigService) {}
 
   getTeamBaseSeats(): number {
     return this.config.get("TEAM_BASE_SEATS");

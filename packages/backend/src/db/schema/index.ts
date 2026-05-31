@@ -1,3 +1,4 @@
+import { billingWebhookEvents } from "./billing-webhook-event.schema.js";
 import { auditEvents } from "./audit-event.schema.js";
 import { aiSuggestionCache } from "./ai-suggestion-cache.schema.js";
 import { instanceMetadata } from "../system.schema.js";
@@ -25,6 +26,7 @@ import { workspaceInvitations } from "./workspace-invitation.schema.js";
 import { workspaceMembers } from "./workspace-member.schema.js";
 import { workspaces } from "./workspace.schema.js";
 
+export { billingWebhookEvents } from "./billing-webhook-event.schema.js";
 export { auditEvents } from "./audit-event.schema.js";
 export { aiSuggestionCache } from "./ai-suggestion-cache.schema.js";
 export { instanceMetadata } from "../system.schema.js";
@@ -53,6 +55,7 @@ export { workspaceMembers } from "./workspace-member.schema.js";
 export { workspaces } from "./workspace.schema.js";
 
 export const schema = {
+  billingWebhookEvents,
   auditEvents,
   aiSuggestionCache,
   instanceMetadata,

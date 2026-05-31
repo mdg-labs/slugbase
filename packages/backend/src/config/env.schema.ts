@@ -29,6 +29,7 @@ const optionalFlagsSchema = z
     OPENAI_MODEL: z.string().min(1).default("gpt-4o-mini"),
     // Stripe billing (spec §11.4, §15) — optional; no-op billing / full entitlements when absent
     STRIPE_SECRET_KEY: z.string().min(1).optional(),
+    STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
     // Config-driven Stripe price ids (spec §12.1, def §6) — not hard-coded in app logic
     STRIPE_PRICE_PERSONAL: z.string().min(1).optional(),
     STRIPE_PRICE_TEAM: z.string().min(1).optional(),
@@ -105,6 +106,7 @@ function readFlagsInput(env: NodeJS.ProcessEnv) {
     OPENAI_API_KEY: env.OPENAI_API_KEY,
     OPENAI_MODEL: env.OPENAI_MODEL,
     STRIPE_SECRET_KEY: env.STRIPE_SECRET_KEY,
+    STRIPE_WEBHOOK_SECRET: env.STRIPE_WEBHOOK_SECRET,
     STRIPE_PRICE_PERSONAL: env.STRIPE_PRICE_PERSONAL,
     STRIPE_PRICE_TEAM: env.STRIPE_PRICE_TEAM,
     STRIPE_PRICE_TEAM_EXTRA_SEAT: env.STRIPE_PRICE_TEAM_EXTRA_SEAT,

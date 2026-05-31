@@ -1,6 +1,14 @@
 export type WorkspacePlan = "free" | "personal" | "team";
 export type WorkspaceMemberRole = "OWNER" | "ADMIN" | "MEMBER";
 
+export const EMPTY_WORKSPACE_BILLING = {
+  billingCustomerId: null,
+  billingSubscriptionId: null,
+  billingStatus: null,
+  billingPeriodEnd: null,
+  permanentPersonal: false,
+} as const;
+
 export const ROLE_HIERARCHY: Record<WorkspaceMemberRole, number> = {
   OWNER: 3,
   ADMIN: 2,
@@ -14,6 +22,11 @@ export interface WorkspaceRecord {
   plan: WorkspacePlan;
   planSeats: number | null;
   planArchived: boolean;
+  billingCustomerId: string | null;
+  billingSubscriptionId: string | null;
+  billingStatus: string | null;
+  billingPeriodEnd: Date | null;
+  permanentPersonal: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -39,6 +52,11 @@ export interface UpdateWorkspaceData {
   plan?: WorkspacePlan;
   planSeats?: number | null;
   planArchived?: boolean;
+  billingCustomerId?: string | null;
+  billingSubscriptionId?: string | null;
+  billingStatus?: string | null;
+  billingPeriodEnd?: Date | null;
+  permanentPersonal?: boolean;
 }
 
 export interface CreateWorkspaceMemberData {

@@ -15,6 +15,7 @@ export async function bootstrap(): Promise<void> {
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: ["error", "warn"],
+    rawBody: true,
   });
   app.use(cookieParser());
   await app.init();

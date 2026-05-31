@@ -9,6 +9,7 @@ import {
   type WorkspaceMemberRole,
   type WorkspaceRecord,
 } from "./workspace.types.js";
+import { EMPTY_WORKSPACE_BILLING } from "./workspace.types.js";
 
 interface ServiceInternals {
   workspaceRepo: WorkspaceRepository;
@@ -42,6 +43,7 @@ function makeWorkspace(overrides: Partial<WorkspaceRecord> = {}): WorkspaceRecor
     plan: "free",
     planSeats: null,
     planArchived: false,
+    ...EMPTY_WORKSPACE_BILLING,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,

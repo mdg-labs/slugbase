@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import type { SessionRecord } from "../sessions/session.types.js";
 import { ACTIVE_WORKSPACE_KEY } from "./tenant.guard.js";
 import type { WorkspaceRecord } from "./workspace.types.js";
+import { EMPTY_WORKSPACE_BILLING } from "./workspace.types.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -32,6 +33,7 @@ function makeWorkspace(id = "ws-1"): WorkspaceRecord {
     plan: "free",
     planSeats: null,
     planArchived: false,
+    ...EMPTY_WORKSPACE_BILLING,
     createdAt: new Date(),
     updatedAt: new Date(),
   };

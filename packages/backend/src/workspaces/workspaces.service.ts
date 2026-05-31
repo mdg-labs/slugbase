@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 
+import { workspaceHasActivePaidBilling } from "../billing/workspace-billing.util.js";
 import { DbService } from "../db/db.service.js";
 import { WorkspaceMemberRepository } from "./workspace-member.repository.js";
 import { WorkspaceRepository } from "./workspace.repository.js";
@@ -86,6 +87,12 @@ export class WorkspacesService {
 
   async deleteWorkspace(id: string, requesterId: string): Promise<void> {
     await this.requireWorkspaceRole(id, requesterId, "OWNER");
+    const workspace = await this.getWorkspace(id);
+    if (workspaceHasActivePaidBilling(workspace)) {
+      throw new ForbiddenException(
+        "Cannot delete a workspace with an active paid subscription. Cancel billing via the portal first.",
+      );
+    }
     await this.memberRepo.deleteAllByWorkspace(id);
     await this.workspaceRepo.delete(id);
   }

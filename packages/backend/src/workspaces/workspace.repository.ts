@@ -28,6 +28,11 @@ function toRecord(row: {
   plan: string;
   planSeats: number | null;
   planArchived: boolean | number;
+  billingCustomerId: string | null;
+  billingSubscriptionId: string | null;
+  billingStatus: string | null;
+  billingPeriodEnd: Date | number | null;
+  permanentPersonal: boolean | number;
   createdAt: Date | number;
   updatedAt: Date | number;
 }): WorkspaceRecord {
@@ -38,6 +43,18 @@ function toRecord(row: {
     plan: row.plan as WorkspacePlan,
     planSeats: row.planSeats ?? null,
     planArchived: Boolean(row.planArchived),
+    billingCustomerId: row.billingCustomerId ?? null,
+    billingSubscriptionId: row.billingSubscriptionId ?? null,
+    billingStatus: row.billingStatus ?? null,
+    billingPeriodEnd:
+      row.billingPeriodEnd === null
+        ? null
+        : new Date(
+            row.billingPeriodEnd instanceof Date
+              ? row.billingPeriodEnd.getTime()
+              : row.billingPeriodEnd,
+          ),
+    permanentPersonal: Boolean(row.permanentPersonal),
     createdAt: new Date(
       row.createdAt instanceof Date ? row.createdAt.getTime() : row.createdAt,
     ),
@@ -63,6 +80,7 @@ export class WorkspaceRepository {
       plan: data.plan ?? "free",
       planSeats: data.planSeats ?? null,
       planArchived: false,
+      permanentPersonal: false,
     };
 
     if (this.dialect === "sqlite") {
@@ -144,21 +162,30 @@ export class WorkspaceRepository {
 
   async update(id: string, patch: UpdateWorkspaceData): Promise<WorkspaceRecord | null> {
     const updatedAt = nowMs();
-    const setPatch = { ...patch, updatedAt };
 
     if (this.dialect === "sqlite") {
       const sqliteDb = this.db as SqliteDrizzleClient;
       sqliteDb
         .update(sqliteWorkspaces)
-        .set({ ...setPatch, updatedAt: new Date(updatedAt) })
+        .set({
+          ...patch,
+          updatedAt: new Date(updatedAt),
+        })
         .where(eq(sqliteWorkspaces.id, id))
         .run();
       return this.findById(id);
     }
 
+    const { billingPeriodEnd, ...rest } = patch;
     await (this.db as PostgresDrizzleClient)
       .update(pgWorkspaces)
-      .set(setPatch)
+      .set({
+        ...rest,
+        updatedAt,
+        ...(billingPeriodEnd !== undefined
+          ? { billingPeriodEnd: billingPeriodEnd?.getTime() ?? null }
+          : {}),
+      })
       .where(eq(pgWorkspaces.id, id));
     return this.findById(id);
   }

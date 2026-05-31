@@ -1,8 +1,16 @@
 import { Global, Module } from "@nestjs/common";
 import Stripe from "stripe";
 
+import { AccountsModule } from "../accounts/accounts.module.js";
 import { ConfigModule } from "../config/config.module.js";
 import { ConfigService } from "../config/config.service.js";
+import { SessionsModule } from "../sessions/sessions.module.js";
+import {
+  BillingApplicationService,
+  STRIPE_WEBHOOK_CLIENT,
+  type StripeWebhookClient,
+} from "./billing-application.service.js";
+import { BillingController } from "./billing.controller.js";
 import { BILLING, STRIPE_CLIENT } from "./billing.tokens.js";
 import { BillingProfileService } from "./billing-profile.service.js";
 import { PlansModule } from "./plans/plans.module.js";
@@ -16,11 +24,13 @@ import { StripeBillingService, type StripeBillingClient } from "./stripe-billing
  */
 @Global()
 @Module({
-  imports: [ConfigModule, PlansModule],
+  imports: [ConfigModule, PlansModule, AccountsModule, SessionsModule],
+  controllers: [BillingController],
   providers: [
     NoopBillingService,
     StripeBillingService,
     BillingProfileService,
+    BillingApplicationService,
     {
       provide: STRIPE_CLIENT,
       useFactory: (config: ConfigService): StripeBillingClient => {
@@ -29,6 +39,17 @@ import { StripeBillingService, type StripeBillingClient } from "./stripe-billing
           return createUnavailableStripeClient();
         }
         return new Stripe(secretKey) as unknown as StripeBillingClient;
+      },
+      inject: [ConfigService],
+    },
+    {
+      provide: STRIPE_WEBHOOK_CLIENT,
+      useFactory: (config: ConfigService): StripeWebhookClient => {
+        const secretKey = config.get("STRIPE_SECRET_KEY");
+        if (!secretKey) {
+          return createUnavailableWebhookClient();
+        }
+        return new Stripe(secretKey);
       },
       inject: [ConfigService],
     },
@@ -44,7 +65,14 @@ import { StripeBillingService, type StripeBillingClient } from "./stripe-billing
       inject: [ConfigService, StripeBillingService, NoopBillingService],
     },
   ],
-  exports: [BILLING, BillingProfileService, NoopBillingService, StripeBillingService, PlansModule],
+  exports: [
+    BILLING,
+    BillingApplicationService,
+    BillingProfileService,
+    NoopBillingService,
+    StripeBillingService,
+    PlansModule,
+  ],
 })
 export class BillingModule {}
 
@@ -56,5 +84,15 @@ function createUnavailableStripeClient(): StripeBillingClient {
     checkout: { sessions: { create: unavailable } },
     billingPortal: { sessions: { create: unavailable } },
     subscriptions: { retrieve: unavailable, update: unavailable },
+  };
+}
+
+function createUnavailableWebhookClient(): StripeWebhookClient {
+  return {
+    webhooks: {
+      constructEvent: (): never => {
+        throw new Error("Stripe webhook client requested without STRIPE_SECRET_KEY");
+      },
+    },
   };
 }

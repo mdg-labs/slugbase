@@ -113,7 +113,7 @@ describe("StripeBillingService", () => {
     ).rejects.toBeInstanceOf(BillingSeatFloorError);
   });
 
-  it("processes subscription webhook events idempotently", async () => {
+  it("processes subscription webhook events", async () => {
     const service = new StripeBillingService(createConfig(), createStripeClient());
     const payload = {
       id: "evt_sub_updated",
@@ -131,11 +131,9 @@ describe("StripeBillingService", () => {
     };
 
     const first = await service.handleAsyncEvent({ eventId: "evt_sub_updated", payload });
-    const second = await service.handleAsyncEvent({ eventId: "evt_sub_updated", payload });
 
     expect(first.stateUpdated).toBe(true);
     expect(first.subscriptionState?.plan).toBe("personal");
-    expect(second).toEqual({ processed: true, stateUpdated: false });
   });
 
   it("maps supporter checkout completion to Personal-permanent", async () => {

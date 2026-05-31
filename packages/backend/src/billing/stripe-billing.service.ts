@@ -53,7 +53,6 @@ export interface StripeBillingClient {
 @Injectable()
 export class StripeBillingService implements BillingService {
   private readonly logger = new Logger(StripeBillingService.name);
-  private readonly processedEventIds = new Set<string>();
 
   constructor(
     @Inject(ConfigService) private readonly config: ConfigService,
@@ -74,13 +73,23 @@ export class StripeBillingService implements BillingService {
     this.assertAvailable();
 
     try {
+      const teamBaseSeats = this.config.get("TEAM_BASE_SEATS");
+      const isTeamRecurring = request.mode === "recurring" && request.plan === "team";
+
       const session = await this.stripe.checkout.sessions.create({
         mode: request.mode === "one_time" ? "payment" : "subscription",
-        line_items: [{ price: request.priceId, quantity: 1 }],
+        line_items: [
+          {
+            price: request.priceId,
+            quantity: isTeamRecurring ? teamBaseSeats : 1,
+          },
+        ],
         success_url: request.successUrl,
         cancel_url: request.cancelUrl,
         customer: request.externalCustomerId ?? undefined,
         customer_email: request.externalCustomerId ? undefined : request.customerEmail,
+        automatic_tax: { enabled: true },
+        tax_id_collection: { enabled: true },
         metadata: {
           workspace_id: request.workspaceId,
           plan: request.plan,
@@ -94,6 +103,9 @@ export class StripeBillingService implements BillingService {
                 metadata: {
                   workspace_id: request.workspaceId,
                   plan: request.plan,
+                  ...(request.plan === "team"
+                    ? { included_seats: String(teamBaseSeats) }
+                    : {}),
                 },
               }
             : undefined,
@@ -187,18 +199,11 @@ export class StripeBillingService implements BillingService {
   handleAsyncEvent(event: BillingAsyncEvent): Promise<BillingEventResult> {
     this.assertAvailable();
 
-    if (this.processedEventIds.has(event.eventId)) {
-      this.logger.debug("Skipping duplicate billing event", { eventId: event.eventId });
-      return Promise.resolve({ processed: true, stateUpdated: false });
-    }
-
     const stripeEvent = parseStripeEvent(event.payload);
     if (!stripeEvent) {
       this.logger.warn("Unrecognized billing event payload", { eventId: event.eventId });
       return Promise.resolve({ processed: false, stateUpdated: false });
     }
-
-    this.processedEventIds.add(event.eventId);
 
     switch (stripeEvent.type) {
       case "customer.subscription.created":
