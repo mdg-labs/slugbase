@@ -23,4 +23,10 @@ export default tseslint.config(
   {
     ignores: ["**/dist/**", "**/node_modules/**", "**/.turbo/**"],
   },
+  {
+    files: ["packages/backend/src/**/*.module.ts"],
+    rules: {
+      "@typescript-eslint/no-extraneous-class": "off",
+    },
+  },
 );
