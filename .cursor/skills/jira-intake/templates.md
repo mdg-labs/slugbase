@@ -88,7 +88,7 @@ See child issue descriptions for acceptance criteria, file paths, and tests.
 - [ ] {Concrete, testable outcome}
 - [ ] DB changes use migration tooling only (no hand-written SQL) — see DB MIGRATIONS block
 - [ ] No deployment-mode branches (`isCloud`) — entitlements engine only (spec §15)
-- [ ] All new env vars registered (Phase + .env.example + schema + docs) (05-env-vars.mdc)
+- [ ] All new env vars registered (Infisical + .env.example + schema + docs) (05-env-vars.mdc)
 
 ---
 

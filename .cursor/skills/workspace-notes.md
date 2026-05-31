@@ -75,7 +75,7 @@ _added: 2026-05-31_
 
 | Concern | Tool | Notes |
 |---|---|---|
-| Secrets management | **Infisical** | Self-hosted `https://secrets.mdg-labs.dev/`; project slug `slugbase-cloud`; envs `development` / `staging` / `production` (currently **empty** — seed as keys are registered); folders per surface `/api` (sensitive) · `/web` + `/marketing` (public `VITE_*`/`PUBLIC_*`) · `/shared`; local `infisical run --env=development -- <cmd>`; CI OIDC via `Infisical/secrets-action`. **Phase CLI not used.** OIDC identity model (single vs per-surface) still open. |
+| Secrets management | **Infisical** | Self-hosted `https://secrets.mdg-labs.dev/`; project slug `slugbase-cloud`; envs `development` / `staging` / `production` (currently **empty** — seed as keys are registered); folders per surface `/api` (sensitive) · `/web` + `/marketing` (public `VITE_*`/`PUBLIC_*`) · `/shared`; local `infisical run --env=development -- <cmd>`; CI OIDC via `Infisical/secrets-action` — **single** machine identity (`INFISICAL_OIDC_IDENTITY_ID`), project-scoped read-only; per-surface identities deferred. **Phase CLI not used.** |
 | Translations | **Tolgee** | v1: en + de (spec §17); self-hosted `https://tolgee.mdg-labs.dev`, project **4** (`TOLGEE_PROJECT_ID=4`, `VITE_TOLGEE_API_URL=https://tolgee.mdg-labs.dev`); Tolgee React SDK in the `web` (React Router v7) app + shared Tolgee project for the Astro marketing site |
 
 Rules touched: `00-project.mdc` (tech-stack + tooling), `05-env-vars.mdc` (Infisical project + workflow), `10-i18n.mdc` (Tolgee instance/project). `TOLGEE_PROJECT_ID=4` is recorded in the `10-i18n.mdc` key inventory.

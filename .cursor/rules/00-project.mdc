@@ -47,14 +47,15 @@ Stages: CI checks → staging deploy (push `staging`) → prepare release (push 
 
 ## Repository state
 
-This repo currently contains only docs. Application code is built phase-by-phase from `docs/slugbase-development-roadmap.md` (plan file — to be drafted). When unsure what phase we're in, read the roadmap.
+This repo currently contains only docs. Application code is built phase-by-phase from `docs/slugbase-development-roadmap.md` (plan file — **DRAFT, pre-Jira**; phases P1–P6). When unsure what phase we're in, read the roadmap.
 
 ## Spec doc precedence (when docs conflict)
 
 1. `docs/slugbase-mvp-spec.md` — **product source of truth**: product vision, architecture, data model, interface contracts, billing, security, self-hosted story, resolved decisions
-2. `docs/design-prototype/V1/` — **visual & interaction-design source of truth** (design tokens, screens, states, copy tone). On any product conflict, the spec (1) wins — see spec §23.4 and rule `11-design-system.mdc`.
+2. `docs/engineering-decisions.md` — **engineering source of truth**: stack, tooling, conventions, infra, CI commands. `docs/defaults-and-constants.md` holds pinned config values. The spec (1) wins on product conflicts.
+3. `docs/design-prototype/V1/` — **visual & interaction-design source of truth** (design tokens, screens, states, copy tone). On any product conflict, the spec (1) wins — see spec §23.4 and rule `11-design-system.mdc`.
 
-*(Additional docs — engineering decisions, API design, schema reference, testing strategy — to be added alongside the roadmap.)*
+*(Companion docs: `engineering-decisions.md`, `defaults-and-constants.md`, `slugbase-development-roadmap.md` (phased plan). `schema-reference.md` / `api-design.md` grow incrementally with the roadmap.)*
 
 ## Hard rules
 

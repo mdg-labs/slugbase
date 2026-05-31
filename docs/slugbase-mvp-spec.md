@@ -810,7 +810,7 @@ All environment secrets are fetched from Infisical via the `Infisical/secrets-ac
 
 `/web` and `/marketing` contain no true secrets (those values are inlined into client bundles); the sensitive set lives only in `/api`. Each deploy job reads only its surface's folder(s).
 
-**Open (to finalize in `engineering-decisions.md`):** one OIDC identity (single `INFISICAL_OIDC_IDENTITY_ID`, as listed above) vs **per-surface identities** (`ci-api` / `ci-web` / `ci-marketing`) for tighter least-privilege at the cost of additional GHA identity IDs.
+**OIDC identity (settled):** a **single machine identity** (`INFISICAL_OIDC_IDENTITY_ID`) is used for all CI jobs, scoped read-only to the `slugbase-cloud` project. Folder separation still limits what each *deployed* surface receives at runtime (the API runtime gets `/api` + `/shared`, the Workers builds get `/web` / `/marketing`). Per-surface CI identities (`ci-api` / `ci-web` / `ci-marketing`) are a possible later hardening, not v1.
 
 ### 22.10 What is not in this pipeline
 

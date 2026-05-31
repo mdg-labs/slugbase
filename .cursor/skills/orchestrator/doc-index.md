@@ -5,15 +5,22 @@ Sub-agents read these files themselves — never paste content into prompts.
 
 ## Precedence (when docs conflict)
 
-1. `docs/slugbase-mvp-spec.md` — product behaviour, architecture, data model, interface contracts, billing, security, resolved decisions
+1. `docs/slugbase-mvp-spec.md` — **product source of truth**: behaviour, architecture, data model, interface contracts, billing, security, resolved decisions
+2. `docs/engineering-decisions.md` — **engineering source of truth**: stack, tooling, conventions, infra, CI commands (spec wins on product conflicts)
+3. `docs/defaults-and-constants.md` — pinned default/config values (slug grammar, caps, TTLs, rate limits, archive rule)
+4. `docs/design-prototype/V1/` — **visual/interaction source of truth** (spec wins on product conflict; divergences in spec §23.4)
 
-*(Additional docs will be added as the roadmap is drafted. Update this index when new spec docs are created.)*
+The phased work plan is `docs/slugbase-development-roadmap.md` (pre-Jira; once converted, Jira is the execution source of truth). `schema-reference.md` / `api-design.md` grow incrementally with the roadmap — add them here when created.
 
 ## Doc shorthand (use in roadmap Doc Ref column)
 
 | Shorthand | File | Covers |
 |---|---|---|
 | `spec` | `docs/slugbase-mvp-spec.md` | Full product & architecture spec |
+| `eng` | `docs/engineering-decisions.md` | Stack, tooling, conventions, infra, CI commands |
+| `def` | `docs/defaults-and-constants.md` | Pinned defaults/constants |
+| `proto` | `docs/design-prototype/V1/` | Visual/interaction prototype (screen map spec §23.2) |
+| `roadmap` | `docs/slugbase-development-roadmap.md` | Phased task plan (pre-Jira) |
 
 Reference sections as `§N` or heading, e.g. `spec §5`, `spec §11.4`, `spec §16`.
 
