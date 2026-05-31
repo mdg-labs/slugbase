@@ -80,7 +80,7 @@ Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit w
 - **AC:** Postgres engine selectable by config on the same schema/migrations; CI runs the integration suite against **both** SQLite and Postgres.
 - **Tests:** integration suite passes on both engines in CI.
 - **Files:** `packages/backend/src/db/**`, `.github/workflows/ci-cd.yml`
-- **Doc Ref:** spec §11.9, decision #32; eng §4, §6 · **Deps:** P1-04, P1-09 · **Status:** [ ]
+- **Doc Ref:** spec §11.9, decision #32; eng §4, §6 · **Deps:** P1-04, P1-09 · **Status:** [x]
 
 ### P1-06 — Crypto interface (at-rest encryption) — BE · Lane P
 - **AC:** `CRYPTO` encrypt/decrypt with `ENCRYPTION_KEY`; strict mode refuses silent failure in prod; exercised by a sample settings field.
