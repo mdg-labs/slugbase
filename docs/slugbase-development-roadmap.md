@@ -358,7 +358,7 @@ Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit w
 - **AC:** team sharing, team admin, member invitations, audit log gated to Team on hosted; UI hides/disables, API refuses; always on for self-host.
 - **Tests:** integration: each gated surface refused on non-Team hosted; allowed on self-host.
 - **Files:** `packages/backend/src/{sharing,teams,invitations,audit}/**` (guards), `packages/backend/src/entitlements/**`
-- **Doc Ref:** spec §12.2, §12.4 · **Deps:** P4-02, P4-04, P4-05 · **Status:** [ ]
+- **Doc Ref:** spec §12.2, §12.4 · **Deps:** P4-02, P4-04, P4-05 · **Status:** [x]
 
 ---
 
