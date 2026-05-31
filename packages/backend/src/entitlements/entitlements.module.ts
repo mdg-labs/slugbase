@@ -1,4 +1,9 @@
 import { Module } from "@nestjs/common";
 
-@Module({})
+import { EntitlementsService } from "./entitlements.service.js";
+
+@Module({
+  providers: [EntitlementsService],
+  exports: [EntitlementsService],
+})
 export class EntitlementsModule {}
