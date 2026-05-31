@@ -17,6 +17,8 @@ When introducing **any** new env var, complete all four steps below in the **sam
 
 The project is currently **empty** — seed `development` as you register keys (step 1). Point the local CLI at the self-hosted instance once (`infisical login --domain https://secrets.mdg-labs.dev`), then select the project via the committed `.infisical.json` (or `--projectId`). **Phase CLI is not used — Infisical only** (decision #34). CI fetches secrets via OIDC (`Infisical/secrets-action`); only `INFISICAL_DOMAIN` and `INFISICAL_OIDC_IDENTITY_ID` live in GitHub Actions secrets (spec §22.9).
 
+**Folder layout (per environment — spec §22.9):** `/api` = all sensitive server-side secrets · `/web` = public `VITE_*` client config · `/marketing` = public `PUBLIC_*` config · `/shared` = values used by >1 surface (`APP_BASE_URL`, `FRONTEND_ORIGIN`). Put a new key in the folder for the surface(s) that consume it; sensitive values go only in `/api`. Never place a real secret in `/web` or `/marketing` (those are inlined into client bundles).
+
 ## This rule fires when you
 
 - Reference a new env var in application code

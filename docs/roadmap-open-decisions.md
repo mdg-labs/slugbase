@@ -7,7 +7,9 @@
 - **D-21:** P1 exits on the foundation vertical slice (monorepo scaffold + CI gate + health/version + DB abstraction + one engine).
 - **All other D-NN:** accepted as recommended.
 
-The stack/architecture decisions are now folded into `slugbase-mvp-spec.md` (§19 + decisions #37–#50). This worksheet is retained only until the durable companion docs (D-15) are written, then deleted.
+The stack, tooling, and infra decisions are now folded into `slugbase-mvp-spec.md` (§19, §14.7, §22.9 + decisions #37–#51) and the `.cursor/rules`. Also settled since this worksheet was written and confirmed: Infisical secret **folder layout** (`/api` · `/web` · `/marketing` · `/shared`, spec §22.9), platform **app naming** (`slugbase-<env>-<app>`, decision #51), and **staging API scale-to-zero**.
+
+**This worksheet is not maintained further.** Its only content not yet in a durable doc is the **D-14 defaults table**, which moves to `defaults-and-constants.md`. Delete this file once the roadmap + that defaults doc absorb it.
 
 ---
 

@@ -795,9 +795,22 @@ On `release` published (same trigger as the hosted production deploy), the workf
 
 ### 22.9 Secrets in CI
 
-All environment secrets are fetched from Infisical via the `Infisical/secrets-action` using **OIDC** (no long-lived tokens in GitHub Actions secrets). The only GitHub Actions secrets stored in the repository are:
+All environment secrets are fetched from Infisical via the `Infisical/secrets-action` using **OIDC** (no long-lived tokens in GitHub Actions secrets). The Infisical instance is self-hosted (`https://secrets.mdg-labs.dev/`), project slug `slugbase-cloud`. The only GitHub Actions secrets stored in the repository are:
 - `INFISICAL_DOMAIN` — the Infisical instance URL
 - `INFISICAL_OIDC_IDENTITY_ID` — the machine identity for OIDC auth
+
+**Secret organization (folders, settled):** within each Infisical environment (`staging` / `production`; `development` is local-only), secrets are organized by deploy surface:
+
+| Folder | Holds | Read by |
+|---|---|---|
+| `/api` | **all sensitive server-side secrets** (`SESSION_SECRET`, `ENCRYPTION_KEY`, `DATABASE_URL`, SMTP, `OPENAI_API_KEY`, Stripe secret + webhook, Turnstile secret, `TOLGEE_API_KEY`, error-reporting DSN, aggregate-stats secret, OIDC provider config) | API deploy |
+| `/web` | public, build-time-inlined client config only (`VITE_*`) | web build/deploy |
+| `/marketing` | public config only (`PUBLIC_*`) | marketing build/deploy |
+| `/shared` | values imported by >1 surface (e.g. `APP_BASE_URL`, `FRONTEND_ORIGIN`) | imported into `/api`, `/web` |
+
+`/web` and `/marketing` contain no true secrets (those values are inlined into client bundles); the sensitive set lives only in `/api`. Each deploy job reads only its surface's folder(s).
+
+**Open (to finalize in `engineering-decisions.md`):** one OIDC identity (single `INFISICAL_OIDC_IDENTITY_ID`, as listed above) vs **per-surface identities** (`ci-api` / `ci-web` / `ci-marketing`) for tighter least-privilege at the cost of additional GHA identity IDs.
 
 ### 22.10 What is not in this pipeline
 
