@@ -42,4 +42,32 @@ export default tseslint.config(
       "@typescript-eslint/no-unsafe-assignment": "off",
     },
   },
+  {
+    // @nestjs/throttler v6 lacks an `exports` field, so ESLint's TypeScript
+    // project service (NodeNext resolution) cannot resolve its types and treats
+    // them as `any`. tsc --noEmit passes cleanly. Disable the affected unsafe
+    // rules only for files that directly import from @nestjs/throttler.
+    files: [
+      "packages/backend/src/auth/rate-limit/**/*.ts",
+      "packages/backend/src/app.module.ts",
+    ],
+    rules: {
+      "@typescript-eslint/no-unsafe-call": "off",
+      "@typescript-eslint/no-unsafe-member-access": "off",
+      "@typescript-eslint/prefer-promise-reject-errors": "off",
+    },
+  },
+  {
+    files: [
+      "packages/backend/src/auth/api-tokens/api-token.controller.ts",
+      "packages/backend/src/auth/csrf/csrf.controller.ts",
+      "packages/backend/src/auth/login-logout.controller.ts",
+      "packages/backend/src/auth/mfa/mfa.controller.ts",
+      "packages/backend/src/auth/registration/registration.controller.ts",
+      "packages/backend/src/health/health.controller.ts",
+    ],
+    rules: {
+      "@typescript-eslint/no-unsafe-call": "off",
+    },
+  },
 );
