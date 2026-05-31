@@ -4,6 +4,61 @@ export const staticMessages = {
     "app.shell.brand": "SlugBase",
     "app.shell.workspace_default": "Personal workspace",
     "app.home.welcome": "Welcome to your workspace.",
+    // Dashboard
+    "dashboard.title": "Home",
+    "dashboard.subtitle": "Overview for {workspace}.",
+    "dashboard.search_entry.placeholder":
+      "Search bookmarks, folders, and tags…",
+    "dashboard.stats.bookmarks": "Bookmarks",
+    "dashboard.stats.folders": "Folders",
+    "dashboard.stats.tags": "Tags",
+    "dashboard.quick_access.title": "Quick access",
+    "dashboard.quick_access.subtitle": "Most used slugs",
+    "dashboard.quick_access.empty":
+      "Save bookmarks with slugs to see frequently used shortcuts here.",
+    "dashboard.pinned.title": "Pinned",
+    "dashboard.pinned.view_all": "View all →",
+    "dashboard.pinned.empty": "No pinned bookmarks yet.",
+    "dashboard.pinned.last_accessed": "{time} ago",
+    "dashboard.recent.title": "Recently used",
+    "dashboard.recent.empty": "Open bookmarks to see recent activity here.",
+    "dashboard.recent.last_accessed": "{time} ago",
+    "dashboard.folders.title": "Folders",
+    "dashboard.folders.view_all": "All folders →",
+    "dashboard.folders.empty": "Create a folder to organize bookmarks.",
+    "dashboard.tags.title": "Most used tags",
+    "dashboard.tags.view_all": "All tags →",
+    "dashboard.tags.empty": "Create tags to group related bookmarks.",
+    "dashboard.sharing.title": "Sharing",
+    "dashboard.sharing.shared_with_you": "Shared with you",
+    "dashboard.sharing.shared_by_you": "Shared by you",
+    "dashboard.checklist.title": "Getting started",
+    "dashboard.checklist.complete_badge": "Complete",
+    "dashboard.checklist.dismiss_aria": "Dismiss checklist",
+    "dashboard.checklist.complete_message":
+      "You're all set. SlugBase is ready to use.",
+    "dashboard.checklist.show_again": "Show again",
+    "dashboard.checklist.import_label": "Import from browser",
+    "dashboard.checklist.import_description":
+      "Migrate your existing bookmarks in one step.",
+    "dashboard.checklist.browser_shortcut_label":
+      "Set up browser search shortcut",
+    "dashboard.checklist.browser_shortcut_description":
+      "Type a keyword plus your slug in the address bar.",
+    "dashboard.checklist.folder_label": "Create a folder",
+    "dashboard.checklist.folder_description":
+      "Organize bookmarks into folders.",
+    "dashboard.checklist.tag_label": "Create a tag",
+    "dashboard.checklist.tag_description":
+      "Group related bookmarks with tags.",
+    "dashboard.entitlement.approaching_title":
+      "{count} bookmarks left on Free",
+    "dashboard.entitlement.approaching_body":
+      "You're approaching the {cap}-bookmark cap ({used} used). Upgrade to Personal for unlimited saves.",
+    "dashboard.entitlement.at_cap_title": "Bookmark limit reached",
+    "dashboard.entitlement.at_cap_body":
+      "You've used all {cap} bookmarks on Free. Upgrade to keep saving.",
+    "dashboard.entitlement.upgrade_action": "Upgrade to Personal",
     "theme.switcher.group": "Theme",
     "theme.switcher.light": "Light",
     "theme.switcher.dark": "Dark",
@@ -248,6 +303,64 @@ export const staticMessages = {
     "app.shell.brand": "SlugBase",
     "app.shell.workspace_default": "Persönlicher Arbeitsbereich",
     "app.home.welcome": "Willkommen in deinem Arbeitsbereich.",
+    // Dashboard
+    "dashboard.title": "Start",
+    "dashboard.subtitle": "Übersicht für {workspace}.",
+    "dashboard.search_entry.placeholder":
+      "Lesezeichen, Ordner und Tags durchsuchen…",
+    "dashboard.stats.bookmarks": "Lesezeichen",
+    "dashboard.stats.folders": "Ordner",
+    "dashboard.stats.tags": "Tags",
+    "dashboard.quick_access.title": "Schnellzugriff",
+    "dashboard.quick_access.subtitle": "Meistgenutzte Slugs",
+    "dashboard.quick_access.empty":
+      "Speichere Lesezeichen mit Slugs, um häufig genutzte Shortcuts hier zu sehen.",
+    "dashboard.pinned.title": "Angepinnt",
+    "dashboard.pinned.view_all": "Alle anzeigen →",
+    "dashboard.pinned.empty": "Noch keine angepinnten Lesezeichen.",
+    "dashboard.pinned.last_accessed": "vor {time}",
+    "dashboard.recent.title": "Zuletzt verwendet",
+    "dashboard.recent.empty":
+      "Öffne Lesezeichen, um kürzliche Aktivität hier zu sehen.",
+    "dashboard.recent.last_accessed": "vor {time}",
+    "dashboard.folders.title": "Ordner",
+    "dashboard.folders.view_all": "Alle Ordner →",
+    "dashboard.folders.empty":
+      "Erstelle einen Ordner, um Lesezeichen zu organisieren.",
+    "dashboard.tags.title": "Meistgenutzte Tags",
+    "dashboard.tags.view_all": "Alle Tags →",
+    "dashboard.tags.empty":
+      "Erstelle Tags, um verwandte Lesezeichen zu gruppieren.",
+    "dashboard.sharing.title": "Freigabe",
+    "dashboard.sharing.shared_with_you": "Mit dir geteilt",
+    "dashboard.sharing.shared_by_you": "Von dir geteilt",
+    "dashboard.checklist.title": "Erste Schritte",
+    "dashboard.checklist.complete_badge": "Abgeschlossen",
+    "dashboard.checklist.dismiss_aria": "Checkliste ausblenden",
+    "dashboard.checklist.complete_message":
+      "Alles erledigt. SlugBase ist einsatzbereit.",
+    "dashboard.checklist.show_again": "Erneut anzeigen",
+    "dashboard.checklist.import_label": "Aus dem Browser importieren",
+    "dashboard.checklist.import_description":
+      "Migriere deine vorhandenen Lesezeichen in einem Schritt.",
+    "dashboard.checklist.browser_shortcut_label":
+      "Browser-Suchkurzbefehl einrichten",
+    "dashboard.checklist.browser_shortcut_description":
+      "Gib ein Stichwort plus deinen Slug in die Adressleiste ein.",
+    "dashboard.checklist.folder_label": "Ordner erstellen",
+    "dashboard.checklist.folder_description":
+      "Organisiere Lesezeichen in Ordnern.",
+    "dashboard.checklist.tag_label": "Tag erstellen",
+    "dashboard.checklist.tag_description":
+      "Gruppiere verwandte Lesezeichen mit Tags.",
+    "dashboard.entitlement.approaching_title":
+      "{count} Lesezeichen übrig im Free-Tarif",
+    "dashboard.entitlement.approaching_body":
+      "Du näherst dich dem Limit von {cap} Lesezeichen ({used} genutzt). Upgrade auf Personal für unbegrenzte Speicherung.",
+    "dashboard.entitlement.at_cap_title": "Lesezeichen-Limit erreicht",
+    "dashboard.entitlement.at_cap_body":
+      "Du hast alle {cap} Lesezeichen im Free-Tarif genutzt. Upgrade, um weiter zu speichern.",
+    "dashboard.entitlement.upgrade_action": "Auf Personal upgraden",
     "theme.switcher.group": "Design",
     "theme.switcher.light": "Hell",
     "theme.switcher.dark": "Dunkel",
