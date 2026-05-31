@@ -12,6 +12,8 @@ export default [
   route("api/search", "routes/api/search.ts"),
   layout("routes/app-layout.tsx", [
     index("routes/dashboard/index.tsx"),
+    route("bookmarks", "routes/bookmarks/index.tsx"),
+    route("folders", "routes/folders/index.tsx"),
     route("settings/members", "routes/settings/members/index.tsx"),
   ]),
 ] satisfies RouteConfig;
