@@ -318,7 +318,43 @@ export class TagRepository extends WorkspaceScopedRepository<TagRecord> {
     tagId: string,
     bookmarkId: string,
   ): Promise<void> {
+    const exists = await this.hasBookmarkTagLink(
+      workspaceId,
+      tagId,
+      bookmarkId,
+    );
+    if (exists) return;
     await this.insertBookmarkTagLink(workspaceId, tagId, bookmarkId);
+  }
+
+  async removeBookmarkFromTag(
+    workspaceId: string,
+    tagId: string,
+    bookmarkId: string,
+  ): Promise<void> {
+    if (this.dialect === "sqlite") {
+      (this.db as SqliteDrizzleClient)
+        .delete(sqliteBookmarkTags)
+        .where(
+          and(
+            eq(sqliteBookmarkTags.workspaceId, workspaceId),
+            eq(sqliteBookmarkTags.tagId, tagId),
+            eq(sqliteBookmarkTags.bookmarkId, bookmarkId),
+          ),
+        )
+        .run();
+      return;
+    }
+
+    await (this.db as PostgresDrizzleClient)
+      .delete(pgBookmarkTags)
+      .where(
+        and(
+          eq(pgBookmarkTags.workspaceId, workspaceId),
+          eq(pgBookmarkTags.tagId, tagId),
+          eq(pgBookmarkTags.bookmarkId, bookmarkId),
+        ),
+      );
   }
 
   async countTagsForBookmark(
@@ -433,6 +469,40 @@ export class TagRepository extends WorkspaceScopedRepository<TagRecord> {
           eq(pgBookmarkTags.tagId, tagId),
         ),
       );
+  }
+
+  private async hasBookmarkTagLink(
+    workspaceId: string,
+    tagId: string,
+    bookmarkId: string,
+  ): Promise<boolean> {
+    if (this.dialect === "sqlite") {
+      const row = (this.db as SqliteDrizzleClient)
+        .select({ id: sqliteBookmarkTags.id })
+        .from(sqliteBookmarkTags)
+        .where(
+          and(
+            eq(sqliteBookmarkTags.workspaceId, workspaceId),
+            eq(sqliteBookmarkTags.tagId, tagId),
+            eq(sqliteBookmarkTags.bookmarkId, bookmarkId),
+          ),
+        )
+        .get();
+      return row != null;
+    }
+
+    const rows = await (this.db as PostgresDrizzleClient)
+      .select({ id: pgBookmarkTags.id })
+      .from(pgBookmarkTags)
+      .where(
+        and(
+          eq(pgBookmarkTags.workspaceId, workspaceId),
+          eq(pgBookmarkTags.tagId, tagId),
+          eq(pgBookmarkTags.bookmarkId, bookmarkId),
+        ),
+      )
+      .limit(1);
+    return rows.length > 0;
   }
 
   private async insertBookmarkTagLink(
