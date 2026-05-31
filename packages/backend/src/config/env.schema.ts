@@ -28,6 +28,11 @@ const optionalFlagsSchema = z
     SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),
     // MFA TOTP issuer label shown in authenticator apps (spec §5.7)
     MFA_TOTP_ISSUER: z.string().min(1).default("SlugBase"),
+    // Rate limiting (spec §18, def §4) — IP-based for login/register/MFA; user-based for token creation
+    RATE_LIMIT_LOGIN_MAX: z.coerce.number().int().positive().default(10),
+    RATE_LIMIT_LOGIN_TTL_SECONDS: z.coerce.number().int().positive().default(900),
+    RATE_LIMIT_TOKEN_CREATION_MAX: z.coerce.number().int().positive().default(20),
+    RATE_LIMIT_TOKEN_CREATION_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
   })
   .strict()
   .superRefine((flags, ctx) => {
@@ -87,6 +92,10 @@ function readFlagsInput(env: NodeJS.ProcessEnv) {
     SMTP_FROM: env.SMTP_FROM,
     SESSION_TTL_DAYS: env.SESSION_TTL_DAYS,
     MFA_TOTP_ISSUER: env.MFA_TOTP_ISSUER,
+    RATE_LIMIT_LOGIN_MAX: env.RATE_LIMIT_LOGIN_MAX,
+    RATE_LIMIT_LOGIN_TTL_SECONDS: env.RATE_LIMIT_LOGIN_TTL_SECONDS,
+    RATE_LIMIT_TOKEN_CREATION_MAX: env.RATE_LIMIT_TOKEN_CREATION_MAX,
+    RATE_LIMIT_TOKEN_CREATION_TTL_SECONDS: env.RATE_LIMIT_TOKEN_CREATION_TTL_SECONDS,
   };
 }
 

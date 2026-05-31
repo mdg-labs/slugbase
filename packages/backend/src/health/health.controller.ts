@@ -1,4 +1,5 @@
 import { Controller, Get } from "@nestjs/common";
+import { SkipThrottle } from "@nestjs/throttler";
 import {
   HealthResponseSchema,
   VersionResponseSchema,
@@ -16,6 +17,7 @@ function readPackageVersion(): string {
 }
 
 @Controller()
+@SkipThrottle({ ip: true, "user-hour": true })
 export class HealthController {
   private readonly version = readPackageVersion();
 
