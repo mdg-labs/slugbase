@@ -15,6 +15,8 @@ import type { BookmarkModalAiContext } from "./ai/bookmark-modal-ai.types.js";
 import { DEFAULT_BOOKMARK_MODAL_AI_CONTEXT } from "./ai/bookmark-modal-ai.types.js";
 import type { FetchAiSuggestionsFn } from "./ai/bookmark-modal-ai.types.js";
 import { useBookmarkModalAiSuggestions } from "./ai/use-bookmark-modal-ai-suggestions.js";
+import { ShareControls } from "../sharing/ShareControls.js";
+import { useWorkspaceEntitlements } from "../sharing/use-workspace-entitlements.js";
 import type {
   BookmarkModalFieldErrors,
   BookmarkModalFolderOption,
@@ -72,6 +74,7 @@ export function BookmarkModal({
   fetchAiSuggestions,
 }: BookmarkModalProps) {
   const { t } = useTranslate();
+  const { canShare, currentUserId } = useWorkspaceEntitlements();
   const formId = useId();
   const urlErrorId = `${formId}-url-error`;
   const titleErrorId = `${formId}-title-error`;
@@ -455,22 +458,39 @@ export function BookmarkModal({
               </label>
             </div>
 
-            <div
-              className="rounded-lg border border-dashed border-[color:var(--border)] bg-[color:var(--raised)] p-sp-5 opacity-70"
-              aria-disabled="true"
-            >
+            <div className="rounded-lg border border-[color:var(--border)] bg-[color:var(--raised)] p-sp-5">
               <p
-                className="font-medium text-fg-muted"
+                className="font-medium text-fg"
                 style={{ fontSize: "var(--text-body)", lineHeight: "var(--lh-body)" }}
               >
                 {t("bookmark.modal.sharing_label")}
               </p>
-              <p
-                className="mt-sp-2 text-fg-subtle"
-                style={{ fontSize: "var(--text-small)", lineHeight: "var(--lh-small)" }}
-              >
-                {t("bookmark.modal.sharing_placeholder")}
-              </p>
+              {mode === "edit" && bookmark ? (
+                canShare ? (
+                  <div className="mt-sp-4">
+                    <ShareControls
+                      resourceKind="bookmark"
+                      resourceId={bookmark.id}
+                      resourceTitle={bookmark.title}
+                      ownerUserId={currentUserId}
+                    />
+                  </div>
+                ) : (
+                  <p
+                    className="mt-sp-2 text-fg-subtle"
+                    style={{ fontSize: "var(--text-small)", lineHeight: "var(--lh-small)" }}
+                  >
+                    {t("sharing.upgrade_required")}
+                  </p>
+                )
+              ) : (
+                <p
+                  className="mt-sp-2 text-fg-subtle"
+                  style={{ fontSize: "var(--text-small)", lineHeight: "var(--lh-small)" }}
+                >
+                  {t("bookmark.modal.sharing_after_save")}
+                </p>
+              )}
             </div>
 
             {submitError ? (

@@ -16,6 +16,14 @@ vi.mock("@tolgee/react", () => ({
   }),
 }));
 
+vi.mock("../sharing/use-workspace-entitlements.js", () => ({
+  useWorkspaceEntitlements: () => ({
+    workspace: { id: "ws-1", name: "Personal", plan: "personal" },
+    currentUserId: "user-1",
+    canShare: true,
+  }),
+}));
+
 const folders = [{ id: "folder-1", name: "Reading", icon: "book" }];
 const tags = [{ id: "tag-1", name: "research" }];
 
