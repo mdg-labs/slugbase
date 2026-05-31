@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { and, asc, desc, eq, like, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, like, or, sql, type SQL } from "drizzle-orm";
 
 import { bookmarkScopeCondition } from "../common/authz/authz-sql.js";
 
@@ -96,6 +96,16 @@ function scopeCondition(
   bookmarksTable: typeof sqliteBookmarks | typeof pgBookmarks,
 ): SQL {
   return bookmarkScopeCondition(scope, workspaceId, userId, bookmarksTable);
+}
+
+function archivePriorityOrder(
+  bookmarksTable: typeof sqliteBookmarks | typeof pgBookmarks,
+) {
+  return [
+    asc(sql`${bookmarksTable.lastAccessedAt} IS NULL`),
+    desc(bookmarksTable.lastAccessedAt),
+    desc(bookmarksTable.createdAt),
+  ];
 }
 
 function orderByForSort(
@@ -268,6 +278,116 @@ export class BookmarkRepository extends WorkspaceScopedRepository<BookmarkRecord
       .returning();
     const row = rows[0];
     return this.assertOwnership(workspaceId, row ? toBookmarkRecord(row) : null);
+  }
+
+  /** Active bookmarks ordered for downgrade archive/restore selection (def §5). */
+  async listActiveInWorkspaceOrdered(workspaceId: string): Promise<BookmarkRecord[]> {
+    const orderBy = archivePriorityOrder(
+      this.dialect === "sqlite" ? sqliteBookmarks : pgBookmarks,
+    );
+
+    if (this.dialect === "sqlite") {
+      const rows = (this.db as SqliteDrizzleClient)
+        .select()
+        .from(sqliteBookmarks)
+        .where(
+          and(
+            eq(sqliteBookmarks.workspaceId, workspaceId),
+            eq(sqliteBookmarks.planArchived, false),
+          ),
+        )
+        .orderBy(...orderBy)
+        .all();
+      return rows.map(toBookmarkRecord);
+    }
+
+    const rows = await (this.db as PostgresDrizzleClient)
+      .select()
+      .from(pgBookmarks)
+      .where(
+        and(
+          eq(pgBookmarks.workspaceId, workspaceId),
+          eq(pgBookmarks.planArchived, false),
+        ),
+      )
+      .orderBy(...orderBy);
+    return rows.map(toBookmarkRecord);
+  }
+
+  /** Plan-archived bookmarks ordered for restore selection (def §5). */
+  async listPlanArchivedInWorkspaceOrdered(workspaceId: string): Promise<BookmarkRecord[]> {
+    const orderBy = archivePriorityOrder(
+      this.dialect === "sqlite" ? sqliteBookmarks : pgBookmarks,
+    );
+
+    if (this.dialect === "sqlite") {
+      const rows = (this.db as SqliteDrizzleClient)
+        .select()
+        .from(sqliteBookmarks)
+        .where(
+          and(
+            eq(sqliteBookmarks.workspaceId, workspaceId),
+            eq(sqliteBookmarks.planArchived, true),
+          ),
+        )
+        .orderBy(...orderBy)
+        .all();
+      return rows.map(toBookmarkRecord);
+    }
+
+    const rows = await (this.db as PostgresDrizzleClient)
+      .select()
+      .from(pgBookmarks)
+      .where(
+        and(
+          eq(pgBookmarks.workspaceId, workspaceId),
+          eq(pgBookmarks.planArchived, true),
+        ),
+      )
+      .orderBy(...orderBy);
+    return rows.map(toBookmarkRecord);
+  }
+
+  async bulkSetPlanArchived(
+    workspaceId: string,
+    bookmarkIds: string[],
+    planArchived: boolean,
+  ): Promise<void> {
+    if (bookmarkIds.length === 0) {
+      return;
+    }
+
+    const nowMs = Date.now();
+
+    if (this.dialect === "sqlite") {
+      (this.db as SqliteDrizzleClient)
+        .update(sqliteBookmarks)
+        .set({
+          planArchived,
+          updatedAt: new Date(nowMs),
+        })
+        .where(
+          and(
+            eq(sqliteBookmarks.workspaceId, workspaceId),
+            inArray(sqliteBookmarks.id, bookmarkIds),
+          ),
+        )
+        .run();
+      return;
+    }
+
+    await (this.db as PostgresDrizzleClient)
+      .update(pgBookmarks)
+      .set({
+        planArchived,
+        updatedAt: nowMs,
+      })
+      .where(
+        and(
+          eq(pgBookmarks.workspaceId, workspaceId),
+          inArray(pgBookmarks.id, bookmarkIds),
+        ),
+      );
   }
 
   /** Counts non-archived bookmarks in the workspace (spec §12.5 — cap applies to active bookmarks). */

@@ -24,6 +24,7 @@ import { BillingWebhookEventRepository } from "./billing-webhook-event.repositor
 import { BILLING } from "./billing.tokens.js";
 import { PlanConfigService } from "./plans/plan-config.service.js";
 import { parseStripeEvent } from "./stripe-billing.mapper.js";
+import { DowngradeService } from "./downgrade/downgrade.service.js";
 import {
   subscriptionStateToWorkspacePatch,
 } from "./workspace-billing.util.js";
@@ -80,6 +81,7 @@ export class BillingApplicationService {
     @Inject(ConfigService) private readonly config: ConfigService,
     @Inject(AccountsService) private readonly accounts: AccountsService,
     @Inject(STRIPE_WEBHOOK_CLIENT) private readonly stripeWebhook: StripeWebhookClient,
+    @Inject(DowngradeService) private readonly downgrade: DowngradeService,
   ) {
     const orm = db.getOrm();
     const dialect = db.dialect;
@@ -246,11 +248,16 @@ export class BillingApplicationService {
   async applySubscriptionState(
     state: Parameters<typeof subscriptionStateToWorkspacePatch>[0],
   ): Promise<WorkspaceRecord | null> {
+    const previous = await this.workspaceRepo.findById(state.workspaceId);
     const patch = subscriptionStateToWorkspacePatch(
       state,
       this.planConfig.getTeamBaseSeats(),
     );
-    return this.workspaceRepo.update(state.workspaceId, patch);
+    const updated = await this.workspaceRepo.update(state.workspaceId, patch);
+    if (updated) {
+      await this.downgrade.handlePlanTransition(previous, updated);
+    }
+    return updated;
   }
 
   private async requireBillingOwner(workspaceId: string, userId: string): Promise<void> {

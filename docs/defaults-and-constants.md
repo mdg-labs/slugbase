@@ -97,6 +97,7 @@ Keys are registered incrementally per task (rule `05-env-vars`). Full categories
 | `STRIPE_PRICE_SUPPORTER` | Stripe price id for one-time supporter / lifetime purchase | `/api` | hosted | Grants Personal entitlement permanently (§12.1) |
 | `TEAM_BASE_SEATS` | Included seats on Team plan | `/api` | hosted | Default `5` (def §5); Fast-Follow tuning |
 | `SUPPORTER_PROMOTION_END` | ISO-8601 end of supporter promotion window | `/api` | hosted | Optional; empty = no deadline enforced in app |
+| `DOWNGRADE_GRACE_PERIOD_DAYS` | Days after billing period end before overflow archive (spec §12.5, def §5) | `/api` | `development` | Default `7` |
 
 ---
 

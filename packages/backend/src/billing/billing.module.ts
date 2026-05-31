@@ -14,6 +14,7 @@ import { BillingController } from "./billing.controller.js";
 import { BILLING, STRIPE_CLIENT } from "./billing.tokens.js";
 import { BillingProfileService } from "./billing-profile.service.js";
 import { PlansModule } from "./plans/plans.module.js";
+import { DowngradeModule } from "./downgrade/downgrade.module.js";
 import { NoopBillingService } from "./noop-billing.service.js";
 import { StripeBillingService, type StripeBillingClient } from "./stripe-billing.service.js";
 
@@ -24,7 +25,7 @@ import { StripeBillingService, type StripeBillingClient } from "./stripe-billing
  */
 @Global()
 @Module({
-  imports: [ConfigModule, PlansModule, AccountsModule, SessionsModule],
+  imports: [ConfigModule, PlansModule, AccountsModule, SessionsModule, DowngradeModule],
   controllers: [BillingController],
   providers: [
     NoopBillingService,
@@ -72,6 +73,7 @@ import { StripeBillingService, type StripeBillingClient } from "./stripe-billing
     NoopBillingService,
     StripeBillingService,
     PlansModule,
+    DowngradeModule,
   ],
 })
 export class BillingModule {}

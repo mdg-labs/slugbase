@@ -37,6 +37,8 @@ const optionalFlagsSchema = z
     STRIPE_PRICE_SUPPORTER: z.string().min(1).optional(),
     TEAM_BASE_SEATS: z.coerce.number().int().positive().default(5),
     SUPPORTER_PROMOTION_END: z.string().min(1).optional(),
+    // Downgrade overflow grace (spec §12.5, def §5) — days after period end before archive
+    DOWNGRADE_GRACE_PERIOD_DAYS: z.coerce.number().int().nonnegative().default(7),
     // Session TTL (spec §5.3, def §3) — sliding window; default 30 days
     SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),
     // MFA TOTP issuer label shown in authenticator apps (spec §5.7)
@@ -113,6 +115,7 @@ function readFlagsInput(env: NodeJS.ProcessEnv) {
     STRIPE_PRICE_SUPPORTER: env.STRIPE_PRICE_SUPPORTER,
     TEAM_BASE_SEATS: env.TEAM_BASE_SEATS,
     SUPPORTER_PROMOTION_END: env.SUPPORTER_PROMOTION_END,
+    DOWNGRADE_GRACE_PERIOD_DAYS: env.DOWNGRADE_GRACE_PERIOD_DAYS,
     SESSION_TTL_DAYS: env.SESSION_TTL_DAYS,
     MFA_TOTP_ISSUER: env.MFA_TOTP_ISSUER,
     RATE_LIMIT_LOGIN_MAX: env.RATE_LIMIT_LOGIN_MAX,
