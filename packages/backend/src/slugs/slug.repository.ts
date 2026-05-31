@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 
 import { and, eq } from "drizzle-orm";
 
+import { bookmarkSharedReadCondition } from "../common/authz/authz-sql.js";
+
 import type {
   DrizzleClient,
   PostgresDrizzleClient,
@@ -91,7 +93,6 @@ export class SlugRepository {
 
   /**
    * Bookmarks the user can reach via /go for the given slug (spec §8.2).
-   * Sharing grants extend this query in a later task; until then, own bookmarks only.
    */
   async findAccessibleForwardingMatches(
     workspaceId: string,
@@ -105,9 +106,10 @@ export class SlugRepository {
         .where(
           and(
             eq(sqliteBookmarks.workspaceId, workspaceId),
-            eq(sqliteBookmarks.userId, userId),
             eq(sqliteBookmarks.slug, slug),
             eq(sqliteBookmarks.forwardingEnabled, true),
+            eq(sqliteBookmarks.planArchived, false),
+            bookmarkSharedReadCondition(workspaceId, userId, sqliteBookmarks),
           ),
         )
         .all();
@@ -120,9 +122,10 @@ export class SlugRepository {
       .where(
         and(
           eq(pgBookmarks.workspaceId, workspaceId),
-          eq(pgBookmarks.userId, userId),
           eq(pgBookmarks.slug, slug),
           eq(pgBookmarks.forwardingEnabled, true),
+          eq(pgBookmarks.planArchived, false),
+          bookmarkSharedReadCondition(workspaceId, userId, pgBookmarks),
         ),
       );
     return rows.map(toBookmarkRecord);

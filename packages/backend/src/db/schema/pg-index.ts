@@ -1,7 +1,11 @@
 import { aiSuggestionCache } from "./ai-suggestion-cache.schema.pg.js";
 import { bookmarkFolders } from "./bookmark-folder.schema.pg.js";
+import { bookmarkTeamShares } from "./bookmark-team-share.schema.pg.js";
+import { bookmarkUserShares } from "./bookmark-user-share.schema.pg.js";
 import { bookmarkTags } from "./bookmark-tag.schema.pg.js";
 import { bookmarks } from "./bookmark.schema.pg.js";
+import { folderTeamShares } from "./folder-team-share.schema.pg.js";
+import { folderUserShares } from "./folder-user-share.schema.pg.js";
 import { tags } from "./tag.schema.pg.js";
 import { teamMemberships } from "./team-membership.schema.pg.js";
 import { teams } from "./team.schema.pg.js";
@@ -22,8 +26,12 @@ import { workspaces } from "./workspace.schema.pg.js";
 
 export { aiSuggestionCache } from "./ai-suggestion-cache.schema.pg.js";
 export { bookmarkFolders } from "./bookmark-folder.schema.pg.js";
+export { bookmarkTeamShares } from "./bookmark-team-share.schema.pg.js";
+export { bookmarkUserShares } from "./bookmark-user-share.schema.pg.js";
 export { bookmarkTags } from "./bookmark-tag.schema.pg.js";
 export { bookmarks } from "./bookmark.schema.pg.js";
+export { folderTeamShares } from "./folder-team-share.schema.pg.js";
+export { folderUserShares } from "./folder-user-share.schema.pg.js";
 export { tags } from "./tag.schema.pg.js";
 export { teamMemberships } from "./team-membership.schema.pg.js";
 export { teams } from "./team.schema.pg.js";
@@ -46,8 +54,12 @@ export const pgSchema = {
   aiSuggestionCache,
   instanceMetadata,
   bookmarkFolders,
+  bookmarkTeamShares,
+  bookmarkUserShares,
   bookmarkTags,
   bookmarks,
+  folderTeamShares,
+  folderUserShares,
   folders,
   tags,
   teamMemberships,

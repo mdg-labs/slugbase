@@ -33,6 +33,7 @@ import {
   parsePage,
   parsePageSize,
 } from "./team.validation.js";
+import { SharingRepository } from "../sharing/sharing.repository.js";
 
 type TeamRow = WorkspaceOwned & {
   id: string;
@@ -294,6 +295,8 @@ export class TeamRepository extends WorkspaceScopedRepository<TeamRecord> {
   }
 
   async delete(workspaceId: string, teamId: string): Promise<void> {
+    const sharingRepo = new SharingRepository(this.db, this.dialect);
+    await sharingRepo.deleteSharesForTeam(workspaceId, teamId);
     await this.deleteMembershipsForTeam(workspaceId, teamId);
 
     if (this.dialect === "sqlite") {

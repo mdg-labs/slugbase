@@ -7,6 +7,7 @@ import {
 } from "@nestjs/common";
 
 import { BookmarkRepository } from "../bookmarks/bookmark.repository.js";
+import { AuthzService } from "../common/authz/authz.service.js";
 import { DbService } from "../db/db.service.js";
 import { WorkspaceDataGuard } from "../workspaces/workspace-data.guard.js";
 import type { WorkspaceRecord } from "../workspaces/workspace.types.js";
@@ -35,6 +36,7 @@ export class FoldersService {
   constructor(
     @Inject(DbService) db: DbService,
     @Inject(WorkspaceDataGuard) private readonly wsDataGuard: WorkspaceDataGuard,
+    @Inject(AuthzService) private readonly authz: AuthzService,
   ) {
     this.folderRepo = new FolderRepository(db.getOrm(), db.dialect);
     this.bookmarkRepo = new BookmarkRepository(db.getOrm(), db.dialect);
@@ -238,8 +240,13 @@ export class FoldersService {
     const folder = await this.folderRepo.findById(workspace.id, folderId);
     if (!folder) throw new NotFoundException("Folder not found");
     this.wsDataGuard.verifyOwnership(workspace.id, folder);
-    if (folder.userId !== userId) {
-      // Shared-folder read access is enforced when share grants exist (later task).
+    const canRead = await this.authz.canReadFolder(
+      workspace.id,
+      userId,
+      folderId,
+      folder.userId,
+    );
+    if (!canRead) {
       throw new ForbiddenException("Folder is not accessible");
     }
     return folder;

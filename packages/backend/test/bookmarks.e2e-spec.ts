@@ -117,7 +117,7 @@ describe("Bookmarks (integration)", () => {
     it("rejects read by a non-owner workspace member", async () => {
       await expect(
         bookmarksService.getBookmark(workspace, memberUserId, bookmarkId),
-      ).rejects.toThrow("Only the bookmark owner");
+      ).rejects.toThrow("Bookmark is not accessible");
     });
 
     it("updates bookmark fields", async () => {

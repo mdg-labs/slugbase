@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 
 import { and, asc, desc, eq, like, or, sql, type SQL } from "drizzle-orm";
 
+import { bookmarkScopeCondition } from "../common/authz/authz-sql.js";
+
 import type {
   DrizzleClient,
   PostgresDrizzleClient,
@@ -20,10 +22,6 @@ import {
   bookmarks as pgBookmarks,
   slugPreferences as pgSlugPreferences,
 } from "../db/schema/pg-index.js";
-import {
-  WorkspaceScopedRepository,
-  type WorkspaceOwned,
-} from "../db/workspace-scoped.repository.js";
 import type {
   BookmarkIdsResult,
   BookmarkRecord,
@@ -41,6 +39,11 @@ import {
   parsePage,
   parsePageSize,
 } from "./bookmark.validation.js";
+import {
+  WorkspaceScopedRepository,
+  type WorkspaceOwned,
+} from "../db/workspace-scoped.repository.js";
+import { SharingRepository } from "../sharing/sharing.repository.js";
 
 type BookmarkRow = WorkspaceOwned & {
   id: string;
@@ -89,19 +92,10 @@ function escapeLikePattern(q: string): string {
 function scopeCondition(
   scope: BookmarkScope,
   userId: string,
+  workspaceId: string,
   bookmarksTable: typeof sqliteBookmarks | typeof pgBookmarks,
 ): SQL {
-  switch (scope) {
-    case "mine":
-    case "all":
-      // Sharing grants extend this in a later task; until then, own bookmarks only.
-      return eq(bookmarksTable.userId, userId);
-    case "shared-with-me":
-    case "shared-by-me":
-      return sql`1 = 0`;
-    default:
-      return eq(bookmarksTable.userId, userId);
-  }
+  return bookmarkScopeCondition(scope, workspaceId, userId, bookmarksTable);
 }
 
 function orderByForSort(
@@ -135,7 +129,7 @@ function buildListConditions(
   const conditions: SQL[] = [
     eq(bookmarksTable.workspaceId, workspaceId),
     eq(bookmarksTable.planArchived, false),
-    scopeCondition(query.scope, userId, bookmarksTable),
+    scopeCondition(query.scope, userId, workspaceId, bookmarksTable),
   ];
 
   if (query.pinned !== undefined) {
@@ -562,6 +556,8 @@ export class BookmarkRepository extends WorkspaceScopedRepository<BookmarkRecord
   }
 
   async delete(workspaceId: string, bookmarkId: string): Promise<void> {
+    const sharingRepo = new SharingRepository(this.db, this.dialect);
+    await sharingRepo.deleteSharesForBookmark(workspaceId, bookmarkId);
     await this.deleteSlugPreferencesForBookmark(workspaceId, bookmarkId);
     await this.deleteBookmarkFolderLinksForBookmark(workspaceId, bookmarkId);
     await this.deleteBookmarkTagLinksForBookmark(workspaceId, bookmarkId);

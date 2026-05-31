@@ -1,8 +1,12 @@
 import { aiSuggestionCache } from "./ai-suggestion-cache.schema.js";
 import { instanceMetadata } from "../system.schema.js";
 import { bookmarkFolders } from "./bookmark-folder.schema.js";
+import { bookmarkTeamShares } from "./bookmark-team-share.schema.js";
+import { bookmarkUserShares } from "./bookmark-user-share.schema.js";
 import { bookmarkTags } from "./bookmark-tag.schema.js";
 import { bookmarks } from "./bookmark.schema.js";
+import { folderTeamShares } from "./folder-team-share.schema.js";
+import { folderUserShares } from "./folder-user-share.schema.js";
 import { tags } from "./tag.schema.js";
 import { teamMemberships } from "./team-membership.schema.js";
 import { teams } from "./team.schema.js";
@@ -23,8 +27,12 @@ import { workspaces } from "./workspace.schema.js";
 export { aiSuggestionCache } from "./ai-suggestion-cache.schema.js";
 export { instanceMetadata } from "../system.schema.js";
 export { bookmarkFolders } from "./bookmark-folder.schema.js";
+export { bookmarkTeamShares } from "./bookmark-team-share.schema.js";
+export { bookmarkUserShares } from "./bookmark-user-share.schema.js";
 export { bookmarkTags } from "./bookmark-tag.schema.js";
 export { bookmarks } from "./bookmark.schema.js";
+export { folderTeamShares } from "./folder-team-share.schema.js";
+export { folderUserShares } from "./folder-user-share.schema.js";
 export { tags } from "./tag.schema.js";
 export { teamMemberships } from "./team-membership.schema.js";
 export { teams } from "./team.schema.js";
@@ -46,8 +54,12 @@ export const schema = {
   aiSuggestionCache,
   instanceMetadata,
   bookmarkFolders,
+  bookmarkTeamShares,
+  bookmarkUserShares,
   bookmarkTags,
   bookmarks,
+  folderTeamShares,
+  folderUserShares,
   folders,
   tags,
   teamMemberships,

@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 
 import { and, asc, desc, eq, like, sql, type SQL } from "drizzle-orm";
 
+import { folderScopeCondition } from "../common/authz/authz-sql.js";
+
 import type {
   DrizzleClient,
   PostgresDrizzleClient,
@@ -34,6 +36,7 @@ import {
   parsePage,
   parsePageSize,
 } from "./folder.validation.js";
+import { SharingRepository } from "../sharing/sharing.repository.js";
 
 type FolderRow = WorkspaceOwned & {
   id: string;
@@ -55,19 +58,10 @@ function escapeLikePattern(q: string): string {
 function scopeCondition(
   scope: FolderScope,
   userId: string,
+  workspaceId: string,
   foldersTable: typeof sqliteFolders | typeof pgFolders,
 ): SQL {
-  switch (scope) {
-    case "mine":
-    case "all":
-      return eq(foldersTable.userId, userId);
-    case "shared-with-me":
-    case "shared-by-me":
-      // Sharing grants ship in a later task; no rows until folder share tables exist.
-      return sql`1 = 0`;
-    default:
-      return eq(foldersTable.userId, userId);
-  }
+  return folderScopeCondition(scope, workspaceId, userId, foldersTable);
 }
 
 function orderByForSort(
@@ -210,7 +204,7 @@ export class FolderRepository extends WorkspaceScopedRepository<FolderRecord> {
       const sqliteDb = this.db as SqliteDrizzleClient;
       const conditions = [
         eq(sqliteFolders.workspaceId, workspaceId),
-        scopeCondition(scope, userId, sqliteFolders),
+        scopeCondition(scope, userId, workspaceId, sqliteFolders),
       ];
       if (searchPattern) {
         conditions.push(like(sqliteFolders.name, searchPattern));
@@ -241,7 +235,7 @@ export class FolderRepository extends WorkspaceScopedRepository<FolderRecord> {
     const pgDb = this.db as PostgresDrizzleClient;
     const conditions = [
       eq(pgFolders.workspaceId, workspaceId),
-      scopeCondition(scope, userId, pgFolders),
+      scopeCondition(scope, userId, workspaceId, pgFolders),
     ];
     if (searchPattern) {
       conditions.push(like(pgFolders.name, searchPattern));
@@ -306,6 +300,8 @@ export class FolderRepository extends WorkspaceScopedRepository<FolderRecord> {
   }
 
   async delete(workspaceId: string, folderId: string): Promise<void> {
+    const sharingRepo = new SharingRepository(this.db, this.dialect);
+    await sharingRepo.deleteSharesForFolder(workspaceId, folderId);
     await this.deleteBookmarkFolderLinksForFolder(workspaceId, folderId);
 
     if (this.dialect === "sqlite") {

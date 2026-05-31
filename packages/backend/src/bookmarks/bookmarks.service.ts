@@ -8,6 +8,7 @@ import {
 } from "@nestjs/common";
 
 import { DbService } from "../db/db.service.js";
+import { AuthzService } from "../common/authz/authz.service.js";
 import { EntitlementsService } from "../entitlements/entitlements.service.js";
 import { WorkspaceDataGuard } from "../workspaces/workspace-data.guard.js";
 import type { WorkspaceRecord } from "../workspaces/workspace.types.js";
@@ -39,6 +40,7 @@ export class BookmarksService {
     @Inject(DbService) db: DbService,
     @Inject(WorkspaceDataGuard) private readonly wsDataGuard: WorkspaceDataGuard,
     @Inject(EntitlementsService) private readonly entitlements: EntitlementsService,
+    @Inject(AuthzService) private readonly authz: AuthzService,
   ) {
     this.repo = new BookmarkRepository(db.getOrm(), db.dialect);
   }
@@ -101,7 +103,7 @@ export class BookmarksService {
     userId: string,
     bookmarkId: string,
   ): Promise<BookmarkRecord> {
-    const bookmark = await this.requireOwnedBookmark(workspace, userId, bookmarkId);
+    const bookmark = await this.requireReadableBookmark(workspace, userId, bookmarkId);
     return this.wsDataGuard.verifyOwnership(workspace.id, bookmark);
   }
 
@@ -181,7 +183,14 @@ export class BookmarksService {
   ): Promise<void> {
     try {
       const bookmark = await this.repo.findById(workspaceId, bookmarkId);
-      if (!bookmark || bookmark.userId !== userId) return;
+      if (!bookmark) return;
+      const canRead = await this.authz.canReadBookmark(
+        workspaceId,
+        userId,
+        bookmarkId,
+        bookmark.userId,
+      );
+      if (!canRead) return;
       await this.repo.incrementAccessCount(workspaceId, bookmarkId, Date.now());
     } catch {
       // Usage tracking must never surface errors to the caller.
@@ -235,6 +244,26 @@ export class BookmarksService {
       page: query.page,
       pageSize: query.pageSize,
     };
+  }
+
+  private async requireReadableBookmark(
+    workspace: WorkspaceRecord,
+    userId: string,
+    bookmarkId: string,
+  ): Promise<BookmarkRecord> {
+    const bookmark = await this.repo.findById(workspace.id, bookmarkId);
+    if (!bookmark) throw new NotFoundException("Bookmark not found");
+    this.wsDataGuard.verifyOwnership(workspace.id, bookmark);
+    const canRead = await this.authz.canReadBookmark(
+      workspace.id,
+      userId,
+      bookmarkId,
+      bookmark.userId,
+    );
+    if (!canRead) {
+      throw new ForbiddenException("Bookmark is not accessible");
+    }
+    return bookmark;
   }
 
   private async requireOwnedBookmark(
