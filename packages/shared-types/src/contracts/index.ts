@@ -1,5 +1,6 @@
 import { initContract } from "@ts-rest/core";
 
+import { apiTokenContract } from "./api-token.contract.js";
 import { authContract } from "./auth.contract.js";
 import { healthContract } from "./health.contract.js";
 import { mfaContract } from "./mfa.contract.js";
@@ -10,8 +11,10 @@ export const apiContract = c.router({
   ...healthContract,
   ...authContract,
   ...mfaContract,
+  ...apiTokenContract,
 });
 
+export { apiTokenContract } from "./api-token.contract.js";
 export { authContract } from "./auth.contract.js";
 export { healthContract } from "./health.contract.js";
 export { mfaContract } from "./mfa.contract.js";
