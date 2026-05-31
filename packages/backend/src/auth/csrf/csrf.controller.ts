@@ -12,7 +12,7 @@ const CSRF_COOKIE = "csrf_token";
 export class CsrfController {
   constructor(
     @Inject(CsrfService) private readonly csrfService: CsrfService,
-    private readonly config: ConfigService,
+    @Inject(ConfigService) private readonly config: ConfigService,
   ) {}
 
   @Get("csrf-token")
