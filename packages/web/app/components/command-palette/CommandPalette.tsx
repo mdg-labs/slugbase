@@ -1,10 +1,18 @@
 import { Kbd } from "@slugbase/ui";
 import { useTranslate } from "@tolgee/react";
 import { Command } from "cmdk";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFetcher, useNavigate } from "react-router";
 
 import type { GlobalSearchResult } from "../../lib/search.types.js";
+import {
+  GO_SLUG_MATCH_LIMIT,
+  filterGoSlugMatches,
+  goRouteForSlug,
+  openGoTarget,
+  parsePaletteQuery,
+} from "./go-mode.js";
+import { GoModeBadge, GoModePanel, resolveGoSlugSelection } from "./GoModePanel.js";
 import {
   PALETTE_ACTION_GROUPS,
   PALETTE_ACTIONS,
@@ -79,12 +87,27 @@ export function CommandPalette({
   const fetcher = useFetcher<GlobalSearchResult>();
   const [query, setQuery] = useState("");
   const debouncedQuery = useDebouncedValue(query.trim(), SEARCH_DEBOUNCE_MS);
+  const enterOpensNewTabRef = useRef(false);
 
-  const isSearchMode = debouncedQuery.length > 0;
+  const parsedQuery = useMemo(() => parsePaletteQuery(query), [query]);
+  const isGoMode = parsedQuery.mode === "go";
+  const isSearchMode =
+    parsedQuery.mode === "search" && debouncedQuery.length > 0;
+  const goSlugPrefix = parsedQuery.slugPrefix;
+
   const searchResult =
     fetcher.state === "idle" && fetcher.data && "q" in fetcher.data
       ? fetcher.data
       : null;
+
+  const goSlugMatches = useMemo(() => {
+    if (!isGoMode || !searchResult) return [];
+    return filterGoSlugMatches(
+      searchResult.bookmarks.items,
+      goSlugPrefix,
+      GO_SLUG_MATCH_LIMIT,
+    );
+  }, [goSlugPrefix, isGoMode, searchResult]);
 
   useEffect(() => {
     if (!open) {
@@ -93,7 +116,20 @@ export function CommandPalette({
   }, [open]);
 
   useEffect(() => {
-    if (!debouncedQuery) return;
+    if (!isGoMode) return;
+    if (goSlugPrefix.length === 0) return;
+
+    const params = new URLSearchParams({
+      q: goSlugPrefix,
+      bookmarkLimit: String(GO_SLUG_MATCH_LIMIT),
+      folderLimit: "1",
+      tagLimit: "1",
+    });
+    void fetcher.load(`/api/search?${params.toString()}`);
+  }, [goSlugPrefix, isGoMode]);
+
+  useEffect(() => {
+    if (!isSearchMode) return;
     const params = new URLSearchParams({
       q: debouncedQuery,
       bookmarkLimit: String(SEARCH_PREVIEW_LIMIT),
@@ -101,7 +137,16 @@ export function CommandPalette({
       tagLimit: String(SEARCH_PREVIEW_LIMIT),
     });
     void fetcher.load(`/api/search?${params.toString()}`);
-  }, [debouncedQuery]);
+  }, [debouncedQuery, isSearchMode]);
+
+  const navigateGo = useCallback(
+    (slug: string, newTab: boolean) => {
+      const path = goRouteForSlug(slug);
+      openGoTarget(path, newTab);
+      onOpenChange(false);
+    },
+    [onOpenChange],
+  );
 
   const runAction = useCallback(
     (action: PaletteActionDef) => {
@@ -127,6 +172,20 @@ export function CommandPalette({
   );
 
   const handleInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+      enterOpensNewTabRef.current = true;
+    }
+
+    if (isGoMode && event.key === "Enter" && !event.altKey) {
+      const slug = resolveGoSlugSelection(goSlugMatches, goSlugPrefix);
+      if (slug) {
+        event.preventDefault();
+        navigateGo(slug, enterOpensNewTabRef.current);
+        enterOpensNewTabRef.current = false;
+        return;
+      }
+    }
+
     if (query.trim()) return;
 
     const key = event.key.toLowerCase();
@@ -189,6 +248,11 @@ export function CommandPalette({
     return map;
   }, []);
 
+  const goLoading =
+    isGoMode &&
+    goSlugPrefix.length > 0 &&
+    fetcher.state === "loading";
+
   return (
     <Command.Dialog
       open={open}
@@ -204,12 +268,16 @@ export function CommandPalette({
         }}
       >
         <div className="flex items-center gap-sp-4 border-b border-[color:var(--border-subtle)] px-sp-6 py-sp-5">
-          <SearchIcon />
+          {isGoMode ? <GoModeBadge /> : <SearchIcon />}
           <Command.Input
             value={query}
             onValueChange={setQuery}
             onKeyDown={handleInputKeyDown}
-            placeholder={t("command_palette.input_placeholder")}
+            placeholder={
+              isGoMode
+                ? t("command_palette.go_mode.input_placeholder")
+                : t("command_palette.input_placeholder")
+            }
             className="flex-1 bg-transparent text-[length:var(--text-h3)] font-normal text-fg outline-none placeholder:text-fg-faint"
             data-testid="command-palette-input"
           />
@@ -239,7 +307,7 @@ export function CommandPalette({
         </div>
 
         <Command.List className="max-h-[46vh] overflow-y-auto p-sp-3">
-          {!isSearchMode &&
+          {parsedQuery.mode === "default" &&
             PALETTE_ACTION_GROUPS.map((groupKey) => {
               const actions = actionsByGroup.get(groupKey) ?? [];
               if (actions.length === 0) return null;
@@ -268,6 +336,18 @@ export function CommandPalette({
                 </Command.Group>
               );
             })}
+
+          {isGoMode ? (
+            <GoModePanel
+              slugPrefix={goSlugPrefix}
+              matches={goSlugMatches}
+              loading={goLoading}
+              onSelectSlug={(slug, newTab) => {
+                navigateGo(slug, newTab || enterOpensNewTabRef.current);
+                enterOpensNewTabRef.current = false;
+              }}
+            />
+          ) : null}
 
           {isSearchMode && fetcher.state === "loading" && (
             <div className="px-sp-4 py-sp-8 text-center text-[13px] text-fg-subtle">
@@ -403,6 +483,19 @@ export function CommandPalette({
             <Kbd>↵</Kbd>
             {t("command_palette.footer.select")}
           </span>
+          {isGoMode ? (
+            <>
+              <span className="inline-flex items-center gap-[5px]">
+                <Kbd>↵</Kbd>
+                {t("command_palette.go_mode.footer_redirect")}
+              </span>
+              <span className="inline-flex items-center gap-[5px]">
+                <Kbd>⌘</Kbd>
+                <Kbd>↵</Kbd>
+                {t("command_palette.footer.open_new_tab")}
+              </span>
+            </>
+          ) : null}
           {isSearchMode ? (
             <span className="inline-flex items-center gap-[5px]">
               <Kbd>⌘</Kbd>
