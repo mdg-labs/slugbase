@@ -63,7 +63,7 @@ jobs:
           domain: ${{ secrets.INFISICAL_DOMAIN }}
           identity-id: ${{ secrets.INFISICAL_OIDC_IDENTITY_ID }}
           project-slug: slugbase-cloud
-          env-slug: development
+          env-slug: dev
 
       - name: Build
         env:
@@ -120,7 +120,7 @@ jobs:
           domain: ${{ secrets.INFISICAL_DOMAIN }}
           identity-id: ${{ secrets.INFISICAL_OIDC_IDENTITY_ID }}
           project-slug: slugbase-cloud
-          env-slug: development
+          env-slug: dev
 
       - name: Integration tests
         env:
