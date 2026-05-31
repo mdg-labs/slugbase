@@ -17,6 +17,24 @@ export {
   type AiSuggestionRequest,
   type AiSuggestions,
 } from "./contracts/ai.contract.js";
+export {
+  BillingProviderError,
+  BillingSeatFloorError,
+  BillingUnavailableError,
+  type BillingAsyncEvent,
+  type BillingCheckoutMode,
+  type BillingCheckoutRequest,
+  type BillingCheckoutSession,
+  type BillingEventResult,
+  type BillingPlan,
+  type BillingPortalRequest,
+  type BillingPortalSession,
+  type BillingSeatQuantityRequest,
+  type BillingService,
+  type BillingSubscriptionLookup,
+  type BillingSubscriptionState,
+  type BillingSubscriptionStatus,
+} from "./contracts/billing.contract.js";
 export { apiContract, authContract, healthContract, mfaContract } from "./contracts/index.js";
 export {
   LoginBodySchema,

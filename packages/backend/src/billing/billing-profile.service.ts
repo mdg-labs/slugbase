@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
+import type { BillingService } from "@slugbase/shared-types";
 
-import { ConfigService } from "../config/config.service.js";
+import { BILLING } from "./billing.tokens.js";
 
 /**
  * Derives whether workspace plan limits entitlements from billing interface
@@ -9,10 +10,9 @@ import { ConfigService } from "../config/config.service.js";
  */
 @Injectable()
 export class BillingProfileService {
-  constructor(@Inject(ConfigService) private readonly config: ConfigService) {}
+  constructor(@Inject(BILLING) private readonly billing: BillingService) {}
 
   isPlanGatingEnabled(): boolean {
-    const stripeKey = this.config.get("STRIPE_SECRET_KEY");
-    return typeof stripeKey === "string" && stripeKey.length > 0;
+    return this.billing.isPlanGatingEnabled();
   }
 }
