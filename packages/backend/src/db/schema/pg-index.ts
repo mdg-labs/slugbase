@@ -6,6 +6,7 @@ import { oidcAccounts } from "./oidc-account.schema.pg.js";
 import { oidcProviders } from "./oidc-provider.schema.pg.js";
 import { sessions } from "./session.schema.pg.js";
 import { userAccounts } from "./user-account.schema.pg.js";
+import { workspaceInvitations } from "./workspace-invitation.schema.pg.js";
 import { workspaceMembers } from "./workspace-member.schema.pg.js";
 import { workspaces } from "./workspace.schema.pg.js";
 
@@ -17,6 +18,7 @@ export { oidcAccounts } from "./oidc-account.schema.pg.js";
 export { oidcProviders } from "./oidc-provider.schema.pg.js";
 export { sessions } from "./session.schema.pg.js";
 export { userAccounts } from "./user-account.schema.pg.js";
+export { workspaceInvitations } from "./workspace-invitation.schema.pg.js";
 export { workspaceMembers } from "./workspace-member.schema.pg.js";
 export { workspaces } from "./workspace.schema.pg.js";
 
@@ -29,6 +31,7 @@ export const pgSchema = {
   oidcProviders,
   sessions,
   userAccounts,
+  workspaceInvitations,
   workspaceMembers,
   workspaces,
 };

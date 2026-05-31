@@ -6,6 +6,7 @@ import { oidcAccounts } from "./oidc-account.schema.js";
 import { oidcProviders } from "./oidc-provider.schema.js";
 import { sessions } from "./session.schema.js";
 import { userAccounts } from "./user-account.schema.js";
+import { workspaceInvitations } from "./workspace-invitation.schema.js";
 import { workspaceMembers } from "./workspace-member.schema.js";
 import { workspaces } from "./workspace.schema.js";
 
@@ -17,6 +18,7 @@ export { oidcAccounts } from "./oidc-account.schema.js";
 export { oidcProviders } from "./oidc-provider.schema.js";
 export { sessions } from "./session.schema.js";
 export { userAccounts } from "./user-account.schema.js";
+export { workspaceInvitations } from "./workspace-invitation.schema.js";
 export { workspaceMembers } from "./workspace-member.schema.js";
 export { workspaces } from "./workspace.schema.js";
 
@@ -29,6 +31,7 @@ export const schema = {
   oidcProviders,
   sessions,
   userAccounts,
+  workspaceInvitations,
   workspaceMembers,
   workspaces,
 };

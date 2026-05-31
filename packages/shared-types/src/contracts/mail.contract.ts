@@ -11,6 +11,7 @@ export type MailMessageType =
   | "email_change_verification"
   | "password_reset"
   | "member_invitation"
+  | "workspace_invitation"
   | "contact_form_notification";
 
 export interface MailMessage {

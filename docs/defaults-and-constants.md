@@ -39,6 +39,7 @@ Naming for code constants follows rule `04-naming` (`SCREAMING_SNAKE_CASE`). Env
 | MFA backup codes | 10, single-use | config | shown once, stored hashed (§5.7) |
 | Password min length | 12 | config | no forced composition; strength meter (§5.4) |
 | Verification/reset token TTL | 1 hour | config | hashed, time-limited (§5.5) |
+| `INVITATION_TTL_DAYS` | 7 days | config | Invitation token lifetime; hashed token only (§4.2) |
 | Public registration default | off | config | on for hosted; `PUBLIC_REGISTRATION` (§5.2) |
 | Email verification required | hosted: yes | config | `EMAIL_VERIFICATION_REQUIRED` (§5.5) |
 
