@@ -86,19 +86,19 @@ Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit w
 - **AC:** `CRYPTO` encrypt/decrypt with `ENCRYPTION_KEY`; strict mode refuses silent failure in prod; exercised by a sample settings field.
 - **Tests:** unit: round-trip; strict-mode throws on bad key.
 - **Files:** `packages/backend/src/crypto/**`, `packages/shared-types/src/contracts/crypto.contract.ts`
-- **Doc Ref:** spec §11.11, §18; rule `03`; eng §3 · **Deps:** P1-03 · **Status:** [ ]
+- **Doc Ref:** spec §11.11, §18; rule `03`; eng §3 · **Deps:** P1-03 · **Status:** [x]
 
 ### P1-07 — SSRF-safe outbound fetch interface — BE · Lane P
 - **AC:** single `FETCH` egress chokepoint: host resolution + private/loopback blocking, timeouts, response size limits, caching; no other code does raw outbound `fetch`.
 - **Tests:** unit: blocks private IPs/loopback; enforces timeout + size cap; caches.
 - **Files:** `packages/backend/src/fetch/**`
-- **Doc Ref:** spec §11.10, §6.4, §18; rule `03` · **Deps:** P1-03 · **Status:** [ ]
+- **Doc Ref:** spec §11.10, §6.4, §18; rule `03` · **Deps:** P1-03 · **Status:** [x]
 
 ### P1-08 — Web + ui skeleton: tokens, theme, layout, Tolgee provider — FE · Lane P
 - **AC:** React Router v7 boots on Node adapter; `ui` exposes Tailwind config bridged to `colors_and_type.css` tokens (dark-first, periwinkle, IBM Plex); app shell + theme switch (light/dark/auto); Tolgee React SDK provider wired; no hard-coded hex/strings.
 - **Tests:** unit: theme tokens resolve; snapshot of base layout.
 - **Files:** `packages/ui/**`, `packages/web/**`
-- **Doc Ref:** spec §19, §23.1; eng §1, §3, §9; rule `11` · **Deps:** P1-01 · **Status:** [ ]
+- **Doc Ref:** spec §19, §23.1; eng §1, §3, §9; rule `11` · **Deps:** P1-01 · **Status:** [!] failed — SB-10: ErrorBoundary hard-coded strings in root.tsx
 
 ### P1-09 — CI checks job (`.github/workflows/ci-cd.yml`) — Infra · Lane S
 - **AC:** workflow with PR/push triggers (`staging`,`main`); CI job: install → lint/typecheck/unit → Infisical OIDC fetch → build → integration → `pnpm audit`; only `INFISICAL_DOMAIN`+`INFISICAL_OIDC_IDENTITY_ID` as GHA secrets.
