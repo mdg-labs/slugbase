@@ -15,8 +15,20 @@ const optionalFlagsSchema = z
     PUBLIC_REGISTRATION: z.coerce.boolean().default(false),
     EMAIL_VERIFICATION_REQUIRED: z.coerce.boolean().default(false),
     PORT: z.coerce.number().int().positive().default(3000),
+    SERVE_WEB_CLIENT: z.coerce.boolean().default(false),
+    WEB_CLIENT_SERVER_BUILD: z.string().min(1).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((flags, ctx) => {
+    if (flags.SERVE_WEB_CLIENT && !flags.WEB_CLIENT_SERVER_BUILD) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "WEB_CLIENT_SERVER_BUILD is required when SERVE_WEB_CLIENT is enabled",
+        path: ["WEB_CLIENT_SERVER_BUILD"],
+      });
+    }
+  });
 
 export type RequiredSecrets = z.infer<typeof requiredSecretsSchema>;
 export type OptionalFlags = z.infer<typeof optionalFlagsSchema>;
@@ -54,6 +66,8 @@ function readFlagsInput(env: NodeJS.ProcessEnv) {
     PUBLIC_REGISTRATION: env.PUBLIC_REGISTRATION,
     EMAIL_VERIFICATION_REQUIRED: env.EMAIL_VERIFICATION_REQUIRED,
     PORT: env.PORT,
+    SERVE_WEB_CLIENT: env.SERVE_WEB_CLIENT,
+    WEB_CLIENT_SERVER_BUILD: env.WEB_CLIENT_SERVER_BUILD,
   };
 }
 

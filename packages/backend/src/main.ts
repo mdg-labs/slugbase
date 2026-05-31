@@ -1,19 +1,34 @@
 import "reflect-metadata";
 
 import { NestFactory } from "@nestjs/core";
+import type { NestExpressApplication } from "@nestjs/platform-express";
 import { fileURLToPath } from "node:url";
 
 import { AppModule } from "./app.module.js";
 import { ConfigService } from "./config/config.service.js";
 import { runMigrations } from "./db/migrate/run-migrations.js";
 import { validateEnvConfig } from "./config/env.schema.js";
-
 export async function bootstrap(): Promise<void> {
   const startupConfig = validateEnvConfig(process.env);
   await runMigrations(startupConfig.DATABASE_URL);
 
-  const app = await NestFactory.create(AppModule, { logger: ["error", "warn"] });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    logger: ["error", "warn"],
+  });
+  await app.init();
+
   const config = app.get(ConfigService);
+  if (config.get("SERVE_WEB_CLIENT")) {
+    const serverBuildPath = config.get("WEB_CLIENT_SERVER_BUILD");
+    if (!serverBuildPath) {
+      throw new Error(
+        "WEB_CLIENT_SERVER_BUILD is required when SERVE_WEB_CLIENT is enabled",
+      );
+    }
+    const { mountWebClient } = await import("./web-client/mount-web-client.js");
+    await mountWebClient(app, serverBuildPath);
+  }
+
   await app.listen(config.get("PORT"));
 }
 
