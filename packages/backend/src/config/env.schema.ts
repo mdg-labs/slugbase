@@ -52,6 +52,10 @@ const optionalFlagsSchema = z
     TURNSTILE_SECRET_KEY: z.string().min(1).optional(),
     // Skip challenge verification in development (spec §11.8) — defaults true when NODE_ENV !== production
     CHALLENGE_DEV_SKIP: z.coerce.boolean().optional(),
+    // Error reporting (spec §11.7, §15) — optional; no-op used when SENTRY_DSN is absent
+    SENTRY_DSN: z.string().min(1).optional(),
+    SENTRY_ENVIRONMENT: z.string().min(1).optional(),
+    SENTRY_RELEASE: z.string().min(1).optional(),
   })
   .strict()
   .superRefine((flags, ctx) => {
@@ -128,6 +132,9 @@ function readFlagsInput(env: NodeJS.ProcessEnv) {
     RATE_LIMIT_TOKEN_CREATION_TTL_SECONDS: env.RATE_LIMIT_TOKEN_CREATION_TTL_SECONDS,
     TURNSTILE_SECRET_KEY: env.TURNSTILE_SECRET_KEY,
     CHALLENGE_DEV_SKIP: env.CHALLENGE_DEV_SKIP,
+    SENTRY_DSN: env.SENTRY_DSN,
+    SENTRY_ENVIRONMENT: env.SENTRY_ENVIRONMENT,
+    SENTRY_RELEASE: env.SENTRY_RELEASE,
   };
 }
 
