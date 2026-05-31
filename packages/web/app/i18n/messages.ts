@@ -203,6 +203,46 @@ export const staticMessages = {
     "command_palette.footer.select": "select",
     "command_palette.footer.open_new_tab": "open in new tab",
     "command_palette.footer.close": "close",
+    // Bookmark modal
+    "bookmark.modal.title_create": "New bookmark",
+    "bookmark.modal.title_edit": "Edit bookmark",
+    "bookmark.modal.subtitle_create":
+      "Paste a URL, add a title, and optionally assign a slug for forwarding.",
+    "bookmark.modal.url_label": "URL",
+    "bookmark.modal.url_placeholder": "https://example.com/docs",
+    "bookmark.modal.title_label": "Title",
+    "bookmark.modal.title_placeholder": "Readable bookmark title",
+    "bookmark.modal.slug_label": "Slug",
+    "bookmark.modal.slug_prefix": "/go/",
+    "bookmark.modal.slug_placeholder": "my-link",
+    "bookmark.modal.forwarding_address": "Forwarding address: {address}",
+    "bookmark.modal.folders_label": "Folders",
+    "bookmark.modal.folders_empty": "No folders yet — create one from the palette.",
+    "bookmark.modal.tags_label": "Tags",
+    "bookmark.modal.tags_empty": "No tags yet — create one from the palette.",
+    "bookmark.modal.pin_label": "Pin bookmark",
+    "bookmark.modal.pin_hint": "Pinned bookmarks appear prominently in lists and on the dashboard.",
+    "bookmark.modal.forwarding_label": "Enable forwarding",
+    "bookmark.modal.forwarding_hint":
+      "When enabled, the slug resolves through /go for signed-in workspace members.",
+    "bookmark.modal.sharing_label": "Sharing",
+    "bookmark.modal.sharing_placeholder":
+      "Team and member sharing controls will appear here in a later release.",
+    "bookmark.modal.cancel": "Cancel",
+    "bookmark.modal.submit_create": "Save bookmark",
+    "bookmark.modal.submit_edit": "Save changes",
+    "bookmark.modal.submit_loading": "Saving…",
+    "bookmark.modal.error.url_required": "Enter a destination URL.",
+    "bookmark.modal.error.url_invalid": "Enter a valid http or https URL.",
+    "bookmark.modal.error.url_too_long": "URL must be 2048 characters or fewer.",
+    "bookmark.modal.error.title_required": "Enter a title.",
+    "bookmark.modal.error.title_too_long": "Title must be 500 characters or fewer.",
+    "bookmark.modal.error.slug_required_for_forwarding":
+      "A slug is required when forwarding is enabled.",
+    "bookmark.modal.error.slug_invalid":
+      "Slug must start with a letter or number and use lowercase letters, numbers, and hyphens only.",
+    "bookmark.modal.error.slug_reserved": "That slug is reserved and cannot be used.",
+    "bookmark.modal.error.submit_failed": "Could not save the bookmark. Try again.",
   },
   de: {
     "app.shell.brand": "SlugBase",
@@ -419,6 +459,53 @@ export const staticMessages = {
     "command_palette.footer.select": "auswählen",
     "command_palette.footer.open_new_tab": "in neuem Tab öffnen",
     "command_palette.footer.close": "schließen",
+    // Bookmark modal
+    "bookmark.modal.title_create": "Neues Lesezeichen",
+    "bookmark.modal.title_edit": "Lesezeichen bearbeiten",
+    "bookmark.modal.subtitle_create":
+      "URL einfügen, Titel hinzufügen und optional einen Slug für Weiterleitungen vergeben.",
+    "bookmark.modal.url_label": "URL",
+    "bookmark.modal.url_placeholder": "https://beispiel.de/docs",
+    "bookmark.modal.title_label": "Titel",
+    "bookmark.modal.title_placeholder": "Lesbarer Lesezeichen-Titel",
+    "bookmark.modal.slug_label": "Slug",
+    "bookmark.modal.slug_prefix": "/go/",
+    "bookmark.modal.slug_placeholder": "mein-link",
+    "bookmark.modal.forwarding_address": "Weiterleitungsadresse: {address}",
+    "bookmark.modal.folders_label": "Ordner",
+    "bookmark.modal.folders_empty":
+      "Noch keine Ordner — erstelle einen über die Palette.",
+    "bookmark.modal.tags_label": "Tags",
+    "bookmark.modal.tags_empty":
+      "Noch keine Tags — erstelle einen über die Palette.",
+    "bookmark.modal.pin_label": "Lesezeichen anheften",
+    "bookmark.modal.pin_hint":
+      "Angeheftete Lesezeichen erscheinen prominent in Listen und auf dem Dashboard.",
+    "bookmark.modal.forwarding_label": "Weiterleitung aktivieren",
+    "bookmark.modal.forwarding_hint":
+      "Wenn aktiviert, löst der Slug für angemeldete Arbeitsbereichsmitglieder über /go auf.",
+    "bookmark.modal.sharing_label": "Freigabe",
+    "bookmark.modal.sharing_placeholder":
+      "Steuerungen für Team- und Mitgliederfreigaben folgen in einer späteren Version.",
+    "bookmark.modal.cancel": "Abbrechen",
+    "bookmark.modal.submit_create": "Lesezeichen speichern",
+    "bookmark.modal.submit_edit": "Änderungen speichern",
+    "bookmark.modal.submit_loading": "Speichern…",
+    "bookmark.modal.error.url_required": "Gib eine Ziel-URL ein.",
+    "bookmark.modal.error.url_invalid": "Gib eine gültige http- oder https-URL ein.",
+    "bookmark.modal.error.url_too_long":
+      "Die URL darf höchstens 2048 Zeichen lang sein.",
+    "bookmark.modal.error.title_required": "Gib einen Titel ein.",
+    "bookmark.modal.error.title_too_long":
+      "Der Titel darf höchstens 500 Zeichen lang sein.",
+    "bookmark.modal.error.slug_required_for_forwarding":
+      "Ein Slug ist erforderlich, wenn die Weiterleitung aktiviert ist.",
+    "bookmark.modal.error.slug_invalid":
+      "Der Slug muss mit einem Buchstaben oder einer Zahl beginnen und darf nur Kleinbuchstaben, Zahlen und Bindestriche enthalten.",
+    "bookmark.modal.error.slug_reserved":
+      "Dieser Slug ist reserviert und kann nicht verwendet werden.",
+    "bookmark.modal.error.submit_failed":
+      "Das Lesezeichen konnte nicht gespeichert werden. Versuche es erneut.",
   },
 } as const;
 

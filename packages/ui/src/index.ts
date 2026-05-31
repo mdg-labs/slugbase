@@ -12,3 +12,15 @@ export { ThemeProvider, useTheme, type ThemeContextValue, type ThemeProviderProp
 export { AppShell, type AppShellProps } from "./components/AppShell.js";
 export { ThemeSwitcher, type ThemeSwitcherLabels, type ThemeSwitcherProps } from "./components/ThemeSwitcher.js";
 export { Kbd, type KbdProps } from "./components/Kbd.js";
+export { Button, type ButtonProps, type ButtonVariant } from "./components/Button.js";
+export { Input, type InputProps } from "./components/Input.js";
+export { Label, type LabelProps } from "./components/Label.js";
+export { FieldError, type FieldErrorProps } from "./components/FieldError.js";
+export {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogOverlay,
+  DialogTrigger,
+  type DialogContentProps,
+} from "./components/Dialog.js";

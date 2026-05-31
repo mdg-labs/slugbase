@@ -66,9 +66,14 @@ function FolderGlyph({ color }: { color: string | null }) {
 export type CommandPaletteProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onNewBookmark?: () => void;
 };
 
-export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
+export function CommandPalette({
+  open,
+  onOpenChange,
+  onNewBookmark,
+}: CommandPaletteProps) {
   const { t } = useTranslate();
   const navigate = useNavigate();
   const fetcher = useFetcher<GlobalSearchResult>();
@@ -100,12 +105,17 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
 
   const runAction = useCallback(
     (action: PaletteActionDef) => {
+      if (action.id === "new-bookmark" && onNewBookmark) {
+        onNewBookmark();
+        onOpenChange(false);
+        return;
+      }
       if (action.path) {
         void navigate(action.path);
       }
       onOpenChange(false);
     },
-    [navigate, onOpenChange],
+    [navigate, onNewBookmark, onOpenChange],
   );
 
   const runActionById = useCallback(
