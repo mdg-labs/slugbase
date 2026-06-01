@@ -107,6 +107,10 @@ Keys are registered incrementally per task (rule `05-env-vars`). Full categories
 | `VITE_SUPPORTER_PROMOTION_END` | ISO-8601 supporter offer deadline (display + countdown) | `/web` | hosted | Optional |
 | `VITE_TEAM_BASE_SEATS` | Included Team seats shown in plan table | `/web` | hosted | Default `5` |
 | `VITE_FREE_BOOKMARK_CAP` | Free cap shown in billing meter/table | `/web` | hosted | Default `50` |
+| `VITE_MAIL_ADMIN_UI` | Show workspace SMTP settings panel (admin UI mail source) | `/web` | `development` | Default `true` when `VITE_BILLING_ENABLED` is false; `false` when operator-managed |
+| `VITE_OIDC_ADMIN_UI` | Show workspace OIDC provider admin panel (DB-sourced providers) | `/web` | `development` | Default `true` when `VITE_BILLING_ENABLED` is false |
+| `VITE_AI_BYO_CREDENTIAL` | Show full AI credential form (BYO key) vs enable-only toggle | `/web` | `development` | Default `true` when `VITE_BILLING_ENABLED` is false |
+| `VITE_APP_BASE_URL` | Public API base URL for OIDC callback display in workspace settings | `/web` | `development` | Falls back to `API_BASE_URL` at runtime when empty |
 | `UMAMI_HOST` | Umami instance base URL for server-side event recording (spec §11.6) | `/api` | hosted optional | Empty = no-op (self-host default) |
 | `UMAMI_WEBSITE_ID` | Umami website UUID for server-side events | `/api` | hosted optional | Required with `UMAMI_HOST` |
 | `VITE_UMAMI_HOST` | Umami script host for web client analytics | `/web` | hosted optional | Empty = no tracker / no consent banner |
