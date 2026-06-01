@@ -1,7 +1,9 @@
 import { useTranslate } from "@tolgee/react";
-import { AppShell, ThemeSwitcher } from "@slugbase/ui";
+import { AppShell } from "@slugbase/ui";
 import { Outlet } from "react-router";
 
+import { AppSidebar } from "./AppSidebar.js";
+import { AppTopBar } from "./AppTopBar.js";
 import {
   BookmarkModalProvider,
   useBookmarkModal,
@@ -11,25 +13,42 @@ import {
   CommandPaletteProvider,
   useCommandPalette,
 } from "./command-palette/CommandPaletteProvider.js";
+import { useAppShellData } from "../lib/session-client.js";
 
 function AppChromeInner() {
   const { t } = useTranslate();
   const { open, setOpen } = useCommandPalette();
   const { openCreate } = useBookmarkModal();
+  const { user, workspace, workspaces, sidebarFolders, bookmarkTotal } =
+    useAppShellData();
+
+  const themeLabels = {
+    group: t("theme.switcher.group"),
+    light: t("theme.switcher.light"),
+    dark: t("theme.switcher.dark"),
+    auto: t("theme.switcher.auto"),
+  };
 
   return (
     <>
       <AppShell
-        brandLabel={t("app.shell.brand")}
-        workspaceLabel={t("app.shell.workspace_default")}
-        headerActions={
-          <ThemeSwitcher
-            labels={{
-              group: t("theme.switcher.group"),
-              light: t("theme.switcher.light"),
-              dark: t("theme.switcher.dark"),
-              auto: t("theme.switcher.auto"),
-            }}
+        sidebar={
+          <AppSidebar
+            workspace={workspace}
+            workspaces={workspaces}
+            folders={sidebarFolders}
+            bookmarkTotal={bookmarkTotal}
+            bookmarksUsed={bookmarkTotal}
+            onUpgrade={() => { /* billing route – wired separately */ }}
+          />
+        }
+        topBar={
+          <AppTopBar
+            userName={user.name}
+            userEmail={user.email}
+            onOpenPalette={() => { setOpen(true); }}
+            onNewBookmark={openCreate}
+            themeLabels={themeLabels}
           />
         }
       >
