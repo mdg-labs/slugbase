@@ -13,11 +13,11 @@ When introducing **any** new env var, complete all four steps below in the **sam
 |---|---|
 | Instance URL | `https://secrets.mdg-labs.dev/` (self-hosted) |
 | Project slug | `slugbase-cloud` |
-| Environments | `development` · `staging` · `production` |
+| Environments | `dev` · `staging` · `prod` |
 
-The project is currently **empty** — seed `development` as you register keys (step 1). Point the local CLI at the self-hosted instance once (`infisical login --domain https://secrets.mdg-labs.dev`), then select the project via the committed `.infisical.json` (or `--projectId`). **Phase CLI is not used — Infisical only** (decision #34). CI fetches secrets via OIDC (`Infisical/secrets-action`); only `INFISICAL_DOMAIN` and `INFISICAL_OIDC_IDENTITY_ID` live in GitHub Actions secrets (spec §22.9).
+All keys for an environment live at the **project root** in Infisical (no subfolders). CI (`Infisical/secrets-action`) and local `infisical run --env=<slug>` inject the full environment. **Never put true secrets in `VITE_*` or `PUBLIC_*` keys** — those values are inlined into client bundles at build time.
 
-**Folder layout (per environment — spec §22.9):** `/api` = all sensitive server-side secrets · `/web` = public `VITE_*` client config · `/marketing` = public `PUBLIC_*` config · `/shared` = values used by >1 surface (`APP_BASE_URL`, `FRONTEND_ORIGIN`). Put a new key in the folder for the surface(s) that consume it; sensitive values go only in `/api`. Never place a real secret in `/web` or `/marketing` (those are inlined into client bundles).
+Point the local CLI at the self-hosted instance once (`infisical login --domain https://secrets.mdg-labs.dev`), then select the project via the committed `.infisical.json` (or `--projectId`). **Phase CLI is not used — Infisical only** (decision #34). CI fetches secrets via OIDC (`Infisical/secrets-action`); only `INFISICAL_DOMAIN` and `INFISICAL_OIDC_IDENTITY_ID` live in GitHub Actions secrets (spec §22.9).
 
 ## This rule fires when you
 
@@ -28,11 +28,11 @@ The project is currently **empty** — seed `development` as you register keys (
 
 ## Required steps (in order)
 
-### 1. Set the value in Infisical `development` via CLI
+### 1. Set the value in Infisical `dev` via CLI
 
 ```bash
 # instance domain is set once via `infisical login --domain https://secrets.mdg-labs.dev`
-infisical secrets set <KEY>=<value> --env=development --projectId=<slugbase-cloud projectId from .infisical.json>
+infisical secrets set <KEY>=<value> --env=dev --projectId=<slugbase-cloud projectId from .infisical.json>
 ```
 
 For security-critical values (secrets, keys) that you shouldn't invent: **stop and ask the user** rather than generating a placeholder and committing code that references it.
@@ -86,8 +86,8 @@ Spec §15 lists the full set of required configuration categories:
 For any task that adds env-var references, verify:
 
 ```bash
-# Key exists in Infisical development
-infisical secrets get <KEY> --env=development
+# Key exists in Infisical dev (env root — do not print values)
+infisical secrets get <KEY> --env=dev
 
 # Key is in .env.example
 rg -n "^<KEY>=" .env.example
@@ -106,7 +106,7 @@ All four must pass. Missing any one fails the task.
 - **Committing `.env` / `.env.local` with real values** — only `.env.example` is allowed.
 - **Partial registration** — code references the var but Infisical + `.env.example` + schema + docs are not all updated.
 - **Inventing values for unknown secrets** — stop and ask the user.
-- **Setting `staging` or `production` secrets from a developer machine** — those flow via the operator's Infisical UI / OIDC sync.
+- **Setting `staging` or `prod` secrets from a developer machine** — those flow via the operator's Infisical UI / OIDC sync.
 
 ## Required spec §15 secrets (never omit or soft-default)
 

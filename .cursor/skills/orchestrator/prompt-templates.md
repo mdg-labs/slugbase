@@ -109,7 +109,7 @@ GIT:
 - Commit messages: `feat(<scope>)[SB-N]: <summary>` or `fix(<scope>)[P*-*]: <summary>` (roadmap-only). Subject ≤72 chars. No Smart Commit `#time` / `#comment` — MCP only. See `07-jira-commit-linking.mdc`.
 
 SECRETS / COMMANDS:
-- Local tests/dev that need env: use Infisical (`infisical run --env=development -- <cmd>`); see `05-env-vars.mdc`
+- Local tests/dev that need env: use Infisical (`infisical run --env=dev -- <cmd>`); see `05-env-vars.mdc`
 - Do not commit `.env` or secret exports
 
 DB MIGRATIONS — MANDATORY (schema-first; no exceptions):
@@ -195,7 +195,7 @@ GIT:
 PLAN FILE: READ ONLY. Do not set `[~]`, `[x]`, or `[!]`.
 
 SECRETS / COMMANDS:
-- Local tests/dev: use Infisical (`infisical run --env=development -- <cmd>`); see `05-env-vars.mdc`
+- Local tests/dev: use Infisical (`infisical run --env=dev -- <cmd>`); see `05-env-vars.mdc`
 - Do not commit `.env` or secret exports
 
 DB MIGRATIONS — MANDATORY (schema-first; no exceptions):
@@ -287,7 +287,7 @@ GIT:
 - Branch staging; one implementation commit; explicit git add only; never stage `.cursor/skills/agent-memory/**`
 - Never push to `main`. When pushing is explicitly requested, target `staging` only.
 - Commit: `feat(<scope>)[SB-N]: <summary>` — key required. No Smart Commit. See `07-jira-commit-linking.mdc`.
-- Infisical for env when needed (`infisical run --env=development`)
+- Infisical for env when needed (`infisical run --env=dev`)
 
 DB MIGRATIONS — MANDATORY (schema-first; no exceptions):
 <copy verbatim DB MIGRATIONS block>
@@ -361,7 +361,7 @@ LAYER 2 — Automated checks from TARGET REPO:
 - lint: pnpm lint (or n/a)
 - typecheck: pnpm typecheck (or n/a)
 - test: <from plan row Tests column, else doc-index defaults>
-Use Infisical (`infisical run --env=development`) when env required. Stop if any defined check fails.
+Use Infisical (`infisical run --env=dev`) when env required. Stop if any defined check fails.
 
 LAYER 3 — Logic review:
 3a. Each acceptance criterion — genuinely implemented?

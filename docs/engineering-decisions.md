@@ -103,7 +103,7 @@ pnpm audit --audit-level=high
 ```
 
 - Playwright e2e is **not** in the local gate (CI-only).
-- Commands needing env run under Infisical: `infisical run --env=development -- <cmd>`.
+- Commands needing env run under Infisical: `infisical run --env=dev -- <cmd>`.
 - Exact `pnpm` script names are finalized in the P1 scaffold; this gate is the contract they must satisfy.
 
 ---
@@ -114,18 +114,11 @@ pnpm audit --audit-level=high
 |---|---|
 | Instance | `https://secrets.mdg-labs.dev/` (self-hosted) |
 | Project slug | `slugbase-cloud` |
-| Environments | `development` · `staging` · `production` (no `development` *deployment* — local only) |
+| Environments | `dev` · `staging` · `prod` (no `dev` *deployment* — local only) |
 | CI auth | OIDC via `Infisical/secrets-action`; **single** machine identity `INFISICAL_OIDC_IDENTITY_ID` (project-scoped read-only) |
 | GHA secrets | only `INFISICAL_DOMAIN` + `INFISICAL_OIDC_IDENTITY_ID` |
 
-**Folder layout (per environment):**
-
-| Folder | Holds | Notes |
-|---|---|---|
-| `/api` | all sensitive server-side secrets | `SESSION_SECRET`, `ENCRYPTION_KEY`, `DATABASE_URL`, SMTP, `OPENAI_API_KEY`, Stripe secret + webhook, Turnstile secret, `TOLGEE_API_KEY`, error DSN, aggregate-stats secret, OIDC provider config |
-| `/web` | public `VITE_*` config | inlined into client bundle — never a real secret |
-| `/marketing` | public `PUBLIC_*` config | inlined — never a real secret |
-| `/shared` | values used by >1 surface | `APP_BASE_URL`, `FRONTEND_ORIGIN`; imported into `/api`, `/web` |
+**Layout:** all keys for an environment live at the **project root** (no Infisical subfolders). CI and `infisical run --env=<slug>` inject the full environment. Never put true secrets in `VITE_*` or `PUBLIC_*` keys (client bundles).
 
 Adding an env var = the 4-step Infisical-first workflow in rule `05-env-vars` (Infisical + `.env.example` + Zod config schema + config-reference doc), in one commit. Security-critical secrets validated at startup; **no silent defaults** (§15).
 
@@ -138,7 +131,7 @@ Adding an env var = the 4-step Infisical-first workflow in rule `05-env-vars` (I
 | Instance | `https://tolgee.mdg-labs.dev` (self-hosted) |
 | Project | `4` (`/projects/4`); `TOLGEE_PROJECT_ID=4` |
 | Client API URL | `VITE_TOLGEE_API_URL=https://tolgee.mdg-labs.dev` |
-| PAT | `TOLGEE_API_KEY` (secret, Infisical `/api`) |
+| PAT | `TOLGEE_API_KEY` (secret, Infisical env root) |
 | SDK | Tolgee **React SDK** in `web`; shared project for Astro `marketing` |
 
 Every UI string is a catalog key `<scope>.<context>.<descriptor>`; en + de required before merge (rule `10-i18n`). Language resolution: user pref → `Accept-Language` → `en`.

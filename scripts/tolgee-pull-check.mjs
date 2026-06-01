@@ -23,7 +23,7 @@ const apiUrl =
   process.env.VITE_TOLGEE_API_URL?.trim() || "https://tolgee.mdg-labs.dev";
 
 if (!apiKey) {
-  fail("TOLGEE_API_KEY is required (set via Infisical /api).");
+  fail("TOLGEE_API_KEY is required (set via Infisical env root).");
 }
 
 rmSync(pullDir, { recursive: true, force: true });

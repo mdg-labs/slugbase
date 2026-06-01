@@ -685,7 +685,7 @@ Every item below was previously an open question and is now **settled** and inte
 31. **Hosted deployment topology (settled):** web client on Cloudflare Workers (edge); API/back-end on Fly.io Frankfurt (`fra`); database on Neon Postgres Frankfurt (`aws-eu-central-1`). Railway was rejected — its only EU region (Amsterdam) has no collocated Neon region, causing cross-region DB latency. Self-hosted uses the combined container image (§14.2) and is unaffected. (Section 14.7.)
 32. **Hosted database engine (settled):** Neon Postgres (`aws-eu-central-1`) for the hosted deployment. Self-hosted defaults to the embedded file-based database with an optional networked Postgres path (§14.1, decision 26). The application schema and migration history are identical across both engines.
 33. **i18n tooling (settled):** Tolgee is the translation-management platform. Message catalogs are externalized through the Tolgee SDK; `TOLGEE_API_KEY` and `TOLGEE_PROJECT_ID` are Infisical-managed secrets. (Section 17, rule 10-i18n.mdc.)
-34. **Secrets management tooling (settled):** Infisical is the secrets manager for all environments (`development` / `staging` / `production`). Operators set `staging` and `production` secrets via the Infisical UI or OIDC sync; developers use `infisical run --env=development` locally. (Section 15, rule 05-env-vars.mdc.)
+34. **Secrets management tooling (settled):** Infisical is the secrets manager for all environments (`dev` / `staging` / `prod`). Operators set `staging` and `prod` secrets via the Infisical UI or OIDC sync; developers use `infisical run --env=dev` locally. All keys live at the environment root (no subfolders). (Section 15, rule 05-env-vars.mdc.)
 
 35. **CI/CD pipeline (settled):** GitHub Actions on hosted runners; single workflow file (`.github/workflows/ci-cd.yml`); branches `staging` and `main`. (Section 22.)
 36. **Design system and UI prototype (settled):** A clickable V1 design prototype in `docs/design-prototype/V1/` is the **visual and interaction-design source of truth** (design language, screen anatomy, states, copy tone). The MVP spec remains the **product source of truth** — where the prototype conflicts with the spec, the spec wins. Design tokens (periwinkle accent `#7782f7`, dark-first, IBM Plex Sans/Mono) are defined in `docs/design-prototype/V1/colors_and_type.css`. (Section 23.)
@@ -799,18 +799,12 @@ All environment secrets are fetched from Infisical via the `Infisical/secrets-ac
 - `INFISICAL_DOMAIN` — the Infisical instance URL
 - `INFISICAL_OIDC_IDENTITY_ID` — the machine identity for OIDC auth
 
-**Secret organization (folders, settled):** within each Infisical environment (`staging` / `production`; `development` is local-only), secrets are organized by deploy surface:
+**Secret organization (settled):** all keys for an environment live at the **Infisical project root** (no subfolders). Local dev and CI inject the full environment via `infisical run --env=<slug>` and `Infisical/secrets-action` respectively.
 
-| Folder | Holds | Read by |
-|---|---|---|
-| `/api` | **all sensitive server-side secrets** (`SESSION_SECRET`, `ENCRYPTION_KEY`, `DATABASE_URL`, SMTP, `OPENAI_API_KEY`, Stripe secret + webhook, Turnstile secret, `TOLGEE_API_KEY`, error-reporting DSN, aggregate-stats secret, OIDC provider config) | API deploy |
-| `/web` | public, build-time-inlined client config only (`VITE_*`) | web build/deploy |
-| `/marketing` | public config only (`PUBLIC_*`) | marketing build/deploy |
-| `/shared` | values imported by >1 surface (e.g. `APP_BASE_URL`, `FRONTEND_ORIGIN`) | imported into `/api`, `/web` |
+- **Server-only secrets** use keys without a client prefix (`SESSION_SECRET`, `TOLGEE_API_KEY`, `DATABASE_URL`, etc.).
+- **Build-time public config** uses `VITE_*` (web) or `PUBLIC_*` (marketing) — these are inlined into client bundles; never store true secrets under those prefixes.
 
-`/web` and `/marketing` contain no true secrets (those values are inlined into client bundles); the sensitive set lives only in `/api`. Each deploy job reads only its surface's folder(s).
-
-**OIDC identity (settled):** a **single machine identity** (`INFISICAL_OIDC_IDENTITY_ID`) is used for all CI jobs, scoped read-only to the `slugbase-cloud` project. Folder separation still limits what each *deployed* surface receives at runtime (the API runtime gets `/api` + `/shared`, the Workers builds get `/web` / `/marketing`). Per-surface CI identities (`ci-api` / `ci-web` / `ci-marketing`) are a possible later hardening, not v1.
+**OIDC identity (settled):** a **single machine identity** (`INFISICAL_OIDC_IDENTITY_ID`) is used for all CI jobs, scoped read-only to the `slugbase-cloud` project. Per-surface CI identities (`ci-api` / `ci-web` / `ci-marketing`) are a possible later hardening, not v1.
 
 ### 22.10 What is not in this pipeline
 

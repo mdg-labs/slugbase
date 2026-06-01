@@ -278,7 +278,7 @@ pnpm typecheck   # or n/a
 pnpm test:unit   # or n/a
 ```
 
-Mark `n/a` for commands not yet defined. Stop if any defined check fails. Use Infisical (`infisical run --env=development`) when env required.
+Mark `n/a` for commands not yet defined. Stop if any defined check fails. Use Infisical (`infisical run --env=dev`) when env required.
 
 **Layer 3 — Logic review:**
 

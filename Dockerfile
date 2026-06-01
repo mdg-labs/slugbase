@@ -26,7 +26,7 @@ COPY packages/ui packages/ui
 COPY packages/backend packages/backend
 COPY packages/web packages/web
 
-# Vite build-time client config (CI passes --build-arg from Infisical /web — spec §22.8)
+# Vite build-time client config (CI passes --build-arg from Infisical — spec §22.8)
 ARG VITE_TOLGEE_API_URL=""
 ARG VITE_BILLING_ENABLED=""
 ARG VITE_PLAN_PRICE_PERSONAL_MONTHLY=""
