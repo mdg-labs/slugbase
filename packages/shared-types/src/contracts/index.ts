@@ -1,5 +1,6 @@
 import { initContract } from "@ts-rest/core";
 
+import { aiContract } from "./ai.contract.js";
 import { billingContract } from "./billing-api.contract.js";
 import { accountContract } from "./account.contract.js";
 import { apiTokenContract } from "./api-token.contract.js";
@@ -36,8 +37,10 @@ export const apiContract = c.router({
   ...invitationContract,
   ...importContract,
   ...billingContract,
+  ...aiContract,
 });
 
+export { aiContract } from "./ai.contract.js";
 export { billingContract } from "./billing-api.contract.js";
 export { accountContract } from "./account.contract.js";
 export { apiTokenContract } from "./api-token.contract.js";

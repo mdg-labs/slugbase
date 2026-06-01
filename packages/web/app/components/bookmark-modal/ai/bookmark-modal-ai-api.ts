@@ -6,6 +6,9 @@ import type {
 
 const getApiBaseUrl = (): string => process.env["API_BASE_URL"] ?? "";
 
+/** Status codes that indicate the feature is gated or unavailable — return null gracefully. */
+const SILENT_NULL_STATUSES = new Set([400, 403, 404, 503]);
+
 export const fetchBookmarkModalAiSuggestions: FetchAiSuggestionsFn = async ({
   url,
   outputLanguage,
@@ -17,7 +20,7 @@ export const fetchBookmarkModalAiSuggestions: FetchAiSuggestionsFn = async ({
     body: JSON.stringify({ url, outputLanguage }),
   });
 
-  if (res.status === 404 || res.status === 403 || res.status === 503) {
+  if (SILENT_NULL_STATUSES.has(res.status)) {
     return null;
   }
 

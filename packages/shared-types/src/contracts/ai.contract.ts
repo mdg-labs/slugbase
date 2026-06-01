@@ -6,6 +6,9 @@
  * without an AI credential — suggestion flows degrade gracefully.
  */
 
+import { initContract } from "@ts-rest/core";
+import { z } from "zod";
+
 /** Optional page metadata to enrich suggestions (spec §6.4). */
 export interface AiPageMetadata {
   title?: string;
@@ -59,3 +62,51 @@ export class AiSuggestError extends Error {
     this.name = "AiSuggestError";
   }
 }
+
+// ─── HTTP contract (ts-rest / OpenAPI) ───────────────────────────────────────
+
+const c = initContract();
+
+const AiPageMetadataSchema = z
+  .object({
+    title: z.string().optional(),
+    description: z.string().optional(),
+    siteName: z.string().optional(),
+  })
+  .strict();
+
+export const AiSuggestBodySchema = z
+  .object({
+    url: z.string().min(1).max(2048),
+    outputLanguage: z.string().min(2).max(10),
+    metadata: AiPageMetadataSchema.optional(),
+  })
+  .strict();
+
+export const AiSuggestionsSchema = z
+  .object({
+    title: z.string(),
+    slug: z.string(),
+    tags: z.array(z.string()),
+    detectedLanguage: z.string(),
+    confidence: z.number(),
+  })
+  .strict();
+
+const errorSchema = z.object({ message: z.string() }).strict();
+
+export const aiContract = c.router({
+  suggestBookmarkFields: {
+    method: "POST",
+    path: "/ai/suggest",
+    body: AiSuggestBodySchema,
+    responses: {
+      200: AiSuggestionsSchema,
+      400: errorSchema,
+      403: errorSchema,
+      503: errorSchema,
+    },
+    summary:
+      "Return AI-generated bookmark field suggestions for a URL (spec §11.2, §6.4)",
+  },
+});

@@ -1,8 +1,13 @@
 import { Global, Module } from "@nestjs/common";
 
+import { AccountsModule } from "../accounts/accounts.module.js";
 import { ConfigModule } from "../config/config.module.js";
 import { ConfigService } from "../config/config.service.js";
 import { CryptoModule } from "../crypto/crypto.module.js";
+import { EntitlementsModule } from "../entitlements/entitlements.module.js";
+import { SessionsModule } from "../sessions/sessions.module.js";
+import { WorkspacesModule } from "../workspaces/workspaces.module.js";
+import { AiController } from "./ai.controller.js";
 import { AiSuggestionCacheModule } from "./cache/ai-suggestion-cache.module.js";
 import { AI, OPENAI_HTTP } from "./ai.tokens.js";
 import { NoopAiService } from "./noop-ai.service.js";
@@ -16,7 +21,16 @@ import { OpenAiAiService } from "./openai-ai.service.js";
  */
 @Global()
 @Module({
-  imports: [ConfigModule, CryptoModule, AiSuggestionCacheModule],
+  imports: [
+    ConfigModule,
+    CryptoModule,
+    AiSuggestionCacheModule,
+    AccountsModule,
+    EntitlementsModule,
+    SessionsModule,
+    WorkspacesModule,
+  ],
+  controllers: [AiController],
   providers: [
     NoopAiService,
     OpenAiAiService,
