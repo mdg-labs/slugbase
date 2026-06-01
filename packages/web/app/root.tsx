@@ -9,9 +9,10 @@ import { ConsentBanner } from "./components/consent/ConsentBanner.js";
 import { AppToastProvider } from "./components/feedback/AppToastProvider.js";
 import { AppErrorBoundary } from "./routes/errors/AppErrorBoundary.js";
 import { getSessionUser } from "./lib/session-client.js";
+import { getServerApiBaseUrl } from "./lib/server-api-base-url.js";
 import stylesheet from "./app.css?url";
 
-const API_BASE_URL = () => process.env["API_BASE_URL"] ?? "";
+const API_BASE_URL = () => getServerApiBaseUrl();
 
 export type RootLoaderData = {
   locale: AppLocale;

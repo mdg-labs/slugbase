@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
 } from "@nestjs/common";
@@ -45,10 +46,21 @@ export class SetupService {
 
   async getStatus(): Promise<SetupStatusResult> {
     const userCount = await this.accounts.countAll();
-    return { needsSetup: userCount === 0 };
+    if (userCount > 0) {
+      return { needsSetup: false };
+    }
+    // Hosted path: public registration creates the first account via /register (spec §5.2).
+    if (this.config.get("PUBLIC_REGISTRATION")) {
+      return { needsSetup: false };
+    }
+    return { needsSetup: true };
   }
 
   async completeSetup(dto: CompleteSetupDto): Promise<CompleteSetupResult> {
+    if (this.config.get("PUBLIC_REGISTRATION")) {
+      throw new ForbiddenException("Instance setup is not available when public registration is enabled");
+    }
+
     const setupComplete = await this.instanceMetadata.get(SETUP_COMPLETE_KEY);
     if (setupComplete === "true") {
       throw new ConflictException("Instance setup has already been completed");

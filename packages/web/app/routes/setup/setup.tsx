@@ -2,8 +2,9 @@ import { useTranslate } from "@tolgee/react";
 import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { Form, redirect, useActionData, useNavigation } from "react-router";
+import { getServerApiBaseUrl } from "../../lib/server-api-base-url.js";
 
-const API_BASE_URL = () => process.env["API_BASE_URL"] ?? "";
+const API_BASE_URL = () => getServerApiBaseUrl();
 
 /** 0 = empty, 1 = very_weak, 2 = weak, 3 = fair, 4 = strong */
 function calcPasswordStrength(password: string): 0 | 1 | 2 | 3 | 4 {

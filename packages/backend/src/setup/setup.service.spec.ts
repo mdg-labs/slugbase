@@ -1,4 +1,4 @@
-import { ConflictException } from "@nestjs/common";
+import { ConflictException, ForbiddenException } from "@nestjs/common";
 import { describe, expect, it, vi, type MockedObject } from "vitest";
 
 import type { AccountsService } from "../accounts/accounts.service.js";
@@ -63,6 +63,7 @@ async function buildService(opts: {
   const config = {
     get: vi.fn((key: string) => {
       if (key === "EMAIL_VERIFICATION_REQUIRED") return opts.emailVerificationRequired ?? false;
+      if (key === "PUBLIC_REGISTRATION") return opts.publicRegistration ?? false;
       if (key === "isProduction") return false;
       return undefined;
     }),
@@ -95,6 +96,11 @@ describe("SetupService.getStatus()", () => {
     await expect(service.getStatus()).resolves.toEqual({ needsSetup: true });
   });
 
+  it("returns needsSetup: false when no users but public registration is enabled", async () => {
+    const { service } = await buildService({ userCount: 0, publicRegistration: true });
+    await expect(service.getStatus()).resolves.toEqual({ needsSetup: false });
+  });
+
   it("returns needsSetup: false when users exist", async () => {
     const { service } = await buildService({ userCount: 1 });
     await expect(service.getStatus()).resolves.toEqual({ needsSetup: false });
@@ -107,6 +113,19 @@ describe("SetupService.getStatus()", () => {
 });
 
 describe("SetupService.completeSetup()", () => {
+  it("throws ForbiddenException when public registration is enabled", async () => {
+    const { service } = await buildService({ userCount: 0, publicRegistration: true });
+    await expect(
+      service.completeSetup({
+        email: "admin@example.com",
+        name: "Admin User",
+        password: "securePassword123!",
+        workspaceName: "Admin Workspace",
+        workspaceSlug: "admin",
+      }),
+    ).rejects.toThrow(ForbiddenException);
+  });
+
   const validDto = {
     email: "admin@example.com",
     name: "Admin User",

@@ -104,3 +104,43 @@ describe("Setup (integration)", () => {
     });
   });
 });
+
+describe("Setup status with public registration (integration)", () => {
+  let app: INestApplication | undefined;
+  let cleanup: () => Promise<void> = async () => {};
+
+  beforeAll(async () => {
+    const testDatabase = await createTestDatabase();
+    cleanup = testDatabase.cleanup;
+    applyTestEnv({
+      DATABASE_URL: testDatabase.databaseUrl,
+      PUBLIC_REGISTRATION: "true",
+    });
+
+    const moduleRef = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
+
+    app = moduleRef.createNestApplication();
+    app.use(cookieParser());
+    await app.init();
+  });
+
+  afterAll(async () => {
+    if (app) await app.close();
+    clearTestEnv();
+    await cleanup();
+  });
+
+  function server(): Server {
+    if (!app) throw new Error("app not initialized");
+    return app.getHttpServer() as Server;
+  }
+
+  it("returns needsSetup: false when public registration is enabled", async () => {
+    const res = await request(server()).get("/setup/status");
+    expect(res.status).toBe(200);
+    const body = res.body as { needsSetup: boolean };
+    expect(body.needsSetup).toBe(false);
+  });
+});
