@@ -14,6 +14,7 @@ vi.mock("react-router", async (importOriginal) => {
     ),
     redirect: vi.fn((url: string) => new Response(null, { status: 302, headers: { Location: url } })),
     useActionData: vi.fn(() => undefined),
+    useLoaderData: vi.fn(() => ({ oidcProviders: [] })),
     useNavigation: vi.fn(() => ({ state: "idle" })),
   };
 });
@@ -40,7 +41,7 @@ describe("Register route — loader", () => {
     const request = new Request("http://localhost/register");
     const args = { request, params: {}, context: {} } as unknown as LoaderFunctionArgs;
     const result = await loader(args);
-    expect(result).toEqual({});
+    expect(result).toMatchObject({ oidcProviders: [] });
   });
 
   it("redirects to / when already authenticated", async () => {

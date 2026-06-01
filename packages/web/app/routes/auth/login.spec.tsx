@@ -15,7 +15,7 @@ vi.mock("react-router", async (importOriginal) => {
     ),
     redirect: vi.fn((url: string) => new Response(null, { status: 302, headers: { Location: url } })),
     useActionData: vi.fn(() => undefined),
-    useLoaderData: vi.fn(() => ({ passwordReset: false })),
+    useLoaderData: vi.fn(() => ({ passwordReset: false, oidcProviders: [] })),
     useNavigation: vi.fn(() => ({ state: "idle" })),
   };
 });
@@ -44,7 +44,7 @@ describe("Login route — loader", () => {
     const request = new Request("http://localhost/login");
     const args = { request, params: {}, context: {} } as unknown as LoaderFunctionArgs;
     const result = await loader(args);
-    expect(result).toEqual({ passwordReset: false });
+    expect(result).toMatchObject({ passwordReset: false, oidcProviders: [] });
   });
 
   it("redirects to / when session is already valid", async () => {

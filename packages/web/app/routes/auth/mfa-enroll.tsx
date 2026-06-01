@@ -10,6 +10,7 @@ import {
 } from "react-router";
 import { TotpInput } from "../../components/TotpInput.js";
 import { getSessionUser } from "../../lib/session-client.js";
+import { AuthShell } from "./AuthShell.js";
 
 const API_BASE_URL = (): string => process.env["API_BASE_URL"] ?? "";
 
@@ -86,7 +87,6 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function MfaEnrollRoute() {
-  const { t } = useTranslate();
   const loaderData = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
@@ -114,103 +114,27 @@ export default function MfaEnrollRoute() {
   };
 
   return (
-    <div className="flex min-h-screen bg-canvas font-sans">
-      {/* Brand rail — hidden on small screens */}
-      <aside
-        className="hidden lg:flex w-[400px] shrink-0 flex-col justify-between border-r border-[color:var(--border)] bg-base p-sp-8"
-        aria-hidden="true"
-      >
-        <div className="flex items-center gap-sp-3">
-          <img
-            src="/slugbase_icon.svg"
-            alt=""
-            width={28}
-            height={28}
-            className="shrink-0"
-          />
-          <span
-            className="text-fg font-semibold"
-            style={{ fontSize: "var(--text-h3)", lineHeight: "var(--lh-h3)" }}
-          >
-            SlugBase
-          </span>
-        </div>
-
-        <div className="flex flex-col gap-sp-7">
-          <div className="flex flex-col gap-sp-4">
-            <h1
-              className="text-fg font-semibold"
-              style={{
-                fontSize: "var(--text-h2)",
-                lineHeight: "var(--lh-h2)",
-              }}
-            >
-              {t("auth.brand.headline")}
-            </h1>
-            <p
-              className="text-fg-muted"
-              style={{
-                fontSize: "var(--text-body-lg)",
-                lineHeight: "var(--lh-body-lg)",
-              }}
-            >
-              {t("auth.brand.subline")}
-            </p>
-          </div>
-        </div>
-
-        <p
-          className="text-fg-subtle"
-          style={{ fontSize: "var(--text-small)", lineHeight: "var(--lh-small)" }}
-        >
-          {t("auth.brand.footer")}
-        </p>
-      </aside>
-
-      {/* Auth pane */}
-      <div className="flex flex-1 items-center justify-center p-sp-8">
-        <div className="w-full max-w-[420px]">
-          {/* Card mark */}
-          <div className="mb-sp-7 flex items-center gap-sp-3">
-            <img
-              src="/slugbase_icon.svg"
-              alt=""
-              width={24}
-              height={24}
-              className="shrink-0"
-            />
-            <span
-              className="text-fg font-semibold"
-              style={{ fontSize: "var(--text-h3)", lineHeight: "var(--lh-h3)" }}
-            >
-              SlugBase
-            </span>
-          </div>
-
-          {backupCodes !== null ? (
-            /* ── Step 2: Backup codes display ── */
-            <BackupCodesStep
-              backupCodes={backupCodes}
-              copied={copied}
-              codesConfirmed={codesConfirmed}
-              onCopy={handleCopyCodes}
-              onConfirmChange={setCodesConfirmed}
-            />
-          ) : (
-            /* ── Step 1: QR code + confirm ── */
-            <EnrollConfirmStep
-              otpAuthUri={otpAuthUri}
-              textSecret={textSecret}
-              qrDataUri={qrDataUri}
-              totpCode={totpCode}
-              onTotpChange={setTotpCode}
-              isSubmitting={isSubmitting}
-              error={error}
-            />
-          )}
-        </div>
-      </div>
-    </div>
+    <AuthShell showSlugRows={false}>
+      {backupCodes !== null ? (
+        <BackupCodesStep
+          backupCodes={backupCodes}
+          copied={copied}
+          codesConfirmed={codesConfirmed}
+          onCopy={handleCopyCodes}
+          onConfirmChange={setCodesConfirmed}
+        />
+      ) : (
+        <EnrollConfirmStep
+          otpAuthUri={otpAuthUri}
+          textSecret={textSecret}
+          qrDataUri={qrDataUri}
+          totpCode={totpCode}
+          onTotpChange={setTotpCode}
+          isSubmitting={isSubmitting}
+          error={error}
+        />
+      )}
+    </AuthShell>
   );
 }
 

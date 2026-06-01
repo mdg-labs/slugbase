@@ -1,8 +1,20 @@
 import { useTranslate } from "@tolgee/react";
 import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { Form, redirect, useActionData, useNavigation } from "react-router";
+import { Form, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
 import { getSessionUser } from "../../lib/session-client.js";
+import {
+  AuthButton,
+  AuthHeading,
+  AuthInput,
+  AuthShell,
+  ErrorBanner,
+  LockFieldIcon,
+  MailFieldIcon,
+  type OidcProviderItem,
+  SsoSection,
+  UserFieldIcon,
+} from "./AuthShell.js";
 
 const API_BASE_URL = () => process.env["API_BASE_URL"] ?? "";
 
@@ -40,12 +52,13 @@ const STRENGTH_KEYS = [
   "register.password_strength.strong",
 ] as const;
 
-const STRENGTH_COLORS = [
+const STRENGTH_COLORS = ["", "bg-danger", "bg-warning", "bg-warning", "bg-success"] as const;
+const STRENGTH_TEXT_COLORS = [
   "",
-  "bg-danger",
-  "bg-warning",
-  "bg-warning",
-  "bg-success",
+  "text-danger-text",
+  "text-warning-text",
+  "text-warning-text",
+  "text-success-text",
 ] as const;
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -53,7 +66,21 @@ export async function loader({ request }: LoaderFunctionArgs) {
   if (user) {
     return redirect(user.emailVerified ? "/" : "/verify-email");
   }
-  return {};
+
+  let oidcProviders: OidcProviderItem[] = [];
+  try {
+    const res = await fetch(`${API_BASE_URL()}/auth/oidc/providers`);
+    if (res.ok) {
+      const data = (await res.json()) as { providers?: OidcProviderItem[] };
+      oidcProviders = (data.providers ?? []).filter(
+        (p): p is OidcProviderItem => typeof p.id === "string" && typeof p.name === "string",
+      );
+    }
+  } catch {
+    // graceful degradation
+  }
+
+  return { oidcProviders };
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -119,6 +146,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
 export default function RegisterRoute() {
   const { t } = useTranslate();
+  const { oidcProviders } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
@@ -133,20 +161,12 @@ export default function RegisterRoute() {
 
   if (error === "register.error_disabled") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-canvas p-sp-8 font-sans">
-        <div className="w-full max-w-[360px] text-center">
-          <div className="mb-sp-7 flex items-center justify-center gap-sp-3">
-            <img src="/slugbase_icon.svg" alt="" width={24} height={24} className="shrink-0" />
-            <span
-              className="text-fg font-semibold"
-              style={{ fontSize: "var(--text-h3)", lineHeight: "var(--lh-h3)" }}
-            >
-              SlugBase
-            </span>
-          </div>
+      <AuthShell>
+        <div className="flex flex-col items-center text-center" style={{ gap: "var(--sp-6)" }}>
           <div
             role="status"
-            className="rounded-lg border border-[color:var(--border)] bg-raised p-sp-8"
+            className="w-full rounded-lg border border-[color:var(--border)] bg-raised"
+            style={{ padding: "var(--sp-8)" }}
           >
             <p
               className="text-fg-muted"
@@ -156,256 +176,156 @@ export default function RegisterRoute() {
             </p>
             <a
               href="/login"
-              className="mt-sp-5 inline-block text-accent-text hover:underline"
-              style={{ fontSize: "var(--text-small)", lineHeight: "var(--lh-small)" }}
+              className="inline-block text-accent-text hover:underline"
+              style={{ marginTop: "var(--sp-5)", fontSize: "var(--text-small)", lineHeight: "var(--lh-small)" }}
             >
               {t("register.sign_in_link")}
             </a>
           </div>
         </div>
-      </div>
+      </AuthShell>
     );
   }
 
   return (
-    <div className="flex min-h-screen bg-canvas font-sans">
-      {/* Brand rail — hidden on small screens */}
-      <aside
-        className="hidden lg:flex w-[400px] shrink-0 flex-col justify-between border-r border-[color:var(--border)] bg-base p-sp-8"
-        aria-hidden="true"
-      >
-        <div className="flex items-center gap-sp-3">
-          <img src="/slugbase_icon.svg" alt="" width={28} height={28} className="shrink-0" />
-          <span
-            className="text-fg font-semibold"
-            style={{ fontSize: "var(--text-h3)", lineHeight: "var(--lh-h3)" }}
+    <AuthShell>
+      <AuthHeading title={t("register.title")} subtitle={t("register.subtitle")} />
+
+      <Form method="post" className="flex flex-col" noValidate style={{ gap: "var(--sp-6)" }}>
+        {error && <ErrorBanner message={t(error)} />}
+
+        {/* Name */}
+        <div className="flex flex-col" style={{ gap: "var(--sp-3)" }}>
+          <label
+            htmlFor="name"
+            className="font-medium text-fg-muted"
+            style={{ fontSize: "var(--text-small)", lineHeight: 1 }}
           >
-            SlugBase
-          </span>
+            {t("register.name_label")}
+          </label>
+          <AuthInput
+            id="name"
+            name="name"
+            type="text"
+            autoComplete="name"
+            required
+            placeholder={t("register.name_placeholder")}
+            leadingIcon={<UserFieldIcon />}
+          />
         </div>
 
-        <div className="flex flex-col gap-sp-7">
-          <div className="flex flex-col gap-sp-4">
-            <h1
-              className="text-fg font-semibold"
-              style={{ fontSize: "var(--text-h2)", lineHeight: "var(--lh-h2)" }}
-            >
-              {t("auth.brand.headline")}
-            </h1>
-            <p
-              className="text-fg-muted"
-              style={{ fontSize: "var(--text-body-lg)", lineHeight: "var(--lh-body-lg)" }}
-            >
-              {t("auth.brand.subline")}
-            </p>
-          </div>
-          <div className="flex flex-col gap-sp-3">
-            <SlugRow src="go.slugbase.app/react19" dst="react.dev/blog" opacity={1} />
-            <SlugRow src="go.slugbase.app/ddia" dst="dataintensive.net" opacity={0.5} />
-            <SlugRow src="go.slugbase.app/rustperf" dst="nnethercote.github.io" opacity={0.25} />
-          </div>
+        {/* Email */}
+        <div className="flex flex-col" style={{ gap: "var(--sp-3)" }}>
+          <label
+            htmlFor="email"
+            className="font-medium text-fg-muted"
+            style={{ fontSize: "var(--text-small)", lineHeight: 1 }}
+          >
+            {t("register.email_label")}
+          </label>
+          <AuthInput
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="username"
+            required
+            placeholder={t("register.email_placeholder")}
+            leadingIcon={<MailFieldIcon />}
+          />
         </div>
 
-        <p
-          className="text-fg-subtle"
-          style={{ fontSize: "var(--text-small)", lineHeight: "var(--lh-small)" }}
-        >
-          {t("auth.brand.footer")}
-        </p>
-      </aside>
+        {/* Password + strength meter (always visible) */}
+        <div className="flex flex-col" style={{ gap: "var(--sp-3)" }}>
+          <label
+            htmlFor="password"
+            className="font-medium text-fg-muted"
+            style={{ fontSize: "var(--text-small)", lineHeight: 1 }}
+          >
+            {t("register.password_label")}
+          </label>
+          <AuthInput
+            id="password"
+            name="password"
+            type={showPassword ? "text" : "password"}
+            autoComplete="new-password"
+            required
+            placeholder={t("auth.password.mask_placeholder")}
+            value={password}
+            onChange={(e) => { setPassword(e.target.value); }}
+            leadingIcon={<LockFieldIcon />}
+            trailingSlot={
+              <button
+                type="button"
+                onClick={() => { setShowPassword((v) => !v); }}
+                aria-label={t(
+                  showPassword ? "register.password_hide" : "register.password_show",
+                )}
+                className="flex items-center text-fg-subtle hover:text-fg px-sp-4"
+                style={{ height: "42px" }}
+              >
+                {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+              </button>
+            }
+          />
 
-      {/* Form pane */}
-      <div className="flex flex-1 items-center justify-center p-sp-8">
-        <div className="w-full max-w-[360px]">
-          <div className="mb-sp-7 flex items-center gap-sp-3">
-            <img src="/slugbase_icon.svg" alt="" width={24} height={24} className="shrink-0" />
-            <span
-              className="text-fg font-semibold"
-              style={{ fontSize: "var(--text-h3)", lineHeight: "var(--lh-h3)" }}
+          {/* Strength meter — always visible once any input exists */}
+          <div className="flex flex-col" style={{ gap: "var(--sp-3)" }} aria-live="polite">
+            <div
+              className="grid gap-sp-3"
+              style={{ gridTemplateColumns: "repeat(4,1fr)" }}
+              role="presentation"
             >
-              SlugBase
-            </span>
-          </div>
-
-          <div className="mb-sp-7">
-            <h2
-              className="text-fg font-semibold"
-              style={{ fontSize: "var(--text-h2)", lineHeight: "var(--lh-h2)" }}
-            >
-              {t("register.title")}
-            </h2>
-            <p
-              className="mt-sp-2 text-fg-muted"
-              style={{ fontSize: "var(--text-body)", lineHeight: "var(--lh-body)" }}
-            >
-              {t("register.subtitle")}
-            </p>
-          </div>
-
-          <Form method="post" className="flex flex-col gap-sp-5" noValidate>
-            {error && (
-              <div
-                role="alert"
-                className="flex items-start gap-sp-3 rounded-md border border-[color:var(--danger-subtle)] bg-[color:var(--danger-subtle)] px-sp-4 py-sp-3"
-              >
-                <p
-                  className="text-danger-text"
-                  style={{ fontSize: "var(--text-small)", lineHeight: "var(--lh-small)" }}
-                >
-                  {t(error)}
-                </p>
-              </div>
-            )}
-
-            {/* Name field */}
-            <div className="flex flex-col gap-sp-2">
-              <label
-                htmlFor="name"
-                className="font-medium text-fg-muted"
-                style={{ fontSize: "var(--text-small)", lineHeight: "var(--lh-small)" }}
-              >
-                {t("register.name_label")}
-              </label>
-              <input
-                id="name"
-                name="name"
-                type="text"
-                autoComplete="name"
-                required
-                placeholder={t("register.name_placeholder")}
-                className="w-full rounded-md border border-[color:var(--border)] bg-raised px-sp-4 py-sp-3 text-fg placeholder:text-fg-faint focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-canvas"
-                style={{ fontSize: "var(--text-body)", lineHeight: "var(--lh-body)" }}
-              />
-            </div>
-
-            {/* Email field */}
-            <div className="flex flex-col gap-sp-2">
-              <label
-                htmlFor="email"
-                className="font-medium text-fg-muted"
-                style={{ fontSize: "var(--text-small)", lineHeight: "var(--lh-small)" }}
-              >
-                {t("register.email_label")}
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="username"
-                required
-                placeholder={t("register.email_placeholder")}
-                className="w-full rounded-md border border-[color:var(--border)] bg-raised px-sp-4 py-sp-3 text-fg placeholder:text-fg-faint focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-canvas"
-                style={{ fontSize: "var(--text-body)", lineHeight: "var(--lh-body)" }}
-              />
-            </div>
-
-            {/* Password field + strength */}
-            <div className="flex flex-col gap-sp-2">
-              <label
-                htmlFor="password"
-                className="font-medium text-fg-muted"
-                style={{ fontSize: "var(--text-small)", lineHeight: "var(--lh-small)" }}
-              >
-                {t("register.password_label")}
-              </label>
-              <div className="relative">
-                <input
-                  id="password"
-                  name="password"
-                  type={showPassword ? "text" : "password"}
-                  autoComplete="new-password"
-                  required
-                  placeholder={t("auth.password.mask_placeholder")}
-                  value={password}
-                  onChange={(e) => { setPassword(e.target.value); }}
-                  className="w-full rounded-md border border-[color:var(--border)] bg-raised px-sp-4 py-sp-3 pr-10 text-fg placeholder:text-fg-faint focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-canvas"
-                  style={{ fontSize: "var(--text-body)", lineHeight: "var(--lh-body)" }}
+              {([1, 2, 3, 4] as const).map((level) => (
+                <div
+                  key={level}
+                  className={`rounded-full transition-colors duration-[var(--duration-fast)] ${
+                    strength >= level ? STRENGTH_COLORS[strength] : "bg-[color:var(--border)]"
+                  }`}
+                  style={{ height: "4px" }}
                 />
-                <button
-                  type="button"
-                  onClick={() => { setShowPassword((v) => !v); }}
-                  aria-label={t(
-                    showPassword ? "register.password_hide" : "register.password_show",
-                  )}
-                  className="absolute inset-y-0 right-0 flex items-center px-sp-4 text-fg-subtle hover:text-fg"
-                >
-                  {showPassword ? <EyeOffIcon /> : <EyeIcon />}
-                </button>
-              </div>
-
-              {/* Strength meter */}
-              {strength > 0 && (
-                <div className="flex flex-col gap-sp-1" aria-live="polite">
-                  <div className="flex gap-sp-1" role="presentation">
-                    {([1, 2, 3, 4] as const).map((level) => (
-                      <div
-                        key={level}
-                        className={`h-1 flex-1 rounded-full transition-colors duration-[var(--duration-fast)] ${
-                          strength >= level
-                            ? STRENGTH_COLORS[strength]
-                            : "bg-[color:var(--border)]"
-                        }`}
-                      />
-                    ))}
-                  </div>
-                  <p
-                    className="text-fg-subtle"
-                    style={{ fontSize: "var(--text-small)", lineHeight: "var(--lh-small)" }}
-                  >
-                    {t(STRENGTH_KEYS[strength] ?? "register.password_strength.weak")}
-                  </p>
-                </div>
-              )}
+              ))}
             </div>
-
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="mt-sp-2 w-full rounded-md bg-accent px-sp-6 py-sp-3 font-medium text-accent-fg transition-colors hover:bg-accent-hover active:bg-accent-active disabled:cursor-not-allowed disabled:opacity-50"
-              style={{ fontSize: "var(--text-body)", lineHeight: "var(--lh-body)" }}
+            <div
+              className="flex items-center justify-between"
+              style={{ fontSize: "var(--text-small)" }}
             >
-              {isSubmitting ? t("register.submit_loading") : t("register.submit")}
-            </button>
-          </Form>
-
-          <p
-            className="mt-sp-6 text-center text-fg-subtle"
-            style={{ fontSize: "var(--text-small)", lineHeight: "var(--lh-small)" }}
-          >
-            {t("register.sign_in_prompt")}{" "}
-            <a href="/login" className="text-accent-text hover:underline">
-              {t("register.sign_in_link")}
-            </a>
-          </p>
+              <span
+                className={
+                  strength > 0 ? STRENGTH_TEXT_COLORS[strength] : "text-fg-subtle"
+                }
+                style={{ fontWeight: "var(--weight-medium)" }}
+              >
+                {strength > 0
+                  ? t(STRENGTH_KEYS[strength] ?? "register.password_strength.weak")
+                  : "\u00a0"}
+              </span>
+              <span
+                className="text-fg-subtle"
+                style={{ fontFamily: "var(--font-mono)", fontSize: "var(--text-mono)" }}
+              >
+                {t("register.password_requirements")}
+              </span>
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
-  );
-}
 
-function SlugRow({
-  src,
-  dst,
-  opacity,
-}: {
-  src: string;
-  dst: string;
-  opacity: number;
-}) {
-  return (
-    <div
-      className="flex items-center gap-sp-3"
-      style={{
-        opacity,
-        fontFamily: "var(--font-mono)",
-        fontSize: "var(--text-mono)",
-        lineHeight: "var(--lh-mono)",
-      }}
-    >
-      <span className="text-accent-text">{src}</span>
-      <span className="text-fg-subtle">→</span>
-      <span className="text-fg-muted">{dst}</span>
-    </div>
+        <AuthButton isSubmitting={isSubmitting} style={{ marginTop: "var(--sp-2)" }}>
+          {isSubmitting ? t("register.submit_loading") : t("register.submit")}
+        </AuthButton>
+
+        <SsoSection providers={oidcProviders} mode="register" t={t} />
+      </Form>
+
+      <p
+        className="text-center text-fg-subtle"
+        style={{ marginTop: "var(--sp-8)", fontSize: "var(--text-body)" }}
+      >
+        {t("register.sign_in_prompt")}{" "}
+        <a href="/login" className="text-accent-text font-medium hover:underline">
+          {t("register.sign_in_link")}
+        </a>
+      </p>
+    </AuthShell>
   );
 }
 

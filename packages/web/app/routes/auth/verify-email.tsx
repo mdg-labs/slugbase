@@ -11,6 +11,7 @@ import {
 } from "react-router";
 import { useAppToast } from "../../components/feedback/AppToastProvider.js";
 import { getSessionUser } from "../../lib/session-client.js";
+import { AuthShell } from "./AuthShell.js";
 
 const API_BASE_URL = () => process.env["API_BASE_URL"] ?? "";
 
@@ -309,65 +310,6 @@ export default function VerifyEmailRoute() {
   );
 }
 
-function AuthShell({ children }: { children: React.ReactNode }) {
-  const { t } = useTranslate();
-
-  return (
-    <div className="flex min-h-screen bg-canvas font-sans">
-      <aside
-        className="hidden lg:flex w-[400px] shrink-0 flex-col justify-between border-r border-[color:var(--border)] bg-base p-sp-8"
-        aria-hidden="true"
-      >
-        <div className="flex items-center gap-sp-3">
-          <img src="/slugbase_icon.svg" alt="" width={28} height={28} className="shrink-0" />
-          <span
-            className="text-fg font-semibold"
-            style={{ fontSize: "var(--text-h3)", lineHeight: "var(--lh-h3)" }}
-          >
-            SlugBase
-          </span>
-        </div>
-
-        <div className="flex flex-col gap-sp-4">
-          <h1
-            className="text-fg font-semibold"
-            style={{ fontSize: "var(--text-h2)", lineHeight: "var(--lh-h2)" }}
-          >
-            {t("auth.brand.headline")}
-          </h1>
-          <p
-            className="text-fg-muted"
-            style={{ fontSize: "var(--text-body-lg)", lineHeight: "var(--lh-body-lg)" }}
-          >
-            {t("auth.brand.subline")}
-          </p>
-        </div>
-
-        <p
-          className="text-fg-subtle"
-          style={{ fontSize: "var(--text-small)", lineHeight: "var(--lh-small)" }}
-        >
-          {t("auth.brand.footer")}
-        </p>
-      </aside>
-
-      <div className="flex flex-1 items-center justify-center p-sp-8">
-        <div className="w-full max-w-[360px]">
-          <div className="mb-sp-7 flex items-center gap-sp-3">
-            <img src="/slugbase_icon.svg" alt="" width={24} height={24} className="shrink-0" />
-            <span
-              className="text-fg font-semibold"
-              style={{ fontSize: "var(--text-h3)", lineHeight: "var(--lh-h3)" }}
-            >
-              SlugBase
-            </span>
-          </div>
-          {children}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function CompleteSuccess({ t }: { t: (key: string) => string }) {
   return (

@@ -9,6 +9,7 @@ import {
   useLoaderData,
   useNavigation,
 } from "react-router";
+import { AuthShell, LockFieldIcon } from "./AuthShell.js";
 
 const API_BASE_URL = () => process.env["API_BASE_URL"] ?? "";
 
@@ -95,234 +96,176 @@ export default function ResetPasswordRoute() {
   const canSubmit = passwordsMatch && newPassword.length >= 12;
 
   return (
-    <div className="flex min-h-screen bg-canvas font-sans">
-      {/* Brand rail — hidden on small screens */}
-      <aside
-        className="hidden lg:flex w-[400px] shrink-0 flex-col justify-between border-r border-[color:var(--border)] bg-base p-sp-8"
-        aria-hidden="true"
-      >
-        <div className="flex items-center gap-sp-3">
-          <img
-            src="/slugbase_icon.svg"
-            alt=""
-            width={28}
-            height={28}
-            className="shrink-0"
-          />
-          <span
-            className="text-fg font-semibold"
-            style={{ fontSize: "var(--text-h3)", lineHeight: "var(--lh-h3)" }}
-          >
-            SlugBase
-          </span>
-        </div>
-
-        <div className="flex flex-col gap-sp-7">
-          <div className="flex flex-col gap-sp-4">
-            <h1
-              className="text-fg font-semibold"
-              style={{ fontSize: "var(--text-h2)", lineHeight: "var(--lh-h2)" }}
+    <AuthShell>
+      {!token ? (
+        <MissingTokenState t={t} />
+      ) : (
+        <>
+          <div style={{ marginBottom: "var(--sp-8)" }}>
+            <h2
+              className="text-fg"
+              style={{
+                margin: "0 0 var(--sp-4)",
+                fontWeight: "var(--weight-semi)",
+                fontSize: "var(--text-h1)",
+                lineHeight: "var(--lh-h1)",
+                letterSpacing: "var(--track-tight)",
+              }}
             >
-              {t("auth.brand.headline")}
-            </h1>
+              {t("password_reset.set.title")}
+            </h2>
             <p
               className="text-fg-muted"
-              style={{ fontSize: "var(--text-body-lg)", lineHeight: "var(--lh-body-lg)" }}
+              style={{ margin: 0, fontSize: "var(--text-body-lg)", lineHeight: "var(--lh-body-lg)" }}
             >
-              {t("auth.brand.subline")}
+              {t("password_reset.set.subtitle")}
             </p>
           </div>
-        </div>
 
-        <p
-          className="text-fg-subtle"
-          style={{ fontSize: "var(--text-small)", lineHeight: "var(--lh-small)" }}
-        >
-          {t("auth.brand.footer")}
-        </p>
-      </aside>
-
-      {/* Auth pane */}
-      <div className="flex flex-1 items-center justify-center p-sp-8">
-        <div className="w-full max-w-[360px]">
-          {/* Card mark */}
-          <div className="mb-sp-7 flex items-center gap-sp-3">
-            <img
-              src="/slugbase_icon.svg"
-              alt=""
-              width={24}
-              height={24}
-              className="shrink-0"
-            />
-            <span
-              className="text-fg font-semibold"
-              style={{ fontSize: "var(--text-h3)", lineHeight: "var(--lh-h3)" }}
-            >
-              SlugBase
-            </span>
-          </div>
-
-          {!token ? (
-            <MissingTokenState t={t} />
-          ) : (
-            <>
-              {/* Heading */}
-              <div className="mb-sp-7">
-                <h2
-                  className="text-fg font-semibold"
-                  style={{ fontSize: "var(--text-h2)", lineHeight: "var(--lh-h2)" }}
-                >
-                  {t("password_reset.set.title")}
-                </h2>
+          <Form method="post" className="flex flex-col" noValidate style={{ gap: "var(--sp-6)" }}>
+            {error && (
+              <div
+                role="alert"
+                className="flex items-start rounded-md border border-[color:var(--danger-subtle)] bg-[color:var(--danger-subtle)] px-sp-4 py-sp-3"
+                style={{ gap: "var(--sp-3)" }}
+              >
                 <p
-                  className="mt-sp-2 text-fg-muted"
-                  style={{ fontSize: "var(--text-body)", lineHeight: "var(--lh-body)" }}
-                >
-                  {t("password_reset.set.subtitle")}
-                </p>
-              </div>
-
-              <Form method="post" className="flex flex-col gap-sp-5" noValidate>
-                {/* Server-side error banner */}
-                {error && (
-                  <div
-                    role="alert"
-                    className="flex items-start gap-sp-3 rounded-md border border-[color:var(--danger-subtle)] bg-[color:var(--danger-subtle)] px-sp-4 py-sp-3"
-                  >
-                    <p
-                      className="text-danger-text"
-                      style={{ fontSize: "var(--text-small)", lineHeight: "var(--lh-small)" }}
-                    >
-                      {t(error)}
-                    </p>
-                  </div>
-                )}
-
-                {/* Hidden token */}
-                <input type="hidden" name="token" value={token} />
-
-                {/* New password field */}
-                <div className="flex flex-col gap-sp-2">
-                  <label
-                    htmlFor="newPassword"
-                    className="font-medium text-fg-muted"
-                    style={{ fontSize: "var(--text-small)", lineHeight: "var(--lh-small)" }}
-                  >
-                    {t("password_reset.set.new_password_label")}
-                  </label>
-                  <div className="relative">
-                    <input
-                      id="newPassword"
-                      name="newPassword"
-                      type={showNew ? "text" : "password"}
-                      autoComplete="new-password"
-                      required
-                      placeholder={t("password_reset.set.new_password_placeholder")}
-                      value={newPassword}
-                      onChange={(e) => { setNewPassword(e.target.value); }}
-                      className="w-full rounded-md border border-[color:var(--border)] bg-raised px-sp-4 py-sp-3 pr-10 text-fg placeholder:text-fg-faint focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-canvas"
-                      style={{ fontSize: "var(--text-body)", lineHeight: "var(--lh-body)" }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => { setShowNew((v) => !v); }}
-                      aria-label={t(
-                        showNew
-                          ? "password_reset.set.password_hide"
-                          : "password_reset.set.password_show",
-                      )}
-                      className="absolute inset-y-0 right-0 flex items-center px-sp-4 text-fg-subtle hover:text-fg"
-                    >
-                      {showNew ? <EyeOffIcon /> : <EyeIcon />}
-                    </button>
-                  </div>
-
-                  {/* Password strength meter */}
-                  <PasswordStrength score={score} value={newPassword} t={t} />
-                </div>
-
-                {/* Confirm password field */}
-                <div className="flex flex-col gap-sp-2">
-                  <label
-                    htmlFor="confirmPassword"
-                    className="font-medium text-fg-muted"
-                    style={{ fontSize: "var(--text-small)", lineHeight: "var(--lh-small)" }}
-                  >
-                    {t("password_reset.set.confirm_password_label")}
-                  </label>
-                  <div className="relative">
-                    <input
-                      id="confirmPassword"
-                      name="confirmPassword"
-                      type={showConfirm ? "text" : "password"}
-                      autoComplete="new-password"
-                      required
-                      placeholder={t("password_reset.set.confirm_password_placeholder")}
-                      value={confirmPassword}
-                      onChange={(e) => { setConfirmPassword(e.target.value); }}
-                      className="w-full rounded-md border border-[color:var(--border)] bg-raised px-sp-4 py-sp-3 pr-10 text-fg placeholder:text-fg-faint focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-canvas"
-                      style={{ fontSize: "var(--text-body)", lineHeight: "var(--lh-body)" }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => { setShowConfirm((v) => !v); }}
-                      aria-label={t(
-                        showConfirm
-                          ? "password_reset.set.password_hide"
-                          : "password_reset.set.password_show",
-                      )}
-                      className="absolute inset-y-0 right-0 flex items-center px-sp-4 text-fg-subtle hover:text-fg"
-                    >
-                      {showConfirm ? <EyeOffIcon /> : <EyeIcon />}
-                    </button>
-                  </div>
-
-                  {/* Match hint */}
-                  {(passwordsMatch || passwordsMismatch) && (
-                    <p
-                      style={{
-                        fontSize: "var(--text-small)",
-                        lineHeight: "var(--lh-small)",
-                        color: passwordsMatch
-                          ? "var(--success-text)"
-                          : "var(--danger-text)",
-                      }}
-                    >
-                      {passwordsMatch
-                        ? t("password_reset.set.passwords_match")
-                        : t("password_reset.set.passwords_mismatch")}
-                    </p>
-                  )}
-                </div>
-
-                {/* Submit */}
-                <button
-                  type="submit"
-                  disabled={isSubmitting || !canSubmit}
-                  className="mt-sp-2 w-full rounded-md bg-accent px-sp-6 py-sp-3 font-medium text-accent-fg transition-colors hover:bg-accent-hover active:bg-accent-active disabled:cursor-not-allowed disabled:opacity-50"
-                  style={{ fontSize: "var(--text-body)", lineHeight: "var(--lh-body)" }}
-                >
-                  {isSubmitting
-                    ? t("password_reset.set.submit_loading")
-                    : t("password_reset.set.submit")}
-                </button>
-              </Form>
-
-              {/* Back link */}
-              <div className="mt-sp-6 text-center">
-                <Link
-                  to="/login"
-                  className="text-fg-muted hover:text-fg"
+                  className="text-danger-text"
                   style={{ fontSize: "var(--text-small)", lineHeight: "var(--lh-small)" }}
                 >
-                  {t("password_reset.set.back_to_sign_in")}
-                </Link>
+                  {t(error)}
+                </p>
               </div>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
+            )}
+
+            <input type="hidden" name="token" value={token} />
+
+            {/* New password */}
+            <div className="flex flex-col" style={{ gap: "var(--sp-3)" }}>
+              <label
+                htmlFor="newPassword"
+                className="font-medium text-fg-muted"
+                style={{ fontSize: "var(--text-small)", lineHeight: 1 }}
+              >
+                {t("password_reset.set.new_password_label")}
+              </label>
+              <div className="relative">
+                <span
+                  className="absolute inset-y-0 left-0 flex items-center text-fg-subtle pointer-events-none"
+                  style={{ paddingLeft: "var(--sp-4)" }}
+                >
+                  <LockFieldIcon />
+                </span>
+                <input
+                  id="newPassword"
+                  name="newPassword"
+                  type={showNew ? "text" : "password"}
+                  autoComplete="new-password"
+                  required
+                  placeholder={t("password_reset.set.new_password_placeholder")}
+                  value={newPassword}
+                  onChange={(e) => { setNewPassword(e.target.value); }}
+                  className="w-full rounded-md border border-[color:var(--border)] bg-raised text-fg placeholder:text-fg-faint focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-canvas"
+                  style={{
+                    height: "42px",
+                    paddingLeft: "calc(var(--sp-4) + 16px + var(--sp-3))",
+                    paddingRight: "2.5rem",
+                    fontSize: "var(--text-body-lg)",
+                    lineHeight: "var(--lh-body-lg)",
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => { setShowNew((v) => !v); }}
+                  aria-label={t(showNew ? "password_reset.set.password_hide" : "password_reset.set.password_show")}
+                  className="absolute inset-y-0 right-0 flex items-center px-sp-4 text-fg-subtle hover:text-fg"
+                >
+                  {showNew ? <EyeOffIcon /> : <EyeIcon />}
+                </button>
+              </div>
+              <PasswordStrength score={score} value={newPassword} t={t} />
+            </div>
+
+            {/* Confirm password */}
+            <div className="flex flex-col" style={{ gap: "var(--sp-3)" }}>
+              <label
+                htmlFor="confirmPassword"
+                className="font-medium text-fg-muted"
+                style={{ fontSize: "var(--text-small)", lineHeight: 1 }}
+              >
+                {t("password_reset.set.confirm_password_label")}
+              </label>
+              <div className="relative">
+                <span
+                  className="absolute inset-y-0 left-0 flex items-center text-fg-subtle pointer-events-none"
+                  style={{ paddingLeft: "var(--sp-4)" }}
+                >
+                  <LockFieldIcon />
+                </span>
+                <input
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  type={showConfirm ? "text" : "password"}
+                  autoComplete="new-password"
+                  required
+                  placeholder={t("password_reset.set.confirm_password_placeholder")}
+                  value={confirmPassword}
+                  onChange={(e) => { setConfirmPassword(e.target.value); }}
+                  className="w-full rounded-md border border-[color:var(--border)] bg-raised text-fg placeholder:text-fg-faint focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-canvas"
+                  style={{
+                    height: "42px",
+                    paddingLeft: "calc(var(--sp-4) + 16px + var(--sp-3))",
+                    paddingRight: "2.5rem",
+                    fontSize: "var(--text-body-lg)",
+                    lineHeight: "var(--lh-body-lg)",
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => { setShowConfirm((v) => !v); }}
+                  aria-label={t(showConfirm ? "password_reset.set.password_hide" : "password_reset.set.password_show")}
+                  className="absolute inset-y-0 right-0 flex items-center px-sp-4 text-fg-subtle hover:text-fg"
+                >
+                  {showConfirm ? <EyeOffIcon /> : <EyeIcon />}
+                </button>
+              </div>
+              {(passwordsMatch || passwordsMismatch) && (
+                <p
+                  style={{
+                    fontSize: "var(--text-small)",
+                    lineHeight: "var(--lh-small)",
+                    color: passwordsMatch ? "var(--success-text)" : "var(--danger-text)",
+                  }}
+                >
+                  {passwordsMatch
+                    ? t("password_reset.set.passwords_match")
+                    : t("password_reset.set.passwords_mismatch")}
+                </p>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              disabled={isSubmitting || !canSubmit}
+              className="w-full rounded-md bg-accent font-medium text-accent-fg transition-colors hover:bg-accent-hover active:bg-accent-active disabled:cursor-not-allowed disabled:opacity-50"
+              style={{ marginTop: "var(--sp-2)", height: "44px", fontSize: "var(--text-body-lg)", lineHeight: 1 }}
+            >
+              {isSubmitting ? t("password_reset.set.submit_loading") : t("password_reset.set.submit")}
+            </button>
+          </Form>
+
+          <div className="text-center" style={{ marginTop: "var(--sp-6)" }}>
+            <Link
+              to="/login"
+              className="text-fg-muted hover:text-fg"
+              style={{ fontSize: "var(--text-small)", lineHeight: "var(--lh-small)" }}
+            >
+              {t("password_reset.set.back_to_sign_in")}
+            </Link>
+          </div>
+        </>
+      )}
+    </AuthShell>
   );
 }
 
