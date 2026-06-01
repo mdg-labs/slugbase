@@ -11,8 +11,10 @@ export type FolderListItem = {
   userId: string;
   name: string;
   icon: string | null;
+  color: string | null;
   bookmarkCount: number;
   shareGrantCount: number;
+  updatedAt: string;
 };
 
 export type FolderListData = {
@@ -30,7 +32,9 @@ interface ApiFolder {
   userId: string;
   name: string;
   icon: string | null;
+  color: string | null;
   bookmarkCount: number;
+  updatedAt: string;
 }
 
 interface PaginatedFolders {
@@ -101,6 +105,7 @@ export async function loadFolderListData(
     items: list.items.map((item) => ({
       ...item,
       shareGrantCount: shareCounts.get(item.id) ?? 0,
+      updatedAt: item.updatedAt,
     })),
   };
 }
