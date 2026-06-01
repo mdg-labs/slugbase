@@ -127,7 +127,8 @@ Keys are registered incrementally per task (rule `05-env-vars`). Full categories
 | `PUBLIC_FREE_BOOKMARK_CAP` | Free cap shown on marketing pricing page | hosted | Default `50` |
 | `PUBLIC_FRONTEND_ORIGIN` | App origin for marketing CTAs (sign-in, register) | all | Same as `FRONTEND_ORIGIN` |
 | `MARKETING_ORIGIN` | Public marketing Workers URL for CI smoke (`GET /health`, `/version`) | `staging` / `production` | e.g. `https://slugbase-staging-marketing.<account>.workers.dev` |
-| `FLY_API_TOKEN` | Fly.io deploy token for `flyctl deploy` | `staging` / `production` | CI OIDC via Infisical only |
+| `FLY_API_TOKEN` | Fly.io deploy token for `flyctl deploy` | `staging` / `prod` | CI OIDC via Infisical only; read from runner env, never `${{ env.* }}` |
+| `FLY_ORG` | Fly.io organization slug for `flyctl deploy --org` | `staging` / `prod` | CI OIDC via Infisical only |
 | `CLOUDFLARE_API_TOKEN` | Cloudflare API token for `wrangler deploy` | `staging` / `production` | CI OIDC via Infisical only |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account id for Workers deploy | `staging` / `production` | CI OIDC via Infisical only |
 | `PUBLIC_CONTACT_ENDPOINT` | Absolute URL for `POST /contact` (marketing form target) | all | e.g. `{APP_BASE_URL}/contact` |

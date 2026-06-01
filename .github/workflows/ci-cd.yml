@@ -272,14 +272,8 @@ jobs:
 
       - name: Deploy to Fly.io
         env:
-          FLY_API_TOKEN: ${{ env.FLY_API_TOKEN }}
           DOCKER_BUILDKIT: "1"
-        run: >
-          flyctl deploy
-          --app slugbase-staging-api
-          --config fly.toml
-          --remote-only
-          --wait-timeout 20m
+        run: bash .github/scripts/fly-deploy.sh slugbase-staging-api
 
   deploy-web-staging:
     name: Staging · 4 · Deploy web (Cloudflare Workers)
@@ -597,14 +591,8 @@ jobs:
 
       - name: Deploy to Fly.io
         env:
-          FLY_API_TOKEN: ${{ env.FLY_API_TOKEN }}
           DOCKER_BUILDKIT: "1"
-        run: >
-          flyctl deploy
-          --app slugbase-production-api
-          --config fly.toml
-          --remote-only
-          --wait-timeout 20m
+        run: bash .github/scripts/fly-deploy.sh slugbase-production-api
 
   deploy-web-production:
     name: Production · 5 · Deploy web (Cloudflare Workers)
