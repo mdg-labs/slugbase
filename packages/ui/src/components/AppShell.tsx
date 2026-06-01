@@ -1,42 +1,46 @@
 import type { ReactNode } from "react";
 
 export type AppShellProps = {
-  brandLabel: string;
-  workspaceLabel: string;
-  headerActions?: ReactNode;
+  /** 248px left sidebar content */
+  sidebar: ReactNode;
+  /** 52px fixed-height top bar content */
+  topBar: ReactNode;
+  /** Scrollable main content area */
   children: ReactNode;
 };
 
-/** Base signed-in layout shell (sidebar + main). */
-export function AppShell({
-  brandLabel,
-  workspaceLabel,
-  headerActions,
-  children,
-}: AppShellProps) {
+/**
+ * Base signed-in layout shell.
+ * Grid: 248px sidebar | flexible main column with 52px topbar + scrollable content.
+ * Layout is viewport-locked (h-screen, overflow-hidden) — scroll lives inside the
+ * main content area only (spec §9.3.1).
+ */
+export function AppShell({ sidebar, topBar, children }: AppShellProps) {
   return (
     <div
-      className="flex min-h-screen bg-canvas font-sans text-body text-fg"
+      className="grid h-screen overflow-hidden bg-canvas font-sans text-body text-fg"
+      style={{ gridTemplateColumns: "248px 1fr" }}
       data-testid="app-shell"
     >
       <aside
-        className="flex w-56 shrink-0 flex-col border-r border-[color:var(--border)] bg-base"
+        className="flex min-h-0 flex-col overflow-y-auto border-r border-[color:var(--border-subtle)] bg-base"
         data-testid="app-shell-sidebar"
       >
-        <div className="border-b border-[color:var(--border-subtle)] px-sp-6 py-sp-5">
-          <p className="t-h3">{brandLabel}</p>
-          <p className="t-small mt-sp-4">{workspaceLabel}</p>
-        </div>
-        <nav className="flex-1 px-sp-4 py-sp-5" aria-label={workspaceLabel} />
+        {sidebar}
       </aside>
-      <div className="flex min-w-0 flex-1 flex-col">
+
+      <div className="flex min-h-0 min-w-0 flex-col overflow-hidden">
         <header
-          className="flex items-center justify-end gap-sp-5 border-b border-[color:var(--border-subtle)] bg-base px-sp-6 py-sp-5"
-          data-testid="app-shell-header"
+          className="flex shrink-0 items-center border-b border-[color:var(--border-subtle)]"
+          style={{ height: 52, background: "color-mix(in srgb, var(--base) 60%, transparent)" }}
+          data-testid="app-shell-topbar"
         >
-          {headerActions}
+          {topBar}
         </header>
-        <main className="flex-1 bg-canvas p-sp-8" data-testid="app-shell-main">
+        <main
+          className="flex-1 overflow-y-auto bg-canvas p-sp-7"
+          data-testid="app-shell-main"
+        >
           {children}
         </main>
       </div>

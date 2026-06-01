@@ -3,41 +3,32 @@
 exports[`AppShell > matches base layout snapshot 1`] = `
 <div>
   <div
-    class="flex min-h-screen bg-canvas font-sans text-body text-fg"
+    class="grid h-screen overflow-hidden bg-canvas font-sans text-body text-fg"
     data-testid="app-shell"
+    style="grid-template-columns: 248px 1fr;"
   >
     <aside
-      class="flex w-56 shrink-0 flex-col border-r border-[color:var(--border)] bg-base"
+      class="flex min-h-0 flex-col overflow-y-auto border-r border-[color:var(--border-subtle)] bg-base"
       data-testid="app-shell-sidebar"
     >
-      <div
-        class="border-b border-[color:var(--border-subtle)] px-sp-6 py-sp-5"
-      >
-        <p
-          class="t-h3"
-        >
-          SlugBase
-        </p>
-        <p
-          class="t-small mt-sp-4"
-        >
-          Personal workspace
-        </p>
+      <div>
+        Sidebar content
       </div>
-      <nav
-        aria-label="Personal workspace"
-        class="flex-1 px-sp-4 py-sp-5"
-      />
     </aside>
     <div
-      class="flex min-w-0 flex-1 flex-col"
+      class="flex min-h-0 min-w-0 flex-col overflow-hidden"
     >
       <header
-        class="flex items-center justify-end gap-sp-5 border-b border-[color:var(--border-subtle)] bg-base px-sp-6 py-sp-5"
-        data-testid="app-shell-header"
-      />
+        class="flex shrink-0 items-center border-b border-[color:var(--border-subtle)]"
+        data-testid="app-shell-topbar"
+        style="height: 52px;"
+      >
+        <div>
+          TopBar content
+        </div>
+      </header>
       <main
-        class="flex-1 bg-canvas p-sp-8"
+        class="flex-1 overflow-y-auto bg-canvas p-sp-7"
         data-testid="app-shell-main"
       >
         <p>
