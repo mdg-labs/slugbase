@@ -1,23 +1,15 @@
+import { coerceCount } from "../db/coerce-count.js";
 import { randomUUID } from "node:crypto";
 
-import { and, asc, desc, eq, like, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, sql, type SQL } from "drizzle-orm";
 
 import { folderScopeCondition } from "../common/authz/authz-sql.js";
 
-import type {
-  DrizzleClient,
-  PostgresDrizzleClient,
-  SqliteDrizzleClient,
-} from "../db/dialect/create-client.js";
-import type { DbDialect } from "../db/dialect/dialect.js";
+import type { DrizzleClient } from "../db/dialect/create-client.js";
 import {
-  bookmarkFolders as sqliteBookmarkFolders,
-  folders as sqliteFolders,
+  bookmarkFolders,
+  folders,
 } from "../db/schema/index.js";
-import {
-  bookmarkFolders as pgBookmarkFolders,
-  folders as pgFolders,
-} from "../db/schema/pg-index.js";
 import {
   WorkspaceScopedRepository,
   type WorkspaceOwned,
@@ -59,14 +51,14 @@ function scopeCondition(
   scope: FolderScope,
   userId: string,
   workspaceId: string,
-  foldersTable: typeof sqliteFolders | typeof pgFolders,
+  foldersTable: typeof folders,
 ): SQL {
   return folderScopeCondition(scope, workspaceId, userId, foldersTable);
 }
 
 function orderByForSort(
   sort: FolderSort,
-  foldersTable: typeof sqliteFolders | typeof pgFolders,
+  foldersTable: typeof folders,
 ) {
   switch (sort) {
     case "name-asc":
@@ -82,9 +74,9 @@ function orderByForSort(
 }
 
 export class FolderRepository extends WorkspaceScopedRepository<FolderRecord> {
-  // eslint-disable-next-line @typescript-eslint/no-useless-constructor -- forwards db + dialect
-  constructor(db: DrizzleClient, dialect: DbDialect) {
-    super(db, dialect);
+  // eslint-disable-next-line @typescript-eslint/no-useless-constructor -- forwards db to WorkspaceScopedRepository
+  constructor(db: DrizzleClient) {
+    super(db);
   }
 
   async create(
@@ -95,44 +87,8 @@ export class FolderRepository extends WorkspaceScopedRepository<FolderRecord> {
     const id = randomUUID();
     const nowMs = Date.now();
 
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      sqliteDb
-        .insert(sqliteFolders)
-        .values({
-          id,
-          workspaceId,
-          userId,
-          name: data.name,
-          icon: data.icon ?? null,
-          createdAt: new Date(nowMs),
-          updatedAt: new Date(nowMs),
-        })
-        .run();
-
-      const row = sqliteDb
-        .select()
-        .from(sqliteFolders)
-        .where(
-          and(eq(sqliteFolders.id, id), eq(sqliteFolders.workspaceId, workspaceId)),
-        )
-        .get();
-      const folder = this.assertOwnership(
-        workspaceId,
-        row ? await this.toFolderRecord(row) : null,
-      );
-      if (data.bookmarkIds?.length) {
-        await this.replaceFolderBookmarks(workspaceId, userId, id, data.bookmarkIds);
-        const withLinks = await this.findById(workspaceId, id);
-        if (!withLinks) throw new Error("Failed to load folder after bookmark links");
-        return withLinks;
-      }
-      return folder;
-    }
-
-    const pgDb = this.db as PostgresDrizzleClient;
-    const rows = await pgDb
-      .insert(pgFolders)
+        const rows = await this.db
+      .insert(folders)
       .values({
         id,
         workspaceId,
@@ -161,25 +117,12 @@ export class FolderRepository extends WorkspaceScopedRepository<FolderRecord> {
     workspaceId: string,
     folderId: string,
   ): Promise<FolderRecord | null> {
-    if (this.dialect === "sqlite") {
-      const row = (this.db as SqliteDrizzleClient)
-        .select()
-        .from(sqliteFolders)
-        .where(
-          and(
-            eq(sqliteFolders.id, folderId),
-            eq(sqliteFolders.workspaceId, workspaceId),
-          ),
-        )
-        .get();
-      return row ? await this.toFolderRecord(row) : null;
-    }
 
-    const rows = await (this.db as PostgresDrizzleClient)
+    const rows = await this.db
       .select()
-      .from(pgFolders)
+      .from(folders)
       .where(
-        and(eq(pgFolders.id, folderId), eq(pgFolders.workspaceId, workspaceId)),
+        and(eq(folders.id, folderId), eq(folders.workspaceId, workspaceId)),
       )
       .limit(1);
     return rows[0] ? await this.toFolderRecord(rows[0]) : null;
@@ -200,59 +143,26 @@ export class FolderRepository extends WorkspaceScopedRepository<FolderRecord> {
         ? `%${escapeLikePattern(query.q.trim())}%`
         : null;
 
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      const conditions = [
-        eq(sqliteFolders.workspaceId, workspaceId),
-        scopeCondition(scope, userId, workspaceId, sqliteFolders),
-      ];
-      if (searchPattern) {
-        conditions.push(like(sqliteFolders.name, searchPattern));
-      }
-
-      const whereClause = and(...conditions);
-
-      const countRow = sqliteDb
-        .select({ count: sql<number>`count(*)` })
-        .from(sqliteFolders)
-        .where(whereClause)
-        .get();
-      const total = countRow?.count ?? 0;
-
-      const rows = sqliteDb
-        .select()
-        .from(sqliteFolders)
-        .where(whereClause)
-        .orderBy(orderByForSort(sort, sqliteFolders))
-        .limit(pageSize)
-        .offset(offset)
-        .all();
-
-      const items = await Promise.all(rows.map((row) => this.toFolderRecord(row)));
-      return { items, total, page, pageSize };
-    }
-
-    const pgDb = this.db as PostgresDrizzleClient;
-    const conditions = [
-      eq(pgFolders.workspaceId, workspaceId),
-      scopeCondition(scope, userId, workspaceId, pgFolders),
+        const conditions = [
+      eq(folders.workspaceId, workspaceId),
+      scopeCondition(scope, userId, workspaceId, folders),
     ];
     if (searchPattern) {
-      conditions.push(like(pgFolders.name, searchPattern));
+      conditions.push(ilike(folders.name, searchPattern));
     }
     const whereClause = and(...conditions);
 
-    const countRows = await pgDb
+    const countRows = await this.db
       .select({ count: sql<number>`count(*)` })
-      .from(pgFolders)
+      .from(folders)
       .where(whereClause);
-    const total = countRows[0]?.count ?? 0;
+    const total = coerceCount(countRows[0]?.count);
 
-    const rows = await pgDb
+    const rows = await this.db
       .select()
-      .from(pgFolders)
+      .from(folders)
       .where(whereClause)
-      .orderBy(orderByForSort(sort, pgFolders))
+      .orderBy(orderByForSort(sort, folders))
       .limit(pageSize)
       .offset(offset);
 
@@ -271,56 +181,25 @@ export class FolderRepository extends WorkspaceScopedRepository<FolderRecord> {
     if (patch.name !== undefined) updates.name = patch.name;
     if (patch.icon !== undefined) updates.icon = patch.icon;
 
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      sqliteDb
-        .update(sqliteFolders)
-        .set({
-          ...updates,
-          updatedAt: new Date(nowMs),
-        })
-        .where(
-          and(
-            eq(sqliteFolders.id, folderId),
-            eq(sqliteFolders.workspaceId, workspaceId),
-          ),
-        )
-        .run();
-      return this.findById(workspaceId, folderId);
-    }
-
-    await (this.db as PostgresDrizzleClient)
-      .update(pgFolders)
+    await this.db
+      .update(folders)
       .set(updates)
       .where(
-        and(eq(pgFolders.id, folderId), eq(pgFolders.workspaceId, workspaceId)),
+        and(eq(folders.id, folderId), eq(folders.workspaceId, workspaceId)),
       );
 
     return this.findById(workspaceId, folderId);
   }
 
   async delete(workspaceId: string, folderId: string): Promise<void> {
-    const sharingRepo = new SharingRepository(this.db, this.dialect);
+    const sharingRepo = new SharingRepository(this.db);
     await sharingRepo.deleteSharesForFolder(workspaceId, folderId);
     await this.deleteBookmarkFolderLinksForFolder(workspaceId, folderId);
 
-    if (this.dialect === "sqlite") {
-      (this.db as SqliteDrizzleClient)
-        .delete(sqliteFolders)
-        .where(
-          and(
-            eq(sqliteFolders.id, folderId),
-            eq(sqliteFolders.workspaceId, workspaceId),
-          ),
-        )
-        .run();
-      return;
-    }
-
-    await (this.db as PostgresDrizzleClient)
-      .delete(pgFolders)
+    await this.db
+      .delete(folders)
       .where(
-        and(eq(pgFolders.id, folderId), eq(pgFolders.workspaceId, workspaceId)),
+        and(eq(folders.id, folderId), eq(folders.workspaceId, workspaceId)),
       );
   }
 
@@ -352,27 +231,14 @@ export class FolderRepository extends WorkspaceScopedRepository<FolderRecord> {
     folderId: string,
     bookmarkId: string,
   ): Promise<void> {
-    if (this.dialect === "sqlite") {
-      (this.db as SqliteDrizzleClient)
-        .delete(sqliteBookmarkFolders)
-        .where(
-          and(
-            eq(sqliteBookmarkFolders.workspaceId, workspaceId),
-            eq(sqliteBookmarkFolders.folderId, folderId),
-            eq(sqliteBookmarkFolders.bookmarkId, bookmarkId),
-          ),
-        )
-        .run();
-      return;
-    }
 
-    await (this.db as PostgresDrizzleClient)
-      .delete(pgBookmarkFolders)
+    await this.db
+      .delete(bookmarkFolders)
       .where(
         and(
-          eq(pgBookmarkFolders.workspaceId, workspaceId),
-          eq(pgBookmarkFolders.folderId, folderId),
-          eq(pgBookmarkFolders.bookmarkId, bookmarkId),
+          eq(bookmarkFolders.workspaceId, workspaceId),
+          eq(bookmarkFolders.folderId, folderId),
+          eq(bookmarkFolders.bookmarkId, bookmarkId),
         ),
       );
   }
@@ -381,57 +247,31 @@ export class FolderRepository extends WorkspaceScopedRepository<FolderRecord> {
     workspaceId: string,
     bookmarkId: string,
   ): Promise<number> {
-    if (this.dialect === "sqlite") {
-      const row = (this.db as SqliteDrizzleClient)
-        .select({ count: sql<number>`count(*)` })
-        .from(sqliteBookmarkFolders)
-        .where(
-          and(
-            eq(sqliteBookmarkFolders.workspaceId, workspaceId),
-            eq(sqliteBookmarkFolders.bookmarkId, bookmarkId),
-          ),
-        )
-        .get();
-      return row?.count ?? 0;
-    }
 
-    const rows = await (this.db as PostgresDrizzleClient)
+    const rows = await this.db
       .select({ count: sql<number>`count(*)` })
-      .from(pgBookmarkFolders)
+      .from(bookmarkFolders)
       .where(
         and(
-          eq(pgBookmarkFolders.workspaceId, workspaceId),
-          eq(pgBookmarkFolders.bookmarkId, bookmarkId),
+          eq(bookmarkFolders.workspaceId, workspaceId),
+          eq(bookmarkFolders.bookmarkId, bookmarkId),
         ),
       );
-    return rows[0]?.count ?? 0;
+    return coerceCount(rows[0]?.count);
   }
 
   async listFolderIdsForBookmark(
     workspaceId: string,
     bookmarkId: string,
   ): Promise<string[]> {
-    if (this.dialect === "sqlite") {
-      const rows = (this.db as SqliteDrizzleClient)
-        .select({ folderId: sqliteBookmarkFolders.folderId })
-        .from(sqliteBookmarkFolders)
-        .where(
-          and(
-            eq(sqliteBookmarkFolders.workspaceId, workspaceId),
-            eq(sqliteBookmarkFolders.bookmarkId, bookmarkId),
-          ),
-        )
-        .all();
-      return rows.map((r) => r.folderId);
-    }
 
-    const rows = await (this.db as PostgresDrizzleClient)
-      .select({ folderId: pgBookmarkFolders.folderId })
-      .from(pgBookmarkFolders)
+    const rows = await this.db
+      .select({ folderId: bookmarkFolders.folderId })
+      .from(bookmarkFolders)
       .where(
         and(
-          eq(pgBookmarkFolders.workspaceId, workspaceId),
-          eq(pgBookmarkFolders.bookmarkId, bookmarkId),
+          eq(bookmarkFolders.workspaceId, workspaceId),
+          eq(bookmarkFolders.bookmarkId, bookmarkId),
         ),
       );
     return rows.map((r) => r.folderId);
@@ -441,25 +281,13 @@ export class FolderRepository extends WorkspaceScopedRepository<FolderRecord> {
     workspaceId: string,
     bookmarkId: string,
   ): Promise<void> {
-    if (this.dialect === "sqlite") {
-      (this.db as SqliteDrizzleClient)
-        .delete(sqliteBookmarkFolders)
-        .where(
-          and(
-            eq(sqliteBookmarkFolders.workspaceId, workspaceId),
-            eq(sqliteBookmarkFolders.bookmarkId, bookmarkId),
-          ),
-        )
-        .run();
-      return;
-    }
 
-    await (this.db as PostgresDrizzleClient)
-      .delete(pgBookmarkFolders)
+    await this.db
+      .delete(bookmarkFolders)
       .where(
         and(
-          eq(pgBookmarkFolders.workspaceId, workspaceId),
-          eq(pgBookmarkFolders.bookmarkId, bookmarkId),
+          eq(bookmarkFolders.workspaceId, workspaceId),
+          eq(bookmarkFolders.bookmarkId, bookmarkId),
         ),
       );
   }
@@ -468,25 +296,13 @@ export class FolderRepository extends WorkspaceScopedRepository<FolderRecord> {
     workspaceId: string,
     folderId: string,
   ): Promise<void> {
-    if (this.dialect === "sqlite") {
-      (this.db as SqliteDrizzleClient)
-        .delete(sqliteBookmarkFolders)
-        .where(
-          and(
-            eq(sqliteBookmarkFolders.workspaceId, workspaceId),
-            eq(sqliteBookmarkFolders.folderId, folderId),
-          ),
-        )
-        .run();
-      return;
-    }
 
-    await (this.db as PostgresDrizzleClient)
-      .delete(pgBookmarkFolders)
+    await this.db
+      .delete(bookmarkFolders)
       .where(
         and(
-          eq(pgBookmarkFolders.workspaceId, workspaceId),
-          eq(pgBookmarkFolders.folderId, folderId),
+          eq(bookmarkFolders.workspaceId, workspaceId),
+          eq(bookmarkFolders.folderId, folderId),
         ),
       );
   }
@@ -500,21 +316,7 @@ export class FolderRepository extends WorkspaceScopedRepository<FolderRecord> {
     const id = randomUUID();
     const nowMs = Date.now();
 
-    if (this.dialect === "sqlite") {
-      (this.db as SqliteDrizzleClient)
-        .insert(sqliteBookmarkFolders)
-        .values({
-          id,
-          workspaceId,
-          folderId,
-          bookmarkId,
-          createdAt: new Date(nowMs),
-        })
-        .run();
-      return;
-    }
-
-    await (this.db as PostgresDrizzleClient).insert(pgBookmarkFolders).values({
+    await this.db.insert(bookmarkFolders).values({
       id,
       workspaceId,
       folderId,
@@ -527,30 +329,17 @@ export class FolderRepository extends WorkspaceScopedRepository<FolderRecord> {
     workspaceId: string,
     folderId: string,
   ): Promise<number> {
-    if (this.dialect === "sqlite") {
-      const row = (this.db as SqliteDrizzleClient)
-        .select({ count: sql<number>`count(*)` })
-        .from(sqliteBookmarkFolders)
-        .where(
-          and(
-            eq(sqliteBookmarkFolders.workspaceId, workspaceId),
-            eq(sqliteBookmarkFolders.folderId, folderId),
-          ),
-        )
-        .get();
-      return row?.count ?? 0;
-    }
 
-    const rows = await (this.db as PostgresDrizzleClient)
+    const rows = await this.db
       .select({ count: sql<number>`count(*)` })
-      .from(pgBookmarkFolders)
+      .from(bookmarkFolders)
       .where(
         and(
-          eq(pgBookmarkFolders.workspaceId, workspaceId),
-          eq(pgBookmarkFolders.folderId, folderId),
+          eq(bookmarkFolders.workspaceId, workspaceId),
+          eq(bookmarkFolders.folderId, folderId),
         ),
       );
-    return rows[0]?.count ?? 0;
+    return coerceCount(rows[0]?.count);
   }
 
   private async toFolderRecord(row: FolderRow): Promise<FolderRecord> {

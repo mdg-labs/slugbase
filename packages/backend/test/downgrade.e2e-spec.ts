@@ -83,7 +83,7 @@ describe("Downgrade overflow (integration)", () => {
     searchService = moduleRef.get(SearchService);
 
     const db = moduleRef.get(DbService);
-    bookmarkRepo = new BookmarkRepository(db.getOrm(), db.dialect);
+    bookmarkRepo = new BookmarkRepository(db.getOrm());
 
     const accountsService = moduleRef.get(AccountsService);
     const owner = await accountsService.registerAccount({

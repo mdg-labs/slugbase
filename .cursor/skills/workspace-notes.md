@@ -63,7 +63,7 @@ _added: 2026-05-31_
 | Backend | NestJS (DI hosts the config-selected external interfaces) |
 | Web client | React Router v7 (framework mode) — CF Workers (hosted) + Node (self-host image) |
 | Marketing | Astro (static) on CF Workers |
-| Persistence | Drizzle ORM + Drizzle Kit; thin dialect layer over SQLite (self-host) + Neon Postgres (hosted) |
+| Persistence | Drizzle ORM + Drizzle Kit; PostgreSQL-only at v1 (Neon hosted + self-host Postgres); SQLite self-host deferred |
 | Contracts/validation | Zod + ts-rest (in `shared-types`) → OpenAPI |
 | UI | Tailwind (token-bridged) + Radix + cmdk |
 | Tests | Vitest + Supertest (unit/integration) + Playwright (e2e, CI only) |

@@ -1,20 +1,20 @@
 import {
+  bigint,
   index,
-  integer,
-  sqliteTable,
+  pgTable,
   text,
   uniqueIndex,
-} from "drizzle-orm/sqlite-core";
+} from "drizzle-orm/pg-core";
 
 /** Associates workspace members with teams (spec §16). */
-export const teamMemberships = sqliteTable(
+export const teamMemberships = pgTable(
   "team_memberships",
   {
     id: text("id").primaryKey(),
     workspaceId: text("workspace_id").notNull(),
     teamId: text("team_id").notNull(),
     userId: text("user_id").notNull(),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
   },
   (t) => [
     uniqueIndex("team_memberships_workspace_team_user_unique_idx").on(

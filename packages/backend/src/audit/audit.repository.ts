@@ -1,15 +1,10 @@
+import { coerceCount } from "../db/coerce-count.js";
 import { randomUUID } from "node:crypto";
 
 import { and, asc, desc, eq, sql, type SQL } from "drizzle-orm";
 
-import type {
-  DrizzleClient,
-  PostgresDrizzleClient,
-  SqliteDrizzleClient,
-} from "../db/dialect/create-client.js";
-import type { DbDialect } from "../db/dialect/dialect.js";
-import { auditEvents as sqliteAuditEvents } from "../db/schema/index.js";
-import { auditEvents as pgAuditEvents } from "../db/schema/pg-index.js";
+import type { DrizzleClient } from "../db/dialect/create-client.js";
+import { auditEvents } from "../db/schema/index.js";
 import {
   WorkspaceScopedRepository,
   type WorkspaceOwned,
@@ -19,11 +14,11 @@ import type {
   ParsedListAuditEventsQuery,
   RecordAuditEventData,
 } from "./audit.types.js";
-import type { AuditEntityType } from "./audit.validation.js";
 import {
   parsePage,
   parsePageSize,
   sanitizeAuditMetadata,
+  type AuditEntityType,
 } from "./audit.validation.js";
 
 type AuditEventRow = WorkspaceOwned & {
@@ -72,7 +67,7 @@ function escapeLikePattern(q: string): string {
 function buildListConditions(
   workspaceId: string,
   query: ParsedListAuditEventsQuery,
-  table: typeof sqliteAuditEvents | typeof pgAuditEvents,
+  table: typeof auditEvents,
 ): SQL[] {
   const conditions: SQL[] = [eq(table.workspaceId, workspaceId)];
 
@@ -95,9 +90,9 @@ function buildListConditions(
 }
 
 export class AuditRepository extends WorkspaceScopedRepository<AuditEventRecord> {
-  // eslint-disable-next-line @typescript-eslint/no-useless-constructor -- forwards db + dialect
-  constructor(db: DrizzleClient, dialect: DbDialect) {
-    super(db, dialect);
+  // eslint-disable-next-line @typescript-eslint/no-useless-constructor -- forwards db to WorkspaceScopedRepository
+  constructor(db: DrizzleClient) {
+    super(db);
   }
 
   async append(data: RecordAuditEventData): Promise<AuditEventRecord> {
@@ -116,29 +111,12 @@ export class AuditRepository extends WorkspaceScopedRepository<AuditEventRecord>
       metadata: metadataJson,
     };
 
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      sqliteDb
-        .insert(sqliteAuditEvents)
-        .values({ ...values, createdAt: new Date(nowMs) })
-        .run();
+        await this.db.insert(auditEvents).values({ ...values, createdAt: nowMs });
 
-      const row = sqliteDb
-        .select()
-        .from(sqliteAuditEvents)
-        .where(eq(sqliteAuditEvents.id, id))
-        .get();
-      if (!row) throw new Error("Failed to append audit event");
-      return this.assertOwnership(data.workspaceId, toRecord(row));
-    }
-
-    const pgDb = this.db as PostgresDrizzleClient;
-    await pgDb.insert(pgAuditEvents).values({ ...values, createdAt: nowMs });
-
-    const rows = await pgDb
+    const rows = await this.db
       .select()
-      .from(pgAuditEvents)
-      .where(eq(pgAuditEvents.id, id))
+      .from(auditEvents)
+      .where(eq(auditEvents.id, id))
       .limit(1);
     const row = rows[0];
     if (!row) throw new Error("Failed to append audit event");
@@ -154,62 +132,23 @@ export class AuditRepository extends WorkspaceScopedRepository<AuditEventRecord>
     const offset = (page - 1) * pageSize;
     const order =
       query.sort === "created-asc"
-        ? asc(
-            this.dialect === "sqlite"
-              ? sqliteAuditEvents.createdAt
-              : pgAuditEvents.createdAt,
+        ? asc(auditEvents.createdAt,
           )
-        : desc(
-            this.dialect === "sqlite"
-              ? sqliteAuditEvents.createdAt
-              : pgAuditEvents.createdAt,
+        : desc(auditEvents.createdAt,
           );
 
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      const conditions = buildListConditions(
-        workspaceId,
-        query,
-        sqliteAuditEvents,
-      );
-      const whereClause = and(...conditions);
-
-      const countRow = sqliteDb
-        .select({ count: sql<number>`count(*)` })
-        .from(sqliteAuditEvents)
-        .where(whereClause)
-        .get();
-      const total = countRow?.count ?? 0;
-
-      const rows = sqliteDb
-        .select()
-        .from(sqliteAuditEvents)
-        .where(whereClause)
-        .orderBy(order)
-        .limit(pageSize)
-        .offset(offset)
-        .all();
-
-      const items = this.assertAllOwned(
-        workspaceId,
-        rows.map((row) => toRecord(row)),
-      );
-      return { items, total };
-    }
-
-    const pgDb = this.db as PostgresDrizzleClient;
-    const conditions = buildListConditions(workspaceId, query, pgAuditEvents);
+        const conditions = buildListConditions(workspaceId, query, auditEvents);
     const whereClause = and(...conditions);
 
-    const countRows = await pgDb
+    const countRows = await this.db
       .select({ count: sql<number>`count(*)` })
-      .from(pgAuditEvents)
+      .from(auditEvents)
       .where(whereClause);
-    const total = countRows[0]?.count ?? 0;
+    const total = coerceCount(countRows[0]?.count);
 
-    const rows = await pgDb
+    const rows = await this.db
       .select()
-      .from(pgAuditEvents)
+      .from(auditEvents)
       .where(whereClause)
       .orderBy(order)
       .limit(pageSize)

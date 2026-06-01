@@ -35,8 +35,8 @@ export class TagsService {
     @Inject(DbService) db: DbService,
     @Inject(WorkspaceDataGuard) private readonly wsDataGuard: WorkspaceDataGuard,
   ) {
-    this.tagRepo = new TagRepository(db.getOrm(), db.dialect);
-    this.bookmarkRepo = new BookmarkRepository(db.getOrm(), db.dialect);
+    this.tagRepo = new TagRepository(db.getOrm());
+    this.bookmarkRepo = new BookmarkRepository(db.getOrm());
   }
 
   async createTag(

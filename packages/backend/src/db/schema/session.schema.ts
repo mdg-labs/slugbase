@@ -1,15 +1,13 @@
-import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { bigint, index, pgTable, text } from "drizzle-orm/pg-core";
 
-export const sessions = sqliteTable(
+export const sessions = pgTable(
   "sessions",
   {
     id: text("id").primaryKey(),
     userId: text("user_id").notNull(),
-    expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
-    lastActivityAt: integer("last_activity_at", {
-      mode: "timestamp_ms",
-    }).notNull(),
+    expiresAt: bigint("expires_at", { mode: "number" }).notNull(),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
+    lastActivityAt: bigint("last_activity_at", { mode: "number" }).notNull(),
     data: text("data").notNull().default("{}"),
   },
   (t) => [index("sessions_user_id_idx").on(t.userId)],

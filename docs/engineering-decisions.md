@@ -15,7 +15,7 @@ This doc exists so roadmap tasks and sub-agents have concrete, runnable answers 
 | Backend | **NestJS** | DI/modules host the config-selected external interfaces (§2.6, §11) — replaces deployment-mode branching; `@nestjs/swagger`/ts-rest → OpenAPI (§18). Runs as a Node container on Fly.io (§14.7) |
 | Web client | **React Router v7** (framework mode) | One app, two adapters: Cloudflare Workers (hosted SSR) + Node (self-host combined image) — §14.2, §14.7 |
 | Marketing | **Astro** (static) | Zero-JS-by-default; separately built; Cloudflare Workers (§2.3, decision #28) |
-| Persistence | **Drizzle ORM** + **Drizzle Kit** | Data-access abstraction (§11.9); embedded SQLite (self-host) + Neon Postgres (hosted) on one schema/migration history (§16, #25/#26/#32) |
+| Persistence | **Drizzle ORM** + **Drizzle Kit** | Data-access abstraction (§11.9); PostgreSQL-only at v1 (Neon hosted + self-host Postgres); SQLite self-host deferred (§16, #32/#41) |
 | Contracts/validation | **Zod** + **ts-rest** | Server validation + env schema; single typed contract → OpenAPI, consumed by backend + web (§18, §19) |
 | UI | **Tailwind** + **Radix** + **cmdk** | Tailwind bridged to prototype tokens (§23.1); Radix = accessible primitives; cmdk = `⌘K` palette (§9) |
 | Tests | **Vitest** + **Supertest** + **Playwright** | Unit/integration (Vitest/Supertest), e2e (Playwright, CI-only, §22.4) |
@@ -62,9 +62,9 @@ docs/             # customer/operator docs + internal-engineering section (this 
 
 ## 4. Data layer
 
-- **One logical schema** defined in Drizzle, with a thin in-house dialect layer so the same models compile to embedded **SQLite** (self-host default) and **Neon Postgres** (hosted). Every tenant-owned table carries `workspace_id` (§4, §16).
-- **Migrations:** owned by **Drizzle Kit** — `drizzle-kit generate` to create, `drizzle-kit migrate` to apply (typically wrapped as `pnpm db:generate` / `pnpm db:migrate`). **Single forward-only history.** Never hand-write SQL, never `drizzle-kit push`, never edit generated files (rule + orchestrator `prompt-templates` DB MIGRATIONS block).
-- **CI runs the test suite against both engines** to defend "identical schema" (§11.9).
+- **One logical schema** defined in Drizzle for **PostgreSQL**. Drizzle Kit generates migrations from the Postgres schema (`dialect: postgresql`); one forward-only history applies to hosted Neon and self-host Postgres alike. Every tenant-owned table carries `workspace_id` (§4, §16). Embedded SQLite self-host is **deferred** (Fast-Follow).
+- **Migrations:** owned by **Drizzle Kit** — `drizzle-kit generate` to create, `drizzle-kit migrate` to apply (typically wrapped as `pnpm db:generate` / `pnpm db:migrate`). **Single forward-only history.** Never hand-write SQL, never `drizzle-kit push`, never edit generated files (rule + orchestrator `prompt-templates` DB MIGRATIONS block). Requires `DATABASE_URL` with a `postgresql://` scheme for generate/migrate.
+- **CI runs integration tests against Postgres** (GitHub Actions service container).
 - **Data access is centralized** so every tenant query is workspace-scoped; cross-tenant access is impossible through normal paths and is defended by tests (§4.4).
 
 ---

@@ -38,8 +38,8 @@ export class FoldersService {
     @Inject(WorkspaceDataGuard) private readonly wsDataGuard: WorkspaceDataGuard,
     @Inject(AuthzService) private readonly authz: AuthzService,
   ) {
-    this.folderRepo = new FolderRepository(db.getOrm(), db.dialect);
-    this.bookmarkRepo = new BookmarkRepository(db.getOrm(), db.dialect);
+    this.folderRepo = new FolderRepository(db.getOrm());
+    this.bookmarkRepo = new BookmarkRepository(db.getOrm());
   }
 
   async createFolder(

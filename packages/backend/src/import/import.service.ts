@@ -33,10 +33,9 @@ export class ImportService {
     @Inject(WorkspaceDataGuard) private readonly wsDataGuard: WorkspaceDataGuard,
   ) {
     const db = dbService.getOrm();
-    const dialect = dbService.dialect;
-    this.bookmarkRepo = new BookmarkRepository(db, dialect);
-    this.folderRepo = new FolderRepository(db, dialect);
-    this.tagRepo = new TagRepository(db, dialect);
+    this.bookmarkRepo = new BookmarkRepository(db);
+    this.folderRepo = new FolderRepository(db);
+    this.tagRepo = new TagRepository(db);
   }
 
   async importJson(
@@ -78,10 +77,7 @@ export class ImportService {
 
     if (entries.length === 0) return result;
 
-    const nameResolver = new ImportNameResolver(
-      this.dbService.getOrm(),
-      this.dbService.dialect,
-    );
+    const nameResolver = new ImportNameResolver(this.dbService.getOrm());
     const assignedSlugs = new Set<string>();
     let activeCount = await this.bookmarkRepo.countActiveInWorkspace(workspace.id);
 

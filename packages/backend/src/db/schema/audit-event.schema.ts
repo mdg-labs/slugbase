@@ -1,12 +1,7 @@
-import {
-  index,
-  integer,
-  sqliteTable,
-  text,
-} from "drizzle-orm/sqlite-core";
+import { bigint, index, pgTable, text } from "drizzle-orm/pg-core";
 
 /** Append-only workspace audit trail (spec §10.1, §16). */
-export const auditEvents = sqliteTable(
+export const auditEvents = pgTable(
   "audit_events",
   {
     id: text("id").primaryKey(),
@@ -16,7 +11,7 @@ export const auditEvents = sqliteTable(
     entityType: text("entity_type").notNull(),
     entityId: text("entity_id"),
     metadata: text("metadata").notNull().default("{}"),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
   },
   (t) => [
     index("audit_events_workspace_created_idx").on(t.workspaceId, t.createdAt),

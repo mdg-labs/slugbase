@@ -8,7 +8,7 @@ export class AuthzService {
   private readonly sharingRepo: SharingRepository;
 
   constructor(@Inject(DbService) db: DbService) {
-    this.sharingRepo = new SharingRepository(db.getOrm(), db.dialect);
+    this.sharingRepo = new SharingRepository(db.getOrm());
   }
 
   async canReadBookmark(

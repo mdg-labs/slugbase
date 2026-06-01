@@ -42,7 +42,7 @@ export class PasswordResetService {
     @Inject(MAIL) private readonly mail: MailService,
     @Inject(SessionService) private readonly sessions: SessionService,
   ) {
-    this.tokenRepo = new PasswordResetTokenRepository(db.getOrm(), db.dialect);
+    this.tokenRepo = new PasswordResetTokenRepository(db.getOrm());
   }
 
   /**

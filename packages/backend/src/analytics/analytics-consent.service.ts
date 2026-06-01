@@ -30,7 +30,6 @@ export class AnalyticsConsentService {
   ) {
     this.consentRepository = new AnalyticsConsentRepository(
       db.getOrm(),
-      db.dialect,
     );
   }
 

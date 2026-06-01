@@ -31,9 +31,8 @@ export class DowngradeService {
     @Inject(ConfigService) private readonly config: ConfigService,
   ) {
     const orm = db.getOrm();
-    const dialect = db.dialect;
-    this.bookmarkRepo = new BookmarkRepository(orm, dialect);
-    this.workspaceRepo = new WorkspaceRepository(orm, dialect);
+    this.bookmarkRepo = new BookmarkRepository(orm);
+    this.workspaceRepo = new WorkspaceRepository(orm);
   }
 
   getGracePeriodDays(): number {

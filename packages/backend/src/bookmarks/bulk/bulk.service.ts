@@ -41,10 +41,9 @@ export class BulkBookmarksService {
     @Inject(WorkspaceDataGuard) private readonly wsDataGuard: WorkspaceDataGuard,
   ) {
     const orm = db.getOrm();
-    const dialect = db.dialect;
-    this.bookmarkRepo = new BookmarkRepository(orm, dialect);
-    this.folderRepo = new FolderRepository(orm, dialect);
-    this.tagRepo = new TagRepository(orm, dialect);
+    this.bookmarkRepo = new BookmarkRepository(orm);
+    this.folderRepo = new FolderRepository(orm);
+    this.tagRepo = new TagRepository(orm);
   }
 
   async bulkDelete(

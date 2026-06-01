@@ -1,7 +1,7 @@
-import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { bigint, index, pgTable, text } from "drizzle-orm/pg-core";
 
 /** Named bookmark container owned by a user within a workspace (spec §7.1, §16). */
-export const folders = sqliteTable(
+export const folders = pgTable(
   "folders",
   {
     id: text("id").primaryKey(),
@@ -9,8 +9,8 @@ export const folders = sqliteTable(
     userId: text("user_id").notNull(),
     name: text("name").notNull(),
     icon: text("icon"),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
-    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
+    updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
   },
   (t) => [
     index("folders_workspace_id_idx").on(t.workspaceId),

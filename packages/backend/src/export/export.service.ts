@@ -16,10 +16,9 @@ export class ExportService {
 
   constructor(@Inject(DbService) dbService: DbService) {
     const db = dbService.getOrm();
-    const dialect = dbService.dialect;
-    this.bookmarkRepo = new BookmarkRepository(db, dialect);
-    this.folderRepo = new FolderRepository(db, dialect);
-    this.tagRepo = new TagRepository(db, dialect);
+    this.bookmarkRepo = new BookmarkRepository(db);
+    this.folderRepo = new FolderRepository(db);
+    this.tagRepo = new TagRepository(db);
   }
 
   async exportJson(

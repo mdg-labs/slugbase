@@ -1,21 +1,13 @@
+import { coerceCount } from "../db/coerce-count.js";
 import { randomUUID } from "node:crypto";
 
-import { and, asc, desc, eq, like, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, sql, type SQL } from "drizzle-orm";
 
-import type {
-  DrizzleClient,
-  PostgresDrizzleClient,
-  SqliteDrizzleClient,
-} from "../db/dialect/create-client.js";
-import type { DbDialect } from "../db/dialect/dialect.js";
+import type { DrizzleClient } from "../db/dialect/create-client.js";
 import {
-  bookmarkTags as sqliteBookmarkTags,
-  tags as sqliteTags,
+  bookmarkTags,
+  tags,
 } from "../db/schema/index.js";
-import {
-  bookmarkTags as pgBookmarkTags,
-  tags as pgTags,
-} from "../db/schema/pg-index.js";
 import {
   WorkspaceScopedRepository,
   type WorkspaceOwned,
@@ -53,8 +45,8 @@ function escapeLikePattern(q: string): string {
 
 function orderByForSort(
   sort: TagSort,
-  tagsTable: typeof sqliteTags | typeof pgTags,
-  bookmarkTagsTable: typeof sqliteBookmarkTags | typeof pgBookmarkTags,
+  tagsTable: typeof tags,
+  bookmarkTagsTable: typeof bookmarkTags,
 ) {
   switch (sort) {
     case "name-asc":
@@ -78,9 +70,9 @@ function orderByForSort(
 }
 
 export class TagRepository extends WorkspaceScopedRepository<TagRecord> {
-  // eslint-disable-next-line @typescript-eslint/no-useless-constructor -- forwards db + dialect
-  constructor(db: DrizzleClient, dialect: DbDialect) {
-    super(db, dialect);
+  // eslint-disable-next-line @typescript-eslint/no-useless-constructor -- forwards db to WorkspaceScopedRepository
+  constructor(db: DrizzleClient) {
+    super(db);
   }
 
   async create(
@@ -91,44 +83,8 @@ export class TagRepository extends WorkspaceScopedRepository<TagRecord> {
     const id = randomUUID();
     const nowMs = Date.now();
 
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      sqliteDb
-        .insert(sqliteTags)
-        .values({
-          id,
-          workspaceId,
-          userId,
-          name: data.name,
-          color: data.color ?? null,
-          createdAt: new Date(nowMs),
-          updatedAt: new Date(nowMs),
-        })
-        .run();
-
-      const row = sqliteDb
-        .select()
-        .from(sqliteTags)
-        .where(
-          and(eq(sqliteTags.id, id), eq(sqliteTags.workspaceId, workspaceId)),
-        )
-        .get();
-      const tag = this.assertOwnership(
-        workspaceId,
-        row ? await this.toTagRecord(row) : null,
-      );
-      if (data.bookmarkIds?.length) {
-        await this.replaceTagBookmarks(workspaceId, userId, id, data.bookmarkIds);
-        const withLinks = await this.findById(workspaceId, id);
-        if (!withLinks) throw new Error("Failed to load tag after bookmark links");
-        return withLinks;
-      }
-      return tag;
-    }
-
-    const pgDb = this.db as PostgresDrizzleClient;
-    const rows = await pgDb
-      .insert(pgTags)
+        const rows = await this.db
+      .insert(tags)
       .values({
         id,
         workspaceId,
@@ -154,21 +110,11 @@ export class TagRepository extends WorkspaceScopedRepository<TagRecord> {
   }
 
   async findById(workspaceId: string, tagId: string): Promise<TagRecord | null> {
-    if (this.dialect === "sqlite") {
-      const row = (this.db as SqliteDrizzleClient)
-        .select()
-        .from(sqliteTags)
-        .where(
-          and(eq(sqliteTags.id, tagId), eq(sqliteTags.workspaceId, workspaceId)),
-        )
-        .get();
-      return row ? await this.toTagRecord(row) : null;
-    }
 
-    const rows = await (this.db as PostgresDrizzleClient)
+    const rows = await this.db
       .select()
-      .from(pgTags)
-      .where(and(eq(pgTags.id, tagId), eq(pgTags.workspaceId, workspaceId)))
+      .from(tags)
+      .where(and(eq(tags.id, tagId), eq(tags.workspaceId, workspaceId)))
       .limit(1);
     return rows[0] ? await this.toTagRecord(rows[0]) : null;
   }
@@ -187,58 +133,26 @@ export class TagRepository extends WorkspaceScopedRepository<TagRecord> {
         ? `%${escapeLikePattern(query.q.trim())}%`
         : null;
 
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      const conditions: SQL[] = [
-        eq(sqliteTags.workspaceId, workspaceId),
-        eq(sqliteTags.userId, userId),
-      ];
-      if (searchPattern) {
-        conditions.push(like(sqliteTags.name, searchPattern));
-      }
-      const whereClause = and(...conditions);
-
-      const countRow = sqliteDb
-        .select({ count: sql<number>`count(*)` })
-        .from(sqliteTags)
-        .where(whereClause)
-        .get();
-      const total = countRow?.count ?? 0;
-
-      const rows = sqliteDb
-        .select()
-        .from(sqliteTags)
-        .where(whereClause)
-        .orderBy(orderByForSort(sort, sqliteTags, sqliteBookmarkTags))
-        .limit(pageSize)
-        .offset(offset)
-        .all();
-
-      const items = await Promise.all(rows.map((row) => this.toTagRecord(row)));
-      return { items, total, page, pageSize };
-    }
-
-    const pgDb = this.db as PostgresDrizzleClient;
-    const conditions: SQL[] = [
-      eq(pgTags.workspaceId, workspaceId),
-      eq(pgTags.userId, userId),
+        const conditions: SQL[] = [
+      eq(tags.workspaceId, workspaceId),
+      eq(tags.userId, userId),
     ];
     if (searchPattern) {
-      conditions.push(like(pgTags.name, searchPattern));
+      conditions.push(ilike(tags.name, searchPattern));
     }
     const whereClause = and(...conditions);
 
-    const countRows = await pgDb
+    const countRows = await this.db
       .select({ count: sql<number>`count(*)` })
-      .from(pgTags)
+      .from(tags)
       .where(whereClause);
-    const total = countRows[0]?.count ?? 0;
+    const total = coerceCount(countRows[0]?.count);
 
-    const rows = await pgDb
+    const rows = await this.db
       .select()
-      .from(pgTags)
+      .from(tags)
       .where(whereClause)
-      .orderBy(orderByForSort(sort, pgTags, pgBookmarkTags))
+      .orderBy(orderByForSort(sort, tags, bookmarkTags))
       .limit(pageSize)
       .offset(offset);
 
@@ -257,25 +171,10 @@ export class TagRepository extends WorkspaceScopedRepository<TagRecord> {
     if (patch.name !== undefined) updates.name = patch.name;
     if (patch.color !== undefined) updates.color = patch.color;
 
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      sqliteDb
-        .update(sqliteTags)
-        .set({
-          ...updates,
-          updatedAt: new Date(nowMs),
-        })
-        .where(
-          and(eq(sqliteTags.id, tagId), eq(sqliteTags.workspaceId, workspaceId)),
-        )
-        .run();
-      return this.findById(workspaceId, tagId);
-    }
-
-    await (this.db as PostgresDrizzleClient)
-      .update(pgTags)
+    await this.db
+      .update(tags)
       .set(updates)
-      .where(and(eq(pgTags.id, tagId), eq(pgTags.workspaceId, workspaceId)));
+      .where(and(eq(tags.id, tagId), eq(tags.workspaceId, workspaceId)));
 
     return this.findById(workspaceId, tagId);
   }
@@ -283,19 +182,9 @@ export class TagRepository extends WorkspaceScopedRepository<TagRecord> {
   async delete(workspaceId: string, tagId: string): Promise<void> {
     await this.deleteBookmarkTagLinksForTag(workspaceId, tagId);
 
-    if (this.dialect === "sqlite") {
-      (this.db as SqliteDrizzleClient)
-        .delete(sqliteTags)
-        .where(
-          and(eq(sqliteTags.id, tagId), eq(sqliteTags.workspaceId, workspaceId)),
-        )
-        .run();
-      return;
-    }
-
-    await (this.db as PostgresDrizzleClient)
-      .delete(pgTags)
-      .where(and(eq(pgTags.id, tagId), eq(pgTags.workspaceId, workspaceId)));
+    await this.db
+      .delete(tags)
+      .where(and(eq(tags.id, tagId), eq(tags.workspaceId, workspaceId)));
   }
 
   async replaceTagBookmarks(
@@ -332,27 +221,14 @@ export class TagRepository extends WorkspaceScopedRepository<TagRecord> {
     tagId: string,
     bookmarkId: string,
   ): Promise<void> {
-    if (this.dialect === "sqlite") {
-      (this.db as SqliteDrizzleClient)
-        .delete(sqliteBookmarkTags)
-        .where(
-          and(
-            eq(sqliteBookmarkTags.workspaceId, workspaceId),
-            eq(sqliteBookmarkTags.tagId, tagId),
-            eq(sqliteBookmarkTags.bookmarkId, bookmarkId),
-          ),
-        )
-        .run();
-      return;
-    }
 
-    await (this.db as PostgresDrizzleClient)
-      .delete(pgBookmarkTags)
+    await this.db
+      .delete(bookmarkTags)
       .where(
         and(
-          eq(pgBookmarkTags.workspaceId, workspaceId),
-          eq(pgBookmarkTags.tagId, tagId),
-          eq(pgBookmarkTags.bookmarkId, bookmarkId),
+          eq(bookmarkTags.workspaceId, workspaceId),
+          eq(bookmarkTags.tagId, tagId),
+          eq(bookmarkTags.bookmarkId, bookmarkId),
         ),
       );
   }
@@ -361,57 +237,31 @@ export class TagRepository extends WorkspaceScopedRepository<TagRecord> {
     workspaceId: string,
     bookmarkId: string,
   ): Promise<number> {
-    if (this.dialect === "sqlite") {
-      const row = (this.db as SqliteDrizzleClient)
-        .select({ count: sql<number>`count(*)` })
-        .from(sqliteBookmarkTags)
-        .where(
-          and(
-            eq(sqliteBookmarkTags.workspaceId, workspaceId),
-            eq(sqliteBookmarkTags.bookmarkId, bookmarkId),
-          ),
-        )
-        .get();
-      return row?.count ?? 0;
-    }
 
-    const rows = await (this.db as PostgresDrizzleClient)
+    const rows = await this.db
       .select({ count: sql<number>`count(*)` })
-      .from(pgBookmarkTags)
+      .from(bookmarkTags)
       .where(
         and(
-          eq(pgBookmarkTags.workspaceId, workspaceId),
-          eq(pgBookmarkTags.bookmarkId, bookmarkId),
+          eq(bookmarkTags.workspaceId, workspaceId),
+          eq(bookmarkTags.bookmarkId, bookmarkId),
         ),
       );
-    return rows[0]?.count ?? 0;
+    return coerceCount(rows[0]?.count);
   }
 
   async listTagIdsForBookmark(
     workspaceId: string,
     bookmarkId: string,
   ): Promise<string[]> {
-    if (this.dialect === "sqlite") {
-      const rows = (this.db as SqliteDrizzleClient)
-        .select({ tagId: sqliteBookmarkTags.tagId })
-        .from(sqliteBookmarkTags)
-        .where(
-          and(
-            eq(sqliteBookmarkTags.workspaceId, workspaceId),
-            eq(sqliteBookmarkTags.bookmarkId, bookmarkId),
-          ),
-        )
-        .all();
-      return rows.map((r) => r.tagId);
-    }
 
-    const rows = await (this.db as PostgresDrizzleClient)
-      .select({ tagId: pgBookmarkTags.tagId })
-      .from(pgBookmarkTags)
+    const rows = await this.db
+      .select({ tagId: bookmarkTags.tagId })
+      .from(bookmarkTags)
       .where(
         and(
-          eq(pgBookmarkTags.workspaceId, workspaceId),
-          eq(pgBookmarkTags.bookmarkId, bookmarkId),
+          eq(bookmarkTags.workspaceId, workspaceId),
+          eq(bookmarkTags.bookmarkId, bookmarkId),
         ),
       );
     return rows.map((r) => r.tagId);
@@ -421,25 +271,13 @@ export class TagRepository extends WorkspaceScopedRepository<TagRecord> {
     workspaceId: string,
     bookmarkId: string,
   ): Promise<void> {
-    if (this.dialect === "sqlite") {
-      (this.db as SqliteDrizzleClient)
-        .delete(sqliteBookmarkTags)
-        .where(
-          and(
-            eq(sqliteBookmarkTags.workspaceId, workspaceId),
-            eq(sqliteBookmarkTags.bookmarkId, bookmarkId),
-          ),
-        )
-        .run();
-      return;
-    }
 
-    await (this.db as PostgresDrizzleClient)
-      .delete(pgBookmarkTags)
+    await this.db
+      .delete(bookmarkTags)
       .where(
         and(
-          eq(pgBookmarkTags.workspaceId, workspaceId),
-          eq(pgBookmarkTags.bookmarkId, bookmarkId),
+          eq(bookmarkTags.workspaceId, workspaceId),
+          eq(bookmarkTags.bookmarkId, bookmarkId),
         ),
       );
   }
@@ -448,25 +286,13 @@ export class TagRepository extends WorkspaceScopedRepository<TagRecord> {
     workspaceId: string,
     tagId: string,
   ): Promise<void> {
-    if (this.dialect === "sqlite") {
-      (this.db as SqliteDrizzleClient)
-        .delete(sqliteBookmarkTags)
-        .where(
-          and(
-            eq(sqliteBookmarkTags.workspaceId, workspaceId),
-            eq(sqliteBookmarkTags.tagId, tagId),
-          ),
-        )
-        .run();
-      return;
-    }
 
-    await (this.db as PostgresDrizzleClient)
-      .delete(pgBookmarkTags)
+    await this.db
+      .delete(bookmarkTags)
       .where(
         and(
-          eq(pgBookmarkTags.workspaceId, workspaceId),
-          eq(pgBookmarkTags.tagId, tagId),
+          eq(bookmarkTags.workspaceId, workspaceId),
+          eq(bookmarkTags.tagId, tagId),
         ),
       );
   }
@@ -476,29 +302,15 @@ export class TagRepository extends WorkspaceScopedRepository<TagRecord> {
     tagId: string,
     bookmarkId: string,
   ): Promise<boolean> {
-    if (this.dialect === "sqlite") {
-      const row = (this.db as SqliteDrizzleClient)
-        .select({ id: sqliteBookmarkTags.id })
-        .from(sqliteBookmarkTags)
-        .where(
-          and(
-            eq(sqliteBookmarkTags.workspaceId, workspaceId),
-            eq(sqliteBookmarkTags.tagId, tagId),
-            eq(sqliteBookmarkTags.bookmarkId, bookmarkId),
-          ),
-        )
-        .get();
-      return row != null;
-    }
 
-    const rows = await (this.db as PostgresDrizzleClient)
-      .select({ id: pgBookmarkTags.id })
-      .from(pgBookmarkTags)
+    const rows = await this.db
+      .select({ id: bookmarkTags.id })
+      .from(bookmarkTags)
       .where(
         and(
-          eq(pgBookmarkTags.workspaceId, workspaceId),
-          eq(pgBookmarkTags.tagId, tagId),
-          eq(pgBookmarkTags.bookmarkId, bookmarkId),
+          eq(bookmarkTags.workspaceId, workspaceId),
+          eq(bookmarkTags.tagId, tagId),
+          eq(bookmarkTags.bookmarkId, bookmarkId),
         ),
       )
       .limit(1);
@@ -513,21 +325,7 @@ export class TagRepository extends WorkspaceScopedRepository<TagRecord> {
     const id = randomUUID();
     const nowMs = Date.now();
 
-    if (this.dialect === "sqlite") {
-      (this.db as SqliteDrizzleClient)
-        .insert(sqliteBookmarkTags)
-        .values({
-          id,
-          workspaceId,
-          tagId,
-          bookmarkId,
-          createdAt: new Date(nowMs),
-        })
-        .run();
-      return;
-    }
-
-    await (this.db as PostgresDrizzleClient).insert(pgBookmarkTags).values({
+    await this.db.insert(bookmarkTags).values({
       id,
       workspaceId,
       tagId,
@@ -540,30 +338,17 @@ export class TagRepository extends WorkspaceScopedRepository<TagRecord> {
     workspaceId: string,
     tagId: string,
   ): Promise<number> {
-    if (this.dialect === "sqlite") {
-      const row = (this.db as SqliteDrizzleClient)
-        .select({ count: sql<number>`count(*)` })
-        .from(sqliteBookmarkTags)
-        .where(
-          and(
-            eq(sqliteBookmarkTags.workspaceId, workspaceId),
-            eq(sqliteBookmarkTags.tagId, tagId),
-          ),
-        )
-        .get();
-      return row?.count ?? 0;
-    }
 
-    const rows = await (this.db as PostgresDrizzleClient)
+    const rows = await this.db
       .select({ count: sql<number>`count(*)` })
-      .from(pgBookmarkTags)
+      .from(bookmarkTags)
       .where(
         and(
-          eq(pgBookmarkTags.workspaceId, workspaceId),
-          eq(pgBookmarkTags.tagId, tagId),
+          eq(bookmarkTags.workspaceId, workspaceId),
+          eq(bookmarkTags.tagId, tagId),
         ),
       );
-    return rows[0]?.count ?? 0;
+    return coerceCount(rows[0]?.count);
   }
 
   private async toTagRecord(row: TagRow): Promise<TagRecord> {

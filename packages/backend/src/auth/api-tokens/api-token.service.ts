@@ -32,7 +32,7 @@ export class ApiTokenService {
   private readonly repo: ApiTokenRepository;
 
   constructor(@Inject(DbService) private readonly db: DbService) {
-    this.repo = new ApiTokenRepository(db.getOrm(), db.dialect);
+    this.repo = new ApiTokenRepository(db.getOrm());
   }
 
   /** Generates a new named API token. Returns the plaintext once. */
@@ -129,11 +129,27 @@ function toSummary(record: ApiTokenRecord): ApiTokenSummary {
 }
 
 function isUniqueConstraintError(err: unknown): boolean {
-  if (!(err instanceof Error)) return false;
-  const msg = err.message.toLowerCase();
-  return (
-    msg.includes("unique constraint") ||
-    msg.includes("unique violation") ||
-    msg.includes("unique")
-  );
+  let current: unknown = err;
+  while (current != null) {
+    if (typeof current === "object") {
+      const code = (current as { code?: string }).code;
+      if (code === "23505") {
+        return true;
+      }
+    }
+    if (current instanceof Error) {
+      const msg = current.message.toLowerCase();
+      if (
+        msg.includes("unique constraint") ||
+        msg.includes("unique violation") ||
+        msg.includes("duplicate key")
+      ) {
+        return true;
+      }
+      current = (current as { cause?: unknown }).cause;
+    } else {
+      break;
+    }
+  }
+  return false;
 }

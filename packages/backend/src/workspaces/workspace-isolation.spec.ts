@@ -28,7 +28,7 @@ class FakeWorkspaceScopedRepository extends WorkspaceScopedRepository<FakeRecord
 
   constructor() {
     // Minimal stubs — the base class constructor only stores references
-    super({} as DrizzleClient, "sqlite");
+    super({} as DrizzleClient);
   }
 
   seed(record: FakeRecord): void {

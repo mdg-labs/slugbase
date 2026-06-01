@@ -1,7 +1,7 @@
-import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { bigint, index, pgTable, text } from "drizzle-orm/pg-core";
 
 /** User-private bookmark label within a workspace (spec §7.2, §16). */
-export const tags = sqliteTable(
+export const tags = pgTable(
   "tags",
   {
     id: text("id").primaryKey(),
@@ -9,8 +9,8 @@ export const tags = sqliteTable(
     userId: text("user_id").notNull(),
     name: text("name").notNull(),
     color: text("color"),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
-    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
+    updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
   },
   (t) => [
     index("tags_workspace_id_idx").on(t.workspaceId),

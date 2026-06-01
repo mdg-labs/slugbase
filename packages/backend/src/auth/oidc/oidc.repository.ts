@@ -2,16 +2,8 @@ import { randomUUID } from "node:crypto";
 
 import { and, eq } from "drizzle-orm";
 
-import type {
-  DrizzleClient,
-  PostgresDrizzleClient,
-  SqliteDrizzleClient,
-} from "../../db/dialect/create-client.js";
-import type { DbDialect } from "../../db/dialect/dialect.js";
-import { oidcAccounts as sqliteOidcAccounts } from "../../db/schema/index.js";
-import { oidcProviders as sqliteOidcProviders } from "../../db/schema/index.js";
-import { oidcAccounts as pgOidcAccounts } from "../../db/schema/pg-index.js";
-import { oidcProviders as pgOidcProviders } from "../../db/schema/pg-index.js";
+import type { DrizzleClient } from "../../db/dialect/create-client.js";
+import { oidcAccounts, oidcProviders } from "../../db/schema/index.js";
 import type {
   CreateOidcAccountData,
   CreateOidcProviderData,
@@ -62,27 +54,14 @@ function toAccountRecord(row: {
 }
 
 export class OidcRepository {
-  constructor(
-    private readonly db: DrizzleClient,
-    private readonly dialect: DbDialect,
-  ) {}
+  constructor(private readonly db: DrizzleClient) {}
 
   async findProviderById(id: string): Promise<OidcProviderRecord | null> {
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      const row = sqliteDb
-        .select()
-        .from(sqliteOidcProviders)
-        .where(eq(sqliteOidcProviders.id, id))
-        .get();
-      if (!row) return null;
-      return toProviderRecord(row);
-    }
-    const pgDb = this.db as PostgresDrizzleClient;
-    const rows = await pgDb
+
+    const rows = await this.db
       .select()
-      .from(pgOidcProviders)
-      .where(eq(pgOidcProviders.id, id))
+      .from(oidcProviders)
+      .where(eq(oidcProviders.id, id))
       .limit(1);
     const row = rows[0];
     if (!row) return null;
@@ -95,34 +74,8 @@ export class OidcRepository {
     const id = randomUUID();
     const now = Date.now();
 
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      sqliteDb
-        .insert(sqliteOidcProviders)
-        .values({
-          id,
-          name: data.name,
-          issuerUrl: data.issuerUrl,
-          clientId: data.clientId,
-          clientSecretEncrypted: data.clientSecretEncrypted,
-          scopes: data.scopes ?? "openid email profile",
-          enabled: data.enabled ?? true,
-          createdAt: new Date(now),
-        })
-        .run();
-
-      const row = sqliteDb
-        .select()
-        .from(sqliteOidcProviders)
-        .where(eq(sqliteOidcProviders.id, id))
-        .get();
-      if (!row) throw new Error("Failed to create OIDC provider");
-      return toProviderRecord(row);
-    }
-
-    const pgDb = this.db as PostgresDrizzleClient;
-    const rows = await pgDb
-      .insert(pgOidcProviders)
+        const rows = await this.db
+      .insert(oidcProviders)
       .values({
         id,
         name: data.name,
@@ -143,29 +96,14 @@ export class OidcRepository {
     providerId: string,
     subject: string,
   ): Promise<OidcAccountRecord | null> {
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      const row = sqliteDb
-        .select()
-        .from(sqliteOidcAccounts)
-        .where(
-          and(
-            eq(sqliteOidcAccounts.providerId, providerId),
-            eq(sqliteOidcAccounts.subject, subject),
-          ),
-        )
-        .get();
-      if (!row) return null;
-      return toAccountRecord(row);
-    }
-    const pgDb = this.db as PostgresDrizzleClient;
-    const rows = await pgDb
+
+    const rows = await this.db
       .select()
-      .from(pgOidcAccounts)
+      .from(oidcAccounts)
       .where(
         and(
-          eq(pgOidcAccounts.providerId, providerId),
-          eq(pgOidcAccounts.subject, subject),
+          eq(oidcAccounts.providerId, providerId),
+          eq(oidcAccounts.subject, subject),
         ),
       )
       .limit(1);
@@ -178,31 +116,8 @@ export class OidcRepository {
     const id = randomUUID();
     const now = Date.now();
 
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      sqliteDb
-        .insert(sqliteOidcAccounts)
-        .values({
-          id,
-          userId: data.userId,
-          providerId: data.providerId,
-          subject: data.subject,
-          createdAt: new Date(now),
-        })
-        .run();
-
-      const row = sqliteDb
-        .select()
-        .from(sqliteOidcAccounts)
-        .where(eq(sqliteOidcAccounts.id, id))
-        .get();
-      if (!row) throw new Error("Failed to create OIDC account");
-      return toAccountRecord(row);
-    }
-
-    const pgDb = this.db as PostgresDrizzleClient;
-    const rows = await pgDb
-      .insert(pgOidcAccounts)
+        const rows = await this.db
+      .insert(oidcAccounts)
       .values({
         id,
         userId: data.userId,

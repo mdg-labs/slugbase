@@ -37,11 +37,10 @@ export class SharingService {
     @Inject(EntitlementsService) private readonly entitlements: EntitlementsService,
   ) {
     const orm = db.getOrm();
-    const dialect = db.dialect;
-    this.sharingRepo = new SharingRepository(orm, dialect);
-    this.bookmarkRepo = new BookmarkRepository(orm, dialect);
-    this.folderRepo = new FolderRepository(orm, dialect);
-    this.teamRepo = new TeamRepository(orm, dialect);
+    this.sharingRepo = new SharingRepository(orm);
+    this.bookmarkRepo = new BookmarkRepository(orm);
+    this.folderRepo = new FolderRepository(orm);
+    this.teamRepo = new TeamRepository(orm);
   }
 
   async listShareTargets(

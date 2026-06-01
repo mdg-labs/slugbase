@@ -37,7 +37,7 @@ export class OidcService {
     @Inject(CRYPTO) private readonly crypto: CryptoService,
     @Inject(AccountsService) private readonly accounts: AccountsService,
   ) {
-    this.repo = new OidcRepository(db.getOrm(), db.dialect);
+    this.repo = new OidcRepository(db.getOrm());
   }
 
   /**

@@ -42,7 +42,7 @@ export class BookmarksService {
     @Inject(EntitlementsService) private readonly entitlements: EntitlementsService,
     @Inject(AuthzService) private readonly authz: AuthzService,
   ) {
-    this.repo = new BookmarkRepository(db.getOrm(), db.dialect);
+    this.repo = new BookmarkRepository(db.getOrm());
   }
 
   async createBookmark(

@@ -1,29 +1,33 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
 export interface TestDatabaseHandle {
   databaseUrl: string;
   cleanup: () => Promise<void>;
 }
 
 export async function createTestDatabase(): Promise<TestDatabaseHandle> {
+  await Promise.resolve();
+
   const configured = process.env.DATABASE_URL?.trim();
 
-  if (configured) {
-    return {
-      databaseUrl: configured,
-      cleanup: async () => {},
-    };
+  if (!configured) {
+    throw new Error(
+      "DATABASE_URL is required for integration tests. " +
+        "Run pnpm test:integration (starts ephemeral Postgres locally) " +
+        "or export DATABASE_URL=postgresql://…",
+    );
   }
 
-  const tempDir = await mkdtemp(join(tmpdir(), "slugbase-db-"));
-  const dbPath = join(tempDir, "test.sqlite");
+  const normalized = configured.toLowerCase();
+  if (
+    !normalized.startsWith("postgres://") &&
+    !normalized.startsWith("postgresql://")
+  ) {
+    throw new Error(
+      "Integration tests require a postgresql:// DATABASE_URL (SQLite support is deferred)",
+    );
+  }
 
   return {
-    databaseUrl: `sqlite://${dbPath}`,
-    cleanup: async () => {
-      await rm(tempDir, { recursive: true, force: true });
-    },
+    databaseUrl: configured,
+    cleanup: async () => {},
   };
 }

@@ -71,14 +71,14 @@ Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit w
 - **Doc Ref:** spec §14.2, §15, §18; eng §3, §8; rule `05` · **Deps:** P1-01 · **Status:** [ ]
 
 ### P1-04 — Persistence interface + Drizzle + SQLite + migrations — BE · Lane S · `[mig]`
-- **AC:** `DB` data-access abstraction with Drizzle impl + thin dialect layer + per-domain schema glob; embedded SQLite wired; Drizzle Kit tooling (`pnpm db:generate`/`db:migrate`); migration-bookkeeping table; auto-migrate on startup (§14.3).
-- **Tests:** integration: migrate up on temp SQLite; trivial repository round-trips.
+- **AC:** `DB` data-access abstraction with Drizzle impl + per-domain schema glob; Drizzle Kit tooling (`pnpm db:generate`/`db:migrate`); migration-bookkeeping table; auto-migrate on startup (§14.3). *Note: v1 ships Postgres-only; embedded SQLite deferred (Fast-Follow).*
+- **Tests:** integration: migrate up on Postgres; trivial repository round-trips.
 - **Files:** `packages/backend/src/db/**`, `drizzle.config.ts`, `packages/backend/migrations/**`
 - **Doc Ref:** spec §11.9, §16; eng §4, §11 · **Deps:** P1-03 · **Status:** [ ]
 
 ### P1-05 — Neon Postgres engine on identical schema + CI matrix — Infra · Lane S
-- **AC:** Postgres engine selectable by config on the same schema/migrations; CI runs the integration suite against **both** SQLite and Postgres.
-- **Tests:** integration suite passes on both engines in CI.
+- **AC:** Postgres engine via `DATABASE_URL`; CI runs the integration suite against Postgres. *Note: dual SQLite/Postgres CI matrix deferred with SQLite self-host (Fast-Follow).*
+- **Tests:** integration suite passes on Postgres in CI.
 - **Files:** `packages/backend/src/db/**`, `.github/workflows/ci-cd.yml`
 - **Doc Ref:** spec §11.9, decision #32; eng §4, §6 · **Deps:** P1-04, P1-09 · **Status:** [x]
 

@@ -25,7 +25,7 @@ export class WorkspaceMembersService {
     @Inject(DbService) private readonly db: DbService,
     @Inject(AccountsService) private readonly accounts: AccountsService,
   ) {
-    this.repo = new WorkspaceMemberRepository(db.getOrm(), db.dialect);
+    this.repo = new WorkspaceMemberRepository(db.getOrm());
   }
 
   async addMember(

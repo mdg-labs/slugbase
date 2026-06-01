@@ -1,20 +1,14 @@
-import {
-  index,
-  integer,
-  sqliteTable,
-  text,
-  uniqueIndex,
-} from "drizzle-orm/sqlite-core";
+import { bigint, index, pgTable, text, uniqueIndex } from "drizzle-orm/pg-core";
 
 /** Folder shared with a team; transitively exposes contained bookmarks (spec §16). */
-export const folderTeamShares = sqliteTable(
+export const folderTeamShares = pgTable(
   "folder_team_shares",
   {
     id: text("id").primaryKey(),
     workspaceId: text("workspace_id").notNull(),
     folderId: text("folder_id").notNull(),
     teamId: text("team_id").notNull(),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
   },
   (t) => [
     uniqueIndex("folder_team_shares_workspace_folder_team_unique_idx").on(

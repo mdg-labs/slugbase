@@ -1,15 +1,10 @@
+import { coerceCount } from "../db/coerce-count.js";
 import { randomUUID } from "node:crypto";
 
 import { and, eq, sql } from "drizzle-orm";
 
-import type {
-  DrizzleClient,
-  PostgresDrizzleClient,
-  SqliteDrizzleClient,
-} from "../db/dialect/create-client.js";
-import type { DbDialect } from "../db/dialect/dialect.js";
-import { workspaceMembers as sqliteWorkspaceMembers } from "../db/schema/index.js";
-import { workspaceMembers as pgWorkspaceMembers } from "../db/schema/pg-index.js";
+import type { DrizzleClient } from "../db/dialect/create-client.js";
+import { workspaceMembers } from "../db/schema/index.js";
 import type {
   CreateWorkspaceMemberData,
   UpdateWorkspaceMemberData,
@@ -40,10 +35,7 @@ function toRecord(row: {
 }
 
 export class WorkspaceMemberRepository {
-  constructor(
-    private readonly db: DrizzleClient,
-    private readonly dialect: DbDialect,
-  ) {}
+  constructor(private readonly db: DrizzleClient) {}
 
   async create(data: CreateWorkspaceMemberData): Promise<WorkspaceMemberRecord> {
     const id = randomUUID();
@@ -55,24 +47,8 @@ export class WorkspaceMemberRepository {
       role: data.role,
     };
 
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      sqliteDb
-        .insert(sqliteWorkspaceMembers)
-        .values({ ...values, joinedAt: new Date(now) })
-        .run();
-      const row = sqliteDb
-        .select()
-        .from(sqliteWorkspaceMembers)
-        .where(eq(sqliteWorkspaceMembers.id, id))
-        .get();
-      if (!row) throw new Error("Failed to create workspace member");
-      return toRecord(row);
-    }
-
-    const pgDb = this.db as PostgresDrizzleClient;
-    const rows = await pgDb
-      .insert(pgWorkspaceMembers)
+        const rows = await this.db
+      .insert(workspaceMembers)
       .values({ ...values, joinedAt: now })
       .returning();
     const row = rows[0];
@@ -84,26 +60,14 @@ export class WorkspaceMemberRepository {
     workspaceId: string,
     userId: string,
   ): Promise<WorkspaceMemberRecord | null> {
-    if (this.dialect === "sqlite") {
-      const row = (this.db as SqliteDrizzleClient)
-        .select()
-        .from(sqliteWorkspaceMembers)
-        .where(
-          and(
-            eq(sqliteWorkspaceMembers.workspaceId, workspaceId),
-            eq(sqliteWorkspaceMembers.userId, userId),
-          ),
-        )
-        .get();
-      return row ? toRecord(row) : null;
-    }
-    const rows = await (this.db as PostgresDrizzleClient)
+
+    const rows = await this.db
       .select()
-      .from(pgWorkspaceMembers)
+      .from(workspaceMembers)
       .where(
         and(
-          eq(pgWorkspaceMembers.workspaceId, workspaceId),
-          eq(pgWorkspaceMembers.userId, userId),
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(workspaceMembers.userId, userId),
         ),
       )
       .limit(1);
@@ -111,61 +75,35 @@ export class WorkspaceMemberRepository {
   }
 
   async findAllByWorkspace(workspaceId: string): Promise<WorkspaceMemberRecord[]> {
-    if (this.dialect === "sqlite") {
-      const rows = (this.db as SqliteDrizzleClient)
-        .select()
-        .from(sqliteWorkspaceMembers)
-        .where(eq(sqliteWorkspaceMembers.workspaceId, workspaceId))
-        .all();
-      return rows.map(toRecord);
-    }
-    const rows = await (this.db as PostgresDrizzleClient)
+
+    const rows = await this.db
       .select()
-      .from(pgWorkspaceMembers)
-      .where(eq(pgWorkspaceMembers.workspaceId, workspaceId));
+      .from(workspaceMembers)
+      .where(eq(workspaceMembers.workspaceId, workspaceId));
     return rows.map(toRecord);
   }
 
   async findAllByUser(userId: string): Promise<WorkspaceMemberRecord[]> {
-    if (this.dialect === "sqlite") {
-      const rows = (this.db as SqliteDrizzleClient)
-        .select()
-        .from(sqliteWorkspaceMembers)
-        .where(eq(sqliteWorkspaceMembers.userId, userId))
-        .all();
-      return rows.map(toRecord);
-    }
-    const rows = await (this.db as PostgresDrizzleClient)
+
+    const rows = await this.db
       .select()
-      .from(pgWorkspaceMembers)
-      .where(eq(pgWorkspaceMembers.userId, userId));
+      .from(workspaceMembers)
+      .where(eq(workspaceMembers.userId, userId));
     return rows.map(toRecord);
   }
 
   async countOwners(workspaceId: string): Promise<number> {
-    if (this.dialect === "sqlite") {
-      const result = (this.db as SqliteDrizzleClient)
-        .select({ count: sql<number>`count(*)` })
-        .from(sqliteWorkspaceMembers)
-        .where(
-          and(
-            eq(sqliteWorkspaceMembers.workspaceId, workspaceId),
-            eq(sqliteWorkspaceMembers.role, "OWNER"),
-          ),
-        )
-        .get();
-      return result?.count ?? 0;
-    }
-    const result = await (this.db as PostgresDrizzleClient)
+
+    const result = await this.db
       .select({ count: sql<number>`count(*)` })
-      .from(pgWorkspaceMembers)
+      .from(workspaceMembers)
       .where(
         and(
-          eq(pgWorkspaceMembers.workspaceId, workspaceId),
-          eq(pgWorkspaceMembers.role, "OWNER"),
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(workspaceMembers.role, "OWNER"),
         ),
       );
-    return result[0]?.count ?? 0;
+    return coerceCount(result[0]?.count);
   }
 
   async update(
@@ -173,64 +111,36 @@ export class WorkspaceMemberRepository {
     userId: string,
     patch: UpdateWorkspaceMemberData,
   ): Promise<WorkspaceMemberRecord | null> {
-    if (this.dialect === "sqlite") {
-      (this.db as SqliteDrizzleClient)
-        .update(sqliteWorkspaceMembers)
+
+    await this.db
+        .update(workspaceMembers)
         .set(patch)
         .where(
           and(
-            eq(sqliteWorkspaceMembers.workspaceId, workspaceId),
-            eq(sqliteWorkspaceMembers.userId, userId),
-          ),
-        )
-        .run();
-    } else {
-      await (this.db as PostgresDrizzleClient)
-        .update(pgWorkspaceMembers)
-        .set(patch)
-        .where(
-          and(
-            eq(pgWorkspaceMembers.workspaceId, workspaceId),
-            eq(pgWorkspaceMembers.userId, userId),
+            eq(workspaceMembers.workspaceId, workspaceId),
+            eq(workspaceMembers.userId, userId),
           ),
         );
-    }
+
     return this.findByWorkspaceAndUser(workspaceId, userId);
   }
 
   async delete(workspaceId: string, userId: string): Promise<void> {
-    if (this.dialect === "sqlite") {
-      (this.db as SqliteDrizzleClient)
-        .delete(sqliteWorkspaceMembers)
-        .where(
-          and(
-            eq(sqliteWorkspaceMembers.workspaceId, workspaceId),
-            eq(sqliteWorkspaceMembers.userId, userId),
-          ),
-        )
-        .run();
-      return;
-    }
-    await (this.db as PostgresDrizzleClient)
-      .delete(pgWorkspaceMembers)
+
+    await this.db
+      .delete(workspaceMembers)
       .where(
         and(
-          eq(pgWorkspaceMembers.workspaceId, workspaceId),
-          eq(pgWorkspaceMembers.userId, userId),
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(workspaceMembers.userId, userId),
         ),
       );
   }
 
   async deleteAllByWorkspace(workspaceId: string): Promise<void> {
-    if (this.dialect === "sqlite") {
-      (this.db as SqliteDrizzleClient)
-        .delete(sqliteWorkspaceMembers)
-        .where(eq(sqliteWorkspaceMembers.workspaceId, workspaceId))
-        .run();
-      return;
-    }
-    await (this.db as PostgresDrizzleClient)
-      .delete(pgWorkspaceMembers)
-      .where(eq(pgWorkspaceMembers.workspaceId, workspaceId));
+
+    await this.db
+      .delete(workspaceMembers)
+      .where(eq(workspaceMembers.workspaceId, workspaceId));
   }
 }

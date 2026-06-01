@@ -1,15 +1,10 @@
+import { coerceCount } from "../../db/coerce-count.js";
 import { randomUUID } from "node:crypto";
 
 import { and, count, eq, gt, isNull } from "drizzle-orm";
 
-import type {
-  DrizzleClient,
-  PostgresDrizzleClient,
-  SqliteDrizzleClient,
-} from "../../db/dialect/create-client.js";
-import type { DbDialect } from "../../db/dialect/dialect.js";
-import { emailVerificationTokens as sqliteTokens } from "../../db/schema/index.js";
-import { emailVerificationTokens as pgTokens } from "../../db/schema/pg-index.js";
+import type { DrizzleClient } from "../../db/dialect/create-client.js";
+import { emailVerificationTokens } from "../../db/schema/index.js";
 
 export interface EmailVerificationTokenRecord {
   id: string;
@@ -45,10 +40,7 @@ function toRecord(row: {
 }
 
 export class EmailVerificationTokenRepository {
-  constructor(
-    private readonly db: DrizzleClient,
-    private readonly dialect: DbDialect,
-  ) {}
+  constructor(private readonly db: DrizzleClient) {}
 
   async create(
     userId: string,
@@ -58,31 +50,8 @@ export class EmailVerificationTokenRepository {
     const id = randomUUID();
     const nowMs = Date.now();
 
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      sqliteDb
-        .insert(sqliteTokens)
-        .values({
-          id,
-          userId,
-          tokenHash,
-          expiresAt,
-          createdAt: new Date(nowMs),
-        })
-        .run();
-
-      const row = sqliteDb
-        .select()
-        .from(sqliteTokens)
-        .where(eq(sqliteTokens.id, id))
-        .get();
-      if (!row) throw new Error("Failed to create email verification token");
-      return toRecord(row);
-    }
-
-    const pgDb = this.db as PostgresDrizzleClient;
-    const rows = await pgDb
-      .insert(pgTokens)
+        const rows = await this.db
+      .insert(emailVerificationTokens)
       .values({
         id,
         userId,
@@ -97,22 +66,11 @@ export class EmailVerificationTokenRepository {
   }
 
   async findByTokenHash(tokenHash: string): Promise<EmailVerificationTokenRecord | null> {
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      const row = sqliteDb
-        .select()
-        .from(sqliteTokens)
-        .where(eq(sqliteTokens.tokenHash, tokenHash))
-        .get();
-      if (!row) return null;
-      return toRecord(row);
-    }
 
-    const pgDb = this.db as PostgresDrizzleClient;
-    const rows = await pgDb
+        const rows = await this.db
       .select()
-      .from(pgTokens)
-      .where(eq(pgTokens.tokenHash, tokenHash))
+      .from(emailVerificationTokens)
+      .where(eq(emailVerificationTokens.tokenHash, tokenHash))
       .limit(1);
     const row = rows[0];
     if (!row) return null;
@@ -120,21 +78,11 @@ export class EmailVerificationTokenRepository {
   }
 
   async markUsed(id: string, nowMs: number): Promise<void> {
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      sqliteDb
-        .update(sqliteTokens)
-        .set({ usedAt: new Date(nowMs) })
-        .where(eq(sqliteTokens.id, id))
-        .run();
-      return;
-    }
 
-    const pgDb = this.db as PostgresDrizzleClient;
-    await pgDb
-      .update(pgTokens)
+        await this.db
+      .update(emailVerificationTokens)
       .set({ usedAt: nowMs })
-      .where(eq(pgTokens.id, id));
+      .where(eq(emailVerificationTokens.id, id));
   }
 
   /**
@@ -142,33 +90,17 @@ export class EmailVerificationTokenRepository {
    * given time window. Used to enforce the resend rate limit.
    */
   async countRecentByUserId(userId: string, sinceMs: number): Promise<number> {
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      const rows = sqliteDb
-        .select({ value: count() })
-        .from(sqliteTokens)
-        .where(
-          and(
-            eq(sqliteTokens.userId, userId),
-            isNull(sqliteTokens.usedAt),
-            gt(sqliteTokens.createdAt, new Date(sinceMs)),
-          ),
-        )
-        .all();
-      return rows[0]?.value ?? 0;
-    }
 
-    const pgDb = this.db as PostgresDrizzleClient;
-    const rows = await pgDb
+        const rows = await this.db
       .select({ value: count() })
-      .from(pgTokens)
+      .from(emailVerificationTokens)
       .where(
         and(
-          eq(pgTokens.userId, userId),
-          isNull(pgTokens.usedAt),
-          gt(pgTokens.createdAt, sinceMs),
+          eq(emailVerificationTokens.userId, userId),
+          isNull(emailVerificationTokens.usedAt),
+          gt(emailVerificationTokens.createdAt, sinceMs),
         ),
       );
-    return rows[0]?.value ?? 0;
+    return coerceCount(rows[0]?.value);
   }
 }

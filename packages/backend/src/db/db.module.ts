@@ -24,7 +24,7 @@ interface DbClientRegistration {
       inject: [ConfigService],
       useFactory: (config: ConfigService): DbClientRegistration => {
         const handle = createDbClient(config.get("DATABASE_URL"));
-        const service = new DbService(handle.client, handle.dialect);
+        const service = new DbService(handle.client);
 
         return {
           service,
@@ -42,7 +42,7 @@ interface DbClientRegistration {
       provide: InstanceMetadataRepository,
       inject: [DbService],
       useFactory: (db: DbService): InstanceMetadataRepository =>
-        new InstanceMetadataRepository(db.getOrm(), db.dialect),
+        new InstanceMetadataRepository(db.getOrm()),
     },
   ],
   exports: [DbService, InstanceMetadataRepository],

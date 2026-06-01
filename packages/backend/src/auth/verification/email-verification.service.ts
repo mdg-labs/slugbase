@@ -51,7 +51,7 @@ export class EmailVerificationService {
     @Inject(ConfigService) private readonly config: ConfigService,
     @Inject(MAIL) private readonly mail: MailService,
   ) {
-    this.tokenRepo = new EmailVerificationTokenRepository(db.getOrm(), db.dialect);
+    this.tokenRepo = new EmailVerificationTokenRepository(db.getOrm());
   }
 
   /**

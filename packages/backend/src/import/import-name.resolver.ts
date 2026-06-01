@@ -1,19 +1,10 @@
 import { and, eq } from "drizzle-orm";
 
-import type {
-  DrizzleClient,
-  PostgresDrizzleClient,
-  SqliteDrizzleClient,
-} from "../db/dialect/create-client.js";
-import type { DbDialect } from "../db/dialect/dialect.js";
+import type { DrizzleClient } from "../db/dialect/create-client.js";
 import {
-  folders as sqliteFolders,
-  tags as sqliteTags,
+  folders,
+  tags,
 } from "../db/schema/index.js";
-import {
-  folders as pgFolders,
-  tags as pgTags,
-} from "../db/schema/pg-index.js";
 import { FolderRepository } from "../folders/folder.repository.js";
 import type { FolderRecord } from "../folders/folder.types.js";
 import { sanitizeFolderName } from "../folders/folder.validation.js";
@@ -28,12 +19,9 @@ export class ImportNameResolver {
   private readonly folderCache = new Map<string, FolderRecord>();
   private readonly tagCache = new Map<string, TagRecord>();
 
-  constructor(
-    private readonly db: DrizzleClient,
-    private readonly dialect: DbDialect,
-  ) {
-    this.folderRepo = new FolderRepository(db, dialect);
-    this.tagRepo = new TagRepository(db, dialect);
+  constructor(private readonly db: DrizzleClient) {
+    this.folderRepo = new FolderRepository(db);
+    this.tagRepo = new TagRepository(db);
   }
 
   async resolveFolder(
@@ -87,31 +75,15 @@ export class ImportNameResolver {
     userId: string,
     name: string,
   ): Promise<FolderRecord | null> {
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      const row = sqliteDb
-        .select()
-        .from(sqliteFolders)
-        .where(
-          and(
-            eq(sqliteFolders.workspaceId, workspaceId),
-            eq(sqliteFolders.userId, userId),
-            eq(sqliteFolders.name, name),
-          ),
-        )
-        .get();
-      return row ? this.folderRepo.findById(workspaceId, row.id) : null;
-    }
 
-    const pgDb = this.db as PostgresDrizzleClient;
-    const rows = await pgDb
+        const rows = await this.db
       .select()
-      .from(pgFolders)
+      .from(folders)
       .where(
         and(
-          eq(pgFolders.workspaceId, workspaceId),
-          eq(pgFolders.userId, userId),
-          eq(pgFolders.name, name),
+          eq(folders.workspaceId, workspaceId),
+          eq(folders.userId, userId),
+          eq(folders.name, name),
         ),
       )
       .limit(1);
@@ -124,31 +96,15 @@ export class ImportNameResolver {
     userId: string,
     name: string,
   ): Promise<TagRecord | null> {
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      const row = sqliteDb
-        .select()
-        .from(sqliteTags)
-        .where(
-          and(
-            eq(sqliteTags.workspaceId, workspaceId),
-            eq(sqliteTags.userId, userId),
-            eq(sqliteTags.name, name),
-          ),
-        )
-        .get();
-      return row ? this.tagRepo.findById(workspaceId, row.id) : null;
-    }
 
-    const pgDb = this.db as PostgresDrizzleClient;
-    const rows = await pgDb
+        const rows = await this.db
       .select()
-      .from(pgTags)
+      .from(tags)
       .where(
         and(
-          eq(pgTags.workspaceId, workspaceId),
-          eq(pgTags.userId, userId),
-          eq(pgTags.name, name),
+          eq(tags.workspaceId, workspaceId),
+          eq(tags.userId, userId),
+          eq(tags.name, name),
         ),
       )
       .limit(1);

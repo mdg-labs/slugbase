@@ -27,7 +27,7 @@ export class GoService {
     @Inject(DbService) db: DbService,
     @Inject(BookmarksService) private readonly bookmarks: BookmarksService,
   ) {
-    this.repo = new SlugRepository(db.getOrm(), db.dialect);
+    this.repo = new SlugRepository(db.getOrm());
   }
 
   validateSlugForGo(slug: string): void {

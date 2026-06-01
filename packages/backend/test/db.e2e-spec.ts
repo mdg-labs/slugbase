@@ -1,11 +1,9 @@
-import Database from "better-sqlite3";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { createDbClient } from "../src/db/dialect/create-client.js";
-import { resolveDialect } from "../src/db/dialect/dialect.js";
 import { InstanceMetadataRepository } from "../src/db/instance-metadata.repository.js";
-import { listMigrationHashes } from "../src/db/migrate/postgres-migrations.js";
+import { listMigrationHashes } from "../src/db/migrate/migration-utils.js";
 import { getMigrationsFolder, runMigrations } from "../src/db/migrate/run-migrations.js";
 import { createTestDatabase } from "./test-database.js";
 
@@ -29,19 +27,6 @@ describe("database migrations and repository (integration)", () => {
     expect(expectedHashes.length).toBeGreaterThan(0);
     expect(getMigrationsFolder()).toContain("migrations");
 
-    if (resolveDialect(databaseUrl) === "sqlite") {
-      const dbPath = databaseUrl.slice("sqlite://".length);
-      const native = new Database(dbPath);
-      const migrationRows = native
-        .prepare("SELECT id, hash FROM __drizzle_migrations")
-        .all() as Array<{ id: number; hash: string }>;
-      native.close();
-
-      expect(migrationRows.length).toBe(expectedHashes.length);
-      expect(migrationRows[0]?.hash).toBeTruthy();
-      return;
-    }
-
     const sql = postgres(databaseUrl, { max: 1 });
     const migrationRows = await sql<
       Array<{ id: number; hash: string }>
@@ -53,8 +38,8 @@ describe("database migrations and repository (integration)", () => {
   });
 
   it("creates instance_metadata and round-trips through the repository", async () => {
-    const { client, dialect, close } = createDbClient(databaseUrl);
-    const repository = new InstanceMetadataRepository(client, dialect);
+    const { client, close } = createDbClient(databaseUrl);
+    const repository = new InstanceMetadataRepository(client);
 
     await repository.set("setup.completed", "false");
     await expect(repository.get("setup.completed")).resolves.toBe("false");

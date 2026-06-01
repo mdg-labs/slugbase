@@ -89,9 +89,9 @@ export class InvitationsService {
     @Inject(ConfigService) private readonly config: ConfigService,
     @Inject(MAIL) private readonly mail: MailService,
   ) {
-    this.invitationRepo = new InvitationRepository(db.getOrm(), db.dialect);
-    this.workspaceRepo = new WorkspaceRepository(db.getOrm(), db.dialect);
-    this.memberRepo = new WorkspaceMemberRepository(db.getOrm(), db.dialect);
+    this.invitationRepo = new InvitationRepository(db.getOrm());
+    this.workspaceRepo = new WorkspaceRepository(db.getOrm());
+    this.memberRepo = new WorkspaceMemberRepository(db.getOrm());
   }
 
   /**

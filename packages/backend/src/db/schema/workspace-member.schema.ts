@@ -1,19 +1,13 @@
-import {
-  index,
-  integer,
-  sqliteTable,
-  text,
-  uniqueIndex,
-} from "drizzle-orm/sqlite-core";
+import { bigint, index, pgTable, text, uniqueIndex } from "drizzle-orm/pg-core";
 
-export const workspaceMembers = sqliteTable(
+export const workspaceMembers = pgTable(
   "workspace_members",
   {
     id: text("id").primaryKey(),
     workspaceId: text("workspace_id").notNull(),
     userId: text("user_id").notNull(),
     role: text("role").notNull(),
-    joinedAt: integer("joined_at", { mode: "timestamp_ms" }).notNull(),
+    joinedAt: bigint("joined_at", { mode: "number" }).notNull(),
   },
   (t) => [
     uniqueIndex("workspace_members_workspace_user_unique_idx").on(

@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
-import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { bigint, index, pgTable, text, uniqueIndex } from "drizzle-orm/pg-core";
 
-export const workspaceInvitations = sqliteTable(
+export const workspaceInvitations = pgTable(
   "workspace_invitations",
   {
     id: text("id").primaryKey(),
@@ -10,9 +10,9 @@ export const workspaceInvitations = sqliteTable(
     role: text("role").notNull(),
     tokenHash: text("token_hash").notNull(),
     invitedByUserId: text("invited_by_user_id").notNull(),
-    acceptedAt: integer("accepted_at", { mode: "timestamp_ms" }),
-    expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    acceptedAt: bigint("accepted_at", { mode: "number" }),
+    expiresAt: bigint("expires_at", { mode: "number" }).notNull(),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
   },
   (t) => [
     uniqueIndex("workspace_invitations_token_hash_unique_idx").on(t.tokenHash),

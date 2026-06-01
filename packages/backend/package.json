@@ -15,7 +15,8 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "test:unit": "vitest run --config vitest.config.ts src",
-    "test:integration": "vitest run --config vitest.config.ts test",
+    "test:integration": "bash ../../scripts/run-backend-integration-tests.sh",
+    "test:integration:run": "vitest run --config vitest.config.ts test --maxWorkers=1",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"
   },
@@ -29,7 +30,6 @@
     "@slugbase/shared-types": "workspace:^",
     "@types/cookie-parser": "^1.4.10",
     "argon2": "^0.44.0",
-    "better-sqlite3": "^11.10.0",
     "compression": "^1.8.1",
     "cookie-parser": "^1.4.7",
     "drizzle-orm": "^0.45.2",
@@ -47,7 +47,6 @@
   },
   "devDependencies": {
     "@nestjs/testing": "^11.1.3",
-    "@types/better-sqlite3": "^7.6.13",
     "@types/compression": "^1.8.1",
     "@types/express": "^5.0.3",
     "@types/node": "^25.9.1",

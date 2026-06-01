@@ -14,7 +14,7 @@ A bookmark manager with built-in URL shortening and keyboard-driven launcher —
 - **Backend:** **NestJS** — its DI/module system hosts the config-selected external interfaces (no deployment-mode branching) and generates OpenAPI; runs as a Node container on Fly.io — spec §19, §2.6, §11, §14.7
 - **Web client:** **React Router v7** (framework mode) — same app runs on Cloudflare Workers (hosted) and as Node inside the self-host image — spec §19, §14.7
 - **Marketing:** **Astro** (static, zero-JS-by-default) on Cloudflare Workers — spec §2.3, §19
-- **Persistence:** **Drizzle ORM** + **Drizzle Kit** behind the data-access abstraction; a thin dialect layer keeps embedded **SQLite** (self-hosted default) and **Neon Postgres `aws-eu-central-1`** (hosted) on one schema/migration history — spec §11.9, §16, decisions #32/#41
+- **Persistence:** **Drizzle ORM** + **Drizzle Kit** behind the data-access abstraction; **PostgreSQL** generates migrations and powers runtime (hosted Neon `aws-eu-central-1` + self-host Postgres). Embedded SQLite self-host is **deferred** (Fast-Follow) — spec §11.9, §16, decisions #32/#41
 - **Contracts/validation:** **Zod** + **ts-rest** in `shared-types`; generates the OpenAPI description — spec §18, §19
 - **UI:** **Tailwind** (token-bridged to `colors_and_type.css`) + **Radix** primitives + **cmdk** palette — spec §23, rule `11-design-system`
 - **Tests:** **Vitest** + **Supertest** (unit/integration) + **Playwright** (e2e) — spec §22.4

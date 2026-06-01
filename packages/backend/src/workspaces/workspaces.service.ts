@@ -24,8 +24,8 @@ export class WorkspacesService {
   private readonly memberRepo: WorkspaceMemberRepository;
 
   constructor(@Inject(DbService) private readonly db: DbService) {
-    this.workspaceRepo = new WorkspaceRepository(db.getOrm(), db.dialect);
-    this.memberRepo = new WorkspaceMemberRepository(db.getOrm(), db.dialect);
+    this.workspaceRepo = new WorkspaceRepository(db.getOrm());
+    this.memberRepo = new WorkspaceMemberRepository(db.getOrm());
   }
 
   async createWorkspace(

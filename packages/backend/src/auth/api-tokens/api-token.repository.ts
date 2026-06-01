@@ -2,14 +2,8 @@ import { randomUUID } from "node:crypto";
 
 import { and, eq } from "drizzle-orm";
 
-import type {
-  DrizzleClient,
-  PostgresDrizzleClient,
-  SqliteDrizzleClient,
-} from "../../db/dialect/create-client.js";
-import type { DbDialect } from "../../db/dialect/dialect.js";
-import { apiTokens as sqliteApiTokens } from "../../db/schema/index.js";
-import { apiTokens as pgApiTokens } from "../../db/schema/pg-index.js";
+import type { DrizzleClient } from "../../db/dialect/create-client.js";
+import { apiTokens } from "../../db/schema/index.js";
 import type { ApiTokenRecord, CreateApiTokenData } from "./api-token.types.js";
 
 function toRecord(row: {
@@ -46,44 +40,15 @@ function toRecord(row: {
 }
 
 export class ApiTokenRepository {
-  constructor(
-    private readonly db: DrizzleClient,
-    private readonly dialect: DbDialect,
-  ) {}
+  constructor(private readonly db: DrizzleClient) {}
 
   async create(data: CreateApiTokenData): Promise<ApiTokenRecord> {
     const id = randomUUID();
     const now = Date.now();
     const expiresAtMs = data.expiresAt?.getTime() ?? null;
 
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      sqliteDb
-        .insert(sqliteApiTokens)
-        .values({
-          id,
-          userId: data.userId,
-          name: data.name,
-          tokenHash: data.tokenHash,
-          tokenPrefix: data.tokenPrefix,
-          createdAt: new Date(now),
-          expiresAt: expiresAtMs != null ? new Date(expiresAtMs) : null,
-        })
-        .run();
-
-      const row = sqliteDb
-        .select()
-        .from(sqliteApiTokens)
-        .where(eq(sqliteApiTokens.id, id))
-        .get();
-
-      if (!row) throw new Error("Failed to create API token");
-      return toRecord(row);
-    }
-
-    const pgDb = this.db as PostgresDrizzleClient;
-    const rows = await pgDb
-      .insert(pgApiTokens)
+        const rows = await this.db
+      .insert(apiTokens)
       .values({
         id,
         userId: data.userId,
@@ -101,40 +66,20 @@ export class ApiTokenRepository {
   }
 
   async findAllByUserId(userId: string): Promise<ApiTokenRecord[]> {
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      const rows = sqliteDb
-        .select()
-        .from(sqliteApiTokens)
-        .where(eq(sqliteApiTokens.userId, userId))
-        .all();
-      return rows.map(toRecord);
-    }
 
-    const pgDb = this.db as PostgresDrizzleClient;
-    const rows = await pgDb
+        const rows = await this.db
       .select()
-      .from(pgApiTokens)
-      .where(eq(pgApiTokens.userId, userId));
+      .from(apiTokens)
+      .where(eq(apiTokens.userId, userId));
     return rows.map(toRecord);
   }
 
   async findByPrefix(tokenPrefix: string): Promise<ApiTokenRecord[]> {
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      const rows = sqliteDb
-        .select()
-        .from(sqliteApiTokens)
-        .where(eq(sqliteApiTokens.tokenPrefix, tokenPrefix))
-        .all();
-      return rows.map(toRecord);
-    }
 
-    const pgDb = this.db as PostgresDrizzleClient;
-    const rows = await pgDb
+        const rows = await this.db
       .select()
-      .from(pgApiTokens)
-      .where(eq(pgApiTokens.tokenPrefix, tokenPrefix));
+      .from(apiTokens)
+      .where(eq(apiTokens.tokenPrefix, tokenPrefix));
     return rows.map(toRecord);
   }
 
@@ -142,88 +87,39 @@ export class ApiTokenRepository {
     id: string,
     userId: string,
   ): Promise<ApiTokenRecord | null> {
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      const row = sqliteDb
-        .select()
-        .from(sqliteApiTokens)
-        .where(
-          and(
-            eq(sqliteApiTokens.id, id),
-            eq(sqliteApiTokens.userId, userId),
-          ),
-        )
-        .get();
-      return row ? toRecord(row) : null;
-    }
 
-    const pgDb = this.db as PostgresDrizzleClient;
-    const rows = await pgDb
+        const rows = await this.db
       .select()
-      .from(pgApiTokens)
+      .from(apiTokens)
       .where(
-        and(eq(pgApiTokens.id, id), eq(pgApiTokens.userId, userId)),
+        and(eq(apiTokens.id, id), eq(apiTokens.userId, userId)),
       )
       .limit(1);
     return rows[0] ? toRecord(rows[0]) : null;
   }
 
   async deleteByIdAndUserId(id: string, userId: string): Promise<boolean> {
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      sqliteDb
-        .delete(sqliteApiTokens)
-        .where(
-          and(
-            eq(sqliteApiTokens.id, id),
-            eq(sqliteApiTokens.userId, userId),
-          ),
-        )
-        .run();
-      return true;
-    }
 
-    const pgDb = this.db as PostgresDrizzleClient;
-    await pgDb
-      .delete(pgApiTokens)
-      .where(and(eq(pgApiTokens.id, id), eq(pgApiTokens.userId, userId)));
+        await this.db
+      .delete(apiTokens)
+      .where(and(eq(apiTokens.id, id), eq(apiTokens.userId, userId)));
     return true;
   }
 
   async touchLastUsed(id: string, nowMs: number): Promise<void> {
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      sqliteDb
-        .update(sqliteApiTokens)
-        .set({ lastUsedAt: new Date(nowMs) })
-        .where(eq(sqliteApiTokens.id, id))
-        .run();
-      return;
-    }
 
-    const pgDb = this.db as PostgresDrizzleClient;
-    await pgDb
-      .update(pgApiTokens)
+        await this.db
+      .update(apiTokens)
       .set({ lastUsedAt: nowMs })
-      .where(eq(pgApiTokens.id, id));
+      .where(eq(apiTokens.id, id));
   }
 
   async countByUserId(userId: string): Promise<number> {
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      const rows = sqliteDb
-        .select({ id: sqliteApiTokens.id })
-        .from(sqliteApiTokens)
-        .where(eq(sqliteApiTokens.userId, userId))
-        .all();
-      return rows.length;
-    }
 
-    const pgDb = this.db as PostgresDrizzleClient;
-    const rows = await pgDb
-      .select({ id: pgApiTokens.id })
-      .from(pgApiTokens)
-      .where(eq(pgApiTokens.userId, userId));
+        const rows = await this.db
+      .select({ id: apiTokens.id })
+      .from(apiTokens)
+      .where(eq(apiTokens.userId, userId));
     return rows.length;
   }
 }

@@ -42,7 +42,7 @@ export class TeamsService {
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(EntitlementsService) private readonly entitlements: EntitlementsService,
   ) {
-    this.teamRepo = new TeamRepository(db.getOrm(), db.dialect);
+    this.teamRepo = new TeamRepository(db.getOrm());
   }
 
   async createTeam(

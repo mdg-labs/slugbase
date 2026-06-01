@@ -2,14 +2,8 @@ import { randomUUID } from "node:crypto";
 
 import { eq, or } from "drizzle-orm";
 
-import type {
-  DrizzleClient,
-  PostgresDrizzleClient,
-  SqliteDrizzleClient,
-} from "../db/dialect/create-client.js";
-import type { DbDialect } from "../db/dialect/dialect.js";
-import { analyticsConsents as sqliteAnalyticsConsents } from "./analytics-consent.schema.js";
-import { analyticsConsents as pgAnalyticsConsents } from "./analytics-consent.schema.pg.js";
+import type { DrizzleClient } from "../db/dialect/create-client.js";
+import { analyticsConsents } from "./analytics-consent.schema.js";
 
 export interface AnalyticsConsentRecord {
   id: string;
@@ -43,43 +37,23 @@ function toRecord(row: {
 }
 
 export class AnalyticsConsentRepository {
-  constructor(
-    private readonly db: DrizzleClient,
-    private readonly dialect: DbDialect,
-  ) {}
+  constructor(private readonly db: DrizzleClient) {}
 
   async findByClientOrUser(
     clientId: string,
     userId?: string | null,
   ): Promise<AnalyticsConsentRecord | null> {
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      const conditions = userId
-        ? [
-            eq(sqliteAnalyticsConsents.clientId, clientId),
-            eq(sqliteAnalyticsConsents.userId, userId),
-          ]
-        : [eq(sqliteAnalyticsConsents.clientId, clientId)];
 
-      const row = sqliteDb
-        .select()
-        .from(sqliteAnalyticsConsents)
-        .where(or(...conditions))
-        .get();
-      return row ? toRecord(row) : null;
-    }
-
-    const pgDb = this.db as PostgresDrizzleClient;
-    const conditions = userId
+        const conditions = userId
       ? [
-          eq(pgAnalyticsConsents.clientId, clientId),
-          eq(pgAnalyticsConsents.userId, userId),
+          eq(analyticsConsents.clientId, clientId),
+          eq(analyticsConsents.userId, userId),
         ]
-      : [eq(pgAnalyticsConsents.clientId, clientId)];
+      : [eq(analyticsConsents.clientId, clientId)];
 
-    const rows = await pgDb
+    const rows = await this.db
       .select()
-      .from(pgAnalyticsConsents)
+      .from(analyticsConsents)
       .where(or(...conditions))
       .limit(1);
     const row = rows[0];
@@ -91,28 +65,15 @@ export class AnalyticsConsentRepository {
     const existing = await this.findByClientOrUser(data.clientId, data.userId);
 
     if (existing) {
-      if (this.dialect === "sqlite") {
-        const sqliteDb = this.db as SqliteDrizzleClient;
-        sqliteDb
-          .update(sqliteAnalyticsConsents)
-          .set({
-            granted: data.granted,
-            userId: data.userId ?? existing.userId,
-            updatedAt: new Date(nowMs),
-          })
-          .where(eq(sqliteAnalyticsConsents.id, existing.id))
-          .run();
-      } else {
-        const pgDb = this.db as PostgresDrizzleClient;
-        await pgDb
-          .update(pgAnalyticsConsents)
+
+    await this.db
+          .update(analyticsConsents)
           .set({
             granted: data.granted,
             userId: data.userId ?? existing.userId,
             updatedAt: nowMs,
           })
-          .where(eq(pgAnalyticsConsents.id, existing.id));
-      }
+          .where(eq(analyticsConsents.id, existing.id));
 
       return {
         ...existing,
@@ -123,28 +84,14 @@ export class AnalyticsConsentRepository {
     }
 
     const id = randomUUID();
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      sqliteDb
-        .insert(sqliteAnalyticsConsents)
-        .values({
-          id,
-          clientId: data.clientId,
-          userId: data.userId ?? null,
-          granted: data.granted,
-          updatedAt: new Date(nowMs),
-        })
-        .run();
-    } else {
-      const pgDb = this.db as PostgresDrizzleClient;
-      await pgDb.insert(pgAnalyticsConsents).values({
+
+    await this.db.insert(analyticsConsents).values({
         id,
         clientId: data.clientId,
         userId: data.userId ?? null,
         granted: data.granted,
         updatedAt: nowMs,
       });
-    }
 
     return {
       id,

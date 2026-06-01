@@ -58,7 +58,7 @@ describe("Invitations (integration)", () => {
     invitationsService = moduleRef.get(InvitationsService);
     const sessions = moduleRef.get(SessionService);
     const db = moduleRef.get(DbService);
-    invitationRepo = new InvitationRepository(db.getOrm(), db.dialect);
+    invitationRepo = new InvitationRepository(db.getOrm());
 
     const owner = await accountsService.registerAccount({
       email: "invite-owner@example.com",

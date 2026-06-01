@@ -1,11 +1,13 @@
 import {
+  bigint,
+  boolean,
   integer,
-  sqliteTable,
+  pgTable,
   text,
   uniqueIndex,
-} from "drizzle-orm/sqlite-core";
+} from "drizzle-orm/pg-core";
 
-export const workspaces = sqliteTable(
+export const workspaces = pgTable(
   "workspaces",
   {
     id: text("id").primaryKey(),
@@ -13,18 +15,14 @@ export const workspaces = sqliteTable(
     slug: text("slug").notNull(),
     plan: text("plan").notNull().default("free"),
     planSeats: integer("plan_seats"),
-    planArchived: integer("plan_archived", { mode: "boolean" })
-      .notNull()
-      .default(false),
+    planArchived: boolean("plan_archived").notNull().default(false),
     billingCustomerId: text("billing_customer_id"),
     billingSubscriptionId: text("billing_subscription_id"),
     billingStatus: text("billing_status"),
-    billingPeriodEnd: integer("billing_period_end", { mode: "timestamp_ms" }),
-    permanentPersonal: integer("permanent_personal", { mode: "boolean" })
-      .notNull()
-      .default(false),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
-    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+    billingPeriodEnd: bigint("billing_period_end", { mode: "number" }),
+    permanentPersonal: boolean("permanent_personal").notNull().default(false),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
+    updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
   },
   (t) => [uniqueIndex("workspaces_slug_unique_idx").on(t.slug)],
 );

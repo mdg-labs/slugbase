@@ -81,13 +81,9 @@ jobs:
         run: pnpm audit --audit-level=high
 
   integration:
-    name: CI · Integration (${{ matrix.db_engine }})
+    name: CI · Integration (postgres)
     needs: ci
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        db_engine: [sqlite, postgres]
     services:
       postgres:
         image: postgres:16-alpine
@@ -131,7 +127,8 @@ jobs:
 
       - name: Integration tests
         env:
-          DATABASE_URL: ${{ matrix.db_engine == 'postgres' && 'postgresql://slugbase:slugbase@localhost:5432/slugbase_test' || '' }}
+          DATABASE_URL: postgresql://slugbase:slugbase@localhost:5432/slugbase_test
+          SLUGBASE_INTEGRATION_NO_DOCKER: "1"
         run: pnpm test:integration
 
   # ── Staging deploy (push to staging only, after CI checks pass) ─────────────

@@ -1,12 +1,6 @@
-import {
-  index,
-  integer,
-  sqliteTable,
-  text,
-  uniqueIndex,
-} from "drizzle-orm/sqlite-core";
+import { bigint, index, pgTable, text, uniqueIndex } from "drizzle-orm/pg-core";
 
-export const oidcAccounts = sqliteTable(
+export const oidcAccounts = pgTable(
   "oidc_accounts",
   {
     id: text("id").primaryKey(),
@@ -16,7 +10,7 @@ export const oidcAccounts = sqliteTable(
     providerId: text("provider_id").notNull(),
     /** The OIDC `sub` claim from the IdP */
     subject: text("subject").notNull(),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
   },
   (t) => [
     uniqueIndex("oidc_accounts_provider_subject_unique_idx").on(

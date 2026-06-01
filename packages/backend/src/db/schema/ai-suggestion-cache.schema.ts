@@ -1,16 +1,12 @@
 import {
-  integer,
-  real,
-  sqliteTable,
+  bigint,
+  doublePrecision,
+  pgTable,
   text,
   uniqueIndex,
-} from "drizzle-orm/sqlite-core";
+} from "drizzle-orm/pg-core";
 
-/**
- * Cached AI bookmark-field suggestions (spec §11.2, §16).
- * Keyed by workspace, user, canonical URL, and output language; TTL def §5 (30d).
- */
-export const aiSuggestionCache = sqliteTable(
+export const aiSuggestionCache = pgTable(
   "ai_suggestion_cache",
   {
     id: text("id").primaryKey(),
@@ -20,10 +16,10 @@ export const aiSuggestionCache = sqliteTable(
     outputLanguage: text("output_language").notNull(),
     title: text("title").notNull(),
     slug: text("slug").notNull(),
-    tags: text("tags", { mode: "json" }).$type<string[]>().notNull(),
+    tags: text("tags").notNull(),
     detectedLanguage: text("detected_language").notNull(),
-    confidence: real("confidence").notNull(),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    confidence: doublePrecision("confidence").notNull(),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
   },
   (t) => [
     uniqueIndex("ai_suggestion_cache_key_unique_idx").on(

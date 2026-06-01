@@ -4,20 +4,11 @@ import { and, eq } from "drizzle-orm";
 
 import { bookmarkSharedReadCondition } from "../common/authz/authz-sql.js";
 
-import type {
-  DrizzleClient,
-  PostgresDrizzleClient,
-  SqliteDrizzleClient,
-} from "../db/dialect/create-client.js";
-import type { DbDialect } from "../db/dialect/dialect.js";
+import type { DrizzleClient } from "../db/dialect/create-client.js";
 import {
-  bookmarks as sqliteBookmarks,
-  slugPreferences as sqliteSlugPreferences,
+  bookmarks,
+  slugPreferences,
 } from "../db/schema/index.js";
-import {
-  bookmarks as pgBookmarks,
-  slugPreferences as pgSlugPreferences,
-} from "../db/schema/pg-index.js";
 import type { BookmarkRecord } from "../bookmarks/bookmark.types.js";
 import type {
   AccessibleForwardingMatch,
@@ -86,46 +77,27 @@ function toSlugPreferenceRecord(row: {
 }
 
 export class SlugRepository {
-  constructor(
-    private readonly db: DrizzleClient,
-    private readonly dialect: DbDialect,
-  ) {}
+  constructor(private readonly db: DrizzleClient) {}
 
   /**
-   * Bookmarks the user can reach via /go for the given slug (spec §8.2).
+   * bookmarks the user can reach via /go for the given slug (spec §8.2).
    */
   async findAccessibleForwardingMatches(
     workspaceId: string,
     userId: string,
     slug: string,
   ): Promise<AccessibleForwardingMatch[]> {
-    if (this.dialect === "sqlite") {
-      const rows = (this.db as SqliteDrizzleClient)
-        .select()
-        .from(sqliteBookmarks)
-        .where(
-          and(
-            eq(sqliteBookmarks.workspaceId, workspaceId),
-            eq(sqliteBookmarks.slug, slug),
-            eq(sqliteBookmarks.forwardingEnabled, true),
-            eq(sqliteBookmarks.planArchived, false),
-            bookmarkSharedReadCondition(workspaceId, userId, sqliteBookmarks),
-          ),
-        )
-        .all();
-      return rows.map(toBookmarkRecord);
-    }
 
-    const rows = await (this.db as PostgresDrizzleClient)
+    const rows = await this.db
       .select()
-      .from(pgBookmarks)
+      .from(bookmarks)
       .where(
         and(
-          eq(pgBookmarks.workspaceId, workspaceId),
-          eq(pgBookmarks.slug, slug),
-          eq(pgBookmarks.forwardingEnabled, true),
-          eq(pgBookmarks.planArchived, false),
-          bookmarkSharedReadCondition(workspaceId, userId, pgBookmarks),
+          eq(bookmarks.workspaceId, workspaceId),
+          eq(bookmarks.slug, slug),
+          eq(bookmarks.forwardingEnabled, true),
+          eq(bookmarks.planArchived, false),
+          bookmarkSharedReadCondition(workspaceId, userId, bookmarks),
         ),
       );
     return rows.map(toBookmarkRecord);
@@ -136,29 +108,15 @@ export class SlugRepository {
     userId: string,
     slug: string,
   ): Promise<SlugPreferenceRecord | null> {
-    if (this.dialect === "sqlite") {
-      const row = (this.db as SqliteDrizzleClient)
-        .select()
-        .from(sqliteSlugPreferences)
-        .where(
-          and(
-            eq(sqliteSlugPreferences.workspaceId, workspaceId),
-            eq(sqliteSlugPreferences.userId, userId),
-            eq(sqliteSlugPreferences.slug, slug),
-          ),
-        )
-        .get();
-      return row ? toSlugPreferenceRecord(row) : null;
-    }
 
-    const rows = await (this.db as PostgresDrizzleClient)
+    const rows = await this.db
       .select()
-      .from(pgSlugPreferences)
+      .from(slugPreferences)
       .where(
         and(
-          eq(pgSlugPreferences.workspaceId, workspaceId),
-          eq(pgSlugPreferences.userId, userId),
-          eq(pgSlugPreferences.slug, slug),
+          eq(slugPreferences.workspaceId, workspaceId),
+          eq(slugPreferences.userId, userId),
+          eq(slugPreferences.slug, slug),
         ),
       )
       .limit(1);
@@ -169,27 +127,14 @@ export class SlugRepository {
     workspaceId: string,
     userId: string,
   ): Promise<SlugPreferenceRecord[]> {
-    if (this.dialect === "sqlite") {
-      const rows = (this.db as SqliteDrizzleClient)
-        .select()
-        .from(sqliteSlugPreferences)
-        .where(
-          and(
-            eq(sqliteSlugPreferences.workspaceId, workspaceId),
-            eq(sqliteSlugPreferences.userId, userId),
-          ),
-        )
-        .all();
-      return rows.map(toSlugPreferenceRecord);
-    }
 
-    const rows = await (this.db as PostgresDrizzleClient)
+    const rows = await this.db
       .select()
-      .from(pgSlugPreferences)
+      .from(slugPreferences)
       .where(
         and(
-          eq(pgSlugPreferences.workspaceId, workspaceId),
-          eq(pgSlugPreferences.userId, userId),
+          eq(slugPreferences.workspaceId, workspaceId),
+          eq(slugPreferences.userId, userId),
         ),
       );
     return rows.map(toSlugPreferenceRecord);
@@ -219,30 +164,17 @@ export class SlugRepository {
     userId: string,
     preferenceId: string,
   ): Promise<boolean> {
-    if (this.dialect === "sqlite") {
-      const result = (this.db as SqliteDrizzleClient)
-        .delete(sqliteSlugPreferences)
-        .where(
-          and(
-            eq(sqliteSlugPreferences.id, preferenceId),
-            eq(sqliteSlugPreferences.workspaceId, workspaceId),
-            eq(sqliteSlugPreferences.userId, userId),
-          ),
-        )
-        .run();
-      return result.changes > 0;
-    }
 
-    const rows = await (this.db as PostgresDrizzleClient)
-      .delete(pgSlugPreferences)
+    const rows = await this.db
+      .delete(slugPreferences)
       .where(
         and(
-          eq(pgSlugPreferences.id, preferenceId),
-          eq(pgSlugPreferences.workspaceId, workspaceId),
-          eq(pgSlugPreferences.userId, userId),
+          eq(slugPreferences.id, preferenceId),
+          eq(slugPreferences.workspaceId, workspaceId),
+          eq(slugPreferences.userId, userId),
         ),
       )
-      .returning({ id: pgSlugPreferences.id });
+      .returning({ id: slugPreferences.id });
     return rows.length > 0;
   }
 
@@ -252,32 +184,8 @@ export class SlugRepository {
     const id = randomUUID();
     const nowMs = Date.now();
 
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      sqliteDb
-        .insert(sqliteSlugPreferences)
-        .values({
-          id,
-          workspaceId: data.workspaceId,
-          userId: data.userId,
-          slug: data.slug,
-          bookmarkId: data.bookmarkId,
-          createdAt: new Date(nowMs),
-        })
-        .run();
-
-      const row = sqliteDb
-        .select()
-        .from(sqliteSlugPreferences)
-        .where(eq(sqliteSlugPreferences.id, id))
-        .get();
-      if (!row) throw new Error("Failed to create slug preference");
-      return toSlugPreferenceRecord(row);
-    }
-
-    const pgDb = this.db as PostgresDrizzleClient;
-    const rows = await pgDb
-      .insert(pgSlugPreferences)
+        const rows = await this.db
+      .insert(slugPreferences)
       .values({
         id,
         workspaceId: data.workspaceId,
@@ -298,37 +206,15 @@ export class SlugRepository {
     preferenceId: string,
     bookmarkId: string,
   ): Promise<SlugPreferenceRecord> {
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      sqliteDb
-        .update(sqliteSlugPreferences)
-        .set({ bookmarkId })
-        .where(
-          and(
-            eq(sqliteSlugPreferences.id, preferenceId),
-            eq(sqliteSlugPreferences.workspaceId, workspaceId),
-            eq(sqliteSlugPreferences.userId, userId),
-          ),
-        )
-        .run();
 
-      const row = sqliteDb
-        .select()
-        .from(sqliteSlugPreferences)
-        .where(eq(sqliteSlugPreferences.id, preferenceId))
-        .get();
-      if (!row) throw new Error("Failed to update slug preference");
-      return toSlugPreferenceRecord(row);
-    }
-
-    const rows = await (this.db as PostgresDrizzleClient)
-      .update(pgSlugPreferences)
+    const rows = await this.db
+      .update(slugPreferences)
       .set({ bookmarkId })
       .where(
         and(
-          eq(pgSlugPreferences.id, preferenceId),
-          eq(pgSlugPreferences.workspaceId, workspaceId),
-          eq(pgSlugPreferences.userId, userId),
+          eq(slugPreferences.id, preferenceId),
+          eq(slugPreferences.workspaceId, workspaceId),
+          eq(slugPreferences.userId, userId),
         ),
       )
       .returning();

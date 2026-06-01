@@ -1,12 +1,6 @@
-import {
-  index,
-  integer,
-  sqliteTable,
-  text,
-  uniqueIndex,
-} from "drizzle-orm/sqlite-core";
+import { bigint, boolean, index, pgTable, text, uniqueIndex } from "drizzle-orm/pg-core";
 
-export const userAccounts = sqliteTable(
+export const userAccounts = pgTable(
   "user_accounts",
   {
     id: text("id").primaryKey(),
@@ -16,19 +10,13 @@ export const userAccounts = sqliteTable(
     language: text("language").notNull().default("en"),
     theme: text("theme").notNull().default("auto"),
     accentColor: text("accent_color"),
-    isInstanceAdmin: integer("is_instance_admin", { mode: "boolean" })
-      .notNull()
-      .default(false),
+    isInstanceAdmin: boolean("is_instance_admin").notNull().default(false),
     mfaState: text("mfa_state").notNull().default("not_enrolled"),
     mfaTotpSecretEncrypted: text("mfa_totp_secret_encrypted"),
-    aiOptOut: integer("ai_opt_out", { mode: "boolean" })
-      .notNull()
-      .default(false),
-    emailVerified: integer("email_verified", { mode: "boolean" })
-      .notNull()
-      .default(false),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
-    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+    aiOptOut: boolean("ai_opt_out").notNull().default(false),
+    emailVerified: boolean("email_verified").notNull().default(false),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
+    updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
   },
   (t) => [
     uniqueIndex("user_accounts_email_unique_idx").on(t.email),

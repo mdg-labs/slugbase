@@ -1,20 +1,20 @@
 import {
+  bigint,
   index,
-  integer,
-  sqliteTable,
+  pgTable,
   text,
   uniqueIndex,
-} from "drizzle-orm/sqlite-core";
+} from "drizzle-orm/pg-core";
 
 /** Many-to-many link between bookmarks and tags, workspace-scoped (spec §16). */
-export const bookmarkTags = sqliteTable(
+export const bookmarkTags = pgTable(
   "bookmark_tags",
   {
     id: text("id").primaryKey(),
     workspaceId: text("workspace_id").notNull(),
     tagId: text("tag_id").notNull(),
     bookmarkId: text("bookmark_id").notNull(),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
   },
   (t) => [
     uniqueIndex("bookmark_tags_workspace_tag_bookmark_unique_idx").on(

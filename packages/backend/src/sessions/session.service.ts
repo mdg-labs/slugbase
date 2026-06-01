@@ -19,7 +19,7 @@ export class SessionService {
     @Inject(DbService) private readonly db: DbService,
     @Inject(ConfigService) private readonly config: ConfigService,
   ) {
-    this.repo = new SessionRepository(db.getOrm(), db.dialect);
+    this.repo = new SessionRepository(db.getOrm());
   }
 
   private get sessionSecret(): string {

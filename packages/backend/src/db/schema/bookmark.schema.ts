@@ -1,13 +1,15 @@
 import { sql } from "drizzle-orm";
 import {
+  bigint,
+  boolean,
   index,
   integer,
-  sqliteTable,
+  pgTable,
   text,
   uniqueIndex,
-} from "drizzle-orm/sqlite-core";
+} from "drizzle-orm/pg-core";
 
-export const bookmarks = sqliteTable(
+export const bookmarks = pgTable(
   "bookmarks",
   {
     id: text("id").primaryKey(),
@@ -16,17 +18,13 @@ export const bookmarks = sqliteTable(
     title: text("title").notNull(),
     url: text("url").notNull(),
     slug: text("slug"),
-    forwardingEnabled: integer("forwarding_enabled", { mode: "boolean" })
-      .notNull()
-      .default(false),
-    pinned: integer("pinned", { mode: "boolean" }).notNull().default(false),
-    planArchived: integer("plan_archived", { mode: "boolean" })
-      .notNull()
-      .default(false),
+    forwardingEnabled: boolean("forwarding_enabled").notNull().default(false),
+    pinned: boolean("pinned").notNull().default(false),
+    planArchived: boolean("plan_archived").notNull().default(false),
     accessCount: integer("access_count").notNull().default(0),
-    lastAccessedAt: integer("last_accessed_at", { mode: "timestamp_ms" }),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
-    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+    lastAccessedAt: bigint("last_accessed_at", { mode: "number" }),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
+    updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
   },
   (t) => [
     index("bookmarks_workspace_id_idx").on(t.workspaceId),

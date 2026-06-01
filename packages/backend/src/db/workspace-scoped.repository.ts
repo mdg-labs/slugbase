@@ -1,7 +1,6 @@
 import { ForbiddenException, NotFoundException } from "@nestjs/common";
 
 import type { DrizzleClient } from "./dialect/create-client.js";
-import type { DbDialect } from "./dialect/dialect.js";
 
 /**
  * Marker interface for any DB record that belongs to a workspace.
@@ -43,10 +42,7 @@ export interface WorkspaceOwned {
  * Spec §5.9, §11.9; security baseline rule §03.
  */
 export abstract class WorkspaceScopedRepository<T extends WorkspaceOwned> {
-  protected constructor(
-    protected readonly db: DrizzleClient,
-    protected readonly dialect: DbDialect,
-  ) {}
+  protected constructor(protected readonly db: DrizzleClient) {}
 
   /**
    * Verifies that a record returned from the DB belongs to the given workspace.

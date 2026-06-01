@@ -1,15 +1,10 @@
+import { coerceCount } from "../db/coerce-count.js";
 import { randomUUID } from "node:crypto";
 
 import { count, eq } from "drizzle-orm";
 
-import type {
-  DrizzleClient,
-  PostgresDrizzleClient,
-  SqliteDrizzleClient,
-} from "../db/dialect/create-client.js";
-import type { DbDialect } from "../db/dialect/dialect.js";
-import { userAccounts as sqliteUserAccounts } from "../db/schema/index.js";
-import { userAccounts as pgUserAccounts } from "../db/schema/pg-index.js";
+import type { DrizzleClient } from "../db/dialect/create-client.js";
+import { userAccounts } from "../db/schema/index.js";
 import type {
   AccountRecord,
   CreateAccountData,
@@ -59,10 +54,7 @@ function toRecord(row: {
 }
 
 export class AccountRepository {
-  constructor(
-    private readonly db: DrizzleClient,
-    private readonly dialect: DbDialect,
-  ) {}
+  constructor(private readonly db: DrizzleClient) {}
 
   async create(data: CreateAccountData): Promise<AccountRecord> {
     const id = randomUUID();
@@ -81,30 +73,8 @@ export class AccountRepository {
       emailVerified: false,
     };
 
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      sqliteDb
-        .insert(sqliteUserAccounts)
-        .values({
-          ...values,
-          createdAt: new Date(now),
-          updatedAt: new Date(now),
-        })
-        .run();
-
-      const row = sqliteDb
-        .select()
-        .from(sqliteUserAccounts)
-        .where(eq(sqliteUserAccounts.id, id))
-        .get();
-
-      if (!row) throw new Error("Failed to create account");
-      return toRecord(row);
-    }
-
-    const pgDb = this.db as PostgresDrizzleClient;
-    const rows = await pgDb
-      .insert(pgUserAccounts)
+        const rows = await this.db
+      .insert(userAccounts)
       .values({ ...values, createdAt: now, updatedAt: now })
       .returning();
 
@@ -114,22 +84,11 @@ export class AccountRepository {
   }
 
   async findByEmail(email: string): Promise<AccountRecord | null> {
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      const row = sqliteDb
-        .select()
-        .from(sqliteUserAccounts)
-        .where(eq(sqliteUserAccounts.email, email))
-        .get();
-      if (!row) return null;
-      return toRecord(row);
-    }
 
-    const pgDb = this.db as PostgresDrizzleClient;
-    const rows = await pgDb
+        const rows = await this.db
       .select()
-      .from(pgUserAccounts)
-      .where(eq(pgUserAccounts.email, email))
+      .from(userAccounts)
+      .where(eq(userAccounts.email, email))
       .limit(1);
     const row = rows[0];
     if (!row) return null;
@@ -137,22 +96,11 @@ export class AccountRepository {
   }
 
   async findById(id: string): Promise<AccountRecord | null> {
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      const row = sqliteDb
-        .select()
-        .from(sqliteUserAccounts)
-        .where(eq(sqliteUserAccounts.id, id))
-        .get();
-      if (!row) return null;
-      return toRecord(row);
-    }
 
-    const pgDb = this.db as PostgresDrizzleClient;
-    const rows = await pgDb
+        const rows = await this.db
       .select()
-      .from(pgUserAccounts)
-      .where(eq(pgUserAccounts.id, id))
+      .from(userAccounts)
+      .where(eq(userAccounts.id, id))
       .limit(1);
     const row = rows[0];
     if (!row) return null;
@@ -160,18 +108,9 @@ export class AccountRepository {
   }
 
   async countAll(): Promise<number> {
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      const row = sqliteDb
-        .select({ value: count() })
-        .from(sqliteUserAccounts)
-        .get();
-      return row?.value ?? 0;
-    }
 
-    const pgDb = this.db as PostgresDrizzleClient;
-    const rows = await pgDb.select({ value: count() }).from(pgUserAccounts);
-    return rows[0]?.value ?? 0;
+        const rows = await this.db.select({ value: count() }).from(userAccounts);
+    return coerceCount(rows[0]?.value);
   }
 
   async updateMfa(
@@ -180,81 +119,37 @@ export class AccountRepository {
   ): Promise<void> {
     const updatedAt = Date.now();
 
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      sqliteDb
-        .update(sqliteUserAccounts)
-        .set({ ...patch, updatedAt: new Date(updatedAt) })
-        .where(eq(sqliteUserAccounts.id, id))
-        .run();
-      return;
-    }
-
-    const pgDb = this.db as PostgresDrizzleClient;
-    await pgDb
-      .update(pgUserAccounts)
+        await this.db
+      .update(userAccounts)
       .set({ ...patch, updatedAt })
-      .where(eq(pgUserAccounts.id, id));
+      .where(eq(userAccounts.id, id));
   }
 
   async updateEmailVerified(id: string, emailVerified: boolean): Promise<void> {
     const updatedAt = Date.now();
 
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      sqliteDb
-        .update(sqliteUserAccounts)
-        .set({ emailVerified, updatedAt: new Date(updatedAt) })
-        .where(eq(sqliteUserAccounts.id, id))
-        .run();
-      return;
-    }
-
-    const pgDb = this.db as PostgresDrizzleClient;
-    await pgDb
-      .update(pgUserAccounts)
+        await this.db
+      .update(userAccounts)
       .set({ emailVerified, updatedAt })
-      .where(eq(pgUserAccounts.id, id));
+      .where(eq(userAccounts.id, id));
   }
 
   async updatePasswordHash(id: string, passwordHash: string): Promise<void> {
     const updatedAt = Date.now();
 
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      sqliteDb
-        .update(sqliteUserAccounts)
-        .set({ passwordHash, updatedAt: new Date(updatedAt) })
-        .where(eq(sqliteUserAccounts.id, id))
-        .run();
-      return;
-    }
-
-    const pgDb = this.db as PostgresDrizzleClient;
-    await pgDb
-      .update(pgUserAccounts)
+        await this.db
+      .update(userAccounts)
       .set({ passwordHash, updatedAt })
-      .where(eq(pgUserAccounts.id, id));
+      .where(eq(userAccounts.id, id));
   }
 
   async updateProfile(id: string, patch: { name: string }): Promise<void> {
     const updatedAt = Date.now();
 
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      sqliteDb
-        .update(sqliteUserAccounts)
-        .set({ name: patch.name, updatedAt: new Date(updatedAt) })
-        .where(eq(sqliteUserAccounts.id, id))
-        .run();
-      return;
-    }
-
-    const pgDb = this.db as PostgresDrizzleClient;
-    await pgDb
-      .update(pgUserAccounts)
+        await this.db
+      .update(userAccounts)
       .set({ name: patch.name, updatedAt })
-      .where(eq(pgUserAccounts.id, id));
+      .where(eq(userAccounts.id, id));
   }
 
   async updatePreferences(
@@ -274,21 +169,10 @@ export class AccountRepository {
     if (patch.accentColor !== undefined) values["accentColor"] = patch.accentColor;
     if (patch.aiOptOut !== undefined) values["aiOptOut"] = patch.aiOptOut;
 
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      sqliteDb
-        .update(sqliteUserAccounts)
-        .set({ ...values, updatedAt: new Date(updatedAt) })
-        .where(eq(sqliteUserAccounts.id, id))
-        .run();
-      return;
-    }
-
-    const pgDb = this.db as PostgresDrizzleClient;
-    await pgDb
-      .update(pgUserAccounts)
+        await this.db
+      .update(userAccounts)
       .set({ ...values, updatedAt })
-      .where(eq(pgUserAccounts.id, id));
+      .where(eq(userAccounts.id, id));
   }
 
   /**
@@ -314,30 +198,8 @@ export class AccountRepository {
       emailVerified: data.emailVerified,
     };
 
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      sqliteDb
-        .insert(sqliteUserAccounts)
-        .values({
-          ...values,
-          createdAt: new Date(now),
-          updatedAt: new Date(now),
-        })
-        .run();
-
-      const row = sqliteDb
-        .select()
-        .from(sqliteUserAccounts)
-        .where(eq(sqliteUserAccounts.id, id))
-        .get();
-
-      if (!row) throw new Error("Failed to create OIDC account");
-      return toRecord(row);
-    }
-
-    const pgDb = this.db as PostgresDrizzleClient;
-    const rows = await pgDb
-      .insert(pgUserAccounts)
+        const rows = await this.db
+      .insert(userAccounts)
       .values({ ...values, createdAt: now, updatedAt: now })
       .returning();
 

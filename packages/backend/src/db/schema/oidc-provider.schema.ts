@@ -1,12 +1,7 @@
-import {
-  index,
-  integer,
-  sqliteTable,
-  text,
-  uniqueIndex,
-} from "drizzle-orm/sqlite-core";
+import { boolean, index, pgTable, text, uniqueIndex } from "drizzle-orm/pg-core";
+import { bigint } from "drizzle-orm/pg-core";
 
-export const oidcProviders = sqliteTable(
+export const oidcProviders = pgTable(
   "oidc_providers",
   {
     id: text("id").primaryKey(),
@@ -17,8 +12,8 @@ export const oidcProviders = sqliteTable(
     clientSecretEncrypted: text("client_secret_encrypted").notNull(),
     /** Space-separated list of OIDC scopes, e.g. "openid email profile" */
     scopes: text("scopes").notNull().default("openid email profile"),
-    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
   },
   (t) => [
     index("oidc_providers_enabled_idx").on(t.enabled),

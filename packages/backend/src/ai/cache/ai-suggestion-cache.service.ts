@@ -17,7 +17,7 @@ export class AiSuggestionCacheService {
   private readonly repository: AiSuggestionCacheRepository;
 
   constructor(@Inject(DbService) db: DbService) {
-    this.repository = new AiSuggestionCacheRepository(db.getOrm(), db.dialect);
+    this.repository = new AiSuggestionCacheRepository(db.getOrm());
   }
 
   /**

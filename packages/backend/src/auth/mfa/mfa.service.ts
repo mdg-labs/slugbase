@@ -30,8 +30,8 @@ export class MfaService {
     @Inject(CRYPTO) private readonly crypto: CryptoService,
     @Inject(ConfigService) private readonly config: ConfigService,
   ) {
-    this.accountRepo = new AccountRepository(db.getOrm(), db.dialect);
-    this.backupCodeRepo = new MfaBackupCodeRepository(db.getOrm(), db.dialect);
+    this.accountRepo = new AccountRepository(db.getOrm());
+    this.backupCodeRepo = new MfaBackupCodeRepository(db.getOrm());
   }
 
   private get issuer(): string {

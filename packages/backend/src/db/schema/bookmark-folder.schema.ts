@@ -1,20 +1,20 @@
 import {
+  bigint,
   index,
-  integer,
-  sqliteTable,
+  pgTable,
   text,
   uniqueIndex,
-} from "drizzle-orm/sqlite-core";
+} from "drizzle-orm/pg-core";
 
 /** Many-to-many link between bookmarks and folders, workspace-scoped (spec §16). */
-export const bookmarkFolders = sqliteTable(
+export const bookmarkFolders = pgTable(
   "bookmark_folders",
   {
     id: text("id").primaryKey(),
     workspaceId: text("workspace_id").notNull(),
     folderId: text("folder_id").notNull(),
     bookmarkId: text("bookmark_id").notNull(),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
   },
   (t) => [
     uniqueIndex("bookmark_folders_workspace_folder_bookmark_unique_idx").on(

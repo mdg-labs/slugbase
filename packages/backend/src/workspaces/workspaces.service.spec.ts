@@ -69,7 +69,7 @@ describe("WorkspacesService — slug uniqueness", () => {
     const { WorkspacesService } = await import("./workspaces.service.js");
 
     const existingWorkspace = makeWorkspace({ slug: "taken-slug" });
-    const mockDb = { getOrm: () => ({}), dialect: "sqlite" as const };
+    const mockDb = { getOrm: () => ({}) };
 
     const service = new WorkspacesService(mockDb as never);
     const internals = service as unknown as ServiceInternals;
@@ -85,7 +85,7 @@ describe("WorkspacesService — slug uniqueness", () => {
     const { WorkspacesService } = await import("./workspaces.service.js");
 
     const newWorkspace = makeWorkspace({ slug: "new-slug" });
-    const mockDb = { getOrm: () => ({}), dialect: "sqlite" as const };
+    const mockDb = { getOrm: () => ({}) };
 
     const service = new WorkspacesService(mockDb as never);
     const internals = service as unknown as ServiceInternals;
@@ -108,7 +108,7 @@ describe("WorkspacesService — role checks", () => {
   it("requireWorkspaceRole throws ForbiddenException when user is not a member", async () => {
     const { WorkspacesService } = await import("./workspaces.service.js");
 
-    const mockDb = { getOrm: () => ({}), dialect: "sqlite" as const };
+    const mockDb = { getOrm: () => ({}) };
     const service = new WorkspacesService(mockDb as never);
     const internals = service as unknown as ServiceInternals;
 
@@ -122,7 +122,7 @@ describe("WorkspacesService — role checks", () => {
   it("requireWorkspaceRole throws ForbiddenException when MEMBER requires ADMIN", async () => {
     const { WorkspacesService } = await import("./workspaces.service.js");
 
-    const mockDb = { getOrm: () => ({}), dialect: "sqlite" as const };
+    const mockDb = { getOrm: () => ({}) };
     const service = new WorkspacesService(mockDb as never);
     const internals = service as unknown as ServiceInternals;
 
@@ -138,7 +138,7 @@ describe("WorkspacesService — role checks", () => {
   it("requireWorkspaceRole passes when OWNER satisfies OWNER requirement", async () => {
     const { WorkspacesService } = await import("./workspaces.service.js");
 
-    const mockDb = { getOrm: () => ({}), dialect: "sqlite" as const };
+    const mockDb = { getOrm: () => ({}) };
     const service = new WorkspacesService(mockDb as never);
     const internals = service as unknown as ServiceInternals;
 
@@ -154,7 +154,7 @@ describe("WorkspacesService — role checks", () => {
   it("deleteWorkspace requires OWNER role", async () => {
     const { WorkspacesService } = await import("./workspaces.service.js");
 
-    const mockDb = { getOrm: () => ({}), dialect: "sqlite" as const };
+    const mockDb = { getOrm: () => ({}) };
     const service = new WorkspacesService(mockDb as never);
     const internals = service as unknown as ServiceInternals;
 

@@ -2,23 +2,30 @@ const testEnvKeys = [
   "NODE_ENV",
   "SESSION_SECRET",
   "ENCRYPTION_KEY",
-  "DATABASE_URL",
   "APP_BASE_URL",
   "FRONTEND_ORIGIN",
   "STRIPE_SECRET_KEY",
+  "OPENAI_API_KEY",
+  "OPENAPI_INTERACTIVE_DOCS",
 ] as const;
 
 export const validTestEnv: NodeJS.ProcessEnv = {
   NODE_ENV: "test",
   SESSION_SECRET: "test-session-secret-with-32-chars-min",
   ENCRYPTION_KEY: "test-encryption-key-with-32-chars",
-  DATABASE_URL: "sqlite://./test.db",
+  DATABASE_URL:
+    process.env.DATABASE_URL ??
+    "postgresql://slugbase:slugbase@localhost:5432/slugbase_test",
   APP_BASE_URL: "https://api.slugbase.test",
   FRONTEND_ORIGIN: "https://app.slugbase.test",
 };
 
 export function applyTestEnv(overrides: NodeJS.ProcessEnv = {}): void {
-  Object.assign(process.env, validTestEnv, overrides);
+  const env: NodeJS.ProcessEnv = { ...validTestEnv, ...overrides };
+  if (process.env.DATABASE_URL && overrides.DATABASE_URL === undefined) {
+    env.DATABASE_URL = process.env.DATABASE_URL;
+  }
+  Object.assign(process.env, env);
 }
 
 export function clearTestEnv(): void {

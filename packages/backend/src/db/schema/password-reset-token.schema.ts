@@ -1,14 +1,14 @@
-import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { bigint, index, pgTable, text } from "drizzle-orm/pg-core";
 
-export const passwordResetTokens = sqliteTable(
+export const passwordResetTokens = pgTable(
   "password_reset_tokens",
   {
     id: text("id").primaryKey(),
     userId: text("user_id").notNull(),
     tokenHash: text("token_hash").notNull(),
-    expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
-    usedAt: integer("used_at", { mode: "timestamp_ms" }),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    expiresAt: bigint("expires_at", { mode: "number" }).notNull(),
+    usedAt: bigint("used_at", { mode: "number" }),
+    createdAt: bigint("created_at", { mode: "number" }).notNull(),
   },
   (t) => [
     index("password_reset_tokens_user_id_idx").on(t.userId),

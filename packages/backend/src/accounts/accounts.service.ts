@@ -31,7 +31,7 @@ export class AccountsService {
     @Inject(DbService) private readonly db: DbService,
     @Inject(PasswordService) private readonly passwordService: PasswordService,
   ) {
-    this.repo = new AccountRepository(db.getOrm(), db.dialect);
+    this.repo = new AccountRepository(db.getOrm());
   }
 
   async registerAccount(dto: RegisterAccountDto): Promise<AccountRecord> {

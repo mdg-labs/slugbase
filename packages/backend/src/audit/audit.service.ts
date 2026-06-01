@@ -37,7 +37,7 @@ export class AuditService {
     @Inject(EntitlementsService) private readonly entitlements: EntitlementsService,
     @Inject(AccountsService) private readonly accounts: AccountsService,
   ) {
-    this.auditRepo = new AuditRepository(db.getOrm(), db.dialect);
+    this.auditRepo = new AuditRepository(db.getOrm());
   }
 
   /**

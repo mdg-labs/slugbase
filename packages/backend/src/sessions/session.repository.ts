@@ -1,13 +1,7 @@
 import { eq } from "drizzle-orm";
 
-import type {
-  DrizzleClient,
-  PostgresDrizzleClient,
-  SqliteDrizzleClient,
-} from "../db/dialect/create-client.js";
-import type { DbDialect } from "../db/dialect/dialect.js";
-import { sessions as sqliteSessions } from "../db/schema/index.js";
-import { sessions as pgSessions } from "../db/schema/pg-index.js";
+import type { DrizzleClient } from "../db/dialect/create-client.js";
+import { sessions } from "../db/schema/index.js";
 import type { SessionRecord } from "./session.types.js";
 
 interface RawSessionRow {
@@ -17,10 +11,6 @@ interface RawSessionRow {
   createdAtMs: number;
   lastActivityAtMs: number;
   data: string;
-}
-
-function toMs(value: Date | number): number {
-  return value instanceof Date ? value.getTime() : value;
 }
 
 function toRecord(row: RawSessionRow): SessionRecord {
@@ -35,10 +25,7 @@ function toRecord(row: RawSessionRow): SessionRecord {
 }
 
 export class SessionRepository {
-  constructor(
-    private readonly db: DrizzleClient,
-    private readonly dialect: DbDialect,
-  ) {}
+  constructor(private readonly db: DrizzleClient) {}
 
   async create(
     id: string,
@@ -47,24 +34,8 @@ export class SessionRepository {
     nowMs: number,
     data: string,
   ): Promise<void> {
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      sqliteDb
-        .insert(sqliteSessions)
-        .values({
-          id,
-          userId,
-          expiresAt: new Date(expiresAtMs),
-          createdAt: new Date(nowMs),
-          lastActivityAt: new Date(nowMs),
-          data,
-        })
-        .run();
-      return;
-    }
 
-    const pgDb = this.db as PostgresDrizzleClient;
-    await pgDb.insert(pgSessions).values({
+        await this.db.insert(sessions).values({
       id,
       userId,
       expiresAt: expiresAtMs,
@@ -75,31 +46,11 @@ export class SessionRepository {
   }
 
   async findById(id: string): Promise<SessionRecord | null> {
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      const row = sqliteDb
-        .select()
-        .from(sqliteSessions)
-        .where(eq(sqliteSessions.id, id))
-        .get();
 
-      if (!row) return null;
-
-      return toRecord({
-        id: row.id,
-        userId: row.userId,
-        expiresAtMs: toMs(row.expiresAt),
-        createdAtMs: toMs(row.createdAt),
-        lastActivityAtMs: toMs(row.lastActivityAt),
-        data: row.data,
-      });
-    }
-
-    const pgDb = this.db as PostgresDrizzleClient;
-    const rows = await pgDb
+        const rows = await this.db
       .select()
-      .from(pgSessions)
-      .where(eq(pgSessions.id, id))
+      .from(sessions)
+      .where(eq(sessions.id, id))
       .limit(1);
 
     const row = rows[0];
@@ -116,66 +67,28 @@ export class SessionRepository {
   }
 
   async touch(id: string, newExpiresAtMs: number, nowMs: number): Promise<void> {
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      sqliteDb
-        .update(sqliteSessions)
-        .set({
-          lastActivityAt: new Date(nowMs),
-          expiresAt: new Date(newExpiresAtMs),
-        })
-        .where(eq(sqliteSessions.id, id))
-        .run();
-      return;
-    }
 
-    const pgDb = this.db as PostgresDrizzleClient;
-    await pgDb
-      .update(pgSessions)
+        await this.db
+      .update(sessions)
       .set({ lastActivityAt: nowMs, expiresAt: newExpiresAtMs })
-      .where(eq(pgSessions.id, id));
+      .where(eq(sessions.id, id));
   }
 
   async deleteById(id: string): Promise<void> {
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      sqliteDb.delete(sqliteSessions).where(eq(sqliteSessions.id, id)).run();
-      return;
-    }
 
-    const pgDb = this.db as PostgresDrizzleClient;
-    await pgDb.delete(pgSessions).where(eq(pgSessions.id, id));
+        await this.db.delete(sessions).where(eq(sessions.id, id));
   }
 
   async deleteAllByUserId(userId: string): Promise<void> {
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      sqliteDb
-        .delete(sqliteSessions)
-        .where(eq(sqliteSessions.userId, userId))
-        .run();
-      return;
-    }
 
-    const pgDb = this.db as PostgresDrizzleClient;
-    await pgDb.delete(pgSessions).where(eq(pgSessions.userId, userId));
+        await this.db.delete(sessions).where(eq(sessions.userId, userId));
   }
 
   async updateData(id: string, data: string, nowMs: number): Promise<void> {
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      sqliteDb
-        .update(sqliteSessions)
-        .set({ data, lastActivityAt: new Date(nowMs) })
-        .where(eq(sqliteSessions.id, id))
-        .run();
-      return;
-    }
 
-    const pgDb = this.db as PostgresDrizzleClient;
-    await pgDb
-      .update(pgSessions)
+        await this.db
+      .update(sessions)
       .set({ data, lastActivityAt: nowMs })
-      .where(eq(pgSessions.id, id));
+      .where(eq(sessions.id, id));
   }
 }

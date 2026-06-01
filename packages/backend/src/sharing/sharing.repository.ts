@@ -2,32 +2,17 @@ import { randomUUID } from "node:crypto";
 
 import { and, eq, inArray } from "drizzle-orm";
 
-import type {
-  DrizzleClient,
-  PostgresDrizzleClient,
-  SqliteDrizzleClient,
-} from "../db/dialect/create-client.js";
-import type { DbDialect } from "../db/dialect/dialect.js";
+import type { DrizzleClient } from "../db/dialect/create-client.js";
 import {
-  bookmarkTeamShares as sqliteBookmarkTeamShares,
-  bookmarkUserShares as sqliteBookmarkUserShares,
-  bookmarks as sqliteBookmarks,
-  folderTeamShares as sqliteFolderTeamShares,
-  folderUserShares as sqliteFolderUserShares,
-  folders as sqliteFolders,
-  teams as sqliteTeams,
-  userAccounts as sqliteUserAccounts,
+  bookmarkTeamShares,
+  bookmarkUserShares,
+  bookmarks,
+  folderTeamShares,
+  folderUserShares,
+  folders,
+  teams,
+  userAccounts,
 } from "../db/schema/index.js";
-import {
-  bookmarkTeamShares as pgBookmarkTeamShares,
-  bookmarkUserShares as pgBookmarkUserShares,
-  bookmarks as pgBookmarks,
-  folderTeamShares as pgFolderTeamShares,
-  folderUserShares as pgFolderUserShares,
-  folders as pgFolders,
-  teams as pgTeams,
-  userAccounts as pgUserAccounts,
-} from "../db/schema/pg-index.js";
 import {
   bookmarkSharedReadCondition,
   folderSharedReadCondition,
@@ -43,10 +28,7 @@ export interface ShareGrantInput {
 }
 
 export class SharingRepository {
-  constructor(
-    private readonly db: DrizzleClient,
-    private readonly dialect: DbDialect,
-  ) {}
+  constructor(private readonly db: DrizzleClient) {}
 
   async grantBookmarkUserShare(
     workspaceId: string,
@@ -81,130 +63,61 @@ export class SharingRepository {
   }
 
   async deleteSharesForBookmark(workspaceId: string, bookmarkId: string): Promise<void> {
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      sqliteDb
-        .delete(sqliteBookmarkUserShares)
-        .where(
-          and(
-            eq(sqliteBookmarkUserShares.workspaceId, workspaceId),
-            eq(sqliteBookmarkUserShares.bookmarkId, bookmarkId),
-          ),
-        )
-        .run();
-      sqliteDb
-        .delete(sqliteBookmarkTeamShares)
-        .where(
-          and(
-            eq(sqliteBookmarkTeamShares.workspaceId, workspaceId),
-            eq(sqliteBookmarkTeamShares.bookmarkId, bookmarkId),
-          ),
-        )
-        .run();
-      return;
-    }
 
-    const pgDb = this.db as PostgresDrizzleClient;
-    await pgDb
-      .delete(pgBookmarkUserShares)
+        await this.db
+      .delete(bookmarkUserShares)
       .where(
         and(
-          eq(pgBookmarkUserShares.workspaceId, workspaceId),
-          eq(pgBookmarkUserShares.bookmarkId, bookmarkId),
+          eq(bookmarkUserShares.workspaceId, workspaceId),
+          eq(bookmarkUserShares.bookmarkId, bookmarkId),
         ),
       );
-    await pgDb
-      .delete(pgBookmarkTeamShares)
+    await this.db
+      .delete(bookmarkTeamShares)
       .where(
         and(
-          eq(pgBookmarkTeamShares.workspaceId, workspaceId),
-          eq(pgBookmarkTeamShares.bookmarkId, bookmarkId),
+          eq(bookmarkTeamShares.workspaceId, workspaceId),
+          eq(bookmarkTeamShares.bookmarkId, bookmarkId),
         ),
       );
   }
 
   async deleteSharesForFolder(workspaceId: string, folderId: string): Promise<void> {
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      sqliteDb
-        .delete(sqliteFolderUserShares)
-        .where(
-          and(
-            eq(sqliteFolderUserShares.workspaceId, workspaceId),
-            eq(sqliteFolderUserShares.folderId, folderId),
-          ),
-        )
-        .run();
-      sqliteDb
-        .delete(sqliteFolderTeamShares)
-        .where(
-          and(
-            eq(sqliteFolderTeamShares.workspaceId, workspaceId),
-            eq(sqliteFolderTeamShares.folderId, folderId),
-          ),
-        )
-        .run();
-      return;
-    }
 
-    const pgDb = this.db as PostgresDrizzleClient;
-    await pgDb
-      .delete(pgFolderUserShares)
+        await this.db
+      .delete(folderUserShares)
       .where(
         and(
-          eq(pgFolderUserShares.workspaceId, workspaceId),
-          eq(pgFolderUserShares.folderId, folderId),
+          eq(folderUserShares.workspaceId, workspaceId),
+          eq(folderUserShares.folderId, folderId),
         ),
       );
-    await pgDb
-      .delete(pgFolderTeamShares)
+    await this.db
+      .delete(folderTeamShares)
       .where(
         and(
-          eq(pgFolderTeamShares.workspaceId, workspaceId),
-          eq(pgFolderTeamShares.folderId, folderId),
+          eq(folderTeamShares.workspaceId, workspaceId),
+          eq(folderTeamShares.folderId, folderId),
         ),
       );
   }
 
   async deleteSharesForTeam(workspaceId: string, teamId: string): Promise<void> {
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      sqliteDb
-        .delete(sqliteBookmarkTeamShares)
-        .where(
-          and(
-            eq(sqliteBookmarkTeamShares.workspaceId, workspaceId),
-            eq(sqliteBookmarkTeamShares.teamId, teamId),
-          ),
-        )
-        .run();
-      sqliteDb
-        .delete(sqliteFolderTeamShares)
-        .where(
-          and(
-            eq(sqliteFolderTeamShares.workspaceId, workspaceId),
-            eq(sqliteFolderTeamShares.teamId, teamId),
-          ),
-        )
-        .run();
-      return;
-    }
 
-    const pgDb = this.db as PostgresDrizzleClient;
-    await pgDb
-      .delete(pgBookmarkTeamShares)
+        await this.db
+      .delete(bookmarkTeamShares)
       .where(
         and(
-          eq(pgBookmarkTeamShares.workspaceId, workspaceId),
-          eq(pgBookmarkTeamShares.teamId, teamId),
+          eq(bookmarkTeamShares.workspaceId, workspaceId),
+          eq(bookmarkTeamShares.teamId, teamId),
         ),
       );
-    await pgDb
-      .delete(pgFolderTeamShares)
+    await this.db
+      .delete(folderTeamShares)
       .where(
         and(
-          eq(pgFolderTeamShares.workspaceId, workspaceId),
-          eq(pgFolderTeamShares.teamId, teamId),
+          eq(folderTeamShares.workspaceId, workspaceId),
+          eq(folderTeamShares.teamId, teamId),
         ),
       );
   }
@@ -214,29 +127,15 @@ export class SharingRepository {
     userId: string,
     bookmarkId: string,
   ): Promise<boolean> {
-    if (this.dialect === "sqlite") {
-      const row = (this.db as SqliteDrizzleClient)
-        .select({ id: sqliteBookmarks.id })
-        .from(sqliteBookmarks)
-        .where(
-          and(
-            eq(sqliteBookmarks.workspaceId, workspaceId),
-            eq(sqliteBookmarks.id, bookmarkId),
-            bookmarkSharedReadCondition(workspaceId, userId, sqliteBookmarks),
-          ),
-        )
-        .get();
-      return row != null;
-    }
 
-    const rows = await (this.db as PostgresDrizzleClient)
-      .select({ id: pgBookmarks.id })
-      .from(pgBookmarks)
+    const rows = await this.db
+      .select({ id: bookmarks.id })
+      .from(bookmarks)
       .where(
         and(
-          eq(pgBookmarks.workspaceId, workspaceId),
-          eq(pgBookmarks.id, bookmarkId),
-          bookmarkSharedReadCondition(workspaceId, userId, pgBookmarks),
+          eq(bookmarks.workspaceId, workspaceId),
+          eq(bookmarks.id, bookmarkId),
+          bookmarkSharedReadCondition(workspaceId, userId, bookmarks),
         ),
       )
       .limit(1);
@@ -248,29 +147,15 @@ export class SharingRepository {
     userId: string,
     folderId: string,
   ): Promise<boolean> {
-    if (this.dialect === "sqlite") {
-      const row = (this.db as SqliteDrizzleClient)
-        .select({ id: sqliteFolders.id })
-        .from(sqliteFolders)
-        .where(
-          and(
-            eq(sqliteFolders.workspaceId, workspaceId),
-            eq(sqliteFolders.id, folderId),
-            folderSharedReadCondition(workspaceId, userId, sqliteFolders),
-          ),
-        )
-        .get();
-      return row != null;
-    }
 
-    const rows = await (this.db as PostgresDrizzleClient)
-      .select({ id: pgFolders.id })
-      .from(pgFolders)
+    const rows = await this.db
+      .select({ id: folders.id })
+      .from(folders)
       .where(
         and(
-          eq(pgFolders.workspaceId, workspaceId),
-          eq(pgFolders.id, folderId),
-          folderSharedReadCondition(workspaceId, userId, pgFolders),
+          eq(folders.workspaceId, workspaceId),
+          eq(folders.id, folderId),
+          folderSharedReadCondition(workspaceId, userId, folders),
         ),
       )
       .limit(1);
@@ -332,55 +217,22 @@ export class SharingRepository {
     const counts = new Map<string, number>();
     if (bookmarkIds.length === 0) return counts;
 
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      const userRows = sqliteDb
-        .select({
-          bookmarkId: sqliteBookmarkUserShares.bookmarkId,
-        })
-        .from(sqliteBookmarkUserShares)
-        .where(
-          and(
-            eq(sqliteBookmarkUserShares.workspaceId, workspaceId),
-            inArray(sqliteBookmarkUserShares.bookmarkId, bookmarkIds),
-          ),
-        )
-        .all();
-      const teamRows = sqliteDb
-        .select({
-          bookmarkId: sqliteBookmarkTeamShares.bookmarkId,
-        })
-        .from(sqliteBookmarkTeamShares)
-        .where(
-          and(
-            eq(sqliteBookmarkTeamShares.workspaceId, workspaceId),
-            inArray(sqliteBookmarkTeamShares.bookmarkId, bookmarkIds),
-          ),
-        )
-        .all();
-      for (const row of [...userRows, ...teamRows]) {
-        counts.set(row.bookmarkId, (counts.get(row.bookmarkId) ?? 0) + 1);
-      }
-      return counts;
-    }
-
-    const pgDb = this.db as PostgresDrizzleClient;
-    const userRows = await pgDb
-      .select({ bookmarkId: pgBookmarkUserShares.bookmarkId })
-      .from(pgBookmarkUserShares)
+        const userRows = await this.db
+      .select({ bookmarkId: bookmarkUserShares.bookmarkId })
+      .from(bookmarkUserShares)
       .where(
         and(
-          eq(pgBookmarkUserShares.workspaceId, workspaceId),
-          inArray(pgBookmarkUserShares.bookmarkId, bookmarkIds),
+          eq(bookmarkUserShares.workspaceId, workspaceId),
+          inArray(bookmarkUserShares.bookmarkId, bookmarkIds),
         ),
       );
-    const teamRows = await pgDb
-      .select({ bookmarkId: pgBookmarkTeamShares.bookmarkId })
-      .from(pgBookmarkTeamShares)
+    const teamRows = await this.db
+      .select({ bookmarkId: bookmarkTeamShares.bookmarkId })
+      .from(bookmarkTeamShares)
       .where(
         and(
-          eq(pgBookmarkTeamShares.workspaceId, workspaceId),
-          inArray(pgBookmarkTeamShares.bookmarkId, bookmarkIds),
+          eq(bookmarkTeamShares.workspaceId, workspaceId),
+          inArray(bookmarkTeamShares.bookmarkId, bookmarkIds),
         ),
       );
     for (const row of [...userRows, ...teamRows]) {
@@ -394,160 +246,70 @@ export class SharingRepository {
     workspaceId: string,
     resourceId: string,
   ): Promise<ShareGrantRecord[]> {
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      const userShares =
-        resourceKind === "bookmark"
-          ? sqliteDb
-              .select({
-                id: sqliteBookmarkUserShares.id,
-                targetId: sqliteBookmarkUserShares.userId,
-                targetName: sqliteUserAccounts.name,
-                createdAt: sqliteBookmarkUserShares.createdAt,
-              })
-              .from(sqliteBookmarkUserShares)
-              .innerJoin(
-                sqliteUserAccounts,
-                eq(sqliteBookmarkUserShares.userId, sqliteUserAccounts.id),
-              )
-              .where(
-                and(
-                  eq(sqliteBookmarkUserShares.workspaceId, workspaceId),
-                  eq(sqliteBookmarkUserShares.bookmarkId, resourceId),
-                ),
-              )
-              .all()
-          : sqliteDb
-              .select({
-                id: sqliteFolderUserShares.id,
-                targetId: sqliteFolderUserShares.userId,
-                targetName: sqliteUserAccounts.name,
-                createdAt: sqliteFolderUserShares.createdAt,
-              })
-              .from(sqliteFolderUserShares)
-              .innerJoin(
-                sqliteUserAccounts,
-                eq(sqliteFolderUserShares.userId, sqliteUserAccounts.id),
-              )
-              .where(
-                and(
-                  eq(sqliteFolderUserShares.workspaceId, workspaceId),
-                  eq(sqliteFolderUserShares.folderId, resourceId),
-                ),
-              )
-              .all();
 
-      const teamShares =
-        resourceKind === "bookmark"
-          ? sqliteDb
-              .select({
-                id: sqliteBookmarkTeamShares.id,
-                targetId: sqliteBookmarkTeamShares.teamId,
-                targetName: sqliteTeams.name,
-                createdAt: sqliteBookmarkTeamShares.createdAt,
-              })
-              .from(sqliteBookmarkTeamShares)
-              .innerJoin(
-                sqliteTeams,
-                eq(sqliteBookmarkTeamShares.teamId, sqliteTeams.id),
-              )
-              .where(
-                and(
-                  eq(sqliteBookmarkTeamShares.workspaceId, workspaceId),
-                  eq(sqliteBookmarkTeamShares.bookmarkId, resourceId),
-                ),
-              )
-              .all()
-          : sqliteDb
-              .select({
-                id: sqliteFolderTeamShares.id,
-                targetId: sqliteFolderTeamShares.teamId,
-                targetName: sqliteTeams.name,
-                createdAt: sqliteFolderTeamShares.createdAt,
-              })
-              .from(sqliteFolderTeamShares)
-              .innerJoin(
-                sqliteTeams,
-                eq(sqliteFolderTeamShares.teamId, sqliteTeams.id),
-              )
-              .where(
-                and(
-                  eq(sqliteFolderTeamShares.workspaceId, workspaceId),
-                  eq(sqliteFolderTeamShares.folderId, resourceId),
-                ),
-              )
-              .all();
-
-      return [
-        ...userShares.map((row) => this.toShareGrant("user", row)),
-        ...teamShares.map((row) => this.toShareGrant("team", row)),
-      ];
-    }
-
-    const pgDb = this.db as PostgresDrizzleClient;
-    const userShares =
+        const userShares =
       resourceKind === "bookmark"
-        ? await pgDb
+        ? await this.db
             .select({
-              id: pgBookmarkUserShares.id,
-              targetId: pgBookmarkUserShares.userId,
-              targetName: pgUserAccounts.name,
-              createdAt: pgBookmarkUserShares.createdAt,
+              id: bookmarkUserShares.id,
+              targetId: bookmarkUserShares.userId,
+              targetName: userAccounts.name,
+              createdAt: bookmarkUserShares.createdAt,
             })
-            .from(pgBookmarkUserShares)
-            .innerJoin(pgUserAccounts, eq(pgBookmarkUserShares.userId, pgUserAccounts.id))
+            .from(bookmarkUserShares)
+            .innerJoin(userAccounts, eq(bookmarkUserShares.userId, userAccounts.id))
             .where(
               and(
-                eq(pgBookmarkUserShares.workspaceId, workspaceId),
-                eq(pgBookmarkUserShares.bookmarkId, resourceId),
+                eq(bookmarkUserShares.workspaceId, workspaceId),
+                eq(bookmarkUserShares.bookmarkId, resourceId),
               ),
             )
-        : await pgDb
+        : await this.db
             .select({
-              id: pgFolderUserShares.id,
-              targetId: pgFolderUserShares.userId,
-              targetName: pgUserAccounts.name,
-              createdAt: pgFolderUserShares.createdAt,
+              id: folderUserShares.id,
+              targetId: folderUserShares.userId,
+              targetName: userAccounts.name,
+              createdAt: folderUserShares.createdAt,
             })
-            .from(pgFolderUserShares)
-            .innerJoin(pgUserAccounts, eq(pgFolderUserShares.userId, pgUserAccounts.id))
+            .from(folderUserShares)
+            .innerJoin(userAccounts, eq(folderUserShares.userId, userAccounts.id))
             .where(
               and(
-                eq(pgFolderUserShares.workspaceId, workspaceId),
-                eq(pgFolderUserShares.folderId, resourceId),
+                eq(folderUserShares.workspaceId, workspaceId),
+                eq(folderUserShares.folderId, resourceId),
               ),
             );
 
     const teamShares =
       resourceKind === "bookmark"
-        ? await pgDb
+        ? await this.db
             .select({
-              id: pgBookmarkTeamShares.id,
-              targetId: pgBookmarkTeamShares.teamId,
-              targetName: pgTeams.name,
-              createdAt: pgBookmarkTeamShares.createdAt,
+              id: bookmarkTeamShares.id,
+              targetId: bookmarkTeamShares.teamId,
+              targetName: teams.name,
+              createdAt: bookmarkTeamShares.createdAt,
             })
-            .from(pgBookmarkTeamShares)
-            .innerJoin(pgTeams, eq(pgBookmarkTeamShares.teamId, pgTeams.id))
+            .from(bookmarkTeamShares)
+            .innerJoin(teams, eq(bookmarkTeamShares.teamId, teams.id))
             .where(
               and(
-                eq(pgBookmarkTeamShares.workspaceId, workspaceId),
-                eq(pgBookmarkTeamShares.bookmarkId, resourceId),
+                eq(bookmarkTeamShares.workspaceId, workspaceId),
+                eq(bookmarkTeamShares.bookmarkId, resourceId),
               ),
             )
-        : await pgDb
+        : await this.db
             .select({
-              id: pgFolderTeamShares.id,
-              targetId: pgFolderTeamShares.teamId,
-              targetName: pgTeams.name,
-              createdAt: pgFolderTeamShares.createdAt,
+              id: folderTeamShares.id,
+              targetId: folderTeamShares.teamId,
+              targetName: teams.name,
+              createdAt: folderTeamShares.createdAt,
             })
-            .from(pgFolderTeamShares)
-            .innerJoin(pgTeams, eq(pgFolderTeamShares.teamId, pgTeams.id))
+            .from(folderTeamShares)
+            .innerJoin(teams, eq(folderTeamShares.teamId, teams.id))
             .where(
               and(
-                eq(pgFolderTeamShares.workspaceId, workspaceId),
-                eq(pgFolderTeamShares.folderId, resourceId),
+                eq(folderTeamShares.workspaceId, workspaceId),
+                eq(folderTeamShares.folderId, resourceId),
               ),
             );
 
@@ -563,104 +325,53 @@ export class SharingRepository {
     resourceId: string,
     grantId: string,
   ): Promise<boolean> {
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      if (resourceKind === "bookmark") {
-        const userResult = sqliteDb
-          .delete(sqliteBookmarkUserShares)
-          .where(
-            and(
-              eq(sqliteBookmarkUserShares.workspaceId, workspaceId),
-              eq(sqliteBookmarkUserShares.bookmarkId, resourceId),
-              eq(sqliteBookmarkUserShares.id, grantId),
-            ),
-          )
-          .run();
-        if (userResult.changes > 0) return true;
-        const teamResult = sqliteDb
-          .delete(sqliteBookmarkTeamShares)
-          .where(
-            and(
-              eq(sqliteBookmarkTeamShares.workspaceId, workspaceId),
-              eq(sqliteBookmarkTeamShares.bookmarkId, resourceId),
-              eq(sqliteBookmarkTeamShares.id, grantId),
-            ),
-          )
-          .run();
-        return teamResult.changes > 0;
-      }
 
-      const userResult = sqliteDb
-        .delete(sqliteFolderUserShares)
+        if (resourceKind === "bookmark") {
+      const userRows = await this.db
+        .delete(bookmarkUserShares)
         .where(
           and(
-            eq(sqliteFolderUserShares.workspaceId, workspaceId),
-            eq(sqliteFolderUserShares.folderId, resourceId),
-            eq(sqliteFolderUserShares.id, grantId),
+            eq(bookmarkUserShares.workspaceId, workspaceId),
+            eq(bookmarkUserShares.bookmarkId, resourceId),
+            eq(bookmarkUserShares.id, grantId),
           ),
         )
-        .run();
-      if (userResult.changes > 0) return true;
-      const teamResult = sqliteDb
-        .delete(sqliteFolderTeamShares)
-        .where(
-          and(
-            eq(sqliteFolderTeamShares.workspaceId, workspaceId),
-            eq(sqliteFolderTeamShares.folderId, resourceId),
-            eq(sqliteFolderTeamShares.id, grantId),
-          ),
-        )
-        .run();
-      return teamResult.changes > 0;
-    }
-
-    const pgDb = this.db as PostgresDrizzleClient;
-    if (resourceKind === "bookmark") {
-      const userRows = await pgDb
-        .delete(pgBookmarkUserShares)
-        .where(
-          and(
-            eq(pgBookmarkUserShares.workspaceId, workspaceId),
-            eq(pgBookmarkUserShares.bookmarkId, resourceId),
-            eq(pgBookmarkUserShares.id, grantId),
-          ),
-        )
-        .returning({ id: pgBookmarkUserShares.id });
+        .returning({ id: bookmarkUserShares.id });
       if (userRows.length > 0) return true;
-      const teamRows = await pgDb
-        .delete(pgBookmarkTeamShares)
+      const teamRows = await this.db
+        .delete(bookmarkTeamShares)
         .where(
           and(
-            eq(pgBookmarkTeamShares.workspaceId, workspaceId),
-            eq(pgBookmarkTeamShares.bookmarkId, resourceId),
-            eq(pgBookmarkTeamShares.id, grantId),
+            eq(bookmarkTeamShares.workspaceId, workspaceId),
+            eq(bookmarkTeamShares.bookmarkId, resourceId),
+            eq(bookmarkTeamShares.id, grantId),
           ),
         )
-        .returning({ id: pgBookmarkTeamShares.id });
+        .returning({ id: bookmarkTeamShares.id });
       return teamRows.length > 0;
     }
 
-    const userRows = await pgDb
-      .delete(pgFolderUserShares)
+    const userRows = await this.db
+      .delete(folderUserShares)
       .where(
         and(
-          eq(pgFolderUserShares.workspaceId, workspaceId),
-          eq(pgFolderUserShares.folderId, resourceId),
-          eq(pgFolderUserShares.id, grantId),
+          eq(folderUserShares.workspaceId, workspaceId),
+          eq(folderUserShares.folderId, resourceId),
+          eq(folderUserShares.id, grantId),
         ),
       )
-      .returning({ id: pgFolderUserShares.id });
+      .returning({ id: folderUserShares.id });
     if (userRows.length > 0) return true;
-    const teamRows = await pgDb
-      .delete(pgFolderTeamShares)
+    const teamRows = await this.db
+      .delete(folderTeamShares)
       .where(
         and(
-          eq(pgFolderTeamShares.workspaceId, workspaceId),
-          eq(pgFolderTeamShares.folderId, resourceId),
-          eq(pgFolderTeamShares.id, grantId),
+          eq(folderTeamShares.workspaceId, workspaceId),
+          eq(folderTeamShares.folderId, resourceId),
+          eq(folderTeamShares.id, grantId),
         ),
       )
-      .returning({ id: pgFolderTeamShares.id });
+      .returning({ id: folderTeamShares.id });
     return teamRows.length > 0;
   }
 
@@ -692,70 +403,10 @@ export class SharingRepository {
     const id = randomUUID();
     const nowMs = Date.now();
 
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      switch (kind) {
-        case "bookmark-user":
-          sqliteDb
-            .insert(sqliteBookmarkUserShares)
-            .values({
-              id,
-              workspaceId,
-              bookmarkId: resourceId,
-              userId: granteeId,
-              createdAt: new Date(nowMs),
-            })
-            .onConflictDoNothing()
-            .run();
-          break;
-        case "bookmark-team":
-          sqliteDb
-            .insert(sqliteBookmarkTeamShares)
-            .values({
-              id,
-              workspaceId,
-              bookmarkId: resourceId,
-              teamId: granteeId,
-              createdAt: new Date(nowMs),
-            })
-            .onConflictDoNothing()
-            .run();
-          break;
-        case "folder-user":
-          sqliteDb
-            .insert(sqliteFolderUserShares)
-            .values({
-              id,
-              workspaceId,
-              folderId: resourceId,
-              userId: granteeId,
-              createdAt: new Date(nowMs),
-            })
-            .onConflictDoNothing()
-            .run();
-          break;
-        case "folder-team":
-          sqliteDb
-            .insert(sqliteFolderTeamShares)
-            .values({
-              id,
-              workspaceId,
-              folderId: resourceId,
-              teamId: granteeId,
-              createdAt: new Date(nowMs),
-            })
-            .onConflictDoNothing()
-            .run();
-          break;
-      }
-      return;
-    }
-
-    const pgDb = this.db as PostgresDrizzleClient;
-    switch (kind) {
+        switch (kind) {
       case "bookmark-user":
-        await pgDb
-          .insert(pgBookmarkUserShares)
+        await this.db
+          .insert(bookmarkUserShares)
           .values({
             id,
             workspaceId,
@@ -766,8 +417,8 @@ export class SharingRepository {
           .onConflictDoNothing();
         break;
       case "bookmark-team":
-        await pgDb
-          .insert(pgBookmarkTeamShares)
+        await this.db
+          .insert(bookmarkTeamShares)
           .values({
             id,
             workspaceId,
@@ -778,8 +429,8 @@ export class SharingRepository {
           .onConflictDoNothing();
         break;
       case "folder-user":
-        await pgDb
-          .insert(pgFolderUserShares)
+        await this.db
+          .insert(folderUserShares)
           .values({
             id,
             workspaceId,
@@ -790,8 +441,8 @@ export class SharingRepository {
           .onConflictDoNothing();
         break;
       case "folder-team":
-        await pgDb
-          .insert(pgFolderTeamShares)
+        await this.db
+          .insert(folderTeamShares)
           .values({
             id,
             workspaceId,

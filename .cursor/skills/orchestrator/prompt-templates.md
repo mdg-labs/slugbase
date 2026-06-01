@@ -33,7 +33,7 @@ DB MIGRATIONS — MANDATORY (schema-first; no exceptions):
   - Using `drizzle-kit push` / any "push"/"sync" command that bypasses the migration history
   - Schema changes without a corresponding generated migration in the same commit
 - If Drizzle Kit cannot run (DB down, env missing) → report blocked; do NOT hand-write SQL as a workaround
-- Stack note (settled, spec §11.9): migrations are owned by **Drizzle Kit** over the Drizzle schema (`drizzle-kit generate` to create, `drizzle-kit migrate` to apply). One forward-only history shared by embedded SQLite (self-host) and Neon Postgres (hosted).
+- Stack note (settled, spec §11.9): migrations are owned by **Drizzle Kit** over the Postgres Drizzle schema (`dialect: postgresql`; `drizzle-kit generate` to create, `drizzle-kit migrate` to apply). One forward-only history; `DATABASE_URL` must use `postgresql://`. Embedded SQLite self-host is deferred (Fast-Follow).
 ```
 
 ---

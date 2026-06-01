@@ -1,27 +1,17 @@
+import { coerceCount } from "../db/coerce-count.js";
 import { randomUUID } from "node:crypto";
 
-import { and, asc, desc, eq, inArray, like, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ilike, or, sql, type SQL } from "drizzle-orm";
 
 import { bookmarkScopeCondition } from "../common/authz/authz-sql.js";
 
-import type {
-  DrizzleClient,
-  PostgresDrizzleClient,
-  SqliteDrizzleClient,
-} from "../db/dialect/create-client.js";
-import type { DbDialect } from "../db/dialect/dialect.js";
+import type { DrizzleClient } from "../db/dialect/create-client.js";
 import {
-  bookmarkFolders as sqliteBookmarkFolders,
-  bookmarkTags as sqliteBookmarkTags,
-  bookmarks as sqliteBookmarks,
-  slugPreferences as sqliteSlugPreferences,
+  bookmarkFolders,
+  bookmarkTags,
+  bookmarks,
+  slugPreferences,
 } from "../db/schema/index.js";
-import {
-  bookmarkFolders as pgBookmarkFolders,
-  bookmarkTags as pgBookmarkTags,
-  bookmarks as pgBookmarks,
-  slugPreferences as pgSlugPreferences,
-} from "../db/schema/pg-index.js";
 import type {
   BookmarkIdsResult,
   BookmarkRecord,
@@ -93,13 +83,13 @@ function scopeCondition(
   scope: BookmarkScope,
   userId: string,
   workspaceId: string,
-  bookmarksTable: typeof sqliteBookmarks | typeof pgBookmarks,
+  bookmarksTable: typeof bookmarks,
 ): SQL {
   return bookmarkScopeCondition(scope, workspaceId, userId, bookmarksTable);
 }
 
 function archivePriorityOrder(
-  bookmarksTable: typeof sqliteBookmarks | typeof pgBookmarks,
+  bookmarksTable: typeof bookmarks,
 ) {
   return [
     asc(sql`${bookmarksTable.lastAccessedAt} IS NULL`),
@@ -110,7 +100,7 @@ function archivePriorityOrder(
 
 function orderByForSort(
   sort: BookmarkSort,
-  bookmarksTable: typeof sqliteBookmarks | typeof pgBookmarks,
+  bookmarksTable: typeof bookmarks,
 ) {
   switch (sort) {
     case "title-asc":
@@ -132,9 +122,9 @@ function buildListConditions(
   workspaceId: string,
   userId: string,
   query: ParsedListBookmarksQuery,
-  bookmarksTable: typeof sqliteBookmarks | typeof pgBookmarks,
-  bookmarkFoldersTable: typeof sqliteBookmarkFolders | typeof pgBookmarkFolders,
-  bookmarkTagsTable: typeof sqliteBookmarkTags | typeof pgBookmarkTags,
+  bookmarksTable: typeof bookmarks,
+  bookmarkFoldersTable: typeof bookmarkFolders,
+  bookmarkTagsTable: typeof bookmarkTags,
 ): SQL[] {
   const conditions: SQL[] = [
     eq(bookmarksTable.workspaceId, workspaceId),
@@ -180,9 +170,9 @@ function buildListConditions(
       : null;
   if (searchPattern) {
     const searchClause = or(
-      like(bookmarksTable.title, searchPattern),
-      like(bookmarksTable.url, searchPattern),
-      like(bookmarksTable.slug, searchPattern),
+      ilike(bookmarksTable.title, searchPattern),
+      ilike(bookmarksTable.url, searchPattern),
+      ilike(bookmarksTable.slug, searchPattern),
     );
     if (searchClause) conditions.push(searchClause);
   }
@@ -210,9 +200,9 @@ function toSlugPreferenceRecord(row: {
 }
 
 export class BookmarkRepository extends WorkspaceScopedRepository<BookmarkRecord> {
-  // eslint-disable-next-line @typescript-eslint/no-useless-constructor -- forwards db + dialect to WorkspaceScopedRepository
-  constructor(db: DrizzleClient, dialect: DbDialect) {
-    super(db, dialect);
+  // eslint-disable-next-line @typescript-eslint/no-useless-constructor -- forwards db to WorkspaceScopedRepository
+  constructor(db: DrizzleClient) {
+    super(db);
   }
 
   async create(
@@ -223,43 +213,8 @@ export class BookmarkRepository extends WorkspaceScopedRepository<BookmarkRecord
     const id = randomUUID();
     const nowMs = Date.now();
 
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      sqliteDb
-        .insert(sqliteBookmarks)
-        .values({
-          id,
-          workspaceId,
-          userId,
-          title: data.title,
-          url: data.url,
-          slug: data.slug ?? null,
-          forwardingEnabled: data.forwardingEnabled ?? false,
-          pinned: data.pinned ?? false,
-          planArchived: false,
-          accessCount: 0,
-          lastAccessedAt: null,
-          createdAt: new Date(nowMs),
-          updatedAt: new Date(nowMs),
-        })
-        .run();
-
-      const row = sqliteDb
-        .select()
-        .from(sqliteBookmarks)
-        .where(
-          and(
-            eq(sqliteBookmarks.id, id),
-            eq(sqliteBookmarks.workspaceId, workspaceId),
-          ),
-        )
-        .get();
-      return this.assertOwnership(workspaceId, row ? toBookmarkRecord(row) : null);
-    }
-
-    const pgDb = this.db as PostgresDrizzleClient;
-    const rows = await pgDb
-      .insert(pgBookmarks)
+        const rows = await this.db
+      .insert(bookmarks)
       .values({
         id,
         workspaceId,
@@ -283,31 +238,16 @@ export class BookmarkRepository extends WorkspaceScopedRepository<BookmarkRecord
   /** Active bookmarks ordered for downgrade archive/restore selection (def §5). */
   async listActiveInWorkspaceOrdered(workspaceId: string): Promise<BookmarkRecord[]> {
     const orderBy = archivePriorityOrder(
-      this.dialect === "sqlite" ? sqliteBookmarks : pgBookmarks,
+      bookmarks,
     );
 
-    if (this.dialect === "sqlite") {
-      const rows = (this.db as SqliteDrizzleClient)
-        .select()
-        .from(sqliteBookmarks)
-        .where(
-          and(
-            eq(sqliteBookmarks.workspaceId, workspaceId),
-            eq(sqliteBookmarks.planArchived, false),
-          ),
-        )
-        .orderBy(...orderBy)
-        .all();
-      return rows.map(toBookmarkRecord);
-    }
-
-    const rows = await (this.db as PostgresDrizzleClient)
+    const rows = await this.db
       .select()
-      .from(pgBookmarks)
+      .from(bookmarks)
       .where(
         and(
-          eq(pgBookmarks.workspaceId, workspaceId),
-          eq(pgBookmarks.planArchived, false),
+          eq(bookmarks.workspaceId, workspaceId),
+          eq(bookmarks.planArchived, false),
         ),
       )
       .orderBy(...orderBy);
@@ -317,31 +257,16 @@ export class BookmarkRepository extends WorkspaceScopedRepository<BookmarkRecord
   /** Plan-archived bookmarks ordered for restore selection (def §5). */
   async listPlanArchivedInWorkspaceOrdered(workspaceId: string): Promise<BookmarkRecord[]> {
     const orderBy = archivePriorityOrder(
-      this.dialect === "sqlite" ? sqliteBookmarks : pgBookmarks,
+      bookmarks,
     );
 
-    if (this.dialect === "sqlite") {
-      const rows = (this.db as SqliteDrizzleClient)
-        .select()
-        .from(sqliteBookmarks)
-        .where(
-          and(
-            eq(sqliteBookmarks.workspaceId, workspaceId),
-            eq(sqliteBookmarks.planArchived, true),
-          ),
-        )
-        .orderBy(...orderBy)
-        .all();
-      return rows.map(toBookmarkRecord);
-    }
-
-    const rows = await (this.db as PostgresDrizzleClient)
+    const rows = await this.db
       .select()
-      .from(pgBookmarks)
+      .from(bookmarks)
       .where(
         and(
-          eq(pgBookmarks.workspaceId, workspaceId),
-          eq(pgBookmarks.planArchived, true),
+          eq(bookmarks.workspaceId, workspaceId),
+          eq(bookmarks.planArchived, true),
         ),
       )
       .orderBy(...orderBy);
@@ -359,90 +284,47 @@ export class BookmarkRepository extends WorkspaceScopedRepository<BookmarkRecord
 
     const nowMs = Date.now();
 
-    if (this.dialect === "sqlite") {
-      (this.db as SqliteDrizzleClient)
-        .update(sqliteBookmarks)
-        .set({
-          planArchived,
-          updatedAt: new Date(nowMs),
-        })
-        .where(
-          and(
-            eq(sqliteBookmarks.workspaceId, workspaceId),
-            inArray(sqliteBookmarks.id, bookmarkIds),
-          ),
-        )
-        .run();
-      return;
-    }
-
-    await (this.db as PostgresDrizzleClient)
-      .update(pgBookmarks)
+    await this.db
+      .update(bookmarks)
       .set({
         planArchived,
         updatedAt: nowMs,
       })
       .where(
         and(
-          eq(pgBookmarks.workspaceId, workspaceId),
-          inArray(pgBookmarks.id, bookmarkIds),
+          eq(bookmarks.workspaceId, workspaceId),
+          inArray(bookmarks.id, bookmarkIds),
         ),
       );
   }
 
   /** Counts non-archived bookmarks in the workspace (spec §12.5 — cap applies to active bookmarks). */
   async countActiveInWorkspace(workspaceId: string): Promise<number> {
-    if (this.dialect === "sqlite") {
-      const row = (this.db as SqliteDrizzleClient)
-        .select({ count: sql<number>`count(*)` })
-        .from(sqliteBookmarks)
-        .where(
-          and(
-            eq(sqliteBookmarks.workspaceId, workspaceId),
-            eq(sqliteBookmarks.planArchived, false),
-          ),
-        )
-        .get();
-      return row?.count ?? 0;
-    }
 
-    const rows = await (this.db as PostgresDrizzleClient)
+    const rows = await this.db
       .select({ count: sql<number>`count(*)` })
-      .from(pgBookmarks)
+      .from(bookmarks)
       .where(
         and(
-          eq(pgBookmarks.workspaceId, workspaceId),
-          eq(pgBookmarks.planArchived, false),
+          eq(bookmarks.workspaceId, workspaceId),
+          eq(bookmarks.planArchived, false),
         ),
       );
-    return rows[0]?.count ?? 0;
+    return coerceCount(rows[0]?.count);
   }
 
   async findById(
     workspaceId: string,
     bookmarkId: string,
   ): Promise<BookmarkRecord | null> {
-    if (this.dialect === "sqlite") {
-      const row = (this.db as SqliteDrizzleClient)
-        .select()
-        .from(sqliteBookmarks)
-        .where(
-          and(
-            eq(sqliteBookmarks.id, bookmarkId),
-            eq(sqliteBookmarks.workspaceId, workspaceId),
-          ),
-        )
-        .get();
-      return row ? toBookmarkRecord(row) : null;
-    }
 
-    const rows = await (this.db as PostgresDrizzleClient)
+    const rows = await this.db
       .select()
-      .from(pgBookmarks)
+      .from(bookmarks)
       .where(
         and(
-          eq(pgBookmarks.id, bookmarkId),
-          eq(pgBookmarks.workspaceId, workspaceId),
+          eq(bookmarks.id, bookmarkId),
+          eq(bookmarks.workspaceId, workspaceId),
         ),
       )
       .limit(1);
@@ -459,66 +341,29 @@ export class BookmarkRepository extends WorkspaceScopedRepository<BookmarkRecord
     const offset = (page - 1) * pageSize;
     const orderBy = orderByForSort(
       query.sort,
-      this.dialect === "sqlite" ? sqliteBookmarks : pgBookmarks,
+      bookmarks,
     );
     const orderByClause = Array.isArray(orderBy) ? orderBy : [orderBy];
 
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      const conditions = buildListConditions(
-        workspaceId,
-        userId,
-        query,
-        sqliteBookmarks,
-        sqliteBookmarkFolders,
-        sqliteBookmarkTags,
-      );
-      const whereClause = and(...conditions);
-
-      const countRow = sqliteDb
-        .select({ count: sql<number>`count(*)` })
-        .from(sqliteBookmarks)
-        .where(whereClause)
-        .get();
-      const total = countRow?.count ?? 0;
-
-      const rows = sqliteDb
-        .select()
-        .from(sqliteBookmarks)
-        .where(whereClause)
-        .orderBy(...orderByClause)
-        .limit(pageSize)
-        .offset(offset)
-        .all();
-
-      return {
-        items: rows.map(toBookmarkRecord),
-        total,
-        page,
-        pageSize,
-      };
-    }
-
-    const pgDb = this.db as PostgresDrizzleClient;
-    const conditions = buildListConditions(
+        const conditions = buildListConditions(
       workspaceId,
       userId,
       query,
-      pgBookmarks,
-      pgBookmarkFolders,
-      pgBookmarkTags,
+      bookmarks,
+      bookmarkFolders,
+      bookmarkTags,
     );
     const whereClause = and(...conditions);
 
-    const countRows = await pgDb
+    const countRows = await this.db
       .select({ count: sql<number>`count(*)` })
-      .from(pgBookmarks)
+      .from(bookmarks)
       .where(whereClause);
-    const total = countRows[0]?.count ?? 0;
+    const total = coerceCount(countRows[0]?.count);
 
-    const rows = await pgDb
+    const rows = await this.db
       .select()
-      .from(pgBookmarks)
+      .from(bookmarks)
       .where(whereClause)
       .orderBy(...orderByClause)
       .limit(pageSize)
@@ -539,59 +384,29 @@ export class BookmarkRepository extends WorkspaceScopedRepository<BookmarkRecord
   ): Promise<BookmarkIdsResult> {
     const orderBy = orderByForSort(
       query.sort,
-      this.dialect === "sqlite" ? sqliteBookmarks : pgBookmarks,
+      bookmarks,
     );
     const orderByClause = Array.isArray(orderBy) ? orderBy : [orderBy];
 
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      const conditions = buildListConditions(
-        workspaceId,
-        userId,
-        query,
-        sqliteBookmarks,
-        sqliteBookmarkFolders,
-        sqliteBookmarkTags,
-      );
-      const whereClause = and(...conditions);
-
-      const countRow = sqliteDb
-        .select({ count: sql<number>`count(*)` })
-        .from(sqliteBookmarks)
-        .where(whereClause)
-        .get();
-      const total = countRow?.count ?? 0;
-
-      const rows = sqliteDb
-        .select({ id: sqliteBookmarks.id })
-        .from(sqliteBookmarks)
-        .where(whereClause)
-        .orderBy(...orderByClause)
-        .all();
-
-      return { ids: rows.map((r) => r.id), total };
-    }
-
-    const pgDb = this.db as PostgresDrizzleClient;
-    const conditions = buildListConditions(
+        const conditions = buildListConditions(
       workspaceId,
       userId,
       query,
-      pgBookmarks,
-      pgBookmarkFolders,
-      pgBookmarkTags,
+      bookmarks,
+      bookmarkFolders,
+      bookmarkTags,
     );
     const whereClause = and(...conditions);
 
-    const countRows = await pgDb
+    const countRows = await this.db
       .select({ count: sql<number>`count(*)` })
-      .from(pgBookmarks)
+      .from(bookmarks)
       .where(whereClause);
-    const total = countRows[0]?.count ?? 0;
+    const total = coerceCount(countRows[0]?.count);
 
-    const rows = await pgDb
-      .select({ id: pgBookmarks.id })
-      .from(pgBookmarks)
+    const rows = await this.db
+      .select({ id: bookmarks.id })
+      .from(bookmarks)
       .where(whereClause)
       .orderBy(...orderByClause);
 
@@ -602,25 +417,12 @@ export class BookmarkRepository extends WorkspaceScopedRepository<BookmarkRecord
     workspaceId: string,
     slug: string,
   ): Promise<BookmarkRecord | null> {
-    if (this.dialect === "sqlite") {
-      const row = (this.db as SqliteDrizzleClient)
-        .select()
-        .from(sqliteBookmarks)
-        .where(
-          and(
-            eq(sqliteBookmarks.workspaceId, workspaceId),
-            eq(sqliteBookmarks.slug, slug),
-          ),
-        )
-        .get();
-      return row ? toBookmarkRecord(row) : null;
-    }
 
-    const rows = await (this.db as PostgresDrizzleClient)
+    const rows = await this.db
       .select()
-      .from(pgBookmarks)
+      .from(bookmarks)
       .where(
-        and(eq(pgBookmarks.workspaceId, workspaceId), eq(pgBookmarks.slug, slug)),
+        and(eq(bookmarks.workspaceId, workspaceId), eq(bookmarks.slug, slug)),
       )
       .limit(1);
     return rows[0] ? toBookmarkRecord(rows[0]) : null;
@@ -643,32 +445,13 @@ export class BookmarkRepository extends WorkspaceScopedRepository<BookmarkRecord
     if (patch.pinned !== undefined) updates.pinned = patch.pinned;
     if (patch.planArchived !== undefined) updates.planArchived = patch.planArchived;
 
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      sqliteDb
-        .update(sqliteBookmarks)
-        .set({
-          ...updates,
-          updatedAt: new Date(nowMs),
-        })
-        .where(
-          and(
-            eq(sqliteBookmarks.id, bookmarkId),
-            eq(sqliteBookmarks.workspaceId, workspaceId),
-          ),
-        )
-        .run();
-
-      return this.findById(workspaceId, bookmarkId);
-    }
-
-    await (this.db as PostgresDrizzleClient)
-      .update(pgBookmarks)
+    await this.db
+      .update(bookmarks)
       .set(updates)
       .where(
         and(
-          eq(pgBookmarks.id, bookmarkId),
-          eq(pgBookmarks.workspaceId, workspaceId),
+          eq(bookmarks.id, bookmarkId),
+          eq(bookmarks.workspaceId, workspaceId),
         ),
       );
 
@@ -676,31 +459,18 @@ export class BookmarkRepository extends WorkspaceScopedRepository<BookmarkRecord
   }
 
   async delete(workspaceId: string, bookmarkId: string): Promise<void> {
-    const sharingRepo = new SharingRepository(this.db, this.dialect);
+    const sharingRepo = new SharingRepository(this.db);
     await sharingRepo.deleteSharesForBookmark(workspaceId, bookmarkId);
     await this.deleteSlugPreferencesForBookmark(workspaceId, bookmarkId);
     await this.deleteBookmarkFolderLinksForBookmark(workspaceId, bookmarkId);
     await this.deleteBookmarkTagLinksForBookmark(workspaceId, bookmarkId);
 
-    if (this.dialect === "sqlite") {
-      (this.db as SqliteDrizzleClient)
-        .delete(sqliteBookmarks)
-        .where(
-          and(
-            eq(sqliteBookmarks.id, bookmarkId),
-            eq(sqliteBookmarks.workspaceId, workspaceId),
-          ),
-        )
-        .run();
-      return;
-    }
-
-    await (this.db as PostgresDrizzleClient)
-      .delete(pgBookmarks)
+    await this.db
+      .delete(bookmarks)
       .where(
         and(
-          eq(pgBookmarks.id, bookmarkId),
-          eq(pgBookmarks.workspaceId, workspaceId),
+          eq(bookmarks.id, bookmarkId),
+          eq(bookmarks.workspaceId, workspaceId),
         ),
       );
   }
@@ -710,35 +480,18 @@ export class BookmarkRepository extends WorkspaceScopedRepository<BookmarkRecord
     bookmarkId: string,
     accessedAtMs: number,
   ): Promise<void> {
-    if (this.dialect === "sqlite") {
-      (this.db as SqliteDrizzleClient)
-        .update(sqliteBookmarks)
-        .set({
-          accessCount: sql`${sqliteBookmarks.accessCount} + 1`,
-          lastAccessedAt: new Date(accessedAtMs),
-          updatedAt: new Date(accessedAtMs),
-        })
-        .where(
-          and(
-            eq(sqliteBookmarks.id, bookmarkId),
-            eq(sqliteBookmarks.workspaceId, workspaceId),
-          ),
-        )
-        .run();
-      return;
-    }
 
-    await (this.db as PostgresDrizzleClient)
-      .update(pgBookmarks)
+    await this.db
+      .update(bookmarks)
       .set({
-        accessCount: sql`${pgBookmarks.accessCount} + 1`,
+        accessCount: sql`${bookmarks.accessCount} + 1`,
         lastAccessedAt: accessedAtMs,
         updatedAt: accessedAtMs,
       })
       .where(
         and(
-          eq(pgBookmarks.id, bookmarkId),
-          eq(pgBookmarks.workspaceId, workspaceId),
+          eq(bookmarks.id, bookmarkId),
+          eq(bookmarks.workspaceId, workspaceId),
         ),
       );
   }
@@ -749,32 +502,8 @@ export class BookmarkRepository extends WorkspaceScopedRepository<BookmarkRecord
     const id = randomUUID();
     const nowMs = Date.now();
 
-    if (this.dialect === "sqlite") {
-      const sqliteDb = this.db as SqliteDrizzleClient;
-      sqliteDb
-        .insert(sqliteSlugPreferences)
-        .values({
-          id,
-          workspaceId: data.workspaceId,
-          userId: data.userId,
-          slug: data.slug,
-          bookmarkId: data.bookmarkId,
-          createdAt: new Date(nowMs),
-        })
-        .run();
-
-      const row = sqliteDb
-        .select()
-        .from(sqliteSlugPreferences)
-        .where(eq(sqliteSlugPreferences.id, id))
-        .get();
-      if (!row) throw new Error("Failed to create slug preference");
-      return toSlugPreferenceRecord(row);
-    }
-
-    const pgDb = this.db as PostgresDrizzleClient;
-    const rows = await pgDb
-      .insert(pgSlugPreferences)
+        const rows = await this.db
+      .insert(slugPreferences)
       .values({
         id,
         workspaceId: data.workspaceId,
@@ -793,55 +522,30 @@ export class BookmarkRepository extends WorkspaceScopedRepository<BookmarkRecord
     workspaceId: string,
     bookmarkId: string,
   ): Promise<number> {
-    if (this.dialect === "sqlite") {
-      const row = (this.db as SqliteDrizzleClient)
-        .select({ count: sql<number>`count(*)` })
-        .from(sqliteSlugPreferences)
-        .where(
-          and(
-            eq(sqliteSlugPreferences.workspaceId, workspaceId),
-            eq(sqliteSlugPreferences.bookmarkId, bookmarkId),
-          ),
-        )
-        .get();
-      return row?.count ?? 0;
-    }
 
-    const rows = await (this.db as PostgresDrizzleClient)
+    const rows = await this.db
       .select({ count: sql<number>`count(*)` })
-      .from(pgSlugPreferences)
+      .from(slugPreferences)
       .where(
         and(
-          eq(pgSlugPreferences.workspaceId, workspaceId),
-          eq(pgSlugPreferences.bookmarkId, bookmarkId),
+          eq(slugPreferences.workspaceId, workspaceId),
+          eq(slugPreferences.bookmarkId, bookmarkId),
         ),
       );
-    return rows[0]?.count ?? 0;
+    return coerceCount(rows[0]?.count);
   }
 
   private async deleteBookmarkFolderLinksForBookmark(
     workspaceId: string,
     bookmarkId: string,
   ): Promise<void> {
-    if (this.dialect === "sqlite") {
-      (this.db as SqliteDrizzleClient)
-        .delete(sqliteBookmarkFolders)
-        .where(
-          and(
-            eq(sqliteBookmarkFolders.workspaceId, workspaceId),
-            eq(sqliteBookmarkFolders.bookmarkId, bookmarkId),
-          ),
-        )
-        .run();
-      return;
-    }
 
-    await (this.db as PostgresDrizzleClient)
-      .delete(pgBookmarkFolders)
+    await this.db
+      .delete(bookmarkFolders)
       .where(
         and(
-          eq(pgBookmarkFolders.workspaceId, workspaceId),
-          eq(pgBookmarkFolders.bookmarkId, bookmarkId),
+          eq(bookmarkFolders.workspaceId, workspaceId),
+          eq(bookmarkFolders.bookmarkId, bookmarkId),
         ),
       );
   }
@@ -850,25 +554,13 @@ export class BookmarkRepository extends WorkspaceScopedRepository<BookmarkRecord
     workspaceId: string,
     bookmarkId: string,
   ): Promise<void> {
-    if (this.dialect === "sqlite") {
-      (this.db as SqliteDrizzleClient)
-        .delete(sqliteBookmarkTags)
-        .where(
-          and(
-            eq(sqliteBookmarkTags.workspaceId, workspaceId),
-            eq(sqliteBookmarkTags.bookmarkId, bookmarkId),
-          ),
-        )
-        .run();
-      return;
-    }
 
-    await (this.db as PostgresDrizzleClient)
-      .delete(pgBookmarkTags)
+    await this.db
+      .delete(bookmarkTags)
       .where(
         and(
-          eq(pgBookmarkTags.workspaceId, workspaceId),
-          eq(pgBookmarkTags.bookmarkId, bookmarkId),
+          eq(bookmarkTags.workspaceId, workspaceId),
+          eq(bookmarkTags.bookmarkId, bookmarkId),
         ),
       );
   }
@@ -877,25 +569,13 @@ export class BookmarkRepository extends WorkspaceScopedRepository<BookmarkRecord
     workspaceId: string,
     bookmarkId: string,
   ): Promise<void> {
-    if (this.dialect === "sqlite") {
-      (this.db as SqliteDrizzleClient)
-        .delete(sqliteSlugPreferences)
-        .where(
-          and(
-            eq(sqliteSlugPreferences.workspaceId, workspaceId),
-            eq(sqliteSlugPreferences.bookmarkId, bookmarkId),
-          ),
-        )
-        .run();
-      return;
-    }
 
-    await (this.db as PostgresDrizzleClient)
-      .delete(pgSlugPreferences)
+    await this.db
+      .delete(slugPreferences)
       .where(
         and(
-          eq(pgSlugPreferences.workspaceId, workspaceId),
-          eq(pgSlugPreferences.bookmarkId, bookmarkId),
+          eq(slugPreferences.workspaceId, workspaceId),
+          eq(slugPreferences.bookmarkId, bookmarkId),
         ),
       );
   }

@@ -84,10 +84,9 @@ export class BillingApplicationService {
     @Inject(DowngradeService) private readonly downgrade: DowngradeService,
   ) {
     const orm = db.getOrm();
-    const dialect = db.dialect;
-    this.workspaceRepo = new WorkspaceRepository(orm, dialect);
-    this.memberRepo = new WorkspaceMemberRepository(orm, dialect);
-    this.webhookEventRepo = new BillingWebhookEventRepository(orm, dialect);
+    this.workspaceRepo = new WorkspaceRepository(orm);
+    this.memberRepo = new WorkspaceMemberRepository(orm);
+    this.webhookEventRepo = new BillingWebhookEventRepository(orm);
   }
 
   assertBillingAvailable(): void {

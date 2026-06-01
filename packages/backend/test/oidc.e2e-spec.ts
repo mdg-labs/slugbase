@@ -58,7 +58,7 @@ describe("OIDC (integration)", () => {
 
     const db = moduleRef.get(DbService);
     const cryptoService = moduleRef.get(AesGcmCryptoService);
-    const oidcRepo = new OidcRepository(db.getOrm(), db.dialect);
+    const oidcRepo = new OidcRepository(db.getOrm());
 
     const secretEncrypted = cryptoService.encrypt(MOCK_CLIENT_SECRET);
     const provider = await oidcRepo.createProvider({
