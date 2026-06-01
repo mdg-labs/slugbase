@@ -3,6 +3,7 @@ import "@slugbase/ui/styles/colors-and-type.css";
 import "../styles/marketing.css";
 import MarketingFooter from "../components/MarketingFooter.astro";
 import MarketingNav from "../components/MarketingNav.astro";
+import AnalyticsConsent from "../components/AnalyticsConsent.astro";
 interface Props {
   title: string;
 }
@@ -27,5 +28,6 @@ const appOrigin = import.meta.env.PUBLIC_FRONTEND_ORIGIN ?? "";
       <slot />
     </main>
     <MarketingFooter />
+    <AnalyticsConsent />
   </body>
 </html>

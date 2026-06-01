@@ -107,6 +107,12 @@ Keys are registered incrementally per task (rule `05-env-vars`). Full categories
 | `VITE_SUPPORTER_PROMOTION_END` | ISO-8601 supporter offer deadline (display + countdown) | `/web` | hosted | Optional |
 | `VITE_TEAM_BASE_SEATS` | Included Team seats shown in plan table | `/web` | hosted | Default `5` |
 | `VITE_FREE_BOOKMARK_CAP` | Free cap shown in billing meter/table | `/web` | hosted | Default `50` |
+| `UMAMI_HOST` | Umami instance base URL for server-side event recording (spec §11.6) | `/api` | hosted optional | Empty = no-op (self-host default) |
+| `UMAMI_WEBSITE_ID` | Umami website UUID for server-side events | `/api` | hosted optional | Required with `UMAMI_HOST` |
+| `VITE_UMAMI_HOST` | Umami script host for web client analytics | `/web` | hosted optional | Empty = no tracker / no consent banner |
+| `VITE_UMAMI_WEBSITE_ID` | Umami website UUID for web client | `/web` | hosted optional | Required with `VITE_UMAMI_HOST` |
+| `PUBLIC_UMAMI_HOST` | Umami script host for marketing site | `/marketing` | hosted optional | Empty = no tracker / no consent banner |
+| `PUBLIC_UMAMI_WEBSITE_ID` | Umami website UUID for marketing site | `/marketing` | hosted optional | Required with `PUBLIC_UMAMI_HOST` |
 | `SENTRY_DSN` | Sentry ingest DSN for API error reporting (spec §11.7) | `/api` | `development` (optional); hosted `staging`/`production` | Empty = no-op (self-host default) |
 | `SENTRY_ENVIRONMENT` | Sentry environment tag override | `/api` | optional | Defaults to `NODE_ENV` |
 | `SENTRY_RELEASE` | Sentry release identifier (deploy version) | `/api` | optional | Empty = omitted from SDK init |

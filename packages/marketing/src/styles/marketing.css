@@ -205,4 +205,51 @@ img { display: block; }
 .mk-list-check li { display:flex; align-items:center; gap:var(--sp-4); font-size:16px; color:var(--fg-muted); }
 .mk-list-check li svg { color:var(--success-text); flex:none; }
 .mk-mono-pill { display:inline-flex; align-items:center; gap:var(--sp-3); height:24px; padding:0 var(--sp-4); background:var(--raised-2); border-radius:var(--r-sm); font:var(--weight-medium) 12px/1 var(--font-mono); color:var(--accent-text); border:1px solid var(--border-subtle); }
+
+/* ---- Analytics consent banner ---- */
+.marketing-consent-banner {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 200;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-5);
+  padding: var(--sp-5) var(--sp-6);
+  background: var(--overlay);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.25);
+}
+.marketing-consent-banner__message {
+  flex: 1 1 280px;
+  margin: 0;
+  font-size: var(--text-body);
+  line-height: var(--lh-body);
+  color: var(--fg);
+}
+.marketing-consent-banner__actions {
+  display: flex;
+  gap: var(--sp-3);
+  flex: none;
+}
+.marketing-consent-banner__decline,
+.marketing-consent-banner__accept {
+  border-radius: var(--r-md);
+  padding: var(--sp-3) var(--sp-5);
+  font-size: var(--text-body);
+  font-weight: var(--weight-medium);
+  border: 1px solid var(--border);
+}
+.marketing-consent-banner__decline {
+  background: var(--raised);
+  color: var(--fg-muted);
+}
+.marketing-consent-banner__accept {
+  background: var(--accent);
+  color: var(--accent-fg);
+  border-color: var(--accent-border);
+}
+
 @media (prefers-reduced-motion: reduce) { * { animation-duration:0.01ms !important; transition-duration:0.01ms !important; } }

@@ -3,6 +3,8 @@ import type { LoaderFunctionArgs } from "react-router";
 import { redirect } from "react-router";
 import { I18nProvider } from "./i18n/I18nProvider.js";
 import { ThemeProvider } from "@slugbase/ui";
+import { AnalyticsConsentProvider } from "./components/consent/AnalyticsConsentProvider.js";
+import { ConsentBanner } from "./components/consent/ConsentBanner.js";
 import { RootErrorBoundary } from "./components/RootErrorBoundary.js";
 import stylesheet from "./app.css?url";
 
@@ -56,7 +58,10 @@ export default function Root() {
   return (
     <I18nProvider>
       <ThemeProvider>
-        <Outlet />
+        <AnalyticsConsentProvider>
+          <Outlet />
+          <ConsentBanner />
+        </AnalyticsConsentProvider>
       </ThemeProvider>
     </I18nProvider>
   );
