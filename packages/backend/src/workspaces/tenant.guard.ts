@@ -10,6 +10,7 @@ import {
 import type { Request } from "express";
 
 import { SESSION_COOKIE } from "../auth/login-logout.controller.js";
+import { ConfigService } from "../config/config.service.js";
 import { SessionService } from "../sessions/session.service.js";
 import type { SessionData } from "../sessions/session.types.js";
 import type { WorkspaceRecord } from "./workspace.types.js";
@@ -30,9 +31,10 @@ export const TENANT_SESSION_ID_KEY = "tenantSessionId";
  * Performs these checks in order:
  *   1. Reads and validates the session cookie → 401 if missing, invalid, or expired
  *   2. Rejects MFA-pending sessions → 401
- *   3. Reads `activeWorkspaceId` from session data → 403 if not set
- *   4. Verifies the user is still a member of the active workspace → 403
- *   5. Verifies the workspace still exists → 403
+ *   3. Rejects email-verification-pending sessions when required → 403 (spec §5.5)
+ *   4. Reads `activeWorkspaceId` from session data → 403 if not set
+ *   5. Verifies the user is still a member of the active workspace → 403
+ *   6. Verifies the workspace still exists → 403
  *
  * On success, attaches to the request:
  *   - `activeWorkspace` — the resolved WorkspaceRecord (use via @ActiveWorkspace())
@@ -46,6 +48,7 @@ export class TenantGuard implements CanActivate {
   constructor(
     @Inject(SessionService) private readonly sessions: SessionService,
     @Inject(WorkspacesService) private readonly workspaces: WorkspacesService,
+    @Inject(ConfigService) private readonly config: ConfigService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -66,6 +69,15 @@ export class TenantGuard implements CanActivate {
     if (data.mfaPending === true) {
       throw new UnauthorizedException(
         "MFA challenge must be completed before proceeding",
+      );
+    }
+
+    if (
+      this.config.get("EMAIL_VERIFICATION_REQUIRED") &&
+      data.emailVerificationPending === true
+    ) {
+      throw new ForbiddenException(
+        "Email address must be verified before accessing workspace data",
       );
     }
 

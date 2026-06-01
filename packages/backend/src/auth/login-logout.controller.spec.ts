@@ -42,6 +42,7 @@ function buildController(opts: {
   activeWorkspaceId?: string;
   workspaceError?: Error;
   mfaState?: string;
+  emailVerificationRequired?: boolean;
 }) {
   const accounts = {
     findByEmail: vi.fn().mockResolvedValue(opts.account ?? null),
@@ -64,6 +65,7 @@ function buildController(opts: {
   const config = {
     get: vi.fn((key: string) => {
       if (key === "isProduction") return false;
+      if (key === "EMAIL_VERIFICATION_REQUIRED") return opts.emailVerificationRequired ?? false;
       return undefined;
     }),
   } as unknown as MockedObject<ConfigService>;
@@ -112,14 +114,15 @@ describe("LoginLogoutController.login()", () => {
     expect(res.cookie).toHaveBeenCalled();
   });
 
-  it("sets emailVerificationPending for unverified users while keeping activeWorkspaceId", async () => {
+  it("sets emailVerificationPending when verification is required and user is unverified", async () => {
     const { controller, sessions } = buildController({
       account: makeAccount({ emailVerified: false }),
       activeWorkspaceId: "ws-1",
+      emailVerificationRequired: true,
     });
     const res = makeResponse();
 
-    await controller.login(
+    const result = await controller.login(
       { email: "user@example.com", password: "secret" },
       res,
     );
@@ -131,6 +134,30 @@ describe("LoginLogoutController.login()", () => {
         emailVerificationPending: true,
       },
     });
+    expect(result).toEqual({
+      userId: "user-1",
+      emailVerificationRequired: true,
+    });
+  });
+
+  it("does not set emailVerificationPending when verification is not required", async () => {
+    const { controller, sessions } = buildController({
+      account: makeAccount({ emailVerified: false }),
+      activeWorkspaceId: "ws-1",
+      emailVerificationRequired: false,
+    });
+    const res = makeResponse();
+
+    const result = await controller.login(
+      { email: "user@example.com", password: "secret" },
+      res,
+    );
+
+    expect(sessions.createSession).toHaveBeenCalledWith({
+      userId: "user-1",
+      data: { activeWorkspaceId: "ws-1" },
+    });
+    expect(result).toEqual({ userId: "user-1" });
   });
 
   it("returns 403 when the user has no workspace memberships", async () => {

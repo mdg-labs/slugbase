@@ -48,6 +48,7 @@ describe("TenantGuard — session and membership validation", () => {
     session: SessionRecord | null;
     workspaceExists?: boolean;
     isMember?: boolean;
+    emailVerificationRequired?: boolean;
   }) {
     const { TenantGuard } = await import("./tenant.guard.js");
 
@@ -68,7 +69,18 @@ describe("TenantGuard — session and membership validation", () => {
         : () => Promise.resolve(makeWorkspace("ws-1")),
     };
 
-    return new TenantGuard(sessionsMock as never, workspacesMock as never);
+    const configMock = {
+      get: (key: string) =>
+        key === "EMAIL_VERIFICATION_REQUIRED"
+          ? (opts.emailVerificationRequired ?? false)
+          : undefined,
+    };
+
+    return new TenantGuard(
+      sessionsMock as never,
+      workspacesMock as never,
+      configMock as never,
+    );
   }
 
   interface FakeContext {
@@ -106,6 +118,33 @@ describe("TenantGuard — session and membership validation", () => {
     await expect(guard.canActivate(fakeContext() as never)).rejects.toThrow(
       UnauthorizedException,
     );
+  });
+
+  it("throws 403 when email verification is pending and required", async () => {
+    const session = makeSession({
+      data: { activeWorkspaceId: "ws-1", emailVerificationPending: true },
+    });
+    const guard = await buildGuard({
+      session,
+      emailVerificationRequired: true,
+    });
+    await expect(guard.canActivate(fakeContext() as never)).rejects.toThrow(
+      ForbiddenException,
+    );
+  });
+
+  it("allows access when email verification is pending but not required", async () => {
+    const session = makeSession({
+      data: { activeWorkspaceId: "ws-1", emailVerificationPending: true },
+    });
+    const guard = await buildGuard({
+      session,
+      isMember: true,
+      workspaceExists: true,
+      emailVerificationRequired: false,
+    });
+    const ctx = fakeContext();
+    await expect(guard.canActivate(ctx as never)).resolves.toBe(true);
   });
 
   it("throws 403 when no activeWorkspaceId is set in session data", async () => {

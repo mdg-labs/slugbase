@@ -33,8 +33,8 @@ interface LoginBody {
 }
 
 type LoginResult =
-  | { userId: string; mfaRequired?: never }
-  | { mfaRequired: true; userId?: never };
+  | { userId: string; emailVerificationRequired?: true; mfaRequired?: never }
+  | { mfaRequired: true; userId?: never; emailVerificationRequired?: never };
 
 @Controller("auth")
 @SkipCsrf()
@@ -90,10 +90,11 @@ export class LoginLogoutController {
     const activeWorkspaceId =
       await this.workspaces.resolveDefaultActiveWorkspaceId(account.id);
 
+    const emailVerificationRequired = this.config.get("EMAIL_VERIFICATION_REQUIRED");
     const sessionData: Record<string, unknown> = {
       activeWorkspaceId,
     };
-    if (!account.emailVerified) {
+    if (emailVerificationRequired && !account.emailVerified) {
       sessionData["emailVerificationPending"] = true;
     }
 
@@ -108,6 +109,10 @@ export class LoginLogoutController {
       path: "/",
       secure: this.config.get("isProduction"),
     });
+
+    if (emailVerificationRequired && !account.emailVerified) {
+      return { userId: account.id, emailVerificationRequired: true };
+    }
 
     return { userId: account.id };
   }

@@ -15,6 +15,7 @@ import type { Request } from "express";
 import { z } from "zod";
 
 import { SessionService } from "../../sessions/session.service.js";
+import type { SessionData } from "../../sessions/session.types.js";
 import { SESSION_COOKIE } from "../login-logout.controller.js";
 import { SkipCsrf } from "../csrf/skip-csrf.decorator.js";
 import { EmailVerificationService } from "./email-verification.service.js";
@@ -44,12 +45,14 @@ export class EmailVerificationController {
   @HttpCode(200)
   async verifyEmail(
     @Query("token") token: string | undefined,
+    @Req() req: Request,
   ): Promise<{ ok: true; userId: string }> {
     if (!token) {
       throw new UnauthorizedException("Verification token is required");
     }
 
     const result = await this.verificationService.verifyToken(token);
+    await this.clearEmailVerificationPendingForSession(req, result.userId);
     return { ok: true, userId: result.userId };
   }
 
@@ -86,6 +89,26 @@ export class EmailVerificationController {
       session.userId,
       parsed.data.email,
     );
+  }
+
+  private async clearEmailVerificationPendingForSession(
+    req: Request,
+    userId: string,
+  ): Promise<void> {
+    const rawCookie = req.cookies[SESSION_COOKIE] as string | undefined;
+    if (!rawCookie) return;
+
+    const sessionId = this.sessions.verifySessionCookie(rawCookie);
+    if (!sessionId) return;
+
+    const session = await this.sessions.findSession(sessionId);
+    if (!session || session.userId !== userId) return;
+
+    const data = session.data as SessionData;
+    if (data.emailVerificationPending !== true) return;
+
+    const { emailVerificationPending: _removed, ...rest } = data;
+    await this.sessions.updateSessionData(sessionId, rest);
   }
 
   private async requireFullSession(req: Request) {

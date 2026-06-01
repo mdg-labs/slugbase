@@ -13,6 +13,7 @@ export const LoginBodySchema = z
 export const LoginResponseSchema = z
   .object({
     userId: z.string(),
+    emailVerificationRequired: z.literal(true).optional(),
   })
   .strict();
 

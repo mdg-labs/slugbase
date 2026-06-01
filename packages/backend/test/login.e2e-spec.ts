@@ -113,7 +113,7 @@ describe("Login session (integration)", () => {
     expect(body.id).toBe(workspaceId);
   });
 
-  it("sets activeWorkspaceId for unverified users on login", async () => {
+  it("sets activeWorkspaceId for unverified users on login when verification is not required", async () => {
     const moduleRef = app as INestApplication;
     const accountsService = moduleRef.get(AccountsService);
     const workspacesService = moduleRef.get(WorkspacesService);
@@ -150,8 +150,8 @@ describe("Login session (integration)", () => {
       const session = await sessionService.findSession(sessionId);
       expect(session?.data).toMatchObject({
         activeWorkspaceId: workspace.id,
-        emailVerificationPending: true,
       });
+      expect(session?.data).not.toHaveProperty("emailVerificationPending");
     }
   });
 

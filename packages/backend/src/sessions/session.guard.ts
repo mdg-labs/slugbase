@@ -32,6 +32,10 @@ export const SESSION_DATA_KEY = "sessionData";
  *   - No session cookie is present or the cookie signature is invalid
  *   - The session does not exist or has expired
  *   - The session is in MFA-pending state (challenge not yet completed)
+ *
+ * Email-verification-pending sessions are allowed here so auth endpoints
+ * (GET /auth/me, resend/correct-signup-email) remain reachable; tenant routes
+ * enforce the verification gate via TenantGuard (spec §5.5).
  */
 @Injectable()
 export class SessionGuard implements CanActivate {
