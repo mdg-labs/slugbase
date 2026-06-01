@@ -196,27 +196,6 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  migrate-staging:
-    name: Staging · 3 · Database migrate
-    runs-on: ubuntu-latest
-    environment: staging
-    needs: build-server-staging
-    if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup workspace
-        uses: ./.github/actions/setup
-        with:
-          skip-checkout: "true"
-          infisical-env-slug: staging
-          infisical-domain: ${{ secrets.INFISICAL_DOMAIN }}
-          infisical-identity-id: ${{ secrets.INFISICAL_OIDC_IDENTITY_ID }}
-
-      - name: Run database migrations
-        run: bash .github/scripts/run-migrate-deploy.sh
-
   push-ghcr-staging-dev:
     name: Staging · 3 · Push self-host image (GHCR dev)
     runs-on: ubuntu-latest
@@ -260,7 +239,7 @@ jobs:
     name: Staging · 4 · Deploy API (Fly)
     runs-on: ubuntu-latest
     environment: staging
-    needs: migrate-staging
+    needs: build-server-staging
     if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
     steps:
       - name: Checkout
@@ -287,7 +266,7 @@ jobs:
     name: Staging · 4 · Deploy web (Cloudflare Workers)
     runs-on: ubuntu-latest
     environment: staging
-    needs: [build-web-staging, migrate-staging]
+    needs: build-web-staging
     if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
     steps:
       - name: Checkout
@@ -319,7 +298,7 @@ jobs:
     name: Staging · 4 · Deploy marketing (Cloudflare Workers)
     runs-on: ubuntu-latest
     environment: staging
-    needs: [build-web-staging, migrate-staging]
+    needs: build-web-staging
     if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
     steps:
       - name: Checkout
@@ -553,34 +532,11 @@ jobs:
           ghcr.io/${{ github.repository }}
           ${{ github.event.release.tag_name }}
 
-  migrate-production:
-    name: Production · 4 · Database migrate
-    runs-on: ubuntu-latest
-    environment: production
-    needs: [check-not-deployed, build-server-production]
-    if: needs.check-not-deployed.outputs.should_deploy == 'true'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.release.tag_name }}
-
-      - name: Setup workspace
-        uses: ./.github/actions/setup
-        with:
-          skip-checkout: "true"
-          infisical-env-slug: prod
-          infisical-domain: ${{ secrets.INFISICAL_DOMAIN }}
-          infisical-identity-id: ${{ secrets.INFISICAL_OIDC_IDENTITY_ID }}
-
-      - name: Run database migrations
-        run: bash .github/scripts/run-migrate-deploy.sh
-
   deploy-fly-production:
     name: Production · 5 · Deploy API (Fly)
     runs-on: ubuntu-latest
     environment: production
-    needs: [check-not-deployed, migrate-production]
+    needs: [check-not-deployed, build-server-production]
     if: needs.check-not-deployed.outputs.should_deploy == 'true'
     steps:
       - name: Checkout
@@ -609,7 +565,7 @@ jobs:
     name: Production · 5 · Deploy web (Cloudflare Workers)
     runs-on: ubuntu-latest
     environment: production
-    needs: [check-not-deployed, build-web-production, migrate-production]
+    needs: [check-not-deployed, build-web-production]
     if: needs.check-not-deployed.outputs.should_deploy == 'true'
     steps:
       - name: Checkout
@@ -643,7 +599,7 @@ jobs:
     name: Production · 5 · Deploy marketing (Cloudflare Workers)
     runs-on: ubuntu-latest
     environment: production
-    needs: [check-not-deployed, build-web-production, migrate-production]
+    needs: [check-not-deployed, build-web-production]
     if: needs.check-not-deployed.outputs.should_deploy == 'true'
     steps:
       - name: Checkout

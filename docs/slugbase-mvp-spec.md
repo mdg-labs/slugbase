@@ -747,19 +747,18 @@ Runs only on the `staging → main` pull request (i.e. the release-candidate PR)
 
 ### 22.5 Staging deploy (push to `staging`)
 
-Ordered pipeline, with server and web/marketing builds running **in parallel** for speed:
+Ordered pipeline, with server and web/marketing builds running **in parallel** for speed. Schema migrations apply automatically on **API startup** (before the server accepts traffic) — hosted Fly and self-host GHCR use the same bootstrap path (§14.2); CI does not connect to Neon for migrate.
 
 | Step | Description |
 |---|---|
 | 1 | GitHub Deployment record — start |
 | 2a (parallel) | Build API/back-end with `staging` Infisical secrets |
 | 2b (parallel) | Build web client + marketing site bundles with `staging` Infisical secrets |
-| 3 | Database migration (`migrate:deploy`) — after 2a, before Fly deploy |
-| 4a | Deploy API to **Fly.io** `fra` (`flyctl deploy --remote-only`) |
-| 4b | Deploy web client to **Cloudflare Workers** via `wrangler deploy` (with retry) — after migration + 2b |
-| 4c | Deploy marketing site to **Cloudflare Workers** via `wrangler deploy` (with retry) — after migration + 2b |
-| 5 | Smoke: `GET /health` and `/version` endpoints on all deployed surfaces |
-| 6 | GitHub Deployment record — finish (success/failure) |
+| 3a | Deploy API to **Fly.io** `fra` (`flyctl deploy --remote-only`) — migrations run on API boot |
+| 3b | Deploy web client to **Cloudflare Workers** via `wrangler deploy` (with retry) — after 2b |
+| 3c | Deploy marketing site to **Cloudflare Workers** via `wrangler deploy` (with retry) — after 2b |
+| 4 | Smoke: `GET /health` and `/version` endpoints on all deployed surfaces |
+| 5 | GitHub Deployment record — finish (success/failure) |
 
 ### 22.6 Prepare release (push to `main`)
 
@@ -774,20 +773,19 @@ Runs after CI checks pass. Only proceeds if `package.json` version is greater th
 
 ### 22.7 Production deploy (release published)
 
-Triggered when a draft release is manually published. Idempotent: compares the release tag against `DEPLOYED_VERSION` (a repository Actions variable); skips the deploy if already deployed.
+Triggered when a draft release is manually published. Idempotent: compares the release tag against `DEPLOYED_VERSION` (a repository Actions variable); skips the deploy if already deployed. Schema migrations apply automatically on **API startup** (before the server accepts traffic) — same bootstrap path as self-host (§14.2); CI does not connect to Neon for migrate.
 
 | Step | Description |
 |---|---|
 | 1 | Idempotency check |
 | 2 | GitHub Deployment record — start |
 | 3 | Build all packages from the release tag with `production` Infisical secrets; upload Sentry source maps (if `SENTRY_AUTH_TOKEN` is set) |
-| 4 | Database migration against production Neon |
-| 5a | Deploy API to **Fly.io** `fra` |
-| 5b | Deploy web client to **Cloudflare Workers** |
-| 5c | Deploy marketing site to **Cloudflare Workers** |
-| 6 | Smoke: health endpoint on Fly API + web client health check on Workers |
-| 7 | GitHub Deployment record — finish |
-| 8 | Write release tag to `DEPLOYED_VERSION` repository variable |
+| 4a | Deploy API to **Fly.io** `fra` — migrations run on API boot |
+| 4b | Deploy web client to **Cloudflare Workers** |
+| 4c | Deploy marketing site to **Cloudflare Workers** |
+| 5 | Smoke: health endpoint on Fly API + web client health check on Workers |
+| 6 | GitHub Deployment record — finish |
+| 7 | Write release tag to `DEPLOYED_VERSION` repository variable |
 
 ### 22.8 Self-hosted container image
 
