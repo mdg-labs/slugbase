@@ -47,6 +47,11 @@ Key differences from Dispatch One: hosted runners (no Docker cleanup), no worker
 Spec: §22. Resolved decision #35.
 _added: 2026-05-31_
 
+## pnpm test:integration — NEVER wrap with infisical (2026-06-01)
+
+`pnpm test:integration` must be run **without** `infisical run --env=dev --`. The integration test script uses an internal `validTestEnv` helper; Infisical injection causes `z.coerce.boolean()` to coerce the string `"false"` to `true` (non-empty string → truthy), breaking session guards and email-verification checks across all authenticated routes → 403 on every guarded endpoint. `lint`, `typecheck`, `test:unit`, and `build` may still use infisical when secrets are required. Rule added to `06-local-ci-before-commit.mdc`.
+_added: 2026-06-01_
+
 ## Database migrations — startup-only (2026-06-01)
 
 CI **does not** run Drizzle migrations against Neon (removed `migrate-staging` / `migrate-production` jobs). Migrations apply automatically on **API bootstrap** before `app.listen()` — hosted Fly (`fra` → Neon `eu-central-1`) and self-host GHCR combined image use the same path. `DATABASE_URL_UNPOOLED` is preferred when set (`resolveMigrationDatabaseUrl`). Local/operator manual apply: `pnpm db:migrate`.
