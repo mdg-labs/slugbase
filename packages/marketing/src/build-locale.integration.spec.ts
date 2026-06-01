@@ -41,5 +41,16 @@ describe("marketing build output", () => {
     expect(enPrivacy).toContain("Fly.io");
     expect(enPrivacy).toContain("Neon Postgres");
     expect(enPrivacy).toContain("Cloudflare Workers");
+
+    const en404 = readFileSync(join(packageRoot, "dist/404.html"), "utf8");
+    const de404 = readFileSync(join(packageRoot, "dist/de/404/index.html"), "utf8");
+    const en500 = readFileSync(join(packageRoot, "dist/500.html"), "utf8");
+
+    expect(en404).toContain(t("en", "marketing.error.404.title"));
+    expect(en404).toContain(t("en", "marketing.error.action.home"));
+    expect(de404).toContain(t("de", "marketing.error.404.title"));
+    expect(de404).toContain(t("de", "marketing.error.action.home"));
+    expect(en500).toContain(t("en", "marketing.error.500.title"));
+    expect(en500).toContain(t("en", "marketing.error.action.reload"));
   });
 });

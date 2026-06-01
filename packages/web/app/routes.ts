@@ -18,5 +18,6 @@ export default [
     route("settings/billing", "routes/settings/billing/index.tsx"),
     route("settings/account", "routes/settings/account/index.tsx"),
     route("settings/workspace", "routes/settings/workspace/index.tsx"),
+    route("*", "routes/not-found.tsx"),
   ]),
 ] satisfies RouteConfig;

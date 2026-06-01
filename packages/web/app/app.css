@@ -3,3 +3,55 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer components {
+  .error-page {
+    @apply flex flex-1 flex-col items-center justify-center gap-sp-6 px-sp-9 py-sp-12 text-center;
+  }
+
+  .error-code {
+    margin: 0;
+    user-select: none;
+    font-family: var(--font-mono);
+    font-weight: var(--weight-bold);
+    font-size: clamp(64px, 10vw, 112px);
+    line-height: 1;
+    letter-spacing: -0.04em;
+    color: transparent;
+    background: linear-gradient(180deg, var(--fg) 0%, var(--fg-faint) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+  }
+
+  .error-mark img {
+    opacity: 0.35;
+  }
+
+  .error-title {
+    margin: 0;
+    font: var(--weight-semi) var(--text-h2) / var(--lh-h2) var(--font-sans);
+    color: var(--fg);
+  }
+
+  .error-desc {
+    margin: 0;
+    max-width: 38ch;
+    font-size: var(--text-body-lg);
+    line-height: var(--lh-body-lg);
+    color: var(--fg-muted);
+  }
+
+  .error-path {
+    margin: 0;
+    padding: var(--sp-3) var(--sp-5);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--r-md);
+    background: var(--raised);
+    font: var(--weight-medium) var(--text-small) / 1 var(--font-mono);
+    color: var(--fg-faint);
+  }
+
+  .error-actions {
+    @apply flex flex-wrap items-center justify-center gap-sp-4;
+  }
+}

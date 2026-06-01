@@ -37,3 +37,5 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export default function AppLayoutRoute() {
   return <AppChrome />;
 }
+
+export { AppShellErrorBoundary as ErrorBoundary } from "./errors/AppShellErrorBoundary.js";
