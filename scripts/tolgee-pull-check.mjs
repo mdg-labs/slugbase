@@ -1,85 +1,43 @@
 #!/usr/bin/env node
 /**
- * Spec §22.6 / P6-07.2: export repo catalogs, pull Tolgee, strict bidirectional diff.
+ * Spec §22.6 / P6-07.2: merge local JSON, pull Tolgee, strict bidirectional diff.
+ * Implements spec "tolgee pull --check" (not a native upstream CLI flag).
  */
-import { spawnSync } from "node:child_process";
-import { rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 import {
-  LOCALES,
+  readSupportedLocales,
   diffCatalogs,
   diffHasErrors,
   formatDiffErrors,
   loadLocaleCatalog,
+  loadMergedLocalCatalogMap,
+  runTolgeePull,
 } from "./i18n-catalog-utils.mjs";
 
 const repoRoot = resolve(import.meta.dirname, "..");
-const exportDir = join(repoRoot, ".tolgee", "export");
 const pullDir = join(repoRoot, ".tolgee", "pull-check");
+const locales = readSupportedLocales();
 
 function fail(message) {
   console.error(`tolgee pull --check: ${message}`);
   process.exit(1);
 }
 
-const apiKey = process.env.TOLGEE_API_KEY?.trim();
-const projectId = process.env.TOLGEE_PROJECT_ID?.trim() || "4";
-const apiUrl =
-  process.env.VITE_TOLGEE_API_URL?.trim() || "https://tolgee.mdg-labs.dev";
-
-if (!apiKey) {
-  fail("TOLGEE_API_KEY is required (set via Infisical env root).");
-}
-
-const exportStep = spawnSync(
-  "pnpm",
-  ["exec", "tsx", "scripts/i18n-export-catalog.mjs"],
-  { cwd: repoRoot, stdio: "inherit", env: process.env },
-);
-if (exportStep.status !== 0) {
-  process.exit(exportStep.status ?? 1);
-}
-
-rmSync(pullDir, { recursive: true, force: true });
-
-const pull = spawnSync(
-  "pnpm",
-  [
-    "exec",
-    "tolgee",
-    "pull",
-    "--path",
-    pullDir,
-    "--languages",
-    ...LOCALES,
-    "--states",
-    "UNTRANSLATED",
-    "TRANSLATED",
-    "REVIEWED",
-    "--empty-dir",
-  ],
-  {
-    cwd: repoRoot,
-    stdio: "inherit",
-    env: {
-      ...process.env,
-      TOLGEE_API_KEY: apiKey,
-      TOLGEE_PROJECT_ID: projectId,
-      VITE_TOLGEE_API_URL: apiUrl,
-    },
-  },
-);
-
-if (pull.status !== 0) {
-  process.exit(pull.status ?? 1);
+try {
+  const exitCode = runTolgeePull(pullDir, repoRoot);
+  if (exitCode !== 0) {
+    process.exit(exitCode);
+  }
+} catch (error) {
+  fail(error instanceof Error ? error.message : String(error));
 }
 
 /** @type {string[]} */
 const allErrors = [];
 let keyCount = 0;
 
-for (const locale of LOCALES) {
-  const local = loadLocaleCatalog(exportDir, locale);
+for (const locale of locales) {
+  const local = loadMergedLocalCatalogMap(locale);
   const remote = loadLocaleCatalog(pullDir, locale);
   if (locale === "en") {
     keyCount = local.size;
@@ -99,5 +57,5 @@ if (allErrors.length > 0) {
 }
 
 console.log(
-  `tolgee pull --check: OK (${keyCount} keys, en+de match repo export and Tolgee)`,
+  `tolgee pull --check: OK (${keyCount} keys, ${locales.join("+")} match repo JSON and Tolgee)`,
 );

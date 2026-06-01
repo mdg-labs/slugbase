@@ -16,7 +16,8 @@ glob_flags=(
   -g '*.astro'
   -g '!*.spec.*'
   -g '!messages.ts'
-  -g '!test-utils/**'
+  -g '!message-keys.generated.ts'
+  -g '!**/i18n/locales/**'
 )
 
 # Same heuristics as packages/web/app/i18n/hardcoded-strings.spec.ts

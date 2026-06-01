@@ -7,8 +7,24 @@
   "parser": "react",
   "strictNamespace": false,
   "push": {
-    "filesTemplate": ".tolgee/export/{languageTag}.json",
-    "languages": ["en", "de"],
+    "files": [
+      {
+        "path": "packages/web/app/i18n/locales/en.json",
+        "language": "en"
+      },
+      {
+        "path": "packages/web/app/i18n/locales/de.json",
+        "language": "de"
+      },
+      {
+        "path": "packages/marketing/src/i18n/locales/en.json",
+        "language": "en"
+      },
+      {
+        "path": "packages/marketing/src/i18n/locales/de.json",
+        "language": "de"
+      }
+    ],
     "forceMode": "OVERRIDE"
   },
   "pull": {

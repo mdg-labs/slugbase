@@ -767,7 +767,7 @@ Runs after CI checks pass. Only proceeds if `package.json` version is greater th
 
 1. Check version bump (compare `package.json` version against latest `v*` tag).
 2. Fetch `staging` Infisical secrets.
-3. Verify translations: `tolgee pull --check` — fails the job if any default-locale key is missing a translation.
+3. Verify translations: `i18n:check:tolgee` (implements spec "tolgee pull --check" in `scripts/tolgee-pull-check.mjs` — merges committed locale JSON, pulls Tolgee, strict diff; not a native upstream CLI flag). Fails if repo catalogs do not match Tolgee. If translators updated Tolgee since last sync, run `pnpm i18n:pull` (via Infisical) and commit before release. **`i18n:push`** syncs repo → Tolgee; **`i18n:pull`** syncs Tolgee → repo (splits merged pull into web/marketing JSON).
 4. Generate changelog from `git log` since last tag (conventional commits).
 5. Create annotated git tag `vX.Y.Z` and push.
 6. Create **draft** GitHub Release (changelog as body) — a human publishes it to trigger production.

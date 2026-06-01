@@ -16,7 +16,8 @@ const IGNORED_PATH_PARTS = [
   ".spec.",
   ".spec.tsx",
   "messages.ts",
-  "test-utils",
+  "message-keys.generated.ts",
+  "i18n/locales",
 ];
 
 /** Attribute or same-line text after `>`. */

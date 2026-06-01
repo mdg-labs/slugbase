@@ -1,10 +1,58 @@
 /**
- * Shared helpers for Tolgee export / push / CI diff (spec §17, P6-07.2).
+ * Shared helpers for Tolgee push / pull / CI diff (spec §17, P6-07.2).
  */
-import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 
-export const LOCALES = ["en", "de"];
+export const MARKETING_KEY_PREFIX = "marketing.";
+
+const repoRoot = resolve(import.meta.dirname, "..");
+
+export const WEB_LOCALES_DIR = join(repoRoot, "packages/web/app/i18n/locales");
+export const MARKETING_LOCALES_DIR = join(
+  repoRoot,
+  "packages/marketing/src/i18n/locales",
+);
+export const SUPPORTED_LOCALES_PATH = join(repoRoot, "i18n/supported-locales.json");
+
+/** @returns {string[]} */
+export function readSupportedLocales() {
+  const raw = readFileSync(SUPPORTED_LOCALES_PATH, "utf8");
+  const locales = JSON.parse(raw);
+  if (!Array.isArray(locales) || locales.length === 0) {
+    throw new Error(`invalid ${SUPPORTED_LOCALES_PATH}`);
+  }
+  for (const locale of locales) {
+    if (typeof locale !== "string" || locale.length === 0) {
+      throw new Error(`invalid locale entry in ${SUPPORTED_LOCALES_PATH}`);
+    }
+  }
+  return locales;
+}
+
+/** @param {string} dir @param {string} locale */
+export function readLocaleJsonFile(dir, locale) {
+  const path = join(dir, `${locale}.json`);
+  if (!existsSync(path)) {
+    throw new Error(`missing locale file: ${path}`);
+  }
+  return /** @type {Record<string, string>} */ (JSON.parse(readFileSync(path, "utf8")));
+}
+
+/** @param {string} locale */
+export function loadPackageLocaleCatalog(locale) {
+  return {
+    web: readLocaleJsonFile(WEB_LOCALES_DIR, locale),
+    marketing: readLocaleJsonFile(MARKETING_LOCALES_DIR, locale),
+  };
+}
+
+/** @returns {Record<string, string>} merged flat catalog for one locale */
+export function loadMergedLocalCatalog(locale) {
+  const { web, marketing } = loadPackageLocaleCatalog(locale);
+  return mergeLocaleCatalogs(web, marketing);
+}
 
 /** @param {Record<string, string>} web @param {Record<string, string>} marketing */
 export function mergeLocaleCatalogs(web, marketing) {
@@ -130,7 +178,7 @@ export function formatDiffErrors(diff, locale) {
 
   if (diff.emptyLocal.length > 0) {
     lines.push(
-      `  [${locale}] empty value in repo export (${diff.emptyLocal.length}):`,
+      `  [${locale}] empty value in repo catalogs (${diff.emptyLocal.length}):`,
     );
     for (const key of diff.emptyLocal.slice(0, 15)) {
       lines.push(`    - ${key}`);
@@ -154,7 +202,7 @@ export function formatDiffErrors(diff, locale) {
 
   if (diff.orphanOnRemote.length > 0) {
     lines.push(
-      `  [${locale}] on Tolgee but not in repo (${diff.orphanOnRemote.length}) — push with removeOtherKeys or delete in Tolgee UI`,
+      `  [${locale}] on Tolgee but not in repo (${diff.orphanOnRemote.length}) — run: pnpm i18n:pull`,
     );
     for (const key of diff.orphanOnRemote.slice(0, 15)) {
       lines.push(`    - ${key}`);
@@ -178,7 +226,7 @@ export function formatDiffErrors(diff, locale) {
 
   if (diff.valueMismatch.length > 0) {
     lines.push(
-      `  [${locale}] value mismatch repo vs Tolgee (${diff.valueMismatch.length}):`,
+      `  [${locale}] value mismatch repo vs Tolgee (${diff.valueMismatch.length}) — run: pnpm i18n:pull`,
     );
     for (const key of diff.valueMismatch.slice(0, 15)) {
       lines.push(`    - ${key}`);
@@ -200,4 +248,153 @@ export function diffHasErrors(diff) {
     diff.emptyLocal.length > 0 ||
     diff.emptyRemote.length > 0
   );
+}
+
+/** @returns {Map<string, string>} */
+export function loadMergedLocalCatalogMap(locale) {
+  return flattenMessages(loadMergedLocalCatalog(locale));
+}
+
+/** @param {Record<string, string>} merged */
+export function splitMergedCatalog(merged) {
+  /** @type {Record<string, string>} */
+  const web = {};
+  /** @type {Record<string, string>} */
+  const marketing = {};
+  for (const [key, value] of Object.entries(merged)) {
+    if (key.startsWith(MARKETING_KEY_PREFIX)) {
+      marketing[key] = value;
+    } else {
+      web[key] = value;
+    }
+  }
+  return { web, marketing };
+}
+
+/** @param {Map<string, string>} remoteMap */
+export function splitMergedCatalogMap(remoteMap) {
+  return splitMergedCatalog(Object.fromEntries(remoteMap));
+}
+
+/** @param {string} dir @param {string} locale @param {Record<string, string>} catalog */
+export function writeSortedLocaleJson(dir, locale, catalog) {
+  mkdirSync(dir, { recursive: true });
+  const sorted = Object.fromEntries(
+    Object.keys(catalog)
+      .sort()
+      .map((key) => [key, catalog[key]]),
+  );
+  writeFileSync(join(dir, `${locale}.json`), `${JSON.stringify(sorted, null, 2)}\n`, "utf8");
+}
+
+/** @returns {{ apiKey: string | undefined, projectId: string, apiUrl: string }} */
+export function getTolgeeEnv() {
+  return {
+    apiKey: process.env.TOLGEE_API_KEY?.trim(),
+    projectId: process.env.TOLGEE_PROJECT_ID?.trim() || "4",
+    apiUrl: process.env.VITE_TOLGEE_API_URL?.trim() || "https://tolgee.mdg-labs.dev",
+  };
+}
+
+/**
+ * @param {string} targetDir
+ * @param {string} repoRoot
+ * @returns {number} exit code
+ */
+export function runTolgeePull(targetDir, repoRoot) {
+  const locales = readSupportedLocales();
+  const { apiKey, projectId, apiUrl } = getTolgeeEnv();
+  if (!apiKey) {
+    throw new Error("TOLGEE_API_KEY is required (set via Infisical env root).");
+  }
+
+  rmSync(targetDir, { recursive: true, force: true });
+
+  const pull = spawnSync(
+    "pnpm",
+    [
+      "exec",
+      "tolgee",
+      "pull",
+      "--path",
+      targetDir,
+      "--languages",
+      ...locales,
+      "--states",
+      "UNTRANSLATED",
+      "TRANSLATED",
+      "REVIEWED",
+      "--empty-dir",
+    ],
+    {
+      cwd: repoRoot,
+      stdio: "inherit",
+      env: {
+        ...process.env,
+        TOLGEE_API_KEY: apiKey,
+        TOLGEE_PROJECT_ID: projectId,
+        VITE_TOLGEE_API_URL: apiUrl,
+      },
+    },
+  );
+
+  return pull.status ?? 1;
+}
+
+/**
+ * @param {{ localMap: Map<string, string>, remoteMap: Map<string, string> }} params
+ */
+export function planPullApply({ localMap, remoteMap }) {
+  const diff = diffCatalogs(localMap, remoteMap, "apply");
+  if (diff.missingOnRemote.length > 0) {
+    return {
+      canApply: false,
+      blockReason: `repo has ${diff.missingOnRemote.length} key(s) not on Tolgee — run pnpm i18n:push first`,
+      diff,
+      stats: {
+        valueUpdates: 0,
+        orphansAdded: 0,
+        orphansAddedWeb: 0,
+        orphansAddedMarketing: 0,
+      },
+    };
+  }
+
+  const { web, marketing } = splitMergedCatalogMap(remoteMap);
+  const orphans = diff.orphanOnRemote;
+  const orphansAddedMarketing = orphans.filter((key) =>
+    key.startsWith(MARKETING_KEY_PREFIX),
+  ).length;
+  const orphansAddedWeb = orphans.length - orphansAddedMarketing;
+
+  return {
+    canApply: true,
+    web,
+    marketing,
+    diff,
+    stats: {
+      valueUpdates: diff.valueMismatch.length,
+      orphansAdded: orphans.length,
+      orphansAddedWeb,
+      orphansAddedMarketing,
+    },
+  };
+}
+
+/** @param {Record<string, string>} catalog */
+export function findEmptyCatalogKeys(catalog) {
+  return Object.entries(catalog)
+    .filter(([, value]) => value.trim() === "")
+    .map(([key]) => key)
+    .sort();
+}
+
+/** @param {string[]} before @param {string[]} after */
+export function enKeySetChanged(before, after) {
+  if (before.length !== after.length) {
+    return true;
+  }
+  const sortedBefore = [...before].sort();
+  const sortedAfter = [...after].sort();
+  return sortedBefore.some((key, index) => key !== sortedAfter[index]);
 }

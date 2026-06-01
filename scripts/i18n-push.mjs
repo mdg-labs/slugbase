@@ -1,22 +1,12 @@
 #!/usr/bin/env node
 /**
- * Export repo catalogs and push en/de to Tolgee project (spec §17).
+ * Push committed locale JSON to Tolgee (reads push.files from .tolgeerc.json).
  */
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
+import { readSupportedLocales } from "./i18n-catalog-utils.mjs";
 
 const repoRoot = resolve(import.meta.dirname, "..");
-
-function run(command, args, label) {
-  const result = spawnSync(command, args, {
-    cwd: repoRoot,
-    stdio: "inherit",
-    env: process.env,
-  });
-  if (result.status !== 0) {
-    process.exit(result.status ?? 1);
-  }
-}
 
 const apiKey = process.env.TOLGEE_API_KEY?.trim();
 if (!apiKey) {
@@ -24,21 +14,15 @@ if (!apiKey) {
   process.exit(1);
 }
 
-run("pnpm", ["exec", "tsx", "scripts/i18n-export-catalog.mjs"], "export");
-
-run(
+const locales = readSupportedLocales();
+const push = spawnSync(
   "pnpm",
-  [
-    "exec",
-    "tolgee",
-    "push",
-    "--force-mode",
-    "OVERRIDE",
-    "--languages",
-    "en",
-    "de",
-  ],
-  "push",
+  ["exec", "tolgee", "push", "--force-mode", "OVERRIDE", "--languages", ...locales],
+  { cwd: repoRoot, stdio: "inherit", env: process.env },
 );
 
-console.log("i18n:push: OK — Tolgee project synced from repo catalogs");
+if (push.status !== 0) {
+  process.exit(push.status ?? 1);
+}
+
+console.log("i18n:push: OK — Tolgee project synced from committed locale JSON");
