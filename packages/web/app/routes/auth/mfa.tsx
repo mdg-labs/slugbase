@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { ActionFunctionArgs } from "react-router";
 import { Form, redirect, useActionData, useNavigation } from "react-router";
 import { TotpInput } from "../../components/TotpInput.js";
+import { AuthShell, KeyFieldIcon } from "./AuthShell.js";
 
 const API_BASE_URL = (): string => process.env["API_BASE_URL"] ?? "";
 
@@ -59,266 +60,134 @@ export default function MfaRoute() {
     actionData && "error" in actionData ? actionData.error : undefined;
 
   return (
-    <div className="flex min-h-screen bg-canvas font-sans">
-      {/* Brand rail — hidden on small screens */}
-      <aside
-        className="hidden lg:flex w-[400px] shrink-0 flex-col justify-between border-r border-[color:var(--border)] bg-base p-sp-8"
-        aria-hidden="true"
+    <AuthShell>
+      {/* Back link */}
+      <a
+        href="/login"
+        className="flex items-center text-fg-muted hover:text-fg"
+        style={{ marginBottom: "var(--sp-5)", fontSize: "var(--text-small)", lineHeight: "var(--lh-small)", gap: "var(--sp-3)" }}
       >
-        <div className="flex items-center gap-sp-3">
-          <img
-            src="/slugbase_icon.svg"
-            alt=""
-            width={28}
-            height={28}
-            className="shrink-0"
-          />
-          <span
-            className="text-fg font-semibold"
-            style={{ fontSize: "var(--text-h3)", lineHeight: "var(--lh-h3)" }}
-          >
-            SlugBase
-          </span>
-        </div>
+        <BackArrowIcon />
+        {t("mfa.challenge.back_to_signin")}
+      </a>
 
-        <div className="flex flex-col gap-sp-7">
-          <div className="flex flex-col gap-sp-4">
-            <h1
-              className="text-fg font-semibold"
-              style={{
-                fontSize: "var(--text-h2)",
-                lineHeight: "var(--lh-h2)",
-              }}
-            >
-              {t("auth.brand.headline")}
-            </h1>
-            <p
-              className="text-fg-muted"
-              style={{
-                fontSize: "var(--text-body-lg)",
-                lineHeight: "var(--lh-body-lg)",
-              }}
-            >
-              {t("auth.brand.subline")}
-            </p>
-          </div>
-
-          <div className="flex flex-col gap-sp-3">
-            <SlugRow
-              src="go.slugbase.app/react19"
-              dst="react.dev/blog"
-              opacity={1}
-            />
-            <SlugRow
-              src="go.slugbase.app/ddia"
-              dst="dataintensive.net"
-              opacity={0.5}
-            />
-            <SlugRow
-              src="go.slugbase.app/rustperf"
-              dst="nnethercote.github.io"
-              opacity={0.25}
-            />
-          </div>
-        </div>
-
-        <p
-          className="text-fg-subtle"
-          style={{ fontSize: "var(--text-small)", lineHeight: "var(--lh-small)" }}
+      {/* Heading */}
+      <div style={{ marginBottom: "var(--sp-8)" }}>
+        <h2
+          className="text-fg"
+          style={{
+            margin: "0 0 var(--sp-4)",
+            fontWeight: "var(--weight-semi)",
+            fontSize: "var(--text-h1)",
+            lineHeight: "var(--lh-h1)",
+            letterSpacing: "var(--track-tight)",
+          }}
         >
-          {t("auth.brand.footer")}
+          {t("mfa.challenge.title")}
+        </h2>
+        <p
+          className="text-fg-muted"
+          style={{ margin: 0, fontSize: "var(--text-body-lg)", lineHeight: "var(--lh-body-lg)" }}
+        >
+          {mode === "totp"
+            ? t("mfa.challenge.subtitle_totp")
+            : t("mfa.challenge.subtitle_backup")}
         </p>
-      </aside>
+      </div>
 
-      {/* Auth pane */}
-      <div className="flex flex-1 items-center justify-center p-sp-8">
-        <div className="w-full max-w-[360px]">
-          {/* Card mark */}
-          <div className="mb-sp-4 flex items-center gap-sp-3">
-            <img
-              src="/slugbase_icon.svg"
-              alt=""
-              width={24}
-              height={24}
-              className="shrink-0"
-            />
-            <span
-              className="text-fg font-semibold"
-              style={{ fontSize: "var(--text-h3)", lineHeight: "var(--lh-h3)" }}
-            >
-              SlugBase
-            </span>
-          </div>
-
-          {/* Back link */}
-          <a
-            href="/login"
-            className="mb-sp-5 flex items-center gap-sp-2 text-fg-muted hover:text-fg"
-            style={{
-              fontSize: "var(--text-small)",
-              lineHeight: "var(--lh-small)",
-            }}
+      <Form method="post" className="flex flex-col" noValidate style={{ gap: "var(--sp-6)" }}>
+        {error && (
+          <div
+            role="alert"
+            className="flex items-start rounded-md border border-[color:var(--danger-subtle)] bg-[color:var(--danger-subtle)] px-sp-4 py-sp-3"
+            style={{ gap: "var(--sp-3)" }}
           >
-            <BackArrowIcon />
-            {t("mfa.challenge.back_to_signin")}
-          </a>
-
-          {/* Heading */}
-          <div className="mb-sp-7">
-            <h2
-              className="text-fg font-semibold"
-              style={{ fontSize: "var(--text-h2)", lineHeight: "var(--lh-h2)" }}
-            >
-              {t("mfa.challenge.title")}
-            </h2>
             <p
-              className="mt-sp-2 text-fg-muted"
-              style={{
-                fontSize: "var(--text-body)",
-                lineHeight: "var(--lh-body)",
-              }}
+              className="text-danger-text"
+              style={{ fontSize: "var(--text-small)", lineHeight: "var(--lh-small)" }}
             >
-              {mode === "totp"
-                ? t("mfa.challenge.subtitle_totp")
-                : t("mfa.challenge.subtitle_backup")}
+              {t(error)}
             </p>
           </div>
+        )}
 
-          <Form method="post" className="flex flex-col gap-sp-5" noValidate>
-            {/* Error banner */}
-            {error && (
-              <div
-                role="alert"
-                className="flex items-start gap-sp-3 rounded-md border border-[color:var(--danger-subtle)] bg-[color:var(--danger-subtle)] px-sp-4 py-sp-3"
-              >
-                <p
-                  className="text-danger-text"
-                  style={{
-                    fontSize: "var(--text-small)",
-                    lineHeight: "var(--lh-small)",
-                  }}
-                >
-                  {t(error)}
-                </p>
-              </div>
-            )}
-
-            {mode === "totp" ? (
-              <div className="flex flex-col gap-sp-2">
-                <label
-                  className="font-medium text-fg-muted"
-                  style={{
-                    fontSize: "var(--text-small)",
-                    lineHeight: "var(--lh-small)",
-                  }}
-                >
-                  {t("mfa.challenge.label_code")}
-                </label>
-                <TotpInput
-                  value={totpCode}
-                  onChange={setTotpCode}
-                  disabled={isSubmitting}
-                />
-                <input type="hidden" name="code" value={totpCode} />
-              </div>
-            ) : (
-              <div className="flex flex-col gap-sp-2">
-                <label
-                  htmlFor="backup-code"
-                  className="font-medium text-fg-muted"
-                  style={{
-                    fontSize: "var(--text-small)",
-                    lineHeight: "var(--lh-small)",
-                  }}
-                >
-                  {t("mfa.challenge.label_backup_code")}
-                </label>
-                <input
-                  id="backup-code"
-                  name="code"
-                  type="text"
-                  autoComplete="off"
-                  spellCheck={false}
-                  placeholder={t("mfa.challenge.placeholder_backup")}
-                  disabled={isSubmitting}
-                  className="w-full rounded-md border border-[color:var(--border)] bg-raised px-sp-4 py-sp-3 text-fg placeholder:text-fg-faint focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-canvas disabled:cursor-not-allowed disabled:opacity-50"
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: "var(--text-mono)",
-                    lineHeight: "var(--lh-mono)",
-                  }}
-                />
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={
-                isSubmitting ||
-                (mode === "totp" && totpCode.replace(/\D/g, "").length < 6)
-              }
-              className="mt-sp-2 w-full rounded-md bg-accent px-sp-6 py-sp-3 font-medium text-accent-fg transition-colors hover:bg-accent-hover active:bg-accent-active disabled:cursor-not-allowed disabled:opacity-50"
-              style={{
-                fontSize: "var(--text-body)",
-                lineHeight: "var(--lh-body)",
-              }}
+        {mode === "totp" ? (
+          <div className="flex flex-col" style={{ gap: "var(--sp-3)" }}>
+            <label
+              className="font-medium text-fg-muted"
+              style={{ fontSize: "var(--text-small)", lineHeight: 1 }}
             >
-              {isSubmitting
-                ? t("mfa.challenge.submit_loading")
-                : t("mfa.challenge.submit")}
-            </button>
-          </Form>
-
-          {/* Mode toggle */}
-          <div
-            className="mt-sp-6 text-center"
-            style={{
-              fontSize: "var(--text-small)",
-              lineHeight: "var(--lh-small)",
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => {
-                setMode((m) => (m === "totp" ? "backup" : "totp"));
-                setTotpCode("");
-              }}
-              className="text-accent-text hover:underline"
-            >
-              {mode === "totp"
-                ? t("mfa.challenge.toggle_use_backup")
-                : t("mfa.challenge.toggle_use_totp")}
-            </button>
+              {t("mfa.challenge.label_code")}
+            </label>
+            <TotpInput value={totpCode} onChange={setTotpCode} disabled={isSubmitting} />
+            <input type="hidden" name="code" value={totpCode} />
           </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+        ) : (
+          <div className="flex flex-col" style={{ gap: "var(--sp-3)" }}>
+            <label
+              htmlFor="backup-code"
+              className="font-medium text-fg-muted"
+              style={{ fontSize: "var(--text-small)", lineHeight: 1 }}
+            >
+              {t("mfa.challenge.label_backup_code")}
+            </label>
+            <div className="relative">
+              <span
+                className="absolute inset-y-0 left-0 flex items-center text-fg-subtle pointer-events-none"
+                style={{ paddingLeft: "var(--sp-4)" }}
+              >
+                <KeyFieldIcon />
+              </span>
+              <input
+                id="backup-code"
+                name="code"
+                type="text"
+                autoComplete="off"
+                spellCheck={false}
+                placeholder={t("mfa.challenge.placeholder_backup")}
+                disabled={isSubmitting}
+                className="w-full rounded-md border border-[color:var(--border)] bg-raised text-fg placeholder:text-fg-faint focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-canvas disabled:cursor-not-allowed disabled:opacity-50"
+                style={{
+                  height: "42px",
+                  paddingLeft: "calc(var(--sp-4) + 16px + var(--sp-3))",
+                  paddingRight: "var(--sp-5)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "var(--text-mono)",
+                  lineHeight: "var(--lh-mono)",
+                }}
+              />
+            </div>
+          </div>
+        )}
 
-function SlugRow({
-  src,
-  dst,
-  opacity,
-}: {
-  src: string;
-  dst: string;
-  opacity: number;
-}) {
-  return (
-    <div
-      className="flex items-center gap-sp-3"
-      style={{
-        opacity,
-        fontFamily: "var(--font-mono)",
-        fontSize: "var(--text-mono)",
-        lineHeight: "var(--lh-mono)",
-      }}
-    >
-      <span className="text-accent-text">{src}</span>
-      <span className="text-fg-subtle">→</span>
-      <span className="text-fg-muted">{dst}</span>
-    </div>
+        <button
+          type="submit"
+          disabled={isSubmitting || (mode === "totp" && totpCode.replace(/\D/g, "").length < 6)}
+          className="w-full rounded-md bg-accent font-medium text-accent-fg transition-colors hover:bg-accent-hover active:bg-accent-active disabled:cursor-not-allowed disabled:opacity-50"
+          style={{ marginTop: "var(--sp-2)", height: "44px", fontSize: "var(--text-body-lg)", lineHeight: 1 }}
+        >
+          {isSubmitting ? t("mfa.challenge.submit_loading") : t("mfa.challenge.submit")}
+        </button>
+      </Form>
+
+      <div
+        className="text-center"
+        style={{ marginTop: "var(--sp-6)", fontSize: "var(--text-small)", lineHeight: "var(--lh-small)" }}
+      >
+        <button
+          type="button"
+          onClick={() => {
+            setMode((m) => (m === "totp" ? "backup" : "totp"));
+            setTotpCode("");
+          }}
+          className="text-accent-text hover:underline"
+        >
+          {mode === "totp"
+            ? t("mfa.challenge.toggle_use_backup")
+            : t("mfa.challenge.toggle_use_totp")}
+        </button>
+      </div>
+    </AuthShell>
   );
 }
 
