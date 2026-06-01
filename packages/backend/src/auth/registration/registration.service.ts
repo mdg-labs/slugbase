@@ -2,6 +2,7 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  Logger,
 } from "@nestjs/common";
 
 import { AccountsService } from "../../accounts/accounts.service.js";
@@ -21,10 +22,13 @@ export interface RegisterDto {
 export interface RegisterResult {
   userId: string;
   cookieValue: string;
+  emailVerificationRequired: boolean;
 }
 
 @Injectable()
 export class RegistrationService {
+  private readonly logger = new Logger(RegistrationService.name);
+
   constructor(
     @Inject(AccountsService) private readonly accounts: AccountsService,
     @Inject(WorkspacesService) private readonly workspaces: WorkspacesService,
@@ -77,9 +81,20 @@ export class RegistrationService {
     });
 
     if (emailVerificationRequired) {
-      await this.emailVerification.issueToken(account.id, account.email);
+      try {
+        await this.emailVerification.issueToken(account.id, account.email);
+      } catch {
+        this.logger.warn(
+          "Signup verification email failed — token persisted; registration continues",
+          { userId: account.id },
+        );
+      }
     }
 
-    return { userId: account.id, cookieValue };
+    return {
+      userId: account.id,
+      cookieValue,
+      emailVerificationRequired,
+    };
   }
 }
