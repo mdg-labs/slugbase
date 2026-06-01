@@ -17,5 +17,6 @@ export default [
     route("settings/members", "routes/settings/members/index.tsx"),
     route("settings/billing", "routes/settings/billing/index.tsx"),
     route("settings/account", "routes/settings/account/index.tsx"),
+    route("settings/workspace", "routes/settings/workspace/index.tsx"),
   ]),
 ] satisfies RouteConfig;
