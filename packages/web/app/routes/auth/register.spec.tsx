@@ -192,7 +192,7 @@ describe("Register route — action", () => {
     expect(result).toEqual({ error: "register.error_password_too_short" });
   });
 
-  it("returns verifyEmail flag when backend signals verification required", async () => {
+  it("redirects to verify-email when backend signals verification required", async () => {
     const apiResponse = new Response(
       JSON.stringify({ userId: "user-1", emailVerificationRequired: true }),
       { status: 201, headers: { "Content-Type": "application/json" } },
@@ -211,12 +211,11 @@ describe("Register route — action", () => {
     const args = { request, params: {}, context: {} } as unknown as ActionFunctionArgs;
     const result = await action(args);
 
-    expect(result).toMatchObject({
-      data: { verifyEmail: true },
-      init: {
-        headers: { "Set-Cookie": "slugbase_session=verify; Path=/; HttpOnly" },
-      },
-    });
+    expect(result).toBeInstanceOf(Response);
+    const res = result as Response;
+    expect(res.status).toBe(302);
+    expect(res.headers.get("Location")).toBe("/verify-email");
+    expect(res.headers.get("Set-Cookie")).toBe("slugbase_session=verify; Path=/; HttpOnly");
   });
 
   it("returns generic error on network failure", async () => {
@@ -299,17 +298,6 @@ describe("Register route — component", () => {
     await waitFor(() => {
       expect(screen.getByText("register.password_strength.weak")).toBeTruthy();
     });
-  });
-
-  it("shows verify-email confirmation when verifyEmail is true", async () => {
-    const RegisterRoute = (await import("./register.js")).default;
-    mockUseActionData.mockReturnValue({ verifyEmail: true });
-    mockUseNavigation.mockReturnValue({ state: "idle" } as ReturnType<typeof useNavigation>);
-
-    render(<RegisterRoute />);
-
-    expect(screen.getByText("register.verify_email_title")).toBeTruthy();
-    expect(screen.getByText("register.verify_email_message")).toBeTruthy();
   });
 
   it("links to /login for existing users", async () => {

@@ -1,7 +1,7 @@
 import { useTranslate } from "@tolgee/react";
 import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { Form, data, redirect, useActionData, useNavigation } from "react-router";
+import { Form, redirect, useActionData, useNavigation } from "react-router";
 import { getSessionUser } from "../../lib/session-client.js";
 
 const API_BASE_URL = () => process.env["API_BASE_URL"] ?? "";
@@ -50,17 +50,11 @@ const STRENGTH_COLORS = [
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await getSessionUser(request);
-  if (user) return redirect("/");
+  if (user) {
+    return redirect(user.emailVerified ? "/" : "/verify-email");
+  }
   return {};
 }
-
-type ActionResult =
-  | { error: "register.error_disabled" }
-  | { error: "register.error_email_taken" }
-  | { error: "register.error_invalid_email" }
-  | { error: "register.error_password_too_short" }
-  | { error: "register.error_generic" }
-  | { verifyEmail: true };
 
 export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
@@ -109,10 +103,11 @@ export async function action({ request }: ActionFunctionArgs) {
   const setCookie = readApiSessionCookie(res);
 
   if ("emailVerificationRequired" in payload && payload.emailVerificationRequired) {
-    return data(
-      { verifyEmail: true } satisfies ActionResult,
-      setCookie !== null ? { headers: { "Set-Cookie": setCookie } } : undefined,
-    );
+    const redirectResponse = redirect("/verify-email");
+    if (setCookie !== null) {
+      redirectResponse.headers.set("Set-Cookie", setCookie);
+    }
+    return redirectResponse;
   }
 
   const redirectResponse = redirect("/");
@@ -135,8 +130,6 @@ export default function RegisterRoute() {
 
   const error =
     actionData && "error" in actionData ? actionData.error : undefined;
-  const verifyEmail =
-    actionData && "verifyEmail" in actionData ? actionData.verifyEmail : false;
 
   if (error === "register.error_disabled") {
     return (
@@ -168,38 +161,6 @@ export default function RegisterRoute() {
             >
               {t("register.sign_in_link")}
             </a>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (verifyEmail) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-canvas p-sp-8 font-sans">
-        <div className="w-full max-w-[360px] text-center">
-          <div className="mb-sp-7 flex items-center justify-center gap-sp-3">
-            <img src="/slugbase_icon.svg" alt="" width={24} height={24} className="shrink-0" />
-            <span
-              className="text-fg font-semibold"
-              style={{ fontSize: "var(--text-h3)", lineHeight: "var(--lh-h3)" }}
-            >
-              SlugBase
-            </span>
-          </div>
-          <div className="rounded-lg border border-[color:var(--border)] bg-raised p-sp-8">
-            <h2
-              className="mb-sp-4 text-fg font-semibold"
-              style={{ fontSize: "var(--text-h3)", lineHeight: "var(--lh-h3)" }}
-            >
-              {t("register.verify_email_title")}
-            </h2>
-            <p
-              className="text-fg-muted"
-              style={{ fontSize: "var(--text-body)", lineHeight: "var(--lh-body)" }}
-            >
-              {t("register.verify_email_message")}
-            </p>
           </div>
         </div>
       </div>

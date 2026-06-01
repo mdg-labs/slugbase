@@ -9,7 +9,9 @@ const API_BASE_URL = () => process.env["API_BASE_URL"] ?? "";
 /** Redirect already-authenticated users away from the login page. */
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await getSessionUser(request);
-  if (user) return redirect("/");
+  if (user) {
+    return redirect(user.emailVerified ? "/" : "/verify-email");
+  }
   const url = new URL(request.url);
   const passwordReset = url.searchParams.get("reset") === "success";
   return { passwordReset };
@@ -46,10 +48,15 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const data = (await res.json()) as
-    | { userId: string }
+    | { userId: string; emailVerificationRequired?: true }
     | { mfaRequired: true };
 
-  const destination = "mfaRequired" in data ? "/mfa" : "/";
+  const destination =
+    "mfaRequired" in data
+      ? "/mfa"
+      : "emailVerificationRequired" in data && data.emailVerificationRequired
+        ? "/verify-email"
+        : "/";
   const redirectResponse = redirect(destination);
 
   const setCookie = res.headers.get("set-cookie");

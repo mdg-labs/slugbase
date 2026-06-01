@@ -163,6 +163,51 @@ describe("Login route — action", () => {
     expect(result).toEqual({ error: "auth.login.error_invalid" });
   });
 
+  it("redirects to /verify-email when login requires email verification", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ userId: "user-1", emailVerificationRequired: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
+
+    const formData = new FormData();
+    formData.set("email", "pending@example.com");
+    formData.set("password", "correct-password");
+
+    const request = new Request("http://localhost/login", {
+      method: "POST",
+      body: formData,
+    });
+
+    const args = { request, params: {}, context: {} } as unknown as ActionFunctionArgs;
+    const result = await action(args);
+    const res = result as Response;
+    expect(res.status).toBe(302);
+    expect(res.headers.get("Location")).toBe("/verify-email");
+  });
+
+  it("redirects unverified session to verify-email", async () => {
+    const { getSessionUser } = await import("../../lib/session-client.js");
+    vi.mocked(getSessionUser).mockResolvedValueOnce({
+      id: "user-1",
+      email: "pending@example.com",
+      name: "Pending",
+      language: "en",
+      mfaState: "not_enrolled",
+      emailVerified: false,
+    });
+
+    const request = new Request("http://localhost/login");
+    const args = { request, params: {}, context: {} } as unknown as LoaderFunctionArgs;
+    const result = await loader(args);
+    expect(result).toBeInstanceOf(Response);
+    expect((result as Response).headers.get("Location")).toBe("/verify-email");
+  });
+
   it("redirects to /mfa when MFA is required", async () => {
     vi.stubGlobal(
       "fetch",
