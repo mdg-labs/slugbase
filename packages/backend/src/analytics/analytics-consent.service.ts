@@ -24,9 +24,9 @@ export class AnalyticsConsentService {
   private readonly consentRepository: AnalyticsConsentRepository;
 
   constructor(
-    private readonly config: ConfigService,
+    @Inject(ConfigService) private readonly config: ConfigService,
     @Inject(DbService) db: DbService,
-    private readonly sessions: SessionService,
+    @Inject(SessionService) private readonly sessions: SessionService,
   ) {
     this.consentRepository = new AnalyticsConsentRepository(
       db.getOrm(),
