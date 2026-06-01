@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ThemeProvider } from "@slugbase/ui";
+import { ThemeProvider, ToastProvider } from "@slugbase/ui";
 
 import { staticMessages } from "../../../i18n/messages.js";
 import * as accountApi from "./account-api.js";
@@ -54,7 +54,9 @@ const baseAccount: AccountSettingsData = {
 function renderPage(account: AccountSettingsData = baseAccount) {
   return render(
     <ThemeProvider>
-      <AccountSettingsPage initialAccount={account} initialTokens={[]} />
+      <ToastProvider dismissLabel="Dismiss notification">
+        <AccountSettingsPage initialAccount={account} initialTokens={[]} />
+      </ToastProvider>
     </ThemeProvider>,
   );
 }

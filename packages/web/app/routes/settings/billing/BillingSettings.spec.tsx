@@ -1,3 +1,4 @@
+import { ToastProvider } from "@slugbase/ui";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -81,9 +82,15 @@ const baseData: BillingSettingsData = {
   returnUrl: "https://app.example/settings/billing",
 };
 
+const billingPage = (initialData: BillingSettingsData) => (
+  <ToastProvider dismissLabel="Dismiss notification">
+    <BillingSettingsPage initialData={initialData} />
+  </ToastProvider>
+);
+
 describe("BillingSettingsPage", () => {
   it("renders plan comparison table from config", () => {
-    const view = render(<BillingSettingsPage initialData={baseData} />);
+    const view = render(billingPage(baseData));
     expect(view.getByTestId("billing-plan-table")).toBeTruthy();
     expect(view.getByText("$4")).toBeTruthy();
     expect(view.getByText("Personal")).toBeTruthy();
@@ -94,7 +101,7 @@ describe("BillingSettingsPage", () => {
     checkoutMock.mockResolvedValue({ checkoutUrl: "https://checkout.test/session" });
     const assignSpy = vi.spyOn(window.location, "assign").mockImplementation(() => {});
 
-    const view = render(<BillingSettingsPage initialData={baseData} />);
+    const view = render(billingPage(baseData));
     fireEvent.click(
       view.getByRole("button", { name: "Upgrade to Personal" }),
     );
@@ -117,18 +124,16 @@ describe("BillingSettingsPage", () => {
     const assignSpy = vi.spyOn(window.location, "assign").mockImplementation(() => {});
 
     const view = render(
-      <BillingSettingsPage
-        initialData={{
-          ...baseData,
-          workspace: {
-            ...baseData.workspace,
-            plan: "personal",
-            billingCustomerId: "cus_123",
-            billingStatus: "active",
-            billingPeriodEnd: "2026-07-01T00:00:00.000Z",
-          },
-        }}
-      />,
+      billingPage({
+        ...baseData,
+        workspace: {
+          ...baseData.workspace,
+          plan: "personal",
+          billingCustomerId: "cus_123",
+          billingStatus: "active",
+          billingPeriodEnd: "2026-07-01T00:00:00.000Z",
+        },
+      }),
     );
 
     fireEvent.click(view.getByRole("button", { name: "Cancel subscription" }));
@@ -144,12 +149,10 @@ describe("BillingSettingsPage", () => {
 
   it("shows unavailable gate when billing is disabled", () => {
     const view = render(
-      <BillingSettingsPage
-        initialData={{
-          ...baseData,
-          planConfig: { ...baseData.planConfig, billingEnabled: false },
-        }}
-      />,
+      billingPage({
+        ...baseData,
+        planConfig: { ...baseData.planConfig, billingEnabled: false },
+      }),
     );
     expect(view.getByTestId("billing-unavailable-gate")).toBeTruthy();
   });

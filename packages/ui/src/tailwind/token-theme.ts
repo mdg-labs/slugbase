@@ -72,6 +72,20 @@ export const slugbaseTailwindPreset = {
         DEFAULT: "var(--ease)",
         "in-out": "var(--ease-in-out)",
       },
+      keyframes: {
+        shimmer: {
+          from: { backgroundPosition: "200% 0" },
+          to: { backgroundPosition: "-200% 0" },
+        },
+        "toast-in": {
+          from: { opacity: "0", transform: "translateX(16px)" },
+          to: { opacity: "1", transform: "translateX(0)" },
+        },
+      },
+      animation: {
+        shimmer: "shimmer 1.3s ease-in-out infinite",
+        "toast-in": "toast-in var(--dur) var(--ease)",
+      },
     },
   },
 } satisfies Pick<Config, "theme">;

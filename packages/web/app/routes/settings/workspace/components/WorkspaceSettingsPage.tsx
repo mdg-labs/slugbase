@@ -2,6 +2,8 @@ import { useTranslate } from "@tolgee/react";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 
+import { useAppToast } from "../../../../components/feedback/AppToastProvider.js";
+
 import {
   createOidcProvider,
   deleteOidcProvider,
@@ -41,8 +43,8 @@ export function WorkspaceSettingsPage({ initialData }: WorkspaceSettingsPageProp
   const [mail, setMail] = useState<MailSettingsData | null>(initialData.mail);
   const [ai, setAi] = useState<AiSettingsData | null>(initialData.ai);
   const [providers, setProviders] = useState(initialData.oidcProviders);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const { showToast } = useAppToast();
 
   const visibleSections = useMemo(
     () => listVisibleWorkspaceSections(initialData.interfaceConfig),
@@ -59,14 +61,8 @@ export function WorkspaceSettingsPage({ initialData }: WorkspaceSettingsPageProp
     setSearchParams(next === "general" ? {} : { section: next });
   };
 
-  const showToast = (messageKey: string, params?: Record<string, string>) => {
-    setStatusMessage(t(messageKey, params));
-    setErrorMessage(null);
-  };
-
   const showError = (message: string) => {
     setErrorMessage(message);
-    setStatusMessage(null);
   };
 
   if (!canManageWorkspaceSettings(initialData.currentUserRole)) {
@@ -231,16 +227,6 @@ export function WorkspaceSettingsPage({ initialData }: WorkspaceSettingsPageProp
           {t("settings.workspace.page_subtitle", { workspace: workspace.name })}
         </p>
       </header>
-
-      {statusMessage ? (
-        <p
-          className="mb-sp-5 rounded-md border border-[color:var(--success-subtle)] bg-[color:var(--success-subtle)] px-sp-4 py-sp-3 text-success-text"
-          role="status"
-          style={{ fontSize: "var(--text-small)" }}
-        >
-          {statusMessage}
-        </p>
-      ) : null}
 
       {errorMessage ? (
         <p

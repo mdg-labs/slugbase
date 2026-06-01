@@ -3,6 +3,8 @@ import { Button } from "@slugbase/ui";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 
+import { useAppToast } from "../../../../components/feedback/AppToastProvider.js";
+
 import {
   openBillingPortal,
   startCheckout,
@@ -43,9 +45,9 @@ export function BillingSettingsPage({ initialData }: BillingSettingsPageProps) {
   const { t } = useTranslate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [workspace, setWorkspace] = useState(initialData.workspace);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const { showToast } = useAppToast();
 
   const tab = (searchParams.get("tab") as BillingTabId | null) ?? "plan";
   const locale = "en";
@@ -63,14 +65,8 @@ export function BillingSettingsPage({ initialData }: BillingSettingsPageProps) {
     setSearchParams(next === "plan" ? {} : { tab: next });
   };
 
-  const showToast = (messageKey: string, params?: Record<string, string>) => {
-    setStatusMessage(t(messageKey, params));
-    setErrorMessage(null);
-  };
-
   const showError = (message: string) => {
     setErrorMessage(message);
-    setStatusMessage(null);
   };
 
   const redirectExternal = (url: string) => {
@@ -212,14 +208,6 @@ export function BillingSettingsPage({ initialData }: BillingSettingsPageProps) {
         </p>
       ) : null}
 
-      {statusMessage ? (
-        <p
-          className="mb-sp-5 rounded-md border border-[color:var(--success-border)] bg-[color:var(--success-subtle)] px-sp-5 py-sp-4 text-[length:var(--text-small)] text-fg"
-          role="status"
-        >
-          {statusMessage}
-        </p>
-      ) : null}
       {errorMessage ? (
         <p
           className="mb-sp-5 rounded-md border border-[color:var(--danger-border)] bg-[color:var(--danger-subtle)] px-sp-5 py-sp-4 text-[length:var(--text-small)] text-fg"
