@@ -2,7 +2,11 @@ import { randomBytes } from "node:crypto";
 
 import { describe, expect, it, vi } from "vitest";
 
-import { generateVerificationToken, hashToken } from "./email-verification.service.js";
+import {
+  generateVerificationToken,
+  hashToken,
+  maskEmailForDisplay,
+} from "./email-verification.service.js";
 
 // ---------------------------------------------------------------------------
 // Pure helper tests — no NestJS DI needed
@@ -25,6 +29,16 @@ describe("hashToken", () => {
     const b = generateVerificationToken();
     expect(a).not.toBe(b);
     expect(hashToken(a)).not.toBe(hashToken(b));
+  });
+});
+
+describe("maskEmailForDisplay", () => {
+  it("masks the local part and domain for a typical address", () => {
+    expect(maskEmailForDisplay("typo@example.com")).toBe("t***@e***.com");
+  });
+
+  it("returns a safe fallback for malformed input", () => {
+    expect(maskEmailForDisplay("invalid")).toBe("***@***.***");
   });
 });
 
@@ -217,5 +231,89 @@ describe("verifyToken logic", () => {
       vi.fn(),
     );
     expect(result).toEqual({ error: "expired" });
+  });
+});
+
+describe("correctSignupEmail logic", () => {
+  interface Account {
+    id: string;
+    email: string;
+    emailVerified: boolean;
+  }
+
+  async function callCorrectSignupEmail(
+    userId: string,
+    newEmail: string,
+    findById: (id: string) => Promise<Account | null>,
+    findByEmail: (email: string) => Promise<Account | null>,
+  ): Promise<{ maskedEmail: string } | { error: string; status: number }> {
+    const account = await findById(userId);
+    if (!account) return { error: "not found", status: 404 };
+
+    if (account.emailVerified) {
+      return { error: "already verified", status: 403 };
+    }
+
+    const normalizedEmail = newEmail.trim();
+    if (normalizedEmail.toLowerCase() === account.email.toLowerCase()) {
+      return { maskedEmail: maskEmailForDisplay(account.email) };
+    }
+
+    const existing = await findByEmail(normalizedEmail);
+    if (existing && existing.id !== userId) {
+      return { error: "conflict", status: 409 };
+    }
+
+    return { maskedEmail: maskEmailForDisplay(normalizedEmail) };
+  }
+
+  it("rejects when the account is already verified", async () => {
+    const result = await callCorrectSignupEmail(
+      "user-1",
+      "new@example.com",
+      () =>
+        Promise.resolve({
+          id: "user-1",
+          email: "old@example.com",
+          emailVerified: true,
+        }),
+      () => Promise.resolve(null),
+    );
+    expect(result).toEqual({ error: "already verified", status: 403 });
+  });
+
+  it("returns masked email without changes when the address is unchanged", async () => {
+    const result = await callCorrectSignupEmail(
+      "user-1",
+      "  Typo@Example.com ",
+      () =>
+        Promise.resolve({
+          id: "user-1",
+          email: "typo@example.com",
+          emailVerified: false,
+        }),
+      () => Promise.resolve(null),
+    );
+    expect(result).toEqual({ maskedEmail: "t***@e***.com" });
+  });
+
+  it("rejects when the new email belongs to another account", async () => {
+    const result = await callCorrectSignupEmail(
+      "user-1",
+      "taken@example.com",
+      () =>
+        Promise.resolve({
+          id: "user-1",
+          email: "typo@example.com",
+          emailVerified: false,
+        }),
+      () =>
+        Promise.resolve({
+          id: "user-2",
+          email: "taken@example.com",
+          emailVerified: true,
+        }),
+    );
+    expect(result).toEqual({ error: "conflict", status: 409 });
   });
 });

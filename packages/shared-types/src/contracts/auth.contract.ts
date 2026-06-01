@@ -58,6 +58,18 @@ export const ResetPasswordResponseSchema = z
   })
   .strict();
 
+export const CorrectSignupEmailBodySchema = z
+  .object({
+    email: z.string().trim().email(),
+  })
+  .strict();
+
+export const CorrectSignupEmailResponseSchema = z
+  .object({
+    maskedEmail: z.string(),
+  })
+  .strict();
+
 export type LoginBody = z.infer<typeof LoginBodySchema>;
 export type LoginResponse = z.infer<typeof LoginResponseSchema>;
 export type LogoutResponse = z.infer<typeof LogoutResponseSchema>;
@@ -66,6 +78,10 @@ export type ForgotPasswordBody = z.infer<typeof ForgotPasswordBodySchema>;
 export type ForgotPasswordResponse = z.infer<typeof ForgotPasswordResponseSchema>;
 export type ResetPasswordBody = z.infer<typeof ResetPasswordBodySchema>;
 export type ResetPasswordResponse = z.infer<typeof ResetPasswordResponseSchema>;
+export type CorrectSignupEmailBody = z.infer<typeof CorrectSignupEmailBodySchema>;
+export type CorrectSignupEmailResponse = z.infer<
+  typeof CorrectSignupEmailResponseSchema
+>;
 
 export const authContract = c.router({
   login: {
@@ -116,5 +132,20 @@ export const authContract = c.router({
     },
     summary:
       "Complete a password reset using a token from the reset email. Invalidates all existing sessions on success.",
+  },
+  correctSignupEmail: {
+    method: "POST",
+    path: "/auth/correct-signup-email",
+    body: CorrectSignupEmailBodySchema,
+    responses: {
+      200: CorrectSignupEmailResponseSchema,
+      401: z.object({ message: z.string() }).strict(),
+      403: z.object({ message: z.string() }).strict(),
+      409: z.object({ message: z.string() }).strict(),
+      422: z.object({ message: z.string() }).strict(),
+      429: z.object({ message: z.string() }).strict(),
+    },
+    summary:
+      "Correct a signup email typo before first verification. Requires an authenticated session and emailVerified=false.",
   },
 });

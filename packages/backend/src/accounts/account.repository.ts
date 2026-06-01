@@ -134,6 +134,15 @@ export class AccountRepository {
       .where(eq(userAccounts.id, id));
   }
 
+  async updateEmail(id: string, email: string): Promise<void> {
+    const updatedAt = Date.now();
+
+        await this.db
+      .update(userAccounts)
+      .set({ email, updatedAt })
+      .where(eq(userAccounts.id, id));
+  }
+
   async updatePasswordHash(id: string, passwordHash: string): Promise<void> {
     const updatedAt = Date.now();
 

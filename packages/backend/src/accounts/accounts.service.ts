@@ -86,6 +86,13 @@ export class AccountsService {
     return this.repo.updateEmailVerified(id, true);
   }
 
+  async updateEmail(id: string, email: string): Promise<AccountRecord> {
+    await this.repo.updateEmail(id, email);
+    const account = await this.repo.findById(id);
+    if (!account) throw new Error("Account not found after email update");
+    return account;
+  }
+
   async updatePassword(id: string, newPassword: string): Promise<void> {
     const passwordHash = await this.passwordService.hashPassword(newPassword);
     return this.repo.updatePasswordHash(id, passwordHash);

@@ -64,10 +64,14 @@ export {
   type UpdateAccountProfileBody,
 } from "./contracts/account.contract.js";
 export {
+  CorrectSignupEmailBodySchema,
+  CorrectSignupEmailResponseSchema,
   LoginBodySchema,
   LoginResponseSchema,
   LogoutResponseSchema,
   MeResponseSchema,
+  type CorrectSignupEmailBody,
+  type CorrectSignupEmailResponse,
   type LoginBody,
   type LoginResponse,
   type LogoutResponse,

@@ -1,6 +1,8 @@
 import { createHash, randomBytes } from "node:crypto";
 
 import {
+  ConflictException,
+  ForbiddenException,
   HttpException,
   HttpStatus,
   Inject,
@@ -38,6 +40,28 @@ export function hashToken(plaintext: string): string {
  */
 export function generateVerificationToken(): string {
   return randomBytes(TOKEN_BYTES).toString("hex");
+}
+
+/** Masks an email address for safe display in the verify-email UI. */
+export function maskEmailForDisplay(email: string): string {
+  const atIndex = email.lastIndexOf("@");
+  if (atIndex <= 0 || atIndex === email.length - 1) {
+    return "***@***.***";
+  }
+
+  const local = email.slice(0, atIndex);
+  const domain = email.slice(atIndex + 1);
+  const visibleLocal = local.length <= 1 ? "*" : `${local.slice(0, 1)}***`;
+
+  const dotIndex = domain.lastIndexOf(".");
+  if (dotIndex <= 0) {
+    return `${visibleLocal}@***`;
+  }
+
+  const domainName = domain.slice(0, dotIndex);
+  const tld = domain.slice(dotIndex + 1);
+  const visibleDomain = domainName.length <= 1 ? "*" : `${domainName.slice(0, 1)}***`;
+  return `${visibleLocal}@${visibleDomain}.${tld}`;
 }
 
 @Injectable()
@@ -153,5 +177,52 @@ export class EmailVerificationService {
     }
 
     await this.issueToken(userId, account.email);
+  }
+
+  /**
+   * Updates the signup email for an unverified account, invalidates outstanding
+   * verification tokens, and sends a fresh verification link to the new address.
+   * Verified accounts must use the change-email flow instead.
+   */
+  async correctSignupEmail(
+    userId: string,
+    newEmail: string,
+  ): Promise<{ maskedEmail: string }> {
+    const account = await this.accounts.findById(userId);
+    if (!account) {
+      throw new NotFoundException("Account not found");
+    }
+
+    if (account.emailVerified) {
+      throw new ForbiddenException(
+        "Email address is already verified — use account settings to change your email",
+      );
+    }
+
+    const normalizedEmail = newEmail.trim();
+    if (normalizedEmail.toLowerCase() === account.email.toLowerCase()) {
+      return { maskedEmail: maskEmailForDisplay(account.email) };
+    }
+
+    const existing = await this.accounts.findByEmail(normalizedEmail);
+    if (existing && existing.id !== userId) {
+      throw new ConflictException("An account with this email already exists");
+    }
+
+    const sinceMs = Date.now() - ONE_HOUR_MS;
+    const recentCount = await this.tokenRepo.countRecentByUserId(userId, sinceMs);
+    if (recentCount >= MAX_RESENDS_PER_HOUR) {
+      throw new HttpException(
+        "Too many verification emails requested — please wait before trying again",
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    const nowMs = Date.now();
+    await this.tokenRepo.invalidateUnusedByUserId(userId, nowMs);
+    await this.accounts.updateEmail(userId, normalizedEmail);
+    await this.issueToken(userId, normalizedEmail);
+
+    return { maskedEmail: maskEmailForDisplay(normalizedEmail) };
   }
 }

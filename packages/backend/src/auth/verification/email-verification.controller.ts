@@ -1,4 +1,6 @@
 import {
+  Body,
+  BadRequestException,
   Controller,
   ForbiddenException,
   Get,
@@ -10,6 +12,7 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import type { Request } from "express";
+import { CorrectSignupEmailBodySchema } from "@slugbase/shared-types";
 
 import { SessionService } from "../../sessions/session.service.js";
 import { SESSION_COOKIE } from "../login-logout.controller.js";
@@ -55,6 +58,28 @@ export class EmailVerificationController {
     const session = await this.requireFullSession(req);
     await this.verificationService.resendVerification(session.userId);
     return { ok: true };
+  }
+
+  /**
+   * Corrects a signup typo before first verification. Only available when
+   * emailVerified=false; verified accounts must use the change-email flow.
+   */
+  @Post("correct-signup-email")
+  @HttpCode(200)
+  async correctSignupEmail(
+    @Req() req: Request,
+    @Body() body: unknown,
+  ): Promise<{ maskedEmail: string }> {
+    const session = await this.requireFullSession(req);
+    const parsed = CorrectSignupEmailBodySchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException("Unable to update email address");
+    }
+
+    return this.verificationService.correctSignupEmail(
+      session.userId,
+      parsed.data.email,
+    );
   }
 
   private async requireFullSession(req: Request) {

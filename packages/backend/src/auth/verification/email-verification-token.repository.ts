@@ -103,4 +103,18 @@ export class EmailVerificationTokenRepository {
       );
     return coerceCount(rows[0]?.value);
   }
+
+  /** Marks all unused signup verification tokens for a user as consumed. */
+  async invalidateUnusedByUserId(userId: string, nowMs: number): Promise<void> {
+
+        await this.db
+      .update(emailVerificationTokens)
+      .set({ usedAt: nowMs })
+      .where(
+        and(
+          eq(emailVerificationTokens.userId, userId),
+          isNull(emailVerificationTokens.usedAt),
+        ),
+      );
+  }
 }
