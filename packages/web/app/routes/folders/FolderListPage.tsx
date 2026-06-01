@@ -17,6 +17,7 @@ import {
   type FolderListItem,
 } from "./folders-loader.js";
 import { FolderListSkeleton } from "./FolderListSkeleton.js";
+import { createFolder, renameFolder, deleteFolder } from "./folders-api.js";
 
 const SORTS = ["name-asc", "created-desc", "count-desc"] as const;
 type FolderSort = (typeof SORTS)[number];
@@ -28,7 +29,7 @@ function isFolderSort(value: string): value is FolderSort {
 function FolderColorDot({ color }: { color: string | null }) {
   return (
     <span
-      className="inline-block shrink-0 rounded-[3px]"
+      className="inline-block shrink-0 rounded"
       style={{
         width: 10,
         height: 10,
@@ -188,13 +189,7 @@ function RenameFolderDialog({ folder, onClose, onSaved }: RenameFolderDialogProp
     if (!trimmed || trimmed === folder.name) { onClose(); return; }
     setSubmitting(true);
     try {
-      const res = await fetch(`${process.env["API_BASE_URL"] ?? ""}/folders/${folder.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ name: trimmed }),
-      });
-      if (!res.ok) throw new Error("failed");
+      await renameFolder(folder.id, trimmed);
       showToast("folders.list.toast_renamed");
       onSaved();
     } catch {
@@ -265,11 +260,7 @@ function DeleteFolderDialog({ folder, onClose, onDeleted }: DeleteFolderDialogPr
   const handleDelete = async () => {
     setSubmitting(true);
     try {
-      const res = await fetch(`${process.env["API_BASE_URL"] ?? ""}/folders/${folder.id}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("failed");
+      await deleteFolder(folder.id);
       showToast("folders.list.toast_deleted");
       onDeleted();
     } catch {
@@ -335,13 +326,7 @@ function NewFolderDialog({ onClose, onSaved }: NewFolderDialogProps) {
     if (!trimmed) return;
     setSubmitting(true);
     try {
-      const res = await fetch(`${process.env["API_BASE_URL"] ?? ""}/folders`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ name: trimmed }),
-      });
-      if (!res.ok) throw new Error("failed");
+      await createFolder(trimmed);
       showToast("folders.list.toast_created");
       onSaved();
     } catch {

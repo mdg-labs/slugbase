@@ -6,6 +6,7 @@ import { Button, EmptyState } from "@slugbase/ui";
 import { useAppToast } from "../../components/feedback/AppToastProvider.js";
 import { type TagListData, type TagListItem } from "./tags-loader.js";
 import { TagListSkeleton } from "./TagListSkeleton.js";
+import { createTag, renameTag, deleteTag } from "./tags-api.js";
 
 const SORTS = ["usage-desc", "name-asc", "created-desc"] as const;
 type TagSort = (typeof SORTS)[number];
@@ -290,13 +291,7 @@ function NewTagInline({ onSaved, onCancel }: NewTagInlineProps) {
     if (!trimmed) return;
     setSubmitting(true);
     try {
-      const res = await fetch(`${process.env["API_BASE_URL"] ?? ""}/tags`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ name: trimmed }),
-      });
-      if (!res.ok) throw new Error("failed");
+      await createTag(trimmed);
       showToast("tags.list.toast_created");
       onSaved();
     } catch {
@@ -398,13 +393,7 @@ export function TagListPage() {
       return;
     }
     try {
-      const res = await fetch(`${process.env["API_BASE_URL"] ?? ""}/tags/${renaming.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ name: trimmed }),
-      });
-      if (!res.ok) throw new Error("failed");
+      await renameTag(renaming.id, trimmed);
       if (selected?.id === renaming.id) {
         setSelected({ ...selected, name: trimmed });
       }
@@ -418,11 +407,7 @@ export function TagListPage() {
 
   const commitDelete = async (tag: TagListItem) => {
     try {
-      const res = await fetch(`${process.env["API_BASE_URL"] ?? ""}/tags/${tag.id}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("failed");
+      await deleteTag(tag.id);
       if (selected?.id === tag.id) setSelected(null);
       setDelConfirm(null);
       showToast("tags.list.toast_deleted");
