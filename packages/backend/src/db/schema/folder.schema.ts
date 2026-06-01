@@ -9,6 +9,7 @@ export const folders = pgTable(
     userId: text("user_id").notNull(),
     name: text("name").notNull(),
     icon: text("icon"),
+    color: text("color"),
     createdAt: bigint("created_at", { mode: "number" }).notNull(),
     updatedAt: bigint("updated_at", { mode: "number" }).notNull(),
   },

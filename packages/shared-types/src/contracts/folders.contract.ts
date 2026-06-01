@@ -9,6 +9,12 @@ const iconField = z
   .nullable()
   .optional();
 
+const colorField = z
+  .string()
+  .regex(/^#[0-9a-fA-F]{6}$/, "Invalid color format — expected hex color e.g. #7782f7")
+  .nullable()
+  .optional();
+
 export const FolderSchema = z
   .object({
     id: z.string(),
@@ -16,6 +22,7 @@ export const FolderSchema = z
     userId: z.string(),
     name: z.string(),
     icon: z.string().nullable(),
+    color: z.string().nullable(),
     bookmarkCount: z.number().int().nonnegative(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
@@ -35,6 +42,7 @@ export const CreateFolderBodySchema = z
   .object({
     name: z.string().min(1).max(200),
     icon: iconField,
+    color: colorField,
     bookmarkIds: z.array(z.string()).optional(),
   })
   .strict();
@@ -43,6 +51,7 @@ export const UpdateFolderBodySchema = z
   .object({
     name: z.string().min(1).max(200).optional(),
     icon: iconField,
+    color: colorField,
   })
   .strict();
 

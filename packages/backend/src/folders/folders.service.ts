@@ -51,6 +51,7 @@ export class FoldersService {
     if (!name) throw new BadRequestException("name is required");
 
     const icon = this.normalizeIcon(dto.icon);
+    const color = this.normalizeColor(dto.color);
     if (dto.bookmarkIds?.length) {
       await this.assertBookmarksOwned(workspace.id, userId, dto.bookmarkIds);
     }
@@ -58,6 +59,7 @@ export class FoldersService {
     const folder = await this.folderRepo.create(workspace.id, userId, {
       name,
       icon,
+      color,
       bookmarkIds: dto.bookmarkIds,
     });
     return this.wsDataGuard.verifyOwnership(workspace.id, folder);
@@ -120,10 +122,13 @@ export class FoldersService {
 
     const nextIcon =
       patch.icon !== undefined ? this.normalizeIcon(patch.icon) : existing.icon;
+    const nextColor =
+      patch.color !== undefined ? this.normalizeColor(patch.color) : existing.color;
 
     const updated = await this.folderRepo.update(workspace.id, folderId, {
       name: nextName,
       icon: nextIcon,
+      color: nextColor,
     });
 
     if (!updated) throw new NotFoundException("Folder not found");
@@ -216,6 +221,18 @@ export class FoldersService {
       }
     }
     return normalized;
+  }
+
+  private normalizeColor(color: string | null | undefined): string | null {
+    if (color === null || color === undefined) return null;
+    const trimmed = color.trim();
+    if (!trimmed) return null;
+    if (!/^#[0-9a-fA-F]{6}$/.test(trimmed)) {
+      throw new BadRequestException(
+        "Invalid color format — expected hex color e.g. #7782f7",
+      );
+    }
+    return trimmed.toLowerCase();
   }
 
   private async requireOwnedFolder(

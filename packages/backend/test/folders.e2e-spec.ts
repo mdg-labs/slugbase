@@ -89,7 +89,19 @@ describe("Folders (integration)", () => {
       expect(folder.name).toBe("Design Resources");
       expect(folder.icon).toBe("palette");
       expect(folder.bookmarkCount).toBe(0);
+      expect(folder.color).toBeNull();
+      expect(folder.updatedAt).toBeInstanceOf(Date);
+      expect(folder.createdAt).toBeInstanceOf(Date);
       folderId = folder.id;
+    });
+
+    it("creates a folder with a hex color", async () => {
+      const folder = await foldersService.createFolder(workspace, ownerUserId, {
+        name: "Colored Folder",
+        color: "#7782f7",
+      });
+      expect(folder.color).toBe("#7782f7");
+      expect(folder.updatedAt).toBeInstanceOf(Date);
     });
 
     it("reads the folder for the owner", async () => {
@@ -131,6 +143,29 @@ describe("Folders (integration)", () => {
       );
       expect(updated.name).toBe("Design Kit");
       expect(updated.icon).toBe("folder");
+    });
+
+    it("updates folder color and exposes updatedAt", async () => {
+      const before = await foldersService.getFolder(workspace, ownerUserId, folderId);
+      const updated = await foldersService.updateFolder(
+        workspace,
+        ownerUserId,
+        folderId,
+        { color: "#45c98a" },
+      );
+      expect(updated.color).toBe("#45c98a");
+      expect(updated.updatedAt).toBeInstanceOf(Date);
+      expect(updated.updatedAt.getTime()).toBeGreaterThanOrEqual(before.updatedAt.getTime());
+    });
+
+    it("clears folder color by setting null", async () => {
+      const updated = await foldersService.updateFolder(
+        workspace,
+        ownerUserId,
+        folderId,
+        { color: null },
+      );
+      expect(updated.color).toBeNull();
     });
 
     it("rejects update by a non-owner workspace member", async () => {

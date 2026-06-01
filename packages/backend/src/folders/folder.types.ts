@@ -6,6 +6,7 @@ export interface FolderRecord {
   userId: string;
   name: string;
   icon: string | null;
+  color: string | null;
   bookmarkCount: number;
   createdAt: Date;
   updatedAt: Date;
@@ -14,12 +15,14 @@ export interface FolderRecord {
 export interface CreateFolderData {
   name: string;
   icon?: string | null;
+  color?: string | null;
   bookmarkIds?: string[];
 }
 
 export interface UpdateFolderData {
   name?: string;
   icon?: string | null;
+  color?: string | null;
 }
 
 /** Raw HTTP query — scope/sort are parsed in the service before listing. */

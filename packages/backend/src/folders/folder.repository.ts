@@ -35,6 +35,7 @@ type FolderRow = WorkspaceOwned & {
   userId: string;
   name: string;
   icon: string | null;
+  color: string | null;
   createdAt: Date | number;
   updatedAt: Date | number;
 };
@@ -95,6 +96,7 @@ export class FolderRepository extends WorkspaceScopedRepository<FolderRecord> {
         userId,
         name: data.name,
         icon: data.icon ?? null,
+        color: data.color ?? null,
         createdAt: nowMs,
         updatedAt: nowMs,
       })
@@ -180,6 +182,7 @@ export class FolderRepository extends WorkspaceScopedRepository<FolderRecord> {
 
     if (patch.name !== undefined) updates.name = patch.name;
     if (patch.icon !== undefined) updates.icon = patch.icon;
+    if (patch.color !== undefined) updates.color = patch.color;
 
     await this.db
       .update(folders)
@@ -353,6 +356,7 @@ export class FolderRepository extends WorkspaceScopedRepository<FolderRecord> {
       userId: row.userId,
       name: row.name,
       icon: row.icon,
+      color: row.color,
       bookmarkCount,
       createdAt: toDate(row.createdAt),
       updatedAt: toDate(row.updatedAt),
