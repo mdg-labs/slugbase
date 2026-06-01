@@ -83,14 +83,14 @@ function ZapIcon() {
 /** Derive a deterministic avatar color from a workspace ID. */
 function workspaceAvatarColor(id: string): string {
   const palette = [
-    "#7782f7", "#45c98a", "#e6b24e", "#f0686b",
+    "var(--accent)", "var(--success)", "var(--warning)", "var(--danger)",
     "#64b5f6", "#ba68c8", "#4db6ac", "#ff8a65",
   ];
   let hash = 0;
   for (let i = 0; i < id.length; i++) {
     hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
   }
-  return palette[hash % palette.length] ?? "#7782f7";
+  return palette[hash % palette.length] ?? "var(--accent)";
 }
 
 type PanelView = "list" | "switching" | "create" | "create-blocked";
@@ -197,7 +197,7 @@ export function WorkspaceSwitcherPanel({
                   >
                     <span
                       className="inline-grid h-[28px] w-[28px] shrink-0 place-items-center rounded-md font-mono text-[11px] font-bold"
-                      style={{ background: color, color: "#0b0c14" }}
+                      style={{ background: color, color: "var(--accent-fg)" }}
                       aria-hidden
                     >
                       {letter}
