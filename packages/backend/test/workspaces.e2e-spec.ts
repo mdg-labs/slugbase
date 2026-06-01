@@ -317,15 +317,18 @@ describe("Workspaces HTTP endpoints (integration)", () => {
     it("renames the active workspace", async () => {
       const sessionCookie = await loginAs(OWNER_EMAIL);
       const csrf = await fetchCsrfToken(sessionCookie);
-      // Explicitly activate the first workspace so TenantGuard can resolve it.
-      // Login sets activeWorkspaceId via resolveDefaultActiveWorkspaceId, but we
-      // assert the activate response here to surface any session/CSRF failures early.
-      const activateRes = await request(server())
-        .post(`/workspaces/${firstWorkspaceId}/activate`)
-        .set("Cookie", `${sessionCookie}; ${csrf.cookie}`)
-        .set("x-csrf-token", csrf.token)
-        .send();
-      expect(activateRes.status).toBe(200);
+
+      // Login already calls resolveDefaultActiveWorkspaceId, which returns the
+      // earliest-created workspace for the user. firstWorkspaceId is created first
+      // in beforeAll, so it is always the login-time active workspace.
+      // Verify this directly before the mutation to fail fast with a clear message
+      // if the session is somehow not set, rather than failing opaquely at TenantGuard.
+      const activeRes = await request(server())
+        .get("/workspaces/active")
+        .set("Cookie", sessionCookie);
+      expect(activeRes.status).toBe(200);
+      const activeBody = activeRes.body as { id: string };
+      expect(activeBody.id).toBe(firstWorkspaceId);
 
       const res = await request(server())
         .patch("/workspaces/active")
@@ -349,25 +352,17 @@ describe("Workspaces HTTP endpoints (integration)", () => {
       const sessionCookie = await loginAs(OWNER_EMAIL);
       const csrf = await fetchCsrfToken(sessionCookie);
 
-      // Create a temporary workspace so owner has >1 workspace, then delete it
-      const createRes = await request(server())
-        .post("/workspaces")
-        .set("Cookie", `${sessionCookie}; ${csrf.cookie}`)
-        .set("x-csrf-token", csrf.token)
-        .send({ name: "Temp To Delete", slug: "temp-to-delete-http" });
-      expect(createRes.status).toBe(201);
-      const created = createRes.body as { id: string };
+      // Login sets activeWorkspaceId to firstWorkspaceId (earliest-created workspace).
+      // By this test the owner has firstWorkspaceId + secondWorkspaceId + created-via-http
+      // (created in the POST suite above), so the last-workspace safeguard does not apply.
+      // Verify the session state before the mutation to surface any session issues early.
+      const activeRes = await request(server())
+        .get("/workspaces/active")
+        .set("Cookie", sessionCookie);
+      expect(activeRes.status).toBe(200);
+      const activeBody = activeRes.body as { id: string };
+      expect(activeBody.id).toBe(firstWorkspaceId);
 
-      // Activate the newly created workspace so TenantGuard resolves it as the
-      // active workspace for the subsequent DELETE /workspaces/active call.
-      const activateRes = await request(server())
-        .post(`/workspaces/${created.id}/activate`)
-        .set("Cookie", `${sessionCookie}; ${csrf.cookie}`)
-        .set("x-csrf-token", csrf.token)
-        .send();
-      expect(activateRes.status).toBe(200);
-
-      // Delete it via DELETE /workspaces/active
       const deleteRes = await request(server())
         .delete("/workspaces/active")
         .set("Cookie", `${sessionCookie}; ${csrf.cookie}`)
