@@ -9,7 +9,7 @@ import {
   randomState,
 } from "openid-client";
 
-import { Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 
 import type { CryptoService } from "@slugbase/shared-types";
 
@@ -182,6 +182,66 @@ export class OidcService {
       scopes: data.scopes,
       enabled: data.enabled,
     });
+  }
+
+  /** Lists all OIDC providers (admin view — includes disabled providers). */
+  async listProviders(): Promise<OidcProviderRecord[]> {
+    return this.repo.listProviders();
+  }
+
+  /**
+   * Updates an existing OIDC provider.
+   * If a new clientSecret is provided, it is encrypted before storage.
+   */
+  async updateProvider(
+    id: string,
+    data: Omit<Parameters<OidcRepository["updateProvider"]>[1], "clientSecretEncrypted"> & {
+      clientSecret?: string;
+    },
+  ): Promise<OidcProviderRecord> {
+    const existing = await this.repo.findProviderById(id);
+    if (!existing) {
+      throw new NotFoundException("OIDC provider not found");
+    }
+
+    const updateData: Parameters<OidcRepository["updateProvider"]>[1] = {
+      ...(data.name !== undefined && { name: data.name }),
+      ...(data.issuerUrl !== undefined && { issuerUrl: data.issuerUrl }),
+      ...(data.clientId !== undefined && { clientId: data.clientId }),
+      ...(data.clientSecret !== undefined && {
+        clientSecretEncrypted: this.crypto.encrypt(data.clientSecret),
+      }),
+      ...(data.scopes !== undefined && { scopes: data.scopes }),
+      ...(data.enabled !== undefined && { enabled: data.enabled }),
+    };
+
+    if (data.issuerUrl !== undefined || data.clientId !== undefined) {
+      const newIssuerUrl = data.issuerUrl ?? existing.issuerUrl;
+      const newClientId = data.clientId ?? existing.clientId;
+      const providers = await this.repo.listProviders();
+      const duplicate = providers.find(
+        (p) => p.id !== id && p.issuerUrl === newIssuerUrl && p.clientId === newClientId,
+      );
+      if (duplicate) {
+        throw new ConflictException(
+          "An OIDC provider with this issuer URL and client ID already exists",
+        );
+      }
+    }
+
+    const updated = await this.repo.updateProvider(id, updateData);
+    if (!updated) {
+      throw new NotFoundException("OIDC provider not found");
+    }
+    return updated;
+  }
+
+  /** Deletes an OIDC provider. Returns true when deleted, false when not found. */
+  async deleteProvider(id: string): Promise<void> {
+    const deleted = await this.repo.deleteProvider(id);
+    if (!deleted) {
+      throw new NotFoundException("OIDC provider not found");
+    }
   }
 
   /** Generates the PKCE verifier/challenge pair — exposed for testing */

@@ -9,6 +9,7 @@ import type {
   CreateOidcProviderData,
   OidcAccountRecord,
   OidcProviderRecord,
+  UpdateOidcProviderData,
 } from "./oidc.types.js";
 
 function toProviderRecord(row: {
@@ -90,6 +91,42 @@ export class OidcRepository {
     const row = rows[0];
     if (!row) throw new Error("Failed to create OIDC provider");
     return toProviderRecord(row);
+  }
+
+  async listProviders(): Promise<OidcProviderRecord[]> {
+    const rows = await this.db.select().from(oidcProviders);
+    return rows.map(toProviderRecord);
+  }
+
+  async updateProvider(
+    id: string,
+    data: UpdateOidcProviderData,
+  ): Promise<OidcProviderRecord | null> {
+    const rows = await this.db
+      .update(oidcProviders)
+      .set({
+        ...(data.name !== undefined && { name: data.name }),
+        ...(data.issuerUrl !== undefined && { issuerUrl: data.issuerUrl }),
+        ...(data.clientId !== undefined && { clientId: data.clientId }),
+        ...(data.clientSecretEncrypted !== undefined && {
+          clientSecretEncrypted: data.clientSecretEncrypted,
+        }),
+        ...(data.scopes !== undefined && { scopes: data.scopes }),
+        ...(data.enabled !== undefined && { enabled: data.enabled }),
+      })
+      .where(eq(oidcProviders.id, id))
+      .returning();
+    const row = rows[0];
+    if (!row) return null;
+    return toProviderRecord(row);
+  }
+
+  async deleteProvider(id: string): Promise<boolean> {
+    const rows = await this.db
+      .delete(oidcProviders)
+      .where(eq(oidcProviders.id, id))
+      .returning({ id: oidcProviders.id });
+    return rows.length > 0;
   }
 
   async findAccountByProviderAndSubject(

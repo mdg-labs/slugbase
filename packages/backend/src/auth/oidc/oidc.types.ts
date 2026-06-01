@@ -26,6 +26,15 @@ export interface CreateOidcProviderData {
   enabled?: boolean;
 }
 
+export interface UpdateOidcProviderData {
+  name?: string;
+  issuerUrl?: string;
+  clientId?: string;
+  clientSecretEncrypted?: string;
+  scopes?: string;
+  enabled?: boolean;
+}
+
 export interface CreateOidcAccountData {
   userId: string;
   providerId: string;
