@@ -13,6 +13,7 @@ build/
 .react-router/
 .turbo/
 *.tsbuildinfo
+.astro
 
 # env (never commit secrets)
 .env
