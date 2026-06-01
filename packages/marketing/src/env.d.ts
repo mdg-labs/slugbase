@@ -11,6 +11,8 @@ interface ImportMetaEnv {
   readonly PUBLIC_SUPPORTER_PROMOTION_END?: string;
   readonly PUBLIC_TEAM_BASE_SEATS?: string;
   readonly PUBLIC_FREE_BOOKMARK_CAP?: string;
+  readonly PUBLIC_CONTACT_ENDPOINT?: string;
+  readonly PUBLIC_TURNSTILE_SITE_KEY?: string;
 }
 
 interface ImportMeta {

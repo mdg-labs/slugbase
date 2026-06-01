@@ -18,6 +18,7 @@ describe("marketing build output", () => {
         PUBLIC_PLAN_PRICE_PERSONAL_YEARLY: "$3.33/mo",
         PUBLIC_PLAN_PRICE_TEAM_SEAT: "$9/seat/mo",
         PUBLIC_PLAN_PRICE_SUPPORTER: "$59",
+        PUBLIC_CONTACT_ENDPOINT: "https://api.slugbase.test/contact",
       },
     });
 
@@ -26,6 +27,8 @@ describe("marketing build output", () => {
     const enPricing = readFileSync(join(packageRoot, "dist/pricing/index.html"), "utf8");
     const dePricing = readFileSync(join(packageRoot, "dist/de/pricing/index.html"), "utf8");
     const enPrivacy = readFileSync(join(packageRoot, "dist/legal/datenschutz/index.html"), "utf8");
+    const enContact = readFileSync(join(packageRoot, "dist/contact/index.html"), "utf8");
+    const deContact = readFileSync(join(packageRoot, "dist/de/contact/index.html"), "utf8");
 
     expect(enHtml).toContain(t("en", "marketing.landing.hero_title"));
     expect(enHtml).toContain(t("en", "marketing.landing.hero_title_accent"));
@@ -41,6 +44,11 @@ describe("marketing build output", () => {
     expect(enPrivacy).toContain("Fly.io");
     expect(enPrivacy).toContain("Neon Postgres");
     expect(enPrivacy).toContain("Cloudflare Workers");
+
+    expect(enContact).toContain(t("en", "marketing.contact.headline"));
+    expect(enContact).toContain('id="contact-form"');
+    expect(deContact).toContain(t("de", "marketing.contact.headline"));
+    expect(deContact).toContain('lang="de"');
 
     const en404 = readFileSync(join(packageRoot, "dist/404.html"), "utf8");
     const de404 = readFileSync(join(packageRoot, "dist/de/404/index.html"), "utf8");

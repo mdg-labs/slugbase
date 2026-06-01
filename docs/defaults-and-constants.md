@@ -126,6 +126,8 @@ Keys are registered incrementally per task (rule `05-env-vars`). Full categories
 | `PUBLIC_TEAM_BASE_SEATS` | Included Team seats shown on marketing pricing page | `/marketing` | hosted | Default `5` |
 | `PUBLIC_FREE_BOOKMARK_CAP` | Free cap shown on marketing pricing page | `/marketing` | hosted | Default `50` |
 | `PUBLIC_FRONTEND_ORIGIN` | App origin for marketing CTAs (sign-in, register) | `/marketing` | all | Same as `FRONTEND_ORIGIN` |
+| `PUBLIC_CONTACT_ENDPOINT` | Absolute URL for `POST /contact` (marketing form target) | `/marketing` | all | e.g. `{APP_BASE_URL}/contact` |
+| `PUBLIC_TURNSTILE_SITE_KEY` | Cloudflare Turnstile site key for marketing contact form | `/marketing` | hosted | Empty = dev/no-op challenge token path |
 | `SENTRY_DSN` | Sentry ingest DSN for API error reporting (spec §11.7) | `/api` | `development` (optional); hosted `staging`/`production` | Empty = no-op (self-host default) |
 | `SENTRY_ENVIRONMENT` | Sentry environment tag override | `/api` | optional | Defaults to `NODE_ENV` |
 | `SENTRY_RELEASE` | Sentry release identifier (deploy version) | `/api` | optional | Empty = omitted from SDK init |
