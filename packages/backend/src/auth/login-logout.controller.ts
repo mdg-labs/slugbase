@@ -115,6 +115,7 @@ export class LoginLogoutController {
       id: account.id,
       email: account.email,
       name: account.name,
+      language: account.language === "de" ? "de" : "en",
       mfaState: account.mfaState,
       emailVerified: account.emailVerified,
     };

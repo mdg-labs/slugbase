@@ -4,6 +4,7 @@ export interface SessionUser {
   id: string;
   email: string;
   name: string;
+  language: "en" | "de";
   mfaState: "not_enrolled" | "pending" | "enrolled";
   emailVerified: boolean;
 }

@@ -4,12 +4,13 @@ import "../styles/marketing.css";
 import MarketingFooter from "../components/MarketingFooter.astro";
 import MarketingNav from "../components/MarketingNav.astro";
 import AnalyticsConsent from "../components/AnalyticsConsent.astro";
+import { t, type SupportedLocale } from "../i18n/tolgee.js";
 interface Props {
   title: string;
 }
 
 const { title } = Astro.props;
-const locale = Astro.currentLocale;
+const locale = Astro.currentLocale as SupportedLocale;
 const appOrigin = import.meta.env.PUBLIC_FRONTEND_ORIGIN ?? "";
 ---
 
@@ -18,7 +19,7 @@ const appOrigin = import.meta.env.PUBLIC_FRONTEND_ORIGIN ?? "";
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="SlugBase — keyboard-driven bookmark manager with slug forwarding." />
+    <meta name="description" content={t(locale, "marketing.meta.description")} />
     <link rel="icon" type="image/svg+xml" href="/slugbase_icon.svg" />
     <title>{title}</title>
   </head>

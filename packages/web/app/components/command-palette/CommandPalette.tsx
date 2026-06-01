@@ -302,7 +302,7 @@ export function CommandPalette({
               </svg>
             </button>
           ) : (
-            <Kbd>Esc</Kbd>
+            <Kbd>{t("ui.kbd.escape")}</Kbd>
           )}
         </div>
 

@@ -27,6 +27,7 @@ export const MeResponseSchema = z
     id: z.string(),
     email: z.string(),
     name: z.string(),
+    language: z.enum(["en", "de"]),
     mfaState: z.enum(["not_enrolled", "pending", "enrolled"]),
     emailVerified: z.boolean(),
   })

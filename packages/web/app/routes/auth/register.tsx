@@ -337,7 +337,7 @@ export default function RegisterRoute() {
                   type={showPassword ? "text" : "password"}
                   autoComplete="new-password"
                   required
-                  placeholder="••••••••"
+                  placeholder={t("auth.password.mask_placeholder")}
                   value={password}
                   onChange={(e) => { setPassword(e.target.value); }}
                   className="w-full rounded-md border border-[color:var(--border)] bg-raised px-sp-4 py-sp-3 pr-10 text-fg placeholder:text-fg-faint focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-canvas"

@@ -1,6 +1,7 @@
 import { Button, Input, Label } from "@slugbase/ui";
 import { useState } from "react";
 
+import { useAppLocale } from "../../../../i18n/use-app-locale.js";
 import type { ApiTokenSummary } from "../account.types.js";
 import { ShownOncePanel } from "./ShownOncePanel.js";
 import { SettingsSection } from "./SettingsSection.js";
@@ -12,10 +13,10 @@ interface ApiTokensSectionProps {
   t: (key: string, params?: Record<string, string>) => string;
 }
 
-function formatDate(value: string | null, locale: string): string {
-  if (!value) return "—";
+function formatDate(value: string | null, locale: string, emptyLabel: string): string {
+  if (!value) return emptyLabel;
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
+  if (Number.isNaN(date.getTime())) return emptyLabel;
   return date.toLocaleDateString(locale, { month: "short", day: "numeric", year: "numeric" });
 }
 
@@ -31,7 +32,8 @@ export function ApiTokensSection({
   const [plaintext, setPlaintext] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [revokingId, setRevokingId] = useState<string | null>(null);
-  const locale = "en";
+  const locale = useAppLocale();
+  const emptyDateLabel = t("ui.empty.dash");
 
   const handleCreate = async (): Promise<void> => {
     if (!name.trim()) return;
@@ -79,13 +81,13 @@ export function ApiTokensSection({
               <span className="font-medium text-fg">{token.name}</span>
               <span className="text-fg-subtle" style={{ fontSize: "var(--text-small)" }}>
                 {t("settings.account.tokens.created_meta", {
-                  date: formatDate(token.createdAt, locale),
+                  date: formatDate(token.createdAt, locale, emptyDateLabel),
                 })}
               </span>
               <span className="text-fg-subtle" style={{ fontSize: "var(--text-small)" }}>
                 {t("settings.account.tokens.last_used_meta", {
                   date: token.lastUsedAt
-                    ? formatDate(token.lastUsedAt, locale)
+                    ? formatDate(token.lastUsedAt, locale, emptyDateLabel)
                     : t("settings.account.tokens.never_used"),
                 })}
               </span>

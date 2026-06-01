@@ -1,6 +1,7 @@
 import { useTheme, type ThemePreference } from "@slugbase/ui";
 import { useEffect, useState } from "react";
 
+import { useSetAppLocale } from "../../../../i18n/use-app-locale.js";
 import { ACCENT_PRESET_LABEL_KEYS, applyUserAccentColor } from "../account-accent.js";
 import {
   ALLOWED_ACCENT_COLORS,
@@ -24,6 +25,7 @@ const THEME_OPTIONS: ThemePreference[] = ["dark", "light", "auto"];
 
 export function PreferencesSection({ account, onSave, t }: PreferencesSectionProps) {
   const { setPreference } = useTheme();
+  const setAppLocale = useSetAppLocale();
   const [language, setLanguage] = useState(account.language);
   const [theme, setTheme] = useState<ThemePreference>(account.theme);
   const [accentColor, setAccentColor] = useState(account.accentColor);
@@ -49,6 +51,7 @@ export function PreferencesSection({ account, onSave, t }: PreferencesSectionPro
       await onSave({ language, theme, accentColor, aiOptOut });
       setPreference(theme);
       applyUserAccentColor(accentColor);
+      setAppLocale(language);
     } finally {
       setBusy(false);
     }
