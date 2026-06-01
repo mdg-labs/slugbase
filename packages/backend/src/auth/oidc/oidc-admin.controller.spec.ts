@@ -1,7 +1,6 @@
 import { ForbiddenException, NotFoundException } from "@nestjs/common";
 import { describe, expect, it, vi, type MockedObject } from "vitest";
 
-import type { OidcProvider } from "@slugbase/shared-types";
 import type { WorkspaceRecord } from "../../workspaces/workspace.types.js";
 import type { WorkspacesService } from "../../workspaces/workspaces.service.js";
 import { TENANT_USER_ID_KEY } from "../../workspaces/tenant.guard.js";
@@ -40,17 +39,6 @@ function makeProviderRecord(id = "provider-1"): OidcProviderRecord {
     createdAt: new Date("2026-01-01T00:00:00Z"),
   };
 }
-
-const MOCK_PUBLIC_PROVIDER: OidcProvider = {
-  id: "provider-1",
-  name: "Test IdP",
-  issuerUrl: "https://idp.example.com",
-  clientId: "client-123",
-  hasClientSecret: true,
-  scopes: "openid email profile",
-  enabled: true,
-  createdAt: "2026-01-01T00:00:00.000Z",
-};
 
 function buildController(opts: { roleAllowed?: boolean; providers?: OidcProviderRecord[] }) {
   const providers = opts.providers ?? [makeProviderRecord()];

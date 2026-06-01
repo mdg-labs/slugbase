@@ -80,19 +80,19 @@ describe("OIDC provider admin HTTP (integration)", () => {
       .get("/auth/csrf-token")
       .set("Cookie", adminSessionCookie);
     adminCsrfToken = (adminCsrfRes.body as { csrfToken: string }).csrfToken;
-    const adminCsrfSetCookie = adminCsrfRes.headers["set-cookie"] as string[] | string;
-    adminCsrfCookie = Array.isArray(adminCsrfSetCookie)
-      ? (adminCsrfSetCookie.find((c) => c.startsWith("csrf_token=")) ?? "")
-      : adminCsrfSetCookie ?? "";
+    adminCsrfCookie =
+      (adminCsrfRes.headers["set-cookie"] as string[]).find((c) =>
+        c.startsWith("csrf_token="),
+      )?.split(";")[0] ?? "";
 
     const memberCsrfRes = await request(app.getHttpServer() as Server)
       .get("/auth/csrf-token")
       .set("Cookie", memberSessionCookie);
     memberCsrfToken = (memberCsrfRes.body as { csrfToken: string }).csrfToken;
-    const memberCsrfSetCookie = memberCsrfRes.headers["set-cookie"] as string[] | string;
-    memberCsrfCookie = Array.isArray(memberCsrfSetCookie)
-      ? (memberCsrfSetCookie.find((c) => c.startsWith("csrf_token=")) ?? "")
-      : memberCsrfSetCookie ?? "";
+    memberCsrfCookie =
+      (memberCsrfRes.headers["set-cookie"] as string[]).find((c) =>
+        c.startsWith("csrf_token="),
+      )?.split(";")[0] ?? "";
   });
 
   afterAll(async () => {
