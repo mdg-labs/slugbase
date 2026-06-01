@@ -54,6 +54,13 @@ describe("Tenant resolution (integration)", () => {
       password: PASSWORD,
     });
 
+    const outsider = await accountsService.findByEmail(OUTSIDER_EMAIL);
+    if (!outsider) throw new Error("outsider account missing");
+    await workspacesService.createWorkspace(
+      { name: "Outsider Workspace", slug: "outsider-ws" },
+      outsider.id,
+    );
+
     const ws = await workspacesService.createWorkspace(
       { name: "Owner Workspace", slug: "owner-ws" },
       ownerUserId,
@@ -104,13 +111,15 @@ describe("Tenant resolution (integration)", () => {
     return { token: body.csrfToken, cookie: csrfCookieStr };
   }
 
-  describe("GET /workspaces/active — before activation", () => {
-    it("returns 403 when no active workspace is set", async () => {
+  describe("GET /workspaces/active — after login", () => {
+    it("returns the default workspace set at login", async () => {
       const sessionCookie = await loginAs(OWNER_EMAIL);
       const res = await request(server())
         .get("/workspaces/active")
         .set("Cookie", sessionCookie);
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(200);
+      const body = res.body as { id: string };
+      expect(body.id).toBe(workspaceId);
     });
 
     it("returns 401 without a session cookie", async () => {

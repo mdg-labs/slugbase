@@ -62,6 +62,32 @@ export class WorkspacesService {
     return this.workspaceRepo.findByIds(ids);
   }
 
+  /**
+   * Resolves the default active workspace for a user session (spec §4.3).
+   * Uses the earliest-created workspace the user belongs to.
+   *
+   * @throws {ForbiddenException} when the user has no workspace memberships
+   */
+  async resolveDefaultActiveWorkspaceId(userId: string): Promise<string> {
+    const userWorkspaces = await this.listUserWorkspaces(userId);
+    if (userWorkspaces.length === 0) {
+      throw new ForbiddenException(
+        "No workspace membership found — join a workspace or complete registration",
+      );
+    }
+
+    const sorted = [...userWorkspaces].sort(
+      (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+    );
+    const defaultWorkspace = sorted[0];
+    if (!defaultWorkspace) {
+      throw new ForbiddenException(
+        "No workspace membership found — join a workspace or complete registration",
+      );
+    }
+    return defaultWorkspace.id;
+  }
+
   async updateWorkspace(
     id: string,
     patch: UpdateWorkspaceData,

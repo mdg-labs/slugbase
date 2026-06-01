@@ -11,6 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AppModule } from "../src/app.module.js";
 import { SESSION_COOKIE } from "../src/auth/login-logout.controller.js";
 import { AccountsService } from "../src/accounts/accounts.service.js";
+import { WorkspacesService } from "../src/workspaces/workspaces.service.js";
 import { applyTestEnv, clearTestEnv } from "../src/test-utils/test-env.js";
 import { createTestDatabase } from "./test-database.js";
 
@@ -41,11 +42,20 @@ describe("MFA (integration)", () => {
     await app.init();
 
     const accountsService = moduleRef.get(AccountsService);
-    await accountsService.registerAccount({
+    const workspacesService = moduleRef.get(WorkspacesService);
+    const account = await accountsService.registerAccount({
       email: MFA_EMAIL,
       name: MFA_NAME,
       password: MFA_PASSWORD,
     });
+    await workspacesService.createWorkspace(
+      {
+        name: `${MFA_NAME}'s workspace`,
+        slug: "mfa-test-ws",
+        plan: "free",
+      },
+      account.id,
+    );
   });
 
   afterAll(async () => {

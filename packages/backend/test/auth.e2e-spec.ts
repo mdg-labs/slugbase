@@ -12,6 +12,7 @@ import { SESSION_COOKIE } from "../src/auth/login-logout.controller.js";
 import { applyTestEnv, clearTestEnv } from "../src/test-utils/test-env.js";
 import { AccountsService } from "../src/accounts/accounts.service.js";
 import { SessionService } from "../src/sessions/session.service.js";
+import { WorkspacesService } from "../src/workspaces/workspaces.service.js";
 import { createTestDatabase } from "./test-database.js";
 
 describe("Auth (integration)", () => {
@@ -36,11 +37,20 @@ describe("Auth (integration)", () => {
     await app.init();
 
     const accountsService = moduleRef.get(AccountsService);
-    await accountsService.registerAccount({
+    const workspacesService = moduleRef.get(WorkspacesService);
+    const account = await accountsService.registerAccount({
       email: TEST_EMAIL,
       name: TEST_NAME,
       password: TEST_PASSWORD,
     });
+    await workspacesService.createWorkspace(
+      {
+        name: `${TEST_NAME}'s workspace`,
+        slug: "auth-test-ws",
+        plan: "free",
+      },
+      account.id,
+    );
   });
 
   afterAll(async () => {

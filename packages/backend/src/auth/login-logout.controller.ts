@@ -22,6 +22,7 @@ import { SessionService } from "../sessions/session.service.js";
 import { SkipCsrf } from "./csrf/skip-csrf.decorator.js";
 import { MfaService } from "./mfa/mfa.service.js";
 import { IpThrottlerGuard } from "./rate-limit/ip-throttler.guard.js";
+import { WorkspacesService } from "../workspaces/workspaces.service.js";
 import type { MeResponse } from "@slugbase/shared-types";
 
 export { SESSION_COOKIE };
@@ -44,6 +45,7 @@ export class LoginLogoutController {
     @Inject(SessionService) private readonly sessions: SessionService,
     @Inject(ConfigService) private readonly config: ConfigService,
     @Inject(MfaService) private readonly mfa: MfaService,
+    @Inject(WorkspacesService) private readonly workspaces: WorkspacesService,
   ) {}
 
   @Post("login")
@@ -85,7 +87,12 @@ export class LoginLogoutController {
       return { mfaRequired: true };
     }
 
-    const sessionData: Record<string, unknown> = {};
+    const activeWorkspaceId =
+      await this.workspaces.resolveDefaultActiveWorkspaceId(account.id);
+
+    const sessionData: Record<string, unknown> = {
+      activeWorkspaceId,
+    };
     if (!account.emailVerified) {
       sessionData["emailVerificationPending"] = true;
     }

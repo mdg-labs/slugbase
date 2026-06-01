@@ -11,12 +11,14 @@ import { OidcModule } from "./oidc/oidc.module.js";
 import { PasswordResetModule } from "./password-reset/password-reset.module.js";
 import { RegistrationModule } from "./registration/registration.module.js";
 import { EmailVerificationModule } from "./verification/email-verification.module.js";
+import { WorkspacesModule } from "../workspaces/workspaces.module.js";
 
 @Module({
   imports: [
     CsrfModule,
     AccountsModule,
     SessionsModule,
+    WorkspacesModule,
     MfaModule,
     ApiTokensModule,
     EmailVerificationModule,
