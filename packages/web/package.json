@@ -7,7 +7,7 @@
     "lint": "eslint app/",
     "typecheck": "react-router typegen && tsc --noEmit -p tsconfig.json",
     "build": "react-router build",
-    "deploy": "wrangler deploy",
+    "deploy": "wrangler deploy --config build/server/wrangler.json",
     "preview": "wrangler dev",
     "start": "react-router-serve ./build/server/index.js",
     "dev": "react-router dev",

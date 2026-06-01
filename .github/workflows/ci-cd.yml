@@ -305,7 +305,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ env.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
-        run: bash .github/scripts/wrangler-deploy-retry.sh packages/web --config wrangler.jsonc
+        run: bash .github/scripts/wrangler-deploy-web-retry.sh packages/web
 
   deploy-marketing-staging:
     name: Staging · 4 · Deploy marketing (Cloudflare Workers)
@@ -626,7 +626,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ env.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
-        run: bash .github/scripts/wrangler-deploy-retry.sh packages/web --config wrangler.production.jsonc
+        run: bash .github/scripts/wrangler-deploy-web-retry.sh packages/web build/server/wrangler.deploy.json
 
   deploy-marketing-production:
     name: Production · 5 · Deploy marketing (Cloudflare Workers)
