@@ -160,6 +160,11 @@ export class MfaService {
     return this.generateAndStoreBackupCodes(userId);
   }
 
+  async countUnusedBackupCodes(userId: string): Promise<number> {
+    const codes = await this.backupCodeRepo.findUnusedByUserId(userId);
+    return codes.length;
+  }
+
   private async generateAndStoreBackupCodes(userId: string): Promise<string[]> {
     const plainCodes: string[] = [];
     const hashes: string[] = [];

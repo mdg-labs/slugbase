@@ -9,6 +9,7 @@ export const userAccounts = pgTable(
     passwordHash: text("password_hash").notNull(),
     language: text("language").notNull().default("en"),
     theme: text("theme").notNull().default("auto"),
+    accentColor: text("accent_color"),
     isInstanceAdmin: boolean("is_instance_admin").notNull().default(false),
     mfaState: text("mfa_state").notNull().default("not_enrolled"),
     mfaTotpSecretEncrypted: text("mfa_totp_secret_encrypted"),

@@ -3,6 +3,7 @@ import { ConflictException, Inject, Injectable } from "@nestjs/common";
 import { DbService } from "../db/db.service.js";
 import { AccountRepository } from "./account.repository.js";
 import type { AccountRecord, CreateAccountData } from "./account.types.js";
+import { OIDC_SENTINEL_PASSWORD_HASH } from "./account.types.js";
 import { PasswordService } from "./password.service.js";
 
 export interface RegisterAccountDto {
@@ -88,5 +89,31 @@ export class AccountsService {
   async updatePassword(id: string, newPassword: string): Promise<void> {
     const passwordHash = await this.passwordService.hashPassword(newPassword);
     return this.repo.updatePasswordHash(id, passwordHash);
+  }
+
+  async updateProfile(id: string, name: string): Promise<AccountRecord> {
+    await this.repo.updateProfile(id, { name });
+    const account = await this.repo.findById(id);
+    if (!account) throw new Error("Account not found after profile update");
+    return account;
+  }
+
+  async updatePreferences(
+    id: string,
+    patch: {
+      language?: string;
+      theme?: string;
+      accentColor?: string | null;
+      aiOptOut?: boolean;
+    },
+  ): Promise<AccountRecord> {
+    await this.repo.updatePreferences(id, patch);
+    const account = await this.repo.findById(id);
+    if (!account) throw new Error("Account not found after preferences update");
+    return account;
+  }
+
+  hasPasswordCredential(account: AccountRecord): boolean {
+    return account.passwordHash !== OIDC_SENTINEL_PASSWORD_HASH;
   }
 }

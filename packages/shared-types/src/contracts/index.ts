@@ -1,6 +1,7 @@
 import { initContract } from "@ts-rest/core";
 
 import { billingContract } from "./billing-api.contract.js";
+import { accountContract } from "./account.contract.js";
 import { apiTokenContract } from "./api-token.contract.js";
 import { authContract } from "./auth.contract.js";
 import { bookmarksContract } from "./bookmarks.contract.js";
@@ -21,6 +22,7 @@ const c = initContract();
 export const apiContract = c.router({
   ...healthContract,
   ...authContract,
+  ...accountContract,
   ...mfaContract,
   ...apiTokenContract,
   ...bookmarksContract,
@@ -37,6 +39,7 @@ export const apiContract = c.router({
 });
 
 export { billingContract } from "./billing-api.contract.js";
+export { accountContract } from "./account.contract.js";
 export { apiTokenContract } from "./api-token.contract.js";
 export { bookmarksContract } from "./bookmarks.contract.js";
 export { foldersContract } from "./folders.contract.js";

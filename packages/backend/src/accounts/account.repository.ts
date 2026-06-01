@@ -27,6 +27,7 @@ function toRecord(row: {
   passwordHash: string;
   language: string;
   theme: string;
+  accentColor: string | null;
   isInstanceAdmin: boolean | number;
   mfaState: string;
   mfaTotpSecretEncrypted: string | null;
@@ -42,6 +43,7 @@ function toRecord(row: {
     passwordHash: row.passwordHash,
     language: row.language,
     theme: row.theme,
+    accentColor: row.accentColor ?? null,
     isInstanceAdmin: Boolean(row.isInstanceAdmin),
     mfaState: row.mfaState as AccountRecord["mfaState"],
     mfaTotpSecretEncrypted: row.mfaTotpSecretEncrypted ?? null,
@@ -232,6 +234,60 @@ export class AccountRepository {
     await pgDb
       .update(pgUserAccounts)
       .set({ passwordHash, updatedAt })
+      .where(eq(pgUserAccounts.id, id));
+  }
+
+  async updateProfile(id: string, patch: { name: string }): Promise<void> {
+    const updatedAt = Date.now();
+
+    if (this.dialect === "sqlite") {
+      const sqliteDb = this.db as SqliteDrizzleClient;
+      sqliteDb
+        .update(sqliteUserAccounts)
+        .set({ name: patch.name, updatedAt: new Date(updatedAt) })
+        .where(eq(sqliteUserAccounts.id, id))
+        .run();
+      return;
+    }
+
+    const pgDb = this.db as PostgresDrizzleClient;
+    await pgDb
+      .update(pgUserAccounts)
+      .set({ name: patch.name, updatedAt })
+      .where(eq(pgUserAccounts.id, id));
+  }
+
+  async updatePreferences(
+    id: string,
+    patch: {
+      language?: string;
+      theme?: string;
+      accentColor?: string | null;
+      aiOptOut?: boolean;
+    },
+  ): Promise<void> {
+    const updatedAt = Date.now();
+    const values: Record<string, unknown> = { updatedAt };
+
+    if (patch.language !== undefined) values["language"] = patch.language;
+    if (patch.theme !== undefined) values["theme"] = patch.theme;
+    if (patch.accentColor !== undefined) values["accentColor"] = patch.accentColor;
+    if (patch.aiOptOut !== undefined) values["aiOptOut"] = patch.aiOptOut;
+
+    if (this.dialect === "sqlite") {
+      const sqliteDb = this.db as SqliteDrizzleClient;
+      sqliteDb
+        .update(sqliteUserAccounts)
+        .set({ ...values, updatedAt: new Date(updatedAt) })
+        .where(eq(sqliteUserAccounts.id, id))
+        .run();
+      return;
+    }
+
+    const pgDb = this.db as PostgresDrizzleClient;
+    await pgDb
+      .update(pgUserAccounts)
+      .set({ ...values, updatedAt })
       .where(eq(pgUserAccounts.id, id));
   }
 

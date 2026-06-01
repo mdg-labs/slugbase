@@ -15,6 +15,7 @@ export const userAccounts = sqliteTable(
     passwordHash: text("password_hash").notNull(),
     language: text("language").notNull().default("en"),
     theme: text("theme").notNull().default("auto"),
+    accentColor: text("accent_color"),
     isInstanceAdmin: integer("is_instance_admin", { mode: "boolean" })
       .notNull()
       .default(false),
