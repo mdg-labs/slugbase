@@ -71,6 +71,19 @@ async function addBookmarkToTag(tagId: string, bookmarkId: string): Promise<void
   }
 }
 
+async function createTag(name: string): Promise<{ id: string }> {
+  const res = await fetch(`${getApiBaseUrl()}/tags`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) {
+    throw new Error(await parseErrorMessage(res));
+  }
+  return (await res.json()) as { id: string };
+}
+
 async function syncFolderMembership(
   bookmarkId: string,
   selectedFolderIds: string[],
@@ -95,13 +108,18 @@ export async function submitBookmarkModal(
 ): Promise<void> {
   const body = toBookmarkSubmitBody(payload);
 
+  const newTagIds = await Promise.all(
+    payload.newTagNames.map((name) => createTag(name).then((t) => t.id)),
+  );
+  const allTagIds = [...payload.tagIds, ...newTagIds];
+
   if (payload.mode === "create") {
     const created = await createBookmark(body);
     await Promise.all([
       ...payload.folderIds.map((folderId) =>
         addBookmarkToFolder(folderId, created.id),
       ),
-      ...payload.tagIds.map((tagId) => addBookmarkToTag(tagId, created.id)),
+      ...allTagIds.map((tagId) => addBookmarkToTag(tagId, created.id)),
     ]);
     return;
   }
@@ -116,7 +134,7 @@ export async function submitBookmarkModal(
     payload.folderIds,
     initial?.folderIds ?? [],
   );
-  await syncTagMembership(payload.bookmarkId, payload.tagIds, initial?.tagIds ?? []);
+  await syncTagMembership(payload.bookmarkId, allTagIds, initial?.tagIds ?? []);
 }
 
 export async function loadBookmarkModalOptions(): Promise<{

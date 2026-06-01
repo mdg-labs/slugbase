@@ -122,6 +122,7 @@ describe("BookmarkModal", () => {
         slug: "docs",
         folderIds: ["folder-1"],
         tagIds: ["tag-1"],
+        newTagNames: [],
         pinned: true,
         forwardingEnabled: false,
         bookmarkId: undefined,
@@ -171,6 +172,7 @@ describe("BookmarkModal", () => {
         slug: "old",
         folderIds: ["folder-1"],
         tagIds: [],
+        newTagNames: [],
         pinned: false,
         forwardingEnabled: true,
       });
