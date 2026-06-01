@@ -1,0 +1,443 @@
+---
+import { getRelativeLocaleUrl } from "astro:i18n";
+import MarketingLayout from "../../layouts/MarketingLayout.astro";
+import { t, type SupportedLocale } from "../../i18n/tolgee.js";
+import {
+  buildMarketingPlanFeatureRows,
+  isSupporterPromotionActive,
+  loadMarketingPricingConfig,
+  type PlanFeatureCell,
+} from "../../lib/pricing-config.js";
+
+const locale = Astro.currentLocale as SupportedLocale;
+const appOrigin = import.meta.env.PUBLIC_FRONTEND_ORIGIN ?? "";
+const config = loadMarketingPricingConfig();
+const featureRows = buildMarketingPlanFeatureRows(config);
+const supporterActive = isSupporterPromotionActive(config);
+const privacyHref = getRelativeLocaleUrl(locale, "/legal/datenschutz");
+const getStartedHref = appOrigin ? `${appOrigin}/auth/register` : "#";
+
+const title = `${t(locale, "marketing.pricing.page_title")} — ${t(locale, "marketing.nav.brand")}`;
+
+function formatFeatureCell(locale: SupportedLocale, value: PlanFeatureCell): string {
+  if (value === "included") return "✓";
+  if (value === "excluded") return "—";
+  if (value === "unlimited") return t(locale, "marketing.pricing.feature.unlimited");
+  return value;
+}
+
+function splitPrice(price: string): { amount: string; period: string } {
+  const slash = price.indexOf("/");
+  if (slash === -1) return { amount: price || "—", period: "" };
+  return {
+    amount: price.slice(0, slash),
+    period: price.slice(slash + 1),
+  };
+}
+
+const freeMonthly = splitPrice("$0");
+const freeYearly = splitPrice("$0");
+const personalMonthly = splitPrice(config.personalMonthlyPrice || "—");
+const personalYearly = splitPrice(config.personalYearlyPrice || "—");
+const teamMonthly = splitPrice(config.teamSeatMonthlyPrice || "—");
+const teamYearly = splitPrice(config.teamSeatYearlyPrice || "—");
+
+const faqItems = [
+  {
+    question: t(locale, "marketing.pricing.faq.cap.question", { cap: String(config.freeBookmarkCap) }),
+    answer: t(locale, "marketing.pricing.faq.cap.answer", { cap: String(config.freeBookmarkCap) }),
+    linkPrivacy: false,
+  },
+  {
+    question: t(locale, "marketing.pricing.faq.personal_vs_team.question"),
+    answer: t(locale, "marketing.pricing.faq.personal_vs_team.answer"),
+    linkPrivacy: false,
+  },
+  {
+    question: t(locale, "marketing.pricing.faq.switch_plans.question"),
+    answer: t(locale, "marketing.pricing.faq.switch_plans.answer"),
+    linkPrivacy: false,
+  },
+  {
+    question: t(locale, "marketing.pricing.faq.cancel.question"),
+    answer: t(locale, "marketing.pricing.faq.cancel.answer", { cap: String(config.freeBookmarkCap) }),
+    linkPrivacy: false,
+  },
+  {
+    question: t(locale, "marketing.pricing.faq.self_hosted.question"),
+    answer: t(locale, "marketing.pricing.faq.self_hosted.answer"),
+    linkPrivacy: false,
+  },
+  {
+    question: t(locale, "marketing.pricing.faq.data_hosting.question"),
+    answer: t(locale, "marketing.pricing.faq.data_hosting.answer"),
+    linkPrivacy: true,
+  },
+] as const;
+---
+
+<MarketingLayout title={title}>
+  <div>
+    <section class="mk-section">
+      <div class="mk-c">
+        <div class="mk-section-head">
+          <span class="mk-eyebrow">{t(locale, "marketing.pricing.eyebrow")}</span>
+          <h1 class="mk-h2 mk-pricing-title">{t(locale, "marketing.pricing.headline")}</h1>
+          <p class="mk-body mk-pricing-sub">{t(locale, "marketing.pricing.subheadline")}</p>
+        </div>
+
+        <div class="mk-billing-toggle">
+          <div class="mk-billing-seg" role="group" aria-label={t(locale, "marketing.pricing.billing_toggle_aria")}>
+            <button type="button" class="on" data-billing="monthly">{t(locale, "marketing.pricing.billing_monthly")}</button>
+            <button type="button" data-billing="yearly">{t(locale, "marketing.pricing.billing_yearly")}</button>
+          </div>
+          <span class="mk-save-badge mk-yearly-only" hidden>{t(locale, "marketing.pricing.yearly_save")}</span>
+        </div>
+
+        <div class="mk-plans">
+          <article class="mk-plan" data-plan="free">
+            <div class="mk-plan-name">{t(locale, "marketing.pricing.plan.free")}</div>
+            <div class="mk-plan-price">
+              <span data-price-monthly={freeMonthly.amount} data-price-yearly={freeYearly.amount}>{freeMonthly.amount}</span>
+              {freeMonthly.period && <span>/{freeMonthly.period}</span>}
+            </div>
+            <p class="mk-plan-desc">{t(locale, "marketing.pricing.plan.free_desc", { cap: String(config.freeBookmarkCap) })}</p>
+            <ul class="mk-plan-feats">
+              <li>{t(locale, "marketing.pricing.plan.free_feat_1", { cap: String(config.freeBookmarkCap) })}</li>
+              <li>{t(locale, "marketing.pricing.plan.free_feat_2")}</li>
+              <li>{t(locale, "marketing.pricing.plan.free_feat_3")}</li>
+              <li class="dim">{t(locale, "marketing.pricing.plan.free_feat_4")}</li>
+            </ul>
+            <a class="mk-btn mk-btn--secondary" href={getStartedHref}>{t(locale, "marketing.pricing.cta.free")}</a>
+          </article>
+
+          <article class="mk-plan featured" data-plan="personal">
+            <div class="mk-plan-name">{t(locale, "marketing.pricing.plan.personal")}</div>
+            <div class="mk-plan-price">
+              <span data-price-monthly={personalMonthly.amount} data-price-yearly={personalYearly.amount}>{personalMonthly.amount}</span>
+              {(personalMonthly.period || personalYearly.period) && (
+                <span data-period-monthly={personalMonthly.period} data-period-yearly={personalYearly.period}>/{personalMonthly.period}</span>
+              )}
+            </div>
+            <p class="mk-plan-desc">{t(locale, "marketing.pricing.plan.personal_desc")}</p>
+            <ul class="mk-plan-feats">
+              <li>{t(locale, "marketing.pricing.plan.personal_feat_1")}</li>
+              <li>{t(locale, "marketing.pricing.plan.personal_feat_2")}</li>
+              <li>{t(locale, "marketing.pricing.plan.personal_feat_3")}</li>
+              <li class="dim">{t(locale, "marketing.pricing.plan.personal_feat_4")}</li>
+            </ul>
+            <a class="mk-btn mk-btn--primary" href={getStartedHref}>{t(locale, "marketing.pricing.cta.personal")}</a>
+          </article>
+
+          <article class="mk-plan" data-plan="team">
+            <div class="mk-plan-name">{t(locale, "marketing.pricing.plan.team")}</div>
+            <div class="mk-plan-price">
+              <span data-price-monthly={teamMonthly.amount} data-price-yearly={teamYearly.amount}>{teamMonthly.amount}</span>
+              {(teamMonthly.period || teamYearly.period) && (
+                <span data-period-monthly={teamMonthly.period} data-period-yearly={teamYearly.period}>/{teamMonthly.period}</span>
+              )}
+            </div>
+            <p class="mk-plan-desc">{t(locale, "marketing.pricing.plan.team_desc", { seats: String(config.teamBaseSeats) })}</p>
+            <ul class="mk-plan-feats">
+              <li>{t(locale, "marketing.pricing.plan.team_feat_1")}</li>
+              <li>{t(locale, "marketing.pricing.plan.team_feat_2", { seats: String(config.teamBaseSeats) })}</li>
+              <li>{t(locale, "marketing.pricing.plan.team_feat_3")}</li>
+              <li>{t(locale, "marketing.pricing.plan.team_feat_4")}</li>
+            </ul>
+            <a class="mk-btn mk-btn--secondary" href={getStartedHref}>{t(locale, "marketing.pricing.cta.team")}</a>
+          </article>
+        </div>
+
+        <div class="mk-feature-table">
+          <div class="mk-feature-table-head">
+            <div>{t(locale, "marketing.pricing.compare_feature")}</div>
+            <div>{t(locale, "marketing.pricing.plan.free")}</div>
+            <div class="featured">{t(locale, "marketing.pricing.plan.personal")}</div>
+            <div>{t(locale, "marketing.pricing.plan.team")}</div>
+          </div>
+          {featureRows.map((row) => (
+            <div class="mk-feature-table-row">
+              <div>{t(locale, row.labelKey)}</div>
+              <div class:list={[{ dim: row.free === "excluded" }]}>{formatFeatureCell(locale, row.free)}</div>
+              <div class:list={["featured", { dim: row.personal === "excluded" }]}>{formatFeatureCell(locale, row.personal)}</div>
+              <div class:list={[{ dim: row.team === "excluded" }]}>{formatFeatureCell(locale, row.team)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    {config.supporterPrice && supporterActive && (
+      <section class="mk-section--sm mk-section--alt">
+        <div class="mk-c">
+          <div class="mk-supporter">
+            <div>
+              <div class="mk-supporter-badge">{t(locale, "marketing.pricing.supporter_badge")}</div>
+              <div class="mk-supporter-price">
+                {config.supporterPrice}
+                <span>{t(locale, "marketing.pricing.supporter_price_suffix")}</span>
+              </div>
+              <p class="mk-supporter-body">{t(locale, "marketing.pricing.supporter_body")}</p>
+              <a class="mk-btn mk-btn--primary mk-btn--lg" href={getStartedHref}>{t(locale, "marketing.pricing.supporter_cta", { price: config.supporterPrice })}</a>
+            </div>
+            {config.supporterPromotionEnd && (
+              <div class="mk-supporter-countdown" data-promotion-end={config.supporterPromotionEnd}>
+                <div class="mk-supporter-countdown-label">{t(locale, "marketing.pricing.supporter_expires")}</div>
+                <div class="countdown" aria-live="polite">
+                  <div class="countdown-unit"><span class="countdown-n" data-unit="days">00</span><span class="countdown-label">{t(locale, "marketing.pricing.countdown_days")}</span></div>
+                  <span class="countdown-sep">:</span>
+                  <div class="countdown-unit"><span class="countdown-n" data-unit="hours">00</span><span class="countdown-label">{t(locale, "marketing.pricing.countdown_hours")}</span></div>
+                  <span class="countdown-sep">:</span>
+                  <div class="countdown-unit"><span class="countdown-n" data-unit="minutes">00</span><span class="countdown-label">{t(locale, "marketing.pricing.countdown_minutes")}</span></div>
+                  <span class="countdown-sep">:</span>
+                  <div class="countdown-unit"><span class="countdown-n" data-unit="seconds">00</span><span class="countdown-label">{t(locale, "marketing.pricing.countdown_seconds")}</span></div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+    )}
+
+    <section class="mk-section--sm">
+      <div class="mk-c">
+        <div class="mk-selfhost">
+          <div class="mk-selfhost-icon" aria-hidden="true">⬡</div>
+          <div class="mk-selfhost-copy">
+            <h3>{t(locale, "marketing.pricing.selfhost_title")}</h3>
+            <p>{t(locale, "marketing.pricing.selfhost_body")}</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="mk-section mk-section--alt">
+      <div class="mk-c--narrow">
+        <div class="mk-section-head mk-faq-head">
+          <span class="mk-eyebrow">{t(locale, "marketing.pricing.faq_eyebrow")}</span>
+          <h2 class="mk-h2">{t(locale, "marketing.pricing.faq_title")}</h2>
+        </div>
+        <div class="mk-faq">
+          {faqItems.map((item) => (
+            <details class="mk-faq-item">
+              <summary class="mk-faq-q">{item.question}</summary>
+              <div class="mk-faq-a">
+                {item.answer}
+                {item.linkPrivacy && (
+                  <>
+                    {" "}
+                    <a href={privacyHref}>{t(locale, "marketing.footer.privacy")}</a>.
+                  </>
+                )}
+              </div>
+            </details>
+          ))}
+        </div>
+      </div>
+    </section>
+  </div>
+</MarketingLayout>
+
+<script>
+  function setBillingMode(mode: "monthly" | "yearly") {
+    document.querySelectorAll<HTMLButtonElement>("[data-billing]").forEach((button) => {
+      button.classList.toggle("on", button.dataset.billing === mode);
+    });
+    document.querySelectorAll<HTMLElement>(".mk-yearly-only").forEach((el) => {
+      el.hidden = mode !== "yearly";
+    });
+    document.querySelectorAll<HTMLElement>("[data-price-monthly]").forEach((el) => {
+      const amount = mode === "yearly" ? el.dataset.priceYearly : el.dataset.priceMonthly;
+      if (amount) el.textContent = amount;
+    });
+    document.querySelectorAll<HTMLElement>("[data-period-monthly]").forEach((el) => {
+      const period = mode === "yearly" ? el.dataset.periodYearly : el.dataset.periodMonthly;
+      if (period) el.textContent = `/${period}`;
+    });
+  }
+
+  document.querySelectorAll<HTMLButtonElement>("[data-billing]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const mode = button.dataset.billing === "yearly" ? "yearly" : "monthly";
+      setBillingMode(mode);
+    });
+  });
+
+  const countdownRoot = document.querySelector<HTMLElement>("[data-promotion-end]");
+  if (countdownRoot?.dataset.promotionEnd) {
+    const target = new Date(countdownRoot.dataset.promotionEnd).getTime();
+    const units = ["days", "hours", "minutes", "seconds"] as const;
+
+    const tick = () => {
+      const diff = Math.max(0, target - Date.now());
+      const days = Math.floor(diff / 86400000);
+      const hours = Math.floor((diff % 86400000) / 3600000);
+      const minutes = Math.floor((diff % 3600000) / 60000);
+      const seconds = Math.floor((diff % 60000) / 1000);
+      const values = [days, hours, minutes, seconds];
+      units.forEach((unit, index) => {
+        const node = countdownRoot.querySelector<HTMLElement>(`[data-unit="${unit}"]`);
+        if (node) node.textContent = String(values[index]).padStart(2, "0");
+      });
+    };
+
+    tick();
+    window.setInterval(tick, 1000);
+  }
+</script>
+
+<style>
+  .mk-pricing-title {
+    font-size: clamp(32px, 4vw, 48px);
+    letter-spacing: -0.025em;
+  }
+
+  .mk-pricing-sub {
+    margin-top: var(--sp-4);
+  }
+
+  .mk-feature-table {
+    margin-top: var(--sp-10);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--r-lg);
+    overflow: hidden;
+  }
+
+  .mk-feature-table-head,
+  .mk-feature-table-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .mk-feature-table-head {
+    background: var(--raised);
+    font-size: 12px;
+    font-weight: var(--weight-semi);
+    color: var(--fg-subtle);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .mk-feature-table-head > div,
+  .mk-feature-table-row > div {
+    padding: 12px 18px;
+    font-size: 14px;
+    color: var(--fg-muted);
+    border-left: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+  }
+
+  .mk-feature-table-head > div:first-child,
+  .mk-feature-table-row > div:first-child {
+    border-left: none;
+    font-weight: var(--weight-medium);
+  }
+
+  .mk-feature-table-head .featured,
+  .mk-feature-table-row .featured {
+    background: rgba(119, 130, 247, 0.06);
+    color: var(--accent-text);
+    font-weight: var(--weight-semi);
+  }
+
+  .mk-feature-table-row .dim {
+    color: var(--fg-faint);
+  }
+
+  .mk-supporter-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 12px;
+    border-radius: 99px;
+    background: var(--accent);
+    color: var(--accent-fg);
+    font-size: 11px;
+    font-weight: var(--weight-bold);
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    margin-bottom: var(--sp-5);
+  }
+
+  .mk-supporter-body {
+    margin: var(--sp-4) 0 var(--sp-6);
+    font-size: 17px;
+    color: var(--fg-muted);
+    line-height: 1.6;
+    max-width: 440px;
+  }
+
+  .mk-supporter-price span {
+    font-size: 16px;
+    font-weight: var(--weight-regular);
+    color: var(--fg-muted);
+  }
+
+  .mk-supporter-countdown-label {
+    font-size: 13px;
+    color: var(--fg-subtle);
+    margin-bottom: var(--sp-4);
+    font-weight: var(--weight-medium);
+  }
+
+  .countdown {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-4);
+  }
+
+  .countdown-unit {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--sp-2);
+  }
+
+  .countdown-n {
+    font: var(--weight-bold) 28px/1 var(--font-mono);
+    color: var(--fg);
+  }
+
+  .countdown-label {
+    font-size: 11px;
+    color: var(--fg-subtle);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .countdown-sep {
+    font: var(--weight-bold) 24px/1 var(--font-mono);
+    color: var(--fg-faint);
+    margin-bottom: var(--sp-5);
+  }
+
+  .mk-selfhost-copy h3 {
+    margin: 0 0 var(--sp-3);
+    font-weight: var(--weight-semi);
+    font-size: 18px;
+    color: var(--fg);
+  }
+
+  .mk-selfhost-copy p {
+    margin: 0;
+    font-size: 15px;
+    color: var(--fg-muted);
+    line-height: 1.6;
+  }
+
+  .mk-faq-head {
+    margin-bottom: var(--sp-9);
+  }
+
+  .mk-plan-feats li::before {
+    content: "✓";
+    color: var(--success-text);
+    margin-right: var(--sp-3);
+  }
+
+  .mk-plan-feats li.dim::before {
+    content: "—";
+    color: var(--fg-faint);
+  }
+</style>
