@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Smoke-test staging deploys: GET /health and /version on API, web, and marketing (spec §22.5).
+# When CF_ACCESS_CLIENT_ID + CF_ACCESS_CLIENT_SECRET are set (Infisical staging), sends
+# Cloudflare Access service-token headers on every request (staging Workers sit behind Access).
 set -euo pipefail
 
 : "${APP_BASE_URL:?APP_BASE_URL is required}"
@@ -8,6 +10,19 @@ set -euo pipefail
 
 MAX_ATTEMPTS="${SMOKE_MAX_ATTEMPTS:-30}"
 SLEEP_SECONDS="${SMOKE_SLEEP_SECONDS:-10}"
+
+CURL_ACCESS_ARGS=()
+if [[ -n "${CF_ACCESS_CLIENT_ID:-}" && -n "${CF_ACCESS_CLIENT_SECRET:-}" ]]; then
+  CURL_ACCESS_ARGS=(
+    -H "CF-Access-Client-Id: ${CF_ACCESS_CLIENT_ID}"
+    -H "CF-Access-Client-Secret: ${CF_ACCESS_CLIENT_SECRET}"
+  )
+  echo "Smoke: using Cloudflare Access service token headers"
+fi
+
+smoke_curl() {
+  curl "${CURL_ACCESS_ARGS[@]}" "$@"
+}
 
 check_surface() {
   local name="$1"
@@ -19,7 +34,7 @@ check_surface() {
 
   local attempt=1
   while [[ "${attempt}" -le "${MAX_ATTEMPTS}" ]]; do
-    if curl -fsS "${health_url}" >/dev/null 2>&1; then
+    if smoke_curl -fsS "${health_url}" >/dev/null 2>&1; then
       break
     fi
     if [[ "${attempt}" -eq "${MAX_ATTEMPTS}" ]]; then
@@ -32,8 +47,8 @@ check_surface() {
   done
 
   local health_status version_status
-  health_status="$(curl -s -o /tmp/slugbase-smoke-health.json -w '%{http_code}' "${health_url}")"
-  version_status="$(curl -s -o /tmp/slugbase-smoke-version.json -w '%{http_code}' "${version_url}")"
+  health_status="$(smoke_curl -s -o /tmp/slugbase-smoke-health.json -w '%{http_code}' "${health_url}")"
+  version_status="$(smoke_curl -s -o /tmp/slugbase-smoke-version.json -w '%{http_code}' "${version_url}")"
 
   echo "  GET /health -> HTTP ${health_status}"
   cat /tmp/slugbase-smoke-health.json

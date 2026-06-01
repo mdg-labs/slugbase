@@ -50,6 +50,7 @@ _added: 2026-05-31_
 ## Database migrations — startup-only (2026-06-01)
 
 CI **does not** run Drizzle migrations against Neon (removed `migrate-staging` / `migrate-production` jobs). Migrations apply automatically on **API bootstrap** before `app.listen()` — hosted Fly (`fra` → Neon `eu-central-1`) and self-host GHCR combined image use the same path. `DATABASE_URL_UNPOOLED` is preferred when set (`resolveMigrationDatabaseUrl`). Local/operator manual apply: `pnpm db:migrate`.
+Staging smoke (`.github/scripts/smoke-staging-health.sh`) sends Cloudflare Access service-token headers when `CF_ACCESS_CLIENT_ID` + `CF_ACCESS_CLIENT_SECRET` are set in Infisical `staging`.
 _added: 2026-06-01_
 
 ## Design system + UI prototype (2026-05-31)
