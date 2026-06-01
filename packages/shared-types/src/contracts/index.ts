@@ -17,6 +17,7 @@ import { sharingContract } from "./sharing.contract.js";
 import { slugsContract } from "./slugs.contract.js";
 import { tagsContract } from "./tags.contract.js";
 import { workspaceContract } from "./workspace.contract.js";
+import { workspaceSettingsContract } from "./workspace-settings.contract.js";
 
 const c = initContract();
 
@@ -38,6 +39,7 @@ export const apiContract = c.router({
   ...importContract,
   ...billingContract,
   ...aiContract,
+  ...workspaceSettingsContract,
 });
 
 export { aiContract } from "./ai.contract.js";
@@ -57,3 +59,14 @@ export { sharingContract } from "./sharing.contract.js";
 export { slugsContract } from "./slugs.contract.js";
 export { tagsContract } from "./tags.contract.js";
 export { workspaceContract } from "./workspace.contract.js";
+export { workspaceSettingsContract } from "./workspace-settings.contract.js";
+export type {
+  MailSettings,
+  UpdateMailSettingsBody,
+  SendTestMailBody,
+  AiSettings,
+  UpdateAiSettingsBody,
+  OidcProvider,
+  CreateOidcProviderBody,
+  UpdateOidcProviderBody,
+} from "./workspace-settings.contract.js";
