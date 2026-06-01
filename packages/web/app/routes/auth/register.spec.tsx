@@ -27,7 +27,7 @@ vi.mock("../../lib/session-client.js", () => ({
 }));
 
 import { useActionData, useNavigation } from "react-router";
-import { action, loader } from "./register.js";
+import { action, loader, readApiSessionCookie } from "./register.js";
 
 const mockUseActionData = vi.mocked(useActionData);
 const mockUseNavigation = vi.mocked(useNavigation);
@@ -78,10 +78,20 @@ describe("Register route — action", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
     delete process.env["API_BASE_URL"];
   });
 
   it("redirects to / on successful registration", async () => {
+    const apiResponse = new Response(JSON.stringify({ userId: "user-1" }), {
+      status: 201,
+      headers: { "Content-Type": "application/json" },
+    });
+    vi.spyOn(apiResponse.headers, "getSetCookie").mockReturnValue([
+      "slugbase_session=abc; Path=/; HttpOnly",
+    ]);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(apiResponse));
+
     const formData = new FormData();
     formData.set("name", "Alice");
     formData.set("email", "alice@example.com");
@@ -94,6 +104,20 @@ describe("Register route — action", () => {
     expect(result).toBeInstanceOf(Response);
     expect((result as Response).status).toBe(302);
     expect((result as Response).headers.get("Location")).toBe("/");
+    expect((result as Response).headers.get("Set-Cookie")).toBe(
+      "slugbase_session=abc; Path=/; HttpOnly",
+    );
+  });
+
+  it("readApiSessionCookie prefers getSetCookie when available", () => {
+    const res = {
+      headers: {
+        getSetCookie: () => ["slugbase_session=abc; Path=/; HttpOnly"],
+        get: () => null,
+      },
+    } as unknown as Response;
+
+    expect(readApiSessionCookie(res)).toBe("slugbase_session=abc; Path=/; HttpOnly");
   });
 
   it("returns register.error_disabled on 403", async () => {
@@ -169,15 +193,14 @@ describe("Register route — action", () => {
   });
 
   it("returns verifyEmail flag when backend signals verification required", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        new Response(
-          JSON.stringify({ userId: "user-1", emailVerificationRequired: true }),
-          { status: 201, headers: { "Content-Type": "application/json" } },
-        ),
-      ),
+    const apiResponse = new Response(
+      JSON.stringify({ userId: "user-1", emailVerificationRequired: true }),
+      { status: 201, headers: { "Content-Type": "application/json" } },
     );
+    vi.spyOn(apiResponse.headers, "getSetCookie").mockReturnValue([
+      "slugbase_session=verify; Path=/; HttpOnly",
+    ]);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(apiResponse));
 
     const formData = new FormData();
     formData.set("name", "Alice");
@@ -188,7 +211,12 @@ describe("Register route — action", () => {
     const args = { request, params: {}, context: {} } as unknown as ActionFunctionArgs;
     const result = await action(args);
 
-    expect(result).toEqual({ verifyEmail: true });
+    expect(result).toMatchObject({
+      data: { verifyEmail: true },
+      init: {
+        headers: { "Set-Cookie": "slugbase_session=verify; Path=/; HttpOnly" },
+      },
+    });
   });
 
   it("returns generic error on network failure", async () => {

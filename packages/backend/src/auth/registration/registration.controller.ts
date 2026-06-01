@@ -18,6 +18,7 @@ import { RegistrationService, type RegisterDto } from "./registration.service.js
 
 interface RegisterResponse {
   userId: string;
+  emailVerificationRequired?: boolean;
 }
 
 @Controller("auth")
@@ -37,7 +38,8 @@ export class RegistrationController {
     @Body() body: RegisterDto,
     @Res({ passthrough: true }) res: Response,
   ): Promise<RegisterResponse> {
-    const { userId, cookieValue } = await this.registrationService.register(body);
+    const { userId, cookieValue, emailVerificationRequired } =
+      await this.registrationService.register(body);
 
     res.cookie(SESSION_COOKIE, cookieValue, {
       httpOnly: true,
@@ -45,6 +47,10 @@ export class RegistrationController {
       path: "/",
       secure: this.config.get("isProduction"),
     });
+
+    if (emailVerificationRequired) {
+      return { userId, emailVerificationRequired: true };
+    }
 
     return { userId };
   }

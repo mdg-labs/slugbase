@@ -1,10 +1,18 @@
 import { useTranslate } from "@tolgee/react";
 import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { Form, redirect, useActionData, useNavigation } from "react-router";
+import { Form, data, redirect, useActionData, useNavigation } from "react-router";
 import { getSessionUser } from "../../lib/session-client.js";
 
 const API_BASE_URL = () => process.env["API_BASE_URL"] ?? "";
+
+/** Reads session cookie from an API response (undici getSetCookie or fetch get). */
+export function readApiSessionCookie(res: Response): string | null {
+  if (typeof res.headers.getSetCookie === "function") {
+    return res.headers.getSetCookie()[0] ?? null;
+  }
+  return res.headers.get("set-cookie");
+}
 
 /** 0 = empty, 1 = very_weak, 2 = weak, 3 = fair, 4 = strong */
 function calcPasswordStrength(password: string): 0 | 1 | 2 | 3 | 4 {
@@ -54,7 +62,7 @@ type ActionResult =
   | { error: "register.error_generic" }
   | { verifyEmail: true };
 
-export async function action({ request }: ActionFunctionArgs): Promise<ActionResult | Response> {
+export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const rawName = formData.get("name");
   const rawEmail = formData.get("email");
@@ -94,15 +102,24 @@ export async function action({ request }: ActionFunctionArgs): Promise<ActionRes
     return { error: "register.error_generic" };
   }
 
-  const data = (await res.json()) as
+  const payload = (await res.json()) as
     | { userId: string; emailVerificationRequired?: boolean }
     | { emailVerificationRequired: true };
 
-  if ("emailVerificationRequired" in data && data.emailVerificationRequired) {
-    return { verifyEmail: true };
+  const setCookie = readApiSessionCookie(res);
+
+  if ("emailVerificationRequired" in payload && payload.emailVerificationRequired) {
+    return data(
+      { verifyEmail: true } satisfies ActionResult,
+      setCookie !== null ? { headers: { "Set-Cookie": setCookie } } : undefined,
+    );
   }
 
-  return redirect("/");
+  const redirectResponse = redirect("/");
+  if (setCookie !== null) {
+    redirectResponse.headers.set("Set-Cookie", setCookie);
+  }
+  return redirectResponse;
 }
 
 export default function RegisterRoute() {

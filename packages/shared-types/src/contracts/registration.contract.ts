@@ -16,6 +16,7 @@ export const RegisterBodySchema = z
 export const RegisterResponseSchema = z
   .object({
     userId: z.string(),
+    emailVerificationRequired: z.literal(true).optional(),
   })
   .strict();
 

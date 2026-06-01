@@ -165,7 +165,42 @@ describe("RegistrationService.register()", () => {
   it("returns userId and cookieValue on success", async () => {
     const { service } = await buildService({ publicRegistration: true });
     const result = await service.register(validDto);
-    expect(result).toMatchObject({ userId: "user-reg-1", cookieValue: "reg-cookie" });
+    expect(result).toMatchObject({
+      userId: "user-reg-1",
+      cookieValue: "reg-cookie",
+      emailVerificationRequired: false,
+    });
+  });
+
+  it("returns emailVerificationRequired when configured", async () => {
+    const { service } = await buildService({
+      publicRegistration: true,
+      emailVerificationRequired: true,
+    });
+    const result = await service.register(validDto);
+    expect(result.emailVerificationRequired).toBe(true);
+  });
+
+  it("still succeeds when verification email send fails", async () => {
+    const { service, emailVerification } = await buildService({
+      publicRegistration: true,
+      emailVerificationRequired: true,
+    });
+    vi.mocked(emailVerification.issueToken).mockRejectedValueOnce(
+      new Error("SMTP connection refused"),
+    );
+
+    const result = await service.register(validDto);
+
+    expect(result).toMatchObject({
+      userId: "user-reg-1",
+      cookieValue: "reg-cookie",
+      emailVerificationRequired: true,
+    });
+    expect(emailVerification.issueToken).toHaveBeenCalledWith(
+      "user-reg-1",
+      "user@example.com",
+    );
   });
 
   it("accepts custom workspaceName and workspaceSlug", async () => {
