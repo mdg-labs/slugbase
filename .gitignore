@@ -2,6 +2,7 @@
 docs/skill-examples/agent-memory/
 .cursor/skills/agent-memory/active/
 .cursor/skills/agent-memory/archive/
+.cursor/tmp/
 
 # examples
 docs/example.ci-cd.yml
