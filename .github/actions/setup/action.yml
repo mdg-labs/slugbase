@@ -11,7 +11,7 @@ inputs:
     required: false
     default: "false"
   infisical-env-slug:
-    description: Infisical environment slug (dev, staging, production)
+    description: Infisical environment slug (dev, staging, prod)
     required: false
     default: dev
   infisical-domain:
