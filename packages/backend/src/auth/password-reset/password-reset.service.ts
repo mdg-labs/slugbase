@@ -30,6 +30,24 @@ export function generateResetToken(): string {
   return randomBytes(TOKEN_BYTES).toString("hex");
 }
 
+/**
+ * Builds the password-reset link for the reset-password UI.
+ *
+ * Hosted (API + separate web Worker): use FRONTEND_ORIGIN (spec §14.7).
+ * Self-hosted combined image (SERVE_WEB_CLIENT): use APP_BASE_URL as the single public origin.
+ */
+export function buildPasswordResetUrl(params: {
+  appBaseUrl: string;
+  frontendOrigin: string;
+  serveWebClient: boolean;
+  token: string;
+}): string {
+  const origin = params.serveWebClient ? params.appBaseUrl : params.frontendOrigin;
+  const url = new URL("/reset-password", origin);
+  url.searchParams.set("token", params.token);
+  return url.href;
+}
+
 @Injectable()
 export class PasswordResetService {
   private readonly logger = new Logger(PasswordResetService.name);
@@ -66,8 +84,12 @@ export class PasswordResetService {
 
     await this.tokenRepo.create(account.id, tokenHash, expiresAt);
 
-    const baseUrl = this.config.get("APP_BASE_URL");
-    const resetUrl = `${baseUrl}/auth/set-password?token=${plaintext}`;
+    const resetUrl = buildPasswordResetUrl({
+      appBaseUrl: this.config.get("APP_BASE_URL"),
+      frontendOrigin: this.config.get("FRONTEND_ORIGIN"),
+      serveWebClient: this.config.get("SERVE_WEB_CLIENT"),
+      token: plaintext,
+    });
 
     if (this.mail.isAvailable()) {
       await this.mail.send({

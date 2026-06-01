@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 
 import { describe, expect, it, vi } from "vitest";
 
-import { generateResetToken, hashResetToken } from "./password-reset.service.js";
+import { generateResetToken, hashResetToken, buildPasswordResetUrl } from "./password-reset.service.js";
 
 // ---------------------------------------------------------------------------
 // Pure helper tests — no NestJS DI needed
@@ -37,6 +37,43 @@ describe("generateResetToken", () => {
   it("generates unique tokens on each call", () => {
     const tokens = new Set(Array.from({ length: 50 }, () => generateResetToken()));
     expect(tokens.size).toBe(50);
+  });
+});
+
+describe("buildPasswordResetUrl", () => {
+  const token = "abc123def456";
+
+  it("uses FRONTEND_ORIGIN and /reset-password when web is not served by the API", () => {
+    const url = buildPasswordResetUrl({
+      appBaseUrl: "https://api.slugbase.test",
+      frontendOrigin: "https://app.slugbase.test",
+      serveWebClient: false,
+      token,
+    });
+
+    expect(url).toBe(`https://app.slugbase.test/reset-password?token=${token}`);
+  });
+
+  it("uses APP_BASE_URL when SERVE_WEB_CLIENT is enabled (combined self-host)", () => {
+    const url = buildPasswordResetUrl({
+      appBaseUrl: "https://slugbase.example.com",
+      frontendOrigin: "https://app.slugbase.test",
+      serveWebClient: true,
+      token,
+    });
+
+    expect(url).toBe(`https://slugbase.example.com/reset-password?token=${token}`);
+  });
+
+  it("normalizes trailing slashes on the configured origin", () => {
+    const url = buildPasswordResetUrl({
+      appBaseUrl: "https://api.slugbase.test/",
+      frontendOrigin: "https://app.slugbase.test/",
+      serveWebClient: false,
+      token,
+    });
+
+    expect(url).toBe(`https://app.slugbase.test/reset-password?token=${token}`);
   });
 });
 
