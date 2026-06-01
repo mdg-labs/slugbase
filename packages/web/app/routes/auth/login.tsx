@@ -278,7 +278,7 @@ export default function LoginRoute() {
                   type={showPassword ? "text" : "password"}
                   autoComplete="current-password"
                   required
-                  placeholder="••••••••"
+                  placeholder={t("auth.password.mask_placeholder")}
                   className="w-full rounded-md border border-[color:var(--border)] bg-raised px-sp-4 py-sp-3 pr-10 text-fg placeholder:text-fg-faint focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-canvas"
                   style={{
                     fontSize: "var(--text-body)",

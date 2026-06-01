@@ -88,6 +88,7 @@ export const staticMessages = {
     "auth.login.email_label": "Email",
     "auth.login.email_placeholder": "you@company.com",
     "auth.login.password_label": "Password",
+    "auth.password.mask_placeholder": "••••••••",
     "auth.login.password_forgot_link": "Forgot password?",
     "auth.login.password_show": "Show password",
     "auth.login.password_hide": "Hide password",
@@ -761,6 +762,8 @@ export const staticMessages = {
     "consent.banner.accept": "Accept analytics",
     "consent.banner.decline": "Decline",
     "ui.toast.dismiss_label": "Dismiss notification",
+    "ui.kbd.escape": "Esc",
+    "ui.empty.dash": "—",
   },
   de: {
     "app.shell.brand": "SlugBase",
@@ -855,6 +858,7 @@ export const staticMessages = {
     "auth.login.email_label": "E-Mail",
     "auth.login.email_placeholder": "du@unternehmen.de",
     "auth.login.password_label": "Passwort",
+    "auth.password.mask_placeholder": "••••••••",
     "auth.login.password_forgot_link": "Passwort vergessen?",
     "auth.login.password_show": "Passwort anzeigen",
     "auth.login.password_hide": "Passwort verbergen",
@@ -1543,6 +1547,8 @@ export const staticMessages = {
     "consent.banner.accept": "Analytics akzeptieren",
     "consent.banner.decline": "Ablehnen",
     "ui.toast.dismiss_label": "Benachrichtigung schließen",
+    "ui.kbd.escape": "Esc",
+    "ui.empty.dash": "—",
   },
 } as const;
 

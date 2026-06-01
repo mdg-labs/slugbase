@@ -7,6 +7,8 @@ export const staticMessages = {
     "marketing.nav.contact": "Contact",
     "marketing.nav.sign_in": "Sign in",
     "marketing.nav.get_started": "Get started",
+    "marketing.meta.description":
+      "SlugBase — keyboard-driven bookmark manager with slug forwarding.",
     "marketing.footer.tagline":
       "Open-source bookmark manager with personal URL forwarding. Self-hostable. Keyboard-driven.",
     "marketing.footer.gdpr": "GDPR-compliant · Hosted in the EU",
@@ -217,6 +219,8 @@ export const staticMessages = {
     "marketing.nav.contact": "Kontakt",
     "marketing.nav.sign_in": "Anmelden",
     "marketing.nav.get_started": "Loslegen",
+    "marketing.meta.description":
+      "SlugBase — tastaturgesteuerter Lesezeichenmanager mit Slug-Weiterleitung.",
     "marketing.footer.tagline":
       "Open-Source-Lesezeichenmanager mit persönlicher URL-Weiterleitung. Self-hosting-fähig. Tastaturgesteuert.",
     "marketing.footer.gdpr": "DSGVO-konform · Gehostet in der EU",

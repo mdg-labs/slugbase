@@ -3,6 +3,7 @@ import { Button, ConfirmDialog, EmptyState, Input, Label } from "@slugbase/ui";
 import { useMemo, useState } from "react";
 
 import { useAppToast } from "../../../../components/feedback/AppToastProvider.js";
+import { useAppLocale } from "../../../../i18n/use-app-locale.js";
 
 import {
   addTeamMember,
@@ -88,7 +89,7 @@ export function MembersSettingsPage({ initialData }: MembersSettingsPageProps) {
   const [busy, setBusy] = useState(false);
   const { showToast } = useAppToast();
 
-  const locale = "en";
+  const locale = useAppLocale();
   const seats = useMemo(
     () => seatUsage(members.length, pending.length, initialData.workspace.planSeats),
     [members.length, pending.length, initialData.workspace.planSeats],

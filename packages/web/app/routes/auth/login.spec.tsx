@@ -53,6 +53,7 @@ describe("Login route — loader", () => {
       id: "user-1",
       email: "alice@example.com",
       name: "Alice",
+      language: "en",
       mfaState: "not_enrolled",
       emailVerified: true,
     });

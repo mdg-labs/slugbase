@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 
 import { useAppToast } from "../../../../components/feedback/AppToastProvider.js";
+import { useAppLocale } from "../../../../i18n/use-app-locale.js";
 
 import {
   openBillingPortal,
@@ -50,7 +51,7 @@ export function BillingSettingsPage({ initialData }: BillingSettingsPageProps) {
   const { showToast } = useAppToast();
 
   const tab = (searchParams.get("tab") as BillingTabId | null) ?? "plan";
-  const locale = "en";
+  const locale = useAppLocale();
   const canManage = canManageBilling(initialData.currentUserRole);
   const displayPlan = effectivePlanForDisplay(workspace);
   const cap = initialData.planConfig.freeBookmarkCap;
