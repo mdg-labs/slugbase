@@ -1,16 +1,21 @@
 #!/usr/bin/env node
 /**
- * Spec §22.6 / P6-07.2: `tolgee pull --check` semantics.
- * Upstream @tolgee/cli has no `--check` flag; pull en+de then fail on missing/empty translations.
+ * Spec §22.6 / P6-07.2: export repo catalogs, pull Tolgee, strict bidirectional diff.
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { rmSync } from "node:fs";
 import { join, resolve } from "node:path";
+import {
+  LOCALES,
+  diffCatalogs,
+  diffHasErrors,
+  formatDiffErrors,
+  loadLocaleCatalog,
+} from "./i18n-catalog-utils.mjs";
 
 const repoRoot = resolve(import.meta.dirname, "..");
+const exportDir = join(repoRoot, ".tolgee", "export");
 const pullDir = join(repoRoot, ".tolgee", "pull-check");
-const defaultLocale = "en";
-const requiredLocales = ["en", "de"];
 
 function fail(message) {
   console.error(`tolgee pull --check: ${message}`);
@@ -26,6 +31,15 @@ if (!apiKey) {
   fail("TOLGEE_API_KEY is required (set via Infisical env root).");
 }
 
+const exportStep = spawnSync(
+  "pnpm",
+  ["exec", "tsx", "scripts/i18n-export-catalog.mjs"],
+  { cwd: repoRoot, stdio: "inherit", env: process.env },
+);
+if (exportStep.status !== 0) {
+  process.exit(exportStep.status ?? 1);
+}
+
 rmSync(pullDir, { recursive: true, force: true });
 
 const pull = spawnSync(
@@ -37,7 +51,7 @@ const pull = spawnSync(
     "--path",
     pullDir,
     "--languages",
-    ...requiredLocales,
+    ...LOCALES,
     "--states",
     "UNTRANSLATED",
     "TRANSLATED",
@@ -60,85 +74,30 @@ if (pull.status !== 0) {
   process.exit(pull.status ?? 1);
 }
 
-function loadLocaleFile(locale) {
-  const candidates = [
-    join(pullDir, `${locale}.json`),
-    join(pullDir, locale, `${locale}.json`),
-  ];
+/** @type {string[]} */
+const allErrors = [];
+let keyCount = 0;
 
-  for (const root of [pullDir, ...readdirSync(pullDir, { withFileTypes: true })
-    .filter((e) => e.isDirectory())
-    .map((e) => join(pullDir, e.name))]) {
-    candidates.push(join(root, `${locale}.json`));
+for (const locale of LOCALES) {
+  const local = loadLocaleCatalog(exportDir, locale);
+  const remote = loadLocaleCatalog(pullDir, locale);
+  if (locale === "en") {
+    keyCount = local.size;
   }
-
-  const path = candidates.find((p) => existsSync(p));
-  if (!path) {
-    fail(`no pulled file for locale "${locale}" under ${pullDir}`);
-  }
-
-  const raw = readFileSync(path, "utf8");
-  return JSON.parse(raw);
-}
-
-function flattenMessages(obj, prefix = "") {
-  const out = new Map();
-  for (const [key, value] of Object.entries(obj)) {
-    const fullKey = prefix ? `${prefix}.${key}` : key;
-    if (value !== null && typeof value === "object" && !Array.isArray(value)) {
-      for (const [k, v] of flattenMessages(value, fullKey)) {
-        out.set(k, v);
-      }
-    } else {
-      out.set(fullKey, value);
-    }
-  }
-  return out;
-}
-
-const enMessages = flattenMessages(loadLocaleFile(defaultLocale));
-const deMessages = flattenMessages(loadLocaleFile("de"));
-
-const missingInDe = [];
-const emptyInDe = [];
-
-for (const [key, enValue] of enMessages) {
-  if (enValue === undefined || enValue === null || String(enValue).trim() === "") {
-    fail(`default locale key "${key}" has an empty English value on Tolgee`);
-  }
-
-  const deValue = deMessages.get(key);
-  if (deValue === undefined) {
-    missingInDe.push(key);
-  } else if (String(deValue).trim() === "") {
-    emptyInDe.push(key);
+  const diff = diffCatalogs(local, remote, locale);
+  if (diffHasErrors(diff)) {
+    allErrors.push(...formatDiffErrors(diff, locale));
   }
 }
 
-if (missingInDe.length > 0 || emptyInDe.length > 0) {
-  if (missingInDe.length > 0) {
-    console.error(
-      `Missing German translation for ${missingInDe.length} key(s):`,
-    );
-    for (const key of missingInDe.slice(0, 20)) {
-      console.error(`  - ${key}`);
-    }
-    if (missingInDe.length > 20) {
-      console.error(`  … and ${missingInDe.length - 20} more`);
-    }
-  }
-  if (emptyInDe.length > 0) {
-    console.error(`Empty German translation for ${emptyInDe.length} key(s):`);
-    for (const key of emptyInDe.slice(0, 20)) {
-      console.error(`  - ${key}`);
-    }
-    if (emptyInDe.length > 20) {
-      console.error(`  … and ${emptyInDe.length - 20} more`);
-    }
+if (allErrors.length > 0) {
+  console.error("tolgee pull --check: repo catalogs do not match Tolgee:\n");
+  for (const line of allErrors) {
+    console.error(line);
   }
   process.exit(1);
 }
 
 console.log(
-  `tolgee pull --check: OK (${enMessages.size} keys, en+de complete on Tolgee)`,
+  `tolgee pull --check: OK (${keyCount} keys, en+de match repo export and Tolgee)`,
 );

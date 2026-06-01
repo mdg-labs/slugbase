@@ -3,11 +3,14 @@
   "projectId": 4,
   "apiUrl": "https://tolgee.mdg-labs.dev",
   "format": "JSON_TOLGEE",
-  "patterns": [
-    "packages/web/app/**/*.tsx",
-    "packages/marketing/src/**/*.astro"
-  ],
+  "patterns": ["packages/web/app/**/*.tsx"],
   "parser": "react",
+  "strictNamespace": false,
+  "push": {
+    "filesTemplate": ".tolgee/export/{languageTag}.json",
+    "languages": ["en", "de"],
+    "forceMode": "OVERRIDE"
+  },
   "pull": {
     "path": ".tolgee/pull",
     "languages": ["en", "de"],

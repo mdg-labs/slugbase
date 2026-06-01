@@ -11,16 +11,30 @@ scan_paths=(
   packages/ui/src/components
 )
 
-# Same heuristic as packages/web/app/i18n/hardcoded-strings.spec.ts
+glob_flags=(
+  -g '*.tsx'
+  -g '*.astro'
+  -g '!*.spec.*'
+  -g '!messages.ts'
+  -g '!test-utils/**'
+)
+
+# Same heuristics as packages/web/app/i18n/hardcoded-strings.spec.ts
 if rg -n --pcre2 \
   '(?:>|(?:placeholder|aria-label|title|alt)=)["\x27]([A-Z][^"\x27{]{1,})["\x27]' \
   "${scan_paths[@]}" \
-  -g '*.tsx' \
+  "${glob_flags[@]}"; then
+  echo "check-hardcoded-ui-strings: hard-coded user-visible strings found (use Tolgee catalog keys)" >&2
+  exit 1
+fi
+
+if rg -n --pcre2 \
+  '\>\s*\n\s*([A-Z][^\n<{]{2,})' \
+  packages/marketing/src \
   -g '*.astro' \
   -g '!*.spec.*' \
-  -g '!messages.ts' \
-  -g '!test-utils/**'; then
-  echo "check-hardcoded-ui-strings: hard-coded user-visible strings found (use Tolgee catalog keys)" >&2
+  -g '!messages.ts'; then
+  echo "check-hardcoded-ui-strings: hard-coded element text found in marketing Astro (use Tolgee catalog keys)" >&2
   exit 1
 fi
 

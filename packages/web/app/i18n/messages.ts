@@ -1,4 +1,4 @@
-/** Static Tolgee catalog (en/de) — synced to Tolgee project 4 in later tasks. */
+/** Static Tolgee catalog (en/de) — sync via `pnpm i18n:push`. */
 export const staticMessages = {
   en: {
     "app.shell.brand": "SlugBase",

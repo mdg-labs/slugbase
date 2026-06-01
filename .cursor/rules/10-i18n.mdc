@@ -13,16 +13,33 @@ SlugBase ships **English (en) and German (de)** at v1. Every string surfaced in 
 
 | Tool | Purpose |
 |---|---|
-| **Tolgee** | Translation-management platform; source of truth for all message catalogs. **Self-hosted instance `https://tolgee.mdg-labs.dev`; SlugBase project `4` (`/projects/4`)** |
+| **Tolgee** | Translation-management **mirror** synced from repo catalogs. **Self-hosted `https://tolgee.mdg-labs.dev`; project `4` (`/projects/4`)** |
 | `TOLGEE_API_KEY` | Infisical key (Tolgee PAT) — never hard-code, never log |
 | `TOLGEE_PROJECT_ID` | `4` — identifies the SlugBase project in the Tolgee instance |
 
-The **Tolgee React SDK** handles runtime key resolution in the web client (**React Router v7**, decision #39). Server-rendered strings resolve through the same catalog so SSR and client output match. The Astro marketing site consumes the same Tolgee project for its EN/DE copy.
+**Repo source of truth:** typed catalogs in `packages/web/app/i18n/messages.ts` and `packages/marketing/src/i18n/messages.ts` (en **and** de together). Tolgee CLI reads/writes **JSON** at `.tolgee/export/{languageTag}.json` (generated, not hand-edited). Astro marketing is **not** parsed by Tolgee CLI — sync is JSON push/pull only.
+
+The **Tolgee React SDK** loads `staticData` from those TS catalogs at runtime (**React Router v7** web app). Marketing uses the same keys via `t(locale, key)` at build time. Optional DevTools when `VITE_TOLGEE_API_URL` / `PUBLIC_TOLGEE_API_URL` is set.
+
+## Tolgee CLI workflow (export → push → CI diff)
+
+```bash
+# 1. Edit messages.ts (web + marketing) — add en AND de for every new key
+pnpm i18n:export                    # messages.ts → .tolgee/export/en.json + de.json
+infisical run --env=dev -- pnpm i18n:push   # upload to Tolgee project 4
+
+# 2. CI / pre-commit gate
+pnpm i18n:check:tolgee              # export + pull + strict repo↔Tolgee diff
+pnpm i18n:check:hardcoded           # no inline UI strings in tsx/astro
+```
+
+- **`i18n:compare:web`** (optional): `tolgee compare` on web TSX only — never include `*.astro`.
+- After adding keys locally, run **`i18n:push`** before merge or CI will fail (repo ahead of Tolgee).
 
 ## Authoring rule — new UI code
 
 1. **Author against the catalog**: write `t('key.name')` (or the framework equivalent) — never inline English strings.
-2. **Add the key to the Tolgee project**: via the Tolgee web UI, the CLI, or the SDK's in-context editing mode during development.
+2. **Add the key to both locale blocks** in the relevant `messages.ts`, then **`pnpm i18n:push`** to sync Tolgee.
 3. **German translation required before merge**: a missing German string is a Fast-Follow blocker, not an acceptable v1 gap. Either add the translation or create a SB Jira task with label `i18n` before merging.
 4. **Key naming convention**: `<scope>.<context>.<descriptor>` — all lowercase, dots as separators, no abbreviations.
    - ✅ `bookmark.list.empty_state_title`
@@ -49,7 +66,8 @@ When invoking the AI-suggest feature, pass the user's resolved locale as the `ou
 |---|---|---|
 | `TOLGEE_API_KEY` | `TOLGEE_API_KEY=` | Tolgee Personal Access Token (server-side SDK calls and CLI) — secret, value only in Infisical |
 | `TOLGEE_PROJECT_ID` | `TOLGEE_PROJECT_ID=4` | SlugBase project in the Tolgee instance (`https://tolgee.mdg-labs.dev/projects/4`) |
-| `VITE_TOLGEE_API_URL` | `VITE_TOLGEE_API_URL=https://tolgee.mdg-labs.dev` | Client-exposed (Vite/React Router v7 prefix); self-hosted Tolgee instance |
+| `VITE_TOLGEE_API_URL` | `VITE_TOLGEE_API_URL=https://tolgee.mdg-labs.dev` | Web client (Vite); optional DevTools |
+| `PUBLIC_TOLGEE_API_URL` | `PUBLIC_TOLGEE_API_URL=https://tolgee.mdg-labs.dev` | Marketing (Astro); optional DevTools |
 
 Register all three via `infisical secrets set ... --env=dev` and add the `.env.example` stubs before writing any Tolgee-consuming code.
 

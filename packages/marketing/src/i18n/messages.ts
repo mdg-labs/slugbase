@@ -1,4 +1,4 @@
-/** Static Tolgee catalog (en/de) — marketing site; synced to Tolgee project 4 in later tasks. */
+/** Static Tolgee catalog (en/de) — marketing site; sync via `pnpm i18n:push`. */
 export const staticMessages = {
   en: {
     "marketing.nav.brand": "SlugBase",
@@ -211,6 +211,10 @@ export const staticMessages = {
     "marketing.error.action.home": "Back to home",
     "marketing.error.action.reload": "Reload the page",
     "marketing.error.action.sign_in": "Sign in",
+    "marketing.consent.message":
+      "We use privacy-friendly analytics to understand product usage. You can accept or decline optional tracking.",
+    "marketing.consent.decline": "Decline",
+    "marketing.consent.accept": "Accept analytics",
   },
   de: {
     "marketing.nav.brand": "SlugBase",
@@ -425,6 +429,10 @@ export const staticMessages = {
     "marketing.error.action.home": "Zur Startseite",
     "marketing.error.action.reload": "Seite neu laden",
     "marketing.error.action.sign_in": "Anmelden",
+    "marketing.consent.message":
+      "Wir nutzen datenschutzfreundliche Analytics, um die Produktnutzung zu verstehen. Du kannst optionales Tracking akzeptieren oder ablehnen.",
+    "marketing.consent.decline": "Ablehnen",
+    "marketing.consent.accept": "Analytics akzeptieren",
   },
 } as const;
 

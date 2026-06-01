@@ -1,7 +1,20 @@
 ---
+import { t } from "../i18n/tolgee.js";
+
 const umamiHost = import.meta.env.PUBLIC_UMAMI_HOST?.replace(/\/$/, "") ?? "";
 const umamiWebsiteId = import.meta.env.PUBLIC_UMAMI_WEBSITE_ID ?? "";
 const analyticsEnabled = umamiHost.length > 0 && umamiWebsiteId.length > 0;
+
+const consentEn = {
+  message: t("en", "marketing.consent.message"),
+  decline: t("en", "marketing.consent.decline"),
+  accept: t("en", "marketing.consent.accept"),
+};
+const consentDe = {
+  message: t("de", "marketing.consent.message"),
+  decline: t("de", "marketing.consent.decline"),
+  accept: t("de", "marketing.consent.accept"),
+};
 ---
 
 {analyticsEnabled && (
@@ -14,19 +27,19 @@ const analyticsEnabled = umamiHost.length > 0 && umamiWebsiteId.length > 0;
       hidden
     >
       <p class="marketing-consent-banner__message" data-consent-message-en>
-        We use privacy-friendly analytics to understand product usage. You can accept or decline optional tracking.
+        {consentEn.message}
       </p>
       <p class="marketing-consent-banner__message" data-consent-message-de hidden>
-        Wir nutzen datenschutzfreundliche Analytics, um die Produktnutzung zu verstehen. Du kannst optionales Tracking akzeptieren oder ablehnen.
+        {consentDe.message}
       </p>
       <div class="marketing-consent-banner__actions">
         <button type="button" class="marketing-consent-banner__decline" data-consent-decline>
-          <span data-consent-decline-en>Decline</span>
-          <span data-consent-decline-de hidden>Ablehnen</span>
+          <span data-consent-decline-en>{consentEn.decline}</span>
+          <span data-consent-decline-de hidden>{consentDe.decline}</span>
         </button>
         <button type="button" class="marketing-consent-banner__accept" data-consent-accept>
-          <span data-consent-accept-en>Accept analytics</span>
-          <span data-consent-accept-de hidden>Analytics akzeptieren</span>
+          <span data-consent-accept-en>{consentEn.accept}</span>
+          <span data-consent-accept-de hidden>{consentDe.accept}</span>
         </button>
       </div>
     </div>

@@ -16,8 +16,10 @@ build/
 .astro
 .wrangler/
 
-# Tolgee CLI pull scratch (CI gate)
-.tolgee/
+# Tolgee CLI scratch (export is ephemeral; pull dirs are CI/dev only)
+.tolgee/pull/
+.tolgee/pull-check/
+.tolgee/export/
 
 # env (never commit secrets)
 .env
