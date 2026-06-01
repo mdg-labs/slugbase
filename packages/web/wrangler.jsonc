@@ -4,6 +4,12 @@
   "compatibility_date": "2026-06-01",
   "compatibility_flags": ["nodejs_compat"],
   "main": "./workers/app.ts",
+  "routes": [
+    {
+      "pattern": "staging-cloud.slugbase.app",
+      "custom_domain": true
+    }
+  ],
   "observability": {
     "enabled": true
   }

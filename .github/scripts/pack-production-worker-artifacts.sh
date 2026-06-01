@@ -4,10 +4,15 @@ set -euo pipefail
 
 OUT="${1:?Usage: pack-production-worker-artifacts.sh <output.tar.gz>}"
 
-sed 's/slugbase-staging-web/slugbase-production-web/g' \
+sed \
+  -e 's/slugbase-staging-web/slugbase-production-web/g' \
+  -e 's/staging-cloud\.slugbase\.app/cloud.slugbase.app/g' \
   packages/web/build/server/wrangler.json \
   > packages/web/build/server/wrangler.deploy.json
-sed 's/slugbase-staging-marketing/slugbase-production-marketing/g' packages/marketing/wrangler.jsonc \
+sed \
+  -e 's/slugbase-staging-marketing/slugbase-production-marketing/g' \
+  -e 's/staging\.slugbase\.app/slugbase.app/g' \
+  packages/marketing/wrangler.jsonc \
   > packages/marketing/wrangler.production.jsonc
 
 tar -czf "${OUT}" \
