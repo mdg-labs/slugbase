@@ -1,3 +1,4 @@
+import { ToastProvider } from "@slugbase/ui";
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -75,25 +76,35 @@ const teamData: MembersSettingsData = {
 describe("MembersSettingsPage", () => {
   it("shows plan gate for non-Team workspaces", () => {
     const view = render(
-      <MembersSettingsPage
-        initialData={{
-          ...teamData,
-          workspace: { ...teamData.workspace, plan: "personal" },
-        }}
-      />,
+      <ToastProvider dismissLabel="Dismiss notification">
+        <MembersSettingsPage
+          initialData={{
+            ...teamData,
+            workspace: { ...teamData.workspace, plan: "personal" },
+          }}
+        />
+      </ToastProvider>,
     );
     expect(view.getByTestId("members-plan-gate")).toBeTruthy();
   });
 
   it("renders members tab content for Team workspaces", () => {
-    const view = render(<MembersSettingsPage initialData={teamData} />);
+    const view = render(
+      <ToastProvider dismissLabel="Dismiss notification">
+        <MembersSettingsPage initialData={teamData} />
+      </ToastProvider>,
+    );
     expect(view.getByTestId("members-settings-page")).toBeTruthy();
     expect(view.getByText("Alex Kerr")).toBeTruthy();
     expect(view.getByText("pending@example.com")).toBeTruthy();
   });
 
   it("shows owner role controls for the current owner", () => {
-    const view = render(<MembersSettingsPage initialData={teamData} />);
+    const view = render(
+      <ToastProvider dismissLabel="Dismiss notification">
+        <MembersSettingsPage initialData={teamData} />
+      </ToastProvider>,
+    );
     expect(view.getAllByText("Transfer ownership…").length).toBeGreaterThan(0);
   });
 });

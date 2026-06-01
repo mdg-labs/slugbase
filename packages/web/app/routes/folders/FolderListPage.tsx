@@ -1,6 +1,6 @@
 import { useTranslate } from "@tolgee/react";
-import { Button } from "@slugbase/ui";
-import { Form, useLoaderData, useNavigate, useSearchParams } from "react-router";
+import { Button, EmptyState } from "@slugbase/ui";
+import { Form, useLoaderData, useNavigate, useNavigation, useSearchParams } from "react-router";
 import { ScopeFilter } from "../../components/sharing/ScopeFilter.js";
 import { ScopeIcon } from "../../components/sharing/ScopeIcon.js";
 import { ShareControls } from "../../components/sharing/ShareControls.js";
@@ -12,13 +12,18 @@ import {
   buildFolderListSearch,
   type FolderListData,
 } from "./folders-loader.js";
+import { FolderListSkeleton } from "./FolderListSkeleton.js";
 
 export function FolderListPage() {
   const { t } = useTranslate();
   const data = useLoaderData<FolderListData>();
   const navigate = useNavigate();
+  const navigation = useNavigation();
   const [searchParams] = useSearchParams();
   const { currentUserId, canShare } = useWorkspaceEntitlements();
+
+  const isLoading = navigation.state === "loading";
+  const isFiltered = data.q.length > 0 || data.scope !== "all";
 
   const updateScope = (scope: SharingScope) => {
     const next = new URLSearchParams(searchParams);
@@ -30,6 +35,14 @@ export function FolderListPage() {
     next.delete("page");
     void navigate(`/folders?${next.toString()}`);
   };
+
+  const clearFilters = () => {
+    void navigate("/folders");
+  };
+
+  if (isLoading) {
+    return <FolderListSkeleton />;
+  }
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-sp-6 px-sp-6 py-sp-8">
@@ -76,11 +89,29 @@ export function FolderListPage() {
 
       {data.items.length === 0 ? (
         <div
-          className="rounded-lg border border-dashed border-[color:var(--border)] px-sp-8 py-sp-10 text-center"
+          className="rounded-lg border border-dashed border-[color:var(--border)]"
           data-testid="folder-list-empty"
         >
-          <p className="font-medium text-fg">{t("folders.list.empty_title")}</p>
-          <p className="mt-sp-2 text-fg-muted">{t("folders.list.empty_body")}</p>
+          <EmptyState
+            title={
+              isFiltered
+                ? t("folders.list.empty_title")
+                : t("folders.list.empty_unfiltered_title")
+            }
+            description={
+              isFiltered
+                ? t("folders.list.empty_body")
+                : t("folders.list.empty_unfiltered_body")
+            }
+            actions={
+              isFiltered ? (
+                <Button variant="secondary" type="button" onClick={clearFilters}>
+                  {t("folders.list.clear_filters_action")}
+                </Button>
+              ) : undefined
+            }
+            testId="folder-list-empty-state"
+          />
         </div>
       ) : (
         <ul className="grid gap-sp-4" data-testid="folder-list">

@@ -1,6 +1,6 @@
 import { useTranslate } from "@tolgee/react";
-import { Button } from "@slugbase/ui";
-import { Form, useLoaderData, useNavigate, useSearchParams } from "react-router";
+import { Button, EmptyState } from "@slugbase/ui";
+import { Form, useLoaderData, useNavigate, useNavigation, useSearchParams } from "react-router";
 import { ScopeFilter } from "../../components/sharing/ScopeFilter.js";
 import { ScopeIcon } from "../../components/sharing/ScopeIcon.js";
 import { ShareControls } from "../../components/sharing/ShareControls.js";
@@ -12,13 +12,18 @@ import {
   buildBookmarkListSearch,
   type BookmarkListData,
 } from "./bookmarks-loader.js";
+import { BookmarkListSkeleton } from "./BookmarkListSkeleton.js";
 
 export function BookmarkListPage() {
   const { t } = useTranslate();
   const data = useLoaderData<BookmarkListData>();
   const navigate = useNavigate();
+  const navigation = useNavigation();
   const [searchParams] = useSearchParams();
   const { currentUserId, canShare } = useWorkspaceEntitlements();
+
+  const isLoading = navigation.state === "loading";
+  const isFiltered = data.q.length > 0 || data.scope !== "all";
 
   const updateScope = (scope: SharingScope) => {
     const next = new URLSearchParams(searchParams);
@@ -30,6 +35,14 @@ export function BookmarkListPage() {
     next.delete("page");
     void navigate(`/bookmarks?${next.toString()}`);
   };
+
+  const clearFilters = () => {
+    void navigate("/bookmarks");
+  };
+
+  if (isLoading) {
+    return <BookmarkListSkeleton />;
+  }
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-sp-6 px-sp-6 py-sp-8">
@@ -72,11 +85,39 @@ export function BookmarkListPage() {
 
       {data.items.length === 0 ? (
         <div
-          className="rounded-lg border border-dashed border-[color:var(--border)] px-sp-8 py-sp-10 text-center"
+          className="rounded-lg border border-dashed border-[color:var(--border)]"
           data-testid="bookmark-list-empty"
         >
-          <p className="font-medium text-fg">{t("bookmarks.list.empty_title")}</p>
-          <p className="mt-sp-2 text-fg-muted">{t("bookmarks.list.empty_body")}</p>
+          <EmptyState
+            title={
+              isFiltered
+                ? t("bookmarks.list.empty_title")
+                : t("bookmarks.list.empty_unfiltered_title")
+            }
+            description={
+              isFiltered
+                ? t("bookmarks.list.empty_body")
+                : t("bookmarks.list.empty_unfiltered_body")
+            }
+            actions={
+              isFiltered ? (
+                <Button variant="secondary" type="button" onClick={clearFilters}>
+                  {t("bookmarks.list.clear_filters_action")}
+                </Button>
+              ) : (
+                <Button
+                  variant="primary"
+                  type="button"
+                  onClick={() => {
+                    void navigate("/bookmarks?new=1");
+                  }}
+                >
+                  {t("bookmarks.list.new_bookmark_action")}
+                </Button>
+              )
+            }
+            testId="bookmark-list-empty-state"
+          />
         </div>
       ) : (
         <ul className="grid gap-sp-4" data-testid="bookmark-list">

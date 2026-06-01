@@ -327,6 +327,9 @@ export const staticMessages = {
     "settings.members.team_expand_action": "Manage",
     "settings.members.team_collapse_action": "Hide",
     "settings.members.team_delete_action": "Delete",
+    "settings.members.team_delete_confirm_title": "Delete team",
+    "settings.members.team_delete_confirm_body":
+      'Delete team "{name}"? Members keep workspace access; only the team grouping is removed.',
     "settings.members.team_add_member_label": "Add member",
     "settings.members.team_add_member_placeholder": "Select a member",
     "settings.members.team_member_remove_action": "Remove",
@@ -734,6 +737,11 @@ export const staticMessages = {
     "bookmarks.list.empty_title": "No bookmarks match",
     "bookmarks.list.empty_body":
       "Try clearing filters or widening the sharing scope.",
+    "bookmarks.list.empty_unfiltered_title": "No bookmarks yet",
+    "bookmarks.list.empty_unfiltered_body":
+      "Save your first link and give it a short slug to start forwarding.",
+    "bookmarks.list.clear_filters_action": "Clear filters",
+    "bookmarks.list.new_bookmark_action": "New bookmark",
     // Folders list
     "folders.list.title": "Folders",
     "folders.list.subtitle": "{count} folders",
@@ -742,12 +750,17 @@ export const staticMessages = {
     "folders.list.empty_title": "No folders match",
     "folders.list.empty_body":
       "Try clearing filters or widening the sharing scope.",
+    "folders.list.empty_unfiltered_title": "No folders yet",
+    "folders.list.empty_unfiltered_body":
+      "Create a folder to organize bookmarks in your workspace.",
+    "folders.list.clear_filters_action": "Clear filters",
     "folders.list.bookmark_count": "{count} bookmarks",
     "consent.banner.aria_label": "Analytics consent",
     "consent.banner.message":
       "We use privacy-friendly analytics to understand product usage. You can accept or decline optional tracking.",
     "consent.banner.accept": "Accept analytics",
     "consent.banner.decline": "Decline",
+    "ui.toast.dismiss_label": "Dismiss notification",
   },
   de: {
     "app.shell.brand": "SlugBase",
@@ -1091,6 +1104,9 @@ export const staticMessages = {
     "settings.members.team_expand_action": "Verwalten",
     "settings.members.team_collapse_action": "Ausblenden",
     "settings.members.team_delete_action": "Löschen",
+    "settings.members.team_delete_confirm_title": "Team löschen",
+    "settings.members.team_delete_confirm_body":
+      'Team „{name}" löschen? Mitglieder behalten den Arbeitsbereich-Zugang; nur die Team-Gruppierung wird entfernt.',
     "settings.members.team_add_member_label": "Mitglied hinzufügen",
     "settings.members.team_add_member_placeholder": "Mitglied auswählen",
     "settings.members.team_member_remove_action": "Entfernen",
@@ -1504,6 +1520,11 @@ export const staticMessages = {
     "bookmarks.list.empty_title": "Keine passenden Lesezeichen",
     "bookmarks.list.empty_body":
       "Versuche, Filter zu löschen oder den Freigabe-Umfang zu erweitern.",
+    "bookmarks.list.empty_unfiltered_title": "Noch keine Lesezeichen",
+    "bookmarks.list.empty_unfiltered_body":
+      "Speichere deinen ersten Link und vergib einen kurzen Slug zum Weiterleiten.",
+    "bookmarks.list.clear_filters_action": "Filter zurücksetzen",
+    "bookmarks.list.new_bookmark_action": "Neues Lesezeichen",
     "folders.list.title": "Ordner",
     "folders.list.subtitle": "{count} Ordner",
     "folders.list.search_placeholder": "Ordnername suchen…",
@@ -1511,12 +1532,17 @@ export const staticMessages = {
     "folders.list.empty_title": "Keine passenden Ordner",
     "folders.list.empty_body":
       "Versuche, Filter zu löschen oder den Freigabe-Umfang zu erweitern.",
+    "folders.list.empty_unfiltered_title": "Noch keine Ordner",
+    "folders.list.empty_unfiltered_body":
+      "Erstelle einen Ordner, um Lesezeichen in deinem Arbeitsbereich zu organisieren.",
+    "folders.list.clear_filters_action": "Filter zurücksetzen",
     "folders.list.bookmark_count": "{count} Lesezeichen",
     "consent.banner.aria_label": "Analytics-Einwilligung",
     "consent.banner.message":
       "Wir nutzen datenschutzfreundliche Analytics, um die Produktnutzung zu verstehen. Du kannst optionales Tracking akzeptieren oder ablehnen.",
     "consent.banner.accept": "Analytics akzeptieren",
     "consent.banner.decline": "Ablehnen",
+    "ui.toast.dismiss_label": "Benachrichtigung schließen",
   },
 } as const;
 

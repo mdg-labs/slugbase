@@ -2,6 +2,8 @@ import { useTranslate } from "@tolgee/react";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 
+import { useAppToast } from "../../../../components/feedback/AppToastProvider.js";
+
 import { applyUserAccentColor } from "../account-accent.js";
 import {
   confirmMfaEnrol,
@@ -41,8 +43,8 @@ export function AccountSettingsPage({
   const { t } = useTranslate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [account, setAccount] = useState(initialAccount);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const { showToast } = useAppToast();
 
   const section = (searchParams.get("section") as AccountSectionId | null) ?? "profile";
   const validSection = SECTIONS.includes(section) ? section : "profile";
@@ -51,14 +53,8 @@ export function AccountSettingsPage({
     setSearchParams(next === "profile" ? {} : { section: next });
   };
 
-  const showToast = (messageKey: string, params?: Record<string, string>) => {
-    setStatusMessage(t(messageKey, params));
-    setErrorMessage(null);
-  };
-
   const showError = (message: string) => {
     setErrorMessage(message);
-    setStatusMessage(null);
   };
 
   const refreshAccount = useMemo(
@@ -93,16 +89,6 @@ export function AccountSettingsPage({
           {t("settings.account.page_subtitle")}
         </p>
       </header>
-
-      {statusMessage ? (
-        <p
-          className="mb-sp-5 rounded-md border border-[color:var(--success-subtle)] bg-[color:var(--success-subtle)] px-sp-4 py-sp-3 text-success-text"
-          role="status"
-          style={{ fontSize: "var(--text-small)" }}
-        >
-          {statusMessage}
-        </p>
-      ) : null}
 
       {errorMessage ? (
         <p

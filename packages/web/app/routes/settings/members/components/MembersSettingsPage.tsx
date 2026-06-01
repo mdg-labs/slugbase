@@ -1,6 +1,8 @@
 import { useTranslate } from "@tolgee/react";
-import { Button, Input, Label } from "@slugbase/ui";
+import { Button, ConfirmDialog, EmptyState, Input, Label } from "@slugbase/ui";
 import { useMemo, useState } from "react";
+
+import { useAppToast } from "../../../../components/feedback/AppToastProvider.js";
 
 import {
   addTeamMember,
@@ -81,9 +83,10 @@ export function MembersSettingsPage({ initialData }: MembersSettingsPageProps) {
   const [teamName, setTeamName] = useState("");
   const [teamDescription, setTeamDescription] = useState("");
   const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [teamDeleteTarget, setTeamDeleteTarget] = useState<TeamRow | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const { showToast } = useAppToast();
 
   const locale = "en";
   const seats = useMemo(
@@ -99,14 +102,8 @@ export function MembersSettingsPage({ initialData }: MembersSettingsPageProps) {
   const isAdmin = currentUserRole === "ADMIN" || isOwner;
   const ownerCount = members.filter((member) => member.role === "OWNER").length;
 
-  const showToast = (messageKey: string, params?: Record<string, string>) => {
-    setStatusMessage(t(messageKey, params));
-    setErrorMessage(null);
-  };
-
   const showError = (message: string) => {
     setErrorMessage(message);
-    setStatusMessage(null);
   };
 
   const handleInvite = async () => {
@@ -285,15 +282,6 @@ export function MembersSettingsPage({ initialData }: MembersSettingsPageProps) {
         </p>
       </header>
 
-      {statusMessage ? (
-        <p
-          className="mb-sp-5 rounded-md border border-[color:var(--success-border)] bg-[color:var(--success-subtle)] px-sp-5 py-sp-4 text-[length:var(--text-small)] text-fg"
-          data-testid="members-status"
-          role="status"
-        >
-          {statusMessage}
-        </p>
-      ) : null}
       {errorMessage ? (
         <p
           className="mb-sp-5 rounded-md border border-[color:var(--danger-border)] bg-[color:var(--danger-subtle)] px-sp-5 py-sp-4 text-[length:var(--text-small)] text-fg"
@@ -427,36 +415,6 @@ export function MembersSettingsPage({ initialData }: MembersSettingsPageProps) {
             </div>
           ) : null}
 
-          {transferTarget ? (
-            <div className="rounded-md border border-[color:var(--warning-border)] bg-[color:var(--warning-subtle)] p-sp-5">
-              <p className="m-0 text-[length:var(--text-body)] text-fg-muted">
-                {t("settings.members.transfer_confirm_body", {
-                  name: members.find((m) => m.userId === transferTarget)?.name ?? "",
-                })}
-              </p>
-              <div className="mt-sp-4 flex gap-sp-3">
-                <Button
-                  disabled={busy}
-                  onClick={() => {
-                    void handleTransfer();
-                  }}
-                  type="button"
-                >
-                  {t("settings.members.transfer_confirm_action")}
-                </Button>
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    setTransferTarget(null);
-                  }}
-                  type="button"
-                >
-                  {t("settings.members.cancel_action")}
-                </Button>
-              </div>
-            </div>
-          ) : null}
-
           <div className="divide-y divide-[color:var(--border-subtle)] border-t border-[color:var(--border-subtle)]">
             {members.map((member) => {
               const canEditRole = isOwner && !(member.role === "OWNER" && ownerCount <= 1);
@@ -528,33 +486,6 @@ export function MembersSettingsPage({ initialData }: MembersSettingsPageProps) {
                       </Button>
                     ) : null}
                   </div>
-                  {removeTarget === member.userId ? (
-                    <div className="mb-sp-4 rounded-md bg-[color:var(--danger-subtle)] px-sp-5 py-sp-4">
-                      <p className="m-0 text-[length:var(--text-small)] text-fg-muted">
-                        {t("settings.members.remove_confirm_body", { name: member.name })}
-                      </p>
-                      <div className="mt-sp-4 flex gap-sp-3">
-                        <Button
-                          disabled={busy}
-                          onClick={() => {
-                            void handleRemove(member.userId);
-                          }}
-                          type="button"
-                        >
-                          {t("settings.members.remove_confirm_action")}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          onClick={() => {
-                            setRemoveTarget(null);
-                          }}
-                          type="button"
-                        >
-                          {t("settings.members.cancel_action")}
-                        </Button>
-                      </div>
-                    </div>
-                  ) : null}
                 </div>
               );
             })}
@@ -682,9 +613,11 @@ export function MembersSettingsPage({ initialData }: MembersSettingsPageProps) {
           ) : null}
 
           {teams.length === 0 && !teamCreateOpen ? (
-            <p className="py-sp-10 text-center text-[length:var(--text-body)] text-fg-subtle">
-              {t("settings.members.teams_empty")}
-            </p>
+            <EmptyState
+              compact
+              title={t("settings.members.teams_empty")}
+              testId="members-teams-empty"
+            />
           ) : null}
 
           {teams.map((team) => (
@@ -718,7 +651,7 @@ export function MembersSettingsPage({ initialData }: MembersSettingsPageProps) {
                       variant="ghost"
                       disabled={busy}
                       onClick={() => {
-                        void handleDeleteTeam(team);
+                        setTeamDeleteTarget(team);
                       }}
                       type="button"
                     >
@@ -789,6 +722,68 @@ export function MembersSettingsPage({ initialData }: MembersSettingsPageProps) {
           ))}
         </section>
       )}
+
+      <ConfirmDialog
+        open={removeTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setRemoveTarget(null);
+        }}
+        title={t("settings.members.remove_confirm_action")}
+        description={t("settings.members.remove_confirm_body", {
+          name: members.find((member) => member.userId === removeTarget)?.name ?? "",
+        })}
+        confirmLabel={t("settings.members.remove_confirm_action")}
+        cancelLabel={t("settings.members.cancel_action")}
+        destructive
+        busy={busy}
+        onConfirm={() => {
+          if (removeTarget) {
+            void handleRemove(removeTarget);
+            setRemoveTarget(null);
+          }
+        }}
+        testId="members-remove-confirm"
+      />
+
+      <ConfirmDialog
+        open={transferTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setTransferTarget(null);
+        }}
+        title={t("settings.members.transfer_confirm_action")}
+        description={t("settings.members.transfer_confirm_body", {
+          name: members.find((member) => member.userId === transferTarget)?.name ?? "",
+        })}
+        confirmLabel={t("settings.members.transfer_confirm_action")}
+        cancelLabel={t("settings.members.cancel_action")}
+        busy={busy}
+        onConfirm={() => {
+          void handleTransfer();
+        }}
+        testId="members-transfer-confirm"
+      />
+
+      <ConfirmDialog
+        open={teamDeleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setTeamDeleteTarget(null);
+        }}
+        title={t("settings.members.team_delete_confirm_title")}
+        description={t("settings.members.team_delete_confirm_body", {
+          name: teamDeleteTarget?.name ?? "",
+        })}
+        confirmLabel={t("settings.members.team_delete_action")}
+        cancelLabel={t("settings.members.cancel_action")}
+        destructive
+        busy={busy}
+        onConfirm={() => {
+          if (teamDeleteTarget) {
+            void handleDeleteTeam(teamDeleteTarget);
+            setTeamDeleteTarget(null);
+          }
+        }}
+        testId="members-team-delete-confirm"
+      />
     </div>
   );
 }

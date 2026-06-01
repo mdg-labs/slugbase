@@ -1,7 +1,7 @@
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ThemeProvider } from "@slugbase/ui";
+import { ThemeProvider, ToastProvider } from "@slugbase/ui";
 
 import { staticMessages } from "../../../i18n/messages.js";
 import { WorkspaceSettingsPage } from "./components/WorkspaceSettingsPage.js";
@@ -52,7 +52,9 @@ const baseData: WorkspaceSettingsData = {
 function renderPage(data: WorkspaceSettingsData = baseData) {
   return render(
     <ThemeProvider>
-      <WorkspaceSettingsPage initialData={data} />
+      <ToastProvider dismissLabel="Dismiss notification">
+        <WorkspaceSettingsPage initialData={data} />
+      </ToastProvider>
     </ThemeProvider>,
   );
 }
