@@ -58,6 +58,18 @@ export const staticMessages = {
       "Sign up on the hosted service or self-host in minutes. No lock-in.",
     "marketing.landing.cta_final_primary": "Get started free",
     "marketing.landing.cta_final_secondary": "Self-host",
+    "marketing.error.404.title": "Not found.",
+    "marketing.error.404.description":
+      "This URL didn't resolve. The page may have moved or no longer exists.",
+    "marketing.error.403.title": "Access denied.",
+    "marketing.error.403.description":
+      "You don't have permission to view this page.",
+    "marketing.error.500.title": "Something broke.",
+    "marketing.error.500.description":
+      "An unexpected error occurred on our end. This isn't your fault. We've logged it and will look into it.",
+    "marketing.error.action.home": "Back to home",
+    "marketing.error.action.reload": "Reload the page",
+    "marketing.error.action.sign_in": "Sign in",
   },
   de: {
     "marketing.nav.brand": "SlugBase",
@@ -119,6 +131,18 @@ export const staticMessages = {
       "Registriere dich beim gehosteten Dienst oder hoste selbst in wenigen Minuten. Kein Lock-in.",
     "marketing.landing.cta_final_primary": "Kostenlos starten",
     "marketing.landing.cta_final_secondary": "Self-hosten",
+    "marketing.error.404.title": "Nicht gefunden.",
+    "marketing.error.404.description":
+      "Diese URL konnte nicht aufgelöst werden. Die Seite wurde verschoben oder existiert nicht mehr.",
+    "marketing.error.403.title": "Zugriff verweigert.",
+    "marketing.error.403.description":
+      "Du hast keine Berechtigung, diese Seite anzuzeigen.",
+    "marketing.error.500.title": "Etwas ist kaputt.",
+    "marketing.error.500.description":
+      "Ein unerwarteter Fehler ist bei uns aufgetreten. Das liegt nicht an dir. Wir haben ihn protokolliert und schauen uns das an.",
+    "marketing.error.action.home": "Zur Startseite",
+    "marketing.error.action.reload": "Seite neu laden",
+    "marketing.error.action.sign_in": "Anmelden",
   },
 } as const;
 

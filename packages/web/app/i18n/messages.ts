@@ -66,6 +66,22 @@ export const staticMessages = {
     "error.boundary.title": "Something went wrong",
     "error.boundary.message": "An unexpected error occurred. You can try again.",
     "error.boundary.retry": "Try again",
+    "error.page.404.title": "Not found.",
+    "error.page.404.description":
+      "This URL didn't resolve. The page, resource, or slug doesn't exist — or it was moved.",
+    "error.page.403.title": "Access denied.",
+    "error.page.403.description":
+      "You're signed in, but you don't have permission to view this. You may need to ask a workspace owner to share access.",
+    "error.page.500.title": "Something broke.",
+    "error.page.500.description":
+      "An unexpected error occurred on our end. This isn't your fault. We've logged it and will look into it.",
+    "error.page.action.bookmarks": "Go to Bookmarks",
+    "error.page.action.workspace": "Go to your workspace",
+    "error.page.action.reload": "Reload the page",
+    "error.page.action.back": "Go back",
+    "error.page.report": "Report this error",
+    "error.page.report_done": "Issue reported — thanks",
+    "error.page.path_label": "Requested path",
     // Auth — login
     "auth.login.title": "Sign in to SlugBase",
     "auth.login.subtitle": "Welcome back. Enter your credentials to continue.",
@@ -713,6 +729,22 @@ export const staticMessages = {
     "error.boundary.message":
       "Ein unerwarteter Fehler ist aufgetreten. Du kannst es erneut versuchen.",
     "error.boundary.retry": "Erneut versuchen",
+    "error.page.404.title": "Nicht gefunden.",
+    "error.page.404.description":
+      "Diese URL konnte nicht aufgelöst werden. Die Seite, Ressource oder der Slug existiert nicht — oder wurde verschoben.",
+    "error.page.403.title": "Zugriff verweigert.",
+    "error.page.403.description":
+      "Du bist angemeldet, hast aber keine Berechtigung für diese Ansicht. Bitte einen Workspace-Inhaber um Zugriff.",
+    "error.page.500.title": "Etwas ist kaputt.",
+    "error.page.500.description":
+      "Ein unerwarteter Fehler ist bei uns aufgetreten. Das liegt nicht an dir. Wir haben ihn protokolliert und schauen uns das an.",
+    "error.page.action.bookmarks": "Zu Lesezeichen",
+    "error.page.action.workspace": "Zu deinem Workspace",
+    "error.page.action.reload": "Seite neu laden",
+    "error.page.action.back": "Zurück",
+    "error.page.report": "Fehler melden",
+    "error.page.report_done": "Problem gemeldet — danke",
+    "error.page.path_label": "Angeforderte URL",
     // Auth — login
     "auth.login.title": "Bei SlugBase anmelden",
     "auth.login.subtitle":
