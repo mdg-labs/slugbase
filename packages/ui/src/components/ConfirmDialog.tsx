@@ -53,12 +53,7 @@ export function ConfirmDialog({
             </Button>
           </DialogClose>
           <Button
-            variant={destructive ? "primary" : "primary"}
-            className={
-              destructive
-                ? "border-[color:var(--danger-border)] bg-danger text-[color:var(--danger-fg)] hover:bg-danger"
-                : undefined
-            }
+            variant={destructive ? "danger" : "primary"}
             disabled={busy}
             onClick={onConfirm}
             type="button"

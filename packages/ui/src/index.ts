@@ -12,8 +12,8 @@ export { ThemeProvider, useTheme, type ThemeContextValue, type ThemeProviderProp
 export { AppShell, type AppShellProps } from "./components/AppShell.js";
 export { ThemeSwitcher, type ThemeSwitcherLabels, type ThemeSwitcherProps } from "./components/ThemeSwitcher.js";
 export { Kbd, type KbdProps } from "./components/Kbd.js";
-export { Button, type ButtonProps, type ButtonVariant } from "./components/Button.js";
-export { Input, type InputProps } from "./components/Input.js";
+export { Button, type ButtonProps, type ButtonVariant, type ButtonSize } from "./components/Button.js";
+export { Input, type InputProps, type InputSize } from "./components/Input.js";
 export { Label, type LabelProps } from "./components/Label.js";
 export { FieldError, type FieldErrorProps } from "./components/FieldError.js";
 export {
@@ -42,3 +42,8 @@ export {
   type ToastProviderProps,
 } from "./components/ToastProvider.js";
 export { ConfirmDialog, type ConfirmDialogProps } from "./components/ConfirmDialog.js";
+export { Badge, type BadgeProps, type BadgeVariant } from "./components/Badge.js";
+export { Tag, type TagProps } from "./components/Tag.js";
+export { SlugBadge, type SlugBadgeProps } from "./components/SlugBadge.js";
+export { Checkbox, type CheckboxProps } from "./components/Checkbox.js";
+export { IconButton, type IconButtonProps, type IconButtonSize } from "./components/IconButton.js";
