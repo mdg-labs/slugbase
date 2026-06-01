@@ -317,12 +317,15 @@ describe("Workspaces HTTP endpoints (integration)", () => {
     it("renames the active workspace", async () => {
       const sessionCookie = await loginAs(OWNER_EMAIL);
       const csrf = await fetchCsrfToken(sessionCookie);
-      // activate the first workspace
-      await request(server())
+      // Explicitly activate the first workspace so TenantGuard can resolve it.
+      // Login sets activeWorkspaceId via resolveDefaultActiveWorkspaceId, but we
+      // assert the activate response here to surface any session/CSRF failures early.
+      const activateRes = await request(server())
         .post(`/workspaces/${firstWorkspaceId}/activate`)
         .set("Cookie", `${sessionCookie}; ${csrf.cookie}`)
         .set("x-csrf-token", csrf.token)
         .send();
+      expect(activateRes.status).toBe(200);
 
       const res = await request(server())
         .patch("/workspaces/active")
@@ -355,12 +358,14 @@ describe("Workspaces HTTP endpoints (integration)", () => {
       expect(createRes.status).toBe(201);
       const created = createRes.body as { id: string };
 
-      // Activate the newly created workspace
-      await request(server())
+      // Activate the newly created workspace so TenantGuard resolves it as the
+      // active workspace for the subsequent DELETE /workspaces/active call.
+      const activateRes = await request(server())
         .post(`/workspaces/${created.id}/activate`)
         .set("Cookie", `${sessionCookie}; ${csrf.cookie}`)
         .set("x-csrf-token", csrf.token)
         .send();
+      expect(activateRes.status).toBe(200);
 
       // Delete it via DELETE /workspaces/active
       const deleteRes = await request(server())
