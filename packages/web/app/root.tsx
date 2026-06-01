@@ -55,6 +55,7 @@ export async function loader({ request }: LoaderFunctionArgs): Promise<RootLoade
 
 export const links = () => [
   { rel: "stylesheet", href: stylesheet },
+  { rel: "icon", href: "/slugbase_icon.svg", type: "image/svg+xml" },
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {
