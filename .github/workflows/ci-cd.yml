@@ -128,7 +128,7 @@ jobs:
     name: Staging · 2 · Build API
     runs-on: ubuntu-latest
     environment: staging
-    needs: [ci, deployment-staging-start]
+    needs: deployment-staging-start
     if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
     steps:
       - name: Checkout
@@ -151,7 +151,7 @@ jobs:
     name: Staging · 2 · Build web/marketing
     runs-on: ubuntu-latest
     environment: staging
-    needs: [ci, deployment-staging-start]
+    needs: deployment-staging-start
     if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
     steps:
       - name: Checkout
@@ -200,7 +200,7 @@ jobs:
     name: Staging · 3 · Push self-host image (GHCR dev)
     runs-on: ubuntu-latest
     environment: staging
-    needs: [ci, deployment-staging-start]
+    needs: deployment-staging-start
     if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
     permissions:
       contents: read
