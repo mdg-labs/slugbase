@@ -51,6 +51,24 @@ pnpm audit --audit-level=high
 
 **Stack note (settled — spec §19):** `lint`/`typecheck`/`test:unit`/`build`/`test:integration` are root Turborepo tasks fanning out to `backend` (NestJS), `web` (React Router v7), `marketing` (Astro), `shared-types`, and `ui`. Unit/integration use **Vitest** (+ Supertest for the API). **Playwright e2e is not part of the local gate** — it runs only on the `staging → main` PR in CI (spec §22.4). If a package legitimately has no task yet, mark that command `n/a` and note it; do not invent skips for code-impacting changes.
 
+## Critical: integration tests must NOT use the Infisical wrapper
+
+**Never** run `pnpm test:integration` wrapped with `infisical run --env=dev --`:
+
+```bash
+# ❌ WRONG — injects env vars that break integration tests
+infisical run --env=dev -- pnpm test:integration
+
+# ✅ CORRECT — integration script uses its own validTestEnv
+pnpm test:integration
+```
+
+**Why:** The backend integration test script uses an internal `validTestEnv` helper that sets safe test defaults (e.g. `EMAIL_VERIFICATION_REQUIRED=false` as a boolean). When Infisical injects `EMAIL_VERIFICATION_REQUIRED="false"` as a **string**, `z.coerce.boolean()` coerces any non-empty string to `true` (`Boolean("false") === true`), breaking session guards and causing 403s across all authenticated test routes.
+
+**Rule:** `pnpm lint`, `pnpm typecheck`, `pnpm test:unit`, and `pnpm build` may be run with `infisical run --env=dev --` when secrets are required. `pnpm test:integration` must always be run **without** the Infisical wrapper.
+
+This applies equally to **execution agents** (pre-commit gate) and **verification agents** (Layer 2 checks).
+
 ## Enforcement
 
 - If any full-gate command fails, **do not commit**. Fix failures first, then rerun from the start.
