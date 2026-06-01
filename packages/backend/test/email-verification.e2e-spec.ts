@@ -132,6 +132,8 @@ describe("Email verification (integration)", () => {
       };
       expect(mailPayload.to).toBe(CORRECTED_EMAIL);
       expect(mailPayload.type).toBe("signup_verification");
+      expect(mailPayload.text).toContain("https://app.slugbase.test/verify-email?token=");
+      expect(mailPayload.text).not.toContain("/auth/verify-email");
 
       const verifyToken = extractVerifyToken(mailPayload.text);
       expect(verifyToken).toBeDefined();

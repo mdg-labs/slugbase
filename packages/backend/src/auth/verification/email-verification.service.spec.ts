@@ -6,6 +6,7 @@ import {
   generateVerificationToken,
   hashToken,
   maskEmailForDisplay,
+  buildEmailVerificationUrl,
 } from "./email-verification.service.js";
 
 // ---------------------------------------------------------------------------
@@ -39,6 +40,43 @@ describe("maskEmailForDisplay", () => {
 
   it("returns a safe fallback for malformed input", () => {
     expect(maskEmailForDisplay("invalid")).toBe("***@***.***");
+  });
+});
+
+describe("buildEmailVerificationUrl", () => {
+  const token = "abc123def456";
+
+  it("uses FRONTEND_ORIGIN and /verify-email when web is not served by the API", () => {
+    const url = buildEmailVerificationUrl({
+      appBaseUrl: "https://api.slugbase.test",
+      frontendOrigin: "https://app.slugbase.test",
+      serveWebClient: false,
+      token,
+    });
+
+    expect(url).toBe(`https://app.slugbase.test/verify-email?token=${token}`);
+  });
+
+  it("uses APP_BASE_URL when SERVE_WEB_CLIENT is enabled (combined self-host)", () => {
+    const url = buildEmailVerificationUrl({
+      appBaseUrl: "https://slugbase.example.com",
+      frontendOrigin: "https://app.slugbase.test",
+      serveWebClient: true,
+      token,
+    });
+
+    expect(url).toBe(`https://slugbase.example.com/verify-email?token=${token}`);
+  });
+
+  it("normalizes trailing slashes on the configured origin", () => {
+    const url = buildEmailVerificationUrl({
+      appBaseUrl: "https://api.slugbase.test/",
+      frontendOrigin: "https://app.slugbase.test/",
+      serveWebClient: false,
+      token,
+    });
+
+    expect(url).toBe(`https://app.slugbase.test/verify-email?token=${token}`);
   });
 });
 

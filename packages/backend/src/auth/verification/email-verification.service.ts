@@ -42,6 +42,24 @@ export function generateVerificationToken(): string {
   return randomBytes(TOKEN_BYTES).toString("hex");
 }
 
+/**
+ * Builds the signup verification link for the verify-email UI.
+ *
+ * Hosted (API + separate web Worker): use FRONTEND_ORIGIN (spec §14.7).
+ * Self-hosted combined image (SERVE_WEB_CLIENT): use APP_BASE_URL as the single public origin.
+ */
+export function buildEmailVerificationUrl(params: {
+  appBaseUrl: string;
+  frontendOrigin: string;
+  serveWebClient: boolean;
+  token: string;
+}): string {
+  const origin = params.serveWebClient ? params.appBaseUrl : params.frontendOrigin;
+  const url = new URL("/verify-email", origin);
+  url.searchParams.set("token", params.token);
+  return url.href;
+}
+
 /** Masks an email address for safe display in the verify-email UI. */
 export function maskEmailForDisplay(email: string): string {
   const atIndex = email.lastIndexOf("@");
@@ -93,8 +111,12 @@ export class EmailVerificationService {
 
     await this.tokenRepo.create(userId, tokenHash, expiresAt);
 
-    const baseUrl = this.config.get("APP_BASE_URL");
-    const verifyUrl = `${baseUrl}/auth/verify-email?token=${plaintext}`;
+    const verifyUrl = buildEmailVerificationUrl({
+      appBaseUrl: this.config.get("APP_BASE_URL"),
+      frontendOrigin: this.config.get("FRONTEND_ORIGIN"),
+      serveWebClient: this.config.get("SERVE_WEB_CLIENT"),
+      token: plaintext,
+    });
 
     if (this.mail.isAvailable()) {
       await this.mail.send({
