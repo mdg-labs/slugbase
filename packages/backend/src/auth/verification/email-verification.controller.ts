@@ -12,12 +12,18 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import type { Request } from "express";
-import { CorrectSignupEmailBodySchema } from "@slugbase/shared-types";
+import { z } from "zod";
 
 import { SessionService } from "../../sessions/session.service.js";
 import { SESSION_COOKIE } from "../login-logout.controller.js";
 import { SkipCsrf } from "../csrf/skip-csrf.decorator.js";
 import { EmailVerificationService } from "./email-verification.service.js";
+
+const correctSignupEmailBodySchema = z
+  .object({
+    email: z.string().trim().email(),
+  })
+  .strict();
 
 @Controller("auth")
 @SkipCsrf()
@@ -71,7 +77,7 @@ export class EmailVerificationController {
     @Body() body: unknown,
   ): Promise<{ maskedEmail: string }> {
     const session = await this.requireFullSession(req);
-    const parsed = CorrectSignupEmailBodySchema.safeParse(body);
+    const parsed = correctSignupEmailBodySchema.safeParse(body);
     if (!parsed.success) {
       throw new BadRequestException("Unable to update email address");
     }
