@@ -126,6 +126,10 @@ Keys are registered incrementally per task (rule `05-env-vars`). Full categories
 | `PUBLIC_TEAM_BASE_SEATS` | Included Team seats shown on marketing pricing page | `/marketing` | hosted | Default `5` |
 | `PUBLIC_FREE_BOOKMARK_CAP` | Free cap shown on marketing pricing page | `/marketing` | hosted | Default `50` |
 | `PUBLIC_FRONTEND_ORIGIN` | App origin for marketing CTAs (sign-in, register) | `/marketing` | all | Same as `FRONTEND_ORIGIN` |
+| `MARKETING_ORIGIN` | Public marketing Workers URL for CI smoke (`GET /health`, `/version`) | `/marketing` | `staging` / `production` | e.g. `https://slugbase-staging-marketing.<account>.workers.dev` |
+| `FLY_API_TOKEN` | Fly.io deploy token for `flyctl deploy` | `/api` | `staging` / `production` | CI OIDC via Infisical only |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare API token for `wrangler deploy` | `/web` | `staging` / `production` | CI OIDC via Infisical only |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account id for Workers deploy | `/web` | `staging` / `production` | CI OIDC via Infisical only |
 | `PUBLIC_CONTACT_ENDPOINT` | Absolute URL for `POST /contact` (marketing form target) | `/marketing` | all | e.g. `{APP_BASE_URL}/contact` |
 | `PUBLIC_TURNSTILE_SITE_KEY` | Cloudflare Turnstile site key for marketing contact form | `/marketing` | hosted | Empty = dev/no-op challenge token path |
 | `SENTRY_DSN` | Sentry ingest DSN for API error reporting (spec §11.7) | `/api` | `development` (optional); hosted `staging`/`production` | Empty = no-op (self-host default) |

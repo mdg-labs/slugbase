@@ -7,8 +7,10 @@
     "lint": "eslint src/",
     "typecheck": "astro check",
     "build": "astro build",
+    "deploy": "wrangler deploy",
     "dev": "astro dev",
     "preview": "astro preview",
+    "preview:workers": "wrangler dev",
     "test:unit": "vitest run --config vitest.config.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts"
   },
@@ -20,6 +22,7 @@
   "devDependencies": {
     "@astrojs/check": "^0.9.4",
     "typescript": "^5.8.3",
-    "vitest": "^3.2.1"
+    "vitest": "^3.2.1",
+    "wrangler": "^4.24.0"
   }
 }

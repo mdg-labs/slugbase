@@ -1,6 +1,8 @@
 import { index, layout, route, type RouteConfig } from "@react-router/dev/routes";
 
 export default [
+  route("health", "routes/health.ts"),
+  route("version", "routes/version.ts"),
   route("login", "routes/auth/login.tsx"),
   route("logout", "routes/auth/logout.tsx"),
   route("mfa", "routes/auth/mfa.tsx"),

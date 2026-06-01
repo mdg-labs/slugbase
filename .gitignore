@@ -14,6 +14,7 @@ build/
 .turbo/
 *.tsbuildinfo
 .astro
+.wrangler/
 
 # Tolgee CLI pull scratch (CI gate)
 .tolgee/
