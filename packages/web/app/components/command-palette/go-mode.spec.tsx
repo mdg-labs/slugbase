@@ -5,7 +5,7 @@ import {
   render,
   waitFor,
 } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 
 import { staticMessages } from "../../i18n/messages.js";
 import type { GlobalSearchResult } from "../../lib/search.types.js";
@@ -111,18 +111,26 @@ describe("go-mode utilities", () => {
 });
 
 describe("CommandPalette go mode", () => {
-  let locationAssignMock: ReturnType<typeof vi.fn>;
-  let windowOpenMock: ReturnType<typeof vi.fn>;
+  let locationAssignMock: MockInstance<(url: string | URL) => void>;
+  let windowOpenMock: MockInstance<
+    (url?: string | URL, target?: string, features?: string) => Window | null
+  >;
 
   beforeEach(() => {
     mockNavigate.mockReset();
     mockLoad.mockReset();
     fetcherData = undefined;
     fetcherState = "idle";
-    windowOpenMock = vi.fn().mockReturnValue(null);
-    locationAssignMock = vi.fn();
-    vi.spyOn(window, "open").mockImplementation(windowOpenMock);
-    vi.spyOn(window.location, "assign").mockImplementation(locationAssignMock);
+    windowOpenMock = vi
+      .fn<(url?: string | URL, target?: string, features?: string) => Window | null>()
+      .mockReturnValue(null);
+    locationAssignMock = vi.fn<(url: string | URL) => void>();
+    vi.spyOn(window, "open").mockImplementation(
+      windowOpenMock as unknown as typeof window.open,
+    );
+    vi.spyOn(window.location, "assign").mockImplementation(
+      locationAssignMock as unknown as typeof window.location.assign,
+    );
   });
 
   afterEach(() => {

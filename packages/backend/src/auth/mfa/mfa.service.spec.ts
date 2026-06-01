@@ -140,12 +140,12 @@ describe("backup code single-use", () => {
 // ---------------------------------------------------------------------------
 
 async function callVerifyTotp(
-  findById: ReturnType<typeof vi.fn>,
+  findById: (userId: string) => Promise<AccountRecord | null>,
   crypto: CryptoService,
   userId: string,
   totpCode: string,
 ): Promise<boolean> {
-  const account = (await findById(userId)) as AccountRecord | null;
+  const account = await findById(userId);
   if (!account || account.mfaState !== "enrolled" || !account.mfaTotpSecretEncrypted) {
     return false;
   }
@@ -154,12 +154,12 @@ async function callVerifyTotp(
 }
 
 async function callVerifyBackupCode(
-  findUnused: ReturnType<typeof vi.fn>,
-  markUsed: ReturnType<typeof vi.fn>,
+  findUnused: (userId: string) => Promise<MfaBackupCodeRecord[]>,
+  markUsed: (id: string, usedAt: number) => Promise<void>,
   userId: string,
   code: string,
 ): Promise<boolean> {
-  const records = (await findUnused(userId)) as MfaBackupCodeRecord[];
+  const records = await findUnused(userId);
   for (const record of records) {
     const match = await argon2.verify(record.codeHash, code);
     if (match) {

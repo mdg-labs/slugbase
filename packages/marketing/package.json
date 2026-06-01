@@ -22,7 +22,7 @@
   "devDependencies": {
     "@astrojs/check": "^0.9.9",
     "typescript": "^5.8.3",
-    "vitest": "^3.2.1",
+    "vitest": "^4.1.6",
     "wrangler": "^4.24.0"
   }
 }
