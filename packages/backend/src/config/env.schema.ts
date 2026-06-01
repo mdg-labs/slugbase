@@ -24,6 +24,7 @@ const requiredSecretsSchema = z
     SESSION_SECRET: z.string().min(32),
     ENCRYPTION_KEY: z.string().min(32),
     DATABASE_URL: z.string().min(1),
+    DATABASE_URL_UNPOOLED: z.string().min(1).optional(),
     APP_BASE_URL: z.string().url(),
     FRONTEND_ORIGIN: z.string().url(),
   })
@@ -34,7 +35,7 @@ const optionalFlagsSchema = z
     PUBLIC_REGISTRATION: z.coerce.boolean().default(false),
     EMAIL_VERIFICATION_REQUIRED: z.coerce.boolean().default(false),
     PORT: z.coerce.number().int().positive().default(3000),
-    SERVE_WEB_CLIENT: z.coerce.boolean().default(false),
+    SERVE_WEB_CLIENT: envBoolean(false),
     WEB_CLIENT_SERVER_BUILD: z.string().min(1).optional(),
     // SMTP transport (spec §11.1, §15) — optional; no-op mail used when SMTP_HOST is absent
     SMTP_HOST: z.string().min(1).optional(),
@@ -119,6 +120,7 @@ function readSecretsInput(env: NodeJS.ProcessEnv) {
     SESSION_SECRET: env.SESSION_SECRET,
     ENCRYPTION_KEY: env.ENCRYPTION_KEY,
     DATABASE_URL: env.DATABASE_URL,
+    DATABASE_URL_UNPOOLED: env.DATABASE_URL_UNPOOLED,
     APP_BASE_URL: env.APP_BASE_URL,
     FRONTEND_ORIGIN: env.FRONTEND_ORIGIN,
   };
@@ -163,6 +165,13 @@ function readFlagsInput(env: NodeJS.ProcessEnv) {
     SENTRY_RELEASE: env.SENTRY_RELEASE,
     OPENAPI_INTERACTIVE_DOCS: env.OPENAPI_INTERACTIVE_DOCS,
   };
+}
+
+export function resolveMigrationDatabaseUrl(
+  config: Pick<AppConfig, "DATABASE_URL" | "DATABASE_URL_UNPOOLED">,
+): string {
+  const unpooled = config.DATABASE_URL_UNPOOLED?.trim();
+  return unpooled && unpooled.length > 0 ? unpooled : config.DATABASE_URL;
 }
 
 export function validateEnvConfig(

@@ -8,10 +8,10 @@ import { fileURLToPath } from "node:url";
 import { AppModule } from "./app.module.js";
 import { ConfigService } from "./config/config.service.js";
 import { runMigrations } from "./db/migrate/run-migrations.js";
-import { validateEnvConfig } from "./config/env.schema.js";
+import { validateEnvConfig, resolveMigrationDatabaseUrl } from "./config/env.schema.js";
 export async function bootstrap(): Promise<void> {
   const startupConfig = validateEnvConfig(process.env);
-  await runMigrations(startupConfig.DATABASE_URL);
+  await runMigrations(resolveMigrationDatabaseUrl(startupConfig));
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: ["error", "warn"],
