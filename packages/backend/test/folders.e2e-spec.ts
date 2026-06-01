@@ -7,7 +7,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AppModule } from "../src/app.module.js";
 import { AccountsService } from "../src/accounts/accounts.service.js";
 import { BookmarksService } from "../src/bookmarks/bookmarks.service.js";
-import { runMigrations } from "../src/db/migrate/run-migrations.js";
 import { FoldersService } from "../src/folders/folders.service.js";
 import { applyTestEnv, clearTestEnv } from "../src/test-utils/test-env.js";
 import { WorkspaceMembersService } from "../src/workspaces/workspace-members.service.js";
@@ -30,7 +29,6 @@ describe("Folders (integration)", () => {
   beforeAll(async () => {
     const testDatabase = await createTestDatabase();
     cleanup = testDatabase.cleanup;
-    await runMigrations(testDatabase.databaseUrl);
     applyTestEnv({ DATABASE_URL: testDatabase.databaseUrl });
 
     const moduleRef = await Test.createTestingModule({

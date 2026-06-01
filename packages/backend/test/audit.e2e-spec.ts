@@ -11,7 +11,6 @@ import { AppModule } from "../src/app.module.js";
 import { AccountsService } from "../src/accounts/accounts.service.js";
 import { AuditActions } from "../src/audit/audit.actions.js";
 import { AuditService } from "../src/audit/audit.service.js";
-import { runMigrations } from "../src/db/migrate/run-migrations.js";
 import { SESSION_COOKIE } from "../src/sessions/session-constants.js";
 import { SessionService } from "../src/sessions/session.service.js";
 import { applyTestEnv, clearTestEnv } from "../src/test-utils/test-env.js";
@@ -54,7 +53,6 @@ describe("Audit log (integration)", () => {
   beforeAll(async () => {
     const testDatabase = await createTestDatabase();
     cleanup = testDatabase.cleanup;
-    await runMigrations(testDatabase.databaseUrl);
     applyTestEnv({
       DATABASE_URL: testDatabase.databaseUrl,
       STRIPE_SECRET_KEY: "sk_test_hosted_plan_gating",

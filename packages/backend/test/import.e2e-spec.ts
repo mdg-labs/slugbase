@@ -7,7 +7,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AppModule } from "../src/app.module.js";
 import { AccountsService } from "../src/accounts/accounts.service.js";
 import { BookmarksService } from "../src/bookmarks/bookmarks.service.js";
-import { runMigrations } from "../src/db/migrate/run-migrations.js";
 import { FREE_BOOKMARK_CAP } from "../src/entitlements/entitlements.service.js";
 import { FoldersService } from "../src/folders/folders.service.js";
 import { ImportService } from "../src/import/import.service.js";
@@ -32,7 +31,6 @@ describe("Import (integration)", () => {
   beforeAll(async () => {
     const testDatabase = await createTestDatabase();
     cleanup = testDatabase.cleanup;
-    await runMigrations(testDatabase.databaseUrl);
     applyTestEnv({
       DATABASE_URL: testDatabase.databaseUrl,
       STRIPE_SECRET_KEY: "sk_test_hosted_plan_gating",

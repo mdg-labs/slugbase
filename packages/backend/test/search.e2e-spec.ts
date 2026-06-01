@@ -7,7 +7,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AppModule } from "../src/app.module.js";
 import { AccountsService } from "../src/accounts/accounts.service.js";
 import { BookmarksService } from "../src/bookmarks/bookmarks.service.js";
-import { runMigrations } from "../src/db/migrate/run-migrations.js";
 import { FoldersService } from "../src/folders/folders.service.js";
 import {
   DEFAULT_SEARCH_LIMIT_PER_TYPE,
@@ -35,7 +34,6 @@ describe("Search (integration)", () => {
   beforeAll(async () => {
     const testDatabase = await createTestDatabase();
     cleanup = testDatabase.cleanup;
-    await runMigrations(testDatabase.databaseUrl);
     applyTestEnv({ DATABASE_URL: testDatabase.databaseUrl });
     delete process.env.SERVE_WEB_CLIENT;
     delete process.env.WEB_CLIENT_SERVER_BUILD;

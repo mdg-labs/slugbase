@@ -9,7 +9,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { AppModule } from "../src/app.module.js";
 import { SESSION_COOKIE } from "../src/auth/login-logout.controller.js";
-import { runMigrations } from "../src/db/migrate/run-migrations.js";
 import { applyTestEnv, clearTestEnv } from "../src/test-utils/test-env.js";
 import { AccountsService } from "../src/accounts/accounts.service.js";
 import { SessionService } from "../src/sessions/session.service.js";
@@ -26,7 +25,6 @@ describe("Auth (integration)", () => {
   beforeAll(async () => {
     const testDatabase = await createTestDatabase();
     cleanup = testDatabase.cleanup;
-    await runMigrations(testDatabase.databaseUrl);
     applyTestEnv({ DATABASE_URL: testDatabase.databaseUrl });
 
     const moduleRef = await Test.createTestingModule({

@@ -9,7 +9,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { AppModule } from "../src/app.module.js";
 import { SESSION_COOKIE } from "../src/auth/login-logout.controller.js";
-import { runMigrations } from "../src/db/migrate/run-migrations.js";
 import { applyTestEnv, clearTestEnv } from "../src/test-utils/test-env.js";
 import { createTestDatabase } from "./test-database.js";
 
@@ -20,7 +19,6 @@ describe("Registration (integration) — PUBLIC_REGISTRATION=false", () => {
   beforeAll(async () => {
     const testDatabase = await createTestDatabase();
     cleanup = testDatabase.cleanup;
-    await runMigrations(testDatabase.databaseUrl);
     // PUBLIC_REGISTRATION is intentionally NOT set here — env.schema.ts defaults it to false
     // Note: z.coerce.boolean() treats "false" as true (Boolean("false") === true), so
     // we rely on the Zod default(false) when the env var is absent.

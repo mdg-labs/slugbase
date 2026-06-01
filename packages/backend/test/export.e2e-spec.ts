@@ -7,7 +7,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AppModule } from "../src/app.module.js";
 import { AccountsService } from "../src/accounts/accounts.service.js";
 import { BookmarksService } from "../src/bookmarks/bookmarks.service.js";
-import { runMigrations } from "../src/db/migrate/run-migrations.js";
 import type { ExportBookmarkEntry } from "../src/export/export.types.js";
 import { ExportService } from "../src/export/export.service.js";
 import { FoldersService } from "../src/folders/folders.service.js";
@@ -106,7 +105,6 @@ describe("Export (integration)", () => {
   beforeAll(async () => {
     const testDatabase = await createTestDatabase();
     cleanup = testDatabase.cleanup;
-    await runMigrations(testDatabase.databaseUrl);
     applyTestEnv({ DATABASE_URL: testDatabase.databaseUrl });
 
     const moduleRef = await Test.createTestingModule({

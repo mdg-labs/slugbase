@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDbClient } from "../src/db/dialect/create-client.js";
 import { InstanceMetadataRepository } from "../src/db/instance-metadata.repository.js";
 import { listMigrationHashes } from "../src/db/migrate/migration-utils.js";
-import { getMigrationsFolder, runMigrations } from "../src/db/migrate/run-migrations.js";
+import { getMigrationsFolder } from "../src/db/migrate/run-migrations.js";
 import { createTestDatabase } from "./test-database.js";
 
 describe("database migrations and repository (integration)", () => {
@@ -15,7 +15,6 @@ describe("database migrations and repository (integration)", () => {
     const testDatabase = await createTestDatabase();
     databaseUrl = testDatabase.databaseUrl;
     cleanup = testDatabase.cleanup;
-    await runMigrations(databaseUrl);
   });
 
   afterAll(async () => {

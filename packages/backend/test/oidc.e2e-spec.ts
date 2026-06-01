@@ -12,7 +12,6 @@ import { SESSION_COOKIE } from "../src/auth/login-logout.controller.js";
 import { OidcRepository } from "../src/auth/oidc/oidc.repository.js";
 import { AesGcmCryptoService } from "../src/crypto/aes-gcm-crypto.service.js";
 import { DbService } from "../src/db/db.service.js";
-import { runMigrations } from "../src/db/migrate/run-migrations.js";
 import { applyTestEnv, clearTestEnv, validTestEnv } from "../src/test-utils/test-env.js";
 import { createTestDatabase } from "./test-database.js";
 
@@ -45,7 +44,6 @@ describe("OIDC (integration)", () => {
   beforeAll(async () => {
     const testDatabase = await createTestDatabase();
     cleanup = testDatabase.cleanup;
-    await runMigrations(testDatabase.databaseUrl);
     applyTestEnv({ DATABASE_URL: testDatabase.databaseUrl });
 
     const moduleRef = await Test.createTestingModule({

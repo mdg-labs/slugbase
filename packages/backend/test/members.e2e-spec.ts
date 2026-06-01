@@ -9,7 +9,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { AppModule } from "../src/app.module.js";
 import { AccountsService } from "../src/accounts/accounts.service.js";
-import { runMigrations } from "../src/db/migrate/run-migrations.js";
 import { SESSION_COOKIE } from "../src/sessions/session-constants.js";
 import { SessionService } from "../src/sessions/session.service.js";
 import { applyTestEnv, clearTestEnv } from "../src/test-utils/test-env.js";
@@ -37,7 +36,6 @@ describe("Members admin HTTP (integration)", () => {
   beforeAll(async () => {
     const testDatabase = await createTestDatabase();
     cleanup = testDatabase.cleanup;
-    await runMigrations(testDatabase.databaseUrl);
     applyTestEnv({ DATABASE_URL: testDatabase.databaseUrl });
 
     const moduleRef = await Test.createTestingModule({

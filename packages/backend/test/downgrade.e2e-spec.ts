@@ -11,7 +11,6 @@ import { DowngradeService } from "../src/billing/downgrade/downgrade.service.js"
 import { BookmarksService } from "../src/bookmarks/bookmarks.service.js";
 import { BookmarkRepository } from "../src/bookmarks/bookmark.repository.js";
 import { DbService } from "../src/db/db.service.js";
-import { runMigrations } from "../src/db/migrate/run-migrations.js";
 import { FREE_BOOKMARK_CAP } from "../src/entitlements/entitlements.service.js";
 import { GoService } from "../src/slugs/go.service.js";
 import { SearchService } from "../src/search/search.service.js";
@@ -59,8 +58,6 @@ describe("Downgrade overflow (integration)", () => {
   beforeAll(async () => {
     const testDatabase = await createTestDatabase();
     cleanup = testDatabase.cleanup;
-    await runMigrations(testDatabase.databaseUrl);
-
     applyTestEnv({
       DATABASE_URL: testDatabase.databaseUrl,
       STRIPE_SECRET_KEY: "sk_test_downgrade_integration",

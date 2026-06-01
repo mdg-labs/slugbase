@@ -8,7 +8,6 @@ import { AppModule } from "../src/app.module.js";
 import { AccountsService } from "../src/accounts/accounts.service.js";
 import { BookmarksService } from "../src/bookmarks/bookmarks.service.js";
 import { FoldersService } from "../src/folders/folders.service.js";
-import { runMigrations } from "../src/db/migrate/run-migrations.js";
 import { GoService } from "../src/slugs/go.service.js";
 import { SharingService } from "../src/sharing/sharing.service.js";
 import { TeamsService } from "../src/teams/teams.service.js";
@@ -37,7 +36,6 @@ describe("Sharing + authorization (integration)", () => {
   beforeAll(async () => {
     const testDatabase = await createTestDatabase();
     cleanup = testDatabase.cleanup;
-    await runMigrations(testDatabase.databaseUrl);
     applyTestEnv({ DATABASE_URL: testDatabase.databaseUrl });
 
     const moduleRef = await Test.createTestingModule({

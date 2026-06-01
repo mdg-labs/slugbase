@@ -11,7 +11,6 @@ import { AppModule } from "../src/app.module.js";
 import { AccountsService } from "../src/accounts/accounts.service.js";
 import { AuditService } from "../src/audit/audit.service.js";
 import { BookmarksService } from "../src/bookmarks/bookmarks.service.js";
-import { runMigrations } from "../src/db/migrate/run-migrations.js";
 import { InvitationsService } from "../src/invitations/invitations.service.js";
 import { SESSION_COOKIE } from "../src/sessions/session-constants.js";
 import { SessionService } from "../src/sessions/session.service.js";
@@ -28,8 +27,6 @@ interface ErrorResponse {
 
 async function bootstrapApp(databaseUrl: string, envOverrides: NodeJS.ProcessEnv = {}) {
   applyTestEnv({ DATABASE_URL: databaseUrl, ...envOverrides });
-  await runMigrations(databaseUrl);
-
   const moduleRef = await Test.createTestingModule({
     imports: [AppModule],
   }).compile();

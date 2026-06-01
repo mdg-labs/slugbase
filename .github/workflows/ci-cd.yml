@@ -534,7 +534,7 @@ jobs:
           env-slug: prod
 
       - name: Log in to GHCR
-        uses: docker/login-action@e9c24a8e6aee478e3626e8a575ec416da3284561 # v3.4.0
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}

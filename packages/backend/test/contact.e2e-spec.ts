@@ -13,7 +13,6 @@ import {
   type ChallengeService,
 } from "../src/challenge/challenge.interface.js";
 import { CHALLENGE } from "../src/challenge/challenge.tokens.js";
-import { runMigrations } from "../src/db/migrate/run-migrations.js";
 import { MAIL } from "../src/mail/mail.tokens.js";
 import { applyTestEnv, clearTestEnv } from "../src/test-utils/test-env.js";
 import { createTestDatabase } from "./test-database.js";
@@ -35,8 +34,6 @@ describe("Contact endpoint (integration)", () => {
   beforeAll(async () => {
     const testDatabase = await createTestDatabase();
     cleanup = testDatabase.cleanup;
-    await runMigrations(testDatabase.databaseUrl);
-
     challengeVerify = vi.fn();
     mailSend = vi.fn().mockResolvedValue(undefined);
 

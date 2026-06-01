@@ -9,7 +9,6 @@ import { AccountsService } from "../src/accounts/accounts.service.js";
 import { BillingApplicationService } from "../src/billing/billing-application.service.js";
 import { STRIPE_CLIENT } from "../src/billing/billing.tokens.js";
 import type { StripeBillingClient } from "../src/billing/stripe-billing.service.js";
-import { runMigrations } from "../src/db/migrate/run-migrations.js";
 import { applyTestEnv, clearTestEnv } from "../src/test-utils/test-env.js";
 import { WorkspaceMembersService } from "../src/workspaces/workspace-members.service.js";
 import { WorkspacesService } from "../src/workspaces/workspaces.service.js";
@@ -102,8 +101,6 @@ describe("Billing (integration)", () => {
   beforeAll(async () => {
     const testDatabase = await createTestDatabase();
     cleanup = testDatabase.cleanup;
-    await runMigrations(testDatabase.databaseUrl);
-
     applyTestEnv({
       DATABASE_URL: testDatabase.databaseUrl,
       STRIPE_SECRET_KEY: "sk_test_billing_integration",

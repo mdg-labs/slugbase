@@ -7,7 +7,6 @@ import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { AppModule } from "../src/app.module.js";
-import { runMigrations } from "../src/db/migrate/run-migrations.js";
 import {
   applyTestEnv,
   clearTestEnv,
@@ -24,7 +23,6 @@ async function createApp(
   envOverrides: NodeJS.ProcessEnv = {},
 ): Promise<{ app: INestApplication; cleanup: () => Promise<void> }> {
   const testDatabase = await createTestDatabase();
-  await runMigrations(testDatabase.databaseUrl);
   applyTestEnv({ DATABASE_URL: testDatabase.databaseUrl, ...envOverrides });
 
   const moduleRef = await Test.createTestingModule({

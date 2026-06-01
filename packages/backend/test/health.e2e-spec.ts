@@ -8,7 +8,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { AppModule } from "../src/app.module.js";
 import { validateEnvConfig } from "../src/config/env.schema.js";
-import { runMigrations } from "../src/db/migrate/run-migrations.js";
 import {
   applyTestEnv,
   clearTestEnv,
@@ -23,7 +22,6 @@ describe("health and version (integration)", () => {
   beforeAll(async () => {
     const testDatabase = await createTestDatabase();
     cleanup = testDatabase.cleanup;
-    await runMigrations(testDatabase.databaseUrl);
     applyTestEnv({ DATABASE_URL: testDatabase.databaseUrl });
 
     const moduleRef = await Test.createTestingModule({

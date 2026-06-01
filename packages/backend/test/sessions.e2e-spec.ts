@@ -11,7 +11,6 @@ import { AppModule } from "../src/app.module.js";
 import { SkipCsrf } from "../src/auth/csrf/skip-csrf.decorator.js";
 import { SessionService } from "../src/sessions/session.service.js";
 import type { SessionRecord } from "../src/sessions/session.types.js";
-import { runMigrations } from "../src/db/migrate/run-migrations.js";
 import { applyTestEnv, clearTestEnv } from "../src/test-utils/test-env.js";
 import { createTestDatabase } from "./test-database.js";
 
@@ -37,7 +36,6 @@ describe("SessionService (integration)", () => {
   beforeAll(async () => {
     const testDatabase = await createTestDatabase();
     cleanup = testDatabase.cleanup;
-    await runMigrations(testDatabase.databaseUrl);
     applyTestEnv({ DATABASE_URL: testDatabase.databaseUrl });
 
     const moduleRef = await Test.createTestingModule({
@@ -128,7 +126,6 @@ describe("CSRF guard (integration)", () => {
   beforeAll(async () => {
     const testDatabase = await createTestDatabase();
     cleanup = testDatabase.cleanup;
-    await runMigrations(testDatabase.databaseUrl);
     applyTestEnv({ DATABASE_URL: testDatabase.databaseUrl });
 
     const moduleRef = await Test.createTestingModule({

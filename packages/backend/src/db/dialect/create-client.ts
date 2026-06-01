@@ -15,7 +15,12 @@ export interface DbClientHandle {
 export function createDbClient(databaseUrl: string): DbClientHandle {
   assertPostgresDatabaseUrl(databaseUrl);
 
-  const sql = postgres(databaseUrl, { max: 1 });
+  const sql = postgres(databaseUrl, {
+    max: 1,
+    ...(process.env.NODE_ENV === "test" || process.env.VITEST === "true"
+      ? { onnotice: () => {} }
+      : {}),
+  });
   const client = drizzle(sql, { schema });
 
   return {

@@ -8,7 +8,6 @@ import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { AppModule } from "../src/app.module.js";
-import { runMigrations } from "../src/db/migrate/run-migrations.js";
 import { applyTestEnv, clearTestEnv } from "../src/test-utils/test-env.js";
 import { createTestDatabase } from "./test-database.js";
 
@@ -19,8 +18,6 @@ describe("Auth rate limiting (integration)", () => {
   beforeAll(async () => {
     const testDatabase = await createTestDatabase();
     cleanup = testDatabase.cleanup;
-    await runMigrations(testDatabase.databaseUrl);
-
     // Configure a very tight rate limit so tests complete quickly
     applyTestEnv({
       DATABASE_URL: testDatabase.databaseUrl,

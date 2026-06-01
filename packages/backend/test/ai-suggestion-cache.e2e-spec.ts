@@ -10,7 +10,6 @@ import { AI, OPENAI_HTTP } from "../src/ai/ai.tokens.js";
 import { AiSuggestionCacheService } from "../src/ai/cache/ai-suggestion-cache.service.js";
 import { AI_SUGGESTION_CACHE_TTL_MS } from "../src/ai/cache/ai-suggestion-cache.constants.js";
 import type { OpenAiHttpExecutor } from "../src/ai/openai-ai.service.js";
-import { runMigrations } from "../src/db/migrate/run-migrations.js";
 import { applyTestEnv, clearTestEnv } from "../src/test-utils/test-env.js";
 import { createTestDatabase } from "./test-database.js";
 
@@ -50,7 +49,6 @@ describe("AI suggestion cache (integration)", () => {
   beforeAll(async () => {
     const testDatabase = await createTestDatabase();
     cleanup = testDatabase.cleanup;
-    await runMigrations(testDatabase.databaseUrl);
     applyTestEnv({
       DATABASE_URL: testDatabase.databaseUrl,
       OPENAI_API_KEY: "integration-test-openai-key",

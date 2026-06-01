@@ -6,7 +6,6 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { AppModule } from "../src/app.module.js";
 import { MetadataService } from "../src/bookmarks/metadata/metadata.service.js";
-import { runMigrations } from "../src/db/migrate/run-migrations.js";
 import {
   FetchService,
   type HttpExecutor,
@@ -36,7 +35,6 @@ describe("Bookmark metadata (integration)", () => {
   beforeAll(async () => {
     const testDatabase = await createTestDatabase();
     cleanup = testDatabase.cleanup;
-    await runMigrations(testDatabase.databaseUrl);
     applyTestEnv({ DATABASE_URL: testDatabase.databaseUrl });
 
     httpExecutor = vi.fn<HttpExecutor>();
