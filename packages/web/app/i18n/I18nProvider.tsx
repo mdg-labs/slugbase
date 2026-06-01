@@ -2,7 +2,8 @@ import { TolgeeProvider, useTolgee } from "@tolgee/react";
 import { useEffect, type ReactNode } from "react";
 import { AppLocaleProvider, useAppLocale } from "./use-app-locale.js";
 import { isAppLocale, type AppLocale } from "./resolve-locale.js";
-import { tolgee } from "./tolgee.js";
+import { getTolgee } from "./tolgee.js";
+import { staticMessages } from "./messages.js";
 
 export type I18nProviderProps = {
   children: ReactNode;
@@ -28,7 +29,10 @@ export function I18nProvider({ children, locale }: I18nProviderProps) {
 
   return (
     <AppLocaleProvider locale={activeLocale}>
-      <TolgeeProvider tolgee={tolgee}>
+      <TolgeeProvider
+        tolgee={getTolgee()}
+        ssr={{ language: activeLocale, staticData: staticMessages }}
+      >
         <LocaleSync />
         {children}
       </TolgeeProvider>
