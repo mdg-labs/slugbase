@@ -15,6 +15,7 @@ import {
   type CreateWorkspaceData,
   type UpdateWorkspaceData,
   type WorkspaceMemberRole,
+  type WorkspacePlan,
   type WorkspaceRecord,
 } from "./workspace.types.js";
 
@@ -119,8 +120,33 @@ export class WorkspacesService {
         "Cannot delete a workspace with an active paid subscription. Cancel billing via the portal first.",
       );
     }
+
+    const userMemberships = await this.memberRepo.findAllByUser(requesterId);
+    const ownedWorkspaceIds = userMemberships
+      .filter((m) => m.role === "OWNER")
+      .map((m) => m.workspaceId);
+    if (ownedWorkspaceIds.length <= 1) {
+      throw new ForbiddenException(
+        "Cannot delete your last workspace. Create another workspace before deleting this one.",
+      );
+    }
+
     await this.memberRepo.deleteAllByWorkspace(id);
     await this.workspaceRepo.delete(id);
+  }
+
+  /**
+   * Returns owned workspace count and plan list for the given user.
+   * Used for multi-workspace entitlement checks on workspace creation (spec §12.2).
+   */
+  async getOwnedWorkspaceInfo(userId: string): Promise<{ count: number; plans: WorkspacePlan[] }> {
+    const memberships = await this.memberRepo.findAllByUser(userId);
+    const ownedIds = memberships
+      .filter((m) => m.role === "OWNER")
+      .map((m) => m.workspaceId);
+    if (ownedIds.length === 0) return { count: 0, plans: [] };
+    const workspaces = await this.workspaceRepo.findByIds(ownedIds);
+    return { count: workspaces.length, plans: workspaces.map((w) => w.plan) };
   }
 
   async requireWorkspaceRole(

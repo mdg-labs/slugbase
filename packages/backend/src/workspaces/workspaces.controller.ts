@@ -1,17 +1,21 @@
 import {
+  Body,
   Controller,
+  Delete,
   ForbiddenException,
   Get,
   HttpCode,
   Inject,
   NotFoundException,
   Param,
+  Patch,
   Post,
   Req,
   UseGuards,
 } from "@nestjs/common";
 import type { Request } from "express";
 
+import { EntitlementsService } from "../entitlements/entitlements.service.js";
 import { SessionService } from "../sessions/session.service.js";
 import {
   SESSION_DATA_KEY,
@@ -21,8 +25,8 @@ import {
 } from "../sessions/session.guard.js";
 import type { SessionData } from "../sessions/session.types.js";
 import { ActiveWorkspace } from "./active-workspace.decorator.js";
-import { TenantGuard } from "./tenant.guard.js";
-import type { WorkspaceRecord } from "./workspace.types.js";
+import { TenantGuard, TENANT_USER_ID_KEY } from "./tenant.guard.js";
+import type { CreateWorkspaceData, UpdateWorkspaceData, WorkspaceRecord } from "./workspace.types.js";
 import { WorkspacesService } from "./workspaces.service.js";
 
 @Controller("workspaces")
@@ -30,7 +34,82 @@ export class WorkspacesController {
   constructor(
     @Inject(SessionService) private readonly sessions: SessionService,
     @Inject(WorkspacesService) private readonly workspaces: WorkspacesService,
+    @Inject(EntitlementsService) private readonly entitlements: EntitlementsService,
   ) {}
+
+  /**
+   * Returns all workspaces the authenticated user belongs to (spec §4.3).
+   * Used by the workspace switcher to populate the list.
+   */
+  @Get()
+  @HttpCode(200)
+  @UseGuards(SessionGuard)
+  async listWorkspaces(
+    @Req() req: Request & Record<string, unknown>,
+  ): Promise<WorkspaceRecord[]> {
+    const userId = req[SESSION_USER_ID_KEY] as string;
+    return this.workspaces.listUserWorkspaces(userId);
+  }
+
+  /**
+   * Creates a new workspace for the authenticated user (spec §12.2).
+   *
+   * Enforces multi-workspace entitlement: Free accounts may only own one
+   * workspace unless they have a paid plan on an existing workspace.
+   */
+  @Post()
+  @HttpCode(201)
+  @UseGuards(SessionGuard)
+  async createWorkspace(
+    @Body() body: CreateWorkspaceData,
+    @Req() req: Request & Record<string, unknown>,
+  ): Promise<WorkspaceRecord> {
+    const userId = req[SESSION_USER_ID_KEY] as string;
+
+    const owned = await this.workspaces.getOwnedWorkspaceInfo(userId);
+    if (!this.entitlements.canCreateWorkspace(owned.count, owned.plans)) {
+      throw new ForbiddenException(
+        "Your plan does not allow creating additional workspaces. Upgrade to Personal or higher.",
+      );
+    }
+
+    return this.workspaces.createWorkspace(body, userId);
+  }
+
+  /**
+   * Updates the active workspace's name or slug (spec §4.3).
+   *
+   * Aligned with web client which calls PATCH /workspaces/active.
+   * Requires ADMIN or OWNER role (enforced by WorkspacesService.updateWorkspace).
+   */
+  @Patch("active")
+  @HttpCode(200)
+  @UseGuards(TenantGuard)
+  async updateActiveWorkspace(
+    @ActiveWorkspace() workspace: WorkspaceRecord,
+    @Req() req: Request & Record<string, unknown>,
+    @Body() body: UpdateWorkspaceData,
+  ): Promise<WorkspaceRecord> {
+    const userId = req[TENANT_USER_ID_KEY] as string;
+    return this.workspaces.updateWorkspace(workspace.id, body, userId);
+  }
+
+  /**
+   * Deletes the active workspace (spec §4.3).
+   *
+   * Safeguards: must be OWNER, no active paid billing, and cannot delete last workspace.
+   * Aligned with web client which calls DELETE /workspaces/active.
+   */
+  @Delete("active")
+  @HttpCode(204)
+  @UseGuards(TenantGuard)
+  async deleteActiveWorkspace(
+    @ActiveWorkspace() workspace: WorkspaceRecord,
+    @Req() req: Request & Record<string, unknown>,
+  ): Promise<void> {
+    const userId = req[TENANT_USER_ID_KEY] as string;
+    return this.workspaces.deleteWorkspace(workspace.id, userId);
+  }
 
   /**
    * Activates a workspace as the tenant context for the current session.
@@ -84,5 +163,36 @@ export class WorkspacesController {
     @ActiveWorkspace() workspace: WorkspaceRecord,
   ): WorkspaceRecord {
     return workspace;
+  }
+
+  /**
+   * Updates a workspace by explicit ID.
+   * Requires ADMIN or OWNER role.
+   */
+  @Patch(":id")
+  @HttpCode(200)
+  @UseGuards(SessionGuard)
+  async updateWorkspace(
+    @Param("id") workspaceId: string,
+    @Body() body: UpdateWorkspaceData,
+    @Req() req: Request & Record<string, unknown>,
+  ): Promise<WorkspaceRecord> {
+    const userId = req[SESSION_USER_ID_KEY] as string;
+    return this.workspaces.updateWorkspace(workspaceId, body, userId);
+  }
+
+  /**
+   * Deletes a workspace by explicit ID.
+   * Requires OWNER role; cannot delete last workspace.
+   */
+  @Delete(":id")
+  @HttpCode(204)
+  @UseGuards(SessionGuard)
+  async deleteWorkspace(
+    @Param("id") workspaceId: string,
+    @Req() req: Request & Record<string, unknown>,
+  ): Promise<void> {
+    const userId = req[SESSION_USER_ID_KEY] as string;
+    return this.workspaces.deleteWorkspace(workspaceId, userId);
   }
 }

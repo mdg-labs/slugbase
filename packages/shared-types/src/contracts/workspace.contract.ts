@@ -145,6 +145,27 @@ export const workspaceContract = c.router({
     },
     summary: "Delete a workspace (OWNER only)",
   },
+  updateActiveWorkspace: {
+    method: "PATCH",
+    path: "/workspaces/active",
+    body: UpdateWorkspaceBodySchema,
+    responses: {
+      200: WorkspaceSchema,
+      403: z.object({ message: z.string() }).strict(),
+      409: z.object({ message: z.string() }).strict(),
+    },
+    summary: "Update the active workspace (ADMIN or OWNER)",
+  },
+  deleteActiveWorkspace: {
+    method: "DELETE",
+    path: "/workspaces/active",
+    body: c.noBody(),
+    responses: {
+      204: c.noBody(),
+      403: z.object({ message: z.string() }).strict(),
+    },
+    summary: "Delete the active workspace (OWNER only, cannot delete last workspace)",
+  },
   listMembers: {
     method: "GET",
     path: "/workspaces/:workspaceId/members",

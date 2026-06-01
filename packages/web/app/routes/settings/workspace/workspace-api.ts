@@ -98,7 +98,7 @@ export async function loadOidcProviders(
 
 export async function updateWorkspaceName(name: string): Promise<WorkspaceSummary> {
   const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/workspace`, {
+  const res = await fetch(`${getApiBaseUrl()}/workspaces/active`, {
     method: "PATCH",
     headers,
     credentials: "include",
@@ -113,7 +113,7 @@ export async function updateWorkspaceName(name: string): Promise<WorkspaceSummar
 
 export async function deleteWorkspace(): Promise<void> {
   const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/workspace`, {
+  const res = await fetch(`${getApiBaseUrl()}/workspaces/active`, {
     method: "DELETE",
     headers,
     credentials: "include",
