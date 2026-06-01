@@ -113,6 +113,15 @@ Keys are registered incrementally per task (rule `05-env-vars`). Full categories
 | `VITE_UMAMI_WEBSITE_ID` | Umami website UUID for web client | `/web` | hosted optional | Required with `VITE_UMAMI_HOST` |
 | `PUBLIC_UMAMI_HOST` | Umami script host for marketing site | `/marketing` | hosted optional | Empty = no tracker / no consent banner |
 | `PUBLIC_UMAMI_WEBSITE_ID` | Umami website UUID for marketing site | `/marketing` | hosted optional | Required with `PUBLIC_UMAMI_HOST` |
+| `PUBLIC_PLAN_PRICE_PERSONAL_MONTHLY` | Display price for Personal (monthly) on marketing pricing page | `/marketing` | hosted | Illustrative; aligned with `VITE_PLAN_PRICE_PERSONAL_MONTHLY` |
+| `PUBLIC_PLAN_PRICE_PERSONAL_YEARLY` | Display price for Personal (yearly) on marketing pricing page | `/marketing` | hosted | Illustrative |
+| `PUBLIC_PLAN_PRICE_TEAM_SEAT` | Display price per Team seat (monthly) on marketing pricing page | `/marketing` | hosted | Illustrative |
+| `PUBLIC_PLAN_PRICE_TEAM_SEAT_YEARLY` | Display price per Team seat (yearly) on marketing pricing page | `/marketing` | hosted | Optional; falls back to monthly |
+| `PUBLIC_PLAN_PRICE_SUPPORTER` | Display price for supporter one-time offer on marketing site | `/marketing` | hosted | Illustrative |
+| `PUBLIC_SUPPORTER_PROMOTION_END` | ISO-8601 supporter offer deadline (marketing countdown) | `/marketing` | hosted | Optional |
+| `PUBLIC_TEAM_BASE_SEATS` | Included Team seats shown on marketing pricing page | `/marketing` | hosted | Default `5` |
+| `PUBLIC_FREE_BOOKMARK_CAP` | Free cap shown on marketing pricing page | `/marketing` | hosted | Default `50` |
+| `PUBLIC_FRONTEND_ORIGIN` | App origin for marketing CTAs (sign-in, register) | `/marketing` | all | Same as `FRONTEND_ORIGIN` |
 | `SENTRY_DSN` | Sentry ingest DSN for API error reporting (spec §11.7) | `/api` | `development` (optional); hosted `staging`/`production` | Empty = no-op (self-host default) |
 | `SENTRY_ENVIRONMENT` | Sentry environment tag override | `/api` | optional | Defaults to `NODE_ENV` |
 | `SENTRY_RELEASE` | Sentry release identifier (deploy version) | `/api` | optional | Empty = omitted from SDK init |

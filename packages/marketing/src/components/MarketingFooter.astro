@@ -37,9 +37,9 @@ const contactHref = getRelativeLocaleUrl(locale, "/contact");
       <div>
         <div class="mk-footer-col-head">{t(locale, "marketing.footer.legal")}</div>
         <div class="mk-footer-links">
-          <span class="mk-footer-link mk-footer-link--muted">{t(locale, "marketing.footer.impressum")}</span>
-          <span class="mk-footer-link mk-footer-link--muted">{t(locale, "marketing.footer.privacy")}</span>
-          <span class="mk-footer-link mk-footer-link--muted">{t(locale, "marketing.footer.terms")}</span>
+          <a class="mk-footer-link" href={getRelativeLocaleUrl(locale, "/legal/impressum")}>{t(locale, "marketing.footer.impressum")}</a>
+          <a class="mk-footer-link" href={getRelativeLocaleUrl(locale, "/legal/datenschutz")}>{t(locale, "marketing.footer.privacy")}</a>
+          <a class="mk-footer-link" href={getRelativeLocaleUrl(locale, "/legal/agb")}>{t(locale, "marketing.footer.terms")}</a>
         </div>
       </div>
     </div>
