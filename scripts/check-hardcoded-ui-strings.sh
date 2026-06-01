@@ -11,8 +11,10 @@ resolve_rg() {
     return
   fi
 
-  local bundled_rg="${repo_root}/node_modules/@vscode/ripgrep/bin/rg"
-  if [[ -x "${bundled_rg}" ]]; then
+  local bundled_rg=""
+  if bundled_rg="$(
+    node --input-type=module -e "import { rgPath } from '@vscode/ripgrep'; console.log(rgPath)" 2>/dev/null
+  )" && [[ -n "${bundled_rg}" && -x "${bundled_rg}" ]]; then
     echo "${bundled_rg}"
     return
   fi
