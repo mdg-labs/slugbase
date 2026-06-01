@@ -1,0 +1,18 @@
+{
+  "$schema": "https://tolgee.io/cli-schema.json",
+  "projectId": 4,
+  "apiUrl": "https://tolgee.mdg-labs.dev",
+  "format": "JSON_TOLGEE",
+  "patterns": [
+    "packages/web/app/**/*.tsx",
+    "packages/marketing/src/**/*.astro"
+  ],
+  "parser": "react",
+  "pull": {
+    "path": ".tolgee/pull",
+    "languages": ["en", "de"],
+    "delimiter": null,
+    "emptyDir": true,
+    "states": ["UNTRANSLATED", "TRANSLATED", "REVIEWED"]
+  }
+}

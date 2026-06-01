@@ -15,6 +15,9 @@ build/
 *.tsbuildinfo
 .astro
 
+# Tolgee CLI pull scratch (CI gate)
+.tolgee/
+
 # env (never commit secrets)
 .env
 .env.local

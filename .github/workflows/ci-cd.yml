@@ -65,6 +65,12 @@ jobs:
           project-slug: slugbase-cloud
           env-slug: dev
 
+      - name: Tolgee translation completeness (pull --check)
+        run: pnpm run i18n:check:tolgee
+
+      - name: Hard-coded UI strings (rg)
+        run: pnpm run i18n:check:hardcoded
+
       - name: Build
         env:
           NODE_ENV: production
