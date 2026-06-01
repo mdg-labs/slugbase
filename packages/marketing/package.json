@@ -17,10 +17,10 @@
   "dependencies": {
     "@slugbase/ui": "workspace:^",
     "@tolgee/web": "^7.1.0",
-    "astro": "^5.7.10"
+    "astro": "^6.4.2"
   },
   "devDependencies": {
-    "@astrojs/check": "^0.9.4",
+    "@astrojs/check": "^0.9.9",
     "typescript": "^5.8.3",
     "vitest": "^3.2.1",
     "wrangler": "^4.24.0"
