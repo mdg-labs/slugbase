@@ -10,11 +10,15 @@ import {
   bookmarkFolders,
   bookmarkTags,
   bookmarks,
+  folders,
   slugPreferences,
+  tags,
 } from "../db/schema/index.js";
 import type {
+  BookmarkFolderSummary,
   BookmarkIdsResult,
   BookmarkRecord,
+  BookmarkTagSummary,
   CreateBookmarkData,
   CreateSlugPreferenceData,
   PaginatedBookmarks,
@@ -50,7 +54,11 @@ type BookmarkRow = WorkspaceOwned & {
   updatedAt: Date | number;
 };
 
-function toBookmarkRecord(row: BookmarkRow): BookmarkRecord {
+function toBookmarkRecord(
+  row: BookmarkRow,
+  folderSummaries: BookmarkFolderSummary[] = [],
+  tagSummaries: BookmarkTagSummary[] = [],
+): BookmarkRecord {
   return {
     id: row.id,
     workspaceId: row.workspaceId,
@@ -72,6 +80,8 @@ function toBookmarkRecord(row: BookmarkRow): BookmarkRecord {
       row.createdAt instanceof Date ? row.createdAt : new Date(row.createdAt),
     updatedAt:
       row.updatedAt instanceof Date ? row.updatedAt : new Date(row.updatedAt),
+    folders: folderSummaries,
+    tags: tagSummaries,
   };
 }
 
@@ -251,7 +261,7 @@ export class BookmarkRepository extends WorkspaceScopedRepository<BookmarkRecord
         ),
       )
       .orderBy(...orderBy);
-    return rows.map(toBookmarkRecord);
+    return rows.map((row) => toBookmarkRecord(row));
   }
 
   /** Plan-archived bookmarks ordered for restore selection (def §5). */
@@ -270,7 +280,7 @@ export class BookmarkRepository extends WorkspaceScopedRepository<BookmarkRecord
         ),
       )
       .orderBy(...orderBy);
-    return rows.map(toBookmarkRecord);
+    return rows.map((row) => toBookmarkRecord(row));
   }
 
   async bulkSetPlanArchived(
@@ -328,7 +338,10 @@ export class BookmarkRepository extends WorkspaceScopedRepository<BookmarkRecord
         ),
       )
       .limit(1);
-    return rows[0] ? toBookmarkRecord(rows[0]) : null;
+    if (!rows[0]) return null;
+    const summaryMap = await this.fetchSummariesForBookmarkIds(workspaceId, [bookmarkId]);
+    const entry = summaryMap.get(bookmarkId);
+    return toBookmarkRecord(rows[0], entry?.folders ?? [], entry?.tags ?? []);
   }
 
   async list(
@@ -369,8 +382,16 @@ export class BookmarkRepository extends WorkspaceScopedRepository<BookmarkRecord
       .limit(pageSize)
       .offset(offset);
 
+    const bookmarkIds = rows.map((r) => r.id);
+    const summaryMap = bookmarkIds.length > 0
+      ? await this.fetchSummariesForBookmarkIds(workspaceId, bookmarkIds)
+      : new Map<string, { folders: BookmarkFolderSummary[]; tags: BookmarkTagSummary[] }>();
+
     return {
-      items: rows.map(toBookmarkRecord),
+      items: rows.map((row) => {
+        const entry = summaryMap.get(row.id);
+        return toBookmarkRecord(row, entry?.folders ?? [], entry?.tags ?? []);
+      }),
       total,
       page,
       pageSize,
@@ -425,7 +446,10 @@ export class BookmarkRepository extends WorkspaceScopedRepository<BookmarkRecord
         and(eq(bookmarks.workspaceId, workspaceId), eq(bookmarks.slug, slug)),
       )
       .limit(1);
-    return rows[0] ? toBookmarkRecord(rows[0]) : null;
+    if (!rows[0]) return null;
+    const summaryMap = await this.fetchSummariesForBookmarkIds(workspaceId, [rows[0].id]);
+    const entry = summaryMap.get(rows[0].id);
+    return toBookmarkRecord(rows[0], entry?.folders ?? [], entry?.tags ?? []);
   }
 
   async update(
@@ -578,5 +602,67 @@ export class BookmarkRepository extends WorkspaceScopedRepository<BookmarkRecord
           eq(slugPreferences.bookmarkId, bookmarkId),
         ),
       );
+  }
+
+  private async fetchSummariesForBookmarkIds(
+    workspaceId: string,
+    bookmarkIds: string[],
+  ): Promise<Map<string, { folders: BookmarkFolderSummary[]; tags: BookmarkTagSummary[] }>> {
+    const result = new Map<string, { folders: BookmarkFolderSummary[]; tags: BookmarkTagSummary[] }>();
+    for (const id of bookmarkIds) {
+      result.set(id, { folders: [], tags: [] });
+    }
+
+    const folderRows = await this.db
+      .select({
+        bookmarkId: bookmarkFolders.bookmarkId,
+        folderId: folders.id,
+        folderName: folders.name,
+      })
+      .from(bookmarkFolders)
+      .innerJoin(folders, and(
+        eq(bookmarkFolders.folderId, folders.id),
+        eq(bookmarkFolders.workspaceId, workspaceId),
+      ))
+      .where(
+        and(
+          eq(bookmarkFolders.workspaceId, workspaceId),
+          inArray(bookmarkFolders.bookmarkId, bookmarkIds),
+        ),
+      );
+
+    for (const row of folderRows) {
+      const entry = result.get(row.bookmarkId);
+      if (entry) {
+        entry.folders.push({ id: row.folderId, name: row.folderName });
+      }
+    }
+
+    const tagRows = await this.db
+      .select({
+        bookmarkId: bookmarkTags.bookmarkId,
+        tagId: tags.id,
+        tagName: tags.name,
+      })
+      .from(bookmarkTags)
+      .innerJoin(tags, and(
+        eq(bookmarkTags.tagId, tags.id),
+        eq(bookmarkTags.workspaceId, workspaceId),
+      ))
+      .where(
+        and(
+          eq(bookmarkTags.workspaceId, workspaceId),
+          inArray(bookmarkTags.bookmarkId, bookmarkIds),
+        ),
+      );
+
+    for (const row of tagRows) {
+      const entry = result.get(row.bookmarkId);
+      if (entry) {
+        entry.tags.push({ id: row.tagId, name: row.tagName });
+      }
+    }
+
+    return result;
   }
 }

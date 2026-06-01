@@ -28,6 +28,8 @@ function bookmark(
     lastAccessedAt,
     createdAt,
     updatedAt: createdAt,
+    folders: [],
+    tags: [],
   };
 }
 

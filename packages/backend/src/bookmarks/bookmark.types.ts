@@ -1,5 +1,15 @@
 import type { BookmarkScope, BookmarkSort } from "./bookmark.validation.js";
 
+export interface BookmarkFolderSummary {
+  id: string;
+  name: string;
+}
+
+export interface BookmarkTagSummary {
+  id: string;
+  name: string;
+}
+
 export interface BookmarkRecord {
   id: string;
   workspaceId: string;
@@ -14,6 +24,8 @@ export interface BookmarkRecord {
   lastAccessedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+  folders: BookmarkFolderSummary[];
+  tags: BookmarkTagSummary[];
 }
 
 export interface CreateBookmarkData {

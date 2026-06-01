@@ -103,6 +103,8 @@ describe("Bookmarks (integration)", () => {
       expect(bookmark.planArchived).toBe(false);
       expect(bookmark.accessCount).toBe(0);
       expect(bookmark.lastAccessedAt).toBeNull();
+      expect(bookmark.folders).toEqual([]);
+      expect(bookmark.tags).toEqual([]);
       bookmarkId = bookmark.id;
     });
 
@@ -378,6 +380,37 @@ describe("Bookmarks (integration)", () => {
       );
       expect(allIds.total).toBe(list.total);
       expect(allIds.ids.sort()).toEqual(list.items.map((b) => b.id).sort());
+    });
+
+    it("includes folder and tag summaries in bookmark list items", async () => {
+      const list = await bookmarksService.listBookmarks(workspace, ownerUserId, {
+        sort: "title-asc",
+        pageSize: 50,
+      });
+
+      const alpha = list.items.find((b) => b.id === alphaId);
+      expect(alpha).toBeDefined();
+      expect(Array.isArray(alpha?.folders)).toBe(true);
+      expect(alpha?.folders.some((f) => f.id === folderId)).toBe(true);
+      expect(alpha?.folders.some((f) => f.name === "List Filter Folder")).toBe(true);
+      expect(Array.isArray(alpha?.tags)).toBe(true);
+      expect(alpha?.tags.some((t) => t.id === tagAId)).toBe(true);
+      expect(alpha?.tags.some((t) => t.id === tagBId)).toBe(true);
+
+      const beta = list.items.find((b) => b.id === betaId);
+      expect(beta?.folders.some((f) => f.id === folderId)).toBe(true);
+      expect(beta?.tags.some((t) => t.id === tagAId)).toBe(true);
+      expect(beta?.tags.some((t) => t.id === tagBId)).toBe(false);
+
+      const gamma = list.items.find((b) => b.id === gammaId);
+      expect(gamma?.folders).toHaveLength(0);
+      expect(gamma?.tags).toHaveLength(0);
+    });
+
+    it("includes folder and tag summaries on single bookmark get", async () => {
+      const bookmark = await bookmarksService.getBookmark(workspace, ownerUserId, alphaId);
+      expect(bookmark.folders.some((f) => f.id === folderId)).toBe(true);
+      expect(bookmark.tags.some((t) => t.id === tagAId)).toBe(true);
     });
   });
 

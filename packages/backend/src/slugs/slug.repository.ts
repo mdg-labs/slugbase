@@ -54,6 +54,8 @@ function toBookmarkRecord(row: BookmarkRow): BookmarkRecord {
       row.createdAt instanceof Date ? row.createdAt : new Date(row.createdAt),
     updatedAt:
       row.updatedAt instanceof Date ? row.updatedAt : new Date(row.updatedAt),
+    folders: [],
+    tags: [],
   };
 }
 

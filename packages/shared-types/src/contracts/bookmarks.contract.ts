@@ -3,6 +3,20 @@ import { z } from "zod";
 
 const c = initContract();
 
+const BookmarkFolderSummarySchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+  })
+  .strict();
+
+const BookmarkTagSummarySchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+  })
+  .strict();
+
 export const BookmarkSchema = z
   .object({
     id: z.string(),
@@ -18,8 +32,13 @@ export const BookmarkSchema = z
     lastAccessedAt: z.string().datetime().nullable(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
+    folders: z.array(BookmarkFolderSummarySchema),
+    tags: z.array(BookmarkTagSummarySchema),
   })
   .strict();
+
+export type BookmarkFolderSummary = z.infer<typeof BookmarkFolderSummarySchema>;
+export type BookmarkTagSummary = z.infer<typeof BookmarkTagSummarySchema>;
 
 const slugField = z
   .string()
