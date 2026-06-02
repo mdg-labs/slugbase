@@ -67,13 +67,15 @@ describe("WorkspaceSettingsPage", () => {
     expect(view.getByDisplayValue("Acme Engineering")).toBeTruthy();
   });
 
-  it("shows SMTP and OIDC tabs when admin UI interfaces are enabled", () => {
+  it("renders workspace settings with all admin UI interfaces enabled (no tab strip)", () => {
     const view = renderPage();
-    expect(view.getByRole("button", { name: "Email" })).toBeTruthy();
-    expect(view.getByRole("button", { name: "Identity" })).toBeTruthy();
+    expect(view.getByTestId("workspace-settings-page")).toBeTruthy();
+    expect(view.getByLabelText("Workspace name")).toBeTruthy();
+    expect(view.queryByRole("button", { name: "Email" })).toBeNull();
+    expect(view.queryByRole("button", { name: "Identity" })).toBeNull();
   });
 
-  it("hides SMTP and OIDC tabs when operator-managed interfaces are active", () => {
+  it("renders workspace settings without horizontal nav when operator-managed interfaces are active", () => {
     const view = renderPage({
       ...baseData,
       interfaceConfig: {
@@ -83,9 +85,10 @@ describe("WorkspaceSettingsPage", () => {
         billingEnabled: true,
       },
     });
+    expect(view.getByTestId("workspace-settings-page")).toBeTruthy();
     expect(view.queryByRole("button", { name: "Email" })).toBeNull();
     expect(view.queryByRole("button", { name: "Identity" })).toBeNull();
-    expect(view.getByRole("button", { name: "AI" })).toBeTruthy();
+    expect(view.queryByRole("button", { name: "AI" })).toBeNull();
   });
 
   it("shows admin-only gate for members", () => {

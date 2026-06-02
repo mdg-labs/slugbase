@@ -41,17 +41,13 @@ export function AccountSettingsPage({
   initialTokens,
 }: AccountSettingsPageProps) {
   const { t } = useTranslate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const [account, setAccount] = useState(initialAccount);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const { showToast } = useAppToast();
 
   const section = (searchParams.get("section") as AccountSectionId | null) ?? "profile";
   const validSection = SECTIONS.includes(section) ? section : "profile";
-
-  const setSection = (next: AccountSectionId) => {
-    setSearchParams(next === "profile" ? {} : { section: next });
-  };
 
   const showError = (message: string) => {
     setErrorMessage(message);
@@ -75,21 +71,6 @@ export function AccountSettingsPage({
 
   return (
     <div className="mx-auto max-w-[680px] px-sp-6 py-sp-8" data-testid="account-settings-page">
-      <header className="mb-sp-7">
-        <h1
-          className="m-0 text-fg font-semibold"
-          style={{ fontSize: "var(--text-h2)", lineHeight: "var(--lh-h2)" }}
-        >
-          {t("settings.account.page_title")}
-        </h1>
-        <p
-          className="mt-sp-2 m-0 text-fg-muted"
-          style={{ fontSize: "var(--text-body)", lineHeight: "var(--lh-body)" }}
-        >
-          {t("settings.account.page_subtitle")}
-        </p>
-      </header>
-
       {errorMessage ? (
         <p
           className="mb-sp-5 rounded-md border border-[color:var(--danger-subtle)] bg-[color:var(--danger-subtle)] px-sp-4 py-sp-3 text-danger-text"
@@ -99,27 +80,6 @@ export function AccountSettingsPage({
           {errorMessage}
         </p>
       ) : null}
-
-      <nav
-        className="mb-sp-7 flex flex-wrap gap-sp-2 border-b border-[color:var(--border-subtle)]"
-        aria-label={t("settings.account.nav_label")}
-      >
-        {SECTIONS.map((sectionId) => (
-          <button
-            key={sectionId}
-            type="button"
-            onClick={() => { setSection(sectionId); }}
-            className={`-mb-px border-b-2 px-sp-4 py-sp-3 font-medium transition-colors ${
-              validSection === sectionId
-                ? "border-accent text-fg"
-                : "border-transparent text-fg-muted hover:text-fg"
-            }`}
-            style={{ fontSize: "var(--text-body)" }}
-          >
-            {t(`settings.account.tab_${sectionId}`)}
-          </button>
-        ))}
-      </nav>
 
       {validSection === "profile" ? (
         <ProfileSection
