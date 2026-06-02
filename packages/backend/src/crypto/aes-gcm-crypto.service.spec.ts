@@ -21,6 +21,7 @@ function createCryptoService(overrides: Partial<AppConfig> = {}): AesGcmCryptoSe
     SMTP_SECURE: false,
     OPENAI_MODEL: "gpt-4o-mini",
     SESSION_TTL_DAYS: 30,
+    SESSION_REMEMBER_TTL_DAYS: 90,
     MFA_TOTP_ISSUER: "SlugBase",
     RATE_LIMIT_LOGIN_MAX: 10,
     RATE_LIMIT_LOGIN_TTL_SECONDS: 900,

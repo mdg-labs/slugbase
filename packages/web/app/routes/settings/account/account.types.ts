@@ -15,6 +15,8 @@ export interface AccountSettingsData {
   email: string;
   name: string;
   emailVerified: boolean;
+  pendingEmail: string | null;
+  pendingEmailMasked: string | null;
   mfaState: AccountMfaState;
   remainingBackupCodes: number | null;
   hasPassword: boolean;
@@ -22,6 +24,7 @@ export interface AccountSettingsData {
   theme: "light" | "dark" | "auto";
   accentColor: AllowedAccentColor | null;
   aiOptOut: boolean;
+  defaultBookmarkView: "grid" | "table";
 }
 
 export type AccountSectionId =
@@ -53,4 +56,9 @@ export interface UpdateAccountPreferencesBody {
   theme?: "light" | "dark" | "auto";
   accentColor?: AllowedAccentColor | null;
   aiOptOut?: boolean;
+  defaultBookmarkView?: "grid" | "table";
+}
+
+export interface UpdateAccountEmailBody {
+  email: string;
 }

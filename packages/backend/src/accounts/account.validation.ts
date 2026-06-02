@@ -39,3 +39,16 @@ export function assertAccentColorValid(color: string | null): void {
     throw new BadRequestException("Unsupported accent color");
   }
 }
+
+const SUPPORTED_BOOKMARK_VIEWS = new Set(["grid", "table"]);
+
+export function normalizeDefaultBookmarkView(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  return value.trim().toLowerCase();
+}
+
+export function assertDefaultBookmarkViewValid(view: string): void {
+  if (!SUPPORTED_BOOKMARK_VIEWS.has(view)) {
+    throw new BadRequestException("Unsupported default bookmark view");
+  }
+}

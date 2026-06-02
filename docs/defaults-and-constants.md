@@ -34,6 +34,7 @@ Naming for code constants follows rule `04-naming` (`SCREAMING_SNAKE_CASE`). Env
 | Constant | Value | Kind | Notes |
 |---|---|---|---|
 | Session TTL | 30 days, sliding | config | DB-backed; individually revocable (§5.3) |
+| Remember-me session TTL | 90 days, sliding | config | When login remember-me is checked (§5.3) |
 | Max API tokens / user | 10 | config | `MAX_API_TOKENS_PER_USER` |
 | API token prefix | `slb_` | config | for display + leak scanning |
 | MFA backup codes | 10, single-use | config | shown once, stored hashed (§5.7) |
@@ -82,6 +83,7 @@ Keys are registered incrementally per task (rule `05-env-vars`). Full categories
 | `SERVE_WEB_CLIENT` | When `true`, Nest serves the bundled React Router v7 web client on the same port via `@react-router/express` (combined self-host image) | `development` (optional local combined-mode testing); combined Docker image | `false` for local API-only dev; combined `Dockerfile` sets `true` |
 | `WEB_CLIENT_SERVER_BUILD` | Absolute path to the RR7 server build entry (`index.js`) | Required when `SERVE_WEB_CLIENT=true` | Optional when web serving disabled; combined image uses `/app/packages/web/build/server/index.js` |
 | `SESSION_TTL_DAYS` | Session sliding-window TTL in days (spec §5.3, def §3) | `development` | `30` (default); integer |
+| `SESSION_REMEMBER_TTL_DAYS` | Extended session TTL when login remember-me is checked (spec §5.3) | `development` | `90` (default); integer |
 | `MFA_TOTP_ISSUER` | Authenticator app issuer label for TOTP (spec §5.7) | `development` | `SlugBase` (default) |
 | `RATE_LIMIT_LOGIN_MAX` | Max requests per window for login / register / MFA challenge (per IP) — spec §18, def §4 | `development` | `10` (default) |
 | `RATE_LIMIT_LOGIN_TTL_SECONDS` | Window size in seconds for the `ip` throttler | `development` | `900` (15 min) |

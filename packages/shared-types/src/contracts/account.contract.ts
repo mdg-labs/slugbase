@@ -6,6 +6,7 @@ const c = initContract();
 const mfaStateSchema = z.enum(["not_enrolled", "pending", "enrolled"]);
 const languageSchema = z.enum(["en", "de"]);
 const themeSchema = z.enum(["light", "dark", "auto"]);
+const defaultBookmarkViewSchema = z.enum(["grid", "table"]);
 
 export const ALLOWED_ACCENT_COLORS = [
   "#7782f7",
@@ -34,8 +35,19 @@ export const AccountSettingsResponseSchema = z
     theme: themeSchema,
     accentColor: accentColorSchema,
     aiOptOut: z.boolean(),
+    defaultBookmarkView: defaultBookmarkViewSchema,
+    pendingEmail: z.string().email().nullable(),
+    pendingEmailMasked: z.string().nullable(),
   })
   .strict();
+
+export const UpdateAccountEmailBodySchema = z
+  .object({
+    email: z.string().trim().email(),
+  })
+  .strict();
+
+export const UpdateAccountEmailResponseSchema = AccountSettingsResponseSchema;
 
 export const UpdateAccountProfileBodySchema = z
   .object({
@@ -62,6 +74,7 @@ export const UpdateAccountPreferencesBodySchema = z
     theme: themeSchema.optional(),
     accentColor: accentColorSchema.optional(),
     aiOptOut: z.boolean().optional(),
+    defaultBookmarkView: defaultBookmarkViewSchema.optional(),
   })
   .strict();
 
@@ -70,6 +83,7 @@ export const UpdateAccountPreferencesResponseSchema = AccountSettingsResponseSch
 export type AccountSettingsResponse = z.infer<typeof AccountSettingsResponseSchema>;
 export type UpdateAccountProfileBody = z.infer<typeof UpdateAccountProfileBodySchema>;
 export type UpdateAccountPasswordBody = z.infer<typeof UpdateAccountPasswordBodySchema>;
+export type UpdateAccountEmailBody = z.infer<typeof UpdateAccountEmailBodySchema>;
 export type UpdateAccountPreferencesBody = z.infer<typeof UpdateAccountPreferencesBodySchema>;
 
 const unauthorizedSchema = z.object({ message: z.string() }).strict();
@@ -94,6 +108,40 @@ export const accountContract = c.router({
     },
     summary: "Update display name",
   },
+  updateEmail: {
+    method: "PATCH",
+    path: "/auth/account/email",
+    body: UpdateAccountEmailBodySchema,
+    responses: {
+      200: UpdateAccountEmailResponseSchema,
+      401: unauthorizedSchema,
+      409: z.object({ message: z.string() }).strict(),
+      429: z.object({ message: z.string() }).strict(),
+    },
+    summary: "Request an email address change with pending verification",
+  },
+  resendEmailChange: {
+    method: "POST",
+    path: "/auth/account/email/resend",
+    body: c.noBody(),
+    responses: {
+      200: z.object({ ok: z.literal(true) }).strict(),
+      401: unauthorizedSchema,
+      422: z.object({ message: z.string() }).strict(),
+      429: z.object({ message: z.string() }).strict(),
+    },
+    summary: "Resend the pending email-change verification message",
+  },
+  cancelEmailChange: {
+    method: "DELETE",
+    path: "/auth/account/email/pending",
+    body: c.noBody(),
+    responses: {
+      200: AccountSettingsResponseSchema,
+      401: unauthorizedSchema,
+    },
+    summary: "Cancel a pending email address change",
+  },
   updatePassword: {
     method: "PATCH",
     path: "/auth/account/password",
@@ -113,6 +161,6 @@ export const accountContract = c.router({
       200: UpdateAccountPreferencesResponseSchema,
       401: unauthorizedSchema,
     },
-    summary: "Update language, theme, accent color, and AI opt-out",
+    summary: "Update language, theme, accent color, default bookmark view, and AI opt-out",
   },
 });

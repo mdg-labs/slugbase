@@ -17,6 +17,7 @@ interface PreferencesSectionProps {
     theme: ThemePreference;
     accentColor: AllowedAccentColor | null;
     aiOptOut: boolean;
+    defaultBookmarkView: "grid" | "table";
   }) => Promise<void>;
   t: (key: string) => string;
 }
@@ -30,6 +31,7 @@ export function PreferencesSection({ account, onSave, t }: PreferencesSectionPro
   const [theme, setTheme] = useState<ThemePreference>(account.theme);
   const [accentColor, setAccentColor] = useState(account.accentColor);
   const [aiOptOut, setAiOptOut] = useState(account.aiOptOut);
+  const [defaultBookmarkView, setDefaultBookmarkView] = useState(account.defaultBookmarkView);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -37,18 +39,26 @@ export function PreferencesSection({ account, onSave, t }: PreferencesSectionPro
     setTheme(account.theme);
     setAccentColor(account.accentColor);
     setAiOptOut(account.aiOptOut);
-  }, [account.language, account.theme, account.accentColor, account.aiOptOut]);
+    setDefaultBookmarkView(account.defaultBookmarkView);
+  }, [
+    account.language,
+    account.theme,
+    account.accentColor,
+    account.aiOptOut,
+    account.defaultBookmarkView,
+  ]);
 
   const dirty =
     language !== account.language ||
     theme !== account.theme ||
     accentColor !== account.accentColor ||
-    aiOptOut !== account.aiOptOut;
+    aiOptOut !== account.aiOptOut ||
+    defaultBookmarkView !== account.defaultBookmarkView;
 
   const handleSave = async (): Promise<void> => {
     setBusy(true);
     try {
-      await onSave({ language, theme, accentColor, aiOptOut });
+      await onSave({ language, theme, accentColor, aiOptOut, defaultBookmarkView });
       setPreference(theme);
       applyUserAccentColor(accentColor);
       setAppLocale(language);
@@ -62,6 +72,7 @@ export function PreferencesSection({ account, onSave, t }: PreferencesSectionPro
     setTheme(account.theme);
     setAccentColor(account.accentColor);
     setAiOptOut(account.aiOptOut);
+    setDefaultBookmarkView(account.defaultBookmarkView);
   };
 
   return (
@@ -157,6 +168,32 @@ export function PreferencesSection({ account, onSave, t }: PreferencesSectionPro
               }`}
               style={{ background: hex }}
             />
+          ))}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-sp-3">
+        <span
+          className="font-medium text-fg-muted"
+          style={{ fontSize: "var(--text-small)" }}
+        >
+          {t("settings.account.prefs.default_view_label")}
+        </span>
+        <div className="flex flex-wrap gap-sp-3">
+          {(["grid", "table"] as const).map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => { setDefaultBookmarkView(option); }}
+              className={`rounded-md border px-sp-5 py-sp-3 font-medium transition-colors ${
+                defaultBookmarkView === option
+                  ? "border-[color:var(--accent-border)] bg-[color:var(--accent-subtle)] text-accent-text"
+                  : "border-[color:var(--border)] bg-raised text-fg hover:bg-raised-2"
+              }`}
+              style={{ fontSize: "var(--text-body)" }}
+            >
+              {t(`settings.account.prefs.default_view_${option}`)}
+            </button>
           ))}
         </div>
       </div>

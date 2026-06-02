@@ -61,6 +61,8 @@ const optionalFlagsSchema = z
     DOWNGRADE_GRACE_PERIOD_DAYS: z.coerce.number().int().nonnegative().default(7),
     // Session TTL (spec §5.3, def §3) — sliding window; default 30 days
     SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),
+    // Extended session TTL when login remember-me is checked (spec §5.3)
+    SESSION_REMEMBER_TTL_DAYS: z.coerce.number().int().positive().default(90),
     // MFA TOTP issuer label shown in authenticator apps (spec §5.7)
     MFA_TOTP_ISSUER: z.string().min(1).default("SlugBase"),
     // Rate limiting (spec §18, def §4) — IP-based for login/register/MFA; user-based for token creation
@@ -151,6 +153,7 @@ function readFlagsInput(env: NodeJS.ProcessEnv) {
     SUPPORTER_PROMOTION_END: env.SUPPORTER_PROMOTION_END,
     DOWNGRADE_GRACE_PERIOD_DAYS: env.DOWNGRADE_GRACE_PERIOD_DAYS,
     SESSION_TTL_DAYS: env.SESSION_TTL_DAYS,
+    SESSION_REMEMBER_TTL_DAYS: env.SESSION_REMEMBER_TTL_DAYS,
     MFA_TOTP_ISSUER: env.MFA_TOTP_ISSUER,
     RATE_LIMIT_LOGIN_MAX: env.RATE_LIMIT_LOGIN_MAX,
     RATE_LIMIT_LOGIN_TTL_SECONDS: env.RATE_LIMIT_LOGIN_TTL_SECONDS,

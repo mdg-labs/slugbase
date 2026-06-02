@@ -14,6 +14,8 @@ export const userAccounts = pgTable(
     mfaState: text("mfa_state").notNull().default("not_enrolled"),
     mfaTotpSecretEncrypted: text("mfa_totp_secret_encrypted"),
     aiOptOut: boolean("ai_opt_out").notNull().default(false),
+    defaultBookmarkView: text("default_bookmark_view").notNull().default("grid"),
+    pendingEmail: text("pending_email"),
     emailVerified: boolean("email_verified").notNull().default(false),
     createdAt: bigint("created_at", { mode: "number" }).notNull(),
     updatedAt: bigint("updated_at", { mode: "number" }).notNull(),

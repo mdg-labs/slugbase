@@ -30,6 +30,14 @@ export class SessionService {
     return this.config.get("SESSION_TTL_DAYS") * DAYS_TO_MS;
   }
 
+  private get rememberTtlMs(): number {
+    return this.config.get("SESSION_REMEMBER_TTL_DAYS") * DAYS_TO_MS;
+  }
+
+  private ttlMsForSessionData(data: Record<string, unknown>): number {
+    return data["rememberMe"] === true ? this.rememberTtlMs : this.ttlMs;
+  }
+
   /** Signs a session ID with HMAC and returns the cookie value. */
   signSessionId(sessionId: string): string {
     const mac = createHmac(HMAC_ALGORITHM, this.sessionSecret)
@@ -87,8 +95,12 @@ export class SessionService {
 
   /** Extends session TTL (sliding window). */
   async touchSession(sessionId: string): Promise<void> {
+    const record = await this.repo.findById(sessionId);
+    if (!record) return;
+
     const nowMs = Date.now();
-    await this.repo.touch(sessionId, nowMs + this.ttlMs, nowMs);
+    const ttlMs = this.ttlMsForSessionData(record.data);
+    await this.repo.touch(sessionId, nowMs + ttlMs, nowMs);
   }
 
   /** Revokes a single session. */

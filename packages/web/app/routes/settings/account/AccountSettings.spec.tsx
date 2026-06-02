@@ -42,6 +42,8 @@ const baseAccount: AccountSettingsData = {
   email: "alex@example.com",
   name: "Alex Kerr",
   emailVerified: true,
+  pendingEmail: null,
+  pendingEmailMasked: null,
   mfaState: "not_enrolled",
   remainingBackupCodes: null,
   hasPassword: true,
@@ -49,6 +51,7 @@ const baseAccount: AccountSettingsData = {
   theme: "dark",
   accentColor: null,
   aiOptOut: false,
+  defaultBookmarkView: "grid",
 };
 
 function renderPage(account: AccountSettingsData = baseAccount) {
@@ -120,6 +123,7 @@ describe("AccountSettingsPage", () => {
         theme: "dark",
         accentColor: null,
         aiOptOut: true,
+        defaultBookmarkView: "grid",
       });
     });
   });

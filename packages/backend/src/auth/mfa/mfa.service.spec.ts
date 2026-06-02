@@ -29,6 +29,8 @@ function makeAccount(overrides: Partial<AccountRecord> = {}): AccountRecord {
     language: "en",
     theme: "auto",
     accentColor: null,
+    defaultBookmarkView: "grid",
+    pendingEmail: null,
     isInstanceAdmin: false,
     mfaState: "not_enrolled",
     mfaTotpSecretEncrypted: null,

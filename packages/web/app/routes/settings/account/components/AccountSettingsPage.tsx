@@ -6,10 +6,13 @@ import { useAppToast } from "../../../../components/feedback/AppToastProvider.js
 
 import { applyUserAccentColor } from "../account-accent.js";
 import {
+  cancelAccountEmailChange,
   confirmMfaEnrol,
   createApiToken,
   disableMfa,
   regenerateMfaBackupCodes,
+  requestAccountEmailChange,
+  resendAccountEmailChange,
   revokeApiToken,
   startMfaEnrol,
   updateAccountPassword,
@@ -84,12 +87,44 @@ export function AccountSettingsPage({
       {validSection === "profile" ? (
         <ProfileSection
           account={account}
-          t={t}
-          onSave={async (name) => {
+          t={(key: string, params?: Record<string, string>) => t(key, params)}
+          onSaveName={async (name) => {
             try {
               const updated = await updateAccountProfile({ name });
               setAccount(updated);
               showToast("settings.account.profile.toast_saved");
+            } catch (err) {
+              showError(
+                err instanceof Error ? err.message : t("settings.account.error_generic"),
+              );
+            }
+          }}
+          onRequestEmailChange={async (email) => {
+            try {
+              const updated = await requestAccountEmailChange({ email });
+              setAccount(updated);
+              showToast("settings.account.profile.email_toast_requested");
+            } catch (err) {
+              showError(
+                err instanceof Error ? err.message : t("settings.account.error_generic"),
+              );
+            }
+          }}
+          onResendEmailChange={async () => {
+            try {
+              await resendAccountEmailChange();
+              showToast("settings.account.profile.email_toast_resent");
+            } catch (err) {
+              showError(
+                err instanceof Error ? err.message : t("settings.account.error_generic"),
+              );
+            }
+          }}
+          onCancelEmailChange={async () => {
+            try {
+              const updated = await cancelAccountEmailChange();
+              setAccount(updated);
+              showToast("settings.account.profile.email_toast_cancelled");
             } catch (err) {
               showError(
                 err instanceof Error ? err.message : t("settings.account.error_generic"),

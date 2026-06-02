@@ -16,6 +16,7 @@ import type { Request, Response } from "express";
 import { AccountsService } from "../accounts/accounts.service.js";
 import { PasswordService } from "../accounts/password.service.js";
 import { ConfigService } from "../config/config.service.js";
+import { setSessionCookie } from "../sessions/session-cookie.util.js";
 import { SESSION_COOKIE } from "../sessions/session-constants.js";
 import { SessionGuard, SESSION_USER_ID_KEY } from "../sessions/session.guard.js";
 import { SessionService } from "../sessions/session.service.js";
@@ -30,6 +31,7 @@ export { SESSION_COOKIE };
 interface LoginBody {
   email: string;
   password: string;
+  rememberMe?: boolean;
 }
 
 type LoginResult =
@@ -56,7 +58,7 @@ export class LoginLogoutController {
     @Body() body: LoginBody,
     @Res({ passthrough: true }) res: Response,
   ): Promise<LoginResult> {
-    const { email, password } = body;
+    const { email, password, rememberMe = false } = body;
 
     const account = await this.accounts.findByEmail(email);
     if (!account) {
@@ -72,17 +74,16 @@ export class LoginLogoutController {
     }
 
     if (account.mfaState === "enrolled") {
+      const ttlDays = rememberMe
+        ? this.config.get("SESSION_REMEMBER_TTL_DAYS")
+        : undefined;
       const { cookieValue } = await this.sessions.createSession({
         userId: account.id,
-        data: { mfaPending: true },
+        data: { mfaPending: true, rememberMe: rememberMe || undefined },
+        ttlDays,
       });
 
-      res.cookie(SESSION_COOKIE, cookieValue, {
-        httpOnly: true,
-        sameSite: "lax",
-        path: "/",
-        secure: this.config.get("isProduction"),
-      });
+      setSessionCookie(res, this.config, cookieValue, rememberMe);
 
       return { mfaRequired: true };
     }
@@ -94,21 +95,24 @@ export class LoginLogoutController {
     const sessionData: Record<string, unknown> = {
       activeWorkspaceId,
     };
+    if (rememberMe) {
+      sessionData["rememberMe"] = true;
+    }
     if (emailVerificationRequired && !account.emailVerified) {
       sessionData["emailVerificationPending"] = true;
     }
 
+    const ttlDays = rememberMe
+      ? this.config.get("SESSION_REMEMBER_TTL_DAYS")
+      : undefined;
+
     const { cookieValue } = await this.sessions.createSession({
       userId: account.id,
       data: sessionData,
+      ttlDays,
     });
 
-    res.cookie(SESSION_COOKIE, cookieValue, {
-      httpOnly: true,
-      sameSite: "lax",
-      path: "/",
-      secure: this.config.get("isProduction"),
-    });
+    setSessionCookie(res, this.config, cookieValue, rememberMe);
 
     if (emailVerificationRequired && !account.emailVerified) {
       return { userId: account.id, emailVerificationRequired: true };

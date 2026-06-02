@@ -47,6 +47,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const rawEmail = formData.get("email");
   const rawPassword = formData.get("password");
+  const rememberMe = formData.get("rememberMe") === "on";
   const email = typeof rawEmail === "string" ? rawEmail.trim() : "";
   const password = typeof rawPassword === "string" ? rawPassword : "";
 
@@ -59,7 +60,7 @@ export async function action({ request }: ActionFunctionArgs) {
     res = await fetch(`${API_BASE_URL()}/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, rememberMe }),
     });
   } catch {
     return { error: "auth.login.error_generic" as const };
@@ -177,6 +178,19 @@ export default function LoginRoute() {
             }
           />
         </div>
+
+        <label
+          className="flex cursor-pointer items-center gap-sp-3 text-fg-muted"
+          style={{ fontSize: "var(--text-small)" }}
+        >
+          <input
+            type="checkbox"
+            name="rememberMe"
+            defaultChecked
+            className="h-4 w-4 rounded border-[color:var(--border)] accent-[color:var(--accent)]"
+          />
+          {t("auth.login.remember_me_label")}
+        </label>
 
         <AuthButton isSubmitting={isSubmitting} style={{ marginTop: "var(--sp-2)" }}>
           {isSubmitting ? t("auth.login.submit_loading") : t("auth.login.submit")}

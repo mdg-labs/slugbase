@@ -14,6 +14,7 @@ import { teamMemberships } from "./team-membership.schema.js";
 import { teams } from "./team.schema.js";
 import { folders } from "./folder.schema.js";
 import { apiTokens } from "./api-token.schema.js";
+import { emailChangeTokens } from "./email-change-token.schema.js";
 import { emailVerificationTokens } from "./email-verification-token.schema.js";
 import { mfaBackupCodes } from "./mfa-backup-code.schema.js";
 import { instanceMetadata } from "./system.schema.js";
@@ -43,6 +44,7 @@ export { teamMemberships } from "./team-membership.schema.js";
 export { teams } from "./team.schema.js";
 export { folders } from "./folder.schema.js";
 export { apiTokens } from "./api-token.schema.js";
+export { emailChangeTokens } from "./email-change-token.schema.js";
 export { emailVerificationTokens } from "./email-verification-token.schema.js";
 export { mfaBackupCodes } from "./mfa-backup-code.schema.js";
 export { instanceMetadata } from "./system.schema.js";
@@ -74,6 +76,7 @@ export const schema = {
   teamMemberships,
   teams,
   apiTokens,
+  emailChangeTokens,
   emailVerificationTokens,
   mfaBackupCodes,
   oidcAccounts,

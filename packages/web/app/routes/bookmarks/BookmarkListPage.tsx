@@ -1043,7 +1043,7 @@ export function BookmarkListPage() {
       const stored = window.localStorage.getItem(VIEW_STORAGE_KEY);
       if (stored === "table") return "table";
     }
-    return "grid";
+    return data.defaultBookmarkView;
   });
 
   // Selection

@@ -18,6 +18,7 @@ import { SessionService } from "../../sessions/session.service.js";
 import type { SessionData } from "../../sessions/session.types.js";
 import { SESSION_COOKIE } from "../login-logout.controller.js";
 import { SkipCsrf } from "../csrf/skip-csrf.decorator.js";
+import { EmailChangeService } from "../account/email-change.service.js";
 import { EmailVerificationService } from "./email-verification.service.js";
 
 const correctSignupEmailBodySchema = z
@@ -32,6 +33,7 @@ export class EmailVerificationController {
   constructor(
     @Inject(EmailVerificationService)
     private readonly verificationService: EmailVerificationService,
+    @Inject(EmailChangeService) private readonly emailChangeService: EmailChangeService,
     @Inject(SessionService) private readonly sessions: SessionService,
   ) {}
 
@@ -54,6 +56,19 @@ export class EmailVerificationController {
     const result = await this.verificationService.verifyToken(token);
     await this.clearEmailVerificationPendingForSession(req, result.userId);
     return { ok: true, userId: result.userId };
+  }
+
+  @Get("verify-email-change")
+  @HttpCode(200)
+  async verifyEmailChange(
+    @Query("token") token: string | undefined,
+  ): Promise<{ ok: true; email: string }> {
+    if (!token) {
+      throw new UnauthorizedException("Verification token is required");
+    }
+
+    const result = await this.emailChangeService.verifyToken(token);
+    return { ok: true, email: result.email };
   }
 
   /**

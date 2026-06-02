@@ -15,6 +15,13 @@
       "when": 1780339190655,
       "tag": "0001_peaceful_monster_badoon",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780379586635,
+      "tag": "0002_unknown_silk_fever",
+      "breakpoints": true
     }
   ]
 }

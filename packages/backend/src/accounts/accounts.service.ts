@@ -112,12 +112,17 @@ export class AccountsService {
       theme?: string;
       accentColor?: string | null;
       aiOptOut?: boolean;
+      defaultBookmarkView?: string;
     },
   ): Promise<AccountRecord> {
     await this.repo.updatePreferences(id, patch);
     const account = await this.repo.findById(id);
     if (!account) throw new Error("Account not found after preferences update");
     return account;
+  }
+
+  async setPendingEmail(id: string, pendingEmail: string | null): Promise<void> {
+    return this.repo.setPendingEmail(id, pendingEmail);
   }
 
   hasPasswordCredential(account: AccountRecord): boolean {

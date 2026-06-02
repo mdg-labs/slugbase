@@ -9,6 +9,7 @@ export default [
   route("mfa/enroll", "routes/auth/mfa-enroll.tsx"),
   route("register", "routes/auth/register.tsx"),
   route("verify-email", "routes/auth/verify-email.tsx"),
+  route("verify-email-change", "routes/auth/verify-email-change.tsx"),
   route("setup", "routes/setup/setup.tsx"),
   route("forgot-password", "routes/auth/forgot-password.tsx"),
   route("reset-password", "routes/auth/reset-password.tsx"),

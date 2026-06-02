@@ -27,6 +27,8 @@ function toRecord(row: {
   mfaState: string;
   mfaTotpSecretEncrypted: string | null;
   aiOptOut: boolean | number;
+  defaultBookmarkView: string;
+  pendingEmail: string | null;
   emailVerified: boolean | number;
   createdAt: Date | number;
   updatedAt: Date | number;
@@ -43,6 +45,9 @@ function toRecord(row: {
     mfaState: row.mfaState as AccountRecord["mfaState"],
     mfaTotpSecretEncrypted: row.mfaTotpSecretEncrypted ?? null,
     aiOptOut: Boolean(row.aiOptOut),
+    defaultBookmarkView:
+      row.defaultBookmarkView === "table" ? "table" : "grid",
+    pendingEmail: row.pendingEmail ?? null,
     emailVerified: Boolean(row.emailVerified),
     createdAt: new Date(
       row.createdAt instanceof Date ? row.createdAt.getTime() : row.createdAt,
@@ -168,6 +173,7 @@ export class AccountRepository {
       theme?: string;
       accentColor?: string | null;
       aiOptOut?: boolean;
+      defaultBookmarkView?: string;
     },
   ): Promise<void> {
     const updatedAt = Date.now();
@@ -177,10 +183,22 @@ export class AccountRepository {
     if (patch.theme !== undefined) values["theme"] = patch.theme;
     if (patch.accentColor !== undefined) values["accentColor"] = patch.accentColor;
     if (patch.aiOptOut !== undefined) values["aiOptOut"] = patch.aiOptOut;
+    if (patch.defaultBookmarkView !== undefined) {
+      values["defaultBookmarkView"] = patch.defaultBookmarkView;
+    }
 
         await this.db
       .update(userAccounts)
       .set({ ...values, updatedAt })
+      .where(eq(userAccounts.id, id));
+  }
+
+  async setPendingEmail(id: string, pendingEmail: string | null): Promise<void> {
+    const updatedAt = Date.now();
+
+        await this.db
+      .update(userAccounts)
+      .set({ pendingEmail, updatedAt })
       .where(eq(userAccounts.id, id));
   }
 

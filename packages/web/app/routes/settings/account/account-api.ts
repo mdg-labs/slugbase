@@ -1,6 +1,7 @@
 import type {
   AccountSettingsData,
   ApiTokenSummary,
+  UpdateAccountEmailBody,
   UpdateAccountPasswordBody,
   UpdateAccountPreferencesBody,
   UpdateAccountProfileBody,
@@ -93,6 +94,48 @@ export async function updateAccountPreferences(
     headers,
     credentials: "include",
     body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new Error(await parseErrorMessage(res));
+  }
+  return (await res.json()) as AccountSettingsData;
+}
+
+export async function requestAccountEmailChange(
+  body: UpdateAccountEmailBody,
+): Promise<AccountSettingsData> {
+  const headers = await getMutationHeaders();
+  const res = await fetch(`${getApiBaseUrl()}/auth/account/email`, {
+    method: "PATCH",
+    headers,
+    credentials: "include",
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new Error(await parseErrorMessage(res));
+  }
+  return (await res.json()) as AccountSettingsData;
+}
+
+export async function resendAccountEmailChange(): Promise<void> {
+  const headers = await getMutationHeaders();
+  const res = await fetch(`${getApiBaseUrl()}/auth/account/email/resend`, {
+    method: "POST",
+    headers,
+    credentials: "include",
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) {
+    throw new Error(await parseErrorMessage(res));
+  }
+}
+
+export async function cancelAccountEmailChange(): Promise<AccountSettingsData> {
+  const headers = await getMutationHeaders();
+  const res = await fetch(`${getApiBaseUrl()}/auth/account/email/pending`, {
+    method: "DELETE",
+    headers,
+    credentials: "include",
   });
   if (!res.ok) {
     throw new Error(await parseErrorMessage(res));

@@ -29,6 +29,7 @@ export type BookmarkListData = {
   tagIds: string[];
   pinnedOnly: boolean;
   view: "grid" | "table";
+  defaultBookmarkView: "grid" | "table";
   page: number;
   pageSize: number;
   sort: string;
@@ -116,8 +117,15 @@ export async function loadBookmarkListData(
     : [];
   const pinnedOnly = url.searchParams.get("pinned") === "true";
   const viewParam = url.searchParams.get("view");
+
+  const accountSettings = await fetchJson<{ defaultBookmarkView?: "grid" | "table" }>(
+    request,
+    "/auth/account",
+  );
+  const defaultBookmarkView =
+    accountSettings?.defaultBookmarkView === "table" ? "table" : "grid";
   const view: "grid" | "table" =
-    viewParam === "table" ? "table" : "grid";
+    viewParam === "table" ? "table" : viewParam === "grid" ? "grid" : defaultBookmarkView;
   const defaultPageSize = view === "table" ? 50 : 24;
   const page = Number(url.searchParams.get("page") ?? "1");
   const pageSize = Number(
@@ -182,6 +190,7 @@ export async function loadBookmarkListData(
     tagIds,
     pinnedOnly,
     view,
+    defaultBookmarkView,
     page: list.page,
     pageSize: list.pageSize,
     sort,

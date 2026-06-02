@@ -2,28 +2,35 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   Inject,
   Patch,
+  Post,
   Req,
   UnauthorizedException,
   UnprocessableEntityException,
   UseGuards,
 } from "@nestjs/common";
 import type { Request } from "express";
+import { z } from "zod";
 
+import {
+  ALLOWED_ACCENT_COLORS,
+  UpdateAccountPreferencesBodySchema,
+} from "@slugbase/shared-types";
 import type {
   AccountSettingsResponse,
+  UpdateAccountEmailBody,
   UpdateAccountPasswordBody,
-  UpdateAccountPreferencesBody,
   UpdateAccountProfileBody,
 } from "@slugbase/shared-types";
-import { ALLOWED_ACCENT_COLORS } from "@slugbase/shared-types";
 
 import { AccountsService } from "../../accounts/accounts.service.js";
 import {
   assertAccentColorValid,
+  assertDefaultBookmarkViewValid,
   assertLanguageValid,
   assertThemeValid,
   normalizeAccentColor,
@@ -31,6 +38,13 @@ import {
 import { PasswordService } from "../../accounts/password.service.js";
 import { SessionGuard, SESSION_USER_ID_KEY } from "../../sessions/session.guard.js";
 import { MfaService } from "../mfa/mfa.service.js";
+import { EmailChangeService } from "./email-change.service.js";
+
+const updateAccountEmailBodySchema = z
+  .object({
+    email: z.string().trim().email(),
+  })
+  .strict();
 
 @Controller("auth/account")
 export class AccountController {
@@ -38,6 +52,7 @@ export class AccountController {
     @Inject(AccountsService) private readonly accounts: AccountsService,
     @Inject(PasswordService) private readonly passwords: PasswordService,
     @Inject(MfaService) private readonly mfa: MfaService,
+    @Inject(EmailChangeService) private readonly emailChange: EmailChangeService,
   ) {}
 
   @Get()
@@ -91,44 +106,91 @@ export class AccountController {
     return { ok: true };
   }
 
+  @Patch("email")
+  @HttpCode(200)
+  @UseGuards(SessionGuard)
+  async requestEmailChange(
+    @Req() req: Request,
+    @Body() body: UpdateAccountEmailBody,
+  ): Promise<AccountSettingsResponse> {
+    const userId = this.requireUserId(req);
+    const parsed = updateAccountEmailBodySchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException("Unable to update email address");
+    }
+
+    await this.emailChange.requestChange(userId, parsed.data.email);
+    return this.buildSettingsResponse(userId);
+  }
+
+  @Post("email/resend")
+  @HttpCode(200)
+  @UseGuards(SessionGuard)
+  async resendEmailChange(@Req() req: Request): Promise<{ ok: true }> {
+    const userId = this.requireUserId(req);
+    await this.emailChange.resendPending(userId);
+    return { ok: true };
+  }
+
+  @Delete("email/pending")
+  @HttpCode(200)
+  @UseGuards(SessionGuard)
+  async cancelEmailChange(@Req() req: Request): Promise<AccountSettingsResponse> {
+    const userId = this.requireUserId(req);
+    await this.emailChange.cancelPending(userId);
+    return this.buildSettingsResponse(userId);
+  }
+
   @Patch("preferences")
   @HttpCode(200)
   @UseGuards(SessionGuard)
   async updatePreferences(
     @Req() req: Request,
-    @Body() body: UpdateAccountPreferencesBody,
+    @Body() body: unknown,
   ): Promise<AccountSettingsResponse> {
     const userId = this.requireUserId(req);
+    const parsed = UpdateAccountPreferencesBodySchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid preference fields");
+    }
+    const preferences = parsed.data;
 
     if (
-      body.language === undefined &&
-      body.theme === undefined &&
-      body.accentColor === undefined &&
-      body.aiOptOut === undefined
+      preferences.language === undefined &&
+      preferences.theme === undefined &&
+      preferences.accentColor === undefined &&
+      preferences.aiOptOut === undefined &&
+      preferences.defaultBookmarkView === undefined
     ) {
       throw new BadRequestException("No preference fields provided");
     }
 
-    if (body.language !== undefined) {
-      assertLanguageValid(body.language);
+    if (preferences.language !== undefined) {
+      assertLanguageValid(preferences.language);
     }
-    if (body.theme !== undefined) {
-      assertThemeValid(body.theme);
+    if (preferences.theme !== undefined) {
+      assertThemeValid(preferences.theme);
     }
 
     const accentColor =
-      body.accentColor === undefined
+      preferences.accentColor === undefined
         ? undefined
-        : normalizeAccentColor(body.accentColor);
+        : normalizeAccentColor(preferences.accentColor);
     if (accentColor !== undefined) {
       assertAccentColorValid(accentColor);
     }
 
+    const defaultBookmarkView = preferences.defaultBookmarkView;
+    if (defaultBookmarkView !== undefined) {
+      assertDefaultBookmarkViewValid(defaultBookmarkView);
+    }
+
     await this.accounts.updatePreferences(userId, {
-      language: body.language,
-      theme: body.theme,
+      language: preferences.language,
+      theme: preferences.theme,
       accentColor,
-      aiOptOut: body.aiOptOut,
+      aiOptOut: preferences.aiOptOut,
+      defaultBookmarkView,
     });
 
     return this.buildSettingsResponse(userId);
@@ -167,6 +229,8 @@ export class AccountController {
       email: account.email,
       name: account.name,
       emailVerified: account.emailVerified,
+      pendingEmail: account.pendingEmail,
+      pendingEmailMasked: this.emailChange.maskPendingEmail(account.pendingEmail),
       mfaState: account.mfaState,
       remainingBackupCodes,
       hasPassword: this.accounts.hasPasswordCredential(account),
@@ -174,6 +238,7 @@ export class AccountController {
       theme,
       accentColor,
       aiOptOut: account.aiOptOut,
+      defaultBookmarkView: account.defaultBookmarkView,
     };
   }
 }

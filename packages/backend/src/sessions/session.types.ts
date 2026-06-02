@@ -9,6 +9,8 @@ export interface SessionData {
   emailVerificationPending?: boolean;
   /** The workspace the user has explicitly activated (spec §4.3). */
   activeWorkspaceId?: string;
+  /** When true, session uses extended TTL (remember-me on login). */
+  rememberMe?: boolean;
 }
 
 export interface SessionRecord {
