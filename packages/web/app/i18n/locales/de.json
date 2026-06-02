@@ -164,7 +164,7 @@
   "bookmarks.list.col_title": "Lesezeichen",
   "bookmarks.list.empty_body": "Versuche, Filter zu löschen oder den Freigabe-Umfang zu erweitern.",
   "bookmarks.list.empty_title": "Keine passenden Lesezeichen",
-  "bookmarks.list.empty_unfiltered_body": "Speichere deinen ersten Link und vergib einen kurzen Slug zum Weiterleiten.",
+  "bookmarks.list.empty_unfiltered_body": "Speichere deinen ersten Link und vergib einen kurzen Slug zum Weiterleiten. Drücke C, um eines hinzuzufügen.",
   "bookmarks.list.empty_unfiltered_title": "Noch keine Lesezeichen",
   "bookmarks.list.filter_folder": "Ordner",
   "bookmarks.list.filter_folder_all": "Alle Ordner",

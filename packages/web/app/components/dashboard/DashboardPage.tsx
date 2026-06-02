@@ -1,4 +1,3 @@
-import { useTranslate } from "@tolgee/react";
 import { useLoaderData } from "react-router";
 
 import { DashboardEntitlementBanner } from "./DashboardEntitlementBanner.js";
@@ -15,7 +14,6 @@ import { resolveEntitlementBanner } from "./dashboard.utils.js";
 import type { DashboardData } from "./dashboard.types.js";
 
 export function DashboardPage() {
-  const { t } = useTranslate();
   const data = useLoaderData<DashboardData>();
   const entitlementBanner = resolveEntitlementBanner(
     data.workspace.plan,
@@ -24,15 +22,6 @@ export function DashboardPage() {
 
   return (
     <div data-testid="dashboard-page">
-      <header className="mb-sp-7">
-        <h1 className="m-0 font-semibold text-fg" style={{ fontSize: "var(--text-h2)", lineHeight: "var(--lh-h2)" }}>
-          {t("dashboard.title")}
-        </h1>
-        <p className="mt-sp-2 text-body text-fg-muted">
-          {t("dashboard.subtitle", { workspace: data.workspace.name })}
-        </p>
-      </header>
-
       {entitlementBanner ? (
         <DashboardEntitlementBanner banner={entitlementBanner} />
       ) : null}

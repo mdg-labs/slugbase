@@ -164,7 +164,7 @@
   "bookmarks.list.col_title": "Bookmark",
   "bookmarks.list.empty_body": "Try clearing filters or widening the sharing scope.",
   "bookmarks.list.empty_title": "No bookmarks match",
-  "bookmarks.list.empty_unfiltered_body": "Save your first link and give it a short slug to start forwarding.",
+  "bookmarks.list.empty_unfiltered_body": "Save your first link and give it a short slug to start forwarding. Press C anywhere to add one.",
   "bookmarks.list.empty_unfiltered_title": "No bookmarks yet",
   "bookmarks.list.filter_folder": "Folder",
   "bookmarks.list.filter_folder_all": "All folders",
