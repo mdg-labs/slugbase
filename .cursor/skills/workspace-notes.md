@@ -43,6 +43,11 @@ _added: 2026-05-31_
 Never introduce `isCloud`, `SLUGBASE_MODE`, or any deployment-mode conditional in application logic. Differences between hosted and self-hosted are expressed via (a) the entitlements engine (spec §11.5) and (b) interface implementation selection. Verifier Layer 3e fails on any deployment-mode branch found in committed code.
 _added: 2026-05-31_
 
+## Marketing staging smoke — root URL only (2026-06-02)
+
+SB-125: Do **not** add a dedicated Cloudflare Worker or `/health`/`/version` on marketing. Staging smoke should assert **HTTP 200 on `MARKETING_ORIGIN` (site root)** only; API/Web keep `/health` + `/version`. CI failure was **302** on `/health`, not missing static files.
+_added: 2026-06-02_
+
 ## CI/CD pipeline (2026-05-31)
 
 Single file: `.github/workflows/ci-cd.yml`. GitHub-hosted runners (`ubuntu-latest`). Modelled on Dispatch One pattern.
