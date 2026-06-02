@@ -404,9 +404,9 @@ export function OnboardingOverlay({ workspaceName, onDone }: OnboardingOverlayPr
                           {t("onboarding.step3.step2_sub")}
                         </p>
                         {[
-                          { field: "Name", value: "SlugBase", copy: false },
-                          { field: "Keyword", value: "s", copy: false },
-                          { field: "URL with %s", value: SHORTCUT_URL, copy: true },
+                          { field: t("onboarding.step3.field_name"), value: t("onboarding.step3.example_name"), copy: false },
+                          { field: t("onboarding.step3.field_keyword"), value: t("onboarding.step3.example_keyword"), copy: false },
+                          { field: t("onboarding.step3.field_url"), value: SHORTCUT_URL, copy: true },
                         ].map(({ field, value, copy }) => (
                           <div
                             key={field}

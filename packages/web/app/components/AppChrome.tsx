@@ -1,6 +1,6 @@
 import { useTranslate } from "@tolgee/react";
 import { AppShell } from "@slugbase/ui";
-import { Outlet } from "react-router";
+import { Outlet, useNavigate } from "react-router";
 import { useEffect, useState } from "react";
 
 import { AppSidebar } from "./AppSidebar.js";
@@ -23,6 +23,7 @@ import { useAppShellData } from "../lib/session-client.js";
 
 function AppChromeInner() {
   const { t } = useTranslate();
+  const navigate = useNavigate();
   const { open, setOpen } = useCommandPalette();
   const { openCreate } = useBookmarkModal();
   const { user, workspace, workspaces, sidebarFolders, bookmarkTotal } =
@@ -53,7 +54,7 @@ function AppChromeInner() {
             folders={sidebarFolders}
             bookmarkTotal={bookmarkTotal}
             bookmarksUsed={bookmarkTotal}
-            onUpgrade={() => { /* billing route – wired separately */ }}
+            onUpgrade={() => { void navigate("/settings/billing"); }}
           />
         }
         topBar={

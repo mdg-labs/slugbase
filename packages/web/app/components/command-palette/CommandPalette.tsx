@@ -94,7 +94,7 @@ function FolderGlyph({ color }: { color: string | null }) {
       style={{ background: color ?? "var(--accent-subtle)" }}
     >
       <svg
-        className="h-[13px] w-[13px] text-[#0b0c14]"
+        className="h-[13px] w-[13px] text-[color:var(--accent-fg)]"
         fill="currentColor"
         viewBox="0 0 24 24"
       >
