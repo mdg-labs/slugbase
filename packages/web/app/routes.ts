@@ -17,6 +17,7 @@ export default [
     index("routes/dashboard/index.tsx"),
     route("bookmarks", "routes/bookmarks/index.tsx"),
     route("folders", "routes/folders/index.tsx"),
+    route("tags", "routes/tags/index.tsx"),
     layout("routes/settings/settings-layout.tsx", [
       route("settings/account", "routes/settings/account/index.tsx"),
       route("settings/workspace", "routes/settings/workspace/index.tsx"),
