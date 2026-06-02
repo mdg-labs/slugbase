@@ -41,6 +41,39 @@ function SearchIcon() {
   );
 }
 
+function CornerDownLeftIcon() {
+  return (
+    <svg
+      aria-hidden
+      className="h-[13px] w-[13px] shrink-0 text-fg-faint"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      viewBox="0 0 24 24"
+    >
+      <polyline points="9 10 4 15 9 20" />
+      <path d="M20 4v7a4 4 0 01-4 4H4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function ActionIcon({ path }: { path: string }) {
+  return (
+    <svg
+      aria-hidden
+      className="h-[15px] w-[15px] shrink-0 text-fg-muted"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      viewBox="0 0 24 24"
+    >
+      <path d={path} />
+    </svg>
+  );
+}
+
 function BookmarkGlyph({ title }: { title: string }) {
   const letter = title.trim().charAt(0).toUpperCase() || "?";
   return (
@@ -61,13 +94,29 @@ function FolderGlyph({ color }: { color: string | null }) {
       style={{ background: color ?? "var(--accent-subtle)" }}
     >
       <svg
-        className="h-[13px] w-[13px] text-[#0b0c14]"
+        className="h-[13px] w-[13px] text-[color:var(--accent-fg)]"
         fill="currentColor"
         viewBox="0 0 24 24"
       >
         <path d="M10 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V8a2 2 0 00-2-2h-8l-2-2z" />
       </svg>
     </span>
+  );
+}
+
+function SlugBaseIcon() {
+  return (
+    <svg
+      aria-hidden
+      className="h-[16px] w-[16px] shrink-0 text-fg-faint"
+      viewBox="0 0 32 32"
+      fill="currentColor"
+    >
+      <rect width="32" height="32" rx="8" fill="currentColor" opacity="0.15" />
+      <path d="M8 11.5C8 9.567 9.567 8 11.5 8H20.5C22.433 8 24 9.567 24 11.5V14C24 14.552 23.552 15 23 15H9C8.448 15 8 14.552 8 14V11.5Z" />
+      <path d="M8 18C8 17.448 8.448 17 9 17H23C23.552 17 24 17.448 24 18V20.5C24 22.433 22.433 24 20.5 24H11.5C9.567 24 8 22.433 8 20.5V18Z" />
+      <rect x="13" y="13.5" width="6" height="5" rx="1" />
+    </svg>
   );
 }
 
@@ -139,15 +188,6 @@ export function CommandPalette({
     void fetcher.load(`/api/search?${params.toString()}`);
   }, [debouncedQuery, isSearchMode]);
 
-  const navigateGo = useCallback(
-    (slug: string, newTab: boolean) => {
-      const path = goRouteForSlug(slug);
-      openGoTarget(path, newTab);
-      onOpenChange(false);
-    },
-    [onOpenChange],
-  );
-
   const runAction = useCallback(
     (action: PaletteActionDef) => {
       if (action.id === "new-bookmark" && onNewBookmark) {
@@ -180,8 +220,9 @@ export function CommandPalette({
       const slug = resolveGoSlugSelection(goSlugMatches, goSlugPrefix);
       if (slug) {
         event.preventDefault();
-        navigateGo(slug, enterOpensNewTabRef.current);
+        openGoTarget(goRouteForSlug(slug), enterOpensNewTabRef.current);
         enterOpensNewTabRef.current = false;
+        onOpenChange(false);
         return;
       }
     }
@@ -248,18 +289,20 @@ export function CommandPalette({
     return map;
   }, []);
 
-  const goLoading =
-    isGoMode &&
-    goSlugPrefix.length > 0 &&
-    fetcher.state === "loading";
+  const goLoading = isGoMode && goSlugPrefix.length > 0 && fetcher.state === "loading";
+
+  const GROUP_HEADING_CLS =
+    "[&_[cmdk-group-heading]]:px-sp-4 [&_[cmdk-group-heading]]:pb-sp-3 [&_[cmdk-group-heading]]:pt-sp-5 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wide [&_[cmdk-group-heading]]:text-fg-subtle";
+  const ITEM_CLS =
+    "group flex cursor-pointer items-center gap-sp-4 rounded-md px-sp-4 py-[9px] text-fg-muted aria-selected:bg-accent-subtle aria-selected:text-fg data-[selected=true]:bg-accent-subtle data-[selected=true]:text-fg";
 
   return (
     <Command.Dialog
       open={open}
       onOpenChange={onOpenChange}
       label={t("command_palette.dialog_label")}
-      overlayClassName="fixed inset-0 z-[100] flex items-start justify-center bg-[color:var(--overlay-scrim)] px-sp-4 pb-sp-8 pt-[12vh] backdrop-blur-[3px]"
-      contentClassName="w-full max-w-[640px] overflow-hidden rounded-xl border border-[color:var(--border-strong)] bg-overlay p-0 shadow-overlay"
+      overlayClassName="fixed inset-0 z-[100] flex items-center justify-center bg-[color:var(--overlay-scrim)] px-sp-4 pb-sp-8 backdrop-blur-[3px]"
+      contentClassName="palette-panel w-full max-w-[640px] overflow-hidden rounded-xl border border-[color:var(--border-strong)] bg-overlay p-0 shadow-overlay"
     >
       <div
         data-testid="command-palette-dialog"
@@ -307,171 +350,182 @@ export function CommandPalette({
         </div>
 
         <Command.List className="max-h-[46vh] overflow-y-auto p-sp-3">
-          {parsedQuery.mode === "default" &&
-            PALETTE_ACTION_GROUPS.map((groupKey) => {
-              const actions = actionsByGroup.get(groupKey) ?? [];
-              if (actions.length === 0) return null;
+            {parsedQuery.mode === "default" &&
+              PALETTE_ACTION_GROUPS.map((groupKey) => {
+                const actions = actionsByGroup.get(groupKey) ?? [];
+                if (actions.length === 0) return null;
 
-              return (
-                <Command.Group
-                  key={groupKey}
-                  heading={t(groupKey)}
-                  className="[&_[cmdk-group-heading]]:px-sp-4 [&_[cmdk-group-heading]]:pb-sp-3 [&_[cmdk-group-heading]]:pt-sp-5 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wide [&_[cmdk-group-heading]]:text-fg-subtle"
-                >
-                  {actions.map((action) => (
-                    <Command.Item
-                      key={action.id}
-                      value={`${t(action.titleKey)} ${action.id}`}
-                      onSelect={() => {
-                        runAction(action);
-                      }}
-                      className="flex cursor-pointer items-center gap-sp-4 rounded-md px-sp-4 py-[9px] text-fg-muted aria-selected:bg-accent-subtle aria-selected:text-fg data-[selected=true]:bg-accent-subtle data-[selected=true]:text-fg"
-                    >
-                      <span className="flex-1 text-[length:var(--text-body-lg)]">
-                        {t(action.titleKey)}
-                      </span>
-                      {action.hint ? <Kbd>{action.hint}</Kbd> : null}
-                    </Command.Item>
-                  ))}
-                </Command.Group>
-              );
-            })}
+                return (
+                  <Command.Group
+                    key={groupKey}
+                    heading={t(groupKey)}
+                    className={GROUP_HEADING_CLS}
+                  >
+                    {actions.map((action) => (
+                      <Command.Item
+                        key={action.id}
+                        value={`${t(action.titleKey)} ${action.id}`}
+                        onSelect={() => {
+                          runAction(action);
+                        }}
+                        className={ITEM_CLS}
+                      >
+                        {action.iconPath ? (
+                          <ActionIcon path={action.iconPath} />
+                        ) : null}
+                        <span className="flex-1 text-[length:var(--text-body-lg)]">
+                          {t(action.titleKey)}
+                        </span>
+                        {action.hint ? <Kbd>{action.hint}</Kbd> : null}
+                        <CornerDownLeftIcon />
+                      </Command.Item>
+                    ))}
+                  </Command.Group>
+                );
+              })}
 
-          {isGoMode ? (
-            <GoModePanel
-              slugPrefix={goSlugPrefix}
-              matches={goSlugMatches}
-              loading={goLoading}
-              onSelectSlug={(slug, newTab) => {
-                navigateGo(slug, newTab || enterOpensNewTabRef.current);
-                enterOpensNewTabRef.current = false;
-              }}
-            />
-          ) : null}
+            {isGoMode ? (
+              <GoModePanel
+                slugPrefix={goSlugPrefix}
+                matches={goSlugMatches}
+                loading={goLoading}
+                onSelectSlug={(slug, newTab) => {
+                  openGoTarget(
+                    goRouteForSlug(slug),
+                    newTab || enterOpensNewTabRef.current,
+                  );
+                  enterOpensNewTabRef.current = false;
+                  onOpenChange(false);
+                }}
+              />
+            ) : null}
 
-          {isSearchMode && fetcher.state === "loading" && (
-            <div className="px-sp-4 py-sp-8 text-center text-[13px] text-fg-subtle">
-              {t("command_palette.search_loading")}
-            </div>
-          )}
-
-          {showNoResults && (
-            <div className="px-sp-4 py-sp-8 text-center text-[13px] text-fg-subtle">
-              {t("command_palette.no_results", { query: debouncedQuery })}
-              <div className="mt-sp-4 text-[12px] text-fg-faint">
-                {t("command_palette.no_results_hint")}
+            {isSearchMode && fetcher.state === "loading" && (
+              <div className="px-sp-4 py-sp-8 text-center text-[13px] text-fg-subtle">
+                {t("command_palette.search_loading")}
               </div>
-            </div>
-          )}
+            )}
 
-          {isSearchMode && hasSearchResults && bookmarkHits.length > 0 && (
-            <Command.Group
-              heading={t("command_palette.group.bookmarks")}
-              className="[&_[cmdk-group-heading]]:px-sp-4 [&_[cmdk-group-heading]]:pb-sp-3 [&_[cmdk-group-heading]]:pt-sp-5 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wide [&_[cmdk-group-heading]]:text-fg-subtle"
-            >
-              {bookmarkHits.map((bookmark) => (
-                <Command.Item
-                  key={bookmark.id}
-                  value={`bookmark ${bookmark.title} ${bookmark.url} ${bookmark.slug ?? ""}`}
-                  onSelect={() => {
-                    openBookmark(bookmark.url, false);
-                  }}
-                  className="flex cursor-pointer items-center gap-sp-4 rounded-md px-sp-4 py-[9px] text-fg-muted aria-selected:bg-accent-subtle aria-selected:text-fg data-[selected=true]:bg-accent-subtle data-[selected=true]:text-fg"
-                >
-                  <BookmarkGlyph title={bookmark.title} />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[length:var(--text-body-lg)]">
-                      {bookmark.title}
-                    </span>
-                    <span className="block truncate font-mono text-[11px] text-fg-faint">
-                      {bookmark.url}
-                    </span>
-                  </span>
-                  {bookmark.slug ? (
-                    <span className="font-mono text-[length:var(--text-small)] text-fg-subtle">
-                      /go/{bookmark.slug}
-                    </span>
-                  ) : null}
-                </Command.Item>
-              ))}
-              {seeAllBookmarks ? (
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-sp-3 rounded-sm px-sp-4 py-[6px] text-left text-[length:var(--text-small)] font-medium text-accent-text hover:bg-raised"
-                  onClick={() => {
-                    const { path, queryParam } = seeAllBookmarks.fallback;
-                    void navigate(
-                      `${path}?${queryParam}=${encodeURIComponent(seeAllBookmarks.q)}`,
-                    );
-                    onOpenChange(false);
-                  }}
-                >
-                  {t("command_palette.see_all_bookmarks", {
-                    count: seeAllBookmarks.total,
-                    query: seeAllBookmarks.q,
-                  })}
-                </button>
-              ) : null}
-            </Command.Group>
-          )}
+            {showNoResults && (
+              <div className="px-sp-4 py-sp-8 text-center text-[13px] text-fg-subtle">
+                {t("command_palette.no_results", { query: debouncedQuery })}
+                <div className="mt-sp-4 text-[12px] text-fg-faint">
+                  {t("command_palette.no_results_hint")}
+                </div>
+              </div>
+            )}
 
-          {isSearchMode && hasSearchResults && folderHits.length > 0 && (
-            <Command.Group
-              heading={t("command_palette.group.folders")}
-              className="[&_[cmdk-group-heading]]:px-sp-4 [&_[cmdk-group-heading]]:pb-sp-3 [&_[cmdk-group-heading]]:pt-sp-5 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wide [&_[cmdk-group-heading]]:text-fg-subtle"
-            >
-              {folderHits.map((folder) => (
-                <Command.Item
-                  key={folder.id}
-                  value={`folder ${folder.name}`}
-                  onSelect={() => {
-                    void navigate(`/folders/${folder.id}`);
-                    onOpenChange(false);
-                  }}
-                  className="flex cursor-pointer items-center gap-sp-4 rounded-md px-sp-4 py-[9px] text-fg-muted aria-selected:bg-accent-subtle aria-selected:text-fg data-[selected=true]:bg-accent-subtle data-[selected=true]:text-fg"
-                >
-                  <FolderGlyph color={folder.icon} />
-                  <span className="flex-1 text-[length:var(--text-body-lg)]">
-                    {folder.name}
-                  </span>
-                  <span className="text-[length:var(--text-small)] text-fg-subtle">
-                    {t("command_palette.bookmark_count", {
-                      count: folder.bookmarkCount,
+            {isSearchMode && hasSearchResults && bookmarkHits.length > 0 && (
+              <Command.Group
+                heading={t("command_palette.group.bookmarks")}
+                className={GROUP_HEADING_CLS}
+              >
+                {bookmarkHits.map((bookmark) => (
+                  <Command.Item
+                    key={bookmark.id}
+                    value={`bookmark ${bookmark.title} ${bookmark.url} ${bookmark.slug ?? ""}`}
+                    onSelect={() => {
+                      openBookmark(bookmark.url, false);
+                    }}
+                    className={ITEM_CLS}
+                  >
+                    <BookmarkGlyph title={bookmark.title} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[length:var(--text-body-lg)]">
+                        {bookmark.title}
+                      </span>
+                      <span className="block truncate font-mono text-[11px] text-fg-faint">
+                        {bookmark.url}
+                      </span>
+                    </span>
+                    {bookmark.slug ? (
+                      <span className="font-mono text-[length:var(--text-small)] text-fg-subtle">
+                        /go/{bookmark.slug}
+                      </span>
+                    ) : null}
+                    <CornerDownLeftIcon />
+                  </Command.Item>
+                ))}
+                {seeAllBookmarks ? (
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-sp-3 rounded-sm px-sp-4 py-[6px] text-left text-[length:var(--text-small)] font-medium text-accent-text hover:bg-raised"
+                    onClick={() => {
+                      const { path, queryParam } = seeAllBookmarks.fallback;
+                      void navigate(
+                        `${path}?${queryParam}=${encodeURIComponent(seeAllBookmarks.q)}`,
+                      );
+                      onOpenChange(false);
+                    }}
+                  >
+                    {t("command_palette.see_all_bookmarks", {
+                      count: seeAllBookmarks.total,
+                      query: seeAllBookmarks.q,
                     })}
-                  </span>
-                </Command.Item>
-              ))}
-            </Command.Group>
-          )}
+                  </button>
+                ) : null}
+              </Command.Group>
+            )}
 
-          {isSearchMode && hasSearchResults && tagHits.length > 0 && (
-            <Command.Group
-              heading={t("command_palette.group.tags")}
-              className="[&_[cmdk-group-heading]]:px-sp-4 [&_[cmdk-group-heading]]:pb-sp-3 [&_[cmdk-group-heading]]:pt-sp-5 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wide [&_[cmdk-group-heading]]:text-fg-subtle"
-            >
-              {tagHits.map((tag) => (
-                <Command.Item
-                  key={tag.id}
-                  value={`tag ${tag.name}`}
-                  onSelect={() => {
-                    void navigate(`/tags/${encodeURIComponent(tag.name)}`);
-                    onOpenChange(false);
-                  }}
-                  className="flex cursor-pointer items-center gap-sp-4 rounded-md px-sp-4 py-[9px] text-fg-muted aria-selected:bg-accent-subtle aria-selected:text-fg data-[selected=true]:bg-accent-subtle data-[selected=true]:text-fg"
-                >
-                  <span className="font-mono text-[length:var(--text-body-lg)]">
-                    #{tag.name}
-                  </span>
-                  <span className="text-[length:var(--text-small)] text-fg-subtle">
-                    {t("command_palette.bookmark_count", {
-                      count: tag.bookmarkCount,
-                    })}
-                  </span>
-                </Command.Item>
-              ))}
-            </Command.Group>
-          )}
-        </Command.List>
+            {isSearchMode && hasSearchResults && folderHits.length > 0 && (
+              <Command.Group
+                heading={t("command_palette.group.folders")}
+                className={GROUP_HEADING_CLS}
+              >
+                {folderHits.map((folder) => (
+                  <Command.Item
+                    key={folder.id}
+                    value={`folder ${folder.name}`}
+                    onSelect={() => {
+                      void navigate(`/folders/${folder.id}`);
+                      onOpenChange(false);
+                    }}
+                    className={ITEM_CLS}
+                  >
+                    <FolderGlyph color={folder.icon} />
+                    <span className="flex-1 text-[length:var(--text-body-lg)]">
+                      {folder.name}
+                    </span>
+                    <span className="text-[length:var(--text-small)] text-fg-subtle">
+                      {t("command_palette.bookmark_count", {
+                        count: folder.bookmarkCount,
+                      })}
+                    </span>
+                    <CornerDownLeftIcon />
+                  </Command.Item>
+                ))}
+              </Command.Group>
+            )}
+
+            {isSearchMode && hasSearchResults && tagHits.length > 0 && (
+              <Command.Group
+                heading={t("command_palette.group.tags")}
+                className={GROUP_HEADING_CLS}
+              >
+                {tagHits.map((tag) => (
+                  <Command.Item
+                    key={tag.id}
+                    value={`tag ${tag.name}`}
+                    onSelect={() => {
+                      void navigate(`/tags/${encodeURIComponent(tag.name)}`);
+                      onOpenChange(false);
+                    }}
+                    className={ITEM_CLS}
+                  >
+                    <span className="font-mono text-[length:var(--text-body-lg)]">
+                      #{tag.name}
+                    </span>
+                    <span className="text-[length:var(--text-small)] text-fg-subtle">
+                      {t("command_palette.bookmark_count", {
+                        count: tag.bookmarkCount,
+                      })}
+                    </span>
+                    <CornerDownLeftIcon />
+                  </Command.Item>
+                ))}
+              </Command.Group>
+            )}
+          </Command.List>
 
         <div className="flex flex-wrap items-center gap-sp-6 border-t border-[color:var(--border-subtle)] px-sp-6 py-sp-4 text-[length:var(--text-micro)] text-fg-subtle">
           <span className="inline-flex items-center gap-[5px]">
@@ -507,7 +561,8 @@ export function CommandPalette({
             <Kbd>esc</Kbd>
             {t("command_palette.footer.close")}
           </span>
-          <span className="inline-flex items-center gap-sp-3">
+          <span className="inline-flex items-center gap-sp-2">
+            <SlugBaseIcon />
             {t("app.shell.brand")}
           </span>
         </div>

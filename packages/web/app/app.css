@@ -54,4 +54,57 @@
   .error-actions {
     @apply flex flex-wrap items-center justify-center gap-sp-4;
   }
+
+  /* Command palette entrance animation (§14.4 — 230ms scale + translateY) */
+  @keyframes palette-in {
+    from {
+      opacity: 0;
+      transform: scale(0.97) translateY(-6px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+
+  .palette-panel {
+    animation: palette-in 230ms var(--ease, cubic-bezier(0.16, 1, 0.3, 1)) both;
+  }
+
+  /* Onboarding overlay step transition */
+  @keyframes onb-step-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .onb-step {
+    animation: onb-step-in 170ms var(--ease, cubic-bezier(0.16, 1, 0.3, 1)) both;
+  }
+
+  /* Slug disambiguation drop-zone */
+  .drop-zone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--sp-4);
+    padding: var(--sp-8);
+    border: 2px dashed var(--border-subtle);
+    border-radius: var(--r-lg);
+    background: var(--canvas);
+    cursor: pointer;
+    text-align: center;
+    transition: border-color 110ms, background 110ms;
+  }
+
+  .drop-zone:hover,
+  .drop-zone.drag {
+    border-color: var(--accent-border);
+    background: var(--accent-subtle);
+  }
 }

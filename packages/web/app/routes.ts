@@ -13,11 +13,15 @@ export default [
   route("forgot-password", "routes/auth/forgot-password.tsx"),
   route("reset-password", "routes/auth/reset-password.tsx"),
   route("api/search", "routes/api/search.ts"),
+  route("api/go/:slug", "routes/api/go.ts"),
+  route("api/go/:slug/choose", "routes/api/go-choose.ts"),
+  route("api/import/:kind", "routes/api/import.ts"),
   layout("routes/app-layout.tsx", [
     index("routes/dashboard/index.tsx"),
     route("bookmarks", "routes/bookmarks/index.tsx"),
     route("folders", "routes/folders/index.tsx"),
     route("tags", "routes/tags/index.tsx"),
+    route("go/:slug", "routes/go/index.tsx"),
     layout("routes/settings/settings-layout.tsx", [
       route("settings/account", "routes/settings/account/index.tsx"),
       route("settings/workspace", "routes/settings/workspace/index.tsx"),
