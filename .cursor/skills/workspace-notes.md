@@ -59,7 +59,7 @@ _added: 2026-05-31_
 
 ## pnpm test:integration — NEVER wrap with infisical (2026-06-01)
 
-`pnpm test:integration` must be run **without** `infisical run --env=dev --`. The integration test script uses an internal `validTestEnv` helper; Infisical injection causes `z.coerce.boolean()` to coerce the string `"false"` to `true` (non-empty string → truthy), breaking session guards and email-verification checks across all authenticated routes → 403 on every guarded endpoint. `lint`, `typecheck`, `test:unit`, and `build` may still use infisical when secrets are required. Rule added to `06-local-ci-before-commit.mdc`.
+`pnpm test:integration` must be run **without** `infisical run --env=dev --` (avoids overriding test env). Backend deployment booleans in `env.schema.ts` use `envBoolean()` / `optionalEnvBoolean()` so Infisical `"false"` is not misread as true (fixed 2026-06-02; formerly `z.coerce.boolean()` on `PUBLIC_REGISTRATION`, `EMAIL_VERIFICATION_REQUIRED`, `SMTP_SECURE`, `CHALLENGE_DEV_SKIP`). Rule: `06-local-ci-before-commit.mdc`.
 _added: 2026-06-01_
 
 ## Database migrations — startup-only (2026-06-01)

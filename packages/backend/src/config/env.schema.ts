@@ -19,6 +19,15 @@ function parseEnvBoolean(value: unknown, defaultValue: boolean): boolean {
 const envBoolean = (defaultValue: boolean) =>
   z.preprocess((value) => parseEnvBoolean(value, defaultValue), z.boolean());
 
+/** Optional Infisical-style boolean: unset → `undefined`; `"false"` / `"true"` parse correctly. */
+const optionalEnvBoolean = () =>
+  z.preprocess((value) => {
+    if (value === undefined || value === null || value === "") {
+      return undefined;
+    }
+    return parseEnvBoolean(value, true);
+  }, z.boolean().optional());
+
 const requiredSecretsSchema = z
   .object({
     SESSION_SECRET: z.string().min(32),
@@ -32,15 +41,15 @@ const requiredSecretsSchema = z
 
 const optionalFlagsSchema = z
   .object({
-    PUBLIC_REGISTRATION: z.coerce.boolean().default(false),
-    EMAIL_VERIFICATION_REQUIRED: z.coerce.boolean().default(false),
+    PUBLIC_REGISTRATION: envBoolean(false),
+    EMAIL_VERIFICATION_REQUIRED: envBoolean(false),
     PORT: z.coerce.number().int().positive().default(3000),
     SERVE_WEB_CLIENT: envBoolean(false),
     WEB_CLIENT_SERVER_BUILD: z.string().min(1).optional(),
     // SMTP transport (spec §11.1, §15) — optional; no-op mail used when SMTP_HOST is absent
     SMTP_HOST: z.string().min(1).optional(),
     SMTP_PORT: z.coerce.number().int().positive().default(587),
-    SMTP_SECURE: z.coerce.boolean().default(false),
+    SMTP_SECURE: envBoolean(false),
     SMTP_USER: z.string().min(1).optional(),
     SMTP_PASS: z.string().min(1).optional(),
     SMTP_FROM: z.string().min(1).optional(),
@@ -76,7 +85,7 @@ const optionalFlagsSchema = z
     // Cloudflare Turnstile challenge (spec §11.8, §15) — optional; no-op challenge when absent
     TURNSTILE_SECRET_KEY: z.string().min(1).optional(),
     // Skip challenge verification in development (spec §11.8) — defaults true when NODE_ENV !== production
-    CHALLENGE_DEV_SKIP: z.coerce.boolean().optional(),
+    CHALLENGE_DEV_SKIP: optionalEnvBoolean(),
     // Product analytics (spec §11.6, §15) — optional; no-op used when Umami is absent
     UMAMI_HOST: z.string().url().optional(),
     UMAMI_WEBSITE_ID: z.string().min(1).optional(),

@@ -43,6 +43,55 @@ describe("validateEnvConfig", () => {
     expect(config.SERVE_WEB_CLIENT).toBe(false);
   });
 
+  it("parses SMTP_SECURE=false from Infisical-style string env", () => {
+    const config = validateEnvConfig({
+      ...validTestEnv,
+      NODE_ENV: "production",
+      SMTP_SECURE: "false",
+    });
+
+    expect(config.SMTP_SECURE).toBe(false);
+  });
+
+  it("parses PUBLIC_REGISTRATION=false from Infisical-style string env", () => {
+    const config = validateEnvConfig({
+      ...validTestEnv,
+      NODE_ENV: "production",
+      PUBLIC_REGISTRATION: "false",
+    });
+
+    expect(config.PUBLIC_REGISTRATION).toBe(false);
+  });
+
+  it("parses EMAIL_VERIFICATION_REQUIRED=false from Infisical-style string env", () => {
+    const config = validateEnvConfig({
+      ...validTestEnv,
+      NODE_ENV: "production",
+      EMAIL_VERIFICATION_REQUIRED: "false",
+    });
+
+    expect(config.EMAIL_VERIFICATION_REQUIRED).toBe(false);
+  });
+
+  it("parses CHALLENGE_DEV_SKIP=false from Infisical-style string env", () => {
+    const config = validateEnvConfig({
+      ...validTestEnv,
+      NODE_ENV: "development",
+      CHALLENGE_DEV_SKIP: "false",
+    });
+
+    expect(config.CHALLENGE_DEV_SKIP).toBe(false);
+  });
+
+  it("leaves CHALLENGE_DEV_SKIP undefined when unset", () => {
+    const config = validateEnvConfig({
+      ...validTestEnv,
+      NODE_ENV: "development",
+    });
+
+    expect(config.CHALLENGE_DEV_SKIP).toBeUndefined();
+  });
+
   it("prefers DATABASE_URL_UNPOOLED for migration URL resolution", () => {
     const config = validateEnvConfig({
       ...validTestEnv,

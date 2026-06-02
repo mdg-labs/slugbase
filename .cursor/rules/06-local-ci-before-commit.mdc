@@ -65,7 +65,7 @@ infisical run --env=dev -- pnpm test:integration
 pnpm test:integration
 ```
 
-**Why:** The backend integration test script uses an internal `validTestEnv` helper that sets safe test defaults (e.g. `EMAIL_VERIFICATION_REQUIRED=false` as a boolean). When Infisical injects `EMAIL_VERIFICATION_REQUIRED="false"` as a **string**, `z.coerce.boolean()` coerces any non-empty string to `true` (`Boolean("false") === true`), breaking session guards and causing 403s across all authenticated test routes.
+**Why:** The integration test script uses `validTestEnv` with boolean literals. Wrapping `pnpm test:integration` with Infisical can still override those vars with string values and change runtime behavior. Backend deployment booleans use `envBoolean()` in `env.schema.ts` so Infisical `"false"` parses correctly at app startup — but keep integration off Infisical to avoid env pollution during tests.
 
 **Rule:** `pnpm lint`, `pnpm typecheck`, `pnpm test:unit`, and `pnpm build` may be run with `infisical run --env=dev --` when secrets are required (wrap via `bash scripts/with-ci-env.sh infisical run --env=dev -- pnpm …`). `pnpm test:integration` must always be run **without** the Infisical wrapper (still use `with-ci-env.sh` for Node only).
 
