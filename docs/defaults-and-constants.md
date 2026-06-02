@@ -89,6 +89,8 @@ Keys are registered incrementally per task (rule `05-env-vars`). Full categories
 | `RATE_LIMIT_LOGIN_TTL_SECONDS` | Window size in seconds for the `ip` throttler | `development` | `900` (15 min) |
 | `RATE_LIMIT_TOKEN_CREATION_MAX` | Max token-creation requests per window (per session) — spec §18, def §4 | `development` | `20` (default) |
 | `RATE_LIMIT_TOKEN_CREATION_TTL_SECONDS` | Window size in seconds for the `user-hour` throttler | `development` | `3600` (1 hr) |
+| `RATE_LIMIT_EMAIL_VERIFICATION_MAX` | Max unused signup/email-change verification tokens per user within the window — spec §5.5, §18 | `development` | `3` (default) |
+| `RATE_LIMIT_EMAIL_VERIFICATION_TTL_SECONDS` | Rolling window in seconds for verification-email rate limit | `development` | `3600` (1 hr) |
 | `OPENAPI_INTERACTIVE_DOCS` | When `true`, serves Scalar interactive API docs at `GET /docs`; `GET /openapi.json` is always published (spec §18) | `development` | `true` (default); set `false` to disable interactive UI |
 | `OPENAI_API_KEY` | OpenAI API credential for AI bookmark suggestions (spec §11.2) | `development` (optional); hosted `staging`/`production` | Empty = AI disabled (no-op); self-hosted BYO key may also be set via encrypted workspace settings |
 | `OPENAI_MODEL` | OpenAI chat model id for suggestions | `development` | `gpt-4o-mini` (default) |

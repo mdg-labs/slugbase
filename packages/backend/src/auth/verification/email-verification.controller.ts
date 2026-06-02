@@ -73,7 +73,7 @@ export class EmailVerificationController {
 
   /**
    * Resends the verification email for the currently authenticated user.
-   * Rate-limited to MAX_RESENDS_PER_HOUR (3) per hour per user.
+   * Rate-limited via RATE_LIMIT_EMAIL_VERIFICATION_MAX / _TTL_SECONDS per user.
    * Requires a full session (not mfaPending).
    */
   @Post("resend-verification")

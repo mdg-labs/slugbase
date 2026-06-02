@@ -125,33 +125,6 @@ describe("token expiry check", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Rate-limit counter check (pure logic — no DB)
-// ---------------------------------------------------------------------------
-
-describe("rate-limit counter", () => {
-  const MAX_RESENDS_PER_HOUR = 3;
-
-  function isRateLimited(recentCount: number): boolean {
-    return recentCount >= MAX_RESENDS_PER_HOUR;
-  }
-
-  it("allows when count is below the limit", () => {
-    expect(isRateLimited(0)).toBe(false);
-    expect(isRateLimited(1)).toBe(false);
-    expect(isRateLimited(2)).toBe(false);
-  });
-
-  it("blocks when count equals the limit", () => {
-    expect(isRateLimited(3)).toBe(true);
-  });
-
-  it("blocks when count exceeds the limit", () => {
-    expect(isRateLimited(4)).toBe(true);
-    expect(isRateLimited(100)).toBe(true);
-  });
-});
-
-// ---------------------------------------------------------------------------
 // Hash verification round-trip
 // ---------------------------------------------------------------------------
 

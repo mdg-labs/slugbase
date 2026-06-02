@@ -3,8 +3,6 @@ import { createHash, randomBytes } from "node:crypto";
 import {
   ConflictException,
   ForbiddenException,
-  HttpException,
-  HttpStatus,
   Inject,
   Injectable,
   Logger,
@@ -18,12 +16,13 @@ import { ConfigService } from "../../config/config.service.js";
 import { DbService } from "../../db/db.service.js";
 import { MAIL } from "../../mail/mail.tokens.js";
 import { EmailVerificationTokenRepository } from "./email-verification-token.repository.js";
+import {
+  assertVerificationEmailRateLimit,
+  verificationEmailRateLimitSinceMs,
+} from "./verification-email-rate-limit.js";
 
 /** 24-hour expiry for verification tokens (spec §5.5, SB-17 task spec). */
 const TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
-/** Rate limit: max 3 resend requests per hour per user. */
-const MAX_RESENDS_PER_HOUR = 3;
-const ONE_HOUR_MS = 60 * 60 * 1000;
 /** Token is 32 random bytes rendered as hex (64-char string). */
 const TOKEN_BYTES = 32;
 
@@ -174,9 +173,7 @@ export class EmailVerificationService {
   }
 
   /**
-   * Rate-limited resend of the verification email.
-   * Throws {@link TooManyRequestsException} if the user has already triggered
-   * more than {@link MAX_RESENDS_PER_HOUR} sends in the last hour.
+   * Rate-limited resend of the verification email (RATE_LIMIT_EMAIL_VERIFICATION_*).
    */
   async resendVerification(userId: string): Promise<void> {
     const account = await this.accounts.findById(userId);
@@ -188,15 +185,9 @@ export class EmailVerificationService {
       throw new UnprocessableEntityException("Email address is already verified");
     }
 
-    const sinceMs = Date.now() - ONE_HOUR_MS;
+    const sinceMs = verificationEmailRateLimitSinceMs(this.config);
     const recentCount = await this.tokenRepo.countRecentByUserId(userId, sinceMs);
-
-    if (recentCount >= MAX_RESENDS_PER_HOUR) {
-      throw new HttpException(
-        "Too many verification emails requested — please wait before trying again",
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
+    assertVerificationEmailRateLimit(recentCount, this.config);
 
     await this.issueToken(userId, account.email);
   }
@@ -231,14 +222,9 @@ export class EmailVerificationService {
       throw new ConflictException("An account with this email already exists");
     }
 
-    const sinceMs = Date.now() - ONE_HOUR_MS;
+    const sinceMs = verificationEmailRateLimitSinceMs(this.config);
     const recentCount = await this.tokenRepo.countRecentByUserId(userId, sinceMs);
-    if (recentCount >= MAX_RESENDS_PER_HOUR) {
-      throw new HttpException(
-        "Too many verification emails requested — please wait before trying again",
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
+    assertVerificationEmailRateLimit(recentCount, this.config);
 
     const nowMs = Date.now();
     await this.tokenRepo.invalidateUnusedByUserId(userId, nowMs);

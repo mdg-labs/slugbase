@@ -1,8 +1,6 @@
 import {
   BadRequestException,
   ConflictException,
-  HttpException,
-  HttpStatus,
   Inject,
   Injectable,
   Logger,
@@ -20,12 +18,14 @@ import {
   hashToken,
   maskEmailForDisplay,
 } from "../verification/email-verification.service.js";
+import {
+  assertVerificationEmailRateLimit,
+  verificationEmailRateLimitSinceMs,
+} from "../verification/verification-email-rate-limit.js";
 import { EmailChangeTokenRepository } from "./email-change-token.repository.js";
 
 /** 24-hour expiry for email-change tokens (spec §5.5). */
 const TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
-const MAX_RESENDS_PER_HOUR = 3;
-const ONE_HOUR_MS = 60 * 60 * 1000;
 
 export function buildEmailChangeVerificationUrl(params: {
   appBaseUrl: string;
@@ -69,14 +69,9 @@ export class EmailChangeService {
       throw new ConflictException("An account with this email already exists");
     }
 
-    const sinceMs = Date.now() - ONE_HOUR_MS;
+    const sinceMs = verificationEmailRateLimitSinceMs(this.config);
     const recentCount = await this.tokenRepo.countRecentByUserId(userId, sinceMs);
-    if (recentCount >= MAX_RESENDS_PER_HOUR) {
-      throw new HttpException(
-        "Too many verification emails requested — please wait before trying again",
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
+    assertVerificationEmailRateLimit(recentCount, this.config);
 
     const nowMs = Date.now();
     await this.tokenRepo.invalidateUnusedByUserId(userId, nowMs);
@@ -96,14 +91,9 @@ export class EmailChangeService {
       throw new UnprocessableEntityException("No pending email change to resend");
     }
 
-    const sinceMs = Date.now() - ONE_HOUR_MS;
+    const sinceMs = verificationEmailRateLimitSinceMs(this.config);
     const recentCount = await this.tokenRepo.countRecentByUserId(userId, sinceMs);
-    if (recentCount >= MAX_RESENDS_PER_HOUR) {
-      throw new HttpException(
-        "Too many verification emails requested — please wait before trying again",
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
+    assertVerificationEmailRateLimit(recentCount, this.config);
 
     await this.issueToken(userId, account.pendingEmail);
   }
