@@ -7,6 +7,8 @@
     "node": ">=22.12.0"
   },
   "scripts": {
+    "preinstall": "node scripts/check-node-version.mjs",
+    "env:check": "bash scripts/with-ci-env.sh node -v && bash scripts/with-ci-env.sh pnpm -v && bash scripts/with-ci-env.sh node scripts/check-node-version.mjs",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test:unit": "turbo run test:unit",

@@ -2,6 +2,11 @@
 
 Durable project memory for orchestrator and sub-agents. Transient task notes belong in local session memory (gitignored), not here.
 
+## Node.js local environment (2026-06-02)
+
+Repo pins **Node 22.12.0** (`.nvmrc`, `.node-version`) — matches CI. `engines.node` is `>=22.12.0` (24 LTS OK). Cursor agent shells default to **Node 20** under `.cursor-server/`; causes Astro/marketing failures and Turbo cache false passes. **Mandatory for agents:** `bash scripts/with-ci-env.sh pnpm …` or `source scripts/ci-env.sh` before any pnpm/turbo. `preinstall` runs `scripts/check-node-version.mjs`. See `docs/local-development.md`.
+_added: 2026-06-02_
+
 ## Git branches — development on staging (2026-05-31)
 
 **`staging`** = development integration branch (Lane S commits, Lane P merges). **`main`** = protected production branch on GitHub — agents never push to `main`. SB-3 scaffold cherry-picked onto `staging` as `778368d` after branch realignment.

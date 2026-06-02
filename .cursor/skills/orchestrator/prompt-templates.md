@@ -9,9 +9,34 @@ When an issue is tracked on Jira, orchestrator includes **role-specific** JIRA S
 
 Sub-agents perform Jira transitions — not the orchestrator.
 
+**Every execution and verifier prompt** must include the **NODE ENV** block below — copy verbatim even when the task has no pnpm commands (verifiers always run checks).
+
 **Every execution prompt** (Lane S, Lane P, Jira, chat) **must** include the **DB MIGRATIONS** block below — copy verbatim even when the task has no schema changes.
 
 When the prompt includes **JIRA SYNC**, also include the **JIRA TIME TRACKING** block.
+
+---
+
+## NODE ENV — sub-agents (mandatory before any pnpm/turbo)
+
+Copy into **every execution and verifier** prompt. Prevents Cursor agent shells (Node 20) from breaking Astro/marketing and misleading Turbo cache.
+
+```text
+NODE ENV (mandatory — run from TARGET REPO before any pnpm/turbo/infisical command):
+- Pin: .nvmrc = 22.12.0 (matches CI); engines >=22.12.0
+- Wrapper (preferred): bash scripts/with-ci-env.sh <command> [args…]
+- Examples:
+    bash scripts/with-ci-env.sh pnpm lint
+    bash scripts/with-ci-env.sh pnpm typecheck
+    bash scripts/with-ci-env.sh pnpm test:unit
+    bash scripts/with-ci-env.sh pnpm build
+    bash scripts/with-ci-env.sh pnpm test:integration   # NO infisical wrapper on integration
+    bash scripts/with-ci-env.sh infisical run --env=dev -- pnpm i18n:check:tolgee
+- Alternative: source scripts/ci-env.sh once per shell, then run commands
+- Sanity: bash scripts/with-ci-env.sh node -v  → must be v22.12.0+
+- Docs: docs/local-development.md
+- FORBIDDEN: bare pnpm/turbo from agent shell without with-ci-env (Node 20 false passes / Astro failures)
+```
 
 ---
 
@@ -358,10 +383,11 @@ VERIFICATION:
 LAYER 1 — Scope audit: committed paths vs declared WRITE SCOPE
 
 LAYER 2 — Automated checks from TARGET REPO:
-- lint: pnpm lint (or n/a)
-- typecheck: pnpm typecheck (or n/a)
+- All commands via: bash scripts/with-ci-env.sh … (see NODE ENV block; docs/local-development.md)
+- lint: bash scripts/with-ci-env.sh pnpm lint (or n/a)
+- typecheck: bash scripts/with-ci-env.sh pnpm typecheck (or n/a)
 - test: <from plan row Tests column, else doc-index defaults>
-Use Infisical (`infisical run --env=dev`) when env required. Stop if any defined check fails.
+Use bash scripts/with-ci-env.sh infisical run --env=dev -- … when env required. Integration tests: bash scripts/with-ci-env.sh pnpm test:integration only (no Infisical wrapper). Stop if any defined check fails.
 
 LAYER 3 — Logic review:
 3a. Each acceptance criterion — genuinely implemented?
@@ -474,7 +500,7 @@ TASK OUTCOMES:
 
 CHECKS:
 1. Confirm branch verifiers reported Jira Done comments + worklogs for integrated tasks
-2. Post-merge smoke: pnpm lint, pnpm typecheck (Infisical for env when needed)
+2. Post-merge smoke: bash scripts/with-ci-env.sh pnpm lint, bash scripts/with-ci-env.sh pnpm typecheck (Infisical for env when needed via with-ci-env wrapper)
 3. If smoke fails → FAIL batch; do not mark [x]
 
 PLAN FILE:

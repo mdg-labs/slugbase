@@ -1,0 +1,18 @@
+# Paste into ~/.bashrc AFTER the existing nvm block (lines that load nvm.sh).
+# Fixes: Cursor Remote SSH puts a bundled Node 20 on PATH before nvm, so `nvm use` appears
+# to work but `node -v` stays on v20. Reinstalling nvm does not help — PATH order is the issue.
+
+_slugbase_strip_cursor_from_path() {
+  PATH="$(
+    printf '%s' "${PATH}" | tr ':' '\n' | grep -v '/\.cursor-server/' | paste -sd: -
+  )"
+  export PATH
+  hash -r 2>/dev/null || true
+}
+
+# Run once per shell, after nvm is loaded:
+_slugbase_strip_cursor_from_path
+nvm use default --silent 2>/dev/null || nvm use --silent 2>/dev/null || true
+
+# Optional: align default with repo CI (22.12.0) instead of global LTS:
+#   nvm alias default 22.12.0
