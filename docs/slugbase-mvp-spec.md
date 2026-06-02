@@ -757,7 +757,7 @@ Ordered pipeline, with server and web/marketing builds running **in parallel** f
 | 3a | Deploy API to **Fly.io** `fra` (`flyctl deploy --remote-only`) — migrations run on API boot |
 | 3b | Deploy web client to **Cloudflare Workers** via `wrangler deploy` (with retry) — after 2b |
 | 3c | Deploy marketing site to **Cloudflare Workers** via `wrangler deploy` (with retry) — after 2b |
-| 4 | Smoke: `GET /health` and `/version` endpoints on all deployed surfaces |
+| 4 | Smoke: API and web — `GET /health` and `/version` (HTTP 200 + JSON); marketing — `GET ${MARKETING_ORIGIN}/` site root liveness only (HTTP 200; static site has no health/version routes) |
 | 5 | GitHub Deployment record — finish (success/failure) |
 
 ### 22.6 Prepare release (push to `main`)

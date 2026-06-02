@@ -345,7 +345,7 @@ jobs:
           project-slug: slugbase-cloud
           env-slug: staging
 
-      - name: Smoke health endpoints
+      - name: Smoke deploy surfaces (API/web /health+/version; marketing root)
         run: bash .github/scripts/smoke-staging-health.sh
 
   deployment-staging-finish:
