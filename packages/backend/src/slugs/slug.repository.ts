@@ -5,6 +5,10 @@ import { and, eq } from "drizzle-orm";
 import { bookmarkSharedReadCondition } from "../common/authz/authz-sql.js";
 
 import type { DrizzleClient } from "../db/dialect/create-client.js";
+import { assertResourceOwnership } from "../common/tenant/resource-ownership.js";
+import {
+  WorkspaceScopedRepository,
+} from "../db/workspace-scoped.repository.js";
 import {
   bookmarks,
   slugPreferences,
@@ -78,8 +82,11 @@ function toSlugPreferenceRecord(row: {
   };
 }
 
-export class SlugRepository {
-  constructor(private readonly db: DrizzleClient) {}
+export class SlugRepository extends WorkspaceScopedRepository<SlugPreferenceRecord> {
+  // eslint-disable-next-line @typescript-eslint/no-useless-constructor -- forwards db to WorkspaceScopedRepository
+  constructor(db: DrizzleClient) {
+    super(db);
+  }
 
   /**
    * bookmarks the user can reach via /go for the given slug (spec §8.2).
@@ -102,7 +109,11 @@ export class SlugRepository {
           bookmarkSharedReadCondition(workspaceId, userId, bookmarks),
         ),
       );
-    return rows.map(toBookmarkRecord);
+    const records = rows.map(toBookmarkRecord);
+    for (const record of records) {
+      assertResourceOwnership(workspaceId, record.workspaceId);
+    }
+    return records;
   }
 
   async findSlugPreference(
@@ -122,7 +133,9 @@ export class SlugRepository {
         ),
       )
       .limit(1);
-    return rows[0] ? toSlugPreferenceRecord(rows[0]) : null;
+    const row = rows[0];
+    if (!row) return null;
+    return this.assertOwnership(workspaceId, toSlugPreferenceRecord(row));
   }
 
   async listSlugPreferences(
@@ -139,7 +152,7 @@ export class SlugRepository {
           eq(slugPreferences.userId, userId),
         ),
       );
-    return rows.map(toSlugPreferenceRecord);
+    return this.assertAllOwned(workspaceId, rows.map(toSlugPreferenceRecord));
   }
 
   async upsertSlugPreference(
@@ -199,7 +212,7 @@ export class SlugRepository {
       .returning();
     const row = rows[0];
     if (!row) throw new Error("Failed to create slug preference");
-    return toSlugPreferenceRecord(row);
+    return this.assertOwnership(data.workspaceId, toSlugPreferenceRecord(row));
   }
 
   private async updateSlugPreferenceBookmark(
@@ -222,6 +235,6 @@ export class SlugRepository {
       .returning();
     const row = rows[0];
     if (!row) throw new Error("Failed to update slug preference");
-    return toSlugPreferenceRecord(row);
+    return this.assertOwnership(workspaceId, toSlugPreferenceRecord(row));
   }
 }

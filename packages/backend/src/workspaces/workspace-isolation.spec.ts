@@ -6,8 +6,10 @@ import {
   WorkspaceScopedRepository,
   type WorkspaceOwned,
 } from "../db/workspace-scoped.repository.js";
-import { assertResourceOwnership } from "./resource-ownership.js";
-import { WorkspaceDataGuard } from "./workspace-data.guard.js";
+import {
+  assertResourceOwnership,
+  WorkspaceDataGuard,
+} from "../common/tenant/index.js";
 
 // ---------------------------------------------------------------------------
 // Test fixture — concrete subclass for testing the abstract base

@@ -12,6 +12,7 @@ import { DbService } from "../db/db.service.js";
 import { EntitlementsService } from "../entitlements/entitlements.service.js";
 import { FolderRepository } from "../folders/folder.repository.js";
 import { TeamRepository } from "../teams/team.repository.js";
+import { WorkspaceDataGuard } from "../common/tenant/index.js";
 import { WorkspaceMembersService } from "../workspaces/workspace-members.service.js";
 import type { WorkspaceRecord } from "../workspaces/workspace.types.js";
 import { assertTeamSharingEntitlement } from "./sharing.entitlements.js";
@@ -31,6 +32,7 @@ export class SharingService {
 
   constructor(
     @Inject(DbService) db: DbService,
+    @Inject(WorkspaceDataGuard) private readonly wsDataGuard: WorkspaceDataGuard,
     @Inject(WorkspaceMembersService)
     private readonly workspaceMembers: WorkspaceMembersService,
     @Inject(AccountsService) private readonly accounts: AccountsService,
@@ -276,6 +278,7 @@ export class SharingService {
   ): Promise<void> {
     const bookmark = await this.bookmarkRepo.findById(workspaceId, bookmarkId);
     if (!bookmark) throw new NotFoundException("Bookmark not found");
+    this.wsDataGuard.verifyOwnership(workspaceId, bookmark);
     if (bookmark.userId !== userId) {
       throw new ForbiddenException("Only the bookmark owner may share this bookmark");
     }
@@ -288,6 +291,7 @@ export class SharingService {
   ): Promise<void> {
     const folder = await this.folderRepo.findById(workspaceId, folderId);
     if (!folder) throw new NotFoundException("Folder not found");
+    this.wsDataGuard.verifyOwnership(workspaceId, folder);
     if (folder.userId !== userId) {
       throw new ForbiddenException("Only the folder owner may share this folder");
     }

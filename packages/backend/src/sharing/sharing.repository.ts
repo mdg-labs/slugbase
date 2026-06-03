@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
 
 import type { DrizzleClient } from "../db/dialect/create-client.js";
+import { WorkspaceScopedRepository } from "../db/workspace-scoped.repository.js";
 import {
   bookmarkTeamShares,
   bookmarkUserShares,
@@ -27,8 +28,17 @@ export interface ShareGrantInput {
   granteeId: string;
 }
 
-export class SharingRepository {
-  constructor(private readonly db: DrizzleClient) {}
+/**
+ * Workspace-scoped share grants — every public method requires `workspaceId`
+ * as the first argument and filters mutations by workspace (spec §5.9).
+ */
+export class SharingRepository extends WorkspaceScopedRepository<{
+  workspaceId: string;
+}> {
+  // eslint-disable-next-line @typescript-eslint/no-useless-constructor -- forwards db to WorkspaceScopedRepository
+  constructor(db: DrizzleClient) {
+    super(db);
+  }
 
   async grantBookmarkUserShare(
     workspaceId: string,
