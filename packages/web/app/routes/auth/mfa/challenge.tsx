@@ -2,8 +2,8 @@ import { useTranslate } from "@tolgee/react";
 import { useState } from "react";
 import type { ActionFunctionArgs } from "react-router";
 import { Form, redirect, useActionData, useNavigation } from "react-router";
-import { TotpInput } from "../../components/TotpInput.js";
-import { AuthShell, KeyFieldIcon } from "./AuthShell.js";
+import { TotpInput } from "../../../components/TotpInput.js";
+import { AuthShell, KeyFieldIcon } from "../AuthShell.js";
 
 const API_BASE_URL = (): string => process.env["API_BASE_URL"] ?? "";
 
@@ -47,7 +47,7 @@ export async function action({ request }: ActionFunctionArgs) {
   return redirectResponse;
 }
 
-export default function MfaRoute() {
+export default function MfaChallengeRoute() {
   const { t } = useTranslate();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();

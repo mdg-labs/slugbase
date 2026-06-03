@@ -8,9 +8,9 @@ import {
   useLoaderData,
   useNavigation,
 } from "react-router";
-import { TotpInput } from "../../components/TotpInput.js";
-import { getSessionUser } from "../../lib/session-client.js";
-import { AuthShell } from "./AuthShell.js";
+import { TotpInput } from "../../../components/TotpInput.js";
+import { getSessionUser } from "../../../lib/session-client.js";
+import { AuthShell } from "../AuthShell.js";
 
 const API_BASE_URL = (): string => process.env["API_BASE_URL"] ?? "";
 
