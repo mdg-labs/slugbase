@@ -10,7 +10,23 @@ export {
 export { resolveTheme, readStoredThemePreference, persistThemePreference } from "./theme/resolve-theme.js";
 export { ThemeProvider, useTheme, type ThemeContextValue, type ThemeProviderProps } from "./theme/theme-context.js";
 export { AppShell, type AppShellProps } from "./components/AppShell.js";
-export { ThemeSwitcher, type ThemeSwitcherLabels, type ThemeSwitcherProps } from "./components/ThemeSwitcher.js";
+export {
+  AuthShell,
+  AuthInput,
+  AuthButton,
+  AuthHeading,
+  ErrorBanner,
+  SuccessBanner,
+  SsoSection,
+  MailFieldIcon,
+  LockFieldIcon,
+  UserFieldIcon,
+  KeyFieldIcon,
+  type AuthShellProps,
+  type AuthShellBrandLabels,
+  type OidcProviderItem,
+  type SsoSectionProps,
+} from "./components/auth-kit.js";
 export { Kbd, type KbdProps } from "./components/Kbd.js";
 export { Button, type ButtonProps, type ButtonVariant, type ButtonSize } from "./components/Button.js";
 export { Input, type InputProps, type InputSize } from "./components/Input.js";
@@ -47,3 +63,4 @@ export { Tag, type TagProps } from "./components/Tag.js";
 export { SlugBadge, type SlugBadgeProps } from "./components/SlugBadge.js";
 export { Checkbox, type CheckboxProps } from "./components/Checkbox.js";
 export { IconButton, type IconButtonProps, type IconButtonSize } from "./components/IconButton.js";
+export { ThemeSwitcher, type ThemeSwitcherLabels, type ThemeSwitcherProps } from "./components/ThemeSwitcher.js";
