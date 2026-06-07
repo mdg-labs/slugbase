@@ -685,7 +685,7 @@ Every item below was previously an open question and is now **settled** and inte
 31. **Hosted deployment topology (settled):** web client on Cloudflare Workers (edge); API/back-end on Fly.io Frankfurt (`fra`); database on Neon Postgres Frankfurt (`aws-eu-central-1`). Railway was rejected — its only EU region (Amsterdam) has no collocated Neon region, causing cross-region DB latency. Self-hosted uses the combined container image (§14.2) and is unaffected. (Section 14.7.)
 32. **Hosted database engine (settled):** Neon Postgres (`aws-eu-central-1`) for the hosted deployment. Self-hosted v1 requires operator-provided Postgres (same schema/migrations). Embedded SQLite self-host is **deferred** (Fast-Follow).
 33. **i18n tooling (settled):** Tolgee is the translation-management platform. Message catalogs are externalized through the Tolgee SDK; `TOLGEE_API_KEY` and `TOLGEE_PROJECT_ID` are Infisical-managed secrets. (Section 17, rule 10-i18n.mdc.)
-34. **Secrets management tooling (settled):** Infisical is the secrets manager for all environments (`dev` / `staging` / `prod`). Operators set `staging` and `prod` secrets via the Infisical UI or OIDC sync; developers use `infisical run --env=dev` locally. All keys live at the environment root (no subfolders). (Section 15, rule 05-env-vars.mdc.)
+34. **Secrets management tooling (settled):** Infisical Cloud (EU) is the secrets manager for all environments (`dev` / `staging` / `prod`). Operators set `staging` and `prod` secrets via the Infisical UI or OIDC sync; developers use `infisical run --env=dev` locally. All keys live at the environment root (no subfolders). (Section 15, rule 05-env-vars.mdc.)
 
 35. **CI/CD pipeline (settled):** GitHub Actions on hosted runners; single workflow file (`.github/workflows/ci-cd.yml`); branches `staging` and `main`. (Section 22.)
 36. **Design system and UI prototype (settled):** A clickable V1 design prototype in `docs/design-prototype/V1/` is the **visual and interaction-design source of truth** (design language, screen anatomy, states, copy tone). The MVP spec remains the **product source of truth** — where the prototype conflicts with the spec, the spec wins. Design tokens (periwinkle accent `#7782f7`, dark-first, IBM Plex Sans/Mono) are defined in `docs/design-prototype/V1/colors_and_type.css`. (Section 23.)
@@ -793,8 +793,8 @@ On `release` published (same trigger as the hosted production deploy), the workf
 
 ### 22.9 Secrets in CI
 
-All environment secrets are fetched from Infisical via the `Infisical/secrets-action` using **OIDC** (no long-lived tokens in GitHub Actions secrets). The Infisical instance is self-hosted (`https://secrets.mdg-labs.dev/`), project slug `slugbase-cloud`. The only GitHub Actions secrets stored in the repository are:
-- `INFISICAL_DOMAIN` — the Infisical instance URL
+All environment secrets are fetched from Infisical via the `Infisical/secrets-action` using **OIDC** (no long-lived tokens in GitHub Actions secrets). Secrets live in **Infisical Cloud (EU)** at `https://eu.infisical.com`, project slug `slugbase-cloud`. The only GitHub Actions secrets stored in the repository are:
+- `INFISICAL_DOMAIN` — Infisical Cloud (EU) instance URL
 - `INFISICAL_OIDC_IDENTITY_ID` — the machine identity for OIDC auth
 
 **Secret organization (settled):** all keys for an environment live at the **Infisical project root** (no subfolders). Local dev and CI inject the full environment via `infisical run --env=<slug>` and `Infisical/secrets-action` respectively.

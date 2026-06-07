@@ -11,13 +11,13 @@ When introducing **any** new env var, complete all four steps below in the **sam
 
 | Field | Value |
 |---|---|
-| Instance URL | `https://secrets.mdg-labs.dev/` (self-hosted) |
+| Instance URL | `https://eu.infisical.com` (Infisical Cloud, EU) |
 | Project slug | `slugbase-cloud` |
 | Environments | `dev` · `staging` · `prod` |
 
 All keys for an environment live at the **project root** in Infisical (no subfolders). CI (`Infisical/secrets-action`) and local `infisical run --env=<slug>` inject the full environment. **Never put true secrets in `VITE_*` or `PUBLIC_*` keys** — those values are inlined into client bundles at build time.
 
-Point the local CLI at the self-hosted instance once (`infisical login --domain https://secrets.mdg-labs.dev`), then select the project via the committed `.infisical.json` (or `--projectId`). **Phase CLI is not used — Infisical only** (decision #34). CI fetches secrets via OIDC (`Infisical/secrets-action`); only `INFISICAL_DOMAIN` and `INFISICAL_OIDC_IDENTITY_ID` live in GitHub Actions secrets (spec §22.9).
+Point the local CLI at Infisical Cloud (EU) once (`infisical login --domain https://eu.infisical.com`; CLI defaults to US `app.infisical.com` without this). Optionally `export INFISICAL_API_URL=https://eu.infisical.com`. Select the project via the committed `.infisical.json` (or `--projectId`). **Phase CLI is not used — Infisical only** (decision #34). CI fetches secrets via OIDC (`Infisical/secrets-action`); GitHub secret `INFISICAL_DOMAIN` must be `https://eu.infisical.com`. Only `INFISICAL_DOMAIN` and `INFISICAL_OIDC_IDENTITY_ID` live in GitHub Actions secrets (spec §22.9).
 
 ## This rule fires when you
 
@@ -31,7 +31,7 @@ Point the local CLI at the self-hosted instance once (`infisical login --domain 
 ### 1. Set the value in Infisical `dev` via CLI
 
 ```bash
-# instance domain is set once via `infisical login --domain https://secrets.mdg-labs.dev`
+# instance domain is set once via `infisical login --domain https://eu.infisical.com`
 infisical secrets set <KEY>=<value> --env=dev --projectId=<slugbase-cloud projectId from .infisical.json>
 ```
 

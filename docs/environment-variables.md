@@ -1,6 +1,6 @@
 # Environment variables
 
-Complete reference for every configuration key SlugBase reads from the environment. Values are managed in **Infisical** (project `slugbase-cloud`) for local dev and deployed environments; see [`.env.example`](../.env.example) for the machine-readable key list (names only, no values).
+Complete reference for every configuration key SlugBase reads from the environment. Values are managed in **Infisical Cloud (EU)** (project `slugbase-cloud`) for local dev and deployed environments; see [`.env.example`](../.env.example) for the machine-readable key list (names only, no values).
 
 Product model: [slugbase-mvp-spec.md §15](slugbase-mvp-spec.md). Backend validation: [`packages/backend/src/config/env.schema.ts`](../packages/backend/src/config/env.schema.ts).
 
@@ -12,19 +12,23 @@ Product model: [slugbase-mvp-spec.md §15](slugbase-mvp-spec.md). Backend valida
 
 | Field | Value |
 |---|---|
-| Instance | `https://secrets.mdg-labs.dev/` |
+| Instance | `https://eu.infisical.com` |
+| Hosting | Infisical Cloud (EU region) |
 | Project slug | `slugbase-cloud` |
 | Environments | `dev` · `staging` · `prod` |
 | Key layout | Project root only (no subfolders) |
 
 **Local dev**
 
+Infisical CLI defaults to **US Cloud** (`https://app.infisical.com`). This project uses **EU Cloud** — set the domain once:
+
 ```bash
-infisical login --domain https://secrets.mdg-labs.dev
+infisical login --domain https://eu.infisical.com
+# optional: export INFISICAL_API_URL=https://eu.infisical.com  # applies to all CLI commands
 infisical run --env=dev -- pnpm dev
 ```
 
-**CI** fetches the full environment via OIDC (`Infisical/secrets-action`). Only `INFISICAL_DOMAIN` and `INFISICAL_OIDC_IDENTITY_ID` live in GitHub Actions secrets — see [GitHub Actions secrets](#github-actions-secrets-not-in-infisical).
+**CI** fetches the full environment via OIDC (`Infisical/secrets-action`). Set GitHub secret `INFISICAL_DOMAIN` to `https://eu.infisical.com` (not `app.infisical.com`). Only `INFISICAL_DOMAIN` and `INFISICAL_OIDC_IDENTITY_ID` live in GitHub Actions secrets — see [GitHub Actions secrets](#github-actions-secrets-not-in-infisical).
 
 ### Table legend
 
@@ -364,11 +368,11 @@ infisical run --env=dev -- pnpm i18n:check:tolgee
 
 ## GitHub Actions secrets (not in Infisical)
 
-These live in the **GitHub repository** secrets settings, not in the Infisical project:
+These live in the **GitHub repository** secrets settings, not in the Infisical project. After migrating to Infisical Cloud (EU), update `INFISICAL_DOMAIN` from any legacy self-hosted URL to `https://eu.infisical.com`.
 
 | Key | What it does | Example value |
 |---|---|---|
-| `INFISICAL_DOMAIN` | Infisical instance URL for OIDC | `https://secrets.mdg-labs.dev/` |
+| `INFISICAL_DOMAIN` | Infisical Cloud (EU) instance URL for OIDC | `https://eu.infisical.com` |
 | `INFISICAL_OIDC_IDENTITY_ID` | Infisical OIDC identity id for CI | `<identity uuid>` |
 
 ---

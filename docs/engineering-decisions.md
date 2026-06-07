@@ -27,7 +27,7 @@ This doc exists so roadmap tasks and sub-agents have concrete, runnable answers 
 | Background work | **In-process** (no worker/broker) | §22.10, §6.3 |
 | AI provider (v1) | **OpenAI** | Behind the vendor-neutral AI interface (§11.2) |
 | i18n | **Tolgee** (React SDK) | en + de catalogs (§17) |
-| Secrets | **Infisical** | All envs (§15, §22.9) |
+| Secrets | **Infisical Cloud (EU)** | All envs (§15, §22.9) |
 
 ---
 
@@ -108,11 +108,11 @@ pnpm audit --audit-level=high
 
 ---
 
-## 8. Secrets — Infisical (spec §15, §22.9, decision #34)
+## 8. Secrets — Infisical Cloud (EU) (spec §15, §22.9, decision #34)
 
 | Field | Value |
 |---|---|
-| Instance | `https://secrets.mdg-labs.dev/` (self-hosted) |
+| Instance | `https://eu.infisical.com` (Infisical Cloud, EU) |
 | Project slug | `slugbase-cloud` |
 | Environments | `dev` · `staging` · `prod` (no `dev` *deployment* — local only) |
 | CI auth | OIDC via `Infisical/secrets-action`; **single** machine identity `INFISICAL_OIDC_IDENTITY_ID` (project-scoped read-only) |

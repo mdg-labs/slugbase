@@ -71,7 +71,12 @@ Sanity: `pnpm env:check`
 
 ## Infisical
 
-Login once: `infisical login --domain https://secrets.mdg-labs.dev`
+Login once (EU Cloud — not US `app.infisical.com`):
+
+```bash
+infisical login --domain https://eu.infisical.com
+# or: export INFISICAL_API_URL=https://eu.infisical.com
+```
 
 Full key inventory (hosted vs self-hosted, examples): [`docs/environment-variables.md`](environment-variables.md).
 

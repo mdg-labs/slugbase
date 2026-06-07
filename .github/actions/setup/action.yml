@@ -15,7 +15,7 @@ inputs:
     required: false
     default: dev
   infisical-domain:
-    description: Infisical instance URL (GitHub secret)
+    description: Infisical Cloud (EU) instance URL (GitHub secret)
     required: false
     default: ""
   infisical-identity-id:
