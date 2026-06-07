@@ -1,7 +1,9 @@
 import { useTranslate } from "@tolgee/react";
-import { Kbd, ThemeSwitcher } from "@slugbase/ui";
+import { Badge, Kbd, ThemeSwitcher } from "@slugbase/ui";
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
+
+import { useListPageMeta } from "./list/ListPageMetaProvider.js";
 
 export type AppTopBarProps = {
   /** Display name of the signed-in user */
@@ -119,13 +121,25 @@ function useBreadcrumbs(): Breadcrumb {
   const pathname = location.pathname;
 
   if (pathname.startsWith("/bookmarks")) {
-    return { icon: bookmarkIcon, label: t("app.shell.nav.bookmarks"), sub: t("bookmarks.list.title") };
+    return {
+      icon: bookmarkIcon,
+      label: t("app.shell.nav.bookmarks"),
+      sub: t("sharing.scope.all"),
+    };
   }
   if (pathname.startsWith("/folders")) {
-    return { icon: folderIcon, label: t("app.shell.nav.folders"), sub: null };
+    return {
+      icon: folderIcon,
+      label: t("app.shell.nav.folders"),
+      sub: t("sharing.scope.all_folders"),
+    };
   }
   if (pathname.startsWith("/tags")) {
-    return { icon: hashIcon, label: t("app.shell.nav.tags"), sub: null };
+    return {
+      icon: hashIcon,
+      label: t("app.shell.nav.tags"),
+      sub: t("tags.list.title"),
+    };
   }
   if (pathname.startsWith("/settings")) {
     return { icon: settingsIcon, label: t("app.shell.nav.settings"), sub: null };
@@ -252,6 +266,9 @@ export function AppTopBar({
 }: AppTopBarProps) {
   const { t } = useTranslate();
   const breadcrumb = useBreadcrumbs();
+  const listMeta = useListPageMeta();
+  const subLabel = listMeta.subLabel ?? breadcrumb.sub;
+  const count = listMeta.count;
 
   return (
     <div className="flex w-full items-center gap-sp-5 px-sp-6">
@@ -259,12 +276,17 @@ export function AppTopBar({
       <div className="flex items-center gap-sp-2 shrink-0" aria-label={t("app.shell.topbar.breadcrumbs_label")}>
         {breadcrumb.icon}
         <span className="font-semibold text-[length:var(--text-body)] text-fg">{breadcrumb.label}</span>
-        {breadcrumb.sub && (
+        {subLabel ? (
           <>
             <ChevronRightIcon />
-            <span className="text-[length:var(--text-body)] text-fg-muted">{breadcrumb.sub}</span>
+            <span className="text-[length:var(--text-body)] text-fg-muted">{subLabel}</span>
+            {count != null ? (
+              <Badge variant="neutral" className="ml-[2px]">
+                {count}
+              </Badge>
+            ) : null}
           </>
-        )}
+        ) : null}
       </div>
 
       {/* ⌘K cmd-trigger */}

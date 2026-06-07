@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 
 import { AppSidebar } from "./AppSidebar.js";
 import { AppTopBar } from "./AppTopBar.js";
+import { ListPageMetaProvider } from "./list/ListPageMetaProvider.js";
 import {
   BookmarkModalProvider,
   useBookmarkModal,
@@ -46,29 +47,31 @@ function AppChromeInner() {
 
   return (
     <>
-      <AppShell
-        sidebar={
-          <AppSidebar
-            workspace={workspace}
-            workspaces={workspaces}
-            folders={sidebarFolders}
-            bookmarkTotal={bookmarkTotal}
-            bookmarksUsed={bookmarkTotal}
-            onUpgrade={() => { void navigate("/settings/billing"); }}
-          />
-        }
-        topBar={
-          <AppTopBar
-            userName={user.name}
-            userEmail={user.email}
-            onOpenPalette={() => { setOpen(true); }}
-            onNewBookmark={openCreate}
-            themeLabels={themeLabels}
-          />
-        }
-      >
-        <Outlet />
-      </AppShell>
+      <ListPageMetaProvider>
+        <AppShell
+          sidebar={
+            <AppSidebar
+              workspace={workspace}
+              workspaces={workspaces}
+              folders={sidebarFolders}
+              bookmarkTotal={bookmarkTotal}
+              bookmarksUsed={bookmarkTotal}
+              onUpgrade={() => { void navigate("/settings/billing"); }}
+            />
+          }
+          topBar={
+            <AppTopBar
+              userName={user.name}
+              userEmail={user.email}
+              onOpenPalette={() => { setOpen(true); }}
+              onNewBookmark={openCreate}
+              themeLabels={themeLabels}
+            />
+          }
+        >
+          <Outlet />
+        </AppShell>
+      </ListPageMetaProvider>
       <CommandPalette
         open={open}
         onOpenChange={setOpen}
