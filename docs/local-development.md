@@ -73,6 +73,8 @@ Sanity: `pnpm env:check`
 
 Login once: `infisical login --domain https://secrets.mdg-labs.dev`
 
+Full key inventory (hosted vs self-hosted, examples): [`docs/environment-variables.md`](environment-variables.md).
+
 ## preinstall guard
 
 `pnpm install` runs `scripts/check-node-version.mjs` and exits if Node is below 22.12.
