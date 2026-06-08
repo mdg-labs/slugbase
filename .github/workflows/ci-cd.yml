@@ -323,18 +323,14 @@ jobs:
     environment: staging
     needs: [deploy-fly-staging, deploy-web-staging, deploy-marketing-staging]
     if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
+    env:
+      # Use GitHub vars (not secrets) to avoid redaction - these are public URLs
+      APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+      FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
+      MARKETING_ORIGIN: ${{ vars.MARKETING_ORIGIN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Fetch secrets from Infisical
-        uses: Infisical/secrets-action@77ab1f4ccd183a543cb5b42435fbd181189f4995 # v1.0.16
-        with:
-          method: oidc
-          domain: ${{ secrets.INFISICAL_DOMAIN }}
-          identity-id: ${{ secrets.INFISICAL_OIDC_IDENTITY_ID }}
-          project-slug: slugbase-cloud
-          env-slug: staging
 
       - name: Smoke deploy surfaces (API/web /health+/version; marketing root)
         run: bash .github/scripts/smoke-staging-health.sh
@@ -632,20 +628,16 @@ jobs:
         deploy-marketing-production,
       ]
     if: needs.check-not-deployed.outputs.should_deploy == 'true'
+    env:
+      # Use GitHub vars (not secrets) to avoid redaction - these are public URLs
+      APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+      FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
+      MARKETING_ORIGIN: ${{ vars.MARKETING_ORIGIN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.release.tag_name }}
-
-      - name: Fetch secrets from Infisical
-        uses: Infisical/secrets-action@77ab1f4ccd183a543cb5b42435fbd181189f4995 # v1.0.16
-        with:
-          method: oidc
-          domain: ${{ secrets.INFISICAL_DOMAIN }}
-          identity-id: ${{ secrets.INFISICAL_OIDC_IDENTITY_ID }}
-          project-slug: slugbase-cloud
-          env-slug: prod
 
       - name: Smoke health endpoints
         run: bash .github/scripts/smoke-staging-health.sh
