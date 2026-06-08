@@ -219,6 +219,8 @@ Worktree:  ../slugbase-wt-<TASK-ID>   # sibling of repo root, or subagent-manage
 Base:      STAGING_BASE_SHA           # do not chase moving staging during execution
 ```
 
+**No `node_modules` in worktrees.** Git worktrees are bare checkouts — they start without `node_modules`. The sub-agent (execution or verifier) **must** run `pnpm install` as the very first action after Jira In Progress (execution) or before verification checks (verifier). This is enforced by the WORK DEP block in the Lane P prompt templates. The install step is the sub-agent's responsibility, not the orchestrator's.
+
 ---
 
 ## Execution agents

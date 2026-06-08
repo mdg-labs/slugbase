@@ -197,6 +197,13 @@ JIRA SYNC — EXECUTION (include when issue is on Jira SB project — omit if no
 - Same block as Lane S execution template (In Progress only — no transitionIdDone; epic parent when subtask)
 - FIRST ACTION: transitionJiraIssue → 21 for each leaf key AND epic key BEFORE session memory
 
+WORK DEP — MANDATORY (Lane P worktrees have no node_modules):
+- Worktrees are bare checkouts — **no `node_modules`** present at branch start
+- FIRST action after Jira In Progress (before session memory and implementation code):
+    cd <WORKTREE> && bash scripts/with-ci-env.sh pnpm install
+- If `pnpm install` fails → blocked; report install error
+- After install, confirm node -v via bash scripts/with-ci-env.sh node -v (must be v22.12.0+)
+
 SESSION MEMORY:
 - Path: /home/michael/projects/slugbase/.cursor/skills/agent-memory/active/<SESSION-ID>.md
 - Same PHASE 1/2/3 + timing rules as Lane S
@@ -428,6 +435,13 @@ SESSION ID: <same as execution>
 
 JIRA SYNC — VERIFIER (include when execution prompt had execution variant):
 - Same rules as Lane S verifier (Done / FAIL comment)
+
+WORK DEP — MANDATORY (Lane P worktrees have no node_modules):
+- Worktrees are bare checkouts — **no `node_modules`** present at branch start
+- FIRST action before any verification checks:
+    cd <WORKTREE> && bash scripts/with-ci-env.sh pnpm install
+- If `pnpm install` fails → blocked; report install error
+- After install, confirm node -v via bash scripts/with-ci-env.sh node -v (must be v22.12.0+)
 
 SESSION MEMORY (local, gitignored):
 - FIRST ACTION: read active/<SESSION-ID>.md in WORKTREE if it exists
