@@ -185,6 +185,8 @@
   "bookmarks.list.pagination_page": "Seite {page} von {total}",
   "bookmarks.list.pagination_range": "{from}–{to} von {total}",
   "bookmarks.list.result_count": "{count} Ergebnisse",
+  "bookmarks.list.section_all_bookmarks": "Alle Lesezeichen",
+  "bookmarks.list.section_pinned": "Angepinnt",
   "bookmarks.list.search_action": "Suchen",
   "bookmarks.list.search_placeholder": "Titel, URL oder Slug suchen…",
   "bookmarks.list.sort_accessed": "Zuletzt aufgerufen",

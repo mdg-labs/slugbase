@@ -185,6 +185,8 @@
   "bookmarks.list.pagination_page": "Page {page} of {total}",
   "bookmarks.list.pagination_range": "{from}–{to} of {total}",
   "bookmarks.list.result_count": "{count} results",
+  "bookmarks.list.section_all_bookmarks": "All bookmarks",
+  "bookmarks.list.section_pinned": "Pinned",
   "bookmarks.list.search_action": "Search",
   "bookmarks.list.search_placeholder": "Search title, URL, or slug…",
   "bookmarks.list.sort_accessed": "Recently accessed",

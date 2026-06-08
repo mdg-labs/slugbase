@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLoaderData, useNavigate, useNavigation } from "react-router";
-import { Button } from "@slugbase/ui";
+import { Button, EmptyState } from "@slugbase/ui";
 
 import { ScopeFilter } from "../../components/sharing/ScopeFilter.js";
 import { ScopeIcon } from "../../components/sharing/ScopeIcon.js";
@@ -22,6 +22,7 @@ import {
 } from "./bookmarks-loader.js";
 import { BookmarkFavicon } from "./BookmarkFavicon.js";
 import { BookmarkListSkeleton } from "./BookmarkListSkeleton.js";
+import { SectionHead } from "../../components/list/SectionHead.js";
 
 const VIEW_STORAGE_KEY = "sb:bookmarks:view";
 
@@ -1217,6 +1218,10 @@ export function BookmarkListPage() {
     data.items.length > 0 && selectedIds.size === data.items.length;
   const someSelected = selectedIds.size > 0 && !allSelected;
   const hasSelection = selectedIds.size > 0;
+  const pinnedItems = data.items.filter((b) => b.pinned);
+  const nonPinnedItems = data.items.filter((b) => !b.pinned);
+  const showPinnedSection =
+    data.page === 1 && pinnedItems.length > 0 && !data.pinnedOnly;
 
   return (
     <div className="flex w-full flex-col" data-testid="bookmark-list-page">
@@ -1465,84 +1470,135 @@ export function BookmarkListPage() {
 
       {/* Content */}
       {data.items.length === 0 ? (
-        <div
-          className="flex flex-col items-center justify-center px-sp-6 py-sp-16"
-          data-testid="bookmark-list-empty"
-        >
+        <div data-testid="bookmark-list-empty">
           {hasFilters ? (
-            <>
-              <p
-                className="mb-sp-4 text-center font-semibold text-fg"
-                style={{ fontSize: "var(--text-h3)" }}
-              >
-                {t("bookmarks.list.empty_title")}
-              </p>
-              <p className="mb-sp-6 text-center text-body text-fg-muted">
-                {t("bookmarks.list.empty_body")}
-              </p>
-              <Button variant="secondary" type="button" onClick={clearFilters}>
-                {t("bookmarks.list.clear_filters_action")}
-              </Button>
-            </>
+            <EmptyState
+              title={t("bookmarks.list.empty_title")}
+              description={t("bookmarks.list.empty_body")}
+              actions={
+                <Button variant="secondary" type="button" onClick={clearFilters}>
+                  {t("bookmarks.list.clear_filters_action")}
+                </Button>
+              }
+              testId="bookmark-list-empty-filtered"
+            />
           ) : (
-            <>
-              <img
-                src="/slugbase_icon.svg"
-                alt=""
-                width={80}
-                height={80}
-                className="mb-sp-7 opacity-30"
-              />
-              <p
-                className="mb-sp-4 text-center font-semibold text-fg"
-                style={{ fontSize: "var(--text-h3)" }}
-              >
-                {t("bookmarks.list.empty_unfiltered_title")}
-              </p>
-              <p className="mb-sp-6 max-w-[30ch] text-center text-body text-fg-muted">
-                {t("bookmarks.list.empty_unfiltered_body")}
-              </p>
-              <div className="flex items-center gap-sp-4">
-                <Button
-                  variant="primary"
-                  type="button"
-                  onClick={() => {
-                    void navigate("/bookmarks?new=1");
-                  }}
-                >
-                  {t("bookmarks.list.new_bookmark_action")}
-                </Button>
-                <Button variant="ghost" type="button">
-                  {t("bookmarks.list.import_action")}
-                </Button>
-              </div>
-            </>
+            <EmptyState
+              illustration={
+                <img
+                  src="/slugbase_icon.svg"
+                  alt=""
+                  width={80}
+                  height={80}
+                  className="opacity-30"
+                />
+              }
+              title={t("bookmarks.list.empty_unfiltered_title")}
+              description={t("bookmarks.list.empty_unfiltered_body")}
+              actions={
+                <div className="flex items-center gap-sp-4">
+                  <Button
+                    variant="primary"
+                    type="button"
+                    onClick={() => {
+                      void navigate("/bookmarks?new=1");
+                    }}
+                  >
+                    {t("bookmarks.list.new_bookmark_action")}
+                  </Button>
+                  <Button variant="ghost" type="button">
+                    {t("bookmarks.list.import_action")}
+                  </Button>
+                </div>
+              }
+              testId="bookmark-list-empty-unfiltered"
+            />
           )}
         </div>
       ) : view === "grid" ? (
-        <div className="p-sp-6">
-          <div
-            className="grid gap-sp-5"
-            style={{
-              gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
-            }}
-            data-testid="bookmark-grid"
-          >
-            {data.items.map((bookmark) => (
-              <BookmarkCard
-                key={bookmark.id}
-                bookmark={bookmark}
-                selected={selectedIds.has(bookmark.id)}
-                onToggleSelect={() => {
-                  toggleSelect(bookmark.id);
-                }}
-                onPin={(pinned) => {
-                  void handlePin(bookmark.id, pinned);
-                }}
-                currentUserId={currentUserId}
+        <div className="p-sp-6" data-testid="bookmark-grid">
+          {showPinnedSection ? (
+            <>
+              <SectionHead
+                icon={<PinIcon filled />}
+                label={t("bookmarks.list.section_pinned")}
+                count={pinnedItems.length}
+                testId="bookmark-section-pinned"
               />
-            ))}
-          </div>
+              <div
+                className="grid gap-sp-5"
+                style={{
+                  gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
+                }}
+              >
+                {pinnedItems.map((bookmark) => (
+                  <BookmarkCard
+                    key={bookmark.id}
+                    bookmark={bookmark}
+                    selected={selectedIds.has(bookmark.id)}
+                    onToggleSelect={() => {
+                      toggleSelect(bookmark.id);
+                    }}
+                    onPin={(pinned) => {
+                      void handlePin(bookmark.id, pinned);
+                    }}
+                    currentUserId={currentUserId}
+                  />
+                ))}
+              </div>
+              {nonPinnedItems.length > 0 ? (
+                <>
+                  <SectionHead
+                    label={t("bookmarks.list.section_all_bookmarks")}
+                    testId="bookmark-section-all"
+                  />
+                  <div
+                    className="grid gap-sp-5"
+                    style={{
+                      gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
+                    }}
+                  >
+                    {nonPinnedItems.map((bookmark) => (
+                      <BookmarkCard
+                        key={bookmark.id}
+                        bookmark={bookmark}
+                        selected={selectedIds.has(bookmark.id)}
+                        onToggleSelect={() => {
+                          toggleSelect(bookmark.id);
+                        }}
+                        onPin={(pinned) => {
+                          void handlePin(bookmark.id, pinned);
+                        }}
+                        currentUserId={currentUserId}
+                      />
+                    ))}
+                  </div>
+                </>
+              ) : null}
+            </>
+          ) : (
+            <div
+              className="grid gap-sp-5"
+              style={{
+                gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
+              }}
+            >
+              {data.items.map((bookmark) => (
+                <BookmarkCard
+                  key={bookmark.id}
+                  bookmark={bookmark}
+                  selected={selectedIds.has(bookmark.id)}
+                  onToggleSelect={() => {
+                    toggleSelect(bookmark.id);
+                  }}
+                  onPin={(pinned) => {
+                    void handlePin(bookmark.id, pinned);
+                  }}
+                  currentUserId={currentUserId}
+                />
+              ))}
+            </div>
+          )}
           <Pagination
             page={data.page}
             pageSize={data.pageSize}
