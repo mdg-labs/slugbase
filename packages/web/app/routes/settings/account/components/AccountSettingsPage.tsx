@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 
@@ -43,7 +43,7 @@ export function AccountSettingsPage({
   initialAccount,
   initialTokens,
 }: AccountSettingsPageProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const [account, setAccount] = useState(initialAccount);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);

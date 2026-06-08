@@ -22,8 +22,8 @@ const mockLoad = vi.fn();
 let fetcherData: GlobalSearchResult | undefined;
 let fetcherState: "idle" | "loading" = "idle";
 
-vi.mock("@tolgee/react", () => ({
-  useTranslate: () => ({
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({
     t: (key: string, params?: Record<string, string | number>) => {
       const messages = staticMessages.en as Record<string, string>;
       const template = messages[key] ?? key;

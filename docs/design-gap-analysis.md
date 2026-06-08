@@ -735,7 +735,7 @@ Applies to all auth routes (`/login`, `/register`, `/mfa`, `/mfa/enroll`, `/forg
 | 37.1 | Tab row switches Impressum / AGB / Datenschutz client-side | Tab links navigate to **separate URLs** (better SEO) |
 | 37.2 | Narrow container max 720px | `mk-c--narrow` — **matches** |
 | 37.3 | Prose sections with h2 dividers | **Present** via i18n |
-| 37.4 | Hard-coded English legal text | Tolgee i18n keys en + de |
+| 37.4 | Hard-coded English legal text | i18n keys en + de |
 | 37.5 | Active tab underline accent | **Present** on current route |
 
 ---

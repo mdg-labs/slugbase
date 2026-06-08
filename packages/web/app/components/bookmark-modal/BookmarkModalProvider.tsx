@@ -1,4 +1,3 @@
-import { useTolgee } from "@tolgee/react";
 import {
   createContext,
   useCallback,
@@ -22,6 +21,7 @@ import type {
   BookmarkModalSubmitPayload,
   BookmarkModalTagOption,
 } from "./bookmark-modal.types.js";
+import { useAppLocale } from "../../i18n/use-app-locale.js";
 
 export interface BookmarkModalContextValue {
   open: boolean;
@@ -48,7 +48,7 @@ export function BookmarkModalProvider({
   onSubmit = submitBookmarkModal,
   aiContext: aiContextOverride,
 }: BookmarkModalProviderProps) {
-  const tolgee = useTolgee(["language"]);
+  const appLocale = useAppLocale();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"create" | "edit">("create");
   const [bookmark, setBookmark] = useState<BookmarkModalInitialBookmark | undefined>();
@@ -130,10 +130,10 @@ export function BookmarkModalProvider({
   const aiContext = useMemo<BookmarkModalAiContext>(
     () => ({
       ...DEFAULT_BOOKMARK_MODAL_AI_CONTEXT,
-      outputLanguage: tolgee.getLanguage() || "en",
+      outputLanguage: appLocale,
       ...aiContextOverride,
     }),
-    [aiContextOverride, tolgee],
+    [aiContextOverride, appLocale],
   );
 
   const value = useMemo(

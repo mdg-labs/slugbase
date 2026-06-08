@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { useCallback, useRef, useState } from "react";
 
 import {
@@ -126,7 +126,7 @@ export type OnboardingOverlayProps = {
 };
 
 export function OnboardingOverlay({ workspaceName, onDone }: OnboardingOverlayProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const [step, setStep] = useState(0);
   const [importState, setImportState] = useState<ImportState>({ phase: "idle" });
   const [drag, setDrag] = useState(false);

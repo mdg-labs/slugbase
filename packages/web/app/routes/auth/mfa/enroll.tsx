@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import {
@@ -160,7 +160,7 @@ function EnrollConfirmStep({
   isSubmitting,
   error,
 }: EnrollConfirmStepProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const [showSecret, setShowSecret] = useState(false);
 
   return (
@@ -301,7 +301,7 @@ function BackupCodesStep({
   onCopy,
   onConfirmChange,
 }: BackupCodesStepProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
 
   return (
     <>

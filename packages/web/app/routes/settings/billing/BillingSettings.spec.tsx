@@ -7,8 +7,8 @@ import { BillingSettingsPage } from "./components/BillingSettingsPage.js";
 import { BillingUnavailableGate } from "./components/BillingUnavailableGate.js";
 import type { BillingSettingsData } from "./billing.types.js";
 
-vi.mock("@tolgee/react", () => ({
-  useTranslate: () => ({
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({
     t: (key: string, params?: Record<string, string | number>) => {
       const messages = staticMessages.en as Record<string, string>;
       const template = messages[key] ?? key;

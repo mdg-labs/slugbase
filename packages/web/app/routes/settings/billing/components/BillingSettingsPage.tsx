@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@slugbase/ui";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
@@ -43,7 +43,7 @@ interface BillingSettingsPageProps {
 }
 
 export function BillingSettingsPage({ initialData }: BillingSettingsPageProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [workspace, setWorkspace] = useState(initialData.workspace);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);

@@ -1,4 +1,4 @@
-/** Tolgee catalog wrapper — edit locales/*.json; push new keys; pull translations from Tolgee. */
+/** Static message catalog — edit locales/*.json; run pnpm i18n:codegen after en.json key changes. */
 import en from "./locales/en.json";
 import de from "./locales/de.json";
 import type { MessageKey } from "./message-keys.generated.js";

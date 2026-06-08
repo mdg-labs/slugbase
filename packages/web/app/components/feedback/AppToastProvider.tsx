@@ -1,9 +1,9 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import type { ReactNode } from "react";
 import { ToastProvider, useToast } from "@slugbase/ui";
 
 export function AppToastProvider({ children }: { children: ReactNode }) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
 
   return (
     <ToastProvider dismissLabel={t("ui.toast.dismiss_label")}>
@@ -13,7 +13,7 @@ export function AppToastProvider({ children }: { children: ReactNode }) {
 }
 
 export function useAppToast() {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const { toast } = useToast();
 
   return {

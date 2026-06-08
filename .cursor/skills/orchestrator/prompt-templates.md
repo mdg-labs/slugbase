@@ -31,7 +31,7 @@ NODE ENV (mandatory — run from TARGET REPO before any pnpm/turbo/infisical com
     bash scripts/with-ci-env.sh pnpm test:unit
     bash scripts/with-ci-env.sh pnpm build
     bash scripts/with-ci-env.sh pnpm test:integration   # NO infisical wrapper on integration
-    bash scripts/with-ci-env.sh infisical run --env=dev -- pnpm i18n:check:tolgee
+    bash scripts/with-ci-env.sh pnpm i18n:validate
 - Alternative: source scripts/ci-env.sh once per shell, then run commands
 - Sanity: bash scripts/with-ci-env.sh node -v  → must be v22.12.0+
 - Docs: docs/local-development.md

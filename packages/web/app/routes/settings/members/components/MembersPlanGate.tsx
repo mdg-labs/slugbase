@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@slugbase/ui";
 
 interface MembersPlanGateProps {
@@ -6,7 +6,7 @@ interface MembersPlanGateProps {
 }
 
 export function MembersPlanGate({ onUpgrade }: MembersPlanGateProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
 
   return (
     <div

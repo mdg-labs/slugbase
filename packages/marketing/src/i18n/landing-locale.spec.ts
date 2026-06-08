@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { staticMessages, supportedLocales } from "./messages.js";
-import { ensureLocaleLoaded, t } from "./tolgee.js";
+import { t } from "./translate.js";
 
 const landingKeys = Object.keys(staticMessages.en).filter((key) =>
   key.startsWith("marketing.landing."),
@@ -8,8 +8,7 @@ const landingKeys = Object.keys(staticMessages.en).filter((key) =>
 
 describe("marketing landing locales", () => {
   for (const locale of supportedLocales) {
-    it(`loads Tolgee catalog for ${locale}`, async () => {
-      await ensureLocaleLoaded(locale);
+    it(`loads catalog for ${locale}`, () => {
       expect(t(locale, "marketing.landing.hero_title")).toBeTruthy();
     });
 

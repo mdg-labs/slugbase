@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@slugbase/ui";
 
 import type { EntitlementBannerState } from "./dashboard.types.js";
@@ -10,7 +10,7 @@ export type DashboardEntitlementBannerProps = {
 export function DashboardEntitlementBanner({
   banner,
 }: DashboardEntitlementBannerProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const atCap = banner.variant === "at-cap";
 
   return (

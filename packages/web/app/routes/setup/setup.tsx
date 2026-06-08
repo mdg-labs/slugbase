@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { Form, redirect, useActionData, useNavigation } from "react-router";
@@ -116,7 +116,7 @@ export async function action({ request }: ActionFunctionArgs): Promise<ActionRes
 }
 
 export default function SetupRoute() {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";

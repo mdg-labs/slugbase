@@ -30,7 +30,7 @@ A Story is split into Sub-tasks **only** when its parts (a) live in **different 
 
 ## Universal acceptance criteria (apply to EVERY leaf — not repeated per row)
 
-Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit with `[SB-N]`/`[P*-*]` (`01`,`07`); TS strict, no `any`, no `console.log`; security baseline (`03`); every new UI string via Tolgee en+de (`10`); every new env var via the Infisical 4-step (`05`); **no `isCloud`/deployment-mode branches** — entitlements + interface selection (spec §15). The DB MIGRATIONS block (orchestrator `prompt-templates.md`) applies to every execution prompt.
+Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit with `[SB-N]`/`[P*-*]` (`01`,`07`); TS strict, no `any`, no `console.log`; security baseline (`03`); every new UI string via repo JSON en+de (`10`); every new env var via the Infisical 4-step (`05`); **no `isCloud`/deployment-mode branches** — entitlements + interface selection (spec §15). The DB MIGRATIONS block (orchestrator `prompt-templates.md`) applies to every execution prompt.
 
 ## Phases (= Epics)
 
@@ -94,8 +94,8 @@ Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit w
 - **Files:** `packages/backend/src/fetch/**`
 - **Doc Ref:** spec §11.10, §6.4, §18; rule `03` · **Deps:** P1-03 · **Status:** [x]
 
-### P1-08 — Web + ui skeleton: tokens, theme, layout, Tolgee provider — FE · Lane P
-- **AC:** React Router v7 boots on Node adapter; `ui` exposes Tailwind config bridged to `colors_and_type.css` tokens (dark-first, periwinkle, IBM Plex); app shell + theme switch (light/dark/auto); Tolgee React SDK provider wired; no hard-coded hex/strings.
+### P1-08 — Web + ui skeleton: tokens, theme, layout, i18n provider — FE · Lane P
+- **AC:** React Router v7 boots on Node adapter; `ui` exposes Tailwind config bridged to `colors_and_type.css` tokens (dark-first, periwinkle, IBM Plex); app shell + theme switch (light/dark/auto); react-i18next provider wired; no hard-coded hex/strings.
 - **Tests:** unit: theme tokens resolve; snapshot of base layout.
 - **Files:** `packages/ui/**`, `packages/web/**`
 - **Doc Ref:** spec §19, §23.1; eng §1, §3, §9; rule `11` · **Deps:** P1-01 · **Status:** [!] failed — SB-10: ErrorBoundary hard-coded strings in root.tsx
@@ -210,7 +210,7 @@ Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit w
 
 ### P2-16 — Auth UI (setup, login, MFA, register, verify, reset) — FE · parent Story
 - **Doc Ref:** spec §5, §23.2 (`AuthApp.jsx`/`AuthKit.jsx`); proto; rule `10`,`11`
-- **Goal:** all auth screens in the prototype design language; non-enumerating copy; shown-once backup codes; strings via Tolgee (en+de). Each screen is its own route file → parallel after the shared shell.
+- **Goal:** all auth screens in the prototype design language; non-enumerating copy; shown-once backup codes; strings via repo JSON (en+de). Each screen is its own route file → parallel after the shared shell.
 - `P2-16.1` — Auth shell + first-run setup + sign-in — FE · Lane S
   - **AC:** shared auth layout/kit; first-run setup screen; sign-in (non-enumerating errors). · **Tests:** component: setup + sign-in render/validate. · **Files:** `packages/web/app/routes/auth/**`, `packages/ui/**` · **Deps:** P1-08, P2-12
 - `P2-16.2` — MFA challenge + backup codes — FE · Lane P
@@ -303,7 +303,7 @@ Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit w
 - **Doc Ref:** spec §9.2; proto (`DashboardApp.jsx`); rule `10`,`11` · **Deps:** P3-04, P3-07 · **Status:** [ ]
 
 ### P3-13 — Bookmark create/edit modal — FE · Lane S
-- **AC:** modal-only create/edit (url, title, slug, folders, tags, pin, forwarding, sharing placeholder); **no detail route** (decision #19); validation surfaced; strings via Tolgee.
+- **AC:** modal-only create/edit (url, title, slug, folders, tags, pin, forwarding, sharing placeholder); **no detail route** (decision #19); validation surfaced; strings via repo JSON.
 - **Tests:** component: create/edit modal validates + submits.
 - **Files:** `packages/web/app/components/bookmark-modal/**`, `packages/ui/**`
 - **Doc Ref:** spec §6.2; proto §23.5; rule `10`,`11` · **Deps:** P3-04, P3-07 · **Status:** [ ]
@@ -422,9 +422,9 @@ Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit w
 
 ### P6-03 — Marketing site (Astro): landing, pricing, contact, legal — parent Story · Domain Ops
 - **Doc Ref:** spec §2.3, §23.2 (`marketing/*`); §23.4; rule `10`,`11`
-- **Goal:** Astro static site, separately built; en+de via Tolgee. Pages are independent leaves after the shared layout.
-- `P6-03.1` — Astro scaffold + shared layout + landing + Tolgee — FE · Lane S
-  - **AC:** Astro app + shared layout + landing page; Tolgee wiring (en+de). · **Tests:** build succeeds; landing renders both locales. · **Files:** `packages/marketing/**` · **Deps:** P1-01
+- **Goal:** Astro static site, separately built; en+de via repo JSON. Pages are independent leaves after the shared layout.
+- `P6-03.1` — Astro scaffold + shared layout + landing + i18n — FE · Lane S
+  - **AC:** Astro app + shared layout + landing page; native `t(locale, key)` wiring (en+de). · **Tests:** build succeeds; landing renders both locales. · **Files:** `packages/marketing/**` · **Deps:** P1-01
 - `P6-03.2` — Pricing + legal pages — FE · Lane P
   - **AC:** pricing (config-driven, "Personal"); legal (Impressum/AGB/Datenschutz, subprocessors Fly/Neon/Cloudflare). · **Tests:** build; pricing from config. · **Files:** `packages/marketing/src/pages/{pricing,legal}/**` · **Deps:** P6-03.1
 - `P6-03.3` — Contact form + Turnstile — FE · Lane P
@@ -450,13 +450,13 @@ Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit w
 - `P6-06.2` — Workspace settings (general/SMTP/AI/OIDC) — FE · Lane P
   - **AC:** general, SMTP, AI, OIDC panels; visibility by config/interface (no `isCloud`). · **Tests:** component: panel visibility by config. · **Files:** `packages/web/app/routes/settings/workspace/**` · **Deps:** P2-14, P3-14.1, P2-03
 
-### P6-07 — i18n completeness + Tolgee CI check — parent Story
+### P6-07 — i18n completeness + repo-JSON CI check — parent Story
 - **Doc Ref:** spec §17, §22.6; rule `10`
-- **Goal:** all UI strings in Tolgee en+de + a CI gate.
+- **Goal:** all UI strings in repo JSON en+de + a CI gate.
 - `P6-07.1` — String audit + en/de completeness + language resolution — FE · Lane P
   - **AC:** all UI strings catalog keys with en+de; language resolution (user → Accept-Language → en); AI output-language honored. · **Tests:** rg finds no hard-coded UI strings. · **Files:** `packages/web/**`, `packages/marketing/**`, `packages/ui/**` (key usage) · **Deps:** P3-13, P4-03, P5-05, P6-03
-- `P6-07.2` — Tolgee build gate in CI — Infra · Lane S
-  - **AC:** `tolgee pull --check` fails build on a missing default-locale key; rg hard-coded-string check in CI. · **Tests:** CI translation check passes. · **Files:** `.github/workflows/ci-cd.yml`, i18n scripts · **Deps:** P6-07.1, P1-09
+- `P6-07.2` — i18n validation build gate in CI — Infra · Lane S
+  - **AC:** `pnpm i18n:validate` fails build on missing keys or locale parity gaps; rg hard-coded-string check in CI. · **Tests:** CI translation check passes. · **Files:** `.github/workflows/ci-cd.yml`, i18n scripts · **Deps:** P6-07.1, P1-09
 
 ### P6-08 — Error pages + UX polish — parent Story · Domain FE
 - **Doc Ref:** spec §18, §23.3; proto (`EdgePages.jsx`,`EdgeStates.html`); rule `11`

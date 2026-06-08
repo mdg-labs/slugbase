@@ -1,7 +1,6 @@
 /// <reference types="astro/client" />
 
 interface ImportMetaEnv {
-  readonly PUBLIC_TOLGEE_API_URL?: string;
   readonly PUBLIC_FRONTEND_ORIGIN?: string;
   readonly PUBLIC_FORWARDING_DOMAIN?: string;
   readonly PUBLIC_PLAN_PRICE_PERSONAL_MONTHLY?: string;

@@ -18,8 +18,8 @@ import {
 const mockNavigate = vi.fn();
 const mockLoad = vi.fn();
 
-vi.mock("@tolgee/react", () => ({
-  useTranslate: () => ({
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({
     t: (key: string) => {
       const messages = staticMessages.en as Record<string, string>;
       return messages[key] ?? key;

@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import type { ActionFunctionArgs } from "react-router";
 import { Form, redirect, useActionData, useNavigation } from "react-router";
@@ -48,7 +48,7 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function MfaChallengeRoute() {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";

@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Minimal stubs for React Router and Tolgee so tests run without full providers
+// Minimal stubs for React Router and i18n so tests run without full providers
 vi.mock("react-router", async (importOriginal) => {
   const original = await importOriginal<typeof import("react-router")>();
   return {
@@ -20,8 +20,8 @@ vi.mock("react-router", async (importOriginal) => {
   };
 });
 
-vi.mock("@tolgee/react", () => ({
-  useTranslate: () => ({
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({
     t: (key: string) => key,
   }),
 }));

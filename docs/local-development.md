@@ -61,7 +61,7 @@ To match CI exactly: `nvm alias default 22.12.0` (optional if you prefer 24 LTS 
 
 ```bash
 bash scripts/with-ci-env.sh pnpm typecheck
-bash scripts/with-ci-env.sh infisical run --env=dev -- pnpm i18n:check:tolgee
+bash scripts/with-ci-env.sh pnpm i18n:validate
 bash scripts/with-ci-env.sh pnpm test:integration   # no Infisical on integration
 ```
 

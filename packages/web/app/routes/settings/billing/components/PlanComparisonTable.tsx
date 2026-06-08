@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@slugbase/ui";
 
 import {
@@ -59,7 +59,7 @@ export function PlanComparisonTable({
   busy,
   onSelectPlan,
 }: PlanComparisonTableProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const features = buildPlanFeatureRows(config);
 
   return (

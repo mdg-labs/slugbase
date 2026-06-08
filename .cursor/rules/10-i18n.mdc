@@ -1,9 +1,9 @@
 ---
-description: All UI strings must live in the Tolgee message catalog; hard-coded strings in UI code are forbidden. Spec §17.
+description: All UI strings must live in the repo JSON message catalog; hard-coded strings in UI code are forbidden. Spec §17.
 alwaysApply: true
 ---
 
-# SlugBase i18n — Tolgee-first Rule (spec §17)
+# SlugBase i18n — repo-JSON Rule (spec §17)
 
 ## Policy
 
@@ -13,44 +13,35 @@ SlugBase ships **English (en) and German (de)** at v1. Every string surfaced in 
 
 | Concern | Who leads | Mechanism |
 |---------|-----------|-----------|
-| **Key inventory** (new/changed keys, English when shipping features) | **Repo** | Edit `locales/*.json` → `i18n:codegen` → `i18n:push` |
-| **Translation values** (German and Tolgee UI edits) | **Tolgee** | Translators in Tolgee UI → `i18n:pull` |
-| **Invariant before merge / CI / release** | **Must match** | `i18n:check:tolgee` (repo JSON === Tolgee) |
+| **Key inventory** (new/changed keys, English when shipping features) | **Repo** | Edit `locales/*.json` → `i18n:codegen` (when en key set changes) |
+| **Translation values** (German) | **Repo** | Edit `locales/de.json` in the same PR or follow-up with Jira `i18n` label |
+| **Invariant before merge / CI / release** | **CI** | `i18n:validate` + `i18n:check:hardcoded` |
 
-Committed catalogs: `packages/web/app/i18n/locales/{en,de}.json` and `packages/marketing/src/i18n/locales/{en,de}.json`. Central locale list: `i18n/supported-locales.json`. Thin `messages.ts` wrappers import JSON for the SDK. Tolgee CLI **`push.files`** in `.tolgeerc.json` points at those four JSON paths. Astro marketing is **not** parsed by Tolgee extract — file push/pull only.
+Committed catalogs: `packages/web/app/i18n/locales/{en,de}.json` and `packages/marketing/src/i18n/locales/{en,de}.json`. Central locale list: `i18n/supported-locales.json`. Thin `messages.ts` wrappers import JSON at build/runtime.
 
-The **Tolgee React SDK** loads `staticData` from imported JSON at runtime (**React Router v7** web app). Marketing uses the same keys via `t(locale, key)` at build time. Optional DevTools when `VITE_TOLGEE_API_URL` / `PUBLIC_TOLGEE_API_URL` is set. **No client API key in production.**
+The **web** app uses **react-i18next** with static JSON resources (`createI18n` in `packages/web/app/i18n/i18n.ts`). Marketing uses native `t(locale, key)` from `packages/marketing/src/i18n/translate.ts` at build time.
 
-Raw `tolgee pull` writes merged scratch files under `.tolgee/pull/` only — use **`pnpm i18n:pull`** to update committed JSON (splits web vs marketing by `marketing.*` prefix).
-
-## Tolgee CLI workflow
+## Developer workflow
 
 ```bash
-# Developer/agent: new or changed keys/values in repo JSON
+# New or changed keys/values in repo JSON
 edit locales/*.json
 pnpm i18n:codegen                    # if en.json key set changed
-infisical run --env=dev -- pnpm i18n:push
-infisical run --env=dev -- pnpm i18n:check:tolgee
-
-# Translator round-trip (Tolgee UI → repo)
-infisical run --env=dev -- pnpm i18n:pull
-infisical run --env=dev -- pnpm i18n:check:tolgee
+pnpm i18n:validate
+pnpm i18n:check:hardcoded
 
 # CI / release gate
-pnpm i18n:check:tolgee
+pnpm i18n:validate
 pnpm i18n:check:hardcoded
 pnpm test:unit
 ```
 
 | Command | When |
 |---------|------|
-| `i18n:push` | After editing locale JSON — sync keys/values repo → Tolgee |
-| `i18n:pull` | After translators edit Tolgee — sync repo ← Tolgee |
-| `i18n:check:tolgee` | CI / verify repo and Tolgee match (no writes) |
 | `i18n:codegen` | After `en.json` key set changes |
+| `i18n:validate` | After locale JSON edits; CI gate |
+| `i18n:check:hardcoded` | CI gate — no inline English in UI sources |
 | `i18n:merge` | Dev sanity — print merged key counts |
-
-When `i18n:check:tolgee` fails: keys missing on Tolgee → **`i18n:push`**; value mismatch or Tolgee-only keys → **`i18n:pull`**.
 
 ## Agent obligation — locale JSON edits
 
@@ -58,26 +49,18 @@ Any agent task that creates or modifies:
 
 - `packages/web/app/i18n/locales/*.json`
 - `packages/marketing/src/i18n/locales/*.json`
-- `i18n/supported-locales.json` (also update `.tolgeerc.json` languages if locale list changes)
+- `i18n/supported-locales.json`
 
 **must**, before marking the task complete:
 
 1. If **`en.json` key set changed** → `pnpm i18n:codegen`
-2. **Always** sync Tolgee after any locale JSON edit:
-   ```bash
-   infisical run --env=dev -- pnpm i18n:push
-   ```
-3. Confirm: `infisical run --env=dev -- pnpm i18n:check:tolgee`
-4. Report push + check outcome in the task summary
-
-**Exception — pull-only tasks:** if the agent ran `i18n:pull` and did not hand-edit JSON afterward, skip push.
-
-**Blocked:** if Infisical/`TOLGEE_API_KEY` unavailable, stop and report `blocked` — do not finish with unpushed locale JSON changes.
+2. Confirm: `pnpm i18n:validate`
+3. Report validation outcome in the task summary
 
 ## Authoring rule — new UI code
 
-1. **Author against the catalog**: write `t('key.name')` — never inline English strings.
-2. **Add the key to both `locales/en.json` and `locales/de.json`**, run **`pnpm i18n:codegen`** if keys changed, then **`pnpm i18n:push`**.
+1. **Author against the catalog**: write `t('key.name')` (web) or `t(locale, 'key.name')` (marketing) — never inline English strings.
+2. **Add the key to both `locales/en.json` and `locales/de.json`**, run **`pnpm i18n:codegen`** if keys changed.
 3. **German translation required before merge**: missing German is a Fast-Follow blocker — add translation or create SB Jira task with label `i18n`.
 4. **Key naming**: `<scope>.<context>.<descriptor>` — lowercase, dot-separated.
 5. **No JSX-only translation workarounds**.
@@ -92,17 +75,6 @@ signed-in user preference → Accept-Language → fallback: en
 
 Pass the user's resolved locale as `outputLanguage`. Do not default to English when preference is German.
 
-## Infisical secrets for Tolgee
-
-| Key | `.env.example` | Description |
-|---|---|---|
-| `TOLGEE_API_KEY` | `TOLGEE_API_KEY=` | Tolgee PAT — secret, Infisical only |
-| `TOLGEE_PROJECT_ID` | `TOLGEE_PROJECT_ID=4` | SlugBase project |
-| `VITE_TOLGEE_API_URL` | `VITE_TOLGEE_API_URL=https://tolgee.mdg-labs.dev` | Web client DevTools |
-| `PUBLIC_TOLGEE_API_URL` | `PUBLIC_TOLGEE_API_URL=https://tolgee.mdg-labs.dev` | Marketing DevTools |
-
-Register via `infisical secrets set ... --env=dev`.
-
 ## Verifier checks (Layer 3c)
 
 For any task that adds or changes UI strings:
@@ -110,8 +82,7 @@ For any task that adds or changes UI strings:
 ```bash
 rg -n '"[A-Z][a-z]' packages/web/app
 rg -n 't\("[a-z][a-zA-Z]' packages/web/app
-rg -n "^TOLGEE_" .env.example
-infisical run --env=dev -- pnpm i18n:check:tolgee   # when locale JSON touched
+pnpm i18n:validate                                   # when locale JSON touched
 pnpm test:scripts                                    # i18n catalog utils
 ```
 
@@ -119,7 +90,5 @@ pnpm test:scripts                                    # i18n catalog utils
 
 - **Inline English strings in UI code**
 - **Skipping German on merge** without Jira `i18n` task
-- **Hard-coding `TOLGEE_API_KEY`**
-- **Completing a task after editing `locales/*.json` without `i18n:push`**
 - **Skipping `i18n:codegen` after `en.json` key-set changes**
 - **Silently falling back to key name** — warn in dev; throw in CI for missing default-locale keys

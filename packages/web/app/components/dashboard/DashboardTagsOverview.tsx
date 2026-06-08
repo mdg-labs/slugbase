@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 
 import { sortTagsByUsage } from "./dashboard.utils.js";
@@ -9,7 +9,7 @@ export type DashboardTagsOverviewProps = {
 };
 
 export function DashboardTagsOverview({ tags }: DashboardTagsOverviewProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const topTags = sortTagsByUsage(tags).slice(0, 12);
 
   return (

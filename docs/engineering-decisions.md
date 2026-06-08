@@ -26,7 +26,7 @@ This doc exists so roadmap tasks and sub-agents have concrete, runnable answers 
 | CSRF | **double-submit token** | Over the §5.8 exempt allowlist |
 | Background work | **In-process** (no worker/broker) | §22.10, §6.3 |
 | AI provider (v1) | **OpenAI** | Behind the vendor-neutral AI interface (§11.2) |
-| i18n | **Tolgee** (React SDK) | en + de catalogs (§17) |
+| i18n | **react-i18next** (web) + repo JSON | en + de catalogs (§17) |
 | Secrets | **Infisical Cloud (EU)** | All envs (§15, §22.9) |
 
 ---
@@ -124,15 +124,14 @@ Adding an env var = the 4-step Infisical-first workflow in rule `05-env-vars` (I
 
 ---
 
-## 9. i18n — Tolgee (spec §17, decision #33)
+## 9. i18n — repo JSON (spec §17, decision #33)
 
 | Field | Value |
 |---|---|
-| Instance | `https://tolgee.mdg-labs.dev` (self-hosted) |
-| Project | `4` (`/projects/4`); `TOLGEE_PROJECT_ID=4` |
-| Client API URL | `VITE_TOLGEE_API_URL=https://tolgee.mdg-labs.dev` |
-| PAT | `TOLGEE_API_KEY` (secret, Infisical env root) |
-| SDK | Tolgee **React SDK** in `web`; shared project for Astro `marketing` |
+| Catalogs | `packages/web/app/i18n/locales/{en,de}.json`, `packages/marketing/src/i18n/locales/{en,de}.json` |
+| Web runtime | **react-i18next** with static JSON resources (`createI18n`) |
+| Marketing | Native `t(locale, key)` at build time (`translate.ts`) |
+| CI | `pnpm i18n:validate` (locale parity + key references) + `i18n:check:hardcoded` |
 
 Every UI string is a catalog key `<scope>.<context>.<descriptor>`; en + de required before merge (rule `10-i18n`). Language resolution: user pref → `Accept-Language` → `en`.
 

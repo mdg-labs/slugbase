@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { useEffect, useRef, useState } from "react";
 import { Form, useLoaderData, useNavigate, useNavigation, useRevalidator, useSearchParams } from "react-router";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
@@ -49,7 +49,7 @@ interface FolderRowProps {
 }
 
 function FolderRow({ folder, currentUserId, canShare, onRename, onDelete }: FolderRowProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const itemScope = resolveResourceSharingScope(
     folder.userId,
@@ -172,7 +172,7 @@ interface RenameFolderDialogProps {
 }
 
 function RenameFolderDialog({ folder, onClose, onSaved }: RenameFolderDialogProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const { showToast, showError } = useAppToast();
   const [name, setName] = useState(folder.name);
   const [submitting, setSubmitting] = useState(false);
@@ -253,7 +253,7 @@ interface DeleteFolderDialogProps {
 }
 
 function DeleteFolderDialog({ folder, onClose, onDeleted }: DeleteFolderDialogProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const { showToast, showError } = useAppToast();
   const [submitting, setSubmitting] = useState(false);
 
@@ -312,7 +312,7 @@ interface NewFolderDialogProps {
 }
 
 function NewFolderDialog({ onClose, onSaved }: NewFolderDialogProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const { showToast, showError } = useAppToast();
   const [name, setName] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -391,7 +391,7 @@ const SORT_OPTIONS: { value: FolderSort; labelKey: string }[] = [
 ];
 
 export function FolderListPage() {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const data = useLoaderData<FolderListData>();
   const navigate = useNavigate();
   const navigation = useNavigation();

@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { Command } from "cmdk";
 
 import type { SearchBookmarkHit } from "../../lib/search.types.js";
@@ -44,7 +44,7 @@ export function GoModePanel({
   loading,
   onSelectSlug,
 }: GoModePanelProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
 
   if (loading) {
     return (
@@ -101,7 +101,7 @@ export function GoModePanel({
 }
 
 export function GoModeBadge() {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   return (
     <span
       className="inline-flex shrink-0 items-center gap-[5px] rounded-sm bg-accent-subtle px-[7px] py-[3px] font-mono text-[11px] font-semibold uppercase tracking-wide text-accent-text"

@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { useEffect, useMemo, useState } from "react";
 
 import {
@@ -77,7 +77,7 @@ function readDismissed(): boolean {
 export function DashboardOnboardingChecklist({
   data,
 }: DashboardOnboardingChecklistProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const [checked, setChecked] = useState<ChecklistState>(() =>
     readStoredChecklist(),
   );

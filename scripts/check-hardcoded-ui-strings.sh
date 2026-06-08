@@ -68,12 +68,12 @@ run_rg_check() {
 }
 
 # Same heuristics as packages/web/app/i18n/hardcoded-strings.spec.ts
-run_rg_check "hard-coded user-visible strings found (use Tolgee catalog keys)" \
+run_rg_check "hard-coded user-visible strings found (use i18n catalog keys)" \
   '(?:>|(?:placeholder|aria-label|title|alt)=)["\x27]([A-Z][^"\x27{]{1,})["\x27]' \
   "${scan_paths[@]}" \
   "${glob_flags[@]}"
 
-run_rg_check "hard-coded element text found in marketing Astro (use Tolgee catalog keys)" \
+run_rg_check "hard-coded element text found in marketing Astro (use i18n catalog keys)" \
   '\>\s*\n\s*([A-Z][^\n<{]{2,})' \
   packages/marketing/src \
   -g '*.astro' \

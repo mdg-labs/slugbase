@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 
 import type { DashboardBookmark } from "./dashboard.types.js";
 
@@ -15,7 +15,7 @@ function openBookmark(bookmark: DashboardBookmark): void {
 }
 
 export function DashboardQuickAccess({ bookmarks }: DashboardQuickAccessProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
 
   return (
     <section

@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { Button, ConfirmDialog, EmptyState, Input, Label } from "@slugbase/ui";
 import { useMemo, useState } from "react";
 
@@ -69,7 +69,7 @@ interface MembersSettingsPageProps {
 }
 
 export function MembersSettingsPage({ initialData }: MembersSettingsPageProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const [tab, setTab] = useState<MembersTabId>("members");
   const [members, setMembers] = useState(initialData.members);
   const [pending, setPending] = useState(initialData.pendingInvitations);

@@ -1,5 +1,5 @@
 import { Button } from "@slugbase/ui";
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 
 import type { BookmarkModalTagOption } from "../bookmark-modal.types.js";
 
@@ -20,7 +20,7 @@ export function BookmarkModalAiTagSuggestions({
   selectedTagIds,
   onToggleTag,
 }: BookmarkModalAiTagSuggestionsProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
 
   const matches = suggestedNames
     .map((name) => {

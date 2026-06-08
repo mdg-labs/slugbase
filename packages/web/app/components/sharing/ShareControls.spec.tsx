@@ -4,8 +4,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { staticMessages } from "../../i18n/messages.js";
 import { ShareControls } from "./ShareControls.js";
 
-vi.mock("@tolgee/react", () => ({
-  useTranslate: () => ({
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({
     t: (key: string) => {
       const messages = staticMessages.en as Record<string, string>;
       return messages[key] ?? key;

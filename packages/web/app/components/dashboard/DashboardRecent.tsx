@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { useState } from "react";
 
 import { formatRelativeTime } from "./dashboard.utils.js";
@@ -59,7 +59,7 @@ function openBookmark(bookmark: DashboardBookmark): void {
 }
 
 export function DashboardRecent({ bookmarks }: DashboardRecentProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
 
   return (
     <section

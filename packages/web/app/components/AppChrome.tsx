@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { AppShell } from "@slugbase/ui";
 import { Outlet, useNavigate } from "react-router";
 import { useEffect, useState } from "react";
@@ -23,7 +23,7 @@ import {
 import { useAppShellData } from "../lib/session-client.js";
 
 function AppChromeInner() {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { open, setOpen } = useCommandPalette();
   const { openCreate } = useBookmarkModal();

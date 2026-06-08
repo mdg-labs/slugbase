@@ -684,7 +684,7 @@ Every item below was previously an open question and is now **settled** and inte
 28. **Marketing site** is a static site, separately built and deployed, in the same repo; deployed to **Cloudflare Workers** (same platform as the web client).
 31. **Hosted deployment topology (settled):** web client on Cloudflare Workers (edge); API/back-end on Fly.io Frankfurt (`fra`); database on Neon Postgres Frankfurt (`aws-eu-central-1`). Railway was rejected — its only EU region (Amsterdam) has no collocated Neon region, causing cross-region DB latency. Self-hosted uses the combined container image (§14.2) and is unaffected. (Section 14.7.)
 32. **Hosted database engine (settled):** Neon Postgres (`aws-eu-central-1`) for the hosted deployment. Self-hosted v1 requires operator-provided Postgres (same schema/migrations). Embedded SQLite self-host is **deferred** (Fast-Follow).
-33. **i18n tooling (settled):** Tolgee is the translation-management platform. Message catalogs are externalized through the Tolgee SDK; `TOLGEE_API_KEY` and `TOLGEE_PROJECT_ID` are Infisical-managed secrets. (Section 17, rule 10-i18n.mdc.)
+33. **i18n tooling (settled):** Message catalogs live in committed repo JSON (`packages/*/i18n/locales/{en,de}.json`). Web uses react-i18next; marketing uses native `t()` at build time. CI validates locale parity via `pnpm i18n:validate`. (Section 17, rule 10-i18n.mdc.)
 34. **Secrets management tooling (settled):** Infisical Cloud (EU) is the secrets manager for all environments (`dev` / `staging` / `prod`). Operators set `staging` and `prod` secrets via the Infisical UI or OIDC sync; developers use `infisical run --env=dev` locally. All keys live at the environment root (no subfolders). (Section 15, rule 05-env-vars.mdc.)
 
 35. **CI/CD pipeline (settled):** GitHub Actions on hosted runners; single workflow file (`.github/workflows/ci-cd.yml`); branches `staging` and `main`. (Section 22.)
@@ -766,7 +766,7 @@ Runs after CI checks pass. Only proceeds if `package.json` version is greater th
 
 1. Check version bump (compare `package.json` version against latest `v*` tag).
 2. Fetch `staging` Infisical secrets.
-3. Verify translations: `i18n:check:tolgee` (implements spec "tolgee pull --check" in `scripts/tolgee-pull-check.mjs` — merges committed locale JSON, pulls Tolgee, strict diff; not a native upstream CLI flag). Fails if repo catalogs do not match Tolgee. If translators updated Tolgee since last sync, run `pnpm i18n:pull` (via Infisical) and commit before release. **`i18n:push`** syncs repo → Tolgee; **`i18n:pull`** syncs Tolgee → repo (splits merged pull into web/marketing JSON).
+3. Verify translations: `pnpm i18n:validate` (locale parity + referenced keys in committed JSON). Fails if non-default locales are missing keys or UI code references unknown keys.
 4. Generate changelog from `git log` since last tag (conventional commits).
 5. Create annotated git tag `vX.Y.Z` and push.
 6. Create **draft** GitHub Release (changelog as body) — a human publishes it to trigger production.
@@ -799,7 +799,7 @@ All environment secrets are fetched from Infisical via the `Infisical/secrets-ac
 
 **Secret organization (settled):** all keys for an environment live at the **Infisical project root** (no subfolders). Local dev and CI inject the full environment via `infisical run --env=<slug>` and `Infisical/secrets-action` respectively.
 
-- **Server-only secrets** use keys without a client prefix (`SESSION_SECRET`, `TOLGEE_API_KEY`, `DATABASE_URL`, etc.).
+- **Server-only secrets** use keys without a client prefix (`SESSION_SECRET`, `DATABASE_URL`, etc.).
 - **Build-time public config** uses `VITE_*` (web) or `PUBLIC_*` (marketing) — these are inlined into client bundles; never store true secrets under those prefixes.
 
 **OIDC identity (settled):** a **single machine identity** (`INFISICAL_OIDC_IDENTITY_ID`) is used for all CI jobs, scoped read-only to the `slugbase-cloud` project. Per-surface CI identities (`ci-api` / `ci-web` / `ci-marketing`) are a possible later hardening, not v1.
@@ -817,7 +817,7 @@ All environment secrets are fetched from Infisical via the `Infisical/secrets-ac
 
 A clickable HTML/React design prototype lives in `docs/design-prototype/V1/`. It is the **visual and interaction-design source of truth**: it defines the design language, the anatomy of every screen, component states, micro-interactions, and the intended copy tone. It is *not* the product source of truth — feature scope, entitlements, tenancy, security, and data model are governed by Sections 1–22 of this spec. **Where the prototype and this spec disagree, this spec wins** (the known conflicts are catalogued in §23.4).
 
-The prototype is a static, data-mocked artefact (React via CDN + Babel-in-browser, `localStorage` for demo state, fake data in `prototype/data.js`). It must be re-implemented in the real stack against the Tolgee message catalog (§17) — never by copying its hard-coded English strings.
+The prototype is a static, data-mocked artefact (React via CDN + Babel-in-browser, `localStorage` for demo state, fake data in `prototype/data.js`). It must be re-implemented in the real stack against the repo JSON message catalog (§17) — never by copying its hard-coded English strings.
 
 ### 23.1 Design tokens (authoritative)
 
@@ -892,7 +892,7 @@ These v1 requirements are either stubbed or absent in the prototype. They must s
 - **Import / export surface** — beyond the onboarding drop-zone, build the Settings import (JSON + Netscape HTML, success/failure counts, cap-aware) and the **lossless export** (§13).
 - **Slug-preference management screen** — the disambiguation UI links to "manage remembered slug preferences"; build that management view (§8, data model "Slug preference").
 - **Forwarding management surface** — the sidebar has a "Forwarding" item with no page; define/build it or remove it to match the spec's slug/redirect model (§8). 
-- **Full internationalisation (EN/DE)** — the prototype has a language preference control but hard-coded English strings. All UI text must come from the Tolgee catalog with a German translation (§17).
+- **Full internationalisation (EN/DE)** — the prototype has a language preference control but hard-coded English strings. All UI text must come from the repo JSON catalog with a German translation (§17).
 - **Consent / cookie mechanism** — the privacy/consent gating for analytics and error reporting on the hosted service (§18) is not in the prototype.
 - **Contact-form backend wiring** — the prototype renders the Turnstile widget and form; wire it to the public contact endpoint behind the challenge interface (§2.3, §11.1, §11.8).
 

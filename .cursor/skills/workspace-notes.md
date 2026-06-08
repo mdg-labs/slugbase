@@ -68,12 +68,17 @@ CI **does not** run Drizzle migrations against Neon (removed `migrate-staging` /
 Staging smoke (`.github/scripts/smoke-staging-health.sh`) sends Cloudflare Access service-token headers when `CF_ACCESS_CLIENT_ID` + `CF_ACCESS_CLIENT_SECRET` are set in Infisical `staging`.
 _added: 2026-06-01_
 
+## i18n — repo JSON (2026-06-08)
+
+**Decision:** Repo JSON (`packages/*/i18n/locales/{en,de}.json`) is the sole source of truth. Web uses **react-i18next** with static resources; marketing uses native `t(locale, key)`. CI: `pnpm i18n:validate` (locale parity + key references) + `i18n:check:hardcoded`. Future TMS is additive — same JSON files.
+_added: 2026-06-08_
+
 ## Design system + UI prototype (2026-05-31)
 
 `docs/design-prototype/V1/` = **visual/interaction source of truth**; MVP spec = **product source of truth** (spec wins on conflict). Spec §23 documents it; §23.2 maps screens→files, §23.4 lists divergences, §23.5 lists under-built v1 features. Rule: `11-design-system.mdc`.
 Tokens (`colors_and_type.css`): accent periwinkle `#7782f7`, dark-first, IBM Plex Sans/Mono, 4px spacing, semantic success/warn/danger. Consume token vars — never hard-code.
 **Spec-wins divergences:** paid tier = "Personal" (not "Pro"); Free cap = 50 (not 100); no folder cap; API tokens not plan-gated; no custom-domain entitlement v1; no workspace-id-in-URL v1; prices/seats/`go.slugbase.app` are config-driven.
-Prototype is React-via-CDN/Babel/localStorage/mock data — demonstrates design only, not the build target. Re-implement against Tolgee catalog (no copying English strings).
+Prototype is React-via-CDN/Babel/localStorage/mock data — demonstrates design only, not the build target. Re-implement against repo JSON catalog (no copying English strings).
 _added: 2026-05-31_
 
 ## Stack decisions (settled 2026-05-31 — spec §19, decisions #37–#50)
@@ -109,9 +114,9 @@ _added: 2026-05-31_
 | Concern | Tool | Notes |
 |---|---|---|
 | Secrets management | **Infisical** | Infisical Cloud (EU) — `https://eu.infisical.com`; project slug `slugbase-cloud`; envs `dev` / `staging` / `prod`; all keys at **environment root** (no subfolders); local `infisical run --env=dev -- <cmd>`; CI OIDC via `Infisical/secrets-action` — **single** machine identity (`INFISICAL_OIDC_IDENTITY_ID`), project-scoped read-only. **Phase CLI not used.** |
-| Translations | **Tolgee** | v1: en + de (spec §17); self-hosted `https://tolgee.mdg-labs.dev`, project **4** (`TOLGEE_PROJECT_ID=4`, `VITE_TOLGEE_API_URL=https://tolgee.mdg-labs.dev`); Tolgee React SDK in the `web` (React Router v7) app + shared Tolgee project for the Astro marketing site |
+| Translations | **repo JSON** | v1: en + de (spec §17); react-i18next (web) + native `t()` (marketing); CI `pnpm i18n:validate` |
 
-Rules touched: `00-project.mdc` (tech-stack + tooling), `05-env-vars.mdc` (Infisical project + workflow), `10-i18n.mdc` (Tolgee instance/project). `TOLGEE_PROJECT_ID=4` is recorded in the `10-i18n.mdc` key inventory.
+Rules touched: `00-project.mdc` (tech-stack + tooling), `05-env-vars.mdc` (Infisical project + workflow), `10-i18n.mdc` (repo-JSON workflow).
 _added: 2026-05-31_
 
 ## Hosted infrastructure topology (2026-05-31)

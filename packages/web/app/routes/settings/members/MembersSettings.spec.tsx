@@ -7,8 +7,8 @@ import { MembersPlanGate } from "./components/MembersPlanGate.js";
 import { MembersSettingsPage } from "./components/MembersSettingsPage.js";
 import type { MembersSettingsData } from "./members.types.js";
 
-vi.mock("@tolgee/react", () => ({
-  useTranslate: () => ({
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({
     t: (key: string, params?: Record<string, string | number>) => {
       const messages = staticMessages.en as Record<string, string>;
       const template = messages[key] ?? key;

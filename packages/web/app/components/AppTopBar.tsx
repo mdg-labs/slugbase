@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { Badge, Kbd, ThemeSwitcher } from "@slugbase/ui";
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
@@ -92,7 +92,7 @@ function useLocationIcon() {
 }
 
 function useBreadcrumbs(): Breadcrumb {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const location = useLocation();
 
   const bookmarkIcon = (
@@ -156,7 +156,7 @@ function AvatarDropdown({
   userName: string;
   userEmail: string;
 }) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -264,7 +264,7 @@ export function AppTopBar({
   onNewBookmark,
   themeLabels,
 }: AppTopBarProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const breadcrumb = useBreadcrumbs();
   const listMeta = useListPageMeta();
   const subLabel = listMeta.subLabel ?? breadcrumb.sub;

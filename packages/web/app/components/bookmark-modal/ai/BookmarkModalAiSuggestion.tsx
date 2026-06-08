@@ -1,5 +1,5 @@
 import { Button } from "@slugbase/ui";
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 
 export type BookmarkModalAiSuggestionProps = {
   fieldLabel: string;
@@ -12,7 +12,7 @@ export function BookmarkModalAiSuggestion({
   value,
   onApply,
 }: BookmarkModalAiSuggestionProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
 
   return (
     <div

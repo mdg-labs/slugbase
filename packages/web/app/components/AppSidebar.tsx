@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import { NavLink, useLocation } from "react-router";
 
@@ -188,7 +188,7 @@ export function AppSidebar({
   bookmarkCap = 50,
   onUpgrade,
 }: AppSidebarProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const location = useLocation();
   const [switcherOpen, setSwitcherOpen] = useState(false);
 

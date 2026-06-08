@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { useRef } from "react";
 
 interface TotpInputProps {
@@ -12,7 +12,7 @@ interface TotpInputProps {
  * and paste support. Renders in IBM Plex Mono per the design system.
  */
 export function TotpInput({ value, onChange, disabled = false }: TotpInputProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const refs = useRef<Array<HTMLInputElement | null>>([]);
 
   const handleChange = (index: number, char: string): void => {

@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 
 import type { SharingScope } from "./sharing.types.js";
 import { getSharingScopeOption } from "./sharing-scope-option.js";
@@ -9,7 +9,7 @@ export type ScopeIconProps = {
 };
 
 export function ScopeIcon({ scope, className = "" }: ScopeIconProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const option = getSharingScopeOption(scope);
 
   return (

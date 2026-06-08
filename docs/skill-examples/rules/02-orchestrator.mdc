@@ -52,7 +52,7 @@ Even when not listed in a task row, the verifier applies §1.6 of the roadmap:
 - Conventional commits (rule `01-git-workflow.mdc`)
 - TypeScript strict, no `any`, no `console.log` (rule `typescript.mdc`)
 - Security defaults — no logged secrets, server-side validation, Prisma-only DB
-- i18n — every UI string via `next-intl` + Tolgee
+- i18n — every UI string via `next-intl`
 
 ## Non-goals (do not implement)
 

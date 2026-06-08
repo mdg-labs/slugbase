@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { Link, Outlet, useLocation } from "react-router";
 
 type NavItem = {
@@ -83,7 +83,7 @@ function isItemActive(item: NavItem, pathname: string, search: string): boolean 
 }
 
 export default function SettingsLayout() {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const { pathname, search } = useLocation();
 
   return (

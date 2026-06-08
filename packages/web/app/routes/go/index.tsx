@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import {
   Link,
@@ -89,7 +89,7 @@ function CheckCircleIcon() {
 }
 
 export default function GoDisambiguatePage() {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const { slug, candidates } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
 

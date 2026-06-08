@@ -1,11 +1,11 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { ThemeSwitcher, AppShell } from "@slugbase/ui";
 import { useRouteError } from "react-router";
 import { AppErrorPage } from "./AppErrorPage.js";
 import { resolveRouteErrorStatus } from "./resolve-route-error-status.js";
 
 export function AppShellErrorBoundary() {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const error = useRouteError();
   const status = resolveRouteErrorStatus(error);
 

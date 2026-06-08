@@ -32,8 +32,8 @@ vi.mock("react-router", async (importOriginal) => {
   };
 });
 
-vi.mock("@tolgee/react", () => ({
-  useTranslate: () => ({
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({
     t: (key: string) => key,
   }),
 }));

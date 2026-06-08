@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@slugbase/ui";
 import { useState } from "react";
 
@@ -19,7 +19,7 @@ export function CancelSubscriptionPanel({
   onConfirmCancel,
   onKeep,
 }: CancelSubscriptionPanelProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const overflow = Math.max(0, bookmarkCount - freeCap);

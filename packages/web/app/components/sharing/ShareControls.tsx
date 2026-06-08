@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@slugbase/ui";
 import { useState } from "react";
 
@@ -23,7 +23,7 @@ export function ShareControls({
   onUpdated,
   compact = false,
 }: ShareControlsProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const { canShare, currentUserId } = useWorkspaceEntitlements();
   const [open, setOpen] = useState(false);
 

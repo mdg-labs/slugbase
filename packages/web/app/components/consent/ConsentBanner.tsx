@@ -1,11 +1,11 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 
 import { Button } from "@slugbase/ui";
 
 import { useAnalyticsConsent } from "./AnalyticsConsentProvider.js";
 
 export function ConsentBanner() {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const { enabled, visible, accept, decline } = useAnalyticsConsent();
 
   if (!enabled || !visible) {

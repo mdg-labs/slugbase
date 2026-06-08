@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { Button, Input, Label } from "@slugbase/ui";
 import { useState } from "react";
 
@@ -24,7 +24,7 @@ export function SeatManagementSection({
   onUpdateSeats,
   onUpgradeTeam,
 }: SeatManagementSectionProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const breakdown = seatBreakdown(workspace.planSeats, config.teamBaseSeats, memberCount);
   const [adding, setAdding] = useState(0);
   const [draftTotal, setDraftTotal] = useState(breakdown.total);

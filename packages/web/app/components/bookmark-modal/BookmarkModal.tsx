@@ -6,7 +6,7 @@ import {
   Input,
   Label,
 } from "@slugbase/ui";
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { useEffect, useId, useRef, useState } from "react";
 
 import { BookmarkModalAiSuggestion } from "./ai/BookmarkModalAiSuggestion.js";
@@ -306,7 +306,7 @@ export function BookmarkModal({
   aiContext = DEFAULT_BOOKMARK_MODAL_AI_CONTEXT,
   fetchAiSuggestions,
 }: BookmarkModalProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const { canShare, currentUserId } = useWorkspaceEntitlements();
   const formId = useId();
   const urlErrorId = `${formId}-url-error`;

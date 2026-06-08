@@ -1,7 +1,7 @@
 ---
 import LandingSections from "./LandingSections.astro";
 import MarketingLayout from "../layouts/MarketingLayout.astro";
-import { t, type SupportedLocale } from "../i18n/tolgee.js";
+import { t, type SupportedLocale } from "../i18n/translate.js";
 
 const locale = Astro.currentLocale as SupportedLocale;
 const appOrigin = import.meta.env.PUBLIC_FRONTEND_ORIGIN ?? "";

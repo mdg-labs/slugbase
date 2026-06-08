@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@slugbase/ui";
 import { useEffect, useState } from "react";
 
@@ -41,7 +41,7 @@ export function SupporterOfferCard({
   busy,
   onClaim,
 }: SupporterOfferCardProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const endMs = config.supporterPromotionEnd
     ? new Date(config.supporterPromotionEnd).getTime()
     : null;

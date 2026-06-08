@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { useEffect, useRef, useState } from "react";
 import { useLoaderData, useNavigate, useNavigation, useRevalidator, useSearchParams } from "react-router";
 import { AlertTriangleIcon, ExternalLinkIcon, HashIcon, PencilIcon, PlusIcon, SearchIcon, Trash2Icon, XIcon } from "lucide-react";
@@ -77,7 +77,7 @@ function TagRow({
   onDelCancel,
   onDelCommit,
 }: TagRowProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const renameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -189,7 +189,7 @@ interface TagDetailPanelProps {
 }
 
 function TagDetailPanel({ tag, onClose, onRenameRequest, onDeleteRequest }: TagDetailPanelProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   return (
@@ -277,7 +277,7 @@ interface NewTagInlineProps {
 }
 
 function NewTagInline({ onSaved, onCancel }: NewTagInlineProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const { showToast, showError } = useAppToast();
   const [name, setName] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -329,7 +329,7 @@ function NewTagInline({ onSaved, onCancel }: NewTagInlineProps) {
 }
 
 export function TagListPage() {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const data = useLoaderData<TagListData>();
   const navigate = useNavigate();
   const navigation = useNavigation();

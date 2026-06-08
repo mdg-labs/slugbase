@@ -267,7 +267,6 @@ Baked in at **`pnpm --filter @slugbase/web build`**. Public display config only 
 | `VITE_OIDC_ADMIN_UI` | Show workspace OIDC admin panel | Yes | Build only | Optional | No | Build | Hosted: `false`; self-host: `true` |
 | `VITE_AI_BYO_CREDENTIAL` | Show full AI credential form (BYO key) | Yes | Build only | Optional | No | Build | Hosted: `false`; self-host: `true` |
 | `VITE_APP_BASE_URL` | API URL shown in OIDC callback settings | Yes | Build only | Optional | No | Build | `https://api.example.com` |
-| `VITE_TOLGEE_API_URL` | Tolgee instance for DevTools (dev builds) | Optional | Optional | Dev only | No | Build | `https://tolgee.example.com` |
 
 ---
 
@@ -289,7 +288,6 @@ Baked in at **`pnpm --filter @slugbase/marketing build`**. Not used by the self-
 | `PUBLIC_SUPPORTER_PROMOTION_END` | Supporter deadline on marketing site | Yes | No | Optional | No | Build | `2026-12-31T23:59:59Z` |
 | `PUBLIC_TEAM_BASE_SEATS` | Team seats on pricing page | Yes | No | Optional | No | Build | `5` |
 | `PUBLIC_FREE_BOOKMARK_CAP` | Free cap on pricing page | Yes | No | Optional | No | Build | `50` |
-| `PUBLIC_TOLGEE_API_URL` | Tolgee URL for marketing DevTools | Optional | No | Dev only | No | Build | `https://tolgee.example.com` |
 
 ---
 
@@ -345,24 +343,6 @@ Stored in Infisical `staging` / `prod`. Injected into GitHub Actions runners onl
 | `VITE_UMAMI_WEBSITE_ID` | Client analytics site id | No | Optional | Optional | No | Build | Empty (default) |
 
 All other `VITE_*` pricing keys: optional on self-host (billing UI hidden when `VITE_BILLING_ENABLED=false`).
-
----
-
-### 10. Development and tooling (Tolgee / i18n)
-
-Used locally and in CI for translation sync — not required at production runtime (catalogs are baked at build).
-
-| Key | What it does | Hosted | Self-host | Required | Secret | When set | Example value |
-|---|---|---|---|---|---|---|---|
-| `TOLGEE_API_KEY` | Tolgee personal access token | Dev only | Dev only | Dev only | Yes | Dev | `<Tolgee PAT>` |
-| `TOLGEE_PROJECT_ID` | Tolgee project id | Dev only | Dev only | Dev only | No | Dev | `4` |
-| `VITE_TOLGEE_API_URL` | Tolgee API URL (web DevTools) | Dev only | Dev only | Dev only | No | Build | `https://tolgee.mdg-labs.dev` |
-| `PUBLIC_TOLGEE_API_URL` | Tolgee API URL (marketing DevTools) | Dev only | Dev only | Dev only | No | Build | `https://tolgee.mdg-labs.dev` |
-
-```bash
-infisical run --env=dev -- pnpm i18n:push
-infisical run --env=dev -- pnpm i18n:check:tolgee
-```
 
 ---
 

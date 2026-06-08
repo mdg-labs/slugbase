@@ -1,5 +1,5 @@
 import { Kbd } from "@slugbase/ui";
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { Command } from "cmdk";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFetcher, useNavigate } from "react-router";
@@ -131,7 +131,7 @@ export function CommandPalette({
   onOpenChange,
   onNewBookmark,
 }: CommandPaletteProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const fetcher = useFetcher<GlobalSearchResult>();
   const [query, setQuery] = useState("");

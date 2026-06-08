@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLoaderData, useNavigate, useNavigation } from "react-router";
 import { Button } from "@slugbase/ui";
@@ -744,7 +744,7 @@ function TableHead({
   someSelected: boolean;
   onToggleAll: () => void;
 }) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   function SortCol({
     id,
     label,
@@ -826,7 +826,7 @@ function BookmarkCapBanner({
   total: number;
   cap: number;
 }) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const remaining = cap - total;
   const atCap = remaining <= 0;
   const approaching = !atCap && remaining <= 10;
@@ -890,7 +890,7 @@ function BulkBar({
   onMoveToFolder: (folderId: string) => void;
   folders: ToolbarFolder[];
 }) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   return (
     <div
       className="fixed bottom-sp-8 left-1/2 z-[100] flex -translate-x-1/2 items-center gap-sp-3 rounded-full border border-[color:var(--border-strong)] bg-overlay px-sp-5 py-sp-4 shadow-overlay"
@@ -974,7 +974,7 @@ function Pagination({
   total: number;
   onPage: (p: number) => void;
 }) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   if (totalPages <= 1) return null;
   const from = (page - 1) * pageSize + 1;
@@ -1030,7 +1030,7 @@ const SORT_OPTIONS = [
 
 /* ── Main page ──────────────────────────────────────────────── */
 export function BookmarkListPage() {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const data = useLoaderData<BookmarkListData>();
   const navigate = useNavigate();
   const navigation = useNavigation();

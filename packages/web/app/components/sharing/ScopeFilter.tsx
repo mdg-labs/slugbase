@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { useEffect, useRef, useState } from "react";
 
 import {
@@ -21,7 +21,7 @@ export function ScopeFilter({
   disabled = false,
   resourceKind = "bookmark",
 }: ScopeFilterProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const current = getSharingScopeOption(value, resourceKind);

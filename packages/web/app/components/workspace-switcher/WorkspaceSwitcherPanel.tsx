@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 
@@ -104,7 +104,7 @@ export function WorkspaceSwitcherPanel({
   activeWorkspaceId,
   onClose,
 }: WorkspaceSwitcherPanelProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [view, setView] = useState<PanelView>("list");
   const [switchingName, setSwitchingName] = useState("");

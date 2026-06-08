@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import type { ActionFunctionArgs } from "react-router";
 import { Form, Link, useActionData, useNavigation } from "react-router";
 import { AuthShell, MailFieldIcon } from "./AuthShell.js";
@@ -30,7 +30,7 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function ForgotPasswordRoute() {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";

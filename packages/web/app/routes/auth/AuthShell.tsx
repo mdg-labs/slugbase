@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import type { ReactNode } from "react";
 import {
   AuthButton,
@@ -34,9 +34,9 @@ type AuthShellWrapperProps = {
   showSlugRows?: boolean;
 };
 
-/** Tolgee-wired auth layout — primitives live in @slugbase/ui. */
+/** i18n-wired auth layout — primitives live in @slugbase/ui. */
 export function AuthShell({ children, showSlugRows = true }: AuthShellWrapperProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
 
   return (
     <AuthShellBase

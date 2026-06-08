@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 import { useState } from "react";
 
@@ -60,7 +60,7 @@ function openBookmark(bookmark: DashboardBookmark): void {
 }
 
 export function DashboardPinned({ bookmarks }: DashboardPinnedProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
 
   return (
     <section

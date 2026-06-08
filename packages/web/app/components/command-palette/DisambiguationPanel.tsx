@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { useState } from "react";
 
 import type { GoCandidate } from "./go-mode-api.js";
@@ -64,7 +64,7 @@ export function DisambiguationPanel({
   onOpen,
   onBack,
 }: DisambiguationPanelProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const [selectedId, setSelectedId] = useState<string>(candidates[0]?.id ?? "");
   const [remember, setRemember] = useState(false);
 

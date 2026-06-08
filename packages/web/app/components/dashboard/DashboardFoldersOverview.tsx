@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 
 import { sortFoldersByUsage } from "./dashboard.utils.js";
@@ -11,7 +11,7 @@ export type DashboardFoldersOverviewProps = {
 export function DashboardFoldersOverview({
   folders,
 }: DashboardFoldersOverviewProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const topFolders = sortFoldersByUsage(folders).slice(0, 6);
 
   return (

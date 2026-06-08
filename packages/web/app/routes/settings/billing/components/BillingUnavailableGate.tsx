@@ -1,11 +1,11 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 
 interface BillingUnavailableGateProps {
   onBack?: () => void;
 }
 
 export function BillingUnavailableGate({ onBack }: BillingUnavailableGateProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
 
   return (
     <div

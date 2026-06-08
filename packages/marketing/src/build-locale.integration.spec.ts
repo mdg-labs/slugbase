@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { t } from "./i18n/tolgee.js";
+import { t } from "./i18n/translate.js";
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 

@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 
 import type { SharingScope } from "./sharing.types.js";
 
@@ -8,7 +8,7 @@ export type SharingLabelProps = {
 };
 
 export function SharingLabel({ scope, shareGrantCount = 0 }: SharingLabelProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
 
   if (scope === "shared-with-me") {
     return (

@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import type { LoaderFunctionArgs } from "react-router";
 import { Link, useLoaderData } from "react-router";
 
@@ -41,7 +41,7 @@ export async function loader({ request }: LoaderFunctionArgs): Promise<LoaderDat
 }
 
 export default function VerifyEmailChangeRoute() {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const data = useLoaderData<typeof loader>();
 
   return (

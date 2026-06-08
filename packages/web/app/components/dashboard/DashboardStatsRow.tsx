@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 
 import type { DashboardCounts } from "./dashboard.types.js";
@@ -93,7 +93,7 @@ function StatTile({ count, label, icon, to, testId }: StatTileProps) {
 }
 
 export function DashboardStatsRow({ counts }: DashboardStatsRowProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
 
   return (
     <div

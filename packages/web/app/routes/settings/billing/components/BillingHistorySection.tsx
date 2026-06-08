@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@slugbase/ui";
 
 import { hasPaidAccess } from "../billing-entitlements.js";
@@ -17,7 +17,7 @@ export function BillingHistorySection({
   busy,
   onOpenPortal,
 }: BillingHistorySectionProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const hasBillingHistory = hasPaidAccess(workspace) && Boolean(workspace.billingCustomerId);
 
   return (

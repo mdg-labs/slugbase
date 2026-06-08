@@ -16,7 +16,6 @@
   },
   "dependencies": {
     "@slugbase/ui": "workspace:^",
-    "@tolgee/web": "^7.1.0",
     "astro": "^6.4.2"
   },
   "devDependencies": {

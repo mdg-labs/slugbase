@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { Button, Dialog, DialogContent } from "@slugbase/ui";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -27,7 +27,7 @@ export function ShareDialog({
   resourceTitle,
   onUpdated,
 }: ShareDialogProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const [grants, setGrants] = useState<ShareGrant[]>([]);
   const [members, setMembers] = useState<
     Array<{ userId: string; name: string; email: string }>

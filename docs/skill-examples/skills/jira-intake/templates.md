@@ -125,7 +125,7 @@ apps/backend/src/modules/{module}/
 ### Acceptance criteria
 
 - [ ] {UI outcome}
-- [ ] All player-facing strings via `next-intl` + Tolgee
+- [ ] All player-facing strings via `next-intl`
 
 ---
 

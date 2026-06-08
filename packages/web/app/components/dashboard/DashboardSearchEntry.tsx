@@ -1,10 +1,10 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { Kbd } from "@slugbase/ui";
 
 import { useCommandPalette } from "../command-palette/CommandPaletteProvider.js";
 
 export function DashboardSearchEntry() {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const { setOpen } = useCommandPalette();
 
   return (

@@ -29,7 +29,7 @@ alwaysApply: true
 ## Before building any UI task
 
 1. Find the matching prototype file(s) in the screen map (spec §23.2).
-2. Re-implement against tokens + the Tolgee message catalog (rule `10-i18n.mdc`) — **never copy the prototype's hard-coded English strings**.
+2. Re-implement against tokens + the repo JSON message catalog (rule `10-i18n.mdc`) — **never copy the prototype's hard-coded English strings**.
 3. Check spec §23.4 (divergences) and §23.5 (under-built features) — the prototype is pre-final on these points.
 
 ## Divergences — follow the SPEC, not the prototype (spec §23.4)

@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@slugbase/ui";
 import { useCallback, useState } from "react";
 import { Link, useLocation } from "react-router";
@@ -30,7 +30,7 @@ const primaryActionKey = {
 } as const;
 
 export function AppErrorPage({ status, error }: AppErrorPageProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const location = useLocation();
   const [reported, setReported] = useState(false);
 

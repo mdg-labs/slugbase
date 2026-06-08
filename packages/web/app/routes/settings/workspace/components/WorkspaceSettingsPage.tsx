@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 
@@ -37,7 +37,7 @@ export interface WorkspaceSettingsPageProps {
 }
 
 export function WorkspaceSettingsPage({ initialData }: WorkspaceSettingsPageProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const [workspace, setWorkspace] = useState(initialData.workspace);
   const [mail, setMail] = useState<MailSettingsData | null>(initialData.mail);

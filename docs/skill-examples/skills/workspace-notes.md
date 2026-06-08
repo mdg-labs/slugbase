@@ -92,7 +92,7 @@ Single naming convention across the monorepo:
 | pnpm workspace scope    | `@dispatch-one/*`              | `@dispatch-one/backend`, `@dispatch-one/web`   |
 | Fly apps                | `dispatch-one-{env}-{service}` | `dispatch-one-staging-backend`                 |
 | Infisical project       | `dispatch-one`                 | CI `project-slug: dispatch-one`                |
-| Tolgee project          | `dispatch-one`                 | `TOLGEE_API_*` in Infisical                    |
+| Translation project     | `dispatch-one`                 | translation API keys in Infisical                    |
 | Sentry projects         | `dispatch-one-{app}`           | `dispatch-one-backend`, `-worker`, `-frontend` |
 
 **Not** the legacy inverted npm scope (removed in DO-148/DO-149) or legacy external slug `one-dispatch` (removed in DO-150).
@@ -118,7 +118,7 @@ _added: 2026-05-26 (DO-202)_
 
 ## Lane P merge — P7-06 + P7-12 i18n
 
-Integrating `orchestrator/P7-12` after P7-06 on `staging` conflicts in `.tolgee/keys.json` and `apps/web/src/i18n/request.ts`. Resolution: keep **both** `personnel` and `alliance` namespaces (additive merge, no key overlap).
+Integrating `orchestrator/P7-12` after P7-06 on `staging` conflicts in `locale JSON` and `apps/web/src/i18n/request.ts`. Resolution: keep **both** `personnel` and `alliance` namespaces (additive merge, no key overlap).
 _added: 2026-05-21_
 
 ## Fly Dockerfiles — workspace package COPY

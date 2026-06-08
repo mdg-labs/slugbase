@@ -9,7 +9,7 @@ A modern, mobile-first emergency dispatch game (Leitstellenspiel-style) built in
 
 ## Tech stack
 
-- **Frontend**: Next.js (App Router) on Cloudflare Pages, MapLibre + Protomaps, Tailwind, Zustand, TanStack Query, Socket.IO client, next-intl + Tolgee
+- **Frontend**: Next.js (App Router) on Cloudflare Pages, MapLibre + Protomaps, Tailwind, Zustand, TanStack Query, Socket.IO client, next-intl
 - **Backend**: NestJS on Fly.io (REST `/api/v1` + Socket.IO gateway)
 - **Worker**: NestJS standalone on Fly.io (spawn engine, salary tick, schedulers)
 - **Data**: Neon Postgres + PostGIS, Prisma, Upstash Redis, OSRM (self-hosted)

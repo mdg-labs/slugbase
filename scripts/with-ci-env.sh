@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Run any command with SlugBase Node/pnpm/Infisical PATH setup.
 # Usage: bash scripts/with-ci-env.sh pnpm typecheck
-#        bash scripts/with-ci-env.sh infisical run --env=dev -- pnpm i18n:check:tolgee
 
 set -euo pipefail
 

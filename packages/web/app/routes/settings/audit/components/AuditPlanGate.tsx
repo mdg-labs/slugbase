@@ -1,9 +1,9 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@slugbase/ui";
 import { useNavigate } from "react-router";
 
 export function AuditPlanGate() {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   return (

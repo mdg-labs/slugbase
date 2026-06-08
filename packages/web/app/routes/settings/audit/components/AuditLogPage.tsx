@@ -1,4 +1,4 @@
-import { useTranslate } from "@tolgee/react";
+import { useTranslation } from "react-i18next";
 import { useCallback, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 
@@ -21,7 +21,7 @@ const TYPE_LABEL_KEYS: Record<AuditEventType, string> = {
 };
 
 function TypeBadge({ type }: { type: AuditEventType }) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   return (
     <span
       className="shrink-0 rounded px-sp-2 py-sp-1 font-mono font-medium text-fg-muted"
@@ -112,7 +112,7 @@ interface AuditLogPageProps {
 }
 
 export function AuditLogPage({ events }: AuditLogPageProps) {
-  const { t } = useTranslate();
+  const { t } = useTranslation();
   const [, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
