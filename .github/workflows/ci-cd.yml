@@ -324,10 +324,13 @@ jobs:
     needs: [deploy-fly-staging, deploy-web-staging, deploy-marketing-staging]
     if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
     env:
-      # Use GitHub vars (not secrets) to avoid redaction - these are public URLs
+      # Public URLs from GitHub vars (not redacted)
       APP_BASE_URL: ${{ vars.APP_BASE_URL }}
       FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
       MARKETING_ORIGIN: ${{ vars.MARKETING_ORIGIN }}
+      # Cloudflare Access credentials (required to bypass Access on staging workers)
+      CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+      CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -629,10 +632,13 @@ jobs:
       ]
     if: needs.check-not-deployed.outputs.should_deploy == 'true'
     env:
-      # Use GitHub vars (not secrets) to avoid redaction - these are public URLs
+      # Public URLs from GitHub vars (not redacted)
       APP_BASE_URL: ${{ vars.APP_BASE_URL }}
       FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
       MARKETING_ORIGIN: ${{ vars.MARKETING_ORIGIN }}
+      # Cloudflare Access credentials (if production uses Access)
+      CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+      CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
