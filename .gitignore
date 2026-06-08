@@ -16,6 +16,7 @@ build/
 *.tsbuildinfo
 .astro
 .wrangler/
+.pnpm-store/
 
 # env (never commit secrets)
 .env
