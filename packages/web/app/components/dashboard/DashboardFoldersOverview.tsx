@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
+import { FolderIcon } from "lucide-react";
 
 import { sortFoldersByUsage } from "./dashboard.utils.js";
 import type { DashboardFolder } from "./dashboard.types.js";
@@ -21,7 +22,7 @@ export function DashboardFoldersOverview({
     >
       <div className="flex items-center justify-between gap-sp-4 border-b border-[color:var(--border-subtle)] px-sp-6 py-sp-5">
         <h2 className="m-0 flex items-center gap-sp-3 font-semibold text-fg">
-          <span aria-hidden>📁</span>
+          <FolderIcon size={16} aria-hidden="true" />
           {t("dashboard.folders.title")}
         </h2>
         <Link

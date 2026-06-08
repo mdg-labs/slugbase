@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { CheckIcon } from "lucide-react";
 import { Button } from "@slugbase/ui";
 
 import {
@@ -28,9 +29,7 @@ function FeatureCell({
 }) {
   if (value === "included") {
     return (
-      <span className="text-success-text" aria-label={t("settings.billing.feature_included_aria")}>
-        ✓
-      </span>
+      <CheckIcon size={14} className="text-success-text" aria-label={t("settings.billing.feature_included_aria")} />
     );
   }
   if (value === "excluded") {

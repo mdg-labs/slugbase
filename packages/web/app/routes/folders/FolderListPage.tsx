@@ -4,6 +4,7 @@ import { Form, useLoaderData, useNavigate, useNavigation, useRevalidator, useSea
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
   AlertTriangleIcon,
+  CheckIcon,
   ExternalLinkIcon,
   FolderOpenIcon,
   FolderPlusIcon,
@@ -548,7 +549,7 @@ export function FolderListPage() {
                   onClick={() => { updateSort(s.value); }}
                 >
                   {currentSort === s.value && (
-                    <span className="text-[color:var(--accent)]">✓</span>
+                    <CheckIcon size={12} className="text-[color:var(--accent)]" aria-hidden="true" />
                   )}
                   <span className={currentSort === s.value ? "font-medium" : ""}>{t(s.labelKey)}</span>
                 </button>

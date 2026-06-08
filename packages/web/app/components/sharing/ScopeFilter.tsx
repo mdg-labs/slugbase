@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { useEffect, useRef, useState } from "react";
+import { CheckIcon } from "lucide-react";
 
 import {
   SHARING_SCOPE_OPTIONS,
@@ -100,9 +101,7 @@ export function ScopeFilter({
               <ScopeGlyph icon={option.icon} />
               <span className="flex-1">{t(resolved.labelKey)}</span>
               {value === option.id ? (
-                <span aria-hidden className="text-accent-text">
-                  ✓
-                </span>
+                <CheckIcon size={12} className="text-accent-text" aria-hidden="true" />
               ) : null}
             </button>
             );

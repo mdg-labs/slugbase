@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { useEffect, useMemo, useState } from "react";
+import { CheckIcon, CheckSquareIcon, XIcon } from "lucide-react";
 
 import {
   CHECKLIST_DISMISSED_KEY,
@@ -134,7 +135,7 @@ export function DashboardOnboardingChecklist({
     >
       <div className="flex items-center gap-sp-4 border-b border-[color:var(--border-subtle)] px-sp-6 py-sp-5">
         <h2 className="m-0 flex flex-1 items-center gap-sp-3 font-semibold text-fg">
-          <span aria-hidden>☑</span>
+          <CheckSquareIcon size={16} aria-hidden="true" />
           {t("dashboard.checklist.title")}
         </h2>
         {!allDone ? (
@@ -155,7 +156,7 @@ export function DashboardOnboardingChecklist({
             }}
             aria-label={t("dashboard.checklist.dismiss_aria")}
           >
-            ×
+            <XIcon size={14} aria-hidden="true" />
           </button>
         ) : null}
       </div>
@@ -196,7 +197,7 @@ export function DashboardOnboardingChecklist({
                       ].join(" ")}
                       aria-hidden
                     >
-                      {isDone ? "✓" : ""}
+                      {isDone ? <CheckIcon size={12} aria-hidden="true" /> : ""}
                     </span>
                     <span className="min-w-0 flex-1">
                       <span
