@@ -13,10 +13,34 @@ export default [
   route("setup", "routes/setup/setup.tsx"),
   route("forgot-password", "routes/auth/forgot-password.tsx"),
   route("reset-password", "routes/auth/reset-password.tsx"),
+
+  // Proxy routes — forward backend API requests to the NestJS backend.
+  // These sit before the app layout so they match bare paths like
+  // /auth/csrf-token, /workspaces, etc. without the app layout shell.
+  // Each route uses a unique file path to avoid React Router dedup errors.
+  // More specific routes (bulk/*) are listed before parameterized ones (:id/*).
+  route("auth/*", "routes/api/proxy/proxy-auth.ts"),
+  route("bookmarks/bulk/*", "routes/api/proxy/proxy-bookmark-bulk.ts"),
+  route("bookmarks/:id/*", "routes/api/proxy/proxy-bookmark-item.ts"),
+  route("tags/:id/*", "routes/api/proxy/proxy-tag-item.ts"),
+  route("folders/:id/*", "routes/api/proxy/proxy-folder-item.ts"),
+  route("workspaces", "routes/api/proxy-item/workspace-root.ts"),
+  route("workspaces/*", "routes/api/proxy/proxy-workspaces.ts"),
+  route("members", "routes/api/proxy-item/members-root.ts"),
+  route("members/*", "routes/api/proxy/proxy-members.ts"),
+  route("workspace/*", "routes/api/proxy/proxy-workspace.ts"),
+  route("teams", "routes/api/proxy-item/teams-root.ts"),
+  route("teams/*", "routes/api/proxy/proxy-teams.ts"),
+  route("sharing/*", "routes/api/proxy/proxy-sharing.ts"),
+  route("audit/*", "routes/api/proxy/proxy-audit.ts"),
+  route("ai/*", "routes/api/proxy/proxy-ai.ts"),
+
+  // Existing API proxy routes with specific request handling
   route("api/search", "routes/api/search.ts"),
   route("api/go/:slug", "routes/api/go.ts"),
   route("api/go/:slug/choose", "routes/api/go-choose.ts"),
   route("api/import/:kind", "routes/api/import.ts"),
+
   layout("routes/app-layout.tsx", [
     index("routes/dashboard/index.tsx"),
     route("bookmarks", "routes/bookmarks/index.tsx"),
