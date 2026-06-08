@@ -34,11 +34,19 @@ export async function proxyRequest(request: Request): Promise<Response> {
     const responseBody = await res.text();
     const responseContentType = res.headers.get("Content-Type") ?? "application/json";
 
-    const location = res.headers.get("Location");
-    const responseHeaders: Record<string, string> = {
+    const responseHeaders = new Headers({
       "Content-Type": responseContentType,
-    };
-    if (location) responseHeaders["Location"] = location;
+    });
+
+    const location = res.headers.get("Location");
+    if (location) responseHeaders.set("Location", location);
+
+    // Forward Set-Cookie headers from the backend (csrf_token, session, etc.).
+    // The Headers.getSetCookie() method returns all Set-Cookie header values
+    // as an array; each is appended individually to preserve multiple cookies.
+    for (const cookie of res.headers.getSetCookie()) {
+      responseHeaders.append("Set-Cookie", cookie);
+    }
 
     return new Response(responseBody, {
       status: res.status,
