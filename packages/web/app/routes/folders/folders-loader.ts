@@ -25,6 +25,7 @@ export type FolderListData = {
   sort: string;
   total: number;
   items: FolderListItem[];
+  ownerNames: Record<string, string>;
 };
 
 interface ApiFolder {
@@ -42,6 +43,11 @@ interface PaginatedFolders {
   total: number;
   page: number;
   pageSize: number;
+}
+
+interface ShareTargetsResponse {
+  members: Array<{ userId: string; name: string; email: string }>;
+  teams: Array<{ id: string; name: string; memberCount: number }>;
 }
 
 async function fetchJson<T>(request: Request, path: string): Promise<T | null> {
@@ -95,6 +101,20 @@ export async function loadFolderListData(
     );
   }
 
+  // Resolve owner names for shared-with-me scope
+  const ownerNames: Record<string, string> = {};
+  if (scope === "shared-with-me" && list.items.length > 0) {
+    const targets = await fetchJson<ShareTargetsResponse>(
+      request,
+      "/sharing/targets",
+    );
+    if (targets) {
+      for (const member of targets.members) {
+        ownerNames[member.userId] = member.name;
+      }
+    }
+  }
+
   return {
     scope,
     q,
@@ -102,6 +122,7 @@ export async function loadFolderListData(
     pageSize: list.pageSize,
     sort,
     total: list.total,
+    ownerNames,
     items: list.items.map((item) => ({
       ...item,
       shareGrantCount: shareCounts.get(item.id) ?? 0,
