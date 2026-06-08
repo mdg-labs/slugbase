@@ -86,7 +86,8 @@ export function BookmarkModalProvider({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (
-        event.key.toLowerCase() !== "c" ||
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- real-world edge case: event.key can be undefined in some IME/browser scenarios
+      event.key?.toLowerCase() !== "c" ||
         event.metaKey ||
         event.ctrlKey ||
         event.altKey
