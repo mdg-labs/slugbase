@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { useEffect, useRef, useState } from "react";
 import { useLoaderData, useNavigate, useNavigation, useRevalidator, useSearchParams } from "react-router";
-import { AlertTriangleIcon, ExternalLinkIcon, HashIcon, LinkIcon, PencilIcon, PlusIcon, SearchIcon, Trash2Icon, XIcon } from "lucide-react";
+import { AlertTriangleIcon, CheckIcon, ExternalLinkIcon, HashIcon, LinkIcon, PencilIcon, PlusIcon, SearchIcon, Trash2Icon, XIcon } from "lucide-react";
 import { Button, EmptyState } from "@slugbase/ui";
 import { useAppToast } from "../../components/feedback/AppToastProvider.js";
 import { BookmarkFavicon } from "../bookmarks/BookmarkFavicon.js";
@@ -561,7 +561,7 @@ export function TagListPage() {
                         onClick={() => { updateSort(s.value); }}
                       >
                         {currentSort === s.value && (
-                          <span className="text-[color:var(--accent)]">✓</span>
+                          <CheckIcon size={12} className="text-[color:var(--accent)]" aria-hidden="true" />
                         )}
                         <span className={currentSort === s.value ? "font-medium" : ""}>{t(s.labelKey)}</span>
                       </button>
