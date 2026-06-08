@@ -45,3 +45,33 @@ export async function deleteTag(id: string): Promise<void> {
   });
   if (!res.ok) throw new Error("failed");
 }
+
+export type TaggedBookmark = {
+  id: string;
+  title: string;
+  url: string;
+  slug: string | null;
+};
+
+interface PaginatedBookmarks {
+  items: TaggedBookmark[];
+  total: number;
+}
+
+export async function fetchTaggedBookmarks(
+  tagId: string,
+): Promise<TaggedBookmark[]> {
+  const apiBase = getApiBaseUrl();
+  const res = await fetch(
+    `${apiBase}/bookmarks?tagIds=${encodeURIComponent(tagId)}&pageSize=200`,
+    { credentials: "include" },
+  );
+  if (!res.ok) return [];
+  const data = (await res.json()) as PaginatedBookmarks;
+  return data.items.map((item) => ({
+    id: item.id,
+    title: item.title,
+    url: item.url,
+    slug: item.slug,
+  }));
+}

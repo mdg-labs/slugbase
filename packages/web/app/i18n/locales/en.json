@@ -918,6 +918,7 @@
   "tags.detail.close": "Close panel",
   "tags.detail.delete": "Delete",
   "tags.detail.empty_body": "No bookmarks tagged #{name} yet.",
+  "tags.detail.loading": "Loading…",
   "tags.detail.rename": "Rename",
   "tags.detail.view_all_bookmarks": "View all in Bookmarks",
   "tags.list.action_delete": "Delete tag",

@@ -918,6 +918,7 @@
   "tags.detail.close": "Panel schließen",
   "tags.detail.delete": "Löschen",
   "tags.detail.empty_body": "Noch keine Lesezeichen mit #{name} markiert.",
+  "tags.detail.loading": "Lädt…",
   "tags.detail.rename": "Umbenennen",
   "tags.detail.view_all_bookmarks": "Alle in Lesezeichen anzeigen",
   "tags.list.action_delete": "Tag löschen",
