@@ -8,6 +8,20 @@ import { toBookmarkSubmitBody } from "./bookmark-modal.validation.js";
 
 const getApiBaseUrl = (): string => process.env["API_BASE_URL"] ?? "";
 
+async function getMutationHeaders(): Promise<Record<string, string>> {
+  const res = await fetch(`${getApiBaseUrl()}/auth/csrf-token`, {
+    credentials: "include",
+  });
+  if (!res.ok) {
+    throw new Error("Failed to fetch CSRF token");
+  }
+  const data = (await res.json()) as { csrfToken: string };
+  return {
+    "Content-Type": "application/json",
+    "x-csrf-token": data.csrfToken,
+  };
+}
+
 async function parseErrorMessage(res: Response): Promise<string> {
   try {
     const data = (await res.json()) as { message?: string };
@@ -20,9 +34,10 @@ async function parseErrorMessage(res: Response): Promise<string> {
 async function createBookmark(
   body: ReturnType<typeof toBookmarkSubmitBody>,
 ): Promise<{ id: string }> {
+  const headers = await getMutationHeaders();
   const res = await fetch(`${getApiBaseUrl()}/bookmarks`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     credentials: "include",
     body: JSON.stringify(body),
   });
@@ -36,9 +51,10 @@ async function updateBookmark(
   bookmarkId: string,
   body: ReturnType<typeof toBookmarkSubmitBody>,
 ): Promise<void> {
+  const headers = await getMutationHeaders();
   const res = await fetch(`${getApiBaseUrl()}/bookmarks/${bookmarkId}`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
+    headers,
     credentials: "include",
     body: JSON.stringify(body),
   });
@@ -48,9 +64,10 @@ async function updateBookmark(
 }
 
 async function addBookmarkToFolder(folderId: string, bookmarkId: string): Promise<void> {
+  const headers = await getMutationHeaders();
   const res = await fetch(`${getApiBaseUrl()}/folders/${folderId}/bookmarks`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     credentials: "include",
     body: JSON.stringify({ bookmarkId }),
   });
@@ -60,9 +77,10 @@ async function addBookmarkToFolder(folderId: string, bookmarkId: string): Promis
 }
 
 async function addBookmarkToTag(tagId: string, bookmarkId: string): Promise<void> {
+  const headers = await getMutationHeaders();
   const res = await fetch(`${getApiBaseUrl()}/tags/${tagId}/bookmarks`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     credentials: "include",
     body: JSON.stringify({ bookmarkId }),
   });
@@ -72,9 +90,10 @@ async function addBookmarkToTag(tagId: string, bookmarkId: string): Promise<void
 }
 
 async function createTag(name: string): Promise<{ id: string }> {
+  const headers = await getMutationHeaders();
   const res = await fetch(`${getApiBaseUrl()}/tags`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     credentials: "include",
     body: JSON.stringify({ name }),
   });
