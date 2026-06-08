@@ -490,7 +490,7 @@ export function TagListPage() {
         {/* Left panel: tag list */}
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="flex flex-wrap items-center gap-sp-3 border-b border-[color:var(--border)] px-sp-7 py-sp-2" data-testid="tag-list-toolbar">
-              <div className="flex min-w-[180px] max-w-[220px] flex-1 items-center gap-sp-2 rounded-md border border-[color:var(--border)] bg-[color:var(--base)] px-sp-3">
+              <div className="flex w-[220px] items-center gap-sp-2 rounded-md border border-[color:var(--border)] bg-[color:var(--raised)] px-sp-3">
                 <SearchIcon size={15} className="shrink-0 text-fg-muted" aria-hidden="true" />
                 <input
                   value={data.q}

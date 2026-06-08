@@ -1,13 +1,29 @@
-import { SkeletonList } from "@slugbase/ui";
-
 export function FolderListSkeleton() {
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-sp-6 px-sp-6 py-sp-8">
-      <div className="flex flex-col gap-sp-3">
-        <div className="h-8 w-40 animate-pulse rounded-sm bg-raised" aria-hidden="true" />
-        <div className="h-4 w-56 animate-pulse rounded-sm bg-raised" aria-hidden="true" />
+    <div className="p-sp-7" data-testid="folder-list-skeleton">
+      <div className="flex flex-col gap-sp-1">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div
+            key={i}
+            className="flex items-center gap-sp-4 rounded-lg px-sp-5 py-sp-4"
+            aria-hidden="true"
+          >
+            {/* Color dot */}
+            <span className="inline-block h-[10px] w-[10px] animate-pulse rounded bg-[color:var(--border)]" />
+            {/* Name */}
+            <div className="min-w-0 flex-1">
+              <div className="h-[14px] w-3/5 animate-pulse rounded bg-[color:var(--border)]" />
+            </div>
+            {/* Count badge */}
+            <div
+              className="h-[12px] w-[30px] animate-pulse rounded bg-[color:var(--border)]"
+              style={{ fontFamily: "var(--font-mono)" }}
+            />
+            {/* Time */}
+            <div className="h-[12px] w-16 animate-pulse rounded bg-[color:var(--border)]" />
+          </div>
+        ))}
       </div>
-      <SkeletonList rows={6} testId="folder-list-skeleton" />
     </div>
   );
 }

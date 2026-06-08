@@ -1225,19 +1225,9 @@ export function BookmarkListPage() {
 
   return (
     <div className="flex w-full flex-col" data-testid="bookmark-list-page">
-      {/* Cap banner */}
-      {data.bookmarkCap !== null ? (
-        <div className="px-sp-6 pt-sp-6">
-          <BookmarkCapBanner
-            total={data.workspaceBookmarkTotal}
-            cap={data.bookmarkCap}
-          />
-        </div>
-      ) : null}
-
       {/* Toolbar */}
       <div
-        className="flex flex-wrap items-center gap-sp-3 border-b border-[color:var(--border-subtle)] px-sp-6 py-sp-4"
+        className="flex flex-wrap items-center gap-sp-3 border-b border-[color:var(--border-subtle)] px-sp-7 py-sp-2"
         data-testid="bookmark-list-toolbar"
       >
         {/* Search */}
@@ -1468,9 +1458,19 @@ export function BookmarkListPage() {
         </div>
       </div>
 
+      {/* Cap banner (between toolbar and content) */}
+      {data.bookmarkCap !== null ? (
+        <div className="px-sp-7 pt-sp-6">
+          <BookmarkCapBanner
+            total={data.workspaceBookmarkTotal}
+            cap={data.bookmarkCap}
+          />
+        </div>
+      ) : null}
+
       {/* Content */}
       {data.items.length === 0 ? (
-        <div data-testid="bookmark-list-empty">
+        <div className="p-sp-7" data-testid="bookmark-list-empty">
           {hasFilters ? (
             <EmptyState
               title={t("bookmarks.list.empty_title")}
@@ -1516,7 +1516,7 @@ export function BookmarkListPage() {
           )}
         </div>
       ) : view === "grid" ? (
-        <div className="p-sp-6" data-testid="bookmark-grid">
+        <div className="p-sp-7" data-testid="bookmark-grid">
           {showPinnedSection ? (
             <>
               <SectionHead
@@ -1609,10 +1609,8 @@ export function BookmarkListPage() {
           />
         </div>
       ) : (
-        <div
-          className="overflow-hidden rounded-none"
-          data-testid="bookmark-table"
-        >
+        <div className="p-sp-7" data-testid="bookmark-table">
+          <div className="overflow-hidden rounded-none">
           <TableHead
             sort={data.sort}
             setSort={(sort) => {
@@ -1645,6 +1643,7 @@ export function BookmarkListPage() {
               navigateTo({ page: p });
             }}
           />
+          </div>
         </div>
       )}
 
