@@ -434,22 +434,7 @@ export function TagListPage() {
       >
         {/* Left panel: tag list */}
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="border-b border-[color:var(--border)] bg-[color:var(--canvas)] px-sp-6 py-sp-6">
-            <div className="mb-sp-5 flex items-end justify-between gap-sp-4">
-              <div>
-                <h1
-                  className="font-semibold text-fg"
-                  style={{ fontSize: "var(--text-h1)", lineHeight: "var(--lh-h1)" }}
-                >
-                  {t("tags.list.title")}
-                </h1>
-                <p className="mt-sp-2 text-fg-muted" style={{ fontSize: "var(--text-body)" }}>
-                  {t("tags.list.subtitle", { count: data.total })}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-sp-3" data-testid="tag-list-toolbar">
+          <div className="flex flex-wrap items-center gap-sp-3 border-b border-[color:var(--border)] px-sp-7 py-sp-2" data-testid="tag-list-toolbar">
               <div className="flex min-w-[180px] max-w-[220px] flex-1 items-center gap-sp-2 rounded-md border border-[color:var(--border)] bg-[color:var(--base)] px-sp-3">
                 <SearchIcon size={15} className="shrink-0 text-fg-muted" aria-hidden="true" />
                 <input
@@ -541,9 +526,8 @@ export function TagListPage() {
                 {t("tags.list.new_action")}
               </Button>
             </div>
-          </div>
 
-          <div className="flex-1 overflow-y-auto px-sp-6 py-sp-4">
+          <div className="flex-1 overflow-y-auto p-sp-7">
             {showNewInline && (
               <div className="mb-sp-3">
                 <NewTagInline

@@ -467,23 +467,9 @@ export function FolderListPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-sp-6 px-sp-6 py-sp-8">
-      <header className="flex flex-wrap items-end justify-between gap-sp-4">
-        <div>
-          <h1
-            className="font-semibold text-fg"
-            style={{ fontSize: "var(--text-h1)", lineHeight: "var(--lh-h1)" }}
-          >
-            {t("folders.list.title")}
-          </h1>
-          <p className="mt-sp-2 text-fg-muted" style={{ fontSize: "var(--text-body)" }}>
-            {t("folders.list.subtitle", { count: data.total })}
-          </p>
-        </div>
-      </header>
-
+    <div className="flex h-full flex-col overflow-hidden">
       <div
-        className="flex flex-wrap items-center gap-sp-3 rounded-lg border border-[color:var(--border)] bg-[color:var(--raised)] px-sp-5 py-sp-4"
+        className="flex flex-wrap items-center gap-sp-3 border-b border-[color:var(--border)] px-sp-7 py-sp-2"
         data-testid="folder-list-toolbar"
       >
         <Form method="get" className="flex min-w-[12rem] max-w-[240px] flex-1 items-center gap-sp-2 rounded-md border border-[color:var(--border)] bg-[color:var(--base)] px-sp-3">
@@ -586,42 +572,38 @@ export function FolderListPage() {
         </Button>
       </div>
 
+      <div className="flex-1 overflow-y-auto p-sp-7" data-testid="folder-list-content">
       {data.items.length === 0 ? (
-        <div
-          className="rounded-lg border border-dashed border-[color:var(--border)]"
-          data-testid="folder-list-empty"
-        >
-          <EmptyState
-            illustration={<FolderOpenIcon size={40} strokeWidth={1.25} />}
-            title={
-              isFiltered
-                ? t("folders.list.empty_title")
-                : t("folders.list.empty_unfiltered_title")
-            }
-            description={
-              isFiltered
-                ? t("folders.list.empty_body")
-                : t("folders.list.empty_unfiltered_body")
-            }
-            actions={
-              isFiltered ? (
-                <Button variant="secondary" type="button" onClick={clearFilters}>
-                  {t("folders.list.clear_filters_action")}
-                </Button>
-              ) : (
-                <Button
-                  variant="primary"
-                  type="button"
-                  onClick={() => { setShowNewDialog(true); }}
-                >
-                  <FolderPlusIcon size={15} className="shrink-0" />
-                  {t("folders.list.new_action")}
-                </Button>
-              )
-            }
-            testId="folder-list-empty-state"
-          />
-        </div>
+        <EmptyState
+          illustration={<FolderOpenIcon size={40} strokeWidth={1.25} />}
+          title={
+            isFiltered
+              ? t("folders.list.empty_title")
+              : t("folders.list.empty_unfiltered_title")
+          }
+          description={
+            isFiltered
+              ? t("folders.list.empty_body")
+              : t("folders.list.empty_unfiltered_body")
+          }
+          actions={
+            isFiltered ? (
+              <Button variant="secondary" type="button" onClick={clearFilters}>
+                {t("folders.list.clear_filters_action")}
+              </Button>
+            ) : (
+              <Button
+                variant="primary"
+                type="button"
+                onClick={() => { setShowNewDialog(true); }}
+              >
+                <FolderPlusIcon size={15} className="shrink-0" />
+                {t("folders.list.new_action")}
+              </Button>
+            )
+          }
+          testId="folder-list-empty-state"
+        />
       ) : (
         <ul className="flex flex-col gap-sp-2" data-testid="folder-list">
           {data.items.map((folder) => (
@@ -636,6 +618,8 @@ export function FolderListPage() {
           ))}
         </ul>
       )}
+
+      </div>
 
       {renameTarget && (
         <RenameFolderDialog
