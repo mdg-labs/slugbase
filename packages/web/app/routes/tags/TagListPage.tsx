@@ -1,12 +1,14 @@
 import { useTranslation } from "react-i18next";
 import { useEffect, useRef, useState } from "react";
 import { useLoaderData, useNavigate, useNavigation, useRevalidator, useSearchParams } from "react-router";
-import { AlertTriangleIcon, ExternalLinkIcon, HashIcon, PencilIcon, PlusIcon, SearchIcon, Trash2Icon, XIcon } from "lucide-react";
+import { AlertTriangleIcon, ExternalLinkIcon, HashIcon, LinkIcon, PencilIcon, PlusIcon, SearchIcon, Trash2Icon, XIcon } from "lucide-react";
 import { Button, EmptyState } from "@slugbase/ui";
 import { useAppToast } from "../../components/feedback/AppToastProvider.js";
+import { BookmarkFavicon } from "../bookmarks/BookmarkFavicon.js";
 import { type TagListData, type TagListItem } from "./tags-loader.js";
 import { TagListSkeleton } from "./TagListSkeleton.js";
-import { createTag, renameTag, deleteTag } from "./tags-api.js";
+import { createTag, renameTag, deleteTag, fetchTaggedBookmarks } from "./tags-api.js";
+import type { TaggedBookmark } from "./tags-api.js";
 
 const SORTS = ["usage-desc", "name-asc", "created-desc"] as const;
 type TagSort = (typeof SORTS)[number];
@@ -191,6 +193,21 @@ interface TagDetailPanelProps {
 function TagDetailPanel({ tag, onClose, onRenameRequest, onDeleteRequest }: TagDetailPanelProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [bookmarks, setBookmarks] = useState<TaggedBookmark[] | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setBookmarks(null);
+    setLoading(true);
+    void fetchTaggedBookmarks(tag.id).then((items) => {
+      if (!cancelled) {
+        setBookmarks(items);
+        setLoading(false);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [tag.id]);
 
   return (
     <div className="flex h-full flex-col border-l border-[color:var(--border)] bg-[color:var(--base)]" data-testid="tag-detail-panel">
@@ -222,8 +239,14 @@ function TagDetailPanel({ tag, onClose, onRenameRequest, onDeleteRequest }: TagD
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-sp-5">
-        {tag.bookmarkCount === 0 ? (
+      <div className="flex-1 overflow-y-auto p-sp-5" data-testid="tags-detail-body">
+        {loading ? (
+          <div className="flex items-center justify-center py-sp-8">
+            <span className="text-fg-subtle" style={{ fontSize: "var(--text-small)" }}>
+              {t("tags.detail.loading")}
+            </span>
+          </div>
+        ) : bookmarks === null || bookmarks.length === 0 ? (
           <div className="flex flex-col items-center gap-sp-4 py-sp-8 text-center">
             <HashIcon size={28} strokeWidth={1.25} className="text-fg-faint" />
             <p className="text-fg-muted" style={{ fontSize: "var(--text-body)" }}>
@@ -231,9 +254,41 @@ function TagDetailPanel({ tag, onClose, onRenameRequest, onDeleteRequest }: TagD
             </p>
           </div>
         ) : (
-          <p className="text-fg-subtle" style={{ fontSize: "var(--text-small)" }}>
-            {t("tags.detail.bookmarks_hint")}
-          </p>
+          <div className="flex flex-col gap-sp-1">
+            {bookmarks.map((bm) => (
+              <div
+                key={bm.id}
+                className="tag-bm-item flex cursor-pointer items-start gap-sp-3 rounded-md px-sp-3 py-sp-3 transition-colors hover:bg-[color:var(--raised-2)]"
+                onClick={() => { void navigate(`/bookmarks?tagId=${tag.id}`); }}
+                data-testid={`tag-bm-item-${bm.id}`}
+              >
+                <BookmarkFavicon url={bm.url} size={24} className="mt-sp-1" />
+                <div className="tag-bm-info min-w-0 flex-1">
+                  <div
+                    className="tag-bm-title truncate font-medium text-fg"
+                    style={{ fontSize: "var(--text-body)" }}
+                  >
+                    {bm.title}
+                  </div>
+                  <div
+                    className="tag-bm-url truncate text-fg-subtle"
+                    style={{ fontSize: "var(--text-small)" }}
+                  >
+                    {bm.url}
+                  </div>
+                </div>
+                {bm.slug && (
+                  <span
+                    className="slug-line mt-sp-1 flex shrink-0 items-center gap-sp-1 text-fg-faint"
+                    style={{ fontSize: 11 }}
+                  >
+                    <LinkIcon size={11} />
+                    <span className="addr">/go/{bm.slug}</span>
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
         )}
       </div>
 
