@@ -7,6 +7,7 @@ import { ScopeFilter } from "../../components/sharing/ScopeFilter.js";
 import { ScopeIcon } from "../../components/sharing/ScopeIcon.js";
 import { resolveResourceSharingScope } from "../../components/sharing/sharing.utils.js";
 import { useWorkspaceEntitlements } from "../../components/sharing/use-workspace-entitlements.js";
+import { useBookmarkModal } from "../../components/bookmark-modal/BookmarkModalProvider.js";
 import {
   bulkDeleteBookmarks,
   bulkMoveToFolder,
@@ -1036,6 +1037,7 @@ export function BookmarkListPage() {
   const navigate = useNavigate();
   const navigation = useNavigation();
   const { currentUserId, canShare } = useWorkspaceEntitlements();
+  const { openCreate } = useBookmarkModal();
 
   // View toggle: prefer server param, but persist locally
   const [view, setView] = useState<"grid" | "table">(() => {
@@ -1501,7 +1503,7 @@ export function BookmarkListPage() {
                     variant="primary"
                     type="button"
                     onClick={() => {
-                      void navigate("/bookmarks?new=1");
+                      openCreate();
                     }}
                   >
                     {t("bookmarks.list.new_bookmark_action")}
