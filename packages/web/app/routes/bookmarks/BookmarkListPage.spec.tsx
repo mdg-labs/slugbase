@@ -191,7 +191,7 @@ describe("BookmarkListPage", () => {
 
       renderPage();
 
-      const menuBtn = screen.getAllByLabelText("More options")[0]!;
+      const menuBtn = screen.getByLabelText("More options");
       fireEvent.click(menuBtn);
 
       // The card's onClick should NOT have been triggered
