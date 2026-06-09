@@ -38,6 +38,7 @@ function formFromBookmark(bookmark: BookmarkModalInitialBookmark): BookmarkModal
     title: bookmark.title,
     slug: bookmark.slug ?? "",
     folderIds: [...bookmark.folderIds],
+    newFolderNames: [],
     tagIds: [...bookmark.tagIds],
     newTagNames: [],
     pinned: bookmark.pinned,
@@ -49,59 +50,118 @@ function toggleId(ids: string[], id: string): string[] {
   return ids.includes(id) ? ids.filter((value) => value !== id) : [...ids, id];
 }
 
-/* ---------- Searchable folder selector ---------- */
+/* ---------- Searchable folder selector with inline create ---------- */
 
 type FolderSelectorProps = {
   folders: BookmarkModalFolderOption[];
   selectedIds: string[];
+  newFolderNames: string[];
   onToggle: (id: string) => void;
+  onAddNewFolder: (name: string) => void;
+  onRemoveNewFolder: (name: string) => void;
   searchPlaceholder: string;
   emptyLabel: string;
+  createLabel: (name: string) => string;
 };
 
 function FolderSelector({
   folders,
   selectedIds,
+  newFolderNames,
   onToggle,
+  onAddNewFolder,
+  onRemoveNewFolder,
   searchPlaceholder,
   emptyLabel,
+  createLabel,
 }: FolderSelectorProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
   const [q, setQ] = useState("");
+
   const filtered = q
     ? folders.filter((f) => f.name.toLowerCase().includes(q.toLowerCase()))
     : folders;
 
-  if (folders.length === 0) {
-    return (
-      <p
-        className="text-fg-subtle"
-        style={{ fontSize: "var(--text-small)", lineHeight: "var(--lh-small)" }}
-      >
-        {emptyLabel}
-      </p>
-    );
-  }
+  const exactMatch =
+    q.trim().length > 0 &&
+    !folders.some((f) => f.name.toLowerCase() === q.trim().toLowerCase()) &&
+    !newFolderNames.some((n) => n.toLowerCase() === q.trim().toLowerCase());
+
+  const handleCreate = () => {
+    const name = q.trim();
+    if (!name) return;
+    onAddNewFolder(name);
+    setQ("");
+    inputRef.current?.focus();
+  };
+
+  const allNewSelected = newFolderNames.length > 0;
 
   return (
     <div className="flex flex-col gap-sp-2">
-      <input
-        type="search"
-        value={q}
-        onChange={(e) => { setQ(e.target.value); }}
-        placeholder={searchPlaceholder}
-        className="h-7 w-full rounded border border-[color:var(--border)] bg-raised px-sp-3 text-fg placeholder:text-fg-subtle focus:outline-none focus:ring-1 focus:ring-[color:var(--accent)]"
-        style={{ fontSize: "var(--text-small)" }}
-      />
-      <div className="flex max-h-32 flex-col gap-sp-1 overflow-y-auto rounded-md border border-[color:var(--border-subtle)] bg-raised p-sp-2">
-        {filtered.length === 0 ? (
-          <p
-            className="px-sp-2 py-sp-1 text-fg-subtle"
+      {allNewSelected ? (
+        <div className="flex flex-wrap gap-sp-2">
+          {newFolderNames.map((name) => (
+            <span
+              key={name}
+              className="flex items-center gap-sp-2 rounded-full border border-[color:var(--border)] bg-raised-2 px-sp-3 py-sp-1"
+              style={{ fontSize: "var(--text-small)" }}
+            >
+              <span className="text-fg">{name}</span>
+              <button
+                type="button"
+                onClick={() => { onRemoveNewFolder(name); }}
+                className="text-fg-subtle hover:text-fg"
+                aria-label={`Remove folder ${name}`}
+              >
+                <svg
+                  className="h-3 w-3"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  viewBox="0 0 24 24"
+                  aria-hidden
+                >
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="flex gap-sp-2">
+        <input
+          ref={inputRef}
+          type="search"
+          value={q}
+          onChange={(e) => { setQ(e.target.value); }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && exactMatch) {
+              e.preventDefault();
+              handleCreate();
+            }
+          }}
+          placeholder={searchPlaceholder}
+          className="h-7 flex-1 rounded border border-[color:var(--border)] bg-raised px-sp-3 text-fg placeholder:text-fg-subtle focus:outline-none focus:ring-1 focus:ring-[color:var(--accent)]"
+          style={{ fontSize: "var(--text-small)" }}
+        />
+        {exactMatch ? (
+          <button
+            type="button"
+            onClick={handleCreate}
+            className="shrink-0 rounded border border-[color:var(--border)] bg-raised px-sp-3 text-fg-muted transition-colors hover:bg-raised-2 hover:text-fg"
             style={{ fontSize: "var(--text-small)" }}
           >
-            {q}
-          </p>
-        ) : (
-          filtered.map((folder) => (
+            {createLabel(q.trim())}
+          </button>
+        ) : null}
+      </div>
+
+      {folders.length > 0 ? (
+        <div className="flex max-h-32 flex-col gap-sp-1 overflow-y-auto rounded-md border border-[color:var(--border-subtle)] bg-raised p-sp-2">
+          {filtered.map((folder) => (
             <label
               key={folder.id}
               className="flex cursor-pointer items-center gap-sp-3 rounded px-sp-2 py-sp-2 hover:bg-raised-2"
@@ -119,9 +179,24 @@ function FolderSelector({
                 {folder.name}
               </span>
             </label>
-          ))
-        )}
-      </div>
+          ))}
+          {filtered.length === 0 && q ? (
+            <p
+              className="px-sp-2 py-sp-1 text-fg-subtle"
+              style={{ fontSize: "var(--text-small)" }}
+            >
+              {q}
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <p
+          className="text-fg-subtle"
+          style={{ fontSize: "var(--text-small)", lineHeight: "var(--lh-small)" }}
+        >
+          {emptyLabel}
+        </p>
+      )}
     </div>
   );
 }
@@ -534,14 +609,28 @@ export function BookmarkModal({
                 <FolderSelector
                   folders={folders}
                   selectedIds={values.folderIds}
+                  newFolderNames={values.newFolderNames}
                   onToggle={(id) => {
                     setValues((current) => ({
                       ...current,
                       folderIds: toggleId(current.folderIds, id),
                     }));
                   }}
+                  onAddNewFolder={(name) => {
+                    setValues((current) => ({
+                      ...current,
+                      newFolderNames: [...current.newFolderNames, name],
+                    }));
+                  }}
+                  onRemoveNewFolder={(name) => {
+                    setValues((current) => ({
+                      ...current,
+                      newFolderNames: current.newFolderNames.filter((n) => n !== name),
+                    }));
+                  }}
                   searchPlaceholder={t("bookmark.modal.folders_search_placeholder")}
                   emptyLabel={t("bookmark.modal.folders_empty")}
+                  createLabel={(name) => t("bookmark.modal.folders_create", { name })}
                 />
               </fieldset>
 
