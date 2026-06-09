@@ -4,19 +4,30 @@ import { AppChrome } from "../components/AppChrome.js";
 import { getSessionUser } from "../lib/session-client.js";
 import type { WorkspaceListItem } from "../components/workspace-switcher/workspace-switcher-api.js";
 import type { SidebarFolder } from "../components/AppSidebar.js";
+import { LoaderStatusError } from "./errors/loader-status-error.js";
 
 const getApiBaseUrl = (): string => process.env["API_BASE_URL"] ?? "";
 
-async function fetchJson<T>(request: Request, path: string): Promise<T | null> {
+type FetchResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; status: number };
+
+async function fetchJson<T>(request: Request, path: string): Promise<FetchResult<T>> {
+  const apiBaseUrl = getApiBaseUrl();
+  if (!apiBaseUrl) {
+    return { ok: false, status: 503 };
+  }
   const cookie = request.headers.get("Cookie") ?? "";
   try {
-    const res = await fetch(`${getApiBaseUrl()}${path}`, {
+    const res = await fetch(`${apiBaseUrl}${path}`, {
       headers: cookie ? { Cookie: cookie } : {},
+      signal: AbortSignal.timeout(10_000),
     });
-    if (!res.ok) return null;
-    return (await res.json()) as T;
+    if (!res.ok) return { ok: false, status: res.status };
+    const data = (await res.json()) as T;
+    return { ok: true, data };
   } catch {
-    return null;
+    return { ok: false, status: 503 };
   }
 }
 
@@ -43,34 +54,50 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const user = await getSessionUser(request);
   if (!user) return redirect("/login");
 
-  const [workspace, workspacesRaw, foldersResponse, bookmarkTotals] = await Promise.all([
+  const apiBaseUrl = getApiBaseUrl();
+  if (!apiBaseUrl) {
+    throw new LoaderStatusError(503);
+  }
+
+  const [workspaceResult, workspacesResult, foldersResult, bookmarksResult] = await Promise.all([
     fetchJson<ApiActiveWorkspace>(request, "/workspaces/active"),
-    fetchJson<unknown>(request, "/workspaces"),
+    fetchJson<WorkspaceListItem[]>(request, "/workspaces"),
     fetchJson<PaginatedResponse<ApiFolder>>(request, "/folders?pageSize=20&sort=name-asc"),
     fetchJson<PaginatedResponse<Record<string, unknown>>>(request, "/bookmarks?pageSize=1"),
   ]);
 
-  if (!workspace) {
-    throw new Error("Failed to load active workspace");
+  if (!workspaceResult.ok) {
+    if (workspaceResult.status === 401) {
+      throw new LoaderStatusError(401);
+    }
+    if (workspaceResult.status === 403) {
+      throw new LoaderStatusError(403);
+    }
+    throw new LoaderStatusError(503);
   }
 
-  const workspaces: WorkspaceListItem[] = Array.isArray(workspacesRaw)
-    ? (workspacesRaw as WorkspaceListItem[])
+  const workspace = workspaceResult.data;
+
+  const workspaces: WorkspaceListItem[] = workspacesResult.ok && Array.isArray(workspacesResult.data)
+    ? workspacesResult.data
     : [{ id: workspace.id, name: workspace.name, plan: workspace.plan, role: "OWNER" }];
 
-  const sidebarFolders: SidebarFolder[] = (foldersResponse?.items ?? []).map((f) => ({
+  const folderItems = foldersResult.ok ? foldersResult.data.items : [];
+  const sidebarFolders: SidebarFolder[] = folderItems.map((f) => ({
     id: f.id,
     name: f.name,
     color: f.icon,
     bookmarkCount: f.bookmarkCount,
   }));
 
+  const bookmarkTotal = bookmarksResult.ok ? bookmarksResult.data.total : 0;
+
   return {
     user,
     workspace: { id: workspace.id, name: workspace.name, plan: workspace.plan },
     workspaces,
     sidebarFolders,
-    bookmarkTotal: bookmarkTotals?.total ?? 0,
+    bookmarkTotal,
   };
 }
 
