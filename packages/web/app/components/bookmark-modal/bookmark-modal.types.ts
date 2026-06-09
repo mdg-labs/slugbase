@@ -28,6 +28,7 @@ export type BookmarkModalFormValues = {
   title: string;
   slug: string;
   folderIds: string[];
+  newFolderNames: string[];
   tagIds: string[];
   newTagNames: string[];
   pinned: boolean;
@@ -48,6 +49,7 @@ export const EMPTY_BOOKMARK_FORM: BookmarkModalFormValues = {
   title: "",
   slug: "",
   folderIds: [],
+  newFolderNames: [],
   tagIds: [],
   newTagNames: [],
   pinned: false,
