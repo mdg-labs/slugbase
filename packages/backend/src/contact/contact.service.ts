@@ -4,6 +4,7 @@ import {
   Injectable,
   ServiceUnavailableException,
 } from "@nestjs/common";
+import { renderContactFormNotificationEmail } from "@slugbase/email-templates";
 import type { MailService } from "@slugbase/shared-types";
 import { ZodError } from "zod";
 
@@ -70,6 +71,12 @@ export class ContactService {
         "",
         dto.message,
       ].join("\n"),
+      html: renderContactFormNotificationEmail({
+        name: dto.name,
+        email: dto.email,
+        topic: topicLabel,
+        message: dto.message,
+      }),
       type: "contact_form_notification",
     });
   }

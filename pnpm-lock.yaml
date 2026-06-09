@@ -58,6 +58,9 @@ importers:
       '@sentry/node':
         specifier: ^9.47.0
         version: 9.47.1
+      '@slugbase/email-templates':
+        specifier: workspace:^
+        version: link:../email-templates
       '@slugbase/shared-types':
         specifier: workspace:^
         version: link:../shared-types

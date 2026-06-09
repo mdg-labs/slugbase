@@ -11,6 +11,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from "@nestjs/common";
+import { renderWorkspaceInvitationEmail } from "@slugbase/email-templates";
 import type { MailService } from "@slugbase/shared-types";
 
 import { AccountsService } from "../accounts/accounts.service.js";
@@ -153,6 +154,12 @@ export class InvitationsService {
             "",
             "If you did not expect this invitation, you can safely ignore this email.",
           ].join("\n"),
+          html: renderWorkspaceInvitationEmail({
+            acceptUrl: inviteUrl,
+            inviterName: inviter?.name ?? "Someone",
+            workspaceName: workspace.name,
+            role: dto.role,
+          }),
           type: "workspace_invitation",
         });
       } catch (err) {
@@ -313,6 +320,12 @@ export class InvitationsService {
             "",
             "If you did not expect this invitation, you can safely ignore this email.",
           ].join("\n"),
+          html: renderWorkspaceInvitationEmail({
+            acceptUrl: inviteUrl,
+            inviterName: inviter?.name ?? "Someone",
+            workspaceName: workspace.name,
+            role: invitation.role,
+          }),
           type: "workspace_invitation",
         });
       } catch (err) {

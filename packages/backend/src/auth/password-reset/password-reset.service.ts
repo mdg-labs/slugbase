@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 
 import { Inject, Injectable, Logger, UnprocessableEntityException } from "@nestjs/common";
+import { renderPasswordResetEmail } from "@slugbase/email-templates";
 import type { MailService } from "@slugbase/shared-types";
 
 import { AccountsService } from "../../accounts/accounts.service.js";
@@ -106,6 +107,7 @@ export class PasswordResetService {
           "If you did not request a password reset, you can safely ignore this email.",
           "Your password will not be changed.",
         ].join("\n"),
+        html: renderPasswordResetEmail({ resetUrl }),
         type: "password_reset",
       });
     } else {

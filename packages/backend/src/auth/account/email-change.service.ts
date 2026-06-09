@@ -7,6 +7,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from "@nestjs/common";
+import { renderEmailChangeVerificationEmail } from "@slugbase/email-templates";
 import type { MailService } from "@slugbase/shared-types";
 
 import { AccountsService } from "../../accounts/accounts.service.js";
@@ -177,6 +178,7 @@ export class EmailChangeService {
           "",
           "If you did not request this change, you can ignore this email.",
         ].join("\n"),
+        html: renderEmailChangeVerificationEmail({ verifyUrl, newEmail: pendingEmail }),
         type: "email_change_verification",
       });
     } else {

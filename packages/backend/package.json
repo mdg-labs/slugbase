@@ -27,6 +27,7 @@
     "@nestjs/throttler": "^6.5.0",
     "@react-router/express": "^7.16.0",
     "@sentry/node": "^9.47.0",
+    "@slugbase/email-templates": "workspace:^",
     "@slugbase/shared-types": "workspace:^",
     "@types/cookie-parser": "^1.4.10",
     "argon2": "^0.44.0",

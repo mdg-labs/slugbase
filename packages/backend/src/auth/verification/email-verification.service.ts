@@ -9,6 +9,7 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from "@nestjs/common";
+import { renderSignupVerificationEmail } from "@slugbase/email-templates";
 import type { MailService } from "@slugbase/shared-types";
 
 import { AccountsService } from "../../accounts/accounts.service.js";
@@ -131,6 +132,7 @@ export class EmailVerificationService {
           "",
           "If you did not create an account, you can safely ignore this email.",
         ].join("\n"),
+        html: renderSignupVerificationEmail({ verifyUrl }),
         type: "signup_verification",
       });
     } else {
