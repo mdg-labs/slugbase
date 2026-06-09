@@ -135,3 +135,8 @@ Key env vars: `APP_BASE_URL` = Fly.io app domain (or custom), `FRONTEND_ORIGIN` 
 Fly scaling: `slugbase-staging-api` **scaled to zero** (`auto_stop_machines`, `min_machines_running = 0`; cold-start on request) — current cost posture. `slugbase-production-api` stays warm (`min_machines_running ≥ 1`). CF Workers (`web`/`marketing`) scale to zero natively.
 Spec: §14.7, resolved decisions 31–32, 51.
 _added: 2026-05-31_
+
+## Lane P branch-merge no-op pattern (2026-06-09)
+
+SB-161 branch `orchestrator/SB-161` pointed at the staging base SHA with no implementation commits — the execution agent likely committed to a different worktree path than the branch tracked. The branch verifier verified worktree files (which were correct) but the git branch had zero diff from base. Integration agent detected the no-op and skipped. Recovery: re-ran as Lane S on staging. **Orchestrator should verify `git log orchestrator/<TASK-ID> --not staging` shows at least one commit before dispatching branch verifiers.** Also affects Lane S when agents commit in worktree paths — the commit lands on a detached HEAD and must be cherry-picked onto `staging`.
+_added: 2026-06-09_
