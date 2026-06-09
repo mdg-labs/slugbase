@@ -14,24 +14,33 @@ async function getMutationHeaders(): Promise<Record<string, string>> {
   };
 }
 
-export async function createFolder(name: string): Promise<void> {
+export interface FolderFormData {
+  name: string;
+  color?: string | null;
+  icon?: string | null;
+}
+
+export async function createFolder(data: FolderFormData): Promise<void> {
   const headers = await getMutationHeaders();
   const res = await fetch(`${getApiBaseUrl()}/folders`, {
     method: "POST",
     headers,
     credentials: "include",
-    body: JSON.stringify({ name }),
+    body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error("failed");
 }
 
-export async function renameFolder(id: string, name: string): Promise<void> {
+export async function renameFolder(
+  id: string,
+  data: FolderFormData,
+): Promise<void> {
   const headers = await getMutationHeaders();
   const res = await fetch(`${getApiBaseUrl()}/folders/${id}`, {
     method: "PATCH",
     headers,
     credentials: "include",
-    body: JSON.stringify({ name }),
+    body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error("failed");
 }
