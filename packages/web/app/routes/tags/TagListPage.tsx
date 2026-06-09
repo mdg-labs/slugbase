@@ -1,8 +1,8 @@
 import { useTranslation } from "react-i18next";
 import { useEffect, useRef, useState } from "react";
 import { useLoaderData, useNavigate, useNavigation, useRevalidator, useSearchParams } from "react-router";
-import { AlertTriangleIcon, CheckIcon, ExternalLinkIcon, HashIcon, LinkIcon, PencilIcon, PlusIcon, SearchIcon, Trash2Icon, XIcon } from "lucide-react";
-import { Button, EmptyState } from "@slugbase/ui";
+import { CheckIcon, ExternalLinkIcon, HashIcon, LinkIcon, PencilIcon, PlusIcon, SearchIcon, Trash2Icon, XIcon } from "lucide-react";
+import { Button, ConfirmDialog, Dialog, DialogContent, EmptyState } from "@slugbase/ui";
 import { useAppToast } from "../../components/feedback/AppToastProvider.js";
 import { BookmarkFavicon } from "../bookmarks/BookmarkFavicon.js";
 import { type TagListData, type TagListItem } from "./tags-loader.js";
@@ -22,6 +22,77 @@ const SORT_OPTIONS: { value: TagSort; labelKey: string }[] = [
   { value: "name-asc", labelKey: "tags.list.sort_alpha" },
   { value: "created-desc", labelKey: "tags.list.sort_recent" },
 ];
+
+const PRESET_COLORS = [
+  "#7782f7",
+  "#45c98a",
+  "#e6b24e",
+  "#f0686b",
+  "#5ba4e6",
+  "#e8944a",
+  "#a77bea",
+  "#8a90a0",
+];
+
+function ColorDot({ color, size = 8 }: { color: string | null; size?: number }) {
+  if (!color) return null;
+  return (
+    <span
+      className="inline-block shrink-0 rounded-full"
+      style={{ width: size, height: size, backgroundColor: color }}
+      aria-hidden="true"
+    />
+  );
+}
+
+/* ---------- Color picker ---------- */
+
+interface ColorPickerProps {
+  value: string | null;
+  onChange: (color: string | null) => void;
+}
+
+function ColorPicker({ value, onChange }: ColorPickerProps) {
+  const { t } = useTranslation();
+  return (
+    <div className="flex flex-col gap-sp-2">
+      <label
+        className="text-fg-muted"
+        style={{ fontSize: "var(--text-small)", lineHeight: "var(--lh-small)" }}
+      >
+        {t("tags.modal.color_label")}
+      </label>
+      <div className="flex items-center gap-sp-3">
+        {PRESET_COLORS.map((swatch) => (
+          <button
+            key={swatch}
+            type="button"
+            className="relative h-7 w-7 rounded-full transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-[color:var(--accent)] focus:ring-offset-2 focus:ring-offset-[color:var(--overlay)]"
+            style={{ backgroundColor: swatch }}
+            aria-label={swatch}
+            onClick={() => { onChange(value === swatch ? null : swatch); }}
+          >
+            {value === swatch && (
+              <CheckIcon size={14} className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-white" />
+            )}
+          </button>
+        ))}
+        {value && (
+          <button
+            type="button"
+            className="text-fg-muted transition-colors hover:text-fg"
+            style={{ fontSize: "var(--text-small)" }}
+            onClick={() => { onChange(null); }}
+          >
+            {t("tags.modal.color_none")}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Usage bar ---------- */
 
 interface UsageBarProps {
   count: number;
@@ -46,46 +117,26 @@ function UsageBar({ count, max }: UsageBarProps) {
   );
 }
 
+/* ---------- Tag row ---------- */
+
 interface TagRowProps {
   tag: TagListItem;
   maxCount: number;
   isSelected: boolean;
-  isRenaming: boolean;
-  isDelConfirm: boolean;
-  renameVal: string;
   onSelect: (tag: TagListItem) => void;
-  onRenameStart: (tag: TagListItem) => void;
-  onRenameChange: (val: string) => void;
-  onRenameCommit: () => void;
-  onRenameCancel: () => void;
-  onDelConfirm: (tag: TagListItem) => void;
-  onDelCancel: () => void;
-  onDelCommit: (tag: TagListItem) => void;
+  onRenameRequest: (tag: TagListItem) => void;
+  onDeleteRequest: (tag: TagListItem) => void;
 }
 
 function TagRow({
   tag,
   maxCount,
   isSelected,
-  isRenaming,
-  isDelConfirm,
-  renameVal,
   onSelect,
-  onRenameStart,
-  onRenameChange,
-  onRenameCommit,
-  onRenameCancel,
-  onDelConfirm,
-  onDelCancel,
-  onDelCommit,
+  onRenameRequest,
+  onDeleteRequest,
 }: TagRowProps) {
   const { t } = useTranslation();
-  const renameInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (isRenaming) { renameInputRef.current?.focus(); renameInputRef.current?.select(); }
-  }, [isRenaming]);
-
   return (
     <div>
       <div
@@ -95,33 +146,17 @@ function TagRow({
           isSelected ? "bg-[color:var(--raised-2)] ring-1 ring-[color:var(--accent)]" : "",
         ].join(" ")}
         style={{ gridTemplateColumns: "1fr 180px 80px 80px" }}
-        onClick={() => { if (!isRenaming) onSelect(tag); }}
+        onClick={() => { onSelect(tag); }}
         data-testid={`tag-row-${tag.id}`}
       >
-        <div className="min-w-0">
-          {isRenaming ? (
-            <input
-              ref={renameInputRef}
-              value={renameVal}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => { onRenameChange(e.target.value); }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") { onRenameCommit(); }
-                if (e.key === "Escape") { onRenameCancel(); }
-              }}
-              onBlur={onRenameCommit}
-              onClick={(e) => { e.stopPropagation(); }}
-              className="w-full rounded border border-[color:var(--accent)] bg-[color:var(--base)] px-sp-3 py-sp-1 text-fg outline-none"
-              style={{ fontSize: "var(--text-body)", fontFamily: "var(--font-mono)" }}
-              maxLength={200}
-            />
-          ) : (
-            <span
-              className="truncate text-fg"
-              style={{ fontSize: "var(--text-body)", fontFamily: "var(--font-mono)" }}
-            >
-              #{tag.name}
-            </span>
-          )}
+        <div className="flex min-w-0 items-center gap-sp-2">
+          <ColorDot color={tag.color} />
+          <span
+            className="truncate text-fg"
+            style={{ fontSize: "var(--text-body)", fontFamily: "var(--font-mono)" }}
+          >
+            #{tag.name}
+          </span>
         </div>
 
         <div className="flex items-center">
@@ -144,7 +179,7 @@ function TagRow({
             title={t("tags.list.action_rename")}
             aria-label={t("tags.list.action_rename")}
             className="inline-flex items-center justify-center rounded p-sp-1 text-fg-muted transition-colors hover:bg-[color:var(--overlay)] hover:text-fg"
-            onClick={() => { onRenameStart(tag); }}
+            onClick={() => { onRenameRequest(tag); }}
           >
             <PencilIcon size={14} />
           </button>
@@ -153,35 +188,17 @@ function TagRow({
             title={t("tags.list.action_delete")}
             aria-label={t("tags.list.action_delete")}
             className="inline-flex items-center justify-center rounded p-sp-1 text-[color:var(--danger-text)] transition-colors hover:bg-[color:var(--overlay)]"
-            onClick={() => { onDelConfirm(tag); }}
+            onClick={() => { onDeleteRequest(tag); }}
           >
             <Trash2Icon size={14} />
           </button>
         </div>
       </div>
-
-      {isDelConfirm && (
-        <div className="mx-sp-2 mb-sp-2 flex flex-wrap items-center gap-sp-3 rounded-md border border-[color:var(--border)] bg-[color:var(--raised)] px-sp-4 py-sp-3">
-          <AlertTriangleIcon size={14} className="shrink-0 text-[color:var(--warning-text)]" />
-          <span className="flex-1 text-fg-muted" style={{ fontSize: "var(--text-small)" }}>
-            {t("tags.list.delete_inline_body", {
-              name: tag.name,
-              count: String(tag.bookmarkCount),
-            })}
-          </span>
-          <div className="flex gap-sp-2">
-            <Button variant="danger" size="sm" type="button" onClick={() => { onDelCommit(tag); }}>
-              {t("tags.list.delete_confirm")}
-            </Button>
-            <Button variant="ghost" size="sm" type="button" onClick={onDelCancel}>
-              {t("tags.list.delete_cancel")}
-            </Button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
+
+/* ---------- Tag detail panel ---------- */
 
 interface TagDetailPanelProps {
   tag: TagListItem;
@@ -213,12 +230,15 @@ function TagDetailPanel({ tag, onClose, onRenameRequest, onDeleteRequest }: TagD
     <div className="flex h-full flex-col border-l border-[color:var(--border)] bg-[color:var(--base)]" data-testid="tag-detail-panel">
       <div className="border-b border-[color:var(--border)] p-sp-5">
         <div className="mb-sp-3 flex items-center justify-between">
-          <span
-            className="truncate font-semibold text-fg"
-            style={{ fontSize: "var(--text-h3)", fontFamily: "var(--font-mono)" }}
-          >
-            #{tag.name}
-          </span>
+          <div className="flex items-center gap-sp-2">
+            <ColorDot color={tag.color} size={10} />
+            <span
+              className="truncate font-semibold text-fg"
+              style={{ fontSize: "var(--text-h3)", fontFamily: "var(--font-mono)" }}
+            >
+              #{tag.name}
+            </span>
+          </div>
           <button
             type="button"
             title={t("tags.detail.close")}
@@ -326,19 +346,32 @@ function TagDetailPanel({ tag, onClose, onRenameRequest, onDeleteRequest }: TagD
   );
 }
 
-interface NewTagInlineProps {
-  onSaved: () => void;
-  onCancel: () => void;
+/* ---------- Tag modal (create / rename) ---------- */
+
+interface TagModalProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  mode: "create" | "edit";
+  initialName?: string;
+  initialColor?: string | null;
+  onSubmit: (name: string, color: string | null) => Promise<void>;
 }
 
-function NewTagInline({ onSaved, onCancel }: NewTagInlineProps) {
+function TagModal({ open, onOpenChange, mode, initialName = "", initialColor = null, onSubmit }: TagModalProps) {
   const { t } = useTranslation();
-  const { showToast, showError } = useAppToast();
-  const [name, setName] = useState("");
-  const [submitting, setSubmitting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [name, setName] = useState(initialName);
+  const [color, setColor] = useState<string | null>(initialColor);
+  const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => { inputRef.current?.focus(); }, []);
+  useEffect(() => {
+    if (open) {
+      setName(initialName);
+      setColor(initialColor);
+      setSubmitting(false);
+      setTimeout(() => { inputRef.current?.focus(); }, 50);
+    }
+  }, [open, initialName, initialColor]);
 
   const handleSubmit = async (e: React.SyntheticEvent) => {
     e.preventDefault();
@@ -346,42 +379,64 @@ function NewTagInline({ onSaved, onCancel }: NewTagInlineProps) {
     if (!trimmed) return;
     setSubmitting(true);
     try {
-      await createTag(trimmed);
-      showToast("tags.list.toast_created");
-      onSaved();
-    } catch {
-      showError(t("tags.list.error_create"));
+      await onSubmit(trimmed, color);
+      onOpenChange(false);
     } finally {
       setSubmitting(false);
     }
   };
 
+  const titleKey = mode === "create" ? "tags.modal.create_title" : "tags.modal.edit_title";
+  const submitKey = mode === "create" ? "tags.modal.submit_create" : "tags.modal.submit_edit";
+
   return (
-    <form
-      className="flex items-center gap-sp-3 rounded-md border border-[color:var(--accent)] bg-[color:var(--raised)] px-sp-4 py-sp-3"
-      onSubmit={(e) => { void handleSubmit(e); }}
-      data-testid="new-tag-inline"
-    >
-      <HashIcon size={14} className="shrink-0 text-fg-muted" aria-hidden="true" />
-      <input
-        ref={inputRef}
-        value={name}
-        onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setName(e.target.value); }}
-        onKeyDown={(e) => { if (e.key === "Escape") onCancel(); }}
-        placeholder={t("tags.list.new_placeholder")}
-        className="flex-1 bg-transparent text-fg outline-none placeholder:text-fg-muted"
-        style={{ fontSize: "var(--text-body)", fontFamily: "var(--font-mono)" }}
-        maxLength={200}
-      />
-      <Button type="submit" variant="primary" size="sm" disabled={submitting || !name.trim()}>
-        {submitting ? t("tags.list.new_saving") : t("tags.list.new_save")}
-      </Button>
-      <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
-        {t("tags.list.new_cancel")}
-      </Button>
-    </form>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent title={t(titleKey)} testId="tag-modal">
+        <form
+          className="flex min-h-0 flex-1 flex-col"
+          onSubmit={(e) => { void handleSubmit(e); }}
+          noValidate
+        >
+          <div className="flex min-h-0 flex-1 flex-col gap-sp-6 overflow-y-auto px-sp-8 py-sp-6">
+            <div className="flex flex-col gap-sp-2">
+              <label
+                htmlFor="tag-name-input"
+                className="text-fg-muted"
+                style={{ fontSize: "var(--text-small)", lineHeight: "var(--lh-small)" }}
+              >
+                {t("tags.modal.name_label")}
+              </label>
+              <input
+                ref={inputRef}
+                id="tag-name-input"
+                value={name}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setName(e.target.value); }}
+                placeholder={t("tags.modal.name_placeholder")}
+                className="rounded-md border border-[color:var(--border)] bg-[color:var(--raised)] px-sp-4 py-sp-3 text-fg outline-none focus:ring-1 focus:ring-[color:var(--accent)]"
+                style={{ fontSize: "var(--text-body)", fontFamily: "var(--font-mono)" }}
+                maxLength={200}
+                required
+              />
+            </div>
+
+            <ColorPicker value={color} onChange={setColor} />
+          </div>
+
+          <div className="flex items-center justify-end gap-sp-4 border-t border-[color:var(--border-subtle)] px-sp-8 py-sp-5">
+            <Button type="button" variant="ghost" disabled={submitting} onClick={() => { onOpenChange(false); }}>
+              {t("tags.modal.cancel")}
+            </Button>
+            <Button type="submit" disabled={submitting || !name.trim()}>
+              {t(submitKey)}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
+
+/* ---------- Main page ---------- */
 
 export function TagListPage() {
   const { t } = useTranslation();
@@ -393,12 +448,12 @@ export function TagListPage() {
   const { showToast, showError } = useAppToast();
 
   const [selected, setSelected] = useState<TagListItem | null>(null);
-  const [renaming, setRenaming] = useState<TagListItem | null>(null);
-  const [renameVal, setRenameVal] = useState("");
-  const [delConfirm, setDelConfirm] = useState<TagListItem | null>(null);
-  const [showNewInline, setShowNewInline] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
   const sortRef = useRef<HTMLDivElement>(null);
+
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editTarget, setEditTarget] = useState<TagListItem | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<TagListItem | null>(null);
 
   const isLoading = navigation.state === "loading";
   const currentSort = isTagSort(data.sort) ? data.sort : "usage-desc";
@@ -408,8 +463,6 @@ export function TagListPage() {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setSelected(null);
-        setRenaming(null);
-        setDelConfirm(null);
       }
     };
     document.addEventListener("keydown", handleKey);
@@ -434,47 +487,41 @@ export function TagListPage() {
     setSortOpen(false);
   };
 
-  const startRename = (tag: TagListItem) => {
-    setRenaming(tag);
-    setRenameVal(tag.name);
-    setDelConfirm(null);
+  const handleCreateSubmit = async (name: string, color: string | null) => {
+    try {
+      await createTag(name, color);
+      showToast("tags.list.toast_created");
+      void revalidator.revalidate();
+    } catch {
+      showError(t("tags.list.error_create"));
+    }
   };
 
-  const commitRename = async () => {
-    if (!renaming) return;
-    const trimmed = renameVal.trim();
-    if (!trimmed || trimmed === renaming.name) {
-      setRenaming(null);
-      return;
-    }
+  const handleEditSubmit = async (name: string, color: string | null) => {
+    if (!editTarget) return;
     try {
-      await renameTag(renaming.id, trimmed);
-      if (selected?.id === renaming.id) {
-        setSelected({ ...selected, name: trimmed });
+      await renameTag(editTarget.id, name, color);
+      if (selected?.id === editTarget.id) {
+        setSelected({ ...selected, name, color });
       }
       showToast("tags.list.toast_renamed");
       void revalidator.revalidate();
     } catch {
       showError(t("tags.list.error_rename"));
     }
-    setRenaming(null);
   };
 
-  const commitDelete = async (tag: TagListItem) => {
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
     try {
-      await deleteTag(tag.id);
-      if (selected?.id === tag.id) setSelected(null);
-      setDelConfirm(null);
+      await deleteTag(deleteTarget.id);
+      if (selected?.id === deleteTarget.id) setSelected(null);
+      setDeleteTarget(null);
       showToast("tags.list.toast_deleted");
       void revalidator.revalidate();
     } catch {
       showError(t("tags.list.error_delete"));
     }
-  };
-
-  const handleNewSaved = () => {
-    setShowNewInline(false);
-    void revalidator.revalidate();
   };
 
   if (isLoading) {
@@ -574,7 +621,7 @@ export function TagListPage() {
                 type="button"
                 variant="primary"
                 size="sm"
-                onClick={() => { setShowNewInline(true); }}
+                onClick={() => { setShowCreateModal(true); }}
                 data-testid="tag-list-new-btn"
               >
                 <PlusIcon size={15} className="shrink-0" />
@@ -583,16 +630,7 @@ export function TagListPage() {
             </div>
 
           <div className="flex-1 overflow-y-auto p-sp-7">
-            {showNewInline && (
-              <div className="mb-sp-3">
-                <NewTagInline
-                  onSaved={handleNewSaved}
-                  onCancel={() => { setShowNewInline(false); }}
-                />
-              </div>
-            )}
-
-            {data.items.length === 0 && !showNewInline ? (
+            {data.items.length === 0 ? (
               <EmptyState
                 illustration={<HashIcon size={36} strokeWidth={1.25} />}
                 title={
@@ -671,17 +709,9 @@ export function TagListPage() {
                     tag={tag}
                     maxCount={data.maxBookmarkCount}
                     isSelected={selected?.id === tag.id}
-                    isRenaming={renaming?.id === tag.id}
-                    isDelConfirm={delConfirm?.id === tag.id}
-                    renameVal={renaming?.id === tag.id ? renameVal : tag.name}
-                    onSelect={(t) => { setSelected((s) => s?.id === t.id ? null : t); setDelConfirm(null); }}
-                    onRenameStart={startRename}
-                    onRenameChange={setRenameVal}
-                    onRenameCommit={() => { void commitRename(); }}
-                    onRenameCancel={() => { setRenaming(null); }}
-                    onDelConfirm={(t) => { setDelConfirm(t); setRenaming(null); }}
-                    onDelCancel={() => { setDelConfirm(null); }}
-                    onDelCommit={(t) => { void commitDelete(t); }}
+                    onSelect={(t) => { setSelected((s) => s?.id === t.id ? null : t); }}
+                    onRenameRequest={(t) => { setEditTarget(t); }}
+                    onDeleteRequest={(t) => { setDeleteTarget(t); }}
                   />
                 ))}
               </div>
@@ -694,11 +724,49 @@ export function TagListPage() {
           <TagDetailPanel
             tag={selected}
             onClose={() => { setSelected(null); }}
-            onRenameRequest={startRename}
-            onDeleteRequest={(tag) => { setDelConfirm(tag); setRenaming(null); }}
+            onRenameRequest={(t) => { setEditTarget(t); }}
+            onDeleteRequest={(t) => { setDeleteTarget(t); }}
           />
         )}
       </div>
+
+      {/* Create modal */}
+      <TagModal
+        open={showCreateModal}
+        onOpenChange={setShowCreateModal}
+        mode="create"
+        onSubmit={handleCreateSubmit}
+      />
+
+      {/* Edit / rename modal */}
+      <TagModal
+        open={!!editTarget}
+        onOpenChange={(open) => { if (!open) setEditTarget(null); }}
+        mode="edit"
+        initialName={editTarget?.name ?? ""}
+        initialColor={editTarget?.color ?? null}
+        onSubmit={handleEditSubmit}
+      />
+
+      {/* Delete confirmation modal */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title={t("tags.modal.delete_title")}
+        description={
+          deleteTarget
+            ? t("tags.modal.delete_body", {
+                name: deleteTarget.name,
+                count: String(deleteTarget.bookmarkCount),
+              })
+            : undefined
+        }
+        confirmLabel={t("tags.modal.delete_confirm")}
+        cancelLabel={t("tags.modal.delete_cancel")}
+        onConfirm={() => { void handleDeleteConfirm(); }}
+        destructive
+        testId="tag-delete-confirm-dialog"
+      />
     </div>
   );
 }

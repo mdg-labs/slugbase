@@ -14,24 +14,28 @@ async function getMutationHeaders(): Promise<Record<string, string>> {
   };
 }
 
-export async function createTag(name: string): Promise<void> {
+export async function createTag(name: string, color?: string | null): Promise<void> {
   const headers = await getMutationHeaders();
+  const body: Record<string, unknown> = { name };
+  if (color) body.color = color;
   const res = await fetch(`${getApiBaseUrl()}/tags`, {
     method: "POST",
     headers,
     credentials: "include",
-    body: JSON.stringify({ name }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error("failed");
 }
 
-export async function renameTag(id: string, name: string): Promise<void> {
+export async function renameTag(id: string, name: string, color?: string | null): Promise<void> {
   const headers = await getMutationHeaders();
+  const body: Record<string, unknown> = { name };
+  if (color) body.color = color;
   const res = await fetch(`${getApiBaseUrl()}/tags/${id}`, {
     method: "PATCH",
     headers,
     credentials: "include",
-    body: JSON.stringify({ name }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error("failed");
 }
