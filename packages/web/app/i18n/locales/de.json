@@ -201,6 +201,7 @@
   "bookmarks.list.menu_pin": "Anheften",
   "bookmarks.list.menu_unpin": "Anheftung aufheben",
   "bookmarks.list.new_bookmark_action": "Neues Lesezeichen",
+  "bookmarks.list.no_slug": "Kein Slug",
   "bookmarks.list.pagination_page": "Seite {page} von {total}",
   "bookmarks.list.pagination_range": "{from}–{to} von {total}",
   "bookmarks.list.result_count": "{count} Ergebnisse",

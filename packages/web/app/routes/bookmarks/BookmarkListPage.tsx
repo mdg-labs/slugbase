@@ -602,7 +602,7 @@ function BookmarkCard({
           style={{ fontSize: 12 }}
         >
           <LinkOffIcon />
-          <span>No slug</span>
+          <span>{t("bookmarks.list.no_slug")}</span>
         </span>
       )}
 

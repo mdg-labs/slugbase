@@ -201,6 +201,7 @@
   "bookmarks.list.menu_pin": "Pin",
   "bookmarks.list.menu_unpin": "Unpin",
   "bookmarks.list.new_bookmark_action": "New bookmark",
+  "bookmarks.list.no_slug": "No slug",
   "bookmarks.list.pagination_page": "Page {page} of {total}",
   "bookmarks.list.pagination_range": "{from}–{to} of {total}",
   "bookmarks.list.result_count": "{count} results",
