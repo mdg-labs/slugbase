@@ -524,7 +524,7 @@ function BookmarkCard({
           className="inline-flex items-center gap-sp-2 self-start rounded border border-[color:var(--accent-border)] bg-[color:var(--accent-subtle)] px-sp-3 py-sp-1 font-mono text-accent-text"
           style={{ fontSize: 12 }}
         >
-          <LinkIcon size={12} />
+          <ArrowRightIcon size={12} />
           /go/{bookmark.slug}
         </span>
       ) : (
@@ -562,7 +562,7 @@ function BookmarkCard({
   );
 }
 
-function LinkIcon({ size = 14 }: { size?: number }) {
+function ArrowRightIcon({ size = 14 }: { size?: number }) {
   return (
     <svg
       aria-hidden
@@ -575,8 +575,7 @@ function LinkIcon({ size = 14 }: { size?: number }) {
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      <path d="M5 9l4-4M8.5 4l1-.5a2.83 2.83 0 014 4l-1.5 1.5" />
-      <path d="M5 9l-1 .5a2.83 2.83 0 01-4-4L1.5 4" />
+      <path d="M2 7h10M8 3l4 4-4 4" />
     </svg>
   );
 }
@@ -665,7 +664,7 @@ function BookmarkRow({
             className="inline-flex max-w-full items-center gap-sp-2 truncate font-mono text-accent-text"
             style={{ fontSize: 12 }}
           >
-            <LinkIcon size={11} />
+            <ArrowRightIcon size={12} />
             <span className="truncate">/go/{bookmark.slug}</span>
           </span>
         ) : (
