@@ -108,8 +108,22 @@ describe("BookmarkModal", () => {
     fireEvent.change(view.getByLabelText("Slug"), {
       target: { value: "docs" },
     });
-    fireEvent.click(view.getByLabelText("Reading"));
-    fireEvent.click(view.getByLabelText("research"));
+
+    // Select folder via dropdown
+    fireEvent.click(view.getByTestId("folder-selector-trigger"));
+    await waitFor(() => {
+      expect(view.getByTestId("folder-selector-menu")).toBeTruthy();
+    });
+    fireEvent.click(view.getByRole("option", { name: "Reading" }));
+
+    // Select tag via suggestion list
+    const input = view.getByTestId("tag-input");
+    fireEvent.focus(input);
+    await waitFor(() => {
+      expect(view.getByTestId("tag-suggestions")).toBeTruthy();
+    });
+    fireEvent.mouseDown(view.getByRole("option", { name: /research/ }));
+
     fireEvent.click(view.getByRole("checkbox", { name: "Pin bookmark" }));
 
     fireEvent.click(view.getByRole("button", { name: "Save bookmark" }));
@@ -178,6 +192,208 @@ describe("BookmarkModal", () => {
         pinned: false,
         forwardingEnabled: true,
       });
+    });
+  });
+
+  it("creates tag pills from typing and Enter key", async () => {
+    const view = render(
+      <BookmarkModal
+        open
+        onOpenChange={vi.fn()}
+        mode="create"
+        folders={folders}
+        tags={tags}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    const input = view.getByTestId("tag-input");
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "newtag" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    // New tag pill should appear
+    await waitFor(() => {
+      expect(view.getByText("newtag")).toBeTruthy();
+      expect(view.getByTestId("tag-remove-new-newtag")).toBeTruthy();
+    });
+
+    // Input should be cleared
+    expect((input as HTMLInputElement).value).toBe("");
+  });
+
+  it("removes tags via pill X button", async () => {
+    const view = render(
+      <BookmarkModal
+        open
+        onOpenChange={vi.fn()}
+        mode="create"
+        folders={folders}
+        tags={tags}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    // Add a new tag first
+    const input = view.getByTestId("tag-input");
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "test" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => {
+      expect(view.getByTestId("tag-remove-new-test")).toBeTruthy();
+    });
+
+    // Remove it via X button
+    fireEvent.click(view.getByTestId("tag-remove-new-test"));
+
+    await waitFor(() => {
+      expect(view.queryByTestId("tag-remove-new-test")).toBeNull();
+    });
+  });
+
+  it("removes tags via Backspace on empty input", async () => {
+    const view = render(
+      <BookmarkModal
+        open
+        onOpenChange={vi.fn()}
+        mode="create"
+        folders={folders}
+        tags={tags}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    // Add a new tag
+    const input = view.getByTestId("tag-input");
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "test" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => {
+      expect(view.getByTestId("tag-remove-new-test")).toBeTruthy();
+    });
+
+    // Press Backspace on empty input to remove last tag
+    fireEvent.keyDown(input, { key: "Backspace" });
+
+    await waitFor(() => {
+      expect(view.queryByTestId("tag-remove-new-test")).toBeNull();
+    });
+  });
+
+  it("shows tag input even when no tags exist", () => {
+    const view = render(
+      <BookmarkModal
+        open
+        onOpenChange={vi.fn()}
+        mode="create"
+        folders={[]}
+        tags={[]}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    // Tag input should always be present in the DOM
+    const input = view.getByTestId("tag-input");
+    expect(input).toBeTruthy();
+    expect(input.getAttribute("data-testid")).toBe("tag-input");
+  });
+
+  it("opens folder dropdown and shows create trigger", async () => {
+    const view = render(
+      <BookmarkModal
+        open
+        onOpenChange={vi.fn()}
+        mode="create"
+        folders={folders}
+        tags={tags}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(view.getByTestId("folder-selector-trigger"));
+
+    await waitFor(() => {
+      expect(view.getByTestId("folder-selector-menu")).toBeTruthy();
+      expect(view.getByTestId("folder-create-trigger")).toBeTruthy();
+    });
+  });
+
+  it("shows nested create-folder subflow inside dropdown", async () => {
+    const view = render(
+      <BookmarkModal
+        open
+        onOpenChange={vi.fn()}
+        mode="create"
+        folders={folders}
+        tags={tags}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    // Open folder dropdown
+    fireEvent.click(view.getByTestId("folder-selector-trigger"));
+    await waitFor(() => {
+      expect(view.getByTestId("folder-create-trigger")).toBeTruthy();
+    });
+
+    // Click the create trigger
+    fireEvent.click(view.getByTestId("folder-create-trigger"));
+
+    await waitFor(() => {
+      expect(view.getByTestId("folder-create-name-input")).toBeTruthy();
+      expect(view.getByTestId("folder-create-confirm")).toBeTruthy();
+    });
+
+    // Type a name and confirm
+    fireEvent.change(view.getByTestId("folder-create-name-input"), {
+      target: { value: "New Folder" },
+    });
+    fireEvent.click(view.getByTestId("folder-create-confirm"));
+
+    // Dropdown should close and form should have the new folder name
+    await waitFor(() => {
+      expect(view.queryByTestId("folder-selector-menu")).toBeNull();
+    });
+  });
+
+  it("selects and deselects existing folders via dropdown", async () => {
+    const view = render(
+      <BookmarkModal
+        open
+        onOpenChange={vi.fn()}
+        mode="create"
+        folders={folders}
+        tags={tags}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    // Open dropdown
+    fireEvent.click(view.getByTestId("folder-selector-trigger"));
+    await waitFor(() => {
+      expect(view.getByTestId("folder-selector-menu")).toBeTruthy();
+    });
+
+    // Select the folder (multi-select: dropdown stays open)
+    fireEvent.click(view.getByRole("option", { name: "Reading" }));
+
+    // Dropdown stays open for multi-select — deselect immediately
+    await waitFor(() => {
+      expect(view.getByTestId("folder-selector-menu")).toBeTruthy();
+    });
+    fireEvent.click(view.getByRole("option", { name: "Reading" }));
+
+    // Still open after deselect
+    await waitFor(() => {
+      expect(view.getByTestId("folder-selector-menu")).toBeTruthy();
+    });
+
+    // Close by clicking trigger
+    fireEvent.click(view.getByTestId("folder-selector-trigger"));
+    await waitFor(() => {
+      expect(view.queryByTestId("folder-selector-menu")).toBeNull();
     });
   });
 });
