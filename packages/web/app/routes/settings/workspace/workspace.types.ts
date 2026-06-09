@@ -43,6 +43,7 @@ export interface OidcProviderSummary {
 export interface WorkspaceSettingsData {
   workspace: WorkspaceSummary;
   currentUserRole: WorkspaceMemberRole;
+  membersForbidden: boolean;
   interfaceConfig: WorkspaceInterfaceConfig;
   appBaseUrl: string;
   mail: MailSettingsData | null;

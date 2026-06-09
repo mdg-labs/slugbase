@@ -41,6 +41,7 @@ export interface MembersSettingsData {
   teams: TeamRow[];
   currentUserId: string;
   currentUserRole: MemberRole;
+  membersForbidden: boolean;
 }
 
 export type MembersTabId = "members" | "teams";

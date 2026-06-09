@@ -37,6 +37,7 @@ afterEach(() => {
 const baseData: WorkspaceSettingsData = {
   workspace: { id: "ws-1", name: "Acme Engineering", plan: "team" },
   currentUserRole: "OWNER",
+  membersForbidden: false,
   interfaceConfig: {
     mailAdminUi: true,
     oidcAdminUi: true,

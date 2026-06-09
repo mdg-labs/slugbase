@@ -6,6 +6,7 @@ import type {
   TeamRow,
   WorkspaceSummary,
 } from "./members.types.js";
+import { fetchMembersWithFallback } from "../members-fetch.js";
 
 const getApiBaseUrl = (): string => process.env["API_BASE_URL"] ?? "";
 
@@ -67,12 +68,29 @@ export async function loadMembersSettingsData(
   pendingInvitations: PendingInvitationRow[];
   teams: TeamRow[];
   currentUserRole: MemberRole;
+  membersForbidden: boolean;
 } | null> {
   const workspace = await fetchJson<ApiWorkspace>("/workspaces/active", request);
-  const members = await fetchJson<MemberRow[]>("/members", request);
-  if (!workspace || !members) return null;
+  const { members: rawMembers, forbidden } = await fetchMembersWithFallback<MemberRow>(request);
+  if (!workspace) return null;
 
-  const currentMember = members.find((member) => member.userId === currentUserId);
+  if (forbidden || !rawMembers) {
+    return {
+      workspace: {
+        id: workspace.id,
+        name: workspace.name,
+        plan: workspace.plan,
+        planSeats: workspace.planSeats,
+      },
+      members: [],
+      pendingInvitations: [],
+      teams: [],
+      currentUserRole: "ADMIN",
+      membersForbidden: true,
+    };
+  }
+
+  const currentMember = rawMembers.find((member) => member.userId === currentUserId);
   if (!currentMember) return null;
 
   const pendingInvitations =
@@ -87,10 +105,11 @@ export async function loadMembersSettingsData(
       plan: workspace.plan,
       planSeats: workspace.planSeats,
     },
-    members,
+    members: rawMembers,
     pendingInvitations,
     teams,
     currentUserRole: currentMember.role,
+    membersForbidden: false,
   };
 }
 

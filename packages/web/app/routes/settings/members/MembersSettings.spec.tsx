@@ -71,6 +71,7 @@ const teamData: MembersSettingsData = {
   ],
   currentUserId: "u-owner",
   currentUserRole: "OWNER",
+  membersForbidden: false,
 };
 
 describe("MembersSettingsPage", () => {

@@ -35,6 +35,7 @@ export async function workspaceSettingsLoader({
   return {
     workspace: context.workspace,
     currentUserRole: context.currentUserRole,
+    membersForbidden: context.membersForbidden,
     interfaceConfig,
     appBaseUrl: readAppBaseUrl(),
     mail,

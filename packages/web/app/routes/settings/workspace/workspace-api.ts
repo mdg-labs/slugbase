@@ -1,3 +1,4 @@
+import { fetchMembersWithFallback } from "../members-fetch.js";
 import type {
   AiSettingsData,
   MailSettingsData,
@@ -57,13 +58,29 @@ export async function loadWorkspaceSettingsContext(
 ): Promise<{
   workspace: WorkspaceSummary;
   currentUserRole: ApiMember["role"];
+  membersForbidden: boolean;
 } | null> {
   const workspace = await fetchJson<WorkspaceSummary & { planSeats?: number | null }>(
     "/workspaces/active",
     request,
   );
-  const members = await fetchJson<ApiMember[]>("/members", request);
-  if (!workspace || !members) return null;
+  const { members, forbidden } = await fetchMembersWithFallback(request);
+  if (!workspace) return null;
+
+  if (forbidden || !members) {
+    // On hosted Free, the /members endpoint may return 403 because the
+    // team-admin entitlement is not granted. Fall back to a safe default
+    // role (ADMIN — the owner always has at least ADMIN).
+    return {
+      workspace: {
+        id: workspace.id,
+        name: workspace.name,
+        plan: workspace.plan,
+      },
+      currentUserRole: "ADMIN",
+      membersForbidden: true,
+    };
+  }
 
   const currentMember = members.find((member) => member.userId === currentUserId);
   if (!currentMember) return null;
@@ -75,6 +92,7 @@ export async function loadWorkspaceSettingsContext(
       plan: workspace.plan,
     },
     currentUserRole: currentMember.role,
+    membersForbidden: false,
   };
 }
 

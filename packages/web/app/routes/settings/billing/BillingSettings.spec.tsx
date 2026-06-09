@@ -69,6 +69,7 @@ const baseData: BillingSettingsData = {
   memberCount: 1,
   currentUserId: "u-owner",
   currentUserRole: "OWNER",
+  membersForbidden: false,
   planConfig: {
     billingEnabled: true,
     personalMonthlyPrice: "$4",

@@ -21,10 +21,6 @@ import { WorkspaceMembersService } from "../src/workspaces/workspace-members.ser
 import { WorkspacesService } from "../src/workspaces/workspaces.service.js";
 import { createTestDatabase } from "./test-database.js";
 
-interface ErrorResponse {
-  message: string;
-}
-
 async function bootstrapApp(databaseUrl: string, envOverrides: NodeJS.ProcessEnv = {}) {
   applyTestEnv({ DATABASE_URL: databaseUrl, ...envOverrides });
   const moduleRef = await Test.createTestingModule({
@@ -259,7 +255,7 @@ describe("Team entitlements (integration)", () => {
       expect(Array.isArray(result.items)).toBe(true);
     });
 
-    it("returns 403 from members admin HTTP on personal plan", async () => {
+    it("allows members list read on personal plan for admins (no team-admin gate)", async () => {
       const { cookieValue } = await sessions.createSession({
         userId: ownerUserId,
         data: { activeWorkspaceId: personalWorkspace.id },
@@ -274,14 +270,11 @@ describe("Team entitlements (integration)", () => {
           c.startsWith("csrf_token="),
         )?.split(";")[0] ?? "";
 
-      const response = await request(server())
+      await request(server())
         .get("/members")
         .set("Cookie", [`${SESSION_COOKIE}=${cookieValue}`, csrfCookie])
         .set("x-csrf-token", csrfBody.csrfToken)
-        .expect(403);
-
-      const body = response.body as ErrorResponse;
-      expect(body.message).toContain("team-admin");
+        .expect(200);
     });
   });
 

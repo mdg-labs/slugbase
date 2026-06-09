@@ -42,7 +42,6 @@ export class WorkspaceMembersController {
     @ActiveWorkspace() workspace: WorkspaceRecord,
     @Req() req: Request & Record<string, unknown>,
   ): Promise<WorkspaceMemberView[]> {
-    assertTeamAdminEntitlement(this.entitlements, workspace);
     const userId = req[TENANT_USER_ID_KEY] as string;
     await this.workspaces.requireWorkspaceRole(workspace.id, userId, "ADMIN");
     return this.members.listMemberViews(workspace.id);

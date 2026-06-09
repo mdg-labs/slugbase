@@ -5,6 +5,7 @@ import type {
   StartCheckoutParams,
 } from "./billing.types.js";
 import { loadBillingPlanDisplayConfig } from "./billing-config.js";
+import { fetchMembersWithFallback } from "../members-fetch.js";
 
 const getApiBaseUrl = (): string => process.env["API_BASE_URL"] ?? "";
 
@@ -16,11 +17,6 @@ interface ApiWorkspace extends BillingWorkspaceSummary {
   slug: string;
   createdAt: string;
   updatedAt: string;
-}
-
-interface ApiMember {
-  userId: string;
-  role: "OWNER" | "ADMIN" | "MEMBER";
 }
 
 async function parseErrorMessage(res: Response): Promise<string> {
@@ -72,23 +68,45 @@ export async function loadBillingSettingsData(
 ): Promise<BillingSettingsData | null> {
   const planConfig = loadBillingPlanDisplayConfig();
   const workspace = await fetchJson<ApiWorkspace>("/workspaces/active", request);
-  const members = await fetchJson<ApiMember[]>("/members", request);
+  const { members, forbidden } = await fetchMembersWithFallback(request);
   const bookmarkTotals = await fetchJson<PaginatedBookmarks>(
     "/bookmarks?pageSize=1",
     request,
   );
 
-  if (!workspace || !members || !bookmarkTotals) {
-    return null;
-  }
-
-  const currentMember = members.find((member) => member.userId === currentUserId);
-  if (!currentMember) {
+  if (!workspace || !bookmarkTotals) {
     return null;
   }
 
   const bookmarkCount = bookmarkTotals.total;
   const cap = planConfig.freeBookmarkCap;
+
+  if (forbidden || !members) {
+    return {
+      workspace: {
+        id: workspace.id,
+        name: workspace.name,
+        plan: workspace.plan,
+        planSeats: workspace.planSeats,
+        planArchived: workspace.planArchived,
+        billingCustomerId: workspace.billingCustomerId,
+        billingSubscriptionId: workspace.billingSubscriptionId,
+        billingStatus: workspace.billingStatus,
+        billingPeriodEnd: workspace.billingPeriodEnd,
+        permanentPersonal: workspace.permanentPersonal,
+      },
+      bookmarkCount,
+      archivedBookmarkCount: estimateArchivedCount(workspace.plan, bookmarkCount, cap),
+      memberCount: 0,
+      currentUserId,
+      currentUserRole: "ADMIN",
+      membersForbidden: true,
+      planConfig,
+      returnUrl,
+    };
+  }
+
+  const currentMember = members.find((member) => member.userId === currentUserId);
 
   return {
     workspace: {
@@ -107,7 +125,8 @@ export async function loadBillingSettingsData(
     archivedBookmarkCount: estimateArchivedCount(workspace.plan, bookmarkCount, cap),
     memberCount: members.length,
     currentUserId,
-    currentUserRole: currentMember.role,
+    currentUserRole: currentMember?.role ?? "ADMIN",
+    membersForbidden: false,
     planConfig,
     returnUrl,
   };

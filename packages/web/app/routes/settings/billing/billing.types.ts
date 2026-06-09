@@ -33,6 +33,7 @@ export interface BillingSettingsData {
   memberCount: number;
   currentUserId: string;
   currentUserRole: "OWNER" | "ADMIN" | "MEMBER";
+  membersForbidden: boolean;
   planConfig: BillingPlanDisplayConfig;
   returnUrl: string;
 }
