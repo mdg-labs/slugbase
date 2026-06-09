@@ -17,9 +17,11 @@ import { useWorkspaceEntitlements } from "../../components/sharing/use-workspace
 import { useBookmarkModal } from "../../components/bookmark-modal/BookmarkModalProvider.js";
 import { useAppToast } from "../../components/feedback/AppToastProvider.js";
 import {
+  bulkAddTags,
   bulkDeleteBookmarks,
   bulkMoveToFolder,
   bulkPinBookmarks,
+  bulkRemoveTags,
   deleteBookmark,
   loadToolbarOptions,
   type ToolbarOption,
@@ -998,6 +1000,90 @@ function BookmarkCapBanner({
   );
 }
 
+/* ── Bulk tag multi-select section ──────────────────────────── */
+function BulkTagSection({
+  heading,
+  tags,
+  confirmLabel,
+  onConfirm,
+  testId,
+}: {
+  heading: string;
+  tags: ToolbarOption[];
+  confirmLabel: string;
+  onConfirm: (tagIds: string[]) => void;
+  testId: string;
+}) {
+  const { t } = useTranslation();
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const toggle = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleConfirm = () => {
+    if (selected.size === 0) return;
+    onConfirm([...selected]);
+    setSelected(new Set());
+  };
+
+  return (
+    <div data-testid={testId}>
+      <MenuHead>{heading}</MenuHead>
+      {tags.length === 0 ? (
+        <p className="px-sp-4 py-sp-2 text-fg-faint" style={{ fontSize: "var(--text-caption)" }}>
+          {t("bookmarks.list.bulk_tags_empty")}
+        </p>
+      ) : (
+        <div style={{ maxHeight: 160, overflowY: "auto" }}>
+          {tags.map((tag) => {
+            const isActive = selected.has(tag.id);
+            return (
+              <MenuItem
+                key={tag.id}
+                icon={
+                  <span
+                    className={[
+                      "grid h-4 w-4 place-items-center rounded-sm border transition-colors",
+                      isActive
+                        ? "border-[color:var(--accent-border)] bg-accent text-accent-fg"
+                        : "border-[color:var(--border-subtle)] bg-canvas",
+                    ].join(" ")}
+                  >
+                    {isActive ? <CheckIcon /> : null}
+                  </span>
+                }
+                onClick={() => {
+                  toggle(tag.id);
+                }}
+              >
+                <span className="font-mono" style={{ fontSize: 12 }}>
+                  #{tag.name}
+                </span>
+              </MenuItem>
+            );
+          })}
+        </div>
+      )}
+      <div className="border-t border-[color:var(--border)] px-sp-4 py-sp-2">
+        <button
+          type="button"
+          disabled={selected.size === 0}
+          className="rounded-md bg-accent px-sp-3 py-sp-1 text-small text-accent-fg disabled:opacity-40 hover:opacity-90"
+          onClick={handleConfirm}
+        >
+          {confirmLabel} ({selected.size})
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ── Bulk bar ───────────────────────────────────────────────── */
 function BulkBar({
   count,
@@ -1006,7 +1092,10 @@ function BulkBar({
   onPin,
   onUnpin,
   onMoveToFolder,
+  onBulkAddTags,
+  onBulkRemoveTags,
   folders,
+  tags,
 }: {
   count: number;
   onClear: () => void;
@@ -1014,7 +1103,10 @@ function BulkBar({
   onPin: () => void;
   onUnpin: () => void;
   onMoveToFolder: (folderId: string) => void;
+  onBulkAddTags: (tagIds: string[]) => void;
+  onBulkRemoveTags: (tagIds: string[]) => void;
   folders: ToolbarFolder[];
+  tags: ToolbarOption[];
 }) {
   const { t } = useTranslation();
   return (
@@ -1065,6 +1157,35 @@ function BulkBar({
               {folder.name}
             </MenuItem>
           ))}
+        </ChipDropdown>
+      ) : null}
+      {tags.length > 0 ? (
+        <ChipDropdown
+          label={
+            <span className="flex items-center gap-sp-2">
+              <HashIcon />
+              {t("bookmarks.list.bulk_tags")}
+            </span>
+          }
+          width={240}
+          align="left"
+          testId="bulk-tags-trigger"
+        >
+          <BulkTagSection
+            heading={t("bookmarks.list.bulk_tags_add_heading")}
+            tags={tags}
+            confirmLabel={t("bookmarks.list.bulk_tags_add_confirm")}
+            onConfirm={onBulkAddTags}
+            testId="bulk-tags-add-section"
+          />
+          <div className="border-t border-[color:var(--border)]" />
+          <BulkTagSection
+            heading={t("bookmarks.list.bulk_tags_remove_heading")}
+            tags={tags}
+            confirmLabel={t("bookmarks.list.bulk_tags_remove_confirm")}
+            onConfirm={onBulkRemoveTags}
+            testId="bulk-tags-remove-section"
+          />
         </ChipDropdown>
       ) : null}
       <button
@@ -1320,6 +1441,30 @@ export function BookmarkListPage() {
       void navigate(buildUrl({}), { replace: true });
     } catch {
       // ignore
+    }
+  };
+
+  const handleBulkAddTags = async (tagIds: string[]) => {
+    const ids = [...selectedIds];
+    try {
+      await bulkAddTags(ids, tagIds);
+      setSelectedIds(new Set());
+      showToast("bookmarks.list.bulk_tags_toast_success");
+      void navigate(buildUrl({}), { replace: true });
+    } catch {
+      showError(t("bookmarks.list.bulk_tags_error"));
+    }
+  };
+
+  const handleBulkRemoveTags = async (tagIds: string[]) => {
+    const ids = [...selectedIds];
+    try {
+      await bulkRemoveTags(ids, tagIds);
+      setSelectedIds(new Set());
+      showToast("bookmarks.list.bulk_tags_toast_success");
+      void navigate(buildUrl({}), { replace: true });
+    } catch {
+      showError(t("bookmarks.list.bulk_tags_error"));
     }
   };
 
@@ -1845,7 +1990,14 @@ export function BookmarkListPage() {
           onMoveToFolder={(folderId) => {
             void handleBulkMoveToFolder(folderId);
           }}
+          onBulkAddTags={(tagIds) => {
+            void handleBulkAddTags(tagIds);
+          }}
+          onBulkRemoveTags={(tagIds) => {
+            void handleBulkRemoveTags(tagIds);
+          }}
           folders={data.toolbarFolders}
+          tags={tags}
         />
       ) : null}
 
