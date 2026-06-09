@@ -11,23 +11,29 @@ type AppErrorPageProps = {
   error?: unknown;
 };
 
-const statusTitleKey = {
+const statusTitleKey: Record<AppErrorStatus, string> = {
   404: "error.page.404.title",
   403: "error.page.403.title",
+  401: "error.page.401.title",
   500: "error.page.500.title",
-} as const;
+  503: "error.page.503.title",
+};
 
-const statusDescriptionKey = {
+const statusDescriptionKey: Record<AppErrorStatus, string> = {
   404: "error.page.404.description",
   403: "error.page.403.description",
+  401: "error.page.401.description",
   500: "error.page.500.description",
-} as const;
+  503: "error.page.503.description",
+};
 
-const primaryActionKey = {
+const primaryActionKey: Record<AppErrorStatus, string> = {
   404: "error.page.action.bookmarks",
   403: "error.page.action.workspace",
+  401: "error.page.action.reload",
   500: "error.page.action.reload",
-} as const;
+  503: "error.page.action.retry",
+};
 
 export function AppErrorPage({ status, error }: AppErrorPageProps) {
   const { t } = useTranslation();
@@ -35,7 +41,8 @@ export function AppErrorPage({ status, error }: AppErrorPageProps) {
   const [reported, setReported] = useState(false);
 
   const showPath = status === 404 && location.pathname.length > 1;
-  const primaryHref = status === 403 ? "/" : "/bookmarks";
+  const primaryHref = status === 401 ? "/login" : status === 403 ? "/" : "/bookmarks";
+  const useButton = status === 500 || status === 503;
 
   const handleReport = useCallback(() => {
     captureClientException(error ?? new Error(`App error ${String(status)}`), {
@@ -73,7 +80,7 @@ export function AppErrorPage({ status, error }: AppErrorPageProps) {
         </p>
       ) : null}
       <div className="error-actions">
-        {status === 500 ? (
+        {useButton ? (
           <Button variant="primary" onClick={handleReload}>
             {t(primaryActionKey[status])}
           </Button>
@@ -86,7 +93,7 @@ export function AppErrorPage({ status, error }: AppErrorPageProps) {
             {t(primaryActionKey[status])}
           </Link>
         )}
-        {status !== 500 ? (
+        {!useButton && status !== 401 ? (
           <Button variant="secondary" onClick={handleBack}>
             {t("error.page.action.back")}
           </Button>

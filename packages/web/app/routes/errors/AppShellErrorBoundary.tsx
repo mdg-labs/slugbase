@@ -1,13 +1,23 @@
 import { useTranslation } from "react-i18next";
 import { ThemeSwitcher, AppShell } from "@slugbase/ui";
-import { useRouteError } from "react-router";
+import { useEffect } from "react";
+import { useNavigate, useRouteError } from "react-router";
 import { AppErrorPage } from "./AppErrorPage.js";
 import { resolveRouteErrorStatus } from "./resolve-route-error-status.js";
 
 export function AppShellErrorBoundary() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const error = useRouteError();
   const status = resolveRouteErrorStatus(error);
+
+  useEffect(() => {
+    if (status === 401) {
+      void navigate("/login", { replace: true });
+    }
+  }, [status, navigate]);
+
+  if (status === 401) return null;
 
   return (
     <AppShell

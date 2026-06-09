@@ -1,8 +1,12 @@
 import { isRouteErrorResponse } from "react-router";
 import { isAppErrorStatus, type AppErrorStatus } from "./error-status.js";
+import { LoaderStatusError } from "./loader-status-error.js";
 
 function readErrorStatus(error: unknown): number | null {
   if (isRouteErrorResponse(error)) {
+    return error.status;
+  }
+  if (error instanceof LoaderStatusError) {
     return error.status;
   }
   if (
