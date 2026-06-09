@@ -443,7 +443,9 @@ function TagChip({ name }: { name: string }) {
 function BookmarkCard({
   bookmark,
   selected,
+  bulkSelectMode,
   onToggleSelect,
+  onOpenUrl,
   onPin,
   onEdit,
   onDelete,
@@ -451,7 +453,9 @@ function BookmarkCard({
 }: {
   bookmark: BookmarkListItem;
   selected: boolean;
+  bulkSelectMode: boolean;
   onToggleSelect: () => void;
+  onOpenUrl: (url: string) => void;
   onPin: (pinned: boolean) => void;
   onEdit: (bookmark: BookmarkListItem) => void;
   onDelete: (bookmark: BookmarkListItem) => void;
@@ -464,6 +468,14 @@ function BookmarkCard({
     bookmark.shareGrantCount,
   );
   const relative = formatRelativeTime(bookmark.lastAccessedAt ?? bookmark.createdAt);
+
+  const handleCardClick = () => {
+    if (bulkSelectMode) {
+      onToggleSelect();
+    } else {
+      onOpenUrl(bookmark.url);
+    }
+  };
 
   return (
     <div
@@ -478,25 +490,12 @@ function BookmarkCard({
       ].join(" ")}
       role="article"
       data-testid={`bookmark-card-${bookmark.id}`}
-      onClick={onToggleSelect}
+      onClick={handleCardClick}
     >
-      {/* Hover checkbox */}
-      <span
-        className={[
-          "absolute left-sp-4 top-sp-4 grid h-5 w-5 shrink-0 cursor-pointer place-items-center rounded-md border transition-all duration-micro",
-          selected
-            ? "border-[color:var(--accent-border)] bg-accent text-accent-fg opacity-100"
-            : "border-[color:var(--border-subtle)] bg-canvas opacity-0 group-hover:opacity-100",
-        ].join(" ")}
-        aria-hidden
-      >
-        {selected ? <CheckIcon /> : null}
-      </span>
-
       {/* Top row: favicon + title */}
       <div className="flex items-start gap-sp-3">
         <BookmarkFavicon url={bookmark.url} size={32} className="mt-[2px]" />
-        <div className="min-w-0 flex-1" style={{ paddingRight: 20 }}>
+        <div className="min-w-0 flex-1" style={{ paddingRight: bulkSelectMode ? 60 : 20 }}>
           <p
             className="truncate font-medium text-fg"
             style={{ fontSize: "var(--text-body)" }}
@@ -504,6 +503,24 @@ function BookmarkCard({
             {bookmark.title}
           </p>
         </div>
+        {/* Bulk-select checkbox (top-right, next to menu) */}
+        {bulkSelectMode ? (
+          <span
+            className={[
+              "absolute right-sp-10 top-sp-3 grid h-5 w-5 shrink-0 cursor-pointer place-items-center rounded-md border transition-all duration-micro",
+              selected
+                ? "border-[color:var(--accent-border)] bg-accent text-accent-fg opacity-100"
+                : "border-[color:var(--border-subtle)] bg-canvas opacity-100",
+            ].join(" ")}
+            aria-hidden
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSelect();
+            }}
+          >
+            {selected ? <CheckIcon /> : null}
+          </span>
+        ) : null}
         {/* 3-dot menu */}
         <DropdownMenu.Root>
           <DropdownMenu.Trigger asChild>
@@ -653,7 +670,9 @@ function ArrowRightIcon({ size = 14 }: { size?: number }) {
 function BookmarkRow({
   bookmark,
   selected,
+  bulkSelectMode,
   onToggleSelect,
+  onOpenUrl,
   onPin,
   onEdit,
   onDelete,
@@ -662,7 +681,9 @@ function BookmarkRow({
 }: {
   bookmark: BookmarkListItem;
   selected: boolean;
+  bulkSelectMode: boolean;
   onToggleSelect: () => void;
+  onOpenUrl: (url: string) => void;
   onPin: (pinned: boolean) => void;
   onEdit: (bookmark: BookmarkListItem) => void;
   onDelete: (bookmark: BookmarkListItem) => void;
@@ -681,6 +702,14 @@ function BookmarkRow({
       : (bookmark.lastAccessedAt ?? bookmark.createdAt),
   );
 
+  const handleRowClick = () => {
+    if (bulkSelectMode) {
+      onToggleSelect();
+    } else {
+      onOpenUrl(bookmark.url);
+    }
+  };
+
   return (
     <div
       className={[
@@ -692,12 +721,13 @@ function BookmarkRow({
       ].join(" ")}
       role="row"
       data-testid={`bookmark-row-${bookmark.id}`}
-      onClick={onToggleSelect}
+      onClick={handleRowClick}
     >
-      {/* Checkbox */}
+      {/* Checkbox — only visible in bulk-select mode */}
       <span
         className={[
           "grid h-5 w-5 shrink-0 place-items-center rounded-md border transition-all duration-micro",
+          !bulkSelectMode ? "invisible" : "",
           selected
             ? "border-[color:var(--accent-border)] bg-accent text-accent-fg"
             : "border-[color:var(--border-subtle)] bg-canvas",
@@ -862,12 +892,14 @@ function BookmarkRow({
 function TableHead({
   sort,
   setSort,
+  bulkSelectMode,
   allSelected,
   someSelected,
   onToggleAll,
 }: {
   sort: string;
   setSort: (s: string) => void;
+  bulkSelectMode: boolean;
   allSelected: boolean;
   someSelected: boolean;
   onToggleAll: () => void;
@@ -921,6 +953,7 @@ function TableHead({
       <span
         className={[
           "grid h-5 w-5 shrink-0 place-items-center rounded-md border cursor-pointer transition-all duration-micro",
+          !bulkSelectMode ? "invisible" : "",
           allSelected || someSelected
             ? "border-[color:var(--accent-border)] bg-accent text-accent-fg"
             : "border-[color:var(--border-subtle)] bg-canvas",
@@ -1295,6 +1328,9 @@ export function BookmarkListPage() {
     return data.defaultBookmarkView;
   });
 
+  // Bulk-select mode
+  const [bulkSelectMode, setBulkSelectMode] = useState(false);
+
   // Selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -1383,6 +1419,34 @@ export function BookmarkListPage() {
     setView(newView);
     navigateTo({ view: newView, page: 1 });
   };
+
+  const handleOpenUrl = (url: string) => {
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const toggleBulkSelectMode = () => {
+    setBulkSelectMode((prev) => {
+      if (prev) {
+        // Exiting bulk-select mode clears selection
+        setSelectedIds(new Set());
+      }
+      return !prev;
+    });
+  };
+
+  // Escape key exits bulk-select mode
+  useEffect(() => {
+    if (!bulkSelectMode) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        toggleBulkSelectMode();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [bulkSelectMode]);
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -1699,6 +1763,21 @@ export function BookmarkListPage() {
           {t("bookmarks.list.result_count", { count: data.total })}
         </span>
 
+        {/* Bulk select toggle */}
+        <button
+          type="button"
+          className={[
+            "inline-flex items-center gap-sp-3 rounded-md border px-sp-4 py-sp-3 text-small",
+            bulkSelectMode
+              ? "border-[color:var(--accent-border)] bg-[color:var(--accent-subtle)] text-accent-text"
+              : "border-[color:var(--border)] bg-[color:var(--raised)] text-fg-muted hover:text-fg",
+          ].join(" ")}
+          onClick={toggleBulkSelectMode}
+          data-testid="bookmark-bulk-select-toggle"
+        >
+          {t(bulkSelectMode ? "bookmarks.list.select_active" : "bookmarks.list.select_action")}
+        </button>
+
         {/* Sort dropdown */}
         <ChipDropdown
           label={
@@ -1844,9 +1923,11 @@ export function BookmarkListPage() {
                     key={bookmark.id}
                     bookmark={bookmark}
                     selected={selectedIds.has(bookmark.id)}
+                    bulkSelectMode={bulkSelectMode}
                     onToggleSelect={() => {
                       toggleSelect(bookmark.id);
                     }}
+                    onOpenUrl={handleOpenUrl}
                     onPin={(pinned) => {
                       void handlePin(bookmark.id, pinned);
                     }}
@@ -1875,9 +1956,11 @@ export function BookmarkListPage() {
                         key={bookmark.id}
                         bookmark={bookmark}
                         selected={selectedIds.has(bookmark.id)}
+                        bulkSelectMode={bulkSelectMode}
                         onToggleSelect={() => {
                           toggleSelect(bookmark.id);
                         }}
+                        onOpenUrl={handleOpenUrl}
                         onPin={(pinned) => {
                           void handlePin(bookmark.id, pinned);
                         }}
@@ -1904,9 +1987,11 @@ export function BookmarkListPage() {
                   key={bookmark.id}
                   bookmark={bookmark}
                   selected={selectedIds.has(bookmark.id)}
+                  bulkSelectMode={bulkSelectMode}
                   onToggleSelect={() => {
                     toggleSelect(bookmark.id);
                   }}
+                  onOpenUrl={handleOpenUrl}
                   onPin={(pinned) => {
                     void handlePin(bookmark.id, pinned);
                   }}
@@ -1936,6 +2021,7 @@ export function BookmarkListPage() {
             setSort={(sort) => {
               navigateTo({ sort, page: 1 });
             }}
+            bulkSelectMode={bulkSelectMode}
             allSelected={allSelected}
             someSelected={someSelected}
             onToggleAll={toggleAll}
@@ -1945,9 +2031,11 @@ export function BookmarkListPage() {
               key={bookmark.id}
               bookmark={bookmark}
               selected={selectedIds.has(bookmark.id)}
+              bulkSelectMode={bulkSelectMode}
               onToggleSelect={() => {
                 toggleSelect(bookmark.id);
               }}
+              onOpenUrl={handleOpenUrl}
               onPin={(pinned) => {
                 void handlePin(bookmark.id, pinned);
               }}

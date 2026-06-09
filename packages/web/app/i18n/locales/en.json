@@ -210,6 +210,8 @@
   "bookmarks.list.section_pinned": "Pinned",
   "bookmarks.list.search_action": "Search",
   "bookmarks.list.search_placeholder": "Search title, URL, or slug…",
+  "bookmarks.list.select_action": "Select",
+  "bookmarks.list.select_active": "Cancel selection",
   "bookmarks.list.sort_accessed": "Recently accessed",
   "bookmarks.list.sort_alpha": "Alphabetical",
   "bookmarks.list.sort_heading": "Sort",

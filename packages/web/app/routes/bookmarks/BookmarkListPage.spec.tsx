@@ -1,8 +1,9 @@
+import React from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { staticMessages } from "../../i18n/messages.js";
-import type { BookmarkListData } from "./bookmarks-loader.js";
+import type { BookmarkListData, BookmarkListItem } from "./bookmarks-loader.js";
 import { BookmarkListPage } from "./BookmarkListPage.js";
 import { BookmarkModalProvider } from "../../components/bookmark-modal/BookmarkModalProvider.js";
 import { AppToastProvider } from "../../components/feedback/AppToastProvider.js";
@@ -31,6 +32,9 @@ vi.mock("./bookmarks-api.js", () => ({
   bulkDeleteBookmarks: vi.fn(),
   bulkMoveToFolder: vi.fn(),
   bulkPinBookmarks: vi.fn(),
+  bulkAddTags: vi.fn(),
+  bulkRemoveTags: vi.fn(),
+  deleteBookmark: vi.fn(),
   loadToolbarOptions: vi.fn().mockResolvedValue({ folders: [], tags: [] }),
   toggleBookmarkPin: vi.fn(),
 }));
@@ -47,7 +51,34 @@ vi.mock("../../components/sharing/use-workspace-entitlements.js", () => ({
   }),
 }));
 
+vi.mock("./BookmarkFavicon.js", () => ({
+  BookmarkFavicon: () => <span data-testid="bookmark-favicon" />,
+}));
+
+vi.mock("../../components/list/SectionHead.js", () => ({
+  SectionHead: ({ label }: { label: string }) => (
+    <div data-testid="section-head">{label}</div>
+  ),
+}));
+
 let mockLoaderData: BookmarkListData;
+
+const makeBookmark = (overrides: Partial<BookmarkListItem> = {}): BookmarkListItem => ({
+  id: "bk-1",
+  userId: "user-1",
+  title: "Example Bookmark",
+  url: "https://example.com",
+  slug: "example",
+  forwardingEnabled: true,
+  pinned: false,
+  accessCount: 5,
+  lastAccessedAt: "2026-06-01T10:00:00Z",
+  createdAt: "2026-05-01T10:00:00Z",
+  shareGrantCount: 0,
+  folders: [],
+  tags: [],
+  ...overrides,
+});
 
 const emptyUnfilteredData: BookmarkListData = {
   items: [],
@@ -81,6 +112,8 @@ function renderPage() {
 describe("BookmarkListPage", () => {
   beforeEach(() => {
     mockLoaderData = { ...emptyUnfilteredData };
+    localStorage.clear();
+    vi.clearAllMocks();
   });
 
   afterEach(() => {
@@ -90,18 +123,267 @@ describe("BookmarkListPage", () => {
   it("opens bookmark modal when empty-state primary button is clicked", async () => {
     renderPage();
 
-    // The unfiltered empty state should be visible
     expect(screen.getByTestId("bookmark-list-empty")).toBeTruthy();
 
-    // Find the "New bookmark" button
     const newBtn = screen.getByText("New bookmark");
     expect(newBtn).toBeTruthy();
 
-    // Click it — should open the bookmark modal
     fireEvent.click(newBtn);
 
     await waitFor(() => {
       expect(screen.getByTestId("bookmark-modal")).toBeTruthy();
+    });
+  });
+
+  describe("Bookmark card click — normal mode", () => {
+    it("opens bookmark URL in a new tab when a card is clicked", () => {
+      const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+      mockLoaderData = {
+        ...emptyUnfilteredData,
+        items: [makeBookmark({ id: "bk-1", url: "https://example.com" })],
+      };
+
+      renderPage();
+
+      const card = screen.getByTestId("bookmark-card-bk-1");
+      fireEvent.click(card);
+
+      expect(openSpy).toHaveBeenCalledWith(
+        "https://example.com",
+        "_blank",
+        "noopener,noreferrer",
+      );
+      openSpy.mockRestore();
+    });
+  });
+
+  describe("Bookmark table row click — normal mode", () => {
+    it("opens bookmark URL in a new tab when a row is clicked", () => {
+      const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+      mockLoaderData = {
+        ...emptyUnfilteredData,
+        view: "table",
+        defaultBookmarkView: "table",
+        items: [makeBookmark({ id: "bk-1", url: "https://example.com" })],
+      };
+
+      renderPage();
+
+      const row = screen.getByTestId("bookmark-row-bk-1");
+      fireEvent.click(row);
+
+      expect(openSpy).toHaveBeenCalledWith(
+        "https://example.com",
+        "_blank",
+        "noopener,noreferrer",
+      );
+      openSpy.mockRestore();
+    });
+  });
+
+  describe("3-dot menu stopPropagation", () => {
+    it("does not open URL when the 3-dot menu trigger is clicked", () => {
+      const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+      mockLoaderData = {
+        ...emptyUnfilteredData,
+        items: [makeBookmark({ id: "bk-1", url: "https://example.com" })],
+      };
+
+      renderPage();
+
+      const menuBtn = screen.getAllByLabelText("More options")[0]!;
+      fireEvent.click(menuBtn);
+
+      // The card's onClick should NOT have been triggered
+      expect(openSpy).not.toHaveBeenCalled();
+      openSpy.mockRestore();
+    });
+  });
+
+  describe("Bulk-select mode toggle", () => {
+    it("has a Select button in the toolbar", () => {
+      mockLoaderData = {
+        ...emptyUnfilteredData,
+        items: [makeBookmark()],
+      };
+
+      renderPage();
+
+      const selectBtn = screen.getByTestId("bookmark-bulk-select-toggle");
+      expect(selectBtn).toBeTruthy();
+      expect(selectBtn.textContent).toContain("Select");
+    });
+
+    it("enters bulk-select mode when Select button is clicked", () => {
+      mockLoaderData = {
+        ...emptyUnfilteredData,
+        items: [makeBookmark({ id: "bk-1" })],
+      };
+
+      renderPage();
+
+      const selectBtn = screen.getByTestId("bookmark-bulk-select-toggle");
+      fireEvent.click(selectBtn);
+
+      // Button text should change to "Cancel selection"
+      expect(selectBtn.textContent).toContain("Cancel selection");
+    });
+
+    it("card click in bulk-select mode toggles selection instead of opening URL", () => {
+      const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+      mockLoaderData = {
+        ...emptyUnfilteredData,
+        total: 1,
+        items: [makeBookmark({ id: "bk-1", url: "https://example.com" })],
+      };
+
+      renderPage();
+
+      // Enter bulk-select mode
+      const selectBtn = screen.getByTestId("bookmark-bulk-select-toggle");
+      fireEvent.click(selectBtn);
+
+      // Click the card
+      const card = screen.getByTestId("bookmark-card-bk-1");
+      fireEvent.click(card);
+
+      // Should NOT open URL
+      expect(openSpy).not.toHaveBeenCalled();
+
+      // Should show BulkBar
+      expect(screen.getByTestId("bulk-bar")).toBeTruthy();
+      openSpy.mockRestore();
+    });
+  });
+
+  describe("Bulk-select checkbox position", () => {
+    it("shows checkbox next to the 3-dot menu in bulk-select mode", () => {
+      mockLoaderData = {
+        ...emptyUnfilteredData,
+        total: 1,
+        items: [makeBookmark({ id: "bk-1" })],
+      };
+
+      renderPage();
+
+      // Enter bulk-select mode
+      const selectBtn = screen.getByTestId("bookmark-bulk-select-toggle");
+      fireEvent.click(selectBtn);
+
+      const card = screen.getByTestId("bookmark-card-bk-1");
+      // The card should contain an aria-hidden checkbox element
+      const checkboxes = card.querySelectorAll('[aria-hidden="true"]');
+      expect(checkboxes.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe("Exit bulk-select mode", () => {
+    it("clears selection and exits bulk-select mode when Select button is clicked again", () => {
+      mockLoaderData = {
+        ...emptyUnfilteredData,
+        total: 2,
+        items: [makeBookmark({ id: "bk-1" }), makeBookmark({ id: "bk-2", title: "Second" })],
+      };
+
+      renderPage();
+
+      // Enter bulk-select mode
+      const selectBtn = screen.getByTestId("bookmark-bulk-select-toggle");
+      fireEvent.click(selectBtn);
+
+      // Select a card
+      const card = screen.getByTestId("bookmark-card-bk-1");
+      fireEvent.click(card);
+
+      // BulkBar should appear
+      expect(screen.getByTestId("bulk-bar")).toBeTruthy();
+
+      // Exit bulk-select mode
+      fireEvent.click(selectBtn);
+
+      // BulkBar should disappear (selection cleared)
+      expect(screen.queryByTestId("bulk-bar")).toBeNull();
+
+      // Button should be back to "Select"
+      expect(selectBtn.textContent).toContain("Select");
+    });
+
+    it("exits bulk-select mode and clears selection on Escape key", () => {
+      mockLoaderData = {
+        ...emptyUnfilteredData,
+        total: 1,
+        items: [makeBookmark({ id: "bk-1" })],
+      };
+
+      renderPage();
+
+      // Enter bulk-select mode
+      const selectBtn = screen.getByTestId("bookmark-bulk-select-toggle");
+      fireEvent.click(selectBtn);
+
+      // Select a card
+      const card = screen.getByTestId("bookmark-card-bk-1");
+      fireEvent.click(card);
+
+      // BulkBar should appear
+      expect(screen.getByTestId("bulk-bar")).toBeTruthy();
+
+      // Press Escape
+      fireEvent.keyDown(document, { key: "Escape" });
+
+      // BulkBar should disappear
+      expect(screen.queryByTestId("bulk-bar")).toBeNull();
+      expect(selectBtn.textContent).toContain("Select");
+    });
+  });
+
+  describe("Table view bulk-select", () => {
+    it("row click in normal mode opens URL", () => {
+      const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+      mockLoaderData = {
+        ...emptyUnfilteredData,
+        view: "table",
+        defaultBookmarkView: "table",
+        items: [makeBookmark({ id: "bk-1", url: "https://test.com" })],
+      };
+
+      renderPage();
+
+      const row = screen.getByTestId("bookmark-row-bk-1");
+      fireEvent.click(row);
+
+      expect(openSpy).toHaveBeenCalledWith(
+        "https://test.com",
+        "_blank",
+        "noopener,noreferrer",
+      );
+      openSpy.mockRestore();
+    });
+
+    it("row click in bulk-select mode toggles selection", () => {
+      const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+      mockLoaderData = {
+        ...emptyUnfilteredData,
+        view: "table",
+        defaultBookmarkView: "table",
+        items: [makeBookmark({ id: "bk-1", url: "https://test.com" })],
+      };
+
+      renderPage();
+
+      // Enter bulk-select mode
+      const selectBtn = screen.getByTestId("bookmark-bulk-select-toggle");
+      fireEvent.click(selectBtn);
+
+      const row = screen.getByTestId("bookmark-row-bk-1");
+      fireEvent.click(row);
+
+      // Should NOT open URL
+      expect(openSpy).not.toHaveBeenCalled();
+
+      // Should show BulkBar
+      expect(screen.getByTestId("bulk-bar")).toBeTruthy();
+      openSpy.mockRestore();
     });
   });
 });
