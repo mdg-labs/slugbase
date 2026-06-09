@@ -5,6 +5,7 @@ import { staticMessages } from "../../i18n/messages.js";
 import type { BookmarkListData } from "./bookmarks-loader.js";
 import { BookmarkListPage } from "./BookmarkListPage.js";
 import { BookmarkModalProvider } from "../../components/bookmark-modal/BookmarkModalProvider.js";
+import { AppToastProvider } from "../../components/feedback/AppToastProvider.js";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -69,9 +70,11 @@ const emptyUnfilteredData: BookmarkListData = {
 
 function renderPage() {
   return render(
-    <BookmarkModalProvider>
-      <BookmarkListPage />
-    </BookmarkModalProvider>,
+    <AppToastProvider>
+      <BookmarkModalProvider>
+        <BookmarkListPage />
+      </BookmarkModalProvider>
+    </AppToastProvider>,
   );
 }
 

@@ -1,17 +1,26 @@
 import { useTranslation } from "react-i18next";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLoaderData, useNavigate, useNavigation } from "react-router";
-import { Button, EmptyState } from "@slugbase/ui";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import {
+  ExternalLinkIcon,
+  MoreHorizontalIcon,
+  PencilIcon,
+  Trash2Icon,
+} from "lucide-react";
+import { Button, ConfirmDialog, EmptyState } from "@slugbase/ui";
 
 import { ScopeFilter } from "../../components/sharing/ScopeFilter.js";
 import { ScopeIcon } from "../../components/sharing/ScopeIcon.js";
 import { resolveResourceSharingScope } from "../../components/sharing/sharing.utils.js";
 import { useWorkspaceEntitlements } from "../../components/sharing/use-workspace-entitlements.js";
 import { useBookmarkModal } from "../../components/bookmark-modal/BookmarkModalProvider.js";
+import { useAppToast } from "../../components/feedback/AppToastProvider.js";
 import {
   bulkDeleteBookmarks,
   bulkMoveToFolder,
   bulkPinBookmarks,
+  deleteBookmark,
   loadToolbarOptions,
   type ToolbarOption,
 } from "./bookmarks-api.js";
@@ -434,14 +443,19 @@ function BookmarkCard({
   selected,
   onToggleSelect,
   onPin,
+  onEdit,
+  onDelete,
   currentUserId,
 }: {
   bookmark: BookmarkListItem;
   selected: boolean;
   onToggleSelect: () => void;
   onPin: (pinned: boolean) => void;
+  onEdit: (bookmark: BookmarkListItem) => void;
+  onDelete: (bookmark: BookmarkListItem) => void;
   currentUserId: string | null;
 }) {
+  const { t } = useTranslation();
   const itemScope = resolveResourceSharingScope(
     bookmark.userId,
     currentUserId ?? "",
@@ -488,23 +502,76 @@ function BookmarkCard({
             {bookmark.title}
           </p>
         </div>
-        {/* Pin button */}
-        <button
-          type="button"
-          className={[
-            "absolute right-sp-4 top-sp-5 rounded-sm p-sp-1 transition-colors duration-micro",
-            bookmark.pinned
-              ? "text-accent-text"
-              : "text-fg-faint hover:text-fg-subtle",
-          ].join(" ")}
-          title={bookmark.pinned ? "Unpin" : "Pin"}
-          onClick={(e) => {
-            e.stopPropagation();
-            onPin(!bookmark.pinned);
-          }}
-        >
-          <PinIcon filled={bookmark.pinned} />
-        </button>
+        {/* 3-dot menu */}
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger asChild>
+            <button
+              type="button"
+              className="absolute right-sp-3 top-sp-4 rounded p-sp-1 text-fg-faint transition-colors duration-micro hover:bg-[color:var(--overlay)] hover:text-fg"
+              title={t("bookmarks.list.action_more")}
+              aria-label={t("bookmarks.list.action_more")}
+              onClick={(e) => {
+                e.stopPropagation();
+              }}
+            >
+              <MoreHorizontalIcon size={16} />
+            </button>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content
+              className="z-50 min-w-[180px] overflow-hidden rounded-lg border border-[color:var(--border)] bg-[color:var(--overlay)] p-sp-2 shadow-lg"
+              align="end"
+              sideOffset={4}
+              onClick={(e) => {
+                e.stopPropagation();
+              }}
+            >
+              <DropdownMenu.Item
+                className="flex cursor-pointer items-center gap-sp-3 rounded px-sp-3 py-sp-2 text-fg outline-none transition-colors hover:bg-[color:var(--raised-2)] focus:bg-[color:var(--raised-2)]"
+                style={{ fontSize: "var(--text-body)" }}
+                onSelect={() => {
+                  window.open(bookmark.url, "_blank", "noopener,noreferrer");
+                }}
+              >
+                <ExternalLinkIcon size={14} className="shrink-0 text-fg-muted" />
+                {t("bookmarks.list.menu_open_url")}
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
+                className="flex cursor-pointer items-center gap-sp-3 rounded px-sp-3 py-sp-2 text-fg outline-none transition-colors hover:bg-[color:var(--raised-2)] focus:bg-[color:var(--raised-2)]"
+                style={{ fontSize: "var(--text-body)" }}
+                onSelect={() => {
+                  onEdit(bookmark);
+                }}
+              >
+                <PencilIcon size={14} className="shrink-0 text-fg-muted" />
+                {t("bookmarks.list.menu_edit")}
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
+                className="flex cursor-pointer items-center gap-sp-3 rounded px-sp-3 py-sp-2 text-fg outline-none transition-colors hover:bg-[color:var(--raised-2)] focus:bg-[color:var(--raised-2)]"
+                style={{ fontSize: "var(--text-body)" }}
+                onSelect={() => {
+                  onPin(!bookmark.pinned);
+                }}
+              >
+                <PinIcon filled={bookmark.pinned} />
+                {bookmark.pinned
+                  ? t("bookmarks.list.menu_unpin")
+                  : t("bookmarks.list.menu_pin")}
+              </DropdownMenu.Item>
+              <DropdownMenu.Separator className="my-sp-2 border-t border-[color:var(--border)]" />
+              <DropdownMenu.Item
+                className="flex cursor-pointer items-center gap-sp-3 rounded px-sp-3 py-sp-2 text-[color:var(--danger-text)] outline-none transition-colors hover:bg-[color:var(--raised-2)] focus:bg-[color:var(--raised-2)]"
+                style={{ fontSize: "var(--text-body)" }}
+                onSelect={() => {
+                  onDelete(bookmark);
+                }}
+              >
+                <Trash2Icon size={14} className="shrink-0" />
+                {t("bookmarks.list.menu_delete")}
+              </DropdownMenu.Item>
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
       </div>
 
       {/* URL row */}
@@ -586,6 +653,8 @@ function BookmarkRow({
   selected,
   onToggleSelect,
   onPin,
+  onEdit,
+  onDelete,
   currentUserId,
   sort,
 }: {
@@ -593,9 +662,12 @@ function BookmarkRow({
   selected: boolean;
   onToggleSelect: () => void;
   onPin: (pinned: boolean) => void;
+  onEdit: (bookmark: BookmarkListItem) => void;
+  onDelete: (bookmark: BookmarkListItem) => void;
   currentUserId: string | null;
   sort: string;
 }) {
+  const { t } = useTranslation();
   const itemScope = resolveResourceSharingScope(
     bookmark.userId,
     currentUserId ?? "",
@@ -710,22 +782,75 @@ function BookmarkRow({
       {/* Actions */}
       <div className="flex items-center justify-end gap-sp-2">
         <ScopeIcon scope={itemScope} />
-        <button
-          type="button"
-          className={[
-            "rounded-sm p-sp-1 transition-colors duration-micro",
-            bookmark.pinned
-              ? "text-accent-text"
-              : "text-fg-faint hover:text-fg-subtle",
-          ].join(" ")}
-          title={bookmark.pinned ? "Unpin" : "Pin"}
-          onClick={(e) => {
-            e.stopPropagation();
-            onPin(!bookmark.pinned);
-          }}
-        >
-          <PinIcon filled={bookmark.pinned} />
-        </button>
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger asChild>
+            <button
+              type="button"
+              className="rounded p-sp-1 text-fg-faint transition-colors duration-micro hover:bg-[color:var(--overlay)] hover:text-fg"
+              title={t("bookmarks.list.action_more")}
+              aria-label={t("bookmarks.list.action_more")}
+              onClick={(e) => {
+                e.stopPropagation();
+              }}
+            >
+              <MoreHorizontalIcon size={15} />
+            </button>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content
+              className="z-50 min-w-[180px] overflow-hidden rounded-lg border border-[color:var(--border)] bg-[color:var(--overlay)] p-sp-2 shadow-lg"
+              align="end"
+              sideOffset={4}
+              onClick={(e) => {
+                e.stopPropagation();
+              }}
+            >
+              <DropdownMenu.Item
+                className="flex cursor-pointer items-center gap-sp-3 rounded px-sp-3 py-sp-2 text-fg outline-none transition-colors hover:bg-[color:var(--raised-2)] focus:bg-[color:var(--raised-2)]"
+                style={{ fontSize: "var(--text-body)" }}
+                onSelect={() => {
+                  window.open(bookmark.url, "_blank", "noopener,noreferrer");
+                }}
+              >
+                <ExternalLinkIcon size={14} className="shrink-0 text-fg-muted" />
+                {t("bookmarks.list.menu_open_url")}
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
+                className="flex cursor-pointer items-center gap-sp-3 rounded px-sp-3 py-sp-2 text-fg outline-none transition-colors hover:bg-[color:var(--raised-2)] focus:bg-[color:var(--raised-2)]"
+                style={{ fontSize: "var(--text-body)" }}
+                onSelect={() => {
+                  onEdit(bookmark);
+                }}
+              >
+                <PencilIcon size={14} className="shrink-0 text-fg-muted" />
+                {t("bookmarks.list.menu_edit")}
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
+                className="flex cursor-pointer items-center gap-sp-3 rounded px-sp-3 py-sp-2 text-fg outline-none transition-colors hover:bg-[color:var(--raised-2)] focus:bg-[color:var(--raised-2)]"
+                style={{ fontSize: "var(--text-body)" }}
+                onSelect={() => {
+                  onPin(!bookmark.pinned);
+                }}
+              >
+                <PinIcon filled={bookmark.pinned} />
+                {bookmark.pinned
+                  ? t("bookmarks.list.menu_unpin")
+                  : t("bookmarks.list.menu_pin")}
+              </DropdownMenu.Item>
+              <DropdownMenu.Separator className="my-sp-2 border-t border-[color:var(--border)]" />
+              <DropdownMenu.Item
+                className="flex cursor-pointer items-center gap-sp-3 rounded px-sp-3 py-sp-2 text-[color:var(--danger-text)] outline-none transition-colors hover:bg-[color:var(--raised-2)] focus:bg-[color:var(--raised-2)]"
+                style={{ fontSize: "var(--text-body)" }}
+                onSelect={() => {
+                  onDelete(bookmark);
+                }}
+              >
+                <Trash2Icon size={14} className="shrink-0" />
+                {t("bookmarks.list.menu_delete")}
+              </DropdownMenu.Item>
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
       </div>
     </div>
   );
@@ -1036,7 +1161,8 @@ export function BookmarkListPage() {
   const navigate = useNavigate();
   const navigation = useNavigation();
   const { currentUserId, canShare } = useWorkspaceEntitlements();
-  const { openCreate } = useBookmarkModal();
+  const { openCreate, openEdit } = useBookmarkModal();
+  const { showToast, showError } = useAppToast();
 
   // View toggle: prefer server param, but persist locally
   const [view, setView] = useState<"grid" | "table">(() => {
@@ -1194,6 +1320,42 @@ export function BookmarkListPage() {
       void navigate(buildUrl({}), { replace: true });
     } catch {
       // ignore
+    }
+  };
+
+  // Single-item edit: open the BookmarkModal pre-filled with the bookmark data
+  const handleEditBookmark = useCallback(
+    (item: BookmarkListItem) => {
+      openEdit({
+        id: item.id,
+        title: item.title,
+        url: item.url,
+        slug: item.slug,
+        forwardingEnabled: item.forwardingEnabled,
+        pinned: item.pinned,
+        folderIds: item.folders.map((f) => f.id),
+        tagIds: item.tags.map((t) => t.id),
+      });
+    },
+    [openEdit],
+  );
+
+  // Single-item delete: open confirmation dialog
+  const [deleteTarget, setDeleteTarget] = useState<BookmarkListItem | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    setDeleteBusy(true);
+    try {
+      await deleteBookmark(deleteTarget.id);
+      setDeleteTarget(null);
+      showToast("bookmarks.list.toast_deleted");
+      void navigate(buildUrl({}), { replace: true });
+    } catch {
+      showError(t("bookmarks.list.error_delete"));
+    } finally {
+      setDeleteBusy(false);
     }
   };
 
@@ -1543,6 +1705,10 @@ export function BookmarkListPage() {
                     onPin={(pinned) => {
                       void handlePin(bookmark.id, pinned);
                     }}
+                    onEdit={handleEditBookmark}
+                    onDelete={(item) => {
+                      setDeleteTarget(item);
+                    }}
                     currentUserId={currentUserId}
                   />
                 ))}
@@ -1570,6 +1736,10 @@ export function BookmarkListPage() {
                         onPin={(pinned) => {
                           void handlePin(bookmark.id, pinned);
                         }}
+                        onEdit={handleEditBookmark}
+                        onDelete={(item) => {
+                          setDeleteTarget(item);
+                        }}
                         currentUserId={currentUserId}
                       />
                     ))}
@@ -1594,6 +1764,10 @@ export function BookmarkListPage() {
                   }}
                   onPin={(pinned) => {
                     void handlePin(bookmark.id, pinned);
+                  }}
+                  onEdit={handleEditBookmark}
+                  onDelete={(item) => {
+                    setDeleteTarget(item);
                   }}
                   currentUserId={currentUserId}
                 />
@@ -1631,6 +1805,10 @@ export function BookmarkListPage() {
               }}
               onPin={(pinned) => {
                 void handlePin(bookmark.id, pinned);
+              }}
+              onEdit={handleEditBookmark}
+              onDelete={(item) => {
+                setDeleteTarget(item);
               }}
               currentUserId={currentUserId}
               sort={data.sort}
@@ -1670,6 +1848,30 @@ export function BookmarkListPage() {
           folders={data.toolbarFolders}
         />
       ) : null}
+
+      {/* Delete confirmation dialog */}
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+        title={t("bookmarks.list.delete_title")}
+        body={
+          <p className="text-fg-muted">
+            {t("bookmarks.list.delete_body", {
+              title: deleteTarget?.title ?? "",
+            })}
+          </p>
+        }
+        confirmLabel={t("bookmarks.list.delete_confirm")}
+        cancelLabel={t("bookmarks.list.delete_cancel")}
+        onConfirm={() => {
+          void handleDeleteConfirm();
+        }}
+        destructive
+        busy={deleteBusy}
+        testId="bookmark-delete-dialog"
+      />
     </div>
   );
 }
