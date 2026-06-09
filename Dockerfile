@@ -16,6 +16,7 @@ COPY scripts/check-node-version.mjs scripts/check-node-version.mjs
 COPY packages/backend/package.json packages/backend/
 COPY packages/web/package.json packages/web/
 COPY packages/shared-types/package.json packages/shared-types/
+COPY packages/email-templates/package.json packages/email-templates/
 COPY packages/ui/package.json packages/ui/
 COPY packages/marketing/package.json packages/marketing/
 RUN echo "shamefully-hoist=true" > .npmrc \
@@ -23,6 +24,7 @@ RUN echo "shamefully-hoist=true" > .npmrc \
 
 FROM build-deps AS build
 COPY packages/shared-types packages/shared-types
+COPY packages/email-templates packages/email-templates
 COPY packages/ui packages/ui
 COPY packages/backend packages/backend
 COPY packages/web packages/web
@@ -71,6 +73,8 @@ COPY --from=build-deps /app/package.json ./package.json
 COPY --from=build-deps /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
 COPY --from=build /app/packages/shared-types/package.json ./packages/shared-types/package.json
 COPY --from=build /app/packages/shared-types/dist ./packages/shared-types/dist
+COPY --from=build /app/packages/email-templates/package.json ./packages/email-templates/package.json
+COPY --from=build /app/packages/email-templates/dist ./packages/email-templates/dist
 COPY --from=build /app/packages/backend/package.json ./packages/backend/package.json
 COPY --from=build /app/packages/backend/dist ./packages/backend/dist
 COPY --from=build /app/packages/backend/migrations ./packages/backend/migrations

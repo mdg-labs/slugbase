@@ -15,12 +15,14 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.js
 COPY scripts/check-node-version.mjs scripts/check-node-version.mjs
 COPY packages/backend/package.json packages/backend/
 COPY packages/shared-types/package.json packages/shared-types/
+COPY packages/email-templates/package.json packages/email-templates/
 COPY packages/web/package.json packages/web/
 COPY packages/marketing/package.json packages/marketing/
 RUN pnpm install --frozen-lockfile
 
 FROM build-deps AS build
 COPY packages/shared-types packages/shared-types
+COPY packages/email-templates packages/email-templates
 COPY packages/backend packages/backend
 RUN pnpm exec turbo run build --filter=@slugbase/backend...
 
