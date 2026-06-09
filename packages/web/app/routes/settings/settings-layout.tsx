@@ -1,55 +1,23 @@
+import { Link, Outlet, useLoaderData, useLocation } from "react-router";
 import { useTranslation } from "react-i18next";
-import { Link, Outlet, useLocation } from "react-router";
 
-type NavItem = {
-  id: string;
-  labelKey: string;
-  path: string;
-  section?: string;
-  tab?: string;
+import { useAppShellData } from "../../lib/session-client.js";
+import { loadWorkspaceInterfaceConfig } from "./workspace/workspace-config.js";
+import { ALL_NAV_GROUPS, filterNavGroups } from "./settings-nav-config.js";
+import type { NavItem } from "./settings-nav-config.js";
+
+type SettingsLayoutData = {
+  interfaceConfig: {
+    mailAdminUi: boolean;
+    oidcAdminUi: boolean;
+    billingEnabled: boolean;
+  };
 };
 
-type NavGroup = {
-  labelKey: string;
-  items: NavItem[];
-};
-
-const NAV_GROUPS: NavGroup[] = [
-  {
-    labelKey: "settings.nav.group.account",
-    items: [
-      { id: "profile", labelKey: "settings.nav.item.profile", path: "/settings/account" },
-      { id: "password", labelKey: "settings.nav.item.password", path: "/settings/account", section: "password" },
-      { id: "mfa", labelKey: "settings.nav.item.mfa", path: "/settings/account", section: "mfa" },
-      { id: "tokens", labelKey: "settings.nav.item.tokens", path: "/settings/account", section: "tokens" },
-      { id: "preferences", labelKey: "settings.nav.item.preferences", path: "/settings/account", section: "preferences" },
-    ],
-  },
-  {
-    labelKey: "settings.nav.group.workspace",
-    items: [
-      { id: "general", labelKey: "settings.nav.item.general", path: "/settings/workspace" },
-      { id: "smtp", labelKey: "settings.nav.item.smtp", path: "/settings/workspace", section: "smtp" },
-      { id: "ai", labelKey: "settings.nav.item.ai", path: "/settings/workspace", section: "ai" },
-      { id: "oidc", labelKey: "settings.nav.item.oidc", path: "/settings/workspace", section: "oidc" },
-    ],
-  },
-  {
-    labelKey: "settings.nav.group.billing",
-    items: [
-      { id: "billing-plan", labelKey: "settings.nav.item.plan", path: "/settings/billing" },
-      { id: "billing-seats", labelKey: "settings.nav.item.seats", path: "/settings/billing", tab: "seats" },
-      { id: "billing-history", labelKey: "settings.nav.item.billing_history", path: "/settings/billing", tab: "history" },
-    ],
-  },
-  {
-    labelKey: "settings.nav.group.administration",
-    items: [
-      { id: "members", labelKey: "settings.nav.item.members", path: "/settings/members" },
-      { id: "audit", labelKey: "settings.nav.item.audit", path: "/settings/audit" },
-    ],
-  },
-];
+export function loader(): SettingsLayoutData {
+  const interfaceConfig = loadWorkspaceInterfaceConfig();
+  return { interfaceConfig };
+}
 
 function itemHref(item: NavItem): string {
   if (item.section) return `${item.path}?section=${item.section}`;
@@ -85,6 +53,11 @@ function isItemActive(item: NavItem, pathname: string, search: string): boolean 
 export default function SettingsLayout() {
   const { t } = useTranslation();
   const { pathname, search } = useLocation();
+  const { interfaceConfig } = useLoaderData<typeof loader>();
+  const appShell = useAppShellData();
+  const workspacePlan = appShell.workspace.plan;
+
+  const navGroups = filterNavGroups(ALL_NAV_GROUPS, interfaceConfig, workspacePlan);
 
   return (
     <div className="flex min-h-0 flex-1" data-testid="settings-layout">
@@ -92,7 +65,7 @@ export default function SettingsLayout() {
         aria-label={t("settings.nav.aria_label")}
         className="w-[212px] shrink-0 overflow-y-auto border-r border-[color:var(--border-subtle)] py-sp-5"
       >
-        {NAV_GROUPS.map((group) => (
+        {navGroups.map((group) => (
           <div key={group.labelKey} className="mb-sp-5">
             <div
               className="px-sp-4 pb-sp-2 font-medium uppercase tracking-wide text-fg-subtle"
