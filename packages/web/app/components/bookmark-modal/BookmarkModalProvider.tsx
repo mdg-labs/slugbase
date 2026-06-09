@@ -4,14 +4,17 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
+import { useTranslation } from "react-i18next";
 
 import type { BookmarkModalAiContext } from "./ai/bookmark-modal-ai.types.js";
 import { DEFAULT_BOOKMARK_MODAL_AI_CONTEXT } from "./ai/bookmark-modal-ai.types.js";
 import { BookmarkModal } from "./BookmarkModal.js";
 import {
+  BookmarkModalLoadError,
   loadBookmarkModalOptions,
   submitBookmarkModal,
 } from "./bookmark-modal-api.js";
@@ -22,6 +25,7 @@ import type {
   BookmarkModalTagOption,
 } from "./bookmark-modal.types.js";
 import { useAppLocale } from "../../i18n/use-app-locale.js";
+import { useAppToast } from "../feedback/AppToastProvider.js";
 
 export interface BookmarkModalContextValue {
   open: boolean;
@@ -49,18 +53,36 @@ export function BookmarkModalProvider({
   aiContext: aiContextOverride,
 }: BookmarkModalProviderProps) {
   const appLocale = useAppLocale();
+  const { t } = useTranslation();
+  const { showError } = useAppToast();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"create" | "edit">("create");
   const [bookmark, setBookmark] = useState<BookmarkModalInitialBookmark | undefined>();
   const [folders, setFolders] = useState<BookmarkModalFolderOption[]>([]);
   const [tags, setTags] = useState<BookmarkModalTagOption[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [optionsError, setOptionsError] = useState<string | null>(null);
+  const loadIdRef = useRef(0);
 
   const loadOptions = useCallback(async () => {
-    const options = await loadBookmarkModalOptions();
-    setFolders(options.folders);
-    setTags(options.tags);
-  }, []);
+    const loadId = ++loadIdRef.current;
+    setOptionsError(null);
+    try {
+      const options = await loadBookmarkModalOptions();
+      if (loadId === loadIdRef.current) {
+        setFolders(options.folders);
+        setTags(options.tags);
+      }
+    } catch (error) {
+      if (loadId !== loadIdRef.current) return;
+      const message =
+        error instanceof BookmarkModalLoadError
+          ? error.message
+          : t("bookmark.modal.error.load_options_failed");
+      setOptionsError(message);
+      showError(t("bookmark.modal.error.load_options_toast"));
+    }
+  }, [t, showError]);
 
   const openCreate = useCallback(() => {
     setMode("create");
@@ -161,6 +183,8 @@ export function BookmarkModalProvider({
         onSubmit={handleSubmit}
         isSubmitting={isSubmitting}
         aiContext={aiContext}
+        optionsError={optionsError}
+        onRetryOptions={() => { void loadOptions(); }}
       />
     </BookmarkModalContext.Provider>
   );

@@ -617,6 +617,8 @@ export type BookmarkModalProps = {
   isSubmitting?: boolean;
   aiContext?: BookmarkModalAiContext;
   fetchAiSuggestions?: FetchAiSuggestionsFn;
+  optionsError?: string | null;
+  onRetryOptions?: () => void;
 };
 
 export function BookmarkModal({
@@ -630,6 +632,8 @@ export function BookmarkModal({
   isSubmitting = false,
   aiContext = DEFAULT_BOOKMARK_MODAL_AI_CONTEXT,
   fetchAiSuggestions,
+  optionsError,
+  onRetryOptions,
 }: BookmarkModalProps) {
   const { t } = useTranslation();
   const { canShare, currentUserId } = useWorkspaceEntitlements();
@@ -727,6 +731,25 @@ export function BookmarkModal({
           noValidate
         >
           <div className="flex min-h-0 flex-1 flex-col gap-sp-6 overflow-y-auto px-sp-8 py-sp-6">
+            {optionsError ? (
+              <div
+                className="rounded-md border border-[color:var(--danger-border,#f0686b33)] bg-[color:var(--danger-bg,#f0686b0d)] px-sp-4 py-sp-3 text-[color:var(--danger-fg,#f0686b)]"
+                style={{ fontSize: "var(--text-small)" }}
+                role="alert"
+                data-testid="options-load-error"
+              >
+                {t("bookmark.modal.error.load_options_inline")}
+                {onRetryOptions ? (
+                  <button
+                    type="button"
+                    className="ml-sp-2 underline"
+                    onClick={onRetryOptions}
+                  >
+                    {t("bookmark.modal.error.load_options_retry")}
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
             {/* URL */}
             <div className="flex flex-col gap-sp-2">
               <Label htmlFor={`${formId}-url`}>{t("bookmark.modal.url_label")}</Label>

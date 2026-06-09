@@ -6,6 +6,41 @@ import type {
 } from "./bookmark-modal.types.js";
 import { toBookmarkSubmitBody } from "./bookmark-modal.validation.js";
 
+export class BookmarkModalLoadError extends Error {
+  constructor(
+    message: string,
+    public readonly cause?: unknown,
+  ) {
+    super(message);
+    this.name = "BookmarkModalLoadError";
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isFolderOptionArray(items: unknown): items is BookmarkModalFolderOption[] {
+  if (!Array.isArray(items)) return false;
+  return items.every(
+    (item) =>
+      isRecord(item) &&
+      typeof item.id === "string" &&
+      typeof item.name === "string" &&
+      (item.icon === null || typeof item.icon === "string"),
+  );
+}
+
+function isTagOptionArray(items: unknown): items is BookmarkModalTagOption[] {
+  if (!Array.isArray(items)) return false;
+  return items.every(
+    (item) =>
+      isRecord(item) &&
+      typeof item.id === "string" &&
+      typeof item.name === "string",
+  );
+}
+
 const getApiBaseUrl = (): string => process.env["API_BASE_URL"] ?? "";
 
 async function getMutationHeaders(): Promise<Record<string, string>> {
@@ -175,28 +210,48 @@ export async function submitBookmarkModal(
   await syncTagMembership(payload.bookmarkId, allTagIds, initial?.tagIds ?? []);
 }
 
-export async function loadBookmarkModalOptions(): Promise<{
+export type LoadBookmarkModalOptionsResult = {
   folders: BookmarkModalFolderOption[];
   tags: BookmarkModalTagOption[];
-}> {
-  const [foldersRes, tagsRes] = await Promise.all([
-    fetch(`${getApiBaseUrl()}/folders?pageSize=100`, {
-      credentials: "include",
-    }),
-    fetch(`${getApiBaseUrl()}/tags?pageSize=100`, { credentials: "include" }),
-  ]);
+};
 
-  if (!foldersRes.ok || !tagsRes.ok) {
-    return { folders: [], tags: [] };
+async function fetchFolders(): Promise<BookmarkModalFolderOption[]> {
+  const res = await fetch(`${getApiBaseUrl()}/folders?pageSize=100`, {
+    credentials: "include",
+  });
+  if (!res.ok) {
+    throw new BookmarkModalLoadError(
+      `Failed to load folders (HTTP ${String(res.status)})`,
+    );
   }
+  const body: unknown = await res.json();
+  if (!isRecord(body) || !isFolderOptionArray(body.items)) {
+    throw new BookmarkModalLoadError(
+      "Unexpected response shape when loading folders",
+    );
+  }
+  return body.items;
+}
 
-  const foldersData = (await foldersRes.json()) as {
-    items: BookmarkModalFolderOption[];
-  };
-  const tagsData = (await tagsRes.json()) as { items: BookmarkModalTagOption[] };
+async function fetchTags(): Promise<BookmarkModalTagOption[]> {
+  const res = await fetch(`${getApiBaseUrl()}/tags?pageSize=100`, {
+    credentials: "include",
+  });
+  if (!res.ok) {
+    throw new BookmarkModalLoadError(
+      `Failed to load tags (HTTP ${String(res.status)})`,
+    );
+  }
+  const body: unknown = await res.json();
+  if (!isRecord(body) || !isTagOptionArray(body.items)) {
+    throw new BookmarkModalLoadError(
+      "Unexpected response shape when loading tags",
+    );
+  }
+  return body.items;
+}
 
-  return {
-    folders: foldersData.items,
-    tags: tagsData.items,
-  };
+export async function loadBookmarkModalOptions(): Promise<LoadBookmarkModalOptionsResult> {
+  const [folders, tags] = await Promise.all([fetchFolders(), fetchTags()]);
+  return { folders, tags };
 }
