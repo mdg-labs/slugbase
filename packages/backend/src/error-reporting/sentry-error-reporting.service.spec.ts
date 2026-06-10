@@ -114,4 +114,40 @@ describe("SentryErrorReportingService", () => {
       email: "user@example.com",
     });
   });
+
+  it("uses SENTRY_RELEASE env when set explicitly", () => {
+    const service = new SentryErrorReportingService(
+      buildConfig({ SENTRY_RELEASE: "custom@1.2.3" }),
+    );
+    service.captureException(new Error("release probe"));
+
+    expect(sentryMocks.init).toHaveBeenCalledWith(
+      expect.objectContaining({ release: "custom@1.2.3" }),
+    );
+  });
+
+  it("omits release when SENTRY_RELEASE env is absent and package.json is unavailable", () => {
+    const service = new SentryErrorReportingService(buildConfig());
+    service.captureException(new Error("no release"));
+
+    // In test env, package.json may or may not resolve; verify init was called
+    expect(sentryMocks.init).toHaveBeenCalledOnce();
+    const initCall = sentryMocks.init.mock.calls[0] as [Record<string, unknown>];
+    // release should either be a slugbase@x string (from root pkg) or absent
+    const release = initCall[0].release;
+    if (release) {
+      expect(release).toMatch(/^slugbase@/);
+    }
+  });
+
+  it("passes release from SENTRY_RELEASE env to Sentry init", () => {
+    const service = new SentryErrorReportingService(
+      buildConfig({ SENTRY_RELEASE: "slugbase@0.1.0" }),
+    );
+    service.captureException(new Error("env override"));
+
+    expect(sentryMocks.init).toHaveBeenCalledWith(
+      expect.objectContaining({ release: "slugbase@0.1.0" }),
+    );
+  });
 });

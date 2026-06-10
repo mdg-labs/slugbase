@@ -5,6 +5,8 @@ import type {
   ErrorCaptureContext,
   ErrorReportingService,
 } from "@slugbase/shared-types";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import { ConfigService } from "../config/config.service.js";
 import {
@@ -13,6 +15,26 @@ import {
   scrubExtra,
   shouldCaptureError,
 } from "./error-reporting-pii.js";
+
+const RELEASE_PREFIX = "slugbase@";
+
+/**
+ * Reads the root package.json version and formats it as a Sentry release string.
+ * Used as a fallback when SENTRY_RELEASE env is not explicitly set.
+ * Returns undefined when the file cannot be read (e.g. inside a Docker container
+ * where root package.json is not copied).
+ */
+function readRootPackageVersion(): string | undefined {
+  try {
+    const rootPkg = join(process.cwd(), "package.json");
+    const pkg = JSON.parse(readFileSync(rootPkg, "utf-8")) as { version?: string };
+    return pkg.version !== undefined
+      ? `${RELEASE_PREFIX}${pkg.version}`
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * Sentry-backed error reporting — active when SENTRY_DSN is configured.
@@ -36,7 +58,8 @@ export class SentryErrorReportingService implements ErrorReportingService {
 
     const environment =
       this.config.get("SENTRY_ENVIRONMENT") ?? this.config.get("nodeEnv");
-    const release = this.config.get("SENTRY_RELEASE");
+    const release =
+      this.config.get("SENTRY_RELEASE") ?? readRootPackageVersion();
 
     Sentry.init({
       dsn,

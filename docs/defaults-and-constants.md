@@ -82,6 +82,15 @@ Machine-readable key list (names only): [`.env.example`](../.env.example). Backe
 
 When adding a new key, follow rule `05-env-vars.mdc` (Infisical + `.env.example` + schema + update `environment-variables.md`).
 
+### Sentry release auto-derivation
+
+The Sentry release identifier (`SENTRY_RELEASE` for the API, `VITE_SENTRY_RELEASE` for the web client) is **auto-derived** from root `package.json` `version` field (format: `slugbase@<version>`):
+
+- **API** (`SENTRY_RELEASE`): when the env var is unset, `sentry-error-reporting.service.ts` reads root `package.json` at startup and formats the release as `slugbase@<version>`. CI also derives the string and exports it for Fly.io deploy steps.
+- **Web** (`VITE_SENTRY_RELEASE`): inlined at build time via Vite `define`. CI sets this from the root `package.json` version; no Infisical secret required.
+- **Override**: setting `SENTRY_RELEASE` or `VITE_SENTRY_RELEASE` explicitly still works — the auto-derived value is only a fallback.
+- **Root version bump**: the release version is bumped during the release promotion workflow (`release published` on `main`).
+
 ---
 
 ## 8. Hosted Workers custom domains (spec §14.7, §22.5–22.7)
