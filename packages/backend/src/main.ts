@@ -33,6 +33,13 @@ export async function bootstrap(): Promise<void> {
   await app.init();
 
   const config = app.get(ConfigService);
+
+  // CORS for cross-origin client requests (hosted: CF Workers → Fly.io API)
+  app.enableCors({
+    origin: config.get("FRONTEND_ORIGIN"),
+    credentials: true,
+  });
+
   if (config.get("SERVE_WEB_CLIENT")) {
     const serverBuildPath = config.get("WEB_CLIENT_SERVER_BUILD");
     if (!serverBuildPath) {
