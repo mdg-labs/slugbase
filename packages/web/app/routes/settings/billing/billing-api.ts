@@ -94,6 +94,7 @@ export async function loadBillingSettingsData(
         billingStatus: workspace.billingStatus,
         billingPeriodEnd: workspace.billingPeriodEnd,
         permanentPersonal: workspace.permanentPersonal,
+        billingInterval: workspace.billingInterval,
       },
       bookmarkCount,
       archivedBookmarkCount: estimateArchivedCount(workspace.plan, bookmarkCount, cap),
@@ -120,6 +121,7 @@ export async function loadBillingSettingsData(
       billingStatus: workspace.billingStatus,
       billingPeriodEnd: workspace.billingPeriodEnd,
       permanentPersonal: workspace.permanentPersonal,
+      billingInterval: workspace.billingInterval,
     },
     bookmarkCount,
     archivedBookmarkCount: estimateArchivedCount(workspace.plan, bookmarkCount, cap),
@@ -200,5 +202,6 @@ export async function updateSeatQuantity(
     billingStatus: body.billingStatus,
     billingPeriodEnd: body.billingPeriodEnd,
     permanentPersonal: body.permanentPersonal,
+    billingInterval: body.billingInterval,
   };
 }
