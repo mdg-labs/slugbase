@@ -16,7 +16,6 @@ const sampleConfig: BillingPlanDisplayConfig = {
   teamSeatYearlyPrice: "$9",
   supporterPrice: "$59",
   supporterPromotionEnd: "2026-12-31T23:59:59.000Z",
-  teamBaseSeats: 5,
   freeBookmarkCap: 50,
 };
 
@@ -35,10 +34,10 @@ describe("billing plan table", () => {
     expect(bookmarks?.personal).toBe("settings.billing.feature.unlimited");
   });
 
-  it("uses team base seats from config for members row", () => {
-    const rows = buildPlanFeatureRows({ ...sampleConfig, teamBaseSeats: 8 });
+  it("uses per-seat label for team members row", () => {
+    const rows = buildPlanFeatureRows(sampleConfig);
     const members = rows.find((row) => row.key === "settings.billing.feature.members");
-    expect(members?.team).toBe("8");
+    expect(members?.team).toBe("settings.billing.feature.per_seat");
   });
 
   it("resolves upgrade and downgrade CTAs by plan rank", () => {

@@ -190,7 +190,7 @@ export function BillingSettingsPage({ initialData }: BillingSettingsPageProps) {
           ? "settings.billing.current_team_annual_price"
           : "settings.billing.current_team_price",
       priceParams: {
-        seats: String(workspace.planSeats ?? initialData.planConfig.teamBaseSeats),
+        seats: String(workspace.planSeats ?? "—"),
         price: teamPrice,
         date: periodEndLabel ?? t("settings.billing.period_end_unknown"),
       },

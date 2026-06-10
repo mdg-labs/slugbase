@@ -11,7 +11,6 @@ export interface BillingPlanDisplayConfig {
   teamSeatYearlyPrice?: string;
   supporterPrice: string;
   supporterPromotionEnd: string | null;
-  teamBaseSeats: number;
   freeBookmarkCap: number;
 }
 

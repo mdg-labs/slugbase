@@ -47,7 +47,6 @@ interface PricingApiResponse {
     team: PublicPlanPriceGroup;
     supporter?: PublicPriceInfo;
   };
-  teamBaseSeats: number;
   freeBookmarkCap: number;
 }
 
@@ -74,7 +73,6 @@ export async function loadBillingPlanDisplayConfig(
 ): Promise<BillingPlanDisplayConfig> {
   const billingEnabled = readBoolean(readEnv("VITE_BILLING_ENABLED"), false);
   const supporterPromotionEnd = readEnv("VITE_SUPPORTER_PROMOTION_END") ?? null;
-  const teamBaseSeats = readPositiveInt(readEnv("VITE_TEAM_BASE_SEATS"), 5);
   const freeBookmarkCap = readPositiveInt(readEnv("VITE_FREE_BOOKMARK_CAP"), FREE_BOOKMARK_CAP);
 
   const apiPricing = await fetchPricingFromApi();
@@ -88,7 +86,6 @@ export async function loadBillingPlanDisplayConfig(
       teamSeatYearlyPrice: apiPricing.plans.team.annual?.display ?? "",
       supporterPrice: apiPricing.plans.supporter?.display ?? "",
       supporterPromotionEnd,
-      teamBaseSeats: apiPricing.teamBaseSeats,
       freeBookmarkCap: apiPricing.freeBookmarkCap,
       ...overrides,
     };
@@ -103,7 +100,6 @@ export async function loadBillingPlanDisplayConfig(
     teamSeatYearlyPrice: readEnv("VITE_PLAN_PRICE_TEAM_SEAT") ?? "",
     supporterPrice: readEnv("VITE_PLAN_PRICE_SUPPORTER") ?? "",
     supporterPromotionEnd,
-    teamBaseSeats,
     freeBookmarkCap,
     ...overrides,
   };
