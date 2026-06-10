@@ -23,6 +23,7 @@ function formatFeatureCell(locale: SupportedLocale, value: PlanFeatureCell): str
   if (value === "included") return "✓";
   if (value === "excluded") return "—";
   if (value === "unlimited") return t(locale, "marketing.pricing.feature.unlimited");
+  if (value === "unlimited_per_seat") return t(locale, "marketing.pricing.feature.unlimited_per_seat");
   return value;
 }
 
@@ -145,10 +146,10 @@ const faqItems = [
                 <span data-period-monthly={teamMonthly.period} data-period-yearly={teamYearly.period}>/{teamMonthly.period}</span>
               )}
             </div>
-            <p class="mk-plan-desc">{t(locale, "marketing.pricing.plan.team_desc", { seats: String(config.teamBaseSeats) })}</p>
+            <p class="mk-plan-desc">{t(locale, "marketing.pricing.plan.team_desc")}</p>
             <ul class="mk-plan-feats">
               <li>{t(locale, "marketing.pricing.plan.team_feat_1")}</li>
-              <li>{t(locale, "marketing.pricing.plan.team_feat_2", { seats: String(config.teamBaseSeats) })}</li>
+              <li>{t(locale, "marketing.pricing.plan.team_feat_2")}</li>
               <li>{t(locale, "marketing.pricing.plan.team_feat_3")}</li>
               <li>{t(locale, "marketing.pricing.plan.team_feat_4")}</li>
             </ul>

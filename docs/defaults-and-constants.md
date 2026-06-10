@@ -63,14 +63,13 @@ Per-IP **and** per-account where applicable; response 429.
 | Workspaces per Free account | 1 | *fixed (entitlement)* | decision #30 |
 | Free: AI / team sharing / audit log | off | *fixed (entitlement)* | §12.2 |
 | Personal / Team / supporter: bookmarks | unlimited | *fixed* | §12.1 |
-| Team base seats | 5 | config | illustrative; Fast-Follow tuning (#17) |
 | Downgrade grace period | 7 days after period end | config | then archive overflow (§12.5) |
 | Archive selection rule | keep most-recently-**accessed**; tiebreak most-recently-**created**; archive remainder over cap | config | deterministic, documented (§12.5) |
 | AI suggestion cache TTL | 30 days | config | keyed by (workspace, user, canonical URL, output language) (§11.2) |
 
 ## 6. Pricing (illustrative — config + marketing only, never in app logic)
 
-Per spec §12.1 and §23.4: prices, the supporter price/deadline, and exact seat counts live in deployment configuration and the marketing site. The prototype's `$4`/`$9`/`$59` and "25 members" are **placeholders**, not commitments. The paid individual tier is **"Personal"** (never "Pro").
+Per spec §12.1 and §23.4: prices, the supporter price/deadline, and exact seat counts live in deployment configuration and the marketing site. The prototype's `$4`/`$9`/`$59` and "25 members" are **placeholders**, not commitments. Updated illustrative values for #318: Personal €3/seat/mo, Team €4/seat/mo, Supporter €49 one-time. The paid individual tier is **"Personal"** (never "Pro").
 
 ---
 
