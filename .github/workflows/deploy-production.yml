@@ -84,6 +84,12 @@ jobs:
           infisical-domain: ${{ secrets.INFISICAL_DOMAIN }}
           infisical-identity-id: ${{ secrets.INFISICAL_OIDC_IDENTITY_ID }}
 
+      - name: Derive release version
+        id: release
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "release=slugbase@${VERSION}" >> "$GITHUB_OUTPUT"
+
       - name: Build shared dependencies for web
         env:
           NODE_ENV: production
@@ -92,6 +98,8 @@ jobs:
       - name: Build web client
         env:
           NODE_ENV: production
+          VITE_SENTRY_ENVIRONMENT: production
+          VITE_SENTRY_RELEASE: ${{ steps.release.outputs.release }}
         run: pnpm --filter @slugbase/web build
 
       - name: Build shared dependencies for marketing

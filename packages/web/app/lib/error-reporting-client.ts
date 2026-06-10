@@ -12,9 +12,16 @@ export function initErrorReportingClient(): void {
     return;
   }
 
+  const environment =
+    (import.meta.env.VITE_SENTRY_ENVIRONMENT as string | undefined) ||
+    import.meta.env.MODE;
+  const release =
+    (import.meta.env.VITE_SENTRY_RELEASE as string | undefined) || undefined;
+
   Sentry.init({
     dsn,
-    environment: import.meta.env.MODE,
+    environment,
+    ...(release ? { release } : {}),
     beforeSend(event) {
       if (event.user) {
         delete event.user.email;

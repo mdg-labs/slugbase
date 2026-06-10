@@ -314,6 +314,8 @@ Optional on both shapes. Empty = no-op (no tracker, no Sentry init).
 | `SENTRY_ENVIRONMENT` | Sentry environment tag override | Optional | No | Optional | No | Runtime | `staging` |
 | `SENTRY_RELEASE` | Sentry release / deploy version | Optional | No | Optional | No | Runtime | `slugbase@1.2.3` |
 | `VITE_SENTRY_DSN` | Public Sentry DSN (web client) | Optional | No | Optional | No | Build | `https://…@sentry.io/…` |
+| `VITE_SENTRY_ENVIRONMENT` | Sentry environment tag for web client (staging / production) — set by CI; falls back to `MODE` | Optional | Build only | Optional | No | Build | `staging` |
+| `VITE_SENTRY_RELEASE` | Sentry release tag for web client — set by CI from root `package.json` version | Optional | Build only | Optional | No | Build | `slugbase@0.1.0` |
 | `SENTRY_AUTH_TOKEN` | Auth token for source map upload | CI only | CI only | CI only | Yes | CI | `<Sentry auth token>` |
 | `SENTRY_ORG` | Sentry org slug (source maps) | CI only | CI only | CI only | No | CI | `my-org` |
 | `SENTRY_PROJECT` | Sentry project slug (source maps) | CI only | CI only | CI only | No | CI | `slugbase-web` |
