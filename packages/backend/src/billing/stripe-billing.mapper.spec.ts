@@ -24,6 +24,7 @@ describe("stripe-billing.mapper", () => {
       workspaceId: "ws-team",
       plan: "team",
       status: "active",
+      billingInterval: null,
       externalCustomerId: "cus_team_1",
       externalSubscriptionId: "sub_team_1",
       includedSeats: 5,
@@ -47,6 +48,64 @@ describe("stripe-billing.mapper", () => {
     expect(state.plan).toBe("personal");
   });
 
+  it("detects billingInterval from price recurring.interval", () => {
+    const monthly = mapStripeSubscriptionToState("ws-monthly", {
+      id: "sub_m",
+      customer: "cus_m",
+      status: "active",
+      current_period_end: 1_735_689_600,
+      metadata: { plan: "personal" },
+      items: {
+        data: [{
+          id: "si_m",
+          quantity: 1,
+          price: {
+            metadata: { plan: "personal" },
+            recurring: { interval: "month" },
+          },
+        }],
+      },
+    });
+    expect(monthly.billingInterval).toBe("monthly");
+
+    const annual = mapStripeSubscriptionToState("ws-annual", {
+      id: "sub_a",
+      customer: "cus_a",
+      status: "active",
+      current_period_end: 1_735_689_600,
+      metadata: { plan: "team", included_seats: "5" },
+      items: {
+        data: [{
+          id: "si_a",
+          quantity: 5,
+          price: {
+            metadata: { plan: "team" },
+            recurring: { interval: "year" },
+          },
+        }],
+      },
+    });
+    expect(annual.billingInterval).toBe("annual");
+  });
+
+  it("detects billingInterval from price metadata when recurring is absent", () => {
+    const state = mapStripeSubscriptionToState("ws-meta", {
+      id: "sub_meta",
+      customer: "cus_meta",
+      status: "active",
+      current_period_end: 1_735_689_600,
+      metadata: { plan: "personal" },
+      items: {
+        data: [{
+          id: "si_meta",
+          quantity: 1,
+          price: { metadata: { plan: "personal", billing_interval: "annual" } },
+        }],
+      },
+    });
+    expect(state.billingInterval).toBe("annual");
+  });
+
   it("maps supporter checkout to Personal-permanent state", () => {
     const state = mapSupporterCheckoutToState("ws-supporter", "cus_supporter");
 
@@ -54,6 +113,7 @@ describe("stripe-billing.mapper", () => {
       workspaceId: "ws-supporter",
       plan: "personal",
       status: "active",
+      billingInterval: null,
       externalCustomerId: "cus_supporter",
       externalSubscriptionId: null,
       currentPeriodEnd: null,

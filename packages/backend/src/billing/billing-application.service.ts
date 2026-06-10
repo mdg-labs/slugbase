@@ -10,6 +10,7 @@ import {
   BillingUnavailableError,
   type BillingAsyncEvent,
   type BillingCheckoutMode,
+  type BillingInterval,
   type BillingPlan,
   type BillingService,
 } from "@slugbase/shared-types";
@@ -34,6 +35,7 @@ export interface StartCheckoutInput {
   requesterId: string;
   plan: Exclude<BillingPlan, "free">;
   mode: BillingCheckoutMode;
+  billingInterval?: BillingInterval;
   successUrl: string;
   cancelUrl: string;
 }
@@ -103,7 +105,11 @@ export class BillingApplicationService {
       throw new BadRequestException("Supporter promotion is no longer available");
     }
 
-    const priceId = this.planConfig.resolveCheckoutPriceId(input.plan, input.mode);
+    const priceId = this.planConfig.resolveCheckoutPriceId(
+      input.plan,
+      input.mode,
+      input.billingInterval,
+    );
     if (!priceId) {
       throw new BadRequestException("Checkout is not configured for this plan");
     }

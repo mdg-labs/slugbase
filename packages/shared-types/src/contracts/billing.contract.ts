@@ -9,6 +9,9 @@
 
 export type BillingPlan = "free" | "personal" | "team";
 
+/** Billing interval for recurring subscriptions (spec §12.1). */
+export type BillingInterval = "monthly" | "annual";
+
 export type BillingSubscriptionStatus =
   | "none"
   | "active"
@@ -57,6 +60,8 @@ export interface BillingSubscriptionState {
   workspaceId: string;
   plan: BillingPlan;
   status: BillingSubscriptionStatus;
+  /** Billing interval for the current subscription; null for free/permanent-permanent plans. */
+  billingInterval: BillingInterval | null;
   externalCustomerId: string | null;
   externalSubscriptionId: string | null;
   currentPeriodEnd: Date | null;

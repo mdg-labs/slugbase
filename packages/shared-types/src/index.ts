@@ -41,6 +41,7 @@ export {
   type BillingCheckoutRequest,
   type BillingCheckoutSession,
   type BillingEventResult,
+  type BillingInterval,
   type BillingPlan,
   type BillingPortalRequest,
   type BillingPortalSession,

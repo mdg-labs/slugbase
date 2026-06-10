@@ -105,8 +105,10 @@ describe("Billing (integration)", () => {
       DATABASE_URL: testDatabase.databaseUrl,
       STRIPE_SECRET_KEY: "sk_test_billing_integration",
       STRIPE_WEBHOOK_SECRET: "whsec_test_billing_integration",
-      STRIPE_PRICE_PERSONAL: "price_personal_test",
-      STRIPE_PRICE_TEAM: "price_team_test",
+      STRIPE_PRICE_PERSONAL_MONTHLY: "price_personal_monthly_test",
+      STRIPE_PRICE_PERSONAL_ANNUAL: "price_personal_annual_test",
+      STRIPE_PRICE_TEAM_MONTHLY: "price_team_monthly_test",
+      STRIPE_PRICE_TEAM_ANNUAL: "price_team_annual_test",
       STRIPE_PRICE_SUPPORTER: "price_supporter_test",
       TEAM_BASE_SEATS: "5",
     });
@@ -227,6 +229,7 @@ describe("Billing (integration)", () => {
       requesterId: ownerUserId,
       plan: "personal",
       mode: "recurring",
+      billingInterval: "monthly",
       successUrl: "https://app.example/success",
       cancelUrl: "https://app.example/cancel",
     });
@@ -238,5 +241,77 @@ describe("Billing (integration)", () => {
       returnUrl: "https://app.example/settings/billing",
     });
     expect(portal.portalUrl).toContain("billing.stripe.test");
+  });
+
+  it("resolves annual price ID when billingInterval is annual", async () => {
+    const checkout = await billingApp.startCheckout({
+      workspaceId,
+      requesterId: ownerUserId,
+      plan: "personal",
+      mode: "recurring",
+      billingInterval: "annual",
+      successUrl: "https://app.example/success",
+      cancelUrl: "https://app.example/cancel",
+    });
+    expect(checkout.checkoutUrl).toContain("checkout.stripe.test");
+  });
+
+  it("subscription state includes billingInterval when set", async () => {
+    const evtMonthly = {
+      id: "evt_interval_monthly",
+      type: "customer.subscription.updated",
+      data: {
+        object: {
+          id: "sub_monthly_1",
+          object: "subscription",
+          status: "active",
+          current_period_end: 1_735_689_600,
+          customer: "cus_interval_1",
+          metadata: { workspace_id: workspaceId, plan: "personal" },
+          items: {
+            data: [{
+              id: "si_monthly",
+              quantity: 1,
+              price: {
+                metadata: { plan: "personal", billing_interval: "monthly" },
+                recurring: { interval: "month" },
+              },
+            }],
+          },
+        },
+      },
+    };
+
+    await billingApp.applyBillingEvent({ eventId: "evt_interval_monthly", payload: evtMonthly });
+
+    const evtAnnual = {
+      id: "evt_interval_annual",
+      type: "customer.subscription.updated",
+      data: {
+        object: {
+          id: "sub_annual_1",
+          object: "subscription",
+          status: "active",
+          current_period_end: 1_735_689_600,
+          customer: "cus_interval_2",
+          metadata: { workspace_id: workspaceId, plan: "team", included_seats: "5" },
+          items: {
+            data: [{
+              id: "si_annual",
+              quantity: 5,
+              price: {
+                metadata: { plan: "team", billing_interval: "annual" },
+                recurring: { interval: "year" },
+              },
+            }],
+          },
+        },
+      },
+    };
+
+    await billingApp.applyBillingEvent({ eventId: "evt_interval_annual", payload: evtAnnual });
+
+    const workspace = await workspacesService.getWorkspace(workspaceId);
+    expect(workspace.plan).toBe("team");
   });
 });

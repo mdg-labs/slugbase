@@ -1,4 +1,4 @@
-import type { BillingPlan, BillingSubscriptionState, BillingSubscriptionStatus } from "@slugbase/shared-types";
+import type { BillingInterval, BillingPlan, BillingSubscriptionState, BillingSubscriptionStatus } from "@slugbase/shared-types";
 
 /** Stripe subscription shape used by the billing mapper (subset of Stripe SDK types). */
 export interface StripeSubscriptionLike {
@@ -14,7 +14,7 @@ export interface StripeSubscriptionLike {
       quantity?: number | null;
       price?: {
         metadata?: Record<string, string>;
-        recurring?: { usage_type?: string } | null;
+        recurring?: { interval?: string; usage_type?: string } | null;
       } | null;
     }>;
   };
@@ -73,6 +73,17 @@ function isPermanentPersonal(metadata: Record<string, string> | undefined): bool
   return metadata?.permanent_personal === "true" || metadata?.supporter === "true";
 }
 
+function readBillingInterval(
+  priceMetadata: Record<string, string> | undefined,
+  priceRecurringInterval: string | undefined,
+): BillingInterval | null {
+  const meta = priceMetadata?.billing_interval;
+  if (meta === "monthly" || meta === "annual") return meta;
+  if (priceRecurringInterval === "month") return "monthly";
+  if (priceRecurringInterval === "year") return "annual";
+  return null;
+}
+
 /**
  * Maps a Stripe subscription object to the product billing state contract.
  */
@@ -90,6 +101,10 @@ export function mapStripeSubscriptionToState(
   const quantity = firstItem?.quantity ?? 1;
   const extraSeats =
     plan === "team" && includedSeats !== null ? Math.max(0, quantity - includedSeats) : 0;
+  const billingInterval = readBillingInterval(
+    priceMetadata,
+    firstItem?.price?.recurring?.interval,
+  );
 
   let status = STRIPE_STATUS_MAP[subscription.status] ?? "none";
   if (subscription.cancel_at_period_end && status === "active") {
@@ -100,6 +115,7 @@ export function mapStripeSubscriptionToState(
     workspaceId,
     plan,
     status,
+    billingInterval,
     externalCustomerId: resolveCustomerId(subscription.customer),
     externalSubscriptionId: subscription.id,
     currentPeriodEnd: new Date(subscription.current_period_end * 1000),
@@ -121,6 +137,7 @@ export function mapSupporterCheckoutToState(
     workspaceId,
     plan: "personal",
     status: "active",
+    billingInterval: null,
     externalCustomerId: customerId,
     externalSubscriptionId: null,
     currentPeriodEnd: null,

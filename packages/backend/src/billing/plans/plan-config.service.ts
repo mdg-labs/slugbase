@@ -1,5 +1,5 @@
 import { Inject, Injectable } from "@nestjs/common";
-import type { BillingCheckoutMode, BillingPlan } from "@slugbase/shared-types";
+import type { BillingCheckoutMode, BillingInterval, BillingPlan } from "@slugbase/shared-types";
 
 import { ConfigService } from "../../config/config.service.js";
 
@@ -7,9 +7,12 @@ import { ConfigService } from "../../config/config.service.js";
 export const DEFAULT_TEAM_BASE_SEATS = 5;
 
 export interface PlanPriceConfig {
-  personalRecurringPriceId: string | null;
-  teamRecurringPriceId: string | null;
-  teamExtraSeatPriceId: string | null;
+  personalMonthlyPriceId: string | null;
+  personalAnnualPriceId: string | null;
+  teamMonthlyPriceId: string | null;
+  teamAnnualPriceId: string | null;
+  teamExtraSeatMonthlyPriceId: string | null;
+  teamExtraSeatAnnualPriceId: string | null;
   supporterOneTimePriceId: string | null;
 }
 
@@ -40,27 +43,46 @@ export class PlanConfigService {
 
   getPriceConfig(): PlanPriceConfig {
     return {
-      personalRecurringPriceId: this.config.get("STRIPE_PRICE_PERSONAL") ?? null,
-      teamRecurringPriceId: this.config.get("STRIPE_PRICE_TEAM") ?? null,
-      teamExtraSeatPriceId: this.config.get("STRIPE_PRICE_TEAM_EXTRA_SEAT") ?? null,
+      personalMonthlyPriceId: this.config.get("STRIPE_PRICE_PERSONAL_MONTHLY") ?? null,
+      personalAnnualPriceId: this.config.get("STRIPE_PRICE_PERSONAL_ANNUAL") ?? null,
+      teamMonthlyPriceId: this.config.get("STRIPE_PRICE_TEAM_MONTHLY") ?? null,
+      teamAnnualPriceId: this.config.get("STRIPE_PRICE_TEAM_ANNUAL") ?? null,
+      teamExtraSeatMonthlyPriceId: this.config.get("STRIPE_PRICE_TEAM_EXTRA_SEAT_MONTHLY") ?? null,
+      teamExtraSeatAnnualPriceId: this.config.get("STRIPE_PRICE_TEAM_EXTRA_SEAT_ANNUAL") ?? null,
       supporterOneTimePriceId: this.config.get("STRIPE_PRICE_SUPPORTER") ?? null,
     };
   }
 
   /**
    * Returns the Stripe price id for a checkout request, or null when not configured.
+   * Default interval is 'monthly' when not specified.
    */
   resolveCheckoutPriceId(
     plan: Exclude<BillingPlan, "free">,
     mode: BillingCheckoutMode,
+    interval: BillingInterval = "monthly",
   ): string | null {
     const prices = this.getPriceConfig();
     if (mode === "one_time") {
       return prices.supporterOneTimePriceId;
     }
     if (plan === "personal") {
-      return prices.personalRecurringPriceId;
+      return interval === "annual"
+        ? prices.personalAnnualPriceId
+        : prices.personalMonthlyPriceId;
     }
-    return prices.teamRecurringPriceId;
+    return interval === "annual"
+      ? prices.teamAnnualPriceId
+      : prices.teamMonthlyPriceId;
+  }
+
+  /**
+   * Returns the extra-seat price id for a given interval, or null when not configured.
+   */
+  getExtraSeatPriceId(interval: BillingInterval = "monthly"): string | null {
+    const prices = this.getPriceConfig();
+    return interval === "annual"
+      ? prices.teamExtraSeatAnnualPriceId
+      : prices.teamExtraSeatMonthlyPriceId;
   }
 }

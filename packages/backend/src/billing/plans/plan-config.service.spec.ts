@@ -16,24 +16,81 @@ describe("PlanConfigService", () => {
     expect(service.getTeamBaseSeats()).toBe(5);
   });
 
-  it("reads config-driven Stripe price ids", () => {
+  it("reads per-interval Stripe price ids", () => {
     const service = createPlanConfig({
-      STRIPE_PRICE_PERSONAL: "price_personal",
-      STRIPE_PRICE_TEAM: "price_team",
-      STRIPE_PRICE_TEAM_EXTRA_SEAT: "price_extra",
+      STRIPE_PRICE_PERSONAL_MONTHLY: "price_personal_monthly",
+      STRIPE_PRICE_PERSONAL_ANNUAL: "price_personal_annual",
+      STRIPE_PRICE_TEAM_MONTHLY: "price_team_monthly",
+      STRIPE_PRICE_TEAM_ANNUAL: "price_team_annual",
+      STRIPE_PRICE_TEAM_EXTRA_SEAT_MONTHLY: "price_extra_monthly",
+      STRIPE_PRICE_TEAM_EXTRA_SEAT_ANNUAL: "price_extra_annual",
       STRIPE_PRICE_SUPPORTER: "price_supporter",
       TEAM_BASE_SEATS: 7,
     });
 
     expect(service.getPriceConfig()).toEqual({
-      personalRecurringPriceId: "price_personal",
-      teamRecurringPriceId: "price_team",
-      teamExtraSeatPriceId: "price_extra",
+      personalMonthlyPriceId: "price_personal_monthly",
+      personalAnnualPriceId: "price_personal_annual",
+      teamMonthlyPriceId: "price_team_monthly",
+      teamAnnualPriceId: "price_team_annual",
+      teamExtraSeatMonthlyPriceId: "price_extra_monthly",
+      teamExtraSeatAnnualPriceId: "price_extra_annual",
       supporterOneTimePriceId: "price_supporter",
     });
-    expect(service.resolveCheckoutPriceId("personal", "recurring")).toBe("price_personal");
-    expect(service.resolveCheckoutPriceId("team", "recurring")).toBe("price_team");
-    expect(service.resolveCheckoutPriceId("personal", "one_time")).toBe("price_supporter");
+  });
+
+  it("resolveCheckoutPriceId defaults to monthly interval", () => {
+    const service = createPlanConfig({
+      STRIPE_PRICE_PERSONAL_MONTHLY: "price_personal_monthly",
+      STRIPE_PRICE_PERSONAL_ANNUAL: "price_personal_annual",
+      STRIPE_PRICE_TEAM_MONTHLY: "price_team_monthly",
+      STRIPE_PRICE_TEAM_ANNUAL: "price_team_annual",
+      STRIPE_PRICE_SUPPORTER: "price_supporter",
+    });
+
+    expect(service.resolveCheckoutPriceId("personal", "recurring")).toBe("price_personal_monthly");
+    expect(service.resolveCheckoutPriceId("team", "recurring")).toBe("price_team_monthly");
+  });
+
+  it("resolveCheckoutPriceId resolves monthly prices", () => {
+    const service = createPlanConfig({
+      STRIPE_PRICE_PERSONAL_MONTHLY: "price_personal_monthly",
+      STRIPE_PRICE_TEAM_MONTHLY: "price_team_monthly",
+      STRIPE_PRICE_SUPPORTER: "price_supporter",
+    });
+
+    expect(service.resolveCheckoutPriceId("personal", "recurring", "monthly")).toBe("price_personal_monthly");
+    expect(service.resolveCheckoutPriceId("team", "recurring", "monthly")).toBe("price_team_monthly");
+    expect(service.resolveCheckoutPriceId("personal", "one_time", "monthly")).toBe("price_supporter");
+  });
+
+  it("resolveCheckoutPriceId resolves annual prices", () => {
+    const service = createPlanConfig({
+      STRIPE_PRICE_PERSONAL_ANNUAL: "price_personal_annual",
+      STRIPE_PRICE_TEAM_ANNUAL: "price_team_annual",
+      STRIPE_PRICE_SUPPORTER: "price_supporter",
+    });
+
+    expect(service.resolveCheckoutPriceId("personal", "recurring", "annual")).toBe("price_personal_annual");
+    expect(service.resolveCheckoutPriceId("team", "recurring", "annual")).toBe("price_team_annual");
+    expect(service.resolveCheckoutPriceId("personal", "one_time", "annual")).toBe("price_supporter");
+  });
+
+  it("resolveCheckoutPriceId returns null when price is not configured", () => {
+    const service = createPlanConfig({});
+    expect(service.resolveCheckoutPriceId("personal", "recurring")).toBeNull();
+    expect(service.resolveCheckoutPriceId("team", "recurring", "annual")).toBeNull();
+  });
+
+  it("getExtraSeatPriceId returns monthly by default", () => {
+    const service = createPlanConfig({
+      STRIPE_PRICE_TEAM_EXTRA_SEAT_MONTHLY: "price_extra_monthly",
+      STRIPE_PRICE_TEAM_EXTRA_SEAT_ANNUAL: "price_extra_annual",
+    });
+
+    expect(service.getExtraSeatPriceId()).toBe("price_extra_monthly");
+    expect(service.getExtraSeatPriceId("monthly")).toBe("price_extra_monthly");
+    expect(service.getExtraSeatPriceId("annual")).toBe("price_extra_annual");
   });
 
   it("treats supporter promotion as active when end date is unset", () => {

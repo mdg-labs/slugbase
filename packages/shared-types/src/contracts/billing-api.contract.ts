@@ -8,10 +8,13 @@ const c = initContract();
 export const BillingCheckoutPlanSchema = z.enum(["personal", "team"]);
 export const BillingCheckoutModeSchema = z.enum(["recurring", "one_time"]);
 
+export const BillingIntervalSchema = z.enum(["monthly", "annual"]);
+
 export const BillingCheckoutBodySchema = z
   .object({
     plan: BillingCheckoutPlanSchema,
     mode: BillingCheckoutModeSchema,
+    billingInterval: BillingIntervalSchema.default("monthly"),
     successUrl: z.string().url(),
     cancelUrl: z.string().url(),
   })

@@ -22,6 +22,7 @@ import { BillingApplicationService } from "./billing-application.service.js";
 interface CheckoutBody {
   plan: "personal" | "team";
   mode: "recurring" | "one_time";
+  billingInterval?: "monthly" | "annual";
   successUrl: string;
   cancelUrl: string;
 }
@@ -55,6 +56,7 @@ export class BillingController {
       requesterId: userId,
       plan: body.plan,
       mode: body.mode,
+      billingInterval: body.billingInterval,
       successUrl: body.successUrl,
       cancelUrl: body.cancelUrl,
     });

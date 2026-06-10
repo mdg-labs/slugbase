@@ -43,6 +43,7 @@ export class NoopBillingService implements BillingService {
       workspaceId: lookup.workspaceId,
       plan: "team",
       status: "none",
+      billingInterval: null,
       externalCustomerId: null,
       externalSubscriptionId: null,
       currentPeriodEnd: null,

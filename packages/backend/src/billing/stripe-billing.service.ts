@@ -146,6 +146,7 @@ export class StripeBillingService implements BillingService {
         workspaceId: lookup.workspaceId,
         plan: "free",
         status: "none",
+        billingInterval: null,
         externalCustomerId: lookup.externalCustomerId ?? null,
         externalSubscriptionId: null,
         currentPeriodEnd: null,
