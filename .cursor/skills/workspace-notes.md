@@ -48,25 +48,33 @@ _added: 2026-05-31_
 SB-125: Do **not** add a dedicated Cloudflare Worker or `/health`/`/version` on marketing. Staging smoke should assert **HTTP 200 on `MARKETING_ORIGIN` (site root)** only; API/Web keep `/health` + `/version`. CI failure was **302** on `/health`, not missing static files.
 _added: 2026-06-02_
 
-## CI/CD pipeline (2026-05-31)
+## CI/CD pipeline (split + gated 2026-06-10)
 
-Single file: `.github/workflows/ci-cd.yml`. GitHub-hosted runners (`ubuntu-latest`). Modelled on Dispatch One pattern.
-Triggers: PR → `staging`/`main` · push `staging` (staging deploy) · push `main` (prepare release) · release published (production deploy) · `workflow_dispatch`.
+Three workflow files (split from monolith by SB-174, gated by SB-175):
+- `.github/workflows/ci.yml` — CI checks (lint, typecheck, tests, build, integration, audit) + calls `deploy-staging.yml` via `workflow_call` when CI passes on push to staging. Concurrency: never cancel (required PR check).
+- `.github/workflows/deploy-staging.yml` — Reusable workflow (`on: workflow_call`). Staging deploy (build, migrate, deploy API/web/marketing, smoke). No own trigger — called from `ci.yml`. Concurrency: cancel in-progress.
+- `.github/workflows/deploy-production.yml` — Production deploy (same pattern + GHCR release image + version record). Trigger: release published. Concurrency: never cancel.
+
+GitHub-hosted runners (`ubuntu-latest`). Strict dependency chains: `build-server → migrate → deploy-fly` (API track), `build-web → deploy-web + deploy-marketing` (web/marketing track). No `if:` conditions in staging jobs; production keeps `if:` for `should_deploy` output access.
+CI gates staging deploy via `workflow_call` — deploy only fires after CI passes. Same branch resolution (no `main` dependency). PRs to staging trigger only CI (deploy skipped by `if:` conditional).
 Secrets: Infisical OIDC via `Infisical/secrets-action` — only two GHA secrets: `INFISICAL_DOMAIN` + `INFISICAL_OIDC_IDENTITY_ID`.
-Key differences from Dispatch One: hosted runners (no Docker cleanup), no worker service, no admin package in v1, self-hosted GHCR image build on release.
+Branch protection: job names preserved from original monolith — existing rules apply unchanged.
 Spec: §22. Resolved decision #35.
-_added: 2026-05-31_
+_added: 2026-05-31_ | _updated: 2026-06-10_
 
 ## pnpm test:integration — NEVER wrap with infisical (2026-06-01)
 
 `pnpm test:integration` must be run **without** `infisical run --env=dev --` (avoids overriding test env). Backend deployment booleans in `env.schema.ts` use `envBoolean()` / `optionalEnvBoolean()` so Infisical `"false"` is not misread as true (fixed 2026-06-02; formerly `z.coerce.boolean()` on `PUBLIC_REGISTRATION`, `EMAIL_VERIFICATION_REQUIRED`, `SMTP_SECURE`, `CHALLENGE_DEV_SKIP`). Rule: `06-local-ci-before-commit.mdc`.
 _added: 2026-06-01_
 
-## Database migrations — startup-only (2026-06-01)
+## Database migrations — split dispatch (SB-173, 2026-06-10)
 
-CI **does not** run Drizzle migrations against Neon (removed `migrate-staging` / `migrate-production` jobs). Migrations apply automatically on **API bootstrap** before `app.listen()` — hosted Fly (`fra` → Neon `eu-central-1`) and self-host GHCR combined image use the same path. `DATABASE_URL_UNPOOLED` is preferred when set (`resolveMigrationDatabaseUrl`). Local/operator manual apply: `pnpm db:migrate`.
+Migrations are split by deployment topology via `SERVE_WEB_CLIENT` flag:
+- **Hosted** (`SERVE_WEB_CLIENT=false`): migrations run in CI via `migrate-staging` / `migrate-production` jobs (`drizzle-kit migrate`). Non-zero exit blocks deploy. `bootstrap()` skips `runMigrations()`.
+- **Self-hosted** (`SERVE_WEB_CLIENT=true`, Dockerfile preset): migrations run on **API bootstrap** before `app.listen()`. Single container, no race.
+`DATABASE_URL_UNPOOLED` is preferred when set (`resolveMigrationDatabaseUrl`). Local/operator manual apply: `pnpm db:migrate`.
 Staging smoke (`.github/scripts/smoke-staging-health.sh`) sends Cloudflare Access service-token headers when `CF_ACCESS_CLIENT_ID` + `CF_ACCESS_CLIENT_SECRET` are set in Infisical `staging`.
-_added: 2026-06-01_
+_added: 2026-06-01_ | _updated: 2026-06-10_
 
 ## i18n — repo JSON (2026-06-08)
 
