@@ -24,7 +24,7 @@ export async function workspaceSettingsLoader({
     throw new Error("Failed to load workspace settings");
   }
 
-  const interfaceConfig = loadWorkspaceInterfaceConfig();
+  const interfaceConfig = await loadWorkspaceInterfaceConfig();
 
   const [mail, ai, oidcProviders] = await Promise.all([
     interfaceConfig.mailAdminUi ? loadMailSettings(request) : Promise.resolve(null),

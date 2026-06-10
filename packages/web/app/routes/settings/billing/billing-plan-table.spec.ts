@@ -13,6 +13,7 @@ const sampleConfig: BillingPlanDisplayConfig = {
   personalMonthlyPrice: "$4",
   personalYearlyPrice: "$40",
   teamSeatPrice: "$9",
+  teamSeatYearlyPrice: "$9",
   supporterPrice: "$59",
   supporterPromotionEnd: "2026-12-31T23:59:59.000Z",
   teamBaseSeats: 5,

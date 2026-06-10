@@ -7,6 +7,7 @@ export interface BillingPlanDisplayConfig {
   personalMonthlyPrice: string;
   personalYearlyPrice: string;
   teamSeatPrice: string;
+  teamSeatYearlyPrice?: string;
   supporterPrice: string;
   supporterPromotionEnd: string | null;
   teamBaseSeats: number;

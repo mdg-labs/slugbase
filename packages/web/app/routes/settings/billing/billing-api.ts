@@ -66,7 +66,7 @@ export async function loadBillingSettingsData(
   currentUserId: string,
   returnUrl: string,
 ): Promise<BillingSettingsData | null> {
-  const planConfig = loadBillingPlanDisplayConfig();
+  const planConfig = await loadBillingPlanDisplayConfig();
   const workspace = await fetchJson<ApiWorkspace>("/workspaces/active", request);
   const { members, forbidden } = await fetchMembersWithFallback(request);
   const bookmarkTotals = await fetchJson<PaginatedBookmarks>(

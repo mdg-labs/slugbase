@@ -7,8 +7,8 @@ import {
 } from "./pricing-config.js";
 
 describe("loadMarketingPricingConfig", () => {
-  it("returns config-driven prices from overrides", () => {
-    const config = loadMarketingPricingConfig({
+  it("returns config-driven prices from overrides", async () => {
+    const config = await loadMarketingPricingConfig({
       personalMonthlyPrice: "$4/mo",
       personalYearlyPrice: "$3.33/mo",
       teamSeatMonthlyPrice: "$9/seat/mo",
@@ -24,15 +24,16 @@ describe("loadMarketingPricingConfig", () => {
     expect(config.freeBookmarkCap).toBe(50);
   });
 
-  it("defaults free bookmark cap to 50 per spec §23.4", () => {
-    expect(loadMarketingPricingConfig().freeBookmarkCap).toBe(50);
+  it("defaults free bookmark cap to 50 per spec §23.4", async () => {
+    const config = await loadMarketingPricingConfig();
+    expect(config.freeBookmarkCap).toBe(50);
   });
 });
 
 describe("buildMarketingPlanFeatureRows", () => {
-  it("includes API tokens on all plans and omits folder caps", () => {
+  it("includes API tokens on all plans and omits folder caps", async () => {
     const rows = buildMarketingPlanFeatureRows(
-      loadMarketingPricingConfig({ freeBookmarkCap: 50, teamBaseSeats: 5 }),
+      await loadMarketingPricingConfig({ freeBookmarkCap: 50, teamBaseSeats: 5 }),
     );
     const labels = rows.map((row) => row.labelKey);
 
@@ -47,8 +48,8 @@ describe("buildMarketingPlanFeatureRows", () => {
 });
 
 describe("isSupporterPromotionActive", () => {
-  it("returns false after the configured end date", () => {
-    const config = loadMarketingPricingConfig({
+  it("returns false after the configured end date", async () => {
+    const config = await loadMarketingPricingConfig({
       supporterPromotionEnd: "2020-01-01T00:00:00.000Z",
     });
     expect(isSupporterPromotionActive(config, new Date("2026-01-01T00:00:00.000Z"))).toBe(false);

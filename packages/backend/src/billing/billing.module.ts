@@ -16,6 +16,8 @@ import { BillingProfileService } from "./billing-profile.service.js";
 import { PlansModule } from "./plans/plans.module.js";
 import { DowngradeModule } from "./downgrade/downgrade.module.js";
 import { NoopBillingService } from "./noop-billing.service.js";
+import { PricingController } from "./pricing.controller.js";
+import { PricingService } from "./pricing.service.js";
 import { StripeBillingService, type StripeBillingClient } from "./stripe-billing.service.js";
 
 /**
@@ -26,12 +28,13 @@ import { StripeBillingService, type StripeBillingClient } from "./stripe-billing
 @Global()
 @Module({
   imports: [ConfigModule, PlansModule, AccountsModule, SessionsModule, DowngradeModule],
-  controllers: [BillingController],
+  controllers: [BillingController, PricingController],
   providers: [
     NoopBillingService,
     StripeBillingService,
     BillingProfileService,
     BillingApplicationService,
+    PricingService,
     {
       provide: STRIPE_CLIENT,
       useFactory: (config: ConfigService): StripeBillingClient => {
@@ -72,6 +75,7 @@ import { StripeBillingService, type StripeBillingClient } from "./stripe-billing
     BillingProfileService,
     NoopBillingService,
     StripeBillingService,
+    PricingService,
     PlansModule,
     DowngradeModule,
   ],
@@ -86,6 +90,7 @@ function createUnavailableStripeClient(): StripeBillingClient {
     checkout: { sessions: { create: unavailable } },
     billingPortal: { sessions: { create: unavailable } },
     subscriptions: { retrieve: unavailable, update: unavailable },
+    prices: { retrieve: unavailable },
   };
 }
 

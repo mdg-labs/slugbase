@@ -262,10 +262,10 @@ Baked in at **`pnpm --filter @slugbase/web build`**. Public display config only 
 | Key | What it does | Hosted | Self-host | Required | Secret | When set | Example value |
 |---|---|---|---|---|---|---|---|
 | `VITE_BILLING_ENABLED` | Show billing settings and plan gates | Yes | Build only | Hosted | No | Build | Hosted: `true`; self-host: `false` |
-| `VITE_PLAN_PRICE_PERSONAL_MONTHLY` | Personal monthly display price | Yes | No | Optional | No | Build | `$4/mo` |
-| `VITE_PLAN_PRICE_PERSONAL_YEARLY` | Personal yearly display price | Yes | No | Optional | No | Build | `$3.33/mo` |
-| `VITE_PLAN_PRICE_TEAM_SEAT` | Team per-seat display price | Yes | No | Optional | No | Build | `$9/seat/mo` |
-| `VITE_PLAN_PRICE_SUPPORTER` | Supporter one-time display price | Yes | No | Optional | No | Build | `$59` |
+| ~~`VITE_PLAN_PRICE_PERSONAL_MONTHLY`~~ | **DEPRECATED** — prices fetched from `GET /pricing/public` | — | — | — | — | — | — |
+| ~~`VITE_PLAN_PRICE_PERSONAL_YEARLY`~~ | **DEPRECATED** — prices fetched from `GET /pricing/public` | — | — | — | — | — | — |
+| ~~`VITE_PLAN_PRICE_TEAM_SEAT`~~ | **DEPRECATED** — prices fetched from `GET /pricing/public` | — | — | — | — | — | — |
+| ~~`VITE_PLAN_PRICE_SUPPORTER`~~ | **DEPRECATED** — prices fetched from `GET /pricing/public` | — | — | — | — | — | — |
 | `VITE_SUPPORTER_PROMOTION_END` | Supporter deadline (display/countdown) | Yes | No | Optional | No | Build | `2026-12-31T23:59:59Z` |
 | `VITE_TEAM_BASE_SEATS` | Team seats shown in plan table | Yes | No | Optional | No | Build | `5` |
 | `VITE_FREE_BOOKMARK_CAP` | Free cap shown in billing meter | Yes | No | Optional | No | Build | `50` |
@@ -284,13 +284,14 @@ Baked in at **`pnpm --filter @slugbase/marketing build`**. Not used by the self-
 |---|---|---|---|---|---|---|---|
 | `PUBLIC_FRONTEND_ORIGIN` | App URL for sign-in / register CTAs | Yes | No | Hosted | No | Build | `https://app.example.com` |
 | `PUBLIC_FORWARDING_DOMAIN` | Forwarding domain shown in demo copy | Yes | No | Optional | No | Build | `go.example.com` |
+| `PUBLIC_API_BASE_URL` | API base URL for fetching prices from `GET /pricing/public` | Yes | No | Hosted | No | Build | `https://api.example.com` |
 | `PUBLIC_CONTACT_ENDPOINT` | `POST` target for contact form | Yes | No | Hosted | No | Build | `https://api.example.com/contact` |
 | `PUBLIC_TURNSTILE_SITE_KEY` | Turnstile site key (contact form) | Yes | No | Optional | No | Build | `<Turnstile site key>` |
-| `PUBLIC_PLAN_PRICE_PERSONAL_MONTHLY` | Personal monthly price on pricing page | Yes | No | Optional | No | Build | `$4/mo` |
-| `PUBLIC_PLAN_PRICE_PERSONAL_YEARLY` | Personal yearly price on pricing page | Yes | No | Optional | No | Build | `$3.33/mo` |
-| `PUBLIC_PLAN_PRICE_TEAM_SEAT` | Team seat monthly price | Yes | No | Optional | No | Build | `$9/seat/mo` |
-| `PUBLIC_PLAN_PRICE_TEAM_SEAT_YEARLY` | Team seat yearly price | Yes | No | Optional | No | Build | `$9/seat/mo` (falls back to monthly) |
-| `PUBLIC_PLAN_PRICE_SUPPORTER` | Supporter price on pricing page | Yes | No | Optional | No | Build | `$59` |
+| ~~`PUBLIC_PLAN_PRICE_PERSONAL_MONTHLY`~~ | **DEPRECATED** — prices fetched from `GET /pricing/public` (fallback when `PUBLIC_API_BASE_URL` unset) | — | — | — | — | — | — |
+| ~~`PUBLIC_PLAN_PRICE_PERSONAL_YEARLY`~~ | **DEPRECATED** — prices fetched from `GET /pricing/public` | — | — | — | — | — | — |
+| ~~`PUBLIC_PLAN_PRICE_TEAM_SEAT`~~ | **DEPRECATED** — prices fetched from `GET /pricing/public` | — | — | — | — | — | — |
+| ~~`PUBLIC_PLAN_PRICE_TEAM_SEAT_YEARLY`~~ | **DEPRECATED** — prices fetched from `GET /pricing/public` | — | — | — | — | — | — |
+| ~~`PUBLIC_PLAN_PRICE_SUPPORTER`~~ | **DEPRECATED** — prices fetched from `GET /pricing/public` | — | — | — | — | — | — |
 | `PUBLIC_SUPPORTER_PROMOTION_END` | Supporter deadline on marketing site | Yes | No | Optional | No | Build | `2026-12-31T23:59:59Z` |
 | `PUBLIC_TEAM_BASE_SEATS` | Team seats on pricing page | Yes | No | Optional | No | Build | `5` |
 | `PUBLIC_FREE_BOOKMARK_CAP` | Free cap on pricing page | Yes | No | Optional | No | Build | `50` |
@@ -348,7 +349,7 @@ Stored in Infisical `staging` / `prod`. Injected into GitHub Actions runners onl
 | `VITE_UMAMI_HOST` | Client analytics | No | Optional | Optional | No | Build | Empty (default) |
 | `VITE_UMAMI_WEBSITE_ID` | Client analytics site id | No | Optional | Optional | No | Build | Empty (default) |
 
-All other `VITE_*` pricing keys: optional on self-host (billing UI hidden when `VITE_BILLING_ENABLED=false`).
+All other `VITE_*` pricing keys: deprecated — prices now fetched from `GET /pricing/public` when `API_BASE_URL` is configured. Legacy env vars are still accepted as fallback on self-host when the API is unreachable.
 
 ---
 

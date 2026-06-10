@@ -23,10 +23,10 @@ function readBoolean(value: string | undefined, fallback: boolean): boolean {
  * Interface-selection flags for workspace settings panels (spec §10.1, §15).
  * Mirrors which configuration source is active — never deployment-mode branching.
  */
-export function loadWorkspaceInterfaceConfig(
+export async function loadWorkspaceInterfaceConfig(
   overrides: Partial<WorkspaceInterfaceConfig> = {},
-): WorkspaceInterfaceConfig {
-  const billing = loadBillingPlanDisplayConfig();
+): Promise<WorkspaceInterfaceConfig> {
+  const billing = await loadBillingPlanDisplayConfig();
   return {
     mailAdminUi: readBoolean(readEnv("VITE_MAIL_ADMIN_UI"), !billing.billingEnabled),
     oidcAdminUi: readBoolean(readEnv("VITE_OIDC_ADMIN_UI"), !billing.billingEnabled),

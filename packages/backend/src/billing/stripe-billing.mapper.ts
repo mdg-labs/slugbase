@@ -29,6 +29,14 @@ export interface StripePortalSessionLike {
   url: string;
 }
 
+export interface StripePriceLike {
+  id: string;
+  unit_amount: number | null;
+  currency: string;
+  type: "recurring" | "one_time";
+  recurring: { interval: string } | null;
+}
+
 export interface StripeEventLike {
   id: string;
   type: string;

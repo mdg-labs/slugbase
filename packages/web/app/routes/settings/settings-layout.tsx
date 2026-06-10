@@ -14,8 +14,8 @@ type SettingsLayoutData = {
   };
 };
 
-export function loader(): SettingsLayoutData {
-  const interfaceConfig = loadWorkspaceInterfaceConfig();
+export async function loader(): Promise<SettingsLayoutData> {
+  const interfaceConfig = await loadWorkspaceInterfaceConfig();
   return { interfaceConfig };
 }
 

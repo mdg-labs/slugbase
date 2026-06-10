@@ -1,4 +1,9 @@
-/** Config-driven marketing pricing display (spec §12.1 — amounts live in env, not app logic). */
+/** Config-driven marketing pricing display (spec §12.1).
+
+Prices come from the public pricing API (GET /pricing/public) at build time,
+keeping Stripe as the single source of truth. Non-price config stays in env. */
+
+import type { PricingResponse } from "./pricing-api-types.js";
 
 export interface MarketingPricingConfig {
   personalMonthlyPrice: string;
@@ -33,9 +38,45 @@ function readPositiveInt(value: string | undefined, fallback: number): number {
 const DEFAULT_FREE_BOOKMARK_CAP = 50;
 const DEFAULT_TEAM_BASE_SEATS = 5;
 
-export function loadMarketingPricingConfig(
+/**
+ * Fetches pricing data from the public API (build-time).
+ * Falls back to env defaults when the API is unreachable (self-hosted without Stripe).
+ */
+async function fetchPricingFromApi(): Promise<PricingResponse | null> {
+  const apiBase = readEnv("PUBLIC_API_BASE_URL");
+  if (!apiBase) return null;
+
+  try {
+    const res = await fetch(`${apiBase}/pricing/public`);
+    if (!res.ok) return null;
+    return (await res.json()) as PricingResponse;
+  } catch {
+    return null;
+  }
+}
+
+export async function loadMarketingPricingConfig(
   overrides: Partial<MarketingPricingConfig> = {},
-): MarketingPricingConfig {
+): Promise<MarketingPricingConfig> {
+  const apiPricing = await fetchPricingFromApi();
+
+  const supporterPromotionEnd = readEnv("PUBLIC_SUPPORTER_PROMOTION_END") ?? null;
+
+  if (apiPricing) {
+    return {
+      personalMonthlyPrice: apiPricing.plans.personal.monthly?.display ?? "",
+      personalYearlyPrice: apiPricing.plans.personal.annual?.display ?? "",
+      teamSeatMonthlyPrice: apiPricing.plans.team.monthly?.display ?? "",
+      teamSeatYearlyPrice: apiPricing.plans.team.annual?.display ?? "",
+      supporterPrice: apiPricing.plans.supporter?.display ?? "",
+      supporterPromotionEnd,
+      teamBaseSeats: apiPricing.teamBaseSeats,
+      freeBookmarkCap: apiPricing.freeBookmarkCap,
+      ...overrides,
+    };
+  }
+
+  // Fallback: env-based config for self-hosted without a reachable API
   const teamSeatMonthly = readEnv("PUBLIC_PLAN_PRICE_TEAM_SEAT") ?? "";
   const teamSeatYearly =
     readEnv("PUBLIC_PLAN_PRICE_TEAM_SEAT_YEARLY") ?? teamSeatMonthly;
@@ -46,7 +87,7 @@ export function loadMarketingPricingConfig(
     teamSeatMonthlyPrice: teamSeatMonthly,
     teamSeatYearlyPrice: teamSeatYearly,
     supporterPrice: readEnv("PUBLIC_PLAN_PRICE_SUPPORTER") ?? "",
-    supporterPromotionEnd: readEnv("PUBLIC_SUPPORTER_PROMOTION_END") ?? null,
+    supporterPromotionEnd,
     teamBaseSeats: readPositiveInt(readEnv("PUBLIC_TEAM_BASE_SEATS"), DEFAULT_TEAM_BASE_SEATS),
     freeBookmarkCap: readPositiveInt(
       readEnv("PUBLIC_FREE_BOOKMARK_CAP"),

@@ -15,7 +15,7 @@ const pricingHref =
 const forwardingDomain =
   import.meta.env.PUBLIC_FORWARDING_DOMAIN || "go.slugbase.app";
 
-const pricingConfig = loadMarketingPricingConfig();
+const pricingConfig = await loadMarketingPricingConfig();
 const freeBookmarkCap = String(pricingConfig.freeBookmarkCap);
 
 const features = [

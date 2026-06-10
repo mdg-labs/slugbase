@@ -57,6 +57,15 @@ function createStripeClient(
         },
       }),
     },
+    prices: {
+      retrieve: vi.fn().mockResolvedValue({
+        id: "price_test",
+        unit_amount: 300,
+        currency: "eur",
+        type: "recurring",
+        recurring: { interval: "month" },
+      }),
+    },
     ...overrides,
   };
 }

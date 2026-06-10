@@ -25,10 +25,11 @@ import {
   subscriptionFromStripeObject,
   type StripeCheckoutSessionLike,
   type StripePortalSessionLike,
+  type StripePriceLike,
   type StripeSubscriptionLike,
 } from "./stripe-billing.mapper.js";
 
-/** Minimal Stripe SDK surface used by {@link StripeBillingService}. */
+/** Minimal Stripe SDK surface used by {@link StripeBillingService} and {@link PricingService}. */
 export interface StripeBillingClient {
   checkout: {
     sessions: {
@@ -43,6 +44,9 @@ export interface StripeBillingClient {
   subscriptions: {
     retrieve(id: string): Promise<StripeSubscriptionLike>;
     update(id: string, params: Record<string, unknown>): Promise<StripeSubscriptionLike>;
+  };
+  prices: {
+    retrieve(id: string): Promise<StripePriceLike>;
   };
 }
 

@@ -11,7 +11,7 @@ import {
 
 const locale = Astro.currentLocale as SupportedLocale;
 const appOrigin = import.meta.env.PUBLIC_FRONTEND_ORIGIN ?? "";
-const config = loadMarketingPricingConfig();
+const config = await loadMarketingPricingConfig();
 const featureRows = buildMarketingPlanFeatureRows(config);
 const supporterActive = isSupporterPromotionActive(config);
 const privacyHref = getRelativeLocaleUrl(locale, "/legal/datenschutz");

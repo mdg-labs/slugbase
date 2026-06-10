@@ -25,19 +25,87 @@ function readPositiveInt(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-/** Config-driven plan display metadata (spec §12.1 — amounts live in env, not app logic). */
-export function loadBillingPlanDisplayConfig(
+const getApiBaseUrl = (): string => process.env["API_BASE_URL"] ?? "";
+
+interface PublicPriceInfo {
+  priceId: string;
+  unitAmount: number;
+  currency: string;
+  interval: string | null;
+  type: "recurring" | "one_time";
+  display: string;
+}
+
+interface PublicPlanPriceGroup {
+  monthly?: PublicPriceInfo;
+  annual?: PublicPriceInfo;
+}
+
+interface PricingApiResponse {
+  plans: {
+    personal: PublicPlanPriceGroup;
+    team: PublicPlanPriceGroup;
+    teamExtraSeat: PublicPlanPriceGroup;
+    supporter?: PublicPriceInfo;
+  };
+  teamBaseSeats: number;
+  freeBookmarkCap: number;
+}
+
+async function fetchPricingFromApi(): Promise<PricingApiResponse | null> {
+  const apiBase = getApiBaseUrl();
+  if (!apiBase) return null;
+
+  try {
+    const res = await fetch(`${apiBase}/pricing/public`);
+    if (!res.ok) return null;
+    return (await res.json()) as PricingApiResponse;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Config-driven plan display metadata (spec §12.1).
+ * Prices come from the public pricing API — Stripe is the single source of truth.
+ * Falls back to env-based config when the API is unreachable (self-hosted without Stripe).
+ */
+export async function loadBillingPlanDisplayConfig(
   overrides: Partial<BillingPlanDisplayConfig> = {},
-): BillingPlanDisplayConfig {
+): Promise<BillingPlanDisplayConfig> {
+  const billingEnabled = readBoolean(readEnv("VITE_BILLING_ENABLED"), false);
+  const supporterPromotionEnd = readEnv("VITE_SUPPORTER_PROMOTION_END") ?? null;
+  const teamBaseSeats = readPositiveInt(readEnv("VITE_TEAM_BASE_SEATS"), 5);
+  const freeBookmarkCap = readPositiveInt(readEnv("VITE_FREE_BOOKMARK_CAP"), FREE_BOOKMARK_CAP);
+
+  const apiPricing = await fetchPricingFromApi();
+
+  if (apiPricing) {
+    return {
+      billingEnabled,
+      personalMonthlyPrice: apiPricing.plans.personal.monthly?.display ?? "",
+      personalYearlyPrice: apiPricing.plans.personal.annual?.display ?? "",
+      teamSeatPrice: apiPricing.plans.team.monthly?.display ?? "",
+      teamSeatYearlyPrice: apiPricing.plans.team.annual?.display ?? "",
+      supporterPrice: apiPricing.plans.supporter?.display ?? "",
+      supporterPromotionEnd,
+      teamBaseSeats: apiPricing.teamBaseSeats,
+      freeBookmarkCap: apiPricing.freeBookmarkCap,
+      ...overrides,
+    };
+  }
+
+  // Fallback: env-based config for self-hosted without a reachable API
   return {
-    billingEnabled: readBoolean(readEnv("VITE_BILLING_ENABLED"), false),
+    billingEnabled,
     personalMonthlyPrice: readEnv("VITE_PLAN_PRICE_PERSONAL_MONTHLY") ?? "",
     personalYearlyPrice: readEnv("VITE_PLAN_PRICE_PERSONAL_YEARLY") ?? "",
     teamSeatPrice: readEnv("VITE_PLAN_PRICE_TEAM_SEAT") ?? "",
+    teamSeatYearlyPrice: readEnv("VITE_PLAN_PRICE_TEAM_SEAT") ?? "",
     supporterPrice: readEnv("VITE_PLAN_PRICE_SUPPORTER") ?? "",
-    supporterPromotionEnd: readEnv("VITE_SUPPORTER_PROMOTION_END") ?? null,
-    teamBaseSeats: readPositiveInt(readEnv("VITE_TEAM_BASE_SEATS"), 5),
-    freeBookmarkCap: readPositiveInt(readEnv("VITE_FREE_BOOKMARK_CAP"), FREE_BOOKMARK_CAP),
+    supporterPromotionEnd,
+    teamBaseSeats,
+    freeBookmarkCap,
     ...overrides,
   };
 }
