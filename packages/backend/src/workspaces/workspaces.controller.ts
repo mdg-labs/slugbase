@@ -26,7 +26,7 @@ import {
 import type { SessionData } from "../sessions/session.types.js";
 import { ActiveWorkspace } from "./active-workspace.decorator.js";
 import { TenantGuard, TENANT_USER_ID_KEY } from "./tenant.guard.js";
-import type { CreateWorkspaceData, UpdateWorkspaceData, WorkspaceRecord } from "./workspace.types.js";
+import type { CreateWorkspaceData, UpdateWorkspaceData, WorkspaceListItemResponse, WorkspaceRecord } from "./workspace.types.js";
 import { WorkspacesService } from "./workspaces.service.js";
 
 @Controller("workspaces")
@@ -46,9 +46,9 @@ export class WorkspacesController {
   @UseGuards(SessionGuard)
   async listWorkspaces(
     @Req() req: Request & Record<string, unknown>,
-  ): Promise<WorkspaceRecord[]> {
+  ): Promise<WorkspaceListItemResponse[]> {
     const userId = req[SESSION_USER_ID_KEY] as string;
-    return this.workspaces.listUserWorkspaces(userId);
+    return this.workspaces.listWorkspaceItemsForUser(userId);
   }
 
   /**

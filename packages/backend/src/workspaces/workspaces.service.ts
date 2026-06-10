@@ -14,6 +14,7 @@ import {
   ROLE_HIERARCHY,
   type CreateWorkspaceData,
   type UpdateWorkspaceData,
+  type WorkspaceListItemResponse,
   type WorkspaceMemberRole,
   type WorkspacePlan,
   type WorkspaceRecord,
@@ -61,6 +62,30 @@ export class WorkspacesService {
     const memberships = await this.memberRepo.findAllByUser(userId);
     const ids = memberships.map((m) => m.workspaceId);
     return this.workspaceRepo.findByIds(ids);
+  }
+
+  /**
+   * Returns workspaces the user belongs to, enriched with the caller's
+   * membership role — used by GET /workspaces (workspace switcher).
+   */
+  async listWorkspaceItemsForUser(userId: string): Promise<WorkspaceListItemResponse[]> {
+    const memberships = await this.memberRepo.findAllByUser(userId);
+    if (memberships.length === 0) return [];
+
+    const roleByWorkspace = new Map<string, WorkspaceMemberRole>();
+    for (const m of memberships) {
+      roleByWorkspace.set(m.workspaceId, m.role);
+    }
+
+    const ids = memberships.map((m) => m.workspaceId);
+    const workspaces = await this.workspaceRepo.findByIds(ids);
+
+    return workspaces.map((w) => ({
+      id: w.id,
+      name: w.name,
+      plan: w.plan,
+      role: roleByWorkspace.get(w.id) ?? "MEMBER",
+    }));
   }
 
   /**
