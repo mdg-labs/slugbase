@@ -1,0 +1,306 @@
+name: Deploy Staging
+
+# Staging deploy pipeline — runs on push to staging (spec §22.5).
+# Job dependency chain: build-server → migrate → deploy-fly (strict sequential).
+
+on:
+  push:
+    branches: [staging]
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  deployments: write
+
+concurrency:
+  group: deploy-staging-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
+
+jobs:
+  deployment-staging-start:
+    name: Staging · 1 · Deployment record start
+    runs-on: ubuntu-latest
+    environment: staging
+    outputs:
+      deployment_id: ${{ steps.create.outputs.deployment_id }}
+    steps:
+      - name: Create GitHub Deployment
+        uses: chrnorm/deployment-action@fe2fba14b486343ce6893cff73b80e153063917a # v1
+        id: create
+        with:
+          token: ${{ github.token }}
+          environment: staging
+          ref: ${{ github.sha }}
+          description: SlugBase staging deploy
+
+  build-server-staging:
+    name: Staging · 2 · Build API
+    runs-on: ubuntu-latest
+    environment: staging
+    needs: deployment-staging-start
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup
+        with:
+          skip-checkout: "true"
+          infisical-env-slug: staging
+          infisical-domain: ${{ secrets.INFISICAL_DOMAIN }}
+          infisical-identity-id: ${{ secrets.INFISICAL_OIDC_IDENTITY_ID }}
+
+      - name: Build API and shared packages
+        env:
+          NODE_ENV: production
+        run: pnpm exec turbo run build --filter=@slugbase/backend...
+
+  build-web-staging:
+    name: Staging · 2 · Build web/marketing
+    runs-on: ubuntu-latest
+    environment: staging
+    needs: deployment-staging-start
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup
+        with:
+          skip-checkout: "true"
+          infisical-env-slug: staging
+          infisical-domain: ${{ secrets.INFISICAL_DOMAIN }}
+          infisical-identity-id: ${{ secrets.INFISICAL_OIDC_IDENTITY_ID }}
+
+      - name: Build shared dependencies for web
+        env:
+          NODE_ENV: production
+        run: pnpm --filter @slugbase/web^... build
+
+      - name: Build web client
+        env:
+          NODE_ENV: production
+        run: pnpm --filter @slugbase/web build
+
+      - name: Build shared dependencies for marketing
+        env:
+          NODE_ENV: production
+        run: pnpm --filter @slugbase/marketing^... build
+
+      - name: Build marketing site
+        env:
+          NODE_ENV: production
+        run: pnpm --filter @slugbase/marketing build
+
+      - name: Pack Worker deploy artifacts
+        run: bash .github/scripts/pack-staging-worker-artifacts.sh staging-worker-artifacts.tar.gz
+
+      - name: Upload Worker deploy artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-worker-artifacts
+          path: staging-worker-artifacts.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+
+  push-ghcr-staging-dev:
+    name: Staging · 3 · Push self-host image (GHCR dev)
+    runs-on: ubuntu-latest
+    environment: staging
+    needs: deployment-staging-start
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch secrets from Infisical
+        uses: Infisical/secrets-action@77ab1f4ccd183a543cb5b42435fbd181189f4995 # v1.0.16
+        with:
+          method: oidc
+          domain: ${{ secrets.INFISICAL_DOMAIN }}
+          identity-id: ${{ secrets.INFISICAL_OIDC_IDENTITY_ID }}
+          project-slug: slugbase-cloud
+          env-slug: staging
+
+      - name: Log in to GHCR
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push combined image (dev tag)
+        env:
+          DOCKER_BUILDKIT: "1"
+        run: >
+          bash .github/scripts/build-push-ghcr.sh
+          ghcr.io/${{ github.repository }}
+          dev
+          --no-latest
+
+  migrate-staging:
+    name: Staging · 3.5 · Run DB migrations
+    runs-on: ubuntu-latest
+    environment: staging
+    needs: build-server-staging
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@d15e628ca66d93ee5f352c71671a7bc6a97af5c9 # v4.0.0
+        with:
+          version: 9.15.4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.12
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Fetch secrets from Infisical
+        uses: Infisical/secrets-action@77ab1f4ccd183a543cb5b42435fbd181189f4995 # v1.0.16
+        with:
+          method: oidc
+          domain: ${{ secrets.INFISICAL_DOMAIN }}
+          identity-id: ${{ secrets.INFISICAL_OIDC_IDENTITY_ID }}
+          project-slug: slugbase-cloud
+          env-slug: staging
+
+      - name: Run Drizzle migrations
+        run: pnpm --filter @slugbase/backend exec drizzle-kit migrate
+
+  deploy-fly-staging:
+    name: Staging · 4 · Deploy API (Fly)
+    runs-on: ubuntu-latest
+    environment: staging
+    needs: migrate-staging
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch secrets from Infisical
+        uses: Infisical/secrets-action@77ab1f4ccd183a543cb5b42435fbd181189f4995 # v1.0.16
+        with:
+          method: oidc
+          domain: ${{ secrets.INFISICAL_DOMAIN }}
+          identity-id: ${{ secrets.INFISICAL_OIDC_IDENTITY_ID }}
+          project-slug: slugbase-cloud
+          env-slug: staging
+
+      - name: Setup flyctl
+        run: bash .github/scripts/setup-flyctl.sh
+
+      - name: Deploy to Fly.io
+        env:
+          DOCKER_BUILDKIT: "1"
+        run: bash .github/scripts/fly-deploy.sh slugbase-staging-api
+
+  deploy-web-staging:
+    name: Staging · 4 · Deploy web (Cloudflare Workers)
+    runs-on: ubuntu-latest
+    environment: staging
+    needs: build-web-staging
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup
+        with:
+          skip-checkout: "true"
+          infisical-env-slug: staging
+          infisical-domain: ${{ secrets.INFISICAL_DOMAIN }}
+          infisical-identity-id: ${{ secrets.INFISICAL_OIDC_IDENTITY_ID }}
+
+      - name: Download Worker deploy artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: staging-worker-artifacts
+
+      - name: Restore Worker deploy artifacts
+        run: bash .github/scripts/unpack-staging-worker-artifacts.sh staging-worker-artifacts.tar.gz
+
+      - name: Deploy to Cloudflare Workers
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ env.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
+        run: bash .github/scripts/wrangler-deploy-web-retry.sh packages/web
+
+  deploy-marketing-staging:
+    name: Staging · 4 · Deploy marketing (Cloudflare Workers)
+    runs-on: ubuntu-latest
+    environment: staging
+    needs: build-web-staging
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup
+        with:
+          skip-checkout: "true"
+          infisical-env-slug: staging
+          infisical-domain: ${{ secrets.INFISICAL_DOMAIN }}
+          infisical-identity-id: ${{ secrets.INFISICAL_OIDC_IDENTITY_ID }}
+
+      - name: Download Worker deploy artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: staging-worker-artifacts
+
+      - name: Restore Worker deploy artifacts
+        run: bash .github/scripts/unpack-staging-worker-artifacts.sh staging-worker-artifacts.tar.gz
+
+      - name: Deploy to Cloudflare Workers
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ env.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
+        run: bash .github/scripts/wrangler-deploy-retry.sh packages/marketing --config wrangler.jsonc
+
+  smoke-staging:
+    name: Staging · 5 · Smoke
+    runs-on: ubuntu-latest
+    environment: staging
+    needs: [deploy-fly-staging, deploy-web-staging, deploy-marketing-staging]
+    env:
+      # Public URLs from GitHub vars (not redacted)
+      APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+      FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
+      MARKETING_ORIGIN: ${{ vars.MARKETING_ORIGIN }}
+      # Cloudflare Access credentials (required to bypass Access on staging workers)
+      CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+      CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Smoke deploy surfaces (API/web /health+/version; marketing root)
+        run: bash .github/scripts/smoke-staging-health.sh
+
+  deployment-staging-finish:
+    name: Staging · 6 · Deployment record finish
+    runs-on: ubuntu-latest
+    needs: [deployment-staging-start, smoke-staging]
+    if: >-
+      always()
+      && needs.deployment-staging-start.result != 'skipped'
+    permissions:
+      contents: read
+      id-token: write
+      deployments: write
+    steps:
+      - name: Update deployment status
+        uses: chrnorm/deployment-status@598d987f3a8dec3817b995f810e6de7c06c92106 # v1
+        with:
+          token: ${{ github.token }}
+          deployment_id: ${{ needs.deployment-staging-start.outputs.deployment_id }}
+          state: ${{ needs.smoke-staging.result == 'success' && 'success' || 'failure' }}

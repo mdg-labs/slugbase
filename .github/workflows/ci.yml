@@ -1,0 +1,84 @@
+name: CI
+
+# CI checks — runs on PRs and pushes to staging/main (spec §22.4).
+
+on:
+  pull_request:
+    branches: [staging, main]
+
+  push:
+    branches: [staging, main]
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    name: CI · Checks
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: slugbase
+          POSTGRES_PASSWORD: slugbase
+          POSTGRES_DB: slugbase_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U slugbase -d slugbase_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@d15e628ca66d93ee5f352c71671a7bc6a97af5c9 # v4.0.0
+        with:
+          version: 9.15.4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.12
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit tests
+        run: pnpm test:unit
+
+      - name: i18n catalog validation
+        run: pnpm run i18n:validate
+
+      - name: Hard-coded UI strings (rg)
+        run: pnpm run i18n:check:hardcoded
+
+      - name: Build
+        env:
+          NODE_ENV: production
+        run: pnpm build
+
+      - name: Integration tests
+        env:
+          DATABASE_URL: postgresql://slugbase:slugbase@localhost:5432/slugbase_test
+          SLUGBASE_INTEGRATION_NO_DOCKER: "1"
+        run: pnpm test:integration
+
+      - name: Dependency audit
+        run: pnpm audit --audit-level=high
