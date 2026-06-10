@@ -2,18 +2,16 @@
 
 Copy and fill. Sub-agents do not see the orchestrator chat.
 
-When an issue is tracked on Jira, orchestrator includes **role-specific** JIRA SYNC blocks (see [jira-board.md](jira-board.md)):
+When an issue is tracked on the GitHub project board, orchestrator includes **role-specific** GITHUB SYNC blocks (see [github-board.md](github-board.md)):
 
-- **Execution prompts:** In Progress only — no `transitionIdDone`; include epic parent key when dispatching a child; **time tracking + worklog** before In Review
-- **Verifier prompts:** Done (+ optional epic on final child); **mandatory Done/FAIL Jira comment**; **time tracking + worklog** before Done/Ready
+- **Execution prompts:** Status → In Progress on leaf + parent (when subtask); **no Status → Done** — verifier only
+- **Verifier prompts:** on PASS → Status → Done; on FAIL → Status → Todo; **mandatory structured comment**
 
-Sub-agents perform Jira transitions — not the orchestrator.
+Sub-agents perform GitHub status updates — not the orchestrator.
 
 **Every execution and verifier prompt** must include the **NODE ENV** block below — copy verbatim even when the task has no pnpm commands (verifiers always run checks).
 
-**Every execution prompt** (Lane S, Lane P, Jira, chat) **must** include the **DB MIGRATIONS** block below — copy verbatim even when the task has no schema changes.
-
-When the prompt includes **JIRA SYNC**, also include the **JIRA TIME TRACKING** block.
+**Every execution prompt** (Lane S, Lane P, chat) **must** include the **DB MIGRATIONS** block below — copy verbatim even when the task has no schema changes.
 
 ---
 
@@ -63,33 +61,6 @@ DB MIGRATIONS — MANDATORY (schema-first; no exceptions):
 
 ---
 
-## JIRA TIME TRACKING — sub-agents (mandatory when JIRA SYNC present)
-
-Copy into **execution and verifier** prompts whenever the orchestrator included a JIRA SYNC block.
-
-```text
-JIRA TIME TRACKING (mandatory when JIRA SYNC block is present):
-- Session memory: record wall-clock start and end — see .cursor/skills/orchestrator/jira-board.md § Time tracking
-- Execution Phase 1: set header started: <ISO 8601 UTC> immediately after Jira In Progress
-- Execution pre-handoff: set header ended + duration; add ## Time tracking section with worklog details
-- Verifier: after reading session memory, add ## Verification timing with started; set ended + duration pre-handoff
-- Jira worklog (before status handoff):
-  CallMcpTool plugin-atlassian-atlassian / addWorklogToJiraIssue
-    cloudId: mdg-labs.atlassian.net
-    issueIdOrKey: <each LEAF key from JIRA SYNC — not epic parent>
-    timeSpent: "<Jira format e.g. 1h 30m>"
-    started: "<started ISO from session memory>"
-    commentBody: "Execution (<SESSION-ID>)" | "Verification (<SESSION-ID>)"
-    contentFormat: markdown
-- Combined batch: split duration evenly across leaf keys; document split in session memory
-- Execution handoff order: local memory ended → worklog → transition In Review → single implementation commit (no session files in git)
-- Verifier handoff order: local memory ended → worklog → Jira Done/FAIL comment → status transition (never commit session files)
-- Round duration to nearest minute; minimum 1m if any work occurred
-- Skip only when JIRA SYNC was omitted or user opted out of Jira updates
-```
-
----
-
 ## Execution agent — Lane S (serial on staging, plan-file mode)
 
 ```text
@@ -101,22 +72,25 @@ PLAN FILE: /home/michael/projects/slugbase/docs/slugbase-development-roadmap.md
 TASK ID: <e.g. P1-03>
 SESSION ID: <TASK-ID>-<YYYYMMDD>-<4hex>
 
-JIRA SYNC — EXECUTION (include when issue is on Jira SB project — omit if none):
-- MCP server: plugin-atlassian-atlassian
-- cloudId: mdg-labs.atlassian.net
-- transitionIdInProgress: 21
-- issues: [{ key: SB-12 }, …]
-- epic (when subtask): { key: SB-8 }   # parent — In Progress with leaves
-- FIRST ACTION: CallMcpTool transitionJiraIssue → transitionIdInProgress for each leaf key AND epic key (if listed) BEFORE session memory
-- FORBIDDEN: transitionJiraIssue with Done; addCommentToJiraIssue; epic Done
-- Reference: .cursor/skills/orchestrator/jira-board.md
+GITHUB SYNC — EXECUTION (include when issue is on GitHub project board — omit if none):
+- MCP server: user-github (or gh CLI)
+- owner: mdg-labs
+- repo: slugbase
+- project: <PROJECT_NUMBER>
+- issues: [{ number: 12 }, …]
+- parent (when subtask): { number: 8 }   # parent — Status → In Progress with leaves
+- FIRST ACTION: Set project Status → "In Progress" for each leaf issue AND parent issue (if listed) BEFORE session memory
+- LAST ACTIONS (in order): Set project Status → "In Review" (leaf only) → single implementation commit
+- FORBIDDEN: Set Status → Done; add comment for verification outcomes; set parent Done
+- Status is set via `gh project item-edit` (Projects v2 Status field) or MCP `issue_write`
+- Reference: .cursor/skills/orchestrator/github-board.md
 
 SESSION MEMORY:
 - Path: /home/michael/projects/slugbase/.cursor/skills/agent-memory/active/<SESSION-ID>.md
-- After Jira In Progress (if JIRA SYNC present): PHASE 1 create file; header + Task; set started: <ISO 8601 UTC>
+- After GitHub In Progress (if GITHUB SYNC present): PHASE 1 create file; header + Task; set started: <ISO 8601 UTC>
 - PHASE 2: update Scope, Decisions, Doc deviations in place
 - PHASE 3: finalize all sections locally (never commit session memory)
-- Pre-handoff (if JIRA SYNC): set ended + duration in local file; worklog; then In Review; single implementation commit
+- Pre-handoff: set ended + duration in local file; then In Review; single implementation commit
 - Retry after FAIL: read existing file (especially VERIFICATION FAILED); overwrite with fresh entry
 
 PLAN REFERENCE:
@@ -131,7 +105,9 @@ GIT:
 - One commit: implementation task files only (session memory is gitignored — never staged)
 - Stage explicit paths only (`git add <path> …`). Never `git add .` or `-A`. Never stage `.cursor/skills/agent-memory/**`.
 - Never push to `main`. When pushing is explicitly requested, target `staging` only.
-- Commit messages: `feat(<scope>)[SB-N]: <summary>` or `fix(<scope>)[P*-*]: <summary>` (roadmap-only). Subject ≤72 chars. No Smart Commit `#time` / `#comment` — MCP only. See `07-jira-commit-linking.mdc`.
+- Commit subject: `feat(<scope>)[#N]: <summary>` or `fix(<scope>)[P*-*]: <summary>` (roadmap-only). Subject ≤72 chars.
+- Commit body: `fixes #N` (when task is tracked on GitHub). One `fixes #N` per commit; multiple (`fixes #12, fixes #13`) also work.
+- No Smart Commit commands. See `07-issue-commit-linking.mdc`.
 
 SECRETS / COMMANDS:
 - Local tests/dev that need env: use Infisical (`infisical run --env=dev -- <cmd>`); see `05-env-vars.mdc`
@@ -164,15 +140,14 @@ ACCEPTANCE CRITERIA (must all pass):
 - <verbatim from plan row>
 
 REQUIRED OUTPUT:
-1. Jira In Progress confirmation (leaf + epic keys updated, or skipped + why)
-2. Session timing: started, ended, duration (or n/a if no JIRA SYNC)
-3. Jira worklog: leaf keys + timeSpent logged (or skipped + why)
-4. Summary (≤5 bullets)
-5. Changed files (absolute paths)
-6. Implementation commit: SHA + message + committed paths (or "no commit" + why)
-7. Plan checkbox: `[~]` only if PLAN FILE in WRITE SCOPE; never `[x]`
-8. Implementation status: complete | blocked | partial + reason (NOT Jira Done — verifier sets that)
-9. Blockers or scope deviations
+1. GitHub In Progress confirmation (leaf + parent issues updated, or skipped + why)
+2. Session timing: started, ended, duration
+3. Summary (≤5 bullets)
+4. Changed files (absolute paths)
+5. Implementation commit: SHA + subject + body (`fixes #N` if applicable) + committed paths (or "no commit" + why)
+6. Plan checkbox: `[~]` only if PLAN FILE in WRITE SCOPE; never `[x]`
+7. Implementation status: complete | blocked | partial + reason (NOT GitHub Done — verifier sets that)
+8. Blockers or scope deviations
 ```
 
 ---
@@ -193,13 +168,13 @@ PLAN FILE: /home/michael/projects/slugbase/docs/slugbase-development-roadmap.md 
 TASK ID: <e.g. P2-05>
 SESSION ID: <TASK-ID>-<YYYYMMDD>-<4hex>
 
-JIRA SYNC — EXECUTION (include when issue is on Jira SB project — omit if none):
-- Same block as Lane S execution template (In Progress only — no transitionIdDone; epic parent when subtask)
-- FIRST ACTION: transitionJiraIssue → 21 for each leaf key AND epic key BEFORE session memory
+GITHUB SYNC — EXECUTION (include when issue is on GitHub project board — omit if none):
+- Same block as Lane S execution template (Status → In Progress only — no Done; parent when subtask)
+- FIRST ACTION: Set project Status → "In Progress" for each leaf issue AND parent issue BEFORE session memory
 
 WORK DEP — MANDATORY (Lane P worktrees have no node_modules):
 - Worktrees are bare checkouts — **no `node_modules`** present at branch start
-- FIRST action after Jira In Progress (before session memory and implementation code):
+- FIRST action after GitHub In Progress (before session memory and implementation code):
     cd <WORKTREE> && bash scripts/with-ci-env.sh pnpm install
 - If `pnpm install` fails → blocked; report install error
 - After install, confirm node -v via bash scripts/with-ci-env.sh node -v (must be v22.12.0+)
@@ -222,7 +197,8 @@ GIT:
 - Stage explicit paths only. Never `git add .` or `-A`.
 - Never push.
 - If git status shows changes outside WRITE SCOPE → blocked.
-- Commit messages: `feat(<scope>)[SB-N]: <summary>`. Subject ≤72 chars. No Smart Commit. See `07-jira-commit-linking.mdc`.
+- Commit subject: `feat(<scope>)[#N]: <summary>`. Subject ≤72 chars. No Smart Commit.
+- Commit body: `fixes #N` when task is tracked on GitHub. See `07-issue-commit-linking.mdc`.
 
 PLAN FILE: READ ONLY. Do not set `[~]`, `[x]`, or `[!]`.
 
@@ -252,13 +228,13 @@ ACCEPTANCE CRITERIA:
 - <verbatim from plan row>
 
 REQUIRED OUTPUT:
-1. Jira In Progress confirmation
-2. Session timing + Jira worklog (or n/a)
+1. GitHub In Progress confirmation
+2. Session timing
 3. Summary (≤5 bullets)
 4. Worktree path + branch name
 5. Changed files (absolute paths)
-6. Implementation commit: SHA + message + committed paths
-7. Implementation status: complete | blocked | partial (NOT Jira Done)
+6. Implementation commit: SHA + subject + body (`fixes #N` if applicable) + committed paths
+7. Implementation status: complete | blocked | partial (NOT GitHub Done)
 8. Blockers or scope deviations
 ```
 
@@ -270,46 +246,43 @@ Same as Lane S except: no plan checkbox update; TASK from orchestrator todo; acc
 
 ---
 
-## Execution agent — Jira mode (Lane S on staging)
+## Execution agent — GitHub mode (Lane S on staging)
 
-Use when the user names a Jira issue key (`SB-12`), URL, or epic child.
+Use when the user names a GitHub issue (`#12`), URL, or parent/child.
 
 ```text
-MODE: Jira
+MODE: GitHub
 LANE: S
 TARGET REPO: /home/michael/projects/slugbase
 WORK BRANCH: staging
-ISSUE KEY: <e.g. SB-12>
-SESSION ID: <ISSUE-KEY>-<YYYYMMDD>-<4hex>
-EPIC: <parent key e.g. SB-8 or none>
+ISSUE NUMBER: <e.g. 12>
+SESSION ID: #<ISSUE-NUMBER>-<YYYYMMDD>-<4hex>
+PARENT: <parent issue number e.g. 8 or none>
 
-JIRA SYNC — EXECUTION (mandatory unless user opted out):
-- MCP server: plugin-atlassian-atlassian
-- cloudId: mdg-labs.atlassian.net
-- issues:
-  - key: SB-12
-- epic (when EPIC header is not "none"):
-  - key: SB-8
-- transitionIds:
-  - "In Progress": 21
-  - "In Review": 31
+GITHUB SYNC — EXECUTION (mandatory unless user opted out):
+- MCP server: user-github (or gh CLI)
+- owner: mdg-labs
+- repo: slugbase
+- project: <PROJECT_NUMBER>
+- issues: [{ number: 12 }]
+- parent (when PARENT header is not "none"):
+  - { number: 8 }
 
-JIRA — EXECUTION (first action, before session memory):
-1. transitionJiraIssue → "In Progress" for EVERY leaf key AND epic key (if listed)
-2. If any transition fails → blocked; do not proceed
-3. FORBIDDEN: transition to Done; addCommentToJiraIssue; epic Done before verifier
+GITHUB — EXECUTION (first action, before session memory):
+1. Set project Status → "In Progress" for EVERY leaf issue AND parent issue (if listed)
+2. If status update fails → blocked; do not proceed
+3. FORBIDDEN: Set Status → Done; add comment for verification outcomes; set parent Done before verifier
 
-JIRA — EXECUTION (pre-handoff, after implementation):
+GITHUB — EXECUTION (pre-handoff, after implementation):
 1. Local session memory: set ended + duration
-2. addWorklogToJiraIssue on each LEAF key (not epic)
-3. transitionJiraIssue → "In Review" for leaf key only
-4. Single implementation commit — task files only
+2. Set project Status → "In Review" for leaf issue only
+3. Single implementation commit — task files only
 
-Reference: .cursor/skills/orchestrator/jira-board.md
+Reference: .cursor/skills/orchestrator/github-board.md
 
 SESSION MEMORY:
 - Path: /home/michael/projects/slugbase/.cursor/skills/agent-memory/active/<SESSION-ID>.md
-- PHASE 1/2/3 after Jira In Progress; set started at Phase 1
+- PHASE 1/2/3 after GitHub In Progress; set started at Phase 1
 
 DOC REFERENCE (read these):
 - <paths + § from issue description>
@@ -318,7 +291,8 @@ DOC REFERENCE (read these):
 GIT:
 - Branch staging; one implementation commit; explicit git add only; never stage `.cursor/skills/agent-memory/**`
 - Never push to `main`. When pushing is explicitly requested, target `staging` only.
-- Commit: `feat(<scope>)[SB-N]: <summary>` — key required. No Smart Commit. See `07-jira-commit-linking.mdc`.
+- Commit subject: `feat(<scope>)[#N]: <summary>` — number required. No Smart Commit.
+- Commit body: `fixes #N`. See `07-issue-commit-linking.mdc`.
 - Infisical for env when needed (`infisical run --env=dev`)
 
 DB MIGRATIONS — MANDATORY (schema-first; no exceptions):
@@ -327,15 +301,14 @@ DB MIGRATIONS — MANDATORY (schema-first; no exceptions):
 READ / WRITE SCOPE / DO NOT TOUCH / AC / TESTS: <orchestrator fills>
 
 REQUIRED OUTPUT:
-1. Jira In Progress: leaf + epic keys updated (or blocked reason)
+1. GitHub In Progress: leaf + parent issues updated (or blocked reason)
 2. Session timing: started, ended, duration
-3. Jira worklog: leaf keys + timeSpent
-4. Jira In Review confirmation
-5. Summary (≤5 bullets)
-6. Changed files (absolute paths)
-7. Implementation commit: SHA + message + paths
-8. Implementation status: complete | blocked | partial (NOT Jira Done)
-9. Blockers or scope deviations
+3. GitHub In Review confirmation
+4. Summary (≤5 bullets)
+5. Changed files (absolute paths)
+6. Implementation commit: SHA + subject + body + paths
+7. Implementation status: complete | blocked | partial (NOT GitHub Done)
+8. Blockers or scope deviations
 ```
 
 ---
@@ -343,25 +316,26 @@ REQUIRED OUTPUT:
 ## Verification agent — Lane S (task verifier on staging)
 
 ```text
-MODE: plan-file | chat | Jira
+MODE: plan-file | chat | GitHub
 LANE: S
 TARGET REPO: /home/michael/projects/slugbase
 WORK BRANCH: staging
 PLAN FILE: <path or n/a>
 SESSION ID: <same as execution>
 
-JIRA SYNC — VERIFIER (include when execution prompt had execution variant):
-- MCP server: plugin-atlassian-atlassian; cloudId: mdg-labs.atlassian.net; transitionIdDone: 41; issues [{ key: SB-12 }]
-- epic (optional): key if final subtask
-- AFTER verdict: PASS → Done for each key (+ epic if listed); FAIL → addCommentToJiraIssue, transition Ready
+GITHUB SYNC — VERIFIER (include when execution prompt had execution variant):
+- MCP server: user-github (or gh CLI); owner: mdg-labs; repo: slugbase; project: <PROJECT_NUMBER>
+- issues: [{ number: 12 }]
+- parent (optional): number if final subtask
+- AFTER PASS: add_issue_comment (mandatory clean summary) → Set project Status → "Done" for each issue (+ parent if listed)
+- AFTER FAIL: add_issue_comment (FAIL detail) → Set project Status → "Todo"; do NOT set Done
 
 SESSION MEMORY (local, gitignored):
 - FIRST ACTION: read active/<SESSION-ID>.md if it exists
 - Missing file → use execution REQUIRED OUTPUT; blocked only if insufficient
-- When JIRA SYNC present: set ## Verification timing started after reading
-- Pre-handoff: ended + duration + worklog before Jira status transition
-- PASS: mandatory Jira Done comment; optionally delete active or move to local archive/ (never commit)
-- FAIL: mandatory Jira FAIL comment; append VERIFICATION FAILED in active/ (never commit)
+- Pre-handoff: set verification ended + duration
+- PASS: mandatory GitHub Done comment; optionally delete active or move to local archive/ (never commit)
+- FAIL: mandatory GitHub FAIL comment; append VERIFICATION FAILED in active/ (never commit)
 
 EXECUTION COMMITS:
 - task id: <id>
@@ -401,7 +375,7 @@ LAYER 3 — Logic review:
 3b. Doc contract — spec section deviations with file:line + fix hint
 3c. Security baseline — sessions (not JWT), no logged secrets, SSRF-safe egress, encrypted at-rest secrets, CSRF (03-security-baseline.mdc)
 3c2. Env vars — any new env var fully registered in Infisical + .env.example + schema + docs? (05-env-vars.mdc)
-3c3. Jira commit link — subject includes `[SB-N]` or `[P*-*]`; no Smart Commit commands (07-jira-commit-linking.mdc)
+3c3. Issue commit link — subject includes `[#N]` or `[P*-*]`; body includes `fixes #N` when task is tracked on GitHub; no Smart Commit commands (07-issue-commit-linking.mdc)
 3d. DB migrations — hand-written migration SQL or hand-created directories → FAIL
 3e. Stubs, TODO/FIXME, placeholder values, deployment-mode branches (`isCloud`) → FAIL
 
@@ -414,10 +388,9 @@ REQUIRED OUTPUT:
 2. Layer 2 per check
 3. Layer 3 breakdown
 4. Overall PASS | FAIL
-5. Verification timing + Jira worklog (or n/a)
-6. Plan file update + SHA or skipped
-7. Jira sync: keys → Done | FAIL comment (+ MCP results), or n/a
-8. Issue list (≤10 bullets)
+5. Plan file update + SHA or skipped
+6. GitHub sync: issues → Done | Todo + comment (or n/a)
+7. Issue list (≤10 bullets)
 ```
 
 ---
@@ -433,8 +406,8 @@ WORKTREE: <path>
 BATCH_ID: <id>
 SESSION ID: <same as execution>
 
-JIRA SYNC — VERIFIER (include when execution prompt had execution variant):
-- Same rules as Lane S verifier (Done / FAIL comment)
+GITHUB SYNC — VERIFIER (include when execution prompt had execution variant):
+- Same rules as Lane S verifier (Done / FAIL comment + Status update)
 
 WORK DEP — MANDATORY (Lane P worktrees have no node_modules):
 - Worktrees are bare checkouts — **no `node_modules`** present at branch start
@@ -445,8 +418,8 @@ WORK DEP — MANDATORY (Lane P worktrees have no node_modules):
 
 SESSION MEMORY (local, gitignored):
 - FIRST ACTION: read active/<SESSION-ID>.md in WORKTREE if it exists
-- PASS: mandatory Jira Done comment; optionally delete active or move to local archive/ (never commit)
-- FAIL: mandatory Jira FAIL comment; append VERIFICATION FAILED in active/ (never commit)
+- PASS: mandatory GitHub Done comment; optionally delete active or move to local archive/ (never commit)
+- FAIL: mandatory GitHub FAIL comment; append VERIFICATION FAILED in active/ (never commit)
 - Do NOT edit PLAN FILE
 
 EXECUTION COMMITS (on task branch):
@@ -459,10 +432,9 @@ VERIFICATION: Same Layer 1/2/3 as Lane S task verifier — run in WORKTREE
 REQUIRED OUTPUT:
 1. Layer 1/2/3 results
 2. Overall PASS | FAIL
-3. Verification timing + Jira worklog (or n/a)
-4. Branch tip SHA for integration
-5. Jira sync results
-6. Issue list (≤10 bullets)
+3. Branch tip SHA for integration
+4. GitHub sync results
+5. Issue list (≤10 bullets)
 ```
 
 ---
@@ -484,7 +456,7 @@ BRANCH-PASS TASKS:
 GIT:
 - checkout staging
 - For each branch-PASS task in MERGE ORDER:
-    git merge --no-ff orchestrator/<TASK-ID> -m "chore(repo)[SB-N]: integrate <TASK-ID> (<BATCH_ID>)"
+    git merge --no-ff orchestrator/<TASK-ID> -m "chore(repo): integrate <TASK-ID> (<BATCH_ID>)"
 - On first conflict → STOP; report conflict files; do not partial-merge
 - Do not rewrite implementation commits; do not edit PLAN FILE; never push to `main`
 
@@ -513,7 +485,7 @@ TASK OUTCOMES:
 - <TASK-ID>: branch-verify PASS, merged | branch-verify FAIL, not merged
 
 CHECKS:
-1. Confirm branch verifiers reported Jira Done comments + worklogs for integrated tasks
+1. Confirm branch verifiers reported GitHub Done comments for integrated tasks
 2. Post-merge smoke: bash scripts/with-ci-env.sh pnpm lint, bash scripts/with-ci-env.sh pnpm typecheck (Infisical for env when needed via with-ci-env wrapper)
 3. If smoke fails → FAIL batch; do not mark [x]
 
@@ -522,7 +494,7 @@ PLAN FILE:
 - Branch-FAIL (not merged) → [!] + note; commit plan file
 
 REQUIRED OUTPUT:
-1. Jira Done comment confirmation per integrated task
+1. GitHub Done comment confirmation per integrated task
 2. Smoke check results
 3. Plan file updates + SHA
 4. Overall batch PASS | FAIL

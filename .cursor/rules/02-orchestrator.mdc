@@ -36,20 +36,20 @@ If you're acting as the orchestrator chat: never edit checkboxes during normal f
 
 **Parallel batches (Lane P):** execution in isolated worktrees (`best-of-n-runner`); integration merges to **`staging`**. See orchestrator SKILL.md § Parallelism. **Never push to `main`.**
 
-## Jira board status (when orchestrating)
+## GitHub board status (when orchestrating)
 
-Project **SB** on `mdg-labs.atlassian.net`. Commit subjects use Jira key in brackets: `[SB-12]`.
+SlugBase project on GitHub (`mdg-labs/slugbase`). Commit subjects use issue number: `[#12]`.
 
-- **Execution agents** → set **In Progress** on leaf issue(s) and epic parent when dispatching a child (first action, before code); set **In Review** before verifier handoff
-- **Verification agents** → set **Done** only after all layers PASS; FAIL → **Ready** + comment
-- Execution prompts must **not** include the Done transition ID — see `.cursor/skills/orchestrator/jira-board.md`
+- **Execution agents** → set project Status **In Progress** on leaf issue(s) and parent when dispatching a child (first action, before code); set **In Review** before verifier handoff
+- **Verification agents** → set **Done** only after all layers PASS; FAIL → **Todo** + comment
+- Execution prompts must **not** set Done — see `.cursor/skills/orchestrator/github-board.md`
 
 ## Universal acceptance criteria (every task)
 
 Even when not listed in a task row, the verifier applies:
 
 - File / directory naming (`04-naming.mdc`)
-- Conventional commits with `[SB-N]` (`01-git-workflow.mdc`, `07-jira-commit-linking.mdc`)
+- Conventional commits with `[#N]` (`01-git-workflow.mdc`, `07-issue-commit-linking.mdc`)
 - TypeScript strict, no `any`, no `console.log` (when TypeScript is in scope)
 - Security defaults — server-side sessions, no logged secrets, server-side validation (`03-security-baseline.mdc`)
 - i18n — every UI string via the i18n layer, no hardcoded strings (spec §17)

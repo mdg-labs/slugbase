@@ -1,6 +1,6 @@
 # Issue summary patterns
 
-Single source of truth for **issue summary** (title) conventions on project **SB**. Both `jira-triage` and `jira-intake` must follow this table when creating or updating issues.
+Single source of truth for **issue summary** (title) conventions on the SlugBase GitHub project. Both `github-triage` and `github-intake` must follow this table when creating or updating issues.
 
 ## Pattern table
 
@@ -8,8 +8,7 @@ Single source of truth for **issue summary** (title) conventions on project **SB
 |---|---|---|
 | **Bug** | `{Area}: {observed defect}` | `Slugs: collision page shown for unambiguous slug` |
 | **Task** | `{Verb} {target}` | `Add SSRF-safe egress service for metadata fetch` |
-| **Story** | `{User-visible outcome}` | `Redirect to bookmark destination via /go/<slug>` |
-| **Epic** | `{Feature name}` — no `(epic)` suffix | `Server-side session infrastructure` |
+| **Feature** | `{Feature name}` — no "(epic)" suffix | `Server-side session infrastructure` |
 
 ## Area prefixes
 
@@ -17,7 +16,7 @@ Use for **Bug** summaries and when a prefix clarifies scope on other types:
 
 `Bookmarks` · `Slugs` · `Go` · `Folders` · `Tags` · `Workspaces` · `Auth` · `MFA` · `OIDC` · `Sessions` · `Billing` · `Entitlements` · `Admin` · `Dashboard` · `Search` · `Import` · `Export` · `Marketing` · `i18n` · `CI` · `Infra` · `API`
 
-Cross-check the Jira **Domain** custom field (`Frontend`, `Backend`, `Infrastructure`, `Operations`) — area prefix and Domain should not contradict.
+Cross-check the **domain label** (`domain:frontend`, `domain:backend`, `domain:infrastructure`, `domain:operations`) — area prefix and domain should not contradict.
 
 ## Length
 
@@ -36,5 +35,5 @@ Cross-check the Jira **Domain** custom field (`Frontend`, `Backend`, `Infrastruc
 
 | Skill | When |
 |---|---|
-| **jira-triage** | After investigation, when rewrite rules apply — include in `editJiraIssue` alongside description |
-| **jira-intake** | On `createJiraIssue` (Epic + leaves); on enrich when draft summary is vague per rewrite rules |
+| **github-triage** | After investigation, when rewrite rules apply — include in `gh issue edit` alongside body |
+| **github-intake** | On issue creation (Feature + leaves); on enrich when draft summary is vague per rewrite rules |

@@ -2,7 +2,7 @@
 name: dependabot-triage
 description: >-
   Fetch a Dependabot security alert from the slugbase repo via gh CLI, search
-  Jira SB for a duplicate Bug issue covering the same package or CVE, and create
+  GitHub Issues for a duplicate Bug covering the same package or CVE, and create
   a new Bug if no open duplicate exists. Use when the user references a Dependabot
   alert number, CVE/GHSA ID, GitHub security URL, or asks to triage a dependency
   vulnerability.
@@ -10,9 +10,9 @@ description: >-
 
 # Dependabot triage (SlugBase)
 
-Fetch alert details from GitHub, search Jira for duplicates, create a Bug if none found.
+Fetch alert details from GitHub, search GitHub Issues for duplicates, create a Bug if none found.
 
-Board constants: [orchestrator/jira-board.md](../orchestrator/jira-board.md).
+Board constants: [orchestrator/github-board.md](../orchestrator/github-board.md).
 
 ## When to use
 
@@ -27,24 +27,21 @@ Board constants: [orchestrator/jira-board.md](../orchestrator/jira-board.md).
 
 1. **Never** call `PATCH state=dismissed` on any alert — not even for testing. See `.cursor/rules/08-dependabot-alerts.mdc`.
 2. **No code changes** during triage.
-3. **Do not change Jira issue status** (leave new bugs at default Backlog).
-4. Use `editJiraIssue` when re-triaging an existing issue; `createJiraIssue` for new ones.
-5. Read MCP tool schemas under `mcps/plugin-atlassian-atlassian/tools/` before calling.
+3. **Do not change issue status** (leave new bugs at default Todo).
+4. Use `gh issue edit` when re-triaging an existing issue; `gh issue create` for new ones.
 
 ## Board constants
 
 ```text
-MCP server: plugin-atlassian-atlassian
-cloudId: mdg-labs.atlassian.net
-projectKey: SB
-repo: <owner>/slugbase   # update with actual GitHub org/owner once known
+Owner: mdg-labs
+Repo: slugbase
 ```
 
 ## Workflow
 
 ```
 - [ ] Phase 1: Resolve alert from GitHub
-- [ ] Phase 2: Search Jira for duplicates
+- [ ] Phase 2: Search GitHub Issues for duplicates
 - [ ] Phase 3: Create Bug (if no open duplicate)
 - [ ] Phase 4: Summarise in chat
 ```
@@ -56,20 +53,20 @@ repo: <owner>/slugbase   # update with actual GitHub org/owner once known
 **By alert number:**
 
 ```bash
-gh api repos/<owner>/slugbase/dependabot/alerts/<N>
+gh api repos/mdg-labs/slugbase/dependabot/alerts/<N>
 ```
 
 **By CVE or GHSA (scan open alerts):**
 
 ```bash
-gh api "repos/<owner>/slugbase/dependabot/alerts?state=open&per_page=100" \
+gh api "repos/mdg-labs/slugbase/dependabot/alerts?state=open&per_page=100" \
   | jq '[.[] | select(.security_advisory.cve_id == "<CVE>" or .security_advisory.ghsa_id == "<GHSA>")]'
 ```
 
 Extract and record:
 
 - `alert_number`
-- `alert_url` — `https://github.com/<owner>/slugbase/security/dependabot/<alert_number>`
+- `alert_url` — `https://github.com/mdg-labs/slugbase/security/dependabot/<alert_number>`
 - `package_name` — `dependency.package.name`
 - `ecosystem` — `dependency.package.ecosystem`
 - `manifest_path` — `dependency.manifest_path`
@@ -83,22 +80,22 @@ Extract and record:
 
 ---
 
-### Phase 2 — Jira duplicate search
+### Phase 2 — GitHub duplicate search
 
-Run two JQL queries in parallel:
+Search open issues for duplicates by package name and CVE/GHSA:
 
-```text
+```bash
 # By package name
-project = SB AND issuetype = Bug AND summary ~ "<package_name>" ORDER BY created DESC
+gh issue list --repo mdg-labs/slugbase --label "type:Bug" --state open --search "<package_name>"
 
 # By CVE/GHSA
-project = SB AND issuetype = Bug AND (description ~ "<cve_id>" OR description ~ "<ghsa_id>") ORDER BY created DESC
+gh issue list --repo mdg-labs/slugbase --label "type:Bug" --state open --search "<cve_id> OR <ghsa_id>"
 ```
 
 **Duplicate rules:**
 
-- **Open duplicate found** (Backlog / Ready / In Progress / In Review) → report the existing issue key; do **not** create.
-- **Done/Cancelled duplicate found** → create anyway (potential regression or incomplete fix).
+- **Open duplicate found** (Todo / In Progress / In Review) → report the existing issue number; do **not** create.
+- **Done/Duplicate duplicate found** → create anyway (potential regression or incomplete fix).
 - **No duplicate** → proceed to Phase 3.
 
 ---
@@ -106,20 +103,16 @@ project = SB AND issuetype = Bug AND (description ~ "<cve_id>" OR description ~ 
 ### Phase 3 — Create Bug
 
 Determine the affected domain:
-- `pnpm` / JS / TS packages → `Backend` (id `10093`) or `Frontend` (id `10092`) based on `manifest_path`
-- Infrastructure / build tooling → `Infrastructure` (id `10094`)
+- `pnpm` / JS / TS packages → `domain:backend` or `domain:frontend` based on `manifest_path`
+- Infrastructure / build tooling → `domain:infrastructure`
 
-```text
-CallMcpTool plugin-atlassian-atlassian / createJiraIssue
-  cloudId: mdg-labs.atlassian.net
-  projectKey: SB
-  issueTypeName: Bug
-  summary: "dep(<package_name>): vulnerable to <cve_id> — bump to <patched_version>"
-  additional_fields:
-    customfield_10081: { id: "<domain option id>" }   # required
-    labels: ["security", "dependabot"]
-  description: <see template below>
-  contentFormat: markdown
+```bash
+gh issue create \
+  --repo mdg-labs/slugbase \
+  --title "dep(<package_name>): vulnerable to <cve_id> — bump to <patched_version>" \
+  --type "Bug" \
+  --label "domain:backend,security,dependabot" \
+  --body "<description template below>"
 ```
 
 **Description template:**
@@ -151,7 +144,7 @@ The commit must land on **`staging`** (development integration branch) for GitHu
 See `.cursor/rules/08-dependabot-alerts.mdc` for the correct fix workflow.
 ```
 
-Leave status at default (Backlog). Do not set In Progress or Done.
+Leave status at default (Todo). Do not set In Progress or Done.
 
 ---
 
@@ -160,19 +153,18 @@ Leave status at default (Backlog). Do not set In Progress or Done.
 Report:
 
 - Alert details (package, CVE, severity)
-- Duplicate found? → key + link; or "No duplicate — created `SB-N`"
-- New issue link if created: `https://mdg-labs.atlassian.net/browse/SB-N`
-- Suggested next step (implement fix via orchestrator, or link existing ticket to the alert)
+- Duplicate found? → number + link; or "No duplicate — created #N"
+- New issue link if created
+- Suggested next step (implement fix via orchestrator, or link existing issue to the alert)
 
 ---
 
-## MCP tools used
+## GitHub tools used
 
 | Tool | Purpose |
 |---|---|
-| `searchJiraIssuesUsingJql` | Duplicate check |
-| `createJiraIssue` | New Bug creation |
-| `editJiraIssue` | Re-triage update |
-| `getJiraIssue` | Optional — read existing duplicate for context |
+| `gh issue list --search` | Duplicate check |
+| `gh issue create` | New Bug creation |
+| `gh issue edit` | Re-triage update |
 
-**Forbidden during triage:** `transitionJiraIssue`; `addCommentToJiraIssue` for findings (use description instead).
+**Forbidden during triage:** setting In Progress / In Review / Done; posting findings as issue comments (use body instead).

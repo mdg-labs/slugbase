@@ -1,39 +1,36 @@
-# Jira description templates
+# Issue description templates
 
-Copy and fill for MCP `description` fields. Replace `{placeholders}`. Use Jira browse URLs once issues exist: `https://mdg-labs.atlassian.net/browse/SB-N`.
+Copy and fill for GitHub issue bodies. Replace `{placeholders}`. Reference issues with `#N` syntax.
 
-**Summaries** (issue titles) are set on `createJiraIssue` / `editJiraIssue` separately — follow [summary-patterns.md](../jira-triage/summary-patterns.md):
+**Summaries** (issue titles) are set on creation or update — follow [summary-patterns.md](../github-triage/summary-patterns.md):
 
 | Type | Example summary |
 |---|---|
-| Epic | `Server-side session infrastructure` |
-| Story | `Redirect to bookmark destination via /go/<slug>` |
+| Feature (epic) | `Server-side session infrastructure` |
 | Task | `Add SSRF-safe egress service for metadata fetch` |
 | Bug | `Slugs: collision page shown for unambiguous slug` |
 
-## Epic parent template
+## Feature (epic) parent template
 
 ```markdown
-## Epic: {Feature name}
+## Feature: {Feature name}
 
-**Fix version:** {MVP Alpha | Public Launch v1.0.0}
-
-**Background:** {Current behaviour + why we're changing it}. {Link to related Done issues or spec sections, e.g. [spec §8](docs/slugbase-mvp-spec.md#8-slugs-and-link-forwarding) or [SB-5](https://mdg-labs.atlassian.net/browse/SB-5) ✅}.
+**Background:** {Current behaviour + why we're changing it}. {Link to related completed issues or spec sections, e.g. [spec §8](docs/slugbase-mvp-spec.md#8-slugs-and-link-forwarding) or #5 ✅}.
 
 ---
 
-### Subtasks
+### Sub-issues
 
 | Issue | Domain | Description |
 |---|---|---|
-| [SB-XX](https://mdg-labs.atlassian.net/browse/SB-XX) | Backend | {one line} |
-| [SB-YY](https://mdg-labs.atlassian.net/browse/SB-YY) | Frontend | {one line} |
+| #XX | Backend | {one line} |
+| #YY | Frontend | {one line} |
 
 ---
 
 ### Goal
 
-{One paragraph: what users or operators can do when this epic is done.}
+{One paragraph: what users or operators can do when this feature is done.}
 
 ---
 
@@ -47,9 +44,9 @@ Copy and fill for MCP `description` fields. Replace `{placeholders}`. Use Jira b
 
 ### Suggested implementation order
 
-1. **SB-XX** + **SB-YY** (parallel)
-2. **SB-ZZ**
-3. **SB-WW**
+1. **#XX** + **#YY** (parallel)
+2. **#ZZ**
+3. **#WW**
 
 ---
 
@@ -61,11 +58,9 @@ See child issue descriptions for acceptance criteria, file paths, and tests.
 ```markdown
 ## {Title}
 
-**Parent epic:** [SB-XX {Epic title}](https://mdg-labs.atlassian.net/browse/SB-XX)
+**Parent feature:** #XX {Feature title}
 
-**Depends on:** [SB-YY {dependency}](https://mdg-labs.atlassian.net/browse/SB-YY)
-
-**Blocks:** [SB-ZZ {dependent}](https://mdg-labs.atlassian.net/browse/SB-ZZ)
+**Depends on:** #YY {dependency}
 
 **Spec refs:** {e.g. spec §5.3 — server-side sessions; spec §11.9 — persistence interface}
 
@@ -112,9 +107,9 @@ packages/shared-types/src/
 ```markdown
 ## {Title}
 
-**Parent epic:** [SB-XX {Epic title}](https://mdg-labs.atlassian.net/browse/SB-XX)
+**Parent feature:** #XX {Feature title}
 
-**Depends on:** [SB-YY API task](https://mdg-labs.atlassian.net/browse/SB-YY)
+**Depends on:** #YY API task
 
 **Spec refs:** {e.g. spec §9 — command palette; spec §6.5 — bookmark list UI}
 
@@ -149,4 +144,4 @@ packages/web/src/...
 
 ## Single-issue template (no epic)
 
-Use for Bugs, chores, or one-shot Stories — include full AC, Files, Tests; omit parent epic section. Always include spec refs where applicable.
+Use for Bugs, chores, or one-shot Tasks — include full AC, Files, Tests; omit parent feature section. Always include spec refs where applicable.

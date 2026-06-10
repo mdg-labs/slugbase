@@ -47,7 +47,7 @@ Stages: CI checks → staging deploy (push `staging`) → prepare release (push 
 
 ## Repository state
 
-This repo currently contains only docs. Application code is built phase-by-phase from `docs/slugbase-development-roadmap.md` (plan file — **DRAFT, pre-Jira**; phases P1–P6). When unsure what phase we're in, read the roadmap.
+This repo currently contains only docs. Application code is built phase-by-phase from `docs/slugbase-development-roadmap.md` (plan file — **DRAFT, pre-GitHub**; phases P1–P6). When unsure what phase we're in, read the roadmap.
 
 ## Spec doc precedence (when docs conflict)
 

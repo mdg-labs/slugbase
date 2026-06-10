@@ -1,8 +1,8 @@
 # Triage description template
 
-Use when composing the `description` field for MCP `editJiraIssue` or `createJiraIssue`. Replace `{placeholders}`. Keep `## Report` at the top — verbatim reporter text.
+Use when composing the `body` field for `gh issue edit` or `gh issue create`. Replace `{placeholders}`. Keep `## Report` at the top — verbatim reporter text.
 
-**Summary (title):** set separately via `editJiraIssue` `summary` field per [summary-patterns.md](summary-patterns.md) — e.g. `Slugs: collision page shown for unambiguous slug` for Bugs.
+**Summary (title):** set separately via `gh issue edit --title` per [summary-patterns.md](summary-patterns.md) — e.g. `Slugs: collision page shown for unambiguous slug` for Bugs.
 
 ## Full template
 
@@ -13,7 +13,7 @@ Use when composing the `description` field for MCP `editJiraIssue` or `createJir
 
 ## Classification
 
-{One paragraph: Frontend / Backend / Infrastructure / cross-cutting. Note if Domain field mismatches code ownership. Reference spec section if relevant, e.g. spec §8.2 for Go/redirect issues.}
+{One paragraph: Frontend / Backend / Infrastructure / cross-cutting. Note if domain label mismatches code ownership. Reference spec section if relevant, e.g. spec §8.2 for Go/redirect issues.}
 
 ## {Feature flow or system name}
 
@@ -59,8 +59,8 @@ E.g. "Go redirect flow (spec §8)", "Session resolution (spec §5.3)", "Entitlem
 
 ## Anti-patterns
 
-- Posting the same content as a Jira **comment** instead of updating **description**
+- Posting the same content as an issue **comment** instead of updating **body**
 - Paraphrasing the reporter's `## Report` text
-- Transitioning to In Progress / In Review / Done during triage (Ready from Backlog only)
+- Setting In Progress / In Review / Done during triage (Ready from Todo only)
 - Committing code fixes or editing repo files without an explicit user request
-- Leaving triaged Backlog issues in Backlog when user did not opt out of Jira updates
+- Leaving triaged Todo issues in Todo when user did not opt out of updates

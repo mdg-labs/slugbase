@@ -1,0 +1,216 @@
+---
+name: github-intake
+description: >-
+  Create or enrich SlugBase GitHub Issues from a feature description, spec section,
+  codebase change, or user-drafted issue. Single Task/Bug for small work;
+  Feature (epic) + children for multi-task features. Dual mode: create net-new issues or
+  enrich an existing #N issue. Stops at Ready. Use when the user describes a
+  new feature, asks to plan or ticket work, flesh out a draft issue, or
+  break a change into board tasks before implementation.
+---
+
+# GitHub intake (SlugBase)
+
+Turn a feature request, spec section, codebase change, or rough draft into **Ready** issues on the SlugBase GitHub project. Canonical spec: `docs/slugbase-mvp-spec.md`.
+
+Board sync for execution/verification: [orchestrator/github-board.md](../orchestrator/github-board.md). Description templates: [templates.md](templates.md). Summary patterns: [../github-triage/summary-patterns.md](../github-triage/summary-patterns.md).
+
+## When to use
+
+| User intent | Action |
+|---|---|
+| Feature or spec section needing **2+ tasks** | **Feature (epic)** + child Tasks/Bugs |
+| Single task sufficient | **One** Task or Bug — no epic |
+| Bug fix (one task) | Bug in affected domain; `type: Bug` |
+| User provides `#N` draft issue | **Enrich mode** — add AC, spec refs, files, tests, children |
+| User says "don't create issues" | Skip MCP; optionally draft markdown plan only |
+
+**Ask before creating** if priority, owning domain, or product rules are unclear.
+
+## Board constants
+
+```text
+MCP server: user-github
+Owner: mdg-labs
+Repo: slugbase
+Project number: 1  (check with gh project list --owner mdg-labs)
+```
+
+Org-level issue types: **Task**, **Bug**, **Feature** — see [github-board.md](../orchestrator/github-board.md).
+
+Org-level issue fields: **Priority** (Critical/High/Medium/Low), **Effort** (S/M/L/XL).
+
+## Issue summaries
+
+Every issue creation or enrich-mode update must follow [summary-patterns.md](../github-triage/summary-patterns.md):
+
+| Issue type | Pattern | Example |
+|---|---|---|
+| Feature (epic) | `{Feature name}` | `Server-side session infrastructure` |
+| Task | `{Verb} {target}` | `Add SSRF-safe egress service for metadata fetch` |
+| Bug | `{Area}: {observed defect}` | `Slugs: collision page shown for unambiguous slug` |
+
+Apply **rewrite vs keep** rules when enriching — rewrite vague drafts; keep summaries that already match.
+
+## Dual mode
+
+### Mode A — Create net-new
+
+User describes a feature with no existing issue number.
+
+### Mode B — Enrich existing
+
+User names `#N`. Fetch with `gh issue view #N`, **merge** structured sections into body via `issue_write` MCP or `gh issue edit`. Rewrite summary when vague. Add sub-issues if scope grew. Do not wipe user prose.
+
+## Domain labels
+
+| Label | Scope |
+|---|---|
+| `domain:frontend` | Web client, React, UI, command palette, dashboard, i18n |
+| `domain:backend` | API, auth, sessions, bookmarks/slugs/folders/tags/workspaces, entitlements, billing, admin |
+| `domain:infrastructure` | Database, container, CI/CD, TLS/proxy, deployment, monitoring |
+| `domain:operations` | Launch, marketing site, docs, billing operations, self-hosted runbooks |
+
+**Feature (epic)** gets the **owning** domain label. Each child gets its own.
+
+## Issue type mapping
+
+| Work | GitHub type |
+|---|---|
+| Epic parent (2+ tasks) | Feature |
+| Feature leaf | Task |
+| Bug | Bug |
+| Chore / DX / spike | Task |
+
+## Workflow
+
+### 1. Understand the request
+
+1. Read relevant spec sections (`spec §N` from [doc-index.md](../orchestrator/doc-index.md)) — cite `§` refs in descriptions.
+2. Search the codebase for patterns / file paths.
+3. Search for duplicates: `gh issue list --label "domain:*" --search "<keywords>"`.
+4. Split into **leaf issues** — each independently implementable and verifiable.
+
+### 2. Draft plan — show user before MCP writes
+
+```markdown
+## Proposed issue structure
+
+**Feature (epic):** #?? — Server-side session infrastructure → Domain: backend
+**Children:**
+
+| # | Domain | Type | Summary | Depends on |
+|---|---|---|---|---|
+| #?? | backend | Task | Implement session store with configurable TTL | — |
+| #?? | backend | Task | Add workspace-context middleware to session | #?? |
+| #?? | frontend | Task | Show active workspace in nav and workspace switcher | #?? |
+
+**Implementation order:** …
+**Open questions:** …
+**Spec refs:** spec §5.3 (sessions), spec §4.3 (workspace resolution), spec §2.5 (multi-tenant)
+```
+
+Wait for approval unless the user said "create the issues now".
+
+### 3. Create Feature epic (Mode A only)
+
+```bash
+gh issue create \
+  --repo mdg-labs/slugbase \
+  --title "Server-side session infrastructure" \
+  --type "Feature" \
+  --label "domain:backend" \
+  --body "<epic template — templates.md>"
+```
+
+Or via MCP `issue_write` with `type: "Feature"` and `labels: ["domain:backend"]`.
+
+Record returned issue number (e.g. `#8`).
+
+### 4. Create children (Mode A) or enrich + add children (Mode B)
+
+```bash
+gh issue create \
+  --repo mdg-labs/slugbase \
+  --title "Redirect to bookmark destination via /go/<slug>" \
+  --type "Task" \
+  --label "domain:backend" \
+  --body "<subtask template>"
+```
+
+Mode B enrich — when summary needs rewrite:
+
+```bash
+gh issue edit <NUMBER> --repo mdg-labs/slugbase \
+  --title "Go: redirect resolves slug within active workspace context" \
+  --body "<merged markdown>"
+```
+
+### 5. Sub-issue relationships
+
+```bash
+# Get node IDs via GraphQL
+gh api graphql -f query='
+  { repository(owner:"mdg-labs", name:"slugbase") {
+      issue(number: 8) { id }
+      issue(number: 9) { id }
+  } }'
+
+# Create sub-issue relationship via MCP
+# sub_issue_write: parent_id: <node ID of epic>, sub_issue_id: <node ID of child>
+```
+
+Document sub-issue relationships in each leaf description with `#N` references.
+
+### 6. Finalize Feature description
+
+Update the Feature epic — **Sub-issues table** with every child number, domain, one-line scope, and **Suggested implementation order**. Include relevant spec `§` refs.
+
+### 7. Add to project and set to Ready
+
+```bash
+# Add to project (if not auto-added)
+gh project item-add <PROJECT_NUMBER> --owner mdg-labs --url "https://github.com/mdg-labs/slugbase/issues/<NUMBER>"
+
+# Set Status to Ready via project field edit
+gh project item-edit --project-id <PROJECT_NODE_ID> --id <ITEM_NODE_ID> \
+  --field-id <STATUS_FIELD_ID> --single-select-option-id <READY_OPTION_ID>
+```
+
+Intake stops at **Ready** — not In Progress or Done.
+
+## Description rules
+
+- **Feature (epic):** context from spec, sub-issues table, suggested order, product rules (cite `spec §N`). Children hold the implementable AC.
+- **Leaf:** parent epic link, Depends on, spec refs, technical sections, AC checklist, Files, Tests.
+- Use **Markdown** in descriptions.
+
+## Sizing guidelines
+
+| Good leaf | Too big — split |
+|---|---|
+| One migration + one schema entity | "All backend auth changes" |
+| One API surface if tightly coupled | Entire feature in one story |
+| One UI flow or one component | "All auth UI" |
+
+## After creation — handoff
+
+```markdown
+Created on GitHub:
+
+- Feature (epic): #8 — Server-side session infrastructure
+- #9 … / #11 … (all child issues)
+
+Suggested order: #9 → #10 → #11
+Ready for orchestrator: "implement #11" or "orchestrate #8 epic"
+```
+
+## Forbidden
+
+- Setting In Progress or Done during intake
+- Inventing product behaviour not in spec docs — ask first
+- Pasting secrets into issue descriptions
+- Creating a multi-task feature without a Feature (epic) parent
+- Omitting domain label — every issue needs one
+- Vague summary placeholders when pattern table applies
+- Referencing "organization", "favorites", "collection" — use canonical vocabulary (spec §3, rule `04-naming.mdc`)
