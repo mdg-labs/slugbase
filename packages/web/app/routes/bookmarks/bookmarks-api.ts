@@ -1,5 +1,7 @@
 const getApiBaseUrl = (): string =>
-  typeof window === "undefined" ? (process.env["API_BASE_URL"] ?? "") : "";
+  (typeof window === "undefined" ? process.env["API_BASE_URL"] : undefined) ??
+  (import.meta.env.VITE_API_URL as string | undefined) ??
+  "";
 
 async function postJson<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${getApiBaseUrl()}${path}`, {

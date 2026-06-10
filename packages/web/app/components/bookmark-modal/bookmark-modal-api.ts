@@ -41,7 +41,8 @@ function isTagOptionArray(items: unknown): items is BookmarkModalTagOption[] {
   );
 }
 
-const getApiBaseUrl = (): string => process.env["API_BASE_URL"] ?? "";
+const getApiBaseUrl = (): string =>
+  (import.meta.env.VITE_API_URL as string | undefined) ?? "";
 
 async function getMutationHeaders(): Promise<Record<string, string>> {
   const res = await fetch(`${getApiBaseUrl()}/auth/csrf-token`, {

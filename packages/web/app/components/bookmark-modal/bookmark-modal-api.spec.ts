@@ -9,7 +9,7 @@ describe("loadBookmarkModalOptions", () => {
   const originalFetch = globalThis.fetch;
 
   beforeEach(() => {
-    vi.stubEnv("API_BASE_URL", "");
+    vi.stubEnv("VITE_API_URL", "");
   });
 
   afterEach(() => {

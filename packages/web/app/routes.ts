@@ -20,6 +20,7 @@ export default [
   // Each route uses a unique file path to avoid React Router dedup errors.
   // More specific routes (bulk/*) are listed before parameterized ones (:id/*).
   route("auth/*", "routes/api/proxy/proxy-auth.ts"),
+  route("bookmarks/favicon", "routes/api/proxy/proxy-bookmark-favicon.ts"),
   route("bookmarks/bulk/*", "routes/api/proxy/proxy-bookmark-bulk.ts"),
   route("bookmarks/:id/*", "routes/api/proxy/proxy-bookmark-item.ts"),
   route("tags/:id/*", "routes/api/proxy/proxy-tag-item.ts"),
