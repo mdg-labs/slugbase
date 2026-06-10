@@ -1,13 +1,10 @@
 name: Deploy Staging
 
-# Staging deploy pipeline — runs on push to staging (spec §22.5).
+# Staging deploy pipeline — reusable workflow called from ci.yml after CI passes (spec §22.5).
 # Job dependency chain: build-server → migrate → deploy-fly (strict sequential).
 
 on:
-  push:
-    branches: [staging]
-
-  workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -15,8 +12,8 @@ permissions:
   deployments: write
 
 concurrency:
-  group: deploy-staging-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'push' }}
+  group: deploy-staging
+  cancel-in-progress: true
 
 jobs:
   deployment-staging-start:

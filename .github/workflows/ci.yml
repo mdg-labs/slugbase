@@ -82,3 +82,11 @@ jobs:
 
       - name: Dependency audit
         run: pnpm audit --audit-level=high
+
+  deploy-staging:
+    if: >
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/staging'
+    needs: ci
+    uses: ./.github/workflows/deploy-staging.yml
+    secrets: inherit
