@@ -78,7 +78,6 @@ const baseData: BillingSettingsData = {
     teamSeatYearlyPrice: "$9",
     supporterPrice: "$59",
     supporterPromotionEnd: "2026-12-31T23:59:59.000Z",
-    teamBaseSeats: 5,
     freeBookmarkCap: 50,
   },
   returnUrl: "https://app.example/settings/billing",

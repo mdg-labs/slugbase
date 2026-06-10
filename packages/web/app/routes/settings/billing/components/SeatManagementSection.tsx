@@ -25,7 +25,7 @@ export function SeatManagementSection({
   onUpgradeTeam,
 }: SeatManagementSectionProps) {
   const { t } = useTranslation();
-  const breakdown = seatBreakdown(workspace.planSeats, config.teamBaseSeats, memberCount);
+  const breakdown = seatBreakdown(workspace.planSeats, memberCount);
   const [adding, setAdding] = useState(0);
   const [draftTotal, setDraftTotal] = useState(breakdown.total);
 
@@ -50,13 +50,12 @@ export function SeatManagementSection({
 
   return (
     <div className="flex flex-col gap-sp-8" data-testid="billing-seats-section">
-      <div className="grid gap-sp-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-sp-4 sm:grid-cols-2 lg:grid-cols-3">
         {(
           [
-            { value: breakdown.included, labelKey: "settings.billing.seats_included_label" },
-            { value: breakdown.extra, labelKey: "settings.billing.seats_extra_label" },
             { value: breakdown.total, labelKey: "settings.billing.seats_total_label" },
             { value: breakdown.inUse, labelKey: "settings.billing.seats_in_use_label" },
+            { value: config.teamSeatPrice || "—", labelKey: "settings.billing.seat_price_label" },
           ] as const
         ).map(({ value, labelKey }) => (
           <div

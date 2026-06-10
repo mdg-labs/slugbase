@@ -26,7 +26,6 @@ export function planRank(plan: BillingPlanId): number {
 /** Plan comparison rows aligned with spec §12.2 — not prototype divergences (§23.4). */
 export function buildPlanFeatureRows(config: BillingPlanDisplayConfig): PlanFeatureRow[] {
   const cap = String(config.freeBookmarkCap);
-  const teamSeats = String(config.teamBaseSeats);
 
   return [
     {
@@ -57,7 +56,7 @@ export function buildPlanFeatureRows(config: BillingPlanDisplayConfig): PlanFeat
       key: "settings.billing.feature.members",
       free: "excluded",
       personal: "excluded",
-      team: teamSeats,
+      team: "settings.billing.feature.per_seat",
     },
     {
       key: "settings.billing.feature.audit_log",

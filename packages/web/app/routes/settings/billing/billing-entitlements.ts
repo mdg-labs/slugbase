@@ -34,25 +34,18 @@ export function effectivePlanForDisplay(workspace: BillingWorkspaceSummary): Bil
 
 export function seatBreakdown(
   planSeats: number | null,
-  teamBaseSeats: number,
   memberCount: number,
 ): {
-  included: number;
-  extra: number;
   total: number;
   inUse: number;
   minTotal: number;
 } {
-  const total = planSeats ?? teamBaseSeats;
-  const included = teamBaseSeats;
-  const extra = Math.max(0, total - included);
+  const total = planSeats ?? memberCount;
 
   return {
-    included,
-    extra,
     total,
     inUse: memberCount,
-    minTotal: Math.max(included, memberCount),
+    minTotal: Math.max(total, memberCount),
   };
 }
 
