@@ -14,7 +14,6 @@ on:
 permissions:
   contents: read
   id-token: write    # Infisical OIDC (deploy-staging reusable workflow)
-  deployments: write # GitHub Deployment records
   packages: write    # GHCR push (deploy-staging reusable workflow)
 
 concurrency:

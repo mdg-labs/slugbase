@@ -1,7 +1,8 @@
 name: Deploy Production
 
 # Production deploy pipeline — runs on release published only (spec §22.7–22.8).
-# Job dependency chain: build-server → migrate → deploy-fly (strict sequential).
+# Job dependency chain: check-not-deployed → build → migrate → deploy → smoke → record.
+# Deployment records are created automatically by the production GitHub Environment.
 
 on:
   release:
@@ -12,7 +13,6 @@ on:
 permissions:
   contents: read
   id-token: write
-  deployments: write
 
 concurrency:
   group: deploy-production-${{ github.event.release.tag_name }}
@@ -39,33 +39,11 @@ jobs:
             echo "Deploying release ${TAG}"
           fi
 
-  deployment-production-start:
-    name: Production · 2 · Deployment record start
+  build-server-production:
+    name: Production · 2 · Build API
     runs-on: ubuntu-latest
     environment: production
     needs: [check-not-deployed]
-    if: needs.check-not-deployed.outputs.should_deploy == 'true'
-    permissions:
-      contents: read
-      id-token: write
-      deployments: write
-    outputs:
-      deployment_id: ${{ steps.create.outputs.deployment_id }}
-    steps:
-      - name: Create GitHub Deployment
-        uses: chrnorm/deployment-action@fe2fba14b486343ce6893cff73b80e153063917a # v1
-        id: create
-        with:
-          token: ${{ github.token }}
-          environment: production
-          ref: ${{ github.event.release.tag_name }}
-          description: SlugBase production deploy ${{ github.event.release.tag_name }}
-
-  build-server-production:
-    name: Production · 3 · Build API
-    runs-on: ubuntu-latest
-    environment: production
-    needs: [check-not-deployed, deployment-production-start]
     if: needs.check-not-deployed.outputs.should_deploy == 'true'
     steps:
       - name: Checkout
@@ -87,10 +65,10 @@ jobs:
         run: pnpm exec turbo run build --filter=@slugbase/backend...
 
   build-web-production:
-    name: Production · 3 · Build web/marketing
+    name: Production · 2 · Build web/marketing
     runs-on: ubuntu-latest
     environment: production
-    needs: [check-not-deployed, deployment-production-start]
+    needs: [check-not-deployed]
     if: needs.check-not-deployed.outputs.should_deploy == 'true'
     steps:
       - name: Checkout
@@ -138,7 +116,7 @@ jobs:
           retention-days: 1
 
   push-ghcr-image:
-    name: Production · 3 · Push self-host image (GHCR)
+    name: Production · 2 · Push self-host image (GHCR)
     runs-on: ubuntu-latest
     environment: production
     needs: [check-not-deployed]
@@ -178,7 +156,7 @@ jobs:
           ${{ github.event.release.tag_name }}
 
   migrate-production:
-    name: Production · 4.5 · Run DB migrations
+    name: Production · 3 · Run DB migrations
     runs-on: ubuntu-latest
     environment: production
     needs: [check-not-deployed, build-server-production]
@@ -216,7 +194,7 @@ jobs:
         run: pnpm --filter @slugbase/backend exec drizzle-kit migrate
 
   deploy-fly-production:
-    name: Production · 5 · Deploy API (Fly)
+    name: Production · 4 · Deploy API (Fly)
     runs-on: ubuntu-latest
     environment: production
     needs: [check-not-deployed, migrate-production]
@@ -245,7 +223,7 @@ jobs:
         run: bash .github/scripts/fly-deploy.sh slugbase-production-api
 
   deploy-web-production:
-    name: Production · 5 · Deploy web (Cloudflare Workers)
+    name: Production · 4 · Deploy web (Cloudflare Workers)
     runs-on: ubuntu-latest
     environment: production
     needs: [check-not-deployed, build-web-production]
@@ -279,7 +257,7 @@ jobs:
         run: bash .github/scripts/wrangler-deploy-web-retry.sh packages/web build/server/wrangler.deploy.json
 
   deploy-marketing-production:
-    name: Production · 5 · Deploy marketing (Cloudflare Workers)
+    name: Production · 4 · Deploy marketing (Cloudflare Workers)
     runs-on: ubuntu-latest
     environment: production
     needs: [check-not-deployed, build-web-production]
@@ -313,7 +291,7 @@ jobs:
         run: bash .github/scripts/wrangler-deploy-retry.sh packages/marketing --config wrangler.production.jsonc
 
   smoke-production:
-    name: Production · 6 · Smoke
+    name: Production · 5 · Smoke
     runs-on: ubuntu-latest
     environment: production
     needs:
@@ -341,27 +319,8 @@ jobs:
       - name: Smoke health endpoints
         run: bash .github/scripts/smoke-staging-health.sh
 
-  deployment-production-finish:
-    name: Production · 7 · Deployment record finish
-    runs-on: ubuntu-latest
-    needs: [deployment-production-start, smoke-production]
-    if: >-
-      always()
-      && needs.deployment-production-start.result != 'skipped'
-    permissions:
-      contents: read
-      id-token: write
-      deployments: write
-    steps:
-      - name: Update deployment status
-        uses: chrnorm/deployment-status@598d987f3a8dec3817b995f810e6de7c06c92106 # v1
-        with:
-          token: ${{ github.token }}
-          deployment_id: ${{ needs.deployment-production-start.outputs.deployment_id }}
-          state: ${{ needs.smoke-production.result == 'success' && 'success' || 'failure' }}
-
   record-deployed-version:
-    name: Production · 8 · Record deployed version
+    name: Production · 6 · Record deployed version
     runs-on: ubuntu-latest
     environment: production
     needs:
