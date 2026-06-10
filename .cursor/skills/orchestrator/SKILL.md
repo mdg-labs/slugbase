@@ -119,10 +119,11 @@ When building a prompt:
 5. Session ID: `<TASK-ID>-<YYYYMMDD>-<4hex>` — same for execution + verifier
 6. **Lane** (`S` or `P`) and git context (branch, worktree, `STAGING_BASE_SHA` for Lane P)
 7. **Epic context** — if parent epic (e.g. #8), note parent issue number and sibling deps in prompt header
-8. **GITHUB SYNC block** — when task(s) are on the board, include role-specific blocks from [github-board.md](github-board.md):
-   - **Execution prompt:** add `In Progress` label only — **never** include close; when subtask, also list parent epic issue number
-   - **Verifier prompt:** close issue (+ optional epic close for final subtask)
-9. **DB MIGRATIONS block** — **mandatory in every execution prompt** (copy verbatim from [prompt-templates.md](prompt-templates.md) even when the task has no schema changes)
+8. **GITHUB TOOLS block** — **mandatory in every GITHUB SYNC prompt** (copy verbatim from [prompt-templates.md](prompt-templates.md)) — tells sub-agents which tool (MCP vs CLI) to use for each operation
+9. **GITHUB SYNC block** — when task(s) are on the board, include role-specific blocks from [github-board.md](github-board.md):
+   - **Execution prompt:** Set project Status → "In Progress" via CLI `gh project item-edit` — **never** set Done; when subtask, also list parent epic issue number
+   - **Verifier prompt:** Set project Status → "Done" via CLI `gh project item-edit` (+ optional epic Done for final subtask); post mandatory comment via MCP `add_issue_comment`
+10. **DB MIGRATIONS block** — **mandatory in every execution prompt** (copy verbatim from [prompt-templates.md](prompt-templates.md) even when the task has no schema changes)
 
 One prompt = one **leaf** task ID unless user requested batching or shared-file serialization requires it.
 

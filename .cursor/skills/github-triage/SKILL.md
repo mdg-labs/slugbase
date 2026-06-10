@@ -19,7 +19,7 @@ Board constants: [orchestrator/github-board.md](../orchestrator/github-board.md)
 | User intent | Action |
 |---|---|
 | "Triage #12", "investigate this bug", issue URL/number | **Update mode** — full workflow below |
-| Bug report, no issue key yet | **Create mode** — `gh issue create` Bug + triage description |
+| Bug report, no issue key yet | **Create mode** — MCP `issue_write` (create) Bug + triage description |
 | "Don't change code" / "investigate only" | Read-only — no commits, no fixes |
 | "Fix it" after triage | Separate implementation pass |
 | "Don't update GitHub" | Skip all issue writes (body, title, status) |
@@ -27,7 +27,7 @@ Board constants: [orchestrator/github-board.md](../orchestrator/github-board.md)
 ## Hard rules
 
 1. **No implementation in a triage run** — read-only codebase investigation only. Do not modify repo files or commit fixes unless the user explicitly asks to implement after triage.
-2. **Update `body` via `gh issue edit`** — never post investigation findings as an issue comment (comments are for verifier summaries only).
+2. **Update `body` via MCP `issue_write` (method: update)** — never post investigation findings as an issue comment (comments are for verifier summaries only).
 3. **Preserve the original report** under `## Report` at the top (verbatim reporter wording).
 4. **Summary follows [summary-patterns.md](summary-patterns.md)** — rewrite when vague/typo/mis-scoped; keep when already correct.
 5. **After successful triage:** set project Status to **Ready** (via `gh project item-edit`) unless user opted out of updates or issue is already In Progress / In Review / Done.
@@ -43,16 +43,18 @@ User provides `#N` or issue URL.
 
 User describes a bug with no key. After investigation:
 
-```bash
-gh issue create \
-  --repo mdg-labs/slugbase \
-  --title "Slugs: collision page shown for unambiguous slug" \
-  --type "Bug" \
-  --label "domain:backend" \
-  --body "<template with ## Report = user message>"
+```text
+MCP issue_write (method: create):
+- owner: mdg-labs
+- repo: slugbase
+- title: "Slugs: collision page shown for unambiguous slug"
+- type: "Bug"
+- labels: ["domain:backend"]
+- body: "<template with ## Report = user message>"
+- issue_fields: [{ field_name: "Priority", field_option_name: "High" }, { field_name: "Effort", field_option_name: "Medium" }]
 ```
 
-After create: set project Status to **Ready**. Do **not** set In Progress or Done.
+After create: set project Status to **Ready** (CLI `gh project item-edit`). Do **not** set In Progress or Done.
 
 ## Workflow (update mode)
 
@@ -62,19 +64,19 @@ Triage progress:
 - [ ] Step 2: Extract and lock original ## Report text
 - [ ] Step 3: Investigate codebase (read-only — no repo edits)
 - [ ] Step 4: Compose body from template; draft title per summary-patterns.md
-- [ ] Step 5: gh issue edit → body (+ title when changed)
+- [ ] Step 5: MCP issue_write (update) → body (+ title when changed)
 - [ ] Step 6: Set project Status to Ready if currently Todo
 - [ ] Step 7: Summarize findings in chat
 ```
 
 ### Step 1 — Fetch issue
 
-| Input | Command |
+| Input | Tool |
 |---|---|
-| `#12` | `gh issue view 12 --repo mdg-labs/slugbase` |
-| Full URL | Extract number from URL → `gh issue view` |
+| `#12` | MCP `issue_read` (method: get, issue_number: 12) |
+| Full URL | Extract number from URL → MCP `issue_read` |
 
-Record: number, title, labels, current body, status.
+Record: number, title, labels, current body, status, issue type, field values.
 
 ### Step 2 — Extract original report
 
@@ -96,16 +98,23 @@ Draft or revise **title** per [summary-patterns.md](summary-patterns.md) — app
 
 When **body only** changed:
 
-```bash
-gh issue edit <NUMBER> --repo mdg-labs/slugbase --body "<composed markdown>"
+```text
+MCP issue_write (method: update):
+- owner: mdg-labs
+- repo: slugbase
+- issue_number: <NUMBER>
+- body: "<composed markdown>"
 ```
 
 When **both body and title** changed:
 
-```bash
-gh issue edit <NUMBER> --repo mdg-labs/slugbase \
-  --title "Go: authenticated user redirected to login on valid slug" \
-  --body "<composed markdown>"
+```text
+MCP issue_write (method: update):
+- owner: mdg-labs
+- repo: slugbase
+- issue_number: <NUMBER>
+- title: "Go: authenticated user redirected to login on valid slug"
+- body: "<composed markdown>"
 ```
 
 Skip this step when user said "don't update GitHub". Do not change labels unless the user asked.
@@ -114,7 +123,7 @@ Skip this step when user said "don't update GitHub". Do not change labels unless
 
 Skip when user opted out of updates.
 
-Set project Status to **Ready** via `gh project item-edit` (or MCP `issue_write` with status field). Only if current status is **Todo** — skip if already In Progress / In Review / Done.
+Set project Status to **Ready** via `gh project item-edit` (CLI — project-board field, no MCP tool). Only if current status is **Todo** — skip if already In Progress / In Review / Done.
 
 ### Step 7 — Reply in chat
 
@@ -122,7 +131,7 @@ Brief summary: issue link, verdict, whether body and/or title were updated, whet
 
 ## Re-triage
 
-Re-fetch issue, preserve `## Report`, replace investigation sections below it, `gh issue edit` again. Set to Ready only if status is Todo.
+Re-fetch issue via MCP `issue_read` (method: get), preserve `## Report`, replace investigation sections below it, update via MCP `issue_write` (method: update). Set to Ready only if status is Todo.
 
 ## What triage does not do
 
@@ -135,10 +144,10 @@ Re-fetch issue, preserve `## Report`, replace investigation sections below it, `
 
 | Tool | Purpose |
 |---|---|
-| `gh issue view` | Resolve issue by number |
-| `gh issue list --search` | Duplicate search |
-| `gh issue edit` | Write investigation to body + title |
-| `gh issue create` | Create mode — new Bug |
-| `gh project item-edit` | Set Status to Ready after triage |
+| MCP `issue_read` (get) | Resolve issue by number |
+| MCP `search_issues` | Duplicate search |
+| MCP `issue_write` (update) | Write investigation to body + title |
+| MCP `issue_write` (create) | Create mode — new Bug (type: Bug + labels + fields) |
+| CLI `gh project item-edit` | Set Status to Ready after triage (project-board field) |
 
-**Forbidden during triage:** posting findings as issue comments; setting In Progress / In Review / Done.
+**Forbidden during triage:** posting findings as issue comments; setting In Progress / In Review / Done; creating issues via `gh issue create` (use MCP `issue_write` instead).

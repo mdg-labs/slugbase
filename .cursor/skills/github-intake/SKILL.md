@@ -38,7 +38,7 @@ Project number: 1  (check with gh project list --owner mdg-labs)
 
 Org-level issue types: **Task**, **Bug**, **Feature** — see [github-board.md](../orchestrator/github-board.md).
 
-Org-level issue fields: **Priority** (Critical/High/Medium/Low), **Effort** (S/M/L/XL).
+Org-level issue fields: **Priority** (Critical/High/Medium/Low), **Effort** (High/Medium/Low).
 
 ## Issue summaries
 
@@ -60,7 +60,7 @@ User describes a feature with no existing issue number.
 
 ### Mode B — Enrich existing
 
-User names `#N`. Fetch with `gh issue view #N`, **merge** structured sections into body via `issue_write` MCP or `gh issue edit`. Rewrite summary when vague. Add sub-issues if scope grew. Do not wipe user prose.
+User names `#N`. Fetch with MCP `issue_read` (method: get, issue_number: N), **merge** structured sections into body via MCP `issue_write` (method: update). Rewrite summary when vague. Add sub-issues if scope grew. Do not wipe user prose.
 
 ## Domain labels
 
@@ -88,7 +88,7 @@ User names `#N`. Fetch with `gh issue view #N`, **merge** structured sections in
 
 1. Read relevant spec sections (`spec §N` from [doc-index.md](../orchestrator/doc-index.md)) — cite `§` refs in descriptions.
 2. Search the codebase for patterns / file paths.
-3. Search for duplicates: `gh issue list --label "domain:*" --search "<keywords>"`.
+3. Search for duplicates: MCP `search_issues` (query: "<keywords>", owner: "mdg-labs", repo: "slugbase").
 4. Split into **leaf issues** — each independently implementable and verifiable.
 
 ### 2. Draft plan — show user before MCP writes
@@ -114,50 +114,52 @@ Wait for approval unless the user said "create the issues now".
 
 ### 3. Create Feature epic (Mode A only)
 
-```bash
-gh issue create \
-  --repo mdg-labs/slugbase \
-  --title "Server-side session infrastructure" \
-  --type "Feature" \
-  --label "domain:backend" \
-  --body "<epic template — templates.md>"
+```text
+MCP issue_write (method: create):
+- owner: mdg-labs
+- repo: slugbase
+- title: "Server-side session infrastructure"
+- type: "Feature"
+- labels: ["domain:backend"]
+- body: "<epic template — templates.md>"
+- issue_fields: [{ field_name: "Priority", field_option_name: "High" }, { field_name: "Effort", field_option_name: "High" }]
 ```
-
-Or via MCP `issue_write` with `type: "Feature"` and `labels: ["domain:backend"]`.
 
 Record returned issue number (e.g. `#8`).
 
 ### 4. Create children (Mode A) or enrich + add children (Mode B)
 
-```bash
-gh issue create \
-  --repo mdg-labs/slugbase \
-  --title "Redirect to bookmark destination via /go/<slug>" \
-  --type "Task" \
-  --label "domain:backend" \
-  --body "<subtask template>"
+```text
+MCP issue_write (method: create):
+- owner: mdg-labs
+- repo: slugbase
+- title: "Redirect to bookmark destination via /go/<slug>"
+- type: "Task"
+- labels: ["domain:backend"]
+- body: "<subtask template>"
+- issue_fields: [{ field_name: "Priority", field_option_name: "Medium" }, { field_name: "Effort", field_option_name: "Medium" }]
 ```
 
 Mode B enrich — when summary needs rewrite:
 
-```bash
-gh issue edit <NUMBER> --repo mdg-labs/slugbase \
-  --title "Go: redirect resolves slug within active workspace context" \
-  --body "<merged markdown>"
+```text
+MCP issue_write (method: update):
+- owner: mdg-labs
+- repo: slugbase
+- issue_number: <NUMBER>
+- title: "Go: redirect resolves slug within active workspace context"
+- body: "<merged markdown>"
 ```
 
 ### 5. Sub-issue relationships
 
-```bash
-# Get node IDs via GraphQL
-gh api graphql -f query='
-  { repository(owner:"mdg-labs", name:"slugbase") {
-      issue(number: 8) { id }
-      issue(number: 9) { id }
-  } }'
+```text
+# Get database IDs via GraphQL (CLI — needed for sub_issue_write)
+gh api graphql -f 'query=query { repository(owner:"mdg-labs", name:"slugbase") {
+  issue(number: 8) { databaseId } issue(number: 9) { databaseId } } }'
 
 # Create sub-issue relationship via MCP
-# sub_issue_write: parent_id: <node ID of epic>, sub_issue_id: <node ID of child>
+# sub_issue_write: method: add, issue_number: 8, sub_issue_id: <database ID of child>
 ```
 
 Document sub-issue relationships in each leaf description with `#N` references.
@@ -169,10 +171,10 @@ Update the Feature epic — **Sub-issues table** with every child number, domain
 ### 7. Add to project and set to Ready
 
 ```bash
-# Add to project (if not auto-added)
+# Add to project (if not auto-added) — CLI only, no MCP tool
 gh project item-add <PROJECT_NUMBER> --owner mdg-labs --url "https://github.com/mdg-labs/slugbase/issues/<NUMBER>"
 
-# Set Status to Ready via project field edit
+# Set Status to Ready — CLI only (project-board field, not issue field)
 gh project item-edit --project-id <PROJECT_NODE_ID> --id <ITEM_NODE_ID> \
   --field-id <STATUS_FIELD_ID> --single-select-option-id <READY_OPTION_ID>
 ```
@@ -207,10 +209,11 @@ Ready for orchestrator: "implement #11" or "orchestrate #8 epic"
 
 ## Forbidden
 
+- **Creating issues via `gh issue create`** — always use MCP `issue_write` (org-level types and fields require it)
 - Setting In Progress or Done during intake
 - Inventing product behaviour not in spec docs — ask first
 - Pasting secrets into issue descriptions
 - Creating a multi-task feature without a Feature (epic) parent
-- Omitting domain label — every issue needs one
+- **Omitting type, domain label, Priority, or Effort** — all four are mandatory on every issue
 - Vague summary placeholders when pattern table applies
 - Referencing "organization", "favorites", "collection" — use canonical vocabulary (spec §3, rule `04-naming.mdc`)

@@ -28,7 +28,7 @@ Board constants: [orchestrator/github-board.md](../orchestrator/github-board.md)
 1. **Never** call `PATCH state=dismissed` on any alert — not even for testing. See `.cursor/rules/08-dependabot-alerts.mdc`.
 2. **No code changes** during triage.
 3. **Do not change issue status** (leave new bugs at default Todo).
-4. Use `gh issue edit` when re-triaging an existing issue; `gh issue create` for new ones.
+4. Use MCP `issue_write` (method: update) when re-triaging an existing issue; MCP `issue_write` (method: create) for new ones.
 
 ## Board constants
 
@@ -84,12 +84,12 @@ Extract and record:
 
 Search open issues for duplicates by package name and CVE/GHSA:
 
-```bash
+```text
 # By package name
-gh issue list --repo mdg-labs/slugbase --label "type:Bug" --state open --search "<package_name>"
+MCP search_issues: { query: "<package_name>", owner: "mdg-labs", repo: "slugbase" }
 
 # By CVE/GHSA
-gh issue list --repo mdg-labs/slugbase --label "type:Bug" --state open --search "<cve_id> OR <ghsa_id>"
+MCP search_issues: { query: "<cve_id> OR <ghsa_id>", owner: "mdg-labs", repo: "slugbase" }
 ```
 
 **Duplicate rules:**
@@ -106,14 +106,18 @@ Determine the affected domain:
 - `pnpm` / JS / TS packages → `domain:backend` or `domain:frontend` based on `manifest_path`
 - Infrastructure / build tooling → `domain:infrastructure`
 
-```bash
-gh issue create \
-  --repo mdg-labs/slugbase \
-  --title "dep(<package_name>): vulnerable to <cve_id> — bump to <patched_version>" \
-  --type "Bug" \
-  --label "domain:backend,security,dependabot" \
-  --body "<description template below>"
+```text
+MCP issue_write (method: create):
+- owner: mdg-labs
+- repo: slugbase
+- title: "dep(<package_name>): vulnerable to <cve_id> — bump to <patched_version>"
+- type: "Bug"
+- labels: ["domain:backend", "security", "dependabot"]
+- body: "<description template below>"
+- issue_fields: [{ field_name: "Priority", field_option_name: "Urgent" }, { field_name: "Effort", field_option_name: "Medium" }]
 ```
+
+Dependabot bugs default to **Priority: Urgent** (security) and **Effort: Medium** (upgrade + test). Override if the advisory severity is low.
 
 **Description template:**
 
@@ -163,8 +167,9 @@ Report:
 
 | Tool | Purpose |
 |---|---|
-| `gh issue list --search` | Duplicate check |
-| `gh issue create` | New Bug creation |
-| `gh issue edit` | Re-triage update |
+| CLI `gh api` (REST) | Fetch Dependabot alert (no MCP tool) |
+| MCP `search_issues` | Duplicate check |
+| MCP `issue_write` (create) | New Bug creation (type + labels + fields) |
+| MCP `issue_write` (update) | Re-triage update |
 
-**Forbidden during triage:** setting In Progress / In Review / Done; posting findings as issue comments (use body instead).
+**Forbidden during triage:** setting In Progress / In Review / Done; posting findings as issue comments (use body instead); creating issues via `gh issue create` (use MCP `issue_write` instead).

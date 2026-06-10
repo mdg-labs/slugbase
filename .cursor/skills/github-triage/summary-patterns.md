@@ -35,5 +35,5 @@ Cross-check the **domain label** (`domain:frontend`, `domain:backend`, `domain:i
 
 | Skill | When |
 |---|---|
-| **github-triage** | After investigation, when rewrite rules apply — include in `gh issue edit` alongside body |
+| **github-triage** | After investigation, when rewrite rules apply — include in MCP `issue_write` (update) alongside body |
 | **github-intake** | On issue creation (Feature + leaves); on enrich when draft summary is vague per rewrite rules |

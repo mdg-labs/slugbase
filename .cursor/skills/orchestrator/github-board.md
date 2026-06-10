@@ -13,6 +13,68 @@ Orchestrator and **sub-agents** use this when a prompt includes a **GITHUB SYNC*
 | MCP server | `user-github` |
 | Auto-close | Disabled on project; use `fixes #N` commit convention |
 
+## Tool selection policy
+
+**MCP is the default.** All GitHub interactions go through the `user-github` MCP tools unless the table below explicitly requires CLI or GraphQL.
+
+### Operation → tool mapping
+
+| Operation | Tool | Why |
+|---|---|---|
+| **Create issue** | MCP `issue_write` (method: create) | Supports `type`, `labels`, `milestone`, `issue_fields` in one call — `gh issue create --type` does not work for org-level types |
+| **Update issue** (title, body, state, labels, type, fields) | MCP `issue_write` (method: update) | Unified write; handles org-level issue fields via `issue_fields` array |
+| **Read issue** (body, labels, state, milestone) | MCP `issue_read` (method: get) | Returns structured data matching MCP write tool expectations |
+| **Read issue comments** | MCP `issue_read` (method: get_comments) | Paginated; use for verifier failure checks |
+| **Read sub-issues** | MCP `issue_read` (method: get_sub_issues) | Returns child issue numbers and titles |
+| **Read issue labels** | MCP `issue_read` (method: get_labels) | Returns label objects |
+| **List issues** (filter by state, labels, fields) | MCP `list_issues` | Supports `field_filters` for org-level fields (Priority, Effort, Status); paginated via `after` cursor |
+| **Search issues** (full-text) | MCP `search_issues` | GitHub search syntax; scoped to `is:issue` |
+| **Add comment** | MCP `add_issue_comment` | Verifier PASS/FAIL comments |
+| **Link sub-issue** | MCP `sub_issue_write` (method: add) | Requires **database IDs** (not issue numbers); see § Getting database IDs below |
+| **Unlink sub-issue** | MCP `sub_issue_write` (method: remove) | Requires database IDs |
+| **Reorder sub-issues** | MCP `sub_issue_write` (method: reprioritize) | Requires database IDs |
+| **Add to project** | CLI `gh project item-add` | No MCP tool for project item management |
+| **Set project Status** | CLI `gh project item-edit` | Status is a project-board field, not an issue field — MCP `issue_write` cannot set it |
+| **List project items** | CLI `gh project item-list` | No MCP tool for project item enumeration |
+| **List project fields** | CLI `gh project field-list` | No MCP tool for project board field discovery |
+| **Fetch Dependabot alerts** | CLI `gh api` (REST) | No MCP tool covers Dependabot alerts endpoint |
+| **Get issue node IDs** | CLI `gh api graphql` | Needed for `sub_issue_write` database ID lookups |
+| **Bulk operations** (100+ items) | CLI `gh api graphql` | Faster than sequential MCP calls for migrations |
+
+### Getting database IDs for sub_issue_write
+
+MCP `sub_issue_write` requires **database IDs** (integer), not issue numbers or GraphQL node IDs. Obtain them via GraphQL:
+
+```bash
+gh api graphql -f 'query=query { repository(owner:"mdg-labs", name:"slugbase") {
+  issue(number:N) { databaseId number title }
+} }'
+```
+
+For bulk operations, paginate with `first:100` and `after` cursor.
+
+### Projects v2 Status (CLI-only)
+
+Project board Status is a **project-level field** — it lives on the project item, not on the issue itself. MCP `issue_write` handles issue-level fields only (Priority, Effort, dates, type, labels). Status must be set via CLI:
+
+```bash
+# 1. Get project item ID for an issue
+gh project item-list 2 --owner mdg-labs --format json \
+  | jq '.items[] | select(.content.number == 12) | .id'
+
+# 2. Get the Status field ID and option IDs
+gh project field-list 2 --owner mdg-labs --format json \
+  | jq '.fields[] | select(.name == "Status")'
+
+# 3. Set Status
+gh project item-edit --project-id <PROJECT_NODE_ID> --id <ITEM_NODE_ID> \
+  --field-id <STATUS_FIELD_ID> --single-select-option-id <OPTION_ID>
+```
+
+### Why CLI for project operations?
+
+GitHub's GraphQL API (which MCP wraps) supports Issues, Pull Requests, and Labels natively. Projects v2 uses a separate `ProjectV2` type with different item IDs, field IDs, and mutation shapes. The `gh project` CLI is the only practical interface for project board mutations — no MCP tool currently wraps `ProjectV2` mutations.
+
 ## Org-level issue types
 
 Set via MCP `issue_write` → `type` parameter. Discover valid types with `list_issue_types` (owner: `mdg-labs`).
@@ -31,10 +93,23 @@ Set via MCP `issue_write` → `issue_fields` array. Each entry takes `field_name
 
 | Field | Type | Options | Example |
 |---|---|---|---|
-| **Priority** | single-select | `Critical`, `High`, `Medium`, `Low` | `issue_fields: [{ field_name: "Priority", field_option_name: "High" }]` |
-| **Effort** | single-select | `S`, `M`, `L`, `XL` | `issue_fields: [{ field_name: "Effort", field_option_name: "M" }]` |
+| **Priority** | single-select | `Urgent`, `High`, `Medium`, `Low` | `issue_fields: [{ field_name: "Priority", field_option_name: "High" }]` |
+| **Effort** | single-select | `High`, `Medium`, `Low` | `issue_fields: [{ field_name: "Effort", field_option_name: "M" }]` |
 | **Start date** | date | YYYY-MM-DD | `issue_fields: [{ field_name: "Start date", value: "2026-06-10" }]` |
 | **Target date** | date | YYYY-MM-DD | `issue_fields: [{ field_name: "Target date", value: "2026-06-20" }]` |
+
+### Required fields — every issue must have all four
+
+**Never create or update an issue without all four fields set.** This is a hard rule — the verifier (Layer 3c) checks it.
+
+| Field | Required | How to set |
+|---|---|---|
+| **Type** (Task/Bug/Feature) | Always | MCP `issue_write` → `type` parameter |
+| **Domain label** (`domain:frontend` etc.) | Always | MCP `issue_write` → `labels` array |
+| **Priority** | Always | MCP `issue_write` → `issue_fields` |
+| **Effort** | Always | MCP `issue_write` → `issue_fields` |
+
+**Why MCP only?** `gh issue create --type` does not work for org-level issue types. `gh issue create --label` sets the GitHub built-in label, not our custom domain labels. MCP `issue_write` is the only tool that sets all four atomically.
 
 ## Projects v2 fields (board-level)
 
@@ -78,12 +153,14 @@ Skip only when user said **"don't update GitHub"** or prompt has no GITHUB SYNC 
 
 Set project Status to **"In Progress"** on every listed issue (leaf + parent).
 
+Project-board Status is a **project-level field** — must be set via CLI:
+
 ```bash
 gh project item-edit --project-id <PROJECT_ID> --id <ITEM_ID> \
   --field-id <STATUS_FIELD_ID> --single-select-option-id <IN_PROGRESS_OPTION_ID>
 ```
 
-Or via `issue_write` if the prompt passes the status field differently — use whichever the prompt specifies.
+For issue-level fields (Priority, Effort, type, labels), use MCP `issue_write` (method: update).
 
 - Combined batch: set **In Progress** on **every** listed issue.
 - **Parent issue:** when prompt lists a parent, set parent **In Progress** in the **same first-action batch** as the leaf.
@@ -223,45 +300,21 @@ GITHUB SYNC — VERIFIER (mandatory unless user opted out):
 |---|---|---|
 | Time tracking | `addWorklogToJiraIssue` required | **Removed** — no equivalent; session memory records timing locally only |
 | Status transitions | Numeric transition IDs (2, 21, 31, 41) | Status is a field value — set via `gh project item-edit`; no IDs to resolve |
-| Parent-child | `parent` field + JQL search | `sub_issue_write` via MCP (requires **node IDs**, not issue numbers) |
+| Parent-child | `parent` field + JQL search | `sub_issue_write` via MCP (requires **database IDs**, not issue numbers) |
 | Auto-close | Transition to Done closes issue | `Fixes #N` in commit body; project-level auto-close disabled |
 | Verifier comments | Heavy: session IDs, sub-agent names, worklog | Clean: commit SHA + summary + AC; no session IDs, no sub-agent names |
 | Issue linking | `createIssueLink` ("Depends on") | Body text "Depends on: #N" or Projects v2 dependencies |
 
 ## Issue lookup (orchestrator)
 
-| User says | Command |
+| User says | Tool (MCP preferred) |
 |---|---|
-| Issue #12, GitHub URL | MCP `issue_read` (method: get, issue_number: 12) or `gh issue view 12` |
+| Issue #12, GitHub URL | MCP `issue_read` (method: get, issue_number: 12) |
 | Sub-issues | MCP `issue_read` (method: get_sub_issues, issue_number: N) |
-| Ready queue | `list_issues` with field filter `field_name: "Status", value: "Ready"` (via project board), or `gh project item-list` filtered by Status |
-| By domain | `list_issues` with labels filter (e.g. `["domain:backend"]`) |
-| By priority | `list_issues` with field_filter `{ field_name: "Priority", value: "High" }` |
-| Node IDs for sub-issues | See § GraphQL for node IDs below |
-
-### GraphQL — get node IDs for sub-issues
-
-`sub_issue_write` requires the sub-issue's **node ID** (not the issue number). Obtain it via:
-
-```bash
-gh api graphql -f query='
-{ repository(owner:"mdg-labs",name:"slugbase") {
-  issue(number:12) {
-    id
-    number
-    title
-    subIssues(first:50) {
-      nodes {
-        id
-        number
-        title
-      }
-    }
-  }
-} }'
-```
-
-The top-level `id` field is the node ID of the issue itself. Child `nodes[].id` values are the node IDs of each sub-issue.
+| Ready queue | CLI `gh project item-list` (project-board query, no MCP tool) |
+| By domain | MCP `list_issues` (labels filter) |
+| By priority | MCP `list_issues` (field_filters) |
+| Database IDs for sub-issues | CLI `gh api graphql` (see § Getting database IDs above) |
 
 ## Epic pattern
 
@@ -282,26 +335,21 @@ SlugBase uses a **Feature + sub-issues** hierarchy:
 
 **Enumerate the leaf set for a parent** (the things to actually implement):
 
-```bash
-# Direct sub-issues of a Feature
-gh api graphql -f query='
-{ repository(owner:"mdg-labs",name:"slugbase") {
-  issue(number:1) {
-    subIssues(first:50) {
-      nodes { id number title }
-    }
-  }
-} }'
+```text
+# Direct sub-issues of a Feature (MCP preferred)
+CallMcpTool issue_read: { method: "get_sub_issues", owner: "mdg-labs", repo: "slugbase", issue_number: 1 }
 
 # For each sub-issue that itself has children, recurse:
-gh api graphql -f query='
-{ repository(owner:"mdg-labs",name:"slugbase") {
-  issue(number:10) {
-    subIssues(first:50) {
-      nodes { id number title }
-    }
-  }
-} }'
+CallMcpTool issue_read: { method: "get_sub_issues", owner: "mdg-labs", repo: "slugbase", issue_number: 10 }
+```
+
+**Bulk enumeration** (when you need node IDs for all children at once):
+
+```bash
+gh api graphql -f query='{ repository(owner:"mdg-labs",name:"slugbase") {
+  issue(number:1) {
+    subIssues(first:50) { nodes { databaseId number title } }
+  } } }'
 ```
 
 Leaf set = atomic issues (no children) **+** all deepest-level children. Batch leaves by domain + Lane.
@@ -319,55 +367,35 @@ Leaf set = atomic issues (no children) **+** all deepest-level children. Batch l
 | `issue_read` (get) | Load AC / description | — | — |
 | `issue_read` (get_sub_issues) | Enumerate leaf set | — | — |
 | `issue_read` (get_comments) | Check for prior verification failures | — | — |
-| `list_issue_types` | Verify valid type names | — | — |
-| `list_issue_fields` | Verify valid field names/options | — | — |
 | `issue_write` (create) | Intake/triage creates issues | — | — |
 | `issue_write` (update) | Recovery only | Set issue-level fields | — |
 | `sub_issue_write` (add) | Intake links parent-child | — | — |
 | `sub_issue_write` (reprioritize) | Reorder children | — | — |
 | `add_issue_comment` | — | — | On PASS (summary) + on FAIL (detail) |
+| `gh project item-edit` (CLI) | — | Set Status → In Progress / In Review | Set Status → Done / Ready |
 
-**Status (project-board field)** is set via `gh project item-edit` (CLI) — not via MCP. MCP `issue_write` handles issue-level fields only (Priority, Effort, dates, type, labels).
+## Standard queries
 
-### Status update via gh CLI
+**MCP preferred** for issue queries. CLI only for project board queries.
 
-```bash
-# Get project item ID for an issue
-gh project item-list 2 --owner mdg-labs --format json \
-  | jq '.items[] | select(.content.number == 12) | .id'
+```text
+# Ready queue (project board — CLI only, no MCP tool)
+gh project item-list 2 --owner mdg-labs --format json
 
-# Get the Status field ID and single-select option IDs
-gh project field-list 2 --owner mdg-labs --format json \
-  | jq '.fields[] | select(.name == "Status")'
+# By domain (MCP preferred)
+CallMcpTool list_issues: { owner, repo, labels: ["domain:backend"] }
 
-# Set Status to "In Progress"
-gh project item-edit --project-id <PROJECT_NODE_ID> --id <ITEM_NODE_ID> \
-  --field-id <STATUS_FIELD_ID> --single-select-option-id <IN_PROGRESS_OPTION_ID>
-```
+# By priority (MCP — field_filters only available via MCP)
+CallMcpTool list_issues: { owner, repo, state: "OPEN",
+  field_filters: [{ field_name: "Priority", value: "High" }] }
 
-## Standard queries (orchestrator)
+# Sub-issues of a parent (MCP preferred)
+CallMcpTool issue_read: { method: "get_sub_issues", owner, repo, issue_number: N }
 
-```bash
-# Ready queue — all domains (via project board)
-gh project item-list 2 --owner mdg-labs --format json \
-  | jq '[.items[] | select(.fieldValues[]? | select(.field.name == "Status" and .text == "Ready"))]'
+# Search by keyword (MCP preferred)
+CallMcpTool search_issues: { query: "csrf", owner, repo }
 
-# By domain
-gh issue list --state open --label "domain:backend" --json number,title,labels
-
-# Issues in a milestone
-gh issue list --milestone "MVP Alpha" --state open --json number,title,labels
-
-# Sub-issues of a parent
-gh api graphql -f query='{ repository(owner:"mdg-labs",name:"slugbase") {
-  issue(number:N) { subIssues(first:50) { nodes { id number title } } } } }'
-
-# Issues with verification failures (check comments)
-gh issue list --state open --json number,title,comments \
-  --jq '.[] | select(.comments[]?.body | contains("Verification failed"))'
-
-# All issues by priority (via MCP)
-CallMcpTool user-github list_issues
-  arguments: { owner: "mdg-labs", repo: "slugbase", state: "OPEN",
-    field_filters: [{ field_name: "Priority", value: "High" }] }
+# Check for verification failures (MCP preferred)
+CallMcpTool issue_read: { method: "get_comments", owner, repo, issue_number: N }
+# Then inspect comment bodies for "Verification failed"
 ```

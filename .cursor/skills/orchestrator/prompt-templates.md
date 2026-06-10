@@ -5,13 +5,43 @@ Copy and fill. Sub-agents do not see the orchestrator chat.
 When an issue is tracked on the GitHub project board, orchestrator includes **role-specific** GITHUB SYNC blocks (see [github-board.md](github-board.md)):
 
 - **Execution prompts:** Status → In Progress on leaf + parent (when subtask); **no Status → Done** — verifier only
-- **Verifier prompts:** on PASS → Status → Done; on FAIL → Status → Todo; **mandatory structured comment**
+- **Verifier prompts:** on PASS → Status → Done; on FAIL → Status → Ready; **mandatory structured comment**
 
 Sub-agents perform GitHub status updates — not the orchestrator.
+
+**Every execution and verifier prompt** must include the **GITHUB TOOLS** block below — copy verbatim. Defines which tool (MCP vs CLI) to use for each operation.
 
 **Every execution and verifier prompt** must include the **NODE ENV** block below — copy verbatim even when the task has no pnpm commands (verifiers always run checks).
 
 **Every execution prompt** (Lane S, Lane P, chat) **must** include the **DB MIGRATIONS** block below — copy verbatim even when the task has no schema changes.
+
+---
+
+## GITHUB TOOLS — sub-agents (mandatory in every GITHUB SYNC prompt)
+
+Copy this block into **every** execution and verifier prompt that has a GITHUB SYNC section. Tells sub-agents which tool to use for each operation.
+
+```text
+GITHUB TOOLS — MANDATORY (MCP preferred; CLI only where noted):
+- MCP server: user-github (always preferred for issue operations)
+- Issue create/update (title, body, type, labels, fields): MCP issue_write
+  - ALWAYS set type, labels, Priority, and Effort on create — all four are mandatory
+  - Valid Priority options: Urgent, High, Medium, Low
+  - Valid Effort options: High, Medium, Low
+  - gh issue create --type does NOT work for org-level issue types — MCP only
+- Issue read (body, labels, state, type, fields): MCP issue_read (method: get)
+- Issue comments: MCP add_issue_comment
+- Sub-issues (link/unlink/reorder): MCP sub_issue_write (requires database IDs, not issue numbers)
+  - Get database IDs: gh api graphql -f 'query=query { repository(owner:"mdg-labs",name:"slugbase") { issue(number:N) { databaseId } } }'
+- Issue search: MCP search_issues
+- Issue list with field filters: MCP list_issues (field_filters for Priority, Effort, etc.)
+- Project Status (In Progress / In Review / Done / Ready): CLI gh project item-edit ONLY
+  - Status is a project-board field — MCP issue_write cannot set it
+  - Get item ID: gh project item-list 2 --owner mdg-labs --format json | jq '.items[] | select(.content.number == <N>) | .id'
+  - Get Status field + option IDs: gh project field-list 2 --owner mdg-labs --format json | jq '.fields[] | select(.name == "Status")'
+- FORBIDDEN: gh issue create, gh issue edit, gh issue view (always use MCP instead)
+- FORBIDDEN: Setting issue fields via gh CLI (always use MCP issue_write)
+```
 
 ---
 
@@ -73,7 +103,7 @@ TASK ID: <e.g. P1-03>
 SESSION ID: <TASK-ID>-<YYYYMMDD>-<4hex>
 
 GITHUB SYNC — EXECUTION (include when issue is on GitHub project board — omit if none):
-- MCP server: user-github (or gh CLI)
+- MCP server: user-github (always preferred — see GITHUB TOOLS block)
 - owner: mdg-labs
 - repo: slugbase
 - project: <PROJECT_NUMBER>
@@ -82,7 +112,7 @@ GITHUB SYNC — EXECUTION (include when issue is on GitHub project board — omi
 - FIRST ACTION: Set project Status → "In Progress" for each leaf issue AND parent issue (if listed) BEFORE session memory
 - LAST ACTIONS (in order): Set project Status → "In Review" (leaf only) → single implementation commit
 - FORBIDDEN: Set Status → Done; add comment for verification outcomes; set parent Done
-- Status is set via `gh project item-edit` (Projects v2 Status field) or MCP `issue_write`
+- Status is set via `gh project item-edit` (CLI only — project-board field, not issue field)
 - Reference: .cursor/skills/orchestrator/github-board.md
 
 SESSION MEMORY:
@@ -259,8 +289,8 @@ ISSUE NUMBER: <e.g. 12>
 SESSION ID: #<ISSUE-NUMBER>-<YYYYMMDD>-<4hex>
 PARENT: <parent issue number e.g. 8 or none>
 
-GITHUB SYNC — EXECUTION (mandatory unless user opted out):
-- MCP server: user-github (or gh CLI)
+GITHUB SYNC — EXECUTION (include when issue is on GitHub project board — omit if none):
+- MCP server: user-github (always preferred — see GITHUB TOOLS block)
 - owner: mdg-labs
 - repo: slugbase
 - project: <PROJECT_NUMBER>
@@ -269,13 +299,13 @@ GITHUB SYNC — EXECUTION (mandatory unless user opted out):
   - { number: 8 }
 
 GITHUB — EXECUTION (first action, before session memory):
-1. Set project Status → "In Progress" for EVERY leaf issue AND parent issue (if listed)
+1. Set project Status → "In Progress" for EVERY leaf issue AND parent issue (if listed) via CLI gh project item-edit
 2. If status update fails → blocked; do not proceed
 3. FORBIDDEN: Set Status → Done; add comment for verification outcomes; set parent Done before verifier
 
 GITHUB — EXECUTION (pre-handoff, after implementation):
 1. Local session memory: set ended + duration
-2. Set project Status → "In Review" for leaf issue only
+2. Set project Status → "In Review" for leaf issue only via CLI gh project item-edit
 3. Single implementation commit — task files only
 
 Reference: .cursor/skills/orchestrator/github-board.md
@@ -324,11 +354,11 @@ PLAN FILE: <path or n/a>
 SESSION ID: <same as execution>
 
 GITHUB SYNC — VERIFIER (include when execution prompt had execution variant):
-- MCP server: user-github (or gh CLI); owner: mdg-labs; repo: slugbase; project: <PROJECT_NUMBER>
+- MCP server: user-github (always preferred — see GITHUB TOOLS block); owner: mdg-labs; repo: slugbase; project: <PROJECT_NUMBER>
 - issues: [{ number: 12 }]
 - parent (optional): number if final subtask
-- AFTER PASS: add_issue_comment (mandatory clean summary) → Set project Status → "Done" for each issue (+ parent if listed)
-- AFTER FAIL: add_issue_comment (FAIL detail) → Set project Status → "Todo"; do NOT set Done
+- AFTER PASS: MCP add_issue_comment (mandatory clean summary) → CLI gh project item-edit → Status "Done" for each issue (+ parent if listed)
+- AFTER FAIL: MCP add_issue_comment (FAIL detail) → CLI gh project item-edit → Status "Ready"; do NOT set Done
 
 SESSION MEMORY (local, gitignored):
 - FIRST ACTION: read active/<SESSION-ID>.md if it exists
@@ -389,7 +419,7 @@ REQUIRED OUTPUT:
 3. Layer 3 breakdown
 4. Overall PASS | FAIL
 5. Plan file update + SHA or skipped
-6. GitHub sync: issues → Done | Todo + comment (or n/a)
+6. GitHub sync: issues → Done | Ready + comment (or n/a)
 7. Issue list (≤10 bullets)
 ```
 
@@ -407,7 +437,8 @@ BATCH_ID: <id>
 SESSION ID: <same as execution>
 
 GITHUB SYNC — VERIFIER (include when execution prompt had execution variant):
-- Same rules as Lane S verifier (Done / FAIL comment + Status update)
+- MCP server: user-github (always preferred — see GITHUB TOOLS block); owner: mdg-labs; repo: slugbase
+- Same rules as Lane S verifier: MCP add_issue_comment + CLI gh project item-edit for Status (Done / Ready)
 
 WORK DEP — MANDATORY (Lane P worktrees have no node_modules):
 - Worktrees are bare checkouts — **no `node_modules`** present at branch start

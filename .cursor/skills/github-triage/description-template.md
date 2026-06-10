@@ -1,8 +1,8 @@
 # Triage description template
 
-Use when composing the `body` field for `gh issue edit` or `gh issue create`. Replace `{placeholders}`. Keep `## Report` at the top — verbatim reporter text.
+Use when composing the `body` field for MCP `issue_write` (method: update or create). Replace `{placeholders}`. Keep `## Report` at the top — verbatim reporter text.
 
-**Summary (title):** set separately via `gh issue edit --title` per [summary-patterns.md](summary-patterns.md) — e.g. `Slugs: collision page shown for unambiguous slug` for Bugs.
+**Summary (title):** set separately via MCP `issue_write` → `title` parameter per [summary-patterns.md](summary-patterns.md) — e.g. `Slugs: collision page shown for unambiguous slug` for Bugs.
 
 ## Full template
 
