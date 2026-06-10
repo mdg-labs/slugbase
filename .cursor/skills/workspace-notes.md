@@ -38,6 +38,16 @@ _added: 2026-05-31_
 SlugBase uses **server-side sessions**, not JWT access + refresh. Never introduce JWT cookies, `localStorage` token storage, or refresh-token rotation. Active-workspace selection lives in the session (spec §4.3). Personal API tokens are long-lived, hashed, bypass MFA. All mutations are CSRF-protected except the explicit allowlist in spec §5.8.
 _added: 2026-05-31_
 
+## CORS — enabled via FRONTEND_ORIGIN (SB-176, 2026-06-10)
+
+Backend enables CORS via `app.enableCors()` in `main.ts` using `FRONTEND_ORIGIN` from `ConfigService` with `credentials: true`. Enabled unconditionally (harmless for self-hosted same-origin). No wildcards, no reflection. Hosted architecture requires this: web on CF Workers, API on Fly.io (different origins). Spec §14.7, §5.8.
+_added: 2026-06-10_
+
+## Workspace list API — includes role (SB-177, 2026-06-10)
+
+`GET /workspaces` returns `WorkspaceListItemResponse[]` with `role: "OWNER" | "ADMIN" | "MEMBER"` via `listWorkspaceItemsForUser()` which joins workspace + membership tables. `WorkspaceRecord` (internal type) remains unchanged. Frontend `WorkspaceSwitcherPanel` consumes `role` directly. Spec §4.3.
+_added: 2026-06-10_
+
 ## No deployment-mode branches (spec §15, §1)
 
 Never introduce `isCloud`, `SLUGBASE_MODE`, or any deployment-mode conditional in application logic. Differences between hosted and self-hosted are expressed via (a) the entitlements engine (spec §11.5) and (b) interface implementation selection. Verifier Layer 3e fails on any deployment-mode branch found in committed code.
