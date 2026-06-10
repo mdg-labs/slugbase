@@ -15,7 +15,6 @@ describe("loadMarketingPricingConfig", () => {
       teamSeatYearlyPrice: "$7.50/seat/mo",
       supporterPrice: "$59",
       freeBookmarkCap: 50,
-      teamBaseSeats: 5,
     });
 
     expect(config.personalMonthlyPrice).toBe("$4/mo");
@@ -33,7 +32,7 @@ describe("loadMarketingPricingConfig", () => {
 describe("buildMarketingPlanFeatureRows", () => {
   it("includes API tokens on all plans and omits folder caps", async () => {
     const rows = buildMarketingPlanFeatureRows(
-      await loadMarketingPricingConfig({ freeBookmarkCap: 50, teamBaseSeats: 5 }),
+      await loadMarketingPricingConfig({ freeBookmarkCap: 50 }),
     );
     const labels = rows.map((row) => row.labelKey);
 

@@ -20,6 +20,5 @@ export interface PricingResponse {
     team: PublicPlanPriceGroup;
     supporter?: PublicPriceInfo;
   };
-  teamBaseSeats: number;
   freeBookmarkCap: number;
 }

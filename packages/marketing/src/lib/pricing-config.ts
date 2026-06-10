@@ -12,7 +12,6 @@ export interface MarketingPricingConfig {
   teamSeatYearlyPrice: string;
   supporterPrice: string;
   supporterPromotionEnd: string | null;
-  teamBaseSeats: number;
   freeBookmarkCap: number;
 }
 
@@ -36,7 +35,6 @@ function readPositiveInt(value: string | undefined, fallback: number): number {
 }
 
 const DEFAULT_FREE_BOOKMARK_CAP = 50;
-const DEFAULT_TEAM_BASE_SEATS = 5;
 
 /**
  * Fetches pricing data from the public API (build-time).
@@ -70,7 +68,6 @@ export async function loadMarketingPricingConfig(
       teamSeatYearlyPrice: apiPricing.plans.team.annual?.display ?? "",
       supporterPrice: apiPricing.plans.supporter?.display ?? "",
       supporterPromotionEnd,
-      teamBaseSeats: apiPricing.teamBaseSeats,
       freeBookmarkCap: apiPricing.freeBookmarkCap,
       ...overrides,
     };
@@ -88,7 +85,6 @@ export async function loadMarketingPricingConfig(
     teamSeatYearlyPrice: teamSeatYearly,
     supporterPrice: readEnv("PUBLIC_PLAN_PRICE_SUPPORTER") ?? "",
     supporterPromotionEnd,
-    teamBaseSeats: readPositiveInt(readEnv("PUBLIC_TEAM_BASE_SEATS"), DEFAULT_TEAM_BASE_SEATS),
     freeBookmarkCap: readPositiveInt(
       readEnv("PUBLIC_FREE_BOOKMARK_CAP"),
       DEFAULT_FREE_BOOKMARK_CAP,
@@ -133,7 +129,6 @@ export function buildMarketingPlanFeatureRows(
   config: MarketingPricingConfig,
 ): MarketingPlanFeatureRow[] {
   const cap = String(config.freeBookmarkCap);
-  const teamSeats = String(config.teamBaseSeats);
 
   return [
     {
@@ -182,7 +177,7 @@ export function buildMarketingPlanFeatureRows(
       labelKey: "marketing.pricing.feature.members",
       free: "excluded",
       personal: "excluded",
-      team: teamSeats,
+      team: "unlimited_per_seat",
     },
     {
       labelKey: "marketing.pricing.feature.audit_log",
