@@ -170,6 +170,28 @@ export function parseStripeEvent(payload: unknown): StripeEventLike | null {
   };
 }
 
+export const EXPECTED_PRODUCT_MARKER = "slugbase";
+
+/**
+ * Reads the product marker from a parsed Stripe event payload.
+ * Checks both session-level and object-level metadata for the marker.
+ * Returns the marker string if found, or null if absent.
+ */
+export function readProductMarker(payload: unknown): string | null {
+  if (typeof payload !== "object" || payload === null) return null;
+  const record = payload as Record<string, unknown>;
+  if (typeof record.data !== "object" || record.data === null) return null;
+  const data = record.data as Record<string, unknown>;
+  if (typeof data.object !== "object" || data.object === null) return null;
+  const obj = data.object as Record<string, unknown>;
+  const metadata =
+    typeof obj.metadata === "object" && obj.metadata !== null
+      ? (obj.metadata as Record<string, unknown>)
+      : undefined;
+  const product = metadata?.product;
+  return typeof product === "string" && product.length > 0 ? product : null;
+}
+
 export function readWorkspaceIdFromMetadata(
   metadata: Record<string, unknown> | undefined,
 ): string | null {

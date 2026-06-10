@@ -4,6 +4,7 @@ import {
   mapStripeSubscriptionToState,
   mapSupporterCheckoutToState,
   parseStripeEvent,
+  readProductMarker,
   subscriptionFromStripeObject,
 } from "./stripe-billing.mapper.js";
 
@@ -149,5 +150,52 @@ describe("stripe-billing.mapper", () => {
     });
 
     expect(subscription?.id).toBe("sub_1");
+  });
+
+  describe("readProductMarker", () => {
+    it("returns the product marker from object metadata", () => {
+      const marker = readProductMarker({
+        id: "evt_1",
+        type: "customer.subscription.updated",
+        data: {
+          object: {
+            metadata: { product: "slugbase", plan: "personal" },
+          },
+        },
+      });
+      expect(marker).toBe("slugbase");
+    });
+
+    it("returns null when metadata has no product key", () => {
+      const marker = readProductMarker({
+        id: "evt_2",
+        type: "customer.subscription.updated",
+        data: {
+          object: {
+            metadata: { plan: "personal" },
+          },
+        },
+      });
+      expect(marker).toBeNull();
+    });
+
+    it("returns null for null or undefined payload", () => {
+      expect(readProductMarker(null)).toBeNull();
+      expect(readProductMarker(undefined)).toBeNull();
+    });
+
+    it("returns null for non-object payload", () => {
+      expect(readProductMarker("string")).toBeNull();
+      expect(readProductMarker(42)).toBeNull();
+    });
+
+    it("returns null when data.object.metadata is absent", () => {
+      const marker = readProductMarker({
+        id: "evt_3",
+        type: "checkout.session.completed",
+        data: { object: { id: "cs_1" } },
+      });
+      expect(marker).toBeNull();
+    });
   });
 });

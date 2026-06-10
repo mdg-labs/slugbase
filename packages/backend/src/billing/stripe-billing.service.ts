@@ -97,6 +97,7 @@ export class StripeBillingService implements BillingService {
         metadata: {
           workspace_id: request.workspaceId,
           plan: request.plan,
+          product: "slugbase",
           ...(request.mode === "one_time"
             ? { permanent_personal: "true", supporter: "true" }
             : {}),
@@ -107,6 +108,7 @@ export class StripeBillingService implements BillingService {
                 metadata: {
                   workspace_id: request.workspaceId,
                   plan: request.plan,
+                  product: "slugbase",
                   ...(request.plan === "team"
                     ? { included_seats: String(teamBaseSeats) }
                     : {}),

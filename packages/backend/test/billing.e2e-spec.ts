@@ -1,13 +1,18 @@
 import "reflect-metadata";
 
-import { ForbiddenException, type INestApplication } from "@nestjs/common";
+import {
+  ForbiddenException,
+  type INestApplication,
+} from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { AppModule } from "../src/app.module.js";
 import { AccountsService } from "../src/accounts/accounts.service.js";
 import { BillingApplicationService } from "../src/billing/billing-application.service.js";
-import { STRIPE_CLIENT } from "../src/billing/billing.tokens.js";
+import {
+  STRIPE_CLIENT,
+} from "../src/billing/billing.tokens.js";
 import type { StripeBillingClient } from "../src/billing/stripe-billing.service.js";
 import { applyTestEnv, clearTestEnv } from "../src/test-utils/test-env.js";
 import { WorkspaceMembersService } from "../src/workspaces/workspace-members.service.js";
@@ -322,5 +327,40 @@ describe("Billing (integration)", () => {
 
     const workspace = await workspacesService.getWorkspace(workspaceId);
     expect(workspace.plan).toBe("team");
+  });
+
+  it("returns { received: true } for webhook events without product marker (no processing)", async () => {
+    const noMarkerPayload = {
+      id: "evt_no_product_marker",
+      type: "invoice.payment_succeeded",
+      data: { object: { id: "in_irrelevant", metadata: {} } },
+    };
+
+    const rawBody = Buffer.from(JSON.stringify(noMarkerPayload));
+    const result = await billingApp.processWebhookEvent(rawBody, "sig_test_no_marker");
+
+    expect(result).toEqual({ received: true });
+  });
+
+  it("returns { received: true } for events with a wrong product marker", async () => {
+    const wrongMarkerPayload = {
+      id: "evt_wrong_marker",
+      type: "customer.subscription.updated",
+      data: {
+        object: {
+          id: "sub_wrong",
+          object: "subscription",
+          status: "active",
+          current_period_end: 1_735_689_600,
+          customer: "cus_wrong",
+          metadata: { workspace_id: "ws-1", plan: "personal", product: "other-service" },
+        },
+      },
+    };
+
+    const rawBody = Buffer.from(JSON.stringify(wrongMarkerPayload));
+    const result = await billingApp.processWebhookEvent(rawBody, "sig_test_wrong_marker");
+
+    expect(result).toEqual({ received: true });
   });
 });

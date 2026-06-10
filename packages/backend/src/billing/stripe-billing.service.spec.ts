@@ -109,6 +109,61 @@ describe("StripeBillingService", () => {
     expect(stripe.checkout.sessions.create).toHaveBeenCalledOnce();
   });
 
+  it("includes product slugbase in checkout session metadata", async () => {
+    const createMock = vi.fn().mockResolvedValue({
+      id: "cs_test",
+      url: "https://checkout.stripe.test/session",
+    });
+    const stripe = createStripeClient({
+      checkout: { sessions: { create: createMock } },
+    });
+    const service = new StripeBillingService(createConfig(), stripe);
+
+    await service.createCheckoutSession({
+      workspaceId: "ws-1",
+      plan: "personal",
+      mode: "recurring",
+      priceId: "price_personal",
+      successUrl: "https://app.example/success",
+      cancelUrl: "https://app.example/cancel",
+      customerEmail: "owner@example.com",
+    });
+
+    const params = createMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    const metadata = params.metadata as Record<string, string>;
+    expect(metadata.product).toBe("slugbase");
+
+    const subscriptionData = params.subscription_data as Record<string, unknown> | undefined;
+    expect(subscriptionData).toBeDefined();
+    const subMetadata = (subscriptionData as Record<string, unknown>).metadata as Record<string, string>;
+    expect(subMetadata.product).toBe("slugbase");
+  });
+
+  it("includes product slugbase in one-time checkout metadata", async () => {
+    const createMock = vi.fn().mockResolvedValue({
+      id: "cs_test",
+      url: "https://checkout.stripe.test/session",
+    });
+    const stripe = createStripeClient({
+      checkout: { sessions: { create: createMock } },
+    });
+    const service = new StripeBillingService(createConfig(), stripe);
+
+    await service.createCheckoutSession({
+      workspaceId: "ws-1",
+      plan: "personal",
+      mode: "one_time",
+      priceId: "price_supporter",
+      successUrl: "https://app.example/success",
+      cancelUrl: "https://app.example/cancel",
+      customerEmail: "owner@example.com",
+    });
+
+    const params = createMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    const metadata = params.metadata as Record<string, string>;
+    expect(metadata.product).toBe("slugbase");
+  });
+
   it("enforces seat floor on quantity updates", async () => {
     const service = new StripeBillingService(createConfig(), createStripeClient());
 

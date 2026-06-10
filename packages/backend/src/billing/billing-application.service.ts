@@ -24,7 +24,11 @@ import type { WorkspaceRecord } from "../workspaces/workspace.types.js";
 import { BillingWebhookEventRepository } from "./billing-webhook-event.repository.js";
 import { BILLING } from "./billing.tokens.js";
 import { PlanConfigService } from "./plans/plan-config.service.js";
-import { parseStripeEvent } from "./stripe-billing.mapper.js";
+import {
+  EXPECTED_PRODUCT_MARKER,
+  parseStripeEvent,
+  readProductMarker,
+} from "./stripe-billing.mapper.js";
 import { DowngradeService } from "./downgrade/downgrade.service.js";
 import {
   subscriptionStateToWorkspacePatch,
@@ -196,6 +200,25 @@ export class BillingApplicationService {
 
   async processWebhookEvent(rawBody: Buffer, signature: string): Promise<{ received: true }> {
     this.assertBillingAvailable();
+
+    // Check product marker in the raw payload BEFORE signature verification.
+    // Events from non-slugbase Stripe accounts (or forwarded events) carry no
+    // marker — acknowledge with 200 so Stripe stops retrying, but do not process.
+    let rawPayload: unknown;
+    try {
+      rawPayload = JSON.parse(rawBody.toString("utf-8"));
+    } catch {
+      throw new BadRequestException("Invalid webhook payload");
+    }
+
+    const productMarker = readProductMarker(rawPayload);
+    if (productMarker !== EXPECTED_PRODUCT_MARKER) {
+      const raw = rawPayload as Record<string, unknown>;
+      this.logger.debug("Webhook event without product marker — ignoring", {
+        eventTyp: typeof raw.type === "string" ? raw.type : undefined,
+      });
+      return { received: true };
+    }
 
     const webhookSecret = this.config.get("STRIPE_WEBHOOK_SECRET");
     if (!webhookSecret) {
