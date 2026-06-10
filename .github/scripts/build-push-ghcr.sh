@@ -33,6 +33,7 @@ fi
 
 echo "Building ${IMAGE}:${TAG} (combined self-host image; push_latest=${PUSH_LATEST})"
 docker build \
+  --provenance=false \
   "${build_args[@]}" \
   "${tags[@]}" \
   -f Dockerfile \
