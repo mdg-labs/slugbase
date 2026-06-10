@@ -19,8 +19,9 @@ import {
   hasPaidAccess,
   isSubscriptionCancelled,
 } from "../billing-entitlements.js";
-import type { BillingPlanId, BillingSettingsData, BillingTabId } from "../billing.types.js";
+import type { BillingInterval, BillingPlanId, BillingSettingsData, BillingTabId } from "../billing.types.js";
 import { BillingHistorySection } from "./BillingHistorySection.js";
+import { BillingIntervalToggle } from "./BillingIntervalToggle.js";
 import { BillingUnavailableGate } from "./BillingUnavailableGate.js";
 import { CancelSubscriptionPanel } from "./CancelSubscriptionPanel.js";
 import { PlanComparisonTable } from "./PlanComparisonTable.js";
@@ -48,6 +49,9 @@ export function BillingSettingsPage({ initialData }: BillingSettingsPageProps) {
   const [workspace, setWorkspace] = useState(initialData.workspace);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [selectedInterval, setSelectedInterval] = useState<BillingInterval>(
+    () => initialData.workspace.billingInterval ?? "monthly",
+  );
   const { showToast } = useAppToast();
 
   const tab = (searchParams.get("tab") as BillingTabId | null) ?? "plan";
@@ -84,6 +88,7 @@ export function BillingSettingsPage({ initialData }: BillingSettingsPageProps) {
         workspaceId: workspace.id,
         plan,
         mode,
+        billingInterval: selectedInterval,
         successUrl: initialData.returnUrl,
         cancelUrl: initialData.returnUrl,
       });
@@ -135,6 +140,8 @@ export function BillingSettingsPage({ initialData }: BillingSettingsPageProps) {
   };
 
   const planSummary = useMemo(() => {
+    const activeInterval = workspace.billingInterval ?? "monthly";
+
     if (workspace.permanentPersonal) {
       return {
         badgeKey: "settings.billing.plan_name_personal",
@@ -152,27 +159,37 @@ export function BillingSettingsPage({ initialData }: BillingSettingsPageProps) {
       };
     }
     if (displayPlan === "personal") {
+      const personalPrice = activeInterval === "annual"
+        ? initialData.planConfig.personalYearlyPrice || initialData.planConfig.personalMonthlyPrice || "—"
+        : initialData.planConfig.personalMonthlyPrice || "—";
       return {
         badgeKey: "settings.billing.plan_name_personal",
         titleKey: "settings.billing.plan_name_personal",
         priceKey: cancelled
           ? "settings.billing.current_cancelled_price"
-          : "settings.billing.current_personal_price",
+          : activeInterval === "annual"
+            ? "settings.billing.current_personal_annual_price"
+            : "settings.billing.current_personal_price",
         priceParams: {
-          price: initialData.planConfig.personalMonthlyPrice || "—",
+          price: personalPrice,
           date: periodEndLabel ?? t("settings.billing.period_end_unknown"),
         },
       };
     }
+    const teamPrice = activeInterval === "annual"
+      ? initialData.planConfig.teamSeatYearlyPrice || initialData.planConfig.teamSeatPrice || "—"
+      : initialData.planConfig.teamSeatPrice || "—";
     return {
       badgeKey: "settings.billing.plan_name_team",
       titleKey: "settings.billing.plan_name_team",
       priceKey: cancelled
         ? "settings.billing.current_cancelled_price"
-        : "settings.billing.current_team_price",
+        : activeInterval === "annual"
+          ? "settings.billing.current_team_annual_price"
+          : "settings.billing.current_team_price",
       priceParams: {
         seats: String(workspace.planSeats ?? initialData.planConfig.teamBaseSeats),
-        price: initialData.planConfig.teamSeatPrice || "—",
+        price: teamPrice,
         date: periodEndLabel ?? t("settings.billing.period_end_unknown"),
       },
     };
@@ -399,6 +416,9 @@ export function BillingSettingsPage({ initialData }: BillingSettingsPageProps) {
           ) : null}
 
           <section>
+            <div className="mb-sp-5">
+              <BillingIntervalToggle value={selectedInterval} onChange={setSelectedInterval} />
+            </div>
             <h2 className="mb-sp-2 text-[length:var(--text-body-lg)] font-semibold text-fg">
               {t("settings.billing.compare_heading")}
             </h2>
@@ -408,6 +428,7 @@ export function BillingSettingsPage({ initialData }: BillingSettingsPageProps) {
             <PlanComparisonTable
               currentPlan={displayPlan}
               config={initialData.planConfig}
+              interval={selectedInterval}
               canManage={canManage}
               busy={busy}
               onSelectPlan={(plan) => {

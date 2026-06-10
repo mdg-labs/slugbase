@@ -8,11 +8,12 @@ import {
   resolvePlanCta,
   type PlanFeatureRow,
 } from "../billing-plan-table.js";
-import type { BillingPlanDisplayConfig, BillingPlanId } from "../billing.types.js";
+import type { BillingInterval, BillingPlanDisplayConfig, BillingPlanId } from "../billing.types.js";
 
 interface PlanComparisonTableProps {
   currentPlan: BillingPlanId;
   config: BillingPlanDisplayConfig;
+  interval: BillingInterval;
   canManage: boolean;
   busy: boolean;
   onSelectPlan: (plan: BillingPlanId) => void;
@@ -54,6 +55,7 @@ const PLAN_IDS: BillingPlanId[] = ["free", "personal", "team"];
 export function PlanComparisonTable({
   currentPlan,
   config,
+  interval,
   canManage,
   busy,
   onSelectPlan,
@@ -71,7 +73,7 @@ export function PlanComparisonTable({
           {t("settings.billing.compare_features_heading")}
         </div>
         {PLAN_IDS.map((planId) => {
-          const { price, periodKey } = formatPlanPriceLabel(planId, config);
+          const { price, periodKey } = formatPlanPriceLabel(planId, config, interval);
           const isCurrent = planId === currentPlan;
           return (
             <div

@@ -143,6 +143,7 @@ export async function startCheckout(params: StartCheckoutParams): Promise<{ chec
       body: JSON.stringify({
         plan: params.plan,
         mode: params.mode,
+        billingInterval: params.billingInterval ?? "monthly",
         successUrl: params.successUrl,
         cancelUrl: params.cancelUrl,
       }),

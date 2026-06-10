@@ -99,6 +99,74 @@ describe("BillingSettingsPage", () => {
     expect(view.queryByText("Pro")).toBeNull();
   });
 
+  it("renders billing interval toggle with monthly default", () => {
+    const view = render(billingPage(baseData));
+    const monthlyBtn = view.getByTestId("billing-interval-monthly");
+    const annualBtn = view.getByTestId("billing-interval-annual");
+    expect(monthlyBtn).toBeTruthy();
+    expect(annualBtn).toBeTruthy();
+    // Monthly should show the $4 price (monthly pricing) since it defaults to monthly
+    expect(view.getByText("$4")).toBeTruthy();
+  });
+
+  it("switches displayed prices when annual interval is selected", async () => {
+    const view = render(billingPage(baseData));
+    expect(view.getByText("$4")).toBeTruthy();
+
+    fireEvent.click(view.getByTestId("billing-interval-annual"));
+
+    await waitFor(() => {
+      expect(view.getByText("$40")).toBeTruthy();
+    });
+  });
+
+  it("passes billingInterval to checkout call", async () => {
+    checkoutMock.mockResolvedValue({ checkoutUrl: "https://checkout.test/session" });
+    const assignSpy = vi.spyOn(window.location, "assign").mockImplementation(() => {});
+
+    const view = render(billingPage(baseData));
+
+    fireEvent.click(view.getByTestId("billing-interval-annual"));
+
+    // Click upgrade - the annual prices are now shown, confirm state updated
+    fireEvent.click(
+      view.getByRole("button", { name: "Upgrade to Personal" }),
+    );
+
+    await waitFor(() => {
+      expect(checkoutMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workspaceId: "ws-1",
+          plan: "personal",
+          mode: "recurring",
+          billingInterval: "annual",
+        }),
+      );
+    });
+
+    assignSpy.mockRestore();
+  });
+
+  it("defaults to monthly billingInterval in checkout", async () => {
+    checkoutMock.mockResolvedValue({ checkoutUrl: "https://checkout.test/session" });
+    const assignSpy = vi.spyOn(window.location, "assign").mockImplementation(() => {});
+
+    const view = render(billingPage(baseData));
+    fireEvent.click(
+      view.getByRole("button", { name: "Upgrade to Personal" }),
+    );
+
+    await waitFor(() => {
+      expect(checkoutMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          billingInterval: "monthly",
+        }),
+      );
+    });
+
+    assignSpy.mockRestore();
+  });
+
   it("starts checkout when upgrading to Personal", async () => {
     checkoutMock.mockResolvedValue({ checkoutUrl: "https://checkout.test/session" });
     const assignSpy = vi.spyOn(window.location, "assign").mockImplementation(() => {});

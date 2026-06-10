@@ -58,4 +58,26 @@ describe("billing plan table", () => {
       periodKey: "settings.billing.plan_period_seat_monthly",
     });
   });
+
+  it("formats annual prices when interval is annual", () => {
+    expect(formatPlanPriceLabel("personal", sampleConfig, "annual")).toEqual({
+      price: "$40",
+      periodKey: "settings.billing.plan_period_yearly",
+    });
+    expect(formatPlanPriceLabel("team", sampleConfig, "annual")).toEqual({
+      price: "$9",
+      periodKey: "settings.billing.plan_period_seat_yearly",
+    });
+  });
+
+  it("free plan always shows $0 regardless of interval", () => {
+    expect(formatPlanPriceLabel("free", sampleConfig, "monthly")).toEqual({
+      price: "$0",
+      periodKey: "settings.billing.plan_period_forever",
+    });
+    expect(formatPlanPriceLabel("free", sampleConfig, "annual")).toEqual({
+      price: "$0",
+      periodKey: "settings.billing.plan_period_forever",
+    });
+  });
 });

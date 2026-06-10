@@ -1,6 +1,7 @@
 export type BillingPlanId = "free" | "personal" | "team";
 export type BillingTabId = "plan" | "seats" | "history";
 export type BillingCheckoutMode = "recurring" | "one_time";
+export type BillingInterval = "monthly" | "annual";
 
 export interface BillingPlanDisplayConfig {
   billingEnabled: boolean;
@@ -25,6 +26,7 @@ export interface BillingWorkspaceSummary {
   billingStatus: string | null;
   billingPeriodEnd: string | null;
   permanentPersonal: boolean;
+  billingInterval?: BillingInterval | null;
 }
 
 export interface BillingSettingsData {
@@ -43,6 +45,7 @@ export interface StartCheckoutParams {
   workspaceId: string;
   plan: Exclude<BillingPlanId, "free">;
   mode: BillingCheckoutMode;
+  billingInterval?: BillingInterval;
   successUrl: string;
   cancelUrl: string;
 }

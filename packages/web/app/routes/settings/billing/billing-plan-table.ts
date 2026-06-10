@@ -1,4 +1,8 @@
-import type { BillingPlanDisplayConfig, BillingPlanId } from "./billing.types.js";
+import type {
+  BillingInterval,
+  BillingPlanDisplayConfig,
+  BillingPlanId,
+} from "./billing.types.js";
 
 export type PlanFeatureValue = string;
 
@@ -77,6 +81,7 @@ export function resolvePlanCta(
 export function formatPlanPriceLabel(
   plan: BillingPlanId,
   config: BillingPlanDisplayConfig,
+  interval: BillingInterval = "monthly",
 ): { price: string; periodKey: string } {
   if (plan === "free") {
     return {
@@ -85,9 +90,22 @@ export function formatPlanPriceLabel(
     };
   }
   if (plan === "personal") {
+    if (interval === "annual") {
+      return {
+        price: config.personalYearlyPrice || "—",
+        periodKey: "settings.billing.plan_period_yearly",
+      };
+    }
     return {
       price: config.personalMonthlyPrice || "—",
       periodKey: "settings.billing.plan_period_monthly",
+    };
+  }
+  // team
+  if (interval === "annual" && config.teamSeatYearlyPrice) {
+    return {
+      price: config.teamSeatYearlyPrice,
+      periodKey: "settings.billing.plan_period_seat_yearly",
     };
   }
   return {
