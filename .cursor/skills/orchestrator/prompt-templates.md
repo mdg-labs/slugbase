@@ -37,7 +37,7 @@ GITHUB TOOLS — MANDATORY (MCP preferred; GraphQL for project board):
 - Issue list with field filters: MCP list_issues (field_filters for Priority, Effort, etc.)
 
 PROJECT STATUS (In Progress / In Review / Done / Ready) — via GraphQL:
-Status is a project-board field — MCP issue_write cannot set it. Do NOT check "is issue in project" — if the GITHUB SYNC block lists the issue, it IS in the project. Do NOT use gh project CLI — use GraphQL.
+Status is a project-board field — MCP issue_write cannot set it. Do NOT check "is issue in project" (see always-applied rule 12-github-project-board.mdc) — if the GITHUB SYNC block lists the issue, it IS in the project. Do NOT use gh project CLI — use GraphQL.
 
 Hardcoded IDs (never change):
 - Project node ID: PVT_kwDODv-LLc4BaOr9

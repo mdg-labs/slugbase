@@ -33,7 +33,6 @@ Orchestrator and **sub-agents** use this when a prompt includes a **GITHUB SYNC*
 | **Link sub-issue** | MCP `sub_issue_write` (method: add) | Requires **database IDs** (not issue numbers); see § Getting database IDs below |
 | **Unlink sub-issue** | MCP `sub_issue_write` (method: remove) | Requires database IDs |
 | **Reorder sub-issues** | MCP `sub_issue_write` (method: reprioritize) | Requires database IDs |
-| **Add to project** | GraphQL `addProjectV2ItemById` | No MCP tool for project item management |
 | **Set project Status** | GraphQL `updateProjectV2ItemFieldValue` | Status is a project-board field — see § Projects v2 Status (via GraphQL) |
 | **Get project item ID** | GraphQL `repository.issue.projectItems` | Direct lookup by issue number — no pagination needed |
 | **Get project fields/options** | GraphQL `organization.projectV2.fields` | Hardcoded in § Projects v2 Status |

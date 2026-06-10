@@ -168,20 +168,11 @@ Document sub-issue relationships in each leaf description with `#N` references.
 
 Update the Feature epic — **Sub-issues table** with every child number, domain, one-line scope, and **Suggested implementation order**. Include relevant spec `§` refs.
 
-### 7. Add to project and set to Ready
+### 7. Set project Status to Ready
+
+Issues are automatically added to the project board by the repo connection. Just get the project item ID and set Status.
 
 ```bash
-# Get issue node ID (needed for adding to project)
-ISSUE_NODE_ID=$(gh api graphql -f 'query=query { repository(owner:"mdg-labs",name:"slugbase") { issue(number:<NUMBER>) { id } } }' --jq '.data.repository.issue.id')
-
-# Add to project — GraphQL mutation
-gh api graphql -f 'query=mutation {
-  addProjectV2ItemById(input: {
-    projectId: "PVT_kwDODv-LLc4BaOr9"
-    contentId: "'"$ISSUE_NODE_ID"'"
-  }) { item { id } }
-}'
-
 # Get project item ID from issue (needed for setting Status)
 ITEM_ID=$(gh api graphql -f 'query=query { repository(owner:"mdg-labs",name:"slugbase") { issue(number:<NUMBER>) { projectItems(first:10) { nodes { id project { number } } } } } }' --jq '.data.repository.issue.projectItems.nodes[] | select(.project.number == 2) | .id')
 
