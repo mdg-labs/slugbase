@@ -8,8 +8,9 @@ on:
 
 permissions:
   contents: read
-  id-token: write
-  deployments: write
+  id-token: write    # Infisical OIDC
+  deployments: write # GitHub Deployment records
+  packages: write    # GHCR push (push-ghcr-staging-dev)
 
 concurrency:
   group: deploy-staging
