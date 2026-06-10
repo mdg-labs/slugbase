@@ -50,6 +50,7 @@ MCP issue_write (method: create):
 - title: "Slugs: collision page shown for unambiguous slug"
 - type: "Bug"
 - labels: ["domain:backend"]
+- assignees: ["<logged-in username from MCP get_me>"]
 - body: "<template with ## Report = user message>"
 - issue_fields: [{ field_name: "Priority", field_option_name: "High" }, { field_name: "Effort", field_option_name: "Medium" }]
 ```

@@ -129,9 +129,9 @@ Set via MCP `issue_write` → `issue_fields` array. Each entry takes `field_name
 | **Start date** | date | YYYY-MM-DD | `issue_fields: [{ field_name: "Start date", value: "2026-06-10" }]` |
 | **Target date** | date | YYYY-MM-DD | `issue_fields: [{ field_name: "Target date", value: "2026-06-20" }]` |
 
-### Required fields — every issue must have all four
+### Required fields — every issue must have all five
 
-**Never create or update an issue without all four fields set.** This is a hard rule — the verifier (Layer 3c) checks it.
+**Never create or update an issue without all five set.** This is a hard rule — the verifier (Layer 3c) checks it.
 
 | Field | Required | How to set |
 |---|---|---|
@@ -139,8 +139,9 @@ Set via MCP `issue_write` → `issue_fields` array. Each entry takes `field_name
 | **Domain label** (`domain:frontend` etc.) | Always | MCP `issue_write` → `labels` array |
 | **Priority** | Always | MCP `issue_write` → `issue_fields` |
 | **Effort** | Always | MCP `issue_write` → `issue_fields` |
+| **Assignee** | Always | MCP `issue_write` → `assignees` (use MCP `get_me` to discover logged-in username) |
 
-**Why MCP only?** `gh issue create --type` does not work for org-level issue types. `gh issue create --label` sets the GitHub built-in label, not our custom domain labels. MCP `issue_write` is the only tool that sets all four atomically.
+**Why MCP only?** `gh issue create --type` does not work for org-level issue types. `gh issue create --label` sets the GitHub built-in label, not our custom domain labels. MCP `issue_write` is the only tool that sets all five atomically.
 
 ## Projects v2 fields (board-level)
 

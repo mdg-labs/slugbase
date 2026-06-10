@@ -25,7 +25,8 @@ Copy this block into **every** execution and verifier prompt that has a GITHUB S
 GITHUB TOOLS — MANDATORY (MCP preferred; GraphQL for project board):
 - MCP server: user-github (always preferred for issue operations)
 - Issue create/update (title, body, type, labels, fields): MCP issue_write
-  - ALWAYS set type, labels, Priority, and Effort on create — all four are mandatory
+  - ALWAYS set type, labels, Priority, Effort, AND assignees on create — all five are mandatory
+  - ALWAYS assign to the logged-in user (discover via MCP get_me, then use the returned username in assignees)
   - Valid Priority options: Urgent, High, Medium, Low
   - Valid Effort options: High, Medium, Low
   - gh issue create --type does NOT work for org-level issue types — MCP only

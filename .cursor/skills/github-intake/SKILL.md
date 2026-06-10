@@ -121,6 +121,7 @@ MCP issue_write (method: create):
 - title: "Server-side session infrastructure"
 - type: "Feature"
 - labels: ["domain:backend"]
+- assignees: ["<logged-in username from MCP get_me>"]
 - body: "<epic template — templates.md>"
 - issue_fields: [{ field_name: "Priority", field_option_name: "High" }, { field_name: "Effort", field_option_name: "High" }]
 ```
