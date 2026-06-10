@@ -1,0 +1,100 @@
+name: Prepare Release
+
+# Release preparation — reusable workflow called from ci.yml after CI passes on main.
+# Creates a draft GitHub Release + git tag when version >= 1.0.0 and greater than latest tag.
+# Spec §22.6 (prepare release), §22.7 (production deploy triggered by release published).
+
+on:
+  workflow_call:
+
+permissions:
+  contents: write    # tag + release creation
+  id-token: write    # Infisical OIDC
+
+jobs:
+  prepare:
+    name: Release - Prepare draft
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0     # full history for changelog + tag lookup
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup
+        with:
+          skip-checkout: "true"
+          skip-infisical: "true"
+
+      - name: Check version bump
+        id: version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+          MIN_VERSION="1.0.0"
+          if [ "$(printf '%s\n' "$VERSION" "$MIN_VERSION" | sort -V | tail -1)" = "$MIN_VERSION" ] && [ "$VERSION" != "$MIN_VERSION" ]; then
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            echo "Version ${VERSION} is below minimum threshold ${MIN_VERSION} - skipping release preparation"
+            exit 0
+          fi
+
+          LATEST_TAG=$(git tag -l 'v*' --sort=-v:refname | head -1 || true)
+          if [ -z "$LATEST_TAG" ]; then
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            echo "No existing tags - will create v${VERSION}"
+            exit 0
+          fi
+
+          LATEST_VERSION="${LATEST_TAG#v}"
+          if [ "$(printf '%s\n' "$LATEST_VERSION" "$VERSION" | sort -V | tail -1)" = "$VERSION" ] && [ "$VERSION" != "$LATEST_VERSION" ]; then
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            echo "Version ${VERSION} is greater than latest tag ${LATEST_TAG}"
+          else
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            echo "Version ${VERSION} is not greater than ${LATEST_TAG} - skipping release preparation"
+          fi
+
+      - name: Fetch staging secrets from Infisical
+        if: steps.version.outputs.should_release == 'true'
+        uses: infisical/secrets-action@v1
+        with:
+          infisical-domain: https://eu.infisical.com
+          identity-id: ${{ secrets.INFISICAL_OIDC_IDENTITY_ID }}
+          env-slug: staging
+          project-id: slugbase-cloud
+
+      - name: Verify translations
+        if: steps.version.outputs.should_release == 'true'
+        run: pnpm i18n:validate
+
+      - name: Generate changelog
+        if: steps.version.outputs.should_release == 'true'
+        id: changelog
+        run: |
+          LATEST_TAG=$(git tag -l 'v*' --sort=-v:refname | head -n1 || true)
+          if [ -n "$LATEST_TAG" ]; then
+            RANGE="${LATEST_TAG}..HEAD"
+          else
+            RANGE="HEAD"
+          fi
+          CHANGELOG=$(git log "$RANGE" --pretty=format:"- %s" --no-merges)
+          {
+            echo "body<<EOF"
+            echo "$CHANGELOG"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create tag and release
+        if: steps.version.outputs.should_release == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git tag -a "v${VERSION}" -m "Release v${VERSION}"
+          git push origin "v${VERSION}"
+          gh release create "v${VERSION}" \
+            --title "v${VERSION}" \
+            --draft \
+            --notes "${{ steps.changelog.outputs.body }}"

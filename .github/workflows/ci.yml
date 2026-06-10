@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write    # prepare-release needs write for tags + releases
   id-token: write    # Infisical OIDC (deploy-staging reusable workflow)
   packages: write    # GHCR push (deploy-staging reusable workflow)
 
@@ -91,4 +91,12 @@ jobs:
       github.ref == 'refs/heads/staging'
     needs: ci
     uses: ./.github/workflows/deploy-staging.yml
+    secrets: inherit
+
+  prepare-release:
+    if: >
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main'
+    needs: ci
+    uses: ./.github/workflows/prepare-release.yml
     secrets: inherit
