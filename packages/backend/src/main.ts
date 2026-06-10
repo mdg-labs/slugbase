@@ -9,9 +9,21 @@ import { AppModule } from "./app.module.js";
 import { ConfigService } from "./config/config.service.js";
 import { runMigrations } from "./db/migrate/run-migrations.js";
 import { validateEnvConfig, resolveMigrationDatabaseUrl } from "./config/env.schema.js";
+
+/**
+ * Run DB migrations only in the self-hosted deployment mode (SERVE_WEB_CLIENT=true).
+ * Hosted deployments run migrations in CI before deploying to Fly.io (see CI/CD workflow).
+ */
+async function runMigrationsIfNeeded(config: ReturnType<typeof validateEnvConfig>): Promise<void> {
+  if (!config.SERVE_WEB_CLIENT) {
+    return;
+  }
+  await runMigrations(resolveMigrationDatabaseUrl(config));
+}
+
 export async function bootstrap(): Promise<void> {
   const startupConfig = validateEnvConfig(process.env);
-  await runMigrations(resolveMigrationDatabaseUrl(startupConfig));
+  await runMigrationsIfNeeded(startupConfig);
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: ["error", "warn"],

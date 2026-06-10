@@ -193,7 +193,7 @@ Control registration, email verification, and how the web UI is served.
 |---|---|---|---|---|---|---|---|
 | `PUBLIC_REGISTRATION` | Allow open signup (`POST /auth/register`) | Yes | Yes | Optional | No | Runtime | Hosted: `true`; self-host: `false` |
 | `EMAIL_VERIFICATION_REQUIRED` | Block login until email verified | Yes | Yes | Optional | No | Runtime | Hosted: `true`; self-host: `false` |
-| `SERVE_WEB_CLIENT` | Nest serves bundled RR7 web on same port | No | Yes | Optional | No | Runtime | Self-host image: `true` (preset in Dockerfile) |
+| `SERVE_WEB_CLIENT` | Serves bundled RR7 web on same port; **also controls migration dispatch** — `bootstrap()` runs DB migrations only when `true` (self-hosted). Hosted deployments run migrations in CI via the `migrate-staging` / `migrate-production` workflow jobs (non-zero exit blocks deploy). | No | Yes | Optional | No | Runtime | Self-host image: `true` (preset in Dockerfile) |
 | `WEB_CLIENT_SERVER_BUILD` | Path to RR7 server build entry | No | Yes | Optional | No | Runtime | `/app/packages/web/build/server/index.js` |
 | `OPENAPI_INTERACTIVE_DOCS` | Scalar UI at `GET /docs` | Yes | Yes | Optional | No | Runtime | `true` (default) |
 | `CHALLENGE_DEV_SKIP` | Skip Turnstile verification in non-production | Yes | Yes | Optional | No | Runtime | Unset in prod; `true` in local dev |
@@ -331,7 +331,7 @@ Stored in Infisical `staging` / `prod`. Injected into GitHub Actions runners onl
 
 | Key | What it does | Hosted | Self-host | Required | Secret | When set | Example value |
 |---|---|---|---|---|---|---|---|
-| `SERVE_WEB_CLIENT` | Serve web from API container | No | Yes | Optional | No | Runtime | `true` (Dockerfile preset) |
+| `SERVE_WEB_CLIENT` | Serve web from API container; controls migration dispatch (true = startup migrations) | No | Yes | Optional | No | Runtime | `true` (Dockerfile preset) |
 | `WEB_CLIENT_SERVER_BUILD` | RR7 server entry path | No | Yes | Optional | No | Runtime | `/app/packages/web/build/server/index.js` |
 | `VITE_BILLING_ENABLED` | Hide billing UI | No | Build only | Optional | No | Build | `false` |
 | `VITE_MAIL_ADMIN_UI` | Show SMTP workspace panel | No | Build only | Optional | No | Build | `true` |
