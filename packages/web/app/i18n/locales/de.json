@@ -675,7 +675,7 @@
   "settings.billing.compare_heading": "Tarife vergleichen",
   "settings.billing.compare_subtitle": "Alle Tarife enthalten Weiterleitungs-Slugs, Themes und Tastatursteuerung.",
   "settings.billing.current_cancelled_price": "Zugang endet am {date} · Wechsel zurück zu Free",
-  "settings.billing.current_free_price": "0 € dauerhaft",
+  "settings.billing.current_free_price": "{price} dauerhaft",
   "settings.billing.current_permanent_price": "{price} einmalig · Personal dauerhaft",
   "settings.billing.current_personal_price": "{price}/Monat · Nächste Verlängerung {date}",
   "settings.billing.current_team_price": "{seats} Plätze · {price}/Platz/Monat · Verlängert am {date}",

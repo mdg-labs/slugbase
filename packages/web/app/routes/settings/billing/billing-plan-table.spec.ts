@@ -70,13 +70,25 @@ describe("billing plan table", () => {
     });
   });
 
-  it("free plan always shows $0 regardless of interval", () => {
+  it("free plan always shows zero with currency prefix regardless of interval", () => {
     expect(formatPlanPriceLabel("free", sampleConfig, "monthly")).toEqual({
       price: "$0",
       periodKey: "settings.billing.plan_period_forever",
     });
     expect(formatPlanPriceLabel("free", sampleConfig, "annual")).toEqual({
       price: "$0",
+      periodKey: "settings.billing.plan_period_forever",
+    });
+  });
+
+  it("free plan derives currency from personal price for non-USD deployments", () => {
+    const eurConfig: BillingPlanDisplayConfig = {
+      ...sampleConfig,
+      personalMonthlyPrice: "\u20ac3",
+      personalYearlyPrice: "\u20ac30",
+    };
+    expect(formatPlanPriceLabel("free", eurConfig, "monthly")).toEqual({
+      price: "\u20ac0",
       periodKey: "settings.billing.plan_period_forever",
     });
   });

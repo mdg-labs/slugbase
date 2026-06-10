@@ -38,7 +38,7 @@ alwaysApply: true
 - Free bookmark cap is **50**, not 100.
 - **No folder cap**; **API tokens are not plan-gated**; **no custom-domain entitlement** in v1.
 - **No workspace identifier in URLs** in v1 — active workspace resolves via the session.
-- Prices, seat counts, and `go.slugbase.app` are **illustrative/config-driven**, never hard-coded.
+- Prices, seat counts, and `cloud.slugbase.app` are **illustrative/config-driven**, never hard-coded.
 
 ## Endorsed UX patterns (spec §23.3)
 

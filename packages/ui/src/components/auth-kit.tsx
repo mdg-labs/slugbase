@@ -94,10 +94,10 @@ export function AuthShell({
 
           {showSlugRows && (
             <div className="relative flex flex-col" style={{ gap: "var(--sp-3)" }}>
-              <BrandSlugRow src="go.slugbase.app/react19" dst="react.dev/blog" opacity={1} />
-              <BrandSlugRow src="go.slugbase.app/ddia" dst="dataintensive.net" opacity={0.55} />
+              <BrandSlugRow src="cloud.slugbase.app/react19" dst="react.dev/blog" opacity={1} />
+              <BrandSlugRow src="cloud.slugbase.app/ddia" dst="dataintensive.net" opacity={0.55} />
               <BrandSlugRow
-                src="go.slugbase.app/rustperf"
+                src="cloud.slugbase.app/rustperf"
                 dst="nnethercote.github.io"
                 opacity={0.28}
               />

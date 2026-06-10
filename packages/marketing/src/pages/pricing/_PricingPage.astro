@@ -35,8 +35,16 @@ function splitPrice(price: string): { amount: string; period: string } {
   };
 }
 
-const freeMonthly = splitPrice("$0");
-const freeYearly = splitPrice("$0");
+/** Extract the currency prefix from a formatted price string. */
+function extractCurrencyPrefix(price: string): string {
+  const match = price.match(/^([^\d]*)/);
+  return match?.[1]?.trimEnd() ?? "";
+}
+
+const freeCurrency = extractCurrencyPrefix(config.personalMonthlyPrice || "");
+const freePrice = freeCurrency ? `${freeCurrency}0` : "—";
+const freeMonthly = splitPrice(freePrice);
+const freeYearly = splitPrice(freePrice);
 const personalMonthly = splitPrice(config.personalMonthlyPrice || "—");
 const personalYearly = splitPrice(config.personalYearlyPrice || "—");
 const teamMonthly = splitPrice(config.teamSeatMonthlyPrice || "—");

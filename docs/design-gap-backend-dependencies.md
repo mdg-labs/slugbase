@@ -96,7 +96,7 @@ Cross-reference to sections in `design-gap-analysis.md`.
 | "Keep me signed in" checkbox | **Backend add** — no `rememberMe` on login; session TTL is fixed today |
 | Registration closed info box | **UI only** — `POST /register` returns 403; frontend already handles |
 | Email verify screen (resend, email display) | **Wire existing API** — `POST /auth/resend-verification` exists; UI doesn't call it |
-| Auth slug demo URLs (`go.slugbase.app`) | **UI only** — use public config (`APP_BASE_URL` / env), not hard-coded strings |
+| Auth slug demo URLs (`cloud.slugbase.app`) | **UI only** — use public config (`APP_BASE_URL` / env), not hard-coded strings |
 
 ### 3.1 Sign in / Register / MFA / Setup (§1–§8)
 

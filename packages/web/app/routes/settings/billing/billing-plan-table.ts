@@ -78,14 +78,25 @@ export function resolvePlanCta(
   return target > current ? "upgrade" : "downgrade";
 }
 
+/**
+ * Extract the currency prefix (symbol or code) from a formatted price string.
+ * The backend formats via `Intl.NumberFormat` so a price like "$4" or "€3" has
+ * leading non-numeric characters that represent the currency display.
+ */
+export function extractCurrencyPrefix(price: string): string {
+  const match = price.match(/^([^\d]*)/);
+  return match?.[1]?.trimEnd() ?? "";
+}
+
 export function formatPlanPriceLabel(
   plan: BillingPlanId,
   config: BillingPlanDisplayConfig,
   interval: BillingInterval = "monthly",
 ): { price: string; periodKey: string } {
   if (plan === "free") {
+    const currencyPrefix = extractCurrencyPrefix(config.personalMonthlyPrice);
     return {
-      price: config.personalMonthlyPrice ? "$0" : "—",
+      price: currencyPrefix ? `${currencyPrefix}0` : "—",
       periodKey: "settings.billing.plan_period_forever",
     };
   }

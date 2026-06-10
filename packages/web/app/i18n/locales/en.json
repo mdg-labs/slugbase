@@ -675,7 +675,7 @@
   "settings.billing.compare_heading": "Compare plans",
   "settings.billing.compare_subtitle": "All plans include forwarding slugs, themes, and keyboard-driven navigation.",
   "settings.billing.current_cancelled_price": "Access ends {date} · Returns to Free",
-  "settings.billing.current_free_price": "$0 forever",
+  "settings.billing.current_free_price": "{price} forever",
   "settings.billing.current_permanent_price": "{price} one-time · Personal forever",
   "settings.billing.current_personal_price": "{price}/mo · Next renewal {date}",
   "settings.billing.current_team_price": "{seats} seats · {price}/seat/mo · Renews {date}",

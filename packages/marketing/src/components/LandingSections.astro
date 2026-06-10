@@ -13,7 +13,7 @@ const pricingHref =
   locale === "de" ? "/de/pricing" : "/pricing";
 
 const forwardingDomain =
-  import.meta.env.PUBLIC_FORWARDING_DOMAIN || "go.slugbase.app";
+  import.meta.env.PUBLIC_FORWARDING_DOMAIN || "cloud.slugbase.app";
 
 const pricingConfig = await loadMarketingPricingConfig();
 const freeBookmarkCap = String(pricingConfig.freeBookmarkCap);
@@ -83,8 +83,16 @@ const teamFolders: TeamFolder[] = [
   { nameKey: "marketing.landing.team_folder_inbox", color: "var(--accent-text)", count: 6, sharingKey: "marketing.landing.team_sharing_private", isPrivate: true },
 ];
 
+/** Extract the currency prefix from a formatted price string. */
+function extractCurrencyPrefix(price: string): string {
+  const match = price.match(/^([^\d]*)/);
+  return match?.[1]?.trimEnd() ?? "";
+}
+
 const personalMonthlyPrice = pricingConfig.personalMonthlyPrice || "—";
 const teamSeatMonthlyPrice = pricingConfig.teamSeatMonthlyPrice || "—";
+const freeCurrency = extractCurrencyPrefix(pricingConfig.personalMonthlyPrice || "");
+const freePrice = freeCurrency ? `${freeCurrency}0` : "—";
 ---
 
 <!-- ---- Hero ---- -->
@@ -360,7 +368,7 @@ const teamSeatMonthlyPrice = pricingConfig.teamSeatMonthlyPrice || "—";
         <div class="mk-teaser-plan-header">
           <span class="mk-teaser-plan-name">{t(locale, "marketing.pricing.plan.free")}</span>
         </div>
-        <div class="mk-teaser-plan-price">$0</div>
+        <div class="mk-teaser-plan-price">{freePrice}</div>
         <ul class="mk-plan-feats">
           <li>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>

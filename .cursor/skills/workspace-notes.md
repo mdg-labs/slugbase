@@ -95,7 +95,7 @@ _added: 2026-06-08_
 
 `docs/design-prototype/V1/` = **visual/interaction source of truth**; MVP spec = **product source of truth** (spec wins on conflict). Spec §23 documents it; §23.2 maps screens→files, §23.4 lists divergences, §23.5 lists under-built v1 features. Rule: `11-design-system.mdc`.
 Tokens (`colors_and_type.css`): accent periwinkle `#7782f7`, dark-first, IBM Plex Sans/Mono, 4px spacing, semantic success/warn/danger. Consume token vars — never hard-code.
-**Spec-wins divergences:** paid tier = "Personal" (not "Pro"); Free cap = 50 (not 100); no folder cap; API tokens not plan-gated; no custom-domain entitlement v1; no workspace-id-in-URL v1; prices/seats/`go.slugbase.app` are config-driven.
+**Spec-wins divergences:** paid tier = "Personal" (not "Pro"); Free cap = 50 (not 100); no folder cap; API tokens not plan-gated; no custom-domain entitlement v1; no workspace-id-in-URL v1; prices/seats/`cloud.slugbase.app` are config-driven.
 Prototype is React-via-CDN/Babel/localStorage/mock data — demonstrates design only, not the build target. Re-implement against repo JSON catalog (no copying English strings).
 _added: 2026-05-31_
 

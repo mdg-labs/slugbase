@@ -11,6 +11,7 @@ import {
   startCheckout,
   updateSeatQuantity,
 } from "../billing-api.js";
+import { extractCurrencyPrefix } from "../billing-plan-table.js";
 import {
   bookmarkMeterVariant,
   canAccessBillingSettings,
@@ -151,11 +152,12 @@ export function BillingSettingsPage({ initialData }: BillingSettingsPageProps) {
       };
     }
     if (displayPlan === "free") {
+      const currencyPrefix = extractCurrencyPrefix(initialData.planConfig.personalMonthlyPrice);
       return {
         badgeKey: "settings.billing.plan_name_free",
         titleKey: "settings.billing.plan_name_free",
         priceKey: "settings.billing.current_free_price",
-        priceParams: {},
+        priceParams: { price: currencyPrefix ? `${currencyPrefix}0` : "—" },
       };
     }
     if (displayPlan === "personal") {

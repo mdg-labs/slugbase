@@ -881,7 +881,7 @@ The prototype was designed before some decisions were finalised. When building, 
 7. **"Up to 25 members" is illustrative.** The exact Team base-seat count is a **Fast-Follow config detail** (§12.2, decision 17), not a fixed 25.
 8. **Prices are illustrative and config-driven.** `$4` / `$9` / `$59` and the supporter deadline are placeholders; concrete pricing lives in deployment configuration and the marketing site, never hard-coded in application logic (§12.1).
 9. **Subprocessor copy in legal pages.** The prototype's Datenschutz lists "Hetzner Cloud (Hosting)". The settled hosted infrastructure is **Fly.io (Frankfurt) + Neon Postgres + Cloudflare Workers** (§14.7); the legal/subprocessor copy must be updated to match actual subprocessors before launch.
-10. **Forwarding domain string.** `go.slugbase.app` is the prototype's placeholder redirect host; the real value is deployment configuration (the public base URL, §15), not a hard-coded constant.
+10. **Forwarding domain string.** `go.slugbase.app` is the prototype's placeholder redirect host; the deployed value is `cloud.slugbase.app` (deployment configuration, §15), not a hard-coded constant.
 
 ### 23.5 Spec features under-represented in the prototype (build with the prototype's design language)
 

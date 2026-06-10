@@ -644,7 +644,7 @@ Applies to all auth routes (`/login`, `/register`, `/mfa`, `/mfa/enroll`, `/forg
 |---|---|---|
 | 34.2.1 | Two-column split text + demo | **Present** |
 | 34.2.2 | `AddressBarDemo`: cycles Navigating → Redirecting → Arrived every 2.2s | **Static** single-state browser mockup |
-| 34.2.3 | Demo URL: `go.slugbase.app/react19` | `go.example.app/react19` (non-branded) |
+| 34.2.3 | Demo URL: `go.slugbase.app/react19` | `cloud.slugbase.app/react19` (config-driven) |
 | 34.2.4 | Checklist with success icons | **Present** |
 
 ### 34.3 Bookmark manager features
