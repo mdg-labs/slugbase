@@ -28,8 +28,6 @@ describe("GET /pricing/public (integration)", () => {
           price_pm_annual: { unit_amount: 3000, currency: "eur", type: "recurring", recurring: { interval: "year" } },
           price_team_monthly: { unit_amount: 900, currency: "eur", type: "recurring", recurring: { interval: "month" } },
           price_team_annual: { unit_amount: 9000, currency: "eur", type: "recurring", recurring: { interval: "year" } },
-          price_seat_monthly: { unit_amount: 200, currency: "eur", type: "recurring", recurring: { interval: "month" } },
-          price_seat_annual: { unit_amount: 2000, currency: "eur", type: "recurring", recurring: { interval: "year" } },
           price_supporter_1x: { unit_amount: 6900, currency: "eur", type: "one_time", recurring: null },
         };
         const price = prices[id];
@@ -49,10 +47,7 @@ describe("GET /pricing/public (integration)", () => {
       STRIPE_PRICE_PERSONAL_ANNUAL: "price_pm_annual",
       STRIPE_PRICE_TEAM_MONTHLY: "price_team_monthly",
       STRIPE_PRICE_TEAM_ANNUAL: "price_team_annual",
-      STRIPE_PRICE_TEAM_EXTRA_SEAT_MONTHLY: "price_seat_monthly",
-      STRIPE_PRICE_TEAM_EXTRA_SEAT_ANNUAL: "price_seat_annual",
       STRIPE_PRICE_SUPPORTER: "price_supporter_1x",
-      TEAM_BASE_SEATS: "5",
     });
 
     const moduleRef = await Test.createTestingModule({
@@ -80,7 +75,6 @@ describe("GET /pricing/public (integration)", () => {
     expect(response.headers["cache-control"]).toBe("public, max-age=300");
 
     const body = response.body as PricingResponse;
-    expect(body.teamBaseSeats).toBe(5);
     expect(body.freeBookmarkCap).toBe(50);
 
     expect(body.plans.personal.monthly).toBeDefined();
@@ -98,9 +92,6 @@ describe("GET /pricing/public (integration)", () => {
     expect(body.plans.team.monthly?.unitAmount).toBe(900);
     expect(body.plans.team.annual?.unitAmount).toBe(9000);
 
-    expect(body.plans.teamExtraSeat.monthly?.unitAmount).toBe(200);
-    expect(body.plans.teamExtraSeat.annual?.unitAmount).toBe(2000);
-
     expect(body.plans.supporter).toBeDefined();
     expect(body.plans.supporter?.priceId).toBe("price_supporter_1x");
     expect(body.plans.supporter?.unitAmount).toBe(6900);
@@ -116,7 +107,7 @@ describe("GET /pricing/public (integration)", () => {
   });
 
   it("calls Stripe prices.retrieve for each configured price", () => {
-    // Two requests so far (first test + this) × 7 configured prices = 14 calls
-    expect(stripeClient.prices.retrieve).toHaveBeenCalledTimes(14);
+    // Two requests so far (first test + this) × 5 configured prices = 10 calls
+    expect(stripeClient.prices.retrieve).toHaveBeenCalledTimes(10);
   });
 });

@@ -41,7 +41,7 @@ function createStripeClient(
         customer: "cus_team_1",
         status: "active",
         current_period_end: 1_735_689_600,
-        metadata: { workspace_id: "ws-1", plan: "team", included_seats: "5" },
+        metadata: { workspace_id: "ws-1", plan: "team" },
         items: {
           data: [{ id: "si_1", quantity: 5, price: { metadata: { plan: "team" } } }],
         },
@@ -51,7 +51,7 @@ function createStripeClient(
         customer: "cus_team_1",
         status: "active",
         current_period_end: 1_735_689_600,
-        metadata: { workspace_id: "ws-1", plan: "team", included_seats: "5" },
+        metadata: { workspace_id: "ws-1", plan: "team" },
         items: {
           data: [{ id: "si_1", quantity: 8, price: { metadata: { plan: "team" } } }],
         },
@@ -87,7 +87,7 @@ describe("StripeBillingService", () => {
     });
 
     expect(state.plan).toBe("team");
-    expect(state.includedSeats).toBe(5);
+    expect(state.extraSeats).toBe(5);
     expect(stripe.subscriptions.retrieve).toHaveBeenCalledWith("sub_team_1");
   });
 
@@ -107,6 +107,58 @@ describe("StripeBillingService", () => {
 
     expect(session.checkoutUrl).toBe("https://checkout.stripe.test/session");
     expect(stripe.checkout.sessions.create).toHaveBeenCalledOnce();
+  });
+
+  it("creates team checkout with quantity 1 (pure per-seat model)", async () => {
+    const createMock = vi.fn().mockResolvedValue({
+      id: "cs_test",
+      url: "https://checkout.stripe.test/session",
+    });
+    const stripe = createStripeClient({
+      checkout: { sessions: { create: createMock } },
+    });
+    const service = new StripeBillingService(createConfig(), stripe);
+
+    await service.createCheckoutSession({
+      workspaceId: "ws-1",
+      plan: "team",
+      mode: "recurring",
+      priceId: "price_team",
+      successUrl: "https://app.example/success",
+      cancelUrl: "https://app.example/cancel",
+      customerEmail: "owner@example.com",
+    });
+
+    const params = createMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    const lineItems = params.line_items as Array<{ quantity: number }>;
+    expect(lineItems[0]?.quantity).toBe(1);
+  });
+
+  it("does not set included_seats in subscription metadata", async () => {
+    const createMock = vi.fn().mockResolvedValue({
+      id: "cs_test",
+      url: "https://checkout.stripe.test/session",
+    });
+    const stripe = createStripeClient({
+      checkout: { sessions: { create: createMock } },
+    });
+    const service = new StripeBillingService(createConfig(), stripe);
+
+    await service.createCheckoutSession({
+      workspaceId: "ws-1",
+      plan: "team",
+      mode: "recurring",
+      priceId: "price_team",
+      successUrl: "https://app.example/success",
+      cancelUrl: "https://app.example/cancel",
+      customerEmail: "owner@example.com",
+    });
+
+    const params = createMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    const subscriptionData = params.subscription_data as Record<string, unknown> | undefined;
+    expect(subscriptionData).toBeDefined();
+    const subMetadata = (subscriptionData as Record<string, unknown>).metadata as Record<string, string>;
+    expect(subMetadata.included_seats).toBeUndefined();
   });
 
   it("includes product slugbase in checkout session metadata", async () => {

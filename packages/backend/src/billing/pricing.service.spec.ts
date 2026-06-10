@@ -11,10 +11,7 @@ function createConfig(overrides: Record<string, string | undefined> = {}) {
     STRIPE_PRICE_PERSONAL_ANNUAL: "price_pm_annual",
     STRIPE_PRICE_TEAM_MONTHLY: "price_team_monthly",
     STRIPE_PRICE_TEAM_ANNUAL: "price_team_annual",
-    STRIPE_PRICE_TEAM_EXTRA_SEAT_MONTHLY: "price_seat_monthly",
-    STRIPE_PRICE_TEAM_EXTRA_SEAT_ANNUAL: "price_seat_annual",
     STRIPE_PRICE_SUPPORTER: "price_supporter_1x",
-    TEAM_BASE_SEATS: "5",
     ...overrides,
   };
 
@@ -31,8 +28,6 @@ function createStripeClient(
     price_pm_annual: { unit_amount: 3000, currency: "eur", type: "recurring", recurring: { interval: "year" } },
     price_team_monthly: { unit_amount: 900, currency: "eur", type: "recurring", recurring: { interval: "month" } },
     price_team_annual: { unit_amount: 9000, currency: "eur", type: "recurring", recurring: { interval: "year" } },
-    price_seat_monthly: { unit_amount: 200, currency: "eur", type: "recurring", recurring: { interval: "month" } },
-    price_seat_annual: { unit_amount: 2000, currency: "eur", type: "recurring", recurring: { interval: "year" } },
     price_supporter_1x: { unit_amount: 6900, currency: "eur", type: "one_time", recurring: null },
   };
 
@@ -62,7 +57,6 @@ describe("PricingService", () => {
 
     const result = await service.getPricing();
 
-    expect(result.teamBaseSeats).toBe(5);
     expect(result.freeBookmarkCap).toBe(50);
     expect(result.plans.personal.monthly).toBeDefined();
     expect(result.plans.personal.monthly?.priceId).toBe("price_pm_monthly");
@@ -81,12 +75,6 @@ describe("PricingService", () => {
     expect(result.plans.team.annual?.unitAmount).toBe(9000);
     expect(result.plans.team.annual?.display).toBe("€90");
 
-    expect(result.plans.teamExtraSeat.monthly?.unitAmount).toBe(200);
-    expect(result.plans.teamExtraSeat.monthly?.display).toBe("€2");
-
-    expect(result.plans.teamExtraSeat.annual?.unitAmount).toBe(2000);
-    expect(result.plans.teamExtraSeat.annual?.display).toBe("€20");
-
     expect(result.plans.supporter).toBeDefined();
     expect(result.plans.supporter?.unitAmount).toBe(6900);
     expect(result.plans.supporter?.type).toBe("one_time");
@@ -100,7 +88,7 @@ describe("PricingService", () => {
 
     await service.getPricing();
 
-    expect(stripe.prices.retrieve).toHaveBeenCalledTimes(7);
+    expect(stripe.prices.retrieve).toHaveBeenCalledTimes(5);
     expect(stripe.prices.retrieve).toHaveBeenCalledWith("price_pm_monthly");
     expect(stripe.prices.retrieve).toHaveBeenCalledWith("price_supporter_1x");
   });
@@ -108,8 +96,6 @@ describe("PricingService", () => {
   it("skips price IDs that are not configured", async () => {
     const config = createConfig({
       STRIPE_PRICE_SUPPORTER: undefined,
-      STRIPE_PRICE_TEAM_EXTRA_SEAT_MONTHLY: undefined,
-      STRIPE_PRICE_TEAM_EXTRA_SEAT_ANNUAL: undefined,
     });
     const stripe = createStripeClient();
     const service = new PricingService(config, stripe);
@@ -118,8 +104,6 @@ describe("PricingService", () => {
 
     expect(stripe.prices.retrieve).toHaveBeenCalledTimes(4);
     expect(result.plans.supporter).toBeUndefined();
-    expect(result.plans.teamExtraSeat.monthly).toBeUndefined();
-    expect(result.plans.teamExtraSeat.annual).toBeUndefined();
   });
 
   it("throws PricingFetchError when a configured Stripe price is not found", async () => {
@@ -138,8 +122,6 @@ describe("PricingService", () => {
       STRIPE_PRICE_PERSONAL_ANNUAL: undefined,
       STRIPE_PRICE_TEAM_MONTHLY: undefined,
       STRIPE_PRICE_TEAM_ANNUAL: undefined,
-      STRIPE_PRICE_TEAM_EXTRA_SEAT_MONTHLY: undefined,
-      STRIPE_PRICE_TEAM_EXTRA_SEAT_ANNUAL: undefined,
       STRIPE_PRICE_SUPPORTER: undefined,
     });
     const stripe = createStripeClient({
@@ -158,8 +140,6 @@ describe("PricingService", () => {
       STRIPE_PRICE_PERSONAL_ANNUAL: undefined,
       STRIPE_PRICE_TEAM_MONTHLY: undefined,
       STRIPE_PRICE_TEAM_ANNUAL: undefined,
-      STRIPE_PRICE_TEAM_EXTRA_SEAT_MONTHLY: undefined,
-      STRIPE_PRICE_TEAM_EXTRA_SEAT_ANNUAL: undefined,
       STRIPE_PRICE_SUPPORTER: undefined,
     });
     const stripe = createStripeClient({

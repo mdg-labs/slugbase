@@ -181,10 +181,7 @@ export class BillingApplicationService {
         currentMemberCount: members.length,
       });
 
-      const patch = subscriptionStateToWorkspacePatch(
-        state,
-        this.planConfig.getTeamBaseSeats(),
-      );
+      const patch = subscriptionStateToWorkspacePatch(state);
       const updated = await this.workspaceRepo.update(input.workspaceId, patch);
       if (!updated) {
         throw new BadRequestException("Failed to update workspace billing state");
@@ -277,10 +274,7 @@ export class BillingApplicationService {
     state: Parameters<typeof subscriptionStateToWorkspacePatch>[0],
   ): Promise<WorkspaceRecord | null> {
     const previous = await this.workspaceRepo.findById(state.workspaceId);
-    const patch = subscriptionStateToWorkspacePatch(
-      state,
-      this.planConfig.getTeamBaseSeats(),
-    );
+    const patch = subscriptionStateToWorkspacePatch(state);
     const updated = await this.workspaceRepo.update(state.workspaceId, patch);
     if (updated) {
       await this.downgrade.handlePlanTransition(previous, updated);

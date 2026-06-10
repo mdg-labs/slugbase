@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { PlanConfigService, DEFAULT_TEAM_BASE_SEATS } from "./plan-config.service.js";
+import { PlanConfigService } from "./plan-config.service.js";
 import type { ConfigService } from "../../config/config.service.js";
 
 function createPlanConfig(overrides: Record<string, string | number | undefined> = {}): PlanConfigService {
@@ -11,21 +11,13 @@ function createPlanConfig(overrides: Record<string, string | number | undefined>
 }
 
 describe("PlanConfigService", () => {
-  it("defaults team base seats to 5 when unset", () => {
-    const service = createPlanConfig({ TEAM_BASE_SEATS: DEFAULT_TEAM_BASE_SEATS });
-    expect(service.getTeamBaseSeats()).toBe(5);
-  });
-
   it("reads per-interval Stripe price ids", () => {
     const service = createPlanConfig({
       STRIPE_PRICE_PERSONAL_MONTHLY: "price_personal_monthly",
       STRIPE_PRICE_PERSONAL_ANNUAL: "price_personal_annual",
       STRIPE_PRICE_TEAM_MONTHLY: "price_team_monthly",
       STRIPE_PRICE_TEAM_ANNUAL: "price_team_annual",
-      STRIPE_PRICE_TEAM_EXTRA_SEAT_MONTHLY: "price_extra_monthly",
-      STRIPE_PRICE_TEAM_EXTRA_SEAT_ANNUAL: "price_extra_annual",
       STRIPE_PRICE_SUPPORTER: "price_supporter",
-      TEAM_BASE_SEATS: 7,
     });
 
     expect(service.getPriceConfig()).toEqual({
@@ -33,8 +25,6 @@ describe("PlanConfigService", () => {
       personalAnnualPriceId: "price_personal_annual",
       teamMonthlyPriceId: "price_team_monthly",
       teamAnnualPriceId: "price_team_annual",
-      teamExtraSeatMonthlyPriceId: "price_extra_monthly",
-      teamExtraSeatAnnualPriceId: "price_extra_annual",
       supporterOneTimePriceId: "price_supporter",
     });
   });
@@ -80,17 +70,6 @@ describe("PlanConfigService", () => {
     const service = createPlanConfig({});
     expect(service.resolveCheckoutPriceId("personal", "recurring")).toBeNull();
     expect(service.resolveCheckoutPriceId("team", "recurring", "annual")).toBeNull();
-  });
-
-  it("getExtraSeatPriceId returns monthly by default", () => {
-    const service = createPlanConfig({
-      STRIPE_PRICE_TEAM_EXTRA_SEAT_MONTHLY: "price_extra_monthly",
-      STRIPE_PRICE_TEAM_EXTRA_SEAT_ANNUAL: "price_extra_annual",
-    });
-
-    expect(service.getExtraSeatPriceId()).toBe("price_extra_monthly");
-    expect(service.getExtraSeatPriceId("monthly")).toBe("price_extra_monthly");
-    expect(service.getExtraSeatPriceId("annual")).toBe("price_extra_annual");
   });
 
   it("treats supporter promotion as active when end date is unset", () => {

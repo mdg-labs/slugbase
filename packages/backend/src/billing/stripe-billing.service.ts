@@ -77,15 +77,12 @@ export class StripeBillingService implements BillingService {
     this.assertAvailable();
 
     try {
-      const teamBaseSeats = this.config.get("TEAM_BASE_SEATS");
-      const isTeamRecurring = request.mode === "recurring" && request.plan === "team";
-
       const session = await this.stripe.checkout.sessions.create({
         mode: request.mode === "one_time" ? "payment" : "subscription",
         line_items: [
           {
             price: request.priceId,
-            quantity: isTeamRecurring ? teamBaseSeats : 1,
+            quantity: 1,
           },
         ],
         success_url: request.successUrl,
@@ -109,9 +106,6 @@ export class StripeBillingService implements BillingService {
                   workspace_id: request.workspaceId,
                   plan: request.plan,
                   product: "slugbase",
-                  ...(request.plan === "team"
-                    ? { included_seats: String(teamBaseSeats) }
-                    : {}),
                 },
               }
             : undefined,

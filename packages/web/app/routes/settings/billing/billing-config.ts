@@ -45,7 +45,6 @@ interface PricingApiResponse {
   plans: {
     personal: PublicPlanPriceGroup;
     team: PublicPlanPriceGroup;
-    teamExtraSeat: PublicPlanPriceGroup;
     supporter?: PublicPriceInfo;
   };
   teamBaseSeats: number;

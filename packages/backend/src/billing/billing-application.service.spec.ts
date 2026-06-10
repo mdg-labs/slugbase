@@ -82,7 +82,6 @@ function createService(overrides: {
   const planConfig = {
     isSupporterPromotionActive: () => true,
     resolveCheckoutPriceId: () => "price_test",
-    getTeamBaseSeats: () => 5,
   } as unknown as PlanConfigService;
   const accounts = { findById: vi.fn() } as unknown as AccountsService;
   const downgrade = { handlePlanTransition: vi.fn() } as unknown as DowngradeService;

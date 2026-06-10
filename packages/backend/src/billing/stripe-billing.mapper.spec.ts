@@ -9,13 +9,13 @@ import {
 } from "./stripe-billing.mapper.js";
 
 describe("stripe-billing.mapper", () => {
-  it("maps an active Team subscription with extra seats", () => {
+  it("maps an active Team subscription with pure per-seat model", () => {
     const state = mapStripeSubscriptionToState("ws-team", {
       id: "sub_team_1",
       customer: "cus_team_1",
       status: "active",
       current_period_end: 1_735_689_600,
-      metadata: { workspace_id: "ws-team", plan: "team", included_seats: "5" },
+      metadata: { workspace_id: "ws-team", plan: "team" },
       items: {
         data: [{ id: "si_1", quantity: 7, price: { metadata: { plan: "team" } } }],
       },
@@ -28,8 +28,8 @@ describe("stripe-billing.mapper", () => {
       billingInterval: null,
       externalCustomerId: "cus_team_1",
       externalSubscriptionId: "sub_team_1",
-      includedSeats: 5,
-      extraSeats: 2,
+      includedSeats: null,
+      extraSeats: 7,
       planGatingEnabled: true,
     });
     expect(state.currentPeriodEnd).toEqual(new Date(1_735_689_600 * 1000));
@@ -74,7 +74,7 @@ describe("stripe-billing.mapper", () => {
       customer: "cus_a",
       status: "active",
       current_period_end: 1_735_689_600,
-      metadata: { plan: "team", included_seats: "5" },
+      metadata: { plan: "team" },
       items: {
         data: [{
           id: "si_a",
