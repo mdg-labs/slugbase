@@ -70,13 +70,6 @@ function readPlanMetadata(metadata: Record<string, string> | undefined): Billing
   return "free";
 }
 
-function readIncludedSeats(metadata: Record<string, string> | undefined): number | null {
-  const raw = metadata?.included_seats;
-  if (!raw) return null;
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
 function isPermanentPersonal(metadata: Record<string, string> | undefined): boolean {
   return metadata?.permanent_personal === "true" || metadata?.supporter === "true";
 }
@@ -105,10 +98,11 @@ export function mapStripeSubscriptionToState(
   const mergedMetadata = { ...priceMetadata, ...metadata };
 
   const plan = readPlanMetadata(mergedMetadata);
-  const includedSeats = plan === "team" ? readIncludedSeats(mergedMetadata) : null;
   const quantity = firstItem?.quantity ?? 1;
-  const extraSeats =
-    plan === "team" && includedSeats !== null ? Math.max(0, quantity - includedSeats) : 0;
+  // Pure per-seat model: subscription quantity IS the total seat count.
+  // extraSeats carries the full quantity for team plans (includedSeats removed).
+  const includedSeats = null;
+  const extraSeats = plan === "team" ? quantity : 0;
   const billingInterval = readBillingInterval(
     priceMetadata,
     firstItem?.price?.recurring?.interval,

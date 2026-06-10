@@ -31,7 +31,6 @@ export function workspaceHasActivePaidBilling(
 
 export function subscriptionStateToWorkspacePatch(
   state: BillingSubscriptionState,
-  teamBaseSeats: number,
 ): {
   plan: WorkspacePlan;
   planSeats: number | null;
@@ -68,10 +67,8 @@ export function subscriptionStateToWorkspacePatch(
   }
 
   const plan = state.plan === "free" ? "free" : state.plan;
-  const planSeats =
-    plan === "team"
-      ? (state.includedSeats ?? teamBaseSeats) + state.extraSeats
-      : null;
+  // Pure per-seat model: extraSeats is the subscription quantity (= total seats for team)
+  const planSeats = plan === "team" ? state.extraSeats : null;
 
   return {
     plan,

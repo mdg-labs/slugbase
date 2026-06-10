@@ -242,13 +242,7 @@ Required for paid entitlements on hosted. Leave empty on self-host (no-op billin
 | `STRIPE_PRICE_PERSONAL_ANNUAL` | Stripe price id for Personal plan (annual) | Yes | No | Hosted | No | Runtime | `price_…` |
 | `STRIPE_PRICE_TEAM_MONTHLY` | Stripe price id for Team plan (monthly) | Yes | No | Hosted | No | Runtime | `price_…` |
 | `STRIPE_PRICE_TEAM_ANNUAL` | Stripe price id for Team plan (annual) | Yes | No | Hosted | No | Runtime | `price_…` |
-| `STRIPE_PRICE_TEAM_EXTRA_SEAT_MONTHLY` | Stripe price id for extra Team seats (monthly) | Yes | No | Optional | No | Runtime | `price_…` |
-| `STRIPE_PRICE_TEAM_EXTRA_SEAT_ANNUAL` | Stripe price id for extra Team seats (annual) | Yes | No | Optional | No | Runtime | `price_…` |
 | `STRIPE_PRICE_SUPPORTER` | Stripe price id for one-time supporter purchase | Yes | No | Optional | No | Runtime | `price_…` |
-| ~~`STRIPE_PRICE_PERSONAL`~~ | **DEPRECATED** — replaced by `_MONTHLY` + `_ANNUAL` | — | — | — | — | — | — |
-| ~~`STRIPE_PRICE_TEAM`~~ | **DEPRECATED** — replaced by `_MONTHLY` + `_ANNUAL` | — | — | — | — | — | — |
-| ~~`STRIPE_PRICE_TEAM_EXTRA_SEAT`~~ | **DEPRECATED** — replaced by `_MONTHLY` + `_ANNUAL` | — | — | — | — | — | — |
-| `TEAM_BASE_SEATS` | Included seats on Team plan | Yes | No | Optional | No | Runtime | `5` (default) |
 | `SUPPORTER_PROMOTION_END` | ISO-8601 end of supporter offer | Yes | No | Optional | No | Runtime | `2026-12-31T23:59:59Z` |
 | `DOWNGRADE_GRACE_PERIOD_DAYS` | Days after period end before overflow archive | Yes | Optional | Optional | No | Runtime | `7` (default) |
 | `TURNSTILE_SECRET_KEY` | Turnstile server secret (API + contact) | Yes | No | Optional | Yes | Runtime | `<Turnstile secret>` |

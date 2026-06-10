@@ -23,7 +23,6 @@ export interface PricingResponse {
   plans: {
     personal: PlanPriceGroup;
     team: PlanPriceGroup;
-    teamExtraSeat: PlanPriceGroup;
     supporter?: PriceInfo;
   };
   teamBaseSeats: number;
@@ -41,11 +40,7 @@ function formatDisplayPrice(unitAmount: number, currency: string): string {
 }
 
 const FREE_BOOKMARK_CAP = 50;
-
-function coercePositiveInt(value: unknown, fallback: number): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
-}
+const TEAM_BASE_SEATS = 5;
 
 /**
  * Fetches live prices from Stripe and builds the public pricing response.
@@ -79,13 +74,9 @@ export class PricingService {
           monthly: prices.teamMonthly,
           annual: prices.teamAnnual,
         },
-        teamExtraSeat: {
-          monthly: prices.teamExtraSeatMonthly,
-          annual: prices.teamExtraSeatAnnual,
-        },
         supporter: prices.supporter,
       },
-      teamBaseSeats: coercePositiveInt(this.config.get("TEAM_BASE_SEATS"), 5),
+      teamBaseSeats: TEAM_BASE_SEATS,
       freeBookmarkCap: FREE_BOOKMARK_CAP,
     };
   }
@@ -95,8 +86,6 @@ export class PricingService {
     personalAnnual: PriceInfo | undefined;
     teamMonthly: PriceInfo | undefined;
     teamAnnual: PriceInfo | undefined;
-    teamExtraSeatMonthly: PriceInfo | undefined;
-    teamExtraSeatAnnual: PriceInfo | undefined;
     supporter: PriceInfo | undefined;
   }> {
     const priceIds = [
@@ -104,8 +93,6 @@ export class PricingService {
       { key: "personalAnnual", id: this.config.get("STRIPE_PRICE_PERSONAL_ANNUAL") },
       { key: "teamMonthly", id: this.config.get("STRIPE_PRICE_TEAM_MONTHLY") },
       { key: "teamAnnual", id: this.config.get("STRIPE_PRICE_TEAM_ANNUAL") },
-      { key: "teamExtraSeatMonthly", id: this.config.get("STRIPE_PRICE_TEAM_EXTRA_SEAT_MONTHLY") },
-      { key: "teamExtraSeatAnnual", id: this.config.get("STRIPE_PRICE_TEAM_EXTRA_SEAT_ANNUAL") },
       { key: "supporter", id: this.config.get("STRIPE_PRICE_SUPPORTER") },
     ] as const;
 
@@ -135,8 +122,6 @@ export class PricingService {
       personalAnnual: PriceInfo | undefined;
       teamMonthly: PriceInfo | undefined;
       teamAnnual: PriceInfo | undefined;
-      teamExtraSeatMonthly: PriceInfo | undefined;
-      teamExtraSeatAnnual: PriceInfo | undefined;
       supporter: PriceInfo | undefined;
     };
   }

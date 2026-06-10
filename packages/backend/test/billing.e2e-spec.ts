@@ -33,7 +33,6 @@ function teamSubscriptionPayload(workspaceId: string, quantity = 5) {
         metadata: {
           workspace_id: workspaceId,
           plan: "team",
-          included_seats: "5",
         },
         items: {
           data: [{ id: "si_1", quantity, price: { metadata: { plan: "team" } } }],
@@ -75,7 +74,7 @@ describe("Billing (integration)", () => {
         customer: "cus_team_1",
         status: "active",
         current_period_end: 1_735_689_600,
-        metadata: { workspace_id: "ws-placeholder", plan: "team", included_seats: "5" },
+        metadata: { workspace_id: "ws-placeholder", plan: "team" },
         items: {
           data: [{ id: "si_1", quantity: 5, price: { metadata: { plan: "team" } } }],
         },
@@ -88,7 +87,7 @@ describe("Billing (integration)", () => {
           customer: "cus_team_1",
           status: "active",
           current_period_end: 1_735_689_600,
-          metadata: { workspace_id: workspaceId, plan: "team", included_seats: "5" },
+          metadata: { workspace_id: workspaceId, plan: "team" },
           items: {
             data: [
               {
@@ -124,7 +123,6 @@ describe("Billing (integration)", () => {
       STRIPE_PRICE_TEAM_MONTHLY: "price_team_monthly_test",
       STRIPE_PRICE_TEAM_ANNUAL: "price_team_annual_test",
       STRIPE_PRICE_SUPPORTER: "price_supporter_test",
-      TEAM_BASE_SEATS: "5",
     });
 
     const moduleRef = await Test.createTestingModule({
@@ -308,7 +306,7 @@ describe("Billing (integration)", () => {
           status: "active",
           current_period_end: 1_735_689_600,
           customer: "cus_interval_2",
-          metadata: { workspace_id: workspaceId, plan: "team", included_seats: "5" },
+          metadata: { workspace_id: workspaceId, plan: "team" },
           items: {
             data: [{
               id: "si_annual",
