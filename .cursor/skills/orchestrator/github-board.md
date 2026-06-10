@@ -33,10 +33,10 @@ Orchestrator and **sub-agents** use this when a prompt includes a **GITHUB SYNC*
 | **Link sub-issue** | MCP `sub_issue_write` (method: add) | Requires **database IDs** (not issue numbers); see § Getting database IDs below |
 | **Unlink sub-issue** | MCP `sub_issue_write` (method: remove) | Requires database IDs |
 | **Reorder sub-issues** | MCP `sub_issue_write` (method: reprioritize) | Requires database IDs |
-| **Add to project** | CLI `gh project item-add` | No MCP tool for project item management |
-| **Set project Status** | CLI `gh project item-edit` | Status is a project-board field, not an issue field — MCP `issue_write` cannot set it |
-| **List project items** | CLI `gh project item-list` | No MCP tool for project item enumeration |
-| **List project fields** | CLI `gh project field-list` | No MCP tool for project board field discovery |
+| **Add to project** | GraphQL `addProjectV2ItemById` | No MCP tool for project item management |
+| **Set project Status** | GraphQL `updateProjectV2ItemFieldValue` | Status is a project-board field — see § Projects v2 Status (via GraphQL) |
+| **Get project item ID** | GraphQL `repository.issue.projectItems` | Direct lookup by issue number — no pagination needed |
+| **Get project fields/options** | GraphQL `organization.projectV2.fields` | Hardcoded in § Projects v2 Status |
 | **Fetch Dependabot alerts** | CLI `gh api` (REST) | No MCP tool covers Dependabot alerts endpoint |
 | **Get issue node IDs** | CLI `gh api graphql` | Needed for `sub_issue_write` database ID lookups |
 | **Bulk operations** (100+ items) | CLI `gh api graphql` | Faster than sequential MCP calls for migrations |
@@ -53,27 +53,59 @@ gh api graphql -f 'query=query { repository(owner:"mdg-labs", name:"slugbase") {
 
 For bulk operations, paginate with `first:100` and `after` cursor.
 
-### Projects v2 Status (CLI-only)
+### Projects v2 Status (via GraphQL)
 
-Project board Status is a **project-level field** — it lives on the project item, not on the issue itself. MCP `issue_write` handles issue-level fields only (Priority, Effort, dates, type, labels). Status must be set via CLI:
+Project board Status is a **project-level field** — it lives on the project item, not on the issue itself. MCP `issue_write` handles issue-level fields only (Priority, Effort, dates, type, labels). Status is set via GraphQL mutations.
+
+**Hardcoded IDs** (never change):
+
+| Entity | ID |
+|---|---|
+| Project node ID | `PVT_kwDODv-LLc4BaOr9` |
+| Status field ID | `PVTSSF_lADODv-LLc4BaOr9zhVHxUI` |
+| Backlog | `9485f8e2` |
+| Ready | `a0e7153f` |
+| In Progress | `47fc9ee4` |
+| In Review | `81f76819` |
+| Done | `98236657` |
+| Declined | `e36e1062` |
+
+**Step 1 — Get project item ID for an issue:**
 
 ```bash
-# 1. Get project item ID for an issue
-gh project item-list 2 --owner mdg-labs --format json \
-  | jq '.items[] | select(.content.number == 12) | .id'
-
-# 2. Get the Status field ID and option IDs
-gh project field-list 2 --owner mdg-labs --format json \
-  | jq '.fields[] | select(.name == "Status")'
-
-# 3. Set Status
-gh project item-edit --project-id <PROJECT_NODE_ID> --id <ITEM_NODE_ID> \
-  --field-id <STATUS_FIELD_ID> --single-select-option-id <OPTION_ID>
+gh api graphql -f 'query=query {
+  repository(owner:"mdg-labs",name:"slugbase") {
+    issue(number:N) {
+      projectItems(first:10) {
+        nodes { id project { number } }
+      }
+    }
+  }
+}'
 ```
 
-### Why CLI for project operations?
+Filter `nodes` where `project.number == 2`, take the `id`.
 
-GitHub's GraphQL API (which MCP wraps) supports Issues, Pull Requests, and Labels natively. Projects v2 uses a separate `ProjectV2` type with different item IDs, field IDs, and mutation shapes. The `gh project` CLI is the only practical interface for project board mutations — no MCP tool currently wraps `ProjectV2` mutations.
+**Step 2 — Set Status:**
+
+```bash
+gh api graphql -f 'query=mutation {
+  updateProjectV2ItemFieldValue(input: {
+    projectId: "PVT_kwDODv-LLc4BaOr9"
+    itemId: "<ITEM_ID>"
+    fieldId: "PVTSSF_lADODv-LLc4BaOr9zhVHxUI"
+    value: { singleSelectOptionId: "<OPTION_ID>" }
+  }) {
+    projectV2Item {
+      fieldValueByName(name: "Status") {
+        ... on ProjectV2ItemFieldSingleSelectValue { name }
+      }
+    }
+  }
+}'
+```
+
+**Why GraphQL, not `gh project` CLI?** No pagination issues (direct lookup by issue number), no jq parsing, works at any project size.
 
 ## Org-level issue types
 
@@ -113,7 +145,7 @@ Set via MCP `issue_write` → `issue_fields` array. Each entry takes `field_name
 
 ## Projects v2 fields (board-level)
 
-The project board adds a **Status** field (single-select on the project item, not on the issue itself). Set via `gh project item-edit`.
+The project board adds a **Status** field (single-select on the project item, not on the issue itself). Set via GraphQL — see § Projects v2 Status (via GraphQL).
 
 ```
 Backlog → Ready → In Progress → In Review → Done
@@ -153,12 +185,20 @@ Skip only when user said **"don't update GitHub"** or prompt has no GITHUB SYNC 
 
 Set project Status to **"In Progress"** on every listed issue (leaf + parent).
 
-Project-board Status is a **project-level field** — must be set via CLI:
+Project-board Status is a **project-level field** — must be set via GraphQL (see § Projects v2 Status):
 
 ```bash
-gh project item-edit --project-id <PROJECT_ID> --id <ITEM_ID> \
-  --field-id <STATUS_FIELD_ID> --single-select-option-id <IN_PROGRESS_OPTION_ID>
+gh api graphql -f 'query=mutation {
+  updateProjectV2ItemFieldValue(input: {
+    projectId: "PVT_kwDODv-LLc4BaOr9"
+    itemId: "<ITEM_ID>"
+    fieldId: "PVTSSF_lADODv-LLc4BaOr9zhVHxUI"
+    value: { singleSelectOptionId: "<IN_PROGRESS_OPTION_ID>" }
+  }) { projectV2Item { fieldValueByName(name: "Status") { ... on ProjectV2ItemFieldSingleSelectValue { name } } } }
+}'
 ```
+
+Get the `<ITEM_ID>` for each issue via the Step 1 query in § Projects v2 Status.
 
 For issue-level fields (Priority, Effort, type, labels), use MCP `issue_write` (method: update).
 
@@ -299,7 +339,7 @@ GITHUB SYNC — VERIFIER (mandatory unless user opted out):
 | Concern | Jira | GitHub |
 |---|---|---|
 | Time tracking | `addWorklogToJiraIssue` required | **Removed** — no equivalent; session memory records timing locally only |
-| Status transitions | Numeric transition IDs (2, 21, 31, 41) | Status is a field value — set via `gh project item-edit`; no IDs to resolve |
+| Status transitions | Numeric transition IDs (2, 21, 31, 41) | Status is a field value — set via GraphQL `updateProjectV2ItemFieldValue`; no IDs to resolve |
 | Parent-child | `parent` field + JQL search | `sub_issue_write` via MCP (requires **database IDs**, not issue numbers) |
 | Auto-close | Transition to Done closes issue | `Fixes #N` in commit body; project-level auto-close disabled |
 | Verifier comments | Heavy: session IDs, sub-agent names, worklog | Clean: commit SHA + summary + AC; no session IDs, no sub-agent names |
@@ -311,7 +351,8 @@ GITHUB SYNC — VERIFIER (mandatory unless user opted out):
 |---|---|
 | Issue #12, GitHub URL | MCP `issue_read` (method: get, issue_number: 12) |
 | Sub-issues | MCP `issue_read` (method: get_sub_issues, issue_number: N) |
-| Ready queue | CLI `gh project item-list` (project-board query, no MCP tool) |
+| Set project Status | GraphQL `updateProjectV2ItemFieldValue` (see § Projects v2 Status) |
+| Project item ID for issue | GraphQL `repository.issue.projectItems` (see § Projects v2 Status) |
 | By domain | MCP `list_issues` (labels filter) |
 | By priority | MCP `list_issues` (field_filters) |
 | Database IDs for sub-issues | CLI `gh api graphql` (see § Getting database IDs above) |
@@ -372,15 +413,20 @@ Leaf set = atomic issues (no children) **+** all deepest-level children. Batch l
 | `sub_issue_write` (add) | Intake links parent-child | — | — |
 | `sub_issue_write` (reprioritize) | Reorder children | — | — |
 | `add_issue_comment` | — | — | On PASS (summary) + on FAIL (detail) |
-| `gh project item-edit` (CLI) | — | Set Status → In Progress / In Review | Set Status → Done / Ready |
+| GraphQL `updateProjectV2ItemFieldValue` | — | Set Status → In Progress / In Review | Set Status → Done / Ready |
 
 ## Standard queries
 
-**MCP preferred** for issue queries. CLI only for project board queries.
+**MCP preferred** for issue queries. GraphQL for project board operations.
 
 ```text
-# Ready queue (project board — CLI only, no MCP tool)
-gh project item-list 2 --owner mdg-labs --format json
+# Set Status (GraphQL — see § Projects v2 Status for IDs)
+gh api graphql -f 'query=mutation { updateProjectV2ItemFieldValue(input: {
+  projectId: "PVT_kwDODv-LLc4BaOr9"
+  itemId: "<ITEM_ID>"
+  fieldId: "PVTSSF_lADODv-LLc4BaOr9zhVHxUI"
+  value: { singleSelectOptionId: "<OPTION_ID>" }
+}) { projectV2Item { fieldValueByName(name: "Status") { ... on ProjectV2ItemFieldSingleSelectValue { name } } } } }'
 
 # By domain (MCP preferred)
 CallMcpTool list_issues: { owner, repo, labels: ["domain:backend"] }

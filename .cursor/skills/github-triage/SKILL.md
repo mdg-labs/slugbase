@@ -30,7 +30,7 @@ Board constants: [orchestrator/github-board.md](../orchestrator/github-board.md)
 2. **Update `body` via MCP `issue_write` (method: update)** — never post investigation findings as an issue comment (comments are for verifier summaries only).
 3. **Preserve the original report** under `## Report` at the top (verbatim reporter wording).
 4. **Summary follows [summary-patterns.md](summary-patterns.md)** — rewrite when vague/typo/mis-scoped; keep when already correct.
-5. **After successful triage:** set project Status to **Ready** (via `gh project item-edit`) unless user opted out of updates or issue is already In Progress / In Review / Done.
+5. **After successful triage:** set project Status to **Ready** (via GraphQL `updateProjectV2ItemFieldValue`) unless user opted out of updates or issue is already In Progress / In Review / Done.
 6. **Never** set In Progress, In Review, or Done — orchestrator / execution / verifier own those.
 
 ## Dual mode
@@ -54,7 +54,7 @@ MCP issue_write (method: create):
 - issue_fields: [{ field_name: "Priority", field_option_name: "High" }, { field_name: "Effort", field_option_name: "Medium" }]
 ```
 
-After create: set project Status to **Ready** (CLI `gh project item-edit`). Do **not** set In Progress or Done.
+After create: set project Status to **Ready** (via GraphQL `updateProjectV2ItemFieldValue`). Do **not** set In Progress or Done.
 
 ## Workflow (update mode)
 
@@ -123,7 +123,7 @@ Skip this step when user said "don't update GitHub". Do not change labels unless
 
 Skip when user opted out of updates.
 
-Set project Status to **Ready** via `gh project item-edit` (CLI — project-board field, no MCP tool). Only if current status is **Todo** — skip if already In Progress / In Review / Done.
+Set project Status to **Ready** via GraphQL `updateProjectV2ItemFieldValue` (see github-board.md § Projects v2 Status for IDs). Only if current status is **Todo** — skip if already In Progress / In Review / Done.
 
 ### Step 7 — Reply in chat
 
@@ -148,6 +148,6 @@ Re-fetch issue via MCP `issue_read` (method: get), preserve `## Report`, replace
 | MCP `search_issues` | Duplicate search |
 | MCP `issue_write` (update) | Write investigation to body + title |
 | MCP `issue_write` (create) | Create mode — new Bug (type: Bug + labels + fields) |
-| CLI `gh project item-edit` | Set Status to Ready after triage (project-board field) |
+| GraphQL `updateProjectV2ItemFieldValue` | Set Status to Ready after triage (project-board field) |
 
 **Forbidden during triage:** posting findings as issue comments; setting In Progress / In Review / Done; creating issues via `gh issue create` (use MCP `issue_write` instead).

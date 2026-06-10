@@ -33,7 +33,7 @@ Board sync for execution/verification: [orchestrator/github-board.md](../orchest
 MCP server: user-github
 Owner: mdg-labs
 Repo: slugbase
-Project number: 1  (check with gh project list --owner mdg-labs)
+Project number: 2 (SlugBase Roadmap)
 ```
 
 Org-level issue types: **Task**, **Bug**, **Feature** — see [github-board.md](../orchestrator/github-board.md).
@@ -171,12 +171,29 @@ Update the Feature epic — **Sub-issues table** with every child number, domain
 ### 7. Add to project and set to Ready
 
 ```bash
-# Add to project (if not auto-added) — CLI only, no MCP tool
-gh project item-add <PROJECT_NUMBER> --owner mdg-labs --url "https://github.com/mdg-labs/slugbase/issues/<NUMBER>"
+# Get issue node ID (needed for adding to project)
+ISSUE_NODE_ID=$(gh api graphql -f 'query=query { repository(owner:"mdg-labs",name:"slugbase") { issue(number:<NUMBER>) { id } } }' --jq '.data.repository.issue.id')
 
-# Set Status to Ready — CLI only (project-board field, not issue field)
-gh project item-edit --project-id <PROJECT_NODE_ID> --id <ITEM_NODE_ID> \
-  --field-id <STATUS_FIELD_ID> --single-select-option-id <READY_OPTION_ID>
+# Add to project — GraphQL mutation
+gh api graphql -f 'query=mutation {
+  addProjectV2ItemById(input: {
+    projectId: "PVT_kwDODv-LLc4BaOr9"
+    contentId: "'"$ISSUE_NODE_ID"'"
+  }) { item { id } }
+}'
+
+# Get project item ID from issue (needed for setting Status)
+ITEM_ID=$(gh api graphql -f 'query=query { repository(owner:"mdg-labs",name:"slugbase") { issue(number:<NUMBER>) { projectItems(first:10) { nodes { id project { number } } } } } }' --jq '.data.repository.issue.projectItems.nodes[] | select(.project.number == 2) | .id')
+
+# Set Status to Ready — GraphQL mutation (see github-board.md § Projects v2 Status)
+gh api graphql -f 'query=mutation {
+  updateProjectV2ItemFieldValue(input: {
+    projectId: "PVT_kwDODv-LLc4BaOr9"
+    itemId: "'"$ITEM_ID"'"
+    fieldId: "PVTSSF_lADODv-LLc4BaOr9zhVHxUI"
+    value: { singleSelectOptionId: "a0e7153f" }
+  }) { projectV2Item { fieldValueByName(name: "Status") { ... on ProjectV2ItemFieldSingleSelectValue { name } } } }
+}'
 ```
 
 Intake stops at **Ready** — not In Progress or Done.

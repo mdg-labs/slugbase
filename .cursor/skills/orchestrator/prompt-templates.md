@@ -22,7 +22,7 @@ Sub-agents perform GitHub status updates — not the orchestrator.
 Copy this block into **every** execution and verifier prompt that has a GITHUB SYNC section. Tells sub-agents which tool to use for each operation.
 
 ```text
-GITHUB TOOLS — MANDATORY (MCP preferred; CLI only where noted):
+GITHUB TOOLS — MANDATORY (MCP preferred; GraphQL for project board):
 - MCP server: user-github (always preferred for issue operations)
 - Issue create/update (title, body, type, labels, fields): MCP issue_write
   - ALWAYS set type, labels, Priority, and Effort on create — all four are mandatory
@@ -35,12 +35,32 @@ GITHUB TOOLS — MANDATORY (MCP preferred; CLI only where noted):
   - Get database IDs: gh api graphql -f 'query=query { repository(owner:"mdg-labs",name:"slugbase") { issue(number:N) { databaseId } } }'
 - Issue search: MCP search_issues
 - Issue list with field filters: MCP list_issues (field_filters for Priority, Effort, etc.)
-- Project Status (In Progress / In Review / Done / Ready): CLI gh project item-edit ONLY
-  - Status is a project-board field — MCP issue_write cannot set it
-  - Get item ID: gh project item-list 2 --owner mdg-labs --format json | jq '.items[] | select(.content.number == <N>) | .id'
-  - Get Status field + option IDs: gh project field-list 2 --owner mdg-labs --format json | jq '.fields[] | select(.name == "Status")'
-- FORBIDDEN: gh issue create, gh issue edit, gh issue view (always use MCP instead)
-- FORBIDDEN: Setting issue fields via gh CLI (always use MCP issue_write)
+
+PROJECT STATUS (In Progress / In Review / Done / Ready) — via GraphQL:
+Status is a project-board field — MCP issue_write cannot set it. Do NOT check "is issue in project" — if the GITHUB SYNC block lists the issue, it IS in the project. Do NOT use gh project CLI — use GraphQL.
+
+Hardcoded IDs (never change):
+- Project node ID: PVT_kwDODv-LLc4BaOr9
+- Status field ID: PVTSSF_lADODv-LLc4BaOr9zhVHxUI
+- Option IDs: Backlog=9485f8e2, Ready=a0e7153f, In Progress=47fc9ee4, In Review=81f76819, Done=98236657, Declined=e36e1062
+
+Step 1: Get project item ID for the issue (one query per issue):
+  gh api graphql -f 'query=query { repository(owner:"mdg-labs",name:"slugbase") { issue(number:N) { projectItems(first:10) { nodes { id project { number } } } } } }'
+  → Filter nodes where project.number == 2, take .id
+
+Step 2: Set Status (one mutation):
+  gh api graphql -f 'query=mutation { updateProjectV2ItemFieldValue(input: {
+    projectId: "PVT_kwDODv-LLc4BaOr9"
+    itemId: "<ITEM_ID from Step 1>"
+    fieldId: "PVTSSF_lADODv-LLc4BaOr9zhVHxUI"
+    value: { singleSelectOptionId: "<OPTION_ID>" }
+  }) { projectV2Item { fieldValueByName(name: "Status") { ... on ProjectV2ItemFieldSingleSelectValue { name } } } } }'
+
+FORBIDDEN:
+- gh issue create, gh issue edit, gh issue view (always use MCP instead)
+- Setting issue fields via gh CLI (always use MCP issue_write)
+- Checking "is issue in project" — if it's in the GITHUB SYNC block, it's in the project
+- gh project item-list, gh project item-edit, gh project field-list (use GraphQL instead)
 ```
 
 ---
@@ -112,7 +132,7 @@ GITHUB SYNC — EXECUTION (include when issue is on GitHub project board — omi
 - FIRST ACTION: Set project Status → "In Progress" for each leaf issue AND parent issue (if listed) BEFORE session memory
 - LAST ACTIONS (in order): Set project Status → "In Review" (leaf only) → single implementation commit
 - FORBIDDEN: Set Status → Done; add comment for verification outcomes; set parent Done
-- Status is set via `gh project item-edit` (CLI only — project-board field, not issue field)
+- Status is set via GraphQL `updateProjectV2ItemFieldValue` (see GITHUB TOOLS block for IDs)
 - Reference: .cursor/skills/orchestrator/github-board.md
 
 SESSION MEMORY:
@@ -299,13 +319,13 @@ GITHUB SYNC — EXECUTION (include when issue is on GitHub project board — omi
   - { number: 8 }
 
 GITHUB — EXECUTION (first action, before session memory):
-1. Set project Status → "In Progress" for EVERY leaf issue AND parent issue (if listed) via CLI gh project item-edit
+1. Set project Status → "In Progress" for EVERY leaf issue AND parent issue (if listed) via GraphQL updateProjectV2ItemFieldValue
 2. If status update fails → blocked; do not proceed
 3. FORBIDDEN: Set Status → Done; add comment for verification outcomes; set parent Done before verifier
 
 GITHUB — EXECUTION (pre-handoff, after implementation):
 1. Local session memory: set ended + duration
-2. Set project Status → "In Review" for leaf issue only via CLI gh project item-edit
+2. Set project Status → "In Review" for leaf issue only via GraphQL updateProjectV2ItemFieldValue
 3. Single implementation commit — task files only
 
 Reference: .cursor/skills/orchestrator/github-board.md
@@ -357,8 +377,8 @@ GITHUB SYNC — VERIFIER (include when execution prompt had execution variant):
 - MCP server: user-github (always preferred — see GITHUB TOOLS block); owner: mdg-labs; repo: slugbase; project: <PROJECT_NUMBER>
 - issues: [{ number: 12 }]
 - parent (optional): number if final subtask
-- AFTER PASS: MCP add_issue_comment (mandatory clean summary) → CLI gh project item-edit → Status "Done" for each issue (+ parent if listed)
-- AFTER FAIL: MCP add_issue_comment (FAIL detail) → CLI gh project item-edit → Status "Ready"; do NOT set Done
+- AFTER PASS: MCP add_issue_comment (mandatory clean summary) → GraphQL updateProjectV2ItemFieldValue → Status "Done" for each issue (+ parent if listed)
+- AFTER FAIL: MCP add_issue_comment (FAIL detail) → GraphQL updateProjectV2ItemFieldValue → Status "Ready"; do NOT set Done
 
 SESSION MEMORY (local, gitignored):
 - FIRST ACTION: read active/<SESSION-ID>.md if it exists
@@ -438,7 +458,7 @@ SESSION ID: <same as execution>
 
 GITHUB SYNC — VERIFIER (include when execution prompt had execution variant):
 - MCP server: user-github (always preferred — see GITHUB TOOLS block); owner: mdg-labs; repo: slugbase
-- Same rules as Lane S verifier: MCP add_issue_comment + CLI gh project item-edit for Status (Done / Ready)
+- Same rules as Lane S verifier: MCP add_issue_comment + GraphQL updateProjectV2ItemFieldValue for Status (Done / Ready)
 
 WORK DEP — MANDATORY (Lane P worktrees have no node_modules):
 - Worktrees are bare checkouts — **no `node_modules`** present at branch start
