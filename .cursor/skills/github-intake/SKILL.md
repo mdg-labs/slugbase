@@ -165,6 +165,54 @@ gh api graphql -f 'query=query { repository(owner:"mdg-labs", name:"slugbase") {
 
 Document sub-issue relationships in each leaf description with `#N` references.
 
+### 5a. Dependencies (blocked-by / blocking)
+
+Use GitHub's native issue dependencies for blocking relationships (separate from parent/child sub-issues). These require the **GraphQL `addBlockedBy` / `removeBlockedBy` mutations** — the MCP `issue_write` tool does not support dependencies.
+
+**Key distinction:**
+- **Sub-issues** (section 5): parent/child hierarchy for epics. Use MCP `sub_issue_write`.
+- **Dependencies** (blocked-by): one issue cannot start until another is resolved. Use GraphQL `addBlockedBy`.
+
+```bash
+# Get Node IDs (NOT database IDs — addBlockedBy requires Node IDs starting with I_)
+gh api graphql -f 'query=query { repository(owner:"mdg-labs", name:"slugbase") {
+  issue(number: <BLOCKED>) { id }          # the issue that is blocked
+  issue(number: <BLOCKING>) { id }         # the issue that blocks it
+} }'
+
+# Add dependency: issue #312 is blocked by issue #4
+gh api graphql -f 'query=mutation {
+  addBlockedBy(input: {
+    issueId: "<BLOCKED_NODE_ID>",
+    blockingIssueId: "<BLOCKING_NODE_ID>"
+  }) {
+    issue { number title }
+    blockingIssue { number title }
+  }
+}'
+
+# Remove dependency
+gh api graphql -f 'query=mutation {
+  removeBlockedBy(input: {
+    issueId: "<BLOCKED_NODE_ID>",
+    blockingIssueId: "<BLOCKING_NODE_ID>"
+  }) {
+    issue { number title }
+    blockingIssue { number title }
+  }
+}'
+
+# Query existing dependencies
+gh api graphql -f 'query=query { repository(owner:"mdg-labs", name:"slugbase") {
+  issue(number: <NUMBER>) {
+    blockedBy(first: 10) { nodes { number title } totalCount }
+    blocking(first: 10) { nodes { number title } totalCount }
+  }
+} }'
+```
+
+**Important:** `addBlockedBy` returns a validation error (`"Target issue has already been taken"`) if the dependency already exists — this is expected and means no action needed.
+
 ### 6. Finalize Feature description
 
 Update the Feature epic — **Sub-issues table** with every child number, domain, one-line scope, and **Suggested implementation order**. Include relevant spec `§` refs.

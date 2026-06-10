@@ -343,7 +343,7 @@ GITHUB SYNC — VERIFIER (mandatory unless user opted out):
 | Parent-child | `parent` field + JQL search | `sub_issue_write` via MCP (requires **database IDs**, not issue numbers) |
 | Auto-close | Transition to Done closes issue | `Fixes #N` in commit body; project-level auto-close disabled |
 | Verifier comments | Heavy: session IDs, sub-agent names, worklog | Clean: commit SHA + summary + AC; no session IDs, no sub-agent names |
-| Issue linking | `createIssueLink` ("Depends on") | Body text "Depends on: #N" or Projects v2 dependencies |
+| Issue linking | `createIssueLink` ("Depends on") | **`addBlockedBy`** GraphQL mutation (requires **Node IDs** `I_...`, not database IDs) — see [github-intake §5a](../github-intake/SKILL.md) |
 
 ## Issue lookup (orchestrator)
 
@@ -356,6 +356,7 @@ GITHUB SYNC — VERIFIER (mandatory unless user opted out):
 | By domain | MCP `list_issues` (labels filter) |
 | By priority | MCP `list_issues` (field_filters) |
 | Database IDs for sub-issues | CLI `gh api graphql` (see § Getting database IDs above) |
+| Dependencies (blocked-by) | CLI `gh api graphql` `addBlockedBy`/`removeBlockedBy` (see [github-intake §5a](../github-intake/SKILL.md)) |
 
 ## Epic pattern
 
