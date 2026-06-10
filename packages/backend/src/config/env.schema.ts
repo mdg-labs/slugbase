@@ -60,10 +60,18 @@ const optionalFlagsSchema = z
     STRIPE_SECRET_KEY: z.string().min(1).optional(),
     STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
     // Config-driven Stripe price ids (spec §12.1, def §6) — not hard-coded in app logic
+    // Per-interval price IDs (spec §12.1, per-interval billing)
+    STRIPE_PRICE_PERSONAL_MONTHLY: z.string().min(1).optional(),
+    STRIPE_PRICE_PERSONAL_ANNUAL: z.string().min(1).optional(),
+    STRIPE_PRICE_TEAM_MONTHLY: z.string().min(1).optional(),
+    STRIPE_PRICE_TEAM_ANNUAL: z.string().min(1).optional(),
+    STRIPE_PRICE_TEAM_EXTRA_SEAT_MONTHLY: z.string().min(1).optional(),
+    STRIPE_PRICE_TEAM_EXTRA_SEAT_ANNUAL: z.string().min(1).optional(),
+    STRIPE_PRICE_SUPPORTER: z.string().min(1).optional(),
+    // DEPRECATED — single-interval keys replaced by per-interval keys above; kept temporarily for backwards compat
     STRIPE_PRICE_PERSONAL: z.string().min(1).optional(),
     STRIPE_PRICE_TEAM: z.string().min(1).optional(),
     STRIPE_PRICE_TEAM_EXTRA_SEAT: z.string().min(1).optional(),
-    STRIPE_PRICE_SUPPORTER: z.string().min(1).optional(),
     TEAM_BASE_SEATS: z.coerce.number().int().positive().default(5),
     SUPPORTER_PROMOTION_END: z.string().min(1).optional(),
     // Downgrade overflow grace (spec §12.5, def §5) — days after period end before archive
@@ -160,6 +168,12 @@ function readFlagsInput(env: NodeJS.ProcessEnv) {
     STRIPE_PRICE_PERSONAL: env.STRIPE_PRICE_PERSONAL,
     STRIPE_PRICE_TEAM: env.STRIPE_PRICE_TEAM,
     STRIPE_PRICE_TEAM_EXTRA_SEAT: env.STRIPE_PRICE_TEAM_EXTRA_SEAT,
+    STRIPE_PRICE_PERSONAL_MONTHLY: env.STRIPE_PRICE_PERSONAL_MONTHLY,
+    STRIPE_PRICE_PERSONAL_ANNUAL: env.STRIPE_PRICE_PERSONAL_ANNUAL,
+    STRIPE_PRICE_TEAM_MONTHLY: env.STRIPE_PRICE_TEAM_MONTHLY,
+    STRIPE_PRICE_TEAM_ANNUAL: env.STRIPE_PRICE_TEAM_ANNUAL,
+    STRIPE_PRICE_TEAM_EXTRA_SEAT_MONTHLY: env.STRIPE_PRICE_TEAM_EXTRA_SEAT_MONTHLY,
+    STRIPE_PRICE_TEAM_EXTRA_SEAT_ANNUAL: env.STRIPE_PRICE_TEAM_EXTRA_SEAT_ANNUAL,
     STRIPE_PRICE_SUPPORTER: env.STRIPE_PRICE_SUPPORTER,
     TEAM_BASE_SEATS: env.TEAM_BASE_SEATS,
     SUPPORTER_PROMOTION_END: env.SUPPORTER_PROMOTION_END,
