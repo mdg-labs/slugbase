@@ -39,6 +39,14 @@ export interface WorkspaceMemberRecord {
   joinedAt: Date;
 }
 
+/** Response shape for GET /workspaces — includes the caller's membership role. */
+export interface WorkspaceListItemResponse {
+  id: string;
+  name: string;
+  plan: WorkspacePlan;
+  role: WorkspaceMemberRole;
+}
+
 export interface CreateWorkspaceData {
   name: string;
   slug: string;
