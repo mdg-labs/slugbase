@@ -4,11 +4,13 @@ import type {
   FetchAiSuggestionsParams,
 } from "./bookmark-modal-ai.types.js";
 
-/**
- * Always returns relative URLs so fetch requests flow through the
- * Cloudflare Worker proxy routes defined in routes.ts.
- */
-const getApiBaseUrl = (): string => "";
+const getApiBaseUrl = (): string => {
+  const fromProcess = typeof process !== "undefined" ? process.env["API_BASE_URL"] : undefined;
+  if (typeof fromProcess === "string" && fromProcess.length > 0) return fromProcess.replace(/\/$/, "");
+  const fromVite = typeof import.meta !== "undefined" ? (import.meta as { env: { VITE_API_URL?: string } }).env.VITE_API_URL : undefined;
+  if (typeof fromVite === "string" && fromVite.length > 0) return fromVite.replace(/\/$/, "");
+  return "";
+};
 
 /** Status codes that indicate the feature is gated or unavailable - return null gracefully. */
 const SILENT_NULL_STATUSES = new Set([400, 403, 404, 503]);

@@ -25,7 +25,13 @@ function readPositiveInt(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-const getApiBaseUrl = (): string => process.env["API_BASE_URL"] ?? "";
+const getApiBaseUrl = (): string => {
+  const fromProcess = typeof process !== "undefined" ? process.env["API_BASE_URL"] : undefined;
+  if (typeof fromProcess === "string" && fromProcess.length > 0) return fromProcess.replace(/\/$/, "");
+  const fromVite = typeof import.meta !== "undefined" ? (import.meta as { env: { VITE_API_URL?: string } }).env.VITE_API_URL : undefined;
+  if (typeof fromVite === "string" && fromVite.length > 0) return fromVite.replace(/\/$/, "");
+  return "";
+};
 
 interface PublicPriceInfo {
   priceId: string;
