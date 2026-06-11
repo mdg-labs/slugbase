@@ -1,36 +1,17 @@
-import * as Sentry from "@sentry/react";
+import * as Sentry from "@sentry/react-router";
 
 let initialized = false;
 
 /**
  * Initializes browser error reporting when VITE_SENTRY_DSN is set.
  * Call sites must pass consentGranted before capturing user-facing errors.
+ * Init is handled directly in entry.client.tsx via Sentry.init();
+ * this function tracks readiness for captureClientException.
  */
 export function initErrorReportingClient(): void {
-  const dsn = import.meta.env.VITE_SENTRY_DSN as string | undefined;
-  if (!dsn || initialized) {
+  if (initialized) {
     return;
   }
-
-  const environment =
-    (import.meta.env.VITE_SENTRY_ENVIRONMENT as string | undefined) ||
-    import.meta.env.MODE;
-  const release =
-    (import.meta.env.VITE_SENTRY_RELEASE as string | undefined) || undefined;
-
-  Sentry.init({
-    dsn,
-    environment,
-    ...(release ? { release } : {}),
-    beforeSend(event) {
-      if (event.user) {
-        delete event.user.email;
-        delete event.user.ip_address;
-        delete event.user.username;
-      }
-      return event;
-    },
-  });
   initialized = true;
 }
 

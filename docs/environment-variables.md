@@ -307,6 +307,10 @@ Optional on both shapes. Empty = no-op (no tracker, no Sentry init).
 | `SENTRY_DSN` | Sentry ingest DSN (API) | Optional | No | Optional | Yes | Runtime | `https://…@sentry.io/…` |
 | `SENTRY_ENVIRONMENT` | Sentry environment tag override | Optional | No | Optional | No | Runtime | `staging` |
 | `SENTRY_RELEASE` | Sentry release / deploy version | Optional | No | Optional | No | Runtime | `slugbase@1.2.3` |
+| `SENTRY_TRACES_SAMPLE_RATE` | Server-side Sentry traces sample rate (0.0–1.0) | Optional | No | Optional | No | Runtime | `0.1` |
+| `SENTRY_REPLAY_SAMPLE_RATE` | Server-side Sentry replay sample rate (0.0–1.0) | Optional | No | Optional | No | Runtime | `0.25` |
+| `VITE_SENTRY_TRACES_SAMPLE_RATE` | Web client Sentry traces sample rate (0.0–1.0) | Optional | No | Optional | No | Build | `0.1` |
+| `VITE_SENTRY_REPLAY_SAMPLE_RATE` | Web client Sentry replay sample rate (0.0–1.0) | Optional | No | Optional | No | Build | `0.25` |
 | `VITE_SENTRY_DSN` | Public Sentry DSN (web client) | Optional | No | Optional | No | Build | `https://…@sentry.io/…` |
 | `VITE_SENTRY_ENVIRONMENT` | Sentry environment tag for web client (staging / production) — set by CI; falls back to `MODE` | Optional | Build only | Optional | No | Build | `staging` |
 | `VITE_SENTRY_RELEASE` | Sentry release tag for web client — set by CI from root `package.json` version | Optional | Build only | Optional | No | Build | `slugbase@0.1.0` |
