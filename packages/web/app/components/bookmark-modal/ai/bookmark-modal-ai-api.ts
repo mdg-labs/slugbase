@@ -4,7 +4,11 @@ import type {
   FetchAiSuggestionsParams,
 } from "./bookmark-modal-ai.types.js";
 
-const getApiBaseUrl = (): string => process.env["API_BASE_URL"] ?? "";
+/**
+ * Always returns relative URLs so fetch requests flow through the
+ * Cloudflare Worker proxy routes defined in routes.ts.
+ */
+const getApiBaseUrl = (): string => "";
 
 /** Status codes that indicate the feature is gated or unavailable — return null gracefully. */
 const SILENT_NULL_STATUSES = new Set([400, 403, 404, 503]);

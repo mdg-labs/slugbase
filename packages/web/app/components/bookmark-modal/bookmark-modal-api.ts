@@ -41,8 +41,12 @@ function isTagOptionArray(items: unknown): items is BookmarkModalTagOption[] {
   );
 }
 
-const getApiBaseUrl = (): string =>
-  (import.meta.env.VITE_API_URL as string | undefined) ?? "";
+/**
+ * Always returns relative URLs so fetch requests flow through the
+ * Cloudflare Worker proxy routes defined in routes.ts rather than
+ * hitting the NestJS backend directly.
+ */
+const getApiBaseUrl = (): string => "";
 
 async function getMutationHeaders(): Promise<Record<string, string>> {
   const res = await fetch(`${getApiBaseUrl()}/auth/csrf-token`, {
