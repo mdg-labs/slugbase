@@ -13,6 +13,19 @@ SlugBase uses **two separate status systems**:
 
 **Board Status is what matters.** Verifiers set Done on the board; the issue itself stays open until the commit lands on `main`.
 
+## Blocking dependencies — unblocked when board Status is Done
+
+A task that depends on another issue (e.g. "Depends on: #325") is **unblocked** when the blocking issue's project board Status is **Done** — regardless of the GitHub issue state (open/closed).
+
+**Why:** Done on the board means the implementation has been verified, committed, and merged to `staging`. The commit carries `fixes #N`, which will auto-close the GitHub issue only when it lands on `main` (the default branch). The distinction is:
+
+| Board Status | GitHub issue state | Meaning |
+|---|---|---|
+| Done | `open` | Implementation complete on `staging` — ready for downstream consumption. **Unblocks dependents.** |
+| Closed | `closed` (auto) | Commit landed on `main` via release — project workflow auto-transitions board to Closed. Purely ceremonial from a dependency perspective; the change was already usable at Done. |
+
+**Corollary:** Never check the GitHub issue state (`open`/`closed`) to determine if a dependency is resolved. Always check the **board Status**. The issue will remain open until release to `main` — that is expected and intentional.
+
 ## Rule
 
 **NEVER check whether an issue is already in the GitHub project.** Every issue created by any agent or skill in this repo is automatically on the project board. Treat this as an invariant — do not query, verify, or attempt to re-add.
