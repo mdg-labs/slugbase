@@ -1,0 +1,208 @@
+# Playwright e2e tests — runs on staging→main release-candidate PRs,
+# on workflow_dispatch, and as a reusable workflow (spec §22.4).
+#
+# Two jobs: hosted (separate API/web/marketing services) and
+# self-hosted (combined Docker image, single port).
+
+name: E2E
+
+on:
+  pull_request:
+    branches: [main]
+
+  workflow_dispatch:
+
+  workflow_call:
+    inputs:
+      mode:
+        description: 'Deployment mode to test'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # Postgres (shared across modes)
+  DATABASE_URL: postgresql://slugbase:slugbase@localhost:5432/slugbase_e2e
+  # E2E mode flag
+  SLUGBASE_E2E_MODE: 'true'
+  # Test credentials (created by seed fixture)
+  E2E_TEST_EMAIL: e2e@slugbase.test
+  E2E_TEST_PASSWORD: e2e-test-password
+
+jobs:
+  e2e-hosted:
+    name: E2E · Hosted mode
+    if: inputs.mode == '' || inputs.mode == 'hosted'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      E2E_BASE_URL_API: http://localhost:4001
+      E2E_BASE_URL_WEB: http://localhost:4002
+      E2E_BASE_URL_MARKETING: http://localhost:4003
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: slugbase
+          POSTGRES_PASSWORD: slugbase
+          POSTGRES_DB: slugbase_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U slugbase -d slugbase_e2e"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
+        with:
+          version: 9.15.4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.12
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Build all packages
+        env:
+          NODE_ENV: production
+        run: pnpm build
+
+      - name: Start API
+        env:
+          PORT: '4001'
+        run: |
+          node packages/backend/dist/main.js &
+          echo "API_PID=$!" >> "$GITHUB_ENV"
+
+      - name: Start Web (React Router serve)
+        env:
+          PORT: '4002'
+        run: |
+          npx react-router-serve packages/web/build/server/index.js &
+          echo "WEB_PID=$!" >> "$GITHUB_ENV"
+
+      - name: Start Marketing (static serve)
+        run: |
+          npx serve packages/marketing/dist -l 4003 &
+          echo "MARKETING_PID=$!" >> "$GITHUB_ENV"
+
+      - name: Wait for health endpoints
+        run: |
+          echo "Waiting for API at $E2E_BASE_URL_API/health ..."
+          for i in $(seq 1 30); do
+            curl -sf "$E2E_BASE_URL_API/health" >/dev/null 2>&1 && break
+            sleep 2
+          done
+          echo "Waiting for Web at $E2E_BASE_URL_WEB/health ..."
+          for i in $(seq 1 30); do
+            curl -sf "$E2E_BASE_URL_WEB/health" >/dev/null 2>&1 && break
+            sleep 2
+          done
+          echo "Waiting for Marketing at $E2E_BASE_URL_MARKETING ..."
+          for i in $(seq 1 15); do
+            curl -sf "$E2E_BASE_URL_MARKETING" >/dev/null 2>&1 && break
+            sleep 2
+          done
+
+      - name: Run Playwright tests (hosted)
+        run: pnpm test:e2e --project=hosted
+
+      - name: Cleanup — Postgres
+        if: always()
+        run: |
+          # Stop backgrounded node/serve processes
+          kill "${API_PID:-}" 2>/dev/null || true
+          kill "${WEB_PID:-}" 2>/dev/null || true
+          kill "${MARKETING_PID:-}" 2>/dev/null || true
+
+      - name: Cleanup — Docker prune
+        if: always()
+        run: docker builder prune --force
+
+  e2e-self-hosted:
+    name: E2E · Self-hosted mode
+    if: inputs.mode == 'self-hosted'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      E2E_BASE_URL_SELF_HOSTED: http://localhost:3000
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: slugbase
+          POSTGRES_PASSWORD: slugbase
+          POSTGRES_DB: slugbase_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U slugbase -d slugbase_e2e"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build combined image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: slugbase-e2e:self-hosted
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Start combined container
+        run: |
+          docker run -d \
+            --name slugbase-e2e-self \
+            --network host \
+            -e DATABASE_URL="$DATABASE_URL" \
+            -e SLUGBASE_E2E_MODE=true \
+            -e E2E_TEST_EMAIL="$E2E_TEST_EMAIL" \
+            -e E2E_TEST_PASSWORD="$E2E_TEST_PASSWORD" \
+            slugbase-e2e:self-hosted
+
+      - name: Wait for health endpoint
+        run: |
+          echo "Waiting for API at http://localhost:3000/health ..."
+          for i in $(seq 1 30); do
+            curl -sf "http://localhost:3000/health" >/dev/null 2>&1 && break
+            sleep 2
+          done
+
+      - name: Run Playwright tests (self-hosted)
+        run: pnpm test:e2e --project=self-hosted
+
+      - name: Cleanup — container
+        if: always()
+        run: |
+          docker stop slugbase-e2e-self 2>/dev/null || true
+          docker rm slugbase-e2e-self 2>/dev/null || true
+
+      - name: Cleanup — Postgres prune
+        if: always()
+        run: docker builder prune --force
