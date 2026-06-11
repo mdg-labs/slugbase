@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { Badge, Kbd, ThemeSwitcher } from "@slugbase/ui";
 import { useEffect, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router";
+import { useFetcher, useLocation, useNavigate } from "react-router";
 
 import { useListPageMeta } from "./list/ListPageMetaProvider.js";
 
@@ -158,6 +158,7 @@ function AvatarDropdown({
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const fetcher = useFetcher();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -246,7 +247,7 @@ function AvatarDropdown({
             <MenuItem
               icon={<LogOutIcon />}
               label={t("app.shell.topbar.sign_out")}
-              onClick={() => { void navigate("/logout"); }}
+              onClick={() => { void fetcher.submit({}, { method: "post", action: "/logout" }); }}
             />
           </div>
         </div>
