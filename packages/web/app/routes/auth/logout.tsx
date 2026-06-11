@@ -5,6 +5,21 @@ import { redirect } from "react-router";
 const SESSION_COOKIE = "slb_session";
 
 const API_BASE_URL = () => process.env["API_BASE_URL"] ?? "";
+const isProd = () => import.meta.env.PROD;
+
+function clearSessionCookie(response: Response): void {
+  const flags = [
+    `${SESSION_COOKIE}=`,
+    "Path=/",
+    "Max-Age=0",
+    "HttpOnly",
+    "SameSite=Lax",
+  ];
+  if (isProd()) {
+    flags.push("Secure");
+  }
+  response.headers.set("Set-Cookie", flags.join("; "));
+}
 
 export async function action({ request }: ActionFunctionArgs) {
   const cookie = request.headers.get("Cookie") ?? "";
@@ -20,16 +35,16 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const response = redirect("/login");
-  response.headers.set(
-    "Set-Cookie",
-    `${SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`,
-  );
+  clearSessionCookie(response);
   return response;
 }
 
-/** GET /logout: redirect to /login (no session to check on direct navigation). */
+/** GET /logout: also clears the session cookie before redirecting to /login,
+ *  so existing GET links/bookmarks to /logout still result in a sign-out. */
 export function loader() {
-  return redirect("/login");
+  const response = redirect("/login");
+  clearSessionCookie(response);
+  return response;
 }
 
 export default function LogoutRoute() {
