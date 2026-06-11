@@ -62,6 +62,7 @@ FORBIDDEN:
 - Setting issue fields via gh CLI (always use MCP issue_write)
 - Checking "is issue in project" — if it's in the GITHUB SYNC block, it's in the project
 - gh project item-list, gh project item-edit, gh project field-list (use GraphQL instead)
+- Setting GitHub issue state (open/closed) — board Status only; never modify GitHub issue state directly
 ```
 
 ---

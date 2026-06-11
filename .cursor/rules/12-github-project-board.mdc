@@ -3,7 +3,15 @@ description: GitHub Project Board — never verify membership, never re-add issu
 alwaysApply: true
 ---
 
-# GitHub Project Board — never verify, never re-add
+# GitHub Project Board — never verify membership, never re-add; board Status vs issue state
+
+## Context
+
+SlugBase uses **two separate status systems**:
+- **GitHub issue state** (`open`/`closed`) — driven solely by commit messages (`fixes #N` on `main`). Agents never modify this.
+- **Project board Status** (Backlog / Ready / In Progress / In Review / Done / Closed) — managed by agents via GraphQL `updateProjectV2ItemFieldValue`. This is the authoritative status for day-to-day work tracking.
+
+**Board Status is what matters.** Verifiers set Done on the board; the issue itself stays open until the commit lands on `main`.
 
 ## Rule
 
