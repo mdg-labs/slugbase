@@ -1,5 +1,7 @@
 import { Module } from "@nestjs/common";
+import { APP_FILTER } from "@nestjs/core";
 import { ThrottlerModule, type ThrottlerModuleOptions } from "@nestjs/throttler";
+import { SentryModule, SentryGlobalFilter } from "@sentry/nestjs/setup";
 
 import { RateLimitModule } from "./auth/rate-limit/rate-limit.module.js";
 import { ConfigModule } from "./config/config.module.js";
@@ -9,6 +11,7 @@ import { HealthModule } from "./health/health.module.js";
 
 @Module({
   imports: [
+    SentryModule.forRoot(),
     ConfigModule,
     HealthModule,
     ThrottlerModule.forRootAsync({
@@ -32,6 +35,12 @@ import { HealthModule } from "./health/health.module.js";
     }),
     RateLimitModule,
     ...domainModules,
+  ],
+  providers: [
+    {
+      provide: APP_FILTER,
+      useClass: SentryGlobalFilter,
+    },
   ],
 })
 export class AppModule {}

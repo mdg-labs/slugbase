@@ -94,6 +94,10 @@ const optionalFlagsSchema = z
     SENTRY_DSN: z.string().min(1).optional(),
     SENTRY_ENVIRONMENT: z.string().min(1).optional(),
     SENTRY_RELEASE: z.string().min(1).optional(),
+    SENTRY_TRACES_SAMPLE_RATE: z.string().min(1).optional(),
+    SENTRY_PROFILING_SAMPLE_RATE: z.string().min(1).optional(),
+    SENTRY_LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).optional(),
+    SENTRY_ENABLE_CONSOLE_LOGGING: envBoolean(false),
     // OpenAPI interactive docs (spec §18) — optional Scalar UI at GET /docs
     OPENAPI_INTERACTIVE_DOCS: envBoolean(true),
   })
@@ -181,6 +185,10 @@ function readFlagsInput(env: NodeJS.ProcessEnv) {
     SENTRY_DSN: env.SENTRY_DSN,
     SENTRY_ENVIRONMENT: env.SENTRY_ENVIRONMENT,
     SENTRY_RELEASE: env.SENTRY_RELEASE,
+    SENTRY_TRACES_SAMPLE_RATE: env.SENTRY_TRACES_SAMPLE_RATE,
+    SENTRY_PROFILING_SAMPLE_RATE: env.SENTRY_PROFILING_SAMPLE_RATE,
+    SENTRY_LOG_LEVEL: env.SENTRY_LOG_LEVEL,
+    SENTRY_ENABLE_CONSOLE_LOGGING: env.SENTRY_ENABLE_CONSOLE_LOGGING,
     OPENAPI_INTERACTIVE_DOCS: env.OPENAPI_INTERACTIVE_DOCS,
   };
 }

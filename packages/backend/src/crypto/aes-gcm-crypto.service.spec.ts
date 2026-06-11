@@ -30,6 +30,7 @@ function createCryptoService(overrides: Partial<AppConfig> = {}): AesGcmCryptoSe
     RATE_LIMIT_EMAIL_VERIFICATION_MAX: 3,
     RATE_LIMIT_EMAIL_VERIFICATION_TTL_SECONDS: 3600,
     OPENAPI_INTERACTIVE_DOCS: true,
+    SENTRY_ENABLE_CONSOLE_LOGGING: false,
     DOWNGRADE_GRACE_PERIOD_DAYS: 7,
     nodeEnv: "test",
     isProduction: false,
