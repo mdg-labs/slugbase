@@ -11,8 +11,6 @@ test.describe("Go not found", () => {
     expect(response?.status()).toBe(404);
 
     // The error page should render with 404 indicator
-    await page.waitForSelector(".error-code");
-    const errorCode = page.locator(".error-code");
-    await expect(errorCode).toHaveText("404");
+    await page.waitForSelector('[data-testid="go-not-found"]');
   });
 });

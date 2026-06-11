@@ -5,12 +5,13 @@ test.describe('Command palette go mode', () => {
   const BOOKMARK_TITLE = 'Go Mode E2E Test';
   const BOOKMARK_URL = 'https://example.com/e2e-go-test';
 
-  test('⌘K → go <slug> resolves or opens disambiguation', async ({ authedPage }) => {
+  test('⌘K → go <slug> resolves or opens disambiguation', async ({ authedPage, sessionCookie }) => {
     const page = authedPage;
 
     // Create a bookmark with slug + forwarding enabled so it appears in go mode
-    const apiUrl = page.context().request.defaultHeaders()?.['X-E2E-Base-URL-API'] ?? 'http://localhost:4001';
-    const createRes = await page.request.post(`${apiUrl}/api/v1/bookmarks`, {
+    const apiUrl = process.env.E2E_BASE_URL_API ?? process.env.E2E_BASE_URL_SELF_HOSTED ?? 'http://localhost:4001';
+    const createRes = await page.request.post(`${apiUrl}/bookmarks`, {
+      headers: { Cookie: sessionCookie },
       data: {
         url: BOOKMARK_URL,
         title: BOOKMARK_TITLE,
@@ -53,13 +54,14 @@ test.describe('Command palette go mode', () => {
     await expect(page).toHaveURL(/\/go\//, { timeout: 5000 });
   });
 
-  test('go mode works with full slug and Enter key', async ({ authedPage }) => {
+  test('go mode works with full slug and Enter key', async ({ authedPage, sessionCookie }) => {
     const page = authedPage;
 
     // Create a bookmark with a distinct slug
-    const apiUrl = page.context().request.defaultHeaders()?.['X-E2E-Base-URL-API'] ?? 'http://localhost:4001';
+    const apiUrl = process.env.E2E_BASE_URL_API ?? process.env.E2E_BASE_URL_SELF_HOSTED ?? 'http://localhost:4001';
     const fullSlug = 'e2e-enter-test';
-    const createRes = await page.request.post(`${apiUrl}/api/v1/bookmarks`, {
+    const createRes = await page.request.post(`${apiUrl}/bookmarks`, {
+      headers: { Cookie: sessionCookie },
       data: {
         url: 'https://example.com/e2e-enter-test',
         title: 'Go Mode Enter Test',

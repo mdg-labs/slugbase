@@ -35,6 +35,11 @@ export class UserThrottlerGuard extends ThrottlerGuard {
     super(options, storageService, reflector);
   }
 
+  public override async canActivate(context: ExecutionContext): Promise<boolean> {
+    if (process.env.SLUGBASE_E2E_MODE === "true") return true;
+    return super.canActivate(context);
+  }
+
   protected override getTracker(
     req: Record<string, unknown>,
   ): Promise<string> {

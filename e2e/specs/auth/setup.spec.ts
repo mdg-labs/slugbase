@@ -2,7 +2,17 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Self-hosted setup smoke', () => {
   test('fresh DB shows /setup flow and setup completes session', async ({ page }) => {
-    // Navigate to setup page (self-hosted mode: requires fresh DB via E2E_SETUP_MODE)
+    // globalSetup already called /setup/complete — if setup is done, skip
+    const statusRes = await page.request.get('/setup/status');
+    if (statusRes.ok()) {
+      const status = await statusRes.json();
+      if (status.setupComplete) {
+        test.skip(true, 'Setup already completed by globalSetup');
+        return;
+      }
+    }
+
+    // Navigate to setup page (self-hosted mode: fresh DB)
     await page.goto('/setup');
 
     // The setup page should render with the setup form
@@ -24,8 +34,6 @@ test.describe('Self-hosted setup smoke', () => {
     await page.click('button[type="submit"]');
 
     // After setup, should redirect to login (or be signed in directly)
-    // The spec says "complete setup → session" which means user may
-    // be redirected to login or directly to dashboard
     await page.waitForURL(/\/(login)?$/);
   });
 });

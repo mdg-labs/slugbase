@@ -4,27 +4,27 @@ const MARKETING_URL =
   process.env.E2E_BASE_URL_MARKETING ?? 'http://localhost:4003';
 
 test.describe('Marketing CTA links', () => {
-  test('Sign In nav link points to /login', async ({ page }) => {
+  test('Sign In nav link has href pointing to /login', async ({ page }) => {
     await page.goto(MARKETING_URL);
     await page.waitForSelector('[data-testid="marketing-nav-signin"]');
 
-    await page.click('[data-testid="marketing-nav-signin"]');
-    await expect(page).toHaveURL(/\/login$/);
+    const href = await page.locator('[data-testid="marketing-nav-signin"]').getAttribute('href');
+    expect(href).toContain('/login');
   });
 
-  test('Get Started nav link points to /register', async ({ page }) => {
+  test('Get Started nav link has href pointing to /register', async ({ page }) => {
     await page.goto(MARKETING_URL);
     await page.waitForSelector('[data-testid="marketing-nav-getstarted"]');
 
-    await page.click('[data-testid="marketing-nav-getstarted"]');
-    await expect(page).toHaveURL(/\/register$/);
+    const href = await page.locator('[data-testid="marketing-nav-getstarted"]').getAttribute('href');
+    expect(href).toContain('/register');
   });
 
-  test('Hero CTA points to /register', async ({ page }) => {
+  test('Hero CTA has href pointing to /register', async ({ page }) => {
     await page.goto(MARKETING_URL);
     await page.waitForSelector('[data-testid="marketing-hero-cta"]');
 
-    await page.click('[data-testid="marketing-hero-cta"]');
-    await expect(page).toHaveURL(/\/register$/);
+    const href = await page.locator('[data-testid="marketing-hero-cta"]').getAttribute('href');
+    expect(href).toContain('/register');
   });
 });

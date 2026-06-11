@@ -18,6 +18,8 @@ import type { Response } from "express";
  *
  * Backed by an in-memory store - suitable for single-instance deployments.
  * Fast-Follow: switch to a distributed store (Redis/KV) for multi-instance deployments.
+ *
+ * Rate limiting is disabled when SLUGBASE_E2E_MODE=true (configurable via env var).
  */
 @Injectable()
 export class IpThrottlerGuard extends ThrottlerGuard {
@@ -27,6 +29,11 @@ export class IpThrottlerGuard extends ThrottlerGuard {
     reflector: Reflector,
   ) {
     super(options, storageService, reflector);
+  }
+
+  public override async canActivate(context: ExecutionContext): Promise<boolean> {
+    if (process.env.SLUGBASE_E2E_MODE === "true") return true;
+    return super.canActivate(context);
   }
 
   protected override getTracker(

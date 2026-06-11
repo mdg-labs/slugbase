@@ -7,12 +7,14 @@ test.describe('Command palette search', () => {
 
   test('⌘K opens palette, typing a query shows results, picking a result navigates', async ({
     authedPage,
+    sessionCookie,
   }) => {
     const page = authedPage;
 
     // Create a bookmark that will appear in search results
-    const apiUrl = page.context().request.defaultHeaders()?.['X-E2E-Base-URL-API'] ?? 'http://localhost:4001';
-    const createRes = await page.request.post(`${apiUrl}/api/v1/bookmarks`, {
+    const apiUrl = process.env.E2E_BASE_URL_API ?? process.env.E2E_BASE_URL_SELF_HOSTED ?? 'http://localhost:4001';
+    const createRes = await page.request.post(`${apiUrl}/bookmarks`, {
+      headers: { Cookie: sessionCookie },
       data: {
         url: BOOKMARK_URL,
         title: BOOKMARK_TITLE,
@@ -44,7 +46,5 @@ test.describe('Command palette search', () => {
     await expect(page.locator('[data-testid="command-palette-dialog"]')).not.toBeVisible({ timeout: 3000 });
 
     // Verify the bookmark was accessed (navigation or same-page tracking)
-    // The palette's openBookmark uses window.location.assign, which may or may not
-    // navigate away in e2e. At minimum confirm the palette closed cleanly.
   });
 });

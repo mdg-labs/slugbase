@@ -55,7 +55,7 @@ export function createSeedHelper(page: Page): SeedFixture['seed'] {
     } = opts;
 
     // Create workspace
-    const wsRes = await request.post(`${apiUrl}/api/v1/workspaces`, {
+    const wsRes = await request.post(`${apiUrl}/workspaces`, {
       data: { name: workspaceName },
     });
     const workspace = await wsRes.json();
@@ -64,7 +64,7 @@ export function createSeedHelper(page: Page): SeedFixture['seed'] {
     // Create folders
     const folderIds: string[] = [];
     for (const name of folders) {
-      const res = await request.post(`${apiUrl}/api/v1/folders`, {
+      const res = await request.post(`${apiUrl}/folders`, {
         data: { workspaceId, name },
       });
       const folder = await res.json();
@@ -74,7 +74,7 @@ export function createSeedHelper(page: Page): SeedFixture['seed'] {
     // Create tags
     const tagIds: string[] = [];
     for (const name of tags) {
-      const res = await request.post(`${apiUrl}/api/v1/tags`, {
+      const res = await request.post(`${apiUrl}/tags`, {
         data: { workspaceId, name },
       });
       const tag = await res.json();
@@ -84,7 +84,7 @@ export function createSeedHelper(page: Page): SeedFixture['seed'] {
     // Create bookmarks
     const bookmarkIds: string[] = [];
     for (let i = 0; i < bookmarks; i++) {
-      const res = await request.post(`${apiUrl}/api/v1/bookmarks`, {
+      const res = await request.post(`${apiUrl}/bookmarks`, {
         data: {
           workspaceId,
           url: `https://example.com/e2e-test-${i}`,

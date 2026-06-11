@@ -1,34 +1,18 @@
-import { type Page } from "@playwright/test";
 import { test, expect } from "../../fixtures/auth.js";
-
-/**
- * Resolve the API base URL from the test page context.
- */
-function resolveApiUrl(page: Page): string {
-  const header = page.context().request.defaultHeaders()?.["X-E2E-Base-URL-API"];
-  if (header) return header;
-
-  const origin = new URL(page.url()).origin;
-  const project = (page.context() as Record<string, unknown>)["_project"] as
-    | Record<string, unknown>
-    | undefined;
-  if (project?.name === "hosted") {
-    return origin.replace(/:4002$/, ":4001");
-  }
-  return origin;
-}
 
 test.describe("Go disambiguation", () => {
   test("two bookmarks with same slug shows disambiguation page, user picks candidate", async ({
     authedPage: page,
+    sessionCookie,
   }) => {
-    const apiUrl = resolveApiUrl(page);
+    const apiUrl = process.env.E2E_BASE_URL_API ?? process.env.E2E_BASE_URL_SELF_HOSTED ?? 'http://localhost:4001';
     const slug = `e2e-disambig-${Date.now()}`;
     const url1 = "https://example.com/e2e-disambig-1";
     const url2 = "https://example.com/e2e-disambig-2";
 
     // Create two bookmarks with the same slug via the API directly
-    const res1 = await page.request.post(`${apiUrl}/api/v1/bookmarks`, {
+    const res1 = await page.request.post(`${apiUrl}/bookmarks`, {
+      headers: { Cookie: sessionCookie },
       data: {
         title: "E2E Disambig One",
         url: url1,
@@ -39,7 +23,8 @@ test.describe("Go disambiguation", () => {
     expect(res1.ok()).toBeTruthy();
     const bm1 = await res1.json();
 
-    const res2 = await page.request.post(`${apiUrl}/api/v1/bookmarks`, {
+    const res2 = await page.request.post(`${apiUrl}/bookmarks`, {
+      headers: { Cookie: sessionCookie },
       data: {
         title: "E2E Disambig Two",
         url: url2,
@@ -74,14 +59,16 @@ test.describe("Go disambiguation", () => {
 
   test("disambiguation with remember preference saves choice", async ({
     authedPage: page,
+    sessionCookie,
   }) => {
-    const apiUrl = resolveApiUrl(page);
+    const apiUrl = process.env.E2E_BASE_URL_API ?? process.env.E2E_BASE_URL_SELF_HOSTED ?? 'http://localhost:4001';
     const slug = `e2e-remember-${Date.now()}`;
     const url1 = "https://example.com/e2e-remember-1";
     const url2 = "https://example.com/e2e-remember-2";
 
     // Create two bookmarks with the same slug via the API directly
-    const res1 = await page.request.post(`${apiUrl}/api/v1/bookmarks`, {
+    const res1 = await page.request.post(`${apiUrl}/bookmarks`, {
+      headers: { Cookie: sessionCookie },
       data: {
         title: "E2E Remember One",
         url: url1,
@@ -92,7 +79,8 @@ test.describe("Go disambiguation", () => {
     expect(res1.ok()).toBeTruthy();
     const bm1 = await res1.json();
 
-    await page.request.post(`${apiUrl}/api/v1/bookmarks`, {
+    await page.request.post(`${apiUrl}/bookmarks`, {
+      headers: { Cookie: sessionCookie },
       data: {
         title: "E2E Remember Two",
         url: url2,

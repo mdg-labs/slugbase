@@ -23,6 +23,7 @@ interface NeetoPlaydashReporterConfig {
 
 export default defineConfig({
   testDir: './specs',
+  globalSetup: './global-setup.ts',
   fullyParallel: true,
   forbidOnly: CI,
   retries: CI ? 2 : 0,
@@ -46,6 +47,8 @@ export default defineConfig({
   projects: [
     {
       name: 'hosted',
+      // Self-hosted setup flow doesn't apply to hosted (has pre-seeded admin)
+      testIgnore: ['**/auth/setup.spec.ts'],
       use: {
         ...devices['Desktop Chrome'],
         baseURL: E2E_BASE_URL_WEB,
@@ -80,6 +83,8 @@ export default defineConfig({
     },
     {
       name: 'self-hosted',
+      // Self-hosted does not serve the marketing site (it's a separate Cloudflare Worker)
+      testIgnore: ['**/marketing/**'],
       use: {
         ...devices['Desktop Chrome'],
         baseURL: process.env.E2E_BASE_URL_SELF_HOSTED ?? 'http://localhost:3000',

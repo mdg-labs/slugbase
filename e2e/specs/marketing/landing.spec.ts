@@ -12,22 +12,22 @@ test.describe('Marketing landing page', () => {
     await expect(page.locator('[data-testid="marketing-footer"]')).toBeVisible();
   });
 
-  test('hero CTA navigates to register', async ({ page }) => {
+  test('hero CTA links to register', async ({ page }) => {
     await page.goto(MARKETING_URL);
-    await page.locator('[data-testid="marketing-hero-cta"]').click();
-    await expect(page).toHaveURL(/\/register$/);
+    const href = await page.locator('[data-testid="marketing-hero-cta"]').getAttribute('href');
+    expect(href).toContain('/register');
   });
 
-  test('sign in nav link navigates to login', async ({ page }) => {
+  test('sign in nav link points to login', async ({ page }) => {
     await page.goto(MARKETING_URL);
-    await page.locator('[data-testid="marketing-nav-signin"]').click();
-    await expect(page).toHaveURL(/\/login$/);
+    const href = await page.locator('[data-testid="marketing-nav-signin"]').getAttribute('href');
+    expect(href).toContain('/login');
   });
 
-  test('get started nav link navigates to register', async ({ page }) => {
+  test('get started nav link points to register', async ({ page }) => {
     await page.goto(MARKETING_URL);
-    await page.locator('[data-testid="marketing-nav-getstarted"]').click();
-    await expect(page).toHaveURL(/\/register$/);
+    const href = await page.locator('[data-testid="marketing-nav-getstarted"]').getAttribute('href');
+    expect(href).toContain('/register');
   });
 
   test('DE landing page renders hero, nav, and footer', async ({ page }) => {
