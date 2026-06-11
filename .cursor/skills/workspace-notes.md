@@ -159,6 +159,11 @@ _added: 2026-05-31_
 SB-161 branch `orchestrator/SB-161` pointed at the staging base SHA with no implementation commits — the execution agent likely committed to a different worktree path than the branch tracked. The branch verifier verified worktree files (which were correct) but the git branch had zero diff from base. Integration agent detected the no-op and skipped. Recovery: re-ran as Lane S on staging. **Orchestrator should verify `git log orchestrator/<TASK-ID> --not staging` shows at least one commit before dispatching branch verifiers.** Also affects Lane S when agents commit in worktree paths — the commit lands on a detached HEAD and must be cherry-picked onto `staging`.
 _added: 2026-06-09_
 
+## Model hallucination — verifier sub-agent wrote to unrelated path (2026-06-10)
+
+The #315 branch verifier (`generalPurpose` subagent `3f9c15eb-60d2-4c95-909a-d8e82f0a005f`) completed verification correctly (Layer 1/2/3 all PASS, GitHub Done comment posted, status set to Done) but then hallucinated and attempted to write `/home/michael/PycharmProjects/ai-proxy/proxy-server/package.json` — a completely unrelated Electron HTTP proxy project. The file didn't exist on disk (path doesn't exist). The verifier prompt should be tightened with a hard block on path escape: add "DO NOT write files outside TARGET REPO or WORKTREE" to verifier prompts.
+_added: 2026-06-10_
+
 ## localStorage view-mode pollution in BookmarkListPage tests (2026-06-09)
 
 BookmarkListPage tests share a jsdom environment. Prior tests that set `view: "table"` write to `localStorage`, which persists into subsequent tests expecting grid view. **Fix:** add `localStorage.clear()` in `beforeEach`. The `ECONNREFUSED 127.0.0.1:3000` warning in the test output is pre-existing and unrelated.
