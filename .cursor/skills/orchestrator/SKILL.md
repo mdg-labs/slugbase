@@ -1,6 +1,6 @@
 ---
 name: orchestrator
-description: Run a chat as a pure orchestrator for SlugBase. Reads the development roadmap and/or the GitHub Issues board to find work, dispatches sub-agents with doc references (not pasted spec content), and runs verification after each batch. Execution agents set GitHub Issues In Progress (leaf + epic parent when subtask); only verification agents close issues after PASS. Use when the user asks to orchestrate, delegate end-to-end, execute the roadmap, implement a GitHub issue/epic (e.g. #12), or coordinate parallel implementation tasks.
+description: Run a chat as a pure orchestrator for SlugBase. Reads the development roadmap and/or the GitHub Issues board to find work, dispatches sub-agents with doc references (not pasted spec content), and runs verification after each batch. Execution agents set board Status to In Progress (leaf + epic parent when subtask); only verification agents set board Status to Done after PASS. Use when the user asks to orchestrate, delegate end-to-end, execute the roadmap, implement a GitHub issue/epic (e.g. #12), or coordinate parallel implementation tasks.
 ---
 
 # Orchestrator (SlugBase)
@@ -61,7 +61,7 @@ The main agent in this chat is a **dispatcher only**. It reads the **roadmap** a
 | Source | Task IDs | AC lives in | Status tracking |
 |---|---|---|---|
 | **Roadmap** | `P1-03`, `P2-01`, … | Plan file row | Plan checkboxes `[x]`/`[!]` |
-| **GitHub Issues** | `#12`, `#8`, … | Issue body (MCP) | GitHub issue state + comment |
+| **GitHub Issues** | `#12`, `#8`, … | Issue body (MCP) | Board Status + comment |
 | **Ad-hoc** | User-named | User message | `TodoWrite` only |
 
 **User intent wins:** if they say "implement #12" or give a GitHub issue URL → **GitHub mode**, even though the roadmap exists.
@@ -71,10 +71,10 @@ The main agent in this chat is a **dispatcher only**. It reads the **roadmap** a
 || **Plan-file mode** | **GitHub mode** | **Chat mode** |
 |---|---|---|---|
 | **When** | Roadmap batch (`P*-*`) | GitHub issue/epic (`#N`) | Ad-hoc; no board or plan |
-| **State** | `- [ ]` / `- [~]` / `- [x]` / `- [!]` in plan file | `TodoWrite` + GitHub issue state | `TodoWrite` in chat |
-| **In progress** | `[~]` (Lane S agent or Lane P batch prep) | Execution agent → GitHub issue **In Progress** label | todo `in_progress` |
-| **Done** | Verifier → `[x]` on plan file | Verifier PASS → close issue | todo `completed` after verify PASS |
-| **Failed** | Verifier → `[!]` on plan file | Verifier → add FAIL comment; reopen issue | todo `pending` |
+| **State** | `- [ ]` / `- [~]` / `- [x]` / `- [!]` in plan file | `TodoWrite` + Board Status | `TodoWrite` in chat |
+| **In progress** | `[~]` (Lane S agent or Lane P batch prep) | Execution agent → board Status **In Progress** | todo `in_progress` |
+| **Done** | Verifier → `[x]` on plan file | Verifier PASS → board Status Done + comment | todo `completed` after verify PASS |
+| **Failed** | Verifier → `[!]` on plan file | Verifier → add FAIL comment; board Status Ready | todo `pending` |
 
 Pick mode on first turn:
 
@@ -97,14 +97,14 @@ Default to **plan-file mode** only when the user asks for roadmap work and did n
 
 **Commits:** Orchestrated runs default to **local commits per task** on **`staging`** (Lane S) or task branches (Lane P). **Never push** unless the user explicitly asks — and **never push to `main`**.
 
-**GitHub sync (default ON):** Orchestrator resolves issue number(s) and label set via MCP, then passes **role-specific** GITHUB SYNC blocks — execution prompts get **In Progress label only** (no close); verifier prompts get **close**. Sub-agents perform the updates — orchestrator does **not** call `issue_write` itself unless recovering from a sub-agent failure. Skip only if user says **"don't update GitHub issues"**.
+**GitHub sync (default ON):** Orchestrator resolves issue number(s) and label set via MCP, then passes **role-specific** GITHUB SYNC blocks — execution prompts get **In Progress label only** (board Status only); verifier prompts set Status **Done**. Sub-agents perform the updates — orchestrator does **not** call `issue_write` itself unless recovering from a sub-agent failure. Skip only if user says **"don't update GitHub issues"**.
 
 ### GitHub status ownership (non-negotiable)
 
 | Column | Who may set it | When |
 |---|---|---|
-| In Progress (label) | **Execution** | First action, before session memory (leaf + epic parent when subtask) |
-| Closed | **Verifier** | After all verification layers PASS only |
+| **In Progress** (Status) | **Execution** | First action, before session memory (leaf + epic parent when subtask) |
+| **Done** (Status) | **Verifier** | After all verification layers PASS (board Status only; issue state is never modified) |
 
 ---
 
@@ -204,7 +204,7 @@ Always: **execute batch → verify (per task) → integrate (Lane P) → batch v
 3. Orchestrator: spawn execution agents (best-of-n-runner, run_in_background: true)
 4. Each execution: finalize local session memory + one implementation commit on task branch only
 5. Orchestrator: spawn one branch verifier per completed task (in that task's worktree)
-6. Branch verifier PASS → report to orchestrator; no plan file write; close issue is the handoff record
+6. Branch verifier PASS → report to orchestrator; no plan file write; board Status Done is the handoff record
 7. Branch verifier FAIL → append VERIFICATION FAILED in local session memory; do not merge
 8. Integration agent: merge PASS branches onto **`staging`** (dependency order, one at a time)
 9. Batch verifier: post-merge smoke checks; [x] integrated tasks; [!] branch-failed tasks
@@ -236,7 +236,7 @@ Never push to **`main`**. When pushing is explicitly requested, target **`stagin
 
 Execution may set `[~]` only when plan file is in WRITE SCOPE. Never `[x]`.
 
-**GitHub FORBIDDEN for execution:** never close an issue; never `add_issue_comment` for verification outcomes; never close epic.
+**GitHub FORBIDDEN for execution:** never set GitHub issue state (open/closed); never `add_issue_comment` for verification outcomes; never set epic Done — board Status only.
 
 ### Lane P (isolated task branch)
 
@@ -294,8 +294,8 @@ Mark `n/a` for commands not yet defined. Stop if any defined check fails. Use In
 
 | Result | Plan (plan-file mode) | GitHub (sub-agent) | Local session memory |
 |---|---|---|---|
-| PASS | `[x]`; commit plan file | Verifier → close issue + mandatory PASS comment | Delete active or move to local archive/ (never commit) |
-| FAIL | `[!]` + note; commit plan file | Verifier → add FAIL comment + reopen issue; do NOT close | Append VERIFICATION FAILED in active/ (never commit) |
+| PASS | `[x]`; commit plan file | Verifier → mandatory PASS comment + board Status Done | Delete active or move to local archive/ (never commit) |
+| FAIL | `[!]` + note; commit plan file | Verifier → add FAIL comment; board Status Ready; do NOT set Done | Append VERIFICATION FAILED in active/ (never commit) |
 
 ---
 
@@ -346,10 +346,10 @@ Path: `.cursor/skills/agent-memory/` — **never committed**.
 | Phase 1 | Execution | Create `active/<SESSION-ID>.md`; header + Task; set `started` when GITHUB SYNC present |
 | Phase 2 | Execution | Update Scope, Decisions, Deviations in place |
 | Phase 3 | Execution | Finalize sections locally (do not commit) |
-| Pre-handoff | Execution | Set `ended` + `duration`; comment + close; **one implementation commit** |
+| Pre-handoff | Execution | Set `ended` + `duration`; set Status **In Review**; **one implementation commit** |
 | Verifier start | Verifier | Read active file if present; set verification `started` when GITHUB SYNC present |
-| Verifier end | Verifier | Set verification `ended` + `duration`; comment + close/FAIL |
-| PASS | Verifier | Mandatory close comment; optionally delete active or move to local `archive/` |
+| Verifier end | Verifier | Set verification `ended` + `duration`; set board Status Done/Ready; mandatory comment |
+| PASS | Verifier | Mandatory PASS comment + board Status Done; optionally delete active or move to local `archive/` |
 | FAIL | Verifier | Mandatory FAIL comment; append VERIFICATION FAILED in active/ if file exists |
 
 **Retry after FAIL:** same SESSION ID; execution reads FAIL comment and local active file.
@@ -449,8 +449,8 @@ Orchestrator may read/write. Sub-agents may read; write only if task WRITE SCOPE
 10. Spawn one **branch verifier** per Lane P task, or one **task verifier** for Lane S.
 11. Lane P: spawn **integration agent** → **batch verifier**.
 12. Lane P: spawn **cleanup** shell agent for worktrees/branches.
-13. Reconcile: PASS → plan `[x]` / confirm close comment; FAIL → plan `[!]` / retry same SESSION ID.
-14. **GitHub epic:** if subtask execution skipped epic In Progress, orchestrator recovery → epic **In Progress** label; if all subtasks PASS and epic not yet closed, recovery → close epic (or ensure last verifier prompt included epic issue number).
+13. Reconcile: PASS → plan `[x]` / confirm board Status Done comment; FAIL → plan `[!]` / retry same SESSION ID.
+14. **GitHub epic:** if subtask execution skipped epic In Progress, orchestrator recovery → epic **In Progress** label; if all subtasks PASS and epic not yet closed, recovery → set epic Done (board Status); or ensure last verifier prompt included epic issue number.
 15. Update workspace-notes if durable learning.
 16. Report batch result + next batch.
 17. Repeat.
@@ -463,10 +463,10 @@ Orchestrator may read/write. Sub-agents may read; write only if task WRITE SCOPE
 - Orchestrator reading session memory **contents** (filenames in `active/` only)
 - Pasting spec doc bodies or full issue bodies into sub-agent prompts
 - Editing roadmap checkboxes for GitHub-only issues (#N)
-- Closing epic issue before all in-scope subtasks verify PASS
+- Setting epic to Done (board Status) before all in-scope subtasks verify PASS
 - **Sub-agent skipping GitHub sync** when GITHUB SYNC block is present
-- **Execution agent closing an issue** — only verifier after PASS
-- **Execution agent confusing REQUIRED OUTPUT `complete` with issue close**
+- **Agent setting GitHub issue state (open/closed)** — board Status only; never modify GitHub issue state
+- **Execution agent confusing REQUIRED OUTPUT `complete` with board Status Done**
 - Execution agent starting implementation before adding In Progress label (when sync required)
 - Execution agent adding In Progress label to a subtask without adding it to epic parent
 - Verifier adding In Progress label (execution owns that)
