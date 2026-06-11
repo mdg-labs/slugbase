@@ -122,7 +122,7 @@ export default function ResetPasswordRoute() {
             </p>
           </div>
 
-          <Form method="post" className="flex flex-col" noValidate style={{ gap: "var(--sp-6)" }}>
+          <Form method="post" className="flex flex-col" noValidate style={{ gap: "var(--sp-6)" }} data-testid="reset-password-form">
             {error && (
               <div
                 role="alert"
@@ -162,6 +162,7 @@ export default function ResetPasswordRoute() {
                   type={showNew ? "text" : "password"}
                   autoComplete="new-password"
                   required
+                  data-testid="reset-password-input"
                   placeholder={t("password_reset.set.new_password_placeholder")}
                   value={newPassword}
                   onChange={(e) => { setNewPassword(e.target.value); }}
@@ -247,6 +248,7 @@ export default function ResetPasswordRoute() {
             <button
               type="submit"
               disabled={isSubmitting || !canSubmit}
+              data-testid="reset-password-submit-btn"
               className="w-full rounded-md bg-accent font-medium text-accent-fg transition-colors hover:bg-accent-hover active:bg-accent-active disabled:cursor-not-allowed disabled:opacity-50"
               style={{ marginTop: "var(--sp-2)", height: "44px", fontSize: "var(--text-body-lg)", lineHeight: 1 }}
             >

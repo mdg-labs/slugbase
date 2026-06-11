@@ -28,6 +28,12 @@ importers:
       eslint:
         specifier: ^9.28.0
         version: 9.39.4(jiti@1.21.7)
+      otplib:
+        specifier: ^13.4.1
+        version: 13.4.1
+      postgres:
+        specifier: ^3.4.7
+        version: 3.4.9
       prettier:
         specifier: ^3.5.3
         version: 3.8.3

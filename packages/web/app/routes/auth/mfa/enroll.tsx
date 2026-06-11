@@ -115,25 +115,29 @@ export default function MfaEnrollRoute() {
 
   return (
     <AuthShell showSlugRows={false}>
-      {backupCodes !== null ? (
-        <BackupCodesStep
-          backupCodes={backupCodes}
-          copied={copied}
-          codesConfirmed={codesConfirmed}
-          onCopy={handleCopyCodes}
-          onConfirmChange={setCodesConfirmed}
-        />
-      ) : (
-        <EnrollConfirmStep
-          otpAuthUri={otpAuthUri}
-          textSecret={textSecret}
-          qrDataUri={qrDataUri}
-          totpCode={totpCode}
-          onTotpChange={setTotpCode}
-          isSubmitting={isSubmitting}
-          error={error}
-        />
-      )}
+      <div data-testid="mfa-enroll-section">
+        {backupCodes !== null ? (
+          <div data-testid="mfa-backup-codes">
+            <BackupCodesStep
+              backupCodes={backupCodes}
+              copied={copied}
+              codesConfirmed={codesConfirmed}
+              onCopy={handleCopyCodes}
+              onConfirmChange={setCodesConfirmed}
+            />
+          </div>
+        ) : (
+          <EnrollConfirmStep
+            otpAuthUri={otpAuthUri}
+            textSecret={textSecret}
+            qrDataUri={qrDataUri}
+            totpCode={totpCode}
+            onTotpChange={setTotpCode}
+            isSubmitting={isSubmitting}
+            error={error}
+          />
+        )}
+      </div>
     </AuthShell>
   );
 }
@@ -193,6 +197,7 @@ function EnrollConfirmStep({
             width={180}
             height={180}
             className="block"
+            data-testid="mfa-qr-code"
           />
         </div>
       </div>
@@ -219,6 +224,7 @@ function EnrollConfirmStep({
               lineHeight: "var(--lh-mono)",
             }}
             aria-live="polite"
+            data-testid="mfa-setup-code"
           >
             {textSecret}
           </div>
@@ -244,7 +250,7 @@ function EnrollConfirmStep({
           </div>
         )}
 
-        <div className="flex flex-col gap-sp-2">
+        <div className="flex flex-col gap-sp-2" data-testid="mfa-verify-input">
           <label
             className="font-medium text-fg-muted"
             style={{
@@ -272,6 +278,7 @@ function EnrollConfirmStep({
             fontSize: "var(--text-body)",
             lineHeight: "var(--lh-body)",
           }}
+          data-testid="mfa-verify-submit"
         >
           {isSubmitting
             ? t("mfa.enroll.submit_loading")
