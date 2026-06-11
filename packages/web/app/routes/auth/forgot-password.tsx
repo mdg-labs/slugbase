@@ -74,7 +74,7 @@ function RequestForm({
         </p>
       </div>
 
-      <Form method="post" className="flex flex-col" noValidate style={{ gap: "var(--sp-6)" }}>
+      <Form method="post" className="flex flex-col" noValidate style={{ gap: "var(--sp-6)" }} data-testid="forgot-password-form">
         <div className="flex flex-col" style={{ gap: "var(--sp-3)" }}>
           <label
             htmlFor="email"
@@ -97,6 +97,7 @@ function RequestForm({
               autoComplete="email"
               required
               placeholder={t("password_reset.forgot.email_placeholder")}
+              data-testid="forgot-password-email-input"
               className="w-full rounded-md border border-[color:var(--border)] bg-raised text-fg placeholder:text-fg-faint focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-canvas"
               style={{
                 height: "42px",
@@ -112,6 +113,7 @@ function RequestForm({
         <button
           type="submit"
           disabled={isSubmitting}
+          data-testid="forgot-password-submit-btn"
           className="w-full rounded-md bg-accent font-medium text-accent-fg transition-colors hover:bg-accent-hover active:bg-accent-active disabled:cursor-not-allowed disabled:opacity-50"
           style={{ marginTop: "var(--sp-2)", height: "44px", fontSize: "var(--text-body-lg)", lineHeight: 1 }}
         >

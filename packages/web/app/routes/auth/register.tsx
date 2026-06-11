@@ -191,7 +191,7 @@ export default function RegisterRoute() {
     <AuthShell>
       <AuthHeading title={t("register.title")} subtitle={t("register.subtitle")} />
 
-      <Form method="post" className="flex flex-col" noValidate style={{ gap: "var(--sp-6)" }}>
+      <Form method="post" className="flex flex-col" noValidate style={{ gap: "var(--sp-6)" }} data-testid="register-form">
         {error && <ErrorBanner message={t(error)} />}
 
         {/* Name */}
@@ -211,6 +211,7 @@ export default function RegisterRoute() {
             required
             placeholder={t("register.name_placeholder")}
             leadingIcon={<UserFieldIcon />}
+            data-testid="register-name-input"
           />
         </div>
 
@@ -231,6 +232,7 @@ export default function RegisterRoute() {
             required
             placeholder={t("register.email_placeholder")}
             leadingIcon={<MailFieldIcon />}
+            data-testid="register-email-input"
           />
         </div>
 
@@ -266,6 +268,7 @@ export default function RegisterRoute() {
                 {showPassword ? <EyeOffIcon /> : <EyeIcon />}
               </button>
             }
+            data-testid="register-password-input"
           />
 
           {/* Strength meter - always visible once any input exists */}
@@ -309,9 +312,11 @@ export default function RegisterRoute() {
           </div>
         </div>
 
-        <AuthButton isSubmitting={isSubmitting} style={{ marginTop: "var(--sp-2)" }}>
-          {isSubmitting ? t("register.submit_loading") : t("register.submit")}
-        </AuthButton>
+        <div data-testid="register-submit-btn">
+          <AuthButton isSubmitting={isSubmitting} style={{ marginTop: "var(--sp-2)" }}>
+            {isSubmitting ? t("register.submit_loading") : t("register.submit")}
+          </AuthButton>
+        </div>
 
         <SsoSection providers={oidcProviders} mode="register" t={t} />
       </Form>

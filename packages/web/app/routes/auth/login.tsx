@@ -110,7 +110,7 @@ export default function LoginRoute() {
     <AuthShell>
       <AuthHeading title={t("auth.login.title")} />
 
-      <Form method="post" className="flex flex-col" noValidate style={{ gap: "var(--sp-6)" }}>
+      <Form method="post" className="flex flex-col" noValidate style={{ gap: "var(--sp-6)" }} data-testid="login-form">
         {passwordReset && <SuccessBanner message={t("auth.login.reset_success")} />}
         {error && <ErrorBanner message={t(error)} />}
 
@@ -131,6 +131,7 @@ export default function LoginRoute() {
             required
             placeholder={t("auth.login.email_placeholder")}
             leadingIcon={<MailFieldIcon />}
+            data-testid="login-email-input"
           />
         </div>
 
@@ -151,6 +152,7 @@ export default function LoginRoute() {
               href="/forgot-password"
               className="text-accent-text hover:underline"
               style={{ fontSize: "var(--text-small)", lineHeight: 1 }}
+              data-testid="login-forgot-password-link"
             >
               {t("auth.login.password_forgot_link")}
             </a>
@@ -176,6 +178,7 @@ export default function LoginRoute() {
                 {showPassword ? <EyeOffIcon /> : <EyeIcon />}
               </button>
             }
+            data-testid="login-password-input"
           />
         </div>
 
@@ -192,9 +195,11 @@ export default function LoginRoute() {
           {t("auth.login.remember_me_label")}
         </label>
 
-        <AuthButton isSubmitting={isSubmitting} style={{ marginTop: "var(--sp-2)" }}>
-          {isSubmitting ? t("auth.login.submit_loading") : t("auth.login.submit")}
-        </AuthButton>
+        <div data-testid="login-submit-btn">
+          <AuthButton isSubmitting={isSubmitting} style={{ marginTop: "var(--sp-2)" }}>
+            {isSubmitting ? t("auth.login.submit_loading") : t("auth.login.submit")}
+          </AuthButton>
+        </div>
 
         <SsoSection providers={oidcProviders} mode="login" t={t} />
       </Form>
@@ -204,7 +209,7 @@ export default function LoginRoute() {
         style={{ marginTop: "var(--sp-8)", fontSize: "var(--text-body)" }}
       >
         {t("auth.login.no_account_prompt")}{" "}
-        <a href="/register" className="text-accent-text font-medium hover:underline">
+        <a href="/register" className="text-accent-text font-medium hover:underline" data-testid="login-register-link">
           {t("auth.login.no_account_link")}
         </a>
       </p>

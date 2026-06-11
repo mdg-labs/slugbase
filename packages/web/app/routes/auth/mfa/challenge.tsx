@@ -95,7 +95,7 @@ export default function MfaChallengeRoute() {
         </p>
       </div>
 
-      <Form method="post" className="flex flex-col" noValidate style={{ gap: "var(--sp-6)" }}>
+      <Form method="post" className="flex flex-col" noValidate style={{ gap: "var(--sp-6)" }} data-testid="mfa-challenge-form">
         {error && (
           <div
             role="alert"
@@ -112,7 +112,7 @@ export default function MfaChallengeRoute() {
         )}
 
         {mode === "totp" ? (
-          <div className="flex flex-col" style={{ gap: "var(--sp-3)" }}>
+          <div className="flex flex-col" style={{ gap: "var(--sp-3)" }} data-testid="mfa-code-input">
             <label
               className="font-medium text-fg-muted"
               style={{ fontSize: "var(--text-small)", lineHeight: 1 }}
@@ -165,6 +165,7 @@ export default function MfaChallengeRoute() {
           disabled={isSubmitting || (mode === "totp" && totpCode.replace(/\D/g, "").length < 6)}
           className="w-full rounded-md bg-accent font-medium text-accent-fg transition-colors hover:bg-accent-hover active:bg-accent-active disabled:cursor-not-allowed disabled:opacity-50"
           style={{ marginTop: "var(--sp-2)", height: "44px", fontSize: "var(--text-body-lg)", lineHeight: 1 }}
+          data-testid="mfa-submit-btn"
         >
           {isSubmitting ? t("mfa.challenge.submit_loading") : t("mfa.challenge.submit")}
         </button>
@@ -181,6 +182,7 @@ export default function MfaChallengeRoute() {
             setTotpCode("");
           }}
           className="text-accent-text hover:underline"
+          data-testid="mfa-recovery-link"
         >
           {mode === "totp"
             ? t("mfa.challenge.toggle_use_backup")

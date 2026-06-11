@@ -95,6 +95,15 @@ function LifeBuoyIcon() {
   );
 }
 
+function SlugIcon() {
+  return (
+    <svg aria-hidden className="h-[16px] w-[16px] shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+      <path d="M4 8h16M4 16h16" strokeLinecap="round" />
+      <path d="M8 4v16M16 4v16" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function AlertTriangleIcon() {
   return (
     <svg aria-hidden className="h-[12px] w-[12px] shrink-0 text-danger-text" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -111,17 +120,20 @@ function NavItem({
   label,
   count,
   end = false,
+  testid,
 }: {
   to: string;
   icon: React.ReactNode;
   label: string;
   count?: number;
   end?: boolean;
+  testid?: string;
 }) {
   return (
     <NavLink
       to={to}
       end={end}
+      data-testid={testid}
       className={({ isActive }) =>
         [
           "flex items-center gap-sp-4 rounded-md px-sp-4 py-[7px] text-[length:var(--text-body)] transition-colors",
@@ -244,14 +256,22 @@ export function AppSidebar({
         <nav
           className="flex-1 overflow-y-auto px-sp-4 py-sp-3"
           aria-label={t("app.shell.nav.aria_label")}
+          data-testid="sidebar-nav"
         >
           <div className="flex flex-col gap-[2px]">
-            <NavItem to="/" end icon={<HomeIcon />} label={t("app.shell.nav.home")} />
+            <NavItem to="/" end icon={<HomeIcon />} label={t("app.shell.nav.home")} testid="sidebar-dashboard-link" />
             <NavItem
               to="/bookmarks"
               icon={<BookmarkIcon />}
               label={t("app.shell.nav.bookmarks")}
               count={bookmarkTotal > 0 ? bookmarkTotal : undefined}
+              testid="sidebar-bookmarks-link"
+            />
+            <NavItem
+              to="/go"
+              icon={<SlugIcon />}
+              label={t("app.shell.nav.go")}
+              testid="sidebar-go-link"
             />
             <NavItem to="/folders" icon={<FolderIcon />} label={t("app.shell.nav.folders")} />
             <NavItem to="/tags" icon={<HashIcon />} label={t("app.shell.nav.tags")} />
@@ -296,7 +316,7 @@ export function AppSidebar({
         </nav>
 
         {/* ── Sidebar footer ─────────────────────────────────────── */}
-        <div className="mt-auto border-t border-[color:var(--border-subtle)] p-sp-4 flex flex-col gap-sp-4">
+        <div className="mt-auto border-t border-[color:var(--border-subtle)] p-sp-4 flex flex-col gap-sp-4" data-testid="sidebar-user-menu">
           {showMeter && (
             <div className="flex flex-col gap-sp-2">
               <div className="flex items-center justify-between">
