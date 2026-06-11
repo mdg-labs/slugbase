@@ -148,23 +148,36 @@ Set via MCP `issue_write` → `issue_fields` array. Each entry takes `field_name
 The project board adds a **Status** field (single-select on the project item, not on the issue itself). Set via GraphQL — see § Projects v2 Status (via GraphQL).
 
 ```
-Backlog → Ready → In Progress → In Review → Done
+Backlog → Ready → In Progress → In Review → Done → Closed
                         ↓
                    Declined
 ```
 
-| Status | Who sets it | When |
-|---|---|---|
-| Backlog | Default for new project items | Unrefined / deferred |
-| Ready | **intake** / **triage** / orchestrator / user | Fully specified; orchestrator picks from here |
-| In Progress | **Execution agent** | First action, before session memory |
-| In Review | **Execution agent** | Last action before verifier handoff |
-| Done | **Verifier** | After all layers PASS |
-| Declined | Orchestrator / user | Permanently declined |
+| Status | Who sets it | When | Notes |
+|---|---|---|---|
+| Backlog | Default for new project items | Unrefined / deferred | — |
+| Ready | **intake** / **triage** / orchestrator / user | Fully specified; orchestrator picks from here | — |
+| In Progress | **Execution agent** | First action, before session memory | — |
+| In Review | **Execution agent** | Last action before verifier handoff | — |
+| Done | **Verifier** | After all layers PASS | Issue may still be open — verified and ready for merge to `main` |
+| Closed | GitHub project workflow (auto) | When the GitHub issue closes (via `fixes #N` on `main`) | Agents never set this. Auto-set by project workflow when commit lands on default branch. |
+| Declined | Orchestrator / user | Permanently declined | — |
 
 ### Failure path
 
 Verifier FAIL → set Status back to **Ready** (not In Progress) + `add_issue_comment` with layer failures.
+
+### FORBIDDEN — agents must not set GitHub issue state
+
+Agents must **never** modify the GitHub issue state (`open` / `closed`). Issue state is driven solely by commit messages — when a commit with `fixes #N` lands on the default branch (`main`), GitHub auto-closes the issue.
+
+All status management must happen via **board Status** only (see status table above):
+
+| Instead of… | Use… |
+|---|---|
+| Closing the GitHub issue on verifier PASS | Board Status → `Done` |
+| Reopening the GitHub issue on verifier FAIL | Board Status → `Ready` |
+| Closing the issue by execution after comment | Board Status → `In Review` (handoff to verifier) |
 
 ## Domain labels
 
