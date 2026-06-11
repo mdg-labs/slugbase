@@ -11,6 +11,10 @@ const E2E_BASE_URL_API = process.env.E2E_BASE_URL_API ?? 'http://localhost:4001'
 const E2E_BASE_URL_WEB = process.env.E2E_BASE_URL_WEB ?? 'http://localhost:4002';
 const E2E_BASE_URL_MARKETING = process.env.E2E_BASE_URL_MARKETING ?? 'http://localhost:4003';
 
+const E2E_PORT_API = process.env.E2E_PORT_API ? Number(process.env.E2E_PORT_API) : 4001;
+const E2E_PORT_WEB = process.env.E2E_PORT_WEB ? Number(process.env.E2E_PORT_WEB) : 4002;
+const E2E_PORT_MKTG = process.env.E2E_PORT_MKTG ? Number(process.env.E2E_PORT_MKTG) : 4003;
+
 interface NeetoPlaydashReporterConfig {
   ciBuildId?: string;
   apiKey?: string;
@@ -26,17 +30,10 @@ export default defineConfig({
 
   reporter: [
     ['list'],
-    ...(CI
-      ? [
-          [
-            '@bigbinary/neeto-playwright-reporter',
-            {
-              ciBuildId: process.env.GITHUB_RUN_ID ?? 'local-run',
-              apiKey: process.env.NEETO_PLAYDASH_API_KEY ?? '',
-              projectKey: process.env.NEETO_PLAYDASH_PROJECT_KEY ?? '',
-            } satisfies NeetoPlaydashReporterConfig,
-          ],
-        ]
+    // When e2e.sh runs both modes, it sets this path so we get a parseable
+    // JSON report per mode for the end-of-run summary table.
+    ...(process.env.E2E_JSON_REPORT_PATH
+      ? [['json', { outputFile: process.env.E2E_JSON_REPORT_PATH }]]
       : []),
   ],
 
@@ -57,6 +54,29 @@ export default defineConfig({
           'X-E2E-Base-URL-Marketing': E2E_BASE_URL_MARKETING,
         },
       },
+      // Per-project reporter: hosted mode reports to its own Neeto Playdash project
+      reporter: [
+        ['list'],
+        // JSON report for end-of-run summary (path set by scripts/e2e.sh per mode)
+        ...(process.env.E2E_JSON_REPORT_PATH
+          ? [['json', { outputFile: process.env.E2E_JSON_REPORT_PATH }]]
+          : []),
+        ...(CI
+          ? [
+              [
+                '@bigbinary/neeto-playwright-reporter',
+                {
+                  ciBuildId: process.env.GITHUB_RUN_ID ?? 'local-run',
+                  apiKey: process.env.NEETO_PLAYDASH_API_KEY_HOSTED ?? '',
+                  projectKey: process.env.NEETO_PLAYDASH_PROJECT_KEY_HOSTED ?? '',
+                } satisfies NeetoPlaydashReporterConfig,
+              ],
+            ]
+          : []),
+      ],
+      // For hosted mode, services are started manually by scripts/e2e.sh (like CI)
+      // Playwright's webServer is unreliable with multi-process setups — use undefined.
+      webServer: undefined,
     },
     {
       name: 'self-hosted',
@@ -67,41 +87,28 @@ export default defineConfig({
           'X-E2E-Base-URL-API': process.env.E2E_BASE_URL_SELF_HOSTED ?? 'http://localhost:3000',
         },
       },
+      // Self-hosted mode: the combined Docker container is started by scripts/e2e.sh
+      webServer: undefined,
+      // Per-project reporter: self-hosted mode reports to its own Neeto Playdash project
+      reporter: [
+        ['list'],
+        // JSON report for end-of-run summary (path set by scripts/e2e.sh per mode)
+        ...(process.env.E2E_JSON_REPORT_PATH
+          ? [['json', { outputFile: process.env.E2E_JSON_REPORT_PATH }]]
+          : []),
+        ...(CI
+          ? [
+              [
+                '@bigbinary/neeto-playwright-reporter',
+                {
+                  ciBuildId: process.env.GITHUB_RUN_ID ?? 'local-run',
+                  apiKey: process.env.NEETO_PLAYDASH_API_KEY_SELF_HOSTED ?? '',
+                  projectKey: process.env.NEETO_PLAYDASH_PROJECT_KEY_SELF_HOSTED ?? '',
+                } satisfies NeetoPlaydashReporterConfig,
+              ],
+            ]
+          : []),
+      ],
     },
   ],
-
-  webServer: CI
-    ? undefined
-    : [
-        {
-          command: 'node packages/backend/dist/main.js',
-          port: 4001,
-          cwd: resolve(__dirname, '..'),
-          reuseExistingServer: true,
-          env: {
-            PORT: '4001',
-            SLUGBASE_E2E_MODE: 'true',
-            SESSION_SECRET: 'e2e-test-session-secret-at-least-32-chars!!',
-            ENCRYPTION_KEY: 'e2e-test-encryption-key-at-least-32-chars!!',
-            APP_BASE_URL: 'http://localhost:4001',
-            FRONTEND_ORIGIN: 'http://localhost:4002',
-            ...(process.env.DATABASE_URL ? { DATABASE_URL: process.env.DATABASE_URL } : {}),
-          },
-        },
-        {
-          command: 'npx --yes react-router-serve build/server/index.js',
-          port: 4002,
-          cwd: resolve(__dirname, '../packages/web'),
-          reuseExistingServer: true,
-          env: {
-            PORT: '4002',
-          },
-        },
-        {
-          command: 'npx --yes serve packages/marketing/dist -l 4003',
-          port: 4003,
-          cwd: resolve(__dirname, '..'),
-          reuseExistingServer: true,
-        },
-      ],
 });

@@ -28,15 +28,18 @@ export interface E2eFixtures {
  * For the `hosted` project, the API is on a separate port.
  * For `self-hosted`, API and web share the same origin.
  */
-function resolveApiUrl(page: Page): string {
-  const header = page.context().request.defaultHeaders()?.['X-E2E-Base-URL-API'];
-  if (header) return header;
+function resolveApiUrl(_page: Page): string {
+  // Prefer environment variables set by scripts/e2e.sh or CI
+  const envApi = process.env.E2E_BASE_URL_API;
+  if (envApi) return envApi;
+
+  const envSelfHosted = process.env.E2E_BASE_URL_SELF_HOSTED;
+  if (envSelfHosted) return envSelfHosted;
 
   // Fallback: derive from page URL origin
-  const origin = new URL(page.url()).origin;
-  const project = page.context()['_project']?.['name'];
+  const origin = new URL(_page.url()).origin;
+  const project = _page.context()['_project']?.['name'];
   if (project === 'hosted') {
-    // In hosted mode web is on :4002, API on :4001
     return origin.replace(/:4002$/, ':4001');
   }
   return origin;

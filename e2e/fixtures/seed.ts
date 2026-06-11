@@ -23,12 +23,16 @@ export interface SeedContext {
 /**
  * Resolve the API base URL.
  */
-function resolveApiUrl(page: Page): string {
-  const header = page.context().request.defaultHeaders()?.['X-E2E-Base-URL-API'];
-  if (header) return header;
+function resolveApiUrl(_page: Page): string {
+  // Prefer environment variables set by scripts/e2e.sh or CI
+  const envApi = process.env.E2E_BASE_URL_API;
+  if (envApi) return envApi;
 
-  const origin = new URL(page.url()).origin;
-  const project = page.context()['_project']?.['name'];
+  const envSelfHosted = process.env.E2E_BASE_URL_SELF_HOSTED;
+  if (envSelfHosted) return envSelfHosted;
+
+  const origin = new URL(_page.url()).origin;
+  const project = _page.context()['_project']?.['name'];
   if (project === 'hosted') {
     return origin.replace(/:4002$/, ':4001');
   }

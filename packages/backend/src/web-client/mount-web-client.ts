@@ -16,7 +16,8 @@ export async function mountWebClient(
   )) as ServerBuild;
 
   const buildDir = dirname(buildPath);
-  const publicPath = buildModule.publicPath;
+  // publicPath is on ServerBuild directly; fallback to "/" if somehow missing
+  const publicPath = buildModule.publicPath ?? "/";
   const assetsBuildDirectory = join(
     buildDir,
     "..",
