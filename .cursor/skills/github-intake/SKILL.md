@@ -91,7 +91,7 @@ User names `#N`. Fetch with MCP `issue_read` (method: get, issue_number: N), **m
 3. Search for duplicates: MCP `search_issues` (query: "<keywords>", owner: "mdg-labs", repo: "slugbase").
 4. Split into **leaf issues** — each independently implementable and verifiable.
 
-### 2. Draft plan — show user before MCP writes
+### 2. Draft plan — STOP. Propose structure first.
 
 ```markdown
 ## Proposed issue structure
@@ -110,7 +110,9 @@ User names `#N`. Fetch with MCP `issue_read` (method: get, issue_number: N), **m
 **Spec refs:** spec §5.3 (sessions), spec §4.3 (workspace resolution), spec §2.5 (multi-tenant)
 ```
 
-Wait for approval unless the user said "create the issues now".
+Wait for approval. **Agents must not create any issues before proposing the draft structure and receiving user approval.** Proceeding directly to step 3 (or any MCP write) without approval is forbidden.
+
+Unless the user said "create the issues now", you must stop at the draft plan and wait for an explicit approval response. A vague or non-committal user message does not count as approval.
 
 ### 3. Create Feature epic (Mode A only)
 
@@ -274,3 +276,4 @@ Ready for orchestrator: "implement #11" or "orchestrate #8 epic"
 - **Omitting type, domain label, Priority, or Effort** — all four are mandatory on every issue
 - Vague summary placeholders when pattern table applies
 - Referencing "organization", "favorites", "collection" — use canonical vocabulary (spec §3, rule `04-naming.mdc`)
+- **Creating issues without first proposing the structure to the user** — the draft plan in step 2 is a mandatory stop-and-wait checkpoint
