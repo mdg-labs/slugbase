@@ -146,7 +146,10 @@ export default function GoDisambiguatePage() {
   }
 
   return (
-    <div className="flex flex-1 items-center justify-center px-sp-6 py-sp-12">
+    <div
+      data-testid="go-disambiguation-page"
+      className="flex flex-1 items-center justify-center px-sp-6 py-sp-12"
+    >
       <div className="w-full max-w-[560px]">
         <div className="mb-sp-6 flex items-start gap-sp-4">
           <GitForkIcon />
@@ -167,6 +170,7 @@ export default function GoDisambiguatePage() {
             return (
               <button
                 key={candidate.id}
+                data-testid={`go-disambiguation-candidate-${candidate.id}`}
                 type="button"
                 onClick={() => { setSelectedId(candidate.id); }}
                 className={[
@@ -208,6 +212,7 @@ export default function GoDisambiguatePage() {
         <label className="mb-sp-5 flex cursor-pointer items-center gap-sp-3 select-none">
           <input
             type="checkbox"
+            data-testid="go-remember-pref-toggle"
             checked={remember}
             onChange={(e) => { setRemember(e.target.checked); }}
             className="h-[14px] w-[14px] accent-[color:var(--accent)]"
@@ -220,6 +225,7 @@ export default function GoDisambiguatePage() {
         <div className="flex flex-wrap items-center gap-sp-4">
           <button
             type="button"
+            data-testid="go-confirm-btn"
             disabled={!selected}
             onClick={handleOpen}
             className="inline-flex items-center gap-sp-2 rounded-md bg-accent px-sp-6 py-sp-3 text-[length:var(--text-body)] font-medium text-accent-fg transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
