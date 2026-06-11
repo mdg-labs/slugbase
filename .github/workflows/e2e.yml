@@ -124,19 +124,17 @@ jobs:
           done
 
       - name: Run Playwright tests (hosted)
-        run: pnpm test:e2e --project=hosted
+        run: pnpm e2e:direct --project=hosted
 
-      - name: Cleanup — Postgres
+      - name: Cleanup
         if: always()
         run: |
           # Stop backgrounded node/serve processes
           kill "${API_PID:-}" 2>/dev/null || true
           kill "${WEB_PID:-}" 2>/dev/null || true
           kill "${MARKETING_PID:-}" 2>/dev/null || true
-
-      - name: Cleanup — Docker prune
-        if: always()
-        run: docker builder prune --force
+          # Prune Docker build cache (keeps volumes intact for the job VM)
+          docker builder prune --force 2>/dev/null || true
 
   e2e-self-hosted:
     name: E2E · Self-hosted mode
@@ -195,7 +193,7 @@ jobs:
           done
 
       - name: Run Playwright tests (self-hosted)
-        run: pnpm test:e2e --project=self-hosted
+        run: pnpm e2e:direct --project=self-hosted
 
       - name: Cleanup — container
         if: always()
@@ -203,6 +201,6 @@ jobs:
           docker stop slugbase-e2e-self 2>/dev/null || true
           docker rm slugbase-e2e-self 2>/dev/null || true
 
-      - name: Cleanup — Postgres prune
+      - name: Cleanup — builder prune
         if: always()
-        run: docker builder prune --force
+        run: docker builder prune --force 2>/dev/null || true

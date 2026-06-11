@@ -1,5 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
-import { resolve } from 'path';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const CI = Boolean(process.env.CI);
 
@@ -72,26 +76,31 @@ export default defineConfig({
         {
           command: 'node packages/backend/dist/main.js',
           port: 4001,
-          cwd: resolve('..'),
+          cwd: resolve(__dirname, '..'),
           reuseExistingServer: true,
           env: {
             PORT: '4001',
             SLUGBASE_E2E_MODE: 'true',
+            SESSION_SECRET: 'e2e-test-session-secret-at-least-32-chars!!',
+            ENCRYPTION_KEY: 'e2e-test-encryption-key-at-least-32-chars!!',
+            APP_BASE_URL: 'http://localhost:4001',
+            FRONTEND_ORIGIN: 'http://localhost:4002',
+            ...(process.env.DATABASE_URL ? { DATABASE_URL: process.env.DATABASE_URL } : {}),
           },
         },
         {
-          command: 'npx react-router-serve packages/web/build/server/index.js',
+          command: 'npx --yes react-router-serve build/server/index.js',
           port: 4002,
-          cwd: resolve('..'),
+          cwd: resolve(__dirname, '../packages/web'),
           reuseExistingServer: true,
           env: {
             PORT: '4002',
           },
         },
         {
-          command: 'npx serve packages/marketing/dist -l 4003',
+          command: 'npx --yes serve packages/marketing/dist -l 4003',
           port: 4003,
-          cwd: resolve('..'),
+          cwd: resolve(__dirname, '..'),
           reuseExistingServer: true,
         },
       ],
