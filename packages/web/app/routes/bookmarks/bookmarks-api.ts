@@ -1,7 +1,9 @@
-const getApiBaseUrl = (): string =>
-  (typeof window === "undefined" ? process.env["API_BASE_URL"] : undefined) ??
-  (import.meta.env.VITE_API_URL as string | undefined) ??
-  "";
+/**
+ * Always returns relative URLs so fetch requests flow through the
+ * Cloudflare Worker proxy routes defined in routes.ts rather than
+ * hitting the NestJS backend directly.
+ */
+const getApiBaseUrl = (): string => "";
 
 async function postJson<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${getApiBaseUrl()}${path}`, {
