@@ -15,7 +15,7 @@ SlugBase uses **two separate status systems**:
 
 ## Blocking dependencies — unblocked when board Status is Done
 
-A task that depends on another issue (e.g. "Depends on: #325") is **unblocked** when the blocking issue's project board Status is **Done** — regardless of the GitHub issue state (open/closed).
+A task that depends on another issue (e.g. "Depends on: #325") is **unblocked** when the blocking issue's project board Status is **Done** or **Closed** — regardless of the GitHub issue state (open/closed).
 
 **Why:** Done on the board means the implementation has been verified, committed, and merged to `staging`. The commit carries `fixes #N`, which will auto-close the GitHub issue only when it lands on `main` (the default branch). The distinction is:
 
