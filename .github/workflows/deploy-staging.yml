@@ -17,45 +17,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-server-staging:
-    name: Staging · 1 · Build API
-    runs-on: ubuntu-latest
-    environment: staging
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup workspace
-        uses: ./.github/actions/setup
-        with:
-          skip-checkout: "true"
-          infisical-env-slug: staging
-          infisical-domain: ${{ secrets.INFISICAL_DOMAIN }}
-          infisical-identity-id: ${{ secrets.INFISICAL_OIDC_IDENTITY_ID }}
-
-      - name: Build API and shared packages
-        env:
-          NODE_ENV: production
-        run: pnpm exec turbo run build --filter=@slugbase/backend...
-
-      - name: Derive release version
-        id: release
-        run: |
-          VERSION=$(node -p "require('./package.json').version")
-          echo "release=slugbase@${VERSION}" >> "$GITHUB_OUTPUT"
-
-      - name: Upload backend source maps to Sentry
-        env:
-          SENTRY_AUTH_TOKEN: ${{ env.SENTRY_AUTH_TOKEN }}
-          SENTRY_ORG: ${{ env.SENTRY_ORG }}
-          SENTRY_PROJECT: ${{ env.SENTRY_PROJECT }}
-        run: |
-          npm install -g @sentry/cli
-          sentry-cli sourcemaps upload \
-            --release "${{ steps.release.outputs.release }}" \
-            packages/backend/dist
-          echo "Uploaded $(find packages/backend/dist -name '*.js.map' | wc -l) backend source maps for release ${{ steps.release.outputs.release }} (staging)"
-
   push-ghcr-staging-dev:
     name: Staging · 1 · Push self-host image (GHCR dev)
     runs-on: ubuntu-latest
@@ -97,7 +58,6 @@ jobs:
     name: Staging · 2 · Run DB migrations
     runs-on: ubuntu-latest
     environment: staging
-    needs: build-server-staging
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -146,6 +106,37 @@ jobs:
           project-slug: slugbase-cloud
           env-slug: staging
 
+      - name: Setup workspace
+        uses: ./.github/actions/setup
+        with:
+          skip-checkout: "true"
+          infisical-env-slug: staging
+          infisical-domain: ${{ secrets.INFISICAL_DOMAIN }}
+          infisical-identity-id: ${{ secrets.INFISICAL_OIDC_IDENTITY_ID }}
+
+      - name: Derive release version
+        id: release
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "release=slugbase@${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Build API and shared packages
+        env:
+          NODE_ENV: production
+        run: pnpm exec turbo run build --filter=@slugbase/backend...
+
+      - name: Upload backend source maps to Sentry
+        env:
+          SENTRY_AUTH_TOKEN: ${{ env.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ env.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ env.SENTRY_PROJECT }}
+        run: |
+          npm install -g @sentry/cli
+          sentry-cli sourcemaps upload \
+            --release "${{ steps.release.outputs.release }}" \
+            packages/backend/dist
+          echo "Uploaded $(find packages/backend/dist -name '*.js.map' | wc -l) backend source maps for release ${{ steps.release.outputs.release }} (staging)"
+
       - name: Setup flyctl
         run: bash .github/scripts/setup-flyctl.sh
 
@@ -185,6 +176,7 @@ jobs:
       - name: Build web client
         env:
           NODE_ENV: production
+          SENTRY_PROJECT: slugbase-web
           VITE_SENTRY_ENVIRONMENT: staging
           VITE_SENTRY_RELEASE: ${{ steps.release.outputs.release }}
         run: pnpm --filter @slugbase/web build

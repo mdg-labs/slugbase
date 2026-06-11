@@ -1,7 +1,7 @@
 name: Deploy Production
 
 # Production deploy pipeline — runs on release published only (spec §22.7–22.8).
-# Job dependency chain: check-not-deployed → build → migrate → deploy → smoke → record.
+# Job dependency chain: check-not-deployed → build (parallel) → migrate → deploy → smoke → record.
 # Deployment records are created automatically by the production GitHub Environment.
 
 on:
@@ -38,50 +38,6 @@ jobs:
             echo "should_deploy=true" >> "$GITHUB_OUTPUT"
             echo "Deploying release ${TAG}"
           fi
-
-  build-server-production:
-    name: Production · 2 · Build API
-    runs-on: ubuntu-latest
-    environment: production
-    needs: [check-not-deployed]
-    if: needs.check-not-deployed.outputs.should_deploy == 'true'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.release.tag_name }}
-
-      - name: Setup workspace
-        uses: ./.github/actions/setup
-        with:
-          skip-checkout: "true"
-          infisical-env-slug: prod
-          infisical-domain: ${{ secrets.INFISICAL_DOMAIN }}
-          infisical-identity-id: ${{ secrets.INFISICAL_OIDC_IDENTITY_ID }}
-
-      - name: Derive release version
-        id: release
-        run: |
-          VERSION=$(node -p "require('./package.json').version")
-          echo "release=slugbase@${VERSION}" >> "$GITHUB_OUTPUT"
-
-      - name: Build API and shared packages
-        env:
-          NODE_ENV: production
-        run: pnpm exec turbo run build --filter=@slugbase/backend...
-
-      - name: Upload backend source maps to Sentry
-        env:
-          SENTRY_AUTH_TOKEN: ${{ env.SENTRY_AUTH_TOKEN }}
-          SENTRY_ORG: ${{ env.SENTRY_ORG }}
-          SENTRY_PROJECT: ${{ env.SENTRY_PROJECT }}
-        run: |
-          npm install -g @sentry/cli
-          sentry-cli sourcemaps upload \
-            --release "${{ steps.release.outputs.release }}" \
-            packages/backend/dist
-          MAP_COUNT=$(find packages/backend/dist -name '*.js.map' | wc -l)
-          echo "Uploaded ${MAP_COUNT} backend source maps for release ${{ steps.release.outputs.release }} (production)"
 
   push-ghcr-image:
     name: Production · 2 · Push self-host image (GHCR)
@@ -127,7 +83,7 @@ jobs:
     name: Production · 3 · Run DB migrations
     runs-on: ubuntu-latest
     environment: production
-    needs: [check-not-deployed, build-server-production]
+    needs: [check-not-deployed]
     if: needs.check-not-deployed.outputs.should_deploy == 'true'
     steps:
       - name: Checkout
@@ -182,6 +138,38 @@ jobs:
           project-slug: slugbase-cloud
           env-slug: prod
 
+      - name: Setup workspace
+        uses: ./.github/actions/setup
+        with:
+          skip-checkout: "true"
+          infisical-env-slug: prod
+          infisical-domain: ${{ secrets.INFISICAL_DOMAIN }}
+          infisical-identity-id: ${{ secrets.INFISICAL_OIDC_IDENTITY_ID }}
+
+      - name: Derive release version
+        id: release
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "release=slugbase@${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Build API and shared packages
+        env:
+          NODE_ENV: production
+        run: pnpm exec turbo run build --filter=@slugbase/backend...
+
+      - name: Upload backend source maps to Sentry
+        env:
+          SENTRY_AUTH_TOKEN: ${{ env.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ env.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ env.SENTRY_PROJECT }}
+        run: |
+          npm install -g @sentry/cli
+          sentry-cli sourcemaps upload \
+            --release "${{ steps.release.outputs.release }}" \
+            packages/backend/dist
+          MAP_COUNT=$(find packages/backend/dist -name '*.js.map' | wc -l)
+          echo "Uploaded ${MAP_COUNT} backend source maps for release ${{ steps.release.outputs.release }} (production)"
+
       - name: Setup flyctl
         run: bash .github/scripts/setup-flyctl.sh
 
@@ -224,6 +212,7 @@ jobs:
       - name: Build web client
         env:
           NODE_ENV: production
+          SENTRY_PROJECT: slugbase-web
           VITE_SENTRY_ENVIRONMENT: production
           VITE_SENTRY_RELEASE: ${{ steps.release.outputs.release }}
         run: pnpm --filter @slugbase/web build
