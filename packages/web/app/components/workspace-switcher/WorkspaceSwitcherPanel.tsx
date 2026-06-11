@@ -170,6 +170,7 @@ export function WorkspaceSwitcherPanel({
       {/* Panel */}
       <div
         ref={panelRef}
+        data-testid="workspace-switcher-panel"
         className="absolute left-sp-4 top-sp-4 flex w-[280px] flex-col rounded-lg border border-[color:var(--border)] bg-overlay"
         style={{ boxShadow: "var(--shadow-overlay)" }}
         role="dialog"
@@ -191,6 +192,7 @@ export function WorkspaceSwitcherPanel({
                 return (
                   <button
                     key={ws.id}
+                    data-testid={`workspace-switcher-item-${ws.id}`}
                     className="flex w-full items-center gap-sp-3 px-sp-3 py-sp-2 text-left transition-colors hover:bg-raised"
                     onClick={() => { void handleSwitch(ws); }}
                     disabled={isActive}
@@ -218,6 +220,7 @@ export function WorkspaceSwitcherPanel({
 
             <div className="border-t border-[color:var(--border-subtle)] px-sp-2 py-sp-2">
               <button
+                data-testid="workspace-switcher-create-btn"
                 className="flex w-full items-center gap-sp-3 rounded-md px-sp-3 py-sp-2 text-[length:var(--text-body)] text-fg-muted transition-colors hover:bg-raised hover:text-fg"
                 onClick={handleCreateClick}
               >

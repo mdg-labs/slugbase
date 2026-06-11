@@ -246,6 +246,7 @@ export function OnboardingOverlay({ workspaceName, onDone }: OnboardingOverlayPr
 
   return (
     <div
+      data-testid="onboarding-overlay"
       role="dialog"
       aria-label={t("onboarding.overlay.aria_label")}
       aria-modal="true"
@@ -271,7 +272,7 @@ export function OnboardingOverlay({ workspaceName, onDone }: OnboardingOverlayPr
         </div>
 
         {/* Dot progress */}
-        <div className="flex items-center justify-center gap-sp-3">
+        <div data-testid="onboarding-progress-dots" className="flex items-center justify-center gap-sp-3">
           {Array.from({ length: TOTAL }, (_, i) => (
             <div
               key={i}
@@ -332,6 +333,7 @@ export function OnboardingOverlay({ workspaceName, onDone }: OnboardingOverlayPr
                 {t("onboarding.step2.body")}
               </p>
               <div
+                data-testid="onboarding-drop-zone"
                 className={`drop-zone${drag ? " drag" : ""}${importState.phase === "ready" || importState.phase === "done" ? " drag" : ""}`}
                 onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
                 onDragLeave={() => { setDrag(false); }}
@@ -340,6 +342,7 @@ export function OnboardingOverlay({ workspaceName, onDone }: OnboardingOverlayPr
               >
                 <input
                   ref={fileInputRef}
+                  data-testid="onboarding-file-input"
                   type="file"
                   accept=".html,.htm,.json"
                   className="sr-only"
@@ -494,6 +497,7 @@ export function OnboardingOverlay({ workspaceName, onDone }: OnboardingOverlayPr
         <div className="flex items-center gap-sp-5">
           <button
             type="button"
+            data-testid="onboarding-step-cta"
             disabled={importState.phase === "importing"}
             onClick={handleCtaClick}
             className="inline-flex items-center gap-sp-2 rounded-md bg-accent px-sp-6 py-sp-3 text-[length:var(--text-body)] font-medium text-accent-fg transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
@@ -503,6 +507,7 @@ export function OnboardingOverlay({ workspaceName, onDone }: OnboardingOverlayPr
           {step === 1 && (
             <button
               type="button"
+              data-testid="onboarding-skip-btn"
               onClick={() => { skip("import"); }}
               className="text-[length:var(--text-small)] text-fg-subtle transition-colors hover:text-fg"
             >
@@ -512,6 +517,7 @@ export function OnboardingOverlay({ workspaceName, onDone }: OnboardingOverlayPr
           {step === 2 && (
             <button
               type="button"
+              data-testid="onboarding-skip-btn"
               onClick={() => { skip("shortcut"); }}
               className="text-[length:var(--text-small)] text-fg-subtle transition-colors hover:text-fg"
             >
