@@ -18,6 +18,7 @@ import { SessionService } from "../../sessions/session.service.js";
 import { SkipCsrf } from "../csrf/skip-csrf.decorator.js";
 import { SESSION_COOKIE } from "../login-logout.controller.js";
 import { IpThrottlerGuard } from "../rate-limit/ip-throttler.guard.js";
+import { WorkspacesService } from "../../workspaces/workspaces.service.js";
 import { MfaService } from "./mfa.service.js";
 
 interface EnrolStartBody {
@@ -48,6 +49,7 @@ export class MfaController {
     @Inject(MfaService) private readonly mfa: MfaService,
     @Inject(AccountsService) private readonly accounts: AccountsService,
     @Inject(SessionService) private readonly sessions: SessionService,
+    @Inject(WorkspacesService) private readonly workspaces: WorkspacesService,
   ) {}
 
   /**
@@ -124,7 +126,8 @@ export class MfaController {
     if (!valid) throw new UnauthorizedException("Invalid MFA code");
 
     const { mfaPending: _removed, ...rest } = session.data as Record<string, unknown> & { mfaPending?: boolean };
-    await this.sessions.updateSessionData(sessionId, rest);
+    const activeWorkspaceId = await this.workspaces.resolveDefaultActiveWorkspaceId(session.userId);
+    await this.sessions.updateSessionData(sessionId, { ...rest, activeWorkspaceId });
 
     return { userId: session.userId };
   }
