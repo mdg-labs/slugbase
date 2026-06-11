@@ -134,7 +134,7 @@ When user asks to implement an **epic** (parent issue with sub-issues):
 1. `issue_read` on epic + `issue_read` (method: `get_sub_issues`) → full sub-issue list.
 2. Read epic body **Suggested implementation order** and dependency prose.
 3. Build a **batch plan** (ordered list of leaf tasks); split cross-domain work by Lane rules.
-4. Track epic parent: execution adds **In Progress** label to epic when any subtask starts; orchestrator or **last subtask verifier** closes epic only when all in-scope subtasks PASS.
+4. Track epic parent: execution adds **In Progress** label to epic when any subtask starts; orchestrator or **last subtask verifier** sets epic board Status to Done only when all in-scope subtasks PASS.
 
 ### Sub-agent types
 
@@ -230,7 +230,7 @@ Base:      STAGING_BASE_SHA           # do not chase moving staging during execu
 1. **GitHub (first action when GITHUB SYNC present):** `issue_write` (method: `update`) → add **In Progress** label for every listed leaf issue **and** epic parent issue
 2. **Session memory** — create `active/<SESSION-ID>.md`; record `started` timestamp
 3. **Implementation** — task files only
-4. **Pre-handoff** — set `ended` + `duration`; `add_issue_comment` on each leaf issue; `issue_write` (method: `update`) → close → **single implementation commit** (task files only; never commit session memory)
+4. **Pre-handoff** — set `ended` + `duration`; `add_issue_comment` on each leaf issue; set board Status to 'In Review' for each leaf issue → **single implementation commit** (task files only; never commit session memory)
 
 Never push to **`main`**. When pushing is explicitly requested, target **`staging`** only. Stage explicit paths only. Stop if branch ≠ **`staging`**.
 
