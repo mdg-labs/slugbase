@@ -41,7 +41,7 @@ export class AuditService {
   }
 
   /**
-   * Append-only audit recording. Does not gate on entitlement — events are
+   * Append-only audit recording. Does not gate on entitlement - events are
    * captured for all plans so history exists when a workspace upgrades.
    */
   async recordEvent(data: RecordAuditEventData): Promise<void> {

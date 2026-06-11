@@ -34,7 +34,7 @@ function FeatureCell({
     );
   }
   if (value === "excluded") {
-    return <span className="text-fg-faint">—</span>;
+    return <span className="text-fg-faint">-</span>;
   }
   if (value.startsWith("settings.billing.")) {
     return (

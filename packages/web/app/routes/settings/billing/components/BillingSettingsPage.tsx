@@ -148,7 +148,7 @@ export function BillingSettingsPage({ initialData }: BillingSettingsPageProps) {
         badgeKey: "settings.billing.plan_name_personal",
         titleKey: "settings.billing.plan_name_personal",
         priceKey: "settings.billing.current_permanent_price",
-        priceParams: { price: initialData.planConfig.supporterPrice || "—" },
+        priceParams: { price: initialData.planConfig.supporterPrice || "-" },
       };
     }
     if (displayPlan === "free") {
@@ -157,13 +157,13 @@ export function BillingSettingsPage({ initialData }: BillingSettingsPageProps) {
         badgeKey: "settings.billing.plan_name_free",
         titleKey: "settings.billing.plan_name_free",
         priceKey: "settings.billing.current_free_price",
-        priceParams: { price: currencyPrefix ? `${currencyPrefix}0` : "—" },
+        priceParams: { price: currencyPrefix ? `${currencyPrefix}0` : "-" },
       };
     }
     if (displayPlan === "personal") {
       const personalPrice = activeInterval === "annual"
-        ? initialData.planConfig.personalYearlyPrice || initialData.planConfig.personalMonthlyPrice || "—"
-        : initialData.planConfig.personalMonthlyPrice || "—";
+        ? initialData.planConfig.personalYearlyPrice || initialData.planConfig.personalMonthlyPrice || "-"
+        : initialData.planConfig.personalMonthlyPrice || "-";
       return {
         badgeKey: "settings.billing.plan_name_personal",
         titleKey: "settings.billing.plan_name_personal",
@@ -179,8 +179,8 @@ export function BillingSettingsPage({ initialData }: BillingSettingsPageProps) {
       };
     }
     const teamPrice = activeInterval === "annual"
-      ? initialData.planConfig.teamSeatYearlyPrice || initialData.planConfig.teamSeatPrice || "—"
-      : initialData.planConfig.teamSeatPrice || "—";
+      ? initialData.planConfig.teamSeatYearlyPrice || initialData.planConfig.teamSeatPrice || "-"
+      : initialData.planConfig.teamSeatPrice || "-";
     return {
       badgeKey: "settings.billing.plan_name_team",
       titleKey: "settings.billing.plan_name_team",
@@ -190,7 +190,7 @@ export function BillingSettingsPage({ initialData }: BillingSettingsPageProps) {
           ? "settings.billing.current_team_annual_price"
           : "settings.billing.current_team_price",
       priceParams: {
-        seats: String(workspace.planSeats ?? "—"),
+        seats: String(workspace.planSeats ?? "-"),
         price: teamPrice,
         date: periodEndLabel ?? t("settings.billing.period_end_unknown"),
       },
@@ -277,7 +277,7 @@ export function BillingSettingsPage({ initialData }: BillingSettingsPageProps) {
                 type="button"
               >
                 {t("settings.billing.archived_upgrade_action", {
-                  price: initialData.planConfig.personalMonthlyPrice || "—",
+                  price: initialData.planConfig.personalMonthlyPrice || "-",
                 })}
               </Button>
             </div>

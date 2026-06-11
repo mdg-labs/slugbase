@@ -5,7 +5,7 @@ import { PERSONAL_ENTITLEMENTS } from "./entitlement-sets.js";
 
 /**
  * Resolves the entitlement set for a workspace plan.
- * Supporter purchases grant plan "personal" with permanentPersonal — same entitlements, no separate path (spec §12.1).
+ * Supporter purchases grant plan "personal" with permanentPersonal - same entitlements, no separate path (spec §12.1).
  */
 export function resolveEntitlementsForPlan(planId: PlanId): EntitlementSet {
   return getPlanDefinition(planId).entitlements;
@@ -13,7 +13,7 @@ export function resolveEntitlementsForPlan(planId: PlanId): EntitlementSet {
 
 /**
  * Maps billing subscription state to entitlements.
- * permanentPersonal (supporter) uses the Personal entitlement set — not a distinct plan.
+ * permanentPersonal (supporter) uses the Personal entitlement set - not a distinct plan.
  */
 export function resolveEntitlementsFromBillingState(input: {
   plan: PlanId;

@@ -6,7 +6,7 @@ export type ListResultCountProps = {
   testId?: string;
 };
 
-/** Mono result count — toolbar right cluster (prototype toolbar count span). */
+/** Mono result count - toolbar right cluster (prototype toolbar count span). */
 export function ListResultCount({
   children,
   className = "",

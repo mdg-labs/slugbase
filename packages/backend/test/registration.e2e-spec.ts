@@ -12,7 +12,7 @@ import { SESSION_COOKIE } from "../src/auth/login-logout.controller.js";
 import { applyTestEnv, clearTestEnv } from "../src/test-utils/test-env.js";
 import { createTestDatabase } from "./test-database.js";
 
-describe("Registration (integration) — PUBLIC_REGISTRATION=true", () => {
+describe("Registration (integration) - PUBLIC_REGISTRATION=true", () => {
   let app: INestApplication | undefined;
   let cleanup: () => Promise<void> = async () => {};
 

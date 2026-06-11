@@ -27,7 +27,7 @@ export class CsrfGuard implements CanActivate {
 
     if (SAFE_METHODS.has(req.method)) return true;
 
-    // Bearer token requests carry implicit CSRF protection — custom Authorization
+    // Bearer token requests carry implicit CSRF protection - custom Authorization
     // headers cannot be auto-set by cross-origin forms or browser navigation.
     if (req.headers.authorization?.startsWith("Bearer ")) return true;
 

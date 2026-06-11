@@ -33,12 +33,12 @@ interface AiSuggestBody {
 }
 
 /**
- * Exposes POST /ai/suggest — returns AI-generated bookmark field suggestions.
+ * Exposes POST /ai/suggest - returns AI-generated bookmark field suggestions.
  *
  * Gate order (spec §11.2, §12.4, §17):
- *   1. Entitlement check — workspace plan must include `ai-suggestions`.
- *   2. Per-user opt-out   — `account.aiOptOut` must be false.
- *   3. Provider check     — AI credential must be configured.
+ *   1. Entitlement check - workspace plan must include `ai-suggestions`.
+ *   2. Per-user opt-out   - `account.aiOptOut` must be false.
+ *   3. Provider check     - AI credential must be configured.
  */
 @Controller("ai")
 @UseGuards(TenantGuard)

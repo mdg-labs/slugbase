@@ -59,14 +59,14 @@ const SAMPLE_BACKUP_CODES = [
   "oooo-pppp",
 ];
 
-describe("MFA enroll route — shouldRevalidate", () => {
+describe("MFA enroll route - shouldRevalidate", () => {
   it("returns false so enrol/start is not re-run after confirm", async () => {
     const { shouldRevalidate } = await import("./enroll.js");
     expect(shouldRevalidate()).toBe(false);
   });
 });
 
-describe("MFA enroll route — action", () => {
+describe("MFA enroll route - action", () => {
   beforeEach(() => {
     vi.stubGlobal(
       "fetch",
@@ -147,7 +147,7 @@ describe("MFA enroll route — action", () => {
   });
 });
 
-describe("MFA enroll route — enroll confirm step", () => {
+describe("MFA enroll route - enroll confirm step", () => {
   afterEach(() => {
     cleanup();
   });
@@ -172,7 +172,7 @@ describe("MFA enroll route — enroll confirm step", () => {
   });
 });
 
-describe("MFA enroll route — backup codes step (shown once)", () => {
+describe("MFA enroll route - backup codes step (shown once)", () => {
   const writeText = vi.fn().mockResolvedValue(undefined);
 
   beforeEach(() => {

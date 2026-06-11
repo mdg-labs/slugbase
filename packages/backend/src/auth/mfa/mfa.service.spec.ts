@@ -10,7 +10,7 @@ import type { AccountRecord } from "../../accounts/account.types.js";
 import type { MfaBackupCodeRecord } from "./mfa.types.js";
 
 /**
- * Lightweight stubs — no NestJS DI needed for unit tests.
+ * Lightweight stubs - no NestJS DI needed for unit tests.
  */
 const fakeCrypto: CryptoService = {
   encrypt: (plaintext) => `enc:${plaintext}`,
@@ -59,7 +59,7 @@ function makeBackupCode(
 // TOTP verification
 // ---------------------------------------------------------------------------
 
-describe("TOTP verify — correct code", () => {
+describe("TOTP verify - correct code", () => {
   it("returns true for a valid TOTP token", async () => {
     const secret = generateSecret();
     const token = generateSync({ secret });

@@ -43,7 +43,7 @@ function makeWorkspace(id = "ws-1"): WorkspaceRecord {
 // TenantGuard unit tests
 // ---------------------------------------------------------------------------
 
-describe("TenantGuard — session and membership validation", () => {
+describe("TenantGuard - session and membership validation", () => {
   async function buildGuard(opts: {
     session: SessionRecord | null;
     workspaceExists?: boolean;
@@ -181,10 +181,10 @@ describe("TenantGuard — session and membership validation", () => {
 });
 
 // ---------------------------------------------------------------------------
-// SessionData type contract — activeWorkspaceId field
+// SessionData type contract - activeWorkspaceId field
 // ---------------------------------------------------------------------------
 
-describe("SessionData — activeWorkspaceId contract", () => {
+describe("SessionData - activeWorkspaceId contract", () => {
   it("stores and retrieves activeWorkspaceId", () => {
     const data: import("../sessions/session.types.js").SessionData = {
       activeWorkspaceId: "ws-42",

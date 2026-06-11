@@ -1,4 +1,4 @@
-/** Optional tag accent color — 6-digit hex with leading # (design tokens compatible). */
+/** Optional tag accent color - 6-digit hex with leading # (design tokens compatible). */
 export const TAG_COLOR_GRAMMAR = /^#[0-9a-fA-F]{6}$/;
 
 export const DEFAULT_TAG_PAGE_SIZE = 24;

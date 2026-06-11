@@ -144,7 +144,7 @@ describe("Workspace isolation (integration)", () => {
     expect(res.status).toBe(200);
   }
 
-  describe("active workspace A — resources in B are inaccessible", () => {
+  describe("active workspace A - resources in B are inaccessible", () => {
     let sessionCookie: string;
     let csrfToken: string;
     let csrfCookie: string;

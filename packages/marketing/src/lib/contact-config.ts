@@ -1,4 +1,4 @@
-/** Marketing contact form — public env (spec §2.3, §11.8). */
+/** Marketing contact form - public env (spec §2.3, §11.8). */
 
 const CONTACT_NAME_MAX_LENGTH = 200;
 const CONTACT_MESSAGE_MAX_LENGTH = 5000;

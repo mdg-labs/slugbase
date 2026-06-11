@@ -135,7 +135,7 @@ describe("BookmarkListPage", () => {
     });
   });
 
-  describe("Bookmark card click — normal mode", () => {
+  describe("Bookmark card click - normal mode", () => {
     it("opens bookmark URL in a new tab when a card is clicked", () => {
       const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
       mockLoaderData = {
@@ -157,7 +157,7 @@ describe("BookmarkListPage", () => {
     });
   });
 
-  describe("Bookmark table row click — normal mode", () => {
+  describe("Bookmark table row click - normal mode", () => {
     it("opens bookmark URL in a new tab when a row is clicked", () => {
       const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
       mockLoaderData = {

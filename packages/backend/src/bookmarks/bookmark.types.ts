@@ -61,7 +61,7 @@ export interface CreateSlugPreferenceData {
   bookmarkId: string;
 }
 
-/** Raw HTTP query — scope/sort/tagIds are parsed in the service before listing. */
+/** Raw HTTP query - scope/sort/tagIds are parsed in the service before listing. */
 export interface ListBookmarksQuery {
   q?: string;
   folderId?: string;

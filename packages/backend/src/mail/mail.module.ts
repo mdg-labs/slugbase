@@ -10,7 +10,7 @@ import { SmtpMailService } from "./smtp-mail.service.js";
 /**
  * Provides the MAIL interface token bound to the config-selected implementation.
  * If SMTP_HOST is set → SmtpMailService; otherwise → NoopMailService.
- * No deployment-mode branching — interface selection only (spec §15, rule 03).
+ * No deployment-mode branching - interface selection only (spec §15, rule 03).
  */
 @Global()
 @Module({

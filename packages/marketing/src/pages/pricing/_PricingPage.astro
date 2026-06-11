@@ -17,11 +17,11 @@ const supporterActive = isSupporterPromotionActive(config);
 const privacyHref = getRelativeLocaleUrl(locale, "/legal/datenschutz");
 const getStartedHref = appOrigin ? `${appOrigin}/auth/register` : "#";
 
-const title = `${t(locale, "marketing.pricing.page_title")} — ${t(locale, "marketing.nav.brand")}`;
+const title = `${t(locale, "marketing.pricing.page_title")} - ${t(locale, "marketing.nav.brand")}`;
 
 function formatFeatureCell(locale: SupportedLocale, value: PlanFeatureCell): string {
   if (value === "included") return "✓";
-  if (value === "excluded") return "—";
+  if (value === "excluded") return "-";
   if (value === "unlimited") return t(locale, "marketing.pricing.feature.unlimited");
   if (value === "unlimited_per_seat") return t(locale, "marketing.pricing.feature.unlimited_per_seat");
   return value;
@@ -29,7 +29,7 @@ function formatFeatureCell(locale: SupportedLocale, value: PlanFeatureCell): str
 
 function splitPrice(price: string): { amount: string; period: string } {
   const slash = price.indexOf("/");
-  if (slash === -1) return { amount: price || "—", period: "" };
+  if (slash === -1) return { amount: price || "-", period: "" };
   return {
     amount: price.slice(0, slash),
     period: price.slice(slash + 1),
@@ -43,13 +43,13 @@ function extractCurrencyPrefix(price: string): string {
 }
 
 const freeCurrency = extractCurrencyPrefix(config.personalMonthlyPrice || "");
-const freePrice = freeCurrency ? `${freeCurrency}0` : "—";
+const freePrice = freeCurrency ? `${freeCurrency}0` : "-";
 const freeMonthly = splitPrice(freePrice);
 const freeYearly = splitPrice(freePrice);
-const personalMonthly = splitPrice(config.personalMonthlyPrice || "—");
-const personalYearly = splitPrice(config.personalYearlyPrice || "—");
-const teamMonthly = splitPrice(config.teamSeatMonthlyPrice || "—");
-const teamYearly = splitPrice(config.teamSeatYearlyPrice || "—");
+const personalMonthly = splitPrice(config.personalMonthlyPrice || "-");
+const personalYearly = splitPrice(config.personalYearlyPrice || "-");
+const teamMonthly = splitPrice(config.teamSeatMonthlyPrice || "-");
+const teamYearly = splitPrice(config.teamSeatYearlyPrice || "-");
 
 const faqItems = [
   {
@@ -446,7 +446,7 @@ const faqItems = [
   }
 
   .mk-plan-feats li.dim::before {
-    content: "—";
+    content: "-";
     color: var(--fg-faint);
   }
 </style>

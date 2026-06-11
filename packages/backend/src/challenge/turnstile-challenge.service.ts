@@ -48,7 +48,7 @@ export class TurnstileChallengeService implements ChallengeService {
 
   async verify(request: ChallengeVerifyRequest): Promise<void> {
     if (this.isDevSkipEnabled()) {
-      this.logger.debug("Challenge dev-skip enabled — verification skipped");
+      this.logger.debug("Challenge dev-skip enabled - verification skipped");
       return;
     }
 

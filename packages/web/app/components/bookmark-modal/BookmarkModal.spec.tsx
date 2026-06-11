@@ -379,7 +379,7 @@ describe("BookmarkModal", () => {
     // Select the folder (multi-select: dropdown stays open)
     fireEvent.click(view.getByRole("option", { name: "Reading" }));
 
-    // Dropdown stays open for multi-select — deselect immediately
+    // Dropdown stays open for multi-select - deselect immediately
     await waitFor(() => {
       expect(view.getByTestId("folder-selector-menu")).toBeTruthy();
     });

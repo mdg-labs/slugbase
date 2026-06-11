@@ -65,7 +65,7 @@ async function fetchPricingFromApi(): Promise<PricingApiResponse | null> {
 
 /**
  * Config-driven plan display metadata (spec §12.1).
- * Prices come from the public pricing API — Stripe is the single source of truth.
+ * Prices come from the public pricing API - Stripe is the single source of truth.
  * Falls back to env-based config when the API is unreachable (self-hosted without Stripe).
  */
 export async function loadBillingPlanDisplayConfig(

@@ -12,14 +12,14 @@ import { SESSION_COOKIE } from "../src/auth/login-logout.controller.js";
 import { applyTestEnv, clearTestEnv } from "../src/test-utils/test-env.js";
 import { createTestDatabase } from "./test-database.js";
 
-describe("Registration (integration) — PUBLIC_REGISTRATION=false", () => {
+describe("Registration (integration) - PUBLIC_REGISTRATION=false", () => {
   let app: INestApplication | undefined;
   let cleanup: () => Promise<void> = async () => {};
 
   beforeAll(async () => {
     const testDatabase = await createTestDatabase();
     cleanup = testDatabase.cleanup;
-    // PUBLIC_REGISTRATION is intentionally NOT set here — env.schema.ts defaults it to false
+    // PUBLIC_REGISTRATION is intentionally NOT set here - env.schema.ts defaults it to false
     // PUBLIC_REGISTRATION defaults to false when unset (envBoolean parsing).
     // we rely on the Zod default(false) when the env var is absent.
     delete process.env["PUBLIC_REGISTRATION"];

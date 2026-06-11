@@ -52,7 +52,7 @@ describe("hashInvitationToken", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Token expiry check (pure logic — no DB)
+// Token expiry check (pure logic - no DB)
 // ---------------------------------------------------------------------------
 
 describe("token expiry check", () => {
@@ -87,7 +87,7 @@ describe("token expiry check", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Duplicate invitation prevention (pure logic — no DB)
+// Duplicate invitation prevention (pure logic - no DB)
 // ---------------------------------------------------------------------------
 
 describe("duplicate invitation prevention", () => {
@@ -135,10 +135,10 @@ describe("duplicate invitation prevention", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Entitlement gate for free plan (pure logic — no NestJS)
+// Entitlement gate for free plan (pure logic - no NestJS)
 // ---------------------------------------------------------------------------
 
-describe("entitlement gate — Team plan required to invite members on hosted", () => {
+describe("entitlement gate - Team plan required to invite members on hosted", () => {
   type Plan = "free" | "personal" | "team";
 
   const PLAN_CAPABILITIES: Record<Plan, Set<string>> = {

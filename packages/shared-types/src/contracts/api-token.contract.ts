@@ -51,7 +51,7 @@ export const apiTokenContract = c.router({
       409: z.object({ message: z.string() }).strict(),
       422: z.object({ message: z.string() }).strict(),
     },
-    summary: "Create a named API token — returns plaintext once",
+    summary: "Create a named API token - returns plaintext once",
   },
   listTokens: {
     method: "GET",

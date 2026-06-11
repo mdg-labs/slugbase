@@ -25,7 +25,7 @@ interface UmamiSendPayload {
 }
 
 /**
- * Umami-backed product analytics — active when UMAMI_HOST and UMAMI_WEBSITE_ID
+ * Umami-backed product analytics - active when UMAMI_HOST and UMAMI_WEBSITE_ID
  * are configured. Consent is enforced before events leave the process.
  */
 @Injectable()

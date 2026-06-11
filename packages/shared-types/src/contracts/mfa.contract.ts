@@ -64,7 +64,7 @@ export const mfaContract = c.router({
       200: MfaEnrolStartResponseSchema,
       401: unauthorizedSchema,
     },
-    summary: "Start TOTP MFA enrollment — returns QR code and text secret",
+    summary: "Start TOTP MFA enrollment - returns QR code and text secret",
   },
   enrolConfirm: {
     method: "POST",
@@ -74,7 +74,7 @@ export const mfaContract = c.router({
       200: MfaEnrolConfirmResponseSchema,
       401: unauthorizedSchema,
     },
-    summary: "Confirm TOTP MFA enrollment — returns 10 single-use backup codes (shown once)",
+    summary: "Confirm TOTP MFA enrollment - returns 10 single-use backup codes (shown once)",
   },
   challenge: {
     method: "POST",

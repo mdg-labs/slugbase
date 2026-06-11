@@ -13,7 +13,7 @@ import { UmamiAnalyticsService } from "./umami-analytics.service.js";
 /**
  * Provides the ANALYTICS interface token bound to the config-selected implementation.
  * If UMAMI_HOST and UMAMI_WEBSITE_ID are set → UmamiAnalyticsService; otherwise → NoopAnalyticsService.
- * No deployment-mode branching — interface selection only (spec §11.6, §15).
+ * No deployment-mode branching - interface selection only (spec §11.6, §15).
  */
 @Global()
 @Module({

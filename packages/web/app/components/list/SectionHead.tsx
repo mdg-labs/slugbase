@@ -10,7 +10,7 @@ export type SectionHeadProps = {
 };
 
 /**
- * Prototype `.section-head` — pinned / all bookmarks section divider.
+ * Prototype `.section-head` - pinned / all bookmarks section divider.
  */
 export function SectionHead({
   icon,

@@ -13,7 +13,7 @@ import { AuthShell, LockFieldIcon } from "./AuthShell.js";
 
 const API_BASE_URL = () => process.env["API_BASE_URL"] ?? "";
 
-/** Password strength scoring — mirrors the design prototype (AuthKit.jsx). */
+/** Password strength scoring - mirrors the design prototype (AuthKit.jsx). */
 function scorePassword(value: string): 0 | 1 | 2 | 3 | 4 {
   if (!value) return 0;
   let s = 0;

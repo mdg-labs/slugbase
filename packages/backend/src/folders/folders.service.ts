@@ -182,7 +182,7 @@ export class FoldersService {
     return this.wsDataGuard.verifyOwnership(workspace.id, folder);
   }
 
-  /** Exposed for integration tests — bookmark in multiple folders. */
+  /** Exposed for integration tests - bookmark in multiple folders. */
   async countFoldersForBookmark(
     workspaceId: string,
     bookmarkId: string,
@@ -190,7 +190,7 @@ export class FoldersService {
     return this.folderRepo.countFoldersForBookmark(workspaceId, bookmarkId);
   }
 
-  /** Exposed for integration tests — list folder IDs containing a bookmark. */
+  /** Exposed for integration tests - list folder IDs containing a bookmark. */
   async listFolderIdsForBookmark(
     workspaceId: string,
     bookmarkId: string,
@@ -229,7 +229,7 @@ export class FoldersService {
     if (!trimmed) return null;
     if (!/^#[0-9a-fA-F]{6}$/.test(trimmed)) {
       throw new BadRequestException(
-        "Invalid color format — expected hex color e.g. #7782f7",
+        "Invalid color format - expected hex color e.g. #7782f7",
       );
     }
     return trimmed.toLowerCase();

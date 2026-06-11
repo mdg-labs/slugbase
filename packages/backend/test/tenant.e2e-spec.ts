@@ -111,7 +111,7 @@ describe("Tenant resolution (integration)", () => {
     return { token: body.csrfToken, cookie: csrfCookieStr };
   }
 
-  describe("GET /workspaces/active — after login", () => {
+  describe("GET /workspaces/active - after login", () => {
     it("returns the default workspace set at login", async () => {
       const sessionCookie = await loginAs(OWNER_EMAIL);
       const res = await request(server())
@@ -168,7 +168,7 @@ describe("Tenant resolution (integration)", () => {
     });
 
     it("returns 401 without a session cookie (CSRF present, no session)", async () => {
-      // GET /auth/csrf-token requires no session — obtains a bare CSRF token
+      // GET /auth/csrf-token requires no session - obtains a bare CSRF token
       const csrfRes = await request(server()).get("/auth/csrf-token");
       const csrfBody = csrfRes.body as { csrfToken: string };
       const csrfCookies = (csrfRes.headers["set-cookie"] as string[] | string | undefined) ?? [];
@@ -192,7 +192,7 @@ describe("Tenant resolution (integration)", () => {
     });
   });
 
-  describe("GET /workspaces/active — after activation", () => {
+  describe("GET /workspaces/active - after activation", () => {
     let sessionCookie: string;
     let csrfToken: string;
     let csrfCookie: string;

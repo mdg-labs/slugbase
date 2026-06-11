@@ -56,7 +56,7 @@ const mockUseActionData = vi.mocked(useActionData);
 const mockUseLoaderData = vi.mocked(useLoaderData);
 const mockUseNavigation = vi.mocked(useNavigation);
 
-describe("Verify-email route — loader", () => {
+describe("Verify-email route - loader", () => {
   beforeEach(() => {
     process.env["API_BASE_URL"] = "http://localhost:3000";
   });
@@ -127,7 +127,7 @@ describe("Verify-email route — loader", () => {
   });
 });
 
-describe("Verify-email route — action", () => {
+describe("Verify-email route - action", () => {
   beforeEach(() => {
     process.env["API_BASE_URL"] = "http://localhost:3000";
   });
@@ -232,7 +232,7 @@ describe("Verify-email route — action", () => {
   });
 });
 
-describe("Verify-email route — component", () => {
+describe("Verify-email route - component", () => {
   afterEach(() => {
     cleanup();
     mockShowToast.mockClear();

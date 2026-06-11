@@ -7,7 +7,7 @@ import {
 } from "./entitlement-sets.js";
 
 /**
- * Hosted plan catalog — maps plan ids to entitlement sets (spec §12.1, §12.2).
+ * Hosted plan catalog - maps plan ids to entitlement sets (spec §12.1, §12.2).
  * Supporter / lifetime is not a separate plan: billing grants Personal permanently.
  */
 export const PLAN_CATALOG: Record<PlanId, PlanDefinition> = {

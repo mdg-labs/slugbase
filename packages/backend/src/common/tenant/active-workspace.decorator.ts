@@ -10,7 +10,7 @@ import { ACTIVE_WORKSPACE_KEY } from "./tenant.guard.js";
 /**
  * Parameter decorator that extracts the resolved active workspace from the request.
  *
- * Must be used on a route protected by TenantGuard — the guard is responsible for
+ * Must be used on a route protected by TenantGuard - the guard is responsible for
  * resolving membership and attaching the WorkspaceRecord to the request object.
  * Throws InternalServerErrorException if used without TenantGuard.
  */

@@ -12,7 +12,7 @@ export interface SessionUser {
   emailVerified: boolean;
 }
 
-/** Server-side API base URL — available in Node loaders/actions at runtime. */
+/** Server-side API base URL - available in Node loaders/actions at runtime. */
 const getApiBaseUrl = (): string => process.env["API_BASE_URL"] ?? "";
 
 /**

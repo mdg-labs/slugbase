@@ -21,7 +21,7 @@ import { SessionService } from "../../sessions/session.service.js";
  * user session. Falls back to IP for unauthenticated requests (the auth guard
  * will reject those anyway).
  *
- * Backed by an in-memory store — suitable for single-instance deployments.
+ * Backed by an in-memory store - suitable for single-instance deployments.
  * Fast-Follow: switch to a distributed store (Redis/KV) for multi-instance deployments.
  */
 @Injectable()
@@ -49,7 +49,7 @@ export class UserThrottlerGuard extends ThrottlerGuard {
       }
     }
 
-    // Fallback to IP — the session auth guard will reject the request anyway
+    // Fallback to IP - the session auth guard will reject the request anyway
     return Promise.resolve((req as { ip?: string }).ip ?? "unknown");
   }
 

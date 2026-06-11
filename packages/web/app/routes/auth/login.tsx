@@ -37,7 +37,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       );
     }
   } catch {
-    // public provider listing is optional — degrade gracefully
+    // public provider listing is optional - degrade gracefully
   }
 
   return { passwordReset, oidcProviders };

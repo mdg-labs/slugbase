@@ -10,7 +10,7 @@ import {
 } from "./email-verification.service.js";
 
 // ---------------------------------------------------------------------------
-// Pure helper tests — no NestJS DI needed
+// Pure helper tests - no NestJS DI needed
 // ---------------------------------------------------------------------------
 
 describe("hashToken", () => {
@@ -20,7 +20,7 @@ describe("hashToken", () => {
     expect(hash).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it("is deterministic — same input yields same hash", () => {
+  it("is deterministic - same input yields same hash", () => {
     const token = generateVerificationToken();
     expect(hashToken(token)).toBe(hashToken(token));
   });
@@ -93,7 +93,7 @@ describe("generateVerificationToken", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Token expiry check (pure logic — no DB)
+// Token expiry check (pure logic - no DB)
 // ---------------------------------------------------------------------------
 
 describe("token expiry check", () => {
@@ -116,7 +116,7 @@ describe("token expiry check", () => {
     try {
       const now = new Date();
       vi.setSystemTime(now);
-      // A date that equals `new Date()` inside the check — expired (<=)
+      // A date that equals `new Date()` inside the check - expired (<=)
       expect(isTokenExpired(now)).toBe(true);
     } finally {
       vi.useRealTimers();

@@ -10,7 +10,7 @@ export type ListPageSplitProps = {
 };
 
 /**
- * Tags master–detail layout — prototype `.tags-layout` (1fr + 360px panel).
+ * Tags master–detail layout - prototype `.tags-layout` (1fr + 360px panel).
  */
 export function ListPageSplit({
   panelOpen = false,

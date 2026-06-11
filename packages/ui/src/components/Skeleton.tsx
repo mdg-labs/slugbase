@@ -7,7 +7,7 @@ export type SkeletonProps = {
   children?: ReactNode;
 };
 
-/** Shimmer placeholder block — prototype `.sk` pattern (spec §23). */
+/** Shimmer placeholder block - prototype `.sk` pattern (spec §23). */
 export function Skeleton({
   className = "",
   style,

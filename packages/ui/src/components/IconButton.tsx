@@ -15,7 +15,7 @@ const sizeClasses: Record<IconButtonSize, string> = {
 };
 
 /**
- * Icon-only action button — matches prototype `.icon-btn` pattern from app.css.
+ * Icon-only action button - matches prototype `.icon-btn` pattern from app.css.
  * Requires `aria-label` for accessibility.
  */
 export function IconButton({

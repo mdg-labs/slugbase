@@ -19,14 +19,14 @@ export interface WorkspaceOwned {
  * Every repository that touches workspace-scoped data (bookmarks, folders,
  * slugs, tags, …) MUST extend this class. It enforces two isolation rules:
  *
- *   1. **Query-level scoping** — every public method on a subclass must accept
+ *   1. **Query-level scoping** - every public method on a subclass must accept
  *      `workspaceId` as an explicit first parameter, and every SELECT/UPDATE/
  *      DELETE query must include `.where(eq(table.workspaceId, workspaceId))`.
  *      There is no way to call a scoped repository without providing a
  *      `workspaceId`, making cross-workspace data access structurally
  *      prevented.
  *
- *   2. **Return-value verification** — before returning any DB record to the
+ *   2. **Return-value verification** - before returning any DB record to the
  *      caller, subclasses must call `assertOwnership` (single record) or
  *      `assertAllOwned` (list). This is a defence-in-depth check that catches
  *      any record that slipped through a mis-scoped query.
@@ -35,7 +35,7 @@ export interface WorkspaceOwned {
  *
  * - Accept `workspaceId` as the first positional arg in every public method.
  * - Add `.where(eq(table.workspaceId, workspaceId))` to every SELECT/UPDATE/
- *   DELETE query — never omit the workspace filter.
+ *   DELETE query - never omit the workspace filter.
  * - Call `assertOwnership(workspaceId, record)` on every single-record result.
  * - Call `assertAllOwned(workspaceId, records)` on every list result.
  *

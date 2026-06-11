@@ -124,7 +124,7 @@ export interface MarketingPlanFeatureRow {
   team: PlanFeatureCell;
 }
 
-/** Feature rows aligned with spec §12.2 / §23.4 — no folder cap, API tokens on all plans. */
+/** Feature rows aligned with spec §12.2 / §23.4 - no folder cap, API tokens on all plans. */
 export function buildMarketingPlanFeatureRows(
   config: MarketingPricingConfig,
 ): MarketingPlanFeatureRow[] {

@@ -1,6 +1,6 @@
 import type { Config } from "tailwindcss";
 
-/** CSS custom properties bridged from colors-and-type.css — no hard-coded hex in Tailwind theme. */
+/** CSS custom properties bridged from colors-and-type.css - no hard-coded hex in Tailwind theme. */
 export const slugbaseCssVarColors = {
   accent: "var(--accent)",
   "accent-hover": "var(--accent-hover)",

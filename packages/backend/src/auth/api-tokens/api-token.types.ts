@@ -17,7 +17,7 @@ export interface CreateApiTokenData {
   expiresAt?: Date;
 }
 
-/** Public view of a token — never exposes the hash. */
+/** Public view of a token - never exposes the hash. */
 export interface ApiTokenSummary {
   id: string;
   name: string;

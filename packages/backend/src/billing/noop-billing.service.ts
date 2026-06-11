@@ -14,7 +14,7 @@ import {
 } from "@slugbase/shared-types";
 
 /**
- * No-op billing implementation — used when STRIPE_SECRET_KEY is not configured.
+ * No-op billing implementation - used when STRIPE_SECRET_KEY is not configured.
  * Grants full/unlimited entitlements via planGatingEnabled=false (spec §11.4–§11.5).
  * Checkout, portal, and seat adjustments are unavailable.
  */
@@ -59,7 +59,7 @@ export class NoopBillingService implements BillingService {
   }
 
   handleAsyncEvent(event: BillingAsyncEvent): Promise<BillingEventResult> {
-    this.logger.warn("Billing provider not configured — ignoring async event", {
+    this.logger.warn("Billing provider not configured - ignoring async event", {
       eventId: event.eventId,
     });
     return Promise.resolve({ processed: true, stateUpdated: false });

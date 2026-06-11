@@ -1,4 +1,4 @@
-/** Lossless export entry — mirrors import JSON shape (spec §13). */
+/** Lossless export entry - mirrors import JSON shape (spec §13). */
 export type ExportBookmarkEntry = {
   title: string;
   url: string;

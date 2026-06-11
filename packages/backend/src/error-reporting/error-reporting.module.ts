@@ -9,7 +9,7 @@ import { SentryErrorReportingService } from "./sentry-error-reporting.service.js
 /**
  * Provides the ERROR_REPORTING interface token bound to the config-selected implementation.
  * If SENTRY_DSN is set → SentryErrorReportingService; otherwise → NoopErrorReportingService.
- * No deployment-mode branching — interface selection only (spec §15, rule 03).
+ * No deployment-mode branching - interface selection only (spec §15, rule 03).
  */
 @Global()
 @Module({

@@ -10,7 +10,7 @@ describe("NoopBillingService", () => {
     expect(service.isAvailable()).toBe(false);
   });
 
-  it("does not enforce plan gating — grants unlimited entitlements", () => {
+  it("does not enforce plan gating - grants unlimited entitlements", () => {
     const service = new NoopBillingService();
     expect(service.isPlanGatingEnabled()).toBe(false);
   });
@@ -64,7 +64,7 @@ describe("NoopBillingService", () => {
 
     expect(result).toEqual({ processed: true, stateUpdated: false });
     expect(warnSpy).toHaveBeenCalledWith(
-      "Billing provider not configured — ignoring async event",
+      "Billing provider not configured - ignoring async event",
       expect.objectContaining({ eventId: "evt_noop_1" }),
     );
   });

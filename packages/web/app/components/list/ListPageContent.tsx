@@ -6,7 +6,7 @@ export type ListPageContentProps = {
   testId?: string;
 };
 
-/** Prototype `.content` — scrollable area with sp-7 padding. */
+/** Prototype `.content` - scrollable area with sp-7 padding. */
 export function ListPageContent({
   children,
   className = "",

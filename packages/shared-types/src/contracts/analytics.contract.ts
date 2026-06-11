@@ -15,7 +15,7 @@ export interface AnalyticsEventContext {
   url?: string;
   /** Hostname reported to the analytics sink. */
   hostname?: string;
-  /** Optional structured payload — must not contain secrets or PII. */
+  /** Optional structured payload - must not contain secrets or PII. */
   data?: Record<string, string | number | boolean>;
 }
 

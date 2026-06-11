@@ -39,7 +39,7 @@ import { useActionData, useNavigation } from "react-router";
 const mockUseActionData = vi.mocked(useActionData);
 const mockUseNavigation = vi.mocked(useNavigation);
 
-describe("MFA challenge route — action", () => {
+describe("MFA challenge route - action", () => {
   beforeEach(() => {
     vi.stubGlobal(
       "fetch",
@@ -142,7 +142,7 @@ describe("MFA challenge route — action", () => {
   });
 });
 
-describe("MFA challenge route — component", () => {
+describe("MFA challenge route - component", () => {
   afterEach(() => {
     cleanup();
   });
@@ -262,7 +262,7 @@ describe("MFA challenge route — component", () => {
   });
 });
 
-describe("TotpInput — component", () => {
+describe("TotpInput - component", () => {
   afterEach(() => {
     cleanup();
   });

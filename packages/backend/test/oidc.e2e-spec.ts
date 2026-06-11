@@ -135,7 +135,7 @@ describe("OIDC (integration)", () => {
         }),
       } as never);
 
-      // Step 1 — initiate flow to get encrypted OIDC state cookie
+      // Step 1 - initiate flow to get encrypted OIDC state cookie
       const authorizeRes = await request(server()).get(
         `/auth/oidc/${testProviderId}/authorize`,
       );
@@ -151,7 +151,7 @@ describe("OIDC (integration)", () => {
         ?.split(";")[0];
       expect(oidcStateCookie).toBeDefined();
 
-      // Step 2 — simulate IdP redirect back with state cookie present
+      // Step 2 - simulate IdP redirect back with state cookie present
       const callbackRes = await request(server())
         .get(
           `/auth/oidc/${testProviderId}/callback?code=mock_code&state=mock_state`,

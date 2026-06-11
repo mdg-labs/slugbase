@@ -11,7 +11,7 @@ const iconField = z
 
 const colorField = z
   .string()
-  .regex(/^#[0-9a-fA-F]{6}$/, "Invalid color format — expected hex color e.g. #7782f7")
+  .regex(/^#[0-9a-fA-F]{6}$/, "Invalid color format - expected hex color e.g. #7782f7")
   .nullable()
   .optional();
 

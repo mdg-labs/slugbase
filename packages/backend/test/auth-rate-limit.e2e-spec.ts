@@ -47,7 +47,7 @@ describe("Auth rate limiting (integration)", () => {
     return app.getHttpServer() as Server;
   }
 
-  describe("POST /auth/login — IP rate limit", () => {
+  describe("POST /auth/login - IP rate limit", () => {
     it("returns 429 with Retry-After header after exceeding the limit", async () => {
       const body = { email: "notexist@example.com", password: "doesnotmatter" };
 

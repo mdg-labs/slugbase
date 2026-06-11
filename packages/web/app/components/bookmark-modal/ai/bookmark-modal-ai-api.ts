@@ -10,7 +10,7 @@ import type {
  */
 const getApiBaseUrl = (): string => "";
 
-/** Status codes that indicate the feature is gated or unavailable — return null gracefully. */
+/** Status codes that indicate the feature is gated or unavailable - return null gracefully. */
 const SILENT_NULL_STATUSES = new Set([400, 403, 404, 503]);
 
 export const fetchBookmarkModalAiSuggestions: FetchAiSuggestionsFn = async ({

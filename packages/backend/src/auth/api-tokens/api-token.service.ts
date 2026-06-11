@@ -23,7 +23,7 @@ const MAX_API_TOKENS_PER_USER = 10;
 
 export interface CreateApiTokenResult {
   record: ApiTokenSummary;
-  /** Plaintext token — returned exactly once; not stored. */
+  /** Plaintext token - returned exactly once; not stored. */
   plaintext: string;
 }
 

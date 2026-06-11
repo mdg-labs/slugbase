@@ -3,7 +3,7 @@
  *
  * The application depends only on this contract; implementations are selected
  * by configuration at module init. The no-op default grants full entitlements
- * on self-hosted installs — checkout, portal, and payment flows are unavailable.
+ * on self-hosted installs - checkout, portal, and payment flows are unavailable.
  * Application logic checks entitlements, never the billing provider directly.
  */
 
@@ -26,7 +26,7 @@ export interface BillingCheckoutRequest {
   workspaceId: string;
   plan: Exclude<BillingPlan, "free">;
   mode: BillingCheckoutMode;
-  /** Config-driven Stripe price id (spec §12.1 — not hard-coded in app logic). */
+  /** Config-driven Stripe price id (spec §12.1 - not hard-coded in app logic). */
   priceId: string;
   successUrl: string;
   cancelUrl: string;
@@ -68,9 +68,9 @@ export interface BillingSubscriptionState {
   /** Included seats for Team; null when not applicable. */
   includedSeats: number | null;
   extraSeats: number;
-  /** Supporter / lifetime purchase — Personal entitlement permanently (spec §12.1). */
+  /** Supporter / lifetime purchase - Personal entitlement permanently (spec §12.1). */
   permanentPersonal: boolean;
-  /** False on self-host no-op — entitlements engine bypasses plan limits. */
+  /** False on self-host no-op - entitlements engine bypasses plan limits. */
   planGatingEnabled: boolean;
 }
 
@@ -79,7 +79,7 @@ export interface BillingSeatQuantityRequest {
   externalSubscriptionId: string;
   /** Total seats (included base + purchased extras). */
   totalSeats: number;
-  /** Current workspace member count — seat floor enforcement (spec §12.2). */
+  /** Current workspace member count - seat floor enforcement (spec §12.2). */
   currentMemberCount: number;
 }
 
@@ -101,11 +101,11 @@ export interface BillingEventResult {
 export interface BillingService {
   /**
    * Returns true when an external billing provider is configured (hosted Stripe).
-   * Self-host no-op reports false — full entitlements apply via the entitlements engine.
+   * Self-host no-op reports false - full entitlements apply via the entitlements engine.
    */
   isAvailable(): boolean;
 
-  /** Alias for plan-gating selection — false on self-host no-op (spec §11.5). */
+  /** Alias for plan-gating selection - false on self-host no-op (spec §11.5). */
   isPlanGatingEnabled(): boolean;
 
   /**

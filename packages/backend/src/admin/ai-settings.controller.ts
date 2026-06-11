@@ -23,7 +23,7 @@ import type { UpdateAiSettingsBody } from "@slugbase/shared-types";
  * Exposes GET/PATCH /workspace/settings/ai.
  *
  * All endpoints require an active workspace session and ADMIN role (spec §11.2, §15).
- * CSRF is enforced globally on mutations — no explicit decorator needed.
+ * CSRF is enforced globally on mutations - no explicit decorator needed.
  */
 @Controller("workspace/settings/ai")
 @UseGuards(TenantGuard)

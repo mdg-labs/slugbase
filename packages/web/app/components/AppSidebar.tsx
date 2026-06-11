@@ -8,7 +8,7 @@ import { WorkspaceSwitcherPanel } from "./workspace-switcher/WorkspaceSwitcherPa
 export type SidebarFolder = {
   id: string;
   name: string;
-  /** CSS color value or null — renders as a dot */
+  /** CSS color value or null - renders as a dot */
   color: string | null;
   bookmarkCount: number;
 };

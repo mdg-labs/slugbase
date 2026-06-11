@@ -85,7 +85,7 @@ export class RegistrationService {
         await this.emailVerification.issueToken(account.id, account.email);
       } catch {
         this.logger.warn(
-          "Signup verification email failed — token persisted; registration continues",
+          "Signup verification email failed - token persisted; registration continues",
           { userId: account.id },
         );
       }

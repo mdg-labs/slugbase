@@ -68,7 +68,7 @@ export type FilterChipMenuProps = {
   testId?: string;
 };
 
-/** Prototype `.chip` dropdown — filter/sort menus with active state. */
+/** Prototype `.chip` dropdown - filter/sort menus with active state. */
 export function FilterChipMenu({
   label,
   active,

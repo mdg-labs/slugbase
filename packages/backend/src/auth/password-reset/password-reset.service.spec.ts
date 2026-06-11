@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { generateResetToken, hashResetToken, buildPasswordResetUrl } from "./password-reset.service.js";
 
 // ---------------------------------------------------------------------------
-// Pure helper tests — no NestJS DI needed
+// Pure helper tests - no NestJS DI needed
 // ---------------------------------------------------------------------------
 
 describe("hashResetToken", () => {
@@ -15,7 +15,7 @@ describe("hashResetToken", () => {
     expect(hash).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it("is deterministic — same input yields same hash", () => {
+  it("is deterministic - same input yields same hash", () => {
     const token = generateResetToken();
     expect(hashResetToken(token)).toBe(hashResetToken(token));
   });
@@ -78,7 +78,7 @@ describe("buildPasswordResetUrl", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Token expiry check (pure logic — no DB)
+// Token expiry check (pure logic - no DB)
 // ---------------------------------------------------------------------------
 
 describe("token expiry check", () => {
@@ -127,7 +127,7 @@ describe("hash round-trip", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Non-enumerating response logic (pure logic — no DB)
+// Non-enumerating response logic (pure logic - no DB)
 // ---------------------------------------------------------------------------
 
 describe("non-enumerating forgotPassword logic", () => {
@@ -170,7 +170,7 @@ describe("non-enumerating forgotPassword logic", () => {
 });
 
 // ---------------------------------------------------------------------------
-// resetPassword logic (pure — no DB)
+// resetPassword logic (pure - no DB)
 // ---------------------------------------------------------------------------
 
 interface TokenRecord {

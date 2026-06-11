@@ -23,7 +23,7 @@ import { StripeBillingService, type StripeBillingClient } from "./stripe-billing
 /**
  * Provides the BILLING interface token bound to the config-selected implementation.
  * If STRIPE_SECRET_KEY is set → StripeBillingService; otherwise → NoopBillingService.
- * No deployment-mode branching — interface selection only (spec §15, rule 03).
+ * No deployment-mode branching - interface selection only (spec §15, rule 03).
  */
 @Global()
 @Module({

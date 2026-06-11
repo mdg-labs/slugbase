@@ -75,7 +75,7 @@ export class PasswordResetService {
     const account = await this.accounts.findByEmail(email);
 
     if (!account) {
-      this.logger.debug("Password reset requested for unknown email — no-op");
+      this.logger.debug("Password reset requested for unknown email - no-op");
       return;
     }
 
@@ -112,7 +112,7 @@ export class PasswordResetService {
       });
     } else {
       this.logger.warn(
-        "Mail transport unavailable — password reset token created but email not sent",
+        "Mail transport unavailable - password reset token created but email not sent",
         { userId: account.id },
       );
     }
@@ -146,7 +146,7 @@ export class PasswordResetService {
 
     if (record.expiresAt <= new Date()) {
       throw new UnprocessableEntityException(
-        "Password reset link has expired — please request a new one",
+        "Password reset link has expired - please request a new one",
       );
     }
 

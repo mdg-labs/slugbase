@@ -17,7 +17,7 @@ export type BookmarkModalAiContext = {
   userAiOptOut: boolean;
   /** Provider credential configured for this deployment/workspace. */
   aiProviderAvailable: boolean;
-  /** Resolved user locale — ISO 639-1 (`en`, `de`) passed as `outputLanguage`. */
+  /** Resolved user locale - ISO 639-1 (`en`, `de`) passed as `outputLanguage`. */
   outputLanguage: string;
 };
 

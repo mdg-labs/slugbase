@@ -37,7 +37,7 @@ export async function loader({ request }: LoaderFunctionArgs): Promise<RootLoade
     acceptLanguage: request.headers.get("Accept-Language"),
   });
 
-  // Avoid redirect loop — /setup handles its own state
+  // Avoid redirect loop - /setup handles its own state
   if (url.pathname === "/setup") return { locale };
 
   try {

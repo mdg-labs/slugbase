@@ -3,7 +3,7 @@
  *
  * The application depends only on this contract; implementations are selected
  * by configuration at module init. The no-op default allows self-hosted installs
- * to run without Turnstile — verification passes when challenge is disabled.
+ * to run without Turnstile - verification passes when challenge is disabled.
  */
 
 export interface ChallengeVerifyRequest {

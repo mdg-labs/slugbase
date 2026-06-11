@@ -99,7 +99,7 @@ function createService(overrides: {
   return { service, billing, webhookClient, mockOrm };
 }
 
-describe("BillingApplicationService — webhook product marker", () => {
+describe("BillingApplicationService - webhook product marker", () => {
   it("returns { received: true } for events without product marker", async () => {
     const { service } = createService();
 

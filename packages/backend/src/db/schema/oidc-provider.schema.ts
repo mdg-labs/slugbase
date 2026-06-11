@@ -8,7 +8,7 @@ export const oidcProviders = pgTable(
     name: text("name").notNull(),
     issuerUrl: text("issuer_url").notNull(),
     clientId: text("client_id").notNull(),
-    /** AES-GCM encrypted via CryptoService (spec §11.11) — never stored or logged as plaintext */
+    /** AES-GCM encrypted via CryptoService (spec §11.11) - never stored or logged as plaintext */
     clientSecretEncrypted: text("client_secret_encrypted").notNull(),
     /** Space-separated list of OIDC scopes, e.g. "openid email profile" */
     scopes: text("scopes").notNull().default("openid email profile"),

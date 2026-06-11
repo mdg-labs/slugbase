@@ -57,7 +57,7 @@ export class OidcController {
       sameSite: "lax",
       path: "/",
       secure: this.config.get("isProduction"),
-      // No maxAge — session-scoped cookie
+      // No maxAge - session-scoped cookie
     });
 
     res.redirect(302, redirectUrl);

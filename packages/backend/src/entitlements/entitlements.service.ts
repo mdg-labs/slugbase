@@ -19,7 +19,7 @@ export class EntitlementsService {
 
   /**
    * Returns true when the workspace's plan grants the requested capability.
-   * Self-host (billing no-op) bypasses plan limits — all capabilities pass.
+   * Self-host (billing no-op) bypasses plan limits - all capabilities pass.
    */
   can(workspace: Pick<WorkspaceRecord, "plan">, capability: EntitlementCapability): boolean {
     if (!this.billingProfile.isPlanGatingEnabled()) {

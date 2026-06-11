@@ -29,7 +29,7 @@ export interface ShareGrantInput {
 }
 
 /**
- * Workspace-scoped share grants — every public method requires `workspaceId`
+ * Workspace-scoped share grants - every public method requires `workspaceId`
  * as the first argument and filters mutations by workspace (spec §5.9).
  */
 export class SharingRepository extends WorkspaceScopedRepository<{

@@ -28,7 +28,7 @@ interface CreateTokenBody {
 
 interface CreateTokenResponse {
   token: ApiTokenSummary;
-  /** Plaintext — shown exactly once. */
+  /** Plaintext - shown exactly once. */
   plaintext: string;
 }
 

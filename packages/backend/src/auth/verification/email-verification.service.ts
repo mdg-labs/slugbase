@@ -137,7 +137,7 @@ export class EmailVerificationService {
       });
     } else {
       this.logger.warn(
-        "Mail transport unavailable — verification token created but email not sent",
+        "Mail transport unavailable - verification token created but email not sent",
         { userId },
       );
     }
@@ -164,7 +164,7 @@ export class EmailVerificationService {
 
     if (record.expiresAt <= new Date()) {
       throw new UnprocessableEntityException(
-        "Verification link has expired — please request a new one",
+        "Verification link has expired - please request a new one",
       );
     }
 
@@ -210,7 +210,7 @@ export class EmailVerificationService {
 
     if (account.emailVerified) {
       throw new ForbiddenException(
-        "Email address is already verified — use account settings to change your email",
+        "Email address is already verified - use account settings to change your email",
       );
     }
 

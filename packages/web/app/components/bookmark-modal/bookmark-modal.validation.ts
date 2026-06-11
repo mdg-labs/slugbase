@@ -3,7 +3,7 @@ import type {
   BookmarkModalFormValues,
 } from "./bookmark-modal.types.js";
 
-/** Slug grammar — docs/defaults-and-constants.md §1, spec §8. */
+/** Slug grammar - docs/defaults-and-constants.md §1, spec §8. */
 const SLUG_GRAMMAR = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 const RESERVED_SLUGS = new Set([

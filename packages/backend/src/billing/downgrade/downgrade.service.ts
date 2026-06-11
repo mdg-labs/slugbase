@@ -63,7 +63,7 @@ export class DowngradeService {
 
   /**
    * Archives over-cap active bookmarks when grace has elapsed (spec §12.5).
-   * Safe to call repeatedly — idempotent when already at cap.
+   * Safe to call repeatedly - idempotent when already at cap.
    */
   async archiveOverflowIfDue(
     workspace: WorkspaceRecord,
@@ -117,7 +117,7 @@ export class DowngradeService {
     return toRestore.length;
   }
 
-  /** Exposed for integration tests — reloads workspace then archives if due. */
+  /** Exposed for integration tests - reloads workspace then archives if due. */
   async processWorkspaceDowngrade(
     workspaceId: string,
     now: Date = new Date(),

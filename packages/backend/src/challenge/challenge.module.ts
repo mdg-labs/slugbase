@@ -9,7 +9,7 @@ import { TurnstileChallengeService } from "./turnstile-challenge.service.js";
 /**
  * Provides the CHALLENGE interface token bound to the config-selected implementation.
  * If TURNSTILE_SECRET_KEY is set → TurnstileChallengeService; otherwise → NoopChallengeService.
- * No deployment-mode branching — interface selection only (spec §11.8, §15).
+ * No deployment-mode branching - interface selection only (spec §11.8, §15).
  */
 @Global()
 @Module({

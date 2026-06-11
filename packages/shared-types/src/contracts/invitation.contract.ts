@@ -92,7 +92,7 @@ export const invitationContract = c.router({
       404: z.object({ message: z.string() }).strict(),
       410: z.object({ message: z.string() }).strict(),
     },
-    summary: "Get invitation metadata — does not accept the invitation (public)",
+    summary: "Get invitation metadata - does not accept the invitation (public)",
   },
   acceptInvitation: {
     method: "POST",
@@ -106,7 +106,7 @@ export const invitationContract = c.router({
       410: z.object({ message: z.string() }).strict(),
       422: z.object({ message: z.string() }).strict(),
     },
-    summary: "Accept a workspace invitation — creates account if needed (public)",
+    summary: "Accept a workspace invitation - creates account if needed (public)",
   },
   listPendingInvitations: {
     method: "GET",

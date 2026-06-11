@@ -9,7 +9,7 @@ export type EmptyStateProps = {
   compact?: boolean;
 };
 
-/** Centered empty state — prototype `.empty` pattern (spec §23). */
+/** Centered empty state - prototype `.empty` pattern (spec §23). */
 export function EmptyState({
   title,
   description,

@@ -23,7 +23,7 @@ export function planRank(plan: BillingPlanId): number {
   return PLAN_RANK[plan];
 }
 
-/** Plan comparison rows aligned with spec §12.2 — not prototype divergences (§23.4). */
+/** Plan comparison rows aligned with spec §12.2 - not prototype divergences (§23.4). */
 export function buildPlanFeatureRows(config: BillingPlanDisplayConfig): PlanFeatureRow[] {
   const cap = String(config.freeBookmarkCap);
 
@@ -95,19 +95,19 @@ export function formatPlanPriceLabel(
   if (plan === "free") {
     const currencyPrefix = extractCurrencyPrefix(config.personalMonthlyPrice);
     return {
-      price: currencyPrefix ? `${currencyPrefix}0` : "—",
+      price: currencyPrefix ? `${currencyPrefix}0` : "-",
       periodKey: "settings.billing.plan_period_forever",
     };
   }
   if (plan === "personal") {
     if (interval === "annual") {
       return {
-        price: config.personalYearlyPrice || "—",
+        price: config.personalYearlyPrice || "-",
         periodKey: "settings.billing.plan_period_yearly",
       };
     }
     return {
-      price: config.personalMonthlyPrice || "—",
+      price: config.personalMonthlyPrice || "-",
       periodKey: "settings.billing.plan_period_monthly",
     };
   }
@@ -119,7 +119,7 @@ export function formatPlanPriceLabel(
     };
   }
   return {
-    price: config.teamSeatPrice || "—",
+    price: config.teamSeatPrice || "-",
     periodKey: "settings.billing.plan_period_seat_monthly",
   };
 }

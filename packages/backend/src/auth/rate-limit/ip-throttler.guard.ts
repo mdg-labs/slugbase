@@ -16,7 +16,7 @@ import type { Response } from "express";
  * IP-based rate-limit guard for auth endpoints (login, register, MFA challenge).
  * Uses the client IP address as the throttle key.
  *
- * Backed by an in-memory store — suitable for single-instance deployments.
+ * Backed by an in-memory store - suitable for single-instance deployments.
  * Fast-Follow: switch to a distributed store (Redis/KV) for multi-instance deployments.
  */
 @Injectable()

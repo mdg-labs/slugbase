@@ -6,7 +6,7 @@ export type TagProps = {
 };
 
 /**
- * Tag pill — `#` prefix at 45% opacity, mono micro font.
+ * Tag pill - `#` prefix at 45% opacity, mono micro font.
  * Matches prototype `.tag` pattern from app.css.
  */
 export function Tag({ children, className = "" }: TagProps) {
