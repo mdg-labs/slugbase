@@ -5,7 +5,7 @@ import type {
 } from "@slugbase/shared-types";
 
 /**
- * No-op error reporting — used when SENTRY_DSN is not configured (spec §11.7).
+ * No-op error reporting - used when SENTRY_DSN is not configured (spec §11.7).
  */
 @Injectable()
 export class NoopErrorReportingService implements ErrorReportingService {

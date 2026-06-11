@@ -723,7 +723,7 @@ function BookmarkRow({
       data-testid={`bookmark-row-${bookmark.id}`}
       onClick={handleRowClick}
     >
-      {/* Checkbox — only visible in bulk-select mode */}
+      {/* Checkbox - only visible in bulk-select mode */}
       <span
         className={[
           "grid h-5 w-5 shrink-0 place-items-center rounded-md border transition-all duration-micro",
@@ -773,7 +773,7 @@ function BookmarkRow({
           </span>
         ) : (
           <span className="text-fg-faint" style={{ fontSize: 12 }}>
-            —
+            -
           </span>
         )}
       </div>
@@ -790,7 +790,7 @@ function BookmarkRow({
           </span>
         ) : (
           <span className="text-fg-faint" style={{ fontSize: 12 }}>
-            —
+            -
           </span>
         )}
       </div>
@@ -1471,7 +1471,7 @@ export function BookmarkListPage() {
       await toggleBookmarkPin(id, pinned);
       void navigate(buildUrl({}), { replace: true });
     } catch {
-      // silently fail — UX toast system not yet available at this scope
+      // silently fail - UX toast system not yet available at this scope
     }
   };
 

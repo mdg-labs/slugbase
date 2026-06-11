@@ -166,7 +166,7 @@ export class BookmarksService {
   }
 
   /**
-   * Records bookmark access asynchronously — never blocks the caller (spec §6.3).
+   * Records bookmark access asynchronously - never blocks the caller (spec §6.3).
    */
   recordAccess(
     workspace: WorkspaceRecord,

@@ -10,7 +10,7 @@ const ACTIVE_BILLING_STATUSES = new Set<BillingSubscriptionStatus>([
 
 /**
  * Returns true when the workspace has an unresolved paid billing relationship
- * (spec §12.3 — deletion blocked until billing is resolved).
+ * (spec §12.3 - deletion blocked until billing is resolved).
  */
 export function workspaceHasActivePaidBilling(
   workspace: Pick<

@@ -7,7 +7,7 @@ export type SlugBadgeProps = {
 };
 
 /**
- * Inline slug address pill — accent-subtle bg, mono small font.
+ * Inline slug address pill - accent-subtle bg, mono small font.
  * Matches prototype `.slug-line` pattern from app.css.
  * Used on bookmark cards and table rows.
  */

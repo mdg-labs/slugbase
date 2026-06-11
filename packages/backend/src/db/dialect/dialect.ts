@@ -18,6 +18,6 @@ export function assertPostgresDatabaseUrl(databaseUrl: string): void {
   }
 
   throw new Error(
-    "Unsupported DATABASE_URL scheme — expected postgres:// or postgresql://",
+    "Unsupported DATABASE_URL scheme - expected postgres:// or postgresql://",
   );
 }

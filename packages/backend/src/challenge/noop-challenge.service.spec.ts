@@ -50,7 +50,7 @@ describe("NoopChallengeService", () => {
     await service.verify({ token: "unused" });
 
     expect(debugSpy).toHaveBeenCalledWith(
-      "Challenge provider not configured — verification skipped",
+      "Challenge provider not configured - verification skipped",
       expect.objectContaining({ hasToken: true }),
     );
   });

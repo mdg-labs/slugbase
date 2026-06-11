@@ -17,7 +17,7 @@ import { OpenAiAiService } from "./openai-ai.service.js";
  * Provides the AI interface token bound to the config-selected implementation.
  * If OPENAI_API_KEY is set → OpenAiAiService; otherwise → NoopAiService.
  * Self-hosted BYO credentials use {@link OpenAiAiService.reconfigureFromEncrypted}.
- * No deployment-mode branching — interface selection only (spec §15, rule 03).
+ * No deployment-mode branching - interface selection only (spec §15, rule 03).
  */
 @Global()
 @Module({

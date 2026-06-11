@@ -1,4 +1,4 @@
-/** Slug grammar and reserved list — docs/defaults-and-constants.md §1, spec §8. */
+/** Slug grammar and reserved list - docs/defaults-and-constants.md §1, spec §8. */
 export const SLUG_GRAMMAR = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 export const RESERVED_SLUGS = new Set([

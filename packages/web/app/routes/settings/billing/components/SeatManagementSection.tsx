@@ -55,7 +55,7 @@ export function SeatManagementSection({
           [
             { value: breakdown.total, labelKey: "settings.billing.seats_total_label" },
             { value: breakdown.inUse, labelKey: "settings.billing.seats_in_use_label" },
-            { value: config.teamSeatPrice || "—", labelKey: "settings.billing.seat_price_label" },
+            { value: config.teamSeatPrice || "-", labelKey: "settings.billing.seat_price_label" },
           ] as const
         ).map(({ value, labelKey }) => (
           <div
@@ -78,7 +78,7 @@ export function SeatManagementSection({
         </h3>
         <p className="mt-sp-2 text-[length:var(--text-small)] text-fg-muted">
           {t("settings.billing.seats_add_body", {
-            price: config.teamSeatPrice || "—",
+            price: config.teamSeatPrice || "-",
           })}
         </p>
         <div className="mt-sp-5 flex flex-wrap items-end gap-sp-4">

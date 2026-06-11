@@ -268,7 +268,7 @@ export default function RegisterRoute() {
             }
           />
 
-          {/* Strength meter — always visible once any input exists */}
+          {/* Strength meter - always visible once any input exists */}
           <div className="flex flex-col" style={{ gap: "var(--sp-3)" }} aria-live="polite">
             <div
               className="grid gap-sp-3"

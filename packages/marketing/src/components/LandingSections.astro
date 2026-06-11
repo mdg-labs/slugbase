@@ -93,10 +93,10 @@ function extractCurrencyPrefix(price: string): string {
   return match?.[1]?.trimEnd() ?? "";
 }
 
-const personalMonthlyPrice = pricingConfig.personalMonthlyPrice || "—";
-const teamSeatMonthlyPrice = pricingConfig.teamSeatMonthlyPrice || "—";
+const personalMonthlyPrice = pricingConfig.personalMonthlyPrice || "-";
+const teamSeatMonthlyPrice = pricingConfig.teamSeatMonthlyPrice || "-";
 const freeCurrency = extractCurrencyPrefix(pricingConfig.personalMonthlyPrice || "");
-const freePrice = freeCurrency ? `${freeCurrency}0` : "—";
+const freePrice = freeCurrency ? `${freeCurrency}0` : "-";
 ---
 
 <!-- ---- Hero ---- -->
@@ -116,7 +116,7 @@ const freePrice = freeCurrency ? `${freeCurrency}0` : "—";
         {t(locale, "marketing.landing.cta_secondary")}
       </a>
     </div>
-    <!-- Static palette demo (34.1.3) — CSS-driven; shows go-mode resolved state -->
+    <!-- Static palette demo (34.1.3) - CSS-driven; shows go-mode resolved state -->
     <div class="hero-pal-wrap" aria-hidden="true">
       <div class="hero-pal">
         <div class="hero-pal-input">
@@ -256,7 +256,7 @@ const freePrice = freeCurrency ? `${freeCurrency}0` : "—";
           <div><span class="cmd">❯</span> <span class="slug-c">go react19</span></div>
           <div class="mk-code-indent">→ react.dev/blog/2024/04/25/react-19</div>
           <div class="mk-code-gap"><span class="cmd">❯</span> <span class="mk-code-muted">designing data</span></div>
-          <div class="mk-code-indent">Designing Data-Intensive Applications — notes</div>
+          <div class="mk-code-indent">Designing Data-Intensive Applications - notes</div>
           <div class="mk-code-indent">{forwardingDomain}/ddia</div>
           <div class="mk-code-gap"><span class="cmd">❯</span> <span class="mk-code-muted">new bookmark</span> <span class="mk-code-faint">C</span></div>
         </div>
@@ -838,7 +838,7 @@ const freePrice = freeCurrency ? `${freeCurrency}0` : "—";
     }
   }
 
-  /* Supporter teaser card — matches pricing page design tokens */
+  /* Supporter teaser card - matches pricing page design tokens */
   .mk-supporter--teaser {
     margin-top: var(--sp-9);
   }

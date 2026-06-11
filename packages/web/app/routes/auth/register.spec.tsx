@@ -33,7 +33,7 @@ import { action, loader, readApiSessionCookie } from "./register.js";
 const mockUseActionData = vi.mocked(useActionData);
 const mockUseNavigation = vi.mocked(useNavigation);
 
-describe("Register route — loader", () => {
+describe("Register route - loader", () => {
   it("returns empty object when unauthenticated", async () => {
     const { getSessionUser } = await import("../../lib/session-client.js");
     vi.mocked(getSessionUser).mockResolvedValueOnce(null);
@@ -63,7 +63,7 @@ describe("Register route — loader", () => {
   });
 });
 
-describe("Register route — action", () => {
+describe("Register route - action", () => {
   beforeEach(() => {
     vi.stubGlobal(
       "fetch",
@@ -235,7 +235,7 @@ describe("Register route — action", () => {
   });
 });
 
-describe("Register route — component", () => {
+describe("Register route - component", () => {
   afterEach(() => {
     cleanup();
   });

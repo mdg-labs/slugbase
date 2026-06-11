@@ -1,4 +1,4 @@
-/** Free workspace bookmark cap — spec §12.1, defaults-and-constants §2. */
+/** Free workspace bookmark cap - spec §12.1, defaults-and-constants §2. */
 export const FREE_BOOKMARK_CAP = 50;
 
 /** Show approaching-cap banner when usage reaches this fraction of the Free cap. */

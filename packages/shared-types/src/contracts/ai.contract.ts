@@ -3,7 +3,7 @@
  *
  * The application depends only on this contract; implementations are selected
  * by configuration at module init. The no-op default allows the app to run
- * without an AI credential — suggestion flows degrade gracefully.
+ * without an AI credential - suggestion flows degrade gracefully.
  */
 
 import { initContract } from "@ts-rest/core";
@@ -19,7 +19,7 @@ export interface AiPageMetadata {
 export interface AiSuggestionRequest {
   /** Canonical destination URL for the bookmark. */
   url: string;
-  /** Desired output language (ISO 639-1, e.g. `en`, `de`) — spec §17. */
+  /** Desired output language (ISO 639-1, e.g. `en`, `de`) - spec §17. */
   outputLanguage: string;
   /** Optional fetched page metadata. */
   metadata?: AiPageMetadata;

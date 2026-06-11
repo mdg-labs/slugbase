@@ -41,7 +41,7 @@ function toPublicProvider(record: OidcProviderRecord): OidcProvider {
  *
  * All endpoints require an active workspace session and ADMIN role (spec §5.6).
  * Client secrets are encrypted at rest (spec §11.11).
- * CSRF is enforced globally on mutations — no explicit decorator needed.
+ * CSRF is enforced globally on mutations - no explicit decorator needed.
  */
 @Controller("workspace/settings/oidc/providers")
 @UseGuards(TenantGuard)

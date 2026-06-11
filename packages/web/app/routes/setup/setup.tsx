@@ -357,7 +357,7 @@ export default function SetupRoute() {
           )}
         </div>
 
-        {/* Setup divider — "First workspace" */}
+        {/* Setup divider - "First workspace" */}
         <div
           className="flex items-center"
           style={{ gap: "var(--sp-4)", margin: "var(--sp-2) 0" }}

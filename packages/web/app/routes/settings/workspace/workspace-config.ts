@@ -21,7 +21,7 @@ function readBoolean(value: string | undefined, fallback: boolean): boolean {
 
 /**
  * Interface-selection flags for workspace settings panels (spec §10.1, §15).
- * Mirrors which configuration source is active — never deployment-mode branching.
+ * Mirrors which configuration source is active - never deployment-mode branching.
  */
 export async function loadWorkspaceInterfaceConfig(
   overrides: Partial<WorkspaceInterfaceConfig> = {},

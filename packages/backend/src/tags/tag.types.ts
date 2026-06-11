@@ -22,7 +22,7 @@ export interface UpdateTagData {
   color?: string | null;
 }
 
-/** Raw HTTP query — sort is parsed in the service before listing. */
+/** Raw HTTP query - sort is parsed in the service before listing. */
 export interface ListTagsQuery {
   q?: string;
   sort?: string;

@@ -81,7 +81,7 @@ export class ContactService {
     });
   }
 
-  /** Operator inbox — defaults to SMTP_FROM when no dedicated inbox is configured. */
+  /** Operator inbox - defaults to SMTP_FROM when no dedicated inbox is configured. */
   private getNotificationRecipient(): string {
     const smtpFrom = this.config.get("SMTP_FROM");
     if (smtpFrom?.trim()) {

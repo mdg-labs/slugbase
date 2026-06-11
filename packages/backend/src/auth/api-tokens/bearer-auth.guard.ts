@@ -15,7 +15,7 @@ export const BEARER_USER_ID_KEY = "bearerUserId";
 /**
  * Guard that accepts `Authorization: Bearer <token>` requests.
  * On success, sets `request.bearerUserId` to the resolved user ID.
- * Does not create a cookie session — the request is stateless.
+ * Does not create a cookie session - the request is stateless.
  * API tokens bypass MFA per spec §5.3.
  */
 @Injectable()

@@ -129,7 +129,7 @@ export class EmailChangeService {
 
     if (record.expiresAt <= new Date()) {
       throw new UnprocessableEntityException(
-        "Verification link has expired — please request a new one",
+        "Verification link has expired - please request a new one",
       );
     }
 
@@ -183,7 +183,7 @@ export class EmailChangeService {
       });
     } else {
       this.logger.warn(
-        "Mail transport unavailable — email change token created but email not sent",
+        "Mail transport unavailable - email change token created but email not sent",
         { userId },
       );
     }

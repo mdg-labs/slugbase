@@ -55,7 +55,7 @@
     @apply flex flex-wrap items-center justify-center gap-sp-4;
   }
 
-  /* Command palette entrance animation (§14.4 — 230ms scale + translateY) */
+  /* Command palette entrance animation (§14.4 - 230ms scale + translateY) */
   @keyframes palette-in {
     from {
       opacity: 0;

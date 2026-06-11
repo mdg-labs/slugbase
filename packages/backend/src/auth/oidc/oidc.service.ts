@@ -184,7 +184,7 @@ export class OidcService {
     });
   }
 
-  /** Lists all OIDC providers (admin view — includes disabled providers). */
+  /** Lists all OIDC providers (admin view - includes disabled providers). */
   async listProviders(): Promise<OidcProviderRecord[]> {
     return this.repo.listProviders();
   }
@@ -244,7 +244,7 @@ export class OidcService {
     }
   }
 
-  /** Generates the PKCE verifier/challenge pair — exposed for testing */
+  /** Generates the PKCE verifier/challenge pair - exposed for testing */
   async generatePkcePair(): Promise<{
     codeVerifier: string;
     codeChallenge: string;
@@ -254,12 +254,12 @@ export class OidcService {
     return { codeVerifier, codeChallenge };
   }
 
-  /** Generates a cryptographically random state value — exposed for testing */
+  /** Generates a cryptographically random state value - exposed for testing */
   generateState(): string {
     return randomState();
   }
 
-  /** Generates a cryptographically random nonce value — exposed for testing */
+  /** Generates a cryptographically random nonce value - exposed for testing */
   generateNonce(): string {
     return randomNonce();
   }

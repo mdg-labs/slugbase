@@ -51,7 +51,7 @@ export interface StripeBillingClient {
 }
 
 /**
- * Stripe billing implementation — used when STRIPE_SECRET_KEY is configured (spec §11.4).
+ * Stripe billing implementation - used when STRIPE_SECRET_KEY is configured (spec §11.4).
  * Maps Stripe subscription/checkout state to the product billing contract.
  */
 @Injectable()

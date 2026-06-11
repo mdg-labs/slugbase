@@ -34,7 +34,7 @@ type AuthShellWrapperProps = {
   showSlugRows?: boolean;
 };
 
-/** i18n-wired auth layout — primitives live in @slugbase/ui. */
+/** i18n-wired auth layout - primitives live in @slugbase/ui. */
 export function AuthShell({ children, showSlugRows = true }: AuthShellWrapperProps) {
   const { t } = useTranslation();
 

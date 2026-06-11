@@ -41,7 +41,7 @@ export interface CreateOidcAccountData {
   subject: string;
 }
 
-/** Transient OIDC flow state stored in the session — never persisted to DB */
+/** Transient OIDC flow state stored in the session - never persisted to DB */
 export interface OidcFlowState {
   state: string;
   nonce: string;

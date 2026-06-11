@@ -11,7 +11,7 @@ import type { ContactTopic } from "../../lib/contact-config.js";
 const locale = Astro.currentLocale as SupportedLocale;
 const config = loadMarketingContactConfig();
 const formReady = isContactFormConfigured(config);
-const title = `${t(locale, "marketing.contact.page_title")} — ${t(locale, "marketing.nav.brand")}`;
+const title = `${t(locale, "marketing.contact.page_title")} - ${t(locale, "marketing.nav.brand")}`;
 
 const clientMessages = {
   errorGeneric: t(locale, "marketing.contact.error.generic"),

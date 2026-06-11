@@ -12,7 +12,7 @@ import {
 } from "../common/tenant/index.js";
 
 // ---------------------------------------------------------------------------
-// Test fixture — concrete subclass for testing the abstract base
+// Test fixture - concrete subclass for testing the abstract base
 // ---------------------------------------------------------------------------
 
 interface FakeRecord extends WorkspaceOwned {
@@ -29,7 +29,7 @@ class FakeWorkspaceScopedRepository extends WorkspaceScopedRepository<FakeRecord
   private readonly store: FakeRecord[] = [];
 
   constructor() {
-    // Minimal stubs — the base class constructor only stores references
+    // Minimal stubs - the base class constructor only stores references
     super({} as DrizzleClient);
   }
 
@@ -37,14 +37,14 @@ class FakeWorkspaceScopedRepository extends WorkspaceScopedRepository<FakeRecord
     this.store.push(record);
   }
 
-  /** Simulates a correctly scoped findById — filters + verifies ownership. */
+  /** Simulates a correctly scoped findById - filters + verifies ownership. */
   findByIdScoped(workspaceId: string, id: string): FakeRecord {
     const record = this.store.find((r) => r.id === id && r.workspaceId === workspaceId) ?? null;
     return this.assertOwnership(workspaceId, record);
   }
 
   /**
-   * Simulates a scoped list — filters by workspaceId in the query, then
+   * Simulates a scoped list - filters by workspaceId in the query, then
    * verifies the result set through assertAllOwned.
    */
   listScoped(workspaceId: string): FakeRecord[] {
@@ -62,7 +62,7 @@ class FakeWorkspaceScopedRepository extends WorkspaceScopedRepository<FakeRecord
 
   /**
    * Simulates loading a record from a different workspace by ID only
-   * (no workspace filter in the query) — verifies assertOwnership catches it.
+   * (no workspace filter in the query) - verifies assertOwnership catches it.
    */
   findByIdUnscoped(workspaceId: string, id: string): FakeRecord {
     const record = this.store.find((r) => r.id === id) ?? null;
@@ -132,10 +132,10 @@ describe("WorkspaceDataGuard", () => {
 });
 
 // ---------------------------------------------------------------------------
-// WorkspaceScopedRepository — assertOwnership (single record)
+// WorkspaceScopedRepository - assertOwnership (single record)
 // ---------------------------------------------------------------------------
 
-describe("WorkspaceScopedRepository — assertOwnership", () => {
+describe("WorkspaceScopedRepository - assertOwnership", () => {
   it("returns the record when workspaceId matches", () => {
     const repo = new FakeWorkspaceScopedRepository();
     repo.seed({ id: "r-1", workspaceId: "ws-1", name: "foo" });
@@ -168,10 +168,10 @@ describe("WorkspaceScopedRepository — assertOwnership", () => {
 });
 
 // ---------------------------------------------------------------------------
-// WorkspaceScopedRepository — assertAllOwned (list)
+// WorkspaceScopedRepository - assertAllOwned (list)
 // ---------------------------------------------------------------------------
 
-describe("WorkspaceScopedRepository — assertAllOwned", () => {
+describe("WorkspaceScopedRepository - assertAllOwned", () => {
   it("returns all records when all belong to the workspace", () => {
     const repo = new FakeWorkspaceScopedRepository();
     repo.seed({ id: "r-1", workspaceId: "ws-1", name: "a" });
@@ -203,7 +203,7 @@ describe("WorkspaceScopedRepository — assertAllOwned", () => {
     expect(results.every((r) => r.workspaceId === "ws-1")).toBe(true);
   });
 
-  it("isolates workspaces — ws-2 records are not visible to ws-1 queries", () => {
+  it("isolates workspaces - ws-2 records are not visible to ws-1 queries", () => {
     const repo = new FakeWorkspaceScopedRepository();
     repo.seed({ id: "r-1", workspaceId: "ws-1", name: "ws1-item" });
     repo.seed({ id: "r-2", workspaceId: "ws-2", name: "ws2-item" });

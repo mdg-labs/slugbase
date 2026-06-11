@@ -20,7 +20,7 @@ export const MailSettingsSchema = z
     port: z.number().int().nullable(),
     secure: z.boolean(),
     user: z.string().nullable(),
-    /** True when a password is stored — never return the encrypted value */
+    /** True when a password is stored - never return the encrypted value */
     hasPassword: z.boolean(),
     from: z.string().nullable(),
   })
@@ -55,7 +55,7 @@ export const AiProviderSchema = z.enum(["openai"]);
 export const AiSettingsSchema = z
   .object({
     provider: AiProviderSchema.nullable(),
-    /** True when an API key is stored — never return the encrypted value */
+    /** True when an API key is stored - never return the encrypted value */
     hasApiKey: z.boolean(),
     model: z.string().nullable(),
     enabled: z.boolean(),
@@ -84,7 +84,7 @@ export const OidcProviderSchema = z
     name: z.string(),
     issuerUrl: z.string(),
     clientId: z.string(),
-    /** True when a client secret is stored — never return the encrypted value */
+    /** True when a client secret is stored - never return the encrypted value */
     hasClientSecret: z.boolean(),
     scopes: z.string(),
     enabled: z.boolean(),

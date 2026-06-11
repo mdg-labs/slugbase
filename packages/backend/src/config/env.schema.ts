@@ -46,20 +46,20 @@ const optionalFlagsSchema = z
     PORT: z.coerce.number().int().positive().default(3000),
     SERVE_WEB_CLIENT: envBoolean(false),
     WEB_CLIENT_SERVER_BUILD: z.string().min(1).optional(),
-    // SMTP transport (spec §11.1, §15) — optional; no-op mail used when SMTP_HOST is absent
+    // SMTP transport (spec §11.1, §15) - optional; no-op mail used when SMTP_HOST is absent
     SMTP_HOST: z.string().min(1).optional(),
     SMTP_PORT: z.coerce.number().int().positive().default(587),
     SMTP_SECURE: envBoolean(false),
     SMTP_USER: z.string().min(1).optional(),
     SMTP_PASS: z.string().min(1).optional(),
     SMTP_FROM: z.string().min(1).optional(),
-    // OpenAI AI suggestions (spec §11.2, §15) — optional; no-op AI used when absent
+    // OpenAI AI suggestions (spec §11.2, §15) - optional; no-op AI used when absent
     OPENAI_API_KEY: z.string().min(1).optional(),
     OPENAI_MODEL: z.string().min(1).default("gpt-4o-mini"),
-    // Stripe billing (spec §11.4, §15) — optional; no-op billing / full entitlements when absent
+    // Stripe billing (spec §11.4, §15) - optional; no-op billing / full entitlements when absent
     STRIPE_SECRET_KEY: z.string().min(1).optional(),
     STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
-    // Config-driven Stripe price ids (spec §12.1, def §6) — not hard-coded in app logic
+    // Config-driven Stripe price ids (spec §12.1, def §6) - not hard-coded in app logic
     // Per-interval price IDs (spec §12.1, per-interval billing)
     STRIPE_PRICE_PERSONAL_MONTHLY: z.string().min(1).optional(),
     STRIPE_PRICE_PERSONAL_ANNUAL: z.string().min(1).optional(),
@@ -67,30 +67,30 @@ const optionalFlagsSchema = z
     STRIPE_PRICE_TEAM_ANNUAL: z.string().min(1).optional(),
     STRIPE_PRICE_SUPPORTER: z.string().min(1).optional(),
     SUPPORTER_PROMOTION_END: z.string().min(1).optional(),
-    // Downgrade overflow grace (spec §12.5, def §5) — days after period end before archive
+    // Downgrade overflow grace (spec §12.5, def §5) - days after period end before archive
     DOWNGRADE_GRACE_PERIOD_DAYS: z.coerce.number().int().nonnegative().default(7),
-    // Session TTL (spec §5.3, def §3) — sliding window; default 30 days
+    // Session TTL (spec §5.3, def §3) - sliding window; default 30 days
     SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),
     // Extended session TTL when login remember-me is checked (spec §5.3)
     SESSION_REMEMBER_TTL_DAYS: z.coerce.number().int().positive().default(90),
     // MFA TOTP issuer label shown in authenticator apps (spec §5.7)
     MFA_TOTP_ISSUER: z.string().min(1).default("SlugBase"),
-    // Rate limiting (spec §18, def §4) — IP-based for login/register/MFA; user-based for token creation
+    // Rate limiting (spec §18, def §4) - IP-based for login/register/MFA; user-based for token creation
     RATE_LIMIT_LOGIN_MAX: z.coerce.number().int().positive().default(10),
     RATE_LIMIT_LOGIN_TTL_SECONDS: z.coerce.number().int().positive().default(900),
     RATE_LIMIT_TOKEN_CREATION_MAX: z.coerce.number().int().positive().default(20),
     RATE_LIMIT_TOKEN_CREATION_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
-    // Signup + email-change verification sends (spec §5.5, §18) — per user, unused tokens in window
+    // Signup + email-change verification sends (spec §5.5, §18) - per user, unused tokens in window
     RATE_LIMIT_EMAIL_VERIFICATION_MAX: z.coerce.number().int().positive().default(3),
     RATE_LIMIT_EMAIL_VERIFICATION_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
-    // Cloudflare Turnstile challenge (spec §11.8, §15) — optional; no-op challenge when absent
+    // Cloudflare Turnstile challenge (spec §11.8, §15) - optional; no-op challenge when absent
     TURNSTILE_SECRET_KEY: z.string().min(1).optional(),
-    // Skip challenge verification in development (spec §11.8) — defaults true when NODE_ENV !== production
+    // Skip challenge verification in development (spec §11.8) - defaults true when NODE_ENV !== production
     CHALLENGE_DEV_SKIP: optionalEnvBoolean(),
-    // Product analytics (spec §11.6, §15) — optional; no-op used when Umami is absent
+    // Product analytics (spec §11.6, §15) - optional; no-op used when Umami is absent
     UMAMI_HOST: z.string().url().optional(),
     UMAMI_WEBSITE_ID: z.string().min(1).optional(),
-    // Error reporting (spec §11.7, §15) — optional; no-op used when SENTRY_DSN is absent
+    // Error reporting (spec §11.7, §15) - optional; no-op used when SENTRY_DSN is absent
     SENTRY_DSN: z.string().min(1).optional(),
     SENTRY_ENVIRONMENT: z.string().min(1).optional(),
     SENTRY_RELEASE: z.string().min(1).optional(),
@@ -98,7 +98,7 @@ const optionalFlagsSchema = z
     SENTRY_PROFILING_SAMPLE_RATE: z.string().min(1).optional(),
     SENTRY_LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).optional(),
     SENTRY_ENABLE_CONSOLE_LOGGING: envBoolean(false),
-    // OpenAPI interactive docs (spec §18) — optional Scalar UI at GET /docs
+    // OpenAPI interactive docs (spec §18) - optional Scalar UI at GET /docs
     OPENAPI_INTERACTIVE_DOCS: envBoolean(true),
   })
   .strict()
@@ -212,14 +212,14 @@ export function validateEnvConfig(
     const secretsResult = requiredSecretsSchema.safeParse(secretsInput);
     if (!secretsResult.success) {
       throw new Error(
-        `Production startup refused: missing or invalid required secrets — ${secretsResult.error.message}`,
+        `Production startup refused: missing or invalid required secrets - ${secretsResult.error.message}`,
       );
     }
 
     const flagsResult = optionalFlagsSchema.safeParse(flagsInput);
     if (!flagsResult.success) {
       throw new Error(
-        `Production startup refused: invalid deployment flags — ${flagsResult.error.message}`,
+        `Production startup refused: invalid deployment flags - ${flagsResult.error.message}`,
       );
     }
 
@@ -234,14 +234,14 @@ export function validateEnvConfig(
   const secretsResult = requiredSecretsSchema.safeParse(secretsInput);
   if (!secretsResult.success) {
     throw new Error(
-      `Invalid configuration: missing or invalid required secrets — ${secretsResult.error.message}`,
+      `Invalid configuration: missing or invalid required secrets - ${secretsResult.error.message}`,
     );
   }
 
   const flagsResult = optionalFlagsSchema.safeParse(flagsInput);
   if (!flagsResult.success) {
     throw new Error(
-      `Invalid configuration: invalid deployment flags — ${flagsResult.error.message}`,
+      `Invalid configuration: invalid deployment flags - ${flagsResult.error.message}`,
     );
   }
 

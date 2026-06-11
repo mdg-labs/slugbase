@@ -136,10 +136,10 @@ describe("Invitations (integration)", () => {
   }
 
   // ---------------------------------------------------------------------------
-  // AC5: Entitlement gate — free plan workspace returns 403
+  // AC5: Entitlement gate - free plan workspace returns 403
   // ---------------------------------------------------------------------------
 
-  describe("POST /workspaces/:id/invitations — free plan → 403", () => {
+  describe("POST /workspaces/:id/invitations - free plan → 403", () => {
     it("returns 403 when workspace is on free plan", async () => {
       const res = await request(server())
         .post(`/workspaces/${freeWorkspaceId}/invitations`)
@@ -151,7 +151,7 @@ describe("Invitations (integration)", () => {
     });
   });
 
-  describe("POST /workspaces/:id/invitations — personal plan → 403", () => {
+  describe("POST /workspaces/:id/invitations - personal plan → 403", () => {
     it("returns 403 when workspace is on personal plan", async () => {
       const res = await request(server())
         .post(`/workspaces/${personalWorkspaceId}/invitations`)
@@ -164,10 +164,10 @@ describe("Invitations (integration)", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // POST /workspaces/:id/invitations — team plan creates invitation
+  // POST /workspaces/:id/invitations - team plan creates invitation
   // ---------------------------------------------------------------------------
 
-  describe("POST /workspaces/:id/invitations — team plan creates invitation", () => {
+  describe("POST /workspaces/:id/invitations - team plan creates invitation", () => {
     it("returns 201 with invitation metadata", async () => {
       const res = await request(server())
         .post(`/workspaces/${teamWorkspaceId}/invitations`)
@@ -216,10 +216,10 @@ describe("Invitations (integration)", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // GET /invitations/:token — metadata (public)
+  // GET /invitations/:token - metadata (public)
   // ---------------------------------------------------------------------------
 
-  describe("GET /invitations/:token — metadata", () => {
+  describe("GET /invitations/:token - metadata", () => {
     it("returns 404 for an unknown token", async () => {
       const res = await request(server()).get("/invitations/deadbeefdeadbeef");
       expect(res.status).toBe(404);
@@ -262,10 +262,10 @@ describe("Invitations (integration)", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // POST /invitations/:token/accept — new user flow (public, @SkipCsrf)
+  // POST /invitations/:token/accept - new user flow (public, @SkipCsrf)
   // ---------------------------------------------------------------------------
 
-  describe("POST /invitations/:token/accept — new user flow", () => {
+  describe("POST /invitations/:token/accept - new user flow", () => {
     it("accepts invitation, creates account, adds member, sets session cookie", async () => {
       const { plaintext } = await createKnownInvitation("newuser-accept@example.com");
 
@@ -342,10 +342,10 @@ describe("Invitations (integration)", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // POST /invitations/:token/accept — existing user flow
+  // POST /invitations/:token/accept - existing user flow
   // ---------------------------------------------------------------------------
 
-  describe("POST /invitations/:token/accept — existing user flow", () => {
+  describe("POST /invitations/:token/accept - existing user flow", () => {
     it("adds existing user as member and marks accepted", async () => {
       const { plaintext } = await createKnownInvitation("existing-accept@example.com");
 

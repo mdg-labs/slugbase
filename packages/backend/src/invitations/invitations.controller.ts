@@ -88,7 +88,7 @@ export class InvitationsController {
 
   /**
    * Returns invitation metadata (workspace name, inviter name, role).
-   * Public — no session required. Does NOT accept the invitation.
+   * Public - no session required. Does NOT accept the invitation.
    * Returns 404 if token is invalid; 410 if expired or already accepted.
    */
   @Get("invitations/:token")
@@ -102,7 +102,7 @@ export class InvitationsController {
 
   /**
    * Accepts a workspace invitation.
-   * Public — no session required (@SkipCsrf, no SessionGuard).
+   * Public - no session required (@SkipCsrf, no SessionGuard).
    * If no account exists for the invited email, name + password are required in the body.
    * Creates a session on success and sets the session cookie.
    */

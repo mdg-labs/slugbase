@@ -26,7 +26,7 @@ import type { UpdateMailSettingsBody, SendTestMailBody } from "@slugbase/shared-
  * Exposes GET/PATCH /workspace/settings/mail and POST /workspace/settings/mail/test.
  *
  * All endpoints require an active workspace session and ADMIN role (spec §11.5, §15).
- * CSRF is enforced globally on all mutations (PATCH, POST) — no explicit decorator needed.
+ * CSRF is enforced globally on all mutations (PATCH, POST) - no explicit decorator needed.
  */
 @Controller("workspace/settings/mail")
 @UseGuards(TenantGuard)

@@ -35,7 +35,7 @@ async function bootstrapApp(databaseUrl: string, envOverrides: NodeJS.ProcessEnv
 }
 
 describe("Team entitlements (integration)", () => {
-  describe("hosted billing — plan gating via Stripe config", () => {
+  describe("hosted billing - plan gating via Stripe config", () => {
     let app: INestApplication | undefined;
     let cleanup: () => Promise<void> = async () => {};
 
@@ -278,7 +278,7 @@ describe("Team entitlements (integration)", () => {
     });
   });
 
-  describe("self-host billing — full entitlements without Stripe", () => {
+  describe("self-host billing - full entitlements without Stripe", () => {
     let app: INestApplication | undefined;
     let cleanup: () => Promise<void> = async () => {};
 

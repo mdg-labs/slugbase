@@ -30,7 +30,7 @@ describe("NoopAiService", () => {
     ).rejects.toThrow();
 
     expect(warnSpy).toHaveBeenCalledWith(
-      "AI provider not configured — suggestion skipped",
+      "AI provider not configured - suggestion skipped",
       expect.objectContaining({
         url: "https://example.com/docs",
         outputLanguage: "de",

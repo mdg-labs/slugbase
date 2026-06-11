@@ -200,7 +200,7 @@ export class BillingApplicationService {
 
     // Check product marker in the raw payload BEFORE signature verification.
     // Events from non-slugbase Stripe accounts (or forwarded events) carry no
-    // marker — acknowledge with 200 so Stripe stops retrying, but do not process.
+    // marker - acknowledge with 200 so Stripe stops retrying, but do not process.
     let rawPayload: unknown;
     try {
       rawPayload = JSON.parse(rawBody.toString("utf-8"));
@@ -211,7 +211,7 @@ export class BillingApplicationService {
     const productMarker = readProductMarker(rawPayload);
     if (productMarker !== EXPECTED_PRODUCT_MARKER) {
       const raw = rawPayload as Record<string, unknown>;
-      this.logger.debug("Webhook event without product marker — ignoring", {
+      this.logger.debug("Webhook event without product marker - ignoring", {
         eventTyp: typeof raw.type === "string" ? raw.type : undefined,
       });
       return { received: true };

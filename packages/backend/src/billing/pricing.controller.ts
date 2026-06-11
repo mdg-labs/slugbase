@@ -6,7 +6,7 @@ import { PricingService } from "./pricing.service.js";
 const CACHE_CONTROL = "public, max-age=300";
 
 /**
- * Public pricing endpoint — no auth, no CSRF.
+ * Public pricing endpoint - no auth, no CSRF.
  * Returns structured price data from Stripe price IDs (spec §12.1, issue #310).
  * CORS is handled globally (FRONTEND_ORIGIN + marketing origin).
  */

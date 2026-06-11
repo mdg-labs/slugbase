@@ -14,7 +14,7 @@ import {
 } from "./error-reporting-pii.js";
 
 /**
- * Sentry-backed error reporting — active when SENTRY_DSN is configured.
+ * Sentry-backed error reporting - active when SENTRY_DSN is configured.
  * Sentry.init() runs in instrument.ts (first import in main.ts).
  * Consent and PII rules are enforced before events leave the process.
  */

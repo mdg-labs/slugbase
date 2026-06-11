@@ -185,7 +185,7 @@ describe("Audit log (integration)", () => {
     });
   });
 
-  describe("read API — pagination and filters", () => {
+  describe("read API - pagination and filters", () => {
     it("returns paginated newest-first results", async () => {
       const result = await auditService.listEvents(
         teamWorkspace,

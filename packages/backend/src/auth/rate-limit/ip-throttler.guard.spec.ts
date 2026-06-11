@@ -11,7 +11,7 @@ class TestableIpThrottlerGuard extends IpThrottlerGuard {
   }
 }
 
-/** Minimal ThrottlerStorage stub — only getTracker is exercised in these tests. */
+/** Minimal ThrottlerStorage stub - only getTracker is exercised in these tests. */
 const storageStub: ThrottlerStorage = {
   increment: () => Promise.resolve({ totalHits: 0, timeToExpire: 0, isBlocked: false, timeToBlockExpire: 0 }),
 };

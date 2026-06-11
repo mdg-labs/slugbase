@@ -5,7 +5,7 @@ import type {
 } from "@slugbase/shared-types";
 
 /**
- * No-op product analytics — used when Umami is not configured (spec §11.6).
+ * No-op product analytics - used when Umami is not configured (spec §11.6).
  */
 @Injectable()
 export class NoopAnalyticsService implements AnalyticsService {

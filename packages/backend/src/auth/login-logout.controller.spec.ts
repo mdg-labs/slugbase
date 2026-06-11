@@ -164,7 +164,7 @@ describe("LoginLogoutController.login()", () => {
     const { controller } = buildController({
       account: makeAccount(),
       workspaceError: new ForbiddenException(
-        "No workspace membership found — join a workspace or complete registration",
+        "No workspace membership found - join a workspace or complete registration",
       ),
     });
     const res = makeResponse();

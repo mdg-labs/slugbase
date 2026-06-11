@@ -52,7 +52,7 @@ export type ListSearchFieldProps = {
 };
 
 /**
- * Prototype `.field` search input — controlled value with debounced onChange.
+ * Prototype `.field` search input - controlled value with debounced onChange.
  */
 export function ListSearchField({
   value,

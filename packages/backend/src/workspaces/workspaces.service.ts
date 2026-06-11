@@ -66,7 +66,7 @@ export class WorkspacesService {
 
   /**
    * Returns workspaces the user belongs to, enriched with the caller's
-   * membership role — used by GET /workspaces (workspace switcher).
+   * membership role - used by GET /workspaces (workspace switcher).
    */
   async listWorkspaceItemsForUser(userId: string): Promise<WorkspaceListItemResponse[]> {
     const memberships = await this.memberRepo.findAllByUser(userId);
@@ -98,7 +98,7 @@ export class WorkspacesService {
     const userWorkspaces = await this.listUserWorkspaces(userId);
     if (userWorkspaces.length === 0) {
       throw new ForbiddenException(
-        "No workspace membership found — join a workspace or complete registration",
+        "No workspace membership found - join a workspace or complete registration",
       );
     }
 
@@ -108,7 +108,7 @@ export class WorkspacesService {
     const defaultWorkspace = sorted[0];
     if (!defaultWorkspace) {
       throw new ForbiddenException(
-        "No workspace membership found — join a workspace or complete registration",
+        "No workspace membership found - join a workspace or complete registration",
       );
     }
     return defaultWorkspace.id;

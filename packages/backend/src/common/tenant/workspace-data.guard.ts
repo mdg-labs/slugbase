@@ -11,7 +11,7 @@ import type { WorkspaceOwned } from "../../db/workspace-scoped.repository.js";
  * complementing the query-level scoping enforced by `WorkspaceScopedRepository`.
  *
  * Unlike a NestJS `CanActivate` route guard (which runs before handler execution),
- * this guard operates at the service layer — after the DB fetch — so it can
+ * this guard operates at the service layer - after the DB fetch - so it can
  * inspect the actual `workspaceId` stamped on the returned record.
  *
  * Spec §5.9; security baseline rule §03.

@@ -64,7 +64,7 @@ function makeMember(
   };
 }
 
-describe("WorkspacesService — slug uniqueness", () => {
+describe("WorkspacesService - slug uniqueness", () => {
   it("createWorkspace rejects a duplicate slug", async () => {
     const { WorkspacesService } = await import("./workspaces.service.js");
 
@@ -104,7 +104,7 @@ describe("WorkspacesService — slug uniqueness", () => {
   });
 });
 
-describe("WorkspacesService — role checks", () => {
+describe("WorkspacesService - role checks", () => {
   it("requireWorkspaceRole throws ForbiddenException when user is not a member", async () => {
     const { WorkspacesService } = await import("./workspaces.service.js");
 

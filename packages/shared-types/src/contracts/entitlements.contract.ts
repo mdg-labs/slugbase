@@ -30,10 +30,10 @@ export interface EntitlementSet {
 
 export type PlanId = z.infer<typeof WorkspacePlanSchema>;
 
-/** Hosted plan catalog entry — display metadata + entitlement mapping (spec §12.1). */
+/** Hosted plan catalog entry - display metadata + entitlement mapping (spec §12.1). */
 export interface PlanDefinition {
   id: PlanId;
-  /** User-facing plan name — paid individual tier is "Personal", never "Pro" (§23.4). */
+  /** User-facing plan name - paid individual tier is "Personal", never "Pro" (§23.4). */
   displayName: string;
   entitlements: EntitlementSet;
 }

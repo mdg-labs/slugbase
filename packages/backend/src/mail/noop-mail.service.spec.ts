@@ -32,7 +32,7 @@ describe("NoopMailService", () => {
     });
 
     expect(warnSpy).toHaveBeenCalledWith(
-      "Mail transport not configured — dropping message",
+      "Mail transport not configured - dropping message",
       expect.objectContaining({ type: "signup_verification", to: "user@example.com" }),
     );
   });
@@ -49,7 +49,7 @@ describe("NoopMailService", () => {
     await service.sendTest("admin@example.com");
 
     expect(warnSpy).toHaveBeenCalledWith(
-      "Mail transport not configured — test send skipped",
+      "Mail transport not configured - test send skipped",
       expect.objectContaining({ to: "admin@example.com" }),
     );
   });

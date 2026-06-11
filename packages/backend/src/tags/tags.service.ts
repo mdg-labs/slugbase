@@ -164,7 +164,7 @@ export class TagsService {
     return this.wsDataGuard.verifyOwnership(workspace.id, tag);
   }
 
-  /** Exposed for integration tests — bookmark with multiple tags. */
+  /** Exposed for integration tests - bookmark with multiple tags. */
   async countTagsForBookmark(
     workspaceId: string,
     bookmarkId: string,
@@ -172,7 +172,7 @@ export class TagsService {
     return this.tagRepo.countTagsForBookmark(workspaceId, bookmarkId);
   }
 
-  /** Exposed for integration tests — list tag IDs on a bookmark. */
+  /** Exposed for integration tests - list tag IDs on a bookmark. */
   async listTagIdsForBookmark(
     workspaceId: string,
     bookmarkId: string,

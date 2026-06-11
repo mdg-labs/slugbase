@@ -70,7 +70,7 @@ export async function loadWorkspaceSettingsContext(
   if (forbidden || !members) {
     // On hosted Free, the /members endpoint may return 403 because the
     // team-admin entitlement is not granted. Fall back to a safe default
-    // role (ADMIN — the owner always has at least ADMIN).
+    // role (ADMIN - the owner always has at least ADMIN).
     return {
       workspace: {
         id: workspace.id,

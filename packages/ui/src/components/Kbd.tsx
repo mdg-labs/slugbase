@@ -6,7 +6,7 @@ export type KbdProps = {
 };
 
 /**
- * Keyboard hint badge — 11px mono, canvas bg, 3D bottom border.
+ * Keyboard hint badge - 11px mono, canvas bg, 3D bottom border.
  * Matches prototype `.kbd` from app.css.
  */
 export function Kbd({ children, className = "" }: KbdProps) {

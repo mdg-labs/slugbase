@@ -62,7 +62,7 @@ export function SupporterOfferCard({
       <div className="mt-sp-5 flex flex-wrap items-start gap-sp-7">
         <div className="min-w-[240px] flex-1">
           <p className="m-0 font-mono text-[length:var(--text-body-lg)] font-semibold text-fg">
-            {config.supporterPrice || "—"}{" "}
+            {config.supporterPrice || "-"}{" "}
             <span className="text-[length:var(--text-small)] font-normal text-fg-muted">
               {t("settings.billing.supporter_price_subtitle")}
             </span>
@@ -77,7 +77,7 @@ export function SupporterOfferCard({
             type="button"
           >
             {t("settings.billing.supporter_claim_action", {
-              price: config.supporterPrice || "—",
+              price: config.supporterPrice || "-",
             })}
           </Button>
         </div>

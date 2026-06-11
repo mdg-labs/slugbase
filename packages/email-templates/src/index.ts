@@ -1,5 +1,5 @@
 /**
- * @slugbase/email-templates — dark-themed transactional email templates
+ * @slugbase/email-templates - dark-themed transactional email templates
  *
  * Provides inline-styled HTML rendering for all SlugBase transactional
  * email types (spec section 11.1, section 23 design tokens).

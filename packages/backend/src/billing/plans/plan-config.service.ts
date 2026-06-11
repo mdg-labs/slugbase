@@ -13,7 +13,7 @@ export interface PlanPriceConfig {
 
 /**
  * Config-driven plan pricing and seat defaults (spec §12.1, def §6).
- * Amounts live in Stripe / marketing — app logic references price ids only.
+ * Amounts live in Stripe / marketing - app logic references price ids only.
  */
 @Injectable()
 export class PlanConfigService {

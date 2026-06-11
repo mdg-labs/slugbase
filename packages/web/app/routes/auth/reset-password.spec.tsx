@@ -39,7 +39,7 @@ const mockUseActionData = vi.mocked(useActionData);
 const mockUseLoaderData = vi.mocked(useLoaderData);
 const mockUseNavigation = vi.mocked(useNavigation);
 
-describe("ResetPassword route — loader", () => {
+describe("ResetPassword route - loader", () => {
   it("extracts the token from the query string", () => {
     const request = new Request("http://localhost/reset-password?token=abc123");
     const args = { request, params: {}, context: {} } as unknown as LoaderFunctionArgs;
@@ -64,7 +64,7 @@ describe("ResetPassword route — loader", () => {
   });
 });
 
-describe("ResetPassword route — action", () => {
+describe("ResetPassword route - action", () => {
   beforeEach(() => {
     vi.stubGlobal(
       "fetch",
@@ -174,7 +174,7 @@ describe("ResetPassword route — action", () => {
   });
 });
 
-describe("ResetPassword route — component", () => {
+describe("ResetPassword route - component", () => {
   afterEach(() => {
     cleanup();
   });

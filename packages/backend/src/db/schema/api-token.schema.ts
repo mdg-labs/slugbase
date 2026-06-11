@@ -13,7 +13,7 @@ export const apiTokens = pgTable(
     userId: text("user_id").notNull(),
     name: text("name").notNull(),
     tokenHash: text("token_hash").notNull(),
-    /** First 8 hex chars of the raw token (after the `slb_` prefix) — used for fast lookup. */
+    /** First 8 hex chars of the raw token (after the `slb_` prefix) - used for fast lookup. */
     tokenPrefix: text("token_prefix").notNull(),
     lastUsedAt: bigint("last_used_at", { mode: "number" }),
     createdAt: bigint("created_at", { mode: "number" }).notNull(),

@@ -12,7 +12,7 @@ export type AppShellProps = {
 /**
  * Base signed-in layout shell.
  * Grid: 248px sidebar | flexible main column with 52px topbar + scrollable content.
- * Layout is viewport-locked (h-screen, overflow-hidden) — scroll lives inside the
+ * Layout is viewport-locked (h-screen, overflow-hidden) - scroll lives inside the
  * main content area only (spec §9.3.1).
  */
 export function AppShell({ sidebar, topBar, children }: AppShellProps) {

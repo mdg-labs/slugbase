@@ -3,7 +3,7 @@
  *
  * The application depends only on this contract; implementations are selected
  * by configuration at module init. The no-op default allows the app to run
- * without any mail transport — email-dependent flows degrade gracefully.
+ * without any mail transport - email-dependent flows degrade gracefully.
  */
 
 export type MailMessageType =
@@ -23,7 +23,7 @@ export interface MailMessage {
   text: string;
   /** Optional HTML body. */
   html?: string;
-  /** Logical message type — used for logging and future template selection. */
+  /** Logical message type - used for logging and future template selection. */
   type: MailMessageType;
 }
 

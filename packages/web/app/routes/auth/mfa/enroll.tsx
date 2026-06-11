@@ -45,7 +45,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   };
 }
 
-/** Prevent loader re-run after action — backup codes must not re-trigger enrol/start */
+/** Prevent loader re-run after action - backup codes must not re-trigger enrol/start */
 export function shouldRevalidate() {
   return false;
 }
@@ -139,7 +139,7 @@ export default function MfaEnrollRoute() {
 }
 
 /* ────────────────────────────────────────────────────────────
-   Step 1 — QR code + TOTP confirmation
+   Step 1 - QR code + TOTP confirmation
    ──────────────────────────────────────────────────────────── */
 
 interface EnrollConfirmStepProps {
@@ -283,7 +283,7 @@ function EnrollConfirmStep({
 }
 
 /* ────────────────────────────────────────────────────────────
-   Step 2 — Backup codes (shown once)
+   Step 2 - Backup codes (shown once)
    ──────────────────────────────────────────────────────────── */
 
 interface BackupCodesStepProps {

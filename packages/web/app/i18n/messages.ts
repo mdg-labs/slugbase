@@ -1,4 +1,4 @@
-/** Static message catalog — edit locales/*.json; run pnpm i18n:codegen after en.json key changes. */
+/** Static message catalog - edit locales/*.json; run pnpm i18n:codegen after en.json key changes. */
 import en from "./locales/en.json";
 import de from "./locales/de.json";
 import type { MessageKey } from "./message-keys.generated.js";

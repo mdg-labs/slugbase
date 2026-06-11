@@ -40,7 +40,7 @@ export class EmailVerificationController {
   /**
    * Verifies an email address via a plaintext token delivered to the user's inbox.
    * Non-enumerating: always returns the same generic error on any token failure.
-   * @SkipCsrf — GET request from email link; no state-mutating side-effects beyond
+   * @SkipCsrf - GET request from email link; no state-mutating side-effects beyond
    * marking the token consumed and setting email_verified=true.
    */
   @Get("verify-email")

@@ -1,6 +1,6 @@
 import type { ListBookmarksQuery } from "../bookmark.types.js";
 
-/** Bulk selection — explicit IDs or select-all with list filters (spec §6.6). */
+/** Bulk selection - explicit IDs or select-all with list filters (spec §6.6). */
 export interface BulkSelectionBody extends ListBookmarksQuery {
   bookmarkIds?: string[];
   selectAll?: boolean;

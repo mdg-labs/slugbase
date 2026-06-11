@@ -25,7 +25,7 @@ export interface RecordAuditEventData {
   metadata?: Record<string, unknown>;
 }
 
-/** Raw HTTP query — filters parsed in the service before listing. */
+/** Raw HTTP query - filters parsed in the service before listing. */
 export interface ListAuditEventsQuery {
   q?: string;
   actorUserId?: string;

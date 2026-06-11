@@ -37,9 +37,9 @@ export const TENANT_SESSION_ID_KEY = "tenantSessionId";
  *   6. Verifies the workspace still exists → 403
  *
  * On success, attaches to the request:
- *   - `activeWorkspace` — the resolved WorkspaceRecord (use via @ActiveWorkspace())
- *   - `tenantUserId`    — the authenticated user ID
- *   - `tenantSessionId` — the session ID (for downstream session mutations)
+ *   - `activeWorkspace` - the resolved WorkspaceRecord (use via @ActiveWorkspace())
+ *   - `tenantUserId`    - the authenticated user ID
+ *   - `tenantSessionId` - the session ID (for downstream session mutations)
  *
  * Spec §4.3, §5.9.
  */
@@ -84,7 +84,7 @@ export class TenantGuard implements CanActivate {
     const activeWorkspaceId = data.activeWorkspaceId;
     if (!activeWorkspaceId) {
       throw new ForbiddenException(
-        "No active workspace selected — call POST /workspaces/:id/activate first",
+        "No active workspace selected - call POST /workspaces/:id/activate first",
       );
     }
 

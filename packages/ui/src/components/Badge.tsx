@@ -16,7 +16,7 @@ const variantClasses: Record<BadgeVariant, string> = {
 };
 
 /**
- * Status / plan badge — matches prototype `.badge` pattern.
+ * Status / plan badge - matches prototype `.badge` pattern.
  * Variant: accent | success | warning | neutral.
  */
 export function Badge({

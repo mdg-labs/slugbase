@@ -36,7 +36,7 @@ function createService(planGatingEnabled: boolean): EntitlementsService {
 }
 
 describe("EntitlementsService", () => {
-  describe("hosted billing — plan gating enabled", () => {
+  describe("hosted billing - plan gating enabled", () => {
     const service = createService(true);
 
     describe("FREE_BOOKMARK_CAP constant", () => {
@@ -210,7 +210,7 @@ describe("EntitlementsService", () => {
     });
   });
 
-  describe("self-host billing — plan gating disabled", () => {
+  describe("self-host billing - plan gating disabled", () => {
     const service = createService(false);
 
     it.each(teamCapabilities)(

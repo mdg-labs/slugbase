@@ -25,7 +25,7 @@ export interface UpdateFolderData {
   color?: string | null;
 }
 
-/** Raw HTTP query — scope/sort are parsed in the service before listing. */
+/** Raw HTTP query - scope/sort are parsed in the service before listing. */
 export interface ListFoldersQuery {
   q?: string;
   scope?: string;

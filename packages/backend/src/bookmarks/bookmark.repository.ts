@@ -308,7 +308,7 @@ export class BookmarkRepository extends WorkspaceScopedRepository<BookmarkRecord
       );
   }
 
-  /** Counts non-archived bookmarks in the workspace (spec §12.5 — cap applies to active bookmarks). */
+  /** Counts non-archived bookmarks in the workspace (spec §12.5 - cap applies to active bookmarks). */
   async countActiveInWorkspace(workspaceId: string): Promise<number> {
 
     const rows = await this.db

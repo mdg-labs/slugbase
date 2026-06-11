@@ -28,7 +28,7 @@ import { action, loader } from "./setup.js";
 const mockUseActionData = vi.mocked(useActionData);
 const mockUseNavigation = vi.mocked(useNavigation);
 
-describe("Setup route — loader", () => {
+describe("Setup route - loader", () => {
   beforeEach(() => {
     process.env["API_BASE_URL"] = "http://localhost:3000";
   });
@@ -83,7 +83,7 @@ describe("Setup route — loader", () => {
   });
 });
 
-describe("Setup route — action", () => {
+describe("Setup route - action", () => {
   beforeEach(() => {
     vi.stubGlobal(
       "fetch",
@@ -196,7 +196,7 @@ describe("Setup route — action", () => {
   });
 });
 
-describe("Setup route — component", () => {
+describe("Setup route - component", () => {
   afterEach(() => {
     cleanup();
   });

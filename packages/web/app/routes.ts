@@ -14,7 +14,7 @@ export default [
   route("forgot-password", "routes/auth/forgot-password.tsx"),
   route("reset-password", "routes/auth/reset-password.tsx"),
 
-  // Proxy routes — forward backend API requests to the NestJS backend.
+  // Proxy routes - forward backend API requests to the NestJS backend.
   // These sit before the app layout so they match bare paths like
   // /auth/csrf-token, /workspaces, etc. without the app layout shell.
   // Each route uses a unique file path to avoid React Router dedup errors.

@@ -6,7 +6,7 @@ export type ListPageToolbarProps = {
   testId?: string;
 };
 
-/** Prototype `.toolbar` — hairline bottom, sp-7 horizontal padding. */
+/** Prototype `.toolbar` - hairline bottom, sp-7 horizontal padding. */
 export function ListPageToolbar({
   children,
   className = "",

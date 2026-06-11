@@ -2,7 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import type { MailMessage, MailService } from "@slugbase/shared-types";
 
 /**
- * No-op mail implementation — used when SMTP_HOST is not configured.
+ * No-op mail implementation - used when SMTP_HOST is not configured.
  * Logs a warning for every attempted send so operators know email is degraded.
  * Reports itself as unavailable so callers can surface appropriate messaging.
  */
@@ -11,7 +11,7 @@ export class NoopMailService implements MailService {
   private readonly logger = new Logger(NoopMailService.name);
 
   send(message: MailMessage): Promise<void> {
-    this.logger.warn("Mail transport not configured — dropping message", {
+    this.logger.warn("Mail transport not configured - dropping message", {
       type: message.type,
       to: message.to,
     });
@@ -23,7 +23,7 @@ export class NoopMailService implements MailService {
   }
 
   sendTest(to: string): Promise<void> {
-    this.logger.warn("Mail transport not configured — test send skipped", {
+    this.logger.warn("Mail transport not configured - test send skipped", {
       to,
     });
     return Promise.resolve();

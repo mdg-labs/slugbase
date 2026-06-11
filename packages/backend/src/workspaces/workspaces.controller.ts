@@ -117,7 +117,7 @@ export class WorkspacesController {
    * Verifies workspace membership before switching.  On success the session's
    * `activeWorkspaceId` is updated and the workspace metadata is returned.
    *
-   * Spec §4.3 — switching the active workspace is an explicit, authenticated
+   * Spec §4.3 - switching the active workspace is an explicit, authenticated
    * operation; no subdomain/path tenancy in v1.
    */
   @Post(":id/activate")
@@ -153,7 +153,7 @@ export class WorkspacesController {
   /**
    * Returns the workspace currently active for the requesting session.
    *
-   * Protected by TenantGuard — returns 403 if no active workspace is set
+   * Protected by TenantGuard - returns 403 if no active workspace is set
    * or the user is no longer a member.
    */
   @Get("active")

@@ -98,7 +98,7 @@ export class InvitationsService {
   /**
    * Creates a workspace invitation and dispatches the invitation email.
    *
-   * Checks the 'workspace-members' entitlement — free plan workspaces may not
+   * Checks the 'workspace-members' entitlement - free plan workspaces may not
    * invite members (spec §12.2, §4.2). Enforces one pending invitation per
    * (workspace, email) pair to prevent duplicate sends.
    */
@@ -164,13 +164,13 @@ export class InvitationsService {
         });
       } catch (err) {
         this.logger.error(
-          "Failed to send invitation email — invitation was created",
+          "Failed to send invitation email - invitation was created",
           { workspaceId, invitedEmail: dto.email, err },
         );
       }
     } else {
       this.logger.warn(
-        "Mail transport unavailable — invitation created but email not sent",
+        "Mail transport unavailable - invitation created but email not sent",
         { workspaceId, invitedEmail: dto.email },
       );
     }

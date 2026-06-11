@@ -22,7 +22,7 @@ export interface UpdateTeamData {
   description?: string | null;
 }
 
-/** Raw HTTP query — sort is parsed in the service before listing. */
+/** Raw HTTP query - sort is parsed in the service before listing. */
 export interface ListTeamsQuery {
   q?: string;
   sort?: string;

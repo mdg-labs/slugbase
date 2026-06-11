@@ -248,7 +248,7 @@ describe("Workspaces HTTP endpoints (integration)", () => {
     return { token: body.csrfToken, cookie: csrfCookieStr };
   }
 
-  describe("GET /workspaces — list user workspaces", () => {
+  describe("GET /workspaces - list user workspaces", () => {
     it("returns 401 without session", async () => {
       const res = await request(server()).get("/workspaces");
       expect(res.status).toBe(401);
@@ -268,7 +268,7 @@ describe("Workspaces HTTP endpoints (integration)", () => {
     });
   });
 
-  describe("POST /workspaces — create workspace", () => {
+  describe("POST /workspaces - create workspace", () => {
     it("returns 401 without session", async () => {
       const csrf = await fetchCsrfToken((await loginAs(OWNER_EMAIL)));
       const res = await request(server())
@@ -306,7 +306,7 @@ describe("Workspaces HTTP endpoints (integration)", () => {
     });
   });
 
-  describe("PATCH /workspaces/active — rename active workspace", () => {
+  describe("PATCH /workspaces/active - rename active workspace", () => {
     it("returns 403 without CSRF token (mutation endpoint)", async () => {
       const res = await request(server())
         .patch("/workspaces/active")
@@ -342,7 +342,7 @@ describe("Workspaces HTTP endpoints (integration)", () => {
     });
   });
 
-  describe("DELETE /workspaces/active — delete active workspace", () => {
+  describe("DELETE /workspaces/active - delete active workspace", () => {
     it("returns 403 without CSRF token (mutation endpoint)", async () => {
       const res = await request(server()).delete("/workspaces/active");
       expect(res.status).toBe(403);
@@ -372,7 +372,7 @@ describe("Workspaces HTTP endpoints (integration)", () => {
     });
   });
 
-  describe("PATCH /workspaces/:id — update workspace by ID", () => {
+  describe("PATCH /workspaces/:id - update workspace by ID", () => {
     it("updates workspace name by explicit ID", async () => {
       const sessionCookie = await loginAs(OWNER_EMAIL);
       const csrf = await fetchCsrfToken(sessionCookie);

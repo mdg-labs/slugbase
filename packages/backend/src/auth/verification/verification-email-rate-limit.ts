@@ -3,7 +3,7 @@ import { HttpException, HttpStatus } from "@nestjs/common";
 import type { ConfigService } from "../../config/config.service.js";
 
 const RATE_LIMIT_MESSAGE =
-  "Too many verification emails requested — please wait before trying again";
+  "Too many verification emails requested - please wait before trying again";
 
 /** Rolling window start (ms) for counting unused verification tokens. */
 export function verificationEmailRateLimitSinceMs(config: ConfigService): number {

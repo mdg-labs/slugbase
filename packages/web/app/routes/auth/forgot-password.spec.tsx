@@ -37,7 +37,7 @@ import { action } from "./forgot-password.js";
 const mockUseActionData = vi.mocked(useActionData);
 const mockUseNavigation = vi.mocked(useNavigation);
 
-describe("ForgotPassword route — action", () => {
+describe("ForgotPassword route - action", () => {
   beforeEach(() => {
     vi.stubGlobal(
       "fetch",
@@ -121,7 +121,7 @@ describe("ForgotPassword route — action", () => {
   });
 });
 
-describe("ForgotPassword route — component (form state)", () => {
+describe("ForgotPassword route - component (form state)", () => {
   afterEach(() => {
     cleanup();
   });
@@ -153,7 +153,7 @@ describe("ForgotPassword route — component (form state)", () => {
   });
 });
 
-describe("ForgotPassword route — component (success state)", () => {
+describe("ForgotPassword route - component (success state)", () => {
   afterEach(() => {
     cleanup();
   });

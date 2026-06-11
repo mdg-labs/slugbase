@@ -24,9 +24,9 @@ export const SESSION_DATA_KEY = "sessionData";
  * Guard that validates the session cookie and enforces a fully authenticated session.
  *
  * On success it attaches three properties to the request:
- *   - `sessionUserId`  — the authenticated user ID
- *   - `sessionId`      — the raw session ID (needed for session mutations)
- *   - `sessionData`    — the typed session data payload
+ *   - `sessionUserId`  - the authenticated user ID
+ *   - `sessionId`      - the raw session ID (needed for session mutations)
+ *   - `sessionData`    - the typed session data payload
  *
  * Throws 401 when:
  *   - No session cookie is present or the cookie signature is invalid

@@ -1,7 +1,7 @@
 import type { ActionFunctionArgs } from "react-router";
 import { redirect } from "react-router";
 
-/** Session cookie name — must match the backend constant. */
+/** Session cookie name - must match the backend constant. */
 const SESSION_COOKIE = "slb_session";
 
 const API_BASE_URL = () => process.env["API_BASE_URL"] ?? "";

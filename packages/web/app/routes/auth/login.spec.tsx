@@ -36,7 +36,7 @@ import { action, loader } from "./login.js";
 const mockUseActionData = vi.mocked(useActionData);
 const mockUseNavigation = vi.mocked(useNavigation);
 
-describe("Login route — loader", () => {
+describe("Login route - loader", () => {
   it("returns empty object when unauthenticated", async () => {
     const { getSessionUser } = await import("../../lib/session-client.js");
     vi.mocked(getSessionUser).mockResolvedValueOnce(null);
@@ -60,7 +60,7 @@ describe("Login route — loader", () => {
 
     const request = new Request("http://localhost/login");
     const args = { request, params: {}, context: {} } as unknown as LoaderFunctionArgs;
-    // redirect() returns a Response, not throws — it rejects because we call `return redirect()`
+    // redirect() returns a Response, not throws - it rejects because we call `return redirect()`
     // which React Router treats as a redirect, not an exception in our action
     const result = await loader(args);
     expect(result).toBeInstanceOf(Response);
@@ -69,7 +69,7 @@ describe("Login route — loader", () => {
   });
 });
 
-describe("Login route — action", () => {
+describe("Login route - action", () => {
   beforeEach(() => {
     vi.stubGlobal(
       "fetch",
@@ -236,7 +236,7 @@ describe("Login route — action", () => {
   });
 });
 
-describe("Login route — component", () => {
+describe("Login route - component", () => {
   afterEach(() => {
     cleanup();
   });

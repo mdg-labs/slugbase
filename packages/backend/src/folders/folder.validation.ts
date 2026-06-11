@@ -1,4 +1,4 @@
-/** Lucide icon name — kebab-case identifier from the searchable icon set (spec §7.1). */
+/** Lucide icon name - kebab-case identifier from the searchable icon set (spec §7.1). */
 export const FOLDER_ICON_GRAMMAR = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 export const DEFAULT_FOLDER_PAGE_SIZE = 24;
