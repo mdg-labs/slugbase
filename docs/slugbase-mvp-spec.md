@@ -737,13 +737,12 @@ Run on every trigger before any deployment gate. Order within the job:
 2. **Fast-fail checks (no secrets, no build):** lint → typecheck → unit tests
 3. Fetch secrets from Infisical (`development` env, OIDC method)
 4. Build
-5. Pack and upload build artifacts (retention: 1 day)
-6. Integration tests (using the development-env secrets)
-7. `pnpm audit --audit-level=high` (dependency audit)
+5. Integration tests (using the development-env secrets)
+6. `pnpm audit --audit-level=high` (dependency audit)
 
 ### 22.4 E2E (Playwright)
 
-Runs only on the `staging → main` pull request (i.e. the release-candidate PR). Depends on CI checks passing. Downloads the CI build artifacts rather than rebuilding. Runs against a managed local stack. Timeout: 45 minutes.
+Runs only on the `staging → main` pull request (i.e. the release-candidate PR). Depends on CI checks passing. Rebuilds from source against the release tag. Runs against a managed local stack. Timeout: 45 minutes.
 
 ### 22.5 Staging deploy (push to `staging`)
 
@@ -755,8 +754,8 @@ Ordered pipeline, with server and web/marketing builds running **in parallel** f
 | 2a (parallel) | Build API/back-end with `staging` Infisical secrets |
 | 2b (parallel) | Build web client + marketing site bundles with `staging` Infisical secrets |
 | 3a | Deploy API to **Fly.io** `fra` (`flyctl deploy --remote-only`) — migrations run on API boot |
-| 3b | Deploy web client to **Cloudflare Workers** via `wrangler deploy` (with retry) — after 2b |
-| 3c | Deploy marketing site to **Cloudflare Workers** via `wrangler deploy` (with retry) — after 2b |
+| 3b | Deploy web client to **Cloudflare Workers** via `wrangler deploy` (with retry)  |
+| 3c | Deploy marketing site to **Cloudflare Workers** via `wrangler deploy` (with retry)  |
 | 4 | Smoke: API and web — `GET /health` and `/version` (HTTP 200 + JSON); marketing — `GET ${MARKETING_ORIGIN}/` site root liveness only (HTTP 200; static site has no health/version routes) |
 | 5 | GitHub Deployment record — finish (success/failure) |
 

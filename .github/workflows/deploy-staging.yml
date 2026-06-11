@@ -1,7 +1,7 @@
 name: Deploy Staging
 
 # Staging deploy pipeline — reusable workflow called from ci.yml after CI passes (spec §22.5).
-# Job dependency chain: build → migrate → deploy → smoke.
+# Job dependency chain: build (parallel API + web/marketing) → migrate → deploy → smoke.
 # Deployment records are created automatically by the staging GitHub Environment.
 
 on:
@@ -56,66 +56,6 @@ jobs:
             --env staging \
             packages/backend/dist
           echo "Uploaded $(find packages/backend/dist -name '*.js.map' | wc -l) backend source maps for release ${{ steps.release.outputs.release }} (staging)"
-
-  build-web-staging:
-    name: Staging · 1 · Build web/marketing
-    runs-on: ubuntu-latest
-    environment: staging
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup workspace
-        uses: ./.github/actions/setup
-        with:
-          skip-checkout: "true"
-          infisical-env-slug: staging
-          infisical-domain: ${{ secrets.INFISICAL_DOMAIN }}
-          infisical-identity-id: ${{ secrets.INFISICAL_OIDC_IDENTITY_ID }}
-
-      - name: Derive release version
-        id: release
-        run: |
-          VERSION=$(node -p "require('./package.json').version")
-          echo "release=slugbase@${VERSION}" >> "$GITHUB_OUTPUT"
-
-      - name: Build shared dependencies for web
-        env:
-          NODE_ENV: production
-        run: pnpm --filter @slugbase/web^... build
-
-      - name: Build web client
-        env:
-          NODE_ENV: production
-          VITE_SENTRY_ENVIRONMENT: staging
-          VITE_SENTRY_RELEASE: ${{ steps.release.outputs.release }}
-        run: pnpm --filter @slugbase/web build
-
-      - name: Strip source maps from web build output
-        run: |
-          find packages/web/build -name '*.js.map' -delete
-          echo "Stripped .map files from web build (safety cleanup)"
-
-      - name: Build shared dependencies for marketing
-        env:
-          NODE_ENV: production
-        run: pnpm --filter @slugbase/marketing^... build
-
-      - name: Build marketing site
-        env:
-          NODE_ENV: production
-        run: pnpm --filter @slugbase/marketing build
-
-      - name: Pack Worker deploy artifacts
-        run: bash .github/scripts/pack-staging-worker-artifacts.sh staging-worker-artifacts.tar.gz
-
-      - name: Upload Worker deploy artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: staging-worker-artifacts
-          path: staging-worker-artifacts.tar.gz
-          if-no-files-found: error
-          retention-days: 1
 
   push-ghcr-staging-dev:
     name: Staging · 1 · Push self-host image (GHCR dev)
@@ -219,7 +159,7 @@ jobs:
     name: Staging · 3 · Deploy web (Cloudflare Workers)
     runs-on: ubuntu-latest
     environment: staging
-    needs: [build-web-staging, migrate-staging]
+    needs: [migrate-staging]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -232,13 +172,28 @@ jobs:
           infisical-domain: ${{ secrets.INFISICAL_DOMAIN }}
           infisical-identity-id: ${{ secrets.INFISICAL_OIDC_IDENTITY_ID }}
 
-      - name: Download Worker deploy artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: staging-worker-artifacts
+      - name: Derive release version
+        id: release
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "release=slugbase@${VERSION}" >> "$GITHUB_OUTPUT"
 
-      - name: Restore Worker deploy artifacts
-        run: bash .github/scripts/unpack-staging-worker-artifacts.sh staging-worker-artifacts.tar.gz
+      - name: Build shared dependencies for web
+        env:
+          NODE_ENV: production
+        run: pnpm --filter @slugbase/web^... build
+
+      - name: Build web client
+        env:
+          NODE_ENV: production
+          VITE_SENTRY_ENVIRONMENT: staging
+          VITE_SENTRY_RELEASE: ${{ steps.release.outputs.release }}
+        run: pnpm --filter @slugbase/web build
+
+      - name: Strip source maps from web build output
+        run: |
+          find packages/web/build -name '*.js.map' -delete
+          echo "Stripped .map files from web build (safety cleanup)"
 
       - name: Deploy to Cloudflare Workers
         env:
@@ -250,7 +205,7 @@ jobs:
     name: Staging · 3 · Deploy marketing (Cloudflare Workers)
     runs-on: ubuntu-latest
     environment: staging
-    needs: [build-web-staging, migrate-staging]
+    needs: [migrate-staging]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -263,13 +218,15 @@ jobs:
           infisical-domain: ${{ secrets.INFISICAL_DOMAIN }}
           infisical-identity-id: ${{ secrets.INFISICAL_OIDC_IDENTITY_ID }}
 
-      - name: Download Worker deploy artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: staging-worker-artifacts
+      - name: Build shared dependencies for marketing
+        env:
+          NODE_ENV: production
+        run: pnpm --filter @slugbase/marketing^... build
 
-      - name: Restore Worker deploy artifacts
-        run: bash .github/scripts/unpack-staging-worker-artifacts.sh staging-worker-artifacts.tar.gz
+      - name: Build marketing site
+        env:
+          NODE_ENV: production
+        run: pnpm --filter @slugbase/marketing build
 
       - name: Deploy to Cloudflare Workers
         env:
