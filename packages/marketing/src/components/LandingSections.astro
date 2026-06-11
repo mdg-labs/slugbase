@@ -1,6 +1,9 @@
 ---
 import { t, type SupportedLocale } from "../i18n/translate.js";
-import { loadMarketingPricingConfig } from "../lib/pricing-config.js";
+import {
+  isSupporterPromotionActive,
+  loadMarketingPricingConfig,
+} from "../lib/pricing-config.js";
 
 interface Props {
   appOrigin: string;
@@ -17,6 +20,7 @@ const forwardingDomain =
 
 const pricingConfig = await loadMarketingPricingConfig();
 const freeBookmarkCap = String(pricingConfig.freeBookmarkCap);
+const supporterActive = isSupporterPromotionActive(pricingConfig);
 
 const features = [
   {
@@ -453,6 +457,35 @@ const freePrice = freeCurrency ? `${freeCurrency}0` : "—";
         </a>
       </div>
     </div>
+
+    {pricingConfig.supporterPrice && supporterActive && (
+      <div class="mk-supporter mk-supporter--teaser">
+        <div class="mk-supporter-badge">{t(locale, "marketing.pricing.supporter_badge")}</div>
+        <div class="mk-supporter-price">
+          {pricingConfig.supporterPrice}
+          <span>{t(locale, "marketing.pricing.supporter_price_suffix")}</span>
+        </div>
+        <p class="mk-supporter-body">{t(locale, "marketing.pricing.supporter_body")}</p>
+        <a class="mk-btn mk-btn--primary mk-btn--lg" href={getStartedHref}>
+          {t(locale, "marketing.pricing.supporter_cta", { price: pricingConfig.supporterPrice })}
+        </a>
+        {pricingConfig.supporterPromotionEnd && (
+          <div class="mk-supporter-countdown" data-promotion-end={pricingConfig.supporterPromotionEnd}>
+            <div class="mk-supporter-countdown-label">{t(locale, "marketing.pricing.supporter_expires")}</div>
+            <div class="countdown" aria-live="polite">
+              <div class="countdown-unit"><span class="countdown-n" data-unit="days">00</span><span class="countdown-label">{t(locale, "marketing.pricing.countdown_days")}</span></div>
+              <span class="countdown-sep">:</span>
+              <div class="countdown-unit"><span class="countdown-n" data-unit="hours">00</span><span class="countdown-label">{t(locale, "marketing.pricing.countdown_hours")}</span></div>
+              <span class="countdown-sep">:</span>
+              <div class="countdown-unit"><span class="countdown-n" data-unit="minutes">00</span><span class="countdown-label">{t(locale, "marketing.pricing.countdown_minutes")}</span></div>
+              <span class="countdown-sep">:</span>
+              <div class="countdown-unit"><span class="countdown-n" data-unit="seconds">00</span><span class="countdown-label">{t(locale, "marketing.pricing.countdown_seconds")}</span></div>
+            </div>
+          </div>
+        )}
+      </div>
+    )}
+
     <div class="mk-teaser-see-full">
       <a class="mk-btn mk-btn--ghost mk-btn--sm" href={pricingHref}>
         {t(locale, "marketing.landing.pricing_see_full")}
@@ -804,4 +837,33 @@ const freePrice = freeCurrency ? `${freeCurrency}0` : "—";
       grid-template-columns: 1fr;
     }
   }
+
+  /* Supporter teaser card — matches pricing page design tokens */
+  .mk-supporter--teaser {
+    margin-top: var(--sp-9);
+  }
 </style>
+
+<script>
+  const countdownRoot = document.querySelector<HTMLElement>(".mk-supporter--teaser [data-promotion-end]");
+  if (countdownRoot?.dataset.promotionEnd) {
+    const target = new Date(countdownRoot.dataset.promotionEnd).getTime();
+    const units = ["days", "hours", "minutes", "seconds"] as const;
+
+    const tick = () => {
+      const diff = Math.max(0, target - Date.now());
+      const days = Math.floor(diff / 86400000);
+      const hours = Math.floor((diff % 86400000) / 3600000);
+      const minutes = Math.floor((diff % 3600000) / 60000);
+      const seconds = Math.floor((diff % 60000) / 1000);
+      const values = [days, hours, minutes, seconds];
+      units.forEach((unit, index) => {
+        const node = countdownRoot.querySelector<HTMLElement>(`[data-unit="${unit}"]`);
+        if (node) node.textContent = String(values[index]).padStart(2, "0");
+      });
+    };
+
+    tick();
+    window.setInterval(tick, 1000);
+  }
+</script>

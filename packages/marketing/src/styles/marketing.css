@@ -196,7 +196,7 @@ img { display: block; }
 .mk-oss:hover { color:var(--fg); border-color:var(--border); }
 
 /* ---- Success state ---- */
-.mk-success { text-align:center; padding:var(--sp-10); display:flex; flex-direction:column; align-items:center; gap:var(--sp-5); }
+.mk-success:not([hidden]) { text-align:center; padding:var(--sp-10); display:flex; flex-direction:column; align-items:center; gap:var(--sp-5); }
 .mk-success-ic { width:64px; height:64px; border-radius:var(--r-xl); background:var(--success-subtle); color:var(--success-text); display:grid; place-items:center; border:1px solid rgba(69,201,138,0.3); }
 
 /* ---- Misc ---- */
