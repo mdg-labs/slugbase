@@ -114,7 +114,7 @@ const pageTitle = `${t(locale, titleKeys[tab])} - ${t(locale, "marketing.nav.bra
 ---
 
 <MarketingLayout title={pageTitle}>
-  <section class="mk-section">
+  <section class="mk-section" data-testid="legal-content">
     <div class="mk-c--narrow">
       <nav class="mk-legal-tabs" aria-label={t(locale, "marketing.footer.legal")}>
         {tabs.map((item) => {
@@ -134,7 +134,7 @@ const pageTitle = `${t(locale, titleKeys[tab])} - ${t(locale, "marketing.nav.bra
 
       <h1 class="mk-legal-page-title">{t(locale, titleKeys[tab])}</h1>
 
-      <div class="mk-legal-prose">
+      <div class="mk-legal-prose" data-testid="legal-content">
         {sectionGroups[tab].map((section) => (
           <section>
             <h2>{t(locale, section.heading)}</h2>

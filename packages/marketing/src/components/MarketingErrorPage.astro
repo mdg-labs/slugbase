@@ -25,7 +25,7 @@ const pageTitle = `${status} · ${t(locale, titleKey)}`;
 ---
 
 <MarketingLayout title={pageTitle}>
-  <section class="mk-error-main" aria-labelledby="marketing-error-title">
+  <section class="mk-error-main" aria-labelledby="marketing-error-title" data-testid={`error-page-${status}`}>
     <img src="/slugbase_icon.svg" width="52" height="52" alt="" class="mk-error-mark" />
     <p class="mk-error-code" aria-hidden="true">{status}</p>
     <h1 id="marketing-error-title" class="mk-error-title">{t(locale, titleKey)}</h1>

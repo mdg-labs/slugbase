@@ -64,9 +64,9 @@ const topicOptions = CONTACT_TOPICS.map((topic) => ({
             </p>
           )}
 
-          <div id="contact-error" class="mk-contact-error" role="alert" hidden />
+          <div id="contact-error" class="mk-contact-error" role="alert" hidden data-testid="contact-error" />
 
-          <form id="contact-form" class="mk-form" novalidate hidden={!formReady}>
+          <form id="contact-form" class="mk-form" novalidate hidden={!formReady} data-testid="contact-form">
             <div class="mk-contact-field-row">
               <div class="mk-field">
                 <label for="contact-name">{t(locale, "marketing.contact.field.name")}</label>
@@ -79,6 +79,7 @@ const topicOptions = CONTACT_TOPICS.map((topic) => ({
                   maxlength={config.nameMaxLength}
                   placeholder={t(locale, "marketing.contact.placeholder.name")}
                   required
+                  data-testid="contact-name-input"
                 />
               </div>
               <div class="mk-field">
@@ -91,6 +92,7 @@ const topicOptions = CONTACT_TOPICS.map((topic) => ({
                   autocomplete="email"
                   placeholder={t(locale, "marketing.contact.placeholder.email")}
                   required
+                  data-testid="contact-email-input"
                 />
               </div>
             </div>
@@ -104,26 +106,27 @@ const topicOptions = CONTACT_TOPICS.map((topic) => ({
             </div>
             <div class="mk-field">
               <label for="contact-message">{t(locale, "marketing.contact.field.message")}</label>
-              <textarea
-                id="contact-message"
-                class="mk-input mk-textarea"
-                name="message"
-                maxlength={config.messageMaxLength}
-                placeholder={t(locale, "marketing.contact.placeholder.message")}
-                required
-              />
+<textarea
+                  id="contact-message"
+                  class="mk-input mk-textarea"
+                  name="message"
+                  maxlength={config.messageMaxLength}
+                  placeholder={t(locale, "marketing.contact.placeholder.message")}
+                  required
+                  data-testid="contact-message-input"
+                />
             </div>
             <div
               id="contact-turnstile"
               class="contact-turnstile-mount"
               hidden={config.turnstileSiteKey.length === 0}
             />
-            <button id="contact-submit" type="submit" class="mk-btn mk-btn--primary" disabled>
+            <button id="contact-submit" type="submit" class="mk-btn mk-btn--primary" disabled data-testid="contact-submit-btn">
               {t(locale, "marketing.contact.submit")}
             </button>
           </form>
 
-          <div id="contact-success" class="mk-success" hidden>
+          <div id="contact-success" class="mk-success" hidden data-testid="contact-success">
             <div class="mk-success-ic" aria-hidden="true">✓</div>
             <h2 class="mk-h2 mk-contact-success-title">{t(locale, "marketing.contact.success_title")}</h2>
             <p class="mk-body mk-contact-success-body">
