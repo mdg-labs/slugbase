@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const sentryMocks = vi.hoisted(() => ({
-  init: vi.fn(),
   captureException: vi.fn(),
   captureMessage: vi.fn(),
   withScope: vi.fn((callback: (scope: SentryScopeMock) => void) => {
@@ -17,8 +16,7 @@ const scopeMock = {
 
 type SentryScopeMock = typeof scopeMock;
 
-vi.mock("@sentry/node", () => ({
-  init: sentryMocks.init,
+vi.mock("@sentry/nestjs", () => ({
   captureException: sentryMocks.captureException,
   captureMessage: sentryMocks.captureMessage,
   withScope: sentryMocks.withScope,
@@ -44,40 +42,44 @@ describe("SentryErrorReportingService", () => {
     vi.clearAllMocks();
   });
 
-  it("initializes Sentry when DSN is configured", () => {
+  it("indicates configured when DSN is present", () => {
     const service = new SentryErrorReportingService(buildConfig());
-    service.captureException(new Error("init probe"));
-
-    expect(sentryMocks.init).toHaveBeenCalledOnce();
-    expect(sentryMocks.init).toHaveBeenCalledWith(
-      expect.objectContaining({
-        dsn: "https://example@o0.ingest.sentry.io/0",
-      }),
-    );
+    expect(service.isConfigured()).toBe(true);
   });
 
-  it("skips init when DSN is absent", () => {
+  it("indicates not configured when DSN is absent", () => {
     const service = new SentryErrorReportingService(
       buildConfig({ SENTRY_DSN: undefined }),
     );
-    service.captureException(new Error("noop probe"));
-
-    expect(sentryMocks.init).not.toHaveBeenCalled();
+    expect(service.isConfigured()).toBe(false);
   });
 
   it("captures exceptions when configured", () => {
     const service = new SentryErrorReportingService(buildConfig());
-    service.captureException(new Error("warmup"));
-
     const error = new Error("boom");
     service.captureException(error);
 
     expect(sentryMocks.captureException).toHaveBeenCalledWith(error);
   });
 
+  it("captures messages when configured", () => {
+    const service = new SentryErrorReportingService(buildConfig());
+    service.captureMessage("test message");
+
+    expect(sentryMocks.captureMessage).toHaveBeenCalledWith("test message");
+  });
+
+  it("skips capture when DSN is absent", () => {
+    const service = new SentryErrorReportingService(
+      buildConfig({ SENTRY_DSN: undefined }),
+    );
+    service.captureException(new Error("noop"));
+
+    expect(sentryMocks.captureException).not.toHaveBeenCalled();
+  });
+
   it("skips capture when consent is denied", () => {
     const service = new SentryErrorReportingService(buildConfig());
-    service.captureException(new Error("warmup"));
     sentryMocks.captureException.mockClear();
 
     service.captureException(new Error("blocked"), { consentGranted: false });
@@ -87,7 +89,6 @@ describe("SentryErrorReportingService", () => {
 
   it("does not attach user email without PII consent", () => {
     const service = new SentryErrorReportingService(buildConfig());
-    service.captureException(new Error("warmup"));
 
     service.captureException(new Error("no pii"), {
       consentGranted: true,
@@ -101,7 +102,6 @@ describe("SentryErrorReportingService", () => {
 
   it("attaches user when PII is explicitly allowed", () => {
     const service = new SentryErrorReportingService(buildConfig());
-    service.captureException(new Error("warmup"));
 
     service.captureException(new Error("with pii"), {
       consentGranted: true,
@@ -115,39 +115,23 @@ describe("SentryErrorReportingService", () => {
     });
   });
 
-  it("uses SENTRY_RELEASE env when set explicitly", () => {
-    const service = new SentryErrorReportingService(
-      buildConfig({ SENTRY_RELEASE: "custom@1.2.3" }),
-    );
-    service.captureException(new Error("release probe"));
-
-    expect(sentryMocks.init).toHaveBeenCalledWith(
-      expect.objectContaining({ release: "custom@1.2.3" }),
-    );
-  });
-
-  it("omits release when SENTRY_RELEASE env is absent and package.json is unavailable", () => {
+  it("sets tags on scope", () => {
     const service = new SentryErrorReportingService(buildConfig());
-    service.captureException(new Error("no release"));
 
-    // In test env, package.json may or may not resolve; verify init was called
-    expect(sentryMocks.init).toHaveBeenCalledOnce();
-    const initCall = sentryMocks.init.mock.calls[0] as [Record<string, unknown>];
-    // release should either be a slugbase@x string (from root pkg) or absent
-    const release = initCall[0].release;
-    if (release) {
-      expect(release).toMatch(/^slugbase@/);
-    }
+    service.captureException(new Error("tagged"), {
+      tags: { route: "bookmarks" },
+    });
+
+    expect(scopeMock.setTags).toHaveBeenCalledWith({ route: "bookmarks" });
   });
 
-  it("passes release from SENTRY_RELEASE env to Sentry init", () => {
-    const service = new SentryErrorReportingService(
-      buildConfig({ SENTRY_RELEASE: "slugbase@0.1.0" }),
-    );
-    service.captureException(new Error("env override"));
+  it("sets extras on scope with PII scrubbed", () => {
+    const service = new SentryErrorReportingService(buildConfig());
 
-    expect(sentryMocks.init).toHaveBeenCalledWith(
-      expect.objectContaining({ release: "slugbase@0.1.0" }),
-    );
+    service.captureException(new Error("with extra"), {
+      extra: { bookmarkId: "b1", password: "secret" },
+    });
+
+    expect(scopeMock.setExtras).toHaveBeenCalledWith({ bookmarkId: "b1" });
   });
 });
