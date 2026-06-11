@@ -37,6 +37,7 @@ export default [
   route("sharing/*", "routes/api/proxy/proxy-sharing.ts"),
   route("audit/*", "routes/api/proxy/proxy-audit.ts"),
   route("ai/*", "routes/api/proxy/proxy-ai.ts"),
+  route("analytics/consent", "routes/api/proxy-item/analytics-consent-root.ts"),
 
   // Existing API proxy routes with specific request handling
   route("api/search", "routes/api/search.ts"),

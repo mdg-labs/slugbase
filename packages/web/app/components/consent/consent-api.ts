@@ -1,6 +1,9 @@
-const API_BASE_URL = () =>
-  (import.meta.env.VITE_API_URL as string | undefined) ??
-  (typeof window !== "undefined" ? window.location.origin : "");
+/**
+ * Always returns relative URLs so fetch requests flow through the
+ * Cloudflare Worker proxy routes defined in routes.ts rather than
+ * hitting the NestJS backend directly.
+ */
+const API_BASE_URL = (): string => "";
 
 async function csrfHeaders(): Promise<HeadersInit> {
   const res = await fetch(`${API_BASE_URL()}/auth/csrf-token`, {
