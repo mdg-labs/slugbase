@@ -65,6 +65,7 @@ export function ApiTokensSection({
       descriptionKey="settings.account.tokens.description"
       t={t}
     >
+      <div data-testid="api-tokens-section">
       {items.length === 0 && !creating ? (
         <p className="m-0 text-center text-fg-subtle" style={{ fontSize: "var(--text-body)" }}>
           {t("settings.account.tokens.empty")}
@@ -95,6 +96,7 @@ export function ApiTokensSection({
                 type="button"
                 variant="secondary"
                 disabled={revokingId === token.id}
+                data-testid={`api-token-revoke-btn-${token.id}`}
                 onClick={() => { void handleRevoke(token.id); }}
               >
                 {t("settings.account.tokens.revoke_action")}
@@ -105,14 +107,16 @@ export function ApiTokensSection({
       ) : null}
 
       {plaintext ? (
-        <ShownOncePanel
-          values={[plaintext]}
-          labelKey="settings.account.tokens.shown_once_label"
-          warningKey="settings.account.tokens.shown_once_warning"
-          copyActionKey="settings.account.tokens.shown_once_copy"
-          copiedKey="settings.account.tokens.shown_once_copied"
-          t={t}
-        />
+        <div data-testid="api-token-plaintext-panel">
+          <ShownOncePanel
+            values={[plaintext]}
+            labelKey="settings.account.tokens.shown_once_label"
+            warningKey="settings.account.tokens.shown_once_warning"
+            copyActionKey="settings.account.tokens.shown_once_copy"
+            copiedKey="settings.account.tokens.shown_once_copied"
+            t={t}
+          />
+        </div>
       ) : null}
 
       {creating ? (
@@ -121,12 +125,13 @@ export function ApiTokensSection({
             <Label htmlFor="token-name">{t("settings.account.tokens.name_label")}</Label>
             <Input
               id="token-name"
+              data-testid="api-token-name-input"
               value={name}
               onChange={(event) => { setName(event.target.value); }}
               placeholder={t("settings.account.tokens.name_placeholder")}
             />
           </div>
-          <Button type="button" disabled={busy || !name.trim()} onClick={() => { void handleCreate(); }}>
+          <Button type="button" data-testid="api-token-create-btn" disabled={busy || !name.trim()} onClick={() => { void handleCreate(); }}>
             {t("settings.account.tokens.create_action")}
           </Button>
           <Button
@@ -142,6 +147,7 @@ export function ApiTokensSection({
           {t("settings.account.tokens.new_action")}
         </Button>
       )}
+    </div>
     </SettingsSection>
   );
 }
