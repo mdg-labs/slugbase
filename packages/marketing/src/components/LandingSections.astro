@@ -458,17 +458,30 @@ const freePrice = freeCurrency ? `${freeCurrency}0` : "-";
       </div>
     </div>
 
-    {pricingConfig.supporterPrice && supporterActive && (
-      <div class="mk-supporter mk-supporter--teaser">
-        <div class="mk-supporter-badge">{t(locale, "marketing.pricing.supporter_badge")}</div>
-        <div class="mk-supporter-price">
-          {pricingConfig.supporterPrice}
-          <span>{t(locale, "marketing.pricing.supporter_price_suffix")}</span>
+
+    <div class="mk-teaser-see-full">
+      <a class="mk-btn mk-btn--ghost mk-btn--sm" href={pricingHref}>
+        {t(locale, "marketing.landing.pricing_see_full")}
+      </a>
+    </div>
+  </div>
+</section>
+
+{pricingConfig.supporterPrice && supporterActive && (
+  <section class="mk-section--sm mk-section--alt">
+    <div class="mk-c">
+      <div class="mk-supporter">
+        <div>
+          <div class="mk-supporter-badge">{t(locale, "marketing.pricing.supporter_badge")}</div>
+          <div class="mk-supporter-price">
+            {pricingConfig.supporterPrice}
+            <span>{t(locale, "marketing.pricing.supporter_price_suffix")}</span>
+          </div>
+          <p class="mk-supporter-body">{t(locale, "marketing.pricing.supporter_body")}</p>
+          <a class="mk-btn mk-btn--primary mk-btn--lg" href={getStartedHref}>
+            {t(locale, "marketing.pricing.supporter_cta", { price: pricingConfig.supporterPrice })}
+          </a>
         </div>
-        <p class="mk-supporter-body">{t(locale, "marketing.pricing.supporter_body")}</p>
-        <a class="mk-btn mk-btn--primary mk-btn--lg" href={getStartedHref}>
-          {t(locale, "marketing.pricing.supporter_cta", { price: pricingConfig.supporterPrice })}
-        </a>
         {pricingConfig.supporterPromotionEnd && (
           <div class="mk-supporter-countdown" data-promotion-end={pricingConfig.supporterPromotionEnd}>
             <div class="mk-supporter-countdown-label">{t(locale, "marketing.pricing.supporter_expires")}</div>
@@ -484,15 +497,9 @@ const freePrice = freeCurrency ? `${freeCurrency}0` : "-";
           </div>
         )}
       </div>
-    )}
-
-    <div class="mk-teaser-see-full">
-      <a class="mk-btn mk-btn--ghost mk-btn--sm" href={pricingHref}>
-        {t(locale, "marketing.landing.pricing_see_full")}
-      </a>
     </div>
-  </div>
-</section>
+  </section>
+)}
 
 <!-- ---- Final CTA ---- -->
 <section class="mk-section--cta">
@@ -838,11 +845,6 @@ const freePrice = freeCurrency ? `${freeCurrency}0` : "-";
     }
   }
 
-  /* Supporter teaser card - matches pricing page design tokens */
-  .mk-supporter--teaser {
-    margin-top: var(--sp-9);
-  }
-
   .countdown {
     display: flex;
     align-items: center;
@@ -876,7 +878,7 @@ const freePrice = freeCurrency ? `${freeCurrency}0` : "-";
 </style>
 
 <script>
-  const countdownRoot = document.querySelector<HTMLElement>(".mk-supporter--teaser [data-promotion-end]");
+  const countdownRoot = document.querySelector<HTMLElement>("[data-promotion-end]");
   if (countdownRoot?.dataset.promotionEnd) {
     const target = new Date(countdownRoot.dataset.promotionEnd).getTime();
     const units = ["days", "hours", "minutes", "seconds"] as const;
