@@ -29,9 +29,11 @@ const getStartedHref = appOrigin ? `${appOrigin}/register` : "#";
       <a class="mk-nav-link" href={contactHref}>{t(locale, "marketing.nav.contact")}</a>
     </div>
     <div class="mk-nav-ctas">
-      <a class="mk-btn mk-btn--ghost mk-btn--sm" href={alternateHref} lang={alternateLocale}>
-        {alternateLocale.toUpperCase()}
-      </a>
+      <div class="mk-nav-locale-switcher" data-testid="locale-switcher">
+        <a class="mk-btn mk-btn--ghost mk-btn--sm" href={alternateHref} lang={alternateLocale} data-testid={`locale-option-${alternateLocale}`}>
+          {alternateLocale.toUpperCase()}
+        </a>
+      </div>
       <a class="mk-btn mk-btn--ghost mk-btn--sm" href={signInHref} data-testid="marketing-nav-signin">{t(locale, "marketing.nav.sign_in")}</a>
       <a class="mk-btn mk-btn--primary mk-btn--sm" href={getStartedHref} data-testid="marketing-nav-getstarted">{t(locale, "marketing.nav.get_started")}</a>
     </div>

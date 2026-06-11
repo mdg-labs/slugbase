@@ -103,8 +103,8 @@ const faqItems = [
           <span class="mk-save-badge mk-yearly-only" hidden>{t(locale, "marketing.pricing.yearly_save")}</span>
         </div>
 
-        <div class="mk-plans">
-          <article class="mk-plan" data-plan="free">
+        <div class="mk-plans" data-testid="pricing-table">
+          <article class="mk-plan" data-plan="free" data-testid="pricing-plan-free">
             <div class="mk-plan-name">{t(locale, "marketing.pricing.plan.free")}</div>
             <div class="mk-plan-price">
               <span data-price-monthly={freeMonthly.amount} data-price-yearly={freeYearly.amount}>{freeMonthly.amount}</span>
@@ -120,7 +120,7 @@ const faqItems = [
             <a class="mk-btn mk-btn--secondary" href={getStartedHref}>{t(locale, "marketing.pricing.cta.free")}</a>
           </article>
 
-          <article class="mk-plan featured" data-plan="personal">
+          <article class="mk-plan featured" data-plan="personal" data-testid="pricing-plan-personal">
             <div class="mk-plan-name">{t(locale, "marketing.pricing.plan.personal")}</div>
             <div class="mk-plan-price">
               <span data-price-monthly={personalMonthly.amount} data-price-yearly={personalYearly.amount}>{personalMonthly.amount}</span>
@@ -138,7 +138,7 @@ const faqItems = [
             <a class="mk-btn mk-btn--primary" href={getStartedHref} data-testid="pricing-cta">{t(locale, "marketing.pricing.cta.personal")}</a>
           </article>
 
-          <article class="mk-plan" data-plan="team">
+          <article class="mk-plan" data-plan="team" data-testid="pricing-plan-team">
             <div class="mk-plan-name">{t(locale, "marketing.pricing.plan.team")}</div>
             <div class="mk-plan-price">
               <span data-price-monthly={teamMonthly.amount} data-price-yearly={teamYearly.amount}>{teamMonthly.amount}</span>
@@ -176,8 +176,8 @@ const faqItems = [
       </div>
     </section>
 
-    {config.supporterPrice && supporterActive && (
-      <section class="mk-section--sm mk-section--alt">
+{config.supporterPrice && supporterActive && (
+    <section class="mk-section--sm mk-section--alt" data-testid="pricing-plan-supporter">
         <div class="mk-c">
           <div class="mk-supporter">
             <div>
@@ -226,7 +226,7 @@ const faqItems = [
           <span class="mk-eyebrow">{t(locale, "marketing.pricing.faq_eyebrow")}</span>
           <h2 class="mk-h2">{t(locale, "marketing.pricing.faq_title")}</h2>
         </div>
-        <div class="mk-faq">
+        <div class="mk-faq" data-testid="pricing-faq">
           {faqItems.map((item) => (
             <details class="mk-faq-item">
               <summary class="mk-faq-q">{item.question}</summary>

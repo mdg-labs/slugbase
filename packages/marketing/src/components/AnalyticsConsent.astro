@@ -25,6 +25,7 @@ const consentDe = {
       role="dialog"
       aria-live="polite"
       hidden
+      data-testid="analytics-consent-banner"
     >
       <p class="marketing-consent-banner__message" data-consent-message-en>
         {consentEn.message}
@@ -33,11 +34,11 @@ const consentDe = {
         {consentDe.message}
       </p>
       <div class="marketing-consent-banner__actions">
-        <button type="button" class="marketing-consent-banner__decline" data-consent-decline>
+        <button type="button" class="marketing-consent-banner__decline" data-consent-decline data-testid="analytics-consent-decline">
           <span data-consent-decline-en>{consentEn.decline}</span>
           <span data-consent-decline-de hidden>{consentDe.decline}</span>
         </button>
-        <button type="button" class="marketing-consent-banner__accept" data-consent-accept>
+        <button type="button" class="marketing-consent-banner__accept" data-consent-accept data-testid="analytics-consent-accept">
           <span data-consent-accept-en>{consentEn.accept}</span>
           <span data-consent-accept-de hidden>{consentDe.accept}</span>
         </button>
