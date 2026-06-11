@@ -11,7 +11,7 @@ interface Props {
 
 const { appOrigin } = Astro.props;
 const locale = Astro.currentLocale as SupportedLocale;
-const getStartedHref = appOrigin ? `${appOrigin}/auth/register` : "#";
+const getStartedHref = appOrigin ? `${appOrigin}/register` : "#";
 const pricingHref =
   locale === "de" ? "/de/pricing" : "/pricing";
 
@@ -109,7 +109,7 @@ const freePrice = freeCurrency ? `${freeCurrency}0` : "-";
     </h1>
     <p class="mk-hero-sub">{t(locale, "marketing.landing.hero_subtitle")}</p>
     <div class="mk-hero-ctas">
-      <a class="mk-btn mk-btn--primary mk-btn--lg" href={getStartedHref}>
+      <a class="mk-btn mk-btn--primary mk-btn--lg" href={getStartedHref} data-testid="marketing-hero-cta">
         {t(locale, "marketing.landing.cta_primary")}
       </a>
       <a class="mk-btn mk-btn--secondary mk-btn--lg" href="#self-host">

@@ -15,7 +15,7 @@ const config = await loadMarketingPricingConfig();
 const featureRows = buildMarketingPlanFeatureRows(config);
 const supporterActive = isSupporterPromotionActive(config);
 const privacyHref = getRelativeLocaleUrl(locale, "/legal/datenschutz");
-const getStartedHref = appOrigin ? `${appOrigin}/auth/register` : "#";
+const getStartedHref = appOrigin ? `${appOrigin}/register` : "#";
 
 const title = `${t(locale, "marketing.pricing.page_title")} - ${t(locale, "marketing.nav.brand")}`;
 
@@ -135,7 +135,7 @@ const faqItems = [
               <li>{t(locale, "marketing.pricing.plan.personal_feat_3")}</li>
               <li class="dim">{t(locale, "marketing.pricing.plan.personal_feat_4")}</li>
             </ul>
-            <a class="mk-btn mk-btn--primary" href={getStartedHref}>{t(locale, "marketing.pricing.cta.personal")}</a>
+            <a class="mk-btn mk-btn--primary" href={getStartedHref} data-testid="pricing-cta">{t(locale, "marketing.pricing.cta.personal")}</a>
           </article>
 
           <article class="mk-plan" data-plan="team">
