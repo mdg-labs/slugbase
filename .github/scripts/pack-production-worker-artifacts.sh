@@ -16,6 +16,8 @@ sed \
   > packages/marketing/wrangler.production.jsonc
 
 tar -czf "${OUT}" \
+  --exclude='*.js.map' \
+  --exclude='*.css.map' \
   packages/web/build \
   packages/marketing/dist \
   packages/marketing/wrangler.production.jsonc

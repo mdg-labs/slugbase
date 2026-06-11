@@ -63,6 +63,10 @@ ENV VITE_BILLING_ENABLED=$VITE_BILLING_ENABLED \
 
 RUN pnpm exec turbo run build --filter=@slugbase/backend... --filter=@slugbase/web...
 
+# Strip source maps from all build outputs (maps uploaded by CI before docker build)
+RUN find packages/web/build -name '*.js.map' -delete && \
+    find packages/backend/dist -name '*.js.map' -delete
+
 FROM base AS runtime
 ENV NODE_ENV=production
 ENV SERVE_WEB_CLIENT=true

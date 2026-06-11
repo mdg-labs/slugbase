@@ -38,6 +38,25 @@ jobs:
           NODE_ENV: production
         run: pnpm exec turbo run build --filter=@slugbase/backend...
 
+      - name: Derive release version
+        id: release
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "release=slugbase@${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload backend source maps to Sentry
+        env:
+          SENTRY_AUTH_TOKEN: ${{ env.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ env.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ env.SENTRY_PROJECT }}
+        run: |
+          npm install -g @sentry/cli
+          sentry-cli sourcemaps upload \
+            --release "${{ steps.release.outputs.release }}" \
+            --env staging \
+            packages/backend/dist
+          echo "Uploaded $(find packages/backend/dist -name '*.js.map' | wc -l) backend source maps for release ${{ steps.release.outputs.release }} (staging)"
+
   build-web-staging:
     name: Staging · 1 · Build web/marketing
     runs-on: ubuntu-latest
@@ -71,6 +90,11 @@ jobs:
           VITE_SENTRY_ENVIRONMENT: staging
           VITE_SENTRY_RELEASE: ${{ steps.release.outputs.release }}
         run: pnpm --filter @slugbase/web build
+
+      - name: Strip source maps from web build output
+        run: |
+          find packages/web/build -name '*.js.map' -delete
+          echo "Stripped .map files from web build (safety cleanup)"
 
       - name: Build shared dependencies for marketing
         env:

@@ -5,6 +5,8 @@ set -euo pipefail
 OUT="${1:?Usage: pack-staging-worker-artifacts.sh <output.tar.gz>}"
 
 tar -czf "${OUT}" \
+  --exclude='*.js.map' \
+  --exclude='*.css.map' \
   packages/web/build \
   packages/marketing/dist \
   packages/marketing/wrangler.jsonc

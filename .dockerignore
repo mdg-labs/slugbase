@@ -20,3 +20,7 @@ node_modules
 packages/**/dist
 packages/**/build
 packages/**/.react-router
+
+# Source maps (uploaded to Sentry before docker build; must not ship in image)
+*.js.map
+*.css.map

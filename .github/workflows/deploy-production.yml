@@ -59,10 +59,30 @@ jobs:
           infisical-domain: ${{ secrets.INFISICAL_DOMAIN }}
           infisical-identity-id: ${{ secrets.INFISICAL_OIDC_IDENTITY_ID }}
 
+      - name: Derive release version
+        id: release
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "release=slugbase@${VERSION}" >> "$GITHUB_OUTPUT"
+
       - name: Build API and shared packages
         env:
           NODE_ENV: production
         run: pnpm exec turbo run build --filter=@slugbase/backend...
+
+      - name: Upload backend source maps to Sentry
+        env:
+          SENTRY_AUTH_TOKEN: ${{ env.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ env.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ env.SENTRY_PROJECT }}
+        run: |
+          npm install -g @sentry/cli
+          sentry-cli sourcemaps upload \
+            --release "${{ steps.release.outputs.release }}" \
+            --env production \
+            packages/backend/dist
+          MAP_COUNT=$(find packages/backend/dist -name '*.js.map' | wc -l)
+          echo "Uploaded ${MAP_COUNT} backend source maps for release ${{ steps.release.outputs.release }} (production)"
 
   build-web-production:
     name: Production · 2 · Build web/marketing
@@ -101,6 +121,11 @@ jobs:
           VITE_SENTRY_ENVIRONMENT: production
           VITE_SENTRY_RELEASE: ${{ steps.release.outputs.release }}
         run: pnpm --filter @slugbase/web build
+
+      - name: Strip source maps from web build output
+        run: |
+          find packages/web/build -name '*.js.map' -delete
+          echo "Stripped .map files from web build (safety cleanup)"
 
       - name: Build shared dependencies for marketing
         env:
