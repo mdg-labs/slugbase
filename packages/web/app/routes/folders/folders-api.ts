@@ -1,4 +1,13 @@
-const getApiBaseUrl = (): string => process.env["API_BASE_URL"] ?? "";
+const getApiBaseUrl = (): string => {
+  if (typeof process !== "undefined" && process.env.API_BASE_URL) {
+    return process.env.API_BASE_URL;
+  }
+  if (typeof import.meta !== "undefined") {
+    const viteUrl = import.meta.env.VITE_API_URL as string | undefined;
+    if (viteUrl) return viteUrl;
+  }
+  return "";
+};
 
 async function getMutationHeaders(): Promise<Record<string, string>> {
   const res = await fetch(`${getApiBaseUrl()}/auth/csrf-token`, {
