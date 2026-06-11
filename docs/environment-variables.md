@@ -311,6 +311,10 @@ Optional on both shapes. Empty = no-op (no tracker, no Sentry init).
 | `SENTRY_PROFILING_SAMPLE_RATE` | Sentry profiling session sample rate (0.0–1.0) | Optional | No | Optional | No | Runtime | `0.1` |
 | `SENTRY_LOG_LEVEL` | Sentry SDK log level filter | Optional | No | Optional | No | Runtime | `info` |
 | `SENTRY_ENABLE_CONSOLE_LOGGING` | Capture console.log/warn/error as Sentry logs | Optional | No | Optional | No | Runtime | `true` |
+| `SENTRY_REPLAY_SAMPLE_RATE` | Server-side Sentry replay sample rate (0.0–1.0) | Optional | No | Optional | No | Runtime | `0.25` |
+| `VITE_SENTRY_TRACES_SAMPLE_RATE` | Web client Sentry traces sample rate (0.0–1.0) | Optional | No | Optional | No | Build | `0.1` |
+| `VITE_SENTRY_REPLAY_SAMPLE_RATE` | Web client Sentry replay sample rate (0.0–1.0) | Optional | No | Optional | No | Build | `0.25` |
+
 | `VITE_SENTRY_DSN` | Public Sentry DSN (web client) | Optional | No | Optional | No | Build | `https://…@sentry.io/…` |
 | `VITE_SENTRY_ENVIRONMENT` | Sentry environment tag for web client (staging / production) — set by CI; falls back to `MODE` | Optional | Build only | Optional | No | Build | `staging` |
 | `VITE_SENTRY_RELEASE` | Sentry release tag for web client — set by CI from root `package.json` version | Optional | Build only | Optional | No | Build | `slugbase@0.1.0` |

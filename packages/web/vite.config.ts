@@ -1,9 +1,12 @@
 import { cloudflare } from "@cloudflare/vite-plugin";
 import { reactRouter } from "@react-router/dev/vite";
-import { sentryVitePlugin } from "@sentry/vite-plugin";
+import {
+  sentryReactRouter,
+  type SentryReactRouterBuildOptions,
+} from "@sentry/react-router";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { defineConfig, type PluginOption } from "vite";
+import { defineConfig } from "vite";
 
 const sentryAuthToken = process.env["SENTRY_AUTH_TOKEN"];
 const sentryOrg = process.env["SENTRY_ORG"];
@@ -20,7 +23,9 @@ function deriveSentryRelease(): string | undefined {
   }
   try {
     const rootPkg = join(process.cwd(), "package.json");
-    const pkg = JSON.parse(readFileSync(rootPkg, "utf-8")) as { version?: string };
+    const pkg = JSON.parse(readFileSync(rootPkg, "utf-8")) as {
+      version?: string;
+    };
     return pkg.version !== undefined
       ? `slugbase@${pkg.version}`
       : undefined;
@@ -32,28 +37,24 @@ function deriveSentryRelease(): string | undefined {
 const sentryRelease = deriveSentryRelease();
 const sentryEnvironment = process.env["VITE_SENTRY_ENVIRONMENT"];
 
-export default defineConfig({
+const sentryConfig: SentryReactRouterBuildOptions = {
+  org: sentryOrg ?? "",
+  project: sentryProject ?? "",
+  authToken: sentryAuthToken,
+  ...(sentryRelease ? { release: { name: sentryRelease } } : {}),
+  ...(sentryEnvironment
+    ? { release: { deploy: { env: sentryEnvironment } } }
+    : {}),
+  telemetry: false,
+};
+
+export default defineConfig((config) => ({
   plugins: [
     cloudflare({ viteEnvironment: { name: "ssr" } }),
     reactRouter(),
-    ...(sentryAuthToken
-      ? [
-          sentryVitePlugin({
-            authToken: sentryAuthToken,
-            org: sentryOrg,
-            project: sentryProject,
-            release: {
-              ...(sentryRelease ? { name: sentryRelease } : {}),
-              ...(sentryEnvironment
-                ? { deploy: { env: sentryEnvironment } }
-                : {}),
-            },
-            telemetry: false,
-          }) as PluginOption,
-        ]
-      : []),
+    sentryReactRouter(sentryConfig, config),
   ],
   build: {
     sourcemap: Boolean(sentryAuthToken),
   },
-});
+}));
