@@ -79,7 +79,6 @@ jobs:
           npm install -g @sentry/cli
           sentry-cli sourcemaps upload \
             --release "${{ steps.release.outputs.release }}" \
-            --env production \
             packages/backend/dist
           MAP_COUNT=$(find packages/backend/dist -name '*.js.map' | wc -l)
           echo "Uploaded ${MAP_COUNT} backend source maps for release ${{ steps.release.outputs.release }} (production)"
