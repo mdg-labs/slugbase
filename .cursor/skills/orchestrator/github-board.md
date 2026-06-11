@@ -38,6 +38,7 @@ Orchestrator and **sub-agents** use this when a prompt includes a **GITHUB SYNC*
 | **Get project fields/options** | GraphQL `organization.projectV2.fields` | Hardcoded in § Projects v2 Status |
 | **Fetch Dependabot alerts** | CLI `gh api` (REST) | No MCP tool covers Dependabot alerts endpoint |
 | **Get issue node IDs** | CLI `gh api graphql` | Needed for `sub_issue_write` database ID lookups |
+| **Fetch milestones** | CLI `gh api /repos/mdg-labs/slugbase/milestones` | No MCP tool for milestones — returns `[{number, title, state, due_on}]`; filter by `state: "open"` |
 | **Bulk operations** (100+ items) | CLI `gh api graphql` | Faster than sequential MCP calls for migrations |
 
 ### Getting database IDs for sub_issue_write
@@ -129,9 +130,9 @@ Set via MCP `issue_write` → `issue_fields` array. Each entry takes `field_name
 | **Start date** | date | YYYY-MM-DD | `issue_fields: [{ field_name: "Start date", value: "2026-06-10" }]` |
 | **Target date** | date | YYYY-MM-DD | `issue_fields: [{ field_name: "Target date", value: "2026-06-20" }]` |
 
-### Required fields — every issue must have all five
+### Required fields — every issue must have all six
 
-**Never create or update an issue without all five set.** This is a hard rule — the verifier (Layer 3c) checks it.
+**Never create or update an issue without all six set.** This is a hard rule — the verifier (Layer 3c) checks it.
 
 | Field | Required | How to set |
 |---|---|---|
@@ -140,8 +141,9 @@ Set via MCP `issue_write` → `issue_fields` array. Each entry takes `field_name
 | **Priority** | Always | MCP `issue_write` → `issue_fields` |
 | **Effort** | Always | MCP `issue_write` → `issue_fields` |
 | **Assignee** | Always | MCP `issue_write` → `assignees` (use MCP `get_me` to discover logged-in username) |
+| **Milestone** | Always | MCP `issue_write` → `milestone` (integer) — see § Milestones below |
 
-**Why MCP only?** `gh issue create --type` does not work for org-level issue types. `gh issue create --label` sets the GitHub built-in label, not our custom domain labels. MCP `issue_write` is the only tool that sets all five atomically.
+**Why MCP only?** `gh issue create --type` does not work for org-level issue types. `gh issue create --label` sets the GitHub built-in label, not our custom domain labels. MCP `issue_write` is the only tool that sets all six atomically.
 
 ## Projects v2 fields (board-level)
 
@@ -189,6 +191,41 @@ One domain label per issue. Cross-domain epics: parent gets the **owning** domai
 | `domain:backend` | API, auth, sessions, bookmarks/slugs/folders/tags/workspaces, entitlements, billing, admin |
 | `domain:infrastructure` | Database, container, CI/CD, TLS/proxy, deployment, monitoring |
 | `domain:operations` | Launch, marketing site, docs, billing operations, self-hosted runbooks |
+| `regression` | Bug that was previously fixed (originating issue had board Status Done/Closed) — always added **alongside** a `domain:*` label, never alone |
+
+The `regression` label must be created in the repo before first use. If it doesn't exist yet:
+
+```bash
+gh api /repos/mdg-labs/slugbase/labels -X POST -f name=regression -f color=fbca04 -f description="Bug that was previously fixed but has reappeared (regression/escaped defect)"
+```
+
+The `domain:*` labels should already exist from repo setup.
+
+## Milestones
+
+**Every issue created on the board must have a milestone set.** This is a required field (see § Required fields above).
+
+### Fetch milestones (no MCP equivalent)
+
+```bash
+gh api /repos/mdg-labs/slugbase/milestones --jq '.[] | {number, title, state, due_on}'
+```
+
+Only consider milestones with `state: "open"`. Closed milestones represent already-delivered work.
+
+### Selection logic
+
+1. **User explicitly names a milestone** → match by `title` from the fetched list; use its `number`
+2. **No user mention of milestone** → pick the **earliest open milestone by `due_on`** (the one most likely to ship next). If no due dates are set, pick the first open milestone by list order.
+
+### How to set via MCP
+
+Pass the milestone integer `number` in every `issue_write` (method: create):
+
+```text
+MCP issue_write (method: create):
+- milestone: <milestone_number>
+```
 
 ## Status sync — sub-agent duties (mandatory)
 

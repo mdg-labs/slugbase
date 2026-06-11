@@ -11,6 +11,10 @@ Use when composing the `body` field for MCP `issue_write` (method: update or cre
 
 {Original issue description — reporter wording, unchanged}
 
+## Regression
+
+{Only for Regression Bugs. Reference the originating Done/Closed issue: "This is a regression / escaped defect from issue #N which was previously marked Done/Closed. The original fix appears to be incomplete or was re-introduced."}
+
 ## Classification
 
 {One paragraph: Frontend / Backend / Infrastructure / cross-cutting. Note if domain label mismatches code ownership. Reference spec section if relevant, e.g. spec §8.2 for Go/redirect issues.}
@@ -51,6 +55,7 @@ E.g. "Go redirect flow (spec §8)", "Session resolution (spec §5.3)", "Entitlem
 |---|---|---|
 | `## Report` | **Yes** | Always first. Verbatim original reporter text. |
 | `## Classification` | Yes | Scope + ownership mismatch; spec section refs where helpful |
+| `## Regression` | When applicable | Only for Regression Bugs (originating issue had board Status Done/Closed). Links to `#N` and notes it's a regression/escaped defect. |
 | Flow section | When applicable | Name for domain: `Go redirect flow`, `Session resolution`, `Entitlement check`, etc. |
 | `## Failure modes / gates` | When applicable | Table of blocking conditions |
 | `## Suspects (ranked)` | Yes | Numbered; deploy commits first when "since deploy" |
@@ -64,3 +69,4 @@ E.g. "Go redirect flow (spec §8)", "Session resolution (spec §5.3)", "Entitlem
 - Setting In Progress / In Review / Done during triage (Ready from Todo only)
 - Committing code fixes or editing repo files without an explicit user request
 - Leaving triaged Todo issues in Todo when user did not opt out of updates
+- Re-opening a Done/Closed issue instead of creating a new Regression Bug with the `regression` label

@@ -10,6 +10,8 @@ Copy and fill for GitHub issue bodies. Replace `{placeholders}`. Reference issue
 | Task | `Add SSRF-safe egress service for metadata fetch` |
 | Bug | `Slugs: collision page shown for unambiguous slug` |
 
+**Milestone must be set on every issue creation.** Agents must fetch available milestones first and pick the earliest open one by due date unless the user specifies otherwise (see [github-intake § Milestones](../github-intake/SKILL.md)).
+
 ## Feature (epic) parent template
 
 ```markdown

@@ -58,6 +58,8 @@ Apply **rewrite vs keep** rules when enriching — rewrite vague drafts; keep su
 
 User describes a feature with no existing issue number.
 
+**Before creating any issue, fetch available milestones** (see § Milestones below) to determine which milestone to assign.
+
 ### Mode B — Enrich existing
 
 User names `#N`. Fetch with MCP `issue_read` (method: get, issue_number: N), **merge** structured sections into body via MCP `issue_write` (method: update). Rewrite summary when vague. Add sub-issues if scope grew. Do not wipe user prose.
@@ -72,6 +74,38 @@ User names `#N`. Fetch with MCP `issue_read` (method: get, issue_number: N), **m
 | `domain:operations` | Launch, marketing site, docs, billing operations, self-hosted runbooks |
 
 **Feature (epic)** gets the **owning** domain label. Each child gets its own.
+
+## Milestones
+
+**Every issue created via intake must have a milestone set.**
+
+### Fetch milestones
+
+There is no MCP tool for milestones. Use the GitHub REST API before creating any issue:
+
+```bash
+gh api /repos/mdg-labs/slugbase/milestones --jq '.[] | {number, title, state, due_on}'
+```
+
+Only consider milestones with `state: "open"`. Filter out closed ones — they represent already-delivered work.
+
+### Selection logic
+
+1. **User explicitly names a milestone** → look up its `number` from the fetched list
+2. **No user mention of milestone** → pick the **earliest open milestone by due date** (the one most likely to ship next). If no due dates are set, pick the first open milestone by list order.
+
+Current expected milestones on the repo (non-authoritative — fetch to get actual numbers):
+- `MVP Alpha` — earliest open milestone; all v1 work targets this
+- `Public Launch v1.0.0` — reserved for post-MVP / Fast-Follow
+
+### How to set
+
+Pass the milestone number in every `issue_write` (method: create) call:
+
+```text
+MCP issue_write (method: create):
+- milestone: <milestone_number>
+```
 
 ## Issue type mapping
 
@@ -124,9 +158,12 @@ MCP issue_write (method: create):
 - type: "Feature"
 - labels: ["domain:backend"]
 - assignees: ["<logged-in username from MCP get_me>"]
+- milestone: <milestone_number>
 - body: "<epic template — templates.md>"
 - issue_fields: [{ field_name: "Priority", field_option_name: "High" }, { field_name: "Effort", field_option_name: "High" }]
 ```
+
+**Milestone:** Fetch available milestones before this call (see § Milestones).
 
 Record returned issue number (e.g. `#8`).
 
@@ -139,9 +176,13 @@ MCP issue_write (method: create):
 - title: "Redirect to bookmark destination via /go/<slug>"
 - type: "Task"
 - labels: ["domain:backend"]
+- assignees: ["<logged-in username from MCP get_me>"]
+- milestone: <milestone_number>
 - body: "<subtask template>"
 - issue_fields: [{ field_name: "Priority", field_option_name: "Medium" }, { field_name: "Effort", field_option_name: "Medium" }]
 ```
+
+**Milestone:** Use the same milestone number as the parent Feature epic.
 
 Mode B enrich — when summary needs rewrite:
 
@@ -273,7 +314,8 @@ Ready for orchestrator: "implement #11" or "orchestrate #8 epic"
 - Inventing product behaviour not in spec docs — ask first
 - Pasting secrets into issue descriptions
 - Creating a multi-task feature without a Feature (epic) parent
-- **Omitting type, domain label, Priority, or Effort** — all four are mandatory on every issue
+- **Omitting type, domain label, Priority, Effort, or Milestone** — all five are mandatory on every issue
 - Vague summary placeholders when pattern table applies
 - Referencing "organization", "favorites", "collection" — use canonical vocabulary (spec §3, rule `04-naming.mdc`)
 - **Creating issues without first proposing the structure to the user** — the draft plan in step 2 is a mandatory stop-and-wait checkpoint
+- **Creating issues without fetching and assigning a milestone** — milestone must be set on every `issue_write` create call
