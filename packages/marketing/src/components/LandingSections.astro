@@ -842,6 +842,37 @@ const freePrice = freeCurrency ? `${freeCurrency}0` : "-";
   .mk-supporter--teaser {
     margin-top: var(--sp-9);
   }
+
+  .countdown {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-4);
+  }
+
+  .countdown-unit {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--sp-2);
+  }
+
+  .countdown-n {
+    font: var(--weight-bold) 28px/1 var(--font-mono);
+    color: var(--fg);
+  }
+
+  .countdown-label {
+    font-size: 11px;
+    color: var(--fg-subtle);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .countdown-sep {
+    font: var(--weight-bold) 24px/1 var(--font-mono);
+    color: var(--fg-faint);
+    margin-bottom: var(--sp-5);
+  }
 </style>
 
 <script>
