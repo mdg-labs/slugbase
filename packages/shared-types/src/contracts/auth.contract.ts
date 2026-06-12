@@ -85,6 +85,25 @@ export type CorrectSignupEmailResponse = z.infer<
   typeof CorrectSignupEmailResponseSchema
 >;
 
+/** Safe fields for login/register SSO buttons (spec §5.2, §11.3). */
+export const PublicOidcProviderItemSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+  })
+  .strict();
+
+export const ListPublicOidcProvidersResponseSchema = z
+  .object({
+    providers: z.array(PublicOidcProviderItemSchema),
+  })
+  .strict();
+
+export type PublicOidcProviderItem = z.infer<typeof PublicOidcProviderItemSchema>;
+export type ListPublicOidcProvidersResponse = z.infer<
+  typeof ListPublicOidcProvidersResponseSchema
+>;
+
 export const authContract = c.router({
   login: {
     method: "POST",
@@ -149,5 +168,14 @@ export const authContract = c.router({
     },
     summary:
       "Correct a signup email typo before first verification. Requires an authenticated session and emailVerified=false.",
+  },
+  listOidcProviders: {
+    method: "GET",
+    path: "/auth/oidc/providers",
+    responses: {
+      200: ListPublicOidcProvidersResponseSchema,
+    },
+    summary:
+      "List enabled OIDC providers for login/register SSO buttons (non-sensitive metadata only).",
   },
 });

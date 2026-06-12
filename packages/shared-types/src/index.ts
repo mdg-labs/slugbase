@@ -69,16 +69,20 @@ export {
 export {
   CorrectSignupEmailBodySchema,
   CorrectSignupEmailResponseSchema,
+  ListPublicOidcProvidersResponseSchema,
   LoginBodySchema,
   LoginResponseSchema,
   LogoutResponseSchema,
   MeResponseSchema,
+  PublicOidcProviderItemSchema,
   type CorrectSignupEmailBody,
   type CorrectSignupEmailResponse,
+  type ListPublicOidcProvidersResponse,
   type LoginBody,
   type LoginResponse,
   type LogoutResponse,
   type MeResponse,
+  type PublicOidcProviderItem,
 } from "./contracts/auth.contract.js";
 export {
   HealthResponseSchema,
