@@ -114,4 +114,41 @@ describe("validateEnvConfig", () => {
       "postgresql://pooled.example/db",
     );
   });
+
+  it("leaves OIDC_DEPLOYMENT_PROVIDERS undefined when unset", () => {
+    const config = validateEnvConfig({
+      ...validTestEnv,
+      NODE_ENV: "production",
+    });
+
+    expect(config.OIDC_DEPLOYMENT_PROVIDERS).toBeUndefined();
+  });
+
+  it("parses OIDC_DEPLOYMENT_PROVIDERS JSON array at startup", () => {
+    const config = validateEnvConfig({
+      ...validTestEnv,
+      NODE_ENV: "production",
+      OIDC_DEPLOYMENT_PROVIDERS: JSON.stringify([
+        {
+          id: "google",
+          name: "Google",
+          issuerUrl: "https://accounts.google.com",
+          clientId: "google-client",
+          clientSecret: "google-secret",
+        },
+      ]),
+    });
+
+    expect(config.OIDC_DEPLOYMENT_PROVIDERS).toEqual([
+      {
+        id: "google",
+        name: "Google",
+        issuerUrl: "https://accounts.google.com",
+        clientId: "google-client",
+        clientSecret: "google-secret",
+        scopes: "openid email profile",
+        enabled: true,
+      },
+    ]);
+  });
 });

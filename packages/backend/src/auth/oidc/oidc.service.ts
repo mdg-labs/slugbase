@@ -20,12 +20,25 @@ import { DbService } from "../../db/db.service.js";
 import { OidcRepository } from "./oidc.repository.js";
 import type { PublicOidcProviderItem } from "@slugbase/shared-types";
 
-import { toPublicOidcLoginProviders } from "./oidc-public-providers.js";
+import {
+  toPublicOidcLoginProviders,
+  toPublicOidcLoginProvidersFromDeployment,
+} from "./oidc-public-providers.js";
 import type {
   CreateOidcProviderData,
   OidcFlowState,
   OidcProviderRecord,
 } from "./oidc.types.js";
+
+interface ResolvedOidcProvider {
+  id: string;
+  name: string;
+  issuerUrl: string;
+  clientId: string;
+  clientSecret: string;
+  scopes: string;
+  enabled: boolean;
+}
 
 /** OIDC scopes always requested in addition to provider-configured scopes */
 const REQUIRED_SCOPES = ["openid", "email", "profile"] as const;
@@ -52,11 +65,10 @@ export class OidcService {
     flowState: OidcFlowState;
   }> {
     const provider = await this.getEnabledProvider(providerId);
-    const clientSecret = this.crypto.decrypt(provider.clientSecretEncrypted);
     const config = await this.discoverClient(
       provider.issuerUrl,
       provider.clientId,
-      clientSecret,
+      provider.clientSecret,
     );
 
     const state = randomState();
@@ -94,11 +106,10 @@ export class OidcService {
     currentUrl: string,
   ): Promise<string> {
     const provider = await this.getEnabledProvider(providerId);
-    const clientSecret = this.crypto.decrypt(provider.clientSecretEncrypted);
     const config = await this.discoverClient(
       provider.issuerUrl,
       provider.clientId,
-      clientSecret,
+      provider.clientSecret,
     );
 
     const callbackUrl = this.buildCallbackUrl(providerId);
@@ -197,8 +208,9 @@ export class OidcService {
    * Self-hosted: enabled DB providers. Hosted interim: empty until #354.
    */
   async listPublicProviders(): Promise<PublicOidcProviderItem[]> {
-    if (this.isHostedDeployment()) {
-      return [];
+    const deploymentProviders = this.config.get("OIDC_DEPLOYMENT_PROVIDERS");
+    if (deploymentProviders !== undefined) {
+      return toPublicOidcLoginProvidersFromDeployment(deploymentProviders);
     }
 
     const providers = await this.repo.listEnabledProviders();
@@ -280,20 +292,36 @@ export class OidcService {
     return randomNonce();
   }
 
-  /** Hosted cloud uses Stripe billing; self-hosted omits STRIPE_SECRET_KEY (spec §11.4). */
-  private isHostedDeployment(): boolean {
-    const stripeKey = this.config.get("STRIPE_SECRET_KEY");
-    return typeof stripeKey === "string" && stripeKey.length > 0;
+  private usesDeploymentProviderSource(): boolean {
+    return this.config.get("OIDC_DEPLOYMENT_PROVIDERS") !== undefined;
   }
 
   private async getEnabledProvider(
     providerId: string,
-  ): Promise<OidcProviderRecord> {
+  ): Promise<ResolvedOidcProvider> {
+    if (this.usesDeploymentProviderSource()) {
+      const deploymentProviders = this.config.get("OIDC_DEPLOYMENT_PROVIDERS");
+      const provider = deploymentProviders?.find((entry) => entry.id === providerId);
+      if (!provider || !provider.enabled) {
+        throw new NotFoundException("OIDC provider not found or disabled");
+      }
+      return provider;
+    }
+
     const provider = await this.repo.findProviderById(providerId);
     if (!provider || !provider.enabled) {
       throw new NotFoundException("OIDC provider not found or disabled");
     }
-    return provider;
+
+    return {
+      id: provider.id,
+      name: provider.name,
+      issuerUrl: provider.issuerUrl,
+      clientId: provider.clientId,
+      clientSecret: this.crypto.decrypt(provider.clientSecretEncrypted),
+      scopes: provider.scopes,
+      enabled: provider.enabled,
+    };
   }
 
   private async discoverClient(

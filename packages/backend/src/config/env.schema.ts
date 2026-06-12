@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+import {
+  oidcDeploymentProviderSchema,
+  parseOidcDeploymentProviders,
+  type OidcDeploymentProvider,
+} from "./oidc-deployment-providers.js";
+
 /** Parses env-style booleans; `z.coerce.boolean()` treats the string `"false"` as true. */
 function parseEnvBoolean(value: unknown, defaultValue: boolean): boolean {
   if (value === undefined || value === null || value === "") {
@@ -100,6 +106,14 @@ const optionalFlagsSchema = z
     SENTRY_ENABLE_CONSOLE_LOGGING: envBoolean(false),
     // OpenAPI interactive docs (spec §18) - optional Scalar UI at GET /docs
     OPENAPI_INTERACTIVE_DOCS: envBoolean(true),
+    // Hosted OIDC providers (spec §11.3) - JSON array; unset = DB-sourced (self-host)
+    OIDC_DEPLOYMENT_PROVIDERS: z.preprocess(
+      (value) =>
+        parseOidcDeploymentProviders(
+          typeof value === "string" ? value : undefined,
+        ),
+      z.array(oidcDeploymentProviderSchema).optional(),
+    ),
   })
   .strict()
   .superRefine((flags, ctx) => {
@@ -115,6 +129,8 @@ const optionalFlagsSchema = z
 
 export type RequiredSecrets = z.infer<typeof requiredSecretsSchema>;
 export type OptionalFlags = z.infer<typeof optionalFlagsSchema>;
+
+export type { OidcDeploymentProvider };
 
 export type AppConfig = RequiredSecrets &
   OptionalFlags & {
@@ -190,6 +206,7 @@ function readFlagsInput(env: NodeJS.ProcessEnv) {
     SENTRY_LOG_LEVEL: env.SENTRY_LOG_LEVEL,
     SENTRY_ENABLE_CONSOLE_LOGGING: env.SENTRY_ENABLE_CONSOLE_LOGGING,
     OPENAPI_INTERACTIVE_DOCS: env.OPENAPI_INTERACTIVE_DOCS,
+    OIDC_DEPLOYMENT_PROVIDERS: env.OIDC_DEPLOYMENT_PROVIDERS,
   };
 }
 

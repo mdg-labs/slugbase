@@ -246,6 +246,9 @@ Required for paid entitlements on hosted. Leave empty on self-host (no-op billin
 | `SUPPORTER_PROMOTION_END` | ISO-8601 end of supporter offer | Yes | No | Optional | No | Runtime | `2026-12-31T23:59:59Z` |
 | `DOWNGRADE_GRACE_PERIOD_DAYS` | Days after period end before overflow archive | Yes | Optional | Optional | No | Runtime | `7` (default) |
 | `TURNSTILE_SECRET_KEY` | Turnstile server secret (API + contact) | Yes | No | Optional | Yes | Runtime | `<Turnstile secret>` |
+| `OIDC_DEPLOYMENT_PROVIDERS` | JSON array of hosted OIDC IdP configs (id, name, issuerUrl, clientId, clientSecret, scopes, enabled) | Yes | No | Optional | Yes | Runtime | `[{"id":"google","name":"Google","issuerUrl":"https://accounts.google.com","clientId":"…","clientSecret":"…"}]` |
+
+> **Self-host note:** Leave `OIDC_DEPLOYMENT_PROVIDERS` unset so federated providers are configured in workspace settings (DB-sourced). When set (including `[]`), the deployment-config source is active and DB providers are ignored for login.
 
 ---
 
