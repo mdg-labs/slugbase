@@ -1,3 +1,4 @@
+import { isPlanGatingEnabled } from "../../lib/billing-config.js";
 import type { EntitlementCapability, WorkspacePlan } from "./sharing.types.js";
 
 const PLAN_CAPABILITIES: Record<WorkspacePlan, Set<EntitlementCapability>> = {
@@ -10,6 +11,9 @@ export function canUseEntitlement(
   plan: WorkspacePlan,
   capability: EntitlementCapability,
 ): boolean {
+  if (!isPlanGatingEnabled()) {
+    return true;
+  }
   return PLAN_CAPABILITIES[plan].has(capability);
 }
 

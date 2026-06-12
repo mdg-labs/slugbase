@@ -1,5 +1,6 @@
 import type { SharingScope } from "../../components/sharing/sharing.types.js";
 import { parseSharingScope } from "../../components/sharing/sharing.utils.js";
+import { isPlanGatingEnabled } from "../../lib/billing-config.js";
 
 const getApiBaseUrl = (): string => process.env["API_BASE_URL"] ?? "";
 
@@ -181,7 +182,8 @@ export async function loadBookmarkListData(
   }
 
   const plan = workspace?.plan ?? "personal";
-  const bookmarkCap = plan === "free" ? FREE_BOOKMARK_CAP : null;
+  const bookmarkCap =
+    isPlanGatingEnabled() && plan === "free" ? FREE_BOOKMARK_CAP : null;
 
   return {
     scope,

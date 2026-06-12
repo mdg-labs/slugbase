@@ -1,3 +1,4 @@
+import { isPlanGatingEnabled } from "../../lib/billing-config.js";
 import {
   APPROACHING_CAP_RATIO,
   FREE_BOOKMARK_CAP,
@@ -11,6 +12,9 @@ import type {
 } from "./dashboard.types.js";
 
 export function hasUnlimitedBookmarks(plan: WorkspacePlan): boolean {
+  if (!isPlanGatingEnabled()) {
+    return true;
+  }
   return plan !== "free";
 }
 

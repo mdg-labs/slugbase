@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { FREE_BOOKMARK_CAP } from "./dashboard.constants.js";
 import {
@@ -25,33 +25,51 @@ const baseData: DashboardData = {
 };
 
 describe("resolveEntitlementBanner", () => {
-  it("returns null for Personal plan workspaces", () => {
-    expect(
-      resolveEntitlementBanner("personal", FREE_BOOKMARK_CAP),
-    ).toBeNull();
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
-  it("returns null for Free workspaces well below the cap", () => {
-    expect(resolveEntitlementBanner("free", 10)).toBeNull();
-  });
+  describe("when plan gating is enabled", () => {
+    it("returns null for Personal plan workspaces", () => {
+      vi.stubEnv("VITE_BILLING_ENABLED", "true");
+      expect(
+        resolveEntitlementBanner("personal", FREE_BOOKMARK_CAP),
+      ).toBeNull();
+    });
 
-  it("returns approaching variant near the Free cap", () => {
-    const banner = resolveEntitlementBanner("free", 46);
-    expect(banner).toEqual({
-      variant: "approaching",
-      used: 46,
-      cap: FREE_BOOKMARK_CAP,
-      remaining: 4,
+    it("returns null for Free workspaces well below the cap", () => {
+      vi.stubEnv("VITE_BILLING_ENABLED", "true");
+      expect(resolveEntitlementBanner("free", 10)).toBeNull();
+    });
+
+    it("returns approaching variant near the Free cap", () => {
+      vi.stubEnv("VITE_BILLING_ENABLED", "true");
+      const banner = resolveEntitlementBanner("free", 46);
+      expect(banner).toEqual({
+        variant: "approaching",
+        used: 46,
+        cap: FREE_BOOKMARK_CAP,
+        remaining: 4,
+      });
+    });
+
+    it("returns at-cap variant when the Free cap is reached", () => {
+      vi.stubEnv("VITE_BILLING_ENABLED", "true");
+      const banner = resolveEntitlementBanner("free", FREE_BOOKMARK_CAP);
+      expect(banner).toEqual({
+        variant: "at-cap",
+        used: FREE_BOOKMARK_CAP,
+        cap: FREE_BOOKMARK_CAP,
+        remaining: 0,
+      });
     });
   });
 
-  it("returns at-cap variant when the Free cap is reached", () => {
-    const banner = resolveEntitlementBanner("free", FREE_BOOKMARK_CAP);
-    expect(banner).toEqual({
-      variant: "at-cap",
-      used: FREE_BOOKMARK_CAP,
-      cap: FREE_BOOKMARK_CAP,
-      remaining: 0,
+  describe("when plan gating is disabled", () => {
+    it("returns null for Free workspaces regardless of bookmark count", () => {
+      vi.stubEnv("VITE_BILLING_ENABLED", "false");
+      expect(resolveEntitlementBanner("free", FREE_BOOKMARK_CAP)).toBeNull();
+      expect(resolveEntitlementBanner("free", 46)).toBeNull();
     });
   });
 });
