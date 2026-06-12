@@ -62,6 +62,15 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Fetch secrets from Infisical
+        uses: Infisical/secrets-action@77ab1f4ccd183a543cb5b42435fbd181189f4995 # v1.0.16
+        with:
+          method: oidc
+          domain: ${{ secrets.INFISICAL_DOMAIN }}
+          identity-id: ${{ secrets.INFISICAL_OIDC_IDENTITY_ID }}
+          project-slug: slugbase-cloud
+          env-slug: staging
+
       - name: Unit tests
         run: pnpm test:unit
 
