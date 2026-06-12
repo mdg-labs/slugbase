@@ -1,5 +1,4 @@
 import { test, expect } from "../../fixtures/auth.js";
-import { createSeedHelper } from "../../fixtures/seed.js";
 
 test.describe("Tags CRUD", () => {
   test("create tag -> assign via bookmark modal -> filter tag list", async ({
@@ -93,9 +92,10 @@ test.describe("Tags CRUD", () => {
 
   test("create tag, assign via bookmark, filter bookmarks by tag", async ({
     page,
+    sessionCookie,
+    csrfToken,
   }) => {
-    // ── Phase 1: Login and seed data ────────────────────────────
-    const seed = createSeedHelper(page);
+    // ── Phase 1: Login ──────────────────────────────────────────
     await page.goto("/login");
     await page.waitForSelector('[data-testid="login-form"]');
     await page.fill('[data-testid="login-email-input"]', "e2e@slugbase.test");
@@ -104,26 +104,48 @@ test.describe("Tags CRUD", () => {
     await page.waitForURL(/\/$/);
     await page.waitForSelector('[data-testid="sidebar-nav"]');
 
-    // Seed with a tag so it's available for filtering
-    await seed({
-      bookmarks: 2,
-      folders: [],
-      tags: ["filter-me"],
-    });
+    // ── Phase 2: Seed tag + bookmarks in the ACTIVE workspace via API ──
+    const apiUrl = process.env.E2E_BASE_URL_API ?? process.env.E2E_BASE_URL_SELF_HOSTED ?? 'http://localhost:4001';
+    const apiHeaders = { Cookie: sessionCookie, "x-csrf-token": csrfToken, "Content-Type": "application/json" };
 
-    // ── Phase 2: Navigate to bookmarks page ─────────────────────
+    // Get the active workspace ID
+    const wsRes = await page.request.get(`${apiUrl}/workspaces/active`, {
+      headers: apiHeaders,
+    });
+    const activeWorkspace = await wsRes.json() as { id: string };
+
+    // Create a tag in the active workspace
+    const tagRes = await page.request.post(`${apiUrl}/tags`, {
+      headers: apiHeaders,
+      data: { workspaceId: activeWorkspace.id, name: "filter-me" },
+    });
+    expect(tagRes.ok(), `Tag creation failed: ${tagRes.status()}`).toBeTruthy();
+    const createdTag = await tagRes.json() as { id: string };
+
+    // Create 2 bookmarks with the tag
+    for (let i = 0; i < 2; i++) {
+      const bookmarkRes = await page.request.post(`${apiUrl}/bookmarks`, {
+        headers: apiHeaders,
+        data: {
+          url: `https://example.com/e2e-filter-tag-${i}`,
+          title: `E2E Filter Bookmark ${i}`,
+          tagIds: [createdTag.id],
+        },
+      });
+      expect(bookmarkRes.ok(), `Bookmark creation ${i} failed: ${bookmarkRes.status()}`).toBeTruthy();
+    }
+
+    // ── Phase 3: Navigate to bookmarks page ─────────────────────
     await page.goto("/bookmarks");
     await page.waitForSelector('[data-testid="bookmark-list-page"]');
 
-    // There should be seeded bookmarks visible
-    const gridOrTable = page.locator(
-      '[data-testid="bookmark-grid"], [data-testid="bookmark-table"]',
-    );
-    await expect(gridOrTable).toBeVisible();
+    // The bookmarks page toolbar should have a tags filter chip
+    const tagsFilter = page.locator('[data-testid="bookmark-tags-filter"]');
+    await expect(tagsFilter).toBeVisible({ timeout: 5000 });
 
-    // ── Phase 3: Filter by tag via the tags filter chip ─────────
+    // ── Phase 4: Filter by tag via the tags filter chip ─────────
     // Open the tags filter chip dropdown
-    await page.click('[data-testid="bookmark-tags-filter"]');
+    await tagsFilter.click();
     // Click the menu item for "filter-me" tag
     await page.locator('button[role="menuitem"]').filter({ hasText: "filter-me" }).click();
 

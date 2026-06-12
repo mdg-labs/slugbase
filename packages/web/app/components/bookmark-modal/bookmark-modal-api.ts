@@ -106,7 +106,7 @@ async function updateBookmark(
 
 async function addBookmarkToFolder(folderId: string, bookmarkId: string): Promise<void> {
   const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/folders/${folderId}/bookmarks`, {
+  const res = await fetch(`${getApiBaseUrl()}/api/folders/${folderId}/bookmarks`, {
     method: "POST",
     headers,
     credentials: "include",
@@ -119,7 +119,7 @@ async function addBookmarkToFolder(folderId: string, bookmarkId: string): Promis
 
 async function addBookmarkToTag(tagId: string, bookmarkId: string): Promise<void> {
   const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/tags/${tagId}/bookmarks`, {
+  const res = await fetch(`${getApiBaseUrl()}/api/tags/${tagId}/bookmarks`, {
     method: "POST",
     headers,
     credentials: "include",
@@ -132,7 +132,7 @@ async function addBookmarkToTag(tagId: string, bookmarkId: string): Promise<void
 
 async function createTag(name: string): Promise<{ id: string }> {
   const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/tags`, {
+  const res = await fetch(`${getApiBaseUrl()}/api/tags`, {
     method: "POST",
     headers,
     credentials: "include",
@@ -146,7 +146,7 @@ async function createTag(name: string): Promise<{ id: string }> {
 
 async function createFolder(name: string): Promise<{ id: string }> {
   const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/folders`, {
+  const res = await fetch(`${getApiBaseUrl()}/api/folders`, {
     method: "POST",
     headers,
     credentials: "include",
@@ -222,7 +222,7 @@ export type LoadBookmarkModalOptionsResult = {
 };
 
 async function fetchFolders(): Promise<BookmarkModalFolderOption[]> {
-  const res = await fetch(`${getApiBaseUrl()}/folders?pageSize=100`, {
+  const res = await fetch(`${getApiBaseUrl()}/api/folders?pageSize=100`, {
     credentials: "include",
   });
   if (!res.ok) {
@@ -240,7 +240,7 @@ async function fetchFolders(): Promise<BookmarkModalFolderOption[]> {
 }
 
 async function fetchTags(): Promise<BookmarkModalTagOption[]> {
-  const res = await fetch(`${getApiBaseUrl()}/tags?pageSize=100`, {
+  const res = await fetch(`${getApiBaseUrl()}/api/tags?pageSize=100`, {
     credentials: "include",
   });
   if (!res.ok) {

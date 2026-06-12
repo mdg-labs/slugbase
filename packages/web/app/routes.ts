@@ -43,6 +43,14 @@ export default [
   route("api/go/:slug/choose", "routes/api/go-choose.ts"),
   route("api/import/:kind", "routes/api/import.ts"),
 
+  // Raw backend list/mutation proxies — used by client-side fetch
+  // (bookmark-modal-api, bookmarks-api toolbar options) to bypass
+  // the page loaders which transform the response shape.
+  route("api/folders", "routes/api/proxy/proxy-folders-root.ts"),
+  route("api/folders/:subpath", "routes/api/proxy/proxy-folders-sub.ts"),
+  route("api/tags", "routes/api/proxy/proxy-tags-root.ts"),
+  route("api/tags/:subpath", "routes/api/proxy/proxy-tags-sub.ts"),
+
   layout("routes/app-layout.tsx", [
     index("routes/dashboard/index.tsx"),
     route("bookmarks", "routes/bookmarks/index.tsx"),

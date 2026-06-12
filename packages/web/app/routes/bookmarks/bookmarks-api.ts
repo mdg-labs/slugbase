@@ -104,10 +104,10 @@ export async function loadToolbarOptions(): Promise<{
   tags: ToolbarOption[];
 }> {
   const [foldersRes, tagsRes] = await Promise.all([
-    fetch(`${getApiBaseUrl()}/folders?pageSize=100`, {
+    fetch(`${getApiBaseUrl()}/api/folders?pageSize=100`, {
       credentials: "include",
     }),
-    fetch(`${getApiBaseUrl()}/tags?pageSize=100`, {
+    fetch(`${getApiBaseUrl()}/api/tags?pageSize=100`, {
       credentials: "include",
     }),
   ]);

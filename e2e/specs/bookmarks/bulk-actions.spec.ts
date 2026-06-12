@@ -3,6 +3,8 @@ import { test, expect } from "../../fixtures/auth.js";
 test.describe("Bookmark bulk actions", () => {
   test("select multiple bookmarks, bulk pin, move to folder, and delete", async ({
     page,
+    sessionCookie,
+    csrfToken,
   }) => {
     // ── Phase 1: Login ──────────────────────────────────────────────
     await page.goto("/login");
@@ -14,92 +16,39 @@ test.describe("Bookmark bulk actions", () => {
     await page.waitForSelector('[data-testid="sidebar-nav"]');
 
     // ── Phase 2: Seed bookmarks and folder via API ─────────────────
-    // Uses page.evaluate so the browser session cookie is sent automatically.
-    // CSRF token is fetched first, then used for mutations.
-    const seededIds = await page.evaluate(async () => {
-      // Helper to get a CSRF token
-      const getCsrfToken = async (): Promise<string> => {
-        const res = await fetch("/auth/csrf-token");
-        const data = (await res.json()) as { csrfToken: string };
-        return data.csrfToken;
-      };
+    const apiUrl = process.env.E2E_BASE_URL_API ?? process.env.E2E_BASE_URL_SELF_HOSTED ?? 'http://localhost:4001';
+    const apiHeaders = { Cookie: sessionCookie, "x-csrf-token": csrfToken, "Content-Type": "application/json" };
 
-      // Helper to POST JSON with CSRF
-      const apiPost = async (
-        path: string,
-        body: Record<string, unknown>,
-        csrf: string,
-      ): Promise<Record<string, unknown>> => {
-        const res = await fetch(path, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-csrf-token": csrf,
-          },
-          body: JSON.stringify(body),
-        });
-        if (!res.ok) throw new Error(`POST ${path} failed: ${res.status}`);
-        return (await res.json()) as Record<string, unknown>;
-      };
+    const bookmarkIds: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const res = await page.request.post(`${apiUrl}/bookmarks`, {
+        headers: apiHeaders,
+        data: { url: `https://example.com/bulk-e2e-${i}`, title: `Bulk E2E Bookmark ${i}` },
+      });
+      expect(res.ok(), `Bookmark creation ${i} failed: ${res.status()}`).toBeTruthy();
+      const created = await res.json() as { id: string };
+      bookmarkIds.push(created.id);
+    }
 
-      // Helper to PATCH JSON with CSRF
-      const apiPatch = async (
-        path: string,
-        body: Record<string, unknown>,
-        csrf: string,
-      ): Promise<void> => {
-        const res = await fetch(path, {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            "x-csrf-token": csrf,
-          },
-          body: JSON.stringify(body),
-        });
-        if (!res.ok) throw new Error(`PATCH ${path} failed: ${res.status}`);
-      };
-
-      // Helper to DELETE with CSRF
-      const apiDelete = async (path: string, csrf: string): Promise<void> => {
-        const res = await fetch(path, {
-          method: "DELETE",
-          headers: { "x-csrf-token": csrf },
-        });
-        if (!res.ok) throw new Error(`DELETE ${path} failed: ${res.status}`);
-      };
-
-      const csrf = await getCsrfToken();
-
-      // Create 3 bookmarks
-      const bookmarkIds: string[] = [];
-      for (let i = 0; i < 3; i++) {
-        const created = (await apiPost(
-          "/bookmarks",
-          {
-            url: `https://example.com/bulk-e2e-${i}`,
-            title: `Bulk E2E Bookmark ${i}`,
-          },
-          csrf,
-        )) as { id: string };
-        bookmarkIds.push(created.id);
-      }
-
-      // Create a folder
-      const folder = (await apiPost(
-        "/folders",
-        { name: "Bulk Test Folder" },
-        csrf,
-      )) as { id: string };
-
-      return { bookmarkIds, folderId: folder.id };
+    const folderRes = await page.request.post(`${apiUrl}/folders`, {
+      headers: apiHeaders,
+      data: { name: "Bulk Test Folder" },
     });
+    expect(folderRes.ok(), `Folder creation failed: ${folderRes.status()}`).toBeTruthy();
+    const { id: folderId } = await folderRes.json() as { id: string };
 
-    expect(seededIds.bookmarkIds).toHaveLength(3);
-    expect(seededIds.folderId).toBeTruthy();
+    expect(bookmarkIds).toHaveLength(3);
+    expect(folderId).toBeTruthy();
 
-    // ── Phase 3: Navigate to bookmarks and verify list ──────────────
+    // ── Phase 3: Navigate to bookmarks and filter to our test data ──
     await page.goto("/bookmarks");
     await page.waitForSelector('[data-testid="bookmark-list-page"]');
+    await page.waitForSelector('[data-testid="bookmark-result-count"]');
+
+    // Search to isolate only the 3 bookmarks we just created
+    const searchInput = page.locator('[data-testid="bookmark-list-search"]');
+    await searchInput.fill("Bulk E2E Bookmark");
+    await page.waitForTimeout(500);
     await page.waitForSelector('[data-testid="bookmark-result-count"]');
     await expect(page.locator('[data-testid="bookmark-result-count"]')).toContainText("3");
 
@@ -109,8 +58,7 @@ test.describe("Bookmark bulk actions", () => {
     // Verify bulk bar is not yet visible (no items selected)
     await expect(page.locator('[data-testid="bulk-bar"]')).not.toBeVisible();
 
-    // Select all bookmarks by clicking on cards
-    // In grid view, cards have role="article" and data-testid="bookmark-card-*"
+    // Select all 3 bookmarks by clicking on cards
     const cards = page.locator('[data-testid^="bookmark-card-"]');
     const cardCount = await cards.count();
     expect(cardCount).toBeGreaterThanOrEqual(3);
@@ -132,8 +80,7 @@ test.describe("Bookmark bulk actions", () => {
     await expect(page.locator('[data-testid="bookmark-result-count"]')).toContainText("3");
 
     // ── Phase 6: Bulk move to folder ───────────────────────────────
-    // Re-select all bookmarks (selection was cleared by pin action)
-    // Toggle bulk select off then back on
+    // Re-enter bulk select mode and reselect (selection cleared by pin action)
     await page.click('[data-testid="bookmark-bulk-select-toggle"]');
     await page.click('[data-testid="bookmark-bulk-select-toggle"]');
 
@@ -157,7 +104,7 @@ test.describe("Bookmark bulk actions", () => {
     await expect(page.locator('[data-testid="bookmark-result-count"]')).toContainText("3");
 
     // ── Phase 7: Bulk delete ───────────────────────────────────────
-    // Re-select all bookmarks
+    // Re-enter bulk select mode and reselect
     await page.click('[data-testid="bookmark-bulk-select-toggle"]');
     await page.click('[data-testid="bookmark-bulk-select-toggle"]');
 
@@ -172,8 +119,8 @@ test.describe("Bookmark bulk actions", () => {
     // Click "Delete" in the bulk bar
     await page.locator('[data-testid="bulk-bar"] button').filter({ hasText: "Delete" }).click();
 
-    // Wait for the page to re-render — should show 0 bookmarks (empty state)
+    // Wait for the page to re-render — our search filter should now show 0 matching results
     await page.waitForTimeout(500);
-    await page.waitForSelector('[data-testid="bookmark-list-empty"]');
+    await expect(page.locator('[data-testid="bookmark-result-count"]')).toContainText("0");
   });
 });
