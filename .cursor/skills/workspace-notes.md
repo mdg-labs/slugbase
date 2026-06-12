@@ -164,9 +164,9 @@ _added: 2026-06-09_
 The #315 branch verifier (`generalPurpose` subagent `3f9c15eb-60d2-4c95-909a-d8e82f0a005f`) completed verification correctly (Layer 1/2/3 all PASS, GitHub Done comment posted, status set to Done) but then hallucinated and attempted to write `/home/michael/PycharmProjects/ai-proxy/proxy-server/package.json` — a completely unrelated Electron HTTP proxy project. The file didn't exist on disk (path doesn't exist). The verifier prompt should be tightened with a hard block on path escape: add "DO NOT write files outside TARGET REPO or WORKTREE" to verifier prompts.
 _added: 2026-06-10_
 
-## ReportPortal test reporting (#343 epic, 2026-06-13)
+## Allure test reporting (#359 epic, 2026-06-13)
 
-Self-hosted instance: `https://reportportal.mdg-labs.dev`, project `slugbase`. Env vars: `REPORTPORTAL_URL`, `REPORTPORTAL_API_KEY`, `REPORTPORTAL_PROJECT` (optional — reporters no-op when unset). Vitest: `scripts/reportportal-vitest.ts` + `scripts/with-reportportal-env.sh` (fetch 3 keys only; never wrap `pnpm test:integration` with full Infisical). Playwright: `scripts/reportportal-playwright.ts` (edition from `--project`). CI: Infisical OIDC `env-slug: staging` in `ci.yml` + `e2e.yml`. Mode: `CI=true` → DEFAULT; local → DEBUG. Neeto Playdash removed — delete GHA secrets `NEETO_PLAYDASH_*` manually.
+Unit, integration, and e2e tests write Allure JSON under `allure-results/`. Local viewing: `npx allure serve allure-results`. CI publishes to GitHub Pages via `ci.yml` and `e2e.yml` (no env vars). ReportPortal removed in #364.
 _added: 2026-06-13_
 
 ## localStorage view-mode pollution in BookmarkListPage tests (2026-06-09)

@@ -359,15 +359,17 @@ All other `VITE_*` pricing keys: deprecated — prices now fetched from `GET /pr
 
 ---
 
-### 10. Test reporting — ReportPortal
+### 10. Test reporting — Allure
 
-Optional keys for the Playwright / e2e test reporter only. Not read by the API at runtime in production — consumed by the test harness when publishing results to ReportPortal. Empty = reporter disabled (local default).
+SlugBase publishes unit, integration, and e2e test results to **Allure** reports. No environment variables are required — reporters write JSON results under `allure-results/` at the repo root.
 
-| Key | What it does | Hosted | Self-host | Required | Secret | When set | Example value |
-|---|---|---|---|---|---|---|---|
-| `REPORTPORTAL_URL` | ReportPortal instance base URL | No | No | CI only | No | CI | `https://reportportal.example.com` |
-| `REPORTPORTAL_PROJECT` | ReportPortal project name | No | No | CI only | No | CI | `slugbase` |
-| `REPORTPORTAL_API_KEY` | ReportPortal user API key for result upload | No | No | CI only | Yes | CI | `<ReportPortal API key>` |
+**Local viewing** (after running tests):
+
+```bash
+npx allure serve allure-results
+```
+
+CI uploads artifacts and publishes reports to GitHub Pages on pull requests (see `.github/workflows/ci.yml` and `.github/workflows/e2e.yml`).
 
 ---
 
