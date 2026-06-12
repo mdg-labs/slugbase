@@ -1,5 +1,8 @@
 import { test, expect } from "../../fixtures/auth.js";
-import { setActiveWorkspacePlan } from "../../helpers/workspace-plan.js";
+import {
+  setActiveWorkspacePlan,
+  waitForTeamAuditLogAccess,
+} from "../../helpers/workspace-plan.js";
 
 test.describe("Settings entitlement gates", () => {
   // Free vs team tests mutate the same worker workspace plan — run serially.
@@ -42,11 +45,11 @@ test.describe("Settings entitlement gates", () => {
     await expect(page.locator('[data-testid="members-plan-gate"]')).not.toBeVisible();
     await expect(page.locator('[data-testid="members-settings-page"]')).toBeVisible();
 
-    // Re-assert team plan — parallel specs on the same worker may downgrade to free.
-    await setActiveWorkspacePlan(page, sessionCookie, csrfToken, "team");
+    // Parallel hosted specs on the same worker may downgrade to free mid-run.
+    await waitForTeamAuditLogAccess(page, sessionCookie, csrfToken);
 
     await page.goto("/settings/audit");
-    await page.waitForSelector('[data-testid="audit-log-page"]');
+    await expect(page.locator('[data-testid="audit-log-page"]')).toBeVisible();
 
     await expect(page.locator('[data-testid="audit-plan-gate"]')).not.toBeVisible();
     await expect(page.locator('[data-testid="audit-log-page"]')).toBeVisible();

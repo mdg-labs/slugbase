@@ -71,5 +71,10 @@ test.describe("Free bookmark cap", () => {
 
     // Verify the banner contains an upgrade CTA
     await expect(capBanner).toContainText("Upgrade to Personal");
+
+    // ── Phase 6: Sidebar usage meter at cap (hosted free plan only) ─
+    const sidebarFooter = page.locator('[data-testid="sidebar-user-menu"]');
+    await expect(sidebarFooter.getByText(/50\s*\/\s*50/)).toBeVisible();
+    await expect(sidebarFooter.getByText("Limit reached")).toBeVisible();
   });
 });

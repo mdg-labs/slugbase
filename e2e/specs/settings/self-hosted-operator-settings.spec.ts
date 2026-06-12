@@ -48,6 +48,16 @@ test.describe("Self-hosted operator settings", () => {
     await expect(page.locator('[data-testid="workspace-operator-managed-gate"]')).not.toBeVisible();
   });
 
+  test("billing settings show unavailable gate", async ({ authedPage }) => {
+    const page = authedPage;
+
+    await page.goto("/settings/billing");
+    await page.waitForSelector('[data-testid="settings-layout"]');
+
+    await expect(page.locator('[data-testid="billing-unavailable-gate"]')).toBeVisible();
+    await expect(page.locator('[data-testid="billing-settings-page"]')).not.toBeVisible();
+  });
+
   test("no bookmark cap banner or sidebar usage meter on default workspace", async ({
     authedPage,
   }) => {
