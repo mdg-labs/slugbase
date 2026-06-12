@@ -100,6 +100,9 @@ jobs:
     needs: [ci]
     if: always()
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     concurrency:
       group: allure-pages
       cancel-in-progress: false
@@ -136,6 +139,28 @@ jobs:
           publish_branch: gh-pages
           publish_dir: ${{ steps.allure-report.outputs.reports-site }}
           destination_dir: ${{ steps.allure-report.outputs.reports-site-path }}
+
+      - name: Find existing Allure PR comment
+        if: always() && github.event_name == 'pull_request' && steps.allure-report.outputs.report-url != ''
+        id: find-allure-comment
+        uses: peter-evans/find-comment@v3
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: 'github-actions[bot]'
+          body-includes: '<!-- ci-allure-report -->'
+
+      - name: Comment Allure report link on PR
+        if: always() && github.event_name == 'pull_request' && steps.allure-report.outputs.report-url != ''
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-id: ${{ steps.find-allure-comment.outputs.comment-id }}
+          edit-mode: replace
+          body: |
+            <!-- ci-allure-report -->
+            ## CI Allure report
+
+            [View test report](${{ steps.allure-report.outputs.report-url }})
 
   deploy-staging:
     if: >
