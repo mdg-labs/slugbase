@@ -217,12 +217,19 @@ function TagDetailPanel({ tag, onClose, onRenameRequest, onDeleteRequest }: TagD
     let cancelled = false;
     setBookmarks(null);
     setLoading(true);
-    void fetchTaggedBookmarks(tag.id).then((items) => {
-      if (!cancelled) {
-        setBookmarks(items);
-        setLoading(false);
-      }
-    });
+    void fetchTaggedBookmarks(tag.id)
+      .then((items) => {
+        if (!cancelled) {
+          setBookmarks(items);
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setBookmarks([]);
+          setLoading(false);
+        }
+      });
     return () => { cancelled = true; };
   }, [tag.id]);
 

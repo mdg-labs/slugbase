@@ -61,6 +61,20 @@ warn()  { echo -e "${YELLOW}⚠${NC} $1"; }
 fail()  { echo -e "${RED}✗${NC} $1"; }
 header(){ echo -e "\n${CYAN}═══════════════════════════════════════════${NC}"; echo -e "${CYAN}  $1${NC}"; echo -e "${CYAN}═══════════════════════════════════════════${NC}"; }
 
+# Track all e2e process PIDs for reliable cleanup.
+E2E_PIDS=()
+kill_e2e_pids() {
+  for pid in "${E2E_PIDS[@]}"; do
+    # Kill process tree (parent + children)
+    if kill -0 "$pid" 2>/dev/null; then
+      # pkill -P finds children of pid; kill the tree bottom-up then the root
+      pkill -P "$pid" 2>/dev/null || true
+      kill -9 "$pid" 2>/dev/null || true
+    fi
+  done
+  E2E_PIDS=()
+}
+
 # ---------------------------------------------------------------------------
 # Find N unique free TCP ports on localhost.
 # Calls python3 once to reserve+release a batch of distinct ports.
@@ -117,10 +131,19 @@ cleanup() {
   [ "$last_exit" -ne 0 ] && [ "$EXIT_CODE" -eq 0 ] && EXIT_CODE=$last_exit
   echo ""
   header "Tearing down"
+  kill_e2e_pids
   docker stop slugbase-e2e-self 2>/dev/null || true
   docker rm slugbase-e2e-self 2>/dev/null || true
   docker compose -f "$COMPOSE_FILE" down --volumes --remove-orphans 2>/dev/null || true
-  docker builder prune --force 2>/dev/null || true
+  # Only prune the Docker build cache when the self-hosted image was actually
+  # built in this run. Pruning unconditionally adds 60-120s of wall time on
+  # hosted-only runs (no Docker build) because the stale cache from previous
+  # runs can be 1 GB+, causing the script to appear to hang after test
+  # completion. Skipping prune on hosted-only runs is safe — the cache is
+  # from a prior self-hosted build and will be pruned on the next full run.
+  if [ "${DOCKER_BUILD_RAN:-false}" = true ]; then
+    docker builder prune --force 2>/dev/null || true
+  fi
   if [ "$EXIT_CODE" -eq 0 ]; then
     ok "All clean — no containers, volumes, or build cache left"
   else
@@ -162,6 +185,16 @@ if [ "$RUN_HOSTED" = true ]; then
 
   mkdir -p "$REPO_ROOT/e2e/test-results"
 
+  # Service logs — background processes must NOT inherit the script's stdout.
+  # If stdout is piped (e.g. `pnpm test:e2e | tail`), inherited fds keep the
+  # pipe open after Playwright exits and the shell appears to hang forever.
+  LOGFILE_HOSTED_API="$REPO_ROOT/e2e/test-results/hosted-services-api.log"
+  LOGFILE_HOSTED_WEB="$REPO_ROOT/e2e/test-results/hosted-services-web.log"
+  LOGFILE_HOSTED_MKTG="$REPO_ROOT/e2e/test-results/hosted-services-marketing.log"
+  : >"$LOGFILE_HOSTED_API"
+  : >"$LOGFILE_HOSTED_WEB"
+  : >"$LOGFILE_HOSTED_MKTG"
+
   # Start API
   info "Starting API on port $PORT_API …"
   PORT="$PORT_API" \
@@ -171,20 +204,23 @@ if [ "$RUN_HOSTED" = true ]; then
     ENCRYPTION_KEY='e2e-test-encryption-key-at-least-32-chars!!' \
     APP_BASE_URL="http://localhost:$PORT_API" \
     FRONTEND_ORIGIN="http://localhost:$PORT_WEB" \
-    node packages/backend/dist/main.js &
+    node packages/backend/dist/main.js >>"$LOGFILE_HOSTED_API" 2>&1 &
   API_PID=$!
+  E2E_PIDS+=("$API_PID")
 
   # Start Web (react-router-serve)
   # API_BASE_URL must point at the backend so server-side loaders/actions can
   # reach it (login, session checks, workspace fetch, etc.).
   info "Starting Web on port $PORT_WEB …"
-  (cd packages/web && PORT="$PORT_WEB" API_BASE_URL="http://localhost:$PORT_API" npx react-router-serve build/server/index.js) &
+  (cd packages/web && PORT="$PORT_WEB" API_BASE_URL="http://localhost:$PORT_API" npx react-router-serve build/server/index.js) >>"$LOGFILE_HOSTED_WEB" 2>&1 &
   WEB_PID=$!
+  E2E_PIDS+=("$WEB_PID")
 
   # Start Marketing (static serve)
   info "Starting Marketing on port $PORT_MKTG …"
-  npx serve packages/marketing/dist -l "$PORT_MKTG" &
+  npx serve packages/marketing/dist -l "$PORT_MKTG" >>"$LOGFILE_HOSTED_MKTG" 2>&1 &
   MKTG_PID=$!
+  E2E_PIDS+=("$MKTG_PID")
 
   # Wait for all three to be healthy
   info "Waiting for services …"
@@ -217,9 +253,9 @@ if [ "$RUN_HOSTED" = true ]; then
     EXIT_CODE=1
   }
 
-  # Kill services
-  kill "$API_PID" "$WEB_PID" "$MKTG_PID" 2>/dev/null || true
-  wait "$API_PID" "$WEB_PID" "$MKTG_PID" 2>/dev/null || true
+  # Kill services — use process tree kill to clean up child processes too.
+  # Subshells ( ) & and npx wrappers spawn child nodes that survive a plain kill.
+  kill_e2e_pids
 
   # Unset hosted env vars so self-hosted phase doesn't inherit them
   unset E2E_BASE_URL_API E2E_BASE_URL_WEB E2E_BASE_URL_MARKETING \
@@ -237,6 +273,7 @@ if [ "$RUN_SELF_HOSTED" = true ]; then
   export E2E_JSON_REPORT_PATH="$REPO_ROOT/e2e/test-results/report-self-hosted.json"
 
   info "Building combined Docker image …"
+  DOCKER_BUILD_RAN=true
   docker build -t slugbase-e2e:self-hosted . 2>&1 | sed 's/^/  /'
   ok "Docker image built"
 

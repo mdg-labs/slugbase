@@ -20,6 +20,16 @@ import {
   type WorkspaceRecord,
 } from "./workspace.types.js";
 
+function deriveWorkspaceSlug(name: string): string {
+  const base = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+  return base.length >= 2 ? base : "workspace";
+}
+
 @Injectable()
 export class WorkspacesService {
   private readonly workspaceRepo: WorkspaceRepository;
@@ -34,20 +44,37 @@ export class WorkspacesService {
     dto: CreateWorkspaceData,
     creatorId: string,
   ): Promise<WorkspaceRecord> {
-    const existing = await this.workspaceRepo.findBySlug(dto.slug);
-    if (existing) {
-      throw new ConflictException(
-        `A workspace with slug "${dto.slug}" already exists`,
-      );
+    const slug = dto.slug?.trim()
+      ? dto.slug.trim()
+      : await this.resolveUniqueWorkspaceSlug(deriveWorkspaceSlug(dto.name));
+
+    if (dto.slug?.trim()) {
+      const existing = await this.workspaceRepo.findBySlug(slug);
+      if (existing) {
+        throw new ConflictException(
+          `A workspace with slug "${slug}" already exists`,
+        );
+      }
     }
 
-    const workspace = await this.workspaceRepo.create(dto);
+    const workspace = await this.workspaceRepo.create({ ...dto, slug });
     await this.memberRepo.create({
       workspaceId: workspace.id,
       userId: creatorId,
       role: "OWNER",
     });
     return workspace;
+  }
+
+  private async resolveUniqueWorkspaceSlug(base: string): Promise<string> {
+    let candidate = base;
+    let suffix = 2;
+    while (await this.workspaceRepo.findBySlug(candidate)) {
+      const tail = `-${String(suffix)}`;
+      candidate = `${base.slice(0, Math.max(2, 48 - tail.length))}${tail}`;
+      suffix += 1;
+    }
+    return candidate;
   }
 
   async getWorkspace(id: string): Promise<WorkspaceRecord> {

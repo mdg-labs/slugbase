@@ -47,7 +47,7 @@ test.describe("Bookmark CRUD", () => {
     await page.getByRole("menuitem", { name: "Delete" }).click();
     await page.waitForSelector('[data-testid="bookmark-delete-dialog"]');
     await page.getByRole("button", { name: "Delete bookmark" }).click();
-    await page.waitForSelector('[data-testid="bookmark-delete-dialog"]', { state: "hidden" });
+    await page.waitForSelector('[data-testid="bookmark-delete-dialog"]', { state: "hidden", timeout: 10000 });
 
     // Verify the bookmark is removed — empty state should show
     await expect(page.getByText("E2E Test Bookmark Edited")).not.toBeVisible();

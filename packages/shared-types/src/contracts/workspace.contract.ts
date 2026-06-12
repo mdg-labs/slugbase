@@ -36,7 +36,8 @@ export const CreateWorkspaceBodySchema = z
       .string()
       .min(2)
       .max(48)
-      .regex(/^[a-z0-9-]+$/, "Slug must contain only lowercase letters, digits, and hyphens"),
+      .regex(/^[a-z0-9-]+$/, "Slug must contain only lowercase letters, digits, and hyphens")
+      .optional(),
   })
   .strict();
 

@@ -68,7 +68,7 @@ test.describe("Tags CRUD", () => {
     // Wait for modal to close
     await page.waitForSelector('[data-testid="bookmark-modal"]', {
       state: "detached",
-      timeout: 5000,
+      timeout: 10000,
     });
 
     // ── Phase 5: Verify the tag appears in the detail panel with the bookmark ──

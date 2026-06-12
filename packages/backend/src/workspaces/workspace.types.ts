@@ -49,7 +49,7 @@ export interface WorkspaceListItemResponse {
 
 export interface CreateWorkspaceData {
   name: string;
-  slug: string;
+  slug?: string;
   plan?: WorkspacePlan;
   planSeats?: number | null;
 }

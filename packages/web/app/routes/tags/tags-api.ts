@@ -76,7 +76,7 @@ export async function fetchTaggedBookmarks(
 ): Promise<TaggedBookmark[]> {
   const apiBase = getApiBaseUrl();
   const res = await fetch(
-    `${apiBase}/bookmarks?tagIds=${encodeURIComponent(tagId)}&pageSize=200`,
+    `${apiBase}/api/bookmarks?tagIds=${encodeURIComponent(tagId)}&pageSize=200`,
     { credentials: "include" },
   );
   if (!res.ok) return [];

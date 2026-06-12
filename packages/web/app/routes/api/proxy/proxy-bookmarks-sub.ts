@@ -1,5 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { buildProxiedResponse } from "../utils/proxy.js";
+
 const getApiBaseUrl = (): string => process.env["API_BASE_URL"] ?? "";
 
 /**
@@ -35,22 +37,7 @@ async function forwardToBookmarksSub(request: Request): Promise<Response> {
   });
 
   const responseBody = await res.text();
-  const responseContentType =
-    res.headers.get("Content-Type") ?? "application/json";
-  const responseHeaders = new Headers({ "Content-Type": responseContentType });
-
-  const location = res.headers.get("Location");
-  if (location) responseHeaders.set("Location", location);
-
-  for (const c of res.headers.getSetCookie()) {
-    responseHeaders.append("Set-Cookie", c);
-  }
-
-  return new Response(responseBody, {
-    status: res.status,
-    statusText: res.statusText,
-    headers: responseHeaders,
-  });
+  return buildProxiedResponse(res, responseBody);
 }
 
 export async function loader({

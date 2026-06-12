@@ -61,7 +61,7 @@ function toRecord(row: {
 export class WorkspaceRepository {
   constructor(private readonly db: DrizzleClient) {}
 
-  async create(data: CreateWorkspaceData): Promise<WorkspaceRecord> {
+  async create(data: CreateWorkspaceData & { slug: string }): Promise<WorkspaceRecord> {
     const id = randomUUID();
     const now = nowMs();
     const values = {

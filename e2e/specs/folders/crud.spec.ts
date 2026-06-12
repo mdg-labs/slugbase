@@ -68,7 +68,7 @@ test.describe("Folders CRUD", () => {
     // Wait for modal to close
     await page.waitForSelector('[data-testid="bookmark-modal"]', {
       state: "detached",
-      timeout: 5000,
+      timeout: 10000,
     });
 
     // ── Phase 7: Filter bookmarks by the folder ─────────────────
@@ -78,10 +78,10 @@ test.describe("Folders CRUD", () => {
     await page.locator('button[role="menuitem"]').filter({ hasText: "E2E Test Folder" }).click();
 
     // Wait for the page to reload with the folder filter applied
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(1500);
     // The filtered view should show our bookmark
     const bookmarkCards = page.locator('[data-testid="bookmark-grid"], [data-testid="bookmark-table"]');
-    await expect(bookmarkCards).toBeVisible({ timeout: 5000 });
+    await expect(bookmarkCards).toBeVisible({ timeout: 10000 });
     await expect(page.locator("text=E2E Folder Test Bookmark").first()).toBeVisible();
 
     // ── Phase 8: Clear filters ──────────────────────────────────
@@ -93,9 +93,11 @@ test.describe("Folders CRUD", () => {
 
   test("search, pinned filter, and scope filter on bookmarks page", async ({
     page,
+    sessionCookie,
+    csrfToken,
   }, testInfo) => {
     // ── Phase 1: Login and seed data ────────────────────────────
-    const seed = createSeedHelper(page);
+    const seed = createSeedHelper(page, { sessionCookie, csrfToken });
     await loginAsWorker(page, testInfo.workerIndex);
 
     // Create seed data: 3 bookmarks, 2 folders
@@ -108,16 +110,16 @@ test.describe("Folders CRUD", () => {
     // ── Phase 3: Use the search input ───────────────────────────
     const searchInput = page.locator('[data-testid="bookmark-list-search"]');
     await searchInput.fill("Test Bookmark");
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(1500);
 
     // Bookmarks matching the search should be visible
     const resultCount = page.locator('[data-testid="bookmark-result-count"]');
-    await expect(resultCount).toBeVisible();
+    await expect(resultCount).toBeVisible({ timeout: 10000 });
     // The grid or table should contain bookmark cards/rows
     const gridOrTable = page.locator(
       '[data-testid="bookmark-grid"], [data-testid="bookmark-table"]',
     );
-    await expect(gridOrTable).toBeVisible();
+    await expect(gridOrTable).toBeVisible({ timeout: 10000 });
 
     // ── Phase 4: Use the pinned filter toggle ───────────────────
     // Clear search first

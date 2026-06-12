@@ -106,7 +106,7 @@ async function updateBookmark(
 
 async function addBookmarkToFolder(folderId: string, bookmarkId: string): Promise<void> {
   const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/api/folders/${folderId}/bookmarks`, {
+  const res = await fetch(`${getApiBaseUrl()}/folders/${folderId}/bookmarks`, {
     method: "POST",
     headers,
     credentials: "include",
@@ -119,7 +119,7 @@ async function addBookmarkToFolder(folderId: string, bookmarkId: string): Promis
 
 async function addBookmarkToTag(tagId: string, bookmarkId: string): Promise<void> {
   const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/api/tags/${tagId}/bookmarks`, {
+  const res = await fetch(`${getApiBaseUrl()}/tags/${tagId}/bookmarks`, {
     method: "POST",
     headers,
     credentials: "include",

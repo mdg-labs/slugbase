@@ -1,5 +1,39 @@
 const getApiBaseUrl = (): string => process.env["API_BASE_URL"] ?? "";
 
+/** Fetch forbids a body on these status codes (Undici throws otherwise). */
+const NULL_BODY_STATUSES = new Set([204, 205, 304]);
+
+/** Build a client Response from an upstream fetch, preserving cookies and status. */
+export function buildProxiedResponse(
+  upstream: Response,
+  bodyText: string,
+): Response {
+  const responseContentType =
+    upstream.headers.get("Content-Type") ?? "application/json";
+
+  const responseHeaders = new Headers(
+    NULL_BODY_STATUSES.has(upstream.status)
+      ? undefined
+      : { "Content-Type": responseContentType },
+  );
+
+  const location = upstream.headers.get("Location");
+  if (location) responseHeaders.set("Location", location);
+
+  for (const cookie of upstream.headers.getSetCookie()) {
+    responseHeaders.append("Set-Cookie", cookie);
+  }
+
+  return new Response(
+    NULL_BODY_STATUSES.has(upstream.status) ? null : bodyText,
+    {
+      status: upstream.status,
+      statusText: upstream.statusText,
+      headers: responseHeaders,
+    },
+  );
+}
+
 /**
  * Forwards a request to the NestJS backend at APP_BASE_URL, preserving the
  * request method, headers (Cookie, x-csrf-token, Content-Type), body, and
@@ -33,27 +67,8 @@ export async function proxyRequest(request: Request): Promise<Response> {
     });
 
     const responseBody = await res.text();
-    const responseContentType = res.headers.get("Content-Type") ?? "application/json";
 
-    const responseHeaders = new Headers({
-      "Content-Type": responseContentType,
-    });
-
-    const location = res.headers.get("Location");
-    if (location) responseHeaders.set("Location", location);
-
-    // Forward Set-Cookie headers from the backend (csrf_token, session, etc.).
-    // The Headers.getSetCookie() method returns all Set-Cookie header values
-    // as an array; each is appended individually to preserve multiple cookies.
-    for (const cookie of res.headers.getSetCookie()) {
-      responseHeaders.append("Set-Cookie", cookie);
-    }
-
-    return new Response(responseBody, {
-      status: res.status,
-      statusText: res.statusText,
-      headers: responseHeaders,
-    });
+    return buildProxiedResponse(res, responseBody);
   } catch {
     return Response.json({ error: "upstream_error" }, { status: 502 });
   }

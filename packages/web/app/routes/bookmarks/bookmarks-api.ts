@@ -6,10 +6,30 @@ const getApiBaseUrl = (): string => {
   return "";
 };
 
+async function getCsrfToken(): Promise<string> {
+  const res = await fetch(`${getApiBaseUrl()}/auth/csrf-token`, {
+    credentials: "include",
+  });
+  if (!res.ok) {
+    throw new Error("Failed to fetch CSRF token");
+  }
+  const data = (await res.json()) as { csrfToken: string };
+  return data.csrfToken;
+}
+
+async function getMutationHeaders(): Promise<Record<string, string>> {
+  const csrfToken = await getCsrfToken();
+  return {
+    "Content-Type": "application/json",
+    "x-csrf-token": csrfToken,
+  };
+}
+
 async function postJson<T>(path: string, body: unknown): Promise<T> {
+  const headers = await getMutationHeaders();
   const res = await fetch(`${getApiBaseUrl()}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     credentials: "include",
     body: JSON.stringify(body),
   });
@@ -27,8 +47,10 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
 }
 
 async function deleteJson(path: string): Promise<void> {
+  const headers = await getMutationHeaders();
   const res = await fetch(`${getApiBaseUrl()}${path}`, {
     method: "DELETE",
+    headers,
     credentials: "include",
   });
   if (!res.ok) {
@@ -94,7 +116,7 @@ export async function toggleBookmarkPin(
 }
 
 export async function deleteBookmark(id: string): Promise<void> {
-  await deleteJson(`/bookmarks/${id}`);
+  await deleteJson(`/api/bookmarks/${id}`);
 }
 
 export type ToolbarOption = { id: string; name: string };

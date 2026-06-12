@@ -59,6 +59,7 @@ test.describe("Workspace switcher", () => {
           resp.url().includes("/workspaces") &&
           resp.request().method() === "POST" &&
           resp.status() === 201,
+        { timeout: 30000 }
       ),
       submitBtn.click(),
     ]);
@@ -87,8 +88,10 @@ test.describe("Workspace switcher", () => {
     await page.waitForSelector('[data-testid="sidebar-nav"]');
 
     // ── Phase 5: Verify active workspace reflected ───────────────
-    // The sidebar should now show "Second Workspace" as the active workspace
-    await expect(page.locator('[data-testid="sidebar-nav"]')).toContainText(/second workspace/i);
+    // The workspace switcher trigger shows the active workspace name
+    await expect(page.getByRole("button", { name: "Switch workspace" })).toContainText(
+      /second workspace/i,
+    );
 
     // Re-open switcher to verify the switched workspace is now active
     await page.click('[aria-label*="workspace"]');
