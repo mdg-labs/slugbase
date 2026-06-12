@@ -8,13 +8,14 @@ test.describe('Command palette search', () => {
   test('⌘K opens palette, typing a query shows results, picking a result navigates', async ({
     authedPage,
     sessionCookie,
+    csrfToken,
   }) => {
     const page = authedPage;
 
     // Create a bookmark that will appear in search results
     const apiUrl = process.env.E2E_BASE_URL_API ?? process.env.E2E_BASE_URL_SELF_HOSTED ?? 'http://localhost:4001';
     const createRes = await page.request.post(`${apiUrl}/bookmarks`, {
-      headers: { Cookie: sessionCookie },
+      headers: { Cookie: sessionCookie, 'x-csrf-token': csrfToken },
       data: {
         url: BOOKMARK_URL,
         title: BOOKMARK_TITLE,
@@ -36,11 +37,13 @@ test.describe('Command palette search', () => {
     await page.waitForTimeout(400); // debounce + fetch
 
     // The bookmark should appear in search results
-    const bookmarkResult = page.locator(`text="${BOOKMARK_TITLE}"`);
+    const palette = page.locator('[data-testid="command-palette-dialog"]');
+    const bookmarkResult = palette.getByText(BOOKMARK_TITLE, { exact: true }).first();
     await expect(bookmarkResult).toBeVisible({ timeout: 5000 });
 
-    // Pick the result — clicking a command item closes the palette
-    await bookmarkResult.click();
+    // Pick the result — use keyboard to avoid cmdk overlay interception
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('Enter');
 
     // Palette should close
     await expect(page.locator('[data-testid="command-palette-dialog"]')).not.toBeVisible({ timeout: 3000 });

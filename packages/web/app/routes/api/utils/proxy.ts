@@ -29,6 +29,7 @@ export async function proxyRequest(request: Request): Promise<Response> {
       headers,
       body,
       redirect: "manual",
+      signal: AbortSignal.timeout(15_000),
     });
 
     const responseBody = await res.text();

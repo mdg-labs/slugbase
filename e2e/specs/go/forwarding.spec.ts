@@ -4,6 +4,7 @@ test.describe("Slug forwarding", () => {
   test("bookmark with forwarding slug navigates /go/:slug to external redirect", async ({
     authedPage: page,
     sessionCookie,
+    csrfToken,
   }) => {
     const apiUrl = process.env.E2E_BASE_URL_API ?? process.env.E2E_BASE_URL_SELF_HOSTED ?? 'http://localhost:4001';
     const slug = `e2e-fwd-${Date.now()}`;
@@ -11,7 +12,7 @@ test.describe("Slug forwarding", () => {
 
     // Create a bookmark with the forwarding slug via the API directly
     const createRes = await page.request.post(`${apiUrl}/bookmarks`, {
-      headers: { Cookie: sessionCookie },
+      headers: { Cookie: sessionCookie, "x-csrf-token": csrfToken },
       data: {
         title: "E2E Forwarding Test",
         url: targetUrl,

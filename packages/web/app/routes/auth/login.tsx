@@ -29,7 +29,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   let oidcProviders: OidcProviderItem[] = [];
   try {
-    const res = await fetch(`${API_BASE_URL()}/auth/oidc/providers`);
+    const res = await fetch(`${API_BASE_URL()}/auth/oidc/providers`, { signal: AbortSignal.timeout(5_000) });
     if (res.ok) {
       const data = (await res.json()) as { providers?: OidcProviderItem[] };
       oidcProviders = (data.providers ?? []).filter(

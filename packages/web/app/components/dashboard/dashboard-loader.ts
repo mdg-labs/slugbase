@@ -60,6 +60,7 @@ async function fetchJson<T>(
   try {
     const res = await fetch(`${getApiBaseUrl()}${path}`, {
       headers: cookie ? { Cookie: cookie } : {},
+      signal: AbortSignal.timeout(8_000),
     });
     if (!res.ok) {
       return null;

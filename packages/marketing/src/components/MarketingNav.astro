@@ -13,8 +13,8 @@ const homeHref = getRelativeLocaleUrl(locale, "/");
 const pricingHref = getRelativeLocaleUrl(locale, "/pricing");
 const contactHref = getRelativeLocaleUrl(locale, "/contact");
 const alternateHref = getRelativeLocaleUrl(alternateLocale, "/");
-const signInHref = appOrigin ? `${appOrigin}/login` : "#";
-const getStartedHref = appOrigin ? `${appOrigin}/register` : "#";
+const signInHref = appOrigin ? `${appOrigin}/login` : "/login";
+const getStartedHref = appOrigin ? `${appOrigin}/register` : "/register";
 ---
 
 <nav class="mk-nav" aria-label={t(locale, "marketing.nav.brand")} data-testid="marketing-nav">

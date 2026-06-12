@@ -30,6 +30,7 @@ export async function getSessionUser(
   try {
     const res = await fetch(`${apiBaseUrl}/auth/me`, {
       headers: cookie ? { Cookie: cookie } : {},
+      signal: AbortSignal.timeout(8_000),
     });
     if (!res.ok) return null;
     return (await res.json()) as SessionUser;

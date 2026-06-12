@@ -46,6 +46,8 @@ export default [
   // Raw backend list/mutation proxies — used by client-side fetch
   // (bookmark-modal-api, bookmarks-api toolbar options) to bypass
   // the page loaders which transform the response shape.
+  route("api/bookmarks", "routes/api/proxy/proxy-bookmarks-root.ts"),
+  route("api/bookmarks/:subpath", "routes/api/proxy/proxy-bookmarks-sub.ts"),
   route("api/folders", "routes/api/proxy/proxy-folders-root.ts"),
   route("api/folders/:subpath", "routes/api/proxy/proxy-folders-sub.ts"),
   route("api/tags", "routes/api/proxy/proxy-tags-root.ts"),

@@ -42,7 +42,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
     if (!res.ok) {
       // eslint-disable-next-line @typescript-eslint/only-throw-error -- RR7 response throw
-      throw data({ error: "upstream_error", slug }, { status: 502 });
+      throw data({ error: "upstream_error", slug, status: res.status }, { status: res.status });
     }
 
     const result = (await res.json()) as GoDisambiguationResult;
@@ -50,7 +50,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   } catch (err) {
     if (err instanceof Response) throw err;
     // eslint-disable-next-line @typescript-eslint/only-throw-error -- RR7 response throw
-    throw data({ error: "upstream_error", slug }, { status: 502 });
+    throw data({ error: "upstream_error", slug, message: err instanceof Error ? err.message : String(err) }, { status: 502 });
   }
 }
 

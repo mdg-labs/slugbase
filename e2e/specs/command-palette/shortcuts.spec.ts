@@ -19,15 +19,17 @@ test.describe('Command palette shortcuts', () => {
     expect(inputValue).toBe('');
 
     // Quick actions should be visible: "New Bookmark" with hint "C"
-    await expect(page.locator('text=New Bookmark')).toBeVisible({ timeout: 3000 });
+    const palette = page.locator('[data-testid="command-palette-dialog"]');
+    await expect(palette.getByText('New Bookmark', { exact: false }).first()).toBeVisible({ timeout: 3000 });
     // "New Folder" should also be visible with hint "F"
-    await expect(page.locator('text=New Folder')).toBeVisible({ timeout: 3000 });
+    await expect(palette.getByText('New Folder', { exact: false }).first()).toBeVisible({ timeout: 3000 });
     // Navigation actions should be visible
-    await expect(page.locator('text=Go to Bookmarks')).toBeVisible({ timeout: 3000 });
-    await expect(page.locator('text=Go to Settings')).toBeVisible({ timeout: 3000 });
+    await expect(palette.getByText('Go to Bookmarks', { exact: false }).first()).toBeVisible({ timeout: 3000 });
+    await expect(palette.getByText('Go to Settings', { exact: false }).first()).toBeVisible({ timeout: 3000 });
 
-    // Verify the shortcut hint "C" for new bookmark is rendered
-    await expect(page.locator('text=C')).toBeVisible({ timeout: 3000 });
+    // Verify the shortcut hint "C" for new bookmark is rendered inside the palette
+    const kbdC = palette.locator('kbd', { hasText: /^C$/ });
+    await expect(kbdC).toBeVisible({ timeout: 3000 });
   });
 
   test('pressing C shortcut triggers new bookmark action', async ({ authedPage }) => {

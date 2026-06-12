@@ -19,8 +19,8 @@ const primaryKey =
     : ("marketing.error.action.home" as const);
 
 const homeHref = getRelativeLocaleUrl(locale, "/");
-const signInHref = appOrigin ? `${appOrigin}/login` : "#";
-const registerHref = appOrigin ? `${appOrigin}/register` : "#";
+const signInHref = appOrigin ? `${appOrigin}/login` : "/login";
+const registerHref = appOrigin ? `${appOrigin}/register` : "/register";
 const pageTitle = `${status} · ${t(locale, titleKey)}`;
 ---
 

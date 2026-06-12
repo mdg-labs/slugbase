@@ -1,3 +1,7 @@
+---
+alwaysApply: true
+---
+
 # E2E testing
 
 ## E2E tests must always use `pnpm test:e2e`

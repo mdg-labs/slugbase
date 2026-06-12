@@ -76,7 +76,7 @@ async function createBookmark(
   body: ReturnType<typeof toBookmarkSubmitBody>,
 ): Promise<{ id: string }> {
   const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/bookmarks`, {
+  const res = await fetch(`${getApiBaseUrl()}/api/bookmarks`, {
     method: "POST",
     headers,
     credentials: "include",
@@ -93,7 +93,7 @@ async function updateBookmark(
   body: ReturnType<typeof toBookmarkSubmitBody>,
 ): Promise<void> {
   const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/bookmarks/${bookmarkId}`, {
+  const res = await fetch(`${getApiBaseUrl()}/api/bookmarks/${bookmarkId}`, {
     method: "PATCH",
     headers,
     credentials: "include",

@@ -23,9 +23,6 @@ export class CsrfGuard implements CanActivate {
   ) {}
 
   canActivate(context: ExecutionContext): boolean {
-    // Skip CSRF in e2e mode — no real cross-origin threat
-    if (process.env.SLUGBASE_E2E_MODE === "true") return true;
-
     const req = context.switchToHttp().getRequest<Request>();
 
     if (SAFE_METHODS.has(req.method)) return true;
