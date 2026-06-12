@@ -56,6 +56,11 @@ export function shouldServeWebClient(req: ExpressRequest): boolean {
     return true;
   }
 
+  // Lazy route discovery for fetcher.load / client navigations (RR7 single-fetch)
+  if (path === "/__manifest" || path.startsWith("/__manifest/")) {
+    return true;
+  }
+
   // RR proxy routes under /api/* (Nest has no /api controllers)
   if (path.startsWith("/api/")) {
     return true;

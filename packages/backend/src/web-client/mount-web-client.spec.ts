@@ -37,6 +37,18 @@ describe("shouldServeWebClient", () => {
     ).toBe(true);
   });
 
+  it("routes React Router lazy route manifest to the web client", () => {
+    expect(
+      shouldServeWebClient(
+        mockRequest({
+          method: "GET",
+          path: "/__manifest",
+          headers: { accept: "application/json" },
+        }),
+      ),
+    ).toBe(true);
+  });
+
   it("routes /api proxy paths to the web client", () => {
     expect(
       shouldServeWebClient(
