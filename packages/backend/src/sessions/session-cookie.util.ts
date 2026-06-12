@@ -22,7 +22,7 @@ export function setSessionCookie(
     httpOnly: true,
     sameSite: "lax",
     path: "/",
-    secure: config.get("isProduction"),
+    secure: config.cookieSecure(),
   };
 
   if (rememberMe) {

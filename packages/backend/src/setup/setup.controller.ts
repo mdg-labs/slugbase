@@ -43,7 +43,7 @@ export class SetupController {
       httpOnly: true,
       sameSite: "lax",
       path: "/",
-      secure: this.config.get("isProduction"),
+      secure: this.config.cookieSecure(),
     });
 
     return { userId };

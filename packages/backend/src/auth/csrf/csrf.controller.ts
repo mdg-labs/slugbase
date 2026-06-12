@@ -26,7 +26,7 @@ export class CsrfController {
       httpOnly: false,
       sameSite: "lax",
       path: "/",
-      secure: this.config.get("isProduction"),
+      secure: this.config.cookieSecure(),
     });
     return { csrfToken: token };
   }

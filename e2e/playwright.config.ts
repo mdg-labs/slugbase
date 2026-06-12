@@ -75,6 +75,7 @@ export default defineConfig({
       use: {
         ...devices['Desktop Chrome'],
         baseURL: process.env.E2E_BASE_URL_SELF_HOSTED ?? 'http://localhost:3000',
+        storageState: ONBOARDING_STORAGE_STATE,
         extraHTTPHeaders: {
           'X-E2E-Base-URL-API': process.env.E2E_BASE_URL_SELF_HOSTED ?? 'http://localhost:3000',
         },

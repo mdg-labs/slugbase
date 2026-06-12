@@ -1,11 +1,11 @@
 import type { ActionFunctionArgs } from "react-router";
 import { redirect } from "react-router";
+import { authCookieSecure } from "../../lib/api-session-cookie.js";
 
 /** Session cookie name - must match the backend constant. */
 const SESSION_COOKIE = "slb_session";
 
 const API_BASE_URL = () => process.env["API_BASE_URL"] ?? "";
-const isProd = () => import.meta.env.PROD;
 
 function clearSessionCookie(response: Response): void {
   const flags = [
@@ -15,7 +15,7 @@ function clearSessionCookie(response: Response): void {
     "HttpOnly",
     "SameSite=Lax",
   ];
-  if (isProd()) {
+  if (authCookieSecure()) {
     flags.push("Secure");
   }
   response.headers.set("Set-Cookie", flags.join("; "));

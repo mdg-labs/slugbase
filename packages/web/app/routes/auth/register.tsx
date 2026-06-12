@@ -2,6 +2,11 @@ import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { Form, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
+import {
+  applyApiSessionCookie,
+  readApiSessionCookie,
+  redirectAfterFormPost,
+} from "../../lib/api-session-cookie.js";
 import { getSessionUser } from "../../lib/session-client.js";
 import {
   AuthButton,
@@ -18,13 +23,7 @@ import {
 
 const API_BASE_URL = () => process.env["API_BASE_URL"] ?? "";
 
-/** Reads session cookie from an API response (undici getSetCookie or fetch get). */
-export function readApiSessionCookie(res: Response): string | null {
-  if (typeof res.headers.getSetCookie === "function") {
-    return res.headers.getSetCookie()[0] ?? null;
-  }
-  return res.headers.get("set-cookie");
-}
+export { readApiSessionCookie };
 
 /** 0 = empty, 1 = very_weak, 2 = weak, 3 = fair, 4 = strong */
 function calcPasswordStrength(password: string): 0 | 1 | 2 | 3 | 4 {
@@ -127,20 +126,14 @@ export async function action({ request }: ActionFunctionArgs) {
     | { userId: string; emailVerificationRequired?: boolean }
     | { emailVerificationRequired: true };
 
-  const setCookie = readApiSessionCookie(res);
-
   if ("emailVerificationRequired" in payload && payload.emailVerificationRequired) {
-    const redirectResponse = redirect("/verify-email");
-    if (setCookie !== null) {
-      redirectResponse.headers.set("Set-Cookie", setCookie);
-    }
+    const redirectResponse = redirectAfterFormPost("/verify-email");
+    applyApiSessionCookie(redirectResponse, res);
     return redirectResponse;
   }
 
-  const redirectResponse = redirect("/");
-  if (setCookie !== null) {
-    redirectResponse.headers.set("Set-Cookie", setCookie);
-  }
+  const redirectResponse = redirectAfterFormPost("/");
+  applyApiSessionCookie(redirectResponse, res);
   return redirectResponse;
 }
 

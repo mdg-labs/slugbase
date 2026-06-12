@@ -14,4 +14,12 @@ export class ConfigService {
   getAll(): AppConfig {
     return this.config;
   }
+
+  /** Secure flag for Set-Cookie — disabled in e2e (plain HTTP on localhost). */
+  cookieSecure(): boolean {
+    if (process.env.SLUGBASE_E2E_MODE === "true") {
+      return false;
+    }
+    return this.get("isProduction");
+  }
 }

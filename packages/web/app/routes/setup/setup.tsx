@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { Form, redirect, useActionData, useNavigation } from "react-router";
+import { applyApiSessionCookie, redirectAfterFormPost } from "../../lib/api-session-cookie.js";
 import { getServerApiBaseUrl } from "../../lib/server-api-base-url.js";
 import {
   AuthShell,
@@ -107,11 +108,8 @@ export async function action({ request }: ActionFunctionArgs): Promise<ActionRes
     return { error: "setup.error_generic" };
   }
 
-  const redirectResponse = redirect("/login");
-  const setCookie = res.headers.get("set-cookie");
-  if (setCookie !== null) {
-    redirectResponse.headers.set("Set-Cookie", setCookie);
-  }
+  const redirectResponse = redirectAfterFormPost("/login");
+  applyApiSessionCookie(redirectResponse, res);
   return redirectResponse;
 }
 

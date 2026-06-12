@@ -120,7 +120,7 @@ export class InvitationsController {
       httpOnly: true,
       sameSite: "lax",
       path: "/",
-      secure: this.config.get("isProduction"),
+      secure: this.config.cookieSecure(),
     });
 
     return { userId: result.userId, workspaceId: result.workspaceId };

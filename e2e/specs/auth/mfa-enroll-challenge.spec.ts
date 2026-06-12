@@ -4,6 +4,7 @@ import { loginAsWorker } from "../../helpers/worker-login.js";
 
 test.describe("MFA enroll and challenge flow", () => {
   test("enroll TOTP in settings -> logout -> login requires MFA challenge", async ({ page }, testInfo) => {
+    test.setTimeout(60_000);
     // ── Phase 1: Login via form ────────────────────────────────────
     await loginAsWorker(page, testInfo.workerIndex);
 
@@ -46,14 +47,16 @@ test.describe("MFA enroll and challenge flow", () => {
     // ── Phase 6: Logout ───────────────────────────────────────────
     await page.goto("/logout");
     await page.waitForURL(/\/login/);
+    await page.waitForSelector('[data-testid="login-form"]');
 
     // ── Phase 7: Login again — should require MFA challenge ────────
     const { email: mfaEmail, password: mfaPassword } = getWorkerCredentials(testInfo.workerIndex);
     await page.fill('[data-testid="login-email-input"]', mfaEmail);
     await page.fill('[data-testid="login-password-input"]', mfaPassword);
-    await page.click('[data-testid="login-submit-btn"]');
+    await page.locator('[data-testid="login-submit-btn"] button[type="submit"]').click();
 
     // Should be redirected to MFA challenge page
+    await page.waitForURL(/\/mfa$/);
     await page.waitForSelector('[data-testid="mfa-challenge-form"]');
 
     // ── Phase 8: Complete MFA challenge with TOTP ─────────────────

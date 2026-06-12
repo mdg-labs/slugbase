@@ -5,8 +5,8 @@ test.describe('Self-hosted setup smoke', () => {
     // globalSetup already called /setup/complete — if setup is done, skip
     const statusRes = await page.request.get('/setup/status');
     if (statusRes.ok()) {
-      const status = await statusRes.json();
-      if (status.setupComplete) {
+      const status = (await statusRes.json()) as { needsSetup?: boolean };
+      if (status.needsSetup === false) {
         test.skip(true, 'Setup already completed by globalSetup');
         return;
       }

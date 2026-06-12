@@ -45,7 +45,7 @@ export class RegistrationController {
       httpOnly: true,
       sameSite: "lax",
       path: "/",
-      secure: this.config.get("isProduction"),
+      secure: this.config.cookieSecure(),
     });
 
     if (emailVerificationRequired) {

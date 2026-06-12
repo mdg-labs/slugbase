@@ -30,6 +30,20 @@ export async function bootstrap(): Promise<void> {
     logger: ["error", "warn"],
     rawBody: true,
   });
+
+  if (startupConfig.SERVE_WEB_CLIENT) {
+    const serverBuildPath = startupConfig.WEB_CLIENT_SERVER_BUILD;
+    if (!serverBuildPath) {
+      throw new Error(
+        "WEB_CLIENT_SERVER_BUILD is required when SERVE_WEB_CLIENT is enabled",
+      );
+    }
+    const { registerWebClientMiddleware } = await import(
+      "./web-client/mount-web-client.js"
+    );
+    await registerWebClientMiddleware(app, serverBuildPath);
+  }
+
   app.use(cookieParser());
   await app.init();
 
@@ -40,17 +54,6 @@ export async function bootstrap(): Promise<void> {
     origin: config.get("FRONTEND_ORIGIN"),
     credentials: true,
   });
-
-  if (config.get("SERVE_WEB_CLIENT")) {
-    const serverBuildPath = config.get("WEB_CLIENT_SERVER_BUILD");
-    if (!serverBuildPath) {
-      throw new Error(
-        "WEB_CLIENT_SERVER_BUILD is required when SERVE_WEB_CLIENT is enabled",
-      );
-    }
-    const { mountWebClient } = await import("./web-client/mount-web-client.js");
-    await mountWebClient(app, serverBuildPath);
-  }
 
   await app.listen(config.get("PORT"));
 }

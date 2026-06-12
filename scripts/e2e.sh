@@ -106,7 +106,7 @@ print(' '.join(str(p) for p in ports))
 # 1. Start ephemeral Postgres (random host port via docker-compose)
 # ---------------------------------------------------------------------------
 header "Starting ephemeral Postgres"
-docker compose -f "$COMPOSE_FILE" up -d --wait 2>&1 | sed 's/^/  /'
+docker compose -f "$COMPOSE_FILE" up -d --wait --force-recreate 2>&1 | sed 's/^/  /'
 
 PGPORT="$(docker compose -f "$COMPOSE_FILE" port postgres 5432 | cut -d: -f2)"
 export DATABASE_URL="postgresql://slugbase:slugbase@localhost:$PGPORT/slugbase_e2e"
@@ -289,6 +289,7 @@ if [ "$RUN_SELF_HOSTED" = true ]; then
     -e APP_BASE_URL="http://localhost:$PORT_SELF" \
     -e FRONTEND_ORIGIN="http://localhost:$PORT_SELF" \
     -e API_BASE_URL="http://localhost:$PORT_SELF" \
+    -e PUBLIC_REGISTRATION=true \
     slugbase-e2e:self-hosted 2>&1 | sed 's/^/  /'
   ok "Container started"
 

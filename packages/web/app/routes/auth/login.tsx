@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { Form, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
+import { applyApiSessionCookie, redirectAfterFormPost } from "../../lib/api-session-cookie.js";
 import { getSessionUser } from "../../lib/session-client.js";
 import {
   AuthButton,
@@ -84,13 +85,8 @@ export async function action({ request }: ActionFunctionArgs) {
       : "emailVerificationRequired" in data && data.emailVerificationRequired
         ? "/verify-email"
         : "/";
-  const redirectResponse = redirect(destination);
-
-  const setCookie = res.headers.get("set-cookie");
-  if (setCookie !== null) {
-    redirectResponse.headers.set("Set-Cookie", setCookie);
-  }
-
+  const redirectResponse = redirectAfterFormPost(destination);
+  applyApiSessionCookie(redirectResponse, res);
   return redirectResponse;
 }
 

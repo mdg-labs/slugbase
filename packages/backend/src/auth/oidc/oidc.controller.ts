@@ -56,7 +56,7 @@ export class OidcController {
       httpOnly: true,
       sameSite: "lax",
       path: "/",
-      secure: this.config.get("isProduction"),
+      secure: this.config.cookieSecure(),
       // No maxAge - session-scoped cookie
     });
 
@@ -116,7 +116,7 @@ export class OidcController {
       httpOnly: true,
       sameSite: "lax",
       path: "/",
-      secure: this.config.get("isProduction"),
+      secure: this.config.cookieSecure(),
     });
 
     const frontendOrigin = this.config.get("FRONTEND_ORIGIN");
