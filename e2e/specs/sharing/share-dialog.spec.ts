@@ -14,6 +14,8 @@ import { test, expect } from "../../fixtures/auth.js";
 test.describe("Share dialog", () => {
   test("free plan hides share controls, team plan shows share dialog", async ({
     page,
+    sessionCookie,
+    csrfToken,
   }) => {
     // ── Phase 1: Login ──────────────────────────────────────────────
     await page.goto("/login");
@@ -24,29 +26,28 @@ test.describe("Share dialog", () => {
     await page.waitForURL(/\/$/);
     await page.waitForSelector('[data-testid="sidebar-nav"]');
 
-    // ── Phase 2: Create a bookmark via the page's action ────────────
-    const csrf = await page.evaluate(async () => {
-      const res = await fetch("/auth/csrf-token");
-      const data = (await res.json()) as { csrfToken: string };
-      return data.csrfToken;
-    });
+    const apiUrl = process.env.E2E_BASE_URL_API ?? process.env.E2E_BASE_URL_SELF_HOSTED ?? 'http://localhost:4001';
+    const apiHeaders = { Cookie: sessionCookie, "x-csrf-token": csrfToken };
 
-    const bookmarkId = await page.evaluate(async (token) => {
-      const res = await fetch("/bookmarks", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-csrf-token": token,
-        },
-        body: JSON.stringify({
-          url: "https://example.com/share-e2e",
-          title: "Share E2E Bookmark",
-        }),
-      });
-      if (!res.ok) throw new Error(`Create bookmark failed: ${res.status}`);
-      const data = (await res.json()) as { id: string };
-      return data.id;
-    }, csrf);
+    // ── Phase 1.5: Reset workspace to free plan ─────────────────────
+    // Parallel test workers may have upgraded the plan; reset it so we
+    // can test the free-plan entitlement gate for share controls.
+    const resetRes = await page.request.patch(`${apiUrl}/workspaces/active`, {
+      headers: { ...apiHeaders, "Content-Type": "application/json" },
+      data: { plan: "free" },
+    });
+    expect(resetRes.ok(), `Plan reset failed: ${resetRes.status()}`).toBeTruthy();
+
+    // ── Phase 2: Create a bookmark via the API directly ──────────────
+    const createRes = await page.request.post(`${apiUrl}/bookmarks`, {
+      headers: apiHeaders,
+      data: {
+        url: "https://example.com/share-e2e",
+        title: "Share E2E Bookmark",
+      },
+    });
+    expect(createRes.ok(), `Bookmark creation failed: ${createRes.status()}`).toBeTruthy();
+    const { id: bookmarkId } = await createRes.json() as { id: string };
 
     // ── Phase 3: Entitlement gate — free plan hides scope filter ────
     await page.goto("/bookmarks");
@@ -76,17 +77,11 @@ test.describe("Share dialog", () => {
     });
 
     // ── Phase 5: Upgrade workspace to team plan ─────────────────────
-    await page.evaluate(async (token) => {
-      const res = await fetch("/workspaces/active", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          "x-csrf-token": token,
-        },
-        body: JSON.stringify({ plan: "team" }),
-      });
-      if (!res.ok) throw new Error(`Upgrade failed: ${res.status}`);
-    }, csrf);
+    const upgradeRes = await page.request.patch(`${apiUrl}/workspaces/active`, {
+      headers: { ...apiHeaders, "Content-Type": "application/json" },
+      data: { plan: "team" },
+    });
+    expect(upgradeRes.ok(), `Upgrade failed: ${upgradeRes.status()}`).toBeTruthy();
 
     // ── Phase 6: Team plan shows scope filter ───────────────────────
     await page.goto("/bookmarks");

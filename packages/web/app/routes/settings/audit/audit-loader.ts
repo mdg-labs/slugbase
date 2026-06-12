@@ -17,7 +17,10 @@ export async function auditSettingsLoader({
 
   const workspace = await loadAuditWorkspacePlan(request);
   if (!workspace) {
-    throw new Error("Failed to load workspace");
+    // Workspace fetch failed — render the plan gate rather than throwing,
+    // which would bubble to the app-level error boundary and hide the
+    // settings layout entirely.
+    return { canAccess: false, workspace: { plan: "free" }, events: null };
   }
 
   if (!canAccessAuditLog(workspace)) {

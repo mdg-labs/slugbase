@@ -13,9 +13,32 @@ test.describe("Free bookmark cap", () => {
     await page.waitForURL(/\/$/);
     await page.waitForSelector('[data-testid="sidebar-nav"]');
 
-    // ── Phase 2: Seed bookmarks to reach the free cap (50) via API ─
+    // ── Phase 2: Reset workspace to free plan ───────────────────────
+    // Parallel test workers may have upgraded the plan; reset it so the
+    // bookmark cap (50) applies and the cap banner renders.
     await page.evaluate(async () => {
-      // Helper to get a CSRF token
+      const getCsrfToken = async (): Promise<string> => {
+        const res = await fetch("/auth/csrf-token");
+        const data = (await res.json()) as { csrfToken: string };
+        return data.csrfToken;
+      };
+
+      const csrf = await getCsrfToken();
+      const res = await fetch("/workspaces/active", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "x-csrf-token": csrf,
+        },
+        body: JSON.stringify({ plan: "free" }),
+      });
+      if (!res.ok) {
+        throw new Error(`Failed to reset workspace plan: ${res.status}`);
+      }
+    });
+
+    // ── Phase 3: Seed bookmarks to reach the free cap (50) via API ─
+    await page.evaluate(async () => {
       const getCsrfToken = async (): Promise<string> => {
         const res = await fetch("/auth/csrf-token");
         const data = (await res.json()) as { csrfToken: string };
@@ -43,11 +66,11 @@ test.describe("Free bookmark cap", () => {
       }
     });
 
-    // ── Phase 3: Navigate to bookmarks ──────────────────────────────
+    // ── Phase 4: Navigate to bookmarks ──────────────────────────────
     await page.goto("/bookmarks");
     await page.waitForSelector('[data-testid="bookmark-list-page"]');
 
-    // ── Phase 4: Verify the cap banner is shown ─────────────────────
+    // ── Phase 5: Verify the cap banner is shown ─────────────────────
     const capBanner = page.locator('[data-testid="bookmark-cap-banner"]');
     await expect(capBanner).toBeVisible();
 
