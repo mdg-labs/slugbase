@@ -98,6 +98,14 @@ export class OidcRepository {
     return rows.map(toProviderRecord);
   }
 
+  async listEnabledProviders(): Promise<OidcProviderRecord[]> {
+    const rows = await this.db
+      .select()
+      .from(oidcProviders)
+      .where(eq(oidcProviders.enabled, true));
+    return rows.map(toProviderRecord);
+  }
+
   async updateProvider(
     id: string,
     data: UpdateOidcProviderData,

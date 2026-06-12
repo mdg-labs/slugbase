@@ -18,6 +18,9 @@ import { ConfigService } from "../../config/config.service.js";
 import { CRYPTO } from "../../crypto/crypto.tokens.js";
 import { DbService } from "../../db/db.service.js";
 import { OidcRepository } from "./oidc.repository.js";
+import type { PublicOidcProviderItem } from "@slugbase/shared-types";
+
+import { toPublicOidcLoginProviders } from "./oidc-public-providers.js";
 import type {
   CreateOidcProviderData,
   OidcFlowState,
@@ -190,6 +193,19 @@ export class OidcService {
   }
 
   /**
+   * Public login/register provider list — id and display name only.
+   * Self-hosted: enabled DB providers. Hosted interim: empty until #354.
+   */
+  async listPublicProviders(): Promise<PublicOidcProviderItem[]> {
+    if (this.isHostedDeployment()) {
+      return [];
+    }
+
+    const providers = await this.repo.listEnabledProviders();
+    return toPublicOidcLoginProviders(providers);
+  }
+
+  /**
    * Updates an existing OIDC provider.
    * If a new clientSecret is provided, it is encrypted before storage.
    */
@@ -262,6 +278,12 @@ export class OidcService {
   /** Generates a cryptographically random nonce value - exposed for testing */
   generateNonce(): string {
     return randomNonce();
+  }
+
+  /** Hosted cloud uses Stripe billing; self-hosted omits STRIPE_SECRET_KEY (spec §11.4). */
+  private isHostedDeployment(): boolean {
+    const stripeKey = this.config.get("STRIPE_SECRET_KEY");
+    return typeof stripeKey === "string" && stripeKey.length > 0;
   }
 
   private async getEnabledProvider(

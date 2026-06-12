@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  HttpCode,
   Inject,
   NotFoundException,
   Param,
@@ -10,7 +11,7 @@ import {
 } from "@nestjs/common";
 import type { Request, Response } from "express";
 
-import type { CryptoService } from "@slugbase/shared-types";
+import type { CryptoService, ListPublicOidcProvidersResponse } from "@slugbase/shared-types";
 
 import { ConfigService } from "../../config/config.service.js";
 import { CRYPTO } from "../../crypto/crypto.tokens.js";
@@ -36,6 +37,17 @@ export class OidcController {
     @Inject(ConfigService) private readonly config: ConfigService,
     @Inject(CRYPTO) private readonly crypto: CryptoService,
   ) {}
+
+  /**
+   * GET /auth/oidc/providers
+   * Returns enabled providers for login/register SSO buttons (safe fields only).
+   */
+  @Get("providers")
+  @HttpCode(200)
+  async listPublicProviders(): Promise<ListPublicOidcProvidersResponse> {
+    const providers = await this.oidc.listPublicProviders();
+    return { providers };
+  }
 
   /**
    * GET /auth/oidc/:providerId/authorize
