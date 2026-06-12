@@ -212,6 +212,7 @@ function EnrollConfirmStep({
             fontSize: "var(--text-small)",
             lineHeight: "var(--lh-small)",
           }}
+          data-testid="mfa-text-secret-toggle"
         >
           {t("mfa.enroll.text_secret_label")}
         </button>

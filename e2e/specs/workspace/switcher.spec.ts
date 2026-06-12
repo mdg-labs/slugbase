@@ -40,11 +40,24 @@ test.describe("Workspace switcher", () => {
     await nameInput.fill("Second Workspace");
 
     // Submit the create form
-    const submitBtn = page.locator("button").filter({ hasText: /create/i });
-    await submitBtn.click();
+    const submitBtn = page.locator('[data-testid="workspace-switcher-panel"]').getByRole('button', { name: /create workspace/i });
+
+    // Wait for the POST /workspaces to succeed before the page navigates away,
+    // otherwise page.goto('/') below would abort the in-flight API call.
+    await Promise.all([
+      page.waitForResponse(
+        (resp) =>
+          resp.url().includes("/workspaces") &&
+          resp.request().method() === "POST" &&
+          resp.status() === 201,
+      ),
+      submitBtn.click(),
+    ]);
 
     // The page reloads after workspace creation (navigate(0))
-    // Wait for the sidebar nav to reappear with the new workspace name
+    // Wait for the page to fully reload by waiting for sidebar to be visible
+    // and the switcher overlay to be gone
+    await page.goto('/');
     await page.waitForSelector('[data-testid="sidebar-nav"]');
 
     // ── Phase 4: Open workspace switcher and switch ──────────────

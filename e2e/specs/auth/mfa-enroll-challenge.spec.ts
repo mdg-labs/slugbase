@@ -27,7 +27,7 @@ test.describe("MFA enroll and challenge flow", () => {
 
     // ── Phase 3: Reveal the TOTP text secret ──────────────────────
     // Click the "manual code" toggle button to reveal the secret
-    await page.click("text=Can't scan?");
+    await page.click('[data-testid="mfa-text-secret-toggle"]');
     await page.waitForSelector('[data-testid="mfa-setup-code"]');
     const textSecret = await page.locator('[data-testid="mfa-setup-code"]').textContent();
     expect(textSecret).toBeTruthy();

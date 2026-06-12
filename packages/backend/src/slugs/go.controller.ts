@@ -56,8 +56,8 @@ export class GoController {
     @ActiveWorkspace() workspace: WorkspaceRecord,
     @Req() req: Request & Record<string, unknown>,
     @Param("slug") slug: string,
-    @Res() res: Response,
-  ): Promise<void> {
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<GoResolveResult | void> {
     const userId = req[TENANT_USER_ID_KEY] as string;
     const result = await this.go.resolveSlug(workspace, userId, slug);
 
@@ -75,7 +75,7 @@ export class GoController {
     @ActiveWorkspace() workspace: WorkspaceRecord,
     @Req() req: Request & Record<string, unknown>,
     @Param("slug") slug: string,
-    @Res() res: Response,
+    @Res({ passthrough: true }) res: Response,
     @Body() body: { bookmarkId: string; remember?: boolean },
   ): Promise<void> {
     const userId = req[TENANT_USER_ID_KEY] as string;
