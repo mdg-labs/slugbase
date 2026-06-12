@@ -12,6 +12,10 @@
 #   bash scripts/e2e.sh specs/bookmarks/              # hosted + self-hosted, single spec dir
 #   bash scripts/e2e.sh --debug                       # hosted + self-hosted, debug mode
 #
+# Build paths (spec §15 — VITE_* flags are build-time; one bundle cannot serve both modes):
+#   Hosted:     pnpm build with VITE_BILLING_ENABLED=true and admin UI flags false
+#   Self-host:  docker build with VITE_BILLING_ENABLED=false and admin UI flags true
+#
 # Prerequisites (one-time):
 #   npx playwright install --with-deps chromium
 #
@@ -60,6 +64,27 @@ info()  { echo -e "${CYAN}→${NC} $1"; }
 warn()  { echo -e "${YELLOW}⚠${NC} $1"; }
 fail()  { echo -e "${RED}✗${NC} $1"; }
 header(){ echo -e "\n${CYAN}═══════════════════════════════════════════${NC}"; echo -e "${CYAN}  $1${NC}"; echo -e "${CYAN}═══════════════════════════════════════════${NC}"; }
+
+# Self-hosted Docker image build args (spec §15 — docs/environment-variables.md)
+SELF_HOSTED_DOCKER_BUILD_ARGS=(
+  --build-arg VITE_BILLING_ENABLED=false
+  --build-arg VITE_MAIL_ADMIN_UI=true
+  --build-arg VITE_OIDC_ADMIN_UI=true
+  --build-arg VITE_AI_BYO_CREDENTIAL=true
+)
+
+# Hosted web bundle: billing on, workspace SMTP/OIDC/AI BYO panels off.
+build_hosted_packages() {
+  header "Building hosted packages"
+  cd "$REPO_ROOT"
+  info "VITE_BILLING_ENABLED=true  VITE_MAIL_ADMIN_UI=false  VITE_OIDC_ADMIN_UI=false  VITE_AI_BYO_CREDENTIAL=false"
+  VITE_BILLING_ENABLED=true \
+  VITE_MAIL_ADMIN_UI=false \
+  VITE_OIDC_ADMIN_UI=false \
+  VITE_AI_BYO_CREDENTIAL=false \
+    bash scripts/with-ci-env.sh pnpm build 2>&1 | sed 's/^/  /'
+  ok "Hosted build complete"
+}
 
 # Track all e2e process PIDs for reliable cleanup.
 E2E_PIDS=()
@@ -159,16 +184,14 @@ trap cleanup EXIT INT TERM
 info "Ensuring Playwright browsers …"
 npx playwright install chromium 2>&1 | sed 's/^/  /'
 ok "Playwright browsers ready"
-header "Building packages"
-cd "$REPO_ROOT"
-bash scripts/with-ci-env.sh pnpm build 2>&1 | sed 's/^/  /'
-ok "Build complete"
 
 # ---------------------------------------------------------------------------
 # 3. Run hosted tests (if selected)
 #    Playwright webServer starts API, web, marketing on random ports
 # ---------------------------------------------------------------------------
 if [ "$RUN_HOSTED" = true ]; then
+  build_hosted_packages
+
   header "Running hosted tests"
 
   IFS=' ' read -r PORT_API PORT_WEB PORT_MKTG <<< "$(find_free_ports 3)"
@@ -272,9 +295,12 @@ if [ "$RUN_SELF_HOSTED" = true ]; then
   read -r PORT_SELF <<< "$(find_free_ports 1)"
   export E2E_JSON_REPORT_PATH="$REPO_ROOT/e2e/test-results/report-self-hosted.json"
 
-  info "Building combined Docker image …"
+  info "Building combined Docker image (self-host VITE flags) …"
+  info "VITE_BILLING_ENABLED=false  VITE_MAIL_ADMIN_UI=true  VITE_OIDC_ADMIN_UI=true  VITE_AI_BYO_CREDENTIAL=true"
   DOCKER_BUILD_RAN=true
-  docker build -t slugbase-e2e:self-hosted . 2>&1 | sed 's/^/  /'
+  docker build -t slugbase-e2e:self-hosted \
+    "${SELF_HOSTED_DOCKER_BUILD_ARGS[@]}" \
+    . 2>&1 | sed 's/^/  /'
   ok "Docker image built"
 
   info "Starting combined container on port $PORT_SELF …"
