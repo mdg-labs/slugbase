@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import { NavLink, useLocation } from "react-router";
 
+import { isPlanGatingEnabled } from "../lib/billing-config.js";
 import type { WorkspaceListItem } from "./workspace-switcher/workspace-switcher-api.js";
 import { WorkspaceSwitcherPanel } from "./workspace-switcher/WorkspaceSwitcherPanel.js";
 
@@ -207,7 +208,7 @@ export function AppSidebar({
   const currentFolderId = new URLSearchParams(location.search).get("folderId");
   const used = bookmarksUsed ?? bookmarkTotal;
   const pct = Math.min(100, Math.round((used / bookmarkCap) * 100));
-  const showMeter = workspace.plan === "free";
+  const showMeter = isPlanGatingEnabled() && workspace.plan === "free";
 
   const wsLetter = workspace.name.trim().charAt(0).toUpperCase() || "?";
 
