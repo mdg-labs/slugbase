@@ -1,4 +1,5 @@
 import { test, expect } from "../../fixtures/auth.js";
+import { e2eResourceSuffix } from "../../helpers/e2e-resource-id.js";
 import { loginAsWorker } from "../../helpers/worker-login.js";
 import { createSeedHelper } from "../../fixtures/seed.js";
 
@@ -6,6 +7,8 @@ test.describe("Folders CRUD", () => {
   test("create folder -> appears in list and sidebar -> filter bookmarks by folder", async ({
     page,
   }, testInfo) => {
+    const folderName = `E2E Test Folder ${e2eResourceSuffix(testInfo)}`;
+
     // ── Phase 1: Login ──────────────────────────────────────────
     await loginAsWorker(page, testInfo.workerIndex);
 
@@ -19,7 +22,7 @@ test.describe("Folders CRUD", () => {
     await page.waitForSelector('[data-testid="folder-create-dialog"]');
 
     // The dialog has an input named "folder-create-input" (id="folder-create-input")
-    await page.fill("#folder-create-input", "E2E Test Folder");
+    await page.fill("#folder-create-input", folderName);
 
     // Submit the form
     await page.click('button[type="submit"]');
@@ -33,14 +36,14 @@ test.describe("Folders CRUD", () => {
     // ── Phase 4: Verify folder appears in the folder list ───────
     await page.waitForSelector('[data-testid="folder-list"]');
     const folderList = page.locator('[data-testid="folder-list"]');
-    await expect(folderList).toContainText("E2E Test Folder");
+    await expect(folderList).toContainText(folderName);
 
     // ── Phase 5: Verify folder appears in the dashboard sidebar ─
     await page.goto("/");
     await page.waitForSelector('[data-testid="dashboard-folders-overview"]');
     const sidebarFolders = page.locator('[data-testid="dashboard-folders-overview"]');
     await expect(sidebarFolders).toBeVisible();
-    await expect(sidebarFolders).toContainText("E2E Test Folder");
+    await expect(sidebarFolders).toContainText(folderName);
 
     // ── Phase 6: Create a bookmark and assign it to the folder ──
     await page.goto("/bookmarks");
@@ -60,7 +63,11 @@ test.describe("Folders CRUD", () => {
     await page.waitForSelector('[data-testid="folder-selector-menu"]');
 
     // Click the folder item by its visible text
-    await page.locator('[data-testid="folder-selector-menu"] button').filter({ hasText: "E2E Test Folder" }).click();
+    await page
+      .locator('[data-testid="folder-selector-menu"] button')
+      .filter({ hasText: folderName })
+      .first()
+      .click();
 
     // Submit the bookmark modal
     await page.click('button[type="submit"]');
@@ -75,7 +82,7 @@ test.describe("Folders CRUD", () => {
     // Open the folder filter chip dropdown on the bookmarks toolbar
     await page.click('[data-testid="bookmark-folder-filter"]');
     // The dropdown menu items should appear — click our folder
-    await page.locator('button[role="menuitem"]').filter({ hasText: "E2E Test Folder" }).click();
+    await page.locator('button[role="menuitem"]').filter({ hasText: folderName }).first().click();
 
     // Wait for the page to reload with the folder filter applied
     await page.waitForTimeout(1500);

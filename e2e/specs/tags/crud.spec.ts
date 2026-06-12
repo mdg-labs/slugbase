@@ -7,6 +7,8 @@ test.describe("Tags CRUD", () => {
   test("create tag -> assign via bookmark modal -> filter tag list", async ({
     page,
   }, testInfo) => {
+    const tagName = `e2e-test-tag-${e2eResourceSuffix(testInfo)}`;
+
     // ── Phase 1: Login ──────────────────────────────────────────
     await loginAsWorker(page, testInfo.workerIndex);
 
@@ -19,7 +21,7 @@ test.describe("Tags CRUD", () => {
     await page.waitForSelector('[data-testid="tag-modal"]');
 
     // The dialog has an input with id="tag-name-input"
-    await page.fill("#tag-name-input", "e2e-test-tag");
+    await page.fill("#tag-name-input", tagName);
 
     // Submit the form
     await page.click('button[type="submit"]');
@@ -33,7 +35,7 @@ test.describe("Tags CRUD", () => {
     // ── Phase 3: Verify the tag appears in the tag list ─────────
     await page.waitForSelector('[data-testid="tag-list"]');
     const tagList = page.locator('[data-testid="tag-list"]');
-    await expect(tagList).toContainText("e2e-test-tag");
+    await expect(tagList).toContainText(tagName);
 
     // Click on the tag row to open the detail panel
     await page.locator('[data-testid="tag-list"] [data-testid^="tag-row-"]').first().click();
@@ -41,7 +43,7 @@ test.describe("Tags CRUD", () => {
     const detailPanel = page.locator('[data-testid="tag-detail-panel"]');
 
     // Detail panel should show the tag name with a hash prefix
-    await expect(detailPanel).toContainText("e2e-test-tag");
+    await expect(detailPanel).toContainText(tagName);
 
     // ── Phase 4: Create a bookmark and assign the tag ───────────
     await page.goto("/bookmarks");
@@ -58,11 +60,15 @@ test.describe("Tags CRUD", () => {
 
     // Type in the tag input to find and select our tag
     const tagInput = page.locator('[data-testid="tag-input"]');
-    await tagInput.fill("e2e-test-tag");
+    await tagInput.fill(tagName);
 
     // Wait for suggestions to appear and click the matching suggestion
     await page.waitForSelector('[data-testid="tag-suggestions"]');
-    await page.locator('[data-testid="tag-suggestions"] button').filter({ hasText: "e2e-test-tag" }).click();
+    await page
+      .locator('[data-testid="tag-suggestions"] button')
+      .filter({ hasText: tagName })
+      .first()
+      .click();
 
     // Submit the bookmark modal
     await page.click('button[type="submit"]');
