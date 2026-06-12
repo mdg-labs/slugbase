@@ -17,7 +17,7 @@ import { ActiveWorkspace } from "../workspaces/active-workspace.decorator.js";
 import { TenantGuard, TENANT_USER_ID_KEY } from "../workspaces/tenant.guard.js";
 import type { WorkspaceRecord } from "../workspaces/workspace.types.js";
 import { GoService } from "./go.service.js";
-import type { SlugPreferenceRecord } from "./slug.types.js";
+import type { GoResolveResult, SlugPreferenceRecord } from "./slug.types.js";
 
 @Controller("go")
 @UseGuards(TenantGuard)
