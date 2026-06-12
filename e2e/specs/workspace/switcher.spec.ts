@@ -4,9 +4,22 @@ import { loginAsWorker } from "../../helpers/worker-login.js";
 test.describe("Workspace switcher", () => {
   test("create second workspace → switch via WorkspaceSwitcherPanel → sidebar and bookmark list reflect active workspace", async ({
     page,
+    sessionCookie,
+    csrfToken,
   }, testInfo) => {
     // ── Phase 1: Login ──────────────────────────────────────────
     await loginAsWorker(page, testInfo.workerIndex);
+
+    // Upgrade workspace to team plan so workspace creation is not blocked
+    const apiUrl = process.env.E2E_BASE_URL_API ?? process.env.E2E_BASE_URL_SELF_HOSTED ?? 'http://localhost:4001';
+    await page.request.patch(`${apiUrl}/workspaces/active`, {
+      headers: {
+        Cookie: sessionCookie,
+        "x-csrf-token": csrfToken,
+        "Content-Type": "application/json",
+      },
+      data: { plan: "team" },
+    });
 
     // Mark onboarding as done so the overlay doesn't interfere
     await page.evaluate(() => {

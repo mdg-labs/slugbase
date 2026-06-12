@@ -1,5 +1,5 @@
 import type { FullConfig } from '@playwright/test';
-import { writeFileSync, readFileSync, existsSync } from 'fs';
+import { writeFileSync } from 'fs';
 import { resolve } from 'path';
 
 const WORKER_COUNT = 8;
@@ -102,24 +102,9 @@ export default async function globalSetup(config: FullConfig) {
     '.worker-credentials.json',
   );
 
-  // If credentials file already exists (e.g. from a previous partial run),
-  // check if it has the right count and skip registration.
-  if (existsSync(credentialsPath)) {
-    try {
-      const existing = JSON.parse(
-        readFileSync(credentialsPath, 'utf-8'),
-      ) as WorkerCredentials[];
-      if (existing.length >= WORKER_COUNT) {
-        console.log(
-          `[global-setup] Worker credentials already exist (${existing.length} users) — skipping registration`,
-        );
-        return;
-      }
-    } catch {
-      // Corrupted file — re-create
-    }
-  }
-
+  // Always re-register worker users — the e2e script creates a fresh ephemeral
+  // Postgres on every run, so any previously cached credentials are invalid.
+  // Registration is idempotent (409 = already exists) so re-running is safe.
   console.log(
     `[global-setup] Registering ${WORKER_COUNT} worker users at ${apiUrl} …`,
   );

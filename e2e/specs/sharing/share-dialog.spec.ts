@@ -119,9 +119,7 @@ test.describe("Share dialog", () => {
     ).toBeVisible();
 
     // Close dialog
-    await page.click(
-      '[data-testid="share-dialog"] button:has-text("Close")'
-    );
+    await page.locator('[data-testid="share-dialog"]').getByRole('button', { name: 'Done' }).click();
     await page.waitForSelector('[data-testid="share-dialog"]', {
       state: "hidden",
     });

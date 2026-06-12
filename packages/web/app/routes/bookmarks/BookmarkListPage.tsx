@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useLoaderData, useNavigate, useNavigation } from "react-router";
+import { useLoaderData, useNavigate, useNavigation, useRevalidator } from "react-router";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
   ExternalLinkIcon,
@@ -1315,8 +1315,19 @@ export function BookmarkListPage() {
   const navigate = useNavigate();
   const navigation = useNavigation();
   const { currentUserId, canShare } = useWorkspaceEntitlements();
-  const { openCreate, openEdit } = useBookmarkModal();
+  const { open, openCreate, openEdit } = useBookmarkModal();
   const { showToast, showError } = useAppToast();
+  const revalidator = useRevalidator();
+
+  // Revalidate when the bookmark modal closes (submit success or cancel)
+  const prevOpenRef = useRef(open);
+  useEffect(() => {
+    if (prevOpenRef.current && !open) {
+      // Modal just closed — re-fetch loader data so the list reflects any changes
+      void revalidator.revalidate();
+    }
+    prevOpenRef.current = open;
+  }, [open, revalidator]);
 
   // View toggle: prefer server param, but persist locally
   const [view, setView] = useState<"grid" | "table">(() => {

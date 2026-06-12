@@ -68,7 +68,7 @@ test.describe("Bookmark bulk actions", () => {
     await expect(page.locator('[data-testid="bulk-bar"]')).toContainText("3");
 
     // ── Phase 5: Bulk pin ──────────────────────────────────────────
-    await page.locator('[data-testid="bulk-bar"] button').filter({ hasText: "Pin" }).click();
+    await page.locator('[data-testid="bulk-bar"]').getByRole('button', { name: 'Pin', exact: true }).click();
 
     // Wait for navigation/re-render after pin
     await page.waitForTimeout(500);
