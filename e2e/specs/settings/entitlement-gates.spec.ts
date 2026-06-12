@@ -1,17 +1,12 @@
 import { test, expect } from "../../fixtures/auth.js";
+import { loginAsWorker } from "../../helpers/worker-login.js";
 
 test.describe("Settings entitlement gates", () => {
   test("free plan shows members-plan-gate and audit-plan-gate", async ({
     page,
-  }) => {
+  }, testInfo) => {
     // ── Phase 1: Login ──────────────────────────────────────────────
-    await page.goto("/login");
-    await page.waitForSelector('[data-testid="login-form"]');
-    await page.fill('[data-testid="login-email-input"]', "e2e@slugbase.test");
-    await page.fill('[data-testid="login-password-input"]', "e2e-test-password");
-    await page.click('[data-testid="login-submit-btn"]');
-    await page.waitForURL(/\/$/);
-    await page.waitForSelector('[data-testid="sidebar-nav"]');
+    await loginAsWorker(page, testInfo.workerIndex);
 
     // ── Phase 2: Navigate to members settings (free plan should gate) ─
     await page.goto("/settings/members");
@@ -31,15 +26,9 @@ test.describe("Settings entitlement gates", () => {
 
   test("team plan shows members and audit pages (no plan gates)", async ({
     page,
-  }) => {
+  }, testInfo) => {
     // ── Phase 1: Login ──────────────────────────────────────────────
-    await page.goto("/login");
-    await page.waitForSelector('[data-testid="login-form"]');
-    await page.fill('[data-testid="login-email-input"]', "e2e@slugbase.test");
-    await page.fill('[data-testid="login-password-input"]', "e2e-test-password");
-    await page.click('[data-testid="login-submit-btn"]');
-    await page.waitForURL(/\/$/);
-    await page.waitForSelector('[data-testid="sidebar-nav"]');
+    await loginAsWorker(page, testInfo.workerIndex);
 
     // ── Phase 2: Upgrade workspace plan to "team" via API ───────────
     await page.evaluate(async () => {

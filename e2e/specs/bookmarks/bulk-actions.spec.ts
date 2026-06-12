@@ -1,19 +1,14 @@
 import { test, expect } from "../../fixtures/auth.js";
+import { loginAsWorker } from "../../helpers/worker-login.js";
 
 test.describe("Bookmark bulk actions", () => {
   test("select multiple bookmarks, bulk pin, move to folder, and delete", async ({
     page,
     sessionCookie,
     csrfToken,
-  }) => {
+  }, testInfo) => {
     // ── Phase 1: Login ──────────────────────────────────────────────
-    await page.goto("/login");
-    await page.waitForSelector('[data-testid="login-form"]');
-    await page.fill('[data-testid="login-email-input"]', "e2e@slugbase.test");
-    await page.fill('[data-testid="login-password-input"]', "e2e-test-password");
-    await page.click('[data-testid="login-submit-btn"]');
-    await page.waitForURL(/\/$/);
-    await page.waitForSelector('[data-testid="sidebar-nav"]');
+    await loginAsWorker(page, testInfo.workerIndex);
 
     // ── Phase 2: Seed bookmarks and folder via API ─────────────────
     const apiUrl = process.env.E2E_BASE_URL_API ?? process.env.E2E_BASE_URL_SELF_HOSTED ?? 'http://localhost:4001';

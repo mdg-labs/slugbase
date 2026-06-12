@@ -1,16 +1,12 @@
 import { test, expect } from "../../fixtures/auth.js";
+import { loginAsWorker } from "../../helpers/worker-login.js";
 
 test.describe("Workspace switcher", () => {
   test("create second workspace → switch via WorkspaceSwitcherPanel → sidebar and bookmark list reflect active workspace", async ({
     page,
-  }) => {
+  }, testInfo) => {
     // ── Phase 1: Login ──────────────────────────────────────────
-    await page.goto("/login");
-    await page.waitForSelector('[data-testid="login-form"]');
-    await page.fill('[data-testid="login-email-input"]', "e2e@slugbase.test");
-    await page.fill('[data-testid="login-password-input"]', "e2e-test-password");
-    await page.click('[data-testid="login-submit-btn"]');
-    await page.waitForURL(/\/$/);
+    await loginAsWorker(page, testInfo.workerIndex);
 
     // Mark onboarding as done so the overlay doesn't interfere
     await page.evaluate(() => {

@@ -1,9 +1,10 @@
 import { test, expect } from "../../fixtures/auth.js";
+import { loginAsWorker } from "../../helpers/worker-login.js";
 
 /**
  * E2E: Share dialog visibility and entitlement gating.
  *
- * Prerequisites: Requires seeded e2e@slugbase.test account with workspace.
+ * Prerequisites: Requires seeded test account with workspace.
  * Backend API sharing covered by packages/backend/test/sharing.e2e-spec.ts.
  *
  * Tests:
@@ -16,15 +17,9 @@ test.describe("Share dialog", () => {
     page,
     sessionCookie,
     csrfToken,
-  }) => {
+  }, testInfo) => {
     // ── Phase 1: Login ──────────────────────────────────────────────
-    await page.goto("/login");
-    await page.waitForSelector('[data-testid="login-form"]');
-    await page.fill('[data-testid="login-email-input"]', "e2e@slugbase.test");
-    await page.fill('[data-testid="login-password-input"]', "e2e-test-password");
-    await page.click('[data-testid="login-submit-btn"]');
-    await page.waitForURL(/\/$/);
-    await page.waitForSelector('[data-testid="sidebar-nav"]');
+    await loginAsWorker(page, testInfo.workerIndex);
 
     const apiUrl = process.env.E2E_BASE_URL_API ?? process.env.E2E_BASE_URL_SELF_HOSTED ?? 'http://localhost:4001';
     const apiHeaders = { Cookie: sessionCookie, "x-csrf-token": csrfToken };

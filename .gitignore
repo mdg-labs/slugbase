@@ -29,5 +29,8 @@ tmp
 # e2e test artifacts (Playwright)
 e2e/test-results/
 e2e/playwright-report/
+e2e/.auth-storage.json
+e2e/.onboarding-storage-state.json
+e2e/.worker-credentials.json
 playwright-report/
 test-results/

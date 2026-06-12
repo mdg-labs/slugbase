@@ -1,6 +1,14 @@
-import { test as base, expect, type Page } from '@playwright/test';
+import { test as base, expect, type Page, type TestInfo } from '@playwright/test';
+import { readFileSync, existsSync } from 'fs';
+import { resolve } from 'path';
 
 const STORAGE_STATE_PATH = '.auth-storage.json';
+
+export interface WorkerCredentials {
+  email: string;
+  password: string;
+  name: string;
+}
 
 export interface E2eFixtures {
   /**
@@ -19,6 +27,11 @@ export interface E2eFixtures {
    * Pre-authenticated storage state file created via API login.
    */
   authStorageState: string;
+
+  /**
+   * Worker-scoped email address for the current Playwright worker.
+   */
+  workerEmail: string;
 }
 
 function resolveApiUrl(): string {
@@ -36,6 +49,47 @@ function resolveWebHostname(): string {
 
 const DEFAULT_EMAIL = 'e2e@slugbase.test';
 const DEFAULT_PASSWORD = 'e2e-test-password';
+
+// ── Worker credentials loading ────────────────────────────────────────────────
+
+let _workerCredentials: WorkerCredentials[] | null = null;
+
+/**
+ * Load worker credentials written by global-setup.
+ * Falls back to a single legacy credential if the file doesn't exist.
+ */
+function loadWorkerCredentials(): WorkerCredentials[] {
+  if (_workerCredentials) return _workerCredentials;
+
+  const credPath = resolve(process.cwd(), 'e2e', '.worker-credentials.json');
+  if (existsSync(credPath)) {
+    try {
+      _workerCredentials = JSON.parse(
+        readFileSync(credPath, 'utf-8'),
+      ) as WorkerCredentials[];
+      return _workerCredentials!;
+    } catch {
+      // Corrupted — fall through to legacy
+    }
+  }
+
+  // Fallback: single legacy user (for self-hosted or when global-setup hasn't run)
+  _workerCredentials = [
+    { email: DEFAULT_EMAIL, password: DEFAULT_PASSWORD, name: 'E2E Test User' },
+  ];
+  return _workerCredentials;
+}
+
+/**
+ * Get credentials for a specific worker index.
+ * Workers are assigned round-robin across the registered user pool.
+ */
+export function getWorkerCredentials(workerIndex: number): WorkerCredentials {
+  const creds = loadWorkerCredentials();
+  return creds[workerIndex % creds.length];
+}
+
+// ── Cookie parsing ────────────────────────────────────────────────────────────
 
 interface Cookie {
   name: string;
@@ -85,33 +139,34 @@ function parseSetCookie(header: string, domain: string): Cookie | null {
   };
 }
 
+// ── Per-worker login cache ────────────────────────────────────────────────────
+
 interface LoginResult {
   cookies: Cookie[];
   cookieHeader: string;
+  csrfToken: string;
 }
 
-/**
- * Shared in-memory cache — both sessionCookie and authedPage fixtures
- * share the same login result, avoiding redundant API calls.
- */
-let loginCache: LoginResult | null = null;
+const loginCacheByWorker = new Map<number, LoginResult>();
 
-async function getLoginResult(): Promise<LoginResult> {
-  if (loginCache) return loginCache;
+async function getLoginResult(workerIndex: number): Promise<LoginResult> {
+  const cached = loginCacheByWorker.get(workerIndex);
+  if (cached) return cached;
 
   const apiUrl = resolveApiUrl();
-  const email = process.env.E2E_TEST_EMAIL ?? DEFAULT_EMAIL;
-  const password = process.env.E2E_TEST_PASSWORD ?? DEFAULT_PASSWORD;
+  const cred = getWorkerCredentials(workerIndex);
 
   const res = await fetch(`${apiUrl}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email: cred.email, password: cred.password }),
   });
 
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`API login failed: ${res.status} ${body}`);
+    throw new Error(
+      `API login failed for worker ${workerIndex} (${cred.email}): ${res.status} ${body}`,
+    );
   }
 
   const rawCookies = res.headers.getSetCookie();
@@ -124,27 +179,56 @@ async function getLoginResult(): Promise<LoginResult> {
     .map((h) => parseSetCookie(h, domain))
     .filter(Boolean) as Cookie[];
 
+  // Fetch a CSRF token — the guard now enforces it in all modes.
+  const csrfRes = await fetch(`${apiUrl}/auth/csrf-token`, {
+    headers: { Cookie: cookies.map((c) => `${c.name}=${c.value}`).join('; ') },
+  });
+  if (!csrfRes.ok) {
+    throw new Error(`CSRF token fetch failed: ${csrfRes.status}`);
+  }
+  const csrfData = (await csrfRes.json()) as { csrfToken: string };
+
+  // Append any Set-Cookie from the CSRF endpoint (e.g. csrf_token cookie)
+  const csrfRawCookies = csrfRes.headers.getSetCookie();
+  for (const h of csrfRawCookies) {
+    const parsed = parseSetCookie(h, domain);
+    if (parsed) cookies.push(parsed);
+  }
+
   const cookieHeader = cookies.map((c) => `${c.name}=${c.value}`).join('; ');
 
-  loginCache = { cookies, cookieHeader };
-  return loginCache;
+  const result: LoginResult = { cookies, cookieHeader, csrfToken: csrfData.csrfToken };
+  loginCacheByWorker.set(workerIndex, result);
+  return result;
 }
 
+// ── Playwright test fixtures ──────────────────────────────────────────────────
+
 export const test = base.extend<E2eFixtures>({
-  sessionCookie: async ({}, use) => {
-    const { cookieHeader } = await getLoginResult();
+  workerEmail: async ({}, use, testInfo) => {
+    const cred = getWorkerCredentials(testInfo.workerIndex);
+    await use(cred.email);
+  },
+
+  sessionCookie: async ({}, use, testInfo) => {
+    const { cookieHeader } = await getLoginResult(testInfo.workerIndex);
     await use(cookieHeader);
   },
 
-  authedPage: async ({ page }, use) => {
-    const { cookies } = await getLoginResult();
+  csrfToken: async ({}, use, testInfo) => {
+    const { csrfToken } = await getLoginResult(testInfo.workerIndex);
+    await use(csrfToken);
+  },
+
+  authedPage: async ({ page }, use, testInfo) => {
+    const { cookies } = await getLoginResult(testInfo.workerIndex);
     expect(cookies.length, 'No cookies parsed from login response').toBeGreaterThan(0);
     await page.context().addCookies(cookies);
     await use(page);
   },
 
-  authStorageState: async ({ page }, use) => {
-    const { cookies } = await getLoginResult();
+  authStorageState: async ({ page }, use, testInfo) => {
+    const { cookies } = await getLoginResult(testInfo.workerIndex);
     expect(cookies.length, 'No cookies parsed from login response').toBeGreaterThan(0);
     await page.context().addCookies(cookies);
     await page.context().storageState({ path: STORAGE_STATE_PATH });

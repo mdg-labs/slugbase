@@ -1,17 +1,12 @@
 import { test, expect } from "../../fixtures/auth.js";
+import { loginAsWorker } from "../../helpers/worker-login.js";
 
 test.describe("Free bookmark cap", () => {
   test("free workspace at cap shows bookmark-cap-banner and upgrade CTA", async ({
     page,
-  }) => {
+  }, testInfo) => {
     // ── Phase 1: Login ──────────────────────────────────────────────
-    await page.goto("/login");
-    await page.waitForSelector('[data-testid="login-form"]');
-    await page.fill('[data-testid="login-email-input"]', "e2e@slugbase.test");
-    await page.fill('[data-testid="login-password-input"]', "e2e-test-password");
-    await page.click('[data-testid="login-submit-btn"]');
-    await page.waitForURL(/\/$/);
-    await page.waitForSelector('[data-testid="sidebar-nav"]');
+    await loginAsWorker(page, testInfo.workerIndex);
 
     // ── Phase 2: Reset workspace to free plan ───────────────────────
     // Parallel test workers may have upgraded the plan; reset it so the

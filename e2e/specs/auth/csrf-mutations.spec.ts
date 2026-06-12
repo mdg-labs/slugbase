@@ -1,17 +1,12 @@
 import { test, expect } from "../../fixtures/auth.js";
+import { loginAsWorker } from "../../helpers/worker-login.js";
 
 test.describe("CSRF mutations", () => {
   test("mutating request without CSRF fails; with token succeeds via browser", async ({
     page,
-  }) => {
+  }, testInfo) => {
     // ── Phase 1: Login and reach dashboard ────────────────────────
-    await page.goto("/login");
-    await page.waitForSelector('[data-testid="login-form"]');
-    await page.fill('[data-testid="login-email-input"]', "e2e@slugbase.test");
-    await page.fill('[data-testid="login-password-input"]', "e2e-test-password");
-    await page.click('[data-testid="login-submit-btn"]');
-    await page.waitForURL(/\/$/);
-    await page.waitForSelector('[data-testid="sidebar-nav"]');
+    await loginAsWorker(page, testInfo.workerIndex);
 
     // ── Phase 2: Try a mutation without CSRF token ────────────────
     // Use PATCH /auth/account/profile which is CSRF-protected (no @SkipCsrf).

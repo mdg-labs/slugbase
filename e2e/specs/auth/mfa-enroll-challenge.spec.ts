@@ -1,18 +1,11 @@
 import { generateSecret, generateSync } from "otplib";
-import { test, expect } from "../../fixtures/auth.js";
+import { test, expect, getWorkerCredentials } from "../../fixtures/auth.js";
+import { loginAsWorker } from "../../helpers/worker-login.js";
 
 test.describe("MFA enroll and challenge flow", () => {
-  const TEST_PASSWORD = "e2e-test-password";
-
-  test("enroll TOTP in settings -> logout -> login requires MFA challenge", async ({ page }) => {
+  test("enroll TOTP in settings -> logout -> login requires MFA challenge", async ({ page }, testInfo) => {
     // ── Phase 1: Login via form ────────────────────────────────────
-    await page.goto("/login");
-    await page.waitForSelector('[data-testid="login-form"]');
-    await page.fill('[data-testid="login-email-input"]', "e2e@slugbase.test");
-    await page.fill('[data-testid="login-password-input"]', TEST_PASSWORD);
-    await page.click('[data-testid="login-submit-btn"]');
-    await page.waitForURL(/\/$/);
-    await page.waitForSelector('[data-testid="sidebar-nav"]');
+    await loginAsWorker(page, testInfo.workerIndex);
 
     // ── Phase 2: Navigate to MFA enroll page ──────────────────────
     await page.goto("/mfa/enroll");
@@ -55,8 +48,9 @@ test.describe("MFA enroll and challenge flow", () => {
     await page.waitForURL(/\/login/);
 
     // ── Phase 7: Login again — should require MFA challenge ────────
-    await page.fill('[data-testid="login-email-input"]', "e2e@slugbase.test");
-    await page.fill('[data-testid="login-password-input"]', TEST_PASSWORD);
+    const { email: mfaEmail, password: mfaPassword } = getWorkerCredentials(testInfo.workerIndex);
+    await page.fill('[data-testid="login-email-input"]', mfaEmail);
+    await page.fill('[data-testid="login-password-input"]', mfaPassword);
     await page.click('[data-testid="login-submit-btn"]');
 
     // Should be redirected to MFA challenge page

@@ -1,4 +1,5 @@
 import { test, expect } from "../../fixtures/auth.js";
+import { loginAsWorker } from "../../helpers/worker-login.js";
 
 /**
  * E2E: Scope filter UI interaction and "shared with me" flow.
@@ -13,15 +14,9 @@ import { test, expect } from "../../fixtures/auth.js";
  * which is tested via backend integration tests rather than browser e2e.
  */
 test.describe("Sharing scope filters", () => {
-  test("scope filter dropdown interaction on team plan", async ({ page }) => {
+  test("scope filter dropdown interaction on team plan", async ({ page }, testInfo) => {
     // ── Login ───────────────────────────────────────────────────────
-    await page.goto("/login");
-    await page.waitForSelector('[data-testid="login-form"]');
-    await page.fill('[data-testid="login-email-input"]', "e2e@slugbase.test");
-    await page.fill('[data-testid="login-password-input"]', "e2e-test-password");
-    await page.click('[data-testid="login-submit-btn"]');
-    await page.waitForURL(/\/$/);
-    await page.waitForSelector('[data-testid="sidebar-nav"]');
+    await loginAsWorker(page, testInfo.workerIndex);
 
     // ── Upgrade workspace to team plan for scope filter visibility ──
     const csrf: string = await page.evaluate(async () => {

@@ -1,4 +1,5 @@
 import { test, expect } from "../../fixtures/auth.js";
+import { loginAsWorker } from "../../helpers/worker-login.js";
 
 const NETSACE_BOOKMARKS_HTML = `<!DOCTYPE NETSCAPE-Bookmark-file-1>
 <META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">
@@ -12,14 +13,16 @@ const NETSACE_BOOKMARKS_HTML = `<!DOCTYPE NETSCAPE-Bookmark-file-1>
 test.describe("Onboarding import", () => {
   test("first login shows OnboardingOverlay → upload Netscape HTML → bookmarks imported → overlay dismissed", async ({
     page,
-  }) => {
+  }, testInfo) => {
     // ── Phase 1: Login ──────────────────────────────────────────
-    await page.goto("/login");
-    await page.waitForSelector('[data-testid="login-form"]');
-    await page.fill('[data-testid="login-email-input"]', "e2e@slugbase.test");
-    await page.fill('[data-testid="login-password-input"]', "e2e-test-password");
-    await page.click('[data-testid="login-submit-btn"]');
-    await page.waitForURL(/\/$/);
+    await loginAsWorker(page, testInfo.workerIndex);
+
+    // Clear onboarding localStorage so the overlay appears for this test
+    await page.evaluate(() => {
+      window.localStorage.removeItem("sb_onboarding_done");
+    });
+    await page.reload();
+    await page.waitForSelector('[data-testid="sidebar-nav"]');
 
     // ── Phase 2: Onboarding overlay appears (step 1: welcome) ──
     await page.waitForSelector('[data-testid="onboarding-overlay"]');
@@ -36,8 +39,8 @@ test.describe("Onboarding import", () => {
       buffer: Buffer.from(NETSACE_BOOKMARKS_HTML),
     });
 
-    // Verify the drop zone reflects the selected file
-    await expect(page.locator('[data-testid="onboarding-drop-zone"]')).toContainText(/example\.com|Example/i);
+    // Verify the drop zone reflects the selected file name
+    await expect(page.locator('[data-testid="onboarding-drop-zone"]')).toContainText("bookmarks.html");
 
     // ── Phase 4: Import ─────────────────────────────────────────
     // Click the CTA button to trigger import

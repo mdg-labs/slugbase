@@ -175,8 +175,10 @@ if [ "$RUN_HOSTED" = true ]; then
   API_PID=$!
 
   # Start Web (react-router-serve)
+  # API_BASE_URL must point at the backend so server-side loaders/actions can
+  # reach it (login, session checks, workspace fetch, etc.).
   info "Starting Web on port $PORT_WEB …"
-  (cd packages/web && PORT="$PORT_WEB" npx react-router-serve build/server/index.js) &
+  (cd packages/web && PORT="$PORT_WEB" API_BASE_URL="http://localhost:$PORT_API" npx react-router-serve build/server/index.js) &
   WEB_PID=$!
 
   # Start Marketing (static serve)
@@ -201,17 +203,8 @@ if [ "$RUN_HOSTED" = true ]; then
 
   ok "Services ready — API:$PORT_API Web:$PORT_WEB Marketing:$PORT_MKTG"
 
-  # Seed the e2e test user via the registration API
-  info "Seeding e2e test user …"
-  SEED_RES=$(curl -sf -o /dev/null -w "%{http_code}" \
-    -X POST "http://localhost:$PORT_API/auth/register" \
-    -H "Content-Type: application/json" \
-    -d '{"email":"e2e@slugbase.test","password":"e2e-test-password","name":"E2E Test User"}')
-  if [ "$SEED_RES" = "201" ] || [ "$SEED_RES" = "200" ]; then
-    ok "Test user seeded (HTTP $SEED_RES)"
-  else
-    fail "Test user seeding failed (HTTP $SEED_RES) — tests may fail"
-  fi
+  # NOTE: Worker-scoped users are now registered by e2e/global-setup.ts
+  # (via Playwright's globalSetup hook). No manual seed needed here.
 
   LOGFILE_HOSTED="$REPO_ROOT/e2e/test-results/hosted-output.log"
 
@@ -258,6 +251,7 @@ if [ "$RUN_SELF_HOSTED" = true ]; then
     -e ENCRYPTION_KEY='selfhosted-e2e-encryption-key-at-least-32!!' \
     -e APP_BASE_URL="http://localhost:$PORT_SELF" \
     -e FRONTEND_ORIGIN="http://localhost:$PORT_SELF" \
+    -e API_BASE_URL="http://localhost:$PORT_SELF" \
     slugbase-e2e:self-hosted 2>&1 | sed 's/^/  /'
   ok "Container started"
 
@@ -325,12 +319,16 @@ print(f'{m}m{s}s')
 header "Test summary"
 printf "  %-14s │ %5s │ %5s │ %5s │ %7s │ %s\n" "Mode" "Total" "Passed" "Failed" "Skipped" "Duration"
 printf "  %s\n" "──────────────────────────────────────────────────────────────"
-print_summary "Hosted" "$REPO_ROOT/e2e/test-results/report-hosted.json"
-print_summary "Self-hosted" "$REPO_ROOT/e2e/test-results/report-self-hosted.json"
+if [ "$RUN_HOSTED" = true ]; then
+  print_summary "Hosted" "$REPO_ROOT/e2e/test-results/report-hosted.json"
+fi
+if [ "$RUN_SELF_HOSTED" = true ]; then
+  print_summary "Self-hosted" "$REPO_ROOT/e2e/test-results/report-self-hosted.json"
+fi
 
 # All modes that were selected ran
 if [ "$EXIT_CODE" -eq 0 ]; then
-  ok "All tests passed across all modes"
+  ok "All tests passed"
 else
   fail "Some tests failed — see above"
 fi

@@ -1,18 +1,13 @@
 import { test, expect } from "../../fixtures/auth.js";
+import { loginAsWorker } from "../../helpers/worker-login.js";
 import { createSeedHelper } from "../../fixtures/seed.js";
 
 test.describe("Folders CRUD", () => {
   test("create folder -> appears in list and sidebar -> filter bookmarks by folder", async ({
     page,
-  }) => {
+  }, testInfo) => {
     // ── Phase 1: Login ──────────────────────────────────────────
-    await page.goto("/login");
-    await page.waitForSelector('[data-testid="login-form"]');
-    await page.fill('[data-testid="login-email-input"]', "e2e@slugbase.test");
-    await page.fill('[data-testid="login-password-input"]', "e2e-test-password");
-    await page.click('[data-testid="login-submit-btn"]');
-    await page.waitForURL(/\/$/);
-    await page.waitForSelector('[data-testid="sidebar-nav"]');
+    await loginAsWorker(page, testInfo.workerIndex);
 
     // ── Phase 2: Navigate to folders page, verify empty state ───
     await page.goto("/folders");
@@ -98,16 +93,10 @@ test.describe("Folders CRUD", () => {
 
   test("search, pinned filter, and scope filter on bookmarks page", async ({
     page,
-  }) => {
+  }, testInfo) => {
     // ── Phase 1: Login and seed data ────────────────────────────
     const seed = createSeedHelper(page);
-    await page.goto("/login");
-    await page.waitForSelector('[data-testid="login-form"]');
-    await page.fill('[data-testid="login-email-input"]', "e2e@slugbase.test");
-    await page.fill('[data-testid="login-password-input"]', "e2e-test-password");
-    await page.click('[data-testid="login-submit-btn"]');
-    await page.waitForURL(/\/$/);
-    await page.waitForSelector('[data-testid="sidebar-nav"]');
+    await loginAsWorker(page, testInfo.workerIndex);
 
     // Create seed data: 3 bookmarks, 2 folders
     await seed({ bookmarks: 3, folders: ["Filter A", "Filter B"], tags: [] });
