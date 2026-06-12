@@ -74,5 +74,19 @@ test.describe("MFA enroll and challenge flow", () => {
     // Should reach the dashboard
     await page.waitForURL(/\/$/);
     await page.waitForSelector('[data-testid="sidebar-nav"]');
+
+    // ── Phase 9: Cleanup — disable MFA so subsequent tests are unaffected ──
+    // Use page.evaluate so the fetch runs in the browser context where the
+    // session cookie is established. The web app proxies /auth/* to the backend.
+    const cleanupTotp = generateSync({ secret: textSecret!.trim() });
+    const disableRes = await page.evaluate(async (code) => {
+      const res = await fetch("/auth/mfa/disable", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ totpCode: code }),
+      });
+      return { ok: res.ok, status: res.status };
+    }, cleanupTotp);
+    expect(disableRes.ok).toBeTruthy();
   });
 });
