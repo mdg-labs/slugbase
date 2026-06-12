@@ -22,8 +22,11 @@ const HOSTED_ONLY_SPECS = [
   '**/billing/**',
 ] as const;
 
-/** Self-hosted setup smoke — fresh-DB /setup flow (#357). */
-const SELF_HOSTED_ONLY_SPECS = ['**/auth/setup.spec.ts'] as const;
+/** Self-hosted operator surfaces — plan gates off, BYO admin panels (#357). */
+const SELF_HOSTED_ONLY_SPECS = [
+  '**/auth/setup.spec.ts',
+  '**/settings/self-hosted-operator-settings.spec.ts',
+] as const;
 
 // ── Build the reporter list ─────────────────────────────────────────────────
 // Playwright's ReporterDescription is `[string, object?]`.  We build it
