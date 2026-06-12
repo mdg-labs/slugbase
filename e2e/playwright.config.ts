@@ -13,6 +13,18 @@ const E2E_BASE_URL_MARKETING = process.env.E2E_BASE_URL_MARKETING ?? 'http://loc
 
 const ONBOARDING_STORAGE_STATE = resolve(__dirname, '.onboarding-storage-state.json');
 
+/** Plan-gating and Stripe billing paths — valid only on the hosted VITE_BILLING_ENABLED build (#358). */
+const HOSTED_ONLY_SPECS = [
+  '**/settings/entitlement-gates.spec.ts',
+  '**/entitlements/free-cap.spec.ts',
+  '**/sharing/share-dialog.spec.ts',
+  '**/sharing/scope-filters.spec.ts',
+  '**/billing/**',
+] as const;
+
+/** Self-hosted setup smoke — fresh-DB /setup flow (#357). */
+const SELF_HOSTED_ONLY_SPECS = ['**/auth/setup.spec.ts'] as const;
+
 // ── Build the reporter list ─────────────────────────────────────────────────
 // Playwright's ReporterDescription is `[string, object?]`.  We build it
 // explicitly so the type checker is happy.
@@ -56,8 +68,7 @@ export default defineConfig({
   projects: [
     {
       name: 'hosted',
-      // Self-hosted setup flow doesn't apply to hosted (has pre-seeded admin)
-      testIgnore: ['**/auth/setup.spec.ts'],
+      testIgnore: [...SELF_HOSTED_ONLY_SPECS],
       use: {
         ...devices['Desktop Chrome'],
         baseURL: E2E_BASE_URL_WEB,
@@ -70,8 +81,8 @@ export default defineConfig({
     },
     {
       name: 'self-hosted',
-      // Self-hosted does not serve the marketing site (it's a separate Cloudflare Worker)
-      testIgnore: ['**/marketing/**'],
+      // Marketing is a separate Cloudflare Worker; plan-gating specs need hosted billing build.
+      testIgnore: ['**/marketing/**', ...HOSTED_ONLY_SPECS],
       use: {
         ...devices['Desktop Chrome'],
         baseURL: process.env.E2E_BASE_URL_SELF_HOSTED ?? 'http://localhost:3000',

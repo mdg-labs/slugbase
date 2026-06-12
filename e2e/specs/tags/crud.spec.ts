@@ -1,4 +1,5 @@
 import { test, expect } from "../../fixtures/auth.js";
+import { isHostedE2eProject } from "../../helpers/deployment-project.js";
 import { e2eResourceSuffix } from "../../helpers/e2e-resource-id.js";
 import { loginAsWorker } from "../../helpers/worker-login.js";
 
@@ -100,12 +101,14 @@ test.describe("Tags CRUD", () => {
     const apiUrl = process.env.E2E_BASE_URL_API ?? process.env.E2E_BASE_URL_SELF_HOSTED ?? 'http://localhost:4001';
     const apiHeaders = { Cookie: sessionCookie, "x-csrf-token": csrfToken, "Content-Type": "application/json" };
 
-    // Parallel workers may be at the free bookmark cap (entitlements/free-cap).
-    const planRes = await page.request.patch(`${apiUrl}/workspaces/active`, {
-      headers: apiHeaders,
-      data: { plan: "team" },
-    });
-    expect(planRes.ok(), `Plan upgrade failed: ${planRes.status()}`).toBeTruthy();
+    // Hosted only: parallel workers may be at the free bookmark cap (entitlements/free-cap).
+    if (isHostedE2eProject(testInfo)) {
+      const planRes = await page.request.patch(`${apiUrl}/workspaces/active`, {
+        headers: apiHeaders,
+        data: { plan: "team" },
+      });
+      expect(planRes.ok(), `Plan upgrade failed: ${planRes.status()}`).toBeTruthy();
+    }
 
     // Get the active workspace ID
     const wsRes = await page.request.get(`${apiUrl}/workspaces/active`, {

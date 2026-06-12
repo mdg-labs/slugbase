@@ -1,93 +1,54 @@
 import { test, expect } from "../../fixtures/auth.js";
-import { loginAsWorker } from "../../helpers/worker-login.js";
+import { setActiveWorkspacePlan } from "../../helpers/workspace-plan.js";
 
 test.describe("Settings entitlement gates", () => {
+  // Free vs team tests mutate the same worker workspace plan — run serially.
+  test.describe.configure({ mode: "serial" });
+
   test("free plan shows members-plan-gate and audit-plan-gate", async ({
-    page,
+    authedPage,
     sessionCookie,
     csrfToken,
-  }, testInfo) => {
-    // ── Phase 1: Login ──────────────────────────────────────────────
-    await loginAsWorker(page, testInfo.workerIndex);
+  }) => {
+    const page = authedPage;
 
-    // ── Phase 1.5: Reset workspace to free plan ─────────────────────
-    // Parallel workers may have upgraded the plan (e.g. workspace switcher).
-    const apiUrl =
-      process.env.E2E_BASE_URL_API
-      ?? process.env.E2E_BASE_URL_SELF_HOSTED
-      ?? "http://localhost:4001";
-    const resetRes = await page.request.patch(`${apiUrl}/workspaces/active`, {
-      headers: {
-        Cookie: sessionCookie,
-        "x-csrf-token": csrfToken,
-        "Content-Type": "application/json",
-      },
-      data: { plan: "free" },
-    });
-    expect(resetRes.ok(), `Plan reset failed: ${resetRes.status()}`).toBeTruthy();
+    await setActiveWorkspacePlan(page, sessionCookie, csrfToken, "free");
 
-    // ── Phase 2: Navigate to members settings (free plan should gate) ─
     await page.goto("/settings/members");
     await page.waitForSelector('[data-testid="settings-layout"]');
 
-    // Free-plan workspace → plan gate should be visible
-    const membersGate = page.locator('[data-testid="members-plan-gate"]');
-    await expect(membersGate).toBeVisible();
+    await expect(page.locator('[data-testid="members-plan-gate"]')).toBeVisible();
 
-    // ── Phase 3: Navigate to audit log settings (free plan should gate) ─
     await page.goto("/settings/audit");
     await page.waitForSelector('[data-testid="settings-layout"]');
 
-    const auditGate = page.locator('[data-testid="audit-plan-gate"]');
-    await expect(auditGate).toBeVisible();
+    await expect(page.locator('[data-testid="audit-plan-gate"]')).toBeVisible();
   });
 
   test("team plan shows members and audit pages (no plan gates)", async ({
-    page,
-  }, testInfo) => {
-    // ── Phase 1: Login ──────────────────────────────────────────────
-    await loginAsWorker(page, testInfo.workerIndex);
+    authedPage,
+    sessionCookie,
+    csrfToken,
+  }) => {
+    test.setTimeout(60_000);
 
-    // ── Phase 2: Upgrade workspace plan to "team" via API ───────────
-    await page.evaluate(async () => {
-      const getCsrfToken = async (): Promise<string> => {
-        const res = await fetch("/auth/csrf-token");
-        const data = (await res.json()) as { csrfToken: string };
-        return data.csrfToken;
-      };
+    const page = authedPage;
 
-      const csrf = await getCsrfToken();
+    await setActiveWorkspacePlan(page, sessionCookie, csrfToken, "team");
 
-      const res = await fetch("/workspaces/active", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          "x-csrf-token": csrf,
-        },
-        body: JSON.stringify({ plan: "team" }),
-      });
-      if (!res.ok) {
-        throw new Error(
-          `Failed to upgrade workspace plan: ${res.status} ${await res.text()}`,
-        );
-      }
-    });
-
-    // ── Phase 3: Navigate to members settings — should show page ────
     await page.goto("/settings/members");
     await page.waitForSelector('[data-testid="members-settings-page"]');
 
-    // Plan gate must NOT be present
     await expect(page.locator('[data-testid="members-plan-gate"]')).not.toBeVisible();
-
-    // Members page content should be visible
     await expect(page.locator('[data-testid="members-settings-page"]')).toBeVisible();
 
-    // ── Phase 4: Navigate to audit log settings — should show page ──
-    await page.goto("/settings/audit");
-    await page.waitForSelector('[data-testid="settings-layout"]');
+    // Re-assert team plan — parallel specs on the same worker may downgrade to free.
+    await setActiveWorkspacePlan(page, sessionCookie, csrfToken, "team");
 
-    // Plan gate must NOT be present
+    await page.goto("/settings/audit");
+    await page.waitForSelector('[data-testid="audit-log-page"]');
+
     await expect(page.locator('[data-testid="audit-plan-gate"]')).not.toBeVisible();
+    await expect(page.locator('[data-testid="audit-log-page"]')).toBeVisible();
   });
 });

@@ -1,4 +1,5 @@
 import { test, expect } from "../../fixtures/auth.js";
+import { isHostedE2eProject, isSelfHostedE2eProject } from "../../helpers/deployment-project.js";
 import { e2eResourceSuffix } from "../../helpers/e2e-resource-id.js";
 import { loginAsWorker } from "../../helpers/worker-login.js";
 
@@ -8,19 +9,27 @@ test.describe("Workspace switcher", () => {
     sessionCookie,
     csrfToken,
   }, testInfo) => {
+    test.skip(
+      isSelfHostedE2eProject(testInfo),
+      "WorkspaceSwitcherPanel gates create on plan string; self-host backend bypasses plan limits (#350)",
+    );
+
     // ── Phase 1: Login ──────────────────────────────────────────
     await loginAsWorker(page, testInfo.workerIndex);
 
-    // Upgrade workspace to team plan so workspace creation is not blocked
-    const apiUrl = process.env.E2E_BASE_URL_API ?? process.env.E2E_BASE_URL_SELF_HOSTED ?? 'http://localhost:4001';
-    await page.request.patch(`${apiUrl}/workspaces/active`, {
-      headers: {
-        Cookie: sessionCookie,
-        "x-csrf-token": csrfToken,
-        "Content-Type": "application/json",
-      },
-      data: { plan: "team" },
-    });
+    // Hosted only: team plan unlocks multi-workspace creation; self-host has no plan gate.
+    if (isHostedE2eProject(testInfo)) {
+      const apiUrl = process.env.E2E_BASE_URL_API ?? process.env.E2E_BASE_URL_SELF_HOSTED ?? 'http://localhost:4001';
+      const planRes = await page.request.patch(`${apiUrl}/workspaces/active`, {
+        headers: {
+          Cookie: sessionCookie,
+          "x-csrf-token": csrfToken,
+          "Content-Type": "application/json",
+        },
+        data: { plan: "team" },
+      });
+      expect(planRes.ok(), `Plan upgrade failed: ${planRes.status()}`).toBeTruthy();
+    }
 
     // Mark onboarding as done so the overlay doesn't interfere
     await page.evaluate(() => {

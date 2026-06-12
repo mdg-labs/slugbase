@@ -304,6 +304,9 @@ if [ "$RUN_SELF_HOSTED" = true ]; then
   ok "Docker image built"
 
   info "Starting combined container on port $PORT_SELF …"
+  # Self-hosted prod default is PUBLIC_REGISTRATION=false (invite-only). E2e overrides
+  # to true so global-setup can register per-worker accounts via /auth/register —
+  # no invite flow in this harness (see e2e/global-setup.ts).
   docker run -d \
     --name slugbase-e2e-self \
     --network host \

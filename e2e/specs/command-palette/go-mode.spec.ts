@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/auth.js';
+import { isHostedE2eProject } from '../../helpers/deployment-project.js';
 import { e2eResourceSuffix } from '../../helpers/e2e-resource-id.js';
 
 const apiUrl = () =>
@@ -7,7 +8,7 @@ const apiUrl = () =>
   ?? process.env.E2E_BASE_URL_SELF_HOSTED
   ?? 'http://localhost:4001';
 
-/** Team plan avoids free bookmark-cap collisions from parallel entitlements tests. */
+/** On hosted, team plan avoids free bookmark-cap collisions from parallel entitlements tests. */
 async function ensureTeamPlanForBookmarkCreate(
   page: Page,
   sessionCookie: string,
@@ -35,7 +36,9 @@ test.describe('Command palette go mode', () => {
     const BOOKMARK_TITLE = 'Go Mode E2E Test';
     const BOOKMARK_URL = 'https://example.com/e2e-go-test';
 
-    await ensureTeamPlanForBookmarkCreate(page, sessionCookie, csrfToken);
+    if (isHostedE2eProject(testInfo)) {
+      await ensureTeamPlanForBookmarkCreate(page, sessionCookie, csrfToken);
+    }
 
     // Create a bookmark with slug + forwarding enabled so it appears in go mode
     const createRes = await page.request.post(`${apiUrl()}/bookmarks`, {
@@ -91,7 +94,9 @@ test.describe('Command palette go mode', () => {
     // Create a bookmark with a distinct slug
     const fullSlug = `e2e-enter-${e2eResourceSuffix(testInfo)}`;
 
-    await ensureTeamPlanForBookmarkCreate(page, sessionCookie, csrfToken);
+    if (isHostedE2eProject(testInfo)) {
+      await ensureTeamPlanForBookmarkCreate(page, sessionCookie, csrfToken);
+    }
 
     const createRes = await page.request.post(`${apiUrl()}/bookmarks`, {
       headers: { Cookie: sessionCookie, 'x-csrf-token': csrfToken },
