@@ -26,6 +26,9 @@ build/
 # tmp
 tmp
 
+# test report artifacts (Allure)
+allure-results/
+
 # e2e test artifacts (Playwright)
 e2e/test-results/
 e2e/playwright-report/

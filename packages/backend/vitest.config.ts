@@ -1,10 +1,11 @@
 import { defineConfig } from "vitest/config";
-import { reportPortalReporters } from "../../scripts/reportportal-vitest.ts";
+import { allureReporters } from "../../scripts/allure-vitest.ts";
 
 export default defineConfig({
   test: {
+    setupFiles: ["allure-vitest/setup"],
     include: ["src/**/*.spec.ts"],
     fileParallelism: false,
-    reporters: ["default", ...reportPortalReporters("unit")],
+    reporters: ["default", ...allureReporters("unit", "backend")],
   },
 });

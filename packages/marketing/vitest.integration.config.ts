@@ -1,11 +1,12 @@
 import { defineConfig } from "vitest/config";
-import { reportPortalReporters } from "../../scripts/reportportal-vitest.ts";
+import { allureReporters } from "../../scripts/allure-vitest.ts";
 
 export default defineConfig({
   test: {
+    setupFiles: ["allure-vitest/setup"],
     environment: "node",
     include: ["src/**/*.integration.spec.ts"],
     testTimeout: 120_000,
-    reporters: ["default", ...reportPortalReporters("integration")],
+    reporters: ["default", ...allureReporters("integration", "marketing")],
   },
 });
