@@ -62,15 +62,6 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Fetch secrets from Infisical
-        uses: Infisical/secrets-action@77ab1f4ccd183a543cb5b42435fbd181189f4995 # v1.0.16
-        with:
-          method: oidc
-          domain: ${{ secrets.INFISICAL_DOMAIN }}
-          identity-id: ${{ secrets.INFISICAL_OIDC_IDENTITY_ID }}
-          project-slug: slugbase-cloud
-          env-slug: staging
-
       - name: Unit tests
         run: pnpm test:unit
 
@@ -93,6 +84,58 @@ jobs:
 
       - name: Dependency audit
         run: pnpm audit --audit-level=high
+
+      - name: Upload Allure results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-ci
+          path: |
+            allure-results/unit
+            allure-results/integration
+          if-no-files-found: ignore
+
+  publish-allure:
+    name: CI · Publish Allure report
+    needs: [ci]
+    if: always()
+    runs-on: ubuntu-latest
+    concurrency:
+      group: allure-pages
+      cancel-in-progress: false
+    steps:
+      - name: Download Allure results
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: allure-ci
+          path: allure-results
+
+      - name: Checkout GitHub Pages with previous Allure reports
+        uses: actions/checkout@v6
+        continue-on-error: true
+        with:
+          ref: gh-pages
+          path: gh-pages-dir
+
+      - name: Generate Allure test report
+        id: allure-report
+        if: always()
+        uses: andgineer/allure-report@v3.8
+        with:
+          allure-results: allure-results
+          website: gh-pages-dir
+          reports-site-path: test-reports
+          website-url: https://mdg-labs.github.io/slugbase
+
+      - name: Publish Allure test report
+        if: always() && steps.allure-report.outcome == 'success'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: ${{ steps.allure-report.outputs.reports-site }}
+          destination_dir: ${{ steps.allure-report.outputs.reports-site-path }}
 
   deploy-staging:
     if: >

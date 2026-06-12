@@ -28,6 +28,8 @@ tmp
 
 # test report artifacts (Allure)
 allure-results/
+allure-report/
+gh-pages-dir/
 
 # e2e test artifacts (Playwright)
 e2e/test-results/

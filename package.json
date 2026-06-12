@@ -32,6 +32,7 @@
     "@reportportal/agent-js-vitest": "^5.2.3",
     "@vitest/runner": "4.1.6",
     "@vscode/ripgrep": "^1.0.10",
+    "allure": "3.11.0",
     "allure-js-commons": "3.10.0",
     "allure-playwright": "3.10.0",
     "allure-vitest": "3.10.0",
