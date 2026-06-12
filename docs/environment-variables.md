@@ -359,6 +359,18 @@ All other `VITE_*` pricing keys: deprecated — prices now fetched from `GET /pr
 
 ---
 
+### 10. Test reporting — ReportPortal
+
+Optional keys for the Playwright / e2e test reporter only. Not read by the API at runtime in production — consumed by the test harness when publishing results to ReportPortal. Empty = reporter disabled (local default).
+
+| Key | What it does | Hosted | Self-host | Required | Secret | When set | Example value |
+|---|---|---|---|---|---|---|---|
+| `REPORTPORTAL_URL` | ReportPortal instance base URL | No | No | CI only | No | CI | `https://reportportal.example.com` |
+| `REPORTPORTAL_PROJECT` | ReportPortal project name | No | No | CI only | No | CI | `slugbase` |
+| `REPORTPORTAL_API_KEY` | ReportPortal user API key for result upload | No | No | CI only | Yes | CI | `<ReportPortal API key>` |
+
+---
+
 ## GitHub Actions secrets (not in Infisical)
 
 These live in the **GitHub repository** secrets settings, not in the Infisical project. After migrating to Infisical Cloud (EU), update `INFISICAL_DOMAIN` from any legacy self-hosted URL to `https://eu.infisical.com`.

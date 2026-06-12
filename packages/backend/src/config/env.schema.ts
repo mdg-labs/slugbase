@@ -106,6 +106,10 @@ const optionalFlagsSchema = z
     SENTRY_ENABLE_CONSOLE_LOGGING: envBoolean(false),
     // OpenAPI interactive docs (spec §18) - optional Scalar UI at GET /docs
     OPENAPI_INTERACTIVE_DOCS: envBoolean(true),
+    // ReportPortal test reporter (CI / e2e only) - optional; no-op when absent
+    REPORTPORTAL_URL: z.string().url().optional(),
+    REPORTPORTAL_PROJECT: z.string().min(1).optional(),
+    REPORTPORTAL_API_KEY: z.string().min(1).optional(),
     // Hosted OIDC providers (spec §11.3) - JSON array; unset = DB-sourced (self-host)
     OIDC_DEPLOYMENT_PROVIDERS: z.preprocess(
       (value) =>
@@ -206,6 +210,9 @@ function readFlagsInput(env: NodeJS.ProcessEnv) {
     SENTRY_LOG_LEVEL: env.SENTRY_LOG_LEVEL,
     SENTRY_ENABLE_CONSOLE_LOGGING: env.SENTRY_ENABLE_CONSOLE_LOGGING,
     OPENAPI_INTERACTIVE_DOCS: env.OPENAPI_INTERACTIVE_DOCS,
+    REPORTPORTAL_URL: env.REPORTPORTAL_URL,
+    REPORTPORTAL_PROJECT: env.REPORTPORTAL_PROJECT,
+    REPORTPORTAL_API_KEY: env.REPORTPORTAL_API_KEY,
     OIDC_DEPLOYMENT_PROVIDERS: env.OIDC_DEPLOYMENT_PROVIDERS,
   };
 }
