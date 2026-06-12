@@ -19,8 +19,8 @@ cleanup_done=0
 run_vitest() {
   cd "${BACKEND_DIR}"
   # First-run setup must execute before other suites mutate the shared ephemeral DB.
-  pnpm exec vitest run --config vitest.config.ts test/00-setup.e2e-spec.ts --maxWorkers=1
-  pnpm exec vitest run --config vitest.config.ts test \
+  pnpm exec vitest run --config vitest.integration.config.ts test/00-setup.e2e-spec.ts --maxWorkers=1
+  pnpm exec vitest run --config vitest.integration.config.ts test \
     --exclude test/00-setup.e2e-spec.ts \
     --maxWorkers=1
 }

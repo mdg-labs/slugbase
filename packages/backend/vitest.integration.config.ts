@@ -3,8 +3,9 @@ import { reportPortalReporters } from "../../scripts/reportportal-vitest.ts";
 
 export default defineConfig({
   test: {
-    include: ["src/**/*.spec.ts"],
+    include: ["test/**/*.e2e-spec.ts"],
     fileParallelism: false,
-    reporters: ["default", ...reportPortalReporters("unit")],
+    globalSetup: ["./test/global-setup.ts"],
+    reporters: ["default", ...reportPortalReporters("integration")],
   },
 });

@@ -14,9 +14,9 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
-    "test:unit": "vitest run --config vitest.config.ts src",
+    "test:unit": "vitest run --config vitest.config.ts",
     "test:integration": "bash ../../scripts/run-backend-integration-tests.sh",
-    "test:integration:run": "vitest run --config vitest.config.ts test --maxWorkers=1",
+    "test:integration:run": "vitest run --config vitest.integration.config.ts --maxWorkers=1",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"
   },
