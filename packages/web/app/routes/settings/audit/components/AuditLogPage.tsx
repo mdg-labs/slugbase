@@ -139,7 +139,7 @@ export function AuditLogPage({ events }: AuditLogPageProps) {
 
   const actors: AuditActor[] = [
     { id: "all", name: t("settings.audit.filter.actor_all") },
-    ...events.actors,
+    ...(events.actors ?? []),
   ];
 
   const currentPage = events.page;
