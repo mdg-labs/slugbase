@@ -1,6 +1,10 @@
 import { defineConfig, devices, type ReporterDescription } from '@playwright/test';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import {
+  detectPlaywrightEdition,
+  reportPortalPlaywrightReporter,
+} from '../scripts/reportportal-playwright.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -39,17 +43,11 @@ if (process.env.E2E_JSON_REPORT_PATH) {
   reporters.push(['json', { outputFile: process.env.E2E_JSON_REPORT_PATH }]);
 }
 
-// In CI, add the Neeto Playdash reporter (single entry — both projects write
-// to the same JSON file, so the top-level reporter is sufficient).
-if (CI) {
-  reporters.push([
-    '@bigbinary/neeto-playwright-reporter',
-    {
-      ciBuildId: process.env.GITHUB_RUN_ID ?? 'local-run',
-      apiKey: process.env.NEETO_PLAYDASH_API_KEY_HOSTED ?? '',
-      projectKey: process.env.NEETO_PLAYDASH_PROJECT_KEY_HOSTED ?? '',
-    },
-  ]);
+// ReportPortal: one launch per Playwright project run (edition from --project).
+// e2e.sh invokes hosted and self-hosted separately; missing REPORTPORTAL_* is a no-op.
+const edition = detectPlaywrightEdition();
+if (edition) {
+  reporters.push(...reportPortalPlaywrightReporter(edition));
 }
 
 export default defineConfig({
