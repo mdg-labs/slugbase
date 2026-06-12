@@ -29,14 +29,14 @@ const API_ONLY_GET_PATHS = new Set([
 function isCloudflareStyleBuild(
   buildModule: unknown,
 ): buildModule is CloudflareStyleBuild {
-  return Boolean(
+  return (
     typeof buildModule === "object" &&
-      buildModule !== null &&
-      "default" in buildModule &&
-      typeof buildModule.default === "object" &&
-      buildModule.default !== null &&
-      "fetch" in buildModule.default &&
-      typeof buildModule.default.fetch === "function",
+    buildModule !== null &&
+    "default" in buildModule &&
+    typeof buildModule.default === "object" &&
+    buildModule.default !== null &&
+    "fetch" in buildModule.default &&
+    typeof buildModule.default.fetch === "function"
   );
 }
 
@@ -101,12 +101,12 @@ export async function registerWebClientMiddleware(
   serverBuildPath: string,
 ): Promise<void> {
   const buildPath = serverBuildPath;
-  const buildModule = await import(pathToFileURL(buildPath).href);
+  const buildModule: unknown = await import(pathToFileURL(buildPath).href);
 
   const buildDir = dirname(buildPath);
   let publicPath = "/";
   let assetsBuildDirectory = join(buildDir, "..", "client");
-  let webHandler: RequestHandler | null = null;
+  let webHandler: RequestHandler;
 
   if (isCloudflareStyleBuild(buildModule)) {
     const config = {
@@ -114,14 +114,14 @@ export async function registerWebClientMiddleware(
       assetsBuildDirectory: join("..", "client"),
       ...buildModule.unstable_reactRouterServeConfig,
     };
-    publicPath = config.publicPath ?? "/";
+    publicPath = config.publicPath;
     assetsBuildDirectory = resolve(buildDir, config.assetsBuildDirectory);
     webHandler = createRequestListener(buildModule.default.fetch);
   } else {
     const classicBuild =
       (buildModule as { default?: ServerBuild }).default ??
       (buildModule as ServerBuild);
-    publicPath = classicBuild.publicPath ?? "/";
+    publicPath = classicBuild.publicPath;
     assetsBuildDirectory = join(buildDir, "..", "client");
     webHandler = createRequestHandler({
       build: classicBuild,
@@ -146,7 +146,7 @@ export async function registerWebClientMiddleware(
       next();
       return;
     }
-    webHandler!(req, res, next);
+    webHandler(req, res, next);
   });
 }
 

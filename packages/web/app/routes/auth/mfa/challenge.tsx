@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import type { ActionFunctionArgs } from "react-router";
-import { Form, redirect, useActionData, useNavigation } from "react-router";
+import { Form, useActionData, useNavigation } from "react-router";
 import { applyApiSessionCookie, redirectAfterFormPost } from "../../../lib/api-session-cookie.js";
 import { TotpInput } from "../../../components/TotpInput.js";
 import { AuthShell, KeyFieldIcon } from "../AuthShell.js";

@@ -102,7 +102,7 @@ describe("Login route - action", () => {
     const result = await action(args);
     expect(result).toBeInstanceOf(Response);
     const res = result as Response;
-    expect(res.status).toBe(302);
+    expect(res.status).toBe(303);
     expect(res.headers.get("Location")).toBe("/");
   });
 
@@ -186,7 +186,7 @@ describe("Login route - action", () => {
     const args = { request, params: {}, context: {} } as unknown as ActionFunctionArgs;
     const result = await action(args);
     const res = result as Response;
-    expect(res.status).toBe(302);
+    expect(res.status).toBe(303);
     expect(res.headers.get("Location")).toBe("/verify-email");
   });
 
@@ -231,7 +231,7 @@ describe("Login route - action", () => {
     const args = { request, params: {}, context: {} } as unknown as ActionFunctionArgs;
     const result = await action(args);
     const res = result as Response;
-    expect(res.status).toBe(302);
+    expect(res.status).toBe(303);
     expect(res.headers.get("Location")).toBe("/mfa");
   });
 });

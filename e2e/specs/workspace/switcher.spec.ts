@@ -1,4 +1,5 @@
 import { test, expect } from "../../fixtures/auth.js";
+import { e2eResourceSuffix } from "../../helpers/e2e-resource-id.js";
 import { loginAsWorker } from "../../helpers/worker-login.js";
 
 test.describe("Workspace switcher", () => {
@@ -38,6 +39,9 @@ test.describe("Workspace switcher", () => {
     // Verify at least one workspace is listed (the default)
     const workspaceItems = page.locator('[data-testid^="workspace-switcher-item-"]');
     await expect(workspaceItems).not.toHaveCount(0);
+    const initialWorkspaceCount = await workspaceItems.count();
+
+    const secondWorkspaceName = `Second Workspace ${e2eResourceSuffix(testInfo)}`;
 
     // ── Phase 3: Create a second workspace ───────────────────────
     const createBtn = page.locator('[data-testid="workspace-switcher-create-btn"]');
@@ -46,7 +50,7 @@ test.describe("Workspace switcher", () => {
     // Fill in the workspace name
     const nameInput = page.locator("#ws-name-input");
     await expect(nameInput).toBeVisible();
-    await nameInput.fill("Second Workspace");
+    await nameInput.fill(secondWorkspaceName);
 
     // Submit the create form
     const submitBtn = page.locator('[data-testid="workspace-switcher-panel"]').getByRole('button', { name: /create workspace/i });
@@ -74,15 +78,14 @@ test.describe("Workspace switcher", () => {
     await page.click('[aria-label*="workspace"]');
     await page.waitForSelector('[data-testid="workspace-switcher-panel"]');
 
-    // There should now be at least 2 workspace items
     const itemsAfterCreate = page.locator('[data-testid^="workspace-switcher-item-"]');
-    await expect(itemsAfterCreate).toHaveCount(2);
+    await expect(itemsAfterCreate).toHaveCount(initialWorkspaceCount + 1);
 
-    // Click the second workspace (the one we just created)
-    // The active workspace has a checkmark; the inactive one is clickable
-    const secondItem = itemsAfterCreate.nth(1);
-    await expect(secondItem).not.toBeDisabled();
-    await secondItem.click();
+    // Click the workspace we just created (name is unique per worker/retry)
+    const createdItem = itemsAfterCreate.filter({ hasText: secondWorkspaceName });
+    await expect(createdItem).toHaveCount(1);
+    await expect(createdItem).not.toBeDisabled();
+    await createdItem.click();
 
     // The page reloads after workspace switch (navigate(0))
     await page.waitForSelector('[data-testid="sidebar-nav"]');
@@ -90,7 +93,7 @@ test.describe("Workspace switcher", () => {
     // ── Phase 5: Verify active workspace reflected ───────────────
     // The workspace switcher trigger shows the active workspace name
     await expect(page.getByRole("button", { name: "Switch workspace" })).toContainText(
-      /second workspace/i,
+      secondWorkspaceName,
     );
 
     // Re-open switcher to verify the switched workspace is now active

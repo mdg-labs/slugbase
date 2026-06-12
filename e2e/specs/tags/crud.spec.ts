@@ -1,4 +1,5 @@
 import { test, expect } from "../../fixtures/auth.js";
+import { e2eResourceSuffix } from "../../helpers/e2e-resource-id.js";
 import { loginAsWorker } from "../../helpers/worker-login.js";
 
 test.describe("Tags CRUD", () => {
@@ -93,9 +94,18 @@ test.describe("Tags CRUD", () => {
     // ── Phase 1: Login ──────────────────────────────────────────
     await loginAsWorker(page, testInfo.workerIndex);
 
+    const tagName = `filter-me-${e2eResourceSuffix(testInfo)}`;
+
     // ── Phase 2: Seed tag + bookmarks in the ACTIVE workspace via API ──
     const apiUrl = process.env.E2E_BASE_URL_API ?? process.env.E2E_BASE_URL_SELF_HOSTED ?? 'http://localhost:4001';
     const apiHeaders = { Cookie: sessionCookie, "x-csrf-token": csrfToken, "Content-Type": "application/json" };
+
+    // Parallel workers may be at the free bookmark cap (entitlements/free-cap).
+    const planRes = await page.request.patch(`${apiUrl}/workspaces/active`, {
+      headers: apiHeaders,
+      data: { plan: "team" },
+    });
+    expect(planRes.ok(), `Plan upgrade failed: ${planRes.status()}`).toBeTruthy();
 
     // Get the active workspace ID
     const wsRes = await page.request.get(`${apiUrl}/workspaces/active`, {
@@ -106,7 +116,7 @@ test.describe("Tags CRUD", () => {
     // Create a tag in the active workspace
     const tagRes = await page.request.post(`${apiUrl}/tags`, {
       headers: apiHeaders,
-      data: { workspaceId: activeWorkspace.id, name: "filter-me" },
+      data: { workspaceId: activeWorkspace.id, name: tagName },
     });
     expect(tagRes.ok(), `Tag creation failed: ${tagRes.status()}`).toBeTruthy();
     const createdTag = await tagRes.json() as { id: string };
@@ -135,8 +145,12 @@ test.describe("Tags CRUD", () => {
     // ── Phase 4: Filter by tag via the tags filter chip ─────────
     // Open the tags filter chip dropdown
     await tagsFilter.click();
-    // Click the menu item for "filter-me" tag
-    await page.locator('button[role="menuitem"]').filter({ hasText: "filter-me" }).click();
+    // Scope to this chip's menu (avoids strict-mode clashes with other menus)
+    await tagsFilter
+      .locator("..")
+      .getByRole("menuitem", { name: `#${tagName}` })
+      .first()
+      .click();
 
     await page.waitForTimeout(500);
     // After filtering, the toolbar should still be visible and

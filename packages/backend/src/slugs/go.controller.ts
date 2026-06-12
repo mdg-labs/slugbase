@@ -57,7 +57,7 @@ export class GoController {
     @Req() req: Request & Record<string, unknown>,
     @Param("slug") slug: string,
     @Res({ passthrough: true }) res: Response,
-  ): Promise<GoResolveResult | void> {
+  ): Promise<GoResolveResult | undefined> {
     const userId = req[TENANT_USER_ID_KEY] as string;
     const result = await this.go.resolveSlug(workspace, userId, slug);
 

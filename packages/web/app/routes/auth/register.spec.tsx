@@ -103,7 +103,7 @@ describe("Register route - action", () => {
     const result = await action(args);
 
     expect(result).toBeInstanceOf(Response);
-    expect((result as Response).status).toBe(302);
+    expect((result as Response).status).toBe(303);
     expect((result as Response).headers.get("Location")).toBe("/");
     expect((result as Response).headers.get("Set-Cookie")).toBe(
       "slugbase_session=abc; Path=/; HttpOnly",
@@ -214,7 +214,7 @@ describe("Register route - action", () => {
 
     expect(result).toBeInstanceOf(Response);
     const res = result as Response;
-    expect(res.status).toBe(302);
+    expect(res.status).toBe(303);
     expect(res.headers.get("Location")).toBe("/verify-email");
     expect(res.headers.get("Set-Cookie")).toBe("slugbase_session=verify; Path=/; HttpOnly");
   });

@@ -124,7 +124,7 @@ describe("Setup route - action", () => {
     const result = await action(args);
 
     expect(result).toBeInstanceOf(Response);
-    expect((result as Response).status).toBe(302);
+    expect((result as Response).status).toBe(303);
     expect((result as Response).headers.get("Location")).toBe("/login");
   });
 

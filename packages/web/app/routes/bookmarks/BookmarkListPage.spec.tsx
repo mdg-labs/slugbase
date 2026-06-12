@@ -26,6 +26,7 @@ vi.mock("react-router", () => ({
   useLoaderData: () => mockLoaderData,
   useNavigate: () => mockNavigate,
   useNavigation: () => ({ state: "idle" }),
+  useRevalidator: () => ({ revalidate: vi.fn(), state: "idle" }),
 }));
 
 vi.mock("./bookmarks-api.js", () => ({

@@ -4,9 +4,27 @@ import { loginAsWorker } from "../../helpers/worker-login.js";
 test.describe("Settings entitlement gates", () => {
   test("free plan shows members-plan-gate and audit-plan-gate", async ({
     page,
+    sessionCookie,
+    csrfToken,
   }, testInfo) => {
     // ── Phase 1: Login ──────────────────────────────────────────────
     await loginAsWorker(page, testInfo.workerIndex);
+
+    // ── Phase 1.5: Reset workspace to free plan ─────────────────────
+    // Parallel workers may have upgraded the plan (e.g. workspace switcher).
+    const apiUrl =
+      process.env.E2E_BASE_URL_API
+      ?? process.env.E2E_BASE_URL_SELF_HOSTED
+      ?? "http://localhost:4001";
+    const resetRes = await page.request.patch(`${apiUrl}/workspaces/active`, {
+      headers: {
+        Cookie: sessionCookie,
+        "x-csrf-token": csrfToken,
+        "Content-Type": "application/json",
+      },
+      data: { plan: "free" },
+    });
+    expect(resetRes.ok(), `Plan reset failed: ${resetRes.status()}`).toBeTruthy();
 
     // ── Phase 2: Navigate to members settings (free plan should gate) ─
     await page.goto("/settings/members");

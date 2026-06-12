@@ -68,6 +68,7 @@ function buildController(opts: {
       if (key === "EMAIL_VERIFICATION_REQUIRED") return opts.emailVerificationRequired ?? false;
       return undefined;
     }),
+    cookieSecure: vi.fn().mockReturnValue(false),
   } as unknown as MockedObject<ConfigService>;
 
   const mfa = {} as unknown as MockedObject<MfaService>;

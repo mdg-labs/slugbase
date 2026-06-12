@@ -91,7 +91,7 @@ describe("MFA challenge route - action", () => {
     const result = await action(args);
     expect(result).toBeInstanceOf(Response);
     const res = result as Response;
-    expect(res.status).toBe(302);
+    expect(res.status).toBe(303);
     expect(res.headers.get("Location")).toBe("/");
   });
 
