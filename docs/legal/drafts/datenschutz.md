@@ -52,13 +52,15 @@ Legal basis: Art. 6(1)(b) GDPR — necessary for the performance of a contract.
 
 **3.3 AI-Assisted Suggestions**
 
-Data: Content of individual bookmarks (URL, current title, existing tags) submitted for suggestion generation.
+Data sent to OpenAI: When you request AI-assisted suggestions, we submit the bookmark URL together with page metadata retrieved by our servers from the target page: page title, meta description, and site name. We do not send full page content, your bookmark notes, or your existing tags to OpenAI.
 
 Purpose: Generating AI-assisted slug, title, and tag suggestions when the feature is enabled by you or your workspace administrator.
 
 Legal basis: Art. 6(1)(b) GDPR — performance of a contract (where enabled as part of the subscribed plan); Art. 6(1)(a) GDPR — consent (where opt-in beyond the contracted scope).
 
 Third-party processor: OpenAI, L.L.C. (USA). Data is transferred to the United States on the basis of Standard Contractual Clauses pursuant to Art. 46(2)(c) GDPR. See Section 7 for full details.
+
+Suggestion cache: To avoid redundant calls to OpenAI, we store suggestion results in a server-side cache keyed by workspace, user, canonical URL, and output language. Cached entries contain the canonical URL, output language, and the generated suggestion result (slug, title, and tags). Purpose of the cache: serving repeat requests without contacting OpenAI again. Legal basis for the cache: Art. 6(1)(b) GDPR — necessary for the performance of a contract. Retention: 30 days from creation; entries expire automatically. See Section 5.
 
 Note: AI suggestions can be disabled at workspace level or per user in account settings.
 
@@ -225,6 +227,7 @@ You can review and change your consent choices at any time via the consent setti
 | Audit log data | Duration of the account plus 30 days after account deletion |
 | MFA data (enrolment state and encrypted TOTP secret) | Deleted upon MFA unenrolment or account deletion |
 | Workspace invitation data | Up to 7 days from creation; deleted on decline, revocation, or expiry; becomes account data on acceptance |
+| AI suggestion cache | 30 days from creation (automatic expiry) |
 
 After the applicable retention period, data is deleted or irreversibly anonymised.
 
@@ -344,13 +347,15 @@ Rechtsgrundlage: Art. 6 Abs. 1 lit. b DSGVO — Vertragserfüllung.
 
 **3.3 KI-gestützte Vorschläge**
 
-Daten: Inhalte einzelner Lesezeichen (URL, aktueller Titel, vorhandene Tags), die zur Vorschlagsgenerierung übermittelt werden.
+An OpenAI übermittelte Daten: Wenn Sie KI-gestützte Vorschläge anfordern, übermitteln wir die Lesezeichen-URL zusammen mit von unseren Servern von der Zielseite abgerufenen Seitenmetadaten: Seitentitel, Meta-Beschreibung und Seitenname. Vollständige Seiteninhalte, Ihre Lesezeichen-Notizen oder vorhandene Tags werden nicht an OpenAI übermittelt.
 
 Zweck: Generierung von KI-gestützten Vorschlägen für Slug, Titel und Tags, wenn die Funktion von Ihnen oder Ihrer Arbeitsbereichsadministration aktiviert wurde.
 
 Rechtsgrundlage: Art. 6 Abs. 1 lit. b DSGVO — Vertragserfüllung (soweit als Bestandteil des gebuchten Plans aktiviert); Art. 6 Abs. 1 lit. a DSGVO — Einwilligung (soweit opt-in über den Vertragsumfang hinaus).
 
 Drittanbieter: OpenAI, L.L.C. (USA). Daten werden auf Grundlage von Standardvertragsklauseln gemäß Art. 46 Abs. 2 lit. c DSGVO in die USA übermittelt. Details siehe Abschnitt 7.
+
+Vorschlags-Cache: Um redundante Anfragen an OpenAI zu vermeiden, speichern wir Vorschlagsergebnisse in einem serverseitigen Cache, der nach Arbeitsbereich, Nutzer:in, kanonischer URL und Ausgabesprache verknüpft ist. Cache-Einträge enthalten die kanonische URL, die Ausgabesprache und das generierte Vorschlagsergebnis (Slug, Titel und Tags). Zweck des Caches: wiederholte Anfragen ohne erneute Kontaktaufnahme mit OpenAI zu bedienen. Rechtsgrundlage für den Cache: Art. 6 Abs. 1 lit. b DSGVO — Vertragserfüllung. Aufbewahrung: 30 Tage ab Erstellung; Einträge verfallen automatisch. Siehe Abschnitt 5.
 
 Hinweis: KI-Vorschläge können in den Kontoeinstellungen auf Arbeitsbereichsebene oder je Nutzer:in deaktiviert werden.
 
@@ -517,6 +522,7 @@ Ihre Einwilligungsoptionen können Sie jederzeit über die Consent-Einstellungen
 | Audit-Log-Daten | Für die Dauer des Kontos zzgl. 30 Tage nach Kontolöschung |
 | MFA-Daten (Registrierungsstatus und verschlüsseltes TOTP-Secret) | Löschung bei MFA-Abmeldung oder Kontolöschung |
 | Arbeitsbereichs-Einladungsdaten | Höchstens 7 Tage ab Erstellung; Löschung bei Ablehnung, Widerruf oder Ablauf; wird bei Annahme zu Kontodaten |
+| KI-Vorschlags-Cache | 30 Tage ab Erstellung (automatischer Verfall) |
 
 Nach Ablauf der jeweiligen Aufbewahrungsfrist werden Daten gelöscht oder unwiderruflich anonymisiert.
 
