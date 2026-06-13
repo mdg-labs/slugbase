@@ -1,8 +1,119 @@
 ---
 title: "Slugs and go"
-description: "Assign short slugs and use go forwarding."
+description: "Assign short slugs to bookmarks and use go forwarding from the address bar or command palette."
 ---
+
+## What you'll accomplish
+
+After this guide, you understand how slugs work in your workspace, how to enable forwarding, and how to resolve ambiguous slugs.
 
 ## Overview
 
-This page is a navigation stub. Full content will be added in a follow-up authoring task.
+A **slug** is a short keyword on a bookmark (for example `docs` or `standup`). When **forwarding** is enabled, signed-in workspace members can open the bookmark by visiting `/go/<slug>` or typing `go <slug>` in the [command palette](/selfhosted/command-palette).
+
+Slugs are **private to your workspace**. They are not public anonymous short links — forwarding requires authentication.
+
+<Callout kind="info" title="Screenshot placeholder">
+**Suggested capture:** Bookmark modal with slug field, forwarding toggle, and forwarding address preview.
+**Suggested filename:** `/assets/selfhosted/slugs-forwarding-modal.png`
+**Alt text:** Bookmark editor showing slug and enable forwarding options.
+</Callout>
+
+## How slugs work in a workspace
+
+| Rule | Detail |
+|------|--------|
+| Uniqueness | Slugs are unique **per member** within a workspace — two members can each use `mail` on their own bookmarks |
+| One slug per bookmark | Each bookmark has at most one slug |
+| Grammar | Lowercase letters, digits, and hyphens; 1–64 characters; must start with a letter or number |
+| Reserved names | System routes such as `api`, `login`, and `health` cannot be used |
+
+When you enable **Enable forwarding**, the editor shows **Forwarding address: /go/&lt;slug&gt;** and explains that the slug resolves through `/go` for signed-in workspace members.
+
+## Assign a slug when saving
+
+<Steps>
+  <Step title="Open the bookmark editor">
+    Create or edit a bookmark from **Bookmarks** or **New bookmark**.
+  </Step>
+  <Step title="Enter a slug">
+    Type a keyword in the **Slug** field (shown with the `/go/` prefix in the UI).
+  </Step>
+  <Step title="Enable forwarding">
+    Turn on **Enable forwarding** so `/go/<slug>` and palette `go` mode can reach this bookmark.
+  </Step>
+  <Step title="Save">
+    Click **Save bookmark** or **Save changes**.
+  </Step>
+</Steps>
+
+## Forward from the browser
+
+### Address bar
+
+Navigate directly to:
+
+```text
+https://your-instance.example.com/go/docs
+```
+
+Replace `docs` with your slug. SlugBase opens the bookmark URL when the slug resolves unambiguously.
+
+### Browser search shortcut
+
+During onboarding (or from the **Getting started** checklist on **Home**), SlugBase helps you add a custom search engine:
+
+1. Open your browser's search engine settings
+2. Add a new entry with a short **Keyword** (for example `s`)
+3. Set the URL template to your instance's `/go/%s` pattern
+4. Type the keyword plus a slug in the address bar — for example `s docs` — and press Enter
+
+## Forward from the command palette
+
+Press `⌘K` (macOS) or `Ctrl+K` (Windows/Linux) to open the **Command palette**. Type `go ` followed by a slug to enter **go** mode. Select a match or press Enter to forward.
+
+See [Command palette](/selfhosted/command-palette) for full palette usage.
+
+## When a slug matches multiple bookmarks
+
+If more than one bookmark you can access shares the same slug, SlugBase shows **Slug matches multiple bookmarks**. Pick which bookmark to open.
+
+<Callout kind="info" title="Screenshot placeholder">
+**Suggested capture:** Slug disambiguation page listing multiple bookmarks for one slug.
+**Suggested filename:** `/assets/selfhosted/go-disambiguation.png`
+**Alt text:** Disambiguation screen asking which bookmark to open for a slug.
+</Callout>
+
+Optional: check **Always open "&lt;slug&gt;" with this bookmark — skip this in future** to save a **remembered preference**. Preferences appear on **Go / Slugs** in the sidebar.
+
+## Manage remembered preferences
+
+Open **Go / Slugs** from the sidebar. The **Remembered preferences** page lists slugs where you chose a default bookmark. From here you can:
+
+- **Change preferred bookmark** when a slug is still ambiguous
+- **Remove preference** to disambiguate again on the next visit
+
+## Verify it worked
+
+- Visiting `/go/<your-slug>` opens the correct destination while signed in
+- Palette `go <slug>` forwards to the same URL
+- After saving a preference, repeat visits skip disambiguation
+
+## Troubleshooting
+
+### No forwarding bookmark found
+
+Confirm forwarding is enabled on the bookmark, the slug is spelled correctly, and you are signed in to the workspace that owns the bookmark.
+
+### Slug required error
+
+Forwarding cannot be enabled without a slug. Add a slug or disable forwarding.
+
+### Someone else's slug with the same name
+
+That is expected — slugs are per member. Your `docs` and a teammate's `docs` are separate; disambiguation only lists bookmarks **you** can access.
+
+## Related topics
+
+- [Bookmarks](/selfhosted/bookmarks) — create and edit bookmarks
+- [Command palette](/selfhosted/command-palette) — `go` mode and keyboard navigation

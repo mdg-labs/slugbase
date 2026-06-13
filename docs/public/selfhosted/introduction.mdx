@@ -1,8 +1,82 @@
 ---
 title: "Introduction to self-hosted SlugBase"
-description: "What SlugBase is and how self-hosted deployment works."
+description: "What SlugBase is, how self-hosted deployment works, and how these guides help you get productive."
 ---
 
-## Overview
+## What you'll learn
 
-This page is a navigation stub. Full content will be added in a follow-up authoring task.
+After reading this page, you will understand what SlugBase does on your own infrastructure, how it differs from SlugBase Cloud, and which guides to read next.
+
+## What is SlugBase?
+
+SlugBase is a bookmark manager with built-in URL shortening and keyboard-driven navigation. You save links in a **workspace**, assign short **slugs** to bookmarks, and jump to any destination from the address bar or command palette using **forwarding** (`/go/<slug>`).
+
+On a self-hosted instance you run the same product as SlugBase Cloud — one codebase, configured for your deployment. Your data stays on infrastructure you control.
+
+## Who these guides are for
+
+| Audience | Start here |
+|----------|------------|
+| **Instance operator** — installs and maintains the deployment | [Quick start](/selfhosted/quick-start) |
+| **Instance administrator** — first account created at setup | [First workspace setup](/selfhosted/first-workspace-setup) |
+| **Workspace members** — day-to-day bookmarking | [Bookmarks](/selfhosted/bookmarks), [Slugs and go](/selfhosted/slugs-and-go) |
+
+Advanced operator topics — SMTP, OIDC, backups, and instance administration — live in other self-hosted guides outside this getting-started group.
+
+## How self-hosted works
+
+A self-hosted SlugBase instance ships as a **combined container image** (API and web client on one port). You provide **PostgreSQL** for persistence and set environment variables for secrets, public URLs, and optional integrations.
+
+Typical shape:
+
+```text
+Your reverse proxy (HTTPS)
+        ↓
+SlugBase container (port 3000)
+        ↓
+PostgreSQL
+```
+
+<Callout kind="info" title="Screenshot placeholder">
+**Suggested capture:** Sign-in screen on a freshly installed self-hosted instance with the SlugBase brand panel visible.
+**Suggested filename:** `/assets/selfhosted/introduction-sign-in.png`
+**Alt text:** SlugBase sign-in page on a self-hosted deployment.
+</Callout>
+
+## Key concepts
+
+### Workspace
+
+A **workspace** is the top-level container for bookmarks, folders, tags, members, and settings. Every piece of data belongs to exactly one workspace. On self-hosted, an **instance-wide administrator** creates workspaces and places members by invitation — public registration is off by default.
+
+### Slug and forwarding
+
+A **slug** is a short keyword on a bookmark (for example `docs`). When **forwarding** is enabled, signed-in workspace members can open `/go/<slug>` to jump to the bookmark's URL. Slugs are private to your workspace; they are not anonymous public short links.
+
+### Folders and tags
+
+**Folders** organize bookmarks into named containers. A bookmark can belong to multiple folders. **Tags** are flexible labels you can filter and search by — use both together when folders give structure and tags give cross-cutting themes.
+
+## Self-hosted vs SlugBase Cloud
+
+| Topic | Self-hosted | SlugBase Cloud |
+|-------|-------------|----------------|
+| Hosting | Your infrastructure | Managed by SlugBase |
+| Billing | Not applicable — full entitlements on your instance | Free, Personal, and Team plans |
+| User onboarding | Setup + invite by default | Public registration with email verification |
+| SMTP and OIDC | Configure in **Settings → Workspace** | Operator-managed on cloud; some settings hidden |
+| Marketing site | Separate deployment (not in the container image) | Hosted separately |
+
+## What to read next
+
+<Columns>
+  <Card title="Quick start" href="/selfhosted/quick-start">
+    Install the container image, connect PostgreSQL, and reach the setup screen.
+  </Card>
+  <Card title="First workspace setup" href="/selfhosted/first-workspace-setup">
+    Create the admin account and first workspace after installation.
+  </Card>
+  <Card title="Bookmarks" href="/selfhosted/bookmarks">
+    Save, edit, pin, and organize your links.
+  </Card>
+</Columns>
