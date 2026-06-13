@@ -1,8 +1,104 @@
 ---
 title: "Command palette"
-description: "Use the keyboard-driven command palette."
+description: "Navigate SlugBase Cloud with the keyboard-driven command palette — search, create, and go forwarding."
 ---
 
 ## Overview
 
-This page is a navigation stub. Full content will be added in a follow-up authoring task.
+The **command palette** is SlugBase's primary keyboard navigation tool. Press `⌘K` on macOS or `Ctrl+K` on Windows and Linux to open it from anywhere in the app.
+
+Use the palette to search bookmarks, folders, and tags; run quick actions; switch workspaces; and forward to slugs with **go** mode.
+
+<!-- screenshot:command-palette-go-mode -->
+
+## Open the palette
+
+| Shortcut | Action |
+|----------|--------|
+| `⌘K` / `Ctrl+K` | Open command palette |
+| `?` | Show keyboard shortcut help |
+
+The palette opens with focus in the search field. Press `Esc` or choose **close** in the footer to dismiss it.
+
+## Search mode (default)
+
+With an empty palette, SlugBase shows quick actions grouped by category:
+
+| Group | Examples |
+|-------|----------|
+| **Go to** | Bookmarks, Folders, Tags, Settings |
+| **Create** | New bookmark, New folder, New tag |
+| **Workspace** | Switch workspace |
+
+Type a query to search across bookmarks, folders, and tags. Results update as you type. Use arrow keys to navigate and Enter to open the selected item. Hold the modifier shown in the footer to **open in new tab**.
+
+When many bookmarks match, choose **See all N bookmarks matching** to jump to the full bookmarks list with your query applied.
+
+## Go mode
+
+Type `go ` (the word `go` followed by a space) to enter slug forwarding mode:
+
+<Steps>
+  <Step title="Open the palette">
+    Press `⌘K` / `Ctrl+K`.
+  </Step>
+  <Step title="Enter go mode">
+    Type `go ` and start typing a slug prefix.
+  </Step>
+  <Step title="Select or forward">
+    Matching slugs appear as you type. Select one to forward to the destination, or press Enter to resolve `/go/<slug>`.
+  </Step>
+</Steps>
+
+You can also paste a `/go/<slug>` path into the palette to forward directly.
+
+If no slug matches, SlugBase shows **No slug matching** with your query. Confirm the slug exists, forwarding is enabled, and you have access to the bookmark.
+
+## Create from the palette
+
+From the empty palette, use the **Create** group or type to find:
+
+- **New bookmark** — opens the bookmark modal
+- **New folder** — opens the new folder dialog
+- **New tag** — opens the new tag dialog
+
+The bookmarks list also supports `C` to create a new bookmark when the palette is not open.
+
+## Switch workspace
+
+Choose **Switch workspace** to open the workspace switcher without leaving the keyboard. On the Free plan, creating additional workspaces requires upgrading to **Personal** or **Team**.
+
+## Palette footer shortcuts
+
+The palette footer reminds you of available keys:
+
+| Key | Action |
+|-----|--------|
+| ↑ / ↓ | Navigate results |
+| Enter | Select / forward |
+| Modifier + Enter | Open in new tab |
+| Esc | Close |
+
+## Verify it worked
+
+Open the palette, search for a known bookmark title, and press Enter — you arrive at the bookmark or its list entry. In go mode, type `go ` plus a slug you own and confirm you forward to the correct URL.
+
+## Troubleshooting
+
+### No results for my search
+
+Try a shorter query or check that the bookmark is in your active workspace. Clear the query with **Clear search**.
+
+### Go mode shows no slugs
+
+You need bookmarks with forwarding enabled and assigned slugs. See [Slugs and go](/cloud/slugs-and-go).
+
+### Palette does not open
+
+Ensure focus is not trapped in a text field that captures the shortcut. Try clicking the app background first, or use the top bar **Keyboard shortcuts** entry.
+
+## Related topics
+
+- [Slugs and go](/cloud/slugs-and-go) — forwarding and `/go/<slug>`
+- [Search and import](/cloud/search-and-import) — full-text search on list pages
+- [Bookmarks](/cloud/bookmarks) — create bookmarks from the palette
