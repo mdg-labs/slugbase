@@ -1,10 +1,10 @@
 ---
-description: i18n with next-intl + Tolgee — no hardcoded strings, description required
+description: i18n with next-intl — no hardcoded strings, description required
 globs: apps/web/**/*.ts, apps/web/**/*.tsx
 alwaysApply: false
 ---
 
-# i18n (next-intl + Tolgee)
+# i18n (next-intl)
 
 Every player-facing string in the web app goes through the i18n system. See `decisions §21` and roadmap task `P7-00`.
 
@@ -68,12 +68,12 @@ const label = locale === 'de' ? vehicleDef.nameDe : vehicleDef.nameEn;
 
 Never duplicate vehicle/incident names into i18n keys — they're already in the data package.
 
-## Tolgee CLI
+## i18n CLI
 
 ```bash
-tolgee-cli push    # upload new keys + descriptions
-tolgee-cli pull    # pull translations into locales/
-tolgee-cli pull --check  # CI: fail if missing keys
+i18n-cli push    # upload new keys + descriptions
+i18n-cli pull    # pull translations into locales/
+i18n-cli pull --check  # CI: fail if missing keys
 ```
 
 CI runs `--check` in the `prepare` job of `ci-cd.yml`.

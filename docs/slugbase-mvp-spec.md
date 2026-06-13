@@ -54,7 +54,7 @@ This rebuild targets a **v1-launchable scope**, not a full-parity reconstruction
 - Soft-delete / trash for user-initiated deletion.
 - Subdomain- or path-based tenancy.
 - Browser extension or bookmarklet; public/anonymous share pages; drag-and-drop reordering; a notifications center; first-class backup/restore (beyond export + volume copy); AI features beyond field suggestions.
-- Fine-tuning of the Team base-seat count and other config-level pricing/quota details.
+- Fine-tuning of config-level pricing/quota details.
 
 ---
 
@@ -72,7 +72,7 @@ The repository is a **pnpm workspace** (a pnpm monorepo). Internal packages (for
 
 ### 2.3 Marketing site is a separate static site within the repo
 
-The public marketing surface (landing page, pricing, contact, legal/terms/privacy/imprint, and similar non-application pages) is a **separate static site** that lives inside the same repository as its own workspace package. It is **separately built and deployed**, independent of the application runtime. The site's framework and hosting target are roadmap details and are intentionally left open here; what is fixed is that it is a static site, in the same repo, built and deployed separately from the application. The application itself contains no marketing pages; the only product-marketing-adjacent surface allowed inside the application is what is strictly needed for sign-in context (for example, a side panel on the login screen), and even that is data-driven, not a marketing page. The marketing site's **contact form** calls a small public endpoint on the application (see Sections 11.1 and 11.8) and is protected by the challenge (bot-protection) interface.
+The public marketing surface (landing page, pricing, contact, legal/terms/privacy/imprint, and similar non-application pages) is a **separate static site** that lives inside the same repository as its own workspace package. It is **separately built and deployed**, independent of the application runtime. The site is built with **Astro** (a static, zero-JS-by-default site generator) and deployed to **Cloudflare Workers** (decisions #28, #40); what is fixed is that it is a static site, in the same repo, built and deployed separately from the application. The application itself contains no marketing pages; the only product-marketing-adjacent surface allowed inside the application is what is strictly needed for sign-in context (for example, a side panel on the login screen), and even that is data-driven, not a marketing page. The marketing site's **contact form** calls a small public endpoint on the application (see Sections 11.1 and 11.8) and is protected by the challenge (bot-protection) interface.
 
 ### 2.4 Documentation lives in the source repo
 
@@ -180,7 +180,7 @@ These paths are not contradictory: setup creates the very first account; invitat
 
 The product uses **server-side sessions** as its single session strategy, **identical on both deployments**. The old model (a JWT access cookie everywhere plus a cloud-only refresh-token flow) is **dropped entirely**. Server-side sessions give immediate revocation and clean multi-device logout, and the active-workspace selection already lives server-side, so the session is the natural home for it.
 
-- **Primary web session:** Established on login, carried in an HTTP-only cookie, backed by a server-side session store. Sessions have a configurable lifetime and can be revoked individually (enabling "log out everywhere"). The session also carries transient state such as in-progress federated-login handshakes and the active-workspace selection.
+- **Primary web session:** Established on login, carried in an HTTP-only cookie, backed by a **database-backed** server-side session store (no Redis/external cache, so a bare self-host install needs no extra services — decision #46). Sessions have a configurable lifetime and can be revoked individually (enabling "log out everywhere"). The session also carries transient state such as in-progress federated-login handshakes and the active-workspace selection.
 - **Personal API tokens:** Long-lived, user-created tokens (prefixed and stored only as hashes) for programmatic API access. Tokens are limited in number per user, individually named, track last-use, and can be revoked. API tokens bypass the interactive MFA step (they represent an already-trusted credential); this trade-off is documented.
 
 ### 5.4 Passwords and credentials
@@ -349,7 +349,7 @@ Each capability that reaches outside the application is defined here **as a cont
 ### 11.2 AI suggestions (AI interface)
 
 - **Responsibility:** Given a destination URL (and optionally fetched page metadata) and a desired output language, return suggested bookmark fields — a title, a slug candidate, a set of tags, a detected language, and a confidence indicator. The contract also reports whether AI is available for the current context. Results are cacheable by (workspace, user, canonical URL, output language) for a bounded period, and usage can be recorded for analytics.
-- **v1 implementation:** A single AI provider, behind a vendor-neutral contract. **Self-hosted:** admins supply their own credential and model via the admin UI; disabled until configured. **Hosted:** the operator supplies the credential via deployment configuration, and per-workspace availability is gated by entitlements with a per-workspace enable toggle. Users can individually opt out on either deployment.
+- **v1 implementation:** **OpenAI**, behind a vendor-neutral contract (decision #49) — no application code depends on OpenAI specifics; alternative providers are Fast-Follow. **Self-hosted:** admins supply their own credential and model via the admin UI; disabled until configured. **Hosted:** the operator supplies the credential via deployment configuration, and per-workspace availability is gated by entitlements with a per-workspace enable toggle. Users can individually opt out on either deployment.
 - **Swappable:** Yes. The contract assumes no particular vendor, model naming, or request shape; the application asks for "suggestions for this URL" and gets a structured result.
 
 ### 11.3 Authentication / identity federation (auth-provider interface)
@@ -389,7 +389,7 @@ The **entitlements engine** is the linchpin that replaces the old deployment-mod
 ### 11.9 Persistence (database interface)
 
 - **Responsibility:** Provide relational persistence for all application data via a single internal data-access abstraction, supporting more than one engine on an **identical schema and migration story**.
-- **v1 implementation:** **Both engines ship in v1.** An **embedded file-based engine** is the self-hosted default (zero external dependency, single-node) and is a **deliberate self-hosting selling point**. A **networked relational engine** is the hosted default. Both run the same schema and the same forward-only migrations.
+- **v1 implementation:** **PostgreSQL** is the sole engine at v1 — hosted on **Neon Postgres** (`aws-eu-central-1`) and required/recommended for self-host (operator-provided Postgres instance or container). The data-access abstraction is implemented with **Drizzle ORM**; **Drizzle Kit** generates and applies migrations directly against Postgres (`dialect: postgresql`). **Embedded SQLite self-host is deferred** to Fast-Follow — the interface contract remains swappable, but v1 ships Postgres-only runtime and migration paths (decision #41, updated).
 - **Swappable:** Yes — application code targets the data-access abstraction, not a specific engine.
 
 ### 11.10 Outbound HTTP egress (fetch interface)
@@ -412,10 +412,10 @@ The hosted service offers:
 
 - **Free:** A capped tier. Up to **50 bookmarks per workspace**; AI suggestions unavailable; no team sharing or team administration; no audit log; **an account may own exactly one workspace**. The entry point.
 - **Personal:** A paid individual tier. Unlimited bookmarks; AI suggestions available; single-user (no team sharing/administration); **a paid entitlement is required to create/own more than one workspace**.
-- **Team:** A paid collaborative tier. Unlimited bookmarks; AI suggestions available; team sharing and team administration; member invitations; audit log; a base number of included seats with the ability to purchase additional seats.
+- **Team:** A paid collaborative tier. Unlimited bookmarks; AI suggestions available; team sharing and team administration; member invitations; audit log; a per-seat price with no minimum — seats are added or removed as team members join or leave.
 - **Supporter / lifetime:** **Not a separate hard-coded plan.** It is a **config-driven launch promotion** (a one-time purchase, time-boxed) whose entitlement effect is **"Personal, permanent."** There is no separate code path: a supporter purchase simply grants the Personal entitlement set permanently to the workspace.
 
-Pricing specifics (amounts, monthly/yearly, extra-seat pricing, the supporter price and deadline, and the **exact Team base-seat count**) are configuration and live in deployment configuration and the marketing site, not hard-coded in application logic. The Free bookmark cap of 50 is a concrete starting value and is confirmable later as configuration.
+Pricing specifics (amounts, monthly/yearly, per-seat pricing, the supporter price and deadline) are configuration and live in deployment configuration and the marketing site, not hard-coded in application logic. The Free bookmark cap of 50 is a concrete starting value and is confirmable later as configuration.
 
 ### 12.2 Limits and quotas (entitlements)
 
@@ -428,7 +428,7 @@ The entitlements the application checks, with their plan mapping:
 - **Team administration (Members and Teams admin):** Team plan only on hosted; always on for self-hosted.
 - **Member invitations:** Team plan only on hosted; always on for self-hosted.
 - **Audit log:** Team plan only on hosted; always on for self-hosted.
-- **Seats:** Team includes a base number of seats (the exact number is a configuration detail, finalized as a Fast-Follow tuning step) and supports purchasable extra seats. **An invitation consumes a seat on acceptance, not on send.** The seat count **cannot be reduced below the current member count.**
+- **Seats:** Team is priced per seat — each member occupies one seat. The seat count equals the current active member count; there is no minimum or "included" tier. **An invitation consumes a seat on acceptance, not on send.** The seat count **cannot be reduced below the current member count.**
 
 ### 12.3 Lifecycle
 
@@ -501,6 +501,18 @@ The hosted service uses a split deployment: the **web client** is served from th
 
 **Self-hosted is unaffected:** self-hosted users continue to run the combined container image (§14.2) on their own infrastructure. The split topology described here is exclusively for the operator-run hosted service.
 
+**App / Worker naming (settled — decision #51):** every operator-run platform app (Fly.io app names and Cloudflare Worker script names) follows **`slugbase-<env>-<app>`**, where `<env>` matches the Infisical environment name (`staging` / `production`) and `<app>` is `api`, `web`, or `marketing`:
+
+| App | Platform | Staging name | Production name |
+|---|---|---|---|
+| API / back-end | Fly.io (`fra`) | `slugbase-staging-api` | `slugbase-production-api` |
+| Web client | Cloudflare Workers | `slugbase-staging-web` | `slugbase-production-web` |
+| Marketing site | Cloudflare Workers | `slugbase-staging-marketing` | `slugbase-production-marketing` |
+
+There is **no `development` deployment** — local development runs the dev servers directly (Infisical `development` env). These are **platform app/script identifiers, not public hostnames**; public domains (and `APP_BASE_URL` / `FRONTEND_ORIGIN`) are configured separately. The self-hosted combined image is published to GHCR and is not subject to this scheme.
+
+**Staging scale-to-zero (current posture):** `slugbase-staging-api` runs **scaled to zero** on Fly.io (`auto_stop_machines` enabled, `min_machines_running = 0`) to save cost — it stops when idle and cold-starts on the next request, with startup latency tolerated on staging. Production (`slugbase-production-api`) stays warm (`min_machines_running ≥ 1`). This is a current cost posture, revisited as traffic grows; the Workers-hosted `web`/`marketing` surfaces scale to zero natively.
+
 **CORS and origin configuration:** `APP_BASE_URL` points to the Fly.io app URL (or a custom domain in front of it); `FRONTEND_ORIGIN` points to the Cloudflare Workers frontend origin. Both are required secrets (§15) validated at startup.
 
 ---
@@ -523,7 +535,7 @@ A guiding rule: a setting that distinguishes a hosted deployment from a self-hos
 
 Described in prose, as conceptual entities and relationships, generalized so that **every tenant-owned entity carries a workspace identifier from the start**. This is a **greenfield rebuild with a single new forward-only migration history**; the previously-separate core and cloud migration chains are unified. **Migrating data from existing instances is a separate workstream not covered by this spec.**
 
-- **Workspace:** The tenant. Has name, plan/entitlement state, billing linkage (possibly empty), included- and extra-seat counts, and timestamps. Owns all the entities below.
+- **Workspace:** The tenant. Has name, plan/entitlement state, billing linkage (possibly empty), seat count, and timestamps. Owns all the entities below.
 - **User account:** Global identity by email, with name, optional password credential, language, theme, verification state, instance-wide admin flag, MFA state (enrollment flag, encrypted secret, enrollment time), and AI-opt-out preference.
 - **Membership:** Associates a user account with a workspace and a role (owner/admin/member).
 - **Workspace invitation:** A pending invitation to join a workspace (email, hashed token, status, expiry). A seat is consumed on acceptance, not on send.
@@ -569,19 +581,41 @@ The product is multilingual. v1 ships **English and German**; the rebuild keeps 
 
 ---
 
-## 19. Repository and Package Layout (Conceptual)
+## 19. Technology Stack and Package Layout (settled)
 
-As a pnpm workspace in a single repository, the conceptual members are:
+The stack below is fixed for v1 (recorded compactly as decisions #37–#50 in §21). It names tool/framework choices only — no code or schemas — consistent with the rest of this document.
 
-- **The application back-end** (API, tenancy, auth, domain logic, entitlements, interface implementations).
-- **The web client** (the signed-in application UI).
-- **A shared package** for cross-cutting types/contracts (including the interface contracts and the API/OpenAPI types) used by both back-end and client.
-- **A shared UI/component package** if it aids reuse.
-- **The marketing site** (a separate static site, independently built and deployed).
-- **The documentation** (customer/operator docs and a clearly separated internal-engineering section).
-- *(Fast-Follow)* **An operator console** package, if and when the operator console is built.
+### 19.1 Stack
 
-The exact package boundaries are an implementation detail for the roadmap; what is fixed is that all of these live in one repo, use pnpm, and that the marketing site and the application are separately buildable.
+| Concern | v1 choice | Notes |
+|---|---|---|
+| Language | **TypeScript** (strict, no `any`) | All packages. |
+| Backend | **NestJS** | Its module/DI system hosts the config-selected interface implementations (§2.6, §11) — interface swapping replaces deployment-mode branching; OpenAPI is generated from the contracts (§18). Runs as a Node container on Fly.io (§14.7). |
+| Web client | **React Router v7** (framework mode) | The same app runs on Cloudflare Workers (hosted edge SSR, §14.7) **and** as a Node server inside the combined self-host image (§14.2) — one codebase, two adapters (§1, §15). |
+| Marketing site | **Astro** (static) | Zero-JS-by-default; deployed to Cloudflare Workers; separately built (§2.3, decision #28). |
+| Persistence | **Drizzle ORM** (+ **Drizzle Kit**) | Behind the data-access abstraction (§11.9); **PostgreSQL** schema and migration history for hosted Neon and self-host. Embedded SQLite self-host deferred (Fast-Follow). |
+| Validation / contracts | **Zod** + **ts-rest** | Server-side validation and env schemas (Zod, rule `05-env-vars`); a single typed REST contract in `shared-types` generates the OpenAPI description (§18) and is consumed by both backend and web client. |
+| UI | **Tailwind** + **Radix** + **cmdk** | Tailwind bridged to the prototype design tokens (§23.1); components consume token variables only (rule `11-design-system`). `cmdk` realises the `⌘K` palette + `go` mode (§9). |
+| Tests | **Vitest** + **Supertest** + **Playwright** | Unit/integration (Vitest/Supertest) and e2e (Playwright, §22.4); these pin the CI-gate commands (§22.3). |
+| Build | **Turborepo** | Cached lint/typecheck/test/build pipelines over the pnpm workspace (`turbo.json`). |
+| Sessions | **DB-backed** server-side store | No Redis/external cache (§5.3, §14.5). |
+| Security primitives | **argon2id** · **otplib** TOTP · **double-submit CSRF** | §5.4, §5.7, §5.8. |
+| Background work | **In-process** (no separate worker/broker) | §22.10, §6.3. |
+| AI provider (v1) | **OpenAI** | Behind the vendor-neutral AI interface (§11.2); swapping providers is Fast-Follow. |
+
+### 19.2 Packages
+
+As a pnpm workspace in a single repository:
+
+- **`packages/backend`** — the NestJS API: tenancy, auth/sessions, domain logic, entitlements, and all external-interface implementations (§11).
+- **`packages/web`** — the React Router v7 signed-in web application. *(Canonical web-package name; `web-client` is not used.)*
+- **`packages/marketing`** — the Astro static marketing site, independently built and deployed (§2.3).
+- **`packages/shared-types`** — cross-cutting Zod/ts-rest contracts, the external-interface contracts, and the generated API/OpenAPI types, consumed by both backend and web.
+- **`packages/ui`** — the shared component library and the design tokens (§23.1).
+- **`docs/`** — customer/operator documentation plus a clearly separated internal-engineering section.
+- *(Fast-Follow)* an **operator console** package, if and when it is built (§10.2, §20).
+
+All members live in one repo, use pnpm, and the marketing site and the application are separately buildable.
 
 ---
 
@@ -631,7 +665,7 @@ Every item below was previously an open question and is now **settled** and inte
 14. Free bookmark cap = **50 per workspace** (concrete starting value, confirmable as config later).
 15. Supporter/lifetime is a **config-driven launch promotion**, entitlement-equivalent to "Personal, permanent"; no separate code path.
 16. Self-hosted has **no billing** (no-op billing impl, full entitlements); no paid self-host licensing in v1.
-17. Team: base included seats + purchasable extras; seat count cannot drop below current member count; invitations consume a seat **on acceptance**; exact base-seat number is a Fast-Follow config detail.
+17. Team is pure per-seat — no base included seats, no minimum seat count; invitations consume a seat **on acceptance**; seat count cannot drop below current member count.
 18. **Downgrade overflow:** downgrade to Free takes effect at period-end with a grace period; over-cap bookmarks are **archived (preserved, hidden), not deleted**, and restored on re-upgrade (Section 12.5). Creation-blocking is not the only cap behavior.
 30. **Workspace-creation entitlement (settled):** "workspaces an account may create/own" is an entitlement checked by the engine. Hosted Free = exactly one workspace; additional workspaces require a paid entitlement (closes the 50×N free-cap bypass). Self-hosted = unrestricted. (Sections 4.1, 11.5, 12.2, 12.4.)
 
@@ -649,9 +683,217 @@ Every item below was previously an open question and is now **settled** and inte
 27. **One concrete implementation per interface in v1**, with the seam in place: SMTP (mail, both deployments), one AI provider, Stripe (billing), Cloudflare Turnstile (challenge), the existing analytics/error-reporting sinks behind no-op-able interfaces. Multiple providers per interface is Fast-Follow.
 28. **Marketing site** is a static site, separately built and deployed, in the same repo; deployed to **Cloudflare Workers** (same platform as the web client).
 31. **Hosted deployment topology (settled):** web client on Cloudflare Workers (edge); API/back-end on Fly.io Frankfurt (`fra`); database on Neon Postgres Frankfurt (`aws-eu-central-1`). Railway was rejected — its only EU region (Amsterdam) has no collocated Neon region, causing cross-region DB latency. Self-hosted uses the combined container image (§14.2) and is unaffected. (Section 14.7.)
-32. **Hosted database engine (settled):** Neon Postgres (`aws-eu-central-1`) for the hosted deployment. Self-hosted defaults to the embedded file-based database with an optional networked Postgres path (§14.1, decision 26). The application schema and migration history are identical across both engines.
-33. **i18n tooling (settled):** Tolgee is the translation-management platform. Message catalogs are externalized through the Tolgee SDK; `TOLGEE_API_KEY` and `TOLGEE_PROJECT_ID` are Infisical-managed secrets. (Section 17, rule 10-i18n.mdc.)
-34. **Secrets management tooling (settled):** Infisical is the secrets manager for all environments (`development` / `staging` / `production`). Operators set `staging` and `production` secrets via the Infisical UI or OIDC sync; developers use `infisical run --env=development` locally. (Section 15, rule 05-env-vars.mdc.)
+32. **Hosted database engine (settled):** Neon Postgres (`aws-eu-central-1`) for the hosted deployment. Self-hosted v1 requires operator-provided Postgres (same schema/migrations). Embedded SQLite self-host is **deferred** (Fast-Follow).
+33. **i18n tooling (settled):** Message catalogs live in committed repo JSON (`packages/*/i18n/locales/{en,de}.json`). Web uses react-i18next; marketing uses native `t()` at build time. CI validates locale parity via `pnpm i18n:validate`. (Section 17, rule 10-i18n.mdc.)
+34. **Secrets management tooling (settled):** Infisical Cloud (EU) is the secrets manager for all environments (`dev` / `staging` / `prod`). Operators set `staging` and `prod` secrets via the Infisical UI or OIDC sync; developers use `infisical run --env=dev` locally. All keys live at the environment root (no subfolders). (Section 15, rule 05-env-vars.mdc.)
+
+35. **CI/CD pipeline (settled):** GitHub Actions on hosted runners; single workflow file (`.github/workflows/ci-cd.yml`); branches `staging` and `main`. (Section 22.)
+36. **Design system and UI prototype (settled):** A clickable V1 design prototype in `docs/design-prototype/V1/` is the **visual and interaction-design source of truth** (design language, screen anatomy, states, copy tone). The MVP spec remains the **product source of truth** — where the prototype conflicts with the spec, the spec wins. Design tokens (periwinkle accent `#7782f7`, dark-first, IBM Plex Sans/Mono) are defined in `docs/design-prototype/V1/colors_and_type.css`. (Section 23.)
+
+**Technology stack**
+37. **Language (settled):** TypeScript everywhere, strict mode, no `any`. (Section 19.)
+38. **Backend framework (settled):** NestJS — its module/DI system hosts the config-selected external-interface implementations (§2.6, §11), replacing deployment-mode branching, and generates the OpenAPI description (§18); runs as a Node container on Fly.io (§14.7). (Section 19.)
+39. **Web client (settled):** React Router v7 (framework mode) — the same app runs on Cloudflare Workers (hosted edge SSR) and as a Node server inside the combined self-host image (§14.2). (Sections 14.7, 19.)
+40. **Marketing site framework (settled):** Astro (static, zero-JS-by-default), deployed to Cloudflare Workers, separately built (§2.3, decision #28). (Section 19.)
+41. **Persistence (settled):** Drizzle ORM behind the data-access abstraction (§11.9); **PostgreSQL-only** at v1 — Drizzle Kit generates migrations from the Postgres schema and applies them natively on Neon (hosted) and operator Postgres (self-host). Embedded SQLite self-host deferred (Fast-Follow). (Sections 11.9, 16, 19.)
+42. **Validation & API contracts (settled):** Zod for all server-side validation and env schemas (rule `05-env-vars`); ts-rest contracts in `shared-types` generate the OpenAPI description (§18) and are consumed by backend and web client. (Section 19.)
+43. **UI system (settled):** Tailwind CSS bridged to the prototype design tokens (`colors_and_type.css`, §23.1) + Radix UI primitives + cmdk for the command palette; components consume token variables only. (Sections 19, 23, rule `11-design-system`.)
+44. **Tests (settled):** Vitest (unit + integration) + Supertest (API) + Playwright (e2e, §22.4); these pin the CI-gate commands (§22.3). (Section 19.)
+45. **Build orchestration (settled):** Turborepo over the pnpm workspace (`turbo.json`). (Sections 2.2, 19.)
+46. **Session store (settled):** database-backed server-side sessions — no Redis/external cache — so a bare self-host install needs no extra services. (Sections 5.3, 14.5.)
+47. **Security primitives (settled):** argon2id (password hashing, §5.4), otplib TOTP + QR (MFA, §5.7), double-submit-token CSRF over the §5.8 exempt allowlist.
+48. **Background work (settled):** in-process within the API — no separate worker process or external broker (§22.10, §6.3).
+49. **AI provider, v1 (settled):** OpenAI behind the vendor-neutral AI interface (§11.2); swapping providers is Fast-Follow.
+50. **Package layout (settled):** pnpm workspace packages `backend`, `web`, `marketing`, `shared-types`, `ui`, plus `docs`; the canonical web-package name is `web` (not `web-client`); marketing and app are separately buildable. (Section 19.)
+51. **Platform app naming (settled):** operator-run Fly.io apps and Cloudflare Worker scripts are named `slugbase-<env>-<app>` — `<env>` ∈ {`staging`, `production`} (matching Infisical env names; no `development` deployment), `<app>` ∈ {`api`, `web`, `marketing`}. These are platform identifiers, not public hostnames. Self-hosted GHCR image is exempt. (Section 14.7.)
+
+---
+
+## 22. CI/CD Pipeline
+
+A single GitHub Actions workflow file (`.github/workflows/ci-cd.yml`) covers the full lifecycle from pull-request checks through production deployment. The design follows the Dispatch One pipeline pattern, adapted for SlugBase's package layout and the hosted GitHub Actions runners (the repo is public).
+
+### 22.1 Runners and concurrency
+
+**GitHub-hosted runners** (`ubuntu-latest`) are used throughout. Because each job runs in a fresh ephemeral VM, Docker cleanup and concurrency group protection for self-hosted runners are unnecessary and are omitted.
+
+Concurrency: in-progress runs are cancelled for PR and `staging`-push triggers; production deploys (triggered by a published release) are never cancelled.
+
+### 22.2 Triggers
+
+| Event | Branches / types | Jobs fired |
+|---|---|---|
+| `pull_request` | targeting `staging` or `main` | CI checks (+ E2E when `staging → main`) |
+| `push` | `staging` | CI checks → staging deploy |
+| `push` | `main` | CI checks → prepare release |
+| `release` published | — | Production deploy |
+| `workflow_dispatch` | — | Manual trigger (full run) |
+
+### 22.3 CI checks (all PRs and pushes)
+
+Run on every trigger before any deployment gate. Order within the job:
+
+1. `pnpm install --frozen-lockfile`
+2. **Fast-fail checks (no secrets, no build):** lint → typecheck → unit tests
+3. Fetch secrets from Infisical (`development` env, OIDC method)
+4. Build
+5. Integration tests (using the development-env secrets)
+6. `pnpm audit --audit-level=high` (dependency audit)
+
+### 22.4 E2E (Playwright)
+
+Runs only on the `staging → main` pull request (i.e. the release-candidate PR). Depends on CI checks passing. Rebuilds from source against the release tag. Runs against a managed local stack. Timeout: 45 minutes.
+
+### 22.5 Staging deploy (push to `staging`)
+
+Ordered pipeline, with server and web/marketing builds running **in parallel** for speed. Schema migrations apply automatically on **API startup** (before the server accepts traffic) — hosted Fly and self-host GHCR use the same bootstrap path (§14.2); CI does not connect to Neon for migrate.
+
+| Step | Description |
+|---|---|
+| 1 | GitHub Deployment record — start |
+| 2a (parallel) | Build API/back-end with `staging` Infisical secrets |
+| 2b (parallel) | Build web client + marketing site bundles with `staging` Infisical secrets |
+| 3a | Deploy API to **Fly.io** `fra` (`flyctl deploy --remote-only`) — migrations run on API boot |
+| 3b | Deploy web client to **Cloudflare Workers** via `wrangler deploy` (with retry)  |
+| 3c | Deploy marketing site to **Cloudflare Workers** via `wrangler deploy` (with retry)  |
+| 4 | Smoke: API and web — `GET /health` and `/version` (HTTP 200 + JSON); marketing — `GET ${MARKETING_ORIGIN}/` site root liveness only (HTTP 200; static site has no health/version routes) |
+| 5 | GitHub Deployment record — finish (success/failure) |
+
+### 22.6 Prepare release (push to `main`)
+
+Runs after CI checks pass. Only proceeds if `package.json` version is greater than the latest git tag.
+
+1. Check version bump (compare `package.json` version against latest `v*` tag).
+2. Fetch `staging` Infisical secrets.
+3. Verify translations: `pnpm i18n:validate` (locale parity + referenced keys in committed JSON). Fails if non-default locales are missing keys or UI code references unknown keys.
+4. Generate changelog from `git log` since last tag (conventional commits).
+5. Create annotated git tag `vX.Y.Z` and push.
+6. Create **draft** GitHub Release (changelog as body) — a human publishes it to trigger production.
+
+### 22.7 Production deploy (release published)
+
+Triggered when a draft release is manually published. Idempotent: compares the release tag against `DEPLOYED_VERSION` (a repository Actions variable); skips the deploy if already deployed. Schema migrations apply automatically on **API startup** (before the server accepts traffic) — same bootstrap path as self-host (§14.2); CI does not connect to Neon for migrate.
+
+| Step | Description |
+|---|---|
+| 1 | Idempotency check |
+| 2 | GitHub Deployment record — start |
+| 3 | Build all packages from the release tag with `production` Infisical secrets; upload Sentry source maps (if `SENTRY_AUTH_TOKEN` is set) |
+| 4a | Deploy API to **Fly.io** `fra` — migrations run on API boot |
+| 4b | Deploy web client to **Cloudflare Workers** |
+| 4c | Deploy marketing site to **Cloudflare Workers** |
+| 5 | Smoke: health endpoint on Fly API + web client health check on Workers |
+| 6 | GitHub Deployment record — finish |
+| 7 | Write release tag to `DEPLOYED_VERSION` repository variable |
+
+### 22.8 Self-hosted container image
+
+On `release` published (same trigger as the hosted production deploy), the workflow also builds and pushes the **combined container image** (API + bundled web client) to the GitHub Container Registry (`ghcr.io`), tagged `vX.Y.Z` and `latest`. This is the artefact self-hosters pull and run.
+
+### 22.9 Secrets in CI
+
+All environment secrets are fetched from Infisical via the `Infisical/secrets-action` using **OIDC** (no long-lived tokens in GitHub Actions secrets). Secrets live in **Infisical Cloud (EU)** at `https://eu.infisical.com`, project slug `slugbase-cloud`. The only GitHub Actions secrets stored in the repository are:
+- `INFISICAL_DOMAIN` — Infisical Cloud (EU) instance URL
+- `INFISICAL_OIDC_IDENTITY_ID` — the machine identity for OIDC auth
+
+**Secret organization (settled):** all keys for an environment live at the **Infisical project root** (no subfolders). Local dev and CI inject the full environment via `infisical run --env=<slug>` and `Infisical/secrets-action` respectively.
+
+- **Server-only secrets** use keys without a client prefix (`SESSION_SECRET`, `DATABASE_URL`, etc.).
+- **Build-time public config** uses `VITE_*` (web) or `PUBLIC_*` (marketing) — these are inlined into client bundles; never store true secrets under those prefixes.
+
+**OIDC identity (settled):** a **single machine identity** (`INFISICAL_OIDC_IDENTITY_ID`) is used for all CI jobs, scoped read-only to the `slugbase-cloud` project. Per-surface CI identities (`ci-api` / `ci-web` / `ci-marketing`) are a possible later hardening, not v1.
+
+### 22.10 What is not in this pipeline
+
+- Self-hosted runner Docker cleanup (not needed on ephemeral hosted runners)
+- Concurrency guards for runner disk space (not needed)
+- A separate admin console deploy (no admin console in v1 — Fast-Follow)
+- A background worker service deploy (SlugBase has no separate worker process; background work is handled within the API process)
+
+---
+
+## 23. Design System and UI Prototype Reference
+
+A clickable HTML/React design prototype lives in `docs/design-prototype/V1/`. It is the **visual and interaction-design source of truth**: it defines the design language, the anatomy of every screen, component states, micro-interactions, and the intended copy tone. It is *not* the product source of truth — feature scope, entitlements, tenancy, security, and data model are governed by Sections 1–22 of this spec. **Where the prototype and this spec disagree, this spec wins** (the known conflicts are catalogued in §23.4).
+
+The prototype is a static, data-mocked artefact (React via CDN + Babel-in-browser, `localStorage` for demo state, fake data in `prototype/data.js`). It must be re-implemented in the real stack against the repo JSON message catalog (§17) — never by copying its hard-coded English strings.
+
+### 23.1 Design tokens (authoritative)
+
+Defined in `docs/design-prototype/V1/colors_and_type.css`. These are the canonical design tokens for the rebuild:
+
+- **Accent:** periwinkle `#7782f7` (dark) / `#5b66e8` (light). This is the spec's "accent color" (§18, §15 user preferences) default.
+- **Mode:** **dark-first** — dark is the primary product theme; light is defined for parity. Theme options are light / dark / auto (matches §18 and the user theme preference in §15).
+- **Surfaces:** layered hierarchy `--canvas` → `--base` → `--raised` → `--raised-2` → `--overlay`, with hairline borders rather than heavy shadows.
+- **Semantic colors:** success `#45c98a`, warning `#e6b24e`, danger `#f0686b`.
+- **Typography:** **IBM Plex Sans** for UI; **IBM Plex Mono** for slugs, shortcuts, code, and metadata. Compact, dense, developer-tool type scale (13px UI body default).
+- **Spacing:** 4px base scale (`--sp-1` … `--sp-12`). **Radii:** modest 4–12px. **Motion:** 110/170/230ms easing tokens.
+- **Brand assets:** `docs/design-prototype/V1/assets/slugbase_icon.svg` (and `.png`).
+
+Implementation note: these tokens become the foundation of the shared UI package (§19). Components must consume token variables, never hard-coded hex values.
+
+### 23.2 Screen and flow inventory (prototype → spec)
+
+| Surface | Prototype file(s) | Spec section |
+|---|---|---|
+| Design tokens / theming | `colors_and_type.css` | §18 |
+| App shell (sidebar, workspace switcher, entitlement meter) | `prototype/Sidebar.jsx`, `App.jsx`, `app.css` | §4, §10, §12 |
+| Bookmarks list (card grid + table, bulk actions, pager, skeleton, empty) | `prototype/BookmarkViews.jsx`, `App.jsx`, `Bookmarks.html` | §6 |
+| Dashboard / Home (stats, quick-access slugs, pinned, tag cloud, sharing, onboarding checklist) | `prototype/DashboardApp.jsx`, `Dashboard.html` | §10 |
+| Folders (scopes, sharing labels, row actions) | `prototype/FoldersApp.jsx`, `Folders.html` | §6, §9 |
+| Tags | `prototype/TagsApp.jsx`, `Tags.html` | §6 |
+| Command palette (default / search / no-results / go-mode / disambiguation) | `prototype/PaletteApp.jsx`, `Palette.jsx`, `Palette.html` | §7, §8 |
+| Slug resolution + disambiguation | `prototype/PaletteApp.jsx` (go-mode), `EdgePages.jsx` (`SlugDisambig`) | §8 |
+| Auth (sign-in, MFA, register, verify email, password reset, set-password, first-run setup) | `prototype/AuthApp.jsx`, `AuthKit.jsx`, `auth.css` | §5 |
+| Onboarding flow + workspace create/switch | `prototype/EdgeFlows.jsx` | §5.2, §10 |
+| Settings shell + nav | `prototype/SettingsApp.jsx`, `SettingsShell.jsx`, `settings.css` | §10 |
+| Account settings (profile, password, MFA enroll/backup codes, API tokens, preferences) | `prototype/SettingsAccount.jsx` | §5 |
+| Workspace settings (general, SMTP, AI, OIDC; hosted vs self-hosted variants) | `prototype/SettingsWorkspace.jsx` | §10, §11.1, §11.3, §11.6, §15 |
+| Members & teams (roles, invites, seats, ownership transfer) | `prototype/SettingsMembers.jsx` | §9, §12 |
+| Audit log (filters, pagination, entitlement gate) | `prototype/SettingsAudit.jsx` | §12 |
+| Plans & billing (plan table, supporter offer, cancel/downgrade, seats, invoices) | `prototype/SettingsBilling.jsx` | §12 |
+| Error pages (404 / 403 / 500), app + marketing variants | `prototype/EdgePages.jsx`, `EdgeStates.html` | §18 |
+| Marketing site (landing, pricing, contact + Turnstile, legal: Impressum/AGB/Datenschutz) | `marketing/*.jsx`, `marketing/Marketing.html`, `marketing.css` | §2.3, §11.8, §17 |
+
+### 23.3 Patterns to carry into the build
+
+These prototype conventions are endorsed as the intended UX baseline (they realise §18's "polished, accessible, keyboard-friendly" requirement):
+
+- **Keyboard-first:** `⌘K`/`Ctrl-K` palette everywhere; single-key shortcuts (`C` new bookmark, `N` new folder, `G`/`T` grid/table, `Esc` clear). The palette's **`go <slug>` mode** is the in-app expression of the redirect feature (§8).
+- **Slug disambiguation:** when a slug resolves to multiple accessible bookmarks, present a chooser with an "always use this one" option that persists a slug preference (§8, data model "Slug preference").
+- **Entitlement surfacing:** sidebar usage meter, approaching-cap and at-cap banners, upsell modal, and plan gates — all entitlement-driven, never deployment-mode-driven (§12.4, §15).
+- **Shown-once secrets:** backup codes and freshly created API tokens use the "store this now, shown once" pattern (§5).
+- **Security-aware copy:** auth screens use non-enumerating language ("we always respond the same way") for reset/verify (§5).
+- **Self-hosted vs hosted variants:** SMTP and OIDC panels are hidden when operator-managed; first-run setup screen for empty instances (§5.2, §14.3, §15) — driven by config/interface selection, not a code branch.
+- **Destructive-action confirmations**, toasts, loading skeletons, and empty states are part of the baseline (§18).
+
+### 23.4 Known prototype↔spec divergences (spec wins)
+
+The prototype was designed before some decisions were finalised. When building, **follow the spec, not the prototype**, on these points:
+
+1. **Plan name: "Pro" → "Personal".** Parts of the prototype app shell (`Sidebar.jsx`, `App.jsx` upsell, `data.js`, `EdgeFlows.jsx`) label the paid individual tier **"Pro"**; the billing and marketing screens correctly call it **"Personal"**. The canonical name is **Personal** (§12.1). Use "Personal" everywhere.
+2. **Free bookmark cap = 50, not 100.** `data.js`/`DashboardApp.jsx` mock a 100-bookmark cap (94/100). The canonical Free cap is **50 per workspace** (§12.1, decision 14) — as the billing/marketing screens correctly show.
+3. **No folder cap.** The prototype pricing tables list "Folders: Free 3 / unlimited". Folders are **not an entitlement** (§12.2); there is no folder limit on any plan. Drop the folder cap.
+4. **API tokens are not plan-gated.** Pricing tables show "API access" as Personal+ only. Personal API tokens are a **core authentication feature for all authenticated users** (§5); they are not in the entitlements list (§12.2). Do not gate them by plan.
+5. **No custom domains / "custom slug domains" entitlement in v1.** Marketing and upsell copy advertise "custom slug domains" / "custom forwarding domain". Custom domains and subdomain-/path-based addressing are **out of scope / Fast-Follow** (§20, decision 4). Slugs themselves are available to everyone; there is no custom-domain plan feature in v1.
+6. **No workspace identifier in URLs (v1).** `SettingsWorkspace.jsx` shows a "Workspace identifier — used in URLs" field and an error page uses a `/workspaces/acme/...` path. v1 resolves the active workspace **via the session**, not via URL path/subdomain (decision 4). Treat URL-based tenancy as a Fast-Follow-only forward hook; do not ship the URL-identifier field in v1.
+7. **Members row is illustrative.** The feature table "Members" cell previously showed a seat count; Team is now per-seat (no base count).
+8. **Prices are illustrative and config-driven.** `$4` / `$9` / `$59` and the supporter deadline are placeholders; concrete pricing lives in deployment configuration and the marketing site, never hard-coded in application logic (§12.1).
+9. **Subprocessor copy in legal pages.** The prototype's Datenschutz lists "Hetzner Cloud (Hosting)". The settled hosted infrastructure is **Fly.io (Frankfurt) + Neon Postgres + Cloudflare Workers** (§14.7); the legal/subprocessor copy must be updated to match actual subprocessors before launch.
+10. **Forwarding domain string.** `go.slugbase.app` is the prototype's placeholder redirect host; the deployed value is `cloud.slugbase.app` (deployment configuration, §15), not a hard-coded constant.
+
+### 23.5 Spec features under-represented in the prototype (build with the prototype's design language)
+
+These v1 requirements are either stubbed or absent in the prototype. They must still be built for v1, using the prototype's established design language and components:
+
+- **Bookmark create/edit modal** (modal-only editing, decision 19) — the prototype stubs "New bookmark" as a toast. Build the full create/edit modal including URL, title, slug, folder, tags, pin, forwarding flag, and sharing (§6).
+- **AI suggestions inline UI** — the prototype exposes AI *settings* but not the in-modal "suggest slug/tags/folder" experience, language-aware, with the per-user opt-out honoured (§6, §11.3, §17).
+- **Import / export surface** — beyond the onboarding drop-zone, build the Settings import (JSON + Netscape HTML, success/failure counts, cap-aware) and the **lossless export** (§13).
+- **Slug-preference management screen** — the disambiguation UI links to "manage remembered slug preferences"; build that management view (§8, data model "Slug preference").
+- **Forwarding management surface** — the sidebar has a "Forwarding" item with no page; define/build it or remove it to match the spec's slug/redirect model (§8). 
+- **Full internationalisation (EN/DE)** — the prototype has a language preference control but hard-coded English strings. All UI text must come from the repo JSON catalog with a German translation (§17).
+- **Consent / cookie mechanism** — the privacy/consent gating for analytics and error reporting on the hosted service (§18) is not in the prototype.
+- **Contact-form backend wiring** — the prototype renders the Turnstile widget and form; wire it to the public contact endpoint behind the challenge interface (§2.3, §11.1, §11.8).
 
 ---
 

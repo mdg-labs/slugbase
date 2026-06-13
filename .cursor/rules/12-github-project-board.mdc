@@ -1,0 +1,79 @@
+---
+description: GitHub Project Board — never verify membership, never re-add issues
+alwaysApply: true
+---
+
+# GitHub Project Board — never verify membership, never re-add; board Status vs issue state
+
+## Context
+
+SlugBase uses **two separate status systems**:
+- **GitHub issue state** (`open`/`closed`) — driven solely by commit messages (`fixes #N` on `main`). Agents never modify this.
+- **Project board Status** (Backlog / Ready / In Progress / In Review / Done / Closed) — managed by agents via GraphQL `updateProjectV2ItemFieldValue`. This is the authoritative status for day-to-day work tracking.
+
+**Board Status is what matters.** Verifiers set Done on the board; the issue itself stays open until the commit lands on `main`.
+
+## Blocking dependencies — unblocked when board Status is Done
+
+A task that depends on another issue (e.g. "Depends on: #325") is **unblocked** when the blocking issue's project board Status is **Done** or **Closed** — regardless of the GitHub issue state (open/closed).
+
+**Why:** Done on the board means the implementation has been verified, committed, and merged to `staging`. The commit carries `fixes #N`, which will auto-close the GitHub issue only when it lands on `main` (the default branch). The distinction is:
+
+| Board Status | GitHub issue state | Meaning |
+|---|---|---|
+| Done | `open` | Implementation complete on `staging` — ready for downstream consumption. **Unblocks dependents.** |
+| Closed | `closed` (auto) | Commit landed on `main` via release — project workflow auto-transitions board to Closed. Purely ceremonial from a dependency perspective; the change was already usable at Done. |
+
+**Corollary:** Never check the GitHub issue state (`open`/`closed`) to determine if a dependency is resolved. Always check the **board Status**. The issue will remain open until release to `main` — that is expected and intentional.
+
+## Rule
+
+**NEVER check whether an issue is already in the GitHub project.** Every issue created by any agent or skill in this repo is automatically on the project board. Treat this as an invariant — do not query, verify, or attempt to re-add.
+
+## Why
+
+The project board has a built-in workflow that **automatically adds every new issue** from the connected `mdg-labs/slugbase` repository. No manual `addProjectV2ItemById` step is needed after issue creation. Agents that check "is issue #N on the board?" waste time, hit pagination limits, and sometimes incorrectly conclude the issue is missing — leading to duplicate adds or blocked workflows.
+
+## Forbidden
+
+- **`gh project item-list`** — never use this command. It paginates (default 30, even `--limit 500` is a band-aid) and is unnecessary. Issue-to-project membership is guaranteed by the repo connection.
+- **GraphQL `repository.issue.projectItems`** checks for "is this issue on the board?" — do not use this as a membership check. It is only valid for getting the **project item ID** needed to set Status.
+- **`addProjectV2ItemById`** after issue creation — the project workflow handles this automatically. Calling it manually creates duplicates.
+- **Any "verify issue is in project" step** in agent prompts, skill workflows, or orchestrator templates.
+
+## Correct workflow for setting Status
+
+When you need to set project Status (In Progress, Done, etc.):
+
+1. **Get the project item ID** via GraphQL (this is the only valid use of `projectItems`):
+   ```bash
+   gh api graphql -f 'query=query {
+     repository(owner:"mdg-labs",name:"slugbase") {
+       issue(number:N) {
+         projectItems(first:10) {
+           nodes { id project { number } }
+         }
+       }
+     }
+   }'
+   ```
+   Filter `nodes` where `project.number == 2`, take the `id`. **Do NOT interpret missing results as "issue not on board"** — it means the query failed or the issue number is wrong.
+
+2. **Set Status** via GraphQL mutation (see `.cursor/skills/orchestrator/github-board.md` for hardcoded IDs).
+
+## Anti-patterns
+
+```bash
+# NEVER — checking if issue is on the board
+gh project item-list 2 --owner mdg-labs --format json | jq '.items[] | select(.content.number == 309)'
+
+# NEVER — re-adding to project after creation
+gh api graphql -f 'query=mutation { addProjectV2ItemById(input: { projectId: "...", contentId: "..." }) ... }'
+
+# NEVER — concluding "issue not on project" from a failed query
+# "Issues #310 and #311 aren't on the project board yet. Let me add them first."
+
+# CORRECT — just get the item ID and set Status
+ITEM_ID=$(gh api graphql -f '...' --jq '...')  # get item ID
+gh api graphql -f 'query=mutation { updateProjectV2ItemFieldValue(...) ... }'  # set status
+```

@@ -1,0 +1,26 @@
+# VCS & local tooling
+.git
+.cursor
+docs
+e2e
+*.md
+!packages/**/README.md
+
+# Dependencies & caches (rebuilt in image)
+node_modules
+.turbo
+*.tsbuildinfo
+
+# Env secrets
+.env
+.env.*
+!.env.example
+
+# Local build artefacts (rebuilt in image)
+packages/**/dist
+packages/**/build
+packages/**/.react-router
+
+# Source maps (uploaded to Sentry before docker build; must not ship in image)
+*.js.map
+*.css.map

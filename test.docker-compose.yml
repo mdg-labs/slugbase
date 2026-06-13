@@ -1,0 +1,30 @@
+# Ephemeral Postgres for local integration tests.
+# Started by scripts/run-backend-integration-tests.sh — not for manual long-lived use.
+#
+# Required env (set by the runner script):
+#   TEST_PG_HOST_PORT      — random host port mapped to 5432
+#   TEST_PG_VOLUME_NAME    — unique volume name removed on teardown
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: slugbase
+      POSTGRES_PASSWORD: slugbase
+      POSTGRES_DB: slugbase_test
+    ports:
+      - "127.0.0.1:${TEST_PG_HOST_PORT}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U slugbase -d slugbase_test"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+    labels:
+      slugbase.test.ephemeral: integration
+
+volumes:
+  pgdata:
+    name: ${TEST_PG_VOLUME_NAME}

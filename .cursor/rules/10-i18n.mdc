@@ -1,35 +1,69 @@
 ---
-description: All UI strings must live in the Tolgee message catalog; hard-coded strings in UI code are forbidden. Spec §17.
+description: All UI strings must live in the repo JSON message catalog; hard-coded strings in UI code are forbidden. Spec §17.
 alwaysApply: true
 ---
 
-# SlugBase i18n — Tolgee-first Rule (spec §17)
+# SlugBase i18n — repo-JSON Rule (spec §17)
 
 ## Policy
 
 SlugBase ships **English (en) and German (de)** at v1. Every string surfaced in the UI — labels, errors, toasts, tooltips, empty-state copy, confirmation dialogs, accessible `aria-label`s — **must be in the message catalog**. Hard-coded strings in component/template code are a commit-blocker.
 
-## Authoritative tools
+## Authority model
 
-| Tool | Purpose |
-|---|---|
-| **Tolgee** | Translation-management platform; source of truth for all message catalogs |
-| `TOLGEE_API_KEY` | Infisical key — never hard-code, never log |
-| `TOLGEE_PROJECT_ID` | Infisical key — identifies the SlugBase project in Tolgee |
+| Concern | Who leads | Mechanism |
+|---------|-----------|-----------|
+| **Key inventory** (new/changed keys, English when shipping features) | **Repo** | Edit `locales/*.json` → `i18n:codegen` (when en key set changes) |
+| **Translation values** (German) | **Repo** | Edit `locales/de.json` in the same PR or follow-up with Jira `i18n` label |
+| **Invariant before merge / CI / release** | **CI** | `i18n:validate` + `i18n:check:hardcoded` |
 
-The Tolgee SDK (or the chosen i18n library integration) handles runtime key resolution. Exact package depends on the chosen front-end framework (TBD). Update this rule once the framework is locked.
+Committed catalogs: `packages/web/app/i18n/locales/{en,de}.json` and `packages/marketing/src/i18n/locales/{en,de}.json`. Central locale list: `i18n/supported-locales.json`. Thin `messages.ts` wrappers import JSON at build/runtime.
+
+The **web** app uses **react-i18next** with static JSON resources (`createI18n` in `packages/web/app/i18n/i18n.ts`). Marketing uses native `t(locale, key)` from `packages/marketing/src/i18n/translate.ts` at build time.
+
+## Developer workflow
+
+```bash
+# New or changed keys/values in repo JSON
+edit locales/*.json
+pnpm i18n:codegen                    # if en.json key set changed
+pnpm i18n:validate
+pnpm i18n:check:hardcoded
+
+# CI / release gate
+pnpm i18n:validate
+pnpm i18n:check:hardcoded
+pnpm test:unit
+```
+
+| Command | When |
+|---------|------|
+| `i18n:codegen` | After `en.json` key set changes |
+| `i18n:validate` | After locale JSON edits; CI gate |
+| `i18n:check:hardcoded` | CI gate — no inline English in UI sources |
+| `i18n:merge` | Dev sanity — print merged key counts |
+
+## Agent obligation — locale JSON edits
+
+Any agent task that creates or modifies:
+
+- `packages/web/app/i18n/locales/*.json`
+- `packages/marketing/src/i18n/locales/*.json`
+- `i18n/supported-locales.json`
+
+**must**, before marking the task complete:
+
+1. If **`en.json` key set changed** → `pnpm i18n:codegen`
+2. Confirm: `pnpm i18n:validate`
+3. Report validation outcome in the task summary
 
 ## Authoring rule — new UI code
 
-1. **Author against the catalog**: write `t('key.name')` (or the framework equivalent) — never inline English strings.
-2. **Add the key to the Tolgee project**: via the Tolgee web UI, the CLI, or the SDK's in-context editing mode during development.
-3. **German translation required before merge**: a missing German string is a Fast-Follow blocker, not an acceptable v1 gap. Either add the translation or create a SB Jira task with label `i18n` before merging.
-4. **Key naming convention**: `<scope>.<context>.<descriptor>` — all lowercase, dots as separators, no abbreviations.
-   - ✅ `bookmark.list.empty_state_title`
-   - ✅ `auth.login.password_placeholder`
-   - ❌ `bkmrk_lst_empty` (abbreviations)
-   - ❌ `BookmarkList.emptyState.title` (camelCase / PascalCase)
-5. **No JSX-only translation workarounds**: translation functions only, not inline HTML or separate `<Trans>` strings that circumvent the catalog.
+1. **Author against the catalog**: write `t('key.name')` (web) or `t(locale, 'key.name')` (marketing) — never inline English strings.
+2. **Add the key to both `locales/en.json` and `locales/de.json`**, run **`pnpm i18n:codegen`** if keys changed.
+3. **German translation required before merge**: missing German is a Fast-Follow blocker — add translation or create SB Jira task with label `i18n`.
+4. **Key naming**: `<scope>.<context>.<descriptor>` — lowercase, dot-separated.
+5. **No JSX-only translation workarounds**.
 
 ## Language resolution order (spec §17)
 
@@ -37,40 +71,24 @@ The Tolgee SDK (or the chosen i18n library integration) handles runtime key reso
 signed-in user preference → Accept-Language → fallback: en
 ```
 
-The user preference is stored as a `language` column on the `user_account` entity (spec §16). The server sets the locale on every response; the client does not make a separate language-resolution request.
-
 ## AI suggestion output language (spec §17)
 
-When invoking the AI-suggest feature, pass the user's resolved locale as the `outputLanguage` hint. The suggestion cache key includes `output_language` (spec §16 — AI suggestion cache). Do not default to English when the user preference is set to German.
-
-## Infisical secrets for Tolgee
-
-| Key | `.env.example` placeholder | Description |
-|---|---|---|
-| `TOLGEE_API_KEY` | `TOLGEE_API_KEY=` | Tolgee Personal Access Token (server-side SDK calls and CLI) |
-| `TOLGEE_PROJECT_ID` | `TOLGEE_PROJECT_ID=` | Numeric project ID in the Tolgee workspace |
-| `NEXT_PUBLIC_TOLGEE_API_URL` | `NEXT_PUBLIC_TOLGEE_API_URL=https://app.tolgee.io` | Change to self-hosted Tolgee if applicable |
-
-Register all three via `infisical secrets set ... --env=development` and add the `.env.example` stubs before writing any Tolgee-consuming code.
+Pass the user's resolved locale as `outputLanguage`. Do not default to English when preference is German.
 
 ## Verifier checks (Layer 3c)
 
-For any task that adds or changes UI strings, verify:
+For any task that adds or changes UI strings:
 
 ```bash
-# No hard-coded user-visible strings in new/changed component files
-rg -n '"[A-Z][a-z]' packages/web-client/src
-
-# Keys follow naming convention (no camelCase separators)
-rg -n 't\("[a-z][a-zA-Z]' packages/web-client/src
-
-# Tolgee env vars are in .env.example
-rg -n "^TOLGEE_" .env.example
+rg -n '"[A-Z][a-z]' packages/web/app
+rg -n 't\("[a-z][a-zA-Z]' packages/web/app
+pnpm i18n:validate                                   # when locale JSON touched
+pnpm test:scripts                                    # i18n catalog utils
 ```
 
 ## Forbidden
 
-- **Inline English strings in UI code** — `<p>No bookmarks yet</p>` — use `t('bookmark.list.empty_state_title')`.
-- **Skipping German on merge** — create the Jira `i18n` task first.
-- **Hard-coding `TOLGEE_API_KEY` anywhere** — it must come from Infisical.
-- **Silently falling back to key name** — log a warning in development when a key is missing; throw in CI if the default locale has unmapped keys.
+- **Inline English strings in UI code**
+- **Skipping German on merge** without Jira `i18n` task
+- **Skipping `i18n:codegen` after `en.json` key-set changes**
+- **Silently falling back to key name** — warn in dev; throw in CI for missing default-locale keys

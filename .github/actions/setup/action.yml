@@ -1,0 +1,57 @@
+name: Setup workspace
+description: pnpm, Node.js, dependencies, and Infisical OIDC secrets
+
+inputs:
+  skip-checkout:
+    description: Set to true when checkout already ran in the job
+    required: false
+    default: "false"
+  skip-infisical:
+    description: Skip Infisical secrets fetch
+    required: false
+    default: "false"
+  infisical-env-slug:
+    description: Infisical environment slug (dev, staging, prod)
+    required: false
+    default: dev
+  infisical-domain:
+    description: Infisical Cloud (EU) instance URL (GitHub secret)
+    required: false
+    default: ""
+  infisical-identity-id:
+    description: Infisical OIDC machine identity id (GitHub secret)
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Checkout
+      if: inputs.skip-checkout != 'true'
+      uses: actions/checkout@v6
+
+    - name: Setup pnpm
+      uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
+      with:
+        version: 9.15.4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v6
+      with:
+        node-version: 22.12
+        cache: pnpm
+
+    - name: Install dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile
+
+    - name: Fetch secrets from Infisical
+      if: inputs.skip-infisical != 'true'
+      # All secrets for the env live at project root (no subfolders).
+      uses: Infisical/secrets-action@77ab1f4ccd183a543cb5b42435fbd181189f4995 # v1.0.16
+      with:
+        method: oidc
+        domain: ${{ inputs.infisical-domain }}
+        identity-id: ${{ inputs.infisical-identity-id }}
+        project-slug: slugbase-cloud
+        env-slug: ${{ inputs.infisical-env-slug }}

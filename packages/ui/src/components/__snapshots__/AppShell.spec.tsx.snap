@@ -1,0 +1,41 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`AppShell > matches base layout snapshot 1`] = `
+<div>
+  <div
+    class="grid h-screen overflow-hidden bg-canvas font-sans text-body text-fg"
+    data-testid="app-shell"
+    style="grid-template-columns: 248px 1fr;"
+  >
+    <aside
+      class="flex min-h-0 flex-col overflow-y-auto border-r border-[color:var(--border-subtle)] bg-base"
+      data-testid="app-shell-sidebar"
+    >
+      <div>
+        Sidebar content
+      </div>
+    </aside>
+    <div
+      class="flex min-h-0 min-w-0 flex-col overflow-hidden"
+    >
+      <header
+        class="flex shrink-0 items-center border-b border-[color:var(--border-subtle)]"
+        data-testid="app-shell-topbar"
+        style="height: 52px;"
+      >
+        <div>
+          TopBar content
+        </div>
+      </header>
+      <main
+        class="flex-1 overflow-y-auto bg-canvas p-sp-7"
+        data-testid="app-shell-main"
+      >
+        <p>
+          Content
+        </p>
+      </main>
+    </div>
+  </div>
+</div>
+`;

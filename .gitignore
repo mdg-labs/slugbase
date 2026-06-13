@@ -2,6 +2,35 @@
 docs/skill-examples/agent-memory/
 .cursor/skills/agent-memory/active/
 .cursor/skills/agent-memory/archive/
+.cursor/tmp/
 
 # examples
 docs/example.ci-cd.yml
+
+# dependencies & build
+node_modules/
+dist/
+build/
+.react-router/
+.turbo/
+*.tsbuildinfo
+.astro
+.wrangler/
+.pnpm-store/
+
+# env (never commit secrets)
+.env
+.env.local
+.env.*.local
+
+# tmp
+tmp
+
+# e2e test artifacts (Playwright)
+e2e/test-results/
+e2e/playwright-report/
+e2e/.auth-storage.json
+e2e/.onboarding-storage-state.json
+e2e/.worker-credentials.json
+playwright-report/
+test-results/

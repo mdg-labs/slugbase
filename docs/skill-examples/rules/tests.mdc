@@ -62,5 +62,5 @@ Per `testing §12`: every new game rule from `impl-spec` or `engineering-decisio
 
 - `setTimeout`/`setInterval` to wait for state changes
 - Tests that depend on the order of other tests
-- Hitting real OSRM, real Sentry, real Tolgee, or real production URLs
+- Hitting real OSRM, real Sentry, real i18n service, or real production URLs
 - Committed `it.only` / `describe.only`

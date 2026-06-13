@@ -1,0 +1,160 @@
+---
+import { getRelativeLocaleUrl } from "astro:i18n";
+import MarketingLayout from "../../layouts/MarketingLayout.astro";
+import { t, type MessageKey, type SupportedLocale } from "../../i18n/translate.js";
+
+export type LegalTab = "impressum" | "agb" | "datenschutz";
+
+interface Props {
+  tab: LegalTab;
+}
+
+const { tab } = Astro.props;
+const locale = Astro.currentLocale as SupportedLocale;
+
+const tabs: LegalTab[] = ["impressum", "agb", "datenschutz"];
+
+const titleKeys: Record<LegalTab, MessageKey> = {
+  impressum: "marketing.legal.impressum.title",
+  agb: "marketing.legal.agb.title",
+  datenschutz: "marketing.legal.datenschutz.title",
+};
+
+interface LegalSection {
+  heading: MessageKey;
+  body: MessageKey;
+}
+
+const sectionGroups: Record<LegalTab, readonly LegalSection[]> = {
+  impressum: [
+    {
+      heading: "marketing.legal.impressum.section_provider.heading",
+      body: "marketing.legal.impressum.section_provider.body",
+    },
+    {
+      heading: "marketing.legal.impressum.section_contact.heading",
+      body: "marketing.legal.impressum.section_contact.body",
+    },
+    {
+      heading: "marketing.legal.impressum.section_business.heading",
+      body: "marketing.legal.impressum.section_business.body",
+    },
+    {
+      heading: "marketing.legal.impressum.section_supervisory.heading",
+      body: "marketing.legal.impressum.section_supervisory.body",
+    },
+    {
+      heading: "marketing.legal.impressum.section_links.heading",
+      body: "marketing.legal.impressum.section_links.body",
+    },
+    {
+      heading: "marketing.legal.impressum.section_copyright.heading",
+      body: "marketing.legal.impressum.section_copyright.body",
+    },
+  ],
+  agb: [
+    {
+      heading: "marketing.legal.agb.section_subject.heading",
+      body: "marketing.legal.agb.section_subject.body",
+    },
+    {
+      heading: "marketing.legal.agb.section_scope.heading",
+      body: "marketing.legal.agb.section_scope.body",
+    },
+    {
+      heading: "marketing.legal.agb.section_prices.heading",
+      body: "marketing.legal.agb.section_prices.body",
+    },
+    {
+      heading: "marketing.legal.agb.section_term.heading",
+      body: "marketing.legal.agb.section_term.body",
+    },
+    {
+      heading: "marketing.legal.agb.section_rights.heading",
+      body: "marketing.legal.agb.section_rights.body",
+    },
+    {
+      heading: "marketing.legal.agb.section_liability.heading",
+      body: "marketing.legal.agb.section_liability.body",
+    },
+    {
+      heading: "marketing.legal.agb.section_law.heading",
+      body: "marketing.legal.agb.section_law.body",
+    },
+  ],
+  datenschutz: [
+    {
+      heading: "marketing.legal.datenschutz.section_controller.heading",
+      body: "marketing.legal.datenschutz.section_controller.body",
+    },
+    {
+      heading: "marketing.legal.datenschutz.section_purposes.heading",
+      body: "marketing.legal.datenschutz.section_purposes.body",
+    },
+    {
+      heading: "marketing.legal.datenschutz.section_legal_basis.heading",
+      body: "marketing.legal.datenschutz.section_legal_basis.body",
+    },
+    {
+      heading: "marketing.legal.datenschutz.section_processors.heading",
+      body: "marketing.legal.datenschutz.section_processors.body",
+    },
+    {
+      heading: "marketing.legal.datenschutz.section_rights.heading",
+      body: "marketing.legal.datenschutz.section_rights.body",
+    },
+    {
+      heading: "marketing.legal.datenschutz.section_contact.heading",
+      body: "marketing.legal.datenschutz.section_contact.body",
+    },
+  ],
+};
+
+const pageTitle = `${t(locale, titleKeys[tab])} - ${t(locale, "marketing.nav.brand")}`;
+---
+
+<MarketingLayout title={pageTitle}>
+  <section class="mk-section">
+    <div class="mk-c--narrow">
+      <nav class="mk-legal-tabs" aria-label={t(locale, "marketing.footer.legal")}>
+        {tabs.map((item) => {
+          const href = getRelativeLocaleUrl(locale, `/legal/${item}`);
+          const isActive = item === tab;
+          return (
+            <a
+              class:list={["mk-legal-tab", { active: isActive }]}
+              href={href}
+              aria-current={isActive ? "page" : undefined}
+            >
+              {t(locale, titleKeys[item])}
+            </a>
+          );
+        })}
+      </nav>
+
+      <h1 class="mk-legal-page-title">{t(locale, titleKeys[tab])}</h1>
+
+      <div class="mk-legal-prose" data-testid="legal-content">
+        {sectionGroups[tab].map((section) => (
+          <section>
+            <h2>{t(locale, section.heading)}</h2>
+            <p>{t(locale, section.body)}</p>
+          </section>
+        ))}
+      </div>
+    </div>
+  </section>
+</MarketingLayout>
+
+<style>
+  .mk-legal-page-title {
+    margin: 0 0 var(--sp-9);
+    font: 700 clamp(28px, 4vw, 36px) / 1.15 var(--font-sans);
+    letter-spacing: -0.025em;
+    color: var(--fg);
+  }
+
+  .mk-legal-tab {
+    text-decoration: none;
+  }
+</style>

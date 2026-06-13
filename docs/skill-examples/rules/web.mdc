@@ -20,7 +20,7 @@ alwaysApply: false
 | Server data + cache | TanStack Query |
 | Live WebSocket state | Zustand store in `apps/web/lib/store/` |
 | Form state | React Hook Form |
-| Theme / locale | next-intl + Tolgee |
+| Theme / locale | next-intl |
 
 Never duplicate server state into Zustand — the cache is the source of truth for fetched data.
 

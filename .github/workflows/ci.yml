@@ -1,0 +1,206 @@
+name: CI
+
+# CI checks — runs on PRs and pushes to staging/main (spec §22.4).
+
+on:
+  pull_request:
+    branches: [staging, main]
+
+  push:
+    branches: [staging, main]
+
+  workflow_dispatch:
+
+permissions:
+  contents: write    # prepare-release needs write for tags + releases
+  id-token: write    # Infisical OIDC (deploy-staging reusable workflow)
+  packages: write    # GHCR push (deploy-staging reusable workflow)
+  pull-requests: write  # ReportPortal PR summary comments
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    name: CI · Checks
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: slugbase
+          POSTGRES_PASSWORD: slugbase
+          POSTGRES_DB: slugbase_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U slugbase -d slugbase_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
+        with:
+          version: 9.15.4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.12
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Fetch secrets from Infisical
+        uses: Infisical/secrets-action@77ab1f4ccd183a543cb5b42435fbd181189f4995 # v1.0.16
+        with:
+          method: oidc
+          domain: ${{ secrets.INFISICAL_DOMAIN }}
+          identity-id: ${{ secrets.INFISICAL_OIDC_IDENTITY_ID }}
+          project-slug: slugbase-cloud
+          env-slug: staging
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Start ReportPortal unit launch
+        id: rp-unit-start
+        run: |
+          uuid=$(node --experimental-strip-types scripts/reportportal-ci-launch.ts start unit || true)
+          echo "launch_id=${uuid}" >> "$GITHUB_OUTPUT"
+          if [ -n "$uuid" ]; then
+            echo "RP_LAUNCH_ID=${uuid}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Unit tests
+        id: unit-tests
+        env:
+          # Infisical injects full staging env; unit tests must not call the live pricing API.
+          PUBLIC_API_BASE_URL: ""
+        run: pnpm test:unit
+
+      - name: Finish ReportPortal unit launch
+        if: always() && steps.rp-unit-start.outputs.launch_id != ''
+        env:
+          RP_LAUNCH_STATUS: ${{ steps.unit-tests.outcome == 'success' && 'PASSED' || 'FAILED' }}
+        run: |
+          node --experimental-strip-types scripts/reportportal-ci-launch.ts finish unit \
+            "${{ steps.rp-unit-start.outputs.launch_id }}" \
+            "$RP_LAUNCH_STATUS"
+
+      - name: Record ReportPortal unit launch
+        if: always() && steps.rp-unit-start.outputs.launch_id != ''
+        env:
+          RP_LAUNCH_UUID: ${{ steps.rp-unit-start.outputs.launch_id }}
+        run: bash scripts/reportportal-ci-summary.sh record-env unit
+
+      - name: i18n catalog validation
+        run: pnpm run i18n:validate
+
+      - name: Hard-coded UI strings (rg)
+        run: pnpm run i18n:check:hardcoded
+
+      - name: Build
+        env:
+          NODE_ENV: production
+        run: pnpm build
+
+      - name: Start ReportPortal integration launch
+        id: rp-integration-start
+        run: |
+          uuid=$(node --experimental-strip-types scripts/reportportal-ci-launch.ts start integration || true)
+          echo "launch_id=${uuid}" >> "$GITHUB_OUTPUT"
+          if [ -n "$uuid" ]; then
+            echo "RP_LAUNCH_ID=${uuid}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Integration tests
+        id: integration-tests
+        env:
+          DATABASE_URL: postgresql://slugbase:slugbase@localhost:5432/slugbase_test
+          SLUGBASE_INTEGRATION_NO_DOCKER: "1"
+          PUBLIC_API_BASE_URL: ""
+        run: pnpm test:integration
+
+      - name: Finish ReportPortal integration launch
+        if: always() && steps.rp-integration-start.outputs.launch_id != ''
+        env:
+          RP_LAUNCH_STATUS: ${{ steps.integration-tests.outcome == 'success' && 'PASSED' || 'FAILED' }}
+        run: |
+          node --experimental-strip-types scripts/reportportal-ci-launch.ts finish integration \
+            "${{ steps.rp-integration-start.outputs.launch_id }}" \
+            "$RP_LAUNCH_STATUS"
+
+      - name: Record ReportPortal integration launch
+        if: always() && steps.rp-integration-start.outputs.launch_id != ''
+        env:
+          RP_LAUNCH_UUID: ${{ steps.rp-integration-start.outputs.launch_id }}
+        run: bash scripts/reportportal-ci-summary.sh record-env integration
+
+      - name: Dependency audit
+        run: pnpm audit --audit-level=high
+
+      - name: Upload ReportPortal launch state
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reportportal-ci-launches
+          path: reportportal-launches.jsonl
+          if-no-files-found: ignore
+
+      - name: ReportPortal summary pointer
+        if: always()
+        run: echo 'ReportPortal launch links are in the **CI · ReportPortal summary** job below.' >> "$GITHUB_STEP_SUMMARY"
+
+  reportportal-summary:
+    name: CI · ReportPortal summary
+    needs: ci
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download ReportPortal launch state
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: reportportal-ci-launches
+
+      - name: ReportPortal job summary
+        if: always()
+        run: bash scripts/reportportal-ci-summary.sh write-summary ci
+
+      - name: ReportPortal PR comment
+        if: always() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: bash scripts/reportportal-ci-summary.sh update-pr-comment ci
+
+  deploy-staging:
+    if: >
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/staging'
+    needs: ci
+    uses: ./.github/workflows/deploy-staging.yml
+    secrets: inherit
+
+  prepare-release:
+    if: >
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main'
+    needs: ci
+    uses: ./.github/workflows/prepare-release.yml
+    secrets: inherit

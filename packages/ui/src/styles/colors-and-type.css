@@ -1,0 +1,140 @@
+/* ============================================================
+   SlugBase Design System - Color & Type Foundations
+   Source: docs/design-prototype/V1/colors_and_type.css
+   Accent: periwinkle. Dark-first, developer-tool density.
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+:root,
+[data-theme="dark"] {
+  --accent:            #7782f7;
+  --accent-hover:      #8d96f9;
+  --accent-active:     #6571ec;
+  --accent-fg:         #0b0c14;
+  --accent-subtle:     rgba(119, 130, 247, 0.13);
+  --accent-subtle-hover: rgba(119, 130, 247, 0.20);
+  --accent-border:     rgba(119, 130, 247, 0.40);
+  --accent-text:       #9aa2fa;
+
+  --canvas:    #0a0b10;
+  --base:      #101220;
+  --raised:    #171a2b;
+  --raised-2:  #1e2236;
+  --overlay:   #1b1f31;
+  --overlay-scrim: rgba(6, 7, 12, 0.62);
+
+  --border-subtle: rgba(255, 255, 255, 0.055);
+  --border:        rgba(255, 255, 255, 0.10);
+  --border-strong: rgba(255, 255, 255, 0.16);
+
+  --fg:        #eceef6;
+  --fg-muted:  #a7adc2;
+  --fg-subtle: #6e7489;
+  --fg-faint:  #4b5067;
+
+  --success:        #45c98a;
+  --success-fg:     #07140d;
+  --success-subtle: rgba(69, 201, 138, 0.14);
+  --success-text:   #5fd6a0;
+
+  --warning:        #e6b24e;
+  --warning-fg:     #1a1304;
+  --warning-subtle: rgba(230, 178, 78, 0.14);
+  --warning-text:   #efc878;
+
+  --danger:         #f0686b;
+  --danger-hover:   #f47e80;
+  --danger-fg:      #1a0708;
+  --danger-subtle:  rgba(240, 104, 107, 0.14);
+  --danger-text:    #f48a8c;
+
+  --ring: 0 0 0 2px var(--canvas), 0 0 0 4px var(--accent);
+  --ring-inset: inset 0 0 0 1px var(--accent-border);
+
+  --shadow-sm:      0 1px 2px rgba(0, 0, 0, 0.40);
+  --shadow-raised:  0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-overlay: 0 18px 50px -12px rgba(0, 0, 0, 0.70), 0 0 0 1px var(--border);
+  --shadow-popover: 0 10px 32px -8px rgba(0, 0, 0, 0.62), 0 0 0 1px var(--border);
+}
+
+[data-theme="light"] {
+  --accent:            #5b66e8;
+  --accent-hover:      #4a55e0;
+  --accent-active:     #3f49d4;
+  --accent-fg:         #ffffff;
+  --accent-subtle:     rgba(91, 102, 232, 0.10);
+  --accent-subtle-hover: rgba(91, 102, 232, 0.16);
+  --accent-border:     rgba(91, 102, 232, 0.32);
+  --accent-text:       #4d58df;
+
+  --canvas:    #f4f5f9;
+  --base:      #ffffff;
+  --raised:    #ffffff;
+  --raised-2:  #f1f2f7;
+  --overlay:   #ffffff;
+  --overlay-scrim: rgba(20, 22, 35, 0.30);
+
+  --border-subtle: rgba(16, 18, 32, 0.06);
+  --border:        rgba(16, 18, 32, 0.11);
+  --border-strong: rgba(16, 18, 32, 0.18);
+
+  --fg:        #14161f;
+  --fg-muted:  #4a4f63;
+  --fg-subtle: #71768a;
+  --fg-faint:  #a2a7ba;
+
+  --success-text: #1f9d68;
+  --warning-text: #b8861f;
+  --danger-text:  #d6494d;
+
+  --shadow-sm:      0 1px 2px rgba(16, 18, 32, 0.08);
+  --shadow-raised:  0 1px 3px rgba(16, 18, 32, 0.10), 0 1px 2px rgba(16,18,32,0.06);
+  --shadow-overlay: 0 24px 56px -16px rgba(16, 18, 32, 0.30), 0 0 0 1px var(--border);
+  --shadow-popover: 0 12px 32px -10px rgba(16, 18, 32, 0.22), 0 0 0 1px var(--border);
+}
+
+:root {
+  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --text-display: 28px;  --lh-display: 34px;
+  --text-h1:      22px;  --lh-h1:      28px;
+  --text-h2:      18px;  --lh-h2:      24px;
+  --text-h3:      15px;  --lh-h3:      20px;
+  --text-body-lg: 14px;  --lh-body-lg: 20px;
+  --text-body:    13px;  --lh-body:    18px;
+  --text-small:   12px;  --lh-small:   16px;
+  --text-micro:   11px;  --lh-micro:   14px;
+  --text-mono:    12.5px; --lh-mono:   18px;
+
+  --weight-regular: 400;
+  --weight-medium:  500;
+  --weight-semi:    600;
+  --weight-bold:    700;
+
+  --track-tight: -0.01em;
+  --track-wide:  0.06em;
+
+  --sp-1: 2px;  --sp-2: 4px;  --sp-3: 6px;  --sp-4: 8px;
+  --sp-5: 12px; --sp-6: 16px; --sp-7: 20px; --sp-8: 24px;
+  --sp-9: 32px; --sp-10: 40px; --sp-11: 48px; --sp-12: 64px;
+
+  --r-sm: 4px; --r-md: 6px; --r-lg: 8px; --r-xl: 12px; --r-full: 999px;
+
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-micro: 110ms;
+  --dur: 170ms;
+  --dur-overlay: 230ms;
+}
+
+.t-display { font: var(--weight-semi) var(--text-display)/var(--lh-display) var(--font-sans); letter-spacing: var(--track-tight); color: var(--fg); }
+.t-h1 { font: var(--weight-semi) var(--text-h1)/var(--lh-h1) var(--font-sans); letter-spacing: var(--track-tight); color: var(--fg); }
+.t-h2 { font: var(--weight-semi) var(--text-h2)/var(--lh-h2) var(--font-sans); color: var(--fg); }
+.t-h3 { font: var(--weight-semi) var(--text-h3)/var(--lh-h3) var(--font-sans); color: var(--fg); }
+.t-body-lg { font: var(--weight-regular) var(--text-body-lg)/var(--lh-body-lg) var(--font-sans); color: var(--fg); }
+.t-body { font: var(--weight-regular) var(--text-body)/var(--lh-body) var(--font-sans); color: var(--fg); }
+.t-small { font: var(--weight-regular) var(--text-small)/var(--lh-small) var(--font-sans); color: var(--fg-muted); }
+.t-label { font: var(--weight-medium) var(--text-micro)/var(--lh-micro) var(--font-sans); letter-spacing: var(--track-wide); text-transform: uppercase; color: var(--fg-subtle); }
+.t-mono { font: var(--weight-regular) var(--text-mono)/var(--lh-mono) var(--font-mono); color: var(--fg-muted); }

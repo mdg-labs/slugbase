@@ -1,5 +1,5 @@
 ---
-description: Git branch policy, commit format, main branch rules, never-push default
+description: Git branch policy — staging for development, main protected; commit format; never-push default
 alwaysApply: true
 ---
 
@@ -9,34 +9,38 @@ alwaysApply: true
 
 | Branch | Role |
 |---|---|
-| `main` | Integration / development branch — all feature work lands here |
+| `staging` | **Development integration branch** — all feature work and orchestrator-verified commits land here |
+| `main` | **Protected production branch** on GitHub — release line only; not for day-to-day development |
 
-- Feature work happens directly on `main` unless the user asks for task branches (Lane P).
-- Release branching and production deploy strategy will be defined once the self-hosted deployment story is operationalized (spec §14).
+- Feature work happens on **`staging`** (Lane S serial) or isolated `orchestrator/<TASK-ID>` branches (Lane P), merged into `staging` after verify.
+- **`main` is protected on GitHub.** Agents and orchestrator runs must **never push to `main`** until an explicit release promotion workflow exists.
+- Promoting `staging` → `main` is operator-only (release); not part of routine task orchestration.
 
 ## Commit messages (Conventional Commits)
 
-Subject ≤72 chars, imperative mood, **scoped**. **Task commits must link a work item** in square brackets — see `07-jira-commit-linking.mdc`.
+Subject ≤72 chars, imperative mood, **scoped**. **Task commits must link a work item** in square brackets — see `07-issue-commit-linking.mdc`.
 
 ```
-feat(<scope>)[SB-123]: <imperative summary>
-fix(<scope>)[SB-123]: <summary>
-chore(<scope>)[SB-123]: <summary>
-refactor(<scope>)[P2-01]: <summary>   # roadmap-only when no Jira mirror
-docs(<scope>)[SB-123]: <summary>
-test(<scope>)[SB-123]: <summary>
-ci(<scope>)[SB-123]: <summary>
-build(<scope>)[SB-123]: <summary>
-perf(<scope>)[SB-123]: <summary>
+feat(<scope>)[#123]: <imperative summary>
+fix(<scope>)[#123]: <summary>
+chore(<scope>)[#123]: <summary>
+refactor(<scope>)[P2-01]: <summary>   # roadmap-only when no GitHub issue exists
+docs(<scope>)[#123]: <summary>
+test(<scope>)[#123]: <summary>
+ci(<scope>)[#123]: <summary>
+build(<scope>)[#123]: <summary>
+perf(<scope>)[#123]: <summary>
 ```
 
-Use `[SB-N]` when the task is on Jira; `[P*-*]` only when no Jira issue exists yet. Do **not** use Smart Commit commands (`#time`, `#comment`, `#resolve`) — Jira sync via MCP only.
+Use `[#N]` when the task is on GitHub Issues; `[P*-*]` only when no GitHub issue exists yet. The commit body must include `fixes #N` to auto-close the issue on merge to `main`.
 
-**Allowed scopes**: `repo`, `ci`, `web`, `backend`, `marketing`, `docs`, `bookmarks`, `slugs`, `go`, `folders`, `tags`, `workspaces`, `auth`, `mfa`, `oidc`, `sessions`, `billing`, `entitlements`, `admin`, `search`, `import`, `export`, `i18n`, `infra`, `plan`, `memory`
+**Allowed scopes**: `repo`, `ci`, `web`, `backend`, `marketing`, `ui`, `shared`, `db`, `docs`, `bookmarks`, `slugs`, `go`, `folders`, `tags`, `workspaces`, `auth`, `mfa`, `oidc`, `sessions`, `billing`, `entitlements`, `admin`, `search`, `import`, `export`, `i18n`, `infra`, `plan`, `memory`
 
-Plan-file verifier commits: `chore(plan)[SB-N]: mark P1-03 verified` (prefer `[SB-N]` when a Jira mirror exists).
+(`ui` = `packages/ui` shared components/tokens · `shared` = `packages/shared-types` contracts · `db` = Drizzle schema/migrations/data-access — spec §19.)
 
-Session memory (`.cursor/skills/agent-memory/`) is **gitignored** — local working notes only. Verifiers post outcomes to Jira; never commit session files.
+Plan-file verifier commits: `chore(plan)[#123]: mark P1-03 verified` (prefer `[#N]` when a GitHub issue exists).
+
+Session memory (`.cursor/skills/agent-memory/`) is **gitignored** — local working notes only. Verifiers post outcomes to GitHub issues; never commit session files.
 
 ## Commit rules
 
@@ -47,17 +51,22 @@ Session memory (`.cursor/skills/agent-memory/`) is **gitignored** — local work
 ## Push policy
 
 **Never push** unless the user explicitly asks. Local commits only.
-This includes never running `git push --force`, `git push --tags`, or any push command in scripts or hooks.
+
+**Never push to `main` on GitHub** — not even when the user asks for a push during development. For now, the only valid remote target for task work is **`staging`** (or a Lane P task branch).
+
+This includes never running `git push --force`, `git push --tags`, or any push to `main` in scripts or hooks.
 
 ## Examples
 
 ```bash
-# GOOD
+# GOOD — GitHub issue work (subject + body)
 git add packages/backend/src/auth/session.service.ts \
         packages/backend/src/auth/session.service.spec.ts
-git commit -m "feat(auth)[SB-12]: add server-side session store with configurable TTL"
+git commit -m "feat(auth)[#12]: add server-side session store with configurable TTL
 
-# GOOD — roadmap-only (no Jira mirror yet)
+fixes #12"
+
+# GOOD — roadmap-only (no GitHub issue yet)
 feat(workspaces)[P2-01]: implement workspace creation with entitlement check
 
 # BAD — blanket staging
@@ -66,6 +75,6 @@ git add .
 # BAD — no scope / no task key
 git commit -m "added auth"
 
-# BAD — old key format (trailing parens)
+# BAD — old key format
 feat(auth): add session store (SB-12)
 ```

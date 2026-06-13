@@ -1,0 +1,57 @@
+---
+import { getRelativeLocaleUrl } from "astro:i18n";
+import MarketingLayout from "../layouts/MarketingLayout.astro";
+import { t, type SupportedLocale } from "../i18n/translate.js";
+
+interface Props {
+  status: 404 | 403 | 500;
+}
+
+const { status } = Astro.props;
+const locale = Astro.currentLocale as SupportedLocale;
+const appOrigin = import.meta.env.PUBLIC_FRONTEND_ORIGIN ?? "";
+
+const titleKey = `marketing.error.${status}.title` as const;
+const descriptionKey = `marketing.error.${status}.description` as const;
+const primaryKey =
+  status === 500
+    ? ("marketing.error.action.reload" as const)
+    : ("marketing.error.action.home" as const);
+
+const homeHref = getRelativeLocaleUrl(locale, "/");
+const signInHref = appOrigin ? `${appOrigin}/login` : "/login";
+const registerHref = appOrigin ? `${appOrigin}/register` : "/register";
+const pageTitle = `${status} · ${t(locale, titleKey)}`;
+---
+
+<MarketingLayout title={pageTitle}>
+  <section class="mk-error-main" aria-labelledby="marketing-error-title" data-testid={`error-page-${status}`}>
+    <img src="/slugbase_icon.svg" width="52" height="52" alt="" class="mk-error-mark" />
+    <p class="mk-error-code" aria-hidden="true">{status}</p>
+    <h1 id="marketing-error-title" class="mk-error-title">{t(locale, titleKey)}</h1>
+    <p class="mk-error-desc">{t(locale, descriptionKey)}</p>
+    <div class="mk-error-actions">
+      {
+        status === 500 ? (
+          <button type="button" class="mk-btn mk-btn--primary" onclick="window.location.reload()">
+            {t(locale, primaryKey)}
+          </button>
+        ) : (
+          <a class="mk-btn mk-btn--primary" href={homeHref}>
+            {t(locale, primaryKey)}
+          </a>
+        )
+      }
+      <a class="mk-btn mk-btn--secondary" href={signInHref}>
+        {t(locale, "marketing.error.action.sign_in")}
+      </a>
+      {
+        status !== 500 ? (
+          <a class="mk-btn mk-btn--ghost mk-btn--sm" href={registerHref}>
+            {t(locale, "marketing.nav.get_started")}
+          </a>
+        ) : null
+      }
+    </div>
+  </section>
+</MarketingLayout>

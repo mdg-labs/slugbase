@@ -1,0 +1,56 @@
+---
+description: Never amend commits that have been pushed to remote
+alwaysApply: true
+---
+
+# Never amend pushed commits
+
+## Rule
+
+**NEVER use `git commit --amend` on any commit that exists on a remote branch.**
+
+Amending rewrites the commit SHA. When the old SHA is already on `origin/staging`, the local and remote diverge. This causes:
+- Failed `git pull` (divergent branches)
+- Forced `git push` to reconcile
+- Risk of losing other people's work if they also pushed
+
+## What to do instead
+
+If a fix is needed after committing, **create a new commit**:
+
+```bash
+# CORRECT — new commit for every change
+git add <path>...
+git commit -m "fix(billing)[#312]: adjust version guard permissions"
+
+# WRONG — amends a pushed commit, causes divergence
+git commit --amend --no-edit
+git commit --amend -m "new message"
+```
+
+## The only exception
+
+`--amend` is safe **only** when ALL of these are true:
+1. The commit was created by **this agent** in **this conversation**
+2. The commit has **never been pushed** to any remote
+3. The user explicitly asked to amend
+
+If any condition fails, create a new commit. No exceptions.
+
+## Why this matters
+
+Our workflow commits locally to `staging` and pushes later. Every amend rewrites a SHA that may already be on `origin/staging`. Even `git pull` from VS Code triggers divergence errors. One amend turns a clean workflow into a force-push recovery scenario.
+
+## Anti-patterns
+
+```bash
+# WRONG — amend after push, creates divergence
+git commit --amend --no-edit
+git push --force-with-lease
+
+# WRONG — amend to fix a mistake, just make a new commit
+git commit --amend -m "better message"
+
+# CORRECT — always safe
+git commit -m "fix(billing)[#312]: adjust version guard permissions"
+```

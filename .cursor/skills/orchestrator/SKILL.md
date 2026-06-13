@@ -1,28 +1,29 @@
 ---
 name: orchestrator
-description: Run a chat as a pure orchestrator for SlugBase. Reads the development roadmap and/or the Jira SB project board to find work, dispatches sub-agents with doc references (not pasted spec content), and runs verification after each batch. Execution agents set Jira In Progress (leaf + epic parent when subtask); only verification agents set Done after PASS. Use when the user asks to orchestrate, delegate end-to-end, execute the roadmap, implement a Jira issue/epic (e.g. SB-12), or coordinate parallel implementation tasks.
+description: Run a chat as a pure orchestrator for SlugBase. Reads the development roadmap and/or the GitHub Issues board to find work, dispatches sub-agents with doc references (not pasted spec content), and runs verification after each batch. Execution agents set board Status to In Progress (leaf + epic parent when subtask); only verification agents set board Status to Done after PASS. Use when the user asks to orchestrate, delegate end-to-end, execute the roadmap, implement a GitHub issue/epic (e.g. #12), or coordinate parallel implementation tasks.
 ---
 
 # Orchestrator (SlugBase)
 
-The main agent in this chat is a **dispatcher only**. It reads the **roadmap** and/or **Jira board**, decides what to run next, and hands implementation to sub-agents. Sub-agents read spec docs and implementation files themselves.
+The main agent in this chat is a **dispatcher only**. It reads the **roadmap** and/or **GitHub board**, decides what to run next, and hands implementation to sub-agents. Sub-agents read spec docs and implementation files themselves.
 
 ## Workspace
 
 | Item | Value |
 |---|---|
 | Repo | `/home/michael/projects/slugbase` |
-| Integration branch | `main` (all verified work lands here) |
+| Integration branch | `staging` (all verified work lands here) |
+| Production branch | `main` — **protected on GitHub**; no development; **never push** from agents |
 | Task branch (Lane P) | `orchestrator/<TASK-ID>` (isolated; merged after verify PASS) |
 | Worktree (Lane P) | Sibling dir `../slugbase-wt-<TASK-ID>` or subagent-managed |
 | Plan file | `docs/slugbase-development-roadmap.md` |
-| Task board (Jira) | SlugBase board — see [jira-board.md](jira-board.md) |
+| Task board (GitHub) | GitHub Issues — see [github-board.md](github-board.md) |
 | Spec docs | `docs/slugbase-*.md` — see [doc-index.md](doc-index.md) |
 | Workspace memory | `.cursor/skills/workspace-notes.md` |
 | Session memory | `.cursor/skills/agent-memory/active/<SESSION-ID>.md` — **local only** (gitignored) |
 | Prompt templates | [prompt-templates.md](prompt-templates.md) |
 
-**Single-repo model.** Session memory and implementation commits live in `slugbase`. Lane S commits directly on `main`; Lane P commits on task branches first, then integration merges to `main`.
+**Single-repo model.** Session memory and implementation commits live in `slugbase`. Lane S commits directly on **`staging`**; Lane P commits on task branches first, then integration merges to **`staging`**. **`main` is off-limits** for development and pushes.
 
 ---
 
@@ -31,10 +32,10 @@ The main agent in this chat is a **dispatcher only**. It reads the **roadmap** a
 ### MAY do
 
 - Read the **plan file** (full file): phases, task rows, dependencies, Doc Ref column, traceability matrix, exit criteria
-- Read **Jira issue payloads** via MCP (`plugin-atlassian-atlassian`): task title, description, subtasks, dependencies, status — see [jira-board.md](jira-board.md)
-- Read [doc-index.md](doc-index.md), [prompt-templates.md](prompt-templates.md), and [jira-board.md](jira-board.md)
+- Read **GitHub issue payloads** via MCP (`user-github`): title, body, labels, sub-issues, state — see [github-board.md](github-board.md)
+- Read [doc-index.md](doc-index.md), [prompt-templates.md](prompt-templates.md), and [github-board.md](github-board.md)
 - Read `.cursor/skills/workspace-notes.md`; write durable learnings there
-- Use `TodoWrite` in **chat mode** / **Jira mode**
+- Use `TodoWrite` in **chat mode** / **GitHub mode**
 - In **plan-file mode**, edit the plan file for status reconciliation or **Lane P batch prep** (`[~]` at batch start)
 - Launch sub-agents via the **Task** tool (`generalPurpose`, `best-of-n-runner`, `shell`, `explore`, `ci-investigator`)
 - Set `run_in_background: true` on Task when dispatching parallel Lane P execution agents
@@ -43,15 +44,15 @@ The main agent in this chat is a **dispatcher only**. It reads the **roadmap** a
 
 ### MUST NOT do
 
-- Read spec doc bodies (`docs/slugbase-*.md`) — sub-agents read these (Jira issue descriptions **are** readable — they are the AC contract for board tasks)
+- Read spec doc bodies (`docs/slugbase-*.md`) — sub-agents read these (GitHub issue bodies **are** readable — they are the AC contract for board tasks)
 - Read implementation files, diffs, test output, lint results, or logs
 - Use `Read`, `Grep`, `Glob`, `ReadLints`, `Shell`, `ApplyPatch`, etc. on implementation work
 - Summarize file contents from memory
-- Edit repo files other than plan file, `workspace-notes.md`, `jira-board.md`, or this skill
+- Edit repo files other than plan file, `workspace-notes.md`, `github-board.md`, or this skill
 - Paste spec doc bodies into sub-agent prompts — pass paths and `§` section refs
-- Paste entire full Jira ADF description bodies — extract AC, file paths, doc refs, and deps
+- Paste entire issue bodies — extract AC, file paths, doc refs, and deps
 - Dispatch Lane P and Lane S tasks in the same batch
-- Allow execution agents to commit to `main` during an in-flight Lane P batch
+- Allow execution agents to commit to **`staging`** during an in-flight Lane P batch (integration agent only — merge commits)
 
 ---
 
@@ -60,28 +61,28 @@ The main agent in this chat is a **dispatcher only**. It reads the **roadmap** a
 | Source | Task IDs | AC lives in | Status tracking |
 |---|---|---|---|
 | **Roadmap** | `P1-03`, `P2-01`, … | Plan file row | Plan checkboxes `[x]`/`[!]` |
-| **Jira** | `SB-12`, `SB-8`, … | Issue description (MCP) | Jira status + optional comment |
+| **GitHub Issues** | `#12`, `#8`, … | Issue body (MCP) | Board Status + comment |
 | **Ad-hoc** | User-named | User message | `TodoWrite` only |
 
-**User intent wins:** if they say "implement SB-12" or give a Jira URL → **Jira mode**, even though the roadmap exists.
+**User intent wins:** if they say "implement #12" or give a GitHub issue URL → **GitHub mode**, even though the roadmap exists.
 
 ## Three modes
 
-| | **Plan-file mode** | **Jira mode** | **Chat mode** |
+|| **Plan-file mode** | **GitHub mode** | **Chat mode** |
 |---|---|---|---|
-| **When** | Roadmap batch (`P*-*`) | Jira issue/epic (`SB-*`) | Ad-hoc; no board or plan |
-| **State** | `- [ ]` / `- [~]` / `- [x]` / `- [!]` in plan file | `TodoWrite` + Jira status | `TodoWrite` in chat |
-| **In progress** | `[~]` (Lane S agent or Lane P batch prep) | Execution agent → Jira **In Progress** | todo `in_progress` |
-| **Done** | Verifier → `[x]` on plan file | Verifier PASS → Jira **Done** | todo `completed` after verify PASS |
-| **Failed** | Verifier → `[!]` on plan file | Verifier → `addCommentToJiraIssue`; stay In Progress | todo `pending` |
+| **When** | Roadmap batch (`P*-*`) | GitHub issue/epic (`#N`) | Ad-hoc; no board or plan |
+| **State** | `- [ ]` / `- [~]` / `- [x]` / `- [!]` in plan file | `TodoWrite` + Board Status | `TodoWrite` in chat |
+| **In progress** | `[~]` (Lane S agent or Lane P batch prep) | Execution agent → board Status **In Progress** | todo `in_progress` |
+| **Done** | Verifier → `[x]` on plan file | Verifier PASS → board Status Done + comment | todo `completed` after verify PASS |
+| **Failed** | Verifier → `[!]` on plan file | Verifier → add FAIL comment; board Status Ready | todo `pending` |
 
 Pick mode on first turn:
 
-- User names Jira issue/URL/epic → **Jira mode**
+- User names GitHub issue/URL/epic → **GitHub mode**
 - User says orchestrate roadmap / phase → **plan-file mode**
 - Otherwise → **chat mode**
 
-Default to **plan-file mode** only when the user asks for roadmap work and did not name a Jira issue.
+Default to **plan-file mode** only when the user asks for roadmap work and did not name a GitHub issue.
 
 ---
 
@@ -89,21 +90,21 @@ Default to **plan-file mode** only when the user asks for roadmap work and did n
 
 1. Confirm target is `/home/michael/projects/slugbase` (only repo).
 2. Read `.cursor/skills/workspace-notes.md` (create on first durable note).
-3. **Pick mode** (plan-file / Jira / chat) from user message.
+3. **Pick mode** (plan-file / GitHub / chat) from user message.
 4. **Plan-file:** read plan file — current phase, next TODO with satisfied deps, BLOCKED items.
-5. **Jira:** load issue(s) via MCP `getJiraIssue` or `searchJiraIssuesUsingJql` (`parent = SB-N` for epic children). Resolve transition IDs via `getTransitionsForJiraIssue` once per session.
-6. Confirm with user (briefly if intent is clear): mode, batch, lane (S vs P), commits in scope, Jira sync ON/OFF.
+5. **GitHub:** load issue(s) via MCP `issue_read` (method: `get`) or `search_issues` / `list_issues`. For sub-issues, use `issue_read` (method: `get_sub_issues`). For labels, use `issue_read` (method: `get_labels`).
+6. Confirm with user (briefly if intent is clear): mode, batch, lane (S vs P), commits in scope, GitHub sync ON/OFF.
 
-**Commits:** Orchestrated runs default to **local commits per task** for traceability. **Never push** unless the user explicitly asks.
+**Commits:** Orchestrated runs default to **local commits per task** on **`staging`** (Lane S) or task branches (Lane P). **Never push** unless the user explicitly asks — and **never push to `main`**.
 
-**Jira sync (default ON):** Orchestrator resolves `cloudId`, issue key(s), and transition IDs via MCP, then passes **role-specific** JIRA SYNC blocks — execution prompts get **In Progress only** (no `transitionIdDone`); verifier prompts get **Done**. Sub-agents perform the updates — orchestrator does **not** call `transitionJiraIssue` itself unless recovering from a sub-agent failure. Skip only if user says **"don't update Jira"**.
+**GitHub sync (default ON):** Orchestrator resolves issue number(s) and label set via MCP, then passes **role-specific** GITHUB SYNC blocks — execution prompts get **In Progress label only** (board Status only); verifier prompts set Status **Done**. Sub-agents perform the updates — orchestrator does **not** call `issue_write` itself unless recovering from a sub-agent failure. Skip only if user says **"don't update GitHub issues"**.
 
-### Jira status ownership (non-negotiable)
+### GitHub status ownership (non-negotiable)
 
 | Column | Who may set it | When |
 |---|---|---|
-| In Progress | **Execution** | First action, before session memory (leaf + epic parent when subtask) |
-| Done | **Verifier** | After all verification layers PASS only |
+| **In Progress** (Status) | **Execution** | First action, before session memory (leaf + epic parent when subtask) |
+| **Done** (Status) | **Verifier** | After all verification layers PASS (board Status only; issue state is never modified) |
 
 ---
 
@@ -111,36 +112,36 @@ Default to **plan-file mode** only when the user asks for roadmap work and did n
 
 When building a prompt:
 
-1. **Task ID** — roadmap `P*-*` or Jira `SB-*`
-2. **Acceptance criteria** — verbatim from plan row **or** extracted from Jira issue description (bullets, not HTML)
-3. **Doc references** — plan Doc Ref column **or** `§` sections cited in Jira issue description ([doc-index.md](doc-index.md) shorthand)
+1. **Task ID** — roadmap `P*-*` or GitHub `#N`
+2. **Acceptance criteria** — verbatim from plan row **or** extracted from issue body (bullets, not HTML)
+3. **Doc references** — plan Doc Ref column **or** `§` sections cited in issue body ([doc-index.md](doc-index.md) shorthand)
 4. Explicit READ / WRITE scope with absolute paths
 5. Session ID: `<TASK-ID>-<YYYYMMDD>-<4hex>` — same for execution + verifier
 6. **Lane** (`S` or `P`) and git context (branch, worktree, `STAGING_BASE_SHA` for Lane P)
-7. **Epic context** — if parent epic (e.g. SB-8), note parent key and sibling deps in prompt header
-8. **JIRA SYNC block** — when task(s) are on the board, include role-specific blocks from [jira-board.md](jira-board.md):
-   - **Execution prompt:** `transitionIdInProgress: 21` only — **never** include `transitionIdDone`; when subtask, also list parent epic key
-   - **Verifier prompt:** `transitionIdDone: 41` (+ optional epic key for final subtask)
-9. **JIRA TIME TRACKING block** — copy verbatim from [prompt-templates.md](prompt-templates.md) into both execution and verifier prompts when JIRA SYNC is present
+7. **Epic context** — if parent epic (e.g. #8), note parent issue number and sibling deps in prompt header
+8. **GITHUB TOOLS block** — **mandatory in every GITHUB SYNC prompt** (copy verbatim from [prompt-templates.md](prompt-templates.md)) — tells sub-agents which tool (MCP vs CLI) to use for each operation
+9. **GITHUB SYNC block** — when task(s) are on the board, include role-specific blocks from [github-board.md](github-board.md):
+   - **Execution prompt:** Set project Status → "In Progress" via GraphQL `updateProjectV2ItemFieldValue` — **never** set Done; when subtask, also list parent epic issue number
+   - **Verifier prompt:** Set project Status → "Done" via GraphQL `updateProjectV2ItemFieldValue` (+ optional epic Done for final subtask); post mandatory comment via MCP `add_issue_comment`
 10. **DB MIGRATIONS block** — **mandatory in every execution prompt** (copy verbatim from [prompt-templates.md](prompt-templates.md) even when the task has no schema changes)
 
 One prompt = one **leaf** task ID unless user requested batching or shared-file serialization requires it.
 
-### Jira epic batches
+### GitHub epic batches
 
-When user asks to implement an **epic** (parent task with subtasks):
+When user asks to implement an **epic** (parent issue with sub-issues):
 
-1. `getJiraIssue` epic + JQL `parent = SB-N` → full subtask list.
-2. Read epic description **Suggested implementation order** and dependency prose.
+1. `issue_read` on epic + `issue_read` (method: `get_sub_issues`) → full sub-issue list.
+2. Read epic body **Suggested implementation order** and dependency prose.
 3. Build a **batch plan** (ordered list of leaf tasks); split cross-domain work by Lane rules.
-4. Track epic parent: execution marks epic **In Progress** when any subtask starts; orchestrator or **last subtask verifier** marks epic **Done** only when all in-scope subtasks PASS.
+4. Track epic parent: execution adds **In Progress** label to epic when any subtask starts; orchestrator or **last subtask verifier** sets epic board Status to Done only when all in-scope subtasks PASS.
 
 ### Sub-agent types
 
 | Type | Use when |
 |---|---|
 | `best-of-n-runner` | **Lane P execution** — isolated git worktree + branch per task |
-| `generalPurpose` | Lane S implementation; branch verify; main batch verify; integration conflict analysis |
+| `generalPurpose` | Lane S implementation; branch verify; staging batch verify; integration conflict analysis |
 | `shell` | Worktree prep/cleanup; integration merges; one-offs |
 | `explore` | Read-only discovery to unblock scope definition |
 | `ci-investigator` | Single failing CI check on a PR |
@@ -163,9 +164,9 @@ Not valid for unrelated cleanup, broad formatting, or dependency churn. **Lane P
 
 ## Parallelism — Lane S / P / B
 
-| Lane | When | Where agents work | Who touches `main` |
+| Lane | When | Where agents work | Who touches `staging` |
 |---|---|---|---|
-| **S — Serial** | Single task; uncertain overlap; migrations; shared contracts; integration conflicts | `main` working tree | Execution + verifier |
+| **S — Serial** | Single task; uncertain overlap; migrations; shared contracts; integration conflicts | `staging` working tree | Execution + verifier |
 | **P — Parallel isolated** | 2–3 tasks; deps satisfied; disjoint WRITE scopes; no shared-file contention | **Worktree + `orchestrator/<TASK-ID>` per task** | Integration agent + batch verifier only |
 | **B — Blocked** | Same file must change in multiple tasks in one batch | — | Serialize, split batch, or run Lane S one at a time |
 
@@ -173,8 +174,8 @@ Not valid for unrelated cleanup, broad formatting, or dependency churn. **Lane P
 
 **Lane P hard rules:**
 
-- Execution agents **never** checkout or commit to `main`.
-- Pin batch base: record `STAGING_BASE_SHA` at batch start; task branches fork from that SHA.
+- Execution agents **never** checkout or commit to **`staging`** during Lane P execution (task branches only).
+- Pin batch base: record `STAGING_BASE_SHA` at batch start (**current `staging` HEAD**); task branches fork from that SHA.
 - Branch verifiers **never** edit the plan file.
 - Batch verifier is the **only** agent that sets `[x]` / `[!]` for Lane P tasks.
 - Never run Lane P and Lane S in the same batch.
@@ -192,7 +193,7 @@ Always: **execute batch → verify (per task) → integrate (Lane P) → batch v
 | Field | Example |
 |---|---|
 | `BATCH_ID` | `20260531-a3f1` |
-| `STAGING_BASE_SHA` | `abc123…` (current `main` HEAD) |
+| `STAGING_BASE_SHA` | `abc123…` (current **`staging`** HEAD) |
 | Per task | `TASK-ID`, `SESSION ID`, branch `orchestrator/<TASK-ID>`, worktree path |
 
 ### Flow
@@ -203,9 +204,9 @@ Always: **execute batch → verify (per task) → integrate (Lane P) → batch v
 3. Orchestrator: spawn execution agents (best-of-n-runner, run_in_background: true)
 4. Each execution: finalize local session memory + one implementation commit on task branch only
 5. Orchestrator: spawn one branch verifier per completed task (in that task's worktree)
-6. Branch verifier PASS → report to orchestrator; no plan file write; Jira Done comment is the handoff record
+6. Branch verifier PASS → report to orchestrator; no plan file write; board Status Done is the handoff record
 7. Branch verifier FAIL → append VERIFICATION FAILED in local session memory; do not merge
-8. Integration agent: merge PASS branches onto main (dependency order, one at a time)
+8. Integration agent: merge PASS branches onto **`staging`** (dependency order, one at a time)
 9. Batch verifier: post-merge smoke checks; [x] integrated tasks; [!] branch-failed tasks
 10. Cleanup agent (shell): remove worktrees; delete merged task branches
 ```
@@ -215,42 +216,44 @@ Always: **execute batch → verify (per task) → integrate (Lane P) → batch v
 ```text
 Branch:    orchestrator/<TASK-ID>
 Worktree:  ../slugbase-wt-<TASK-ID>   # sibling of repo root, or subagent-managed path
-Base:      STAGING_BASE_SHA           # do not chase moving main during execution
+Base:      STAGING_BASE_SHA           # do not chase moving staging during execution
 ```
+
+**No `node_modules` in worktrees.** Git worktrees are bare checkouts — they start without `node_modules`. The sub-agent (execution or verifier) **must** run `pnpm install` as the very first action after GitHub issue In Progress (execution) or before verification checks (verifier). This is enforced by the WORK DEP block in the Lane P prompt templates. The install step is the sub-agent's responsibility, not the orchestrator's.
 
 ---
 
 ## Execution agents
 
-### Lane S (serial on `main`)
+### Lane S (serial on `staging`)
 
-1. **Jira (first action when JIRA SYNC present):** `transitionJiraIssue` → **In Progress** for every listed leaf key **and** epic parent key
+1. **GitHub (first action when GITHUB SYNC present):** `issue_write` (method: `update`) → add **In Progress** label for every listed leaf issue **and** epic parent issue
 2. **Session memory** — create `active/<SESSION-ID>.md`; record `started` timestamp
 3. **Implementation** — task files only
-4. **Pre-handoff** — set `ended` + `duration`; `addWorklogToJiraIssue` on each leaf key; `transitionJiraIssue` → **In Review** → **single implementation commit** (task files only; never commit session memory)
+4. **Pre-handoff** — set `ended` + `duration`; `add_issue_comment` on each leaf issue; set board Status to 'In Review' for each leaf issue → **single implementation commit** (task files only; never commit session memory)
 
-Never push. Stage explicit paths only. Stop if branch ≠ `main`.
+Never push to **`main`**. When pushing is explicitly requested, target **`staging`** only. Stage explicit paths only. Stop if branch ≠ **`staging`**.
 
 Execution may set `[~]` only when plan file is in WRITE SCOPE. Never `[x]`.
 
-**Jira FORBIDDEN for execution:** never call `transitionJiraIssue` with Done; never call `addCommentToJiraIssue` for verification outcomes; never set epic Done.
+**GitHub FORBIDDEN for execution:** never set GitHub issue state (open/closed); never `add_issue_comment` for verification outcomes; never set epic Done — board Status only.
 
 ### Lane P (isolated task branch)
 
 Same flow on **`orchestrator/<TASK-ID>` only** — one implementation commit per task.
 
 - Work only in assigned worktree / branch.
-- Never checkout `main`, never merge, never push.
+- Never checkout **`staging`**, never merge, never push (during Lane P execution).
 - Plan file: **read-only**.
 - If `git status` shows unexpected changes outside WRITE SCOPE → `blocked`.
 
 ### Commit messages
 
-Every task commit must include `[SB-N]` or `[P*-*]` — see `.cursor/rules/07-jira-commit-linking.mdc`.
+Every task commit must include `[#N]` or `[P*-*]` — see `.cursor/rules/07-github-commit-linking.mdc`.
 
 ```
-feat(auth)[SB-12]: implement server-side session store with configurable TTL
-fix(go)[SB-31]: handle missing slug gracefully in redirect endpoint
+feat(auth)[#12]: implement server-side session store with configurable TTL
+fix(go)[#31]: handle missing slug gracefully in redirect endpoint
 ```
 
 Do **not** commit `.cursor/skills/agent-memory/**` — gitignored local notes only.
@@ -261,7 +264,7 @@ Do **not** commit `.cursor/skills/agent-memory/**` — gitignored local notes on
 
 Never reuse a verifier thread across batches. Spawn **fresh** verifiers.
 
-### Lane S — task verifier (on `main`)
+### Lane S — task verifier (on `staging`)
 
 One verifier after execution. Input: session ID, commit SHAs, WRITE scopes, committed paths, acceptance criteria, doc refs.
 
@@ -277,30 +280,31 @@ pnpm typecheck   # or n/a
 pnpm test:unit   # or n/a
 ```
 
-Mark `n/a` for commands not yet defined. Stop if any defined check fails. Use Phase CLI when env required.
+Mark `n/a` for commands not yet defined. Stop if any defined check fails. Use Infisical (`infisical run --env=dev`) when env required.
 
 **Layer 3 — Logic review:**
 
 - 3a. Each acceptance criterion — genuinely implemented?
 - 3b. Doc contract — spec `§` deviations with file:line + fix hint
 - 3c. Security baseline — server-side sessions (not JWT), no logged secrets, SSRF-safe egress, encrypted at-rest secrets, CSRF exempt list not widened; no deployment-mode branches (03-security-baseline.mdc)
-- 3c2. Env vars — any new var fully registered (Phase + .env.example + schema + docs)? (05-env-vars.mdc)
-- 3c3. Jira commit link — subject includes `[SB-N]` or `[P*-*]`; no Smart Commit commands (07-jira-commit-linking.mdc)
+- 3c2. Env vars — any new var fully registered (Infisical + .env.example + schema + docs)? (05-env-vars.mdc)
+- 3c3. GitHub commit link — subject includes `[#N]` or `[P*-*]`; no unrelated issue references (07-github-commit-linking.mdc)
+- 3c4. Board Status only — agents must never set GitHub issue state (open/closed); all status management must be via project board Status (In Progress / In Review / Done / Ready); verifying code or comments that call `issue_state`, `close()`, `reopen()` on GitHub issues → **FAIL**
 - 3d. DB migrations — hand-written migration SQL or hand-created migration directories → **FAIL**
 - 3e. Stubs, TODO/FIXME, placeholder values, `isCloud`/deployment-mode branches → **FAIL**
 
-| Result | Plan (plan-file mode) | Jira (sub-agent) | Local session memory |
+| Result | Plan (plan-file mode) | GitHub (sub-agent) | Local session memory |
 |---|---|---|---|
-| PASS | `[x]`; commit plan file | Verifier → **Done** + mandatory Done comment | Delete active or move to local archive/ (never commit) |
-| FAIL | `[!]` + note; commit plan file | Verifier → **Ready** + FAIL comment; do NOT set Done | Append VERIFICATION FAILED in active/ (never commit) |
+| PASS | `[x]`; commit plan file | Verifier → mandatory PASS comment + board Status Done | Delete active or move to local archive/ (never commit) |
+| FAIL | `[!]` + note; commit plan file | Verifier → add FAIL comment; board Status Ready; do NOT set Done | Append VERIFICATION FAILED in active/ (never commit) |
 
 ---
 
 ## Integration agent
 
-Spawn after all branch verifiers complete. Only agent that commits to `main` during a Lane P batch (merge commits).
+Spawn after all branch verifiers complete. Only agent that commits to **`staging`** during a Lane P batch (merge commits).
 
-Merge `orchestrator/<TASK-ID>` into `main` with `--no-ff`, one task at a time. On conflict → **stop**; report conflict files.
+Merge `orchestrator/<TASK-ID>` into **`staging`** with `--no-ff`, one task at a time. On conflict → **stop**; report conflict files. Never push to **`main`**.
 
 ---
 
@@ -310,7 +314,7 @@ After batch closes, spawn a **shell** agent:
 
 ```bash
 git worktree remove ../slugbase-wt-<TASK-ID>   # per task
-git branch -d orchestrator/<TASK-ID>           # only after merged to main
+git branch -d orchestrator/<TASK-ID>           # only after merged to staging
 ```
 
 ---
@@ -340,16 +344,16 @@ Path: `.cursor/skills/agent-memory/` — **never committed**.
 | Step | Who | Action |
 |---|---|---|
 | Before dispatch | Orchestrator | Generate SESSION ID |
-| Phase 1 | Execution | Create `active/<SESSION-ID>.md`; header + Task; set `started` when JIRA SYNC present |
+| Phase 1 | Execution | Create `active/<SESSION-ID>.md`; header + Task; set `started` when GITHUB SYNC present |
 | Phase 2 | Execution | Update Scope, Decisions, Deviations in place |
 | Phase 3 | Execution | Finalize sections locally (do not commit) |
-| Pre-handoff | Execution | Set `ended` + `duration`; worklog + In Review; **one implementation commit** |
-| Verifier start | Verifier | Read active file if present; set verification `started` when JIRA SYNC present |
-| Verifier end | Verifier | Set verification `ended` + `duration`; worklog; Jira comment + Done/Ready transition |
-| PASS | Verifier | Mandatory Jira Done comment; optionally delete active or move to local `archive/` |
-| FAIL | Verifier | Mandatory Jira FAIL comment; append VERIFICATION FAILED in active/ if file exists |
+| Pre-handoff | Execution | Set `ended` + `duration`; set Status **In Review**; **one implementation commit** |
+| Verifier start | Verifier | Read active file if present; set verification `started` when GITHUB SYNC present |
+| Verifier end | Verifier | Set verification `ended` + `duration`; set board Status Done/Ready; mandatory comment |
+| PASS | Verifier | Mandatory PASS comment + board Status Done; optionally delete active or move to local `archive/` |
+| FAIL | Verifier | Mandatory FAIL comment; append VERIFICATION FAILED in active/ if file exists |
 
-**Retry after FAIL:** same SESSION ID; execution reads Jira FAIL comment and local active file.
+**Retry after FAIL:** same SESSION ID; execution reads FAIL comment and local active file.
 
 ### Session file template
 
@@ -362,12 +366,11 @@ _task: <TASK-ID> | started: <ISO 8601 UTC> | ended: <ISO or pending> | duration:
 
 <one line from plan>
 
-## Time tracking
+## Timing
 
 - **Execution started:** <ISO>
 - **Execution ended:** <ISO>
 - **Duration:** <human-readable>
-- **Jira worklog:** <leaf keys + timeSpent logged, or n/a>
 
 ## Scope
 
@@ -393,7 +396,7 @@ _task: <TASK-ID> | started: <ISO 8601 UTC> | ended: <ISO or pending> | duration:
 
 ## Verification timing
 
-_verification started: <ISO> | ended: <ISO> | duration: <human> | Jira worklog: <keys or n/a>_
+_verification started: <ISO> | ended: <ISO> | duration: <human>_
 ```
 
 ### Verifier failure append
@@ -420,7 +423,7 @@ _agent: verification_
 
 Path: `.cursor/skills/workspace-notes.md`
 
-Store only durable knowledge: conventions, build/test quirks, Phase CLI notes, recurring verify failures, Lane P merge conflict patterns.
+Store only durable knowledge: conventions, build/test quirks, Infisical/env notes, recurring verify failures, Lane P merge conflict patterns.
 
 ```markdown
 ## <topic>
@@ -435,20 +438,20 @@ Orchestrator may read/write. Sub-agents may read; write only if task WRITE SCOPE
 
 ## Minimal run loop
 
-1. Read workspace-notes; pick mode (plan-file / Jira / chat).
-2. **Plan-file:** read plan file, next TODO. **Jira:** load issue/epic/children via MCP.
-3. Identify next tasks (deps satisfied — plan rows, Jira issue links, epic prose order).
-4. Map doc refs → paths (plan Doc Ref or Jira description `§` citations; orchestrator does **not** open spec doc bodies).
+1. Read workspace-notes; pick mode (plan-file / GitHub / chat).
+2. **Plan-file:** read plan file, next TODO. **GitHub:** load issue/epic/sub-issues via MCP.
+3. Identify next tasks (deps satisfied — plan rows, GitHub issue links, epic prose order).
+4. Map doc refs → paths (plan Doc Ref or issue body `§` citations; orchestrator does **not** open spec doc bodies).
 5. Choose lane: **S**, **P**, or **B** (blocked → split or serialize).
 6. Generate SESSION ID per leaf task; if Lane P, record `BATCH_ID` + `STAGING_BASE_SHA`.
-7. Batch prep: plan `[~]` / todos `in_progress` (orchestrator does **not** set Jira In Progress — execution agent does).
+7. Batch prep: plan `[~]` / todos `in_progress` (orchestrator does **not** set GitHub In Progress — execution agent does).
 8. Spawn execution sub-agent(s) — `best-of-n-runner` + `run_in_background: true` for Lane P.
 9. Collect: local SESSION ID path, implementation SHA, scopes, paths, status per task.
 10. Spawn one **branch verifier** per Lane P task, or one **task verifier** for Lane S.
 11. Lane P: spawn **integration agent** → **batch verifier**.
 12. Lane P: spawn **cleanup** shell agent for worktrees/branches.
-13. Reconcile: PASS → plan `[x]` / confirm Jira Done comment; FAIL → plan `[!]` / retry same SESSION ID.
-14. **Jira epic:** if subtask execution skipped epic In Progress, orchestrator recovery → epic **In Progress**; if all subtasks PASS and epic not yet Done, recovery → epic **Done** (or ensure last verifier prompt included epic key).
+13. Reconcile: PASS → plan `[x]` / confirm board Status Done comment; FAIL → plan `[!]` / retry same SESSION ID.
+14. **GitHub epic:** if subtask execution skipped epic In Progress, orchestrator recovery → epic **In Progress** label; if all subtasks PASS and epic not yet closed, recovery → set epic Done (board Status); or ensure last verifier prompt included epic issue number.
 15. Update workspace-notes if durable learning.
 16. Report batch result + next batch.
 17. Repeat.
@@ -457,24 +460,25 @@ Orchestrator may read/write. Sub-agents may read; write only if task WRITE SCOPE
 
 ## Anti-patterns
 
-- Orchestrator reading spec **doc** bodies or implementation files (Jira issue descriptions are OK)
+- Orchestrator reading spec **doc** bodies or implementation files (GitHub issue bodies are OK)
 - Orchestrator reading session memory **contents** (filenames in `active/` only)
-- Pasting spec doc bodies or full Jira ADF descriptions into sub-agent prompts
-- Editing roadmap checkboxes for Jira-only issues (SB-N)
-- Marking Jira epic Done before all in-scope subtasks verify PASS
-- **Sub-agent skipping Jira sync** when JIRA SYNC block is present
-- **Sub-agent skipping Jira worklog** when JIRA SYNC block is present
-- **Execution agent setting Jira Done** — only verifier after PASS
-- **Execution agent confusing REQUIRED OUTPUT `complete` with Jira Done**
-- Execution agent starting implementation before Jira In Progress (when sync required)
-- Execution agent setting a subtask In Progress without setting epic parent In Progress
-- Verifier setting Jira In Progress (execution owns that)
-- Committing session memory files to git (local only; Jira comment is the durable record)
+- Pasting spec doc bodies or full issue bodies into sub-agent prompts
+- Editing roadmap checkboxes for GitHub-only issues (#N)
+- Setting epic to Done (board Status) before all in-scope subtasks verify PASS
+- **Sub-agent skipping GitHub sync** when GITHUB SYNC block is present
+- **Agent setting GitHub issue state (open/closed)** — board Status only; never modify GitHub issue state
+- **Execution agent confusing REQUIRED OUTPUT `complete` with board Status Done**
+- Execution agent starting implementation before adding In Progress label (when sync required)
+- Execution agent adding In Progress label to a subtask without adding it to epic parent
+- Verifier adding In Progress label (execution owns that)
+- Committing session memory files to git (local only; GitHub comment is the durable record)
 - Verifier proceeding without local session memory **and** without execution REQUIRED OUTPUT
 - Reusing SESSION ID across different tasks
 - Reusing verifier thread across batches
 - Marking `[x]` or todo `completed` before verifier PASS
-- **Lane P execution agents committing to `main`**
+- **Lane P execution agents committing to `staging`** (during execution — integration agent merges only)
+- **Pushing to `main`** on GitHub — forbidden for all agents
+- **Lane S work on any branch other than `staging`**
 - **Branch verifiers editing the plan file**
 - **Parallel Lane P without `best-of-n-runner` or equivalent worktree isolation**
 - **Dispatching Lane P and Lane S in the same batch**
@@ -482,8 +486,7 @@ Orchestrator may read/write. Sub-agents may read; write only if task WRITE SCOPE
 - Pushing from any sub-agent without user request
 - Blanket `git add .` / `-A`
 - Committing `.env` or secrets
-- **Task commits without `[SB-N]` or `[P*-*]` in subject** when Jira sync was in scope
-- **Smart Commit commands in commit messages** (`#time`, `#comment`, `#resolve`) — MCP owns Jira sync
+- **Task commits without `[#N]` or `[P*-*]` in subject** when GitHub sync was in scope
 - **Execution agent hand-writing DB migrations** — schema change → migration CLI only (see DB MIGRATIONS block in every execution prompt)
 - **Orchestrator omitting DB MIGRATIONS block** from an execution prompt
 - **Deployment-mode branches in code** — `isCloud`, `SLUGBASE_MODE` checks are forbidden; use entitlements engine (spec §15)

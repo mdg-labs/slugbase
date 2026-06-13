@@ -36,19 +36,40 @@ Skip the full gate when staged changes are only in:
 
 For these commits, run **targeted validation only** (e.g. YAML parse for workflow edits) and report that the full gate was intentionally skipped.
 
-## Full gate (update once stack is decided)
+## Full gate
 
-When code-impacting files are staged:
+When code-impacting files are staged, run (via Turborepo across the workspace). **Always** use the repo Node bootstrap so marketing/Astro runs on Node >=22.12 (not Cursor’s bundled Node 20):
 
 ```bash
-pnpm lint && \
-pnpm typecheck && \
-pnpm test:unit && \
-pnpm build && \
+bash scripts/with-ci-env.sh pnpm lint && \
+bash scripts/with-ci-env.sh pnpm typecheck && \
+bash scripts/with-ci-env.sh pnpm test:unit && \
+bash scripts/with-ci-env.sh pnpm build && \
+bash scripts/with-ci-env.sh pnpm test:integration && \
+bash scripts/with-ci-env.sh pnpm audit --audit-level=high
+```
+
+Quick sanity check: `pnpm env:check` (see `docs/local-development.md`).
+
+**Stack note (settled — spec §19):** `lint`/`typecheck`/`test:unit`/`build`/`test:integration` are root Turborepo tasks fanning out to `backend` (NestJS), `web` (React Router v7), `marketing` (Astro), `shared-types`, and `ui`. Unit/integration use **Vitest** (+ Supertest for the API). **Playwright e2e is not part of the local gate** — it runs only on the `staging → main` PR in CI (spec §22.4). If a package legitimately has no task yet, mark that command `n/a` and note it; do not invent skips for code-impacting changes.
+
+## Critical: integration tests must NOT use the Infisical wrapper
+
+**Never** run `pnpm test:integration` wrapped with `infisical run --env=dev --`:
+
+```bash
+# ❌ WRONG — injects env vars that break integration tests
+infisical run --env=dev -- pnpm test:integration
+
+# ✅ CORRECT — integration script uses its own validTestEnv
 pnpm test:integration
 ```
 
-**Stack note:** Exact commands will be defined when the tech stack is chosen (spec §19 package layout). Mark any undefined command as `n/a` and note which were skipped. Add `pnpm audit --audit-level=high` once dependencies are established.
+**Why:** The integration test script uses `validTestEnv` with boolean literals. Wrapping `pnpm test:integration` with Infisical can still override those vars with string values and change runtime behavior. Backend deployment booleans use `envBoolean()` in `env.schema.ts` so Infisical `"false"` parses correctly at app startup — but keep integration off Infisical to avoid env pollution during tests.
+
+**Rule:** `pnpm lint`, `pnpm typecheck`, `pnpm test:unit`, and `pnpm build` may be run with `infisical run --env=dev --` when secrets are required (wrap via `bash scripts/with-ci-env.sh infisical run --env=dev -- pnpm …`). `pnpm test:integration` must always be run **without** the Infisical wrapper (still use `with-ci-env.sh` for Node only).
+
+This applies equally to **execution agents** (pre-commit gate) and **verification agents** (Layer 2 checks).
 
 ## Enforcement
 

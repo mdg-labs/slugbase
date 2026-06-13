@@ -1,0 +1,110 @@
+@import "@slugbase/ui/styles/colors-and-type.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .error-page {
+    @apply flex flex-1 flex-col items-center justify-center gap-sp-6 px-sp-9 py-sp-12 text-center;
+  }
+
+  .error-code {
+    margin: 0;
+    user-select: none;
+    font-family: var(--font-mono);
+    font-weight: var(--weight-bold);
+    font-size: clamp(64px, 10vw, 112px);
+    line-height: 1;
+    letter-spacing: -0.04em;
+    color: transparent;
+    background: linear-gradient(180deg, var(--fg) 0%, var(--fg-faint) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+  }
+
+  .error-mark img {
+    opacity: 0.35;
+  }
+
+  .error-title {
+    margin: 0;
+    font: var(--weight-semi) var(--text-h2) / var(--lh-h2) var(--font-sans);
+    color: var(--fg);
+  }
+
+  .error-desc {
+    margin: 0;
+    max-width: 38ch;
+    font-size: var(--text-body-lg);
+    line-height: var(--lh-body-lg);
+    color: var(--fg-muted);
+  }
+
+  .error-path {
+    margin: 0;
+    padding: var(--sp-3) var(--sp-5);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--r-md);
+    background: var(--raised);
+    font: var(--weight-medium) var(--text-small) / 1 var(--font-mono);
+    color: var(--fg-faint);
+  }
+
+  .error-actions {
+    @apply flex flex-wrap items-center justify-center gap-sp-4;
+  }
+
+  /* Command palette entrance animation (§14.4 - 230ms scale + translateY) */
+  @keyframes palette-in {
+    from {
+      opacity: 0;
+      transform: scale(0.97) translateY(-6px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+
+  .palette-panel {
+    animation: palette-in 230ms var(--ease, cubic-bezier(0.16, 1, 0.3, 1)) both;
+  }
+
+  /* Onboarding overlay step transition */
+  @keyframes onb-step-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .onb-step {
+    animation: onb-step-in 170ms var(--ease, cubic-bezier(0.16, 1, 0.3, 1)) both;
+  }
+
+  /* Slug disambiguation drop-zone */
+  .drop-zone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--sp-4);
+    padding: var(--sp-8);
+    border: 2px dashed var(--border-subtle);
+    border-radius: var(--r-lg);
+    background: var(--canvas);
+    cursor: pointer;
+    text-align: center;
+    transition: border-color 110ms, background 110ms;
+  }
+
+  .drop-zone:hover,
+  .drop-zone.drag {
+    border-color: var(--accent-border);
+    background: var(--accent-subtle);
+  }
+}

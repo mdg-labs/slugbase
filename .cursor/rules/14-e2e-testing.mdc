@@ -1,0 +1,54 @@
+---
+alwaysApply: true
+---
+
+# E2E testing
+
+## E2E tests must always use `pnpm test:e2e`
+
+All end-to-end Playwright tests are run through the single entrypoint:
+
+```bash
+pnpm test:e2e
+```
+
+This invokes `bash scripts/e2e.sh`, which handles the full lifecycle: spins up ephemeral Postgres, builds packages, starts services, runs Playwright for each deployment mode, and tears everything down.
+
+**Never run Playwright directly** (`npx playwright test ...`, `pnpx playwright test ...`, or any other shortcut). The wrapper script sets up the database, seeds test data, starts the required services on random ports, passes the correct config and project flags, and cleans up afterward. Bypassing it will either fail or produce unreliable results.
+
+### Allowed invocations
+
+```bash
+# both modes (default)
+pnpm test:e2e
+
+# hosted only
+pnpm test:e2e --project=hosted
+
+# self-hosted only
+pnpm test:e2e --project=self-hosted
+
+# single spec directory
+pnpm test:e2e specs/bookmarks/
+
+# debug mode
+pnpm test:e2e --debug
+```
+
+All arguments are forwarded to the underlying Playwright runner.
+
+## Log files
+
+Every `pnpm test:e2e` run streams full terminal output to log files under `e2e/test-results/`:
+
+| Mode | Log file |
+|---|---|
+| Hosted | `e2e/test-results/hosted-output.log` |
+| Self-hosted | `e2e/test-results/self-hosted-output.log` |
+
+These files are **always produced** - the script uses `tee` to capture output while still printing to the terminal. If you need to inspect a failed run, read the relevant log file rather than re-running. The files are overwritten on each run so they always reflect the latest execution.
+
+## Non-goals
+
+- Playwright **e2e is not part of the local CI gate** (spec section 22.4). It runs only on the `staging -> main` PR in CI, or on-demand via `pnpm test:e2e`.
+- Unit and integration tests use `pnpm test:unit` / `pnpm test:integration` - do not confuse these with e2e.

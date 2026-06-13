@@ -1,0 +1,181 @@
+import { initContract } from "@ts-rest/core";
+import { z } from "zod";
+
+const c = initContract();
+
+export const LoginBodySchema = z
+  .object({
+    email: z.string().email(),
+    password: z.string().min(1),
+    rememberMe: z.boolean().optional(),
+  })
+  .strict();
+
+export const LoginResponseSchema = z
+  .object({
+    userId: z.string(),
+    emailVerificationRequired: z.literal(true).optional(),
+  })
+  .strict();
+
+export const LogoutResponseSchema = z
+  .object({
+    ok: z.literal(true),
+  })
+  .strict();
+
+export const MeResponseSchema = z
+  .object({
+    id: z.string(),
+    email: z.string(),
+    name: z.string(),
+    language: z.enum(["en", "de"]),
+    mfaState: z.enum(["not_enrolled", "pending", "enrolled"]),
+    emailVerified: z.boolean(),
+  })
+  .strict();
+
+export const ForgotPasswordBodySchema = z
+  .object({
+    email: z.string().email(),
+  })
+  .strict();
+
+export const ForgotPasswordResponseSchema = z
+  .object({
+    ok: z.literal(true),
+  })
+  .strict();
+
+export const ResetPasswordBodySchema = z
+  .object({
+    token: z.string().min(1),
+    newPassword: z.string().min(12),
+  })
+  .strict();
+
+export const ResetPasswordResponseSchema = z
+  .object({
+    ok: z.literal(true),
+  })
+  .strict();
+
+export const CorrectSignupEmailBodySchema = z
+  .object({
+    email: z.string().trim().email(),
+  })
+  .strict();
+
+export const CorrectSignupEmailResponseSchema = z
+  .object({
+    maskedEmail: z.string(),
+  })
+  .strict();
+
+export type LoginBody = z.infer<typeof LoginBodySchema>;
+export type LoginResponse = z.infer<typeof LoginResponseSchema>;
+export type LogoutResponse = z.infer<typeof LogoutResponseSchema>;
+export type MeResponse = z.infer<typeof MeResponseSchema>;
+export type ForgotPasswordBody = z.infer<typeof ForgotPasswordBodySchema>;
+export type ForgotPasswordResponse = z.infer<typeof ForgotPasswordResponseSchema>;
+export type ResetPasswordBody = z.infer<typeof ResetPasswordBodySchema>;
+export type ResetPasswordResponse = z.infer<typeof ResetPasswordResponseSchema>;
+export type CorrectSignupEmailBody = z.infer<typeof CorrectSignupEmailBodySchema>;
+export type CorrectSignupEmailResponse = z.infer<
+  typeof CorrectSignupEmailResponseSchema
+>;
+
+/** Safe fields for login/register SSO buttons (spec §5.2, §11.3). */
+export const PublicOidcProviderItemSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+  })
+  .strict();
+
+export const ListPublicOidcProvidersResponseSchema = z
+  .object({
+    providers: z.array(PublicOidcProviderItemSchema),
+  })
+  .strict();
+
+export type PublicOidcProviderItem = z.infer<typeof PublicOidcProviderItemSchema>;
+export type ListPublicOidcProvidersResponse = z.infer<
+  typeof ListPublicOidcProvidersResponseSchema
+>;
+
+export const authContract = c.router({
+  login: {
+    method: "POST",
+    path: "/auth/login",
+    body: LoginBodySchema,
+    responses: {
+      200: LoginResponseSchema,
+      401: z.object({ message: z.string() }).strict(),
+    },
+    summary: "Login with email and password",
+  },
+  logout: {
+    method: "POST",
+    path: "/auth/logout",
+    body: c.noBody(),
+    responses: {
+      200: LogoutResponseSchema,
+    },
+    summary: "Logout and revoke the current session",
+  },
+  me: {
+    method: "GET",
+    path: "/auth/me",
+    responses: {
+      200: MeResponseSchema,
+      401: z.object({ message: z.string() }).strict(),
+    },
+    summary: "Get the current authenticated user",
+  },
+  forgotPassword: {
+    method: "POST",
+    path: "/auth/forgot-password",
+    body: ForgotPasswordBodySchema,
+    responses: {
+      200: ForgotPasswordResponseSchema,
+    },
+    summary:
+      "Request a password reset email. Non-enumerating: always returns 200 regardless of whether the email is registered.",
+  },
+  resetPassword: {
+    method: "POST",
+    path: "/auth/reset-password",
+    body: ResetPasswordBodySchema,
+    responses: {
+      200: ResetPasswordResponseSchema,
+      422: z.object({ message: z.string() }).strict(),
+    },
+    summary:
+      "Complete a password reset using a token from the reset email. Invalidates all existing sessions on success.",
+  },
+  correctSignupEmail: {
+    method: "POST",
+    path: "/auth/correct-signup-email",
+    body: CorrectSignupEmailBodySchema,
+    responses: {
+      200: CorrectSignupEmailResponseSchema,
+      401: z.object({ message: z.string() }).strict(),
+      403: z.object({ message: z.string() }).strict(),
+      409: z.object({ message: z.string() }).strict(),
+      422: z.object({ message: z.string() }).strict(),
+      429: z.object({ message: z.string() }).strict(),
+    },
+    summary:
+      "Correct a signup email typo before first verification. Requires an authenticated session and emailVerified=false.",
+  },
+  listOidcProviders: {
+    method: "GET",
+    path: "/auth/oidc/providers",
+    responses: {
+      200: ListPublicOidcProvidersResponseSchema,
+    },
+    summary:
+      "List enabled OIDC providers for login/register SSO buttons (non-sensitive metadata only).",
+  },
+});

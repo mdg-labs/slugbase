@@ -1,0 +1,37 @@
+# syntax=docker/dockerfile:1
+# API-only container (Fly.io hosted API — spec §14.2, §14.7)
+
+FROM node:22-bookworm-slim AS base
+ENV PNPM_HOME="/pnpm"
+ENV PATH="${PNPM_HOME}:${PATH}"
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
+WORKDIR /app
+
+FROM base AS build-deps
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends python3 make g++ \
+  && rm -rf /var/lib/apt/lists/*
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json tsconfig.json ./
+COPY scripts/check-node-version.mjs scripts/check-node-version.mjs
+COPY packages/backend/package.json packages/backend/
+COPY packages/shared-types/package.json packages/shared-types/
+COPY packages/email-templates/package.json packages/email-templates/
+COPY packages/web/package.json packages/web/
+COPY packages/marketing/package.json packages/marketing/
+RUN pnpm install --frozen-lockfile
+
+FROM build-deps AS build
+COPY packages/shared-types packages/shared-types
+COPY packages/email-templates packages/email-templates
+COPY packages/backend packages/backend
+RUN pnpm exec turbo run build --filter=@slugbase/backend...
+
+FROM build AS deploy
+RUN pnpm deploy --filter=@slugbase/backend --prod /prod/backend
+
+FROM base AS runtime
+ENV NODE_ENV=production
+WORKDIR /app
+COPY --from=deploy /prod/backend ./
+EXPOSE 3000
+CMD ["node", "dist/main.js"]

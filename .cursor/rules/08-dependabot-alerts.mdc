@@ -9,7 +9,7 @@ alwaysApply: true
 
 **Never dismiss a Dependabot alert via the GitHub UI or API** (`PATCH state=dismissed`).
 
-The correct resolution is to **upgrade the vulnerable dependency** and land the fix on `main`. GitHub auto-closes the alert when it detects the vulnerability is no longer present in the dependency graph.
+The correct resolution is to **upgrade the vulnerable dependency** and land the fix on **`staging`** (the development integration branch). GitHub auto-closes the alert when it detects the vulnerability is no longer present in the dependency graph on the default branch — promote to `main` only via the release workflow.
 
 ## Why
 

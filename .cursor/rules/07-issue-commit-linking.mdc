@@ -1,0 +1,78 @@
+---
+description: Link every task commit to a GitHub issue for Development panel traceability — use [#N] in subject + fixes #N in body
+alwaysApply: true
+---
+
+# Issue commit linking
+
+Every **task-related** commit must reference a GitHub issue so the **Development** panel links correctly and the issue auto-closes on merge to `main`.
+
+## Required subject format
+
+```
+<type>(<scope>)[#N]: <imperative summary>
+```
+
+| Part | Rule |
+|---|---|
+| `<type>` | Conventional Commits: `feat`, `fix`, `chore`, `refactor`, `docs`, `test`, `ci`, `build`, `perf` |
+| `<scope>` | Allowed scopes from `01-git-workflow.mdc` (`bookmarks`, `auth`, `billing`, `go`, …) |
+| `[#N]` | **Mandatory** on task commits — square brackets, `#` prefix, issue number |
+| Summary | Imperative mood; whole subject ≤72 chars |
+
+## Required body format
+
+The commit body must include a closing keyword so GitHub auto-closes the issue on merge to `main`:
+
+```
+fixes #N
+```
+
+Place this on its own line in the commit body (not the subject). Multiple issues: one per line.
+
+### Issue key precedence
+
+1. **GitHub issue** — `#12` when the task exists on the board (orchestrator GITHUB SYNC, user named `#N`, or roadmap row has a GitHub issue)
+2. **Roadmap only** — `[P2-01]` when no GitHub issue exists yet
+3. **Combined batch** — primary issue number in brackets; list siblings in session memory
+
+### Examples
+
+```bash
+# GOOD — GitHub issue work
+feat(auth)[#12]: add server-side session store with configurable TTL
+
+In the commit body:
+fixes #12
+
+# GOOD — roadmap-only (no GitHub issue)
+feat(workspaces)[P2-01]: implement workspace creation with entitlement check
+
+# GOOD — plan-file verifier commit
+chore(plan)[#12]: mark P1-03 verified
+
+# BAD — key at end (old format)
+feat(auth): add session store (#12)
+
+# BAD — missing key on task work
+feat(auth): add session store
+
+# BAD — no closing keyword in body
+feat(auth)[#12]: add session store
+(no "fixes #12" in body)
+```
+
+## Auto-close on merge
+
+GitHub auto-closes issues referenced with `fixes #N`, `closes #N`, or `resolves #N` in the commit body when merged to the default branch (`main`). The project's built-in "Auto-close issue" workflow is **disabled** — we rely on commit body keywords exclusively.
+
+## Exceptions (no issue key required)
+
+- Pure repo hygiene with no task ID: `chore(repo): init pnpm workspace` (rare; prefer a GitHub issue when in doubt)
+- Integration merge commits: `chore(repo)[#N]: integrate orchestrator batch (<BATCH_ID>)`
+
+## Enforcement
+
+- **Execution agents:** implementation commits include `[#N]` or `[P*-*]` in subject + `fixes #N` in body
+- **Verifiers:** Layer 3 — FAIL if a task commit subject lacks a valid issue number when GitHub sync was in scope
+- **Orchestrator prompts:** pass issue number in the GIT block; see `.cursor/skills/orchestrator/prompt-templates.md`

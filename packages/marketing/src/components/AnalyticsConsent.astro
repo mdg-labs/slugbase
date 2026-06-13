@@ -1,0 +1,101 @@
+---
+import { t } from "../i18n/translate.js";
+
+const umamiHost = import.meta.env.PUBLIC_UMAMI_HOST?.replace(/\/$/, "") ?? "";
+const umamiWebsiteId = import.meta.env.PUBLIC_UMAMI_WEBSITE_ID ?? "";
+const analyticsEnabled = umamiHost.length > 0 && umamiWebsiteId.length > 0;
+
+const consentEn = {
+  message: t("en", "marketing.consent.message"),
+  decline: t("en", "marketing.consent.decline"),
+  accept: t("en", "marketing.consent.accept"),
+};
+const consentDe = {
+  message: t("de", "marketing.consent.message"),
+  decline: t("de", "marketing.consent.decline"),
+  accept: t("de", "marketing.consent.accept"),
+};
+---
+
+{analyticsEnabled && (
+  <>
+    <div
+      id="marketing-consent-banner"
+      class="marketing-consent-banner"
+      role="dialog"
+      aria-live="polite"
+      hidden
+      data-testid="analytics-consent-banner"
+    >
+      <p class="marketing-consent-banner__message" data-consent-message-en>
+        {consentEn.message}
+      </p>
+      <p class="marketing-consent-banner__message" data-consent-message-de hidden>
+        {consentDe.message}
+      </p>
+      <div class="marketing-consent-banner__actions">
+        <button type="button" class="marketing-consent-banner__decline" data-consent-decline data-testid="analytics-consent-decline">
+          <span data-consent-decline-en>{consentEn.decline}</span>
+          <span data-consent-decline-de hidden>{consentDe.decline}</span>
+        </button>
+        <button type="button" class="marketing-consent-banner__accept" data-consent-accept data-testid="analytics-consent-accept">
+          <span data-consent-accept-en>{consentEn.accept}</span>
+          <span data-consent-accept-de hidden>{consentDe.accept}</span>
+        </button>
+      </div>
+    </div>
+    <script
+      define:vars={{ umamiHost, umamiWebsiteId }}
+      is:inline
+    >
+      (function () {
+        const storageKey = "slugbase_analytics_consent";
+        const locale = document.documentElement.lang === "de" ? "de" : "en";
+        const banner = document.getElementById("marketing-consent-banner");
+        if (!banner) return;
+
+        function setLocaleVisibility() {
+          banner.querySelectorAll("[data-consent-message-en], [data-consent-accept-en], [data-consent-decline-en]").forEach((el) => {
+            el.hidden = locale !== "en";
+          });
+          banner.querySelectorAll("[data-consent-message-de], [data-consent-accept-de], [data-consent-decline-de]").forEach((el) => {
+            el.hidden = locale !== "de";
+          });
+        }
+
+        function loadTracker() {
+          if (document.querySelector('script[data-website-id="' + umamiWebsiteId + '"]')) {
+            return;
+          }
+          const script = document.createElement("script");
+          script.defer = true;
+          script.src = umamiHost + "/script.js";
+          script.dataset.websiteId = umamiWebsiteId;
+          document.head.appendChild(script);
+        }
+
+        function applyConsent(granted) {
+          localStorage.setItem(storageKey, granted ? "granted" : "denied");
+          banner.hidden = true;
+          if (granted) {
+            loadTracker();
+          }
+        }
+
+        setLocaleVisibility();
+        const stored = localStorage.getItem(storageKey);
+        if (stored === "granted") {
+          loadTracker();
+          return;
+        }
+        if (stored === "denied") {
+          return;
+        }
+
+        banner.hidden = false;
+        banner.querySelector("[data-consent-accept]")?.addEventListener("click", () => applyConsent(true));
+        banner.querySelector("[data-consent-decline]")?.addEventListener("click", () => applyConsent(false));
+      })();
+    </script>
+  </>
+)}
