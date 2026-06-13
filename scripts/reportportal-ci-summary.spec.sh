@@ -9,8 +9,8 @@ source "${SCRIPT_DIR}/reportportal-ci-summary.sh"
 TMPDIR="${TMPDIR:-/tmp}"
 STATE_FILE="${TMPDIR}/rp-launches-test-$$.jsonl"
 export RP_LAUNCHES_FILE="$STATE_FILE"
-export REPORTPORTAL_URL="https://reportportal.example.com"
-export REPORTPORTAL_PROJECT="slugbase"
+export REPORTPORTAL_SUMMARY_URL="https://reportportal.example.com"
+export REPORTPORTAL_SUMMARY_PROJECT="slugbase"
 
 cleanup() {
   rm -f "$STATE_FILE"
@@ -38,8 +38,8 @@ EOF
 
 # launch-url
 assert_eq \
-  "https://reportportal.example.com/ui/%23slugbase/launches/all/61ce1c26-842a-4bde-9abe-a4696e31d626" \
-  "$(reportportal_launch_url "61ce1c26-842a-4bde-9abe-a4696e31d626")" \
+  "https://reportportal.example.com/ui/#slugbase/launches/all/61ce1c26-842a-4bde-9abe-a4696e31d626" \
+  "$(REPORTPORTAL_SUMMARY_URL=https://reportportal.example.com reportportal_launch_url "61ce1c26-842a-4bde-9abe-a4696e31d626")" \
   "launch-url"
 
 # parse-uuids (dedupe)
@@ -59,9 +59,10 @@ assert_eq "bbbbbbbb-cccc-dddd-eeee-ffffffffffff" "${LEGACY_UUIDS[0]}" "legacy pa
 reportportal_record_log "unit" "$LOG_FILE"
 assert_eq "2" "$(wc -l <"$STATE_FILE" | tr -d ' ')" "record-log count"
 
-MD=$(reportportal_build_launch_markdown "ReportPortal · CI")
+MD=$(reportportal_build_launch_html "ReportPortal · CI")
 echo "$MD" | grep -q "61ce1c26-842a-4bde-9abe-a4696e31d626"
-echo "$MD" | grep -q "reportportal.example.com/ui/%23slugbase/launches/all/"
+echo "$MD" | grep -q 'href="https://reportportal.example.com/ui/#slugbase/launches/all/'
+echo "$MD" | grep -q "<strong>unit</strong>"
 
 # record-env
 export RP_LAUNCH_UUID="ffffffff-1111-2222-3333-444444444444"

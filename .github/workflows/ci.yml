@@ -149,22 +149,6 @@ jobs:
       - name: Dependency audit
         run: pnpm audit --audit-level=high
 
-      - name: ReportPortal job summary
-        if: always()
-        env:
-          REPORTPORTAL_SUMMARY_URL: https://reportportal.mdg-labs.dev
-          REPORTPORTAL_SUMMARY_PROJECT: slugbase
-        run: bash scripts/reportportal-ci-summary.sh write-summary ci
-
-      - name: ReportPortal PR comment
-        if: always() && github.event_name == 'pull_request'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_PR_NUMBER: ${{ github.event.pull_request.number }}
-          REPORTPORTAL_SUMMARY_URL: https://reportportal.mdg-labs.dev
-          REPORTPORTAL_SUMMARY_PROJECT: slugbase
-        run: bash scripts/reportportal-ci-summary.sh update-pr-comment ci
-
       - name: Upload ReportPortal launch state
         if: always()
         uses: actions/upload-artifact@v4
@@ -172,6 +156,38 @@ jobs:
           name: reportportal-ci-launches
           path: reportportal-launches.jsonl
           if-no-files-found: ignore
+
+      - name: ReportPortal summary pointer
+        if: always()
+        run: echo 'ReportPortal launch links are in the **CI · ReportPortal summary** job below.' >> "$GITHUB_STEP_SUMMARY"
+
+  reportportal-summary:
+    name: CI · ReportPortal summary
+    needs: ci
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download ReportPortal launch state
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: reportportal-ci-launches
+
+      - name: ReportPortal job summary
+        if: always()
+        run: bash scripts/reportportal-ci-summary.sh write-summary ci
+
+      - name: ReportPortal PR comment
+        if: always() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: bash scripts/reportportal-ci-summary.sh update-pr-comment ci
 
   deploy-staging:
     if: >

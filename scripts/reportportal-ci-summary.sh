@@ -2,21 +2,35 @@
 # ReportPortal CI helpers — parse launch UUIDs, write job summary, upsert PR comments.
 #
 # State file (JSONL): {"layer":"<label>","uuid":"<uuid>"}
-# Launch URL: ${REPORTPORTAL_URL}/ui/#${REPORTPORTAL_PROJECT}/launches/all/{uuid}
+# Launch URL: ${REPORTPORTAL_SUMMARY_URL}/ui/#${REPORTPORTAL_SUMMARY_PROJECT}/launches/all/{uuid}
+#
+# Job summary and PR links MUST run in a job without Infisical / REPORTPORTAL_API_KEY in env.
+# GitHub masks secret substrings everywhere in that job's output (including GITHUB_STEP_SUMMARY),
+# which corrupts launch UUIDs and breaks markdown hrefs.
 set -euo pipefail
 
 STATE_FILE="${RP_LAUNCHES_FILE:-reportportal-launches.jsonl}"
 MARKER_CI='<!-- reportportal-ci -->'
 MARKER_E2E='<!-- reportportal-e2e -->'
+REPORTPORTAL_UI_BASE_DEFAULT="https://reportportal.mdg-labs.dev"
+REPORTPORTAL_PROJECT_DEFAULT="slugbase"
+
+reportportal_summary_base_url() {
+  printf '%s' "${REPORTPORTAL_SUMMARY_URL:-$REPORTPORTAL_UI_BASE_DEFAULT}"
+}
+
+reportportal_summary_project() {
+  printf '%s' "${REPORTPORTAL_SUMMARY_PROJECT:-$REPORTPORTAL_PROJECT_DEFAULT}"
+}
 
 reportportal_launch_url() {
   local uuid="$1"
-  # Use explicit public URL vars for summaries — Infisical-injected REPORTPORTAL_* can be
-  # secret-masked in GITHUB_STEP_SUMMARY / PR bodies, breaking markdown hrefs.
-  local base_url="${REPORTPORTAL_SUMMARY_URL:-${REPORTPORTAL_PUBLIC_URL:-${REPORTPORTAL_URL:-https://reportportal.mdg-labs.dev}}}"
-  local project="${REPORTPORTAL_SUMMARY_PROJECT:-${REPORTPORTAL_PUBLIC_PROJECT:-${REPORTPORTAL_PROJECT:-slugbase}}}"
-  # Encode # as %23 — bare hash in markdown links is treated as a fragment on github.com.
-  printf '%s/ui/%%23%s/launches/all/%s' "${base_url%/}" "$project" "$uuid"
+  local base_url
+  local project
+  base_url="$(reportportal_summary_base_url)"
+  project="$(reportportal_summary_project)"
+  # HTML / autolink href — literal # is correct inside href; do not use markdown [text](url).
+  printf '%s/ui/#%s/launches/all/%s' "${base_url%/}" "$project" "$uuid"
 }
 
 # Extract unique launch UUIDs from a log file or stdin.
@@ -65,7 +79,28 @@ reportportal_has_launches() {
   [ -f "$STATE_FILE" ] && [ -s "$STATE_FILE" ]
 }
 
-# Build markdown bullet list grouped by layer label.
+# Build HTML bullet list for job summary and PR comments (avoids markdown # fragment bugs).
+reportportal_build_launch_html() {
+  local title="$1"
+  if ! reportportal_has_launches; then
+    return 0
+  fi
+
+  echo "<h3>${title}</h3>"
+  echo "<ul>"
+
+  local layer uuid url
+  while IFS= read -r line; do
+    layer=$(echo "$line" | jq -r '.layer')
+    uuid=$(echo "$line" | jq -r '.uuid')
+    url=$(reportportal_launch_url "$uuid")
+    echo "<li><strong>${layer}</strong>: <a href=\"${url}\">View launch</a> <code>${uuid}</code></li>"
+  done < <(sort -u "$STATE_FILE")
+
+  echo "</ul>"
+}
+
+# Deprecated markdown builder — kept for tests / local debugging only.
 reportportal_build_launch_markdown() {
   local title="$1"
   if ! reportportal_has_launches; then
@@ -80,7 +115,7 @@ reportportal_build_launch_markdown() {
     layer=$(echo "$line" | jq -r '.layer')
     uuid=$(echo "$line" | jq -r '.uuid')
     url=$(reportportal_launch_url "$uuid")
-    echo "- **${layer}**: [View launch (${uuid})](${url})"
+    echo "- **${layer}**: <${url}>"
   done < <(sort -u "$STATE_FILE")
 
   echo ""
@@ -94,13 +129,13 @@ reportportal_write_summary() {
   fi
 
   if [ -z "${GITHUB_STEP_SUMMARY:-}" ]; then
-    reportportal_build_launch_markdown "ReportPortal · ${workflow}"
+    reportportal_build_launch_html "ReportPortal · ${workflow}"
     return 0
   fi
 
   {
     echo ""
-    reportportal_build_launch_markdown "ReportPortal · ${workflow}"
+    reportportal_build_launch_html "ReportPortal · ${workflow}"
   } >>"$GITHUB_STEP_SUMMARY"
 }
 
@@ -124,8 +159,8 @@ reportportal_build_pr_body() {
 
   {
     echo "$marker"
-    reportportal_build_launch_markdown "$title"
-    echo "_Workflow run: [${GITHUB_RUN_ID:-local}](${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-}/actions/runs/${GITHUB_RUN_ID:-})_"
+    reportportal_build_launch_html "$title"
+    echo "<p><em>Workflow run: <a href=\"${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-}/actions/runs/${GITHUB_RUN_ID:-}\">${GITHUB_RUN_ID:-local}</a></em></p>"
   }
 }
 

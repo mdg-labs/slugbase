@@ -393,6 +393,8 @@ Agent wiring (`@reportportal/agent-js-vitest`, `@reportportal/agent-js-playwrigh
 
 **CI launch grouping:** GitHub Actions starts one shared launch per layer (`SlugBase · Unit · CI #<run>` / `SlugBase · Integration · CI #<run>`) and sets ephemeral `RP_LAUNCH_ID` on the runner before Turbo fan-out. Package reporters attach to that launch (attribute `package` still identifies the workspace package). Not stored in Infisical.
 
+**CI summary links:** Launch UUIDs are uploaded as a workflow artifact; the separate `CI · ReportPortal summary` job (no Infisical / no `REPORTPORTAL_API_KEY` in env) writes HTML links to the job summary and PR comment. This avoids GitHub secret masking corrupting UUID substrings in markdown hrefs.
+
 ---
 
 ## GitHub Actions secrets (not in Infisical)

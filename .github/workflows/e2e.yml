@@ -300,9 +300,6 @@ jobs:
 
       - name: ReportPortal job summary
         if: always()
-        env:
-          REPORTPORTAL_SUMMARY_URL: https://reportportal.mdg-labs.dev
-          REPORTPORTAL_SUMMARY_PROJECT: slugbase
         run: bash scripts/reportportal-ci-summary.sh write-summary e2e
 
       - name: ReportPortal PR comment
@@ -310,6 +307,4 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_PR_NUMBER: ${{ github.event.pull_request.number }}
-          REPORTPORTAL_SUMMARY_URL: https://reportportal.mdg-labs.dev
-          REPORTPORTAL_SUMMARY_PROJECT: slugbase
         run: bash scripts/reportportal-ci-summary.sh update-pr-comment e2e
