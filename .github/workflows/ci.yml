@@ -22,8 +22,57 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  changes:
+    name: CI · Path filter
+    runs-on: ubuntu-latest
+    outputs:
+      docs-public: ${{ steps.filter.outputs.docs-public }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Detect changed paths
+        uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f3f63b57bf86a0e # v3.0.2
+        id: filter
+        with:
+          filters: |
+            docs-public:
+              - 'docs/public/**'
+              - 'scripts/validate-docs-public.mjs'
+              - 'scripts/validate-docs-public.spec.mjs'
+
+  validate-docs-public:
+    name: CI · Public docs
+    needs: changes
+    if: needs.changes.outputs.docs-public == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
+        with:
+          version: 9.15.4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.12
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate public docs
+        run: pnpm validate:docs-public
+
+      - name: Public docs script tests
+        run: pnpm test:scripts -- scripts/validate-docs-public.spec.mjs
+
   ci:
     name: CI · Checks
+    needs: changes
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -201,16 +250,22 @@ jobs:
 
   deploy-staging:
     if: >
+      always() &&
+      needs.ci.result == 'success' &&
+      (needs.validate-docs-public.result == 'success' || needs.validate-docs-public.result == 'skipped') &&
       github.event_name == 'push' &&
       github.ref == 'refs/heads/staging'
-    needs: ci
+    needs: [ci, validate-docs-public]
     uses: ./.github/workflows/deploy-staging.yml
     secrets: inherit
 
   prepare-release:
     if: >
+      always() &&
+      needs.ci.result == 'success' &&
+      (needs.validate-docs-public.result == 'success' || needs.validate-docs-public.result == 'skipped') &&
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main'
-    needs: ci
+    needs: [ci, validate-docs-public]
     uses: ./.github/workflows/prepare-release.yml
     secrets: inherit

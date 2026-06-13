@@ -1,0 +1,154 @@
+---
+description: Documentation.AI authoring for customer/operator docs in docs/public/. Publish contract, MDX frontmatter, navigation, and component usage. Parent epic #392.
+globs: docs/public/**/*.mdx
+alwaysApply: false
+---
+
+# Documentation.AI — SlugBase public docs
+
+You are writing **customer and operator** documentation published via [Documentation.AI](https://documentation.ai). Source lives in `docs/public/` in the SlugBase monorepo and syncs flat to [`mdg-labs/slugbase-docs`](https://github.com/mdg-labs/slugbase-docs) on push to `main` (see #396). Engineering specs stay in `docs/internal/` and are **never** synced.
+
+**Authoring guide:** `docs/public/README.md` · **Validation:** `pnpm validate:docs-public` · **Parent contract:** GitHub #392
+
+## Publish mirror (slugbase → slugbase-docs)
+
+Paths under `docs/public/` become the **same paths** at the `slugbase-docs` repo root after sync:
+
+```text
+docs/public/documentation.json     →  documentation.json
+docs/public/selfhosted/quick-start.mdx  →  selfhosted/quick-start.mdx
+docs/public/cloud/api-reference/cloud-openapi.yaml  →  cloud/api-reference/cloud-openapi.yaml
+```
+
+Published URLs mirror file paths (no `.mdx` suffix): `selfhosted/quick-start.mdx` → `/selfhosted/quick-start`.
+
+## Product vocabulary (spec §3 — mandatory in public docs)
+
+| Use | Never use |
+|-----|-----------|
+| workspace | organization, org, tenant |
+| folder | collection |
+| pinned / pinning | favorite, starred |
+| member | user (for workspace membership) |
+| slug | alias, shortlink, keyword |
+| forwarding / go | redirect (in user-facing copy) |
+
+If a reader needs to be a SlugBase **developer** to understand a page, it belongs in `docs/internal/`, not here.
+
+## Page files (MDX)
+
+Every page **must** start with YAML frontmatter:
+
+```yaml
+---
+title: "Clear, specific, keyword-rich title"
+description: "Concise description explaining page purpose and value"
+---
+```
+
+- H1 comes from frontmatter `title` — start body content with `##` (H2)
+- Filenames: **lowercase-with-hyphens** (`quick-start.mdx`, not `QuickStart.mdx`)
+- Internal links: **root-absolute** — `[Quick start](/selfhosted/quick-start)`, not relative `../`
+- Images: root-absolute — `![alt](/assets/intro-hero.png)`
+- Never commit secrets, API keys, or real credentials in examples
+
+## documentation.json (navigation)
+
+Lives at `docs/public/documentation.json`. Controls branding, navbar, sidebar, and OpenAPI wiring.
+
+**Adding a page requires both:**
+
+1. Create `docs/public/{product}/{page}.mdx` with frontmatter
+2. Add a `path` entry in the correct `navigation.products → tabs → groups → pages` chain
+
+| `documentation.json` | File on disk |
+|----------------------|--------------|
+| `"path": "selfhosted/quick-start"` | `selfhosted/quick-start.mdx` |
+| `"path": "cloud/billing"` | `cloud/billing.mdx` |
+
+- `path` is relative to repo root, **no** `.mdx` suffix
+- `title` in JSON is sidebar label (can differ from frontmatter `title`)
+- `icon` optional — Lucide name (e.g. `"zap"`, `"book-open"`)
+- `href` instead of `path` for **external** links only
+- Each nav container uses **one** child type: `groups` OR `pages` OR `dropdowns`, not a mix
+
+**OpenAPI API tabs:** specs live beside product guides:
+
+- `selfhosted/api-reference/selfhosted-openapi.yaml`
+- `cloud/api-reference/cloud-openapi.yaml`
+
+Reference from a nav **group** via `"openapi": "…"`. Documentation.AI generates API pages from the spec.
+
+Run `pnpm validate:docs-public` before committing changes under `docs/public/`.
+
+---
+
+## Core writing principles
+
+### Language and style
+
+- Clear, direct language for technical audiences
+- Second person ("you") for instructions; active voice; present tense for current states
+- Define jargon on first use; consistent terminology
+- Concise sentences; parallel structure in lists and headings
+
+### Content organization
+
+- Lead with the most important information
+- Progressive disclosure: basics before advanced topics
+- Numbered steps for procedures; prerequisites before instructions
+- Descriptive, keyword-rich headings (H2 → H3 → H4)
+- Verification steps so readers can confirm success
+
+### User-centered approach
+
+- Focus on user goals and outcomes, not internal implementation
+- Anticipate common questions; include troubleshooting for likely failures
+- Write for scannability: headings, lists, callouts, white space
+
+## Documentation.AI components
+
+**Attribute naming:** kebab-case (`param-type`, `default-open`, `show-lines`). Boolean attributes: `required="true"` or `horizontal={true}`.
+
+**Icons:** Lucide names without suffix — `icon="zap"`, `icon="book-open"` ([Lucide icons](https://lucide.dev/icons/)).
+
+### Callouts
+
+Use `<Callout kind="info|tip|alert|danger|success">` for supplementary, best-practice, caution, high-risk, and confirmation content.
+
+### Code
+
+- Fenced blocks with language tag; optional `title="filename.ext"`
+- `<CodeGroup>` for multi-language equivalents
+- `<Request>` / `<Response>` for API endpoint sidebar examples
+- Complete, runnable examples with realistic (non-secret) data
+
+### Structure
+
+- `<Steps>` for sequential procedures (prefer over long ordered lists)
+- `<Tabs>` for platform-specific or alternative approaches
+- `<Expandable>` / `<ExpandableGroup>` for progressive disclosure
+- `<Card title="…" href="…">` inside `<Columns>` for navigation grids
+- `<ParamField>` / `<ResponseField>` for API parameters and responses
+- `<Update>` for changelogs and release notes
+- Mermaid for flowcharts and sequence diagrams
+
+### Component selection
+
+| Need | Use |
+|------|-----|
+| Page structure | Markdown H2–H4 |
+| Procedures | `<Steps>` |
+| Platform variants | `<Tabs>` |
+| Multi-language code | `<CodeGroup>` |
+| API params/responses | `<ParamField>`, `<ResponseField>`, `<Request>`, `<Response>` |
+| Highlights | `<Callout>` |
+| Navigation grids | `<Card>` in `<Columns>` |
+| Media | `<Image>`, `<Video>`, `<Iframe>` |
+
+## References
+
+- [Documentation.AI code editor](https://documentation.ai/docs/write-and-publish/code-editor)
+- [Site configuration](https://documentation.ai/docs/customize/site-configuration)
+- [documentation.json schema](https://dashboard.documentation.ai/documentation.json)
+- SlugBase publish contract: GitHub issue #392
