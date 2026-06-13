@@ -2,6 +2,8 @@ import * as Sentry from "@sentry/nestjs";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { buildSentryLoggingOptions } from "./logging/sentry-log-config.js";
+
 const SENTRY_DSN = process.env.SENTRY_DSN;
 const SENTRY_ENVIRONMENT =
   process.env.SENTRY_ENVIRONMENT ?? process.env.NODE_ENV ?? "production";
@@ -32,6 +34,8 @@ const profileSessionSampleRate = Number.parseFloat(
 );
 
 if (SENTRY_DSN) {
+  const loggingOptions = buildSentryLoggingOptions(process.env);
+
   Sentry.init({
     dsn: SENTRY_DSN,
     environment: SENTRY_ENVIRONMENT,
@@ -65,6 +69,8 @@ if (SENTRY_DSN) {
       : 0.1,
     profileLifecycle: "trace",
     enableLogs: true,
+    beforeSendLog: loggingOptions.beforeSendLog,
+    integrations: loggingOptions.integrations,
     beforeSend(event) {
       if (event.user) {
         delete event.user.email;

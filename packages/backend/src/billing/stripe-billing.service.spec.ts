@@ -5,6 +5,14 @@ import { BillingSeatFloorError } from "@slugbase/shared-types";
 import type { ConfigService } from "../config/config.service.js";
 import { StripeBillingService, type StripeBillingClient } from "./stripe-billing.service.js";
 
+function createErrorReporting() {
+  return {
+    isConfigured: () => false,
+    captureException: vi.fn(),
+    captureMessage: vi.fn(),
+  };
+}
+
 function createConfig(overrides: Partial<Record<string, string>> = {}) {
   const values: Record<string, string | undefined> = {
     STRIPE_SECRET_KEY: "sk_test_example",
@@ -72,14 +80,14 @@ function createStripeClient(
 
 describe("StripeBillingService", () => {
   it("reports available when Stripe key is configured", () => {
-    const service = new StripeBillingService(createConfig(), createStripeClient());
+    const service = new StripeBillingService(createConfig(), createStripeClient(), createErrorReporting());
     expect(service.isAvailable()).toBe(true);
     expect(service.isPlanGatingEnabled()).toBe(true);
   });
 
   it("maps subscription state from Stripe", async () => {
     const stripe = createStripeClient();
-    const service = new StripeBillingService(createConfig(), stripe);
+    const service = new StripeBillingService(createConfig(), stripe, createErrorReporting());
 
     const state = await service.getSubscriptionState({
       workspaceId: "ws-1",
@@ -93,7 +101,7 @@ describe("StripeBillingService", () => {
 
   it("creates checkout sessions via Stripe", async () => {
     const stripe = createStripeClient();
-    const service = new StripeBillingService(createConfig(), stripe);
+    const service = new StripeBillingService(createConfig(), stripe, createErrorReporting());
 
     const session = await service.createCheckoutSession({
       workspaceId: "ws-1",
@@ -117,7 +125,7 @@ describe("StripeBillingService", () => {
     const stripe = createStripeClient({
       checkout: { sessions: { create: createMock } },
     });
-    const service = new StripeBillingService(createConfig(), stripe);
+    const service = new StripeBillingService(createConfig(), stripe, createErrorReporting());
 
     await service.createCheckoutSession({
       workspaceId: "ws-1",
@@ -142,7 +150,7 @@ describe("StripeBillingService", () => {
     const stripe = createStripeClient({
       checkout: { sessions: { create: createMock } },
     });
-    const service = new StripeBillingService(createConfig(), stripe);
+    const service = new StripeBillingService(createConfig(), stripe, createErrorReporting());
 
     await service.createCheckoutSession({
       workspaceId: "ws-1",
@@ -169,7 +177,7 @@ describe("StripeBillingService", () => {
     const stripe = createStripeClient({
       checkout: { sessions: { create: createMock } },
     });
-    const service = new StripeBillingService(createConfig(), stripe);
+    const service = new StripeBillingService(createConfig(), stripe, createErrorReporting());
 
     await service.createCheckoutSession({
       workspaceId: "ws-1",
@@ -199,7 +207,7 @@ describe("StripeBillingService", () => {
     const stripe = createStripeClient({
       checkout: { sessions: { create: createMock } },
     });
-    const service = new StripeBillingService(createConfig(), stripe);
+    const service = new StripeBillingService(createConfig(), stripe, createErrorReporting());
 
     await service.createCheckoutSession({
       workspaceId: "ws-1",
@@ -217,7 +225,7 @@ describe("StripeBillingService", () => {
   });
 
   it("enforces seat floor on quantity updates", async () => {
-    const service = new StripeBillingService(createConfig(), createStripeClient());
+    const service = new StripeBillingService(createConfig(), createStripeClient(), createErrorReporting());
 
     await expect(
       service.updateSeatQuantity({
@@ -230,7 +238,7 @@ describe("StripeBillingService", () => {
   });
 
   it("processes subscription webhook events", async () => {
-    const service = new StripeBillingService(createConfig(), createStripeClient());
+    const service = new StripeBillingService(createConfig(), createStripeClient(), createErrorReporting());
     const payload = {
       id: "evt_sub_updated",
       type: "customer.subscription.updated",
@@ -253,7 +261,7 @@ describe("StripeBillingService", () => {
   });
 
   it("maps supporter checkout completion to Personal-permanent", async () => {
-    const service = new StripeBillingService(createConfig(), createStripeClient());
+    const service = new StripeBillingService(createConfig(), createStripeClient(), createErrorReporting());
 
     const result = await service.handleAsyncEvent({
       eventId: "evt_checkout_done",
