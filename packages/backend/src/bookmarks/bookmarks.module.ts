@@ -9,6 +9,7 @@ import { BulkBookmarksService } from "./bulk/bulk.service.js";
 import { MetadataModule } from "./metadata/metadata.module.js";
 import { BookmarksController } from "./bookmarks.controller.js";
 import { BookmarksService } from "./bookmarks.service.js";
+import { BOOKMARKS_SERVICE } from "./bookmarks.tokens.js";
 
 @Module({
   imports: [
@@ -19,7 +20,11 @@ import { BookmarksService } from "./bookmarks.service.js";
     forwardRef(() => SlugsModule),
   ],
   controllers: [BookmarksController, BulkBookmarksController],
-  providers: [BookmarksService, BulkBookmarksService],
-  exports: [BookmarksService, BulkBookmarksService],
+  providers: [
+    BookmarksService,
+    BulkBookmarksService,
+    { provide: BOOKMARKS_SERVICE, useExisting: BookmarksService },
+  ],
+  exports: [BookmarksService, BulkBookmarksService, BOOKMARKS_SERVICE],
 })
 export class BookmarksModule {}

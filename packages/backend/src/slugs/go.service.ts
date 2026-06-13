@@ -4,9 +4,11 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
+import { ModuleRef } from "@nestjs/core";
 
 import { assertSlugValid } from "../bookmarks/bookmark.validation.js";
-import { BookmarksService } from "../bookmarks/bookmarks.service.js";
+import type { BookmarksService } from "../bookmarks/bookmarks.service.js";
+import { BOOKMARKS_SERVICE } from "../bookmarks/bookmarks.tokens.js";
 import { DbService } from "../db/db.service.js";
 import type { WorkspaceRecord } from "../workspaces/workspace.types.js";
 import { SlugRepository } from "./slug.repository.js";
@@ -50,9 +52,13 @@ export class GoService {
 
   constructor(
     @Inject(DbService) db: DbService,
-    @Inject(BookmarksService) private readonly bookmarks: BookmarksService,
+    @Inject(ModuleRef) private readonly moduleRef: ModuleRef,
   ) {
     this.repo = new SlugRepository(db.getOrm());
+  }
+
+  private get bookmarks(): BookmarksService {
+    return this.moduleRef.get(BOOKMARKS_SERVICE, { strict: false });
   }
 
   validateSlugForGo(slug: string): void {

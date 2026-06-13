@@ -2,16 +2,17 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
-  forwardRef,
   Inject,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
+import { ModuleRef } from "@nestjs/core";
 
 import { DbService } from "../db/db.service.js";
 import { AuthzService } from "../common/authz/authz.service.js";
 import { EntitlementsService } from "../entitlements/entitlements.service.js";
-import { GoService } from "../slugs/go.service.js";
+import type { GoService } from "../slugs/go.service.js";
+import { GO_SERVICE } from "../slugs/go.tokens.js";
 import { WorkspaceDataGuard } from "../workspaces/workspace-data.guard.js";
 import type { WorkspaceRecord } from "../workspaces/workspace.types.js";
 import { BookmarkRepository } from "./bookmark.repository.js";
@@ -43,9 +44,13 @@ export class BookmarksService {
     @Inject(WorkspaceDataGuard) private readonly wsDataGuard: WorkspaceDataGuard,
     @Inject(EntitlementsService) private readonly entitlements: EntitlementsService,
     @Inject(AuthzService) private readonly authz: AuthzService,
-    @Inject(forwardRef(() => GoService)) private readonly goService: GoService,
+    @Inject(ModuleRef) private readonly moduleRef: ModuleRef,
   ) {
     this.repo = new BookmarkRepository(db.getOrm());
+  }
+
+  private get goService(): GoService {
+    return this.moduleRef.get(GO_SERVICE, { strict: false });
   }
 
   async createBookmark(
