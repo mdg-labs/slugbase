@@ -32,6 +32,10 @@ export const SlugPreferenceSchema = z
     slug: slugParamSchema,
     bookmarkId: z.string(),
     createdAt: z.string().datetime(),
+    bookmarkTitle: z.string(),
+    bookmarkUrl: z.string(),
+    ownerUserId: z.string(),
+    isAmbiguous: z.boolean(),
   })
   .strict();
 
@@ -82,7 +86,8 @@ export const slugsContract = c.router({
       403: errorSchema,
       404: errorSchema,
     },
-    summary: "Choose a bookmark for an ambiguous slug and optionally remember it",
+    summary:
+      "Choose a bookmark for an ambiguous slug; set remember: true to create or update a slug preference (management UI edit)",
   },
   listSlugPreferences: {
     method: "GET",
@@ -92,7 +97,8 @@ export const slugsContract = c.router({
       401: errorSchema,
       403: errorSchema,
     },
-    summary: "List remembered slug-to-bookmark mappings for the current user",
+    summary:
+      "List remembered slug-to-bookmark mappings for the current user with bookmark details and ambiguity status",
   },
   removeSlugPreference: {
     method: "DELETE",

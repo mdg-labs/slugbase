@@ -9,6 +9,13 @@ export interface SlugPreferenceRecord {
   createdAt: Date;
 }
 
+export interface EnrichedSlugPreferenceRecord extends SlugPreferenceRecord {
+  bookmarkTitle: string;
+  bookmarkUrl: string;
+  ownerUserId: string;
+  isAmbiguous: boolean;
+}
+
 export interface GoCandidate {
   id: string;
   title: string;

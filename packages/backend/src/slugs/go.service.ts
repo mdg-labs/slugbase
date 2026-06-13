@@ -12,12 +12,37 @@ import type { WorkspaceRecord } from "../workspaces/workspace.types.js";
 import { SlugRepository } from "./slug.repository.js";
 import type {
   AccessibleForwardingMatch,
+  EnrichedSlugPreferenceRecord,
   GoCandidate,
   GoDisambiguationResult,
   GoRedirectResult,
   GoResolveResult,
   SlugPreferenceRecord,
 } from "./slug.types.js";
+
+/** True when the slug still resolves to two or more accessible forwarding matches. */
+export function isSlugAmbiguous(matchCount: number): boolean {
+  return matchCount >= 2;
+}
+
+/** Maps a stored preference to its enriched list shape, or null when the bookmark is stale. */
+export function enrichSlugPreference(
+  preference: SlugPreferenceRecord,
+  matches: AccessibleForwardingMatch[],
+): EnrichedSlugPreferenceRecord | null {
+  const preferred = matches.find((match) => match.id === preference.bookmarkId);
+  if (!preferred) {
+    return null;
+  }
+
+  return {
+    ...preference,
+    bookmarkTitle: preferred.title,
+    bookmarkUrl: preferred.url,
+    ownerUserId: preferred.userId,
+    isAmbiguous: isSlugAmbiguous(matches.length),
+  };
+}
 
 @Injectable()
 export class GoService {
@@ -194,8 +219,25 @@ export class GoService {
   async listPreferences(
     workspace: WorkspaceRecord,
     userId: string,
-  ): Promise<SlugPreferenceRecord[]> {
-    return this.repo.listSlugPreferences(workspace.id, userId);
+  ): Promise<EnrichedSlugPreferenceRecord[]> {
+    const preferences = await this.repo.listSlugPreferences(workspace.id, userId);
+    const items: EnrichedSlugPreferenceRecord[] = [];
+
+    for (const preference of preferences) {
+      const matches = await this.repo.findAccessibleForwardingMatches(
+        workspace.id,
+        userId,
+        preference.slug,
+      );
+      const enriched = enrichSlugPreference(preference, matches);
+      if (!enriched) {
+        await this.repo.deleteSlugPreference(workspace.id, userId, preference.id);
+        continue;
+      }
+      items.push(enriched);
+    }
+
+    return items;
   }
 
   async removePreference(

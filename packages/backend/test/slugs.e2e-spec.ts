@@ -278,10 +278,28 @@ describe("Slugs + /go (integration)", () => {
       expect(res.status).toBe(302);
       expect(res.headers.location).toBe("https://chosen.example.com");
 
-      const prefs = await goService.listPreferences(workspace, ownerUserId);
-      expect(prefs.some((p) => p.slug === "choose-me" && p.bookmarkId === chosen.id)).toBe(
-        true,
+      const listRes = await request(server())
+        .get("/go/preferences")
+        .set("Cookie", sessionCookie);
+      expect(listRes.status).toBe(200);
+      const listBody = listRes.body as {
+        items: Array<{
+          slug: string;
+          bookmarkId: string;
+          bookmarkTitle: string;
+          bookmarkUrl: string;
+          ownerUserId: string;
+          isAmbiguous: boolean;
+        }>;
+      };
+      const item = listBody.items.find(
+        (entry) => entry.slug === "choose-me" && entry.bookmarkId === chosen.id,
       );
+      expect(item).toBeDefined();
+      expect(item?.bookmarkTitle).toBe("Choose Target");
+      expect(item?.bookmarkUrl).toBe("https://chosen.example.com");
+      expect(item?.ownerUserId).toBe(ownerUserId);
+      expect(item?.isAmbiguous).toBe(true);
 
       spy.mockRestore();
     });
@@ -305,8 +323,23 @@ describe("Slugs + /go (integration)", () => {
         .get("/go/preferences")
         .set("Cookie", sessionCookie);
       expect(listRes.status).toBe(200);
-      const listBody = listRes.body as { items: Array<{ id: string; slug: string }> };
-      expect(listBody.items.some((item) => item.id === created.id)).toBe(true);
+      const listBody = listRes.body as {
+        items: Array<{
+          id: string;
+          slug: string;
+          bookmarkTitle: string;
+          bookmarkUrl: string;
+          ownerUserId: string;
+          isAmbiguous: boolean;
+        }>;
+      };
+      const listed = listBody.items.find((item) => item.id === created.id);
+      expect(listed).toBeDefined();
+      expect(listed?.slug).toBe("pref-list");
+      expect(listed?.bookmarkTitle).toBe("Pref List");
+      expect(listed?.bookmarkUrl).toBe("https://pref-list.example.com");
+      expect(listed?.ownerUserId).toBe(ownerUserId);
+      expect(listed?.isAmbiguous).toBe(false);
 
       const deleteRes = await request(server())
         .delete(`/go/preferences/${created.id}`)
@@ -409,7 +442,9 @@ describe("Slugs + /go (integration)", () => {
       await goService.reEvaluateSlugPreference(workspaceId, ownerUserId, "prune-delete");
       spy.mockRestore();
 
-      const beforeDelete = await goService.listPreferences(workspace, ownerUserId);
+      const beforeDelete = await goService
+        .getRepository()
+        .listSlugPreferences(workspaceId, ownerUserId);
       expect(beforeDelete.some((p) => p.slug === "prune-delete")).toBe(true);
 
       await bookmarksService.deleteBookmark(workspace, ownerUserId, removed.id);

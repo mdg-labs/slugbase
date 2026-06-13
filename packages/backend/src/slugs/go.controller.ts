@@ -17,7 +17,7 @@ import { ActiveWorkspace } from "../workspaces/active-workspace.decorator.js";
 import { TenantGuard, TENANT_USER_ID_KEY } from "../workspaces/tenant.guard.js";
 import type { WorkspaceRecord } from "../workspaces/workspace.types.js";
 import { GoService } from "./go.service.js";
-import type { GoResolveResult, SlugPreferenceRecord } from "./slug.types.js";
+import type { GoResolveResult, EnrichedSlugPreferenceRecord } from "./slug.types.js";
 
 @Controller("go")
 @UseGuards(TenantGuard)
@@ -29,13 +29,15 @@ export class GoController {
   async listPreferences(
     @ActiveWorkspace() workspace: WorkspaceRecord,
     @Req() req: Request & Record<string, unknown>,
-  ): Promise<{ items: SlugPreferenceRecord[] }> {
+  ): Promise<{
+    items: Array<Omit<EnrichedSlugPreferenceRecord, "createdAt"> & { createdAt: string }>;
+  }> {
     const userId = req[TENANT_USER_ID_KEY] as string;
     const items = await this.go.listPreferences(workspace, userId);
     return {
       items: items.map((item) => ({
         ...item,
-        createdAt: item.createdAt,
+        createdAt: item.createdAt.toISOString(),
       })),
     };
   }
