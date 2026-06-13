@@ -7,7 +7,8 @@ import {
   reportPortalMode,
   reportPortalReporterConfig,
   reportPortalReporters,
-} from "./reportportal-vitest.ts";
+} from "./reportportal-vitest.js";
+import { ReportPortalVitest4Reporter } from "./reportportal-vitest4-adapter.js";
 
 const REQUIRED_ENV = {
   REPORTPORTAL_URL: "https://reportportal.example.com",
@@ -130,6 +131,7 @@ describe("reportPortalReporters", () => {
 
     const reporters = reportPortalReporters("unit", "web");
     expect(reporters).toHaveLength(1);
+    expect(reporters[0]).toBeInstanceOf(ReportPortalVitest4Reporter);
     expect(reporters[0]?.config.launch).toBe("SlugBase · Unit");
   });
 });

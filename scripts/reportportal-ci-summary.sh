@@ -17,16 +17,20 @@ reportportal_launch_url() {
 }
 
 # Extract unique launch UUIDs from a log file or stdin.
+# client-javascript prints "Report Portal Launch UUID:" (with a space).
+RP_LAUNCH_UUID_PATTERN='Report[[:space:]]*Portal Launch UUID: [0-9a-fA-F-]{36}'
+RP_LAUNCH_UUID_SED='s/Report[[:space:]]*Portal Launch UUID: //'
+
 reportportal_parse_uuids() {
   local input="${1:--}"
   if [ "$input" = "-" ]; then
-    grep -oE 'ReportPortal Launch UUID: [0-9a-fA-F-]{36}' 2>/dev/null \
-      | sed 's/ReportPortal Launch UUID: //' \
+    grep -oE "$RP_LAUNCH_UUID_PATTERN" 2>/dev/null \
+      | sed -E "$RP_LAUNCH_UUID_SED" \
       | sort -u \
       || true
   else
-    grep -oE 'ReportPortal Launch UUID: [0-9a-fA-F-]{36}' "$input" 2>/dev/null \
-      | sed 's/ReportPortal Launch UUID: //' \
+    grep -oE "$RP_LAUNCH_UUID_PATTERN" "$input" 2>/dev/null \
+      | sed -E "$RP_LAUNCH_UUID_SED" \
       | sort -u \
       || true
   fi

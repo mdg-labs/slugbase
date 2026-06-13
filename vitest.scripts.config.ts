@@ -1,5 +1,5 @@
 import { defineConfig } from "vitest/config";
-import { reportPortalReporters } from "./scripts/reportportal-vitest.ts";
+import { reportPortalReporters } from "./scripts/reportportal-vitest.js";
 
 export default defineConfig({
   test: {

@@ -8,10 +8,12 @@
       "dependsOn": ["^build", "^typecheck"]
     },
     "test:unit": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "cache": false
     },
     "test:integration": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "cache": false
     },
     "build": {
       "dependsOn": ["^build"],

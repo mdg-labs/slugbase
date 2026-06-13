@@ -4,7 +4,7 @@ import {
   reportPortalPlaywrightAttributes,
   reportPortalPlaywrightReporter,
   reportPortalPlaywrightReporterConfig,
-} from "./reportportal-playwright.ts";
+} from "./reportportal-playwright.js";
 
 const REQUIRED_ENV = {
   REPORTPORTAL_URL: "https://reportportal.example.com",

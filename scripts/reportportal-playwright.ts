@@ -4,7 +4,7 @@ import {
   reportPortalCiAttributes,
   reportPortalEndpoint,
   reportPortalMode,
-} from "./reportportal-vitest.ts";
+} from "./reportportal-vitest.js";
 
 export type PlaywrightEdition = "hosted" | "self-hosted";
 

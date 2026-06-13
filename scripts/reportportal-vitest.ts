@@ -1,4 +1,5 @@
 import { RPReporter } from "@reportportal/agent-js-vitest";
+import { ReportPortalVitest4Reporter } from "./reportportal-vitest4-adapter.js";
 
 export type ReportPortalLayer = "unit" | "integration";
 
@@ -112,11 +113,11 @@ export function reportPortalReporterConfig(
 export function reportPortalReporters(
   layer: ReportPortalLayer,
   packageName: string,
-): RPReporter[] {
+): ReportPortalVitest4Reporter[] {
   const config = reportPortalReporterConfig(layer, packageName);
   if (!config) {
     return [];
   }
 
-  return [new RPReporter(config as ReportPortalClientConfig)];
+  return [new ReportPortalVitest4Reporter(config as ReportPortalClientConfig)];
 }

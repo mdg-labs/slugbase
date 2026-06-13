@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url';
 import {
   detectPlaywrightEdition,
   reportPortalPlaywrightReporter,
-} from '../scripts/reportportal-playwright.ts';
+} from "../scripts/reportportal-playwright.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

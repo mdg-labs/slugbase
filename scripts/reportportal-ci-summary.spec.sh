@@ -30,10 +30,10 @@ assert_eq() {
 LOG_FILE="${TMPDIR}/rp-log-test-$$.txt"
 cat >"$LOG_FILE" <<'EOF'
 some test output
-ReportPortal Launch UUID: 61ce1c26-842a-4bde-9abe-a4696e31d626
+Report Portal Launch UUID: 61ce1c26-842a-4bde-9abe-a4696e31d626
 more output
-ReportPortal Launch UUID: 61ce1c26-842a-4bde-9abe-a4696e31d626
-ReportPortal Launch UUID: aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
+Report Portal Launch UUID: 61ce1c26-842a-4bde-9abe-a4696e31d626
+Report Portal Launch UUID: aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
 EOF
 
 # launch-url
@@ -47,6 +47,13 @@ mapfile -t PARSED_UUIDS < <(reportportal_parse_uuids "$LOG_FILE")
 assert_eq "2" "${#PARSED_UUIDS[@]}" "parse-uuids count"
 assert_eq "61ce1c26-842a-4bde-9abe-a4696e31d626" "${PARSED_UUIDS[0]}" "parse-uuids first"
 assert_eq "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" "${PARSED_UUIDS[1]}" "parse-uuids second"
+
+# legacy client string without space between Report and Portal
+LEGACY_LOG="${TMPDIR}/rp-log-legacy-$$.txt"
+printf '%s\n' 'ReportPortal Launch UUID: bbbbbbbb-cccc-dddd-eeee-ffffffffffff' >"$LEGACY_LOG"
+mapfile -t LEGACY_UUIDS < <(reportportal_parse_uuids "$LEGACY_LOG")
+assert_eq "1" "${#LEGACY_UUIDS[@]}" "legacy parse-uuids count"
+assert_eq "bbbbbbbb-cccc-dddd-eeee-ffffffffffff" "${LEGACY_UUIDS[0]}" "legacy parse-uuids"
 
 # record-log + markdown
 reportportal_record_log "unit" "$LOG_FILE"
