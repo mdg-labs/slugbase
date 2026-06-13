@@ -103,10 +103,37 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      checks: write
     concurrency:
       group: allure-pages
       cancel-in-progress: false
+    env:
+      ALLURE_WORKFLOW: ci
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
+        with:
+          version: 9.15.4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.12
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Checkout gh-pages (history)
+        uses: actions/checkout@v6
+        continue-on-error: true
+        with:
+          ref: gh-pages
+          path: gh-pages-dir
+
       - name: Download Allure results
         uses: actions/download-artifact@v4
         continue-on-error: true
@@ -114,22 +141,10 @@ jobs:
           name: allure-ci
           path: allure-results
 
-      - name: Checkout GitHub Pages with previous Allure reports
-        uses: actions/checkout@v6
-        continue-on-error: true
-        with:
-          ref: gh-pages
-          path: gh-pages-dir
-
       - name: Generate Allure test report
         id: allure-report
         if: always()
-        uses: andgineer/allure-report@v3.8
-        with:
-          allure-results: allure-results
-          website: gh-pages-dir
-          reports-site-path: test-reports
-          website-url: https://mdg-labs.github.io/slugbase
+        run: bash scripts/allure-publish-ci.sh allure-results
 
       - name: Publish Allure test report
         if: always() && steps.allure-report.outcome == 'success'
@@ -137,30 +152,17 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
-          publish_dir: ${{ steps.allure-report.outputs.reports-site }}
-          destination_dir: ${{ steps.allure-report.outputs.reports-site-path }}
+          publish_dir: ${{ steps.allure-report.outputs.pages-payload }}
+          destination_dir: .
+          keep_files: true
 
-      - name: Find existing Allure PR comment
-        if: always() && github.event_name == 'pull_request' && steps.allure-report.outputs.report-url != ''
-        id: find-allure-comment
-        uses: peter-evans/find-comment@v3
+      - name: Post Allure summary to PR
+        if: always() && github.event_name == 'pull_request' && steps.allure-report.outcome == 'success'
+        uses: allure-framework/allure-action@v0.7.1
         with:
-          issue-number: ${{ github.event.pull_request.number }}
-          comment-author: 'github-actions[bot]'
-          body-includes: '<!-- ci-allure-report -->'
-
-      - name: Comment Allure report link on PR
-        if: always() && github.event_name == 'pull_request' && steps.allure-report.outputs.report-url != ''
-        uses: peter-evans/create-or-update-comment@v4
-        with:
-          issue-number: ${{ github.event.pull_request.number }}
-          comment-id: ${{ steps.find-allure-comment.outputs.comment-id }}
-          edit-mode: replace
-          body: |
-            <!-- ci-allure-report -->
-            ## CI Allure report
-
-            [View test report](${{ steps.allure-report.outputs.report-url }})
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          report-directory: ${{ steps.allure-report.outputs.report-directory }}
+          remote-href: https://mdg-labs.github.io/slugbase/${{ steps.allure-report.outputs.reports-site-path }}
 
   deploy-staging:
     if: >

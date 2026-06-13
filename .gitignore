@@ -29,6 +29,10 @@ tmp
 # test report artifacts (Allure)
 allure-results/
 allure-report/
+allure-report-out/
+allure-report-test/
+allure-history*.jsonl
+pages-payload/
 gh-pages-dir/
 
 # e2e test artifacts (Playwright)

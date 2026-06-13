@@ -366,10 +366,15 @@ SlugBase publishes unit, integration, and e2e test results to **Allure** reports
 **Local viewing** (after running tests):
 
 ```bash
-npx allure serve allure-results
+# Discover package-level result dirs (Allure 3 does not recurse into subfolders)
+mapfile -t DIRS < <(find allure-results -type f -name '*-result.json' -printf '%h\n' | sort -u)
+pnpm exec allure generate "${DIRS[@]}"
+pnpm exec allure open ./allure-report-out
 ```
 
-CI uploads artifacts and publishes reports to GitHub Pages on pull requests (see `.github/workflows/ci.yml` and `.github/workflows/e2e.yml`).
+Configuration lives in `allurerc.mjs` at the repo root ([Allure 3 configure docs](https://allurereport.org/docs/v3/configure/)).
+
+CI uploads artifacts, generates reports with `scripts/allure-publish-ci.sh`, publishes to GitHub Pages, and posts PR summaries via [`allure-framework/allure-action`](https://allurereport.org/docs/integrations-github-action/) (see `.github/workflows/ci.yml` and `.github/workflows/e2e.yml`).
 
 ---
 
