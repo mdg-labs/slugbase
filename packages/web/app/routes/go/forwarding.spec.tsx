@@ -25,7 +25,7 @@ vi.mock("react-i18next", () => ({
 
 const mockRevalidate = vi.fn();
 
-const loaderData = vi.hoisted(() => ({
+const loaderData = vi.hoisted((): { value: ForwardingLoaderData } => ({
   value: {
     currentUserId: "user-1",
     ownerNames: { "user-2": "Jamie Lee" },
@@ -55,7 +55,7 @@ const loaderData = vi.hoisted(() => ({
         isAmbiguous: true,
       },
     ],
-  } as ForwardingLoaderData,
+  },
 }));
 
 vi.mock("react-router", async () => {
