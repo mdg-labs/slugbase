@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   detectPlaywrightEdition,
   reportPortalPlaywrightAttributes,
@@ -6,6 +6,7 @@ import {
   reportPortalPlaywrightReporter,
   reportPortalPlaywrightReporterConfig,
 } from "./reportportal-playwright.js";
+import { isolateReportPortalCiEnv } from "./reportportal-test-env.js";
 
 const REQUIRED_ENV = {
   REPORTPORTAL_URL: "https://reportportal.example.com",
@@ -38,6 +39,10 @@ describe("detectPlaywrightEdition", () => {
 });
 
 describe("reportPortalPlaywrightAttributes", () => {
+  beforeEach(() => {
+    isolateReportPortalCiEnv();
+  });
+
   afterEach(() => {
     vi.unstubAllEnvs();
   });

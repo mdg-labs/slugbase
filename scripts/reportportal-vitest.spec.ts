@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   readReportPortalEnv,
   reportPortalAttributes,
@@ -10,6 +10,7 @@ import {
   reportPortalReporters,
 } from "./reportportal-vitest.js";
 import { ReportPortalVitest4Reporter } from "./reportportal-vitest4-adapter.js";
+import { isolateReportPortalCiEnv } from "./reportportal-test-env.js";
 
 const REQUIRED_ENV = {
   REPORTPORTAL_URL: "https://reportportal.example.com",
@@ -68,6 +69,10 @@ describe("reportPortalMode", () => {
 });
 
 describe("reportPortalCiAttributes", () => {
+  beforeEach(() => {
+    isolateReportPortalCiEnv();
+  });
+
   afterEach(() => {
     vi.unstubAllEnvs();
   });
@@ -84,6 +89,10 @@ describe("reportPortalCiAttributes", () => {
 });
 
 describe("reportPortalLaunchName", () => {
+  beforeEach(() => {
+    isolateReportPortalCiEnv();
+  });
+
   afterEach(() => {
     vi.unstubAllEnvs();
   });
@@ -102,6 +111,10 @@ describe("reportPortalLaunchName", () => {
 });
 
 describe("reportPortalReporterConfig", () => {
+  beforeEach(() => {
+    isolateReportPortalCiEnv();
+  });
+
   afterEach(() => {
     vi.unstubAllEnvs();
   });
@@ -147,6 +160,10 @@ describe("reportPortalReporterConfig", () => {
 });
 
 describe("reportPortalReporters", () => {
+  beforeEach(() => {
+    isolateReportPortalCiEnv();
+  });
+
   afterEach(() => {
     vi.unstubAllEnvs();
   });

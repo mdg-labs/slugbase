@@ -68,7 +68,7 @@ jobs:
         run: pnpm validate:docs-public
 
       - name: Public docs script tests
-        run: pnpm test:scripts -- scripts/validate-docs-public.spec.mjs
+        run: pnpm test:scripts:docs-public
 
   ci:
     name: CI · Checks

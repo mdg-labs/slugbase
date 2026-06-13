@@ -22,6 +22,7 @@
     "check:client-api-origin": "bash scripts/check-client-api-origin.sh",
     "validate:docs-public": "node scripts/validate-docs-public.mjs",
     "test:scripts": "bash scripts/check-client-api-origin.sh && vitest run --config vitest.scripts.config.ts",
+    "test:scripts:docs-public": "bash scripts/check-client-api-origin.sh && vitest run --config vitest.scripts.config.ts scripts/validate-docs-public.spec.mjs",
     "db:generate": "pnpm --filter @slugbase/backend db:generate",
     "db:migrate": "pnpm --filter @slugbase/backend db:migrate",
     "test:e2e": "bash scripts/e2e.sh",
