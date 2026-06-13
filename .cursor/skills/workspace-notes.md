@@ -164,9 +164,9 @@ _added: 2026-06-09_
 The #315 branch verifier (`generalPurpose` subagent `3f9c15eb-60d2-4c95-909a-d8e82f0a005f`) completed verification correctly (Layer 1/2/3 all PASS, GitHub Done comment posted, status set to Done) but then hallucinated and attempted to write `/home/michael/PycharmProjects/ai-proxy/proxy-server/package.json` — a completely unrelated Electron HTTP proxy project. The file didn't exist on disk (path doesn't exist). The verifier prompt should be tightened with a hard block on path escape: add "DO NOT write files outside TARGET REPO or WORKTREE" to verifier prompts.
 _added: 2026-06-10_
 
-## Allure test reporting (#359 epic, 2026-06-13)
+## ReportPortal test reporting (#366 epic, 2026-06-13)
 
-Unit, integration, and e2e tests write Allure JSON under `allure-results/` (`*-result.json`, Allure 3 format). Config: `allurerc.mjs` (separate CI vs E2E history via `ALLURE_WORKFLOW`). Local: discover dirs with `find … *-result.json`, then `pnpm exec allure generate` + `pnpm exec allure open ./allure-report-out`. CI: `scripts/allure-publish-ci.sh` + `peaceiris/actions-gh-pages` + `allure-framework/allure-action@v0.7.1` for PR summaries. **Not** `andgineer/allure-report` (Allure 2 → empty pages). GitHub Pages: `test-reports/<run>-<attempt>/`. ReportPortal removed in #364.
+Unit, integration, and e2e tests publish launches to self-hosted ReportPortal when `REPORTPORTAL_URL`, `REPORTPORTAL_PROJECT`, and `REPORTPORTAL_API_KEY` are set (CI via Infisical). Wiring: `scripts/reportportal-vitest.ts`, `scripts/reportportal-playwright.ts`, `scripts/reportportal-ci-summary.sh` (CI job summary + PR comments from `reportportal_launch_url=` stdout). Reporters no-op locally when env is incomplete. Allure + gh-pages test reports removed in #371.
 _added: 2026-06-13_
 
 ## Infisical secrets delete — use --type (2026-06-13)

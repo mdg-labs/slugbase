@@ -26,15 +26,6 @@ build/
 # tmp
 tmp
 
-# test report artifacts (Allure)
-allure-results/
-allure-report/
-allure-report-out/
-allure-report-test/
-allure-history*.jsonl
-pages-payload/
-gh-pages-dir/
-
 # e2e test artifacts (Playwright)
 e2e/test-results/
 e2e/playwright-report/
