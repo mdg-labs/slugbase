@@ -1,8 +1,14 @@
-import RPReporter from "@reportportal/agent-js-vitest";
+import { RPReporter } from "@reportportal/agent-js-vitest";
 
 export type ReportPortalLayer = "unit" | "integration";
 
-type ReportPortalMode = "DEFAULT" | "DEBUG";
+/** Agent constructor config (includes undocumented launchUuidPrint* fields used at runtime). */
+type ReportPortalClientConfig = ConstructorParameters<typeof RPReporter>[0];
+
+type ReportPortalVitestConfig = ReportPortalClientConfig & {
+  launchUuidPrint: boolean;
+  launchUuidPrintOutput: "STDOUT";
+};
 
 type ReportPortalAttribute = {
   key?: string;
@@ -15,16 +21,8 @@ type ReportPortalEnv = {
   apiKey: string;
 };
 
-type ReportPortalVitestConfig = {
-  apiKey: string;
-  endpoint: string;
-  project: string;
-  launch: string;
-  mode: ReportPortalMode;
-  attributes: ReportPortalAttribute[];
-  launchUuidPrint: boolean;
-  launchUuidPrintOutput: "STDOUT";
-};
+const LAUNCH_MODE_DEFAULT = "DEFAULT" as NonNullable<ReportPortalClientConfig["mode"]>;
+const LAUNCH_MODE_DEBUG = "DEBUG" as NonNullable<ReportPortalClientConfig["mode"]>;
 
 const LAUNCH_NAMES: Record<ReportPortalLayer, string> = {
   unit: "SlugBase · Unit",
@@ -60,8 +58,8 @@ export function reportPortalEndpoint(baseUrl: string): string {
   return `${baseUrl.replace(/\/$/, "")}/api/v2`;
 }
 
-export function reportPortalMode(): ReportPortalMode {
-  return process.env.CI === "true" ? "DEFAULT" : "DEBUG";
+export function reportPortalMode(): NonNullable<ReportPortalClientConfig["mode"]> {
+  return process.env.CI === "true" ? LAUNCH_MODE_DEFAULT : LAUNCH_MODE_DEBUG;
 }
 
 export function reportPortalCiAttributes(): ReportPortalAttribute[] {
@@ -120,5 +118,5 @@ export function reportPortalReporters(
     return [];
   }
 
-  return [new RPReporter(config)];
+  return [new RPReporter(config as ReportPortalClientConfig)];
 }

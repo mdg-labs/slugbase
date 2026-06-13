@@ -36,6 +36,9 @@ function readPositiveInt(value: string | undefined, fallback: number): number {
 
 const DEFAULT_FREE_BOOKMARK_CAP = 50;
 
+/** Avoid hanging Vitest/CI when the pricing API is slow or behind Access. */
+const PRICING_API_FETCH_TIMEOUT_MS = 3_000;
+
 /**
  * Fetches pricing data from the public API (build-time).
  * Falls back to env defaults when the API is unreachable (self-hosted without Stripe).
@@ -45,7 +48,9 @@ async function fetchPricingFromApi(): Promise<PricingResponse | null> {
   if (!apiBase) return null;
 
   try {
-    const res = await fetch(`${apiBase}/pricing/public`);
+    const res = await fetch(`${apiBase}/pricing/public`, {
+      signal: AbortSignal.timeout(PRICING_API_FETCH_TIMEOUT_MS),
+    });
     if (!res.ok) return null;
     return (await res.json()) as PricingResponse;
   } catch {
