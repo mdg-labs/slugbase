@@ -146,6 +146,16 @@ Scope: Event recording occurs for all plans; viewing the audit log requires the 
 
 Note: Audit log data is retained for the duration of the account plus 30 days after account deletion (see Section 5). A dedicated automated purge job for audit events is not yet implemented; events are removed when associated workspace and account data is deleted.
 
+**3.12 Multi-Factor Authentication (MFA / TOTP)**
+
+Data: MFA enrolment state (e.g. not enrolled, enrolment pending, or enrolled) and, where MFA is enabled or enrolment is in progress, an encrypted TOTP shared secret stored in the account record. The TOTP secret is never stored or transmitted in plain text after enrolment is confirmed. During the one-time enrolment step, the secret is disclosed to you only (e.g. via QR code or text display) so you can configure your authenticator application.
+
+Purpose: Securing account access via two-factor authentication.
+
+Legal basis: Art. 6(1)(b) GDPR — necessary for the performance of a contract; Art. 6(1)(f) GDPR — legitimate interest in the security of your account.
+
+Note: MFA enrolment state and the encrypted TOTP secret are deleted when you disable MFA or when your account is deleted (see Section 5).
+
 #### 4. Cookies and Local Storage
 
 **4.1 Strictly Necessary Cookies**
@@ -201,6 +211,7 @@ You can review and change your consent choices at any time via the consent setti
 | Error reports (Sentry) | 90 days from creation |
 | Support and communication records | 3 years from the date of last contact |
 | Audit log data | Duration of the account plus 30 days after account deletion |
+| MFA data (enrolment state and encrypted TOTP secret) | Deleted upon MFA unenrolment or account deletion |
 
 After the applicable retention period, data is deleted or irreversibly anonymised.
 
@@ -414,6 +425,16 @@ Umfang: Die Erfassung von Ereignissen erfolgt für alle Pläne; die Einsicht in 
 
 Hinweis: Audit-Log-Daten werden für die Dauer des Kontos zzgl. 30 Tage nach Kontolöschung aufbewahrt (siehe Abschnitt 5). Ein dedizierter automatisierter Löschvorgang für Audit-Ereignisse ist derzeit nicht implementiert; Ereignisse werden entfernt, wenn die zugehörigen Arbeitsbereichs- und Kontodaten gelöscht werden.
 
+**3.12 Zwei-Faktor-Authentifizierung (MFA / TOTP)**
+
+Daten: MFA-Registrierungsstatus (z. B. nicht registriert, Registrierung ausstehend oder registriert) und, sofern MFA aktiviert ist oder die Registrierung läuft, ein verschlüsseltes TOTP-Shared-Secret im Kontodatensatz. Das TOTP-Secret wird nach abgeschlossener Registrierung nie im Klartext gespeichert oder übertragen. Im einmaligen Registrierungsschritt wird das Secret ausschließlich Ihnen mitgeteilt (z. B. per QR-Code oder Klartextanzeige), damit Sie Ihre Authenticator-App einrichten können.
+
+Zweck: Absicherung des Kontozugangs durch Zwei-Faktor-Authentifizierung.
+
+Rechtsgrundlage: Art. 6 Abs. 1 lit. b DSGVO — Vertragserfüllung; Art. 6 Abs. 1 lit. f DSGVO — berechtigte Interessen an der Sicherheit Ihres Kontos.
+
+Hinweis: MFA-Registrierungsstatus und das verschlüsselte TOTP-Secret werden gelöscht, wenn Sie MFA deaktivieren oder Ihr Konto gelöscht wird (siehe Abschnitt 5).
+
 #### 4. Cookies und lokaler Speicher
 
 **4.1 Technisch notwendige Cookies**
@@ -469,6 +490,7 @@ Ihre Einwilligungsoptionen können Sie jederzeit über die Consent-Einstellungen
 | Fehlerberichte (Sentry) | 90 Tage ab Erstellung |
 | Support- und Kommunikationsaufzeichnungen | 3 Jahre ab letztem Kontakt |
 | Audit-Log-Daten | Für die Dauer des Kontos zzgl. 30 Tage nach Kontolöschung |
+| MFA-Daten (Registrierungsstatus und verschlüsseltes TOTP-Secret) | Löschung bei MFA-Abmeldung oder Kontolöschung |
 
 Nach Ablauf der jeweiligen Aufbewahrungsfrist werden Daten gelöscht oder unwiderruflich anonymisiert.
 
