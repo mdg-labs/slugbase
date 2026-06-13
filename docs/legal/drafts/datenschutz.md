@@ -134,6 +134,18 @@ Purpose: Authenticating your account without requiring a separate password.
 
 Legal basis: Art. 6(1)(b) GDPR — performance of a contract; Art. 6(1)(a) GDPR — consent as expressed through your choice to use the identity provider.
 
+**3.11 Audit Log**
+
+Data: For each significant action within a workspace, we record the actor's user ID (and, when displayed in the audit log interface, the actor's email address resolved from the account record), the workspace ID, the action type, the affected entity type, the entity ID (where applicable), a timestamp, and optional supplementary metadata as a JSON object. Events are recorded for all workspaces regardless of plan; access to view the audit log is restricted to workspace administrators on workspaces with the Team plan entitlement (or on self-hosted instances where the feature is enabled by default).
+
+Purpose: Providing workspace administrators with a read-only, paginated record of significant actions within the workspace (e.g. member changes, team operations, and bookmark creations, updates, and deletions) in accordance with the audit log feature of the Service.
+
+Legal basis: Art. 6(1)(b) GDPR — necessary for the performance of a contract (provision of the Team plan audit log feature to entitled workspace administrators).
+
+Scope: Event recording occurs for all plans; viewing the audit log requires the Team plan entitlement on the hosted service and workspace administrator privileges. On self-hosted installations, the audit log is available to workspace administrators without plan restriction.
+
+Note: Audit log data is retained for the duration of the account plus 30 days after account deletion (see Section 5). A dedicated automated purge job for audit events is not yet implemented; events are removed when associated workspace and account data is deleted.
+
 #### 4. Cookies and Local Storage
 
 **4.1 Strictly Necessary Cookies**
@@ -188,6 +200,7 @@ You can review and change your consent choices at any time via the consent setti
 | Analytics data (Umami) | Aggregated; no personal data retained beyond the session |
 | Error reports (Sentry) | 90 days from creation |
 | Support and communication records | 3 years from the date of last contact |
+| Audit log data | Duration of the account plus 30 days after account deletion |
 
 After the applicable retention period, data is deleted or irreversibly anonymised.
 
@@ -389,6 +402,18 @@ Zweck: Kontenauthentifizierung ohne separates Passwort.
 
 Rechtsgrundlage: Art. 6 Abs. 1 lit. b DSGVO — Vertragserfüllung; Art. 6 Abs. 1 lit. a DSGVO — Einwilligung, die durch die Wahl des Identity Providers zum Ausdruck gebracht wird.
 
+**3.11 Audit Log**
+
+Daten: Für jede wesentliche Aktion innerhalb eines Arbeitsbereichs speichern wir die Benutzer-ID der handelnden Person (sowie, wenn in der Audit-Log-Oberfläche angezeigt, die aus dem Konto aufgelöste E-Mail-Adresse), die Arbeitsbereichs-ID, den Aktionstyp, den betroffenen Entitätstyp, die Entitäts-ID (sofern zutreffend), einen Zeitstempel sowie optionale ergänzende Metadaten als JSON-Objekt. Ereignisse werden für alle Arbeitsbereiche unabhängig vom Plan erfasst; der Zugriff auf die Anzeige des Audit Logs ist auf Arbeitsbereichsadministrator:innen bei Arbeitsbereichen mit Team-Plan-Berechtigung beschränkt (bzw. bei selbst gehosteten Installationen, wo die Funktion standardmäßig verfügbar ist).
+
+Zweck: Bereitstellung eines schreibgeschützten, paginierten Protokolls wesentlicher Aktionen innerhalb des Arbeitsbereichs (z. B. Mitgliederverwaltung, Team-Operationen sowie Erstellung, Aktualisierung und Löschung von Lesezeichen) für Arbeitsbereichsadministrator:innen gemäß der Audit-Log-Funktion des Dienstes.
+
+Rechtsgrundlage: Art. 6 Abs. 1 lit. b DSGVO — Vertragserfüllung (Bereitstellung der Audit-Log-Funktion im Rahmen des Team-Plans für berechtigte Arbeitsbereichsadministrator:innen).
+
+Umfang: Die Erfassung von Ereignissen erfolgt für alle Pläne; die Einsicht in das Audit Log erfordert die Team-Plan-Berechtigung im gehosteten Dienst sowie Arbeitsbereichsadministrator-Rechte. Bei selbst gehosteten Installationen steht das Audit Log Arbeitsbereichsadministrator:innen ohne Planbeschränkung zur Verfügung.
+
+Hinweis: Audit-Log-Daten werden für die Dauer des Kontos zzgl. 30 Tage nach Kontolöschung aufbewahrt (siehe Abschnitt 5). Ein dedizierter automatisierter Löschvorgang für Audit-Ereignisse ist derzeit nicht implementiert; Ereignisse werden entfernt, wenn die zugehörigen Arbeitsbereichs- und Kontodaten gelöscht werden.
+
 #### 4. Cookies und lokaler Speicher
 
 **4.1 Technisch notwendige Cookies**
@@ -443,6 +468,7 @@ Ihre Einwilligungsoptionen können Sie jederzeit über die Consent-Einstellungen
 | Analysedaten (Umami) | Aggregiert; keine personenbezogenen Daten über die Sitzung hinaus |
 | Fehlerberichte (Sentry) | 90 Tage ab Erstellung |
 | Support- und Kommunikationsaufzeichnungen | 3 Jahre ab letztem Kontakt |
+| Audit-Log-Daten | Für die Dauer des Kontos zzgl. 30 Tage nach Kontolöschung |
 
 Nach Ablauf der jeweiligen Aufbewahrungsfrist werden Daten gelöscht oder unwiderruflich anonymisiert.
 
