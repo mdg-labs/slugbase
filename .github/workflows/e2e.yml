@@ -171,9 +171,7 @@ jobs:
           E2E_BASE_URL_API: http://localhost:4001
           E2E_BASE_URL_WEB: http://localhost:4002
           E2E_BASE_URL_MARKETING: http://localhost:4003
-        run: |
-          set -o pipefail
-          pnpm e2e:direct --project=hosted 2>&1 | tee rp-e2e-hosted.log
+        run: bash scripts/e2e-ci-playwright.sh hosted rp-e2e-hosted.log
 
       - name: Extract ReportPortal launch UUID (hosted)
         if: always()
@@ -309,9 +307,7 @@ jobs:
         env:
           DATABASE_URL: postgresql://slugbase:slugbase@localhost:5432/slugbase_e2e
           E2E_BASE_URL_SELF_HOSTED: http://localhost:3000
-        run: |
-          set -o pipefail
-          pnpm e2e:direct --project=self-hosted 2>&1 | tee rp-e2e-self-hosted.log
+        run: bash scripts/e2e-ci-playwright.sh self-hosted rp-e2e-self-hosted.log
 
       - name: Extract ReportPortal launch UUID (self-hosted)
         if: always()

@@ -166,7 +166,7 @@ _added: 2026-06-10_
 
 ## E2E CI — no Infisical pollution on app under test (2026-06-13)
 
-`e2e.yml` mirrors `scripts/e2e.sh`: API/container start with explicit test env only (`SLUGBASE_E2E_MODE`, hardcoded session/encryption keys, localhost URLs, `PUBLIC_REGISTRATION=true`). **Hosted** also runs `pnpm --filter @slugbase/backend db:migrate` before API start (hosted API skips bootstrap migrations when `SERVE_WEB_CLIENT=false`). Infisical `staging` fetch runs immediately before Playwright; Playwright steps re-pin `DATABASE_URL` + e2e base URLs so staging secrets do not reach tests. Follow-up: selective 3-key fetch via Infisical path `/ci/e2e` (option B).
+`e2e.yml` mirrors `scripts/e2e.sh`: API/container start with explicit test env only (`SLUGBASE_E2E_MODE`, hardcoded session/encryption keys, localhost URLs, `PUBLIC_REGISTRATION=true`). **Hosted** also runs `pnpm --filter @slugbase/backend db:migrate` before API start (hosted API skips bootstrap migrations when `SERVE_WEB_CLIENT=false`). Infisical `staging` fetch runs immediately before Playwright; Playwright steps re-pin `DATABASE_URL` + e2e base URLs so staging secrets do not reach tests. CI Playwright uses `scripts/e2e-ci-playwright.sh` (process substitution + summary parse) — `pnpm | tee` could exit 0 while the log shows `N failed`. Follow-up: selective 3-key fetch via Infisical path `/ci/e2e` (option B).
 _added: 2026-06-13_
 
 ## ReportPortal test reporting (#366 epic, 2026-06-13)
