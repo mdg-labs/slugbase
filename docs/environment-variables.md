@@ -161,7 +161,7 @@ flowchart LR
 | **Runtime** | Fly.io API process, self-host container, Worker SSR (`process.env`) | `SESSION_SECRET`, `DATABASE_URL`, `STRIPE_SECRET_KEY` |
 | **Build** | `pnpm build` for web/marketing; Docker `ARG VITE_*` | `VITE_BILLING_ENABLED`, `PUBLIC_PLAN_PRICE_PERSONAL_MONTHLY` |
 | **Both** | Set at build for client; may also be read at SSR | `API_BASE_URL`, `VITE_API_URL` |
-| **CI** | GitHub Actions runner only; never shipped to production runtime | `FLY_API_TOKEN`, `CLOUDFLARE_API_TOKEN`, `SENTRY_AUTH_TOKEN` |
+| **CI** | GitHub Actions runner only; never shipped to production runtime | `FLY_API_TOKEN`, `CLOUDFLARE_API_TOKEN`, `SENTRY_AUTH_TOKEN`, `REPORTPORTAL_*` |
 
 ---
 
@@ -359,22 +359,37 @@ All other `VITE_*` pricing keys: deprecated — prices now fetched from `GET /pr
 
 ---
 
-### 10. Test reporting — Allure
+### 10. Test reporting — ReportPortal
 
-SlugBase publishes unit, integration, and e2e test results to **Allure** reports. No environment variables are required — reporters write JSON results under `allure-results/` at the repo root.
+SlugBase publishes unit, integration, and e2e test results to a self-hosted **ReportPortal** instance. Keys are **CI-only** — stored in Infisical `dev` and `staging`, injected on GitHub Actions runners. Vitest and Playwright reporters no-op when `REPORTPORTAL_*` is unset (local dev default).
 
-**Local viewing** (after running tests):
+**Canonical CI target**
+
+| Setting | Value |
+|---|---|
+| Instance URL | `https://reportportal.mdg-labs.dev` |
+| API endpoint | `https://reportportal.mdg-labs.dev/api/v2` (derived by agents — do not put `/api/v2` in `REPORTPORTAL_URL`) |
+| Project | `slugbase` |
+
+| Key | What it does | Hosted | Self-host | Required | Secret | When set | Example value |
+|---|---|---|---|---|---|---|---|
+| `REPORTPORTAL_URL` | ReportPortal instance base URL (no `/api/v2` suffix) | Yes | No | CI only | No | CI | `https://reportportal.mdg-labs.dev` |
+| `REPORTPORTAL_PROJECT` | ReportPortal project name | Yes | No | CI only | No | CI | `slugbase` |
+| `REPORTPORTAL_API_KEY` | User API key for launch upload | Yes | No | CI only | Yes | CI | `<ReportPortal user API key>` |
+
+**Infisical `dev` (local / verifier)**
 
 ```bash
-# Discover package-level result dirs (Allure 3 does not recurse into subfolders)
-mapfile -t DIRS < <(find allure-results -type f -name '*-result.json' -printf '%h\n' | sort -u)
-pnpm exec allure generate "${DIRS[@]}"
-pnpm exec allure open ./allure-report-out
+infisical secrets set REPORTPORTAL_URL="https://reportportal.mdg-labs.dev" --env=dev
+infisical secrets set REPORTPORTAL_PROJECT="slugbase" --env=dev
+infisical secrets set REPORTPORTAL_API_KEY="<key from ReportPortal UI>" --env=dev
 ```
 
-Configuration lives in `allurerc.mjs` at the repo root ([Allure 3 configure docs](https://allurereport.org/docs/v3/configure/)).
+**Infisical `staging` (operator — CI)**
 
-CI uploads artifacts, generates reports with `scripts/allure-publish-ci.sh`, publishes to GitHub Pages, and posts PR summaries via [`allure-framework/allure-action`](https://allurereport.org/docs/integrations-github-action/) (see `.github/workflows/ci.yml` and `.github/workflows/e2e.yml`).
+Set the same three keys in Infisical `staging` before enabling ReportPortal uploads in CI (#370). Generate the API key in ReportPortal under **Profile → API Keys** for a user with access to project `slugbase`. Never commit or log the key.
+
+Agent wiring (`@reportportal/agent-js-vitest`, `@reportportal/agent-js-playwright`) lands in #368–#370. See [ReportPortal JavaScript agents](https://reportportal.io/docs/log-data-in-reportportal/test-framework-integration/JavaScript/).
 
 ---
 
