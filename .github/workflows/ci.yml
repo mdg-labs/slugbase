@@ -109,6 +109,9 @@ jobs:
       - name: Hard-coded UI strings (rg)
         run: pnpm run i18n:check:hardcoded
 
+      - name: Client API origin guard
+        run: pnpm run check:client-api-origin
+
       - name: Build
         env:
           NODE_ENV: production

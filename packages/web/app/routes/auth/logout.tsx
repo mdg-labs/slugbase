@@ -1,11 +1,12 @@
 import type { ActionFunctionArgs } from "react-router";
+import { getServerApiBaseUrl } from "../../lib/server-api-base-url.js";
 import { redirect } from "react-router";
 import { authCookieSecure } from "../../lib/api-session-cookie.js";
 
 /** Session cookie name - must match the backend constant. */
 const SESSION_COOKIE = "slb_session";
 
-const API_BASE_URL = () => process.env["API_BASE_URL"] ?? "";
+const API_BASE_URL = () => getServerApiBaseUrl();
 
 function clearSessionCookie(response: Response): void {
   const flags = [

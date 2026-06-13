@@ -1,3 +1,4 @@
+import { getServerApiBaseUrl } from "../../../lib/server-api-base-url.js";
 import { FREE_BOOKMARK_CAP } from "../../../components/dashboard/dashboard.constants.js";
 import type { BillingPlanDisplayConfig } from "./billing.types.js";
 
@@ -25,14 +26,6 @@ function readPositiveInt(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-const getApiBaseUrl = (): string => {
-  const fromProcess = typeof process !== "undefined" ? process.env["API_BASE_URL"] : undefined;
-  if (typeof fromProcess === "string" && fromProcess.length > 0) return fromProcess.replace(/\/$/, "");
-  const fromVite = typeof import.meta !== "undefined" ? (import.meta as { env: { VITE_API_URL?: string } }).env.VITE_API_URL : undefined;
-  if (typeof fromVite === "string" && fromVite.length > 0) return fromVite.replace(/\/$/, "");
-  return "";
-};
-
 interface PublicPriceInfo {
   priceId: string;
   unitAmount: number;
@@ -57,7 +50,7 @@ interface PricingApiResponse {
 }
 
 async function fetchPricingFromApi(): Promise<PricingApiResponse | null> {
-  const apiBase = getApiBaseUrl();
+  const apiBase = getServerApiBaseUrl();
   if (!apiBase) return null;
 
   try {

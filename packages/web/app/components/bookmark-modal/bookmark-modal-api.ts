@@ -1,7 +1,8 @@
+import { resolveClientApiPath } from "../../lib/client-api-path.js";
 import {
-  getApiBaseUrl,
-  resolveClientApiPath,
-} from "../../lib/client-api-path.js";
+  apiFetch,
+  parseApiErrorMessage,
+} from "../../lib/client-api-fetch.js";
 import type {
   BookmarkModalFolderOption,
   BookmarkModalInitialBookmark,
@@ -45,41 +46,16 @@ function isTagOptionArray(items: unknown): items is BookmarkModalTagOption[] {
   );
 }
 
-async function getMutationHeaders(): Promise<Record<string, string>> {
-  const res = await fetch(`${getApiBaseUrl()}/auth/csrf-token`, {
-    credentials: "include",
-  });
-  if (!res.ok) {
-    throw new Error("Failed to fetch CSRF token");
-  }
-  const data = (await res.json()) as { csrfToken: string };
-  return {
-    "Content-Type": "application/json",
-    "x-csrf-token": data.csrfToken,
-  };
-}
-
-async function parseErrorMessage(res: Response): Promise<string> {
-  try {
-    const data = (await res.json()) as { message?: string };
-    return data.message ?? "Request failed";
-  } catch {
-    return "Request failed";
-  }
-}
-
 async function createBookmark(
   body: ReturnType<typeof toBookmarkSubmitBody>,
 ): Promise<{ id: string }> {
-  const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}${resolveClientApiPath("/bookmarks")}`, {
+  const res = await apiFetch(resolveClientApiPath("/bookmarks"), {
     method: "POST",
-    headers,
-    credentials: "include",
+    csrf: true,
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    throw new Error(await parseErrorMessage(res));
+    throw new Error(await parseApiErrorMessage(res));
   }
   return (await res.json()) as { id: string };
 }
@@ -88,71 +64,58 @@ async function updateBookmark(
   bookmarkId: string,
   body: ReturnType<typeof toBookmarkSubmitBody>,
 ): Promise<void> {
-  const headers = await getMutationHeaders();
-  const res = await fetch(
-    `${getApiBaseUrl()}${resolveClientApiPath(`/bookmarks/${bookmarkId}`)}`,
-    {
-      method: "PATCH",
-      headers,
-      credentials: "include",
-      body: JSON.stringify(body),
-    },
-  );
+  const res = await apiFetch(resolveClientApiPath(`/bookmarks/${bookmarkId}`), {
+    method: "PATCH",
+    csrf: true,
+    body: JSON.stringify(body),
+  });
   if (!res.ok) {
-    throw new Error(await parseErrorMessage(res));
+    throw new Error(await parseApiErrorMessage(res));
   }
 }
 
 async function addBookmarkToFolder(folderId: string, bookmarkId: string): Promise<void> {
-  const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/folders/${folderId}/bookmarks`, {
+  const res = await apiFetch(`/folders/${folderId}/bookmarks`, {
     method: "POST",
-    headers,
-    credentials: "include",
+    csrf: true,
     body: JSON.stringify({ bookmarkId }),
   });
   if (!res.ok) {
-    throw new Error(await parseErrorMessage(res));
+    throw new Error(await parseApiErrorMessage(res));
   }
 }
 
 async function addBookmarkToTag(tagId: string, bookmarkId: string): Promise<void> {
-  const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/tags/${tagId}/bookmarks`, {
+  const res = await apiFetch(`/tags/${tagId}/bookmarks`, {
     method: "POST",
-    headers,
-    credentials: "include",
+    csrf: true,
     body: JSON.stringify({ bookmarkId }),
   });
   if (!res.ok) {
-    throw new Error(await parseErrorMessage(res));
+    throw new Error(await parseApiErrorMessage(res));
   }
 }
 
 async function createTag(name: string): Promise<{ id: string }> {
-  const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}${resolveClientApiPath("/tags")}`, {
+  const res = await apiFetch(resolveClientApiPath("/tags"), {
     method: "POST",
-    headers,
-    credentials: "include",
+    csrf: true,
     body: JSON.stringify({ name }),
   });
   if (!res.ok) {
-    throw new Error(await parseErrorMessage(res));
+    throw new Error(await parseApiErrorMessage(res));
   }
   return (await res.json()) as { id: string };
 }
 
 async function createFolder(name: string): Promise<{ id: string }> {
-  const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}${resolveClientApiPath("/folders")}`, {
+  const res = await apiFetch(resolveClientApiPath("/folders"), {
     method: "POST",
-    headers,
-    credentials: "include",
+    csrf: true,
     body: JSON.stringify({ name }),
   });
   if (!res.ok) {
-    throw new Error(await parseErrorMessage(res));
+    throw new Error(await parseApiErrorMessage(res));
   }
   return (await res.json()) as { id: string };
 }
@@ -221,12 +184,7 @@ export type LoadBookmarkModalOptionsResult = {
 };
 
 async function fetchFolders(): Promise<BookmarkModalFolderOption[]> {
-  const res = await fetch(
-    `${getApiBaseUrl()}${resolveClientApiPath("/folders?pageSize=100")}`,
-    {
-      credentials: "include",
-    },
-  );
+  const res = await apiFetch(resolveClientApiPath("/folders?pageSize=100"));
   if (!res.ok) {
     throw new BookmarkModalLoadError(
       `Failed to load folders (HTTP ${String(res.status)})`,
@@ -242,12 +200,7 @@ async function fetchFolders(): Promise<BookmarkModalFolderOption[]> {
 }
 
 async function fetchTags(): Promise<BookmarkModalTagOption[]> {
-  const res = await fetch(
-    `${getApiBaseUrl()}${resolveClientApiPath("/tags?pageSize=100")}`,
-    {
-      credentials: "include",
-    },
-  );
+  const res = await apiFetch(resolveClientApiPath("/tags?pageSize=100"));
   if (!res.ok) {
     throw new BookmarkModalLoadError(
       `Failed to load tags (HTTP ${String(res.status)})`,

@@ -32,12 +32,29 @@ describe("client-api-path", () => {
     });
   });
 
-  describe("getApiBaseUrl", () => {
+  describe("getClientApiOrigin", () => {
     it("returns empty string so browser fetch stays same-origin", async () => {
       vi.stubEnv("VITE_API_URL", "https://api.example.com");
-      const { getApiBaseUrl } = await import("./client-api-path.js");
+      const { getClientApiOrigin } = await import("./client-api-path.js");
 
-      expect(getApiBaseUrl()).toBe("");
+      expect(getClientApiOrigin()).toBe("");
+    });
+  });
+
+  describe("resolveFetchBase", () => {
+    it("returns server API base when request is passed", async () => {
+      vi.stubEnv("API_BASE_URL", "https://api.example.com");
+      const { resolveFetchBase } = await import("./client-api-path.js");
+      const request = new Request("https://app.example.com/");
+
+      expect(resolveFetchBase(request)).toBe("https://api.example.com");
+    });
+
+    it("returns empty string in browser context", async () => {
+      vi.stubEnv("VITE_API_URL", "https://api.example.com");
+      const { resolveFetchBase } = await import("./client-api-path.js");
+
+      expect(resolveFetchBase()).toBe("");
     });
   });
 });

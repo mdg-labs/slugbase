@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { getServerApiBaseUrl } from "../../../lib/server-api-base-url.js";
 import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import {
@@ -12,7 +13,7 @@ import { TotpInput } from "../../../components/TotpInput.js";
 import { getSessionUser } from "../../../lib/session-client.js";
 import { AuthShell } from "../AuthShell.js";
 
-const API_BASE_URL = (): string => process.env["API_BASE_URL"] ?? "";
+const API_BASE_URL = () => getServerApiBaseUrl();
 
 interface EnrolStartData {
   otpAuthUri: string;

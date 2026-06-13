@@ -2,13 +2,13 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { buildProxiedResponse } from "../utils/proxy.js";
 
-const getApiBaseUrl = (): string => process.env["API_BASE_URL"] ?? "";
+import { getServerApiBaseUrl } from "../../../lib/server-api-base-url.js";
 
 /**
  * Proxy /api/bookmarks → backend /bookmarks (list, create).
  */
 async function forwardToBookmarks(request: Request): Promise<Response> {
-  const apiBaseUrl = getApiBaseUrl();
+  const apiBaseUrl = getServerApiBaseUrl();
   const url = new URL(request.url);
   const backendPath = url.pathname.replace(/^\/api\/bookmarks/, "/bookmarks");
   const qs = url.searchParams.toString();

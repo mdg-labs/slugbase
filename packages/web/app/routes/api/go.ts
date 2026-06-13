@@ -1,12 +1,12 @@
 import type { LoaderFunctionArgs } from "react-router";
 
-const getApiBaseUrl = (): string => process.env["API_BASE_URL"] ?? "";
+import { getServerApiBaseUrl } from "../../lib/server-api-base-url.js";
 
 /** Proxy GET /api/go/:slug → backend GET /go/:slug (returns JSON, never follows redirect). */
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const slug = params["slug"] ?? "";
   const cookie = request.headers.get("Cookie") ?? "";
-  const apiBaseUrl = getApiBaseUrl();
+  const apiBaseUrl = getServerApiBaseUrl();
 
   try {
     const res = await fetch(`${apiBaseUrl}/go/${encodeURIComponent(slug)}`, {

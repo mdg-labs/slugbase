@@ -1,9 +1,10 @@
 import { useTranslation } from "react-i18next";
+import { getServerApiBaseUrl } from "../../lib/server-api-base-url.js";
 import type { ActionFunctionArgs } from "react-router";
 import { Form, Link, useActionData, useNavigation } from "react-router";
 import { AuthShell, MailFieldIcon } from "./AuthShell.js";
 
-const API_BASE_URL = () => process.env["API_BASE_URL"] ?? "";
+const API_BASE_URL = () => getServerApiBaseUrl();
 
 /**
  * Non-enumerating: always returns sent=true regardless of backend response

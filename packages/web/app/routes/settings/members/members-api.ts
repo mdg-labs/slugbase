@@ -1,3 +1,8 @@
+import {
+  apiFetch,
+  parseApiErrorMessage,
+  serverFetchJson,
+} from "../../../lib/client-api-fetch.js";
 import type {
   InvitationRole,
   MemberRow,
@@ -7,51 +12,6 @@ import type {
   WorkspaceSummary,
 } from "./members.types.js";
 import { fetchMembersWithFallback } from "../members-fetch.js";
-
-const getApiBaseUrl = (): string => {
-  const fromProcess = typeof process !== "undefined" ? process.env["API_BASE_URL"] : undefined;
-  if (typeof fromProcess === "string" && fromProcess.length > 0) return fromProcess.replace(/\/$/, "");
-  const fromVite = typeof import.meta !== "undefined" ? (import.meta as { env: { VITE_API_URL?: string } }).env.VITE_API_URL : undefined;
-  if (typeof fromVite === "string" && fromVite.length > 0) return fromVite.replace(/\/$/, "");
-  return "";
-};
-
-async function parseErrorMessage(res: Response): Promise<string> {
-  try {
-    const data = (await res.json()) as { message?: string };
-    return data.message ?? "Request failed";
-  } catch {
-    return "Request failed";
-  }
-}
-
-async function getMutationHeaders(): Promise<Record<string, string>> {
-  const res = await fetch(`${getApiBaseUrl()}/auth/csrf-token`, {
-    credentials: "include",
-  });
-  if (!res.ok) {
-    throw new Error("Failed to fetch CSRF token");
-  }
-  const data = (await res.json()) as { csrfToken: string };
-  return {
-    "Content-Type": "application/json",
-    "x-csrf-token": data.csrfToken,
-  };
-}
-
-async function fetchJson<T>(path: string, request?: Request): Promise<T | null> {
-  const cookie = request?.headers.get("Cookie") ?? "";
-  try {
-    const res = await fetch(`${getApiBaseUrl()}${path}`, {
-      headers: cookie ? { Cookie: cookie } : {},
-      credentials: request ? undefined : "include",
-    });
-    if (!res.ok) return null;
-    return (await res.json()) as T;
-  } catch {
-    return null;
-  }
-}
 
 interface ApiWorkspace {
   id: string;
@@ -76,7 +36,7 @@ export async function loadMembersSettingsData(
   currentUserRole: MemberRole;
   membersForbidden: boolean;
 } | null> {
-  const workspace = await fetchJson<ApiWorkspace>("/workspaces/active", request);
+  const workspace = await serverFetchJson<ApiWorkspace>(request, "/workspaces/active");
   const { members: rawMembers, forbidden } = await fetchMembersWithFallback<MemberRow>(request);
   if (!workspace) return null;
 
@@ -100,8 +60,8 @@ export async function loadMembersSettingsData(
   if (!currentMember) return null;
 
   const pendingInvitations =
-    (await fetchJson<PendingInvitationRow[]>("/workspace/invitations", request)) ?? [];
-  const teamsResponse = await fetchJson<PaginatedTeams>("/teams?pageSize=100", request);
+    (await serverFetchJson<PendingInvitationRow[]>(request, "/workspace/invitations")) ?? [];
+  const teamsResponse = await serverFetchJson<PaginatedTeams>(request, "/teams?pageSize=100");
   const teams = teamsResponse?.items ?? [];
 
   return {
@@ -124,15 +84,13 @@ export async function createInvitation(
   email: string,
   role: InvitationRole,
 ): Promise<PendingInvitationRow> {
-  const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/workspaces/${workspaceId}/invitations`, {
+  const res = await apiFetch(`/workspaces/${workspaceId}/invitations`, {
     method: "POST",
-    headers,
-    credentials: "include",
+    csrf: true,
     body: JSON.stringify({ email, role }),
   });
   if (!res.ok) {
-    throw new Error(await parseErrorMessage(res));
+    throw new Error(await parseApiErrorMessage(res));
   }
   const body = (await res.json()) as {
     id: string;
@@ -154,119 +112,96 @@ export async function updateMemberRole(
   userId: string,
   role: MemberRole,
 ): Promise<MemberRow> {
-  const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/members/${userId}`, {
+  const res = await apiFetch(`/members/${userId}`, {
     method: "PATCH",
-    headers,
-    credentials: "include",
+    csrf: true,
     body: JSON.stringify({ role }),
   });
   if (!res.ok) {
-    throw new Error(await parseErrorMessage(res));
+    throw new Error(await parseApiErrorMessage(res));
   }
   return (await res.json()) as MemberRow;
 }
 
 export async function removeMember(userId: string): Promise<void> {
-  const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/members/${userId}`, {
-    method: "DELETE",
-    headers,
-    credentials: "include",
-  });
+  const res = await apiFetch(`/members/${userId}`, { method: "DELETE", csrf: true });
   if (!res.ok) {
-    throw new Error(await parseErrorMessage(res));
+    throw new Error(await parseApiErrorMessage(res));
   }
 }
 
 export async function transferOwnership(targetUserId: string): Promise<MemberRow[]> {
-  const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/members/transfer-ownership`, {
+  const res = await apiFetch("/members/transfer-ownership", {
     method: "POST",
-    headers,
-    credentials: "include",
+    csrf: true,
     body: JSON.stringify({ targetUserId }),
   });
   if (!res.ok) {
-    throw new Error(await parseErrorMessage(res));
+    throw new Error(await parseApiErrorMessage(res));
   }
   return (await res.json()) as MemberRow[];
 }
 
 export async function resendInvitation(invitationId: string): Promise<PendingInvitationRow> {
-  const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/workspace/invitations/${invitationId}/resend`, {
+  const res = await apiFetch(`/workspace/invitations/${invitationId}/resend`, {
     method: "POST",
-    headers,
-    credentials: "include",
+    csrf: true,
+    body: JSON.stringify({}),
   });
   if (!res.ok) {
-    throw new Error(await parseErrorMessage(res));
+    throw new Error(await parseApiErrorMessage(res));
   }
   return (await res.json()) as PendingInvitationRow;
 }
 
 export async function revokeInvitation(invitationId: string): Promise<void> {
-  const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/workspace/invitations/${invitationId}`, {
+  const res = await apiFetch(`/workspace/invitations/${invitationId}`, {
     method: "DELETE",
-    headers,
-    credentials: "include",
+    csrf: true,
   });
   if (!res.ok) {
-    throw new Error(await parseErrorMessage(res));
+    throw new Error(await parseApiErrorMessage(res));
   }
 }
 
 export async function createTeam(name: string, description: string): Promise<TeamRow> {
-  const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/teams`, {
+  const res = await apiFetch("/teams", {
     method: "POST",
-    headers,
-    credentials: "include",
+    csrf: true,
     body: JSON.stringify({ name, description: description || null }),
   });
   if (!res.ok) {
-    throw new Error(await parseErrorMessage(res));
+    throw new Error(await parseApiErrorMessage(res));
   }
   return (await res.json()) as TeamRow;
 }
 
 export async function deleteTeam(teamId: string): Promise<void> {
-  const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/teams/${teamId}`, {
-    method: "DELETE",
-    headers,
-    credentials: "include",
-  });
+  const res = await apiFetch(`/teams/${teamId}`, { method: "DELETE", csrf: true });
   if (!res.ok) {
-    throw new Error(await parseErrorMessage(res));
+    throw new Error(await parseApiErrorMessage(res));
   }
 }
 
 export async function addTeamMember(teamId: string, userId: string): Promise<TeamRow> {
-  const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/teams/${teamId}/members`, {
+  const res = await apiFetch(`/teams/${teamId}/members`, {
     method: "POST",
-    headers,
-    credentials: "include",
+    csrf: true,
     body: JSON.stringify({ userId }),
   });
   if (!res.ok) {
-    throw new Error(await parseErrorMessage(res));
+    throw new Error(await parseApiErrorMessage(res));
   }
   return (await res.json()) as TeamRow;
 }
 
 export async function removeTeamMember(teamId: string, userId: string): Promise<TeamRow> {
-  const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/teams/${teamId}/members/${userId}`, {
+  const res = await apiFetch(`/teams/${teamId}/members/${userId}`, {
     method: "DELETE",
-    headers,
-    credentials: "include",
+    csrf: true,
   });
   if (!res.ok) {
-    throw new Error(await parseErrorMessage(res));
+    throw new Error(await parseApiErrorMessage(res));
   }
   return (await res.json()) as TeamRow;
 }

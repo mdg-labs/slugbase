@@ -160,7 +160,7 @@ flowchart LR
 |---|---|---|
 | **Runtime** | Fly.io API process, self-host container, Worker SSR (`process.env`) | `SESSION_SECRET`, `DATABASE_URL`, `STRIPE_SECRET_KEY` |
 | **Build** | `pnpm build` for web/marketing; Docker `ARG VITE_*` | `VITE_BILLING_ENABLED`, `PUBLIC_PLAN_PRICE_PERSONAL_MONTHLY` |
-| **Both** | Set at build for client; may also be read at SSR | `API_BASE_URL`, `VITE_API_URL` |
+| **Both** | Build + SSR fallback | `API_BASE_URL` (runtime Worker), `VITE_API_URL` (SSR fallback only) |
 | **CI** | GitHub Actions runner only; never shipped to production runtime | `FLY_API_TOKEN`, `CLOUDFLARE_API_TOKEN`, `SENTRY_AUTH_TOKEN`, `REPORTPORTAL_*` |
 
 ---
@@ -179,8 +179,10 @@ Every deployment must set these. The API refuses to start in production without 
 | `DATABASE_URL_UNPOOLED` | Direct DB URL for migrations / drizzle-kit | Yes | Optional | Optional | Yes | Runtime | Neon direct URL; falls back to `DATABASE_URL` |
 | `APP_BASE_URL` | Public HTTPS base URL of the API (links, OIDC callbacks, CORS) | Yes | Yes | Always | No | Runtime | `https://api.example.com` |
 | `FRONTEND_ORIGIN` | Public web app origin (CORS allowlist) | Yes | Yes | Always | No | Runtime | `https://app.example.com` |
-| `API_BASE_URL` | API origin for web SSR loaders/actions | Yes | Optional | Hosted | No | Both | Same as `APP_BASE_URL` on hosted |
-| `VITE_API_URL` | API origin baked into web client (consent, SSR fallback) | Yes | Optional | Hosted | No | Build | Same as `APP_BASE_URL` on hosted |
+| `API_BASE_URL` | API origin for Worker SSR loaders, actions, and proxy upstream | Yes | Optional | Hosted | No | Runtime (Worker) | Same as `APP_BASE_URL` on hosted |
+| `VITE_API_URL` | Build-time fallback when `API_BASE_URL` unset at SSR; **not** used for browser `fetch` | Yes | Optional | Hosted | No | Build | Same as `APP_BASE_URL` on hosted |
+
+**Client API routing (web):** Browser `fetch` always uses same-origin Worker proxy routes (`/auth/*`, `/api/*`, …). SSR loaders and proxy handlers call the NestJS API via `API_BASE_URL` (see `packages/web/app/lib/client-api-path.ts` and `client-api-fetch.ts`). Never read `VITE_API_URL` in UI modules for cross-origin browser requests — session cookies are `SameSite=Lax` on the web origin.
 | `MARKETING_ORIGIN` | Public marketing site URL (CI smoke only) | Yes | No | Hosted | No | CI | `https://www.example.com` |
 
 ---

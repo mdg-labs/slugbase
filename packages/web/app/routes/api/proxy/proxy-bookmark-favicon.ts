@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs } from "react-router";
 
-const getApiBaseUrl = (): string => process.env["API_BASE_URL"] ?? "";
+import { getServerApiBaseUrl } from "../../../lib/server-api-base-url.js";
 
 /**
  * Binary-safe proxy for favicon requests from the client.
@@ -17,7 +17,7 @@ export async function loader({ request }: LoaderFunctionArgs): Promise<Response>
     return new Response("", { status: 400 });
   }
 
-  const apiBaseUrl = getApiBaseUrl();
+  const apiBaseUrl = getServerApiBaseUrl();
   const cookie = request.headers.get("Cookie") ?? "";
 
   try {

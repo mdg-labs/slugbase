@@ -1,3 +1,8 @@
+import {
+  apiFetch,
+  parseApiErrorMessage,
+  serverFetchJson,
+} from "../../../lib/client-api-fetch.js";
 import type {
   AccountSettingsData,
   ApiTokenSummary,
@@ -7,71 +12,28 @@ import type {
   UpdateAccountProfileBody,
 } from "./account.types.js";
 
-const getApiBaseUrl = (): string => {
-  const fromProcess = typeof process !== "undefined" ? process.env["API_BASE_URL"] : undefined;
-  if (typeof fromProcess === "string" && fromProcess.length > 0) return fromProcess.replace(/\/$/, "");
-  const fromVite = typeof import.meta !== "undefined" ? (import.meta as { env: { VITE_API_URL?: string } }).env.VITE_API_URL : undefined;
-  if (typeof fromVite === "string" && fromVite.length > 0) return fromVite.replace(/\/$/, "");
-  return "";
-};
-
-async function parseErrorMessage(res: Response): Promise<string> {
-  try {
-    const data = (await res.json()) as { message?: string };
-    return data.message ?? "Request failed";
-  } catch {
-    return "Request failed";
-  }
-}
-
-async function getMutationHeaders(request?: Request): Promise<Record<string, string>> {
-  const cookie = request?.headers.get("Cookie") ?? "";
-  const res = await fetch(`${getApiBaseUrl()}/auth/csrf-token`, {
-    headers: cookie ? { Cookie: cookie } : {},
-    credentials: request ? undefined : "include",
-  });
-  if (!res.ok) {
-    throw new Error("Failed to fetch CSRF token");
-  }
-  const data = (await res.json()) as { csrfToken: string };
-  return {
-    "Content-Type": "application/json",
-    "x-csrf-token": data.csrfToken,
-  };
-}
-
-async function fetchJson<T>(path: string, request?: Request): Promise<T | null> {
-  const cookie = request?.headers.get("Cookie") ?? "";
-  try {
-    const res = await fetch(`${getApiBaseUrl()}${path}`, {
-      headers: cookie ? { Cookie: cookie } : {},
-      credentials: request ? undefined : "include",
-    });
-    if (!res.ok) return null;
-    return (await res.json()) as T;
-  } catch {
-    return null;
-  }
-}
-
 export async function loadAccountSettings(
   request: Request,
 ): Promise<AccountSettingsData | null> {
-  return fetchJson<AccountSettingsData>("/auth/account", request);
+  return serverFetchJson<AccountSettingsData>(request, "/auth/account");
+}
+
+export async function refreshAccountSettings(): Promise<AccountSettingsData | null> {
+  const res = await apiFetch("/auth/account");
+  if (!res.ok) return null;
+  return (await res.json()) as AccountSettingsData;
 }
 
 export async function updateAccountProfile(
   body: UpdateAccountProfileBody,
 ): Promise<AccountSettingsData> {
-  const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/auth/account/profile`, {
+  const res = await apiFetch("/auth/account/profile", {
     method: "PATCH",
-    headers,
-    credentials: "include",
+    csrf: true,
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    throw new Error(await parseErrorMessage(res));
+    throw new Error(await parseApiErrorMessage(res));
   }
   return (await res.json()) as AccountSettingsData;
 }
@@ -79,30 +41,26 @@ export async function updateAccountProfile(
 export async function updateAccountPassword(
   body: UpdateAccountPasswordBody,
 ): Promise<void> {
-  const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/auth/account/password`, {
+  const res = await apiFetch("/auth/account/password", {
     method: "PATCH",
-    headers,
-    credentials: "include",
+    csrf: true,
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    throw new Error(await parseErrorMessage(res));
+    throw new Error(await parseApiErrorMessage(res));
   }
 }
 
 export async function updateAccountPreferences(
   body: UpdateAccountPreferencesBody,
 ): Promise<AccountSettingsData> {
-  const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/auth/account/preferences`, {
+  const res = await apiFetch("/auth/account/preferences", {
     method: "PATCH",
-    headers,
-    credentials: "include",
+    csrf: true,
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    throw new Error(await parseErrorMessage(res));
+    throw new Error(await parseApiErrorMessage(res));
   }
   return (await res.json()) as AccountSettingsData;
 }
@@ -110,50 +68,45 @@ export async function updateAccountPreferences(
 export async function requestAccountEmailChange(
   body: UpdateAccountEmailBody,
 ): Promise<AccountSettingsData> {
-  const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/auth/account/email`, {
+  const res = await apiFetch("/auth/account/email", {
     method: "PATCH",
-    headers,
-    credentials: "include",
+    csrf: true,
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    throw new Error(await parseErrorMessage(res));
+    throw new Error(await parseApiErrorMessage(res));
   }
   return (await res.json()) as AccountSettingsData;
 }
 
 export async function resendAccountEmailChange(): Promise<void> {
-  const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/auth/account/email/resend`, {
+  const res = await apiFetch("/auth/account/email/resend", {
     method: "POST",
-    headers,
-    credentials: "include",
+    csrf: true,
     body: JSON.stringify({}),
   });
   if (!res.ok) {
-    throw new Error(await parseErrorMessage(res));
+    throw new Error(await parseApiErrorMessage(res));
   }
 }
 
 export async function cancelAccountEmailChange(): Promise<AccountSettingsData> {
-  const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/auth/account/email/pending`, {
+  const res = await apiFetch("/auth/account/email/pending", {
     method: "DELETE",
-    headers,
-    credentials: "include",
+    csrf: true,
   });
   if (!res.ok) {
-    throw new Error(await parseErrorMessage(res));
+    throw new Error(await parseApiErrorMessage(res));
   }
   return (await res.json()) as AccountSettingsData;
 }
 
 export async function listApiTokens(request?: Request): Promise<ApiTokenSummary[]> {
-  const data = await fetchJson<{ tokens: ApiTokenSummary[] }>(
-    "/auth/api-tokens",
-    request,
-  );
+  const data = request
+    ? await serverFetchJson<{ tokens: ApiTokenSummary[] }>(request, "/auth/api-tokens")
+    : await apiFetch("/auth/api-tokens").then(async (res: Response) =>
+        res.ok ? ((await res.json()) as { tokens: ApiTokenSummary[] }) : null,
+      );
   return data?.tokens ?? [];
 }
 
@@ -161,28 +114,24 @@ export async function createApiToken(name: string): Promise<{
   token: ApiTokenSummary;
   plaintext: string;
 }> {
-  const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/auth/api-tokens`, {
+  const res = await apiFetch("/auth/api-tokens", {
     method: "POST",
-    headers,
-    credentials: "include",
+    csrf: true,
     body: JSON.stringify({ name }),
   });
   if (!res.ok) {
-    throw new Error(await parseErrorMessage(res));
+    throw new Error(await parseApiErrorMessage(res));
   }
   return (await res.json()) as { token: ApiTokenSummary; plaintext: string };
 }
 
 export async function revokeApiToken(id: string): Promise<void> {
-  const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/auth/api-tokens/${id}`, {
+  const res = await apiFetch(`/auth/api-tokens/${id}`, {
     method: "DELETE",
-    headers,
-    credentials: "include",
+    csrf: true,
   });
   if (!res.ok) {
-    throw new Error(await parseErrorMessage(res));
+    throw new Error(await parseApiErrorMessage(res));
   }
 }
 
@@ -193,57 +142,49 @@ export interface MfaEnrolStartData {
 }
 
 export async function startMfaEnrol(): Promise<MfaEnrolStartData> {
-  const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/auth/mfa/enrol/start`, {
+  const res = await apiFetch("/auth/mfa/enrol/start", {
     method: "POST",
-    headers,
-    credentials: "include",
+    csrf: true,
     body: JSON.stringify({}),
   });
   if (!res.ok) {
-    throw new Error(await parseErrorMessage(res));
+    throw new Error(await parseApiErrorMessage(res));
   }
   return (await res.json()) as MfaEnrolStartData;
 }
 
 export async function confirmMfaEnrol(totpCode: string): Promise<string[]> {
-  const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/auth/mfa/enrol/confirm`, {
+  const res = await apiFetch("/auth/mfa/enrol/confirm", {
     method: "POST",
-    headers,
-    credentials: "include",
+    csrf: true,
     body: JSON.stringify({ totpCode }),
   });
   if (!res.ok) {
-    throw new Error(await parseErrorMessage(res));
+    throw new Error(await parseApiErrorMessage(res));
   }
   const data = (await res.json()) as { backupCodes: string[] };
   return data.backupCodes;
 }
 
 export async function disableMfa(totpCode: string): Promise<void> {
-  const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/auth/mfa/disable`, {
+  const res = await apiFetch("/auth/mfa/disable", {
     method: "POST",
-    headers,
-    credentials: "include",
+    csrf: true,
     body: JSON.stringify({ totpCode }),
   });
   if (!res.ok) {
-    throw new Error(await parseErrorMessage(res));
+    throw new Error(await parseApiErrorMessage(res));
   }
 }
 
 export async function regenerateMfaBackupCodes(totpCode: string): Promise<string[]> {
-  const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/auth/mfa/backup-codes/regenerate`, {
+  const res = await apiFetch("/auth/mfa/backup-codes/regenerate", {
     method: "POST",
-    headers,
-    credentials: "include",
+    csrf: true,
     body: JSON.stringify({ totpCode }),
   });
   if (!res.ok) {
-    throw new Error(await parseErrorMessage(res));
+    throw new Error(await parseApiErrorMessage(res));
   }
   const data = (await res.json()) as { backupCodes: string[] };
   return data.backupCodes;
