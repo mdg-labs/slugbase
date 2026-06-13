@@ -1,0 +1,77 @@
+---
+title: "First run setup"
+description: "Initial Setup: create the first admin user, sign in, and optional next steps for OIDC, SMTP, and AI."
+---
+
+## What you need
+
+- SlugBase running and reachable in the browser (see [Quick start](/selfhosted/quick-start), [Docker](/selfhosted/docker), or [Docker Compose](/selfhosted/docker-compose)).
+- Production secrets already set so the server stays up — see [Configuration](/selfhosted/configuration).
+
+When the system has not been initialized yet, you see the **Initial Setup** screen instead of the main app.
+
+## Steps
+
+<Steps>
+  <Step title="Open SlugBase in your browser" icon="globe" titleType="p">
+    Navigate to your deployment URL (for example `https://bookmarks.example.com` or `http://localhost:5000` for a local trial).
+  </Step>
+  <Step title="Complete Initial Setup" icon="user-plus" titleType="p">
+    Fill in:
+
+    - **Email**
+    - **Name**
+    - **Password** and **Confirm Password** — must match and meet these rules: 8–128 characters, with at least one uppercase letter, one lowercase letter, one digit, and one special character (e.g. `!@#$%`).
+
+    Select **Create Admin User**. On success you'll see **Setup completed successfully!** and land on the dashboard.
+  </Step>
+  <Step title="Sign in for future visits" icon="log-in" titleType="p">
+    After setup, use **Login** with the email and password you just created. Additional users can sign up at `/signup` as long as registration is enabled (the default). Note that sign-up sends a **verification email**, so SMTP must be configured first — see [Admin: SMTP email](/selfhosted/admin-smtp).
+  </Step>
+  <Step title="Optional: configure the workspace" icon="shield" titleType="p">
+    Open **Admin** to set up your instance further:
+
+    - **Users** — add more accounts or invite people by email.
+    - **Teams** — group users for shared bookmarks and folders.
+    - **OIDC Providers** — let users sign in with Google, GitHub, or your company SSO.
+    - **Settings** — configure SMTP so the app can send password reset and verification emails.
+    - **AI Suggestions** — enable AI-powered title, tag, and slug hints (requires an OpenAI API key).
+
+    <Callout kind="tip">
+      To close registration after you've invited everyone, set **`REGISTRATIONS_ENABLED=false`** in your environment — see [Configuration](/selfhosted/configuration).
+    </Callout>
+  </Step>
+</Steps>
+
+## Verify
+
+| Check | Outcome |
+| --- | --- |
+| Setup completion | You reach the dashboard without errors. |
+| Auth | Log out and log back in via `/login`. |
+| Admin | As the first user, **Admin** is available in the shell navigation. |
+
+## Troubleshooting
+
+<ExpandableGroup>
+  <Expandable title="I never see Initial Setup" default-open="false">
+    The server may already be initialized. If you expected a fresh install, confirm you are using an empty database or volume path.
+  </Expandable>
+  <Expandable title="Passwords do not match / rejected password" default-open="false">
+    The form shows **Passwords do not match** or **Password must be at least 8 characters long** when basic checks fail. After submit, the server can also reject passwords that lack an uppercase letter, lowercase letter, number, or special character (see the password rules in the setup step above).
+  </Expandable>
+  <Expandable title="Error after submit" default-open="false">
+    Check the API response message in the UI and the server logs. Common causes include database permission errors or invalid environment configuration.
+  </Expandable>
+</ExpandableGroup>
+
+## Related
+
+<Columns cols="2">
+  <Card title="Configuration" href="/selfhosted/configuration" icon="settings">
+    Secrets, URLs, and registration toggle.
+  </Card>
+  <Card title="Introduction" href="/selfhosted/introduction" icon="star">
+    Map of app areas and terminology.
+  </Card>
+</Columns>

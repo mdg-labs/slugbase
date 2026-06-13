@@ -1,0 +1,59 @@
+---
+title: "Sign up and login (Cloud)"
+description: "Create a SlugBase Cloud account with email and password, verify your email, log in, and reset a forgotten password."
+---
+
+<Callout kind="info">
+  **Cloud vs self-hosted:** This page describes the hosted product at **slugbase.app**. In-app behavior shared with core is documented in the [Self-hosted guides](/selfhosted/introduction) unless this page says otherwise.
+</Callout>
+
+## What you need
+
+An email address you can access and a password of at least **8 characters**. Cloud sign-up uses **email and password** only (there is no self-hosted-style initial **Setup** wizard; the server reports the system as already initialized for Cloud).
+
+## Sign up
+
+<Steps>
+  <Step title="Open the sign-up page" icon="user-plus" titleType="p">
+    Go to [slugbase.app](https://slugbase.app) and choose **Sign up**, or open `https://slugbase.app/app/signup` directly.
+  </Step>
+  <Step title="Fill the form" icon="file-text" titleType="p">
+    Enter **Email**, **Name**, **Password**, and **Confirm password**. The in-app hint matches the product copy: passwords need at least 8 characters.
+  </Step>
+  <Step title="Accept terms" icon="shield-check" titleType="p">
+    Enable the control that confirms you have read and accept the **Terms and Conditions** and **Privacy Policy** (required to submit). Those documents open from the links on the form (hosted at [Terms](https://slugbase.app/terms) and [Privacy](https://slugbase.app/privacy)).
+  </Step>
+  <Step title="Submit and verify email" icon="mail" titleType="p">
+    Choose **Sign up**. You should see **Check your email** and a message that a verification link was sent. Open the link in the email, then you can log in.
+  </Step>
+</Steps>
+
+## Log in
+
+<Steps>
+  <Step title="Open login" icon="log-in" titleType="p">
+    Use **Log in** from the marketing site or go to `https://slugbase.app/app/login`.
+  </Step>
+  <Step title="Enter credentials" icon="key-round" titleType="p">
+    Enter **Email** and **Password**, then sign in. If your email is not verified yet, the app shows a message to verify first (see below).
+  </Step>
+</Steps>
+
+## If you must verify email before logging in
+
+When the server requires verification, you may be redirected to a **Verify your email** flow (`/app/verify-email-required`). There you can **Resend verification email** and optionally correct a typo in your email address; the copy explains that a new link is sent to the updated address when you change it.
+
+## Forgot password
+
+Use **Forgot password?** on the login page to start a reset flow (`/app/reset-password` or `/app/password-reset`). Complete the steps in the email the service sends you.
+
+## Related
+
+<Columns cols="2">
+  <Card title="Workspaces" href="/cloud/workspaces" icon="building-2">
+    How your workspace is set up after sign-up.
+  </Card>
+  <Card title="Profile and cloud settings" href="/cloud/profile-and-cloud-settings" icon="user-cog">
+    Account settings inside the app.
+  </Card>
+</Columns>

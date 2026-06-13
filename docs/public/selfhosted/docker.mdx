@@ -1,0 +1,92 @@
+---
+title: "Run SlugBase with Docker"
+description: "Build and run the production Docker image: ports, volumes, health checks, and build-time frontend options."
+---
+
+## What you need
+
+- **Docker** installed on your server or workstation.
+- Strong values for **`JWT_SECRET`**, **`ENCRYPTION_KEY`**, and (for production) **`SESSION_SECRET`** — see [Configuration](/selfhosted/configuration).
+- A host directory you can mount for SQLite data (default database path inside the container is `/app/data/slugbase.db`).
+
+The primary **`Dockerfile`** at the repository root produces a **single container** that runs the Node backend and serves the built frontend static assets from `public` in production mode.
+
+<Callout kind="alert">
+  Do not paste real secrets into issue trackers or chat logs. Use a secret store, `.env` (kept out of git), or your orchestrator’s secret mechanism.
+</Callout>
+
+## Steps
+
+<Steps>
+  <Step title="Prepare environment variables" icon="settings" titleType="p">
+    Create a file (for example `.env`) or export variables in your shell. At minimum you need the secrets the server validates at startup. When the app is reachable on a public URL, also set **`BASE_URL`** and **`FRONTEND_URL`** to that HTTPS origin. See [Configuration](/selfhosted/configuration) for details.
+  </Step>
+  <Step title="Get the image" icon="hammer" titleType="p">
+    **Published image (recommended):** pull from Docker Hub:
+
+    ```bash
+    docker pull mdglabs/slugbase:latest
+    ```
+
+    **Build from source:** from the repository root (where the `Dockerfile` lives):
+
+    ```bash
+    docker build -t slugbase:local .
+    ```
+
+    Use **`mdglabs/slugbase:latest`** or **`slugbase:local`** as the image name in the next step.
+
+    When building from source, you can pass optional build arguments — but the defaults are correct for self-hosted use, so you normally don't need to change them.
+  </Step>
+  <Step title="Run the container" icon="play" titleType="p">
+    Map port **5000**, persist `/app/data`, and pass environment variables (example uses `--env-file`):
+
+    ```bash
+    mkdir -p ./data
+    docker run -d \
+      --name slugbase \
+      -p 5000:5000 \
+      -v "$(pwd)/data:/app/data" \
+      --env-file .env \
+      -e DB_PATH=/app/data/slugbase.db \
+      mdglabs/slugbase:latest
+    ```
+
+    The image sets `NODE_ENV=production`, `PORT=5000`, and defaults `DB_TYPE=sqlite` with `DB_PATH=/app/data/slugbase.db`.
+  </Step>
+</Steps>
+
+## Verify
+
+- **Health:** Open `http://localhost:5000/api/health` — a successful response means the container is running.
+- **UI:** Open `http://localhost:5000`. On a fresh database you'll see **Initial Setup** — follow [First run setup](/selfhosted/first-run-setup).
+- **API docs:** Browse to `/api-docs` for the interactive API reference (disable with `SLUGBASE_API_DOCS=false`).
+
+## Backend-only image
+
+The repository also includes `Dockerfile.backend` for deployments that only need the API (no web UI). Most users should use the main `Dockerfile`, which includes everything.
+
+## Troubleshooting
+
+<ExpandableGroup>
+  <Expandable title="Container exits immediately" default-open="false">
+    Inspect logs with `docker logs slugbase`. Missing or weak `JWT_SECRET` / `ENCRYPTION_KEY` / production `SESSION_SECRET` causes the process to exit during environment validation.
+  </Expandable>
+  <Expandable title="Database not persisted" default-open="false">
+    Ensure the bind mount targets `/app/data` and that `DB_PATH` remains `/app/data/slugbase.db` (as in the example compose file). Permissions should allow the non-root `nodejs` user in the image to write the file.
+  </Expandable>
+  <Expandable title="I need PostgreSQL instead of SQLite" default-open="false">
+    Set `DB_TYPE=postgresql` and provide either `DATABASE_URL` or `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD`. A commented PostgreSQL service is included in the compose template on [Docker Compose](/selfhosted/docker-compose) (and in the repository’s `docker-compose.example.yml`). See [Configuration](/selfhosted/configuration).
+  </Expandable>
+</ExpandableGroup>
+
+## Related
+
+<Columns cols="2">
+  <Card title="Docker Compose" href="/selfhosted/docker-compose" icon="layers">
+    Declarative service, env file, and optional Postgres sidecar.
+  </Card>
+  <Card title="Reverse proxy" href="/selfhosted/reverse-proxy" icon="globe">
+    TLS termination and headers in front of the container.
+  </Card>
+</Columns>

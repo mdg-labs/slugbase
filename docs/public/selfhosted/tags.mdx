@@ -1,0 +1,62 @@
+---
+title: "Tags"
+description: "Create tags, sort the tag list, and use tags to filter bookmarks across your library."
+---
+
+## What this page is for
+
+**Tags** (`/tags`) are labels you attach to bookmarks. The page subtitle is **Label and filter bookmarks across your library.** Tags help you find subsets of bookmarks from **Bookmarks** or from **Most Used Tags** on the **Overview** dashboard.
+
+<Callout kind="info">
+  Everything on this page is part of **self-hosted** core. Tag limits are not imposed by the open-source product itself beyond practical API and UI constraints.
+</Callout>
+
+## Before you start
+
+You add tags to bookmarks from the **Bookmarks** page (**Create Bookmark** / **Edit Bookmark**), not only from this list. You can create tags ahead of time here so they appear in pickers.
+
+## How to create or edit a tag
+
+<Steps>
+  <Step title="Open Tags" icon="tag" titleType="p">
+    In the sidebar, choose **Tags**.
+  </Step>
+  <Step title="Create or edit" icon="plus" titleType="p">
+    Select **Create Tag** or **Edit Tag** on an existing row.
+  </Step>
+  <Step title="Name and save" icon="save" titleType="p">
+    Set **Tag Name** and save. Deleting uses **Delete Tag** with a confirmation naming the tag.
+  </Step>
+</Steps>
+
+Empty state copy: **No tags yet** — **Create tags to organize and filter your bookmarks.**
+
+## Sort and pagination
+
+- Default sort is **Alphabetical**; you can choose **Recently Added** from the toolbar. A chip like `Sort: …` appears when you are not on the default.
+- **Per page** and page navigation split long tag lists; **Clear all** on chips resets sort to default.
+
+If filters yield no rows, the app may show **No tags match the current filters. Clear filters to see all.**
+
+## Using tags from Bookmarks and the dashboard
+
+- On **Bookmarks**, use **Filter by Tag** (**All Tags** clears the filter).
+- On **Overview**, **Most Used Tags** shows each tag with a **numeric badge** (count only); choosing a tag opens **Bookmarks** filtered to that tag.
+- In the command palette, picking a tag result navigates to **Bookmarks** with that tag filter applied.
+
+## Related
+
+<Columns cols="2">
+  <Card title="Bookmarks" href="/selfhosted/bookmarks" icon="bookmark">
+    Add tags to bookmarks and filter the main list.
+  </Card>
+  <Card title="Dashboard" href="/selfhosted/dashboard" icon="layout-grid">
+    **Most Used Tags** shortcuts live on Overview.
+  </Card>
+  <Card title="Folders" href="/selfhosted/folders" icon="folder">
+    Combine folders and tags for structure and discovery.
+  </Card>
+  <Card title="Import and export" href="/selfhosted/import-export" icon="arrow-left-right">
+    Imports can bring in bookmark metadata; plan backups around exports.
+  </Card>
+</Columns>

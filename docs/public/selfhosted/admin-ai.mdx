@@ -1,0 +1,68 @@
+---
+title: "Admin: AI suggestions"
+description: "Enable OpenAI-powered bookmark suggestions in self-hosted SlugBase: admin toggle, API key, model selection, and user preferences."
+---
+
+## What this is for
+
+**AI Suggestions** (sidebar under **Admin**) configures optional AI help when people create bookmarks: suggested **title**, **tags**, and **slug**. The page title in the app is **AI Bookmark Suggestions**; the UI copy states that it uses **OpenAI** (for example **GPT-4o-mini** in the default description text).
+
+## Before you start
+
+- You need access to **Admin** (see [Workspace admin overview](/selfhosted/admin-overview)).
+- Self-hosted builds show the full form: **Enable AI suggestions**, **Provider** (OpenAI), **API Key**, and **Model**. Obtain an API key from your OpenAI account.
+
+<Callout kind="info">
+  **Self-hosted vs cloud:** On your own server, plan information from `/config/plan` is not used; the **AI Suggestions** item stays available to admins. On the hosted product, whether this page appears and what you can edit may depend on subscription and deployment settings.
+</Callout>
+
+## How to turn on AI and set credentials
+
+<Steps>
+  <Step title="Open AI Suggestions" icon="sparkles" titleType="p">
+    Under **Admin**, choose **AI Suggestions**.
+  </Step>
+  <Step title="Enable" icon="toggle-left" titleType="p">
+    Turn on **Enable AI suggestions**. The app saves this change when you toggle it.
+  </Step>
+  <Step title="Provider" icon="cpu" titleType="p">
+    Choose **Provider** (OpenAI is available in the selector).
+  </Step>
+  <Step title="API key" icon="key-round" titleType="p">
+    Paste your **API Key**. The field saves on blur when you enter a non-empty value. To rotate keys, enter a new key; when a key is already stored, the placeholder explains that you can enter a new key to change it.
+  </Step>
+  <Step title="Model" icon="list" titleType="p">
+    After a key is set and saved, open **Model** to pick from models returned by the server. If the list is still loading, wait for **Loading models…** to finish; if loading fails, check the key and try again.
+  </Step>
+</Steps>
+
+## User-level control
+
+When the instance exposes AI suggestions (backend reports they are available), each user sees **AI suggestions** under **Preferences** on [Profile and preferences](/selfhosted/profile-and-preferences) so they can opt in or out for their own account. That preference only matters if an administrator has enabled suggestions for the instance.
+
+## Verify
+
+- With AI enabled and a valid key, create a bookmark and confirm suggestions appear during creation (the bookmark UI shows an AI-suggesting state while working).
+- If AI is not available from the server yet, the profile **AI suggestions** toggle stays hidden until admin configuration succeeds.
+
+## Troubleshooting
+
+<ExpandableGroup>
+  <Expandable title="Model list is empty or errors" default-open="false">
+    Confirm **API Key** is saved, then retry. Network or key permission issues surface as **Could not load models** style messaging in the app.
+  </Expandable>
+  <Expandable title="Users do not see the profile AI toggle" default-open="false">
+    The toggle appears only after the instance exposes AI suggestions to signed-in users—typically once an administrator enables AI and the key or provider setup succeeds.
+  </Expandable>
+</ExpandableGroup>
+
+## Related
+
+<Columns cols="2">
+  <Card title="Configuration" href="/selfhosted/configuration" icon="settings">
+    Notes on AI env vars vs in-app setup for self-hosted installs.
+  </Card>
+  <Card title="Bookmarks" href="/selfhosted/bookmarks" icon="bookmark">
+    Creating and managing bookmarks where suggestions apply.
+  </Card>
+</Columns>

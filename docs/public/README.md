@@ -1,6 +1,6 @@
 # SlugBase public documentation (source)
 
-Customer and operator documentation for [Documentation.AI](https://documentation.ai). Content here is authored as MDX and synced to [`mdg-labs/slugbase-docs`](https://github.com/mdg-labs/slugbase-docs) on push to `main` (see [#396](https://github.com/mdg-labs/slugbase/issues/396)).
+Customer and operator documentation for [Documentation.AI](https://documentation.ai). **This directory in the SlugBase monorepo is the source of truth** for publishable docs. Content is authored as MDX here and synced to [`mdg-labs/slugbase-docs`](https://github.com/mdg-labs/slugbase-docs) on push to `main` (see [#396](https://github.com/mdg-labs/slugbase/issues/396)).
 
 **Engineering docs** (spec, roadmap, design prototype, agent rules) live under [`docs/internal/`](../internal/) and are **never** synced.
 
@@ -121,7 +121,7 @@ Each container uses **exactly one** child type (`groups`, `pages`, or `dropdowns
 - `icon` — optional Lucide icon name.
 - `href` — external links only (use instead of `path`).
 
-`initialRoute` sets the default page when visiting `/` (path without `.mdx`, e.g. `selfhosted/introduction`). It must resolve to an existing `.mdx` file once content is migrated.
+`initialRoute` sets the default page when visiting `/` (path without `.mdx`, e.g. `selfhosted/introduction`). It must resolve to an existing `.mdx` file.
 
 ### OpenAPI / API tabs
 
@@ -158,7 +158,7 @@ The validator checks **only** `docs/public/` (not `docs/internal/`):
 
 - Every `*.mdx` has `title` and `description` frontmatter
 - Every `path` in `documentation.json` resolves to a matching `.mdx` file
-- Every `openapi` path resolves to an existing file (once content is present)
+- Every `openapi` path resolves to an existing file
 - MDX filenames use lowercase-with-hyphens
 - `documentation.json` is valid JSON with required keys `name` and `navigation`
 

@@ -1,0 +1,90 @@
+---
+title: "Bookmarks"
+description: "Create and edit bookmarks, filter and sort the list, bulk actions, page search, and the global command palette."
+---
+
+## What this page is for
+
+**Bookmarks** is where you manage all your saved links. Each bookmark has a title and URL; you can also add a **Slug** (for short links), assign **Folders** and **Tags**, and control whether the link is forwarded via `/go/<slug>`.
+
+From the toolbar you can filter by folder or tag, switch between **Card View** and **List View**, and access **Import** and **Export** under **More**.
+
+## Before you start
+
+Folders and tags are optional — you can add them to bookmarks at any time. To set up browser shortcuts using slugs, see [Slugs overview](/selfhosted/slugs-overview) and [Browser setup](/selfhosted/browser-setup).
+
+## How to create or edit a bookmark
+
+<Steps>
+  <Step title="Open Bookmarks" icon="bookmark" titleType="p">
+    In the sidebar, choose **Bookmarks**.
+  </Step>
+  <Step title="Start the editor" icon="plus" titleType="p">
+    Select **Create Bookmark**, or use **Edit Bookmark** from a row or card menu on an existing item.
+  </Step>
+  <Step title="Fill in the form" icon="file-text" titleType="p">
+    Enter **Title** and **URL**. Optionally set **Slug**, assign **Folders** and **Tags**, and adjust **Enable Forwarding** if you use short links. Save with **Save**.
+  </Step>
+</Steps>
+
+<Callout kind="tip">
+  The empty state offers **Create your first bookmark** and **Import bookmarks** when you have no data yet.
+</Callout>
+
+## Filter, sort, and search on the page
+
+Use the toolbar below the title:
+
+- **Search** — placeholder **Search bookmarks, folders, tags...**; applies the query to the list when you submit.
+- **Filter by Folder** / **Filter by Tag** — **All Folders** and **All Tags** clear the respective filter.
+- **Sort By** — options include **Recently Added**, **Alphabetical**, **Most Used**, and **Recently Accessed**.
+- **Per page** — page size (for example 50, 100, 200, 500).
+- **More** — opens a menu with **Import**, **Export**, **Pinned** toggle, **View Mode** (**Card View** / **List View**), **Select Multiple**, and **Per page** when space is tight.
+
+Scope tabs (when available): **All**, **Mine**, **Shared with me**, **Shared by me**. Active filters appear as chips; select **Clear all** to reset everything.
+
+## Bulk actions
+
+Choose **Select Multiple** from **More**, select rows, then use the bottom bar for **Move to Folder**, **Add Tags**, **Share with Teams** (when sharing is available), **Delete Selected**, **Select All**, **Deselect All**, or selecting all matching the current filters when offered.
+
+## Command palette
+
+The command palette is the dialog opened by **Ctrl+K** (**⌘K** on Mac) from anywhere in the app, or by selecting the large command bar on the **Overview** dashboard (accessible name **Open command palette**). Its input uses the same placeholder as the dashboard: **Type a command or search bookmarks**.
+
+### When the input is empty
+
+Results are grouped as:
+
+- **Navigation** — **Bookmarks**, **Folders**, **Tags**, and **Admin** if your account can access workspace admin.
+- **Quick Actions** — **Create Bookmark**, **Create Folder**, **Import**, **Export** (these navigate or open the right flow on **Bookmarks**).
+
+### When you type a normal search
+
+The app searches bookmarks (and matches navigation and quick-action labels). Choosing a bookmark opens its URL in a new tab; choosing a folder or tag sends you to **Bookmarks** with the corresponding filter.
+
+### Go mode (`go …`)
+
+If the query matches the `go` command pattern (for example `go` alone or `go myslug`), the list switches to a **Go** group: bookmarks whose **Slug** matches are shown, with `go/<slug>` shown under each title. Choosing an item opens that bookmark’s URL.
+
+Press **Enter** when the line looks like `go <slug>` (or a pasted `/go/<slug>` path) to open the forwarding URL for that slug in a new tab.
+
+<Callout kind="tip">
+  For setting up your browser’s address bar to use the same `go` idiom, use the in-app **Search engine guide** (`/search-engine-guide`) linked from bookmark UI copy where shown.
+</Callout>
+
+## Related
+
+<Columns cols="2">
+  <Card title="Dashboard" href="/selfhosted/dashboard" icon="layout-grid">
+    Home stats and the same command bar shortcut.
+  </Card>
+  <Card title="Import and export" href="/selfhosted/import-export" icon="arrow-left-right">
+    File formats and backup workflow in detail.
+  </Card>
+  <Card title="Folders" href="/selfhosted/folders" icon="folder">
+    Create folders and filter bookmarks by folder.
+  </Card>
+  <Card title="Tags" href="/selfhosted/tags" icon="tag">
+    Manage tags used on bookmarks.
+  </Card>
+</Columns>

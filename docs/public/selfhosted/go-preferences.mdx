@@ -1,0 +1,60 @@
+---
+title: "Go preferences"
+description: "Remembered slug choices when multiple bookmarks share one slug, and how to clear them."
+---
+
+## What this is for
+
+Sometimes more than one bookmark you can access uses the same **slug**. The first time that happens, SlugBase shows a simple chooser page whose heading is **Multiple bookmarks match** (including the slug in quotes), with a table (**Title**, **Source**, and **Always use this**). Picking **Always use this** saves your choice so the next visit to **`/go/`** with that slug goes straight to that bookmark.
+
+The in-app page for those saved rows is titled **Remembered Slug Choices** (`/go-preferences`). The **Profile** screen groups this under **Quick Access**, with **Manage remembered slug choices** linking here.
+
+## Before you start
+
+- You need a slug collision to have occurred (or you will only see the empty state).
+- You must be signed in; **`/go/`** resolution uses your account to resolve bookmarks.
+
+## How to open Remembered Slug Choices
+
+<Steps>
+  <Step title="Open Profile" icon="user" titleType="p">
+    In the sidebar, choose **Profile**.
+  </Step>
+  <Step title="Open Go preferences" icon="sliders-horizontal" titleType="p">
+    Under **Quick Access**, select **Manage remembered slug choices**.
+  </Step>
+</Steps>
+
+You can also go directly to **`/go-preferences`** in the app (same path as in the address bar after your SlugBase origin).
+
+## What you see on the page
+
+- **Title:** **Remembered Slug Choices**
+- **Description:** Explains that when multiple bookmarks share the same slug, your saved choice controls which one opens for **`/go`** resolution.
+- Each row shows the **`/go/`** path and slug, a **Source** label (workspace), the bookmark **Title**, actions to **Open** the URL, and **Remove** for that remembered choice.
+
+<Callout kind="tip">
+  If the page is empty, you haven't saved any slug preferences yet. Visit `/go/<slug>` when multiple bookmarks match the same slug to pick and save your preferred one.
+</Callout>
+
+## Remove a remembered choice
+
+<Steps>
+  <Step title="Find the slug row" icon="list" titleType="p">
+    On **Remembered Slug Choices**, locate the row for the slug you want to clear.
+  </Step>
+  <Step title="Remove" icon="trash-2" titleType="p">
+    Use **Remove** (trash) for that row. After removal, the next request to **`/go/`** with that slug may show the chooser again if several bookmarks still match.
+  </Step>
+</Steps>
+
+## Related
+
+<Columns cols="2">
+  <Card title="Slugs overview" href="/selfhosted/slugs-overview" icon="search">
+    Slugs, forwarding, and **`/go/`** behavior.
+  </Card>
+  <Card title="Browser setup" href="/selfhosted/browser-setup" icon="globe-2">
+    Keyword + slug in the browser address bar.
+  </Card>
+</Columns>

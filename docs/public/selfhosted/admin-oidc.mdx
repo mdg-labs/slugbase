@@ -1,0 +1,52 @@
+---
+title: "Admin: OIDC providers"
+description: "Configure OpenID Connect sign-in for self-hosted SlugBase: issuer, client credentials, callback URL, and optional custom endpoints."
+---
+
+## What this is for
+
+**OIDC Providers** lets you register one or more OpenID Connect identity providers so users can sign in with accounts from that IdP (for example your company SSO), in addition to—or instead of—local passwords, depending on how you use the product.
+
+## Before you start
+
+- You need access to **Admin** (see [Workspace admin overview](/selfhosted/admin-overview)).
+- Have your IdP’s **issuer** URL and **client ID** ready; **Client secret** is required when adding a new provider in the UI.
+
+## How to add a provider
+
+<Steps>
+  <Step title="Open OIDC Providers" icon="key" titleType="p">
+    Under **Admin**, choose **OIDC Providers**.
+  </Step>
+  <Step title="Add Provider" icon="plus" titleType="p">
+    Select **Add Provider**.
+  </Step>
+  <Step title="Fill the form" icon="form-input" titleType="p">
+    Enter **Provider Key** (your label for this IdP), **Issuer URL**, **Client ID**, and **Client Secret** for a new provider. Default **Scopes** are suitable for many setups (`openid profile email`); adjust if your IdP requires different scopes.
+  </Step>
+  <Step title="Review behavior flags" icon="toggle-left" titleType="p">
+    **Auto Create Users** controls whether successful IdP sign-in can create a new SlugBase user automatically. **Default Role** sets the role for auto-created users.
+  </Step>
+  <Step title="Custom endpoints (optional)" icon="link" titleType="p">
+    Most providers work with just the issuer URL and you can leave **Custom OIDC Endpoints** empty. Only fill them in if your provider requires specific **Authorization URL**, **Token URL**, or **UserInfo URL** values that differ from the standard discovery paths.
+  </Step>
+  <Step title="Save and register the callback" icon="check" titleType="p">
+    After saving, open the provider card and copy **Callback URL**. Register that exact URL as an allowed redirect URI in your IdP application settings.
+  </Step>
+</Steps>
+
+## After it is configured
+
+- Each provider card shows the issuer, optional endpoint hints, **Auto Create** / **Default Role** badges, and the **Callback URL** in a monospace block for easy copying.
+- Use **Edit** or **Delete** from the card actions; delete asks for confirmation.
+
+## Related
+
+<Columns cols="2">
+  <Card title="First run setup" href="/selfhosted/first-run-setup" icon="rocket">
+    Creating the first administrator and getting the instance online.
+  </Card>
+  <Card title="Profile and preferences" href="/selfhosted/profile-and-preferences" icon="user-cog">
+    OIDC-managed accounts may see email as read-only in profile.
+  </Card>
+</Columns>

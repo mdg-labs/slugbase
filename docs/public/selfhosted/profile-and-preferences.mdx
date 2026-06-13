@@ -1,0 +1,84 @@
+---
+title: "Profile and preferences"
+description: "Update your account details, language and theme, optional AI suggestions, and quick access to Go preferences."
+---
+
+## What this is for
+
+The **Profile** page is where you manage your own account: **Email** and **Name**, **Preferences** (language and theme, and **AI suggestions** when that feature is available for your workspace), a shortcut to **Go preferences**, optional [two-factor authentication](/selfhosted/two-factor-authentication), and—on the same screen—personal API tokens and account deletion (those topics have dedicated guides).
+
+## Before you start
+
+- You must be signed in.
+- Open **Profile** from the user menu (avatar) in the top bar—the item is labeled **Profile**.
+
+## Open Profile
+
+<Steps>
+  <Step title="Open the user menu" icon="user" titleType="p">
+    In the top bar, select your avatar or account control to open the menu.
+  </Step>
+  <Step title="Choose Profile" icon="user-cog" titleType="p">
+    Select **Profile**. The page title is **Profile**, with the subtitle **Manage your account settings and preferences**.
+  </Step>
+</Steps>
+
+The in-app route is **`/profile`** (after your SlugBase app’s base path, if you use one).
+
+## Account
+
+This block is titled **Account**, with the description **Your account details and quick access.**
+
+| Row | What you can do |
+| --- | --- |
+| **Email** | Select **Edit**, change the address, then **Save** or **Cancel**. If you use OIDC sign-in, the helper text explains that **Email is managed by your identity provider and cannot be changed here.** A pending email change may show **Pending email verification** with instructions. |
+| **Name** | Select **Edit**, update your name, then **Save** or **Cancel**. |
+| **Quick Access** | Text explains using **`/go/<slug>`** for quick access. Follow **Manage remembered slug choices** to open [Go preferences](/selfhosted/go-preferences). |
+
+## Preferences
+
+This block is titled **Preferences**, with the description **Language, theme, and display options.**
+
+<Steps>
+  <Step title="Set language" icon="languages" titleType="p">
+    Under **Language**, pick **English** or **Deutsch** (these are the options on the Profile screen today).
+  </Step>
+  <Step title="Set theme" icon="palette" titleType="p">
+    Under **Theme**, choose **Auto**, **Light**, or **Dark**.
+  </Step>
+  <Step title="Save" icon="save" titleType="p">
+    If anything changed, select **Save** at the bottom of the card. While edits are unsaved, you may see **Unsaved changes** next to the button.
+  </Step>
+</Steps>
+
+### AI suggestions
+
+When your workspace exposes this option (the server reports that AI suggestions are available), **Preferences** also includes **AI suggestions** with the description **Suggest title, tags, and slug when creating bookmarks**. Use the toggle to turn that on or off, then **Save** if the footer shows unsaved changes.
+
+<Callout kind="info">
+  Workspace-wide AI is configured by an admin. If the toggle does not appear, AI suggestions are not available in your deployment or for your account.
+</Callout>
+
+## Admin badge
+
+If you can access workspace administration, an **Admin** badge may appear next to **Signed in as:** and your email on the Profile header.
+
+## Related
+
+<Columns cols="2">
+  <Card title="API tokens" href="/selfhosted/api-tokens" icon="key-round">
+    Create and revoke personal tokens for the REST API from the same Profile page.
+  </Card>
+  <Card title="Two-factor authentication" href="/selfhosted/two-factor-authentication" icon="shield">
+    TOTP and backup codes; API tokens do not require MFA on each request.
+  </Card>
+  <Card title="Delete account" href="/selfhosted/delete-account" icon="user-x">
+    Permanently remove your account and data from the Danger zone on Profile.
+  </Card>
+  <Card title="Go preferences" href="/selfhosted/go-preferences" icon="sliders-horizontal">
+    Remembered slug choices linked from **Quick Access** on Profile.
+  </Card>
+  <Card title="Browser setup" href="/selfhosted/browser-setup" icon="globe-2">
+    Using slugs from the browser address bar.
+  </Card>
+</Columns>

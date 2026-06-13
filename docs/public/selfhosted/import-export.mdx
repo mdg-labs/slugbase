@@ -1,0 +1,75 @@
+---
+title: "Import and export"
+description: "Bring bookmarks in from JSON or HTML files and download a JSON backup from the Bookmarks page."
+---
+
+## What this is for
+
+Self-hosted SlugBase lets you **Import** bookmark files and **Export** your library as JSON from **Bookmarks**. Use imports to migrate from another tool or a browser export; use export for backups and moving data between instances you control.
+
+<Callout kind="info">
+  This page documents **self-hosted** behavior from the core app. Hosted plans may enforce bookmark limits on import; see the Cloud product docs starting at [Cloud introduction](/cloud/introduction) if you use slugbase.app.
+</Callout>
+
+## Before you start
+
+Open **Bookmarks** (`/bookmarks`). Import and export live in the toolbar **More** menu (**More**) as **Import** and **Export**.
+
+You can also open **Import** via **Quick Actions** in the command palette (**Ctrl+K** / **⌘K**), or from dashboard checklist links such as **Import browser bookmarks** when that banner is visible.
+
+## Import
+
+<Steps>
+  <Step title="Open Import" icon="upload" titleType="p">
+    On **Bookmarks**, open **More**, then **Import** (dialog title **Import**).
+  </Step>
+  <Step title="Choose a file" icon="file" titleType="p">
+    Select **Select File** and pick a `.json` or `.html` file (accepted types are restricted to those extensions).
+  </Step>
+  <Step title="Confirm results" icon="check" titleType="p">
+    The app shows a summary of how many bookmarks were imported and how many failed. Close the dialog when you are done.
+  </Step>
+</Steps>
+
+### Supported formats
+
+- **JSON** — an array of bookmark objects, each with `title` and `url` fields.
+- **HTML** — Netscape bookmark format, as exported by most browsers. Files larger than **10 MB** are rejected.
+
+<Callout kind="alert">
+  Only import files from sources you trust.
+</Callout>
+
+## Export
+
+<Steps>
+  <Step title="Open Export" icon="download" titleType="p">
+    On **Bookmarks**, open **More**, then **Export**.
+  </Step>
+  <Step title="Save the file" icon="save" titleType="p">
+    The browser downloads a JSON file named like `slugbase-bookmarks-YYYY-MM-DD.json` containing your exported bookmarks.
+  </Step>
+</Steps>
+
+**Export** downloads a **JSON** file. If you need HTML format for another tool, import the JSON into that tool directly or convert it yourself.
+
+<Callout kind="tip">
+  **Export** from **Quick Actions** in the command palette runs the same flow—it navigates to **Bookmarks** with export triggered.
+</Callout>
+
+## Related
+
+<Columns cols="2">
+  <Card title="Bookmarks" href="/selfhosted/bookmarks" icon="bookmark">
+    Toolbar **More** menu and bulk tools after importing.
+  </Card>
+  <Card title="Dashboard" href="/selfhosted/dashboard" icon="layout-grid">
+    Onboarding shortcuts include import links.
+  </Card>
+  <Card title="Configuration" href="/selfhosted/configuration" icon="settings">
+    Point your instance URL and API correctly before relying on backups.
+  </Card>
+  <Card title="First run setup" href="/selfhosted/first-run-setup" icon="rocket">
+    Ensure you can sign in before importing production data.
+  </Card>
+</Columns>

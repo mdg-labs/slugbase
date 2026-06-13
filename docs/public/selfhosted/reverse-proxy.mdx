@@ -1,0 +1,99 @@
+---
+title: "Reverse proxy and HTTPS"
+description: "Put SlugBase behind nginx, Caddy, or Traefik: set public URLs, preserve client IP, and keep cookies working."
+---
+
+## What you need
+
+- A domain name and TLS certificate (Let’s Encrypt or your CA).
+- A reverse proxy that can forward HTTP to the SlugBase container or process (default upstream port **5000**).
+- Environment variables **`BASE_URL`** and **`FRONTEND_URL`** set to the **public HTTPS URL** users type in the browser.
+
+SlugBase trusts one proxy hop, so it correctly reads the client's real IP and protocol from the headers your proxy sends. Session cookies are automatically marked **Secure** when `NODE_ENV=production` and `BASE_URL` starts with `https://`.
+
+<Callout kind="alert">
+  If **`BASE_URL`** stays `http://` while users reach the site over HTTPS, secure cookies may not match how browsers treat the session. Set both **`BASE_URL`** and **`FRONTEND_URL`** to the canonical `https://` origin.
+</Callout>
+
+## Steps
+
+<Steps>
+  <Step title="Point DNS at your proxy" icon="globe" titleType="p">
+    Create an A/AAAA (or CNAME) record for your hostname to the machine or load balancer that terminates TLS.
+  </Step>
+  <Step title="Forward to SlugBase" icon="arrow-right-left" titleType="p">
+    Proxy `/` to the backend listening on **`PORT`** (default **5000**). Use HTTP to the upstream unless you terminate TLS again behind the proxy.
+
+    Typical headers to set (names may vary by proxy):
+
+    - `Host` — original host from the client.
+    - `X-Forwarded-Proto` — `https` when the client used HTTPS.
+    - `X-Forwarded-For` — client IP chain.
+  </Step>
+  <Step title="Align environment variables" icon="settings" titleType="p">
+    Set:
+
+    ```bash
+    NODE_ENV=production
+    BASE_URL=https://bookmarks.example.com
+    FRONTEND_URL=https://bookmarks.example.com
+    ```
+
+    Add **`CORS_EXTRA_ORIGINS`** only if a separate origin loads the SPA or calls the API. See [Configuration](/selfhosted/configuration).
+  </Step>
+  <Step title="Reload and test" icon="check-circle" titleType="p">
+    Open the public URL, complete or confirm login, and verify **Admin** and **Bookmarks** load without mixed-content or redirect loops.
+  </Step>
+</Steps>
+
+## Example snippets
+
+<Tabs>
+  <Tab title="Caddy" icon="shield">
+    ```caddy
+    bookmarks.example.com {
+      reverse_proxy localhost:5000
+    }
+    ```
+  </Tab>
+  <Tab title="nginx (conceptual)" icon="server">
+    ```nginx
+    location / {
+      proxy_pass http://127.0.0.1:5000;
+      proxy_http_version 1.1;
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Verify
+
+- Open `https://your-domain/api/health` and confirm you get a successful response.
+- Sign in and refresh the page — you should stay signed in.
+- If OIDC login is configured, complete a full login cycle to confirm the callback URL works correctly.
+
+## Troubleshooting
+
+<ExpandableGroup>
+  <Expandable title="Redirect loops or wrong scheme in links" default-open="false">
+    Confirm **`X-Forwarded-Proto`** is `https` and **`BASE_URL`** uses `https://`. A single trusted proxy hop matches `trust proxy` = **1**; more complex chains may need proxy config adjustments.
+  </Expandable>
+  <Expandable title="WebSocket or long-lived requests" default-open="false">
+    SlugBase is primarily HTTP request/response; if you add extensions, ensure your proxy allows upgrade headers. Stock bookmark flows rarely need this.
+  </Expandable>
+</ExpandableGroup>
+
+## Related
+
+<Columns cols="2">
+  <Card title="Configuration" href="/selfhosted/configuration" icon="settings">
+    Full environment variable reference.
+  </Card>
+  <Card title="Docker Compose" href="/selfhosted/docker-compose" icon="layers">
+    Published ports and `.env` next to a proxy.
+  </Card>
+</Columns>

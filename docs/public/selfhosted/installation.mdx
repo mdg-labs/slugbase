@@ -1,0 +1,75 @@
+---
+title: "Installation"
+description: "How the SlugBase monorepo is organized, what to install, and how production builds map to the running server."
+---
+
+## What you need
+
+- **Git** and **Node.js 20** or later.
+- Internet access to download dependencies when running `npm install`.
+
+All commands below run from the repository root. Production serving runs via `npm run start`.
+
+## Steps
+
+<Steps>
+  <Step title="Clone the repository" icon="git-branch" titleType="p">
+    ```bash
+    git clone https://github.com/mdg-labs/slugbase.git
+    cd slugbase
+    ```
+  </Step>
+  <Step title="Install dependencies" icon="download" titleType="p">
+    ```bash
+    npm install
+    ```
+  </Step>
+  <Step title="Choose how you will run SlugBase" icon="workflow" titleType="p">
+    - **Local development:** `npm run dev` runs the backend and frontend together (see [Quick start](/selfhosted/quick-start)).
+    - **Production (no Docker):** `npm run build` then `npm run start` after setting up environment variables (see [Configuration](/selfhosted/configuration)).
+    - **Production with Docker:** use the ready-made **`docker-compose.yml`** from [Docker Compose](/selfhosted/docker-compose)—no git clone needed—or see [Docker](/selfhosted/docker) for single-container options.
+  </Step>
+  <Step title="Build for production (when not using Docker)" icon="hammer" titleType="p">
+    ```bash
+    npm run build
+    ```
+  </Step>
+  <Step title="Start the production server" icon="play" titleType="p">
+    ```bash
+    npm run start
+    ```
+
+    The server runs on port **5000** by default and serves both the API and the web UI.
+  </Step>
+</Steps>
+
+## Verify
+
+- After `npm run build`, the build should complete without errors.
+- After `npm run start`, open `http://localhost:5000/api/health` — a successful response means the server is up.
+
+<Callout kind="info">
+  A **backend-only** image (`Dockerfile.backend`) is available for API-only deployments. Most users should use the main `Dockerfile` or the Docker Compose setup, which includes the full web UI.
+</Callout>
+
+## Troubleshooting
+
+<ExpandableGroup>
+  <Expandable title="npm install fails or workspace errors" default-open="false">
+    Use a supported Node version (see **Node 20** above), delete `node_modules` only inside the repo if needed, and re-run `npm install` from the **repository root** so workspaces resolve correctly.
+  </Expandable>
+  <Expandable title="start fails with environment validation errors" default-open="false">
+    The backend validates `JWT_SECRET`, `ENCRYPTION_KEY`, and production `SESSION_SECRET` before listening. Generate long random values and set `NODE_ENV=production` only when you intend to run in production mode. Details: [Configuration](/selfhosted/configuration).
+  </Expandable>
+</ExpandableGroup>
+
+## Related
+
+<Columns cols="2">
+  <Card title="Quick start" href="/selfhosted/quick-start" icon="zap">
+    Short paths for dev and production.
+  </Card>
+  <Card title="First run setup" href="/selfhosted/first-run-setup" icon="rocket">
+    Create the first admin and sign in.
+  </Card>
+</Columns>

@@ -1,0 +1,83 @@
+---
+title: "Self-hosted FAQ"
+description: "Short answers about installing, using, and administering self-hosted SlugBase, with links to detailed guides."
+---
+
+## Getting started and hosting
+
+<ExpandableGroup>
+  <Expandable title="What is self-hosted SlugBase?" default-open="false">
+    An open-source bookmark manager you run on your own server or container. You get bookmarks, folders, tags, optional `/go/` short links, teams, and admin tools without using the hosted product. See [Introduction](/selfhosted/introduction).
+  </Expandable>
+  <Expandable title="How do I install it?" default-open="false">
+    Use [Quick start](/selfhosted/quick-start) for the fastest path, [Docker](/selfhosted/docker) or [Docker Compose](/selfhosted/docker-compose) for containers, or [Installation](/selfhosted/installation) for other options. Then complete [First run setup](/selfhosted/first-run-setup).
+  </Expandable>
+  <Expandable title="Which database can I use?" default-open="false">
+    **SQLite** is the default (good for many single-server installs). **PostgreSQL** is supported for larger deployments. Set `DB_TYPE` and related variables as described in [Configuration](/selfhosted/configuration).
+  </Expandable>
+  <Expandable title="Do I need HTTPS?" default-open="false">
+    For production, yes—session cookies use **Secure** when `NODE_ENV=production` and **`BASE_URL`** starts with `https://`. Align **`BASE_URL`** and **`FRONTEND_URL`** with your public URL. See [Reverse proxy and HTTPS](/selfhosted/reverse-proxy).
+  </Expandable>
+  <Expandable title="Where is the hosted (cloud) version documented?" default-open="false">
+    Plans, workspaces, and billing are covered under [Cloud](/cloud/introduction). Core bookmark and slug behavior is the same; this site’s self-hosted guides describe the open-source app.
+  </Expandable>
+</ExpandableGroup>
+
+## Bookmarks, slugs, and search
+
+<ExpandableGroup>
+  <Expandable title="What is a slug?" default-open="false">
+    A short keyword on a bookmark. With **Enable Forwarding** on, visitors can open **`/go/`** plus that keyword on your SlugBase site. See [Slugs overview](/selfhosted/slugs-overview).
+  </Expandable>
+  <Expandable title="How do I search the app quickly?" default-open="false">
+    Use **Ctrl+K** (Windows/Linux) or **⌘K** (macOS) for the command palette. Bookmark behavior and the palette are covered in [Bookmarks](/selfhosted/bookmarks).
+  </Expandable>
+  <Expandable title="Can I import or export bookmarks?" default-open="false">
+    Yes—JSON import and export are available in the app. See [Import and export](/selfhosted/import-export).
+  </Expandable>
+</ExpandableGroup>
+
+## Accounts and security
+
+<ExpandableGroup>
+  <Expandable title="Who is the admin?" default-open="false">
+    The **first user** created during **Initial Setup** is an administrator. After that, sign in at `/login`; additional users can use `/signup` while registration stays enabled.
+  </Expandable>
+  <Expandable title="How do I disable open registration?" default-open="false">
+    Set **`REGISTRATIONS_ENABLED=false`** in the server environment. See [Configuration](/selfhosted/configuration) and [First run setup](/selfhosted/first-run-setup).
+  </Expandable>
+  <Expandable title="Can I use Google, GitHub, or another OIDC login?" default-open="false">
+    Yes—configure providers under **Admin → OIDC Providers**. Details are in [OIDC](/selfhosted/admin-oidc).
+  </Expandable>
+  <Expandable title="Email verification required" default-open="false">
+    If sign-up or login requires verification, you may be sent to **`/verify-email-required`**. There you can **resend** the link to your address or **correct a typo** in the email field, as the on-page copy explains. Links that verify in one step use **`/verify-email?token=…`** (the token is in the query string). Invalid, expired, or already-used links show the messages from the app (for example a prompt to resend when a signup link expired). On **SlugBase Cloud**, verification and account email rules are described in [Sign up and login](/cloud/sign-up-and-login).
+  </Expandable>
+  <Expandable title="Password reset" default-open="false">
+    Request a link from **`/reset-password`** or **`/password-reset`** (both routes open the same screen). The email you receive contains a link with **`token=`** in the URL; that opens the **set new password** step. If no message arrives, configure outbound mail under **Admin → Settings** ([SMTP](/selfhosted/admin-smtp)) and see [Troubleshooting](/selfhosted/troubleshooting) (for example password-reset email issues).
+  </Expandable>
+  <Expandable title="How do I use the HTTP API?" default-open="false">
+    Create a personal token under **Profile** and follow [API tokens](/selfhosted/api-tokens). Your server serves the self-hosted OpenAPI spec at **`/openapi.json`** and **`/openapi.yaml`**; interactive docs are at **`/api-docs`** unless you disable them with **`SLUGBASE_API_DOCS=false`** (see [Configuration](/selfhosted/configuration)).
+  </Expandable>
+</ExpandableGroup>
+
+## Workspace admin
+
+<ExpandableGroup>
+  <Expandable title="Where do I manage users and teams?" default-open="false">
+    **Admin** (`/admin`) includes **Members** and **Teams**. Start with [Admin overview](/selfhosted/admin-overview), then [Members](/selfhosted/admin-members) and [Teams](/selfhosted/admin-teams).
+  </Expandable>
+  <Expandable title="How do I enable AI suggestions when creating bookmarks?" default-open="false">
+    Configure **Admin → AI Suggestions** with your OpenAI API key. See [AI](/selfhosted/admin-ai).
+  </Expandable>
+</ExpandableGroup>
+
+## Related
+
+<Columns cols="2">
+  <Card title="Troubleshooting" href="/selfhosted/troubleshooting" icon="wrench">
+    Install and runtime issues: env vars, proxy, database, and auth.
+  </Card>
+  <Card title="Configuration" href="/selfhosted/configuration" icon="settings">
+    Environment variables and security requirements at startup.
+  </Card>
+</Columns>

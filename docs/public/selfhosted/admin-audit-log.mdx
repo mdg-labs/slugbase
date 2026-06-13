@@ -1,0 +1,54 @@
+---
+title: "Admin: audit log"
+description: "Review recent workspace changes to bookmarks, folders, tags, teams, and members from the Admin audit log."
+---
+
+## What this is for
+
+**Audit log** lists recent changes so administrators can see **who did what** and **when**. The screen matches the in-app description: recent changes to bookmarks, folders, tags, teams, and members.
+
+## Before you start
+
+- You need access to **Admin** (see [Workspace admin overview](/selfhosted/admin-overview)).
+- Self-hosted deployments list **Audit log** for every workspace admin. On the hosted product, availability depends on plan—see [Admin: audit log (Cloud)](/cloud/admin-audit-log).
+
+## How to open Audit log
+
+In the sidebar under **Admin**, choose **Audit log**.
+
+## What you see
+
+The page shows a table with these columns (same labels as in the app):
+
+| Column | Meaning |
+| --- | --- |
+| **Time** | When the event was recorded. |
+| **Actor** | Who performed the action. |
+| **Action** | What happened (for example create, update, or delete). |
+| **Entity** | What type of thing was affected. |
+| **Details** | Extra context for the event, when available. |
+
+If nothing has been logged yet, you see **No audit events yet.**
+
+## Load older events
+
+At the bottom of the list, use **Load more** to fetch the next page of events. While data is loading, the control shows the same loading state as elsewhere in the app.
+
+## If loading fails
+
+If the log cannot be loaded, the app shows an error message. Retry after a moment; if the problem continues, check that your account still has admin access and that the server is reachable.
+
+## Cloud differences
+
+On **SlugBase Cloud**, the audit log is only available on the **Team** plan (and only after plan information has finished loading). See [Audit log (Cloud)](/cloud/admin-audit-log) for hosted-product detail.
+
+## Related
+
+<Columns cols="2">
+  <Card title="Members (Users)" href="/selfhosted/admin-members" icon="users">
+    User and invite management.
+  </Card>
+  <Card title="Teams" href="/selfhosted/admin-teams" icon="users-round">
+    Teams used with sharing and audit context.
+  </Card>
+</Columns>
