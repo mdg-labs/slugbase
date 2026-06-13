@@ -2,6 +2,8 @@
 
 Customer and operator documentation for [Documentation.AI](https://documentation.ai). **This directory in the SlugBase monorepo is the source of truth** for publishable docs. Content is authored as MDX here and synced to [`mdg-labs/slugbase-docs`](https://github.com/mdg-labs/slugbase-docs) on push to `main` (see [#396](https://github.com/mdg-labs/slugbase/issues/396)).
 
+**To publish:** merge your branch to **`slugbase` `main`**. CI mirrors this tree to `slugbase-docs` `main`; Documentation.AI rebuilds from that repo. There is no publish path from `staging` or open PRs.
+
 **Engineering docs** (spec, roadmap, design prototype, agent rules) live under [`docs/internal/`](../internal/) and are **never** synced.
 
 ---
