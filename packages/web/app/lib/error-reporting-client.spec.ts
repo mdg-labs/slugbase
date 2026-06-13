@@ -29,13 +29,8 @@ describe("error-reporting-client", () => {
   });
 
   describe("captureClientException", () => {
-    it("captures exceptions when initialized", async () => {
-      vi.stubEnv("VITE_SENTRY_DSN", "https://examplePublicKey@o0.ingest.sentry.io/0");
-
-      const { captureClientException, initErrorReportingClient } = await import(
-        "./error-reporting-client"
-      );
-      initErrorReportingClient();
+    it("captures exceptions", async () => {
+      const { captureClientException } = await import("./error-reporting-client");
       const error = new Error("test error");
       captureClientException(error);
 
@@ -43,20 +38,8 @@ describe("error-reporting-client", () => {
     });
 
     it("skips capture when consent is denied", async () => {
-      vi.stubEnv("VITE_SENTRY_DSN", "https://examplePublicKey@o0.ingest.sentry.io/0");
-
-      const { captureClientException, initErrorReportingClient } = await import(
-        "./error-reporting-client"
-      );
-      initErrorReportingClient();
-      captureClientException(new Error("blocked"), { consentGranted: false });
-
-      expect(sentryMocks.captureException).not.toHaveBeenCalled();
-    });
-
-    it("skips capture when not initialized", async () => {
       const { captureClientException } = await import("./error-reporting-client");
-      captureClientException(new Error("no init"));
+      captureClientException(new Error("blocked"), { consentGranted: false });
 
       expect(sentryMocks.captureException).not.toHaveBeenCalled();
     });
