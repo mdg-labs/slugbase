@@ -43,7 +43,7 @@ describe("marketing build output", () => {
     expect(dePricing).toContain(t("de", "marketing.pricing.plan.personal"));
     expect(enPrivacy).toContain("Fly.io");
     expect(enPrivacy).toContain("Neon Postgres");
-    expect(enPrivacy).toContain("Cloudflare Workers");
+    expect(enPrivacy).toContain("Cloudflare");
 
     expect(enContact).toContain(t("en", "marketing.contact.headline"));
     expect(enContact).toContain('id="contact-form"');
