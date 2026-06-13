@@ -10,6 +10,8 @@ You are writing **customer and operator** documentation published via [Documenta
 
 **Authoring guide:** `docs/public/README.md` · **Validation:** `pnpm validate:docs-public` · **Parent contract:** GitHub #392
 
+**Authoring workflows:** invoke `/write-customer-docs` for greenfield pages, information architecture, and maintenance passes — see `.cursor/skills/write-customer-docs/SKILL.md`.
+
 ## Publish mirror (slugbase → slugbase-docs)
 
 Paths under `docs/public/` become the **same paths** at the `slugbase-docs` repo root after sync:
@@ -49,7 +51,7 @@ description: "Concise description explaining page purpose and value"
 - H1 comes from frontmatter `title` — start body content with `##` (H2)
 - Filenames: **lowercase-with-hyphens** (`quick-start.mdx`, not `QuickStart.mdx`)
 - Internal links: **root-absolute** — `[Quick start](/selfhosted/quick-start)`, not relative `../`
-- Images: root-absolute — `![alt](/assets/intro-hero.png)`
+- Images: root-absolute — `![alt](/assets/intro-hero.png)` once the asset exists (see [Screenshots](#screenshots) for placeholders)
 - Never commit secrets, API keys, or real credentials in examples
 
 ## documentation.json (navigation)
@@ -85,16 +87,17 @@ Run `pnpm validate:docs-public` before committing changes under `docs/public/`.
 
 ## Core writing principles
 
-### Language and style
+### Audience and tone
 
-- Clear, direct language for technical audiences
-- Second person ("you") for instructions; active voice; present tense for current states
-- Define jargon on first use; consistent terminology
+- Write for **customer and operator** audiences — people using SlugBase or running a deployment, not engineers building the product (spec §2.4)
+- **Task-first:** open with what the reader needs to accomplish; explain concepts only when needed to complete the task
+- Clear, direct language; second person ("you"); active voice; present tense for current states
+- Define jargon on first use; consistent terminology (see [Product vocabulary](#product-vocabulary-spec-3--mandatory-in-public-docs))
 - Concise sentences; parallel structure in lists and headings
 
 ### Content organization
 
-- Lead with the most important information
+- Lead with the task or outcome, then prerequisites and context
 - Progressive disclosure: basics before advanced topics
 - Numbered steps for procedures; prerequisites before instructions
 - Descriptive, keyword-rich headings (H2 → H3 → H4)
@@ -105,6 +108,20 @@ Run `pnpm validate:docs-public` before committing changes under `docs/public/`.
 - Focus on user goals and outcomes, not internal implementation
 - Anticipate common questions; include troubleshooting for likely failures
 - Write for scannability: headings, lists, callouts, white space
+
+## Screenshots
+
+When a screenshot is needed but the asset is not committed yet, use a placeholder callout — **do not** use `![...]()` until the file exists under `docs/public/assets/`:
+
+```mdx
+<Callout kind="info" title="Screenshot placeholder">
+**Suggested capture:** …
+**Suggested filename:** `/assets/{product}/{slug}.png`
+**Alt text:** …
+</Callout>
+```
+
+Replace the callout with root-absolute `![alt](/assets/{product}/{slug}.png)` once the PNG is in the repo.
 
 ## Documentation.AI components
 
@@ -148,6 +165,7 @@ Use `<Callout kind="info|tip|alert|danger|success">` for supplementary, best-pra
 
 ## References
 
+- `.cursor/skills/write-customer-docs/SKILL.md` — greenfield and maintenance authoring workflows (`/write-customer-docs`)
 - [Documentation.AI code editor](https://documentation.ai/docs/write-and-publish/code-editor)
 - [Site configuration](https://documentation.ai/docs/customize/site-configuration)
 - [documentation.json schema](https://dashboard.documentation.ai/documentation.json)
