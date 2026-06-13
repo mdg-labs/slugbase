@@ -3,6 +3,10 @@
 #
 # Two jobs: hosted (separate API/web/marketing services) and
 # self-hosted (combined Docker image, single port).
+#
+# App under test uses explicit e2e env only (mirrors scripts/e2e.sh) — never
+# Infisical staging. Infisical is fetched immediately before Playwright so
+# REPORTPORTAL_* creds reach the reporter without polluting API/container env.
 
 name: E2E
 
@@ -88,15 +92,6 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Fetch secrets from Infisical
-        uses: Infisical/secrets-action@77ab1f4ccd183a543cb5b42435fbd181189f4995 # v1.0.16
-        with:
-          method: oidc
-          domain: ${{ secrets.INFISICAL_DOMAIN }}
-          identity-id: ${{ secrets.INFISICAL_OIDC_IDENTITY_ID }}
-          project-slug: slugbase-cloud
-          env-slug: staging
-
       - name: Build all packages (hosted VITE flags)
         env:
           NODE_ENV: production
@@ -109,7 +104,7 @@ jobs:
       - name: Start API
         env:
           PORT: '4001'
-          # Override Infisical staging URLs — e2e services listen on localhost.
+          SLUGBASE_E2E_MODE: 'true'
           PUBLIC_REGISTRATION: 'true'
           SESSION_SECRET: 'ci-e2e-session-secret-at-least-32-chars-long!!'
           ENCRYPTION_KEY: 'ci-e2e-encryption-key-at-least-32-chars-long!!'
@@ -149,6 +144,15 @@ jobs:
             curl -sf "$E2E_BASE_URL_MARKETING" >/dev/null 2>&1 && break
             sleep 2
           done
+
+      - name: Fetch ReportPortal secrets from Infisical
+        uses: Infisical/secrets-action@77ab1f4ccd183a543cb5b42435fbd181189f4995 # v1.0.16
+        with:
+          method: oidc
+          domain: ${{ secrets.INFISICAL_DOMAIN }}
+          identity-id: ${{ secrets.INFISICAL_OIDC_IDENTITY_ID }}
+          project-slug: slugbase-cloud
+          env-slug: staging
 
       - name: Run Playwright tests (hosted)
         run: |
@@ -234,15 +238,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Fetch secrets from Infisical
-        uses: Infisical/secrets-action@77ab1f4ccd183a543cb5b42435fbd181189f4995 # v1.0.16
-        with:
-          method: oidc
-          domain: ${{ secrets.INFISICAL_DOMAIN }}
-          identity-id: ${{ secrets.INFISICAL_OIDC_IDENTITY_ID }}
-          project-slug: slugbase-cloud
-          env-slug: staging
-
       - name: Build combined image
         uses: docker/build-push-action@v6
         with:
@@ -272,6 +267,7 @@ jobs:
             -e FRONTEND_ORIGIN='http://localhost:3000' \
             -e API_BASE_URL='http://localhost:3000' \
             -e PUBLIC_REGISTRATION=true \
+            -e PORT=3000 \
             slugbase-e2e:self-hosted
 
       - name: Wait for health endpoint
@@ -281,6 +277,15 @@ jobs:
             curl -sf "http://localhost:3000/health" >/dev/null 2>&1 && break
             sleep 2
           done
+
+      - name: Fetch ReportPortal secrets from Infisical
+        uses: Infisical/secrets-action@77ab1f4ccd183a543cb5b42435fbd181189f4995 # v1.0.16
+        with:
+          method: oidc
+          domain: ${{ secrets.INFISICAL_DOMAIN }}
+          identity-id: ${{ secrets.INFISICAL_OIDC_IDENTITY_ID }}
+          project-slug: slugbase-cloud
+          env-slug: staging
 
       - name: Run Playwright tests (self-hosted)
         run: |
