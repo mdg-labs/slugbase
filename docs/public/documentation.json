@@ -2,17 +2,16 @@
   "name": "SlugBase Documentation",
   "title": "SlugBase",
   "template": "classic",
-  "initialRoute": "selfhosted/introduction",
   "colors": {
     "light": {
       "brand": "#5d6af2",
-      "heading": "#1a1a1a",
-      "text": "#374151"
+      "heading": "#1a1a2e",
+      "text": "#3d3d56"
     },
     "dark": {
-      "brand": "#5d6af2",
-      "heading": "#f2f2f2",
-      "text": "#c1c1c1"
+      "brand": "#7782f7",
+      "heading": "#f0f0f5",
+      "text": "#c8c8d4"
     }
   },
   "navbar": {
@@ -20,15 +19,21 @@
       "links": [
         {
           "title": "GitHub",
-          "link": "https://github.com/mdg-labs/slugbase"
+          "href": "https://github.com/mdg-labs/slugbase"
         },
         {
           "title": "SlugBase Cloud",
-          "link": "https://slugbase.app"
+          "href": "https://cloud.slugbase.app"
         }
       ]
     }
   },
+  "scripts": [
+    {
+      "src": "scripts/umami-analytics.js",
+      "category": "analytics"
+    }
+  ],
   "navigation": {
     "products": [
       {
@@ -38,215 +43,7 @@
           {
             "tab": "Guides",
             "icon": "book-open",
-            "groups": [
-              {
-                "group": "Introduction",
-                "icon": "sparkles",
-                "expandable": false,
-                "pages": [
-                  {
-                    "title": "Introduction",
-                    "path": "selfhosted/introduction",
-                    "icon": "star"
-                  }
-                ]
-              },
-              {
-                "group": "Install and configure",
-                "icon": "download",
-                "expandable": false,
-                "pages": [
-                  {
-                    "title": "Quick start",
-                    "path": "selfhosted/quick-start",
-                    "icon": "zap"
-                  },
-                  {
-                    "title": "Installation",
-                    "path": "selfhosted/installation",
-                    "icon": "package"
-                  },
-                  {
-                    "title": "Docker",
-                    "path": "selfhosted/docker",
-                    "icon": "container"
-                  },
-                  {
-                    "title": "Docker Compose",
-                    "path": "selfhosted/docker-compose",
-                    "icon": "layers"
-                  },
-                  {
-                    "title": "Configuration",
-                    "path": "selfhosted/configuration",
-                    "icon": "settings"
-                  },
-                  {
-                    "title": "Reverse proxy",
-                    "path": "selfhosted/reverse-proxy",
-                    "icon": "globe"
-                  },
-                  {
-                    "title": "First run setup",
-                    "path": "selfhosted/first-run-setup",
-                    "icon": "rocket"
-                  }
-                ]
-              },
-              {
-                "group": "Using SlugBase",
-                "icon": "layout-dashboard",
-                "expandable": false,
-                "pages": [
-                  {
-                    "title": "Dashboard",
-                    "path": "selfhosted/dashboard",
-                    "icon": "layout-grid"
-                  },
-                  {
-                    "title": "Bookmarks",
-                    "path": "selfhosted/bookmarks",
-                    "icon": "bookmark"
-                  },
-                  {
-                    "title": "Folders",
-                    "path": "selfhosted/folders",
-                    "icon": "folder"
-                  },
-                  {
-                    "title": "Tags",
-                    "path": "selfhosted/tags",
-                    "icon": "tag"
-                  },
-                  {
-                    "title": "Import and export",
-                    "path": "selfhosted/import-export",
-                    "icon": "arrow-left-right"
-                  }
-                ]
-              },
-              {
-                "group": "Slugs and browser",
-                "icon": "link",
-                "expandable": false,
-                "pages": [
-                  {
-                    "title": "Slugs overview",
-                    "path": "selfhosted/slugs-overview",
-                    "icon": "search"
-                  },
-                  {
-                    "title": "Go preferences",
-                    "path": "selfhosted/go-preferences",
-                    "icon": "sliders-horizontal"
-                  },
-                  {
-                    "title": "Browser setup",
-                    "path": "selfhosted/browser-setup",
-                    "icon": "globe-2"
-                  }
-                ]
-              },
-              {
-                "group": "Your account",
-                "icon": "user",
-                "expandable": false,
-                "pages": [
-                  {
-                    "title": "Profile and preferences",
-                    "path": "selfhosted/profile-and-preferences",
-                    "icon": "user-cog"
-                  },
-                  {
-                    "title": "API tokens",
-                    "path": "selfhosted/api-tokens",
-                    "icon": "key-round"
-                  },
-                  {
-                    "title": "Two-factor authentication",
-                    "path": "selfhosted/two-factor-authentication",
-                    "icon": "shield"
-                  },
-                  {
-                    "title": "Delete account",
-                    "path": "selfhosted/delete-account",
-                    "icon": "user-x"
-                  }
-                ]
-              },
-              {
-                "group": "Workspace admin",
-                "icon": "shield",
-                "expandable": false,
-                "pages": [
-                  {
-                    "title": "Admin overview",
-                    "path": "selfhosted/admin-overview",
-                    "icon": "shield-check"
-                  },
-                  {
-                    "title": "Members",
-                    "path": "selfhosted/admin-members",
-                    "icon": "users"
-                  },
-                  {
-                    "title": "Teams",
-                    "path": "selfhosted/admin-teams",
-                    "icon": "users-round"
-                  },
-                  {
-                    "title": "Audit log",
-                    "path": "selfhosted/admin-audit-log",
-                    "icon": "scroll-text"
-                  },
-                  {
-                    "title": "OIDC",
-                    "path": "selfhosted/admin-oidc",
-                    "icon": "key"
-                  },
-                  {
-                    "title": "SMTP",
-                    "path": "selfhosted/admin-smtp",
-                    "icon": "mail"
-                  },
-                  {
-                    "title": "AI",
-                    "path": "selfhosted/admin-ai",
-                    "icon": "sparkles"
-                  }
-                ]
-              },
-              {
-                "group": "Help",
-                "icon": "circle-help",
-                "expandable": false,
-                "pages": [
-                  {
-                    "title": "FAQ",
-                    "path": "selfhosted/faq",
-                    "icon": "help-circle"
-                  },
-                  {
-                    "title": "Troubleshooting",
-                    "path": "selfhosted/troubleshooting",
-                    "icon": "wrench"
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "tab": "API",
-            "icon": "brackets",
-            "groups": [
-              {
-                "group": "REST API",
-                "icon": "code",
-                "expandable": true,
-                "pages": [],
-                "openapi": "selfhosted/api-reference/selfhosted-openapi.yaml"
-              }
-            ]
+            "groups": []
           }
         ]
       },
@@ -257,142 +54,10 @@
           {
             "tab": "Guides",
             "icon": "book-open",
-            "groups": [
-              {
-                "group": "Introduction",
-                "icon": "sparkles",
-                "expandable": false,
-                "pages": [
-                  {
-                    "title": "Introduction",
-                    "path": "cloud/introduction",
-                    "icon": "star"
-                  }
-                ]
-              },
-              {
-                "group": "Account",
-                "icon": "user",
-                "expandable": false,
-                "pages": [
-                  {
-                    "title": "Sign up and login",
-                    "path": "cloud/sign-up-and-login",
-                    "icon": "log-in"
-                  },
-                  {
-                    "title": "Workspaces",
-                    "path": "cloud/workspaces",
-                    "icon": "building-2"
-                  },
-                  {
-                    "title": "Profile and cloud settings",
-                    "path": "cloud/profile-and-cloud-settings",
-                    "icon": "user-cog"
-                  },
-                  {
-                    "title": "Two-factor authentication",
-                    "path": "cloud/two-factor-authentication",
-                    "icon": "shield"
-                  }
-                ]
-              },
-              {
-                "group": "Plans and billing",
-                "icon": "credit-card",
-                "expandable": false,
-                "pages": [
-                  {
-                    "title": "Plans and limits",
-                    "path": "cloud/plans-and-limits",
-                    "icon": "gauge"
-                  },
-                  {
-                    "title": "Billing",
-                    "path": "cloud/billing",
-                    "icon": "wallet"
-                  }
-                ]
-              },
-              {
-                "group": "Collaboration",
-                "icon": "users",
-                "expandable": false,
-                "pages": [
-                  {
-                    "title": "Collaboration",
-                    "path": "cloud/collaboration",
-                    "icon": "share-2"
-                  },
-                  {
-                    "title": "Audit log",
-                    "path": "cloud/admin-audit-log",
-                    "icon": "scroll-text"
-                  }
-                ]
-              },
-              {
-                "group": "Trust and support",
-                "icon": "shield-check",
-                "expandable": false,
-                "pages": [
-                  {
-                    "title": "Privacy and cookies",
-                    "path": "cloud/privacy-and-cookies",
-                    "icon": "cookie"
-                  },
-                  {
-                    "title": "Support",
-                    "path": "cloud/support",
-                    "icon": "life-buoy"
-                  },
-                  {
-                    "title": "FAQ",
-                    "path": "cloud/faq",
-                    "icon": "help-circle"
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "tab": "API",
-            "icon": "brackets",
-            "groups": [
-              {
-                "group": "REST API",
-                "icon": "code",
-                "expandable": true,
-                "pages": [],
-                "openapi": "cloud/api-reference/cloud-openapi.yaml"
-              }
-            ]
+            "groups": []
           }
         ]
       }
     ]
-  },
-  "logo-dark": "https://blob-cdn.documentation.ai/org-5655c5ac-dc7b-4226-bb31-9bfd580ebf03/doc-c7e01938-1e51-40f7-9359-afcf05d0c9d9/1774877717250-53cqr1q4gv-slugbase_icon_purple.png?q=85&fm=auto&auto=compress%2Cformat",
-  "logo-light": "https://blob-cdn.documentation.ai/org-5655c5ac-dc7b-4226-bb31-9bfd580ebf03/doc-c7e01938-1e51-40f7-9359-afcf05d0c9d9/1774877717250-53cqr1q4gv-slugbase_icon_purple.png?q=85&fm=auto&auto=compress%2Cformat",
-  "favicon": "https://blob-cdn.documentation.ai/org-5655c5ac-dc7b-4226-bb31-9bfd580ebf03/doc-c7e01938-1e51-40f7-9359-afcf05d0c9d9/1774877717250-53cqr1q4gv-slugbase_icon_purple.png?q=85&fm=auto&auto=compress%2Cformat",
-  "scripts": [
-    {
-      "src": "scripts/cookie-consent.bundle.js"
-    },
-    {
-      "src": "scripts/umami-analytics.js",
-      "category": "analytics"
-    }
-  ],
-  "integrations": {
-    "telemetry": {
-      "enabled": "false"
-    },
-    "cookies": {
-      "analytics": {
-        "key": "slugbase-docs-analytics-consent",
-        "value": "granted"
-      }
-    }
   }
 }

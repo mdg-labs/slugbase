@@ -30,4 +30,4 @@ docs/public/              →  slugbase-docs/ (repo root)
 └── scripts/
 ```
 
-Public pages are populated in [#395](https://github.com/mdg-labs/slugbase/issues/395); this tree currently holds the scaffold only.
+Public MDX pages are **not populated yet** — only the directory scaffold and `documentation.json` shell. Do not re-import legacy `slugbase-docs` content.
