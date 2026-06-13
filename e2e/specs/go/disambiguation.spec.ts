@@ -1,18 +1,87 @@
-import { test } from "../../fixtures/auth.js";
+import { test, expect } from "../../fixtures/auth.js";
+import { setupSharedSlugDisambiguation } from "../../fixtures/sharing-setup.js";
+import { isHostedE2eProject } from "../../helpers/deployment-project.js";
 
 test.describe("Go disambiguation", () => {
-  // SKIPPED: The database enforces slug uniqueness per workspace (bookmarks_workspace_slug_unique_idx),
-  // but the spec (8.2) describes disambiguation for "multiple accessible bookmarks" with the same
-  // slug "possible through sharing". The DB constraint prevents this scenario from occurring for
-  // bookmarks owned by the same user. These tests need a second user + sharing setup to create a
-  // valid disambiguation scenario.
-  // See spec 8.2, 11.9 for the expected behavior once the schema supports it.
+  test("two bookmarks with same slug shows disambiguation page, user picks candidate", async ({
+    authedPage: page,
+    sessionCookie,
+    csrfToken,
+  }, testInfo) => {
+    const setup = await setupSharedSlugDisambiguation(
+      page,
+      testInfo.workerIndex,
+      { sessionCookie, csrfToken },
+      { hosted: isHostedE2eProject(testInfo) },
+    );
 
-  test.skip("two bookmarks with same slug shows disambiguation page, user picks candidate", async () => {
-    // placeholder
+    await page.goto(`/go/${setup.slug}`);
+    await expect(page.locator('[data-testid="go-disambiguation-page"]')).toBeVisible();
+    await expect(
+      page.locator(`[data-testid="go-disambiguation-candidate-${setup.userBBookmarkId}"]`),
+    ).toBeVisible();
+    await expect(
+      page.locator(`[data-testid="go-disambiguation-candidate-${setup.userABookmarkId}"]`),
+    ).toBeVisible();
+
+    await page.click(`[data-testid="go-disambiguation-candidate-${setup.userBBookmarkId}"]`);
+    await page.click('[data-testid="go-confirm-btn"]');
+    await page.waitForURL(setup.userBTargetUrl, { timeout: 10_000 });
+
+    await page.goto(`/go/${setup.slug}`);
+    await expect(page.locator('[data-testid="go-disambiguation-page"]')).toBeVisible({
+      timeout: 10_000,
+    });
   });
 
-  test.skip("disambiguation with remember preference saves choice", async () => {
-    // placeholder
+  test("disambiguation with remember preference saves choice", async ({
+    authedPage: page,
+    sessionCookie,
+    csrfToken,
+  }, testInfo) => {
+    const setup = await setupSharedSlugDisambiguation(
+      page,
+      testInfo.workerIndex,
+      { sessionCookie, csrfToken },
+      { hosted: isHostedE2eProject(testInfo) },
+    );
+
+    await page.goto(`/go/${setup.slug}`);
+    await expect(page.locator('[data-testid="go-disambiguation-page"]')).toBeVisible();
+
+    await page.click(`[data-testid="go-disambiguation-candidate-${setup.userBBookmarkId}"]`);
+    await page.check('[data-testid="go-remember-pref-toggle"]');
+    await page.click('[data-testid="go-confirm-btn"]');
+    await page.waitForURL(setup.userBTargetUrl, { timeout: 10_000 });
+
+    await page.goto(`/go/${setup.slug}`);
+    await page.waitForURL(setup.userBTargetUrl, { timeout: 10_000 });
+    expect(page.url()).toBe(setup.userBTargetUrl);
+
+    await page.goto('/go');
+    await expect(page.locator('[data-testid="forwarding-page"]')).toBeVisible();
+    await expect(page.locator('[data-testid="forwarding-prefs-list"]')).toBeVisible();
+    await expect(page.getByText(setup.userBTitle, { exact: true })).toBeVisible();
+
+    const prefRow = page
+      .locator('[data-testid^="forwarding-pref-row-"]')
+      .filter({ hasText: setup.slug });
+    await expect(prefRow).toHaveCount(1);
+
+    const deleteButton = prefRow.locator('[data-testid^="forwarding-pref-delete-"]');
+    await deleteButton.click();
+    await expect(page.locator('[data-testid="forwarding-pref-delete-dialog"]')).toBeVisible();
+    await page.getByRole('button', { name: 'Remove' }).click();
+    await expect(page.locator('[data-testid="forwarding-pref-delete-dialog"]')).toBeHidden({
+      timeout: 10_000,
+    });
+    await expect(page.locator('[data-testid="forwarding-prefs-empty"]')).toBeVisible({
+      timeout: 10_000,
+    });
+
+    await page.goto(`/go/${setup.slug}`);
+    await expect(page.locator('[data-testid="go-disambiguation-page"]')).toBeVisible({
+      timeout: 10_000,
+    });
   });
 });

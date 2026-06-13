@@ -4,7 +4,6 @@ import {
   Link,
   data,
   redirect,
-  useFetcher,
   useLoaderData,
 } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
@@ -88,10 +87,42 @@ function CheckCircleIcon() {
   );
 }
 
+async function submitGoChoose(
+  slug: string,
+  bookmarkId: string,
+  remember: boolean,
+): Promise<string> {
+  const csrfRes = await fetch("/auth/csrf-token", { credentials: "include" });
+  if (!csrfRes.ok) {
+    throw new Error("Failed to fetch CSRF token");
+  }
+  const { csrfToken } = (await csrfRes.json()) as { csrfToken: string };
+
+  const res = await fetch(`/api/go/${encodeURIComponent(slug)}/choose`, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      "x-csrf-token": csrfToken,
+    },
+    body: JSON.stringify({ bookmarkId, remember }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Choose failed: ${String(res.status)}`);
+  }
+
+  const data = (await res.json()) as { kind?: string; url?: string };
+  if (data.kind === "redirect" && data.url) {
+    return data.url;
+  }
+
+  throw new Error("Choose response missing redirect URL");
+}
+
 export default function GoDisambiguatePage() {
   const { t } = useTranslation();
   const { slug, candidates } = useLoaderData<typeof loader>();
-  const fetcher = useFetcher();
 
   const [selectedId, setSelectedId] = useState<string>(candidates[0]?.id ?? "");
   const [remember, setRemember] = useState(false);
@@ -102,17 +133,14 @@ export default function GoDisambiguatePage() {
   const handleOpen = () => {
     if (!selected) return;
     setConfirmed(selected);
-    void fetcher.submit(
-      { bookmarkId: selected.id, remember: String(remember) },
-      {
-        method: "POST",
-        action: `/api/go/${encodeURIComponent(slug)}/choose`,
-        encType: "application/json",
-      },
-    );
-    setTimeout(() => {
-      window.location.assign(selected.url);
-    }, 80);
+    void (async () => {
+      try {
+        const targetUrl = await submitGoChoose(slug, selected.id, remember);
+        window.location.assign(targetUrl);
+      } catch {
+        setConfirmed(null);
+      }
+    })();
   };
 
   if (confirmed) {
