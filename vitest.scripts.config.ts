@@ -1,10 +1,10 @@
 import { defineConfig } from "vitest/config";
-import { allureReporters } from "./scripts/allure-vitest.ts";
+import { reportPortalReporters } from "./scripts/reportportal-vitest.ts";
 
 export default defineConfig({
   test: {
-    setupFiles: ["allure-vitest/setup"],
-    include: ["scripts/**/*.spec.mjs"],
-    reporters: ["default", ...allureReporters("unit", "scripts")],
+    setupFiles: ["@reportportal/agent-js-vitest/setup"],
+    include: ["scripts/**/*.spec.mjs", "scripts/**/*.spec.ts"],
+    reporters: ["default", ...reportPortalReporters("unit", "scripts")],
   },
 });
