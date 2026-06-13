@@ -82,8 +82,56 @@ pnpm validate:docs-public
 | No commit on `slugbase-docs` | Mirror already matched | Expected — idempotent skip |
 | Documentation.AI stale | `slugbase-docs` push failed or DA build lag | Check workflow logs; check Documentation.AI dashboard |
 
+## End-to-end verification (Documentation.AI)
+
+Full checklist and current status: [`documentation-ai-publish-verification.md`](./documentation-ai-publish-verification.md) ([#397](https://github.com/mdg-labs/slugbase/issues/397)).
+
+**Publish chain:**
+
+```text
+slugbase docs/public/  →  CI sync  →  slugbase-docs main  →  Documentation.AI build  →  https://docs.slugbase.app
+```
+
+### Local checks (no publish)
+
+```bash
+pnpm validate:docs-public
+```
+
+Confirms frontmatter, `documentation.json` nav paths, OpenAPI paths, and filename conventions under `docs/public/` only.
+
+### After secret + workflow on `main`
+
+1. Complete [one-time setup](#one-time-setup-operator) if not done.
+2. Merge a `docs/public/**` change to `slugbase` `main` (or confirm idempotent skip if trees match).
+3. Confirm **Actions → Sync Public Docs** green on `mdg-labs/slugbase`.
+4. Confirm new commit on `slugbase-docs` `main` (`sync from mdg-labs/slugbase@<sha>`).
+5. In **Documentation.AI dashboard**: build for `slugbase-docs` `main` succeeds; build log has zero parse errors.
+6. Smoke **https://docs.slugbase.app**:
+   - Product switcher (**Self-hosted** / **Cloud**)
+   - Guides sidebar matches `documentation.json`
+   - API tab OpenAPI pages (both products)
+   - `initialRoute` (`selfhosted/introduction`) at `/`
+   - Internal links (e.g. `/selfhosted/quick-start`)
+7. Optional regression: trivial MDX edit → merge → live site updates within DA build window.
+
+### Verification status (2026-06-13)
+
+| Step | Status |
+|---|---|
+| Local `docs/public/` + `validate:docs-public` | PASS |
+| `SLUGBASE_DOCS_DEPLOY_KEY` on `slugbase` | **Not configured** |
+| Sync workflow on `main` | **Pending** (on `staging` as of [#396](https://github.com/mdg-labs/slugbase/issues/396)) |
+| Automated CI sync run | **Not run** |
+| Documentation.AI dashboard build | **Operator** — browser required |
+| Live site (existing deploy) | **Partial** — pages load at `docs.slugbase.app`; automated path not confirmed |
+
+See [documentation-ai-publish-verification.md](./documentation-ai-publish-verification.md) for the full operator handoff.
+
 ## Related
 
 - Authoring guide: [`docs/public/README.md`](../public/README.md)
+- Publish verification: [`documentation-ai-publish-verification.md`](./documentation-ai-publish-verification.md)
 - Publish contract: [#392](https://github.com/mdg-labs/slugbase/issues/392)
 - Workflow implementation: [#396](https://github.com/mdg-labs/slugbase/issues/396)
+- Verification task: [#397](https://github.com/mdg-labs/slugbase/issues/397)

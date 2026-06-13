@@ -4,6 +4,8 @@ Customer and operator documentation for [Documentation.AI](https://documentation
 
 **To publish:** merge your branch to **`slugbase` `main`**. CI mirrors this tree to `slugbase-docs` `main`; Documentation.AI rebuilds from that repo. There is no publish path from `staging` or open PRs.
 
+**Live site:** [docs.slugbase.app](https://docs.slugbase.app) (after Documentation.AI build). **Do not edit `slugbase-docs` directly** — the next sync overwrites it. Source of truth is always this directory in `mdg-labs/slugbase`. Operator setup and verification: [`docs/internal/sync-docs-public-runbook.md`](../internal/sync-docs-public-runbook.md), [`docs/internal/documentation-ai-publish-verification.md`](../internal/documentation-ai-publish-verification.md).
+
 **Engineering docs** (spec, roadmap, design prototype, agent rules) live under [`docs/internal/`](../internal/) and are **never** synced.
 
 ---
