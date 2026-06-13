@@ -23,6 +23,7 @@ interface CheckoutBody {
   plan: "personal" | "team";
   mode: "recurring" | "one_time";
   billingInterval?: "monthly" | "annual";
+  seatQuantity?: number;
   successUrl: string;
   cancelUrl: string;
 }
@@ -57,6 +58,7 @@ export class BillingController {
       plan: body.plan,
       mode: body.mode,
       billingInterval: body.billingInterval,
+      seatQuantity: body.seatQuantity,
       successUrl: body.successUrl,
       cancelUrl: body.cancelUrl,
     });

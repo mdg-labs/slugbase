@@ -23,6 +23,7 @@ import { WorkspaceRepository } from "../workspaces/workspace.repository.js";
 import type { WorkspaceRecord } from "../workspaces/workspace.types.js";
 import { BillingWebhookEventRepository } from "./billing-webhook-event.repository.js";
 import { BILLING } from "./billing.tokens.js";
+import { TEAM_MIN_SEATS } from "./plans/entitlement-sets.js";
 import { PlanConfigService } from "./plans/plan-config.service.js";
 import {
   EXPECTED_PRODUCT_MARKER,
@@ -40,6 +41,7 @@ export interface StartCheckoutInput {
   plan: Exclude<BillingPlan, "free">;
   mode: BillingCheckoutMode;
   billingInterval?: BillingInterval;
+  seatQuantity?: number;
   successUrl: string;
   cancelUrl: string;
 }
@@ -128,6 +130,25 @@ export class BillingApplicationService {
       throw new ForbiddenException("Account not found");
     }
 
+    let seatQuantity: number | undefined;
+    if (input.plan === "team" && input.mode === "recurring") {
+      const members = await this.memberRepo.findAllByWorkspace(input.workspaceId);
+      const memberCount = members.length;
+      const requested = input.seatQuantity ?? Math.max(memberCount, TEAM_MIN_SEATS);
+
+      if (requested < TEAM_MIN_SEATS) {
+        throw new BadRequestException(
+          `Team checkout requires at least ${String(TEAM_MIN_SEATS)} seats`,
+        );
+      }
+      if (requested < memberCount) {
+        throw new BadRequestException(
+          `Seat quantity (${String(requested)}) cannot be below current member count (${String(memberCount)})`,
+        );
+      }
+      seatQuantity = requested;
+    }
+
     return this.billing.createCheckoutSession({
       workspaceId: input.workspaceId,
       plan: input.plan,
@@ -137,6 +158,7 @@ export class BillingApplicationService {
       cancelUrl: input.cancelUrl,
       customerEmail: account.email,
       externalCustomerId: workspace.billingCustomerId,
+      seatQuantity,
     });
   }
 
@@ -172,6 +194,12 @@ export class BillingApplicationService {
     }
 
     const members = await this.memberRepo.findAllByWorkspace(input.workspaceId);
+
+    if (input.totalSeats < TEAM_MIN_SEATS) {
+      throw new BadRequestException(
+        `Team subscriptions require at least ${String(TEAM_MIN_SEATS)} seats`,
+      );
+    }
 
     try {
       const state = await this.billing.updateSeatQuantity({

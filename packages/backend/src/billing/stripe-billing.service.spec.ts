@@ -117,7 +117,7 @@ describe("StripeBillingService", () => {
     expect(stripe.checkout.sessions.create).toHaveBeenCalledOnce();
   });
 
-  it("creates team checkout with quantity 1 (pure per-seat model)", async () => {
+  it("creates team checkout with requested seat quantity", async () => {
     const createMock = vi.fn().mockResolvedValue({
       id: "cs_test",
       url: "https://checkout.stripe.test/session",
@@ -132,6 +132,33 @@ describe("StripeBillingService", () => {
       plan: "team",
       mode: "recurring",
       priceId: "price_team",
+      seatQuantity: 5,
+      successUrl: "https://app.example/success",
+      cancelUrl: "https://app.example/cancel",
+      customerEmail: "owner@example.com",
+    });
+
+    const params = createMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    const lineItems = params.line_items as Array<{ quantity: number }>;
+    expect(lineItems[0]?.quantity).toBe(5);
+  });
+
+  it("creates personal checkout with quantity 1 regardless of seatQuantity", async () => {
+    const createMock = vi.fn().mockResolvedValue({
+      id: "cs_test",
+      url: "https://checkout.stripe.test/session",
+    });
+    const stripe = createStripeClient({
+      checkout: { sessions: { create: createMock } },
+    });
+    const service = new StripeBillingService(createConfig(), stripe, createErrorReporting());
+
+    await service.createCheckoutSession({
+      workspaceId: "ws-1",
+      plan: "personal",
+      mode: "recurring",
+      priceId: "price_personal",
+      seatQuantity: 5,
       successUrl: "https://app.example/success",
       cancelUrl: "https://app.example/cancel",
       customerEmail: "owner@example.com",
@@ -235,6 +262,19 @@ describe("StripeBillingService", () => {
         currentMemberCount: 5,
       }),
     ).rejects.toBeInstanceOf(BillingSeatFloorError);
+  });
+
+  it("rejects seat updates below TEAM_MIN_SEATS", async () => {
+    const service = new StripeBillingService(createConfig(), createStripeClient(), createErrorReporting());
+
+    await expect(
+      service.updateSeatQuantity({
+        workspaceId: "ws-1",
+        externalSubscriptionId: "sub_team_1",
+        totalSeats: 1,
+        currentMemberCount: 1,
+      }),
+    ).rejects.toThrow(/at least 2 seats/i);
   });
 
   it("processes subscription webhook events", async () => {

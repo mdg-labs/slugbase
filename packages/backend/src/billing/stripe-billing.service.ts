@@ -18,6 +18,7 @@ import {
 
 import { ConfigService } from "../config/config.service.js";
 import { ERROR_REPORTING } from "../error-reporting/error-reporting.tokens.js";
+import { TEAM_MIN_SEATS } from "./plans/entitlement-sets.js";
 import { STRIPE_CLIENT } from "./billing.tokens.js";
 import {
   checkoutSessionFromStripeObject,
@@ -80,12 +81,17 @@ export class StripeBillingService implements BillingService {
     this.assertAvailable();
 
     try {
+      const quantity =
+        request.plan === "team" && request.mode === "recurring"
+          ? (request.seatQuantity ?? 1)
+          : 1;
+
       const session = await this.stripe.checkout.sessions.create({
         mode: request.mode === "one_time" ? "payment" : "subscription",
         line_items: [
           {
             price: request.priceId,
-            quantity: 1,
+            quantity,
           },
         ],
         success_url: request.successUrl,
@@ -185,6 +191,12 @@ export class StripeBillingService implements BillingService {
     request: BillingSeatQuantityRequest,
   ): Promise<BillingSubscriptionState> {
     this.assertAvailable();
+
+    if (request.totalSeats < TEAM_MIN_SEATS) {
+      throw new BillingProviderError(
+        `Team subscriptions require at least ${String(TEAM_MIN_SEATS)} seats`,
+      );
+    }
 
     if (request.totalSeats < request.currentMemberCount) {
       throw new BillingSeatFloorError(request.totalSeats, request.currentMemberCount);

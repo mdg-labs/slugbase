@@ -218,7 +218,27 @@ describe("Billing (integration)", () => {
         requesterId: ownerUserId,
         totalSeats: 1,
       }),
-    ).rejects.toThrow(/cannot be below current member count/i);
+    ).rejects.toThrow(/at least 2 seats|cannot be below current member count/i);
+  });
+
+  it("creates Team checkout session with requested seat quantity", async () => {
+    const checkoutCreate = stripeClient.checkout.sessions.create as ReturnType<typeof vi.fn>;
+    checkoutCreate.mockClear();
+
+    await billingApp.startCheckout({
+      workspaceId,
+      requesterId: ownerUserId,
+      plan: "team",
+      mode: "recurring",
+      seatQuantity: 5,
+      successUrl: "https://app.example/success",
+      cancelUrl: "https://app.example/cancel",
+    });
+
+    expect(checkoutCreate).toHaveBeenCalledOnce();
+    const params = checkoutCreate.mock.calls[0]?.[0] as Record<string, unknown>;
+    const lineItems = params.line_items as Array<{ quantity: number }>;
+    expect(lineItems[0]?.quantity).toBe(5);
   });
 
   it("blocks workspace deletion while active paid billing is unresolved", async () => {

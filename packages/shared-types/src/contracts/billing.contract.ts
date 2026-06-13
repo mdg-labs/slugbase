@@ -33,6 +33,11 @@ export interface BillingCheckoutRequest {
   customerEmail?: string;
   /** Existing Stripe customer id when the workspace is already linked. */
   externalCustomerId?: string | null;
+  /**
+   * Seat quantity for Team recurring checkout (spec §12.2).
+   * Ignored for Personal and one-time purchases; always 1 at the Stripe line item.
+   */
+  seatQuantity?: number;
 }
 
 export interface BillingCheckoutSession {

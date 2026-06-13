@@ -15,6 +15,8 @@ export const BillingCheckoutBodySchema = z
     plan: BillingCheckoutPlanSchema,
     mode: BillingCheckoutModeSchema,
     billingInterval: BillingIntervalSchema.default("monthly"),
+    /** Seat quantity for Team recurring checkout (minimum 2). Ignored for Personal and one-time. */
+    seatQuantity: z.number().int().positive().optional(),
     successUrl: z.string().url(),
     cancelUrl: z.string().url(),
   })

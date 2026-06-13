@@ -18,6 +18,9 @@ const TEAM_CAPABILITIES: EntitlementCapability[] = [
 /** Free workspace bookmark cap (spec §23.4, def §2). */
 export const FREE_BOOKMARK_CAP = 50;
 
+/** Minimum Team seats at checkout and while subscribed (spec §12.2, def §5). */
+export const TEAM_MIN_SEATS = 2;
+
 /** Free accounts may own exactly one workspace on hosted (spec §12.2, def §5). */
 export const FREE_WORKSPACES_PER_ACCOUNT = 1;
 
