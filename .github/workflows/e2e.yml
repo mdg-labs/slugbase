@@ -96,6 +96,7 @@ jobs:
         env:
           NODE_ENV: production
           VITE_BILLING_ENABLED: 'true'
+          VITE_FREE_BOOKMARK_CAP: '50'
           VITE_MAIL_ADMIN_UI: 'false'
           VITE_OIDC_ADMIN_UI: 'false'
           VITE_AI_BYO_CREDENTIAL: 'false'
