@@ -494,7 +494,7 @@ function BookmarkCard({
     >
       {/* Top row: favicon + title */}
       <div className="flex items-start gap-sp-3">
-        <BookmarkFavicon url={bookmark.url} size={32} className="mt-[2px]" />
+        <BookmarkFavicon title={bookmark.title} url={bookmark.url} size={32} className="mt-[2px]" />
         <div className="min-w-0 flex-1" style={{ paddingRight: bulkSelectMode ? 60 : 20 }}>
           <p
             className="truncate font-medium text-fg"
@@ -739,7 +739,7 @@ function BookmarkRow({
 
       {/* Title + URL */}
       <div className="flex min-w-0 items-center gap-sp-3">
-        <BookmarkFavicon url={bookmark.url} size={26} />
+        <BookmarkFavicon title={bookmark.title} url={bookmark.url} size={26} />
         <div className="min-w-0">
           <div
             className="flex items-center gap-sp-2 truncate font-medium text-fg"

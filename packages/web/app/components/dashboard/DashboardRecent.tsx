@@ -1,54 +1,12 @@
 import { useTranslation } from "react-i18next";
-import { useState } from "react";
 
+import { BookmarkGlyph } from "../../routes/bookmarks/BookmarkGlyph.js";
 import { formatRelativeTime } from "./dashboard.utils.js";
 import type { DashboardBookmark } from "./dashboard.types.js";
 
 export type DashboardRecentProps = {
   bookmarks: DashboardBookmark[];
 };
-
-function RecentFavicon({ url, size = 20 }: { url: string; size?: number }) {
-  const [failed, setFailed] = useState(false);
-
-  let initial = "";
-  try {
-    initial = new URL(url).hostname.replace(/^www\./, "").slice(0, 1).toUpperCase();
-  } catch {
-    initial = url.slice(0, 1).toUpperCase();
-  }
-
-  if (failed || !url) {
-    return (
-      <span
-        className="inline-flex shrink-0 items-center justify-center rounded-md bg-[color:var(--canvas)] font-mono text-fg-faint"
-        style={{
-          width: size,
-          height: size,
-          fontSize: Math.max(8, Math.round(size * 0.44)),
-        }}
-        aria-hidden
-      >
-        {initial}
-      </span>
-    );
-  }
-
-  return (
-    <img
-      src={`/bookmarks/favicon?url=${encodeURIComponent(url)}`}
-      alt=""
-      aria-hidden
-      width={size}
-      height={size}
-      className="shrink-0 rounded-md object-contain"
-      style={{ width: size, height: size }}
-      onError={() => {
-        setFailed(true);
-      }}
-    />
-  );
-}
 
 function openBookmark(bookmark: DashboardBookmark): void {
   if (bookmark.slug && bookmark.forwardingEnabled) {
@@ -88,7 +46,7 @@ export function DashboardRecent({ bookmarks }: DashboardRecentProps) {
                     openBookmark(bookmark);
                   }}
                 >
-                  <RecentFavicon url={bookmark.url} size={20} />
+                  <BookmarkGlyph title={bookmark.title} url={bookmark.url} size={20} />
                   <span className="min-w-0 flex-1 truncate font-medium text-fg">
                     {bookmark.title}
                   </span>

@@ -20,6 +20,7 @@ import {
   type PaletteActionDef,
   type PaletteActionId,
 } from "./palette-actions.js";
+import { BookmarkGlyph } from "../../routes/bookmarks/BookmarkGlyph.js";
 import { useDebouncedValue } from "./use-debounced-value.js";
 
 const SEARCH_PREVIEW_LIMIT = 3;
@@ -71,18 +72,6 @@ function ActionIcon({ path }: { path: string }) {
     >
       <path d={path} />
     </svg>
-  );
-}
-
-function BookmarkGlyph({ title }: { title: string }) {
-  const letter = title.trim().charAt(0).toUpperCase() || "?";
-  return (
-    <span
-      aria-hidden
-      className="inline-grid h-[22px] w-[22px] shrink-0 place-items-center rounded-md bg-raised-2 font-mono text-[11px] font-semibold text-fg-muted"
-    >
-      {letter}
-    </span>
   );
 }
 
@@ -429,7 +418,7 @@ export function CommandPalette({
                     }}
                     className={ITEM_CLS}
                   >
-                    <BookmarkGlyph title={bookmark.title} />
+                    <BookmarkGlyph title={bookmark.title} url={bookmark.url} size={22} />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[length:var(--text-body-lg)]">
                         {bookmark.title}

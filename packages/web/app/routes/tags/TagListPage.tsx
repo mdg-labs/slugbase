@@ -289,7 +289,7 @@ function TagDetailPanel({ tag, onClose, onRenameRequest, onDeleteRequest }: TagD
                 onClick={() => { void navigate(`/bookmarks?tagId=${tag.id}`); }}
                 data-testid={`tag-bm-item-${bm.id}`}
               >
-                <BookmarkFavicon url={bm.url} size={24} className="mt-sp-1" />
+                <BookmarkFavicon title={bm.title} url={bm.url} size={24} className="mt-sp-1" />
                 <div className="tag-bm-info min-w-0 flex-1">
                   <div
                     className="tag-bm-title truncate font-medium text-fg"

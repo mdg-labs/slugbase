@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { Command } from "cmdk";
 
 import type { SearchBookmarkHit } from "../../lib/search.types.js";
+import { BookmarkGlyph } from "../../routes/bookmarks/BookmarkGlyph.js";
 import { goRouteForSlug } from "./go-mode.js";
 
 function GoArrowIcon() {
@@ -16,18 +17,6 @@ function GoArrowIcon() {
     >
       <path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
-  );
-}
-
-function BookmarkGlyph({ title }: { title: string }) {
-  const letter = title.trim().charAt(0).toUpperCase() || "?";
-  return (
-    <span
-      aria-hidden
-      className="inline-grid h-[22px] w-[22px] shrink-0 place-items-center rounded-md bg-raised-2 font-mono text-[11px] font-semibold text-fg-muted"
-    >
-      {letter}
-    </span>
   );
 }
 
@@ -84,7 +73,7 @@ export function GoModePanel({
               className="flex cursor-pointer items-center gap-sp-4 rounded-md px-sp-4 py-[9px] text-fg-muted aria-selected:bg-accent-subtle aria-selected:text-fg data-[selected=true]:bg-accent-subtle data-[selected=true]:text-fg"
               data-testid={`go-mode-item-${slug}`}
             >
-              <BookmarkGlyph title={bookmark.title} />
+              <BookmarkGlyph title={bookmark.title} url={bookmark.url} size={22} />
               <span className="shrink-0 font-mono text-[length:var(--text-body-lg)] font-semibold text-fg aria-selected:text-accent-text data-[selected=true]:text-accent-text">
                 /go/{slug}
               </span>
