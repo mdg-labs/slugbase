@@ -1,44 +1,19 @@
-function readEnvString(key: string): string | undefined {
-  const fromProcess =
-    typeof process !== "undefined" ? process.env[key] : undefined;
-  if (typeof fromProcess === "string" && fromProcess.length > 0) {
-    return fromProcess;
-  }
-
-  if (typeof import.meta !== "undefined" && key in import.meta.env) {
-    const value: unknown = import.meta.env[key as keyof ImportMetaEnv];
-    if (typeof value === "string" && value.length > 0) {
-      return value;
-    }
-  }
-
-  return undefined;
-}
-
-/** Client-side API origin for browser fetch calls (hosted cross-origin vs same-origin). */
+/**
+ * Client-side API origin for browser `fetch`.
+ * Always empty — session cookies are `SameSite=Lax` on the web origin, so
+ * browser calls must stay same-origin and flow through Worker proxy routes
+ * (`/api/*`, `/auth/*`, `/folders/*`, …). Server loaders use `API_BASE_URL`.
+ */
 export function getApiBaseUrl(): string {
-  const fromApiBase = readEnvString("API_BASE_URL");
-  if (fromApiBase !== undefined) {
-    return fromApiBase.replace(/\/$/, "");
-  }
-
-  const fromVite = readEnvString("VITE_API_URL");
-  if (fromVite !== undefined) {
-    return fromVite.replace(/\/$/, "");
-  }
-
   return "";
 }
 
 /**
- * Resolves a NestJS API path for client-side fetch.
- * Same-origin (self-hosted): prefix with `/api` to hit the Worker proxy.
- * Cross-origin (hosted): use the path as-is on the NestJS API origin.
+ * Resolves a NestJS list/mutation path for client-side fetch via `/api/*` proxies.
+ * Paths covered by bare proxy routes (`/auth/*`, `/folders/:id/*`, …) are passed
+ * without this helper — see `routes.ts`.
  */
 export function resolveClientApiPath(apiPath: string): string {
   const normalized = apiPath.startsWith("/") ? apiPath : `/${apiPath}`;
-  if (getApiBaseUrl().length > 0) {
-    return normalized;
-  }
   return `/api${normalized}`;
 }

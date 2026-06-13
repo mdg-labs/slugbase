@@ -47,7 +47,7 @@ describe("loadBookmarkModalOptions", () => {
     );
   });
 
-  it("uses direct API paths when VITE_API_URL is set", async () => {
+  it("uses same-origin /api proxy paths when VITE_API_URL is set (hosted)", async () => {
     vi.stubEnv("VITE_API_URL", "https://api.example.com");
     vi.resetModules();
     const { loadBookmarkModalOptions: loadOptions } = await import(
@@ -68,12 +68,12 @@ describe("loadBookmarkModalOptions", () => {
 
     expect(globalThis.fetch).toHaveBeenNthCalledWith(
       1,
-      "https://api.example.com/folders?pageSize=100",
+      "/api/folders?pageSize=100",
       expect.objectContaining({ credentials: "include" }),
     );
     expect(globalThis.fetch).toHaveBeenNthCalledWith(
       2,
-      "https://api.example.com/tags?pageSize=100",
+      "/api/tags?pageSize=100",
       expect.objectContaining({ credentials: "include" }),
     );
   });
