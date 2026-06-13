@@ -1,6 +1,6 @@
 # SlugBase public documentation (source)
 
-> **Intentionally empty.** Legacy content imported from `slugbase-docs` was removed — it described an outdated SlugBase version. New customer/operator guides will be authored here from scratch.
+> **Intentionally empty.** Legacy content imported from `slugbase-docs` was removed — it described an outdated SlugBase version. New customer/operator guides will be authored here from scratch. Legacy migration ([#395](https://github.com/mdg-labs/slugbase/issues/395)) is superseded by greenfield authoring ([#406](https://github.com/mdg-labs/slugbase/issues/406)).
 
 Customer and operator documentation for [Documentation.AI](https://documentation.ai). **This directory in the SlugBase monorepo is the source of truth** for publishable docs. Content is authored as MDX here and synced to [`mdg-labs/slugbase-docs`](https://github.com/mdg-labs/slugbase-docs) on push to `main` (see [#396](https://github.com/mdg-labs/slugbase/issues/396)).
 
