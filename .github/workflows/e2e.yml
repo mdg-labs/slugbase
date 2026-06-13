@@ -101,6 +101,9 @@ jobs:
           VITE_AI_BYO_CREDENTIAL: 'false'
         run: pnpm build
 
+      - name: Run DB migrations
+        run: pnpm --filter @slugbase/backend db:migrate
+
       - name: Start API
         env:
           PORT: '4001'
@@ -130,20 +133,26 @@ jobs:
       - name: Wait for health endpoints
         run: |
           echo "Waiting for API at $E2E_BASE_URL_API/health ..."
+          api_ok=false
           for i in $(seq 1 30); do
-            curl -sf "$E2E_BASE_URL_API/health" >/dev/null 2>&1 && break
+            curl -sf "$E2E_BASE_URL_API/health" >/dev/null 2>&1 && { api_ok=true; break; }
             sleep 2
           done
+          $api_ok || { echo "API did not become healthy"; exit 1; }
           echo "Waiting for Web at $E2E_BASE_URL_WEB/health ..."
+          web_ok=false
           for i in $(seq 1 30); do
-            curl -sf "$E2E_BASE_URL_WEB/health" >/dev/null 2>&1 && break
+            curl -sf "$E2E_BASE_URL_WEB/health" >/dev/null 2>&1 && { web_ok=true; break; }
             sleep 2
           done
+          $web_ok || { echo "Web did not become healthy"; exit 1; }
           echo "Waiting for Marketing at $E2E_BASE_URL_MARKETING ..."
+          mktg_ok=false
           for i in $(seq 1 15); do
-            curl -sf "$E2E_BASE_URL_MARKETING" >/dev/null 2>&1 && break
+            curl -sf "$E2E_BASE_URL_MARKETING" >/dev/null 2>&1 && { mktg_ok=true; break; }
             sleep 2
           done
+          $mktg_ok || { echo "Marketing did not become healthy"; exit 1; }
 
       - name: Fetch ReportPortal secrets from Infisical
         uses: Infisical/secrets-action@77ab1f4ccd183a543cb5b42435fbd181189f4995 # v1.0.16
@@ -155,6 +164,12 @@ jobs:
           env-slug: staging
 
       - name: Run Playwright tests (hosted)
+        env:
+          # Re-pin e2e env after Infisical — staging DATABASE_URL etc. must not reach tests.
+          DATABASE_URL: postgresql://slugbase:slugbase@localhost:5432/slugbase_e2e
+          E2E_BASE_URL_API: http://localhost:4001
+          E2E_BASE_URL_WEB: http://localhost:4002
+          E2E_BASE_URL_MARKETING: http://localhost:4003
         run: |
           set -o pipefail
           pnpm e2e:direct --project=hosted 2>&1 | tee rp-e2e-hosted.log
@@ -273,10 +288,12 @@ jobs:
       - name: Wait for health endpoint
         run: |
           echo "Waiting for API at http://localhost:3000/health ..."
+          ok=false
           for i in $(seq 1 30); do
-            curl -sf "http://localhost:3000/health" >/dev/null 2>&1 && break
+            curl -sf "http://localhost:3000/health" >/dev/null 2>&1 && { ok=true; break; }
             sleep 2
           done
+          $ok || { echo "Self-hosted container did not become healthy"; exit 1; }
 
       - name: Fetch ReportPortal secrets from Infisical
         uses: Infisical/secrets-action@77ab1f4ccd183a543cb5b42435fbd181189f4995 # v1.0.16
@@ -288,6 +305,9 @@ jobs:
           env-slug: staging
 
       - name: Run Playwright tests (self-hosted)
+        env:
+          DATABASE_URL: postgresql://slugbase:slugbase@localhost:5432/slugbase_e2e
+          E2E_BASE_URL_SELF_HOSTED: http://localhost:3000
         run: |
           set -o pipefail
           pnpm e2e:direct --project=self-hosted 2>&1 | tee rp-e2e-self-hosted.log
