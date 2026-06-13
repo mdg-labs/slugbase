@@ -30,6 +30,7 @@
     "@playwright/test": "^1.60.0",
     "@reportportal/agent-js-playwright": "5.2.3",
     "@reportportal/agent-js-vitest": "5.2.3",
+    "@reportportal/client-javascript": "5.5.11",
     "@vitest/runner": "4.1.6",
     "@vscode/ripgrep": "^1.0.10",
     "eslint": "^9.28.0",

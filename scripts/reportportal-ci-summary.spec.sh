@@ -38,7 +38,7 @@ EOF
 
 # launch-url
 assert_eq \
-  "https://reportportal.example.com/ui/#slugbase/launches/all/61ce1c26-842a-4bde-9abe-a4696e31d626" \
+  "https://reportportal.example.com/ui/%23slugbase/launches/all/61ce1c26-842a-4bde-9abe-a4696e31d626" \
   "$(reportportal_launch_url "61ce1c26-842a-4bde-9abe-a4696e31d626")" \
   "launch-url"
 
@@ -61,7 +61,7 @@ assert_eq "2" "$(wc -l <"$STATE_FILE" | tr -d ' ')" "record-log count"
 
 MD=$(reportportal_build_launch_markdown "ReportPortal · CI")
 echo "$MD" | grep -q "61ce1c26-842a-4bde-9abe-a4696e31d626"
-echo "$MD" | grep -q "reportportal.example.com/ui/#slugbase/launches/all/"
+echo "$MD" | grep -q "reportportal.example.com/ui/%23slugbase/launches/all/"
 
 # record-env
 export RP_LAUNCH_UUID="ffffffff-1111-2222-3333-444444444444"

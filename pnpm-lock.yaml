@@ -25,6 +25,9 @@ importers:
       '@reportportal/agent-js-vitest':
         specifier: 5.2.3
         version: 5.2.3
+      '@reportportal/client-javascript':
+        specifier: 5.5.11
+        version: 5.5.11
       '@vitest/runner':
         specifier: 4.1.6
         version: 4.1.6

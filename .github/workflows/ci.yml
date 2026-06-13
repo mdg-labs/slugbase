@@ -72,17 +72,36 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Start ReportPortal unit launch
+        id: rp-unit-start
+        run: |
+          uuid=$(node --experimental-strip-types scripts/reportportal-ci-launch.ts start unit || true)
+          echo "launch_id=${uuid}" >> "$GITHUB_OUTPUT"
+          if [ -n "$uuid" ]; then
+            echo "RP_LAUNCH_ID=${uuid}" >> "$GITHUB_ENV"
+          fi
+
       - name: Unit tests
+        id: unit-tests
         env:
           # Infisical injects full staging env; unit tests must not call the live pricing API.
           PUBLIC_API_BASE_URL: ""
-        run: |
-          set -o pipefail
-          pnpm test:unit 2>&1 | tee /tmp/rp-unit.log
+        run: pnpm test:unit
 
-      - name: Record ReportPortal unit launches
-        if: always()
-        run: bash scripts/reportportal-ci-summary.sh record-log unit /tmp/rp-unit.log
+      - name: Finish ReportPortal unit launch
+        if: always() && steps.rp-unit-start.outputs.launch_id != ''
+        env:
+          RP_LAUNCH_STATUS: ${{ steps.unit-tests.outcome == 'success' && 'PASSED' || 'FAILED' }}
+        run: |
+          node --experimental-strip-types scripts/reportportal-ci-launch.ts finish unit \
+            "${{ steps.rp-unit-start.outputs.launch_id }}" \
+            "$RP_LAUNCH_STATUS"
+
+      - name: Record ReportPortal unit launch
+        if: always() && steps.rp-unit-start.outputs.launch_id != ''
+        env:
+          RP_LAUNCH_UUID: ${{ steps.rp-unit-start.outputs.launch_id }}
+        run: bash scripts/reportportal-ci-summary.sh record-env unit
 
       - name: i18n catalog validation
         run: pnpm run i18n:validate
@@ -95,24 +114,46 @@ jobs:
           NODE_ENV: production
         run: pnpm build
 
+      - name: Start ReportPortal integration launch
+        id: rp-integration-start
+        run: |
+          uuid=$(node --experimental-strip-types scripts/reportportal-ci-launch.ts start integration || true)
+          echo "launch_id=${uuid}" >> "$GITHUB_OUTPUT"
+          if [ -n "$uuid" ]; then
+            echo "RP_LAUNCH_ID=${uuid}" >> "$GITHUB_ENV"
+          fi
+
       - name: Integration tests
+        id: integration-tests
         env:
           DATABASE_URL: postgresql://slugbase:slugbase@localhost:5432/slugbase_test
           SLUGBASE_INTEGRATION_NO_DOCKER: "1"
           PUBLIC_API_BASE_URL: ""
-        run: |
-          set -o pipefail
-          pnpm test:integration 2>&1 | tee /tmp/rp-integration.log
+        run: pnpm test:integration
 
-      - name: Record ReportPortal integration launches
-        if: always()
-        run: bash scripts/reportportal-ci-summary.sh record-log integration /tmp/rp-integration.log
+      - name: Finish ReportPortal integration launch
+        if: always() && steps.rp-integration-start.outputs.launch_id != ''
+        env:
+          RP_LAUNCH_STATUS: ${{ steps.integration-tests.outcome == 'success' && 'PASSED' || 'FAILED' }}
+        run: |
+          node --experimental-strip-types scripts/reportportal-ci-launch.ts finish integration \
+            "${{ steps.rp-integration-start.outputs.launch_id }}" \
+            "$RP_LAUNCH_STATUS"
+
+      - name: Record ReportPortal integration launch
+        if: always() && steps.rp-integration-start.outputs.launch_id != ''
+        env:
+          RP_LAUNCH_UUID: ${{ steps.rp-integration-start.outputs.launch_id }}
+        run: bash scripts/reportportal-ci-summary.sh record-env integration
 
       - name: Dependency audit
         run: pnpm audit --audit-level=high
 
       - name: ReportPortal job summary
         if: always()
+        env:
+          REPORTPORTAL_SUMMARY_URL: https://reportportal.mdg-labs.dev
+          REPORTPORTAL_SUMMARY_PROJECT: slugbase
         run: bash scripts/reportportal-ci-summary.sh write-summary ci
 
       - name: ReportPortal PR comment
@@ -120,6 +161,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPORTPORTAL_SUMMARY_URL: https://reportportal.mdg-labs.dev
+          REPORTPORTAL_SUMMARY_PROJECT: slugbase
         run: bash scripts/reportportal-ci-summary.sh update-pr-comment ci
 
       - name: Upload ReportPortal launch state

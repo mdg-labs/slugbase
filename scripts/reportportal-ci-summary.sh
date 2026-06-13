@@ -11,9 +11,12 @@ MARKER_E2E='<!-- reportportal-e2e -->'
 
 reportportal_launch_url() {
   local uuid="$1"
-  local base_url="${REPORTPORTAL_URL:-https://reportportal.mdg-labs.dev}"
-  local project="${REPORTPORTAL_PROJECT:-slugbase}"
-  printf '%s/ui/#%s/launches/all/%s' "${base_url%/}" "$project" "$uuid"
+  # Use explicit public URL vars for summaries — Infisical-injected REPORTPORTAL_* can be
+  # secret-masked in GITHUB_STEP_SUMMARY / PR bodies, breaking markdown hrefs.
+  local base_url="${REPORTPORTAL_SUMMARY_URL:-${REPORTPORTAL_PUBLIC_URL:-${REPORTPORTAL_URL:-https://reportportal.mdg-labs.dev}}}"
+  local project="${REPORTPORTAL_SUMMARY_PROJECT:-${REPORTPORTAL_PUBLIC_PROJECT:-${REPORTPORTAL_PROJECT:-slugbase}}}"
+  # Encode # as %23 — bare hash in markdown links is treated as a fragment on github.com.
+  printf '%s/ui/%%23%s/launches/all/%s' "${base_url%/}" "$project" "$uuid"
 }
 
 # Extract unique launch UUIDs from a log file or stdin.
@@ -77,7 +80,7 @@ reportportal_build_launch_markdown() {
     layer=$(echo "$line" | jq -r '.layer')
     uuid=$(echo "$line" | jq -r '.uuid')
     url=$(reportportal_launch_url "$uuid")
-    echo "- **${layer}**: [${uuid}](${url})"
+    echo "- **${layer}**: [View launch (${uuid})](${url})"
   done < <(sort -u "$STATE_FILE")
 
   echo ""

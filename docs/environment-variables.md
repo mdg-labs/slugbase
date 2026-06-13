@@ -391,6 +391,8 @@ Set the same three keys in Infisical `staging` before enabling ReportPortal uplo
 
 Agent wiring (`@reportportal/agent-js-vitest`, `@reportportal/agent-js-playwright`) lands in #368–#370. See [ReportPortal JavaScript agents](https://reportportal.io/docs/log-data-in-reportportal/test-framework-integration/JavaScript/).
 
+**CI launch grouping:** GitHub Actions starts one shared launch per layer (`SlugBase · Unit · CI #<run>` / `SlugBase · Integration · CI #<run>`) and sets ephemeral `RP_LAUNCH_ID` on the runner before Turbo fan-out. Package reporters attach to that launch (attribute `package` still identifies the workspace package). Not stored in Infisical.
+
 ---
 
 ## GitHub Actions secrets (not in Infisical)

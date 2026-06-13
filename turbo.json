@@ -9,7 +9,8 @@
     "GITHUB_WORKFLOW",
     "REPORTPORTAL_API_KEY",
     "REPORTPORTAL_PROJECT",
-    "REPORTPORTAL_URL"
+    "REPORTPORTAL_URL",
+    "RP_LAUNCH_ID"
   ],
   "tasks": {
     "lint": {

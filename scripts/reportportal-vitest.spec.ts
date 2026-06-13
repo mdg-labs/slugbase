@@ -4,6 +4,7 @@ import {
   reportPortalAttributes,
   reportPortalCiAttributes,
   reportPortalEndpoint,
+  reportPortalLaunchName,
   reportPortalMode,
   reportPortalReporterConfig,
   reportPortalReporters,
@@ -82,6 +83,24 @@ describe("reportPortalCiAttributes", () => {
   });
 });
 
+describe("reportPortalLaunchName", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("includes CI run number in CI", () => {
+    vi.stubEnv("CI", "true");
+    vi.stubEnv("GITHUB_RUN_NUMBER", "30");
+
+    expect(reportPortalLaunchName("unit")).toBe("SlugBase · Unit · CI #30");
+    expect(reportPortalLaunchName("integration")).toBe("SlugBase · Integration · CI #30");
+  });
+
+  it("uses base name locally", () => {
+    expect(reportPortalLaunchName("unit")).toBe("SlugBase · Unit");
+  });
+});
+
 describe("reportPortalReporterConfig", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
@@ -112,6 +131,18 @@ describe("reportPortalReporterConfig", () => {
     expect(reportPortalReporterConfig("integration", "marketing")?.launch).toBe(
       "SlugBase · Integration",
     );
+  });
+
+  it("attaches to a shared CI launch when RP_LAUNCH_ID is set", () => {
+    for (const [key, value] of Object.entries(REQUIRED_ENV)) {
+      vi.stubEnv(key, value);
+    }
+    vi.stubEnv("RP_LAUNCH_ID", "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+
+    expect(reportPortalReporterConfig("unit", "web")).toMatchObject({
+      launchId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+      launchUuidPrint: false,
+    });
   });
 });
 
