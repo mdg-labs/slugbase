@@ -1,8 +1,94 @@
 ---
-title: "FAQ"
-description: "Frequently asked questions about self-hosted SlugBase."
+title: "Self-hosted FAQ"
+description: "Frequently asked questions about running and using self-hosted SlugBase."
 ---
 
-## Overview
+## General
 
-This page is a navigation stub. Full content will be added in a follow-up authoring task.
+### How is self-hosted different from SlugBase Cloud?
+
+Self-hosted runs the same application on your infrastructure. You control data residency, email, identity providers, and upgrades. SlugBase Cloud is a managed service with operator-configured email, OIDC, billing, and infrastructure. Feature limits that apply to hosted plans (bookmark caps, team gates) do not apply on self-hosted — all workspace features are available.
+
+### Do I need a license key?
+
+No. Self-hosted v1 uses a no-op billing implementation with full entitlements. There is no paid self-host license in v1.
+
+### Can every user create their own workspace?
+
+No. Self-hosted is designed as an **admin-curated multi-workspace** product. Instance administrators create workspaces and invite users. Public registration is off by default; enable it only if you want open signup.
+
+## Workspaces and data
+
+### Can I belong to multiple workspaces?
+
+Yes. One account can be a member of many workspaces with different roles in each. Switch workspaces from the sidebar or command palette.
+
+### What happens to my bookmarks if I leave a workspace?
+
+Your bookmarks, folders, and tags stay in the workspace. Export them first if you need a personal copy. See [Backup and export](/selfhosted/backup-and-export).
+
+### Are slugs public short links?
+
+No. Slugs resolve only for signed-in workspace members. `/go/<slug>` requires authentication and uses your active workspace context.
+
+## Security
+
+### Does self-hosted support MFA?
+
+Yes. Every account can enroll TOTP two-factor authentication from **Settings → Account → Two-factor auth**. API tokens and federated sign-in bypass MFA.
+
+### How are secrets stored?
+
+SMTP passwords, OIDC client secrets, AI API keys, and MFA secrets are encrypted at rest. Session signing uses `SESSION_SECRET`; field encryption uses `ENCRYPTION_KEY`.
+
+### Can I use SSO?
+
+Yes. Configure OIDC identity providers in **Settings → Workspace → Identity providers** when the admin UI is enabled. See [OIDC](/selfhosted/oidc).
+
+## Email and invitations
+
+### Why are invitation emails not sending?
+
+Outbound email requires SMTP configuration. See [SMTP](/selfhosted/smtp) and send a test message before inviting members.
+
+### Can I disable email verification?
+
+Email verification is configurable on self-hosted (`EMAIL_VERIFICATION_REQUIRED`). Hosted requires verification by default.
+
+## Features
+
+### Is team sharing available?
+
+Yes, on all self-hosted workspaces. Share bookmarks and folders with members and teams without a plan upgrade. See [Sharing](/selfhosted/sharing).
+
+### Is the audit log available?
+
+Yes. Workspace admins and owners can view the audit log on self-hosted instances. See [Audit log](/selfhosted/audit-log).
+
+### Are API tokens restricted by plan?
+
+No. Any account can create personal API tokens. See [API tokens](/selfhosted/api-tokens).
+
+### What AI provider does SlugBase use?
+
+v1 uses OpenAI behind a vendor-neutral contract. You supply your own API key on self-hosted instances. See [AI suggestions](/selfhosted/ai-suggestions).
+
+## Operations
+
+### Is there a separate admin console?
+
+No dedicated operator console in v1. Instance administrators use the standard web app plus deployment configuration. See [Instance admin](/selfhosted/instance-admin).
+
+### How do I back up my instance?
+
+Use per-user JSON [export](/selfhosted/backup-and-export) for bookmark content and database volume snapshots for full-instance recovery. There is no one-click restore UI in v1.
+
+### How do I upgrade?
+
+Deploy a newer container image and restart. Database migrations apply automatically on startup. Snapshot the database before upgrading production.
+
+## Related topics
+
+- [Introduction](/selfhosted/introduction)
+- [Quick start](/selfhosted/quick-start)
+- [Troubleshooting](/selfhosted/troubleshooting)

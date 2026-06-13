@@ -1,8 +1,99 @@
 ---
 title: "Account settings"
-description: "Manage your personal account preferences."
+description: "Manage your profile, password, two-factor authentication, preferences, and personal security on a self-hosted instance."
 ---
 
-## Overview
+## What you'll accomplish
 
-This page is a navigation stub. Full content will be added in a follow-up authoring task.
+After this guide, you can update your profile, secure your account with MFA, and set personal preferences that apply across workspaces.
+
+## Open account settings
+
+From the sidebar, select **Settings**. Under **Account**, choose a section: **Profile**, **Password**, **Two-factor auth**, **API tokens**, or **Preferences**.
+
+<Callout kind="info" title="Screenshot placeholder">
+**Suggested capture:** Account settings page with Profile section visible.
+
+**Suggested filename:** `/assets/selfhosted/settings-account-profile.png`
+
+**Alt text:** Account settings showing display name and email fields.
+</Callout>
+
+## Profile
+
+Update your **Display name** and **Email address**. Your name and email are visible to other members in workspaces you belong to.
+
+Changing your email sends a verification link to the new address. Your email does not change until you confirm the link. You can **Resend verification email** or **Cancel change** while verification is pending.
+
+## Password
+
+<Steps>
+  <Step title="Open Password">
+    Under **Account**, select **Password**.
+  </Step>
+  <Step title="Enter credentials">
+  If you already have a password, enter your **Current password**, then your **New password** and confirmation.
+  </Step>
+  <Step title="Save">
+    Click **Update password**.
+  </Step>
+</Steps>
+
+If you signed in with a federated identity provider (OIDC), you may not have a password yet. You can **Add password** to enable direct email-and-password sign-in alongside SSO.
+
+## Two-factor authentication
+
+Protect your account with a time-based authenticator app (TOTP).
+
+<Steps>
+  <Step title="Open Two-factor auth">
+    Under **Account**, select **Two-factor auth**.
+  </Step>
+  <Step title="Set up authenticator app">
+    Click **Set up authenticator app**. Scan the QR code or enter the setup key manually in your authenticator app.
+  </Step>
+  <Step title="Verify and activate">
+    Enter the 6-digit code from your app and click **Verify and activate**.
+  </Step>
+  <Step title="Save backup codes">
+    Copy your one-time backup codes and store them securely. Each code works only once if you lose your authenticator.
+  </Step>
+</Steps>
+
+After enrollment, password sign-in requires your authenticator code. Federated (OIDC) sign-in and [API tokens](/selfhosted/api-tokens) do not prompt for MFA.
+
+To disable MFA, enter your current authenticator code on the same page.
+
+<Callout kind="tip">
+If you are locked out, an [instance administrator](/selfhosted/instance-admin) can reset MFA on your account.
+</Callout>
+
+## Preferences
+
+Personal preferences apply to your account only — not the whole workspace:
+
+| Setting | Options |
+|---------|---------|
+| **Language** | English, Deutsch (German) |
+| **Theme** | Light, Dark, Auto |
+| **Accent color** | Periwinkle, Indigo, Teal, and others |
+| **Default bookmark view** | Card grid or Table |
+| **AI suggestions opt-out** | Disable AI features on your content when the workspace has AI enabled |
+
+Click **Save changes** after editing preferences.
+
+## API tokens
+
+Personal API tokens authenticate scripts and integrations as you. See the dedicated [API tokens](/selfhosted/api-tokens) guide for creation and revocation steps.
+
+## Verify it worked
+
+- Profile changes appear in the account menu and to workspace members.
+- After enabling MFA, your next password sign-in prompts for a code.
+- Preference changes take effect immediately in the UI.
+
+## Related topics
+
+- [API tokens](/selfhosted/api-tokens) — programmatic access
+- [OIDC](/selfhosted/oidc) — federated sign-in
+- [AI suggestions](/selfhosted/ai-suggestions) — workspace-wide AI and personal opt-out

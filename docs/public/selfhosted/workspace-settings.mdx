@@ -1,8 +1,84 @@
 ---
 title: "Workspace settings"
-description: "Configure workspace name, accent, and defaults."
+description: "Configure workspace name, general options, and deletion for workspace admins on self-hosted instances."
 ---
 
-## Overview
+## What you'll accomplish
 
-This page is a navigation stub. Full content will be added in a follow-up authoring task.
+After this guide, you can update general workspace settings and understand which configuration sections are available to workspace admins on self-hosted instances.
+
+## Prerequisites
+
+- Signed in as a workspace **owner** or **admin**
+- Active workspace selected
+
+<Callout kind="info" title="Screenshot placeholder">
+**Suggested capture:** Settings → Workspace → General with workspace name field.
+
+**Suggested filename:** `/assets/selfhosted/settings-workspace-general.png`
+
+**Alt text:** Workspace general settings with name field and save button.
+</Callout>
+
+## Open workspace settings
+
+<Steps>
+  <Step title="Go to Settings">
+    From the sidebar, select **Settings**.
+  </Step>
+  <Step title="Open Workspace">
+    Under **Workspace**, choose **General** or another section from the workspace settings navigation.
+  </Step>
+</Steps>
+
+Members without admin rights see a notice that workspace settings are restricted to admins and owners.
+
+## General settings
+
+On the **General** section, update the **Workspace name** and click **Save changes**. The name appears in the workspace switcher and member-facing screens.
+
+## Workspace settings sections (self-hosted)
+
+On a typical self-hosted instance with admin UI enabled, workspace admins see these sections under **Workspace**:
+
+| Section | Purpose |
+|---------|---------|
+| **General** | Workspace name and deletion |
+| **Email / SMTP** | Outbound email transport — see [SMTP](/selfhosted/smtp) |
+| **AI suggestions** | Enable AI and configure credentials — see [AI suggestions](/selfhosted/ai-suggestions) |
+| **Identity providers** | OIDC federated sign-in — see [OIDC](/selfhosted/oidc) |
+
+If your operator manages email or identity centrally, the **Email / SMTP** or **Identity providers** sections may show a read-only notice instead of editable fields.
+
+The **Billing** group does not appear on self-hosted instances.
+
+## Delete a workspace
+
+<Callout kind="danger">
+Deleting a workspace permanently removes all bookmarks, folders, tags, teams, and settings in that workspace. This cannot be undone.
+</Callout>
+
+<Steps>
+  <Step title="Open General settings">
+    Scroll to **Delete workspace**.
+  </Step>
+  <Step title="Start deletion">
+    Click **Delete workspace…** and type the workspace name to confirm.
+  </Step>
+  <Step title="Confirm permanently">
+    Click **Delete permanently**.
+  </Step>
+</Steps>
+
+Only workspace owners can delete a workspace. At least one owner must remain until deletion is confirmed.
+
+## Verify it worked
+
+After saving general settings, the updated workspace name appears in the sidebar switcher. Configuration changes in SMTP, AI, or OIDC sections show success toasts when saved.
+
+## Related topics
+
+- [SMTP](/selfhosted/smtp) — outbound email
+- [OIDC](/selfhosted/oidc) — federated sign-in
+- [AI suggestions](/selfhosted/ai-suggestions) — AI configuration
+- [Members and teams](/selfhosted/members-and-teams) — workspace membership

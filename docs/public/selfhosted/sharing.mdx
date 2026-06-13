@@ -1,8 +1,101 @@
 ---
-title: "Sharing"
-description: "Share bookmarks and folders within a workspace."
+title: "Sharing bookmarks and folders"
+description: "Share bookmarks and folders with workspace members and teams on a self-hosted instance."
 ---
 
-## Overview
+## What you'll accomplish
 
-This page is a navigation stub. Full content will be added in a follow-up authoring task.
+After this guide, you can grant read access to bookmarks and folders for individual members or teams in your workspace.
+
+## Prerequisites
+
+- Signed in to the active workspace
+- On self-hosted instances, sharing is always available — no plan upgrade required
+
+## How sharing works
+
+Sharing grants **read access** to a bookmark or folder within the same workspace. Shared bookmarks appear in the recipient's lists with a **Shared with you** indicator. Sharing a folder also grants read access to the bookmarks inside it.
+
+Sharing does not copy content — it exposes your existing bookmark or folder to selected members or teams.
+
+<Callout kind="info" title="Screenshot placeholder">
+**Suggested capture:** Share access dialog on a bookmark with a member and a team listed under current grants.
+
+**Suggested filename:** `/assets/selfhosted/sharing-dialog.png`
+
+**Alt text:** Share access dialog showing grant type selector and list of people with access.
+</Callout>
+
+## Share a bookmark
+
+<Steps>
+  <Step title="Open the bookmark menu">
+    From the bookmarks list or dashboard, open the menu on the bookmark you own.
+  </Step>
+  <Step title="Choose Share">
+    Select **Share** to open the share access dialog.
+  </Step>
+  <Step title="Add a grant">
+    Choose **Member** or **Team**, select the target, and click **Add**.
+  </Step>
+  <Step title="Close the dialog">
+    Click **Done**. Recipients can now find the bookmark under sharing filters.
+  </Step>
+</Steps>
+
+## Share a folder
+
+<Steps>
+  <Step title="Open the folder">
+    From **Folders**, open the menu on a folder you own.
+  </Step>
+  <Step title="Choose Share">
+    Use the same share access dialog as bookmarks. Grants apply to the folder and its bookmarks.
+  </Step>
+</Steps>
+
+## Filter by sharing scope
+
+On bookmark and folder lists, use the **Sharing scope** filter:
+
+| Scope | Shows |
+|-------|-------|
+| **All bookmarks** / **All folders** | Everything you can access |
+| **Only me** | Items you own that are not shared |
+| **Shared with me** | Items others shared with you |
+| **Shared by me** | Items you shared with others |
+
+## Revoke access
+
+<Steps>
+  <Step title="Open Share on the item">
+    Return to the share access dialog for the bookmark or folder.
+  </Step>
+  <Step title="Remove a grant">
+    Next to a member or team, click **Remove**.
+  </Step>
+</Steps>
+
+## Bulk share bookmarks
+
+From the bookmarks list, select multiple bookmarks and use the bulk **Share** action to grant access to the same member or team for all selected items.
+
+## Verify it worked
+
+Switch the list filter to **Shared by me** and confirm the item appears. Ask the recipient to check **Shared with me**.
+
+## Troubleshooting
+
+### Share option is missing
+
+Only the owner of a bookmark or folder can manage sharing. You cannot share items owned by another member unless they share with you first (read-only).
+
+### Recipient cannot see the bookmark
+
+Confirm they are a member of the active workspace and that you shared with the correct member or team.
+
+## Related topics
+
+- [Members and teams](/selfhosted/members-and-teams) — create teams as sharing targets
+- [Folders](/selfhosted/folders) — organize bookmarks before sharing
+- [Bookmarks](/selfhosted/bookmarks) — create and manage bookmarks
