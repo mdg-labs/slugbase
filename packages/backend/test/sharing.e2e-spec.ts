@@ -254,4 +254,80 @@ describe("Sharing + authorization (integration)", () => {
       ).rejects.toThrow("Bookmark is not accessible");
     });
   });
+
+  describe("slug preference auto-prune on share revoke", () => {
+    it("removes recipient preference when revoke leaves one accessible match", async () => {
+      const ownerBookmark = await bookmarksService.createBookmark(workspace, ownerUserId, {
+        title: "Owner Collision",
+        url: "https://owner-collision.example.com",
+        slug: "share-collision",
+        forwardingEnabled: true,
+      });
+      await bookmarksService.createBookmark(workspace, recipientUserId, {
+        title: "Recipient Collision",
+        url: "https://recipient-collision.example.com",
+        slug: "share-collision",
+        forwardingEnabled: true,
+      });
+
+      await sharingService.shareBookmarkWithUser(
+        workspace,
+        ownerUserId,
+        ownerBookmark.id,
+        recipientUserId,
+      );
+
+      const recipientOwn = await bookmarksService.listBookmarks(workspace, recipientUserId, {
+        scope: "mine",
+      });
+      const recipientBookmark = recipientOwn.items.find(
+        (item) => item.slug === "share-collision",
+      );
+      expect(recipientBookmark).toBeTruthy();
+
+      await goService.chooseSlugTarget(
+        workspace,
+        recipientUserId,
+        "share-collision",
+        ownerBookmark.id,
+        true,
+      );
+
+      const prefsBefore = await goService.listPreferences(workspace, recipientUserId);
+      expect(
+        prefsBefore.some(
+          (p) => p.slug === "share-collision" && p.bookmarkId === ownerBookmark.id,
+        ),
+      ).toBe(true);
+
+      const grants = await sharingService.listBookmarkShares(
+        workspace,
+        ownerUserId,
+        ownerBookmark.id,
+      );
+      const userGrant = grants.find((grant) => grant.kind === "user");
+      expect(userGrant).toBeTruthy();
+      if (!userGrant) return;
+
+      await sharingService.revokeBookmarkShare(
+        workspace,
+        ownerUserId,
+        ownerBookmark.id,
+        userGrant.id,
+      );
+
+      const prefsAfter = await goService.listPreferences(workspace, recipientUserId);
+      expect(prefsAfter.some((p) => p.slug === "share-collision")).toBe(false);
+
+      const result = await goService.resolveSlug(
+        workspace,
+        recipientUserId,
+        "share-collision",
+      );
+      expect(result.kind).toBe("redirect");
+      if (result.kind === "redirect") {
+        expect(result.url).toBe("https://recipient-collision.example.com");
+      }
+    });
+  });
 });

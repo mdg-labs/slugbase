@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  forwardRef,
   Inject,
   Injectable,
   NotFoundException,
@@ -10,6 +11,7 @@ import {
 import { DbService } from "../db/db.service.js";
 import { AuthzService } from "../common/authz/authz.service.js";
 import { EntitlementsService } from "../entitlements/entitlements.service.js";
+import { GoService } from "../slugs/go.service.js";
 import { WorkspaceDataGuard } from "../workspaces/workspace-data.guard.js";
 import type { WorkspaceRecord } from "../workspaces/workspace.types.js";
 import { BookmarkRepository } from "./bookmark.repository.js";
@@ -41,6 +43,7 @@ export class BookmarksService {
     @Inject(WorkspaceDataGuard) private readonly wsDataGuard: WorkspaceDataGuard,
     @Inject(EntitlementsService) private readonly entitlements: EntitlementsService,
     @Inject(AuthzService) private readonly authz: AuthzService,
+    @Inject(forwardRef(() => GoService)) private readonly goService: GoService,
   ) {
     this.repo = new BookmarkRepository(db.getOrm());
   }
@@ -144,6 +147,20 @@ export class BookmarksService {
     });
 
     if (!updated) throw new NotFoundException("Bookmark not found");
+
+    const slugChanged =
+      patch.slug !== undefined && nextSlug !== existing.slug;
+    const forwardingChanged =
+      patch.forwardingEnabled !== undefined &&
+      nextForwarding !== existing.forwardingEnabled;
+    if (slugChanged || forwardingChanged) {
+      await this.goService.reEvaluateAfterBookmarkMutation(
+        workspace.id,
+        existing.slug,
+        nextSlug,
+      );
+    }
+
     return this.wsDataGuard.verifyOwnership(workspace.id, updated);
   }
 
@@ -152,8 +169,15 @@ export class BookmarksService {
     userId: string,
     bookmarkId: string,
   ): Promise<void> {
-    await this.requireOwnedBookmark(workspace, userId, bookmarkId);
+    const existing = await this.requireOwnedBookmark(workspace, userId, bookmarkId);
     await this.repo.delete(workspace.id, bookmarkId);
+    if (existing.slug) {
+      await this.goService.reEvaluateAfterBookmarkMutation(
+        workspace.id,
+        existing.slug,
+        null,
+      );
+    }
   }
 
   async togglePin(

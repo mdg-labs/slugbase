@@ -319,6 +319,106 @@ describe("Slugs + /go (integration)", () => {
     });
   });
 
+  describe("slug preference auto-prune", () => {
+    it("prunes a preference on resolve when only one match remains", async () => {
+      const only = await bookmarksService.createBookmark(workspace, ownerUserId, {
+        title: "Only Match",
+        url: "https://only-match.example.com",
+        slug: "prune-resolve",
+        forwardingEnabled: true,
+      });
+
+      await goService.getRepository().upsertSlugPreference({
+        workspaceId,
+        userId: ownerUserId,
+        slug: "prune-resolve",
+        bookmarkId: only.id,
+      });
+
+      const before = await goService.listPreferences(workspace, ownerUserId);
+      expect(before.some((p) => p.slug === "prune-resolve")).toBe(true);
+
+      const result = await goService.resolveSlug(workspace, ownerUserId, "prune-resolve");
+      expect(result.kind).toBe("redirect");
+
+      const after = await goService.listPreferences(workspace, ownerUserId);
+      expect(after.some((p) => p.slug === "prune-resolve")).toBe(false);
+    });
+
+    it("retains a preference while two accessible matches still exist", async () => {
+      const first = await bookmarksService.createBookmark(workspace, ownerUserId, {
+        title: "Prune Keep First",
+        url: "https://prune-keep-first.example.com",
+        slug: "prune-keep",
+        forwardingEnabled: true,
+      });
+      const second = await bookmarksService.createBookmark(workspace, ownerUserId, {
+        title: "Prune Keep Second",
+        url: "https://prune-keep-second.example.com",
+        slug: "prune-keep-alt",
+        forwardingEnabled: true,
+      });
+
+      await goService.getRepository().upsertSlugPreference({
+        workspaceId,
+        userId: ownerUserId,
+        slug: "prune-keep",
+        bookmarkId: first.id,
+      });
+
+      const repo = goService.getRepository();
+      const spy = vi.spyOn(repo, "findAccessibleForwardingMatches").mockResolvedValue([
+        first,
+        { ...second, slug: "prune-keep" },
+      ]);
+
+      await goService.reEvaluateSlugPreference(workspaceId, ownerUserId, "prune-keep");
+
+      const prefs = await goService.listPreferences(workspace, ownerUserId);
+      expect(prefs.some((p) => p.slug === "prune-keep")).toBe(true);
+
+      spy.mockRestore();
+    });
+
+    it("prunes a preference when the preferred bookmark is deleted", async () => {
+      const kept = await bookmarksService.createBookmark(workspace, ownerUserId, {
+        title: "Kept Collision",
+        url: "https://kept-collision.example.com",
+        slug: "prune-delete",
+        forwardingEnabled: true,
+      });
+      const removed = await bookmarksService.createBookmark(workspace, ownerUserId, {
+        title: "Removed Collision",
+        url: "https://removed-collision.example.com",
+        slug: "prune-delete-alt",
+        forwardingEnabled: true,
+      });
+
+      await goService.getRepository().upsertSlugPreference({
+        workspaceId,
+        userId: ownerUserId,
+        slug: "prune-delete",
+        bookmarkId: removed.id,
+      });
+
+      const repo = goService.getRepository();
+      const spy = vi.spyOn(repo, "findAccessibleForwardingMatches").mockResolvedValue([
+        kept,
+        { ...removed, slug: "prune-delete" },
+      ]);
+      await goService.reEvaluateSlugPreference(workspaceId, ownerUserId, "prune-delete");
+      spy.mockRestore();
+
+      const beforeDelete = await goService.listPreferences(workspace, ownerUserId);
+      expect(beforeDelete.some((p) => p.slug === "prune-delete")).toBe(true);
+
+      await bookmarksService.deleteBookmark(workspace, ownerUserId, removed.id);
+
+      const afterDelete = await goService.listPreferences(workspace, ownerUserId);
+      expect(afterDelete.some((p) => p.slug === "prune-delete")).toBe(false);
+    });
+  });
+
   describe("async usage tracking", () => {
     it("increments access count after redirect", async () => {
       const bookmark = await bookmarksService.createBookmark(workspace, ownerUserId, {

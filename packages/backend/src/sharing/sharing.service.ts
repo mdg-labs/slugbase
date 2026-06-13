@@ -11,6 +11,7 @@ import { BookmarkRepository } from "../bookmarks/bookmark.repository.js";
 import { DbService } from "../db/db.service.js";
 import { EntitlementsService } from "../entitlements/entitlements.service.js";
 import { FolderRepository } from "../folders/folder.repository.js";
+import { GoService } from "../slugs/go.service.js";
 import { TeamRepository } from "../teams/team.repository.js";
 import { WorkspaceDataGuard } from "../common/tenant/index.js";
 import { WorkspaceMembersService } from "../workspaces/workspace-members.service.js";
@@ -37,6 +38,7 @@ export class SharingService {
     private readonly workspaceMembers: WorkspaceMembersService,
     @Inject(AccountsService) private readonly accounts: AccountsService,
     @Inject(EntitlementsService) private readonly entitlements: EntitlementsService,
+    @Inject(GoService) private readonly goService: GoService,
   ) {
     const orm = db.getOrm();
     this.sharingRepo = new SharingRepository(orm);
@@ -134,6 +136,11 @@ export class SharingService {
     grantId: string,
   ): Promise<void> {
     await this.requireBookmarkOwner(workspace.id, ownerUserId, bookmarkId);
+    const [bookmark, grants] = await Promise.all([
+      this.bookmarkRepo.findById(workspace.id, bookmarkId),
+      this.sharingRepo.listBookmarkShares(workspace.id, bookmarkId),
+    ]);
+    const grant = grants.find((entry) => entry.id === grantId);
     const removed = await this.sharingRepo.revokeBookmarkShare(
       workspace.id,
       bookmarkId,
@@ -141,6 +148,13 @@ export class SharingService {
     );
     if (!removed) {
       throw new NotFoundException("Share grant not found");
+    }
+    if (grant?.kind === "user") {
+      await this.goService.reEvaluateAfterShareRevoke(
+        workspace.id,
+        grant.targetId,
+        bookmark?.slug ?? null,
+      );
     }
   }
 

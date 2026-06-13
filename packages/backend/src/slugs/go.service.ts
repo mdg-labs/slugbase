@@ -61,8 +61,16 @@ export class GoService {
     if (preference) {
       const preferred = matches.find((match) => match.id === preference.bookmarkId);
       if (preferred) {
+        if (matches.length <= 1) {
+          await this.repo.deleteSlugPreference(
+            workspace.id,
+            userId,
+            preference.id,
+          );
+        }
         return this.toRedirect(preferred);
       }
+      await this.repo.deleteSlugPreference(workspace.id, userId, preference.id);
     }
 
     if (matches.length === 1) {
@@ -74,6 +82,70 @@ export class GoService {
     }
 
     return this.toDisambiguation(slug, matches);
+  }
+
+  /**
+   * Re-evaluates one user's preference for a slug (spec §8.3, epic #382).
+   * Prunes when ≤1 accessible match remains or the preferred bookmark is stale.
+   */
+  async reEvaluateSlugPreference(
+    workspaceId: string,
+    userId: string,
+    slug: string,
+  ): Promise<void> {
+    const preference = await this.repo.findSlugPreference(workspaceId, userId, slug);
+    if (!preference) return;
+
+    const matches = await this.repo.findAccessibleForwardingMatches(
+      workspaceId,
+      userId,
+      slug,
+    );
+
+    const preferredStillMatches = matches.some(
+      (match) => match.id === preference.bookmarkId,
+    );
+    const shouldPrune = matches.length <= 1 || !preferredStillMatches;
+    if (shouldPrune) {
+      await this.repo.deleteSlugPreference(workspaceId, userId, preference.id);
+    }
+  }
+
+  /** Re-evaluates every stored preference for a slug after bookmark mutations. */
+  async reEvaluateSlugPreferencesForSlug(
+    workspaceId: string,
+    slug: string,
+  ): Promise<void> {
+    const preferences = await this.repo.listSlugPreferencesForSlug(workspaceId, slug);
+    await Promise.all(
+      preferences.map((preference) =>
+        this.reEvaluateSlugPreference(workspaceId, preference.userId, slug),
+      ),
+    );
+  }
+
+  /** Re-evaluates preferences on affected slugs after a bookmark update or delete. */
+  async reEvaluateAfterBookmarkMutation(
+    workspaceId: string,
+    previousSlug: string | null,
+    nextSlug: string | null,
+  ): Promise<void> {
+    const slugs = new Set<string>();
+    if (previousSlug) slugs.add(previousSlug);
+    if (nextSlug) slugs.add(nextSlug);
+    await Promise.all(
+      [...slugs].map((slug) => this.reEvaluateSlugPreferencesForSlug(workspaceId, slug)),
+    );
+  }
+
+  /** Re-evaluates a recipient's preference after share access is revoked. */
+  async reEvaluateAfterShareRevoke(
+    workspaceId: string,
+    recipientUserId: string,
+    slug: string | null,
+  ): Promise<void> {
+    if (!slug) return;
+    await this.reEvaluateSlugPreference(workspaceId, recipientUserId, slug);
   }
 
   async chooseSlugTarget(

@@ -193,6 +193,23 @@ export class SlugRepository extends WorkspaceScopedRepository<SlugPreferenceReco
     return rows.length > 0;
   }
 
+  async listSlugPreferencesForSlug(
+    workspaceId: string,
+    slug: string,
+  ): Promise<SlugPreferenceRecord[]> {
+
+    const rows = await this.db
+      .select()
+      .from(slugPreferences)
+      .where(
+        and(
+          eq(slugPreferences.workspaceId, workspaceId),
+          eq(slugPreferences.slug, slug),
+        ),
+      );
+    return this.assertAllOwned(workspaceId, rows.map(toSlugPreferenceRecord));
+  }
+
   private async createSlugPreference(
     data: UpsertSlugPreferenceData,
   ): Promise<SlugPreferenceRecord> {
