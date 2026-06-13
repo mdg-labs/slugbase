@@ -156,6 +156,18 @@ Legal basis: Art. 6(1)(b) GDPR — necessary for the performance of a contract; 
 
 Note: MFA enrolment state and the encrypted TOTP secret are deleted when you disable MFA or when your account is deleted (see Section 5).
 
+**3.13 Workspace Invitation Emails**
+
+Data: Email address of the invitee (third-party data — the invitee may not yet have a SlugBase account). The invitation email may also include the inviting member's display name, the workspace name, and the assigned role.
+
+Purpose: Sending workspace invitations on behalf of the workspace member who initiated the invitation (typically the workspace owner or an administrator).
+
+Legal basis: Art. 6(1)(b) GDPR — necessary for the performance of a contract (provision of team workspace functionality to the inviting member); Art. 6(1)(f) GDPR — legitimate interest in enabling workspace administrators to invite collaborators.
+
+Third-party processor: Postmark (ActiveCampaign, LLC). See Section 7.
+
+Note: Invitation records (including the invitee email address and a hashed invitation token) are retained for up to 7 days from creation. They are deleted when the invitation is declined, revoked, or expires. Upon acceptance, the invitee's email address becomes account data (see Section 3.1). See also Section 5.
+
 #### 4. Cookies and Local Storage
 
 **4.1 Strictly Necessary Cookies**
@@ -212,6 +224,7 @@ You can review and change your consent choices at any time via the consent setti
 | Support and communication records | 3 years from the date of last contact |
 | Audit log data | Duration of the account plus 30 days after account deletion |
 | MFA data (enrolment state and encrypted TOTP secret) | Deleted upon MFA unenrolment or account deletion |
+| Workspace invitation data | Up to 7 days from creation; deleted on decline, revocation, or expiry; becomes account data on acceptance |
 
 After the applicable retention period, data is deleted or irreversibly anonymised.
 
@@ -435,6 +448,18 @@ Rechtsgrundlage: Art. 6 Abs. 1 lit. b DSGVO — Vertragserfüllung; Art. 6 Abs. 
 
 Hinweis: MFA-Registrierungsstatus und das verschlüsselte TOTP-Secret werden gelöscht, wenn Sie MFA deaktivieren oder Ihr Konto gelöscht wird (siehe Abschnitt 5).
 
+**3.13 Arbeitsbereichs-Einladungs-E-Mails**
+
+Daten: E-Mail-Adresse der eingeladenen Person (Drittparteiendaten — die eingeladene Person verfügt ggf. noch über kein SlugBase-Konto). Die Einladungs-E-Mail kann außerdem den Anzeigenamen der einladenden Person, den Arbeitsbereichsnamen und die zugewiesene Rolle enthalten.
+
+Zweck: Versand von Arbeitsbereichs-Einladungen im Auftrag der einladenden Person (in der Regel Arbeitsbereichsinhaber:in oder Administrator:in).
+
+Rechtsgrundlage: Art. 6 Abs. 1 lit. b DSGVO — Vertragserfüllung (Bereitstellung der Team-Arbeitsbereichsfunktionalität für die einladende Person); Art. 6 Abs. 1 lit. f DSGVO — berechtigte Interessen an der Einladung von Mitarbeitenden durch Arbeitsbereichsadministrator:innen.
+
+Auftragsverarbeiter: Postmark (ActiveCampaign, LLC). Siehe Abschnitt 7.
+
+Hinweis: Einladungsdatensätze (einschließlich der E-Mail-Adresse der eingeladenen Person und eines gehashten Einladungstokens) werden höchstens 7 Tage ab Erstellung aufbewahrt. Sie werden gelöscht, wenn die Einladung abgelehnt, widerrufen oder abgelaufen ist. Mit Annahme werden die E-Mail-Daten der eingeladenen Person zu Kontodaten (siehe Abschnitt 3.1). Siehe auch Abschnitt 5.
+
 #### 4. Cookies und lokaler Speicher
 
 **4.1 Technisch notwendige Cookies**
@@ -491,6 +516,7 @@ Ihre Einwilligungsoptionen können Sie jederzeit über die Consent-Einstellungen
 | Support- und Kommunikationsaufzeichnungen | 3 Jahre ab letztem Kontakt |
 | Audit-Log-Daten | Für die Dauer des Kontos zzgl. 30 Tage nach Kontolöschung |
 | MFA-Daten (Registrierungsstatus und verschlüsseltes TOTP-Secret) | Löschung bei MFA-Abmeldung oder Kontolöschung |
+| Arbeitsbereichs-Einladungsdaten | Höchstens 7 Tage ab Erstellung; Löschung bei Ablehnung, Widerruf oder Ablauf; wird bei Annahme zu Kontodaten |
 
 Nach Ablauf der jeweiligen Aufbewahrungsfrist werden Daten gelöscht oder unwiderruflich anonymisiert.
 
