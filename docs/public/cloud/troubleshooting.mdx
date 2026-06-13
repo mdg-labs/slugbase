@@ -1,8 +1,92 @@
 ---
 title: "Troubleshooting"
-description: "Resolve common SlugBase Cloud issues."
+description: "Resolve common sign-in, MFA, billing, and workspace issues on SlugBase Cloud."
 ---
 
-## Overview
+## Quick checks
 
-This page is a navigation stub. Full content will be added in a follow-up authoring task.
+Before diving into specific symptoms, try these steps:
+
+1. Confirm you are visiting [cloud.slugbase.app](https://cloud.slugbase.app)
+2. Check that you selected the correct workspace in the sidebar switcher
+3. Clear site cookies for `cloud.slugbase.app` and sign in again
+4. Try another browser or a private window to rule out extensions
+
+## Sign-in and account access
+
+<!-- screenshot:cloud-login-error -->
+
+| Symptom | Likely cause | What to do |
+|---------|--------------|------------|
+| "Incorrect email or password" | Wrong credentials | Reset your password. Check caps lock and keyboard layout. |
+| No password reset email | Typo, spam filter, or unregistered email | Check spam. SlugBase does not confirm whether an email is registered — if nothing arrives, verify the address or contact [support](/cloud/support). |
+| Email verification link expired | Link timed out | Request a new verification email from account settings or the sign-up flow. |
+| Redirect loop after sign-in | Cookies blocked | Allow cookies for `cloud.slugbase.app`. Disable strict tracking protection for the site. |
+| Federated sign-in fails | Provider misconfiguration | Contact your workspace admin if sign-in is through an identity provider. |
+
+## MFA issues
+
+| Symptom | Likely cause | What to do |
+|---------|--------------|------------|
+| Authenticator code rejected | Clock drift or stale code | Sync device time. Enter the next fresh 6-digit code. |
+| No access to authenticator | Lost device | Use a **backup code** on the MFA challenge screen. |
+| No backup codes left | Codes used or lost | Regenerate codes from settings if you can still sign in. Otherwise contact [support](/cloud/support). |
+| Cannot disable MFA | Wrong code entered | Enter the current authenticator code exactly. Wait for a new code if needed. |
+
+See [MFA and security](/cloud/mfa-and-security) for setup and backup code guidance.
+
+## Workspace and switching
+
+| Symptom | Likely cause | What to do |
+|---------|--------------|------------|
+| Empty bookmarks after sign-in | Wrong active workspace | Open the workspace switcher and select the correct workspace. |
+| Cannot create a second workspace | Free plan limit | Upgrade to Personal or Team from **Settings → Billing**. |
+| Missing settings sections | Role or plan restriction | Members & teams and audit log require the Team plan. Billing requires owner role. |
+| Removed from workspace | Membership revoked | You no longer have access. Contact the workspace owner. Your data remains in that workspace. |
+
+## Bookmarks and limits
+
+| Symptom | Likely cause | What to do |
+|---------|--------------|------------|
+| Cannot add bookmarks | Free plan at 50-bookmark cap | Delete bookmarks, upgrade to Personal or Team, or check for archived bookmarks after a downgrade. |
+| Bookmarks disappeared after downgrade | Plan-archived state | Over-cap bookmarks are hidden on Free, not deleted. Upgrade to restore them. |
+| Import partially failed | Cap or invalid URLs | Free workspaces stop importing at the cap. Fix invalid URLs and retry. |
+
+## Billing and plans
+
+| Symptom | Likely cause | What to do |
+|---------|--------------|------------|
+| Upgrade button missing | Not the workspace owner | Ask the owner to upgrade or transfer ownership. |
+| Plan did not update after checkout | Webhook delay | Wait a minute and refresh. Open **Manage billing** to confirm payment. |
+| Cannot invite members | Not on Team plan or no seats | Upgrade to Team and ensure seats are available. |
+| Cannot reduce seats | Below member count or minimum | Remove members first. Team requires at least 2 seats. |
+| Cannot delete workspace | Active paid subscription | Cancel or resolve billing before deletion. |
+
+See [Plans and billing](/cloud/plans-and-billing) for downgrade and archive behaviour.
+
+## API tokens
+
+| Symptom | Likely cause | What to do |
+|---------|--------------|------------|
+| 401 Unauthorized | Revoked or wrong token | Create a new token. Send `Authorization: Bearer <token>`. |
+| Token limit reached | Maximum tokens per account | Revoke unused tokens from **Settings → Account → API tokens**. |
+
+## Slugs and forwarding
+
+| Symptom | Likely cause | What to do |
+|---------|--------------|------------|
+| `/go/<slug>` does not resolve | Wrong workspace, slug disabled, or archived bookmark | Switch workspace. Confirm forwarding is enabled on the bookmark. |
+| Slug conflict | Another member uses the same slug | Slugs are unique per owner within a workspace — choose a different slug or use disambiguation. |
+
+See [Slugs and go](/cloud/slugs-and-go) for forwarding details.
+
+## Still stuck?
+
+- Workspace issues: contact your workspace **owner** or **admin**
+- Account, billing, or access recovery: email [support@slugbase.app](mailto:support@slugbase.app) or see [Support](/cloud/support)
+- General questions: check the [FAQ](/cloud/faq)
+
+## Related topics
+
+- [FAQ](/cloud/faq) — short answers to common questions
+- [Support](/cloud/support) — how to reach the SlugBase team

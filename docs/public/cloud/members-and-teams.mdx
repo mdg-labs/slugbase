@@ -1,8 +1,123 @@
 ---
 title: "Members and teams"
-description: "Invite members and manage workspace roles."
+description: "Invite members, manage roles, and organize teams on SlugBase Cloud Team plans."
 ---
 
-## Overview
+## What you'll accomplish
 
-This page is a navigation stub. Full content will be added in a follow-up authoring task.
+After this guide, you understand how workspace membership works on SlugBase Cloud, including invitations, roles, teams, and seat limits on Team plans.
+
+## Team plan required
+
+Member invitations, role management, teams, bookmark sharing, and the audit log are available on the **Team** plan only.
+
+On Free and Personal plans, the **Members & teams** settings section is hidden and invitation endpoints are unavailable. If you need collaboration, upgrade to Team from **Settings → Billing**.
+
+<Callout kind="info">
+API tokens are not plan-gated — any signed-in member can create personal API tokens from account settings.
+</Callout>
+
+## Prerequisites
+
+- You are a workspace **owner** or **admin**
+- The workspace is on the **Team** plan
+- Available seats for new members (see [Seat limits](#seat-limits))
+
+<!-- screenshot:cloud-members-list -->
+
+## Invite a member
+
+<Steps>
+  <Step title="Open Members & teams">
+    Go to **Settings → Members & teams**.
+  </Step>
+  <Step title="Send an invitation">
+    Click **Invite member**, enter the colleague's email address, choose a role (**Admin** or **Member**), and send the invite.
+  </Step>
+  <Step title="They accept the invitation">
+    The invitee receives an email with a link. When they accept, they join the workspace and **one seat is consumed**.
+  </Step>
+</Steps>
+
+Invitations expire after a set period. You can resend or revoke pending invitations from the same screen.
+
+<Callout kind="tip">
+An invitation reserves a seat **when it is accepted**, not when it is sent.
+</Callout>
+
+## Member roles
+
+| Role | Can do |
+|------|--------|
+| **Owner** | Everything, including billing and deleting the workspace. At least one owner is required. |
+| **Admin** | Invite and remove members, manage teams, change workspace settings, view the audit log. |
+| **Member** | Use bookmarks, slugs, folders, tags, and shared content. Cannot manage members or billing. |
+
+Only an owner can transfer ownership to another member. After transfer, the previous owner becomes an admin.
+
+## Remove a member
+
+From **Settings → Members & teams**, open a member's menu and choose **Remove**.
+
+Removed members lose access immediately. Their bookmarks, folders, and tags remain in the workspace.
+
+## Teams
+
+Teams group members inside a workspace for organization and sharing. They do not replace workspace membership — every person is still a workspace member.
+
+<!-- screenshot:cloud-teams-list -->
+
+<Steps>
+  <Step title="Create a team">
+    On the **Teams** tab, click **New team**, enter a name and optional description, and save.
+  </Step>
+  <Step title="Add members to the team">
+    Expand the team and add existing workspace members.
+  </Step>
+  <Step title="Share with the team">
+    When sharing a bookmark or folder, choose the team as the audience. See sharing behaviour in your bookmark and folder guides.
+  </Step>
+</Steps>
+
+Deleting a team removes the grouping only. Members keep workspace access and their bookmarks.
+
+## Seat limits
+
+Team plans are priced **per seat**. Each workspace member occupies one seat.
+
+| Rule | Detail |
+|------|--------|
+| Minimum seats | Team requires at least **2 seats** at purchase and while subscribed |
+| Seat usage | Displayed as "X of Y seats used" in member settings |
+| Adding seats | Owners can add seats from **Settings → Billing → Seats** |
+| Reducing seats | Cannot go below the current member count or the 2-seat minimum |
+| At limit | New invitations are blocked until you purchase more seats |
+
+## Audit log
+
+Workspace owners and admins on Team plans can view the **audit log** under **Settings → Audit log**. It records significant actions such as member changes, bookmark edits, and settings updates.
+
+## Verify it worked
+
+- Invited members appear in the member list (or under pending invitations until they accept)
+- Seat usage updates after acceptance
+- Teams appear on the Teams tab with the members you added
+
+## Troubleshooting
+
+### I don't see Members & teams
+
+Your workspace is not on the Team plan. Upgrade from **Settings → Billing**.
+
+### Seat limit reached
+
+Purchase additional seats before sending more invitations.
+
+### The invitee didn't receive email
+
+Ask them to check spam. Resend the invitation from the pending list. If problems persist, see [Troubleshooting](/cloud/troubleshooting).
+
+## Related topics
+
+- [Workspaces overview](/cloud/workspaces-overview) — switching and ownership limits
+- [Plans and billing](/cloud/plans-and-billing) — upgrade to Team and manage seats

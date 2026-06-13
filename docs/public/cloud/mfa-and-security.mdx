@@ -1,8 +1,112 @@
 ---
 title: "MFA and security"
-description: "Enable multi-factor authentication and security options."
+description: "Enable two-factor authentication, manage backup codes, and understand how SlugBase Cloud protects your account."
 ---
 
-## Overview
+## What you'll accomplish
 
-This page is a navigation stub. Full content will be added in a follow-up authoring task.
+After this guide, you can enable two-factor authentication (MFA) with an authenticator app, save backup codes, and understand how API tokens relate to account security.
+
+## Why enable MFA
+
+Two-factor authentication adds a second step after your password. Even if someone learns your password, they cannot sign in without a code from your authenticator app or a one-time backup code.
+
+MFA is optional but strongly recommended for SlugBase Cloud accounts.
+
+## Set up authenticator app MFA
+
+<!-- screenshot:cloud-mfa-enroll -->
+
+<Steps>
+  <Step title="Open two-factor settings">
+    Go to **Settings → Account → Two-factor auth**.
+  </Step>
+  <Step title="Start setup">
+    Click **Set up authenticator app**. SlugBase displays a QR code and a manual setup key.
+  </Step>
+  <Step title="Scan or enter the key">
+    In your authenticator app (for example, 1Password, Authy, or Google Authenticator), scan the QR code or enter the setup key manually.
+  </Step>
+  <Step title="Confirm with a code">
+    Enter the 6-digit code from your app and activate MFA.
+  </Step>
+  <Step title="Save backup codes">
+    SlugBase shows one-time **backup codes**. Copy or download them and store them somewhere safe — they are shown only once.
+  </Step>
+</Steps>
+
+<Callout kind="danger">
+Without backup codes, losing your authenticator device can lock you out. Store codes in a password manager or secure location.
+</Callout>
+
+## Sign in with MFA
+
+After MFA is enabled, sign-in works like this:
+
+1. Enter your email and password as usual.
+2. On the MFA challenge screen, enter the 6-digit code from your authenticator app.
+3. Alternatively, click **Use a backup code instead** and enter one single-use backup code.
+
+Each backup code works only once.
+
+## Manage MFA after enrollment
+
+From **Settings → Account → Two-factor auth**:
+
+| Action | What happens |
+|--------|--------------|
+| **Regenerate backup codes** | Invalidates old codes and shows a new set (requires your current authenticator code) |
+| **Disable MFA** | Removes the second factor (requires your current authenticator code) |
+
+## API tokens and MFA
+
+Personal API tokens authenticate API requests without an interactive MFA step. Tokens represent a long-lived credential you explicitly created.
+
+- Create and revoke tokens under **Settings → Account → API tokens**
+- Treat tokens like passwords — never commit them to source control or share them in chat
+- Revoke tokens you no longer use
+
+See [Account settings](/cloud/account-settings) for token management.
+
+## Sessions and sign-out
+
+SlugBase uses secure browser sessions to keep you signed in. To end your session on the current device, sign out from the account menu.
+
+Sessions are server-side — signing out revokes that session immediately.
+
+## Password security
+
+- Use a unique, strong password for your SlugBase account
+- Update your password from **Settings → Account → Password**
+- Password reset emails use non-enumerating copy — you will not learn whether an email is registered from the reset flow
+
+## Federated sign-in
+
+If your workspace uses an external identity provider (OIDC), you may sign in through that provider. You can still add a SlugBase password and enable MFA for direct sign-in.
+
+## Verify it worked
+
+- **Settings → Account → Two-factor auth** shows "Authenticator app active"
+- Sign out and sign in again — you are prompted for a code
+- Backup codes remaining count appears in settings
+
+## Troubleshooting
+
+### My authenticator code is rejected
+
+- Ensure your device clock is accurate (TOTP depends on time sync)
+- Wait for a fresh code — codes expire every 30 seconds
+- Try a backup code if the app is unavailable
+
+### I lost my authenticator and backup codes
+
+Contact [support](/cloud/support) from the email address on your account. Be prepared to verify ownership.
+
+### MFA is required but I only use API tokens
+
+API tokens bypass MFA for API access. For the web app, you must complete MFA when it is enabled on your account.
+
+## Related topics
+
+- [Account settings](/cloud/account-settings) — profile, password, and tokens
+- [Troubleshooting](/cloud/troubleshooting) — sign-in and session issues
