@@ -1,8 +1,129 @@
 ---
 title: "Bookmarks"
-description: "Save, organize, and open bookmarks in SlugBase."
+description: "Save, edit, pin, and organize bookmarks in your SlugBase workspace."
 ---
 
-## Overview
+## What you'll accomplish
 
-This page is a navigation stub. Full content will be added in a follow-up authoring task.
+After this guide, you can create bookmarks, edit them in the modal editor, pin important links, and use list filters and views.
+
+## Prerequisites
+
+- Signed in to SlugBase
+- An active **workspace** selected in the top bar
+
+<Callout kind="info" title="Screenshot placeholder">
+**Suggested capture:** Bookmarks list in table view with pinned section, filters, and **New bookmark** action visible.
+**Suggested filename:** `/assets/selfhosted/bookmarks-list-overview.png`
+**Alt text:** Bookmarks page showing pinned items and the bookmark list.
+</Callout>
+
+## Open Bookmarks
+
+From the sidebar, select **Bookmarks**. The page title is **Bookmarks** with a count subtitle.
+
+Toggle between **Grid view** and **Table view** using the view control. Sort by recently added, recently accessed, alphabetical, or most used.
+
+## Create a bookmark
+
+<Steps>
+  <Step title="Start a new bookmark">
+    Click **New bookmark** in the top bar or on the Bookmarks page.
+  </Step>
+  <Step title="Enter URL and title">
+  In the **New bookmark** modal, paste the **URL** (`https://…`) and a **Title**. The title is required.
+  </Step>
+  <Step title="Optional: slug, folders, tags, pin, forwarding">
+    Assign a **Slug**, add **Folders** and **Tags**, enable **Pin bookmark**, and turn on **Enable forwarding** when you want `/go/<slug>` to work for workspace members.
+  </Step>
+  <Step title="Save">
+    Click **Save bookmark**.
+  </Step>
+</Steps>
+
+<Callout kind="info" title="Screenshot placeholder">
+**Suggested capture:** New bookmark modal with URL, title, slug, folders, tags, pin, and forwarding fields.
+**Suggested filename:** `/assets/selfhosted/bookmark-modal-create.png`
+**Alt text:** New bookmark dialog with slug and forwarding options.
+</Callout>
+
+### Forwarding address
+
+When forwarding is enabled, the modal shows **Forwarding address** with the `/go/` prefix. Slugs must start with a letter or number and use lowercase letters, digits, and hyphens only. Reserved route names (such as `api` or `login`) cannot be used as slugs.
+
+### AI suggestions
+
+If your workspace has AI configured, SlugBase can suggest slug, tags, or folder while you edit. Suggestions respect your language preference. Apply suggestions individually before saving.
+
+## Edit or delete a bookmark
+
+Open the row menu (**More options**) on any bookmark:
+
+| Action | Result |
+|--------|--------|
+| **Edit** | Opens the **Edit bookmark** modal |
+| **Open URL** | Opens the destination in a new tab |
+| **Pin** / **Unpin** | Toggles pinned status |
+| **Delete** | Removes the bookmark after confirmation |
+
+Bookmark editing is **modal-only** — there is no separate detail page.
+
+## Pin bookmarks
+
+**Pinned** bookmarks appear in a dedicated section on the Bookmarks page and on **Home**. Use pinning — not favorites or stars — to surface important links.
+
+From the list menu, choose **Pin**. Pinned items show under **Pinned** at the top of the list.
+
+## Filter and search the list
+
+| Control | Purpose |
+|---------|---------|
+| Search field | Search title, URL, or slug |
+| **Folder** filter | Limit to one folder or all folders |
+| **Tags** filter | Match bookmarks with selected tags |
+| **Pinned** filter | Show only pinned bookmarks |
+| **Clear filters** | Reset all filters |
+
+When filters hide every bookmark, SlugBase shows **No bookmarks match** with guidance to clear filters.
+
+## Bulk actions
+
+Click **Select** to enter selection mode. With one or more bookmarks selected:
+
+- **Pin** / **Unpin**
+- **Move to folder**
+- **Tags** — add or remove tags in bulk
+- **Delete**
+- **Clear selection**
+
+## Sharing
+
+Sharing controls appear in the bookmark modal after the bookmark is saved. Grant access to workspace **members** or **teams** according to your workspace sharing settings. See [Sharing](/selfhosted/sharing) for team and member rules.
+
+## Verify it worked
+
+- Your bookmark appears in the list with the correct title and URL
+- Pinned bookmarks show under **Pinned** and on **Home**
+- A slug with forwarding enabled resolves when you use [Slugs and go](/selfhosted/slugs-and-go)
+
+## Troubleshooting
+
+### URL was rejected
+
+Enter a valid `http://` or `https://` URL within the length limit. SlugBase validates URLs for safety.
+
+### Slug errors
+
+- **Slug is required when forwarding is enabled** — add a slug or disable forwarding
+- **Reserved slug** — choose a different keyword
+- **Invalid characters** — use lowercase letters, numbers, and hyphens only
+
+### Bookmark limit messaging
+
+On hosted Free plans, SlugBase shows approaching-cap banners at 50 bookmarks. Self-hosted instances run with full entitlements — you should not see plan caps unless your operator configured billing.
+
+## Related topics
+
+- [Folders](/selfhosted/folders) — organize bookmarks into folders
+- [Tags](/selfhosted/tags) — label bookmarks for filtering
+- [Search and import](/selfhosted/search-and-import) — find bookmarks and import from a browser

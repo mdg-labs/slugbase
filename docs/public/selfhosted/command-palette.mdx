@@ -1,8 +1,117 @@
 ---
 title: "Command palette"
-description: "Use the keyboard-driven command palette."
+description: "Use the keyboard-driven command palette to search, navigate, create, and forward with go mode."
 ---
 
-## Overview
+## What you'll accomplish
 
-This page is a navigation stub. Full content will be added in a follow-up authoring task.
+After this guide, you can open the command palette, search bookmarks, run navigation commands, create items quickly, and forward with `go` mode.
+
+## Open the palette
+
+| Method | Action |
+|--------|--------|
+| Keyboard | `⌘K` on macOS or `Ctrl+K` on Windows/Linux |
+| Top bar | Click the search field labeled **Open command palette** |
+
+The dialog title is **Command palette**. The input placeholder reads **Search bookmarks or type a command…**.
+
+<Callout kind="info" title="Screenshot placeholder">
+**Suggested capture:** Command palette open with default search results and footer shortcut hints.
+**Suggested filename:** `/assets/selfhosted/command-palette-default.png`
+**Alt text:** Command palette showing bookmark search results and keyboard hints.
+</Callout>
+
+## Search bookmarks
+
+Start typing to search titles, URLs, and slugs. Results group under **Bookmarks**, **Folders**, and **Tags**.
+
+| Footer hint | Meaning |
+|-------------|---------|
+| navigate | Move selection with arrow keys |
+| select | Open the highlighted item |
+| open in new tab | Open in a background tab (where supported) |
+| close | Dismiss the palette (`Esc`) |
+
+When many bookmarks match, SlugBase offers **See all N bookmarks matching "…"** to jump to the full Bookmarks list.
+
+If nothing matches, you see **No results for "…"** with a tip to try another search or press `C` to create a bookmark.
+
+## Go to pages and settings
+
+Results under **Go to** include:
+
+- **Go to Bookmarks**
+- **Go to Folders**
+- **Go to Tags**
+- **Go to Settings**
+
+Select an item to navigate without leaving the keyboard.
+
+## Create from the palette
+
+The **Create** group provides quick actions:
+
+| Action | Opens |
+|--------|--------|
+| **New bookmark** | New bookmark modal |
+| **New folder** | New folder dialog |
+| **New tag** | New tag dialog |
+
+Single-key shortcuts also work elsewhere in the app — for example `C` for a new bookmark when focus is not in a text field.
+
+## Switch workspace
+
+Choose **Switch workspace** under **Workspace** to open the workspace switcher. Select another workspace or **Create workspace** when your plan allows multiple workspaces.
+
+On self-hosted instances, workspace creation is typically unrestricted for administrators.
+
+## Go mode — forward by slug
+
+Type `go ` (the word `go` followed by a space) to enter **go** mode. The badge shows **go** and the placeholder becomes **Type a slug to redirect…**.
+
+<Callout kind="info" title="Screenshot placeholder">
+**Suggested capture:** Command palette in go mode with slug matches and redirect footer hint.
+**Suggested filename:** `/assets/selfhosted/command-palette-go-mode.png`
+**Alt text:** Command palette go mode listing matching slugs.
+</Callout>
+
+| State | What you see |
+|-------|----------------|
+| Empty input | **All slugs — type to filter** |
+| Partial slug | Matching slugs with bookmark counts |
+| No match | **No slug matching "…"** |
+| Confirm | Footer shows **redirect** — press Enter to forward |
+
+Go mode uses the same resolution rules as `/go/<slug>` in the address bar, including [disambiguation](/selfhosted/slugs-and-go) when a slug maps to multiple bookmarks.
+
+## Workspace-scoped results
+
+Search and go resolution respect your **active workspace** from the top bar. Switch workspaces before searching if you need another library.
+
+## Verify it worked
+
+- `⌘K` / `Ctrl+K` opens and closes the palette
+- Typing finds an existing bookmark by title or slug
+- `go <slug>` forwards to the correct URL when forwarding is enabled
+- **Go to Folders** navigates to the Folders page
+
+## Troubleshooting
+
+### Palette does not open
+
+Ensure focus is not trapped in another modal. Press `Esc` to clear overlays, then try again.
+
+### Go mode finds no slug
+
+Confirm the bookmark has **Enable forwarding** on and you typed the slug after `go ` with a space.
+
+### Results feel stale
+
+Switch away and back to the workspace, or open the target page directly from the sidebar.
+
+## Related topics
+
+- [Slugs and go](/selfhosted/slugs-and-go) — forwarding and disambiguation
+- [Search and import](/selfhosted/search-and-import) — full list search and filters
+- [Bookmarks](/selfhosted/bookmarks) — create and edit from the UI
