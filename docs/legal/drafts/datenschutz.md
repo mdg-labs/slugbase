@@ -277,7 +277,7 @@ As a data subject under the GDPR and the Austrian Datenschutzgesetz (DSG), you h
 
 **Right to restriction of processing (Art. 18 GDPR):** You may request that we restrict the processing of your data in certain circumstances, for example while the accuracy of the data is contested.
 
-**Right to data portability (Art. 20 GDPR):** You may request that we provide your personal data in a structured, commonly used, machine-readable format and, where technically feasible, transmit it directly to another controller.
+**Right to data portability (Art. 20 GDPR):** For bookmark data (URLs, slugs, titles, tags, notes, folder assignments, and related metadata), you can download a JSON export at any time from your account settings in the active workspace — without submitting a formal data-subject request. The export is structured, commonly used, and machine-readable. To request a complete copy of all personal data we hold about you — including account, billing, audit, and communication data not included in the bookmark export — send a written request to hello@slugbase.app. Where technically feasible, we will also transmit data directly to another controller upon request.
 
 **Right to object (Art. 21 GDPR):** You may object at any time to processing based on legitimate interests (Art. 6(1)(f) GDPR). We will then cease processing unless we can demonstrate compelling legitimate grounds that override your interests, rights, and freedoms.
 
@@ -572,7 +572,7 @@ Als betroffene Person nach DSGVO und Datenschutzgesetz (DSG) stehen Ihnen folgen
 
 **Recht auf Einschränkung der Verarbeitung (Art. 18 DSGVO):** Sie können in bestimmten Fällen — etwa wenn die Richtigkeit der Daten bestritten wird — die Einschränkung der Verarbeitung verlangen.
 
-**Recht auf Datenübertragbarkeit (Art. 20 DSGVO):** Sie können verlangen, dass wir Ihre personenbezogenen Daten in einem strukturierten, gängigen, maschinenlesbaren Format bereitstellen und — soweit technisch machbar — direkt an einen anderen Verantwortlichen übermitteln.
+**Recht auf Datenübertragbarkeit (Art. 20 DSGVO):** Lesezeichendaten (URLs, Slugs, Titel, Tags, Notizen, Ordnerzuordnungen und zugehörige Metadaten) können Sie jederzeit als JSON-Export in den Kontoeinstellungen des aktiven Arbeitsbereichs herunterladen — ohne eine formelle Betroffenenanfrage einreichen zu müssen. Der Export ist strukturiert, gängig und maschinenlesbar. Für eine vollständige Kopie aller von uns über Sie gespeicherten personenbezogenen Daten — einschließlich Kontodaten, Abrechnungs-, Audit- und Kommunikationsdaten, die nicht im Lesezeichen-Export enthalten sind — senden Sie eine schriftliche Anfrage an hello@slugbase.app. Soweit technisch machbar, übermitteln wir Daten auf Anfrage auch direkt an einen anderen Verantwortlichen.
 
 **Widerspruchsrecht (Art. 21 DSGVO):** Sie können jederzeit der Verarbeitung auf Grundlage berechtigter Interessen (Art. 6 Abs. 1 lit. f DSGVO) widersprechen. Wir stellen die Verarbeitung dann ein, sofern wir keine zwingenden schutzwürdigen Gründe nachweisen können, die Ihre Interessen, Rechte und Freiheiten überwiegen.
 
