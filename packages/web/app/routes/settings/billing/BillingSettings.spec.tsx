@@ -225,6 +225,78 @@ describe("BillingSettingsPage", () => {
     );
     expect(view.getByTestId("billing-unavailable-gate")).toBeTruthy();
   });
+
+  it("shows seat picker when upgrading to Team", () => {
+    const view = render(billingPage(baseData));
+    fireEvent.click(view.getByRole("button", { name: "Upgrade to Team" }));
+    expect(view.getByTestId("billing-team-checkout-picker")).toBeTruthy();
+    expect(view.getByTestId("billing-team-checkout-seats-input")).toBeTruthy();
+    expect(checkoutMock).not.toHaveBeenCalled();
+  });
+
+  it("enforces minimum 2 seats on Team checkout", () => {
+    const view = render(billingPage(baseData));
+    fireEvent.click(view.getByRole("button", { name: "Upgrade to Team" }));
+
+    const input = view.getByTestId("billing-team-checkout-seats-input") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "1" } });
+
+    expect(view.getByTestId("billing-team-checkout-min-error")).toBeTruthy();
+    expect(view.getByTestId("billing-team-checkout-confirm")).toHaveProperty("disabled", true);
+  });
+
+  it("updates Team price preview when seat count changes", () => {
+    const view = render(billingPage(baseData));
+    fireEvent.click(view.getByRole("button", { name: "Upgrade to Team" }));
+
+    expect(view.getByText(/2 seats × \$9/)).toBeTruthy();
+    expect(view.getByText(/= \$18/)).toBeTruthy();
+
+    fireEvent.click(view.getByLabelText("Increase seat count"));
+
+    expect(view.getByText(/3 seats × \$9/)).toBeTruthy();
+    expect(view.getByText(/= \$27/)).toBeTruthy();
+  });
+
+  it("passes seatQuantity to Team checkout", async () => {
+    checkoutMock.mockResolvedValue({ checkoutUrl: "https://checkout.test/session" });
+    const assignSpy = vi.spyOn(window.location, "assign").mockImplementation(() => {});
+
+    const view = render(billingPage(baseData));
+    fireEvent.click(view.getByRole("button", { name: "Upgrade to Team" }));
+    fireEvent.click(view.getByTestId("billing-team-checkout-confirm"));
+
+    await waitFor(() => {
+      expect(checkoutMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workspaceId: "ws-1",
+          plan: "team",
+          mode: "recurring",
+          seatQuantity: 2,
+          billingInterval: "monthly",
+        }),
+      );
+    });
+
+    assignSpy.mockRestore();
+  });
+
+  it("requires seats at least member count for Team checkout", () => {
+    const view = render(
+      billingPage({
+        ...baseData,
+        memberCount: 4,
+      }),
+    );
+    fireEvent.click(view.getByRole("button", { name: "Upgrade to Team" }));
+
+    const input = view.getByTestId("billing-team-checkout-seats-input") as HTMLInputElement;
+    expect(input.value).toBe("4");
+
+    fireEvent.change(input, { target: { value: "3" } });
+    expect(view.getByTestId("billing-team-checkout-min-error")).toBeTruthy();
+    expect(view.getByTestId("billing-team-checkout-confirm")).toHaveProperty("disabled", true);
+  });
 });
 
 describe("BillingUnavailableGate", () => {

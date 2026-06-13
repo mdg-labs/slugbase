@@ -1,5 +1,12 @@
 import type { BillingPlanId, BillingWorkspaceSummary } from "./billing.types.js";
 
+/** Team plan minimum seats at checkout (spec §12.2, decision #17). */
+export const TEAM_MIN_SEATS = 2;
+
+export function teamCheckoutMinSeats(memberCount: number): number {
+  return Math.max(memberCount, TEAM_MIN_SEATS);
+}
+
 export function canAccessBillingSettings(billingEnabled: boolean): boolean {
   return billingEnabled;
 }

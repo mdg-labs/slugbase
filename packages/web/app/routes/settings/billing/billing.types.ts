@@ -45,6 +45,8 @@ export interface StartCheckoutParams {
   plan: Exclude<BillingPlanId, "free">;
   mode: BillingCheckoutMode;
   billingInterval?: BillingInterval;
+  /** Seat quantity for Team recurring checkout (minimum 2). */
+  seatQuantity?: number;
   successUrl: string;
   cancelUrl: string;
 }

@@ -19,6 +19,8 @@ import {
   effectivePlanForDisplay,
   hasPaidAccess,
   isSubscriptionCancelled,
+  teamCheckoutMinSeats,
+  TEAM_MIN_SEATS,
 } from "../billing-entitlements.js";
 import type { BillingInterval, BillingPlanId, BillingSettingsData, BillingTabId } from "../billing.types.js";
 import { BillingHistorySection } from "./BillingHistorySection.js";
@@ -28,6 +30,7 @@ import { CancelSubscriptionPanel } from "./CancelSubscriptionPanel.js";
 import { PlanComparisonTable } from "./PlanComparisonTable.js";
 import { SeatManagementSection } from "./SeatManagementSection.js";
 import { SupporterOfferCard } from "./SupporterOfferCard.js";
+import { TeamCheckoutSeatPicker } from "./TeamCheckoutSeatPicker.js";
 
 function formatDate(value: string | null, locale: string): string | null {
   if (!value) return null;
@@ -52,6 +55,10 @@ export function BillingSettingsPage({ initialData }: BillingSettingsPageProps) {
   const [busy, setBusy] = useState(false);
   const [selectedInterval, setSelectedInterval] = useState<BillingInterval>(
     () => initialData.workspace.billingInterval ?? "monthly",
+  );
+  const [teamCheckoutOpen, setTeamCheckoutOpen] = useState(false);
+  const [teamSeatQuantity, setTeamSeatQuantity] = useState(() =>
+    teamCheckoutMinSeats(initialData.memberCount),
   );
   const { showToast } = useAppToast();
 
@@ -82,6 +89,7 @@ export function BillingSettingsPage({ initialData }: BillingSettingsPageProps) {
   const handleCheckout = async (
     plan: Exclude<BillingPlanId, "free">,
     mode: "recurring" | "one_time" = "recurring",
+    seatQuantity?: number,
   ) => {
     setBusy(true);
     try {
@@ -90,6 +98,7 @@ export function BillingSettingsPage({ initialData }: BillingSettingsPageProps) {
         plan,
         mode,
         billingInterval: selectedInterval,
+        ...(plan === "team" && seatQuantity !== undefined ? { seatQuantity } : {}),
         successUrl: initialData.returnUrl,
         cancelUrl: initialData.returnUrl,
       });
@@ -99,6 +108,29 @@ export function BillingSettingsPage({ initialData }: BillingSettingsPageProps) {
     } finally {
       setBusy(false);
     }
+  };
+
+  const beginTeamCheckout = () => {
+    setTeamSeatQuantity(teamCheckoutMinSeats(initialData.memberCount));
+    setTeamCheckoutOpen(true);
+  };
+
+  const confirmTeamCheckout = async () => {
+    const minSeats = teamCheckoutMinSeats(initialData.memberCount);
+    if (teamSeatQuantity < minSeats) {
+      const message =
+        initialData.memberCount > TEAM_MIN_SEATS
+          ? t("settings.billing.checkout_team_below_members_error", {
+              members: String(initialData.memberCount),
+            })
+          : t("settings.billing.checkout_team_min_seats_error", {
+              min: String(minSeats),
+            });
+      showError(message);
+      return;
+    }
+    setTeamCheckoutOpen(false);
+    await handleCheckout("team", "recurring", teamSeatQuantity);
   };
 
   const handlePlanSelect = async (plan: BillingPlanId) => {
@@ -112,7 +144,7 @@ export function BillingSettingsPage({ initialData }: BillingSettingsPageProps) {
       await handleCheckout("personal", "recurring");
       return;
     }
-    await handleCheckout("team", "recurring");
+    beginTeamCheckout();
   };
 
   const handleOpenPortal = async () => {
@@ -381,7 +413,7 @@ export function BillingSettingsPage({ initialData }: BillingSettingsPageProps) {
                   variant="secondary"
                   disabled={!canManage || busy}
                   onClick={() => {
-                    void handleCheckout("team", "recurring");
+                    beginTeamCheckout();
                   }}
                   type="button"
                 >
@@ -421,6 +453,25 @@ export function BillingSettingsPage({ initialData }: BillingSettingsPageProps) {
             <div className="mb-sp-5">
               <BillingIntervalToggle value={selectedInterval} onChange={setSelectedInterval} />
             </div>
+            {teamCheckoutOpen ? (
+              <div className="mb-sp-5">
+                <TeamCheckoutSeatPicker
+                  memberCount={initialData.memberCount}
+                  config={initialData.planConfig}
+                  interval={selectedInterval}
+                  seatQuantity={teamSeatQuantity}
+                  canManage={canManage}
+                  busy={busy}
+                  onSeatQuantityChange={setTeamSeatQuantity}
+                  onConfirm={() => {
+                    void confirmTeamCheckout();
+                  }}
+                  onCancel={() => {
+                    setTeamCheckoutOpen(false);
+                  }}
+                />
+              </div>
+            ) : null}
             <h2 className="mb-sp-2 text-[length:var(--text-body-lg)] font-semibold text-fg">
               {t("settings.billing.compare_heading")}
             </h2>
@@ -469,7 +520,8 @@ export function BillingSettingsPage({ initialData }: BillingSettingsPageProps) {
           busy={busy}
           onUpdateSeats={handleUpdateSeats}
           onUpgradeTeam={() => {
-            void handleCheckout("team", "recurring");
+            setTab("plan");
+            beginTeamCheckout();
           }}
         />
       ) : null}

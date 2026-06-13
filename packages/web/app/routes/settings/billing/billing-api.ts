@@ -108,6 +108,9 @@ export async function startCheckout(params: StartCheckoutParams): Promise<{ chec
       plan: params.plan,
       mode: params.mode,
       billingInterval: params.billingInterval ?? "monthly",
+      ...(params.plan === "team" && params.seatQuantity !== undefined
+        ? { seatQuantity: params.seatQuantity }
+        : {}),
       successUrl: params.successUrl,
       cancelUrl: params.cancelUrl,
     }),

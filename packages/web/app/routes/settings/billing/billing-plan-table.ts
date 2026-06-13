@@ -87,6 +87,23 @@ export function extractCurrencyPrefix(price: string): string {
   return match?.[1]?.trimEnd() ?? "";
 }
 
+export function parseDisplayPriceAmount(price: string): number | null {
+  const match = price.match(/[\d.,]+/);
+  if (!match) return null;
+  const normalized = match[0].replaceAll(",", "");
+  const parsed = Number.parseFloat(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export function formatSeatTotalPrice(seatPrice: string, seatCount: number): string {
+  const amount = parseDisplayPriceAmount(seatPrice);
+  if (amount === null) return "-";
+  const prefix = extractCurrencyPrefix(seatPrice);
+  const total = amount * seatCount;
+  const formatted = Number.isInteger(total) ? String(total) : total.toFixed(2);
+  return prefix ? `${prefix}${formatted}` : formatted;
+}
+
 export function formatPlanPriceLabel(
   plan: BillingPlanId,
   config: BillingPlanDisplayConfig,
