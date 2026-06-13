@@ -166,7 +166,7 @@ _added: 2026-06-10_
 
 ## Allure test reporting (#359 epic, 2026-06-13)
 
-Unit, integration, and e2e tests write Allure JSON under `allure-results/`. Local viewing: `npx allure serve allure-results`. CI publishes to GitHub Pages via `ci.yml` and `e2e.yml` (no env vars). ReportPortal removed in #364.
+Unit, integration, and e2e tests write Allure JSON under `allure-results/` (`*-result.json`, Allure 3 format). Config: `allurerc.mjs` (separate CI vs E2E history via `ALLURE_WORKFLOW`). Local: discover dirs with `find … *-result.json`, then `pnpm exec allure generate` + `pnpm exec allure open ./allure-report-out`. CI: `scripts/allure-publish-ci.sh` + `peaceiris/actions-gh-pages` + `allure-framework/allure-action@v0.7.1` for PR summaries. **Not** `andgineer/allure-report` (Allure 2 → empty pages). GitHub Pages: `test-reports/<run>-<attempt>/`. ReportPortal removed in #364.
 _added: 2026-06-13_
 
 ## Infisical secrets delete — use --type (2026-06-13)
