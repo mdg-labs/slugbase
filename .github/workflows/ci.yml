@@ -84,8 +84,10 @@ jobs:
       - name: Unit tests
         id: unit-tests
         env:
-          # Infisical injects full staging env; unit tests must not call the live pricing API.
+          # Infisical injects full staging env; unit tests must not call the live API.
           PUBLIC_API_BASE_URL: ""
+          API_BASE_URL: ""
+          VITE_API_URL: ""
         run: pnpm test:unit
 
       - name: Finish ReportPortal unit launch
@@ -109,12 +111,18 @@ jobs:
       - name: Hard-coded UI strings (rg)
         run: pnpm run i18n:check:hardcoded
 
+      - name: Client API origin guard
+        run: pnpm run check:client-api-origin
+
       - name: Build
+        # Keep reporting integration to ReportPortal when unit fails; still skip if lint/typecheck failed.
+        if: always() && steps.typecheck.outcome == 'success'
         env:
           NODE_ENV: production
         run: pnpm build
 
       - name: Start ReportPortal integration launch
+        if: always() && steps.typecheck.outcome == 'success'
         id: rp-integration-start
         run: |
           uuid=$(node --experimental-strip-types scripts/reportportal-ci-launch.ts start integration || true)
@@ -124,6 +132,7 @@ jobs:
           fi
 
       - name: Integration tests
+        if: always() && steps.typecheck.outcome == 'success'
         id: integration-tests
         env:
           DATABASE_URL: postgresql://slugbase:slugbase@localhost:5432/slugbase_test
@@ -147,6 +156,7 @@ jobs:
         run: bash scripts/reportportal-ci-summary.sh record-env integration
 
       - name: Dependency audit
+        if: always() && steps.typecheck.outcome == 'success'
         run: pnpm audit --audit-level=high
 
       - name: Upload ReportPortal launch state

@@ -2,7 +2,7 @@ import type { LoaderFunctionArgs } from "react-router";
 
 import type { GlobalSearchResult } from "../../lib/search.types.js";
 
-const getApiBaseUrl = (): string => process.env["API_BASE_URL"] ?? "";
+import { getServerApiBaseUrl } from "../../lib/server-api-base-url.js";
 
 /** Proxies authenticated global search to the NestJS API (cookie-forwarding). */
 export async function loader({
@@ -21,7 +21,7 @@ export async function loader({
     if (value) params.set(key, value);
   }
 
-  const apiBaseUrl = getApiBaseUrl();
+  const apiBaseUrl = getServerApiBaseUrl();
   const cookie = request.headers.get("Cookie") ?? "";
 
   try {

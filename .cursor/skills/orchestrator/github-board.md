@@ -357,13 +357,14 @@ GITHUB SYNC — EXECUTION (mandatory unless user opted out):
 - issues:
   - number: 12          # leaf
   - number: 8           # Parent issue (when leaf is a sub-issue)
+- CLOSE_PARENTS: <[#8] | [#10, #1] | none>   # parents to fixes-close in this commit
 - nodeIds:
   - issue 8: <node_id>  # needed for sub_issue_write if linking
   - issue 12: <node_id>
 - FIRST ACTION: Set project Status → "In Progress" for EVERY listed issue (leaf + parent) BEFORE session memory
 - LAST ACTIONS (in order): local session memory ended/duration → Set project Status → "In Review" (leaf only) → single implementation commit (no session files)
 - FORBIDDEN: Set Status → Done; add comment for verification outcomes; committing session memory files
-- COMMIT: include [#N] in subject; add "Fixes #N" in body for auto-close on main
+- COMMIT: subject `[#<leaf>]`; body `fixes #<leaf>` always; add `fixes #<parent>` one line per issue in CLOSE_PARENTS (omit when none); FORBIDDEN: fixes parent not in CLOSE_PARENTS
 - Reference: .cursor/skills/orchestrator/github-board.md
 ```
 
@@ -378,6 +379,7 @@ GITHUB SYNC — VERIFIER (mandatory unless user opted out):
 - issues:
   - number: 12          # leaf (In Review)
   - number: 8           # Parent — Done only if final child
+- CLOSE_PARENTS: <[#8] | none>   # same as execution — verifier Layer 3c3 checks commit body
 - PRE-HANDOFF: local session memory verification ended/duration
 - AFTER PASS: add_issue_comment (mandatory clean summary) → Set project Status → "Done" for leaf (+ parent if final child)
 - AFTER FAIL: add_issue_comment (FAIL template) → Set project Status → "Ready"; do NOT set Done
@@ -449,6 +451,20 @@ Leaf set = atomic issues (no children) **+** all deepest-level children. Batch l
 - Implement **leaf** issues; pass each leaf number to execution + verifier prompts. A parent Feature is never implemented directly — only its children.
 - Parent **In Progress**: execution sets parent when any leaf starts; set the intermediate parent In Progress too when implementing one of its sub-issues.
 - Parent **Done**: last leaf verifier marks the intermediate parent Done (when its last child passes) and the top-level parent Done (when its last child passes) — or orchestrator recovery.
+
+### Commit close
+
+Board Status **Done** does **not** close the GitHub issue. Epic parents auto-close on `main` only when a commit body includes `fixes #<epic>`.
+
+- **Intermediate subtask:** body has `fixes #<leaf>` only.
+- **Final in-scope child of parent P:** same commit adds `fixes #<P>` (one line per parent completed, including nested intermediates).
+- Orchestrator computes `CLOSE_PARENTS` and passes it in execution + verifier prompts; execution agents must not guess; verifier Layer 3c3 enforces alignment.
+
+```text
+# Last child of epic #8
+fixes #12
+fixes #8
+```
 
 ## MCP tools by role
 

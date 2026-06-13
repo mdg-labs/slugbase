@@ -1,6 +1,6 @@
 import type { DashboardBookmark, DashboardData } from "./dashboard.types.js";
 
-const getApiBaseUrl = (): string => process.env["API_BASE_URL"] ?? "";
+import { getServerApiBaseUrl } from "../../lib/server-api-base-url.js";
 
 interface PaginatedResponse<T> {
   items: T[];
@@ -58,7 +58,7 @@ async function fetchJson<T>(
   const cookie = request.headers.get("Cookie") ?? "";
 
   try {
-    const res = await fetch(`${getApiBaseUrl()}${path}`, {
+    const res = await fetch(`${getServerApiBaseUrl()}${path}`, {
       headers: cookie ? { Cookie: cookie } : {},
       signal: AbortSignal.timeout(8_000),
     });

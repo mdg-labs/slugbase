@@ -2,7 +2,7 @@ import type { SharingScope } from "../../components/sharing/sharing.types.js";
 import { parseSharingScope } from "../../components/sharing/sharing.utils.js";
 import { isPlanGatingEnabled } from "../../lib/billing-config.js";
 
-const getApiBaseUrl = (): string => process.env["API_BASE_URL"] ?? "";
+import { getServerApiBaseUrl } from "../../lib/server-api-base-url.js";
 
 export type BookmarkListItem = {
   id: string;
@@ -92,7 +92,7 @@ const FREE_BOOKMARK_CAP = 50;
 async function fetchJson<T>(request: Request, path: string): Promise<T | null> {
   const cookie = request.headers.get("Cookie") ?? "";
   try {
-    const res = await fetch(`${getApiBaseUrl()}${path}`, {
+    const res = await fetch(`${getServerApiBaseUrl()}${path}`, {
       headers: cookie ? { Cookie: cookie } : {},
     });
     if (!res.ok) return null;

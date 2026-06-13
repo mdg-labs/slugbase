@@ -30,6 +30,57 @@ fixes #N
 
 Place this on its own line in the commit body (not the subject). Multiple issues: one per line.
 
+## Epic (parent Feature) issues
+
+Subtasks under a parent Feature (epic) follow the same subject/body rules, with **parent auto-close only on the final in-scope child**.
+
+| Commit | Subject | Body |
+|---|---|---|
+| Any subtask under a parent | `[#<leaf>]` | `fixes #<leaf>` |
+| **Final** child of parent P | `[#<leaf>]` | `fixes #<leaf>` + one `fixes #<P>` line per parent whose last in-scope child this is |
+| Atomic leaf (no parent) | `[#<leaf>]` | `fixes #<leaf>` |
+| Roadmap-only | `[P*-*]` | no `fixes` lines |
+
+**Do not** put `fixes #<epic>` on intermediate subtasks — that would auto-close the epic when the first subtask lands on `main`.
+
+The orchestrator passes `CLOSE_PARENTS: [#P, …]` or `none` in execution prompts (computed from the epic batch plan). Execution agents **must not guess** which parents to close.
+
+```bash
+# GOOD — intermediate subtask under epic #8
+feat(auth)[#11]: add sign-in shell
+
+fixes #11
+
+# GOOD — last in-scope child of epic #8
+feat(auth)[#12]: add MFA challenge screen
+
+fixes #12
+fixes #8
+
+# GOOD — nested: last child of #10 but not top epic #1
+feat(auth)[#13]: add register + verify flow
+
+fixes #13
+fixes #10
+
+# BAD — premature epic close on non-final subtask
+feat(auth)[#11]: add sign-in shell
+
+fixes #11
+fixes #8
+
+# BAD — final child omitting parent close when CLOSE_PARENTS lists #8
+feat(auth)[#12]: add MFA challenge screen
+
+fixes #12
+```
+
+**Verifier FAIL** when GitHub sync was in scope:
+
+- Body missing `fixes #<leaf>`
+- Body includes `fixes #<parent>` when parent is **not** in `CLOSE_PARENTS`
+- Body missing `fixes #<parent>` when parent **is** in `CLOSE_PARENTS`
+
 ### Issue key precedence
 
 1. **GitHub issue** — `#12` when the task exists on the board (orchestrator GITHUB SYNC, user named `#N`, or roadmap row has a GitHub issue)
@@ -73,6 +124,6 @@ GitHub auto-closes issues referenced with `fixes #N`, `closes #N`, or `resolves 
 
 ## Enforcement
 
-- **Execution agents:** implementation commits include `[#N]` or `[P*-*]` in subject + `fixes #N` in body
-- **Verifiers:** Layer 3 — FAIL if a task commit subject lacks a valid issue number when GitHub sync was in scope
-- **Orchestrator prompts:** pass issue number in the GIT block; see `.cursor/skills/orchestrator/prompt-templates.md`
+- **Execution agents:** implementation commits include `[#N]` or `[P*-*]` in subject + `fixes #<leaf>` in body; add `fixes #<parent>` only for issues listed in `CLOSE_PARENTS`
+- **Verifiers:** Layer 3 — FAIL if a task commit subject lacks a valid issue number when GitHub sync was in scope; FAIL on epic parent `fixes` mismatches (see Epic section above)
+- **Orchestrator prompts:** pass leaf issue number, `PARENT`, and `CLOSE_PARENTS` in the GIT block; see `.cursor/skills/orchestrator/prompt-templates.md`

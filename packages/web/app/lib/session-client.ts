@@ -2,6 +2,7 @@ import { useRouteLoaderData } from "react-router";
 
 import type { WorkspaceListItem } from "../components/workspace-switcher/workspace-switcher-api.js";
 import type { SidebarFolder } from "../components/AppSidebar.js";
+import { getServerApiBaseUrl } from "./server-api-base-url.js";
 
 export interface SessionUser {
   id: string;
@@ -12,9 +13,6 @@ export interface SessionUser {
   emailVerified: boolean;
 }
 
-/** Server-side API base URL - available in Node loaders/actions at runtime. */
-const getApiBaseUrl = (): string => process.env["API_BASE_URL"] ?? "";
-
 /**
  * Fetches the current session user from the backend by forwarding the session
  * cookie. Returns `null` when unauthenticated or the request fails.
@@ -24,7 +22,7 @@ const getApiBaseUrl = (): string => process.env["API_BASE_URL"] ?? "";
 export async function getSessionUser(
   request: Request,
 ): Promise<SessionUser | null> {
-  const apiBaseUrl = getApiBaseUrl();
+  const apiBaseUrl = getServerApiBaseUrl();
   const cookie = request.headers.get("Cookie") ?? "";
 
   try {

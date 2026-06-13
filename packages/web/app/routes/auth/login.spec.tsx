@@ -37,6 +37,24 @@ const mockUseActionData = vi.mocked(useActionData);
 const mockUseNavigation = vi.mocked(useNavigation);
 
 describe("Login route - loader", () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ providers: [] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
+    process.env["API_BASE_URL"] = "http://localhost:3000";
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete process.env["API_BASE_URL"];
+  });
+
   it("returns empty object when unauthenticated", async () => {
     const { getSessionUser } = await import("../../lib/session-client.js");
     vi.mocked(getSessionUser).mockResolvedValueOnce(null);

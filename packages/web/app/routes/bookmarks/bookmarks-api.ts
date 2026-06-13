@@ -1,33 +1,10 @@
-import {
-  getApiBaseUrl,
-  resolveClientApiPath,
-} from "../../lib/client-api-path.js";
-
-async function getCsrfToken(): Promise<string> {
-  const res = await fetch(`${getApiBaseUrl()}/auth/csrf-token`, {
-    credentials: "include",
-  });
-  if (!res.ok) {
-    throw new Error("Failed to fetch CSRF token");
-  }
-  const data = (await res.json()) as { csrfToken: string };
-  return data.csrfToken;
-}
-
-async function getMutationHeaders(): Promise<Record<string, string>> {
-  const csrfToken = await getCsrfToken();
-  return {
-    "Content-Type": "application/json",
-    "x-csrf-token": csrfToken,
-  };
-}
+import { resolveClientApiPath } from "../../lib/client-api-path.js";
+import { apiFetch } from "../../lib/client-api-fetch.js";
 
 async function postJson<T>(path: string, body: unknown): Promise<T> {
-  const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}${path}`, {
+  const res = await apiFetch(path, {
     method: "POST",
-    headers,
-    credentials: "include",
+    csrf: true,
     body: JSON.stringify(body),
   });
   if (!res.ok) {
@@ -44,12 +21,7 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
 }
 
 async function deleteJson(path: string): Promise<void> {
-  const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}${path}`, {
-    method: "DELETE",
-    headers,
-    credentials: "include",
-  });
+  const res = await apiFetch(path, { method: "DELETE", csrf: true });
   if (!res.ok) {
     throw new Error("Delete failed");
   }
@@ -123,15 +95,8 @@ export async function loadToolbarOptions(): Promise<{
   tags: ToolbarOption[];
 }> {
   const [foldersRes, tagsRes] = await Promise.all([
-    fetch(
-      `${getApiBaseUrl()}${resolveClientApiPath("/folders?pageSize=100")}`,
-      {
-        credentials: "include",
-      },
-    ),
-    fetch(`${getApiBaseUrl()}${resolveClientApiPath("/tags?pageSize=100")}`, {
-      credentials: "include",
-    }),
+    apiFetch(resolveClientApiPath("/folders?pageSize=100")),
+    apiFetch(resolveClientApiPath("/tags?pageSize=100")),
   ]);
 
   const foldersData = foldersRes.ok

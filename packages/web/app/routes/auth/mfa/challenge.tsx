@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { getServerApiBaseUrl } from "../../../lib/server-api-base-url.js";
 import { useState } from "react";
 import type { ActionFunctionArgs } from "react-router";
 import { Form, useActionData, useNavigation } from "react-router";
@@ -6,7 +7,7 @@ import { applyApiSessionCookie, redirectAfterFormPost } from "../../../lib/api-s
 import { TotpInput } from "../../../components/TotpInput.js";
 import { AuthShell, KeyFieldIcon } from "../AuthShell.js";
 
-const API_BASE_URL = (): string => process.env["API_BASE_URL"] ?? "";
+const API_BASE_URL = () => getServerApiBaseUrl();
 
 export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();

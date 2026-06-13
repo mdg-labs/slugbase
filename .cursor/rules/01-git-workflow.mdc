@@ -32,7 +32,7 @@ build(<scope>)[#123]: <summary>
 perf(<scope>)[#123]: <summary>
 ```
 
-Use `[#N]` when the task is on GitHub Issues; `[P*-*]` only when no GitHub issue exists yet. The commit body must include `fixes #N` to auto-close the issue on merge to `main`.
+Use `[#N]` when the task is on GitHub Issues; `[P*-*]` only when no GitHub issue exists yet. The commit body must include `fixes #N` to auto-close the issue on merge to `main`. Subtasks under an epic also close parent Features via `fixes #<parent>` on the **final in-scope child** only — see `07-issue-commit-linking.mdc` (Epic section).
 
 **Allowed scopes**: `repo`, `ci`, `web`, `backend`, `marketing`, `ui`, `shared`, `db`, `docs`, `bookmarks`, `slugs`, `go`, `folders`, `tags`, `workspaces`, `auth`, `mfa`, `oidc`, `sessions`, `billing`, `entitlements`, `admin`, `search`, `import`, `export`, `i18n`, `infra`, `plan`, `memory`
 

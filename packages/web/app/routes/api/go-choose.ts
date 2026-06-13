@@ -1,13 +1,13 @@
 import type { ActionFunctionArgs } from "react-router";
 
-const getApiBaseUrl = (): string => process.env["API_BASE_URL"] ?? "";
+import { getServerApiBaseUrl } from "../../lib/server-api-base-url.js";
 
 /** Proxy POST /api/go/:slug/choose → backend POST /go/:slug/choose. */
 export async function action({ request, params }: ActionFunctionArgs) {
   const slug = params["slug"] ?? "";
   const cookie = request.headers.get("Cookie") ?? "";
   const csrfToken = request.headers.get("x-csrf-token") ?? "";
-  const apiBaseUrl = getApiBaseUrl();
+  const apiBaseUrl = getServerApiBaseUrl();
   const body = await request.text();
 
   try {

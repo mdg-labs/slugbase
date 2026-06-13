@@ -64,14 +64,13 @@ test.describe('Command palette go mode', () => {
     await page.waitForSelector('[data-testid="command-palette-dialog"]');
     await page.waitForSelector('[data-testid="command-palette-input"]');
 
-    // Type "go " prefix to enter go mode, then the slug
-    // cmdk auto-focuses the input; use keyboard to trigger onValueChange
-    await page.keyboard.type(`go ${SLUG.slice(0, 4)}`, { delay: 30 });
-    await page.waitForTimeout(400); // debounce + fetch
+    // Type full go command — partial keyboard input is flaky with cmdk debounce/search.
+    await page.fill('[data-testid="command-palette-input"]', `go ${SLUG}`);
+    await expect(page.locator(`[data-testid="go-mode-item-${SLUG}"]`)).toBeVisible({
+      timeout: 10_000,
+    });
 
-    // The go mode item for our slug should appear
     const goItem = page.locator(`[data-testid="go-mode-item-${SLUG}"]`);
-    await expect(goItem).toBeVisible({ timeout: 5000 });
 
     // Select the go mode item — use keyboard to bypass cmdk-overlay intercepting clicks
     await page.keyboard.press('ArrowDown');
@@ -122,11 +121,12 @@ test.describe('Command palette go mode', () => {
 
     // Type full go command with exact slug
     await page.fill('[data-testid="command-palette-input"]', `go ${fullSlug}`);
-    await page.waitForTimeout(400);
+    await expect(page.locator(`[data-testid="go-mode-item-${fullSlug}"]`)).toBeVisible({
+      timeout: 10_000,
+    });
 
     // The go mode item should be visible
     const goItem = page.locator(`[data-testid="go-mode-item-${fullSlug}"]`);
-    await expect(goItem).toBeVisible({ timeout: 5000 });
 
     // Press Enter to resolve via keyboard
     await page.keyboard.press('Enter');

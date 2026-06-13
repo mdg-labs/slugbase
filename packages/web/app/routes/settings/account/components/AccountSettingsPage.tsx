@@ -11,6 +11,7 @@ import {
   createApiToken,
   disableMfa,
   regenerateMfaBackupCodes,
+  refreshAccountSettings,
   requestAccountEmailChange,
   resendAccountEmailChange,
   revokeApiToken,
@@ -58,12 +59,9 @@ export function AccountSettingsPage({
 
   const refreshAccount = useMemo(
     () => () => {
-      void fetch(`${process.env["API_BASE_URL"] ?? ""}/auth/account`, {
-        credentials: "include",
-      })
-        .then(async (res) => {
-          if (!res.ok) return;
-          const data = (await res.json()) as AccountSettingsData;
+      void refreshAccountSettings()
+        .then((data) => {
+          if (!data) return;
           setAccount(data);
           applyUserAccentColor(data.accentColor);
         })

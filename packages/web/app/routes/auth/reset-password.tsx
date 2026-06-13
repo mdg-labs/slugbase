@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { getServerApiBaseUrl } from "../../lib/server-api-base-url.js";
 import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import {
@@ -11,7 +12,7 @@ import {
 } from "react-router";
 import { AuthShell, LockFieldIcon } from "./AuthShell.js";
 
-const API_BASE_URL = () => process.env["API_BASE_URL"] ?? "";
+const API_BASE_URL = () => getServerApiBaseUrl();
 
 /** Password strength scoring - mirrors the design prototype (AuthKit.jsx). */
 function scorePassword(value: string): 0 | 1 | 2 | 3 | 4 {

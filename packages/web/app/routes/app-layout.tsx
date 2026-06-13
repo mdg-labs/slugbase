@@ -6,14 +6,14 @@ import type { WorkspaceListItem } from "../components/workspace-switcher/workspa
 import type { SidebarFolder } from "../components/AppSidebar.js";
 import { LoaderStatusError } from "./errors/loader-status-error.js";
 
-const getApiBaseUrl = (): string => process.env["API_BASE_URL"] ?? "";
+import { getServerApiBaseUrl } from "../lib/server-api-base-url.js";
 
 type FetchResult<T> =
   | { ok: true; data: T }
   | { ok: false; status: number };
 
 async function fetchJson<T>(request: Request, path: string): Promise<FetchResult<T>> {
-  const apiBaseUrl = getApiBaseUrl();
+  const apiBaseUrl = getServerApiBaseUrl();
   if (!apiBaseUrl) {
     return { ok: false, status: 503 };
   }
@@ -54,7 +54,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const user = await getSessionUser(request);
   if (!user) return redirect("/login");
 
-  const apiBaseUrl = getApiBaseUrl();
+  const apiBaseUrl = getServerApiBaseUrl();
   if (!apiBaseUrl) {
     throw new LoaderStatusError(503);
   }

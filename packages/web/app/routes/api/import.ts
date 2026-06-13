@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs } from "react-router";
 
-const getApiBaseUrl = (): string => process.env["API_BASE_URL"] ?? "";
+import { getServerApiBaseUrl } from "../../lib/server-api-base-url.js";
 
 /** Proxy POST /api/import/netscape-html → backend POST /import/netscape-html */
 export async function action({ request, params }: ActionFunctionArgs) {
@@ -11,7 +11,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   const cookie = request.headers.get("Cookie") ?? "";
   const csrfToken = request.headers.get("x-csrf-token") ?? "";
-  const apiBaseUrl = getApiBaseUrl();
+  const apiBaseUrl = getServerApiBaseUrl();
   const body = await request.text();
 
   try {

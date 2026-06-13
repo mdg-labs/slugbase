@@ -164,6 +164,11 @@ _added: 2026-06-09_
 The #315 branch verifier (`generalPurpose` subagent `3f9c15eb-60d2-4c95-909a-d8e82f0a005f`) completed verification correctly (Layer 1/2/3 all PASS, GitHub Done comment posted, status set to Done) but then hallucinated and attempted to write `/home/michael/PycharmProjects/ai-proxy/proxy-server/package.json` — a completely unrelated Electron HTTP proxy project. The file didn't exist on disk (path doesn't exist). The verifier prompt should be tightened with a hard block on path escape: add "DO NOT write files outside TARGET REPO or WORKTREE" to verifier prompts.
 _added: 2026-06-10_
 
+## E2E CI — no Infisical pollution on app under test (2026-06-13)
+
+`e2e.yml` mirrors `scripts/e2e.sh`: API/container start with explicit test env only (`SLUGBASE_E2E_MODE`, hardcoded session/encryption keys, localhost URLs, `PUBLIC_REGISTRATION=true`). **Hosted** also runs `pnpm --filter @slugbase/backend db:migrate` before API start (hosted API skips bootstrap migrations when `SERVE_WEB_CLIENT=false`). Infisical `staging` fetch runs immediately before Playwright; Playwright steps re-pin `DATABASE_URL` + e2e base URLs so staging secrets do not reach tests. CI Playwright uses `scripts/e2e-ci-playwright.sh` (process substitution + summary parse) — `pnpm | tee` could exit 0 while the log shows `N failed`. Follow-up: selective 3-key fetch via Infisical path `/ci/e2e` (option B).
+_added: 2026-06-13_
+
 ## ReportPortal test reporting (#366 epic, 2026-06-13)
 
 Unit, integration, and e2e tests publish launches to self-hosted ReportPortal when `REPORTPORTAL_URL`, `REPORTPORTAL_PROJECT`, and `REPORTPORTAL_API_KEY` are set (CI via Infisical). Wiring: `scripts/reportportal-vitest.ts`, `scripts/reportportal-playwright.ts`, `scripts/reportportal-ci-summary.sh` (CI job summary + PR comments from `reportportal_launch_url=` stdout). Reporters no-op locally when env is incomplete. Allure + gh-pages test reports removed in #371.

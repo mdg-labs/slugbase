@@ -1,3 +1,8 @@
+import {
+  apiFetch,
+  parseApiErrorMessage,
+  serverFetchJson,
+} from "../../../lib/client-api-fetch.js";
 import type {
   BillingPlanId,
   BillingSettingsData,
@@ -7,14 +12,6 @@ import type {
 import { loadBillingPlanDisplayConfig } from "./billing-config.js";
 import { fetchMembersWithFallback } from "../members-fetch.js";
 
-const getApiBaseUrl = (): string => {
-  const fromProcess = typeof process !== "undefined" ? process.env["API_BASE_URL"] : undefined;
-  if (typeof fromProcess === "string" && fromProcess.length > 0) return fromProcess.replace(/\/$/, "");
-  const fromVite = typeof import.meta !== "undefined" ? (import.meta as { env: { VITE_API_URL?: string } }).env.VITE_API_URL : undefined;
-  if (typeof fromVite === "string" && fromVite.length > 0) return fromVite.replace(/\/$/, "");
-  return "";
-};
-
 interface PaginatedBookmarks {
   total: number;
 }
@@ -23,43 +20,6 @@ interface ApiWorkspace extends BillingWorkspaceSummary {
   slug: string;
   createdAt: string;
   updatedAt: string;
-}
-
-async function parseErrorMessage(res: Response): Promise<string> {
-  try {
-    const data = (await res.json()) as { message?: string };
-    return data.message ?? "Request failed";
-  } catch {
-    return "Request failed";
-  }
-}
-
-async function getMutationHeaders(): Promise<Record<string, string>> {
-  const res = await fetch(`${getApiBaseUrl()}/auth/csrf-token`, {
-    credentials: "include",
-  });
-  if (!res.ok) {
-    throw new Error("Failed to fetch CSRF token");
-  }
-  const data = (await res.json()) as { csrfToken: string };
-  return {
-    "Content-Type": "application/json",
-    "x-csrf-token": data.csrfToken,
-  };
-}
-
-async function fetchJson<T>(path: string, request?: Request): Promise<T | null> {
-  const cookie = request?.headers.get("Cookie") ?? "";
-  try {
-    const res = await fetch(`${getApiBaseUrl()}${path}`, {
-      headers: cookie ? { Cookie: cookie } : {},
-      credentials: request ? undefined : "include",
-    });
-    if (!res.ok) return null;
-    return (await res.json()) as T;
-  } catch {
-    return null;
-  }
 }
 
 function estimateArchivedCount(plan: BillingPlanId, bookmarkCount: number, cap: number): number {
@@ -73,11 +33,11 @@ export async function loadBillingSettingsData(
   returnUrl: string,
 ): Promise<BillingSettingsData | null> {
   const planConfig = await loadBillingPlanDisplayConfig();
-  const workspace = await fetchJson<ApiWorkspace>("/workspaces/active", request);
+  const workspace = await serverFetchJson<ApiWorkspace>(request, "/workspaces/active");
   const { members, forbidden } = await fetchMembersWithFallback(request);
-  const bookmarkTotals = await fetchJson<PaginatedBookmarks>(
-    "/bookmarks?pageSize=1",
+  const bookmarkTotals = await serverFetchJson<PaginatedBookmarks>(
     request,
+    "/bookmarks?pageSize=1",
   );
 
   if (!workspace || !bookmarkTotals) {
@@ -141,24 +101,19 @@ export async function loadBillingSettingsData(
 }
 
 export async function startCheckout(params: StartCheckoutParams): Promise<{ checkoutUrl: string }> {
-  const headers = await getMutationHeaders();
-  const res = await fetch(
-    `${getApiBaseUrl()}/workspaces/${params.workspaceId}/billing/checkout`,
-    {
-      method: "POST",
-      headers,
-      credentials: "include",
-      body: JSON.stringify({
-        plan: params.plan,
-        mode: params.mode,
-        billingInterval: params.billingInterval ?? "monthly",
-        successUrl: params.successUrl,
-        cancelUrl: params.cancelUrl,
-      }),
-    },
-  );
+  const res = await apiFetch(`/workspaces/${params.workspaceId}/billing/checkout`, {
+    method: "POST",
+    csrf: true,
+    body: JSON.stringify({
+      plan: params.plan,
+      mode: params.mode,
+      billingInterval: params.billingInterval ?? "monthly",
+      successUrl: params.successUrl,
+      cancelUrl: params.cancelUrl,
+    }),
+  });
   if (!res.ok) {
-    throw new Error(await parseErrorMessage(res));
+    throw new Error(await parseApiErrorMessage(res));
   }
   const body = (await res.json()) as { checkoutUrl: string };
   return { checkoutUrl: body.checkoutUrl };
@@ -168,15 +123,13 @@ export async function openBillingPortal(
   workspaceId: string,
   returnUrl: string,
 ): Promise<{ portalUrl: string }> {
-  const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/workspaces/${workspaceId}/billing/portal`, {
+  const res = await apiFetch(`/workspaces/${workspaceId}/billing/portal`, {
     method: "POST",
-    headers,
-    credentials: "include",
+    csrf: true,
     body: JSON.stringify({ returnUrl }),
   });
   if (!res.ok) {
-    throw new Error(await parseErrorMessage(res));
+    throw new Error(await parseApiErrorMessage(res));
   }
   const body = (await res.json()) as { portalUrl: string };
   return { portalUrl: body.portalUrl };
@@ -186,15 +139,13 @@ export async function updateSeatQuantity(
   workspaceId: string,
   totalSeats: number,
 ): Promise<BillingWorkspaceSummary> {
-  const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/workspaces/${workspaceId}/billing/seats`, {
+  const res = await apiFetch(`/workspaces/${workspaceId}/billing/seats`, {
     method: "PATCH",
-    headers,
-    credentials: "include",
+    csrf: true,
     body: JSON.stringify({ totalSeats }),
   });
   if (!res.ok) {
-    throw new Error(await parseErrorMessage(res));
+    throw new Error(await parseApiErrorMessage(res));
   }
   const body = (await res.json()) as ApiWorkspace;
   return {

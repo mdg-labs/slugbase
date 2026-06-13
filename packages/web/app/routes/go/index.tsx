@@ -11,7 +11,7 @@ import type { LoaderFunctionArgs } from "react-router";
 
 import type { GoCandidate } from "../../components/command-palette/go-mode-api.js";
 
-const getApiBaseUrl = (): string => process.env["API_BASE_URL"] ?? "";
+import { getServerApiBaseUrl } from "../../lib/server-api-base-url.js";
 
 interface GoDisambiguationResult {
   kind: "disambiguation";
@@ -22,7 +22,7 @@ interface GoDisambiguationResult {
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const slug = params["slug"] ?? "";
   const cookie = request.headers.get("Cookie") ?? "";
-  const apiBaseUrl = getApiBaseUrl();
+  const apiBaseUrl = getServerApiBaseUrl();
 
   try {
     const res = await fetch(`${apiBaseUrl}/go/${encodeURIComponent(slug)}`, {

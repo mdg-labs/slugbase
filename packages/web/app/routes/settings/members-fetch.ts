@@ -1,4 +1,4 @@
-const getApiBaseUrl = (): string => process.env["API_BASE_URL"] ?? "";
+import { getServerApiBaseUrl } from "../../lib/server-api-base-url.js";
 
 export interface ApiMember {
   userId: string;
@@ -23,7 +23,7 @@ export async function fetchMembersWithFallback<T = ApiMember>(
 ): Promise<MembersFetchResult<T>> {
   const cookie = request.headers.get("Cookie") ?? "";
   try {
-    const res = await fetch(`${getApiBaseUrl()}/members`, {
+    const res = await fetch(`${getServerApiBaseUrl()}/members`, {
       headers: cookie ? { Cookie: cookie } : {},
       credentials: undefined,
     });

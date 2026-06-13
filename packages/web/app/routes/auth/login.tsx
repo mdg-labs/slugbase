@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { getServerApiBaseUrl } from "../../lib/server-api-base-url.js";
 import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { Form, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
@@ -17,7 +18,7 @@ import {
   SsoSection,
 } from "./AuthShell.js";
 
-const API_BASE_URL = () => process.env["API_BASE_URL"] ?? "";
+const API_BASE_URL = () => getServerApiBaseUrl();
 
 /** Redirect already-authenticated users away from the login page. */
 export async function loader({ request }: LoaderFunctionArgs) {

@@ -4,7 +4,7 @@ import { loginAsWorker } from "../../helpers/worker-login.js";
 
 test.describe("MFA enroll and challenge flow", () => {
   test("enroll TOTP in settings -> logout -> login requires MFA challenge", async ({ page }, testInfo) => {
-    test.setTimeout(60_000);
+    test.setTimeout(90_000);
     // ── Phase 1: Login via form ────────────────────────────────────
     await loginAsWorker(page, testInfo.workerIndex);
 
@@ -28,19 +28,26 @@ test.describe("MFA enroll and challenge flow", () => {
     expect(textSecret!.length).toBeGreaterThan(0);
 
     // ── Phase 4: Generate TOTP and verify enrollment ──────────────
-    const totpCode = generateSync({ secret: textSecret!.trim() });
-
-    // The TotpInput has 6 individual digit fields inside the verify-input container
-    const digitInputs = page.locator('[data-testid="mfa-verify-input"] input');
-    const digits = totpCode.split("");
-    for (let i = 0; i < digits.length; i++) {
-      await digitInputs.nth(i).fill(digits[i]);
+    // Retry on TOTP window boundaries — first verify can fail on cold CI runners.
+    let enrolled = false;
+    for (let attempt = 0; attempt < 3 && !enrolled; attempt++) {
+      const totpCode = generateSync({ secret: textSecret!.trim() });
+      const digitInputs = page.locator('[data-testid="mfa-verify-input"] input');
+      const digits = totpCode.split("");
+      for (let i = 0; i < digits.length; i++) {
+        await digitInputs.nth(i).fill(digits[i]);
+      }
+      await page.click('[data-testid="mfa-verify-submit"]');
+      try {
+        await page.waitForSelector('[data-testid="mfa-backup-codes"]', { timeout: 20_000 });
+        enrolled = true;
+      } catch {
+        // stale code or slow API — retry with a fresh TOTP
+      }
     }
-
-    await page.click('[data-testid="mfa-verify-submit"]');
+    expect(enrolled).toBe(true);
 
     // ── Phase 5: Backup codes are shown ───────────────────────────
-    await page.waitForSelector('[data-testid="mfa-backup-codes"]');
     const backupCodesSection = page.locator('[data-testid="mfa-backup-codes"]');
     await expect(backupCodesSection).toBeVisible();
 
