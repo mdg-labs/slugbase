@@ -2,9 +2,9 @@ import { defineConfig, devices, type ReporterDescription } from '@playwright/tes
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import {
-  allurePlaywrightReporter,
   detectPlaywrightEdition,
-} from '../scripts/allure-playwright.ts';
+  reportPortalPlaywrightReporter,
+} from '../scripts/reportportal-playwright.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -43,11 +43,11 @@ if (process.env.E2E_JSON_REPORT_PATH) {
   reporters.push(['json', { outputFile: process.env.E2E_JSON_REPORT_PATH }]);
 }
 
-// Allure: one results dir per Playwright project run (edition from --project).
-// e2e.sh invokes hosted and self-hosted separately.
+// ReportPortal: one launch per Playwright project run (edition from --project).
+// e2e.sh invokes hosted and self-hosted separately; no-ops when REPORTPORTAL_* unset.
 const edition = detectPlaywrightEdition();
 if (edition) {
-  reporters.push(...allurePlaywrightReporter(edition));
+  reporters.push(...reportPortalPlaywrightReporter(edition));
 }
 
 export default defineConfig({
