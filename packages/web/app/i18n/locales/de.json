@@ -1,5 +1,9 @@
 {
   "app.home.welcome": "Willkommen in deinem Arbeitsbereich.",
+  "app.legal.impressum": "Impressum",
+  "app.legal.nav_aria_label": "Rechtliches",
+  "app.legal.privacy": "Datenschutz",
+  "app.legal.terms": "AGB",
   "app.shell.brand": "SlugBase",
   "app.shell.nav.account_section": "Konto",
   "app.shell.nav.aria_label": "Hauptnavigation",

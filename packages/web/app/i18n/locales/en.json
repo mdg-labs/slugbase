@@ -1,5 +1,9 @@
 {
   "app.home.welcome": "Welcome to your workspace.",
+  "app.legal.impressum": "Impressum",
+  "app.legal.nav_aria_label": "Legal",
+  "app.legal.privacy": "Privacy",
+  "app.legal.terms": "Terms",
   "app.shell.brand": "SlugBase",
   "app.shell.nav.account_section": "Account",
   "app.shell.nav.aria_label": "Main navigation",

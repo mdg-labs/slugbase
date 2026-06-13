@@ -74,15 +74,23 @@ SELF_HOSTED_DOCKER_BUILD_ARGS=(
 )
 
 # Hosted web bundle: billing on, workspace SMTP/OIDC/AI BYO panels off.
+# Optional second arg: marketing origin for VITE_MARKETING_ORIGIN (legal links in web UI).
 build_hosted_packages() {
+  local marketing_origin="${1:-}"
   header "Building hosted packages"
   cd "$REPO_ROOT"
   info "VITE_BILLING_ENABLED=true  VITE_MAIL_ADMIN_UI=false  VITE_OIDC_ADMIN_UI=false  VITE_AI_BYO_CREDENTIAL=false"
-  VITE_BILLING_ENABLED=true \
-  VITE_MAIL_ADMIN_UI=false \
-  VITE_OIDC_ADMIN_UI=false \
-  VITE_AI_BYO_CREDENTIAL=false \
-    bash scripts/with-ci-env.sh pnpm build 2>&1 | sed 's/^/  /'
+  local -a build_env=(
+    VITE_BILLING_ENABLED=true
+    VITE_MAIL_ADMIN_UI=false
+    VITE_OIDC_ADMIN_UI=false
+    VITE_AI_BYO_CREDENTIAL=false
+  )
+  if [ -n "$marketing_origin" ]; then
+    info "VITE_MARKETING_ORIGIN=$marketing_origin"
+    build_env+=(VITE_MARKETING_ORIGIN="$marketing_origin")
+  fi
+  "${build_env[@]}" bash scripts/with-ci-env.sh pnpm build 2>&1 | sed 's/^/  /'
   ok "Hosted build complete"
 }
 
@@ -190,11 +198,11 @@ ok "Playwright browsers ready"
 #    Playwright webServer starts API, web, marketing on random ports
 # ---------------------------------------------------------------------------
 if [ "$RUN_HOSTED" = true ]; then
-  build_hosted_packages
-
   header "Running hosted tests"
 
   IFS=' ' read -r PORT_API PORT_WEB PORT_MKTG <<< "$(find_free_ports 3)"
+
+  build_hosted_packages "http://localhost:$PORT_MKTG"
 
   export E2E_BASE_URL_API="http://localhost:$PORT_API"
   export E2E_BASE_URL_WEB="http://localhost:$PORT_WEB"

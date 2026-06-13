@@ -1,6 +1,8 @@
-import { getClientApiOrigin } from "../../lib/client-api-path.js";
 import { useTranslation } from "react-i18next";
 import type { ReactNode } from "react";
+
+import { LegalLinks } from "../../components/LegalLinks.js";
+import { getClientApiOrigin } from "../../lib/client-api-path.js";
 import {
   AuthButton,
   AuthHeading,
@@ -49,6 +51,7 @@ export function AuthShell({ children, showSlugRows = true }: AuthShellWrapperPro
       }}
     >
       {children}
+      <LegalLinks variant="auth" />
     </AuthShellBase>
   );
 }

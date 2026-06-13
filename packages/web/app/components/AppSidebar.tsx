@@ -3,6 +3,7 @@ import { useState } from "react";
 import { NavLink, useLocation } from "react-router";
 
 import { isPlanGatingEnabled } from "../lib/billing-config.js";
+import { LegalLinks } from "./LegalLinks.js";
 import type { WorkspaceListItem } from "./workspace-switcher/workspace-switcher-api.js";
 import { WorkspaceSwitcherPanel } from "./workspace-switcher/WorkspaceSwitcherPanel.js";
 
@@ -373,6 +374,8 @@ export function AppSidebar({
             <LifeBuoyIcon />
             {t("app.shell.nav.help")}
           </button>
+
+          <LegalLinks variant="sidebar" />
         </div>
       </div>
 
