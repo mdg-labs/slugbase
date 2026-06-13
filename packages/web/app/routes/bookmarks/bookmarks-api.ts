@@ -1,10 +1,7 @@
-const getApiBaseUrl = (): string => {
-  const fromProcess = typeof process !== "undefined" ? process.env["API_BASE_URL"] : undefined;
-  if (typeof fromProcess === "string" && fromProcess.length > 0) return fromProcess.replace(/\/$/, "");
-  const fromVite = typeof import.meta !== "undefined" ? (import.meta as { env: { VITE_API_URL?: string } }).env.VITE_API_URL : undefined;
-  if (typeof fromVite === "string" && fromVite.length > 0) return fromVite.replace(/\/$/, "");
-  return "";
-};
+import {
+  getApiBaseUrl,
+  resolveClientApiPath,
+} from "../../lib/client-api-path.js";
 
 async function getCsrfToken(): Promise<string> {
   const res = await fetch(`${getApiBaseUrl()}/auth/csrf-token`, {
@@ -116,7 +113,7 @@ export async function toggleBookmarkPin(
 }
 
 export async function deleteBookmark(id: string): Promise<void> {
-  await deleteJson(`/api/bookmarks/${id}`);
+  await deleteJson(resolveClientApiPath(`/bookmarks/${id}`));
 }
 
 export type ToolbarOption = { id: string; name: string };
@@ -126,10 +123,13 @@ export async function loadToolbarOptions(): Promise<{
   tags: ToolbarOption[];
 }> {
   const [foldersRes, tagsRes] = await Promise.all([
-    fetch(`${getApiBaseUrl()}/api/folders?pageSize=100`, {
-      credentials: "include",
-    }),
-    fetch(`${getApiBaseUrl()}/api/tags?pageSize=100`, {
+    fetch(
+      `${getApiBaseUrl()}${resolveClientApiPath("/folders?pageSize=100")}`,
+      {
+        credentials: "include",
+      },
+    ),
+    fetch(`${getApiBaseUrl()}${resolveClientApiPath("/tags?pageSize=100")}`, {
       credentials: "include",
     }),
   ]);

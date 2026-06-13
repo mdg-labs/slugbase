@@ -1,3 +1,7 @@
+import {
+  getApiBaseUrl,
+  resolveClientApiPath,
+} from "../../lib/client-api-path.js";
 import type {
   BookmarkModalFolderOption,
   BookmarkModalInitialBookmark,
@@ -41,14 +45,6 @@ function isTagOptionArray(items: unknown): items is BookmarkModalTagOption[] {
   );
 }
 
-const getApiBaseUrl = (): string => {
-  const fromProcess = typeof process !== "undefined" ? process.env["API_BASE_URL"] : undefined;
-  if (typeof fromProcess === "string" && fromProcess.length > 0) return fromProcess.replace(/\/$/, "");
-  const fromVite = typeof import.meta !== "undefined" ? (import.meta as { env: { VITE_API_URL?: string } }).env.VITE_API_URL : undefined;
-  if (typeof fromVite === "string" && fromVite.length > 0) return fromVite.replace(/\/$/, "");
-  return "";
-};
-
 async function getMutationHeaders(): Promise<Record<string, string>> {
   const res = await fetch(`${getApiBaseUrl()}/auth/csrf-token`, {
     credentials: "include",
@@ -76,7 +72,7 @@ async function createBookmark(
   body: ReturnType<typeof toBookmarkSubmitBody>,
 ): Promise<{ id: string }> {
   const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/api/bookmarks`, {
+  const res = await fetch(`${getApiBaseUrl()}${resolveClientApiPath("/bookmarks")}`, {
     method: "POST",
     headers,
     credentials: "include",
@@ -93,12 +89,15 @@ async function updateBookmark(
   body: ReturnType<typeof toBookmarkSubmitBody>,
 ): Promise<void> {
   const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/api/bookmarks/${bookmarkId}`, {
-    method: "PATCH",
-    headers,
-    credentials: "include",
-    body: JSON.stringify(body),
-  });
+  const res = await fetch(
+    `${getApiBaseUrl()}${resolveClientApiPath(`/bookmarks/${bookmarkId}`)}`,
+    {
+      method: "PATCH",
+      headers,
+      credentials: "include",
+      body: JSON.stringify(body),
+    },
+  );
   if (!res.ok) {
     throw new Error(await parseErrorMessage(res));
   }
@@ -132,7 +131,7 @@ async function addBookmarkToTag(tagId: string, bookmarkId: string): Promise<void
 
 async function createTag(name: string): Promise<{ id: string }> {
   const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/api/tags`, {
+  const res = await fetch(`${getApiBaseUrl()}${resolveClientApiPath("/tags")}`, {
     method: "POST",
     headers,
     credentials: "include",
@@ -146,7 +145,7 @@ async function createTag(name: string): Promise<{ id: string }> {
 
 async function createFolder(name: string): Promise<{ id: string }> {
   const headers = await getMutationHeaders();
-  const res = await fetch(`${getApiBaseUrl()}/api/folders`, {
+  const res = await fetch(`${getApiBaseUrl()}${resolveClientApiPath("/folders")}`, {
     method: "POST",
     headers,
     credentials: "include",
@@ -222,9 +221,12 @@ export type LoadBookmarkModalOptionsResult = {
 };
 
 async function fetchFolders(): Promise<BookmarkModalFolderOption[]> {
-  const res = await fetch(`${getApiBaseUrl()}/api/folders?pageSize=100`, {
-    credentials: "include",
-  });
+  const res = await fetch(
+    `${getApiBaseUrl()}${resolveClientApiPath("/folders?pageSize=100")}`,
+    {
+      credentials: "include",
+    },
+  );
   if (!res.ok) {
     throw new BookmarkModalLoadError(
       `Failed to load folders (HTTP ${String(res.status)})`,
@@ -240,9 +242,12 @@ async function fetchFolders(): Promise<BookmarkModalFolderOption[]> {
 }
 
 async function fetchTags(): Promise<BookmarkModalTagOption[]> {
-  const res = await fetch(`${getApiBaseUrl()}/api/tags?pageSize=100`, {
-    credentials: "include",
-  });
+  const res = await fetch(
+    `${getApiBaseUrl()}${resolveClientApiPath("/tags?pageSize=100")}`,
+    {
+      credentials: "include",
+    },
+  );
   if (!res.ok) {
     throw new BookmarkModalLoadError(
       `Failed to load tags (HTTP ${String(res.status)})`,

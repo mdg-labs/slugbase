@@ -35,6 +35,47 @@ describe("loadBookmarkModalOptions", () => {
 
     expect(result.folders).toEqual(folders);
     expect(result.tags).toEqual(tags);
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(
+      1,
+      "/api/folders?pageSize=100",
+      expect.objectContaining({ credentials: "include" }),
+    );
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(
+      2,
+      "/api/tags?pageSize=100",
+      expect.objectContaining({ credentials: "include" }),
+    );
+  });
+
+  it("uses direct API paths when VITE_API_URL is set", async () => {
+    vi.stubEnv("VITE_API_URL", "https://api.example.com");
+    vi.resetModules();
+    const { loadBookmarkModalOptions: loadOptions } = await import(
+      "./bookmark-modal-api.js"
+    );
+
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ items: [], total: 0, page: 1, pageSize: 100 }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ items: [], total: 0, page: 1, pageSize: 100 }),
+      });
+
+    await loadOptions();
+
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(
+      1,
+      "https://api.example.com/folders?pageSize=100",
+      expect.objectContaining({ credentials: "include" }),
+    );
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(
+      2,
+      "https://api.example.com/tags?pageSize=100",
+      expect.objectContaining({ credentials: "include" }),
+    );
   });
 
   it("throws BookmarkModalLoadError when folders endpoint returns non-OK", async () => {
