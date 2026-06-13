@@ -4,7 +4,7 @@ Copy and fill. Sub-agents do not see the orchestrator chat.
 
 When an issue is tracked on the GitHub project board, orchestrator includes **role-specific** GITHUB SYNC blocks (see [github-board.md](github-board.md)):
 
-- **Execution prompts:** Status → In Progress on leaf + parent (when subtask); **no Status → Done** — verifier only
+- **Execution prompts:** Status → In Progress on leaf + parent (when subtask); **no Status → Done** — verifier only; pass `CLOSE_PARENTS` for epic commit close
 - **Verifier prompts:** on PASS → Status → Done; on FAIL → Status → Ready; **mandatory structured comment**
 
 Sub-agents perform GitHub status updates — not the orchestrator.
@@ -123,6 +123,8 @@ WORK BRANCH: staging
 PLAN FILE: /home/michael/projects/slugbase/docs/slugbase-development-roadmap.md
 TASK ID: <e.g. P1-03>
 SESSION ID: <TASK-ID>-<YYYYMMDD>-<4hex>
+PARENT: <parent issue number or none>
+CLOSE_PARENTS: <[#8] | [#10, #1] | none>   # parents to fixes-close in this commit
 
 GITHUB SYNC — EXECUTION (include when issue is on GitHub project board — omit if none):
 - MCP server: user-github (always preferred — see GITHUB TOOLS block)
@@ -157,8 +159,11 @@ GIT:
 - One commit: implementation task files only (session memory is gitignored — never staged)
 - Stage explicit paths only (`git add <path> …`). Never `git add .` or `-A`. Never stage `.cursor/skills/agent-memory/**`.
 - Never push to `main`. When pushing is explicitly requested, target `staging` only.
-- Commit subject: `feat(<scope>)[#N]: <summary>` or `fix(<scope>)[P*-*]: <summary>` (roadmap-only). Subject ≤72 chars.
-- Commit body: `fixes #N` (when task is tracked on GitHub). One `fixes #N` per commit; multiple (`fixes #12, fixes #13`) also work.
+- Commit subject: `feat(<scope>)[#<leaf>]: <summary>` or `fix(<scope>)[P*-*]: <summary>` (roadmap-only). Leaf number only in brackets. Subject ≤72 chars.
+- Commit body (GitHub-tracked):
+    fixes #<leaf>                    # always
+    fixes #<parent>                  # one line per issue in CLOSE_PARENTS (omit when none)
+- FORBIDDEN: fixes #<parent> when parent not in CLOSE_PARENTS
 - No Smart Commit commands. See `07-issue-commit-linking.mdc`.
 
 SECRETS / COMMANDS:
@@ -196,7 +201,7 @@ REQUIRED OUTPUT:
 2. Session timing: started, ended, duration
 3. Summary (≤5 bullets)
 4. Changed files (absolute paths)
-5. Implementation commit: SHA + subject + body (`fixes #N` if applicable) + committed paths (or "no commit" + why)
+5. Implementation commit: SHA + subject + body (`fixes #<leaf>` + `fixes #<parent>` per CLOSE_PARENTS) + committed paths (or "no commit" + why)
 6. Plan checkbox: `[~]` only if PLAN FILE in WRITE SCOPE; never `[x]`
 7. Implementation status: complete | blocked | partial + reason (NOT GitHub Done — verifier sets that)
 8. Blockers or scope deviations
@@ -219,6 +224,8 @@ BATCH_ID: <YYYYMMDD>-<4hex>
 PLAN FILE: /home/michael/projects/slugbase/docs/slugbase-development-roadmap.md (READ ONLY)
 TASK ID: <e.g. P2-05>
 SESSION ID: <TASK-ID>-<YYYYMMDD>-<4hex>
+PARENT: <parent issue number or none>
+CLOSE_PARENTS: <[#8] | [#10, #1] | none>   # parents to fixes-close in this commit
 
 GITHUB SYNC — EXECUTION (include when issue is on GitHub project board — omit if none):
 - Same block as Lane S execution template (Status → In Progress only — no Done; parent when subtask)
@@ -249,8 +256,12 @@ GIT:
 - Stage explicit paths only. Never `git add .` or `-A`.
 - Never push.
 - If git status shows changes outside WRITE SCOPE → blocked.
-- Commit subject: `feat(<scope>)[#N]: <summary>`. Subject ≤72 chars. No Smart Commit.
-- Commit body: `fixes #N` when task is tracked on GitHub. See `07-issue-commit-linking.mdc`.
+- Commit subject: `feat(<scope>)[#<leaf>]: <summary>`. Leaf number only in brackets. Subject ≤72 chars. No Smart Commit.
+- Commit body (GitHub-tracked):
+    fixes #<leaf>                    # always
+    fixes #<parent>                  # one line per issue in CLOSE_PARENTS (omit when none)
+- FORBIDDEN: fixes #<parent> when parent not in CLOSE_PARENTS
+- See `07-issue-commit-linking.mdc`.
 
 PLAN FILE: READ ONLY. Do not set `[~]`, `[x]`, or `[!]`.
 
@@ -285,7 +296,7 @@ REQUIRED OUTPUT:
 3. Summary (≤5 bullets)
 4. Worktree path + branch name
 5. Changed files (absolute paths)
-6. Implementation commit: SHA + subject + body (`fixes #N` if applicable) + committed paths
+6. Implementation commit: SHA + subject + body (`fixes #<leaf>` + `fixes #<parent>` per CLOSE_PARENTS) + committed paths
 7. Implementation status: complete | blocked | partial (NOT GitHub Done)
 8. Blockers or scope deviations
 ```
@@ -310,6 +321,7 @@ WORK BRANCH: staging
 ISSUE NUMBER: <e.g. 12>
 SESSION ID: #<ISSUE-NUMBER>-<YYYYMMDD>-<4hex>
 PARENT: <parent issue number e.g. 8 or none>
+CLOSE_PARENTS: <[#8] | [#10, #1] | none>   # parents to fixes-close in this commit
 
 GITHUB SYNC — EXECUTION (include when issue is on GitHub project board — omit if none):
 - MCP server: user-github (always preferred — see GITHUB TOOLS block)
@@ -343,8 +355,12 @@ DOC REFERENCE (read these):
 GIT:
 - Branch staging; one implementation commit; explicit git add only; never stage `.cursor/skills/agent-memory/**`
 - Never push to `main`. When pushing is explicitly requested, target `staging` only.
-- Commit subject: `feat(<scope>)[#N]: <summary>` — number required. No Smart Commit.
-- Commit body: `fixes #N`. See `07-issue-commit-linking.mdc`.
+- Commit subject: `feat(<scope>)[#<leaf>]: <summary>` — leaf number required. No Smart Commit.
+- Commit body (GitHub-tracked):
+    fixes #<leaf>                    # always
+    fixes #<parent>                  # one line per issue in CLOSE_PARENTS (omit when none)
+- FORBIDDEN: fixes #<parent> when parent not in CLOSE_PARENTS
+- See `07-issue-commit-linking.mdc`.
 - Infisical for env when needed (`infisical run --env=dev`)
 
 DB MIGRATIONS — MANDATORY (schema-first; no exceptions):
@@ -358,7 +374,7 @@ REQUIRED OUTPUT:
 3. GitHub In Review confirmation
 4. Summary (≤5 bullets)
 5. Changed files (absolute paths)
-6. Implementation commit: SHA + subject + body + paths
+6. Implementation commit: SHA + subject + body (`fixes #<leaf>` + `fixes #<parent>` per CLOSE_PARENTS) + paths
 7. Implementation status: complete | blocked | partial (NOT GitHub Done)
 8. Blockers or scope deviations
 ```
@@ -374,6 +390,7 @@ TARGET REPO: /home/michael/projects/slugbase
 WORK BRANCH: staging
 PLAN FILE: <path or n/a>
 SESSION ID: <same as execution>
+CLOSE_PARENTS: <same as execution prompt — [#8] | none>
 
 GITHUB SYNC — VERIFIER (include when execution prompt had execution variant):
 - MCP server: user-github (always preferred — see GITHUB TOOLS block); owner: mdg-labs; repo: slugbase; project: <PROJECT_NUMBER>
@@ -427,7 +444,7 @@ LAYER 3 — Logic review:
 3b. Doc contract — spec section deviations with file:line + fix hint
 3c. Security baseline — sessions (not JWT), no logged secrets, SSRF-safe egress, encrypted at-rest secrets, CSRF (03-security-baseline.mdc)
 3c2. Env vars — any new env var fully registered in Infisical + .env.example + schema + docs? (05-env-vars.mdc)
-3c3. Issue commit link — subject includes `[#N]` or `[P*-*]`; body includes `fixes #N` when task is tracked on GitHub; no Smart Commit commands (07-issue-commit-linking.mdc)
+3c3. Issue commit link — subject includes `[#N]` or `[P*-*]`; body includes `fixes #<leaf>` when task is tracked on GitHub; body includes `fixes #<parent>` only for parents in CLOSE_PARENTS; no Smart Commit commands (07-issue-commit-linking.mdc)
 3d. DB migrations — hand-written migration SQL or hand-created directories → FAIL
 3e. Stubs, TODO/FIXME, placeholder values, deployment-mode branches (`isCloud`) → FAIL
 
@@ -457,6 +474,7 @@ WORK BRANCH: orchestrator/<TASK-ID>
 WORKTREE: <path>
 BATCH_ID: <id>
 SESSION ID: <same as execution>
+CLOSE_PARENTS: <same as execution prompt — [#8] | none>
 
 GITHUB SYNC — VERIFIER (include when execution prompt had execution variant):
 - MCP server: user-github (always preferred — see GITHUB TOOLS block); owner: mdg-labs; repo: slugbase

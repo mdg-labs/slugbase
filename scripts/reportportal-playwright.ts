@@ -26,7 +26,13 @@ type ReportPortalPlaywrightConfig = {
   launchUuidPrintOutput: "STDOUT";
 };
 
-const E2E_LAUNCH = "SlugBase · E2E";
+const E2E_LAUNCH_PREFIX = "SlugBase · E2E";
+
+export function reportPortalPlaywrightLaunchName(
+  edition: PlaywrightEdition,
+): string {
+  return `${E2E_LAUNCH_PREFIX} · ${edition}`;
+}
 
 /** Playwright `--project` flag when a single edition is selected (e2e.sh passes this). */
 export function detectPlaywrightEdition(): PlaywrightEdition | null {
@@ -72,7 +78,7 @@ export function reportPortalPlaywrightReporterConfig(
     apiKey: env.apiKey,
     endpoint: reportPortalEndpoint(env.url),
     project: env.project,
-    launch: E2E_LAUNCH,
+    launch: reportPortalPlaywrightLaunchName(edition),
     mode: reportPortalMode(),
     attributes: reportPortalPlaywrightAttributes(edition),
     launchUuidPrint: true,

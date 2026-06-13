@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   detectPlaywrightEdition,
   reportPortalPlaywrightAttributes,
+  reportPortalPlaywrightLaunchName,
   reportPortalPlaywrightReporter,
   reportPortalPlaywrightReporterConfig,
 } from "./reportportal-playwright.js";
@@ -72,16 +73,16 @@ describe("reportPortalPlaywrightReporterConfig", () => {
       apiKey: REQUIRED_ENV.REPORTPORTAL_API_KEY,
       endpoint: "https://reportportal.example.com/api/v2",
       project: REQUIRED_ENV.REPORTPORTAL_PROJECT,
-      launch: "SlugBase · E2E",
+      launch: reportPortalPlaywrightLaunchName("hosted"),
       mode: "DEFAULT",
       attributes: reportPortalPlaywrightAttributes("hosted"),
       launchUuidPrint: true,
       launchUuidPrintOutput: "STDOUT",
     });
 
-    expect(
-      reportPortalPlaywrightReporterConfig("self-hosted")?.attributes,
-    ).toContainEqual({ key: "edition", value: "self-hosted" });
+    expect(reportPortalPlaywrightReporterConfig("self-hosted")?.launch).toBe(
+      reportPortalPlaywrightLaunchName("self-hosted"),
+    );
   });
 });
 
@@ -103,7 +104,7 @@ describe("reportPortalPlaywrightReporter", () => {
     expect(reporters).toHaveLength(1);
     expect(reporters[0]?.[0]).toBe("@reportportal/agent-js-playwright");
     expect(reporters[0]?.[1]).toMatchObject({
-      launch: "SlugBase · E2E",
+      launch: reportPortalPlaywrightLaunchName("hosted"),
       project: REQUIRED_ENV.REPORTPORTAL_PROJECT,
     });
   });

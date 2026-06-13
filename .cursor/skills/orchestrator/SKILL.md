@@ -118,7 +118,7 @@ When building a prompt:
 4. Explicit READ / WRITE scope with absolute paths
 5. Session ID: `<TASK-ID>-<YYYYMMDD>-<4hex>` — same for execution + verifier
 6. **Lane** (`S` or `P`) and git context (branch, worktree, `STAGING_BASE_SHA` for Lane P)
-7. **Epic context** — if parent epic (e.g. #8), note parent issue number and sibling deps in prompt header
+7. **Epic context** — if parent epic (e.g. #8), note `PARENT` issue number, sibling deps, and computed `CLOSE_PARENTS` in prompt header (see § GitHub epic batches)
 8. **GITHUB TOOLS block** — **mandatory in every GITHUB SYNC prompt** (copy verbatim from [prompt-templates.md](prompt-templates.md)) — tells sub-agents which tool (MCP vs CLI) to use for each operation
 9. **GITHUB SYNC block** — when task(s) are on the board, include role-specific blocks from [github-board.md](github-board.md):
    - **Execution prompt:** Set project Status → "In Progress" via GraphQL `updateProjectV2ItemFieldValue` — **never** set Done; when subtask, also list parent epic issue number
@@ -135,6 +135,19 @@ When user asks to implement an **epic** (parent issue with sub-issues):
 2. Read epic body **Suggested implementation order** and dependency prose.
 3. Build a **batch plan** (ordered list of leaf tasks); split cross-domain work by Lane rules.
 4. Track epic parent: execution adds **In Progress** label to epic when any subtask starts; orchestrator or **last subtask verifier** sets epic board Status to Done only when all in-scope subtasks PASS.
+5. **Compute `CLOSE_PARENTS`** before each leaf dispatch and pass to execution + verifier prompts:
+
+   - **In-scope siblings** = sub-issues in the current epic/batch plan (or all open children if user said "implement #8 epic" without narrowing).
+   - For leaf `L` with parent chain `P1 → P2 → … → Pn`, include `Pi` in `CLOSE_PARENTS` when every other in-scope sibling of `L` under `Pi` is already **board Done** (or not in the remaining batch).
+   - Pass `CLOSE_PARENTS: [#P, …]` or `none` — execution agents must not guess.
+
+   ```text
+   # Example: #1 Auth epic; #13 is last UI child (#10) but #1 still has open branches
+   CLOSE_PARENTS: [#10]
+
+   # Later: last remaining child under #1
+   CLOSE_PARENTS: [#1]
+   ```
 
 ### Sub-agent types
 
@@ -249,11 +262,22 @@ Same flow on **`orchestrator/<TASK-ID>` only** — one implementation commit per
 
 ### Commit messages
 
-Every task commit must include `[#N]` or `[P*-*]` — see `.cursor/rules/07-github-commit-linking.mdc`.
+Every task commit must include `[#N]` or `[P*-*]` — see `.cursor/rules/07-issue-commit-linking.mdc`.
 
 ```
 feat(auth)[#12]: implement server-side session store with configurable TTL
 fix(go)[#31]: handle missing slug gracefully in redirect endpoint
+```
+
+**Epic subtasks:** subject uses **leaf** number only (`[#<leaf>]`). Commit body always includes `fixes #<leaf>`. Add `fixes #<parent>` (one line per parent) **only** for issues listed in `CLOSE_PARENTS` from the orchestrator prompt — never on intermediate subtasks.
+
+```text
+# Intermediate subtask under epic #8
+fixes #11
+
+# Final in-scope child of epic #8
+fixes #12
+fixes #8
 ```
 
 Do **not** commit `.cursor/skills/agent-memory/**` — gitignored local notes only.
@@ -288,7 +312,7 @@ Mark `n/a` for commands not yet defined. Stop if any defined check fails. Use In
 - 3b. Doc contract — spec `§` deviations with file:line + fix hint
 - 3c. Security baseline — server-side sessions (not JWT), no logged secrets, SSRF-safe egress, encrypted at-rest secrets, CSRF exempt list not widened; no deployment-mode branches (03-security-baseline.mdc)
 - 3c2. Env vars — any new var fully registered (Infisical + .env.example + schema + docs)? (05-env-vars.mdc)
-- 3c3. GitHub commit link — subject includes `[#N]` or `[P*-*]`; no unrelated issue references (07-github-commit-linking.mdc)
+- 3c3. GitHub commit link — subject includes `[#N]` or `[P*-*]`; body includes `fixes #<leaf>` when task is tracked on GitHub; body includes `fixes #<parent>` only for parents in `CLOSE_PARENTS`; no unrelated issue references (07-issue-commit-linking.mdc)
 - 3c4. Board Status only — agents must never set GitHub issue state (open/closed); all status management must be via project board Status (In Progress / In Review / Done / Ready); verifying code or comments that call `issue_state`, `close()`, `reopen()` on GitHub issues → **FAIL**
 - 3d. DB migrations — hand-written migration SQL or hand-created migration directories → **FAIL**
 - 3e. Stubs, TODO/FIXME, placeholder values, `isCloud`/deployment-mode branches → **FAIL**
@@ -487,6 +511,8 @@ Orchestrator may read/write. Sub-agents may read; write only if task WRITE SCOPE
 - Blanket `git add .` / `-A`
 - Committing `.env` or secrets
 - **Task commits without `[#N]` or `[P*-*]` in subject** when GitHub sync was in scope
+- **`fixes #<epic>` on non-final subtask** — premature epic auto-close on `main`
+- **Omitting `fixes #<parent>` when `CLOSE_PARENTS` lists the parent** — epic stays open after release
 - **Execution agent hand-writing DB migrations** — schema change → migration CLI only (see DB MIGRATIONS block in every execution prompt)
 - **Orchestrator omitting DB MIGRATIONS block** from an execution prompt
 - **Deployment-mode branches in code** — `isCloud`, `SLUGBASE_MODE` checks are forbidden; use entitlements engine (spec §15)

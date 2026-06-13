@@ -109,20 +109,27 @@ jobs:
       - name: Start API
         env:
           PORT: '4001'
+          # Override Infisical staging URLs — e2e services listen on localhost.
+          PUBLIC_REGISTRATION: 'true'
+          SESSION_SECRET: 'ci-e2e-session-secret-at-least-32-chars-long!!'
+          ENCRYPTION_KEY: 'ci-e2e-encryption-key-at-least-32-chars-long!!'
+          APP_BASE_URL: http://localhost:4001
+          FRONTEND_ORIGIN: http://localhost:4002
         run: |
-          node packages/backend/dist/main.js &
+          node packages/backend/dist/main.js >> hosted-services-api.log 2>&1 &
           echo "API_PID=$!" >> "$GITHUB_ENV"
 
       - name: Start Web (React Router serve)
         env:
           PORT: '4002'
+          API_BASE_URL: http://localhost:4001
         run: |
-          npx react-router-serve packages/web/build/server/index.js &
+          (cd packages/web && npx react-router-serve build/server/index.js) >> hosted-services-web.log 2>&1 &
           echo "WEB_PID=$!" >> "$GITHUB_ENV"
 
       - name: Start Marketing (static serve)
         run: |
-          npx serve packages/marketing/dist -l 4003 &
+          npx serve packages/marketing/dist -l 4003 >> hosted-services-marketing.log 2>&1 &
           echo "MARKETING_PID=$!" >> "$GITHUB_ENV"
 
       - name: Wait for health endpoints
@@ -148,21 +155,31 @@ jobs:
           set -o pipefail
           pnpm e2e:direct --project=hosted 2>&1 | tee rp-e2e-hosted.log
 
+      - name: Extract ReportPortal launch UUID (hosted)
+        if: always()
+        run: bash scripts/reportportal-ci-summary.sh parse-uuids rp-e2e-hosted.log > rp-e2e-hosted.uuid || true
+
       - name: Upload ReportPortal launch log (hosted)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: reportportal-e2e-hosted-log
-          path: rp-e2e-hosted.log
+          path: |
+            rp-e2e-hosted.log
+            rp-e2e-hosted.uuid
+            hosted-services-api.log
+            hosted-services-web.log
           if-no-files-found: ignore
 
       - name: Cleanup
         if: always()
         run: |
-          # Stop backgrounded node/serve processes
-          kill "${API_PID:-}" 2>/dev/null || true
-          kill "${WEB_PID:-}" 2>/dev/null || true
-          kill "${MARKETING_PID:-}" 2>/dev/null || true
+          # Stop backgrounded node/serve process trees (npx/react-router-serve spawn children)
+          for pid in "${API_PID:-}" "${WEB_PID:-}" "${MARKETING_PID:-}"; do
+            [ -n "$pid" ] || continue
+            pkill -P "$pid" 2>/dev/null || true
+            kill "$pid" 2>/dev/null || true
+          done
           # Prune Docker build cache (keeps volumes intact for the job VM)
           docker builder prune --force 2>/dev/null || true
 
@@ -196,6 +213,23 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
+        with:
+          version: 9.15.4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.12
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -236,6 +270,8 @@ jobs:
             -e ENCRYPTION_KEY='ci-e2e-encryption-key-at-least-32-chars-long!!' \
             -e APP_BASE_URL='http://localhost:3000' \
             -e FRONTEND_ORIGIN='http://localhost:3000' \
+            -e API_BASE_URL='http://localhost:3000' \
+            -e PUBLIC_REGISTRATION=true \
             slugbase-e2e:self-hosted
 
       - name: Wait for health endpoint
@@ -251,12 +287,18 @@ jobs:
           set -o pipefail
           pnpm e2e:direct --project=self-hosted 2>&1 | tee rp-e2e-self-hosted.log
 
+      - name: Extract ReportPortal launch UUID (self-hosted)
+        if: always()
+        run: bash scripts/reportportal-ci-summary.sh parse-uuids rp-e2e-self-hosted.log > rp-e2e-self-hosted.uuid || true
+
       - name: Upload ReportPortal launch log (self-hosted)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: reportportal-e2e-self-hosted-log
-          path: rp-e2e-self-hosted.log
+          path: |
+            rp-e2e-self-hosted.log
+            rp-e2e-self-hosted.uuid
           if-no-files-found: ignore
 
       - name: Cleanup — container
@@ -295,8 +337,23 @@ jobs:
       - name: Record ReportPortal e2e launches
         if: always()
         run: |
-          bash scripts/reportportal-ci-summary.sh record-log "e2e · hosted" rp-logs/rp-e2e-hosted.log
-          bash scripts/reportportal-ci-summary.sh record-log "e2e · self-hosted" rp-logs/rp-e2e-self-hosted.log
+          # Prefer dedicated UUID files (avoids GitHub log secret masking in tee output).
+          if [ -s rp-logs/rp-e2e-hosted.uuid ]; then
+            while IFS= read -r uuid; do
+              [ -n "$uuid" ] || continue
+              RP_LAUNCH_UUID="$uuid" bash scripts/reportportal-ci-summary.sh record-env "e2e · hosted"
+            done < rp-logs/rp-e2e-hosted.uuid
+          else
+            bash scripts/reportportal-ci-summary.sh record-log "e2e · hosted" rp-logs/rp-e2e-hosted.log
+          fi
+          if [ -s rp-logs/rp-e2e-self-hosted.uuid ]; then
+            while IFS= read -r uuid; do
+              [ -n "$uuid" ] || continue
+              RP_LAUNCH_UUID="$uuid" bash scripts/reportportal-ci-summary.sh record-env "e2e · self-hosted"
+            done < rp-logs/rp-e2e-self-hosted.uuid
+          else
+            bash scripts/reportportal-ci-summary.sh record-log "e2e · self-hosted" rp-logs/rp-e2e-self-hosted.log
+          fi
 
       - name: ReportPortal job summary
         if: always()

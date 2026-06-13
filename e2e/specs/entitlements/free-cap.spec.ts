@@ -2,6 +2,9 @@ import { test, expect } from "../../fixtures/auth.js";
 import { loginAsWorker } from "../../helpers/worker-login.js";
 
 test.describe("Free bookmark cap", () => {
+  // Mutates workspace plan and bookmark count — isolate from parallel specs on the same worker.
+  test.describe.configure({ mode: "serial" });
+
   test("free workspace at cap shows bookmark-cap-banner and upgrade CTA", async ({
     page,
   }, testInfo) => {
@@ -61,8 +64,10 @@ test.describe("Free bookmark cap", () => {
       }
     });
 
-    // ── Phase 4: Navigate to bookmarks ──────────────────────────────
+    // ── Phase 4: Navigate to bookmarks (reload so app-layout picks up plan + count) ─
     await page.goto("/bookmarks");
+    await page.waitForSelector('[data-testid="bookmark-list-page"]');
+    await page.reload();
     await page.waitForSelector('[data-testid="bookmark-list-page"]');
 
     // ── Phase 5: Verify the cap banner is shown ─────────────────────
