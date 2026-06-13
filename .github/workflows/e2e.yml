@@ -169,7 +169,7 @@ jobs:
     if: >
       !cancelled() && (
         github.event_name != 'workflow_call'
-        || inputs.mode == ''            # workflow_call without mode = run everything
+        || inputs.mode == ''
         || inputs.mode == 'self-hosted'
       )
     runs-on: ubuntu-latest
