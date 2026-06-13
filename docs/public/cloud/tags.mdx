@@ -1,8 +1,99 @@
 ---
-title: "Tags"
-description: "Label bookmarks with tags for flexible filtering."
+title: "Label bookmarks with tags"
+description: "Create private tags, filter bookmarks by tag, and use tag overview on SlugBase Cloud."
 ---
 
-## Overview
+## What you'll accomplish
 
-This page is a navigation stub. Full content will be added in a follow-up authoring task.
+After this guide, you can create tags, apply them to bookmarks, and filter your library by tag.
+
+## Prerequisites
+
+- Signed in to SlugBase Cloud
+- Active workspace selected
+
+## About tags
+
+**Tags** are private labels you assign to your own bookmarks. Each member's tags are independent — tags are never shared between members, even on Team plans.
+
+Use tags alongside folders: folders group bookmarks into containers; tags add flexible cross-cutting labels (for example, `reference`, `urgent`, `read-later`).
+
+<!-- screenshot:tags-list-overview -->
+
+## Create a tag
+
+<Steps>
+  <Step title="Open Tags">
+    From the sidebar, select **Tags**.
+  </Step>
+  <Step title="New tag">
+    Click **New tag**, enter a name, and click **Create tag**.
+  </Step>
+  <Step title="Optional: color">
+    Set an optional color when creating or renaming a tag.
+  </Step>
+</Steps>
+
+You can also create tags from the bookmark modal's **Tags** field or from the command palette (**New tag**).
+
+## Apply tags to bookmarks
+
+<Steps>
+  <Step title="Edit a bookmark">
+    Open **Edit** on a bookmark from the bookmarks list.
+  </Step>
+  <Step title="Add tags">
+    In the **Tags** field, search for existing tags or type a new name to create one.
+  </Step>
+  <Step title="Save">
+    Click **Save changes**.
+  </Step>
+</Steps>
+
+For multiple bookmarks, use bulk selection and choose **Tags** to add or remove tags across the selection.
+
+## Browse and filter by tag
+
+On the **Tags** page:
+
+- **Search** tag names
+- **Sort** alphabetically, by usage, or by recently created
+- Click a tag to open a detail panel with bookmark count and a link to **View all in Bookmarks**
+
+On the **Bookmarks** page, use the **Tags** filter to show bookmarks matching one or more tags.
+
+The dashboard **Most used tags** section surfaces your frequently applied tags.
+
+## Rename or delete a tag
+
+<Steps>
+  <Step title="Open tag actions">
+    From the tags list, choose **Rename tag** or **Delete tag**.
+  </Step>
+  <Step title="Rename">
+    Enter the new name and save.
+  </Step>
+  <Step title="Delete">
+    Confirm deletion. The tag is removed from all bookmarks that used it — bookmarks themselves are not deleted.
+  </Step>
+</Steps>
+
+## Verify it worked
+
+The tag appears on the Tags page with an updated usage count. Filtering bookmarks by that tag shows the correct set.
+
+## Troubleshooting
+
+### I cannot find a tag on another member's bookmarks
+
+Tags are private to each member. You only see and manage your own tags.
+
+### Deleting a tag removed labels but not bookmarks
+
+That is expected — delete tag removes the label from bookmarks without deleting the bookmarks.
+
+## Related topics
+
+- [Bookmarks](/cloud/bookmarks) — apply tags in the bookmark modal
+- [Folders](/cloud/folders) — structural organization alongside tags
+- [Search and import](/cloud/search-and-import) — import can create tags from export data
