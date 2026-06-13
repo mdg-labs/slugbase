@@ -169,6 +169,11 @@ _added: 2026-06-10_
 Unit, integration, and e2e tests write Allure JSON under `allure-results/`. Local viewing: `npx allure serve allure-results`. CI publishes to GitHub Pages via `ci.yml` and `e2e.yml` (no env vars). ReportPortal removed in #364.
 _added: 2026-06-13_
 
+## Infisical secrets delete — use --type (2026-06-13)
+
+`infisical secrets get KEY` without `--type` merges layers and can false-positive "present" after shared secrets are deleted. For existence/delete checks use `--type=shared` and `--type=personal` separately. Delete shared: `infisical secrets delete KEY --env=ENV --type=shared`.
+_added: 2026-06-13_
+
 ## localStorage view-mode pollution in BookmarkListPage tests (2026-06-09)
 
 BookmarkListPage tests share a jsdom environment. Prior tests that set `view: "table"` write to `localStorage`, which persists into subsequent tests expecting grid view. **Fix:** add `localStorage.clear()` in `beforeEach`. The `ECONNREFUSED 127.0.0.1:3000` warning in the test output is pre-existing and unrelated.
