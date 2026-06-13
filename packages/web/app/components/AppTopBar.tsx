@@ -141,6 +141,19 @@ function useBreadcrumbs(): Breadcrumb {
       sub: t("tags.list.title"),
     };
   }
+  if (pathname === "/go" || pathname.startsWith("/go/")) {
+    const slugIcon = (
+      <svg aria-hidden className="h-[15px] w-[15px] shrink-0 text-accent-text" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+        <path d="M4 8h16M4 16h16" strokeLinecap="round" />
+        <path d="M8 4v16M16 4v16" strokeLinecap="round" />
+      </svg>
+    );
+    return {
+      icon: slugIcon,
+      label: t("app.shell.nav.go"),
+      sub: pathname === "/go" ? t("go.forwarding.subtitle") : null,
+    };
+  }
   if (pathname.startsWith("/settings")) {
     return { icon: settingsIcon, label: t("app.shell.nav.settings"), sub: null };
   }

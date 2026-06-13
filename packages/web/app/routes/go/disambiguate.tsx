@@ -243,7 +243,7 @@ export default function GoDisambiguatePage() {
             {t("go.disambig.open_action")}
           </button>
           <Link
-            to="/settings/account?tab=preferences"
+            to="/go"
             className="text-[length:var(--text-small)] text-fg-faint hover:text-fg-subtle"
           >
             {t("go.disambig.manage_prefs")}

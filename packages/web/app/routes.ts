@@ -39,8 +39,10 @@ export default [
 
   // Existing API proxy routes with specific request handling
   route("api/search", "routes/api/search.ts"),
-  route("api/go/:slug", "routes/api/go.ts"),
+  route("api/go/preferences/:id", "routes/api/go-preferences-item.ts"),
+  route("api/go/preferences", "routes/api/go-preferences.ts"),
   route("api/go/:slug/choose", "routes/api/go-choose.ts"),
+  route("api/go/:slug", "routes/api/go.ts"),
   route("api/import/:kind", "routes/api/import.ts"),
 
   // Raw backend list/mutation proxies — used by client-side fetch
@@ -58,7 +60,8 @@ export default [
     route("bookmarks", "routes/bookmarks/index.tsx"),
     route("folders", "routes/folders/index.tsx"),
     route("tags", "routes/tags/index.tsx"),
-    route("go/:slug", "routes/go/index.tsx"),
+    route("go", "routes/go/forwarding.tsx"),
+    route("go/:slug", "routes/go/disambiguate.tsx"),
     layout("routes/settings/settings-layout.tsx", [
       route("settings/account", "routes/settings/account/index.tsx"),
       route("settings/workspace", "routes/settings/workspace/index.tsx"),
