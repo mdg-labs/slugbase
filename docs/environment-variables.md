@@ -120,7 +120,7 @@ docker run -d \
   ghcr.io/<owner>/slugbase:latest
 ```
 
-CI builds the image with all `VITE_*` keys from Infisical as `--build-arg` (see [`.github/scripts/build-push-ghcr.sh`](../.github/scripts/build-push-ghcr.sh)).
+CI builds the image with an allowlisted subset of `VITE_*` keys from Infisical as `--build-arg` (see [`.github/scripts/build-push-ghcr.sh`](../.github/scripts/build-push-ghcr.sh)). **`VITE_SENTRY_*` keys are never passed** — hosted error-reporting DSNs must not be baked into the self-host client bundle.
 
 ### URL wiring (self-hosted)
 
@@ -344,6 +344,8 @@ Stored in Infisical `staging` / `prod`. Injected into GitHub Actions runners onl
 
 ### 9. Self-hosted — runtime and image build
 
+**Do not bake hosted telemetry at image build time.** Self-host operators and CI must never pass `VITE_SENTRY_*` (or other hosted-only telemetry keys) as Docker `--build-arg` values. The GHCR publish script uses an explicit allowlist that omits `VITE_SENTRY_*`; local/e2e builds mirror the same rule. Runtime `SENTRY_DSN` on the API container is optional and separate from client build-time keys — leave both empty for a fully no-op error-reporting install (spec §11.7).
+
 | Key | What it does | Hosted | Self-host | Required | Secret | When set | Example value |
 |---|---|---|---|---|---|---|---|
 | `SERVE_WEB_CLIENT` | Serve web from API container; controls migration dispatch (true = startup migrations) | No | Yes | Optional | No | Runtime | `true` (Dockerfile preset) |
@@ -353,7 +355,7 @@ Stored in Infisical `staging` / `prod`. Injected into GitHub Actions runners onl
 | `VITE_OIDC_ADMIN_UI` | Show OIDC workspace panel | No | Build only | Optional | No | Build | `true` |
 | `VITE_AI_BYO_CREDENTIAL` | Show BYO AI credential form | No | Build only | Optional | No | Build | `true` |
 | `VITE_APP_BASE_URL` | Public URL for OIDC display | No | Build only | Optional | No | Build | `https://bookmarks.example.com` |
-| `VITE_SENTRY_DSN` | Client error reporting | No | Optional | Optional | No | Build | Empty (default) |
+| `VITE_SENTRY_DSN` | Client error reporting — **must remain unset at self-host image build** | No | No (build) | No | No | Build | Empty (default; do not bake) |
 | `VITE_UMAMI_HOST` | Client analytics | No | Optional | Optional | No | Build | Empty (default) |
 | `VITE_UMAMI_WEBSITE_ID` | Client analytics site id | No | Optional | Optional | No | Build | Empty (default) |
 

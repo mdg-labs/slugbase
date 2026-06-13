@@ -20,11 +20,31 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
+# Self-host image: only pass VITE_* keys safe to bake into the combined bundle (spec §14.2).
+# Never pass VITE_SENTRY_* — CI Infisical env includes hosted telemetry for Worker builds.
+SELF_HOST_VITE_BUILD_ARGS=(
+  VITE_BILLING_ENABLED
+  VITE_PLAN_PRICE_PERSONAL_MONTHLY
+  VITE_PLAN_PRICE_PERSONAL_YEARLY
+  VITE_PLAN_PRICE_TEAM_SEAT
+  VITE_PLAN_PRICE_SUPPORTER
+  VITE_SUPPORTER_PROMOTION_END
+  VITE_TEAM_BASE_SEATS
+  VITE_FREE_BOOKMARK_CAP
+  VITE_MAIL_ADMIN_UI
+  VITE_OIDC_ADMIN_UI
+  VITE_AI_BYO_CREDENTIAL
+  VITE_APP_BASE_URL
+  VITE_UMAMI_HOST
+  VITE_UMAMI_WEBSITE_ID
+)
+
 build_args=()
-while IFS='=' read -r key value; do
-  [[ "${key}" == VITE_* ]] || continue
-  build_args+=(--build-arg "${key}=${value}")
-done < <(env | grep '^VITE_' | sort)
+for key in "${SELF_HOST_VITE_BUILD_ARGS[@]}"; do
+  if [[ -n "${!key-}" ]]; then
+    build_args+=(--build-arg "${key}=${!key}")
+  fi
+done
 
 tags=(-t "${IMAGE}:${TAG}")
 if [[ "${PUSH_LATEST}" == "true" ]]; then

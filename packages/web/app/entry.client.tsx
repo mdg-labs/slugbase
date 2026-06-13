@@ -16,6 +16,8 @@ const replaysSessionSampleRate = Number(
   import.meta.env.VITE_SENTRY_REPLAY_SAMPLE_RATE ?? "0.25",
 );
 
+const routerOnError = dsn ? Sentry.sentryOnError : undefined;
+
 if (dsn) {
   Sentry.init({
     dsn,
@@ -55,7 +57,7 @@ startTransition(() => {
   hydrateRoot(
     document,
     <StrictMode>
-      <HydratedRouter onError={Sentry.sentryOnError} />
+      <HydratedRouter onError={routerOnError} />
     </StrictMode>,
   );
 });
