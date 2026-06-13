@@ -12,12 +12,13 @@ import {
   UnprocessableEntityException,
 } from "@nestjs/common";
 import { renderWorkspaceInvitationEmail } from "@slugbase/email-templates";
-import type { MailService } from "@slugbase/shared-types";
+import type { MailService, ErrorReportingService } from "@slugbase/shared-types";
 
 import { AccountsService } from "../accounts/accounts.service.js";
 import { ConfigService } from "../config/config.service.js";
 import { DbService } from "../db/db.service.js";
 import { EntitlementsService } from "../entitlements/entitlements.service.js";
+import { ERROR_REPORTING } from "../error-reporting/error-reporting.tokens.js";
 import { MAIL } from "../mail/mail.tokens.js";
 import { SessionService } from "../sessions/session.service.js";
 import { WorkspaceMemberRepository } from "../workspaces/workspace-member.repository.js";
@@ -89,6 +90,7 @@ export class InvitationsService {
     @Inject(SessionService) private readonly sessions: SessionService,
     @Inject(ConfigService) private readonly config: ConfigService,
     @Inject(MAIL) private readonly mail: MailService,
+    @Inject(ERROR_REPORTING) private readonly errorReporting: ErrorReportingService,
   ) {
     this.invitationRepo = new InvitationRepository(db.getOrm());
     this.workspaceRepo = new WorkspaceRepository(db.getOrm());
@@ -163,6 +165,10 @@ export class InvitationsService {
           type: "workspace_invitation",
         });
       } catch (err) {
+        this.errorReporting.captureException(err, {
+          tags: { service: "invitations", operation: "createInvitationEmail" },
+          extra: { workspaceId },
+        });
         this.logger.error(
           "Failed to send invitation email - invitation was created",
           { workspaceId, invitedEmail: dto.email, err },
@@ -329,6 +335,10 @@ export class InvitationsService {
           type: "workspace_invitation",
         });
       } catch (err) {
+        this.errorReporting.captureException(err, {
+          tags: { service: "invitations", operation: "resendInvitationEmail" },
+          extra: { workspaceId: invitation.workspaceId },
+        });
         this.logger.error(
           "Failed to send invitation email",
           { workspaceId: invitation.workspaceId, invitedEmail: invitation.invitedEmail, err },

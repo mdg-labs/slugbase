@@ -9,7 +9,15 @@ import { fileURLToPath } from "node:url";
 import { AppModule } from "./app.module.js";
 import { ConfigService } from "./config/config.service.js";
 import { runMigrations } from "./db/migrate/run-migrations.js";
-import { validateEnvConfig, resolveMigrationDatabaseUrl } from "./config/env.schema.js";
+import {
+  validateEnvConfig,
+  resolveMigrationDatabaseUrl,
+} from "./config/env.schema.js";
+import {
+  parseSentryLogLevel,
+  resolveNestLogLevels,
+} from "./logging/sentry-log-config.js";
+import { SentryLoggerService } from "./logging/sentry-logger.service.js";
 
 /**
  * Run DB migrations only in the self-hosted deployment mode (SERVE_WEB_CLIENT=true).
@@ -26,8 +34,20 @@ export async function bootstrap(): Promise<void> {
   const startupConfig = validateEnvConfig(process.env);
   await runMigrationsIfNeeded(startupConfig);
 
+  const nestLogLevels = resolveNestLogLevels({
+    sentryLogLevel: parseSentryLogLevel(startupConfig.SENTRY_LOG_LEVEL),
+    nodeEnv: startupConfig.nodeEnv,
+  });
+
+  const sentryLogger = startupConfig.SENTRY_DSN
+    ? new SentryLoggerService()
+    : undefined;
+  if (sentryLogger) {
+    sentryLogger.setLogLevels(nestLogLevels);
+  }
+
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
-    logger: ["error", "warn"],
+    logger: sentryLogger ?? nestLogLevels,
     rawBody: true,
   });
 

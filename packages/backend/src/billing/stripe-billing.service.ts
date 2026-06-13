@@ -13,9 +13,11 @@ import {
   type BillingService,
   type BillingSubscriptionLookup,
   type BillingSubscriptionState,
+  type ErrorReportingService,
 } from "@slugbase/shared-types";
 
 import { ConfigService } from "../config/config.service.js";
+import { ERROR_REPORTING } from "../error-reporting/error-reporting.tokens.js";
 import { STRIPE_CLIENT } from "./billing.tokens.js";
 import {
   checkoutSessionFromStripeObject,
@@ -61,6 +63,7 @@ export class StripeBillingService implements BillingService {
   constructor(
     @Inject(ConfigService) private readonly config: ConfigService,
     @Inject(STRIPE_CLIENT) private readonly stripe: StripeBillingClient,
+    @Inject(ERROR_REPORTING) private readonly errorReporting: ErrorReportingService,
   ) {}
 
   isAvailable(): boolean {
@@ -118,6 +121,10 @@ export class StripeBillingService implements BillingService {
       return { checkoutUrl: session.url, sessionId: session.id };
     } catch (error) {
       if (error instanceof BillingProviderError) throw error;
+      this.errorReporting.captureException(error, {
+        tags: { service: "stripe-billing", operation: "createCheckoutSession" },
+        extra: { workspaceId: request.workspaceId },
+      });
       throw new BillingProviderError("Failed to create Stripe checkout session", error);
     }
   }
@@ -132,6 +139,9 @@ export class StripeBillingService implements BillingService {
       });
       return { portalUrl: session.url };
     } catch (error) {
+      this.errorReporting.captureException(error, {
+        tags: { service: "stripe-billing", operation: "createPortalSession" },
+      });
       throw new BillingProviderError("Failed to create Stripe billing portal session", error);
     }
   }
@@ -163,6 +173,10 @@ export class StripeBillingService implements BillingService {
       );
       return mapStripeSubscriptionToState(lookup.workspaceId, subscription);
     } catch (error) {
+      this.errorReporting.captureException(error, {
+        tags: { service: "stripe-billing", operation: "getSubscriptionState" },
+        extra: { workspaceId: lookup.workspaceId },
+      });
       throw new BillingProviderError("Failed to retrieve Stripe subscription", error);
     }
   }
@@ -193,6 +207,10 @@ export class StripeBillingService implements BillingService {
       if (error instanceof BillingSeatFloorError || error instanceof BillingProviderError) {
         throw error;
       }
+      this.errorReporting.captureException(error, {
+        tags: { service: "stripe-billing", operation: "updateSeatQuantity" },
+        extra: { workspaceId: request.workspaceId },
+      });
       throw new BillingProviderError("Failed to update Stripe seat quantity", error);
     }
   }

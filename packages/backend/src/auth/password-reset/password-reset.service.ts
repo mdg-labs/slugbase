@@ -2,11 +2,12 @@ import { createHash, randomBytes } from "node:crypto";
 
 import { Inject, Injectable, Logger, UnprocessableEntityException } from "@nestjs/common";
 import { renderPasswordResetEmail } from "@slugbase/email-templates";
-import type { MailService } from "@slugbase/shared-types";
+import type { MailService, ErrorReportingService } from "@slugbase/shared-types";
 
 import { AccountsService } from "../../accounts/accounts.service.js";
 import { ConfigService } from "../../config/config.service.js";
 import { DbService } from "../../db/db.service.js";
+import { ERROR_REPORTING } from "../../error-reporting/error-reporting.tokens.js";
 import { MAIL } from "../../mail/mail.tokens.js";
 import { SessionService } from "../../sessions/session.service.js";
 import { PasswordResetTokenRepository } from "./password-reset-token.repository.js";
@@ -60,6 +61,7 @@ export class PasswordResetService {
     @Inject(ConfigService) private readonly config: ConfigService,
     @Inject(MAIL) private readonly mail: MailService,
     @Inject(SessionService) private readonly sessions: SessionService,
+    @Inject(ERROR_REPORTING) private readonly errorReporting: ErrorReportingService,
   ) {
     this.tokenRepo = new PasswordResetTokenRepository(db.getOrm());
   }
@@ -93,23 +95,34 @@ export class PasswordResetService {
     });
 
     if (this.mail.isAvailable()) {
-      await this.mail.send({
-        to: email,
-        subject: "Reset your SlugBase password",
-        text: [
-          "You requested a password reset for your SlugBase account.",
-          "",
-          "Click the link below to set a new password:",
-          resetUrl,
-          "",
-          "This link expires in 1 hour.",
-          "",
-          "If you did not request a password reset, you can safely ignore this email.",
-          "Your password will not be changed.",
-        ].join("\n"),
-        html: renderPasswordResetEmail({ resetUrl }),
-        type: "password_reset",
-      });
+      try {
+        await this.mail.send({
+          to: email,
+          subject: "Reset your SlugBase password",
+          text: [
+            "You requested a password reset for your SlugBase account.",
+            "",
+            "Click the link below to set a new password:",
+            resetUrl,
+            "",
+            "This link expires in 1 hour.",
+            "",
+            "If you did not request a password reset, you can safely ignore this email.",
+            "Your password will not be changed.",
+          ].join("\n"),
+          html: renderPasswordResetEmail({ resetUrl }),
+          type: "password_reset",
+        });
+      } catch (err) {
+        this.errorReporting.captureException(err, {
+          tags: { service: "password-reset", operation: "forgotPassword" },
+          extra: { userId: account.id },
+        });
+        this.logger.error("Failed to send password reset email", {
+          userId: account.id,
+          err,
+        });
+      }
     } else {
       this.logger.warn(
         "Mail transport unavailable - password reset token created but email not sent",
