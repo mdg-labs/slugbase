@@ -63,6 +63,7 @@ Per-IP **and** per-account where applicable; response 429.
 | Workspaces per Free account | 1 | *fixed (entitlement)* | decision #30 |
 | Free: AI / team sharing / audit log | off | *fixed (entitlement)* | §12.2 |
 | Personal / Team / supporter: bookmarks | unlimited | *fixed* | §12.1 |
+| `TEAM_MIN_SEATS` | **2** | *fixed* | decision #17; Team checkout and subscription floor (§12.2) |
 | Downgrade grace period | 7 days after period end | config | then archive overflow (§12.5) |
 | Archive selection rule | keep most-recently-**accessed**; tiebreak most-recently-**created**; archive remainder over cap | config | deterministic, documented (§12.5) |
 | AI suggestion cache TTL | 30 days | config | keyed by (workspace, user, canonical URL, output language) (§11.2) |

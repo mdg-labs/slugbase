@@ -36,6 +36,9 @@ function readPositiveInt(value: string | undefined, fallback: number): number {
 
 const DEFAULT_FREE_BOOKMARK_CAP = 50;
 
+/** Team plan minimum seats at checkout and while subscribed (spec §12.2, decision #17). */
+export const TEAM_MIN_SEATS = 2;
+
 /** Avoid hanging Vitest/CI when the pricing API is slow or behind Access. */
 const PRICING_API_FETCH_TIMEOUT_MS = 3_000;
 

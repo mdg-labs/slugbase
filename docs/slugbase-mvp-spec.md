@@ -412,7 +412,7 @@ The hosted service offers:
 
 - **Free:** A capped tier. Up to **50 bookmarks per workspace**; AI suggestions unavailable; no team sharing or team administration; no audit log; **an account may own exactly one workspace**. The entry point.
 - **Personal:** A paid individual tier. Unlimited bookmarks; AI suggestions available; single-user (no team sharing/administration); **a paid entitlement is required to create/own more than one workspace**.
-- **Team:** A paid collaborative tier. Unlimited bookmarks; AI suggestions available; team sharing and team administration; member invitations; audit log; a per-seat price with no minimum — seats are added or removed as team members join or leave.
+- **Team:** A paid collaborative tier. Unlimited bookmarks; AI suggestions available; team sharing and team administration; member invitations; audit log; **per-seat pricing with a minimum of 2 seats** at purchase and while subscribed. Checkout includes **seat-quantity selection** (at least 2); billed seats adjust as members join or leave, subject to the minimum and the rules in Section 12.2.
 - **Supporter / lifetime:** **Not a separate hard-coded plan.** It is a **config-driven launch promotion** (a one-time purchase, time-boxed) whose entitlement effect is **"Personal, permanent."** There is no separate code path: a supporter purchase simply grants the Personal entitlement set permanently to the workspace.
 
 Pricing specifics (amounts, monthly/yearly, per-seat pricing, the supporter price and deadline) are configuration and live in deployment configuration and the marketing site, not hard-coded in application logic. The Free bookmark cap of 50 is a concrete starting value and is confirmable later as configuration.
@@ -428,11 +428,11 @@ The entitlements the application checks, with their plan mapping:
 - **Team administration (Members and Teams admin):** Team plan only on hosted; always on for self-hosted.
 - **Member invitations:** Team plan only on hosted; always on for self-hosted.
 - **Audit log:** Team plan only on hosted; always on for self-hosted.
-- **Seats:** Team is priced per seat — each member occupies one seat. The seat count equals the current active member count; there is no minimum or "included" tier. **An invitation consumes a seat on acceptance, not on send.** The seat count **cannot be reduced below the current member count.**
+- **Seats:** Team is priced per seat — each member occupies one seat. **Purchase and subscription require a minimum of 2 seats** (`TEAM_MIN_SEATS`); there is no separate base or "included" tier beyond that floor. Checkout lets the purchaser choose the initial seat quantity (at least 2). The billed seat count tracks the greater of the active member count and `TEAM_MIN_SEATS` while on Team. **An invitation consumes a seat on acceptance, not on send.** The seat count **cannot be reduced below the current member count** or below `TEAM_MIN_SEATS`, whichever is higher.
 
 ### 12.3 Lifecycle
 
-Workspaces start on Free. A workspace owner/admin can start a checkout to move to a paid plan or to take the supporter promotion, can open a self-service portal to manage or cancel, and can adjust extra seats. All of these flow through the billing interface; the application reacts to billing events by updating the workspace's plan/entitlement state idempotently. Deleting an account/workspace is blocked when the actor is the billing owner of an active paid workspace until billing is resolved.
+Workspaces start on Free. A workspace owner/admin can start a checkout to move to a paid plan or to take the supporter promotion, can open a self-service portal to manage or cancel, and can adjust extra seats. **Team checkout includes seat-quantity selection** (minimum `TEAM_MIN_SEATS` = 2); other paid plans do not require seat selection. All of these flow through the billing interface; the application reacts to billing events by updating the workspace's plan/entitlement state idempotently. Deleting an account/workspace is blocked when the actor is the billing owner of an active paid workspace until billing is resolved.
 
 ### 12.4 Enforcement points
 
@@ -665,7 +665,7 @@ Every item below was previously an open question and is now **settled** and inte
 14. Free bookmark cap = **50 per workspace** (concrete starting value, confirmable as config later).
 15. Supporter/lifetime is a **config-driven launch promotion**, entitlement-equivalent to "Personal, permanent"; no separate code path.
 16. Self-hosted has **no billing** (no-op billing impl, full entitlements); no paid self-host licensing in v1.
-17. Team is pure per-seat — no base included seats, no minimum seat count; invitations consume a seat **on acceptance**; seat count cannot drop below current member count.
+17. Team is pure per-seat — no base included seats; **minimum 2 seats** (`TEAM_MIN_SEATS`) at purchase and while subscribed; **checkout includes seat-quantity selection**; invitations consume a seat **on acceptance**; billed seat count cannot drop below current member count or below `TEAM_MIN_SEATS`, whichever is higher.
 18. **Downgrade overflow:** downgrade to Free takes effect at period-end with a grace period; over-cap bookmarks are **archived (preserved, hidden), not deleted**, and restored on re-upgrade (Section 12.5). Creation-blocking is not the only cap behavior.
 30. **Workspace-creation entitlement (settled):** "workspaces an account may create/own" is an entitlement checked by the engine. Hosted Free = exactly one workspace; additional workspaces require a paid entitlement (closes the 50×N free-cap bypass). Self-hosted = unrestricted. (Sections 4.1, 11.5, 12.2, 12.4.)
 
@@ -877,7 +877,7 @@ The prototype was designed before some decisions were finalised. When building, 
 4. **API tokens are not plan-gated.** Pricing tables show "API access" as Personal+ only. Personal API tokens are a **core authentication feature for all authenticated users** (§5); they are not in the entitlements list (§12.2). Do not gate them by plan.
 5. **No custom domains / "custom slug domains" entitlement in v1.** Marketing and upsell copy advertise "custom slug domains" / "custom forwarding domain". Custom domains and subdomain-/path-based addressing are **out of scope / Fast-Follow** (§20, decision 4). Slugs themselves are available to everyone; there is no custom-domain plan feature in v1.
 6. **No workspace identifier in URLs (v1).** `SettingsWorkspace.jsx` shows a "Workspace identifier — used in URLs" field and an error page uses a `/workspaces/acme/...` path. v1 resolves the active workspace **via the session**, not via URL path/subdomain (decision 4). Treat URL-based tenancy as a Fast-Follow-only forward hook; do not ship the URL-identifier field in v1.
-7. **Members row is illustrative.** The feature table "Members" cell previously showed a seat count; Team is now per-seat (no base count).
+7. **Members row is illustrative.** The feature table "Members" cell previously showed a seat count; Team is per-seat with a **2-seat minimum** (no separate base tier).
 8. **Prices are illustrative and config-driven.** `$4` / `$9` / `$59` and the supporter deadline are placeholders; concrete pricing lives in deployment configuration and the marketing site, never hard-coded in application logic (§12.1).
 9. **Subprocessor copy in legal pages.** The prototype's Datenschutz lists "Hetzner Cloud (Hosting)". The settled hosted infrastructure is **Fly.io (Frankfurt) + Neon Postgres + Cloudflare Workers** (§14.7); the legal/subprocessor copy must be updated to match actual subprocessors before launch.
 10. **Forwarding domain string.** `go.slugbase.app` is the prototype's placeholder redirect host; the deployed value is `cloud.slugbase.app` (deployment configuration, §15), not a hard-coded constant.
