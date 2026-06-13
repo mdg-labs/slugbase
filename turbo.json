@@ -1,5 +1,16 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalPassThroughEnv": [
+    "CI",
+    "GITHUB_REF",
+    "GITHUB_RUN_ID",
+    "GITHUB_RUN_NUMBER",
+    "GITHUB_SHA",
+    "GITHUB_WORKFLOW",
+    "REPORTPORTAL_API_KEY",
+    "REPORTPORTAL_PROJECT",
+    "REPORTPORTAL_URL"
+  ],
   "tasks": {
     "lint": {
       "dependsOn": ["^lint", "^build"]
