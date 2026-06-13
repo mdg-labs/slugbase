@@ -2,6 +2,7 @@
   "name": "SlugBase Documentation",
   "title": "SlugBase",
   "template": "classic",
+  "initialRoute": "selfhosted/introduction",
   "colors": {
     "light": {
       "brand": "#5d6af2",
@@ -43,7 +44,159 @@
           {
             "tab": "Guides",
             "icon": "book-open",
-            "groups": []
+            "groups": [
+              {
+                "group": "Getting started",
+                "icon": "rocket",
+                "pages": [
+                  {
+                    "title": "Introduction",
+                    "path": "selfhosted/introduction",
+                    "icon": "book-open"
+                  },
+                  {
+                    "title": "Quick start",
+                    "path": "selfhosted/quick-start",
+                    "icon": "zap"
+                  },
+                  {
+                    "title": "First workspace setup",
+                    "path": "selfhosted/first-workspace-setup",
+                    "icon": "layout-grid"
+                  }
+                ]
+              },
+              {
+                "group": "Using SlugBase",
+                "icon": "bookmark",
+                "pages": [
+                  {
+                    "title": "Bookmarks",
+                    "path": "selfhosted/bookmarks",
+                    "icon": "bookmark"
+                  },
+                  {
+                    "title": "Slugs and go",
+                    "path": "selfhosted/slugs-and-go",
+                    "icon": "link"
+                  },
+                  {
+                    "title": "Folders",
+                    "path": "selfhosted/folders",
+                    "icon": "folder"
+                  },
+                  {
+                    "title": "Tags",
+                    "path": "selfhosted/tags",
+                    "icon": "tag"
+                  },
+                  {
+                    "title": "Command palette",
+                    "path": "selfhosted/command-palette",
+                    "icon": "command"
+                  },
+                  {
+                    "title": "Search and import",
+                    "path": "selfhosted/search-and-import",
+                    "icon": "search"
+                  }
+                ]
+              },
+              {
+                "group": "Workspaces",
+                "icon": "users",
+                "pages": [
+                  {
+                    "title": "Workspaces overview",
+                    "path": "selfhosted/workspaces-overview",
+                    "icon": "layout-grid"
+                  },
+                  {
+                    "title": "Members and teams",
+                    "path": "selfhosted/members-and-teams",
+                    "icon": "users"
+                  },
+                  {
+                    "title": "Sharing",
+                    "path": "selfhosted/sharing",
+                    "icon": "share-2"
+                  }
+                ]
+              },
+              {
+                "group": "Settings",
+                "icon": "settings",
+                "pages": [
+                  {
+                    "title": "Account settings",
+                    "path": "selfhosted/account-settings",
+                    "icon": "user"
+                  },
+                  {
+                    "title": "Workspace settings",
+                    "path": "selfhosted/workspace-settings",
+                    "icon": "settings-2"
+                  },
+                  {
+                    "title": "SMTP",
+                    "path": "selfhosted/smtp",
+                    "icon": "mail"
+                  },
+                  {
+                    "title": "OIDC",
+                    "path": "selfhosted/oidc",
+                    "icon": "key-round"
+                  },
+                  {
+                    "title": "AI suggestions",
+                    "path": "selfhosted/ai-suggestions",
+                    "icon": "sparkles"
+                  },
+                  {
+                    "title": "API tokens",
+                    "path": "selfhosted/api-tokens",
+                    "icon": "key"
+                  }
+                ]
+              },
+              {
+                "group": "Administration",
+                "icon": "shield",
+                "pages": [
+                  {
+                    "title": "Instance admin",
+                    "path": "selfhosted/instance-admin",
+                    "icon": "server-cog"
+                  },
+                  {
+                    "title": "Audit log",
+                    "path": "selfhosted/audit-log",
+                    "icon": "scroll-text"
+                  },
+                  {
+                    "title": "Backup and export",
+                    "path": "selfhosted/backup-and-export",
+                    "icon": "database-backup"
+                  }
+                ]
+              },
+              {
+                "group": "Help",
+                "icon": "life-buoy",
+                "pages": [
+                  {
+                    "title": "Troubleshooting",
+                    "path": "selfhosted/troubleshooting",
+                    "icon": "wrench"
+                  },
+                  {
+                    "title": "FAQ",
+                    "path": "selfhosted/faq",
+                    "icon": "circle-help"
+                  }
+                ]
+              }
+            ]
           }
         ]
       },
@@ -54,7 +207,123 @@
           {
             "tab": "Guides",
             "icon": "book-open",
-            "groups": []
+            "groups": [
+              {
+                "group": "Getting started",
+                "icon": "rocket",
+                "pages": [
+                  {
+                    "title": "Introduction",
+                    "path": "cloud/introduction",
+                    "icon": "book-open"
+                  },
+                  {
+                    "title": "Sign up",
+                    "path": "cloud/sign-up",
+                    "icon": "user-plus"
+                  },
+                  {
+                    "title": "First workspace",
+                    "path": "cloud/first-workspace",
+                    "icon": "layout-grid"
+                  }
+                ]
+              },
+              {
+                "group": "Using SlugBase",
+                "icon": "bookmark",
+                "pages": [
+                  {
+                    "title": "Bookmarks",
+                    "path": "cloud/bookmarks",
+                    "icon": "bookmark"
+                  },
+                  {
+                    "title": "Slugs and go",
+                    "path": "cloud/slugs-and-go",
+                    "icon": "link"
+                  },
+                  {
+                    "title": "Folders",
+                    "path": "cloud/folders",
+                    "icon": "folder"
+                  },
+                  {
+                    "title": "Tags",
+                    "path": "cloud/tags",
+                    "icon": "tag"
+                  },
+                  {
+                    "title": "Command palette",
+                    "path": "cloud/command-palette",
+                    "icon": "command"
+                  },
+                  {
+                    "title": "Search and import",
+                    "path": "cloud/search-and-import",
+                    "icon": "search"
+                  }
+                ]
+              },
+              {
+                "group": "Workspaces",
+                "icon": "users",
+                "pages": [
+                  {
+                    "title": "Workspaces overview",
+                    "path": "cloud/workspaces-overview",
+                    "icon": "layout-grid"
+                  },
+                  {
+                    "title": "Members and teams",
+                    "path": "cloud/members-and-teams",
+                    "icon": "users"
+                  }
+                ]
+              },
+              {
+                "group": "Account & billing",
+                "icon": "credit-card",
+                "pages": [
+                  {
+                    "title": "Account settings",
+                    "path": "cloud/account-settings",
+                    "icon": "user"
+                  },
+                  {
+                    "title": "Plans and billing",
+                    "path": "cloud/plans-and-billing",
+                    "icon": "credit-card"
+                  },
+                  {
+                    "title": "MFA and security",
+                    "path": "cloud/mfa-and-security",
+                    "icon": "shield-check"
+                  }
+                ]
+              },
+              {
+                "group": "Help",
+                "icon": "life-buoy",
+                "pages": [
+                  {
+                    "title": "Troubleshooting",
+                    "path": "cloud/troubleshooting",
+                    "icon": "wrench"
+                  },
+                  {
+                    "title": "FAQ",
+                    "path": "cloud/faq",
+                    "icon": "circle-help"
+                  },
+                  {
+                    "title": "Support",
+                    "path": "cloud/support",
+                    "icon": "headphones"
+                  }
+                ]
+              }
+            ]
           }
         ]
       }
