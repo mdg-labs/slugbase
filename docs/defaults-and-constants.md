@@ -14,7 +14,7 @@ Naming for code constants follows rule `04-naming` (`SCREAMING_SNAKE_CASE`). Env
 |---|---|---|---|
 | Slug grammar | `^[a-z0-9][a-z0-9-]{0,63}$` | config | lowercase, digits, hyphen; 1–64 chars; no leading hyphen |
 | Reserved slugs | `go`, `api`, `auth`, `health`, `version`, `login`, `logout`, `setup` | config | rejected at create/edit; avoids collision with routes |
-| Slug uniqueness | per **workspace** | *fixed* | decision #7 |
+| Slug uniqueness | per **owner** within workspace | *fixed* | decision #7 |
 | Max one slug per bookmark | 1 | *fixed* | §8.1 |
 
 ## 2. Bookmarks, lists, import/export (spec §6, §13)

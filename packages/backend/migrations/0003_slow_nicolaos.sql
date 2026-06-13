@@ -1,0 +1,2 @@
+DROP INDEX "bookmarks_workspace_slug_unique_idx";--> statement-breakpoint
+CREATE UNIQUE INDEX "bookmarks_workspace_user_slug_unique_idx" ON "bookmarks" USING btree ("workspace_id","user_id","slug") WHERE "bookmarks"."slug" IS NOT NULL;

@@ -263,7 +263,7 @@ Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit w
 - **Doc Ref:** spec §6.4, §11.10; def §2 · **Deps:** P1-07, P3-01 · **Status:** [ ]
 
 ### P3-07 — Slugs + `/go` redirect + disambiguation + go-preferences — BE · Lane S · `[mig]`
-- **AC:** slug validation (def §1 grammar + reserved list) unique per workspace; `/go/<slug>` requires auth, resolves within active workspace over accessible+forwarding bookmarks; no-match 404; single→redirect (async usage); multi→disambiguation with "always use this" → stored go-preference; preference management (list/remove).
+- **AC:** slug validation (def §1 grammar + reserved list) unique per owner within workspace; `/go/<slug>` requires auth, resolves within active workspace over accessible+forwarding bookmarks; no-match 404; single→redirect (async usage); multi→disambiguation with "always use this" → stored go-preference; preference management (list/remove).
 - **Tests:** integration: single/multi/no-match; reserved slug rejected; preference honored.
 - **Files:** `packages/backend/src/slugs/**` (+ `go-preference` table), `shared-types/src/contracts/slugs.contract.ts`
 - **Doc Ref:** spec §8.1–8.4, §16; def §1 · **Deps:** P3-01 · **Status:** [ ]

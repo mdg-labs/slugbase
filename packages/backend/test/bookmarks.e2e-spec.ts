@@ -165,7 +165,7 @@ describe("Bookmarks (integration)", () => {
       ).rejects.toThrow("Only the bookmark owner");
     });
 
-    it("rejects duplicate slug within the workspace", async () => {
+    it("rejects duplicate slug for the same owner", async () => {
       await bookmarksService.createBookmark(workspace, ownerUserId, {
         title: "Other",
         url: "https://other.example.com",
@@ -180,6 +180,25 @@ describe("Bookmarks (integration)", () => {
           forwardingEnabled: true,
         }),
       ).rejects.toThrow('Slug "example" is already in use');
+    });
+
+    it("allows the same slug for different owners in one workspace", async () => {
+      const ownerBookmark = await bookmarksService.createBookmark(workspace, ownerUserId, {
+        title: "Owner Mail",
+        url: "https://owner-mail.example.com",
+        slug: "mail",
+        forwardingEnabled: true,
+      });
+      expect(ownerBookmark.slug).toBe("mail");
+
+      const memberBookmark = await bookmarksService.createBookmark(workspace, memberUserId, {
+        title: "Member Mail",
+        url: "https://member-mail.example.com",
+        slug: "mail",
+        forwardingEnabled: true,
+      });
+      expect(memberBookmark.slug).toBe("mail");
+      expect(memberBookmark.userId).toBe(memberUserId);
     });
   });
 

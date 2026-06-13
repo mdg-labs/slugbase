@@ -98,6 +98,7 @@ export class ImportService {
 
       const { slug, skippedSlug } = await this.resolveImportSlug(
         workspace.id,
+        userId,
         entry.slug,
         assignedSlugs,
       );
@@ -161,6 +162,7 @@ export class ImportService {
 
   private async resolveImportSlug(
     workspaceId: string,
+    userId: string,
     rawSlug: string | null | undefined,
     assignedSlugs: Set<string>,
   ): Promise<{ slug: string | null; skippedSlug: boolean }> {
@@ -177,7 +179,7 @@ export class ImportService {
       return { slug: null, skippedSlug: true };
     }
 
-    const existing = await this.bookmarkRepo.findBySlug(workspaceId, normalized);
+    const existing = await this.bookmarkRepo.findBySlug(workspaceId, userId, normalized);
     if (existing) {
       return { slug: null, skippedSlug: true };
     }

@@ -130,7 +130,7 @@ describe("Import (integration)", () => {
       }
     });
 
-    it("skips duplicate slugs without failing the import", async () => {
+    it("skips duplicate slugs for the same owner without failing the import", async () => {
       const result = await importService.importJson(workspace, ownerUserId, [
         {
           title: "Dup Slug One",

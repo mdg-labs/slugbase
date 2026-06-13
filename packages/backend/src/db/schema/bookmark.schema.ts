@@ -29,8 +29,8 @@ export const bookmarks = pgTable(
   (t) => [
     index("bookmarks_workspace_id_idx").on(t.workspaceId),
     index("bookmarks_user_id_idx").on(t.userId),
-    uniqueIndex("bookmarks_workspace_slug_unique_idx")
-      .on(t.workspaceId, t.slug)
+    uniqueIndex("bookmarks_workspace_user_slug_unique_idx")
+      .on(t.workspaceId, t.userId, t.slug)
       .where(sql`${t.slug} IS NOT NULL`),
   ],
 );

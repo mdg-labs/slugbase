@@ -96,7 +96,7 @@ These terms are the canonical product vocabulary and are used consistently throu
 - **Member:** A user account's association with a workspace, carrying a role (owner, admin, member). A single user account may be a member of multiple workspaces.
 - **User account:** A globally unique identity (by email) that can sign in. A user account is distinct from a member; the account is the person, the membership is their seat in a given workspace.
 - **Bookmark:** A saved destination URL with a title and optional metadata, owned by a user within a workspace. It may have an optional slug and may be organized into folders and labeled with tags.
-- **Slug:** A short, memorable keyword attached to a bookmark. When forwarding is enabled, the slug resolves through the redirect endpoint to the bookmark's destination URL. Slugs are unique within a workspace.
+- **Slug:** A short, memorable keyword attached to a bookmark. When forwarding is enabled, the slug resolves through the redirect endpoint to the bookmark's destination URL. Slugs are unique per owner within a workspace (two members may each use the same slug on their own bookmarks).
 - **Forwarding / "Go":** The redirect behavior: visiting the redirect address for a slug forwards the authenticated user to the destination URL. Collision resolution and the "remember my choice" behavior are part of this subsystem.
 - **Folder:** A named, optionally icon-bearing container used to organize bookmarks. A bookmark can belong to multiple folders. Folders can be shared with teams or individual members. **"Folder" is the only container term; there is no "collection."**
 - **Tag:** A user-private label used to filter and group bookmarks. Tags are not shared across users.
@@ -154,7 +154,7 @@ A workspace can be a single-person "personal workspace" or a multi-person "team 
 
 ### 4.6 Slug namespace and tenancy
 
-Slugs are unique **within a workspace**, not globally. Two different workspaces may each have a slug `mail`. A self-hosted single-workspace install simply has one slug namespace, which reads as "unique across the instance." The redirect subsystem always resolves slugs within the active workspace context.
+Slugs are unique **per owner within a workspace**, not globally. Two different workspaces may each have a slug `mail`; two members in the same workspace may each use `mail` on their own bookmarks. A self-hosted single-workspace install still has one slug namespace per user. The redirect subsystem always resolves slugs within the active workspace context.
 
 ---
 
@@ -274,7 +274,7 @@ This is SlugBase's signature capability and is specified precisely.
 
 ### 8.1 Slugs
 
-A slug is a short keyword attached to a bookmark. A bookmark may have at most one slug. A slug is required when forwarding is enabled and may be empty when forwarding is off. Slugs are unique within a workspace. The UI shows the resulting forwarding address and offers a copy action.
+A slug is a short keyword attached to a bookmark. A bookmark may have at most one slug. A slug is required when forwarding is enabled and may be empty when forwarding is off. Slugs are unique per owner within a workspace. The UI shows the resulting forwarding address and offers a copy action.
 
 ### 8.2 The redirect endpoint
 
@@ -284,7 +284,7 @@ The product exposes a redirect endpoint (today at the `/go/<slug>` path on the d
 2. The slug is resolved within the visitor's active workspace context, considering only bookmarks the user can access (their own plus shared) that have forwarding enabled.
 3. **No match:** a not-found response.
 4. **Exactly one match:** an immediate redirect to the destination, with usage tracking updated asynchronously.
-5. **Multiple matches** (the same slug accessible via more than one bookmark — possible through sharing): a disambiguation page lets the user choose, with an option to "always use this," which records a per-user preference.
+5. **Multiple matches** (the same slug on more than one accessible bookmark — possible when different owners use the same slug or when sharing exposes overlapping slugs): a disambiguation page lets the user choose, with an option to "always use this," which records a per-user preference.
 
 ### 8.3 Go preferences
 
@@ -539,7 +539,7 @@ Described in prose, as conceptual entities and relationships, generalized so tha
 - **User account:** Global identity by email, with name, optional password credential, language, theme, verification state, instance-wide admin flag, MFA state (enrollment flag, encrypted secret, enrollment time), and AI-opt-out preference.
 - **Membership:** Associates a user account with a workspace and a role (owner/admin/member).
 - **Workspace invitation:** A pending invitation to join a workspace (email, hashed token, status, expiry). A seat is consumed on acceptance, not on send.
-- **Bookmark:** Belongs to a user within a workspace. Has title, URL, optional slug (unique within the workspace), forwarding flag, pinned flag, **plan-archived flag** (for downgrade overflow), access count, last-accessed time, and timestamps. Associated many-to-many with folders and tags; optionally shared with teams and members.
+- **Bookmark:** Belongs to a user within a workspace. Has title, URL, optional slug (unique per owner within the workspace), forwarding flag, pinned flag, **plan-archived flag** (for downgrade overflow), access count, last-accessed time, and timestamps. Associated many-to-many with folders and tags; optionally shared with teams and members.
 - **Folder:** Belongs to a user within a workspace. Has name, optional icon, timestamps. Shareable with teams/members.
 - **Tag:** Belongs to a user within a workspace. Has name. User-private.
 - **Bookmark–folder and bookmark–tag associations:** Many-to-many link records, workspace-scoped.
@@ -648,7 +648,7 @@ Every item below was previously an open question and is now **settled** and inte
 4. Tenant resolution = **session-carried active workspace + explicit switch endpoint**; no subdomain/path tenancy in v1, but the resolution interface allows them later without touching app logic.
 5. Self-hosted does **not** auto-create a workspace per user — first-run setup creates the first workspace; later users are admin-invited into existing workspaces. Hosted auto-creates a personal workspace on signup.
 6. On leave, authored bookmarks **remain with the workspace**; no spin-off, no cross-workspace data movement; leaving = membership revoked; users export to take data.
-7. Slugs are unique **per workspace**.
+7. Slugs are unique **per owner within a workspace**.
 29. **Self-host vision (settled):** self-hosted is officially an **admin-curated multi-workspace product** — an instance-wide admin creates/manages workspaces and invites users into them; explicitly not a "every user spins up their own tenant" model. First-run setup + invite-only stays the default; public registration is an off-by-default config flag. (Sections 4.5, 5.2, 14.)
 
 **Auth & accounts**

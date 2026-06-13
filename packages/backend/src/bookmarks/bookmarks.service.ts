@@ -60,7 +60,7 @@ export class BookmarksService {
     const forwardingEnabled = dto.forwardingEnabled ?? false;
 
     this.validateSlugFields(slug, forwardingEnabled);
-    await this.assertSlugAvailable(workspace.id, slug, null);
+    await this.assertSlugAvailable(workspace.id, userId, slug, null);
 
     const activeCount = await this.repo.countActiveInWorkspace(workspace.id);
     this.entitlements.assertCanCreateBookmark(workspace, activeCount);
@@ -132,7 +132,7 @@ export class BookmarksService {
         : existing.forwardingEnabled;
 
     this.validateSlugFields(nextSlug, nextForwarding);
-    await this.assertSlugAvailable(workspace.id, nextSlug, existing.id);
+    await this.assertSlugAvailable(workspace.id, userId, nextSlug, existing.id);
 
     const updated = await this.repo.update(workspace.id, bookmarkId, {
       title: nextTitle,
@@ -297,14 +297,15 @@ export class BookmarksService {
 
   private async assertSlugAvailable(
     workspaceId: string,
+    userId: string,
     slug: string | null,
     excludeBookmarkId: string | null,
   ): Promise<void> {
     if (!slug) return;
 
-    const existing = await this.repo.findBySlug(workspaceId, slug);
+    const existing = await this.repo.findBySlug(workspaceId, userId, slug);
     if (existing && existing.id !== excludeBookmarkId) {
-      throw new ConflictException(`Slug "${slug}" is already in use in this workspace`);
+      throw new ConflictException(`Slug "${slug}" is already in use`);
     }
   }
 }

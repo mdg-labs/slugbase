@@ -436,6 +436,7 @@ export class BookmarkRepository extends WorkspaceScopedRepository<BookmarkRecord
 
   async findBySlug(
     workspaceId: string,
+    userId: string,
     slug: string,
   ): Promise<BookmarkRecord | null> {
 
@@ -443,7 +444,11 @@ export class BookmarkRepository extends WorkspaceScopedRepository<BookmarkRecord
       .select()
       .from(bookmarks)
       .where(
-        and(eq(bookmarks.workspaceId, workspaceId), eq(bookmarks.slug, slug)),
+        and(
+          eq(bookmarks.workspaceId, workspaceId),
+          eq(bookmarks.userId, userId),
+          eq(bookmarks.slug, slug),
+        ),
       )
       .limit(1);
     if (!rows[0]) return null;
