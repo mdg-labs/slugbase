@@ -15,11 +15,15 @@ export class ConfigService {
     return this.config;
   }
 
-  /** Secure flag for Set-Cookie — disabled in e2e (plain HTTP on localhost). */
+  /**
+   * Secure flag for Set-Cookie — follows APP_BASE_URL scheme so plain-HTTP
+   * self-host installs work in production (spec §14.2). SLUGBASE_E2E_MODE remains
+   * an e2e escape hatch for rate limits and other test overrides.
+   */
   cookieSecure(): boolean {
     if (process.env.SLUGBASE_E2E_MODE === "true") {
       return false;
     }
-    return this.get("isProduction");
+    return new URL(this.get("APP_BASE_URL")).protocol === "https:";
   }
 }

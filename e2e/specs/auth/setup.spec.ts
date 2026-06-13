@@ -33,7 +33,13 @@ test.describe('Self-hosted setup smoke', () => {
     // Submit the setup form
     await page.click('button[type="submit"]');
 
-    // After setup, should redirect to login (or be signed in directly)
-    await page.waitForURL(/\/(login)?$/);
+    // After setup, redirect to app shell with session established (HTTP-safe cookies)
+    await page.waitForURL(/\/$/);
+    await page.waitForSelector('[data-testid="sidebar-nav"]');
+
+    const cookies = await page.context().cookies();
+    const session = cookies.find((c) => c.name === 'slb_session');
+    expect(session).toBeDefined();
+    expect(session?.secure).toBe(false);
   });
 });

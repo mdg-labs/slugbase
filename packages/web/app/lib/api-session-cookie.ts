@@ -19,12 +19,30 @@ export function applyApiSessionCookie(
   }
 }
 
-/** Secure flag for auth Set-Cookie — mirrors backend cookieSecure() in e2e. */
+function resolveAppBaseUrl(): string {
+  const fromVite = import.meta.env.VITE_APP_BASE_URL as string | undefined;
+  if (typeof fromVite === "string" && fromVite.length > 0) {
+    return fromVite.replace(/\/$/, "");
+  }
+  if (typeof process !== "undefined") {
+    const fromApi = process.env["API_BASE_URL"];
+    if (typeof fromApi === "string" && fromApi.length > 0) {
+      return fromApi.replace(/\/$/, "");
+    }
+  }
+  return "http://localhost:3000";
+}
+
+/** Secure flag for auth Set-Cookie — mirrors backend cookieSecure(). */
 export function authCookieSecure(): boolean {
   if (typeof process !== "undefined" && process.env["SLUGBASE_E2E_MODE"] === "true") {
     return false;
   }
-  return import.meta.env.PROD;
+  try {
+    return new URL(resolveAppBaseUrl()).protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 /** Redirect after an HTML form POST — full document navigation (not client-only). */

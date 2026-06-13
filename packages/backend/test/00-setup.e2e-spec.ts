@@ -72,6 +72,8 @@ describe("Setup (integration)", () => {
       const setCookie = res.headers["set-cookie"] as string[] | string | undefined;
       const cookies = Array.isArray(setCookie) ? setCookie : setCookie ? [setCookie] : [];
       expect(cookies.some((c) => c.startsWith(`${SESSION_COOKIE}=`))).toBe(true);
+      const sessionCookie = cookies.find((c) => c.startsWith(`${SESSION_COOKIE}=`));
+      expect(sessionCookie).toMatch(/;\s*Secure(?:;|$)/i);
     });
 
     it("returns 409 Conflict on a second call (idempotency)", async () => {

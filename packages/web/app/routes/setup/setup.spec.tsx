@@ -115,7 +115,7 @@ describe("Setup route - action", () => {
     return fd;
   }
 
-  it("redirects to /login on successful setup", async () => {
+  it("redirects to / on successful setup", async () => {
     const request = new Request("http://localhost/setup", {
       method: "POST",
       body: makeFormData(),
@@ -125,7 +125,7 @@ describe("Setup route - action", () => {
 
     expect(result).toBeInstanceOf(Response);
     expect((result as Response).status).toBe(303);
-    expect((result as Response).headers.get("Location")).toBe("/login");
+    expect((result as Response).headers.get("Location")).toBe("/");
   });
 
   it("returns setup.error_already_done on 409", async () => {

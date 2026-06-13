@@ -108,7 +108,7 @@ export async function action({ request }: ActionFunctionArgs): Promise<ActionRes
     return { error: "setup.error_generic" };
   }
 
-  const redirectResponse = redirectAfterFormPost("/login");
+  const redirectResponse = redirectAfterFormPost("/");
   applyApiSessionCookie(redirectResponse, res);
   return redirectResponse;
 }
