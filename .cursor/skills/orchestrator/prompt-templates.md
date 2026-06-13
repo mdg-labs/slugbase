@@ -84,7 +84,7 @@ NODE ENV (mandatory — run from TARGET REPO before any pnpm/turbo/infisical com
     bash scripts/with-ci-env.sh pnpm i18n:validate
 - Alternative: source scripts/ci-env.sh once per shell, then run commands
 - Sanity: bash scripts/with-ci-env.sh node -v  → must be v22.12.0+
-- Docs: docs/local-development.md
+- Docs: docs/internal/local-development.md
 - FORBIDDEN: bare pnpm/turbo from agent shell without with-ci-env (Node 20 false passes / Astro failures)
 ```
 
@@ -120,7 +120,7 @@ MODE: plan-file
 LANE: S
 TARGET REPO: /home/michael/projects/slugbase
 WORK BRANCH: staging
-PLAN FILE: /home/michael/projects/slugbase/docs/slugbase-development-roadmap.md
+PLAN FILE: /home/michael/projects/slugbase/docs/internal/slugbase-development-roadmap.md
 TASK ID: <e.g. P1-03>
 SESSION ID: <TASK-ID>-<YYYYMMDD>-<4hex>
 PARENT: <parent issue number or none>
@@ -221,7 +221,7 @@ WORK BRANCH: orchestrator/<TASK-ID>
 WORKTREE: <subagent worktree path, e.g. ../slugbase-wt-<TASK-ID>>
 STAGING_BASE_SHA: <pin — do not rebase onto staging>
 BATCH_ID: <YYYYMMDD>-<4hex>
-PLAN FILE: /home/michael/projects/slugbase/docs/slugbase-development-roadmap.md (READ ONLY)
+PLAN FILE: /home/michael/projects/slugbase/docs/internal/slugbase-development-roadmap.md (READ ONLY)
 TASK ID: <e.g. P2-05>
 SESSION ID: <TASK-ID>-<YYYYMMDD>-<4hex>
 PARENT: <parent issue number or none>
@@ -433,7 +433,7 @@ VERIFICATION:
 LAYER 1 — Scope audit: committed paths vs declared WRITE SCOPE
 
 LAYER 2 — Automated checks from TARGET REPO:
-- All commands via: bash scripts/with-ci-env.sh … (see NODE ENV block; docs/local-development.md)
+- All commands via: bash scripts/with-ci-env.sh … (see NODE ENV block; docs/internal/local-development.md)
 - lint: bash scripts/with-ci-env.sh pnpm lint (or n/a)
 - typecheck: bash scripts/with-ci-env.sh pnpm typecheck (or n/a)
 - test: <from plan row Tests column, else doc-index defaults>
@@ -550,7 +550,7 @@ LANE: P (batch verify)
 TARGET REPO: /home/michael/projects/slugbase
 WORK BRANCH: staging
 BATCH_ID: <id>
-PLAN FILE: /home/michael/projects/slugbase/docs/slugbase-development-roadmap.md
+PLAN FILE: /home/michael/projects/slugbase/docs/internal/slugbase-development-roadmap.md
 
 TASK OUTCOMES:
 - <TASK-ID>: branch-verify PASS, merged | branch-verify FAIL, not merged

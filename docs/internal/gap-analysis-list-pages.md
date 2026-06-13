@@ -2,10 +2,10 @@
 
 ## Purpose
 
-Compare the current frontend implementation of the three list pages (Bookmarks, Tags, Folders) against the V1 design prototype at `docs/design-prototype/V1/`, and against each other. Identify gaps, inconsistencies, and missing features. No code changes — findings only.
+Compare the current frontend implementation of the three list pages (Bookmarks, Tags, Folders) against the V1 design prototype at `docs/internal/design-prototype/V1/`, and against each other. Identify gaps, inconsistencies, and missing features. No code changes — findings only.
 
 **Last updated**: 2026-06-08
-**Prototype reference**: `docs/design-prototype/V1/prototype/{App.jsx,BookmarkViews.jsx,TagsApp.jsx,FoldersApp.jsx,app.css,pages.css}`
+**Prototype reference**: `docs/internal/design-prototype/V1/prototype/{App.jsx,BookmarkViews.jsx,TagsApp.jsx,FoldersApp.jsx,app.css,pages.css}`
 **Code reference**: `packages/web/app/routes/{bookmarks,tags,folders}/`
 
 ---

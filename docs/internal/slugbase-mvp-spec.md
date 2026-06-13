@@ -612,7 +612,8 @@ As a pnpm workspace in a single repository:
 - **`packages/marketing`** — the Astro static marketing site, independently built and deployed (§2.3).
 - **`packages/shared-types`** — cross-cutting Zod/ts-rest contracts, the external-interface contracts, and the generated API/OpenAPI types, consumed by both backend and web.
 - **`packages/ui`** — the shared component library and the design tokens (§23.1).
-- **`docs/`** — customer/operator documentation plus a clearly separated internal-engineering section.
+- **`docs/public/`** — customer/operator documentation (Documentation.AI MDX; synced to `slugbase-docs`).
+- **`docs/internal/`** — engineering spec, design prototypes, and agent reference (not synced).
 - *(Fast-Follow)* an **operator console** package, if and when it is built (§10.2, §20).
 
 All members live in one repo, use pnpm, and the marketing site and the application are separately buildable.
@@ -688,7 +689,7 @@ Every item below was previously an open question and is now **settled** and inte
 34. **Secrets management tooling (settled):** Infisical Cloud (EU) is the secrets manager for all environments (`dev` / `staging` / `prod`). Operators set `staging` and `prod` secrets via the Infisical UI or OIDC sync; developers use `infisical run --env=dev` locally. All keys live at the environment root (no subfolders). (Section 15, rule 05-env-vars.mdc.)
 
 35. **CI/CD pipeline (settled):** GitHub Actions on hosted runners; single workflow file (`.github/workflows/ci-cd.yml`); branches `staging` and `main`. (Section 22.)
-36. **Design system and UI prototype (settled):** A clickable V1 design prototype in `docs/design-prototype/V1/` is the **visual and interaction-design source of truth** (design language, screen anatomy, states, copy tone). The MVP spec remains the **product source of truth** — where the prototype conflicts with the spec, the spec wins. Design tokens (periwinkle accent `#7782f7`, dark-first, IBM Plex Sans/Mono) are defined in `docs/design-prototype/V1/colors_and_type.css`. (Section 23.)
+36. **Design system and UI prototype (settled):** A clickable V1 design prototype in `docs/internal/design-prototype/V1/` is the **visual and interaction-design source of truth** (design language, screen anatomy, states, copy tone). The MVP spec remains the **product source of truth** — where the prototype conflicts with the spec, the spec wins. Design tokens (periwinkle accent `#7782f7`, dark-first, IBM Plex Sans/Mono) are defined in `docs/internal/design-prototype/V1/colors_and_type.css`. (Section 23.)
 
 **Technology stack**
 37. **Language (settled):** TypeScript everywhere, strict mode, no `any`. (Section 19.)
@@ -814,13 +815,13 @@ All environment secrets are fetched from Infisical via the `Infisical/secrets-ac
 
 ## 23. Design System and UI Prototype Reference
 
-A clickable HTML/React design prototype lives in `docs/design-prototype/V1/`. It is the **visual and interaction-design source of truth**: it defines the design language, the anatomy of every screen, component states, micro-interactions, and the intended copy tone. It is *not* the product source of truth — feature scope, entitlements, tenancy, security, and data model are governed by Sections 1–22 of this spec. **Where the prototype and this spec disagree, this spec wins** (the known conflicts are catalogued in §23.4).
+A clickable HTML/React design prototype lives in `docs/internal/design-prototype/V1/`. It is the **visual and interaction-design source of truth**: it defines the design language, the anatomy of every screen, component states, micro-interactions, and the intended copy tone. It is *not* the product source of truth — feature scope, entitlements, tenancy, security, and data model are governed by Sections 1–22 of this spec. **Where the prototype and this spec disagree, this spec wins** (the known conflicts are catalogued in §23.4).
 
 The prototype is a static, data-mocked artefact (React via CDN + Babel-in-browser, `localStorage` for demo state, fake data in `prototype/data.js`). It must be re-implemented in the real stack against the repo JSON message catalog (§17) — never by copying its hard-coded English strings.
 
 ### 23.1 Design tokens (authoritative)
 
-Defined in `docs/design-prototype/V1/colors_and_type.css`. These are the canonical design tokens for the rebuild:
+Defined in `docs/internal/design-prototype/V1/colors_and_type.css`. These are the canonical design tokens for the rebuild:
 
 - **Accent:** periwinkle `#7782f7` (dark) / `#5b66e8` (light). This is the spec's "accent color" (§18, §15 user preferences) default.
 - **Mode:** **dark-first** — dark is the primary product theme; light is defined for parity. Theme options are light / dark / auto (matches §18 and the user theme preference in §15).
@@ -828,7 +829,7 @@ Defined in `docs/design-prototype/V1/colors_and_type.css`. These are the canonic
 - **Semantic colors:** success `#45c98a`, warning `#e6b24e`, danger `#f0686b`.
 - **Typography:** **IBM Plex Sans** for UI; **IBM Plex Mono** for slugs, shortcuts, code, and metadata. Compact, dense, developer-tool type scale (13px UI body default).
 - **Spacing:** 4px base scale (`--sp-1` … `--sp-12`). **Radii:** modest 4–12px. **Motion:** 110/170/230ms easing tokens.
-- **Brand assets:** `docs/design-prototype/V1/assets/slugbase_icon.svg` (and `.png`).
+- **Brand assets:** `docs/internal/design-prototype/V1/assets/slugbase_icon.svg` (and `.png`).
 
 Implementation note: these tokens become the foundation of the shared UI package (§19). Components must consume token variables, never hard-coded hex values.
 

@@ -2,7 +2,7 @@
 
 **Status:** Draft  
 **Date:** 2026-06-01  
-**Companion to:** `docs/design-gap-analysis.md`  
+**Companion to:** `docs/internal/design-gap-analysis.md`  
 **Purpose:** For each prototype-aligned frontend change, state whether the backend already supports it, what API exists today, and what (if anything) must be added on the server.
 
 ---

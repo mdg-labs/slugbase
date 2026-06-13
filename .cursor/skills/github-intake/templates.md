@@ -17,7 +17,7 @@ Copy and fill for GitHub issue bodies. Replace `{placeholders}`. Reference issue
 ```markdown
 ## Feature: {Feature name}
 
-**Background:** {Current behaviour + why we're changing it}. {Link to related completed issues or spec sections, e.g. [spec §8](docs/slugbase-mvp-spec.md#8-slugs-and-link-forwarding) or #5 ✅}.
+**Background:** {Current behaviour + why we're changing it}. {Link to related completed issues or spec sections, e.g. [spec §8](docs/internal/slugbase-mvp-spec.md#8-slugs-and-link-forwarding) or #5 ✅}.
 
 ---
 

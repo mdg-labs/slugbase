@@ -9,13 +9,13 @@ export type SupportedLocale = "en" | "de";
 function findDraftsDir(startDir: string): string {
   let dir = startDir;
   for (;;) {
-    const candidate = join(dir, "docs/legal/drafts");
+    const candidate = join(dir, "docs/internal/legal/drafts");
     if (existsSync(join(candidate, "impressum.md"))) {
       return candidate;
     }
     const parent = dirname(dir);
     if (parent === dir) {
-      throw new Error("Legal drafts directory not found (docs/legal/drafts)");
+      throw new Error("Legal drafts directory not found (docs/internal/legal/drafts)");
     }
     dir = parent;
   }

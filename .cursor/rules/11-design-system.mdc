@@ -1,5 +1,5 @@
 ---
-description: UI work must follow the V1 design prototype (docs/design-prototype/V1/) and its design tokens; the MVP spec wins on any product conflict. Spec §23.
+description: UI work must follow the V1 design prototype (docs/internal/design-prototype/V1/) and its design tokens; the MVP spec wins on any product conflict. Spec §23.
 alwaysApply: true
 ---
 
@@ -9,12 +9,12 @@ alwaysApply: true
 
 | Source | Authority |
 |---|---|
-| `docs/design-prototype/V1/` | **Visual & interaction-design source of truth** — design language, screen anatomy, component states, copy tone |
-| `docs/slugbase-mvp-spec.md` | **Product source of truth** — scope, entitlements, tenancy, security, data model |
+| `docs/internal/design-prototype/V1/` | **Visual & interaction-design source of truth** — design language, screen anatomy, component states, copy tone |
+| `docs/internal/slugbase-mvp-spec.md` | **Product source of truth** — scope, entitlements, tenancy, security, data model |
 
 **On any conflict, the spec wins.** The known conflicts are catalogued in spec §23.4 — read it before building UI.
 
-## Design tokens (authoritative — `docs/design-prototype/V1/colors_and_type.css`)
+## Design tokens (authoritative — `docs/internal/design-prototype/V1/colors_and_type.css`)
 
 - **Accent:** periwinkle `#7782f7` (dark) / `#5b66e8` (light) — the default workspace accent.
 - **Dark-first:** dark is the primary theme; light is parity. Themes: light / dark / auto.
@@ -22,7 +22,7 @@ alwaysApply: true
 - **Surfaces:** `--canvas` → `--base` → `--raised` → `--raised-2` → `--overlay`; hairline borders over heavy shadows.
 - **Semantic:** success `#45c98a` · warning `#e6b24e` · danger `#f0686b`.
 - **Spacing:** 4px base (`--sp-*`). **Radii:** 4–12px. **Motion:** 110/170/230ms easing tokens.
-- **Brand:** `docs/design-prototype/V1/assets/slugbase_icon.svg`.
+- **Brand:** `docs/internal/design-prototype/V1/assets/slugbase_icon.svg`.
 
 **Always consume token variables — never hard-code hex/px values that duplicate a token.** Tokens belong in the shared UI package (spec §19).
 

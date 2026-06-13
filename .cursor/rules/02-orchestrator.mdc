@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Orchestrator & roadmap
 
-SlugBase is built **task-by-task** from `docs/slugbase-development-roadmap.md`. Sub-agents implement tasks; a verifier checks them; checkboxes get ticked.
+SlugBase is built **task-by-task** from `docs/internal/slugbase-development-roadmap.md`. Sub-agents implement tasks; a verifier checks them; checkboxes get ticked.
 
 ## Use the orchestrator skill when
 
@@ -19,7 +19,7 @@ In that case, follow `.cursor/skills/orchestrator/SKILL.md`. Do not improvise.
 - You're implementing a single task and the user already pointed at a Task ID (e.g. `P1-01`)
 - You're checking dependencies or what's next
 
-Open `docs/slugbase-development-roadmap.md`, search the Task ID, read the row (Doc Ref + acceptance criteria + Tests).
+Open `docs/internal/slugbase-development-roadmap.md`, search the Task ID, read the row (Doc Ref + acceptance criteria + Tests).
 
 ## Task lifecycle (plan-file mode)
 

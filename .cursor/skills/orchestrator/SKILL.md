@@ -16,9 +16,9 @@ The main agent in this chat is a **dispatcher only**. It reads the **roadmap** a
 | Production branch | `main` — **protected on GitHub**; no development; **never push** from agents |
 | Task branch (Lane P) | `orchestrator/<TASK-ID>` (isolated; merged after verify PASS) |
 | Worktree (Lane P) | Sibling dir `../slugbase-wt-<TASK-ID>` or subagent-managed |
-| Plan file | `docs/slugbase-development-roadmap.md` |
+| Plan file | `docs/internal/slugbase-development-roadmap.md` |
 | Task board (GitHub) | GitHub Issues — see [github-board.md](github-board.md) |
-| Spec docs | `docs/slugbase-*.md` — see [doc-index.md](doc-index.md) |
+| Spec docs | `docs/internal/slugbase-*.md` — see [doc-index.md](doc-index.md) |
 | Workspace memory | `.cursor/skills/workspace-notes.md` |
 | Session memory | `.cursor/skills/agent-memory/active/<SESSION-ID>.md` — **local only** (gitignored) |
 | Prompt templates | [prompt-templates.md](prompt-templates.md) |
@@ -44,7 +44,7 @@ The main agent in this chat is a **dispatcher only**. It reads the **roadmap** a
 
 ### MUST NOT do
 
-- Read spec doc bodies (`docs/slugbase-*.md`) — sub-agents read these (GitHub issue bodies **are** readable — they are the AC contract for board tasks)
+- Read spec doc bodies (`docs/internal/slugbase-*.md`) — sub-agents read these (GitHub issue bodies **are** readable — they are the AC contract for board tasks)
 - Read implementation files, diffs, test output, lint results, or logs
 - Use `Read`, `Grep`, `Glob`, `ReadLints`, `Shell`, `ApplyPatch`, etc. on implementation work
 - Summarize file contents from memory

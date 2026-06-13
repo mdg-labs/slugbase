@@ -49,7 +49,7 @@ bash scripts/with-ci-env.sh pnpm test:integration && \
 bash scripts/with-ci-env.sh pnpm audit --audit-level=high
 ```
 
-Quick sanity check: `pnpm env:check` (see `docs/local-development.md`).
+Quick sanity check: `pnpm env:check` (see `docs/internal/local-development.md`).
 
 **Stack note (settled — spec §19):** `lint`/`typecheck`/`test:unit`/`build`/`test:integration` are root Turborepo tasks fanning out to `backend` (NestJS), `web` (React Router v7), `marketing` (Astro), `shared-types`, and `ui`. Unit/integration use **Vitest** (+ Supertest for the API). **Playwright e2e is not part of the local gate** — it runs only on the `staging → main` PR in CI (spec §22.4). If a package legitimately has no task yet, mark that command `n/a` and note it; do not invent skips for code-impacting changes.
 

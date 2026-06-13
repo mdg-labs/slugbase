@@ -34,7 +34,7 @@ Turbo can then **cache** marketing typecheck from an older good run while `node 
 
 ### Real fix (your machine)
 
-Add the snippet in [`docs/shell/cursor-remote-bashrc.snippet`](shell/cursor-remote-bashrc.snippet) to **`~/.bashrc` immediately after** the block that loads `nvm.sh`, then open a **new terminal** or run `source ~/.bashrc`:
+Add the snippet in [`docs/internal/shell/cursor-remote-bashrc.snippet`](shell/cursor-remote-bashrc.snippet) to **`~/.bashrc` immediately after** the block that loads `nvm.sh`, then open a **new terminal** or run `source ~/.bashrc`:
 
 ```bash
 _slugbase_strip_cursor_from_path() {
@@ -78,7 +78,7 @@ infisical login --domain https://eu.infisical.com
 # or: export INFISICAL_API_URL=https://eu.infisical.com
 ```
 
-Full key inventory (hosted vs self-hosted, examples): [`docs/environment-variables.md`](environment-variables.md).
+Full key inventory (hosted vs self-hosted, examples): [`docs/internal/environment-variables.md`](environment-variables.md).
 
 ## preinstall guard
 

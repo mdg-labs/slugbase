@@ -42,7 +42,8 @@ packages/
   marketing/      # Astro static marketing site (separately built/deployed)
   shared-types/   # Zod + ts-rest contracts, interface contracts, generated OpenAPI types
   ui/             # shared components + design tokens (bridged from colors_and_type.css)
-docs/             # customer/operator docs + internal-engineering section (this file)
+docs/public/      # customer/operator docs (Documentation.AI MDX — synced)
+docs/internal/    # engineering spec + prototypes (this file)
 ```
 
 - **No app package may depend on another app package.** Both `backend` and `web` depend on `shared-types` (and `web`/`marketing` on `ui`); never `web → backend`.

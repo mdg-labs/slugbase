@@ -5,22 +5,22 @@ Sub-agents read these files themselves — never paste content into prompts.
 
 ## Precedence (when docs conflict)
 
-1. `docs/slugbase-mvp-spec.md` — **product source of truth**: behaviour, architecture, data model, interface contracts, billing, security, resolved decisions
-2. `docs/engineering-decisions.md` — **engineering source of truth**: stack, tooling, conventions, infra, CI commands (spec wins on product conflicts)
-3. `docs/defaults-and-constants.md` — pinned default/config values (slug grammar, caps, TTLs, rate limits, archive rule)
-4. `docs/design-prototype/V1/` — **visual/interaction source of truth** (spec wins on product conflict; divergences in spec §23.4)
+1. `docs/internal/slugbase-mvp-spec.md` — **product source of truth**: behaviour, architecture, data model, interface contracts, billing, security, resolved decisions
+2. `docs/internal/engineering-decisions.md` — **engineering source of truth**: stack, tooling, conventions, infra, CI commands (spec wins on product conflicts)
+3. `docs/internal/defaults-and-constants.md` — pinned default/config values (slug grammar, caps, TTLs, rate limits, archive rule)
+4. `docs/internal/design-prototype/V1/` — **visual/interaction source of truth** (spec wins on product conflict; divergences in spec §23.4)
 
-The phased work plan is `docs/slugbase-development-roadmap.md` (pre-GitHub; once converted, GitHub Issues is the execution source of truth). `schema-reference.md` / `api-design.md` grow incrementally with the roadmap — add them here when created.
+The phased work plan is `docs/internal/slugbase-development-roadmap.md` (pre-GitHub; once converted, GitHub Issues is the execution source of truth). `schema-reference.md` / `api-design.md` grow incrementally with the roadmap — add them here when created.
 
 ## Doc shorthand (use in roadmap Doc Ref column)
 
 | Shorthand | File | Covers |
 |---|---|---|
-| `spec` | `docs/slugbase-mvp-spec.md` | Full product & architecture spec |
-| `eng` | `docs/engineering-decisions.md` | Stack, tooling, conventions, infra, CI commands |
-| `def` | `docs/defaults-and-constants.md` | Pinned defaults/constants |
-| `proto` | `docs/design-prototype/V1/` | Visual/interaction prototype (screen map spec §23.2) |
-| `roadmap` | `docs/slugbase-development-roadmap.md` | Phased task plan (pre-Jira) |
+| `spec` | `docs/internal/slugbase-mvp-spec.md` | Full product & architecture spec |
+| `eng` | `docs/internal/engineering-decisions.md` | Stack, tooling, conventions, infra, CI commands |
+| `def` | `docs/internal/defaults-and-constants.md` | Pinned defaults/constants |
+| `proto` | `docs/internal/design-prototype/V1/` | Visual/interaction prototype (screen map spec §23.2) |
+| `roadmap` | `docs/internal/slugbase-development-roadmap.md` | Phased task plan (pre-Jira) |
 
 Reference sections as `§N` or heading, e.g. `spec §5`, `spec §11.4`, `spec §16`.
 
@@ -50,11 +50,11 @@ Reference sections as `§N` or heading, e.g. `spec §5`, `spec §11.4`, `spec §
 | `spec §20` | Explicitly out of scope for v1 (Fast-Follow list) |
 | `spec §21` | Resolved decisions log |
 | `spec §22` | CI/CD pipeline (GitHub Actions, single workflow file) |
-| `spec §23` | Design system + UI prototype reference (`docs/design-prototype/V1/`); §23.4 = divergences where spec wins |
+| `spec §23` | Design system + UI prototype reference (`docs/internal/design-prototype/V1/`); §23.4 = divergences where spec wins |
 
 ## UI / design source
 
-`docs/design-prototype/V1/` is the **visual & interaction source of truth** (design tokens in `colors_and_type.css`; screens mapped in spec §23.2). The MVP spec is the **product source of truth** — on any conflict, spec wins (catalogued in spec §23.4). Any UI task must reference the matching prototype file(s) **and** check §23.4/§23.5 before building.
+`docs/internal/design-prototype/V1/` is the **visual & interaction source of truth** (design tokens in `colors_and_type.css`; screens mapped in spec §23.2). The MVP spec is the **product source of truth** — on any conflict, spec wins (catalogued in spec §23.4). Any UI task must reference the matching prototype file(s) **and** check §23.4/§23.5 before building.
 
 ## GitHub issue tracking
 

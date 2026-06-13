@@ -47,13 +47,13 @@ Stages: CI checks → staging deploy (push `staging`) → prepare release (push 
 
 ## Repository state
 
-This repo currently contains only docs. Application code is built phase-by-phase from `docs/slugbase-development-roadmap.md` (plan file — **DRAFT, pre-GitHub**; phases P1–P6). When unsure what phase we're in, read the roadmap.
+This repo currently contains only docs. Application code is built phase-by-phase from `docs/internal/slugbase-development-roadmap.md` (plan file — **DRAFT, pre-GitHub**; phases P1–P6). When unsure what phase we're in, read the roadmap.
 
 ## Spec doc precedence (when docs conflict)
 
-1. `docs/slugbase-mvp-spec.md` — **product source of truth**: product vision, architecture, data model, interface contracts, billing, security, self-hosted story, resolved decisions
-2. `docs/engineering-decisions.md` — **engineering source of truth**: stack, tooling, conventions, infra, CI commands. `docs/defaults-and-constants.md` holds pinned config values. The spec (1) wins on product conflicts.
-3. `docs/design-prototype/V1/` — **visual & interaction-design source of truth** (design tokens, screens, states, copy tone). On any product conflict, the spec (1) wins — see spec §23.4 and rule `11-design-system.mdc`.
+1. `docs/internal/slugbase-mvp-spec.md` — **product source of truth**: product vision, architecture, data model, interface contracts, billing, security, self-hosted story, resolved decisions
+2. `docs/internal/engineering-decisions.md` — **engineering source of truth**: stack, tooling, conventions, infra, CI commands. `docs/internal/defaults-and-constants.md` holds pinned config values. The spec (1) wins on product conflicts.
+3. `docs/internal/design-prototype/V1/` — **visual & interaction-design source of truth** (design tokens, screens, states, copy tone). On any product conflict, the spec (1) wins — see spec §23.4 and rule `11-design-system.mdc`.
 
 *(Companion docs: `engineering-decisions.md`, `defaults-and-constants.md`, `slugbase-development-roadmap.md` (phased plan). `schema-reference.md` / `api-design.md` grow incrementally with the roadmap.)*
 
@@ -67,6 +67,6 @@ This repo currently contains only docs. Application code is built phase-by-phase
 - Bookmark editing is modal-only — no dedicated detail route (spec §6.2, decision #19).
 - Slugs are private to a workspace — no anonymous `/go` resolution in v1 (spec §8.2, decision #23).
 - All user-facing strings must be i18n keys — no hardcoded English or German (spec §17). Never copy the prototype's hard-coded English strings.
-- UI follows the V1 design prototype + tokens (`docs/design-prototype/V1/`, spec §23); paid tier is **"Personal"** not "Pro"; Free cap is **50**; no folder cap; API tokens not plan-gated (spec §23.4).
+- UI follows the V1 design prototype + tokens (`docs/internal/design-prototype/V1/`, spec §23); paid tier is **"Personal"** not "Pro"; Free cap is **50**; no folder cap; API tokens not plan-gated (spec §23.4).
 - Single repo, no submodules, pnpm throughout — no npm or yarn lockfiles (spec §2.2).
 - Self-hosted and cloud are the **same code path** — no `isCloud`/deployment-mode branches in app logic (spec §1, §15).

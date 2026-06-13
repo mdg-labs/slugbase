@@ -2,12 +2,12 @@
 
 **Status:** Draft  
 **Date:** 2026-06-01  
-**Compares:** `docs/design-prototype/V1/` → `packages/web/` + `packages/marketing/`  
+**Compares:** `docs/internal/design-prototype/V1/` → `packages/web/` + `packages/marketing/`  
 **Product authority:** Spec wins on product conflicts (§23.4). This doc is visual / layout / component anatomy only.
 
 **Legend**
 
-- **Prototype:** design mockup in `docs/design-prototype/V1/`
+- **Prototype:** design mockup in `docs/internal/design-prototype/V1/`
 - **Built:** current React Router web app or Astro marketing site
 - Items marked **[spec]** are intentional product divergences — do not copy the prototype
 
@@ -822,4 +822,4 @@ Applies to all auth routes (`/login`, `/register`, `/mfa`, `/mfa/enroll`, `/forg
 
 ---
 
-*Generated from exhaustive re-scan of `docs/design-prototype/V1/`, `packages/web/`, and `packages/marketing/`.*
+*Generated from exhaustive re-scan of `docs/internal/design-prototype/V1/`, `packages/web/`, and `packages/marketing/`.*

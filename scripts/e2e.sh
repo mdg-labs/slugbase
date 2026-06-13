@@ -65,7 +65,7 @@ warn()  { echo -e "${YELLOW}⚠${NC} $1"; }
 fail()  { echo -e "${RED}✗${NC} $1"; }
 header(){ echo -e "\n${CYAN}═══════════════════════════════════════════${NC}"; echo -e "${CYAN}  $1${NC}"; echo -e "${CYAN}═══════════════════════════════════════════${NC}"; }
 
-# Self-hosted Docker image build args (spec §15 — docs/environment-variables.md)
+# Self-hosted Docker image build args (spec §15 — docs/internal/environment-variables.md)
 SELF_HOSTED_DOCKER_BUILD_ARGS=(
   --build-arg VITE_BILLING_ENABLED=false
   --build-arg VITE_MAIL_ADMIN_UI=true

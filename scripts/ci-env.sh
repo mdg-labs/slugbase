@@ -2,7 +2,7 @@
 #
 # Root cause (Cursor Remote SSH): the agent prepends ~/.cursor-server/.../ to PATH with a
 # bundled `node` (v20). That wins over nvm even after `nvm use`. Fix: remove those entries,
-# then load nvm normally. See docs/local-development.md
+# then load nvm normally. See docs/internal/local-development.md
 
 _slugbase_repo_root() {
   local dir="${SLUGBASE_REPO_ROOT:-${PWD}}"

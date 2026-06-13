@@ -11,7 +11,7 @@ description: >-
 
 # GitHub intake (SlugBase)
 
-Turn a feature request, spec section, codebase change, or rough draft into **Ready** issues on the SlugBase GitHub project. Canonical spec: `docs/slugbase-mvp-spec.md`.
+Turn a feature request, spec section, codebase change, or rough draft into **Ready** issues on the SlugBase GitHub project. Canonical spec: `docs/internal/slugbase-mvp-spec.md`.
 
 Board sync for execution/verification: [orchestrator/github-board.md](../orchestrator/github-board.md). Description templates: [templates.md](templates.md). Summary patterns: [../github-triage/summary-patterns.md](../github-triage/summary-patterns.md).
 

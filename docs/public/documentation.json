@@ -1,0 +1,80 @@
+{
+  "name": "SlugBase Documentation",
+  "title": "SlugBase",
+  "template": "classic",
+  "initialRoute": "selfhosted/introduction",
+  "colors": {
+    "light": {
+      "brand": "#5d6af2",
+      "heading": "#1a1a2e",
+      "text": "#3d3d56"
+    },
+    "dark": {
+      "brand": "#7782f7",
+      "heading": "#f0f0f5",
+      "text": "#c8c8d4"
+    }
+  },
+  "navbar": {
+    "actions": {
+      "links": [
+        {
+          "title": "GitHub",
+          "href": "https://github.com/mdg-labs/slugbase"
+        },
+        {
+          "title": "SlugBase Cloud",
+          "href": "https://cloud.slugbase.app"
+        }
+      ]
+    }
+  },
+  "navigation": {
+    "products": [
+      {
+        "product": "Self-hosted",
+        "icon": "server",
+        "tabs": [
+          {
+            "tab": "Guides",
+            "icon": "book-open",
+            "groups": []
+          },
+          {
+            "tab": "API",
+            "icon": "brackets",
+            "groups": [
+              {
+                "group": "REST API",
+                "openapi": "selfhosted/api-reference/selfhosted-openapi.yaml",
+                "pages": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "product": "Cloud",
+        "icon": "cloud",
+        "tabs": [
+          {
+            "tab": "Guides",
+            "icon": "book-open",
+            "groups": []
+          },
+          {
+            "tab": "API",
+            "icon": "brackets",
+            "groups": [
+              {
+                "group": "REST API",
+                "openapi": "cloud/api-reference/cloud-openapi.yaml",
+                "pages": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

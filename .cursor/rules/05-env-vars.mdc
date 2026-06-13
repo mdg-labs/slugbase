@@ -71,7 +71,7 @@ SESSION_SECRET: z.string().default('dev-secret'),
 
 ### 4. Document in the configuration reference
 
-Add a row to **[`docs/environment-variables.md`](../../docs/environment-variables.md)** using the standard table columns (key, purpose, hosted/self-host, required, secret, when set, example value).
+Add a row to **[`docs/internal/environment-variables.md`](../../docs/internal/environment-variables.md)** using the standard table columns (key, purpose, hosted/self-host, required, secret, when set, example value).
 
 Spec §15 lists the full set of required configuration categories:
 - Required secrets: `SESSION_SECRET`, `ENCRYPTION_KEY`
@@ -95,7 +95,7 @@ rg -n "^<KEY>=" .env.example
 rg -n "\b<KEY>\b" "packages/*/src/**/config*"
 
 # Key appears in environment-variables.md
-rg -n "\b<KEY>\b" docs/environment-variables.md
+rg -n "\b<KEY>\b" docs/internal/environment-variables.md
 ```
 
 All four must pass. Missing any one fails the task.
