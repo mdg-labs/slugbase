@@ -44,6 +44,24 @@ mdg-labs/slugbase-docs (main)  →  Documentation.AI build  →  https://docs.sl
 2. Confirm Documentation.AI build succeeds
 3. Confirm change visible on live site within build window
 
+## Troubleshooting stale content and 500 errors
+
+Documentation.AI hosts on Vercel ISR. After a large restructure you may see **both** symptoms:
+
+| Symptom | Cause | Check |
+|---------|-------|-------|
+| Sidebar or copy looks like the **old** docs | `x-vercel-cache: STALE` — previous prerender still served | `curl -sI https://docs.slugbase.app/selfhosted/introduction \| rg vercel-cache` |
+| **500** on renamed or new paths | Fresh prerender failed on MDX/runtime error | `curl -sI https://docs.slugbase.app/selfhosted/first-workspace-setup` |
+
+Common MDX causes of 500 on fresh render:
+
+- Unescaped placeholders such as `/go/<slug>` or `Bearer <token>` (use `&lt;slug&gt;` / `&lt;token&gt;`)
+- `{/* screenshot:… */}` JSX comments (use `<Callout kind="info" title="Screenshot placeholder">`)
+- `<Callout>` without a `title` attribute
+- Raw `&` inside JSX attribute values (use `&amp;`)
+
+After fixing MDX, push to `slugbase-docs` `main` and spot-check a mix of old paths, renamed paths, and new paths — all should return **200**, not STALE-only old content or 500.
+
 ## Related
 
 - Customer docs README: [`slugbase-docs` repository](https://github.com/mdg-labs/slugbase-docs)
