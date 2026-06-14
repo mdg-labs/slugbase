@@ -74,9 +74,13 @@ The repository is a **pnpm workspace** (a pnpm monorepo). Internal packages (for
 
 The public marketing surface (landing page, pricing, contact, legal/terms/privacy/imprint, and similar non-application pages) is a **separate static site** that lives inside the same repository as its own workspace package. It is **separately built and deployed**, independent of the application runtime. The site is built with **Astro** (a static, zero-JS-by-default site generator) and deployed to **Cloudflare Workers** (decisions #28, #40); what is fixed is that it is a static site, in the same repo, built and deployed separately from the application. The application itself contains no marketing pages; the only product-marketing-adjacent surface allowed inside the application is what is strictly needed for sign-in context (for example, a side panel on the login screen), and even that is data-driven, not a marketing page. The marketing site's **contact form** calls a small public endpoint on the application (see Sections 11.1 and 11.8) and is protected by the challenge (bot-protection) interface.
 
-### 2.4 Documentation lives in the source repo
+### 2.4 Documentation
 
-All documentation — both end-user/customer-facing and operator-facing — lives in the same repository. The current split into separate `slugbase-docs` and `slugbase-docs-internal` repositories is collapsed into the single repo. The governing editorial principle is retained: **if a reader would need to be a SlugBase developer to understand a page, it does not belong in the docs.** Internal engineering design notes and architecture decisions are kept distinct from customer/operator documentation (for example, in a clearly separated section or directory), but everything is colocated with the source.
+**Engineering documentation** (spec, roadmap, design prototypes, agent rules) lives in this monorepo under `docs/internal/`.
+
+**Customer and operator documentation** (Documentation.AI MDX, published at docs.slugbase.app) lives in the separate repository [`mdg-labs/slugbase-docs`](https://github.com/mdg-labs/slugbase-docs). Open `slugbase.code-workspace` in Cursor for both repos.
+
+The governing editorial principle is unchanged: **if a reader would need to be a SlugBase developer to understand a page, it does not belong in customer docs.**
 
 ### 2.5 Multi-tenant from day one
 
@@ -612,8 +616,7 @@ As a pnpm workspace in a single repository:
 - **`packages/marketing`** — the Astro static marketing site, independently built and deployed (§2.3).
 - **`packages/shared-types`** — cross-cutting Zod/ts-rest contracts, the external-interface contracts, and the generated API/OpenAPI types, consumed by both backend and web.
 - **`packages/ui`** — the shared component library and the design tokens (§23.1).
-- **`docs/public/`** — customer/operator documentation (Documentation.AI MDX; synced to `slugbase-docs`).
-- **`docs/internal/`** — engineering spec, design prototypes, and agent reference (not synced).
+- **Customer docs** — separate repository [`mdg-labs/slugbase-docs`](https://github.com/mdg-labs/slugbase-docs) (Documentation.AI MDX; published at docs.slugbase.app). Engineering docs remain in this monorepo under **`docs/internal/`**.
 - *(Fast-Follow)* an **operator console** package, if and when it is built (§10.2, §20).
 
 All members live in one repo, use pnpm, and the marketing site and the application are separately buildable.

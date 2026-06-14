@@ -1,28 +1,15 @@
 ---
-description: Documentation.AI authoring for customer/operator docs in docs/public/. Publish contract, MDX frontmatter, navigation, and component usage. Parent epic #392.
-globs: docs/public/**/*.mdx
+description: Documentation.AI authoring for customer/operator docs in slugbase-docs. MDX frontmatter, navigation, CDN images, and component usage. Parent epic #392.
 alwaysApply: false
 ---
 
 # Documentation.AI — SlugBase public docs
 
-You are writing **customer and operator** documentation published via [Documentation.AI](https://documentation.ai). Source lives in `docs/public/` in the SlugBase monorepo and syncs flat to [`mdg-labs/slugbase-docs`](https://github.com/mdg-labs/slugbase-docs) on push to `main` (see #396). Engineering specs stay in `docs/internal/` and are **never** synced.
+You are writing **customer and operator** documentation published via [Documentation.AI](https://documentation.ai). Source lives in the **[`mdg-labs/slugbase-docs`](https://github.com/mdg-labs/slugbase-docs)** repository at the repo root. Push to `main` to publish at [docs.slugbase.app](https://docs.slugbase.app). Engineering specs stay in `slugbase` → `docs/internal/` and are **never** part of customer docs.
 
-**Authoring guide:** `docs/public/README.md` · **Validation:** `pnpm validate:docs-public` · **Parent contract:** GitHub #392
+**Authoring guide:** `slugbase-docs/README.md` · **Workflow skill:** `.cursor/skills/write-customer-docs/SKILL.md` · **Parent contract:** GitHub #392
 
-**Authoring workflows:** invoke `/write-customer-docs` for greenfield pages, information architecture, and maintenance passes — see `.cursor/skills/write-customer-docs/SKILL.md`.
-
-## Publish mirror (slugbase → slugbase-docs)
-
-Paths under `docs/public/` become the **same paths** at the `slugbase-docs` repo root after sync:
-
-```text
-docs/public/documentation.json     →  documentation.json
-docs/public/selfhosted/quick-start.mdx  →  selfhosted/quick-start.mdx
-docs/public/cloud/api-reference/cloud-openapi.yaml  →  cloud/api-reference/cloud-openapi.yaml
-```
-
-Published URLs mirror file paths (no `.mdx` suffix): `selfhosted/quick-start.mdx` → `/selfhosted/quick-start`.
+**Local setup:** open [`slugbase.code-workspace`](../../slugbase.code-workspace) for both repos.
 
 ## Product vocabulary (spec §3 — mandatory in public docs)
 
@@ -51,16 +38,15 @@ description: "Concise description explaining page purpose and value"
 - H1 comes from frontmatter `title` — start body content with `##` (H2)
 - Filenames: **lowercase-with-hyphens** (`quick-start.mdx`, not `QuickStart.mdx`)
 - Internal links: **root-absolute** — `[Quick start](/selfhosted/quick-start)`, not relative `../`
-- Images: root-absolute — `![alt](/assets/intro-hero.png)` once the asset exists (see [Screenshots](#screenshots) for placeholders)
 - Never commit secrets, API keys, or real credentials in examples
 
 ## documentation.json (navigation)
 
-Lives at `docs/public/documentation.json`. Controls branding, navbar, sidebar, and OpenAPI wiring.
+Lives at `slugbase-docs/documentation.json`. Controls branding, navbar, sidebar, and OpenAPI wiring.
 
 **Adding a page requires both:**
 
-1. Create `docs/public/{product}/{page}.mdx` with frontmatter
+1. Create `{product}/{page}.mdx` in `slugbase-docs` with frontmatter
 2. Add a `path` entry in the correct `navigation.products → tabs → groups → pages` chain
 
 | `documentation.json` | File on disk |
@@ -80,8 +66,6 @@ Lives at `docs/public/documentation.json`. Controls branding, navbar, sidebar, a
 - `cloud/api-reference/cloud-openapi.yaml`
 
 Reference from a nav **group** via `"openapi": "…"`. Documentation.AI generates API pages from the spec.
-
-Run `pnpm validate:docs-public` before committing changes under `docs/public/`.
 
 ---
 
@@ -109,19 +93,35 @@ Run `pnpm validate:docs-public` before committing changes under `docs/public/`.
 - Anticipate common questions; include troubleshooting for likely failures
 - Write for scannability: headings, lists, callouts, white space
 
-## Screenshots
+## Screenshots and images
 
-When a screenshot is needed but the asset is not committed yet, use a placeholder callout — **do not** use `![...]()` until the file exists under `docs/public/assets/`:
+Documentation.AI does **not** serve arbitrary repo files at `/assets/…` on the live site. Use the **web editor** to upload screenshots — images are optimized and hosted on `blob-cdn.documentation.ai`.
+
+**Preferred workflow:**
+
+1. Upload via Documentation.AI web editor (`/image` command).
+2. Copy the CDN URL from image properties.
+3. Reference in MDX with `<Image>`:
+
+```mdx
+<Image
+  src="https://blob-cdn.documentation.ai/org-…/screenshot.png?q=85&fm=auto&auto=compress%2Cformat"
+  alt="Descriptive alt text for the UI shown"
+  width="1200"
+  height="800"
+/>
+```
+
+Until a screenshot exists, use a placeholder callout:
 
 ```mdx
 <Callout kind="info" title="Screenshot placeholder">
 **Suggested capture:** …
-**Suggested filename:** `/assets/{product}/{slug}.png`
 **Alt text:** …
 </Callout>
 ```
 
-Replace the callout with root-absolute `![alt](/assets/{product}/{slug}.png)` once the PNG is in the repo.
+Do **not** use `![alt](/assets/…)` — those paths 404 on the published site.
 
 ## Documentation.AI components
 
@@ -167,6 +167,7 @@ Use `<Callout kind="info|tip|alert|danger|success">` for supplementary, best-pra
 
 - `.cursor/skills/write-customer-docs/SKILL.md` — greenfield and maintenance authoring workflows (`/write-customer-docs`)
 - [Documentation.AI code editor](https://documentation.ai/docs/write-and-publish/code-editor)
+- [Documentation.AI images](https://documentation.ai/docs/components/images)
 - [Site configuration](https://documentation.ai/docs/customize/site-configuration)
 - [documentation.json schema](https://dashboard.documentation.ai/documentation.json)
-- SlugBase publish contract: GitHub issue #392
+- SlugBase publish verification: `docs/internal/documentation-ai-publish-verification.md`

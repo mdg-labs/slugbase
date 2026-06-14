@@ -1,6 +1,6 @@
 # Screenshot placeholders
 
-Real screenshots are captured in a separate task. Until assets exist under `docs/public/assets/`, use **HTML comment placeholders** in MDX drafts so authors and reviewers know where visuals belong.
+Use placeholders in MDX drafts until screenshots are uploaded via the **Documentation.AI web editor** (CDN URLs on `blob-cdn.documentation.ai`).
 
 ## Placeholder syntax
 
@@ -11,7 +11,7 @@ Real screenshots are captured in a separate task. Until assets exist under `docs
 | Part | Rule |
 |---|---|
 | `screenshot:` | Fixed prefix — distinguishes from other comments |
-| `<asset-slug>` | Lowercase kebab-case describing the screen; matches future filename without extension |
+| `<asset-slug>` | Lowercase kebab-case describing the screen |
 
 **Placement:** On its own line, typically after the section heading or before `<Steps>`.
 
@@ -25,18 +25,19 @@ Real screenshots are captured in a separate task. Until assets exist under `docs
 From the sidebar, choose **Settings**, then **Workspace**.
 ```
 
-```mdx
-<!-- screenshot:bookmarks-list-overview -->
+## Replacing placeholders
 
-## Steps
-```
-
-## Future asset mapping
-
-When screenshots are captured, replace the comment with a root-absolute image (per `docs/public/README.md`):
+1. Upload the screenshot in the Documentation.AI web editor (`/image`).
+2. Copy the `blob-cdn.documentation.ai` URL from image properties.
+3. Replace the comment with `<Image>`:
 
 ```mdx
-![Bookmarks list showing pinned and unpinned items](/assets/bookmarks-list-overview.png)
+<Image
+  src="https://blob-cdn.documentation.ai/org-…/settings-workspace-general.png?q=85&fm=auto&auto=compress%2Cformat"
+  alt="Workspace settings general tab"
+  width="1200"
+  height="800"
+/>
 ```
 
 | Placeholder slug | Suggested capture | Product |
@@ -50,11 +51,9 @@ When screenshots are captured, replace the comment with a root-absolute image (p
 | `login-error-generic` | Sign-in with generic error state | both |
 | `dashboard-pinned-row` | Dashboard with pinned bookmarks | both |
 
-Store files in `docs/public/assets/` — synced flat to `slugbase-docs` root `assets/`.
+Do **not** use `![alt](/assets/…)` — repo `/assets/` paths are not served on the live site.
 
 ## Optional: visible callout placeholder
-
-When a reviewer needs an inline reminder (not just a comment), wrap with a Documentation.AI callout:
 
 ```mdx
 <Callout kind="info">
@@ -62,27 +61,9 @@ When a reviewer needs an inline reminder (not just a comment), wrap with a Docum
 </Callout>
 ```
 
-Use sparingly — prefer HTML comments in drafts; reserve callouts for review handoff.
-
-## Page template integration
-
-All skeletons in [page-templates.md](page-templates.md) include `<!-- screenshot:… -->` markers. When authoring:
-
-1. Add a placeholder for every UI that is hard to describe in text alone.
-2. Use slugs from the mapping table or add new slugs following the same naming pattern.
-3. List new slugs in the Phase 6 summary for the screenshot capture follow-up.
-
 ## What not to do
 
 - Do not commit proprietary or customer data in screenshots — use demo workspaces.
-- Do not use relative image paths (`../assets/…`) — root-absolute only.
+- Do not use relative image paths — CDN URLs must be absolute.
 - Do not skip placeholders and leave long prose descriptions of pixel layout.
 - Do not embed base64 images in MDX.
-
-## Alt text (when replacing placeholders)
-
-Follow active voice, describe the UI state not the filename:
-
-```mdx
-![Workspace settings with SMTP host and port fields filled in](/assets/settings-workspace-smtp.png)
-```

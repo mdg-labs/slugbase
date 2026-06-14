@@ -1,0 +1,12 @@
+{
+  "folders": [
+    {
+      "name": "slugbase",
+      "path": "."
+    },
+    {
+      "name": "slugbase-docs",
+      "path": "../slugbase-docs"
+    }
+  ]
+}

@@ -1,19 +1,19 @@
 ---
 name: write-customer-docs
 description: >-
-  Author or refresh SlugBase customer and operator documentation in docs/public/
-  as MDX for Documentation.AI. Use when the user invokes /write-customer-docs,
-  asks to write customer docs, operator guides, public documentation, MDX pages,
-  documentation.json navigation, or refresh docs/public/ content. Explicit invocation
-  only — not auto-loaded.
+  Author or refresh SlugBase customer and operator documentation in the
+  slugbase-docs repo as MDX for Documentation.AI. Use when the user invokes
+  /write-customer-docs, asks to write customer docs, operator guides, public
+  documentation, MDX pages, documentation.json navigation, or refresh customer
+  docs content. Explicit invocation only — not auto-loaded.
 disable-model-invocation: true
 ---
 
 # Write customer docs (SlugBase)
 
-Author **customer and operator** documentation published via [Documentation.AI](https://documentation.ai). Source lives in `docs/public/` in the SlugBase monorepo and syncs to [`mdg-labs/slugbase-docs`](https://github.com/mdg-labs/slugbase-docs) on push to `main`.
+Author **customer and operator** documentation published via [Documentation.AI](https://documentation.ai). Source lives in the **[`mdg-labs/slugbase-docs`](https://github.com/mdg-labs/slugbase-docs)** repository (repo root). Open [`slugbase.code-workspace`](../../../slugbase.code-workspace) for the app monorepo and docs repo side by side.
 
-**Authoring guide:** [`docs/public/README.md`](../../../docs/public/README.md) · **MDX format rule:** [`.cursor/rules/documentation.ai.mdc`](../../rules/documentation.ai.mdc) · **Validation:** `pnpm validate:docs-public` · **Parent epic:** GitHub #392 · **Spec boundary:** spec §2.4 · **Vocabulary:** spec §3
+**Authoring guide:** `slugbase-docs/README.md` · **MDX format rule:** [`.cursor/rules/documentation.ai.mdc`](../../rules/documentation.ai.mdc) · **Parent epic:** GitHub #392 · **Spec boundary:** spec §2.4 · **Vocabulary:** spec §3
 
 ## When to use
 
@@ -28,12 +28,13 @@ Author **customer and operator** documentation published via [Documentation.AI](
 
 ## Hard rules
 
-1. **English only** for `docs/public/` — German (`de.json`) is for the web app UI, not public docs (spec §17). Never author German MDX.
+1. **English only** for customer MDX — German (`de.json`) is for the web app UI, not public docs (spec §17). Never author German MDX.
 2. **Never guess product behaviour** — discover from routes, UI copy, and spec before drafting.
 3. **Never edit `docs/internal/`** as part of customer doc work — cite spec sections; do not copy engineering docs into public pages.
 4. **Never commit secrets** — use placeholders in examples.
 5. **Defer MDX format details** to `.cursor/rules/documentation.ai.mdc` — this skill covers workflow, IA, tone, and discovery.
-6. **Both steps to add a page:** create `.mdx` file **and** register `path` in `documentation.json` (see README).
+6. **Both steps to add a page:** create `.mdx` file **and** register `path` in `documentation.json` (see `slugbase-docs/README.md`).
+7. **Edit `slugbase-docs` only** — do not recreate `docs/public/` in the monorepo.
 
 ## Reference files (read as needed)
 
@@ -53,7 +54,7 @@ Author **customer and operator** documentation published via [Documentation.AI](
 - [ ] Phase 2: Discovery
 - [ ] Phase 3: IA proposal (bulk work only)
 - [ ] Phase 4: Draft MDX
-- [ ] Phase 5: Wire navigation + validate
+- [ ] Phase 5: Wire navigation
 - [ ] Phase 6: Summarise changes
 ```
 
@@ -64,7 +65,7 @@ Confirm with the user (or infer from the request):
 | Dimension | Options |
 |---|---|
 | **Breadth** | Full corpus · one product (`cloud` / `selfhosted`) · one nav group · single page refresh |
-| **Mode** | **Greenfield** — `docs/public/` has no MDX for this area yet · **Maintenance** — existing MDX to update or extend |
+| **Mode** | **Greenfield** — no MDX for this area yet · **Maintenance** — existing MDX to update or extend |
 | **Audience** | End user (bookmarks, slugs, palette) · workspace admin · instance operator (self-hosted install, SMTP, OIDC) |
 
 Record scope in chat before discovery.
@@ -114,16 +115,10 @@ For each page:
 - Verification step at the end of procedures.
 - Troubleshooting section for how-to and runbook pages.
 
-### Phase 5 — Wire + validate
+### Phase 5 — Wire navigation
 
-1. Add or update `path` entries in `docs/public/documentation.json` under the correct product → tab → group chain.
-2. Run from repo root:
-
-```bash
-bash scripts/with-ci-env.sh pnpm validate:docs-public
-```
-
-3. Fix all validator errors before finishing.
+1. Add or update `path` entries in `slugbase-docs/documentation.json` under the correct product → tab → group chain.
+2. Push to `slugbase-docs` `main` (or open a PR) — Documentation.AI validates on build.
 
 ### Phase 6 — Summarise
 
@@ -131,7 +126,7 @@ Report:
 
 - Pages created or updated (paths)
 - Navigation changes in `documentation.json`
-- Screenshot placeholders added (asset filenames for a follow-up capture task)
+- Screenshot placeholders added (for follow-up capture via DA web editor)
 - Open questions or spec gaps found during discovery
 
 ## Maintenance mode checklist
@@ -142,25 +137,24 @@ When refreshing existing MDX:
 - [ ] Compare page claims against spec § relevant sections
 - [ ] Check entitlement-gated UI (settings nav visibility, billing panels) still matches
 - [ ] Update internal links if paths moved
-- [ ] Re-run `pnpm validate:docs-public`
+- [ ] Confirm Documentation.AI build passes after push
 
 ## Out of scope
 
 - Editing `.cursor/rules/documentation.ai.mdc` (owned by #408)
 - Engineering docs in `docs/internal/`
 - German public documentation
-- Capturing real screenshots (use placeholders; file follow-up task)
 - OpenAPI spec authoring (separate API reference work under #392 children)
 
 ## Quick commands
 
 ```bash
-# Validate public docs
-bash scripts/with-ci-env.sh pnpm validate:docs-public
-
-# Search UI copy by prefix
+# Search UI copy by prefix (slugbase monorepo)
 rg '"bookmarks\.' packages/web/app/i18n/locales/en.json
 
 # List app routes
 cat packages/web/app/routes.ts
+
+# List customer MDX (slugbase-docs repo)
+ls slugbase-docs/selfhosted slugbase-docs/cloud
 ```

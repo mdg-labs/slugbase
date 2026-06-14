@@ -151,7 +151,7 @@ description: "Set up SlugBase and save your first bookmark in minutes."
 ---
 ```
 
-English only for all `docs/public/**/*.mdx`.
+English only for all `slugbase-docs/**/*.mdx`.
 
 ---
 

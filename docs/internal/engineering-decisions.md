@@ -42,9 +42,10 @@ packages/
   marketing/      # Astro static marketing site (separately built/deployed)
   shared-types/   # Zod + ts-rest contracts, interface contracts, generated OpenAPI types
   ui/             # shared components + design tokens (bridged from colors_and_type.css)
-docs/public/      # customer/operator docs (Documentation.AI MDX — synced)
 docs/internal/    # engineering spec + prototypes (this file)
 ```
+
+Customer/operator docs: separate repo [`mdg-labs/slugbase-docs`](https://github.com/mdg-labs/slugbase-docs) (Documentation.AI MDX). Open via `slugbase.code-workspace`.
 
 - **No app package may depend on another app package.** Both `backend` and `web` depend on `shared-types` (and `web`/`marketing` on `ui`); never `web → backend`.
 - The external-interface **contracts** live in `shared-types`; their **implementations** live in `backend`.

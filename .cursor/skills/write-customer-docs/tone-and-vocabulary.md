@@ -1,12 +1,12 @@
 # Tone and vocabulary
 
-Customer docs explain **what readers can do in SlugBase**, not how the codebase is structured. English only for `docs/public/`.
+Customer docs explain **what readers can do in SlugBase**, not how the codebase is structured. English only for `slugbase-docs` MDX.
 
 ## Language scope
 
 | Surface | Locales | Notes |
 |---|---|---|
-| Public docs (`docs/public/`) | **English only** | No German MDX, no bilingual pages |
+| Public docs (`slugbase-docs/`) | **English only** | No German MDX, no bilingual pages |
 | Web app UI | English + German (`en.json`, `de.json`) | Use `en.json` for terminology discovery, not as translated doc output |
 
 If a user asks for German public documentation, defer to a separate i18n initiative — out of scope for v1 public docs.

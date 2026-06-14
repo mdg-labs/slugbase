@@ -1,6 +1,6 @@
 # Information architecture
 
-SlugBase public docs use Documentation.AI's **Dimensions → Views → Content** model. Source: `docs/public/documentation.json`.
+SlugBase public docs use Documentation.AI's **Dimensions → Views → Content** model. Source: `slugbase-docs/documentation.json`.
 
 ## Product dimensions
 
@@ -51,7 +51,7 @@ navigation.products[]
 | Account & billing | `account-settings`, `plans-and-billing`, `mfa-and-security` | Workspace owner |
 | Help | `troubleshooting`, `faq`, `support` | End user |
 
-**API tab** — wire later via group-level `openapi` paths (see `docs/public/README.md`).
+**API tab** — wire later via group-level `openapi` paths (see `slugbase-docs/README.md`).
 
 ## Page inventory
 
@@ -119,7 +119,7 @@ navigation.products[]
 
 For each new page:
 
-1. Create `docs/public/{path}.mdx` with `title` and `description` frontmatter.
+1. Create `{path}.mdx` in `slugbase-docs` with `title` and `description` frontmatter.
 2. Add to the correct chain:
 
 ```json
@@ -131,7 +131,7 @@ For each new page:
 ```
 
 3. Set `initialRoute` when adding the first page in a product (e.g. `selfhosted/introduction`).
-4. Run `pnpm validate:docs-public`.
+4. Push to `slugbase-docs` `main` — Documentation.AI validates on build.
 
 ## Greenfield vs maintenance IA
 
@@ -150,4 +150,4 @@ For each new page:
 
 ## English-only scope
 
-All `docs/public/` content is **English only**. The web app ships German UI (`de.json`), but public documentation does not include a German locale. Do not plan `de` MDX variants or translation workflows in this skill.
+All customer MDX in `slugbase-docs` is **English only**. The web app ships German UI (`de.json`), but public documentation does not include a German locale. Do not plan `de` MDX variants or translation workflows in this skill.

@@ -10,8 +10,8 @@ Read these **in order** before drafting or refreshing customer docs. Never guess
 | 2 | **UI copy (English)** | `packages/web/app/i18n/locales/en.json` | Labels, button text, errors, empty states — use as terminology anchor |
 | 3 | **Settings navigation** | `packages/web/app/routes/settings/settings-nav-config.ts` | Settings sections, entitlement-gated items (SMTP, OIDC, billing, members) |
 | 4 | **Product spec** | `docs/internal/slugbase-mvp-spec.md` | Authoritative behaviour, limits, security copy, entitlement rules |
-| 5 | **Existing public MDX** | `docs/public/**/*.mdx` | Current published content (may be empty during greenfield) |
-| 6 | **Site navigation** | `docs/public/documentation.json` | Product dimensions, tabs, groups, registered paths, OpenAPI wiring |
+| 5 | **Existing public MDX** | `slugbase-docs/**/*.mdx` | Current published content |
+| 6 | **Site navigation** | `slugbase-docs/documentation.json` | Product dimensions, tabs, groups, registered paths, OpenAPI wiring |
 
 ### Supplementary sources (as needed)
 
@@ -21,13 +21,13 @@ Read these **in order** before drafting or refreshing customer docs. Never guess
 | Route modules | `packages/web/app/routes/**` | Component structure, loader behaviour, visible fields |
 | Design prototype | `docs/internal/design-prototype/V1/` | Screen layout, interaction patterns (spec §23 wins on conflict) |
 | Defaults | `docs/internal/defaults-and-constants.md` | Caps, limits, TTLs for accurate numbers in docs |
-| Public README | `docs/public/README.md` | Publish mirror, validation, path conventions |
+| Public README | `slugbase-docs/README.md` | Repo layout, path conventions, image workflow |
 
 **Do not** treat `packages/web/app/i18n/locales/de.json` as a public docs source — German is in-app UI only.
 
 ## Greenfield discovery (0 MDX)
 
-Use when `docs/public/` has no `.mdx` files for the target area (current state: empty Guides groups in `documentation.json`).
+Use when `slugbase-docs/` has no `.mdx` files for the target area.
 
 ### Steps
 
@@ -44,11 +44,11 @@ Use when `docs/public/` has no `.mdx` files for the target area (current state: 
 
 ## Maintenance discovery (existing MDX)
 
-Use when updating or extending pages that already exist under `docs/public/`.
+Use when updating or extending pages that already exist in `slugbase-docs/`.
 
 ### Steps
 
-1. **Inventory current pages** — list `docs/public/**/*.mdx` and cross-check every `path` in `documentation.json`.
+1. **Inventory current pages** — list `slugbase-docs/**/*.mdx` and cross-check every `path` in `documentation.json`.
 2. **Diff routes** — compare page claims against current `routes.ts` (new settings sections, renamed paths).
 3. **Diff UI copy** — spot terminology drift between MDX and `en.json` labels.
 4. **Diff spec** — re-read relevant spec sections; flag behaviour that changed since the page was written.
