@@ -11,9 +11,24 @@ disable-model-invocation: true
 
 # Write customer docs (SlugBase)
 
-Author **customer and operator** documentation published via [Documentation.AI](https://documentation.ai). Source lives in the **[`mdg-labs/slugbase-docs`](https://github.com/mdg-labs/slugbase-docs)** repository (repo root). Open [`slugbase.code-workspace`](../../../slugbase.code-workspace) for the app monorepo and docs repo side by side.
+Author **customer and operator** documentation published via [Documentation.AI](https://documentation.ai). Source lives in the **[`mdg-labs/slugbase-docs`](https://github.com/mdg-labs/slugbase-docs)** repository (repo root).
 
-**Authoring guide:** `slugbase-docs/README.md` · **MDX format rule:** [`.cursor/rules/documentation.ai.mdc`](../../rules/documentation.ai.mdc) · **Parent epic:** GitHub #392 · **Spec boundary:** spec §2.4 · **Vocabulary:** spec §3
+**Authoring guide:** `slugbase-docs/README.md` · **MDX format rule:** `slugbase-docs/.cursor/rules/documentation.ai.mdc` · **Parent epic:** GitHub #392 · **Spec boundary:** spec §2.4 · **Vocabulary:** spec §3
+
+## Workspace layout (two repos)
+
+Customer docs work spans **two sibling repositories** opened together in Cursor:
+
+| Workspace folder | GitHub repo | Role |
+|---|---|---|
+| `slugbase/` | [`mdg-labs/slugbase`](https://github.com/mdg-labs/slugbase) | App monorepo — routes, UI copy, engineering spec (`slugbase/docs/internal/`), agent rules/skills (`slugbase/.cursor/`) |
+| `slugbase-docs/` | [`mdg-labs/slugbase-docs`](https://github.com/mdg-labs/slugbase-docs) | Customer/operator MDX — **edit here for public docs** |
+
+**Open:** [`slugbase/slugbase.code-workspace`](../../../slugbase.code-workspace) from the monorepo checkout. The workspace expects a sibling `slugbase-docs` checkout at `../slugbase-docs`.
+
+**Path convention:** paths in this skill are **workspace-relative** from the multi-root workspace (prefix `slugbase/` or `slugbase-docs/`). When a tool's cwd is a single repo root, drop the matching prefix.
+
+**Git:** commit MDX and `documentation.json` changes in **`slugbase-docs`** only. Discovery reads from **`slugbase`**; do not recreate `slugbase/docs/public/` in the monorepo.
 
 ## When to use
 
@@ -30,11 +45,11 @@ Author **customer and operator** documentation published via [Documentation.AI](
 
 1. **English only** for customer MDX — German (`de.json`) is for the web app UI, not public docs (spec §17). Never author German MDX.
 2. **Never guess product behaviour** — discover from routes, UI copy, and spec before drafting.
-3. **Never edit `docs/internal/`** as part of customer doc work — cite spec sections; do not copy engineering docs into public pages.
+3. **Never edit `slugbase/docs/internal/`** as part of customer doc work — cite spec sections; do not copy engineering docs into public pages.
 4. **Never commit secrets** — use placeholders in examples.
-5. **Defer MDX format details** to `.cursor/rules/documentation.ai.mdc` — this skill covers workflow, IA, tone, and discovery.
-6. **Both steps to add a page:** create `.mdx` file **and** register `path` in `documentation.json` (see `slugbase-docs/README.md`).
-7. **Edit `slugbase-docs` only** — do not recreate `docs/public/` in the monorepo.
+5. **Defer MDX format details** to `slugbase-docs/.cursor/rules/documentation.ai.mdc` — this skill covers workflow, IA, tone, and discovery.
+6. **Both steps to add a page:** create `.mdx` under `slugbase-docs/` **and** register `path` in `slugbase-docs/documentation.json` (see `slugbase-docs/README.md`).
+7. **Edit `slugbase-docs/` only** for publishable content — never recreate `slugbase/docs/public/` in the monorepo.
 
 ## Reference files (read as needed)
 
@@ -106,7 +121,7 @@ For each page:
 3. Write **task-oriented English** — one primary concept per page.
 4. Use self-contained `##` sections (retrieval-friendly for Documentation.AI search).
 5. Insert screenshot placeholders per [screenshot-placeholders.md](screenshot-placeholders.md) where visuals help.
-6. Use Documentation.AI components per `.cursor/rules/documentation.ai.mdc`.
+6. Use Documentation.AI components per `slugbase-docs/.cursor/rules/documentation.ai.mdc`.
 
 **Body structure defaults:**
 
@@ -141,20 +156,26 @@ When refreshing existing MDX:
 
 ## Out of scope
 
-- Editing `.cursor/rules/documentation.ai.mdc` (owned by #408)
-- Engineering docs in `docs/internal/`
+- Editing `slugbase-docs/.cursor/rules/documentation.ai.mdc` (owned by #408)
+- Engineering docs in `slugbase/docs/internal/`
 - German public documentation
 - OpenAPI spec authoring (separate API reference work under #392 children)
 
 ## Quick commands
 
 ```bash
+# Multi-root workspace (slugbase.code-workspace) — paths from workspace root
+
 # Search UI copy by prefix (slugbase monorepo)
-rg '"bookmarks\.' packages/web/app/i18n/locales/en.json
+rg '"bookmarks\.' slugbase/packages/web/app/i18n/locales/en.json
 
 # List app routes
-cat packages/web/app/routes.ts
+cat slugbase/packages/web/app/routes.ts
 
 # List customer MDX (slugbase-docs repo)
 ls slugbase-docs/selfhosted slugbase-docs/cloud
+
+# Git status per repo
+git -C slugbase status
+git -C slugbase-docs status
 ```

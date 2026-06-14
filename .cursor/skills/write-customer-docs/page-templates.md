@@ -2,7 +2,7 @@
 
 Skeletons for common public doc page types. Apply [tone-and-vocabulary.md](tone-and-vocabulary.md) and insert [screenshot placeholders](screenshot-placeholders.md) where noted.
 
-**Format details** (frontmatter, components, links): defer to `.cursor/rules/documentation.ai.mdc`.
+**Format details** (frontmatter, components, links): defer to `slugbase-docs/.cursor/rules/documentation.ai.mdc`.
 
 ## Shared frontmatter
 

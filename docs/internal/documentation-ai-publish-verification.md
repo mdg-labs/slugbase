@@ -47,5 +47,6 @@ mdg-labs/slugbase-docs (main)  →  Documentation.AI build  →  https://docs.sl
 ## Related
 
 - Customer docs README: [`slugbase-docs` repository](https://github.com/mdg-labs/slugbase-docs)
-- Authoring skill: `.cursor/skills/write-customer-docs/SKILL.md` (in monorepo)
+- MDX format rule: `slugbase-docs/.cursor/rules/documentation.ai.mdc`
+- Authoring skill: `slugbase/.cursor/skills/write-customer-docs/SKILL.md` (monorepo)
 - Parent epic: [#392](https://github.com/mdg-labs/slugbase/issues/392)

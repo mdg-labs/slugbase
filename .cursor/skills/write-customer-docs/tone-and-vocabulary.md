@@ -25,7 +25,7 @@ If a user asks for German public documentation, defer to a separate i18n initiat
 
 ## Product vocabulary (spec §3 — mandatory)
 
-Use these terms in all public docs. Full glossary: `docs/internal/slugbase-mvp-spec.md` §3.
+Use these terms in all public docs. Full glossary: `slugbase/docs/internal/slugbase-mvp-spec.md` §3.
 
 | Use | Never use | Notes |
 |---|---|---|

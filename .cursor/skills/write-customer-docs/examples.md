@@ -1,6 +1,6 @@
 # Examples — good vs bad
 
-Side-by-side excerpts for SlugBase public docs. Formatting details: `.cursor/rules/documentation.ai.mdc`.
+Side-by-side excerpts for SlugBase public docs. Formatting details: `slugbase-docs/.cursor/rules/documentation.ai.mdc`.
 
 ---
 
@@ -54,7 +54,7 @@ Side-by-side excerpts for SlugBase public docs. Formatting details: `.cursor/rul
 
 > SlugBase stores sessions in PostgreSQL via Drizzle ORM. The NestJS backend validates CSRF on mutating routes except the allowlist in `csrf.middleware.ts`.
 
-**Problems:** Belongs in `docs/internal/` — readers are not SlugBase developers (spec §2.4).
+**Problems:** Belongs in `slugbase/docs/internal/` — readers are not SlugBase developers (spec §2.4).
 
 ### Good
 

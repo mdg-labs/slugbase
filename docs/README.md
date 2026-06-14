@@ -2,7 +2,7 @@
 
 This repository holds **engineering documentation only** (`docs/internal/`).
 
-Customer and operator guides (Documentation.AI MDX) live in the separate **[`mdg-labs/slugbase-docs`](https://github.com/mdg-labs/slugbase-docs)** repository. Open [`slugbase.code-workspace`](../slugbase.code-workspace) in Cursor for both repos side by side.
+Customer and operator guides (Documentation.AI MDX) live in the separate **[`mdg-labs/slugbase-docs`](https://github.com/mdg-labs/slugbase-docs)** repository (`slugbase-docs/.cursor/rules/documentation.ai.mdc` for MDX authoring). Open [`slugbase/slugbase.code-workspace`](../slugbase.code-workspace) in Cursor for both repos side by side.
 
 ## Internal (`docs/internal/`)
 

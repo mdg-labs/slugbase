@@ -119,7 +119,7 @@ navigation.products[]
 
 For each new page:
 
-1. Create `{path}.mdx` in `slugbase-docs` with `title` and `description` frontmatter.
+1. Create `{path}.mdx` under `slugbase-docs/` with `title` and `description` frontmatter.
 2. Add to the correct chain:
 
 ```json
