@@ -58,13 +58,19 @@ function createMockWebhookClient() {
   };
 }
 
-function createMockConfig(overrides: Record<string, string | undefined> = {}): ConfigService {
-  const values: Record<string, string | undefined> = {
+function createMockConfig(overrides: Record<string, string | boolean | undefined> = {}): ConfigService {
+  const values: Record<string, string | boolean | undefined> = {
     STRIPE_WEBHOOK_SECRET: "whsec_test",
+    FRONTEND_ORIGIN: "https://app.slugbase.test",
+    isProduction: false,
     ...overrides,
   };
   return { get: (key: string) => values[key] } as ConfigService;
 }
+
+const frontendSuccessUrl = "https://app.slugbase.test/billing/success";
+const frontendCancelUrl = "https://app.slugbase.test/billing/cancel";
+const frontendReturnUrl = "https://app.slugbase.test/settings/billing";
 
 function createService(overrides: {
   billing?: BillingService;
@@ -289,8 +295,8 @@ describe("BillingApplicationService - Team seat quantity", () => {
         plan: "team",
         mode: "recurring",
         seatQuantity: 1,
-        successUrl: "https://app.example/success",
-        cancelUrl: "https://app.example/cancel",
+        successUrl: frontendSuccessUrl,
+        cancelUrl: frontendCancelUrl,
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
@@ -305,8 +311,8 @@ describe("BillingApplicationService - Team seat quantity", () => {
         plan: "team",
         mode: "recurring",
         seatQuantity: 3,
-        successUrl: "https://app.example/success",
-        cancelUrl: "https://app.example/cancel",
+        successUrl: frontendSuccessUrl,
+        cancelUrl: frontendCancelUrl,
       }),
     ).rejects.toThrow(/below current member count/i);
   });
@@ -325,12 +331,227 @@ describe("BillingApplicationService - Team seat quantity", () => {
       plan: "team",
       mode: "recurring",
       seatQuantity: 5,
-      successUrl: "https://app.example/success",
-      cancelUrl: "https://app.example/cancel",
+      successUrl: frontendSuccessUrl,
+      cancelUrl: frontendCancelUrl,
     });
 
     expect(billing.createCheckoutSession).toHaveBeenCalledWith(
       expect.objectContaining({ seatQuantity: 5 }),
     );
+  });
+});
+
+describe("BillingApplicationService - redirect URL allowlist", () => {
+  it("rejects checkout when successUrl is off-origin", async () => {
+    const billing = createMockBilling();
+    const { service } = createCheckoutService({ billing });
+
+    await expect(
+      service.startCheckout({
+        workspaceId: "ws-1",
+        requesterId: "user-1",
+        plan: "personal",
+        mode: "recurring",
+        successUrl: "https://evil.example/success",
+        cancelUrl: frontendCancelUrl,
+      }),
+    ).rejects.toThrow(/frontend origin/i);
+
+    expect(billing.createCheckoutSession).not.toHaveBeenCalled();
+  });
+
+  it("rejects checkout when cancelUrl is off-origin", async () => {
+    const billing = createMockBilling();
+    const { service } = createCheckoutService({ billing });
+
+    await expect(
+      service.startCheckout({
+        workspaceId: "ws-1",
+        requesterId: "user-1",
+        plan: "personal",
+        mode: "recurring",
+        successUrl: frontendSuccessUrl,
+        cancelUrl: "https://evil.example/cancel",
+      }),
+    ).rejects.toThrow(/frontend origin/i);
+
+    expect(billing.createCheckoutSession).not.toHaveBeenCalled();
+  });
+
+  it("rejects portal when returnUrl is off-origin", async () => {
+    const billing = createMockBilling();
+    const webhookClient = createMockWebhookClient();
+    const config = createMockConfig();
+    const mockOrm = {
+      select: vi.fn().mockReturnThis(),
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue([]),
+      insert: vi.fn().mockReturnThis(),
+      values: vi.fn().mockResolvedValue(undefined),
+    };
+    const db = { getOrm: () => mockOrm } as unknown as DbService;
+    const planConfig = {
+      isSupporterPromotionActive: () => true,
+      resolveCheckoutPriceId: () => "price_test",
+    } as unknown as PlanConfigService;
+    const accounts = {
+      findById: vi.fn().mockResolvedValue({ id: "user-1", email: "owner@example.com" }),
+    } as unknown as AccountsService;
+    const downgrade = { handlePlanTransition: vi.fn() } as unknown as DowngradeService;
+
+    vi.spyOn(WorkspaceRepository.prototype, "findById").mockResolvedValue({
+      ...workspaceFixture,
+      billingCustomerId: "cus_1",
+    });
+    vi.spyOn(WorkspaceMemberRepository.prototype, "findByWorkspaceAndUser").mockResolvedValue({
+      id: "m-1",
+      workspaceId: "ws-1",
+      userId: "user-1",
+      role: "OWNER",
+      joinedAt: new Date(),
+    });
+
+    const service = new BillingApplicationService(
+      db,
+      billing,
+      planConfig,
+      config,
+      accounts,
+      webhookClient,
+      downgrade,
+    );
+
+    await expect(
+      service.openPortal({
+        workspaceId: "ws-1",
+        requesterId: "user-1",
+        returnUrl: "https://evil.example/settings/billing",
+      }),
+    ).rejects.toThrow(/frontend origin/i);
+
+    expect(billing.createPortalSession).not.toHaveBeenCalled();
+  });
+
+  it("allows redirect URLs on the configured frontend origin", async () => {
+    const billing = createMockBilling();
+    (billing.createCheckoutSession as ReturnType<typeof vi.fn>).mockResolvedValue({
+      checkoutUrl: "https://checkout.stripe.test/session",
+      sessionId: "cs_test",
+    });
+    (billing.createPortalSession as ReturnType<typeof vi.fn>).mockResolvedValue({
+      portalUrl: "https://billing.stripe.test/portal",
+    });
+    const webhookClient = createMockWebhookClient();
+    const config = createMockConfig();
+    const mockOrm = {
+      select: vi.fn().mockReturnThis(),
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue([]),
+      insert: vi.fn().mockReturnThis(),
+      values: vi.fn().mockResolvedValue(undefined),
+    };
+    const db = { getOrm: () => mockOrm } as unknown as DbService;
+    const planConfig = {
+      isSupporterPromotionActive: () => true,
+      resolveCheckoutPriceId: () => "price_personal",
+    } as unknown as PlanConfigService;
+    const accounts = {
+      findById: vi.fn().mockResolvedValue({ id: "user-1", email: "owner@example.com" }),
+    } as unknown as AccountsService;
+    const downgrade = { handlePlanTransition: vi.fn() } as unknown as DowngradeService;
+
+    vi.spyOn(WorkspaceMemberRepository.prototype, "findByWorkspaceAndUser").mockResolvedValue({
+      id: "m-1",
+      workspaceId: "ws-1",
+      userId: "user-1",
+      role: "OWNER",
+      joinedAt: new Date(),
+    });
+
+    const service = new BillingApplicationService(
+      db,
+      billing,
+      planConfig,
+      config,
+      accounts,
+      webhookClient,
+      downgrade,
+    );
+
+    vi.spyOn(WorkspaceRepository.prototype, "findById")
+      .mockResolvedValueOnce(workspaceFixture)
+      .mockResolvedValueOnce({
+        ...workspaceFixture,
+        billingCustomerId: "cus_1",
+      });
+
+    await service.startCheckout({
+      workspaceId: "ws-1",
+      requesterId: "user-1",
+      plan: "personal",
+      mode: "recurring",
+      successUrl: frontendSuccessUrl,
+      cancelUrl: frontendCancelUrl,
+    });
+
+    await service.openPortal({
+      workspaceId: "ws-1",
+      requesterId: "user-1",
+      returnUrl: frontendReturnUrl,
+    });
+
+    expect(billing.createCheckoutSession).toHaveBeenCalledOnce();
+    expect(billing.createPortalSession).toHaveBeenCalledOnce();
+  });
+
+  it("rejects non-HTTPS redirect URLs in production", async () => {
+    const billing = createMockBilling();
+    const productionConfig = createMockConfig({
+      FRONTEND_ORIGIN: "http://localhost:3000",
+      isProduction: true,
+    });
+    const webhookClient = createMockWebhookClient();
+    const mockOrm = {
+      select: vi.fn().mockReturnThis(),
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue([]),
+      insert: vi.fn().mockReturnThis(),
+      values: vi.fn().mockResolvedValue(undefined),
+    };
+    const db = { getOrm: () => mockOrm } as unknown as DbService;
+    const planConfig = {
+      isSupporterPromotionActive: () => true,
+      resolveCheckoutPriceId: () => "price_personal",
+    } as unknown as PlanConfigService;
+    const accounts = {
+      findById: vi.fn().mockResolvedValue({ id: "user-1", email: "owner@example.com" }),
+    } as unknown as AccountsService;
+    const downgrade = { handlePlanTransition: vi.fn() } as unknown as DowngradeService;
+
+    const productionService = new BillingApplicationService(
+      db,
+      billing,
+      planConfig,
+      productionConfig,
+      accounts,
+      webhookClient,
+      downgrade,
+    );
+
+    await expect(
+      productionService.startCheckout({
+        workspaceId: "ws-1",
+        requesterId: "user-1",
+        plan: "personal",
+        mode: "recurring",
+        successUrl: "http://localhost:3000/billing/success",
+        cancelUrl: "http://localhost:3000/billing/cancel",
+      }),
+    ).rejects.toThrow(/HTTPS in production/i);
+
+    expect(billing.createCheckoutSession).not.toHaveBeenCalled();
   });
 });

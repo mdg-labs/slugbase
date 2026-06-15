@@ -231,8 +231,8 @@ describe("Billing (integration)", () => {
       plan: "team",
       mode: "recurring",
       seatQuantity: 5,
-      successUrl: "https://app.example/success",
-      cancelUrl: "https://app.example/cancel",
+      successUrl: "https://app.slugbase.test/success",
+      cancelUrl: "https://app.slugbase.test/cancel",
     });
 
     expect(checkoutCreate).toHaveBeenCalledOnce();
@@ -262,15 +262,15 @@ describe("Billing (integration)", () => {
       plan: "personal",
       mode: "recurring",
       billingInterval: "monthly",
-      successUrl: "https://app.example/success",
-      cancelUrl: "https://app.example/cancel",
+      successUrl: "https://app.slugbase.test/success",
+      cancelUrl: "https://app.slugbase.test/cancel",
     });
     expect(checkout.checkoutUrl).toContain("checkout.stripe.test");
 
     const portal = await billingApp.openPortal({
       workspaceId,
       requesterId: ownerUserId,
-      returnUrl: "https://app.example/settings/billing",
+      returnUrl: "https://app.slugbase.test/settings/billing",
     });
     expect(portal.portalUrl).toContain("billing.stripe.test");
   });
@@ -282,8 +282,8 @@ describe("Billing (integration)", () => {
       plan: "personal",
       mode: "recurring",
       billingInterval: "annual",
-      successUrl: "https://app.example/success",
-      cancelUrl: "https://app.example/cancel",
+      successUrl: "https://app.slugbase.test/success",
+      cancelUrl: "https://app.slugbase.test/cancel",
     });
     expect(checkout.checkoutUrl).toContain("checkout.stripe.test");
   });
