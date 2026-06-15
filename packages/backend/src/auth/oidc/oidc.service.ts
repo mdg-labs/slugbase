@@ -152,11 +152,19 @@ export class OidcService {
 
     if (email) {
       const existingAccount = await this.accounts.findByEmail(email);
-      if (existingAccount) {
+      if (existingAccount && emailVerified) {
         userId = existingAccount.id;
-        if (emailVerified && !existingAccount.emailVerified) {
+        if (!existingAccount.emailVerified) {
           await this.accounts.markEmailVerified(userId);
         }
+      } else if (existingAccount) {
+        // IdP email is unverified — do not auto-link to an existing account (spec §5.6).
+        const newAccount = await this.accounts.createOidcAccount({
+          email: `${subject}@oidc.local`,
+          name,
+          emailVerified: false,
+        });
+        userId = newAccount.id;
       } else {
         const newAccount = await this.accounts.createOidcAccount({
           email,
