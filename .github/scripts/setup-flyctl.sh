@@ -50,10 +50,10 @@ curl -fsSL "${archive_url}" -o "${tmpdir}/${asset}"
 mkdir -p "${BIN_DIR}"
 tar -xzf "${tmpdir}/${asset}" -C "${BIN_DIR}"
 
+# GITHUB_PATH only affects subsequent workflow steps — always update PATH for this step.
+export PATH="${BIN_DIR}:${PATH}"
 if [[ -n "${GITHUB_PATH:-}" ]]; then
   echo "${BIN_DIR}" >> "${GITHUB_PATH}"
-else
-  export PATH="${BIN_DIR}:${PATH}"
 fi
 
 flyctl version
