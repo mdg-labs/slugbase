@@ -8,8 +8,8 @@ export interface CryptoService {
 
   /**
    * Decrypts a value produced by {@link encrypt}.
-   * In strict mode (production), any failure throws {@link CryptoDecryptError}
-   * instead of returning empty or pass-through plaintext.
+   * In strict mode (production or staging via SENTRY_ENVIRONMENT), any failure
+   * throws {@link CryptoDecryptError} instead of returning empty or pass-through plaintext.
    */
   decrypt(ciphertext: string): string;
 }

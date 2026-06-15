@@ -308,8 +308,10 @@ Optional on both shapes. Empty = no-op (no tracker, no Sentry init).
 | `UMAMI_WEBSITE_ID` | Umami website UUID (API) | Optional | No | Optional | No | Runtime | `<uuid>` |
 | `VITE_UMAMI_HOST` | Umami script host (web client) | Optional | No | Optional | No | Build | `https://analytics.example.com` |
 | `VITE_UMAMI_WEBSITE_ID` | Umami website UUID (web client) | Optional | No | Optional | No | Build | `<uuid>` |
+| `VITE_UMAMI_ALLOWED_ORIGINS` | Extra HTTPS origins allowed for web Umami script (SEC-027) | Optional | No | Optional | No | Build | `https://analytics.example.com` |
 | `PUBLIC_UMAMI_HOST` | Umami script host (marketing) | Optional | No | Optional | No | Build | `https://analytics.example.com` |
 | `PUBLIC_UMAMI_WEBSITE_ID` | Umami website UUID (marketing) | Optional | No | Optional | No | Build | `<uuid>` |
+| `PUBLIC_UMAMI_ALLOWED_ORIGINS` | Extra HTTPS origins allowed for marketing Umami script (SEC-027) | Optional | No | Optional | No | Build | `https://analytics.example.com` |
 | `SENTRY_DSN` | Sentry ingest DSN (API) | Optional | No | Optional | Yes | Runtime | `https://…@sentry.io/…` |
 | `SENTRY_ENVIRONMENT` | Sentry environment tag override | Optional | No | Optional | No | Runtime | `staging` |
 | `SENTRY_RELEASE` | Sentry release / deploy version | Optional | No | Optional | No | Runtime | `slugbase@1.2.3` |

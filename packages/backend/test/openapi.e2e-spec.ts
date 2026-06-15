@@ -110,3 +110,28 @@ describe("OpenAPI interactive docs toggle (integration)", () => {
     expect(body.openapi).toBe("3.1.0");
   });
 });
+
+describe("OpenAPI interactive docs in production (integration)", () => {
+  let app: INestApplication;
+  let cleanup: () => Promise<void>;
+
+  beforeAll(async () => {
+    const setup = await createApp({
+      NODE_ENV: "production",
+      OPENAPI_INTERACTIVE_DOCS: "true",
+    });
+    app = setup.app;
+    cleanup = setup.cleanup;
+  });
+
+  afterAll(async () => {
+    await cleanup();
+  });
+
+  it("GET /docs returns 404 in production even when OPENAPI_INTERACTIVE_DOCS is true", async () => {
+    const server = app.getHttpServer() as Server;
+    const response = await request(server).get("/docs");
+
+    expect(response.status).toBe(404);
+  });
+});

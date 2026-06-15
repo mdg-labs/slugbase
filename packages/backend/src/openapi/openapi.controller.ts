@@ -27,7 +27,11 @@ export class OpenapiController {
 
   @Get("docs")
   getInteractiveDocs(@Res() res: Response): void {
-    if (!this.config.get("OPENAPI_INTERACTIVE_DOCS")) {
+    // SEC-018: interactive docs are never served in production
+    if (
+      this.config.get("isProduction") ||
+      !this.config.get("OPENAPI_INTERACTIVE_DOCS")
+    ) {
       throw new NotFoundException();
     }
 

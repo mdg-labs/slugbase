@@ -8,6 +8,11 @@ import { SkipCsrf } from "./skip-csrf.decorator.js";
 
 const CSRF_COOKIE = "csrf_token";
 
+/**
+ * Double-submit CSRF (spec §5.8, SEC-025): the token cookie is intentionally
+ * readable by JavaScript so the SPA can mirror it in X-CSRF-Token. The session
+ * cookie remains HttpOnly. CSP hardening is tracked in #428.
+ */
 @Controller("auth")
 @SkipCsrf()
 @SkipThrottle({ ip: true, "user-hour": true })

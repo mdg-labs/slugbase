@@ -1,9 +1,20 @@
 ---
+import {
+  buildUmamiHostAllowlist,
+  isUmamiHostAllowed,
+} from "@slugbase/shared-types";
 import { t } from "../i18n/translate.js";
 
 const umamiHost = import.meta.env.PUBLIC_UMAMI_HOST?.replace(/\/$/, "") ?? "";
 const umamiWebsiteId = import.meta.env.PUBLIC_UMAMI_WEBSITE_ID ?? "";
-const analyticsEnabled = umamiHost.length > 0 && umamiWebsiteId.length > 0;
+const umamiAllowlist = buildUmamiHostAllowlist(
+  umamiHost || undefined,
+  import.meta.env.PUBLIC_UMAMI_ALLOWED_ORIGINS,
+);
+const analyticsEnabled =
+  umamiHost.length > 0 &&
+  umamiWebsiteId.length > 0 &&
+  isUmamiHostAllowed(umamiHost, umamiAllowlist);
 
 const consentEn = {
   message: t("en", "marketing.consent.message"),

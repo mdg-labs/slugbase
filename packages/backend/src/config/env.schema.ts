@@ -240,9 +240,15 @@ export function validateEnvConfig(
       );
     }
 
+    const flags = {
+      ...flagsResult.data,
+      // SEC-018: never expose interactive OpenAPI docs in production
+      OPENAPI_INTERACTIVE_DOCS: false,
+    };
+
     return {
       ...secretsResult.data,
-      ...flagsResult.data,
+      ...flags,
       nodeEnv,
       isProduction,
     };

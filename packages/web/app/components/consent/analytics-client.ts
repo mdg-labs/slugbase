@@ -1,4 +1,9 @@
 import {
+  buildUmamiHostAllowlist,
+  isUmamiHostAllowed,
+} from "@slugbase/shared-types";
+
+import {
   isAnalyticsConsentGranted,
   writeStoredAnalyticsConsent,
 } from "./consent-storage.js";
@@ -15,8 +20,20 @@ function umamiWebsiteId(): string | undefined {
   return id && id.length > 0 ? id : undefined;
 }
 
+function umamiHostAllowlist(): Set<string> {
+  const extraOrigins = import.meta.env.VITE_UMAMI_ALLOWED_ORIGINS as
+    | string
+    | undefined;
+  return buildUmamiHostAllowlist(umamiHost(), extraOrigins);
+}
+
+function isPermittedUmamiHost(host: string): boolean {
+  return isUmamiHostAllowed(host, umamiHostAllowlist());
+}
+
 export function isClientAnalyticsConfigured(): boolean {
-  return Boolean(umamiHost() && umamiWebsiteId());
+  const host = umamiHost();
+  return Boolean(host && umamiWebsiteId() && isPermittedUmamiHost(host));
 }
 
 /**
@@ -29,7 +46,7 @@ export function initAnalyticsClient(): void {
 
   const host = umamiHost();
   const websiteId = umamiWebsiteId();
-  if (!host || !websiteId) {
+  if (!host || !websiteId || !isPermittedUmamiHost(host)) {
     return;
   }
 
@@ -60,3 +77,5 @@ export function applyAnalyticsConsent(granted: boolean): void {
     initAnalyticsClient();
   }
 }
+
+export { isPermittedUmamiHost, umamiHostAllowlist };

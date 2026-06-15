@@ -18,6 +18,11 @@ export {
   type AnalyticsService,
 } from "./contracts/analytics.contract.js";
 export {
+  buildUmamiHostAllowlist,
+  isUmamiHostAllowed,
+  parseUmamiAllowedOrigins,
+} from "./analytics/umami-host-allowlist.js";
+export {
   AiSuggestError,
   AiUnavailableError,
   type AiPageMetadata,

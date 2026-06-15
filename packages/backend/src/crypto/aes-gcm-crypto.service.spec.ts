@@ -87,6 +87,21 @@ describe("AesGcmCryptoService", () => {
     expect(() => decryptor.decrypt(ciphertext)).toThrow(CryptoDecryptError);
   });
 
+  it("throws in staging strict mode when decrypting with a different key", () => {
+    const encryptor = createCryptoService({
+      ENCRYPTION_KEY: "primary-encryption-key-32-chars-min",
+      SENTRY_ENVIRONMENT: "staging",
+    });
+    const decryptor = createCryptoService({
+      ENCRYPTION_KEY: "secondary-encryption-key-32-chars",
+      SENTRY_ENVIRONMENT: "staging",
+    });
+
+    const ciphertext = encryptor.encrypt("secret-value");
+
+    expect(() => decryptor.decrypt(ciphertext)).toThrow(CryptoDecryptError);
+  });
+
   it("returns empty string in non-strict mode on decrypt failure", () => {
     const encryptor = createCryptoService({
       ENCRYPTION_KEY: "primary-encryption-key-32-chars-min",

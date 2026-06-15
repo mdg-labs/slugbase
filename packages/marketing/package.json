@@ -15,6 +15,7 @@
     "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
+    "@slugbase/shared-types": "workspace:^",
     "@slugbase/ui": "workspace:^",
     "astro": "^6.4.2",
     "marked": "^15.0.12"

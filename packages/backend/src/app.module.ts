@@ -21,7 +21,9 @@ import { HealthModule } from "./health/health.module.js";
         throttlers: [
           {
             name: "ip",
-            // In-memory store; distributed store is a Fast-Follow for multi-instance
+            // SEC-017: in-memory Throttler store — per-instance only; Redis store is
+            // a Fast-Follow when multi-replica rate limits must be shared. See
+            // docs/internal/security-audit-dispositions.md.
             ttl: config.get("RATE_LIMIT_LOGIN_TTL_SECONDS") * 1000,
             limit: config.get("RATE_LIMIT_LOGIN_MAX"),
           },

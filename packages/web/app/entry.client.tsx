@@ -3,6 +3,8 @@ import { startTransition, StrictMode } from "react";
 import { hydrateRoot } from "react-dom/client";
 import { HydratedRouter } from "react-router/dom";
 
+import { isSensitiveReplayRoute } from "./lib/sentry-replay-routes.js";
+
 const dsn = import.meta.env.VITE_SENTRY_DSN as string | undefined;
 const environment =
   (import.meta.env.VITE_SENTRY_ENVIRONMENT as string | undefined) ||
@@ -12,11 +14,29 @@ const release =
 const tracesSampleRate = Number(
   import.meta.env.VITE_SENTRY_TRACES_SAMPLE_RATE ?? "0.1",
 );
-const replaysSessionSampleRate = Number(
+const configuredReplaySessionSampleRate = Number(
   import.meta.env.VITE_SENTRY_REPLAY_SAMPLE_RATE ?? "0.25",
 );
 
 const routerOnError = dsn ? Sentry.sentryOnError : undefined;
+
+function currentPathname(): string {
+  return typeof window !== "undefined" ? window.location.pathname : "";
+}
+
+function replaySessionSampleRate(): number {
+  if (isSensitiveReplayRoute(currentPathname())) {
+    return 0;
+  }
+  return configuredReplaySessionSampleRate;
+}
+
+function replayErrorSampleRate(): number {
+  if (isSensitiveReplayRoute(currentPathname())) {
+    return 0;
+  }
+  return 1.0;
+}
 
 if (dsn) {
   Sentry.init({
@@ -25,13 +45,18 @@ if (dsn) {
     ...(release ? { release } : {}),
     integrations: [
       Sentry.reactRouterTracingIntegration(),
-      Sentry.replayIntegration(),
+      Sentry.replayIntegration({
+        maskAllText: true,
+        maskAllInputs: true,
+        blockAllMedia: true,
+        beforeErrorSampling: () => !isSensitiveReplayRoute(currentPathname()),
+      }),
       Sentry.feedbackIntegration({ colorScheme: "system" }),
     ],
     enableLogs: true,
     tracesSampleRate,
-    replaysSessionSampleRate,
-    replaysOnErrorSampleRate: 1.0,
+    replaysSessionSampleRate: replaySessionSampleRate(),
+    replaysOnErrorSampleRate: replayErrorSampleRate(),
     tracesSampler: (_samplingContext) => {
       if (
         typeof window !== "undefined" &&

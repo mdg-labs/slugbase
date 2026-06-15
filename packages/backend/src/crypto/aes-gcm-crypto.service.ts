@@ -22,7 +22,10 @@ export class AesGcmCryptoService implements CryptoService {
   constructor(@Inject(ConfigService) config: ConfigService) {
     const encryptionKey = config.get("ENCRYPTION_KEY");
     this.key = createHash("sha256").update(encryptionKey, "utf8").digest();
-    this.strictMode = config.get("isProduction");
+    // SEC-019: staging runs with NODE_ENV=production — use SENTRY_ENVIRONMENT too
+    this.strictMode =
+      config.get("isProduction") ||
+      config.get("SENTRY_ENVIRONMENT") === "staging";
   }
 
   encrypt(plaintext: string): string {

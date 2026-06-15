@@ -14,7 +14,18 @@ describe("validateEnvConfig", () => {
     });
 
     expect(config.isProduction).toBe(true);
+    expect(config.OPENAPI_INTERACTIVE_DOCS).toBe(false);
     expect(config.SESSION_SECRET.length).toBeGreaterThanOrEqual(32);
+  });
+
+  it("forces OPENAPI_INTERACTIVE_DOCS off in production even when env is true", () => {
+    const config = validateEnvConfig({
+      ...validTestEnv,
+      NODE_ENV: "production",
+      OPENAPI_INTERACTIVE_DOCS: "true",
+    });
+
+    expect(config.OPENAPI_INTERACTIVE_DOCS).toBe(false);
   });
 
   it("throws when SESSION_SECRET is missing in production mode", () => {

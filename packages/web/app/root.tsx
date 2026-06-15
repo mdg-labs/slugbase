@@ -8,6 +8,7 @@ import { AnalyticsConsentProvider } from "./components/consent/AnalyticsConsentP
 import { ConsentBanner } from "./components/consent/ConsentBanner.js";
 import { AppToastProvider } from "./components/feedback/AppToastProvider.js";
 import { AppErrorBoundary } from "./routes/errors/AppErrorBoundary.js";
+import { SentryReplayRouteGuard } from "./components/observability/SentryReplayRouteGuard.js";
 import { getSessionUser } from "./lib/session-client.js";
 import { getServerApiBaseUrl } from "./lib/server-api-base-url.js";
 import { useCspNonce } from "./security/nonce-context.js";
@@ -90,6 +91,7 @@ export default function Root() {
       <ThemeProvider>
         <AppToastProvider>
           <AnalyticsConsentProvider>
+            <SentryReplayRouteGuard />
             <Outlet />
             <ConsentBanner />
           </AnalyticsConsentProvider>

@@ -62,6 +62,15 @@ describe("entry.client", () => {
     expect(sentryMocks.init).toHaveBeenCalledWith(
       expect.objectContaining({
         dsn: "https://example@o0.ingest.sentry.io/0",
+        replaysSessionSampleRate: expect.any(Number),
+        replaysOnErrorSampleRate: expect.any(Number),
+      }),
+    );
+    expect(sentryMocks.replayIntegration).toHaveBeenCalledWith(
+      expect.objectContaining({
+        maskAllText: true,
+        maskAllInputs: true,
+        blockAllMedia: true,
       }),
     );
     expect(hydrateRootMock).toHaveBeenCalled();
