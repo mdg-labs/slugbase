@@ -1,5 +1,7 @@
 import { createRequestHandler } from "react-router";
 
+import { mergeWorkerSecurityHeaders } from "../app/security/http-security-headers.js";
+
 declare module "react-router" {
   export interface AppLoadContext {
     cloudflare: {
@@ -16,8 +18,9 @@ const requestHandler = createRequestHandler(
 
 export default {
   async fetch(request, env, ctx) {
-    return requestHandler(request, {
+    const response = await requestHandler(request, {
       cloudflare: { env, ctx },
     });
+    return mergeWorkerSecurityHeaders(response, request, import.meta.env.DEV);
   },
 } satisfies ExportedHandler<Env>;

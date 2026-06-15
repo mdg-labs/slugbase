@@ -10,6 +10,7 @@ import { AppToastProvider } from "./components/feedback/AppToastProvider.js";
 import { AppErrorBoundary } from "./routes/errors/AppErrorBoundary.js";
 import { getSessionUser } from "./lib/session-client.js";
 import { getServerApiBaseUrl } from "./lib/server-api-base-url.js";
+import { useCspNonce } from "./security/nonce-context.js";
 import stylesheet from "./app.css?url";
 
 const API_BASE_URL = () => getServerApiBaseUrl();
@@ -61,6 +62,7 @@ export const links = () => [
 export function Layout({ children }: { children: React.ReactNode }) {
   const data: unknown = useRouteLoaderData("root");
   const locale = readRootLocale(data);
+  const nonce = useCspNonce();
 
   return (
     <html lang={locale} data-theme="dark">
@@ -68,12 +70,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <Meta />
-        <Links />
+        <Links nonce={nonce} />
       </head>
       <body className="min-h-screen bg-canvas antialiased">
         {children}
-        <ScrollRestoration />
-        <Scripts />
+        <ScrollRestoration nonce={nonce} />
+        <Scripts nonce={nonce} />
       </body>
     </html>
   );
