@@ -4,8 +4,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider, ToastProvider } from "@slugbase/ui";
 
 import { staticMessages } from "../../../i18n/messages.js";
+import { AiSection } from "./components/AiSection.js";
 import { WorkspaceSettingsPage } from "./components/WorkspaceSettingsPage.js";
-import type { WorkspaceSettingsData } from "./workspace.types.js";
+import type { WorkspaceInterfaceConfig, WorkspaceSettingsData } from "./workspace.types.js";
 
 vi.mock("react-router", async () => {
   const actual = await vi.importActual<typeof import("react-router")>("react-router");
@@ -98,5 +99,70 @@ describe("WorkspaceSettingsPage", () => {
       currentUserRole: "MEMBER",
     });
     expect(view.getByTestId("workspace-admin-role-gate")).toBeTruthy();
+  });
+});
+
+function renderAiSection(options: {
+  enabled?: boolean;
+  hasApiKey?: boolean;
+  interfaceConfig: WorkspaceInterfaceConfig;
+}) {
+  const t = (key: string) => (staticMessages.en as Record<string, string>)[key] ?? key;
+  return render(
+    <ThemeProvider>
+      <AiSection
+        initial={{
+          enabled: options.enabled ?? false,
+          hasApiKey: options.hasApiKey ?? false,
+          model: "gpt-4o-mini",
+        }}
+        interfaceConfig={options.interfaceConfig}
+        onSave={vi.fn().mockResolvedValue(undefined)}
+        t={t}
+      />
+    </ThemeProvider>,
+  );
+}
+
+describe("AiSection", () => {
+  const selfHostConfig: WorkspaceInterfaceConfig = {
+    mailAdminUi: true,
+    oidcAdminUi: true,
+    aiByoCredential: true,
+    billingEnabled: false,
+  };
+
+  const hostedConfig: WorkspaceInterfaceConfig = {
+    mailAdminUi: false,
+    oidcAdminUi: false,
+    aiByoCredential: false,
+    billingEnabled: true,
+  };
+
+  it("shows BYO credential fields without enabling AI on self-host", () => {
+    const view = renderAiSection({ interfaceConfig: selfHostConfig });
+    expect(view.getByLabelText("API key")).toBeTruthy();
+    expect(view.getByLabelText("Model")).toBeTruthy();
+    const checkbox = view.getByRole("checkbox");
+    expect((checkbox as HTMLInputElement).checked).toBe(false);
+  });
+
+  it("shows BYO fields on self-host when AI is enabled", () => {
+    const view = renderAiSection({ enabled: true, hasApiKey: true, interfaceConfig: selfHostConfig });
+    expect(view.getByLabelText("API key")).toBeTruthy();
+    expect(view.getByLabelText("Model")).toBeTruthy();
+    expect((view.getByRole("checkbox") as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("hides BYO fields on hosted and shows operator notice when enabled", () => {
+    const view = renderAiSection({ enabled: true, interfaceConfig: hostedConfig });
+    expect(view.queryByLabelText("API key")).toBeNull();
+    expect(view.getByText(/credential configured by the operator/)).toBeTruthy();
+  });
+
+  it("hides BYO fields and operator notice on hosted when disabled", () => {
+    const view = renderAiSection({ interfaceConfig: hostedConfig });
+    expect(view.queryByLabelText("API key")).toBeNull();
+    expect(view.queryByText(/credential configured by the operator/)).toBeNull();
   });
 });

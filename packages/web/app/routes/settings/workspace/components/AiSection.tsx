@@ -80,7 +80,7 @@ export function AiSection({ initial, interfaceConfig, onSave, t }: AiSectionProp
         </p>
       ) : null}
 
-      {enabled && interfaceConfig.aiByoCredential ? (
+      {interfaceConfig.aiByoCredential ? (
         <>
           <div className="flex flex-col gap-sp-2">
             <Label htmlFor="ai-api-key">{t("settings.workspace.ai.api_key_label")}</Label>
