@@ -1,4 +1,4 @@
-import type { MailSettings } from "@slugbase/shared-types";
+import type { MailSettings, UpdateMailSettingsBody } from "@slugbase/shared-types";
 
 import {
   apiFetch,
@@ -42,7 +42,7 @@ function mapMailSettingsFromApi(settings: MailSettings): MailSettingsData {
 
 function mapMailSettingsToApi(
   body: Omit<MailSettingsData, "hasPassword"> & { password?: string },
-): Record<string, unknown> {
+): UpdateMailSettingsBody {
   return {
     host: body.host,
     port: body.port,
