@@ -113,4 +113,18 @@ describe("OpenAiAiService", () => {
 
     expect(http).toHaveBeenCalledOnce();
   });
+
+  it("clears credentials applied from the database", () => {
+    const service = new OpenAiAiService(
+      createConfig({ OPENAI_API_KEY: undefined }),
+      createCrypto(),
+      vi.fn(),
+    );
+
+    service.reconfigureFromEncrypted("cipher-text", "gpt-4o-mini");
+    expect(service.isAvailable()).toBe(true);
+
+    service.clearCredentials();
+    expect(service.isAvailable()).toBe(false);
+  });
 });

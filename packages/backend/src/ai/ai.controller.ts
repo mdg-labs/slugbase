@@ -24,6 +24,7 @@ import { TenantGuard, TENANT_USER_ID_KEY } from "../workspaces/tenant.guard.js";
 import type { WorkspaceRecord } from "../workspaces/workspace.types.js";
 import { AiSuggestionCacheService } from "./cache/ai-suggestion-cache.service.js";
 import type { AiSuggestionCacheContext } from "./cache/ai-suggestion-cache.types.js";
+import { AiRuntimeService } from "./ai-runtime.service.js";
 import { AI } from "./ai.tokens.js";
 
 interface AiSuggestBody {
@@ -45,6 +46,7 @@ interface AiSuggestBody {
 export class AiController {
   constructor(
     @Inject(AI) private readonly ai: AiService,
+    @Inject(AiRuntimeService) private readonly aiRuntime: AiRuntimeService,
     @Inject(AiSuggestionCacheService)
     private readonly cache: AiSuggestionCacheService,
     @Inject(AccountsService) private readonly accounts: AccountsService,
@@ -70,6 +72,12 @@ export class AiController {
     if (account.aiOptOut) {
       throw new ForbiddenException(
         "AI suggestions are disabled for your account",
+      );
+    }
+
+    if (!this.aiRuntime.isInstanceEnabled()) {
+      throw new ServiceUnavailableException(
+        "AI suggestions are disabled for this instance",
       );
     }
 

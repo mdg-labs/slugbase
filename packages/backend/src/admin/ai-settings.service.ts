@@ -4,19 +4,16 @@ import { eq } from "drizzle-orm";
 import type { CryptoService } from "@slugbase/shared-types";
 import type { AiSettings, UpdateAiSettingsBody } from "@slugbase/shared-types";
 
+import {
+  AiRuntimeService,
+  type StoredAiSettings,
+} from "../ai/ai-runtime.service.js";
 import { CRYPTO } from "../crypto/crypto.tokens.js";
 import { DbService } from "../db/db.service.js";
 import type { DrizzleClient } from "../db/dialect/create-client.js";
 import { instanceMetadata } from "../db/schema/index.js";
 
 const AI_SETTINGS_KEY = "ai_settings";
-
-interface StoredAiSettings {
-  provider: string | null;
-  encryptedApiKey: string | null;
-  model: string | null;
-  enabled: boolean;
-}
 
 function defaultSettings(): StoredAiSettings {
   return {
@@ -48,6 +45,7 @@ export class AiSettingsService {
   constructor(
     @Inject(DbService) dbService: DbService,
     @Inject(CRYPTO) private readonly crypto: CryptoService,
+    @Inject(AiRuntimeService) private readonly aiRuntime: AiRuntimeService,
   ) {
     this.db = dbService.getOrm();
   }
@@ -93,6 +91,8 @@ export class AiSettingsService {
         target: instanceMetadata.key,
         set: { value: JSON.stringify(updated), updatedAt: now },
       });
+
+    this.aiRuntime.applyStoredSettings(updated);
 
     return toPublicSettings(updated);
   }

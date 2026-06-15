@@ -11,6 +11,7 @@ import { TENANT_USER_ID_KEY } from "../workspaces/tenant.guard.js";
 import type { WorkspaceRecord } from "../workspaces/workspace.types.js";
 import type { AiSuggestionCacheService } from "./cache/ai-suggestion-cache.service.js";
 import { AiController } from "./ai.controller.js";
+import type { AiRuntimeService } from "./ai-runtime.service.js";
 import type { AiService, AiSuggestions } from "@slugbase/shared-types";
 
 // ---------------------------------------------------------------------------
@@ -73,6 +74,7 @@ function makeReq(userId = "user-1"): Record<string, unknown> {
 
 function buildController(opts: {
   aiAvailable?: boolean;
+  instanceEnabled?: boolean;
   aiOptOut?: boolean;
   accountFound?: boolean;
   entitlementAllowed?: boolean;
@@ -82,6 +84,10 @@ function buildController(opts: {
     isAvailable: vi.fn().mockReturnValue(opts.aiAvailable ?? true),
     suggest: vi.fn(),
   } as unknown as MockedObject<AiService>;
+
+  const aiRuntime = {
+    isInstanceEnabled: vi.fn().mockReturnValue(opts.instanceEnabled ?? true),
+  } as unknown as MockedObject<AiRuntimeService>;
 
   const cache = {
     suggestWithCache:
@@ -112,9 +118,9 @@ function buildController(opts: {
     }),
   } as unknown as MockedObject<EntitlementsService>;
 
-  const controller = new AiController(ai, cache, accounts, entitlements);
+  const controller = new AiController(ai, aiRuntime, cache, accounts, entitlements);
 
-  return { controller, ai, cache, accounts, entitlements };
+  return { controller, ai, aiRuntime, cache, accounts, entitlements };
 }
 
 // ---------------------------------------------------------------------------
@@ -180,6 +186,15 @@ describe("AiController.suggest", () => {
 
   it("throws ServiceUnavailableException when AI provider is not configured", async () => {
     const { controller } = buildController({ aiAvailable: false });
+    const workspace = makeWorkspace("personal");
+
+    await expect(
+      controller.suggest(workspace, makeReq() as never, SUGGEST_BODY),
+    ).rejects.toBeInstanceOf(ServiceUnavailableException);
+  });
+
+  it("throws ServiceUnavailableException when instance AI is disabled", async () => {
+    const { controller } = buildController({ instanceEnabled: false });
     const workspace = makeWorkspace("personal");
 
     await expect(

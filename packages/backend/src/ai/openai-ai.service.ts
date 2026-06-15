@@ -117,6 +117,11 @@ export class OpenAiAiService implements AiService {
       this.model = model;
     }
   }
+
+  /** Clears DB-applied credentials; env-configured keys are not touched. */
+  clearCredentials(): void {
+    this.apiKey = undefined;
+  }
 }
 
 function buildSystemPrompt(outputLanguage: string): string {
