@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 
+import { isPlanGatingEnabled } from "../../lib/billing-config.js";
 import type { WorkspaceListItem } from "./workspace-switcher-api.js";
 import {
   activateWorkspace,
@@ -114,7 +115,11 @@ export function WorkspaceSwitcherPanel({
   const panelRef = useRef<HTMLDivElement>(null);
 
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId);
-  const canCreateMore = activeWorkspace?.plan !== "free" || workspaces.length === 0;
+  const planGatingEnabled = isPlanGatingEnabled();
+  const canCreateMore =
+    !planGatingEnabled ||
+    activeWorkspace?.plan !== "free" ||
+    workspaces.length === 0;
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -208,9 +213,11 @@ export function WorkspaceSwitcherPanel({
                       <span className="block truncate text-[length:var(--text-body)] font-medium text-fg">
                         {ws.name}
                       </span>
-                      <span className="block text-[length:var(--text-micro)] text-fg-subtle capitalize">
-                        {ws.plan} · {ws.role.toLowerCase()}
-                      </span>
+                      {planGatingEnabled && (
+                        <span className="block text-[length:var(--text-micro)] text-fg-subtle capitalize">
+                          {ws.plan} · {ws.role.toLowerCase()}
+                        </span>
+                      )}
                     </span>
                     {isActive && <CheckIcon />}
                   </button>
