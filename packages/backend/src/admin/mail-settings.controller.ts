@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -12,9 +13,11 @@ import {
 } from "@nestjs/common";
 import type { Request } from "express";
 
-import type { MailService, MailSettings } from "@slugbase/shared-types";
+import { MailSendError, type MailService, type MailSettings } from "@slugbase/shared-types";
 
 import { MAIL } from "../mail/mail.tokens.js";
+import { isSmtpAuthFailure } from "../mail/smtp-mail.service.js";
+import { SmtpMailService } from "../mail/smtp-mail.service.js";
 import { ActiveWorkspace } from "../workspaces/active-workspace.decorator.js";
 import { TenantGuard, TENANT_USER_ID_KEY } from "../workspaces/tenant.guard.js";
 import type { WorkspaceRecord } from "../workspaces/workspace.types.js";
@@ -35,6 +38,7 @@ export class MailSettingsController {
     @Inject(MailSettingsService) private readonly mailSettings: MailSettingsService,
     @Inject(WorkspacesService) private readonly workspaces: WorkspacesService,
     @Inject(MAIL) private readonly mail: MailService,
+    @Inject(SmtpMailService) private readonly smtpMail: SmtpMailService,
   ) {}
 
   @Get()
@@ -55,7 +59,7 @@ export class MailSettingsController {
     @Body() body: UpdateMailSettingsBody,
   ): Promise<MailSettings> {
     await this.requireAdmin(workspace.id, req);
-    return this.mailSettings.updateSettings(body);
+    return this.mailSettings.updateSettingsAndApply(body, this.smtpMail);
   }
 
   @Post("test")
@@ -69,11 +73,18 @@ export class MailSettingsController {
 
     if (!this.mail.isAvailable()) {
       throw new ServiceUnavailableException(
-        "Mail transport is not configured. Update SMTP settings first.",
+        "Mail transport is not configured. Save SMTP settings with a host first.",
       );
     }
 
-    await this.mail.sendTest(body.to);
+    try {
+      await this.mail.sendTest(body.to);
+    } catch (error) {
+      if (error instanceof MailSendError && isSmtpAuthFailure(error.cause)) {
+        throw new BadRequestException("SMTP authentication failed. Check username and password.");
+      }
+      throw error;
+    }
   }
 
   private async requireAdmin(workspaceId: string, req: Request & Record<string, unknown>): Promise<void> {

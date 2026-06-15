@@ -1,13 +1,14 @@
-import { ForbiddenException, ServiceUnavailableException } from "@nestjs/common";
+import { ForbiddenException, ServiceUnavailableException, BadRequestException } from "@nestjs/common";
 import { describe, expect, it, vi, type MockedObject } from "vitest";
 
-import type { MailService, MailSettings } from "@slugbase/shared-types";
+import { MailSendError, type MailService, type MailSettings } from "@slugbase/shared-types";
 import type { WorkspaceRecord } from "../workspaces/workspace.types.js";
 import type { WorkspacesService } from "../workspaces/workspaces.service.js";
 import { TENANT_USER_ID_KEY } from "../workspaces/tenant.guard.js";
 import { EMPTY_WORKSPACE_BILLING } from "../workspaces/workspace.types.js";
 import { MailSettingsController } from "./mail-settings.controller.js";
 import type { MailSettingsService } from "./mail-settings.service.js";
+import type { SmtpMailService } from "../mail/smtp-mail.service.js";
 
 function makeWorkspace(id = "ws-1"): WorkspaceRecord {
   return {
@@ -44,6 +45,7 @@ function buildController(opts: {
   const mailSettings = {
     getSettings: vi.fn().mockResolvedValue(opts.settings ?? MOCK_SETTINGS),
     updateSettings: vi.fn().mockResolvedValue(opts.settings ?? MOCK_SETTINGS),
+    updateSettingsAndApply: vi.fn().mockResolvedValue(opts.settings ?? MOCK_SETTINGS),
   } as unknown as MockedObject<MailSettingsService>;
 
   const workspaces = {
@@ -60,8 +62,10 @@ function buildController(opts: {
     sendTest: vi.fn().mockResolvedValue(undefined),
   } as unknown as MockedObject<MailService>;
 
-  const controller = new MailSettingsController(mailSettings, workspaces, mail);
-  return { controller, mailSettings, workspaces, mail };
+  const smtpMail = {} as unknown as MockedObject<SmtpMailService>;
+
+  const controller = new MailSettingsController(mailSettings, workspaces, mail, smtpMail);
+  return { controller, mailSettings, workspaces, mail, smtpMail };
 }
 
 describe("MailSettingsController.getSettings", () => {
@@ -91,10 +95,10 @@ describe("MailSettingsController.getSettings", () => {
 
 describe("MailSettingsController.updateSettings", () => {
   it("updates and returns settings", async () => {
-    const { controller, mailSettings } = buildController({});
+    const { controller, mailSettings, smtpMail } = buildController({});
     const body = { host: "mail.example.com", port: 465, secure: true };
     const result = await controller.updateSettings(makeWorkspace(), makeReq() as never, body);
-    expect(mailSettings.updateSettings).toHaveBeenCalledWith(body);
+    expect(mailSettings.updateSettingsAndApply).toHaveBeenCalledWith(body, smtpMail);
     expect(result).toEqual(MOCK_SETTINGS);
   });
 
@@ -118,6 +122,17 @@ describe("MailSettingsController.sendTest", () => {
     await expect(
       controller.sendTest(makeWorkspace(), makeReq() as never, { to: "admin@example.com" }),
     ).rejects.toBeInstanceOf(ServiceUnavailableException);
+  });
+
+  it("throws BadRequestException when SMTP authentication fails", async () => {
+    const { controller, mail } = buildController({});
+    mail.sendTest.mockRejectedValue(
+      new MailSendError("send failed", Object.assign(new Error("Invalid login"), { code: "EAUTH" })),
+    );
+
+    await expect(
+      controller.sendTest(makeWorkspace(), makeReq() as never, { to: "admin@example.com" }),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it("throws ForbiddenException when user is not ADMIN", async () => {

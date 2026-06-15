@@ -7,13 +7,14 @@ import { SessionsModule } from "../sessions/sessions.module.js";
 import { WorkspacesModule } from "../workspaces/workspaces.module.js";
 import { AiSettingsController } from "./ai-settings.controller.js";
 import { AiSettingsService } from "./ai-settings.service.js";
+import { MailTransportBootstrapService } from "./mail-transport-bootstrap.service.js";
 import { MailSettingsController } from "./mail-settings.controller.js";
 import { MailSettingsService } from "./mail-settings.service.js";
 
 @Module({
   imports: [DbModule, CryptoModule, MailModule, SessionsModule, WorkspacesModule],
   controllers: [MailSettingsController, AiSettingsController],
-  providers: [MailSettingsService, AiSettingsService],
+  providers: [MailSettingsService, AiSettingsService, MailTransportBootstrapService],
   exports: [MailSettingsService, AiSettingsService],
 })
 export class AdminModule {}

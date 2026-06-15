@@ -2,6 +2,7 @@ import { Input, Label } from "@slugbase/ui";
 import { useEffect, useState } from "react";
 
 import type { MailSettingsData } from "../workspace.types.js";
+import { MailTestRequestError } from "../workspace-api.js";
 import { SaveBar, SettingsSection } from "../../account/components/SettingsSection.js";
 
 interface SmtpSectionProps {
@@ -35,6 +36,11 @@ export function SmtpSection({ initial, onSave, onSendTest, t }: SmtpSectionProps
   const [busy, setBusy] = useState(false);
   const [testEmail, setTestEmail] = useState("");
   const [testState, setTestState] = useState<"idle" | "testing" | "ok" | "fail">("idle");
+  const [testFailureKey, setTestFailureKey] = useState<
+    | "settings.workspace.smtp.test_failure"
+    | "settings.workspace.smtp.test_failure_not_configured"
+    | "settings.workspace.smtp.test_failure_auth"
+  >("settings.workspace.smtp.test_failure");
 
   useEffect(() => {
     setForm(initial);
@@ -74,7 +80,18 @@ export function SmtpSection({ initial, onSave, onSendTest, t }: SmtpSectionProps
     try {
       await onSendTest(testEmail.trim());
       setTestState("ok");
-    } catch {
+    } catch (error) {
+      if (error instanceof MailTestRequestError) {
+        if (error.status === 503) {
+          setTestFailureKey("settings.workspace.smtp.test_failure_not_configured");
+        } else if (error.status === 400) {
+          setTestFailureKey("settings.workspace.smtp.test_failure_auth");
+        } else {
+          setTestFailureKey("settings.workspace.smtp.test_failure");
+        }
+      } else {
+        setTestFailureKey("settings.workspace.smtp.test_failure");
+      }
       setTestState("fail");
     }
   };
@@ -206,7 +223,7 @@ export function SmtpSection({ initial, onSave, onSendTest, t }: SmtpSectionProps
       ) : null}
       {testState === "fail" ? (
         <p className="m-0 text-danger-text" style={{ fontSize: "var(--text-small)" }}>
-          {t("settings.workspace.smtp.test_failure")}
+          {t(testFailureKey)}
         </p>
       ) : null}
 

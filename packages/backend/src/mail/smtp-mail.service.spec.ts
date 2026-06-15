@@ -26,10 +26,42 @@ function buildCrypto(config: ConfigService): AesGcmCryptoService {
 }
 
 describe("SmtpMailService", () => {
-  it("reports as available", () => {
+  it("reports unavailable when SMTP_HOST is not configured", () => {
+    const config = new ConfigService(
+      validateEnvConfig({
+        ...validTestEnv,
+        SMTP_FROM: "noreply@example.com",
+      }),
+    );
+    const service = new SmtpMailService(config, buildCrypto(config));
+    expect(service.isAvailable()).toBe(false);
+  });
+
+  it("reports as available when SMTP_HOST is configured", () => {
     const config = buildConfig();
     const service = new SmtpMailService(config, buildCrypto(config));
     expect(service.isAvailable()).toBe(true);
+  });
+
+  it("drops messages when transport is not configured", async () => {
+    const config = new ConfigService(
+      validateEnvConfig({
+        ...validTestEnv,
+        SMTP_FROM: "noreply@example.com",
+      }),
+    );
+    const service = new SmtpMailService(config, buildCrypto(config));
+
+    const sendMailSpy = vi.spyOn(service["transport"], "sendMail");
+
+    await service.send({
+      to: "recipient@example.com",
+      subject: "Test",
+      text: "body",
+      type: "member_invitation",
+    });
+
+    expect(sendMailSpy).not.toHaveBeenCalled();
   });
 
   it("calls transport.sendMail with the correct payload", async () => {
