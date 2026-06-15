@@ -5,16 +5,33 @@ import { Test } from "@nestjs/testing";
 import cookieParser from "cookie-parser";
 import type { Server } from "node:http";
 import request from "supertest";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { AppModule } from "../src/app.module.js";
 import { AccountsService } from "../src/accounts/accounts.service.js";
+import { OPENAI_HTTP } from "../src/ai/ai.tokens.js";
+import type { OpenAiHttpExecutor } from "../src/ai/openai-ai.service.js";
 import { SESSION_COOKIE } from "../src/sessions/session-constants.js";
 import { SessionService } from "../src/sessions/session.service.js";
 import { applyTestEnv, clearTestEnv } from "../src/test-utils/test-env.js";
 import { WorkspacesService } from "../src/workspaces/workspaces.service.js";
 import { WorkspaceMembersService } from "../src/workspaces/workspace-members.service.js";
 import { createTestDatabase } from "./test-database.js";
+
+function createOpenAiResponse(payload: {
+  title: string;
+  slug: string;
+  tags: string[];
+  detectedLanguage: string;
+  confidence: number;
+}): Response {
+  return new Response(
+    JSON.stringify({
+      choices: [{ message: { content: JSON.stringify(payload) } }],
+    }),
+    { status: 200, headers: { "Content-Type": "application/json" } },
+  );
+}
 
 describe("Workspace AI settings HTTP (integration)", () => {
   let app: INestApplication | undefined;
@@ -185,5 +202,139 @@ describe("Workspace AI settings HTTP (integration)", () => {
 
       expect(res.status).toBe(403);
     });
+  });
+});
+
+describe("AI runtime wiring (integration)", () => {
+  let app: INestApplication | undefined;
+  let cleanup: () => Promise<void> = async () => {};
+  let httpExecutor: ReturnType<typeof vi.fn<OpenAiHttpExecutor>>;
+
+  let adminSessionCookie: string;
+  let adminCsrfToken: string;
+  let adminCsrfCookie: string;
+
+  beforeAll(async () => {
+    const testDatabase = await createTestDatabase();
+    cleanup = testDatabase.cleanup;
+    applyTestEnv({
+      DATABASE_URL: testDatabase.databaseUrl,
+    });
+    delete process.env.OPENAI_API_KEY;
+
+    httpExecutor = vi.fn<OpenAiHttpExecutor>().mockResolvedValue(
+      createOpenAiResponse({
+        title: "UI Configured Docs",
+        slug: "ui-configured-docs",
+        tags: ["docs"],
+        detectedLanguage: "en",
+        confidence: 0.87,
+      }),
+    );
+
+    const moduleRef = await Test.createTestingModule({
+      imports: [AppModule],
+    })
+      .overrideProvider(OPENAI_HTTP)
+      .useValue(httpExecutor)
+      .compile();
+
+    app = moduleRef.createNestApplication();
+    app.use(cookieParser());
+    await app.init();
+
+    const accountsService = moduleRef.get(AccountsService);
+    const workspacesService = moduleRef.get(WorkspacesService);
+    const sessions = moduleRef.get(SessionService);
+
+    const adminUser = await accountsService.registerAccount({
+      email: "ai-runtime-admin@example.com",
+      name: "AI Runtime Admin",
+      password: "password-abc-123",
+    });
+
+    const workspace = await workspacesService.createWorkspace(
+      { name: "AI Runtime WS", slug: "ai-runtime-ws", plan: "personal" },
+      adminUser.id,
+    );
+
+    const adminSession = await sessions.createSession({
+      userId: adminUser.id,
+      data: { activeWorkspaceId: workspace.id },
+    });
+    adminSessionCookie = `${SESSION_COOKIE}=${adminSession.cookieValue}`;
+
+    const adminCsrfRes = await request(app.getHttpServer() as Server)
+      .get("/auth/csrf-token")
+      .set("Cookie", adminSessionCookie);
+    adminCsrfToken = (adminCsrfRes.body as { csrfToken: string }).csrfToken;
+    adminCsrfCookie =
+      (adminCsrfRes.headers["set-cookie"] as string[]).find((c) =>
+        c.startsWith("csrf_token="),
+      )?.split(";")[0] ?? "";
+  });
+
+  afterAll(async () => {
+    if (app) await app.close();
+    clearTestEnv();
+    await cleanup();
+  });
+
+  function server(): Server {
+    if (!app) throw new Error("app not initialized");
+    return app.getHttpServer() as Server;
+  }
+
+  it("serves suggestions after UI-only AI configuration without OPENAI_API_KEY env", async () => {
+    const patchRes = await request(server())
+      .patch("/workspace/settings/ai")
+      .set("Cookie", `${adminSessionCookie}; ${adminCsrfCookie}`)
+      .set("x-csrf-token", adminCsrfToken)
+      .send({
+        provider: "openai",
+        apiKey: "sk-ui-configured-key",
+        model: "gpt-4o-mini",
+        enabled: true,
+      });
+
+    expect(patchRes.status).toBe(200);
+
+    const suggestRes = await request(server())
+      .post("/ai/suggest")
+      .set("Cookie", `${adminSessionCookie}; ${adminCsrfCookie}`)
+      .set("x-csrf-token", adminCsrfToken)
+      .send({
+        url: "https://example.com/docs",
+        outputLanguage: "en",
+      });
+
+    expect(suggestRes.status).toBe(200);
+    expect(suggestRes.body).toMatchObject({
+      title: "UI Configured Docs",
+      slug: "ui-configured-docs",
+    });
+    expect(httpExecutor).toHaveBeenCalled();
+  });
+
+  it("returns 503 when instance AI is disabled even if a key exists", async () => {
+    await request(server())
+      .patch("/workspace/settings/ai")
+      .set("Cookie", `${adminSessionCookie}; ${adminCsrfCookie}`)
+      .set("x-csrf-token", adminCsrfToken)
+      .send({ enabled: false });
+
+    const suggestRes = await request(server())
+      .post("/ai/suggest")
+      .set("Cookie", `${adminSessionCookie}; ${adminCsrfCookie}`)
+      .set("x-csrf-token", adminCsrfToken)
+      .send({
+        url: "https://example.com/docs",
+        outputLanguage: "en",
+      });
+
+    expect(suggestRes.status).toBe(503);
+    expect((suggestRes.body as { message: string }).message).toContain(
+      "disabled",
+    );
   });
 });
