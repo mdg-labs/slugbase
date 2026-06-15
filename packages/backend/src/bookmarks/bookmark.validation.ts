@@ -34,7 +34,7 @@ export function sanitizeBookmarkTitle(title: string): string {
 
 export { BOOKMARK_HTTP_URL_MESSAGE, isBookmarkHttpUrl };
 
-/** Validates and normalizes a bookmark destination URL for persistence (spec §6.4). */
+/** Validates a bookmark destination URL for persistence without altering its shape (spec §6.4). */
 export function assertHttpUrl(rawUrl: string): string {
   const trimmed = rawUrl.trim();
   if (trimmed.length === 0) {
@@ -55,7 +55,7 @@ export function assertHttpUrl(rawUrl: string): string {
     throw new Error(BOOKMARK_HTTP_URL_MESSAGE);
   }
 
-  return parsed.toString();
+  return trimmed;
 }
 
 export function normalizeOptionalSlug(slug: string | null | undefined): string | null {
