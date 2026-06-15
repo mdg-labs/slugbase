@@ -58,7 +58,11 @@ describe("CsrfService", () => {
   it("rejects tokens with an invalid MAC", () => {
     const csrf = createCsrfService();
     const token = csrf.generateToken();
-    const tampered = `${token.slice(0, -1)}x`;
+    const idx = token.lastIndexOf(".");
+    const value = token.slice(0, idx);
+    const macBuf = Buffer.from(token.slice(idx + 1), "base64url");
+    macBuf[0] = (macBuf[0] ?? 0) ^ 0xff;
+    const tampered = `${value}.${macBuf.toString("base64url")}`;
 
     expect(csrf.verifyToken(tampered)).toBe(false);
   });

@@ -60,7 +60,11 @@ describe("SessionService", () => {
     const sessions = createSessionService();
     const sessionId = "0123456789abcdef0123456789abcdef";
     const cookieValue = sessions.signSessionId(sessionId);
-    const tampered = `${cookieValue.slice(0, -1)}x`;
+    const idx = cookieValue.lastIndexOf(".");
+    const value = cookieValue.slice(0, idx);
+    const macBuf = Buffer.from(cookieValue.slice(idx + 1), "base64url");
+    macBuf[0] = (macBuf[0] ?? 0) ^ 0xff;
+    const tampered = `${value}.${macBuf.toString("base64url")}`;
 
     expect(sessions.verifySessionCookie(tampered)).toBeNull();
   });
