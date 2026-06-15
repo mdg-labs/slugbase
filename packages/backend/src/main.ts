@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 
 import { AppModule } from "./app.module.js";
 import { ConfigService } from "./config/config.service.js";
+import { applySecurityHeaders } from "./security/apply-security-headers.js";
 import { runMigrations } from "./db/migrate/run-migrations.js";
 import {
   validateEnvConfig,
@@ -49,6 +50,10 @@ export async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: sentryLogger ?? nestLogLevels,
     rawBody: true,
+  });
+
+  applySecurityHeaders(app, {
+    enableHsts: startupConfig.nodeEnv === "production",
   });
 
   if (startupConfig.SERVE_WEB_CLIENT) {
