@@ -1,7 +1,9 @@
 import { resolveClientApiPath } from "../../lib/client-api-path.js";
 import {
   apiFetch,
+  fetchCsrfHeaders,
   parseApiErrorMessage,
+  type JsonHeaders,
 } from "../../lib/client-api-fetch.js";
 import type {
   BookmarkModalFolderOption,
@@ -48,10 +50,11 @@ function isTagOptionArray(items: unknown): items is BookmarkModalTagOption[] {
 
 async function createBookmark(
   body: ReturnType<typeof toBookmarkSubmitBody>,
+  csrfHeaders: JsonHeaders,
 ): Promise<{ id: string }> {
   const res = await apiFetch(resolveClientApiPath("/bookmarks"), {
     method: "POST",
-    csrf: true,
+    csrfHeaders,
     body: JSON.stringify(body),
   });
   if (!res.ok) {
@@ -63,10 +66,11 @@ async function createBookmark(
 async function updateBookmark(
   bookmarkId: string,
   body: ReturnType<typeof toBookmarkSubmitBody>,
+  csrfHeaders: JsonHeaders,
 ): Promise<void> {
   const res = await apiFetch(resolveClientApiPath(`/bookmarks/${bookmarkId}`), {
     method: "PATCH",
-    csrf: true,
+    csrfHeaders,
     body: JSON.stringify(body),
   });
   if (!res.ok) {
@@ -74,10 +78,14 @@ async function updateBookmark(
   }
 }
 
-async function addBookmarkToFolder(folderId: string, bookmarkId: string): Promise<void> {
+async function addBookmarkToFolder(
+  folderId: string,
+  bookmarkId: string,
+  csrfHeaders: JsonHeaders,
+): Promise<void> {
   const res = await apiFetch(`/folders/${folderId}/bookmarks`, {
     method: "POST",
-    csrf: true,
+    csrfHeaders,
     body: JSON.stringify({ bookmarkId }),
   });
   if (!res.ok) {
@@ -85,10 +93,14 @@ async function addBookmarkToFolder(folderId: string, bookmarkId: string): Promis
   }
 }
 
-async function addBookmarkToTag(tagId: string, bookmarkId: string): Promise<void> {
+async function addBookmarkToTag(
+  tagId: string,
+  bookmarkId: string,
+  csrfHeaders: JsonHeaders,
+): Promise<void> {
   const res = await apiFetch(`/tags/${tagId}/bookmarks`, {
     method: "POST",
-    csrf: true,
+    csrfHeaders,
     body: JSON.stringify({ bookmarkId }),
   });
   if (!res.ok) {
@@ -96,10 +108,13 @@ async function addBookmarkToTag(tagId: string, bookmarkId: string): Promise<void
   }
 }
 
-async function createTag(name: string): Promise<{ id: string }> {
+async function createTag(
+  name: string,
+  csrfHeaders: JsonHeaders,
+): Promise<{ id: string }> {
   const res = await apiFetch(resolveClientApiPath("/tags"), {
     method: "POST",
-    csrf: true,
+    csrfHeaders,
     body: JSON.stringify({ name }),
   });
   if (!res.ok) {
@@ -108,10 +123,13 @@ async function createTag(name: string): Promise<{ id: string }> {
   return (await res.json()) as { id: string };
 }
 
-async function createFolder(name: string): Promise<{ id: string }> {
+async function createFolder(
+  name: string,
+  csrfHeaders: JsonHeaders,
+): Promise<{ id: string }> {
   const res = await apiFetch(resolveClientApiPath("/folders"), {
     method: "POST",
-    csrf: true,
+    csrfHeaders,
     body: JSON.stringify({ name }),
   });
   if (!res.ok) {
@@ -124,43 +142,52 @@ async function syncFolderMembership(
   bookmarkId: string,
   selectedFolderIds: string[],
   initialFolderIds: string[],
+  csrfHeaders: JsonHeaders,
 ): Promise<void> {
   const toAdd = selectedFolderIds.filter((id) => !initialFolderIds.includes(id));
-  await Promise.all(toAdd.map((folderId) => addBookmarkToFolder(folderId, bookmarkId)));
+  await Promise.all(
+    toAdd.map((folderId) => addBookmarkToFolder(folderId, bookmarkId, csrfHeaders)),
+  );
 }
 
 async function syncTagMembership(
   bookmarkId: string,
   selectedTagIds: string[],
   initialTagIds: string[],
+  csrfHeaders: JsonHeaders,
 ): Promise<void> {
   const toAdd = selectedTagIds.filter((id) => !initialTagIds.includes(id));
-  await Promise.all(toAdd.map((tagId) => addBookmarkToTag(tagId, bookmarkId)));
+  await Promise.all(
+    toAdd.map((tagId) => addBookmarkToTag(tagId, bookmarkId, csrfHeaders)),
+  );
 }
 
 export async function submitBookmarkModal(
   payload: BookmarkModalSubmitPayload,
   initial?: BookmarkModalInitialBookmark,
 ): Promise<void> {
+  const csrfHeaders = await fetchCsrfHeaders();
   const body = toBookmarkSubmitBody(payload);
 
   const newFolderIds = await Promise.all(
-    payload.newFolderNames.map((name) => createFolder(name).then((f) => f.id)),
+    payload.newFolderNames.map((name) =>
+      createFolder(name, csrfHeaders).then((f) => f.id),
+    ),
   );
   const allFolderIds = [...payload.folderIds, ...newFolderIds];
 
   const newTagIds = await Promise.all(
-    payload.newTagNames.map((name) => createTag(name).then((t) => t.id)),
+    payload.newTagNames.map((name) => createTag(name, csrfHeaders).then((t) => t.id)),
   );
   const allTagIds = [...payload.tagIds, ...newTagIds];
 
   if (payload.mode === "create") {
-    const created = await createBookmark(body);
+    const created = await createBookmark(body, csrfHeaders);
     await Promise.all([
       ...allFolderIds.map((folderId) =>
-        addBookmarkToFolder(folderId, created.id),
+        addBookmarkToFolder(folderId, created.id, csrfHeaders),
       ),
-      ...allTagIds.map((tagId) => addBookmarkToTag(tagId, created.id)),
+      ...allTagIds.map((tagId) => addBookmarkToTag(tagId, created.id, csrfHeaders)),
     ]);
     return;
   }
@@ -169,13 +196,19 @@ export async function submitBookmarkModal(
     throw new Error("bookmarkId is required for edit");
   }
 
-  await updateBookmark(payload.bookmarkId, body);
+  await updateBookmark(payload.bookmarkId, body, csrfHeaders);
   await syncFolderMembership(
     payload.bookmarkId,
     allFolderIds,
     initial?.folderIds ?? [],
+    csrfHeaders,
   );
-  await syncTagMembership(payload.bookmarkId, allTagIds, initial?.tagIds ?? []);
+  await syncTagMembership(
+    payload.bookmarkId,
+    allTagIds,
+    initial?.tagIds ?? [],
+    csrfHeaders,
+  );
 }
 
 export type LoadBookmarkModalOptionsResult = {

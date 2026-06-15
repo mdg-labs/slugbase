@@ -30,16 +30,20 @@ export async function fetchCsrfHeadersOrEmpty(request?: Request): Promise<JsonHe
 export type ClientFetchInit = Omit<RequestInit, "credentials"> & {
   request?: Request;
   csrf?: boolean;
+  /** Pre-fetched CSRF headers — avoids parallel token fetches invalidating the cookie. */
+  csrfHeaders?: JsonHeaders;
 };
 
 /** Browser or server fetch against the API (same-origin or absolute base). */
 export async function apiFetch(path: string, init: ClientFetchInit = {}): Promise<Response> {
-  const { request, csrf = false, headers: initHeaders, ...rest } = init;
+  const { request, csrf = false, csrfHeaders, headers: initHeaders, ...rest } = init;
   const base = resolveFetchBase(request);
   const cookie = request?.headers.get("Cookie") ?? "";
 
   const headerRecord: Record<string, string> = {};
-  if (csrf) {
+  if (csrfHeaders) {
+    Object.assign(headerRecord, csrfHeaders);
+  } else if (csrf) {
     Object.assign(headerRecord, await fetchCsrfHeaders(request));
   }
   if (initHeaders instanceof Headers) {

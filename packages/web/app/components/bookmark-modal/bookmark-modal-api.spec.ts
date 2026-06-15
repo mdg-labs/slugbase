@@ -3,7 +3,143 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   BookmarkModalLoadError,
   loadBookmarkModalOptions,
+  submitBookmarkModal,
 } from "./bookmark-modal-api.js";
+import type { BookmarkModalSubmitPayload } from "./bookmark-modal.types.js";
+
+function fetchInputUrl(input: RequestInfo | URL): string {
+  if (typeof input === "string") return input;
+  if (input instanceof URL) return input.href;
+  return input.url;
+}
+
+function mockOkJson(data: unknown) {
+  return { ok: true, json: () => Promise.resolve(data) } as Response;
+}
+
+function mockOkEmpty() {
+  return { ok: true } as Response;
+}
+
+describe("submitBookmarkModal", () => {
+  const originalFetch = globalThis.fetch;
+  const CSRF_TOKEN = "csrf-shared-token";
+
+  beforeEach(() => {
+    vi.stubEnv("VITE_API_URL", "");
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  it("fetches CSRF token once and reuses it for parallel ad-hoc tag creation", async () => {
+    const mutationCalls: Array<{ url: string; token?: string }> = [];
+    let tagCounter = 0;
+
+    globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = fetchInputUrl(input);
+      const headers = init?.headers as Record<string, string> | undefined;
+      const token = headers?.["x-csrf-token"];
+
+      if (url.endsWith("/auth/csrf-token")) {
+        return Promise.resolve(mockOkJson({ csrfToken: CSRF_TOKEN }));
+      }
+
+      if (url.endsWith("/api/tags") && init?.method === "POST") {
+        tagCounter += 1;
+        mutationCalls.push({ url, token });
+        return Promise.resolve(mockOkJson({ id: `tag-${String(tagCounter)}` }));
+      }
+
+      if (url.endsWith("/api/bookmarks") && init?.method === "POST") {
+        mutationCalls.push({ url, token });
+        return Promise.resolve(mockOkJson({ id: "bm-new" }));
+      }
+
+      if (url.includes("/tags/") && url.endsWith("/bookmarks")) {
+        mutationCalls.push({ url, token });
+        return Promise.resolve(mockOkEmpty());
+      }
+
+      return Promise.resolve({ ok: false, status: 404 } as Response);
+    });
+
+    const payload: BookmarkModalSubmitPayload = {
+      mode: "create",
+      url: "https://example.com/adhoc-tags",
+      title: "Ad-hoc tags",
+      slug: "",
+      folderIds: [],
+      newFolderNames: [],
+      tagIds: [],
+      newTagNames: ["alpha", "beta"],
+      pinned: false,
+      forwardingEnabled: false,
+    };
+
+    await submitBookmarkModal(payload);
+
+    const csrfFetches = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.filter(
+      ([url]) => fetchInputUrl(url as RequestInfo | URL).endsWith("/auth/csrf-token"),
+    );
+    expect(csrfFetches).toHaveLength(1);
+    expect(mutationCalls.length).toBeGreaterThanOrEqual(4);
+    expect(mutationCalls.every((call) => call.token === CSRF_TOKEN)).toBe(true);
+  });
+
+  it("reuses CSRF token for parallel folder and tag membership on create", async () => {
+    const mutationTokens: string[] = [];
+
+    globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = fetchInputUrl(input);
+      const headers = init?.headers as Record<string, string> | undefined;
+      const token = headers?.["x-csrf-token"];
+
+      if (url.endsWith("/auth/csrf-token")) {
+        return Promise.resolve(mockOkJson({ csrfToken: CSRF_TOKEN }));
+      }
+
+      if (url.endsWith("/api/bookmarks") && init?.method === "POST") {
+        mutationTokens.push(token ?? "");
+        return Promise.resolve(mockOkJson({ id: "bm-1" }));
+      }
+
+      if (
+        (url.includes("/folders/") || url.includes("/tags/")) &&
+        url.endsWith("/bookmarks")
+      ) {
+        mutationTokens.push(token ?? "");
+        return Promise.resolve(mockOkEmpty());
+      }
+
+      return Promise.resolve({ ok: false, status: 404 } as Response);
+    });
+
+    const payload: BookmarkModalSubmitPayload = {
+      mode: "create",
+      url: "https://example.com/multi-link",
+      title: "Multi link",
+      slug: "",
+      folderIds: ["folder-1", "folder-2"],
+      newFolderNames: [],
+      tagIds: ["tag-1", "tag-2"],
+      newTagNames: [],
+      pinned: false,
+      forwardingEnabled: false,
+    };
+
+    await submitBookmarkModal(payload);
+
+    const csrfFetches = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.filter(
+      ([url]) => fetchInputUrl(url as RequestInfo | URL).endsWith("/auth/csrf-token"),
+    );
+    expect(csrfFetches).toHaveLength(1);
+    expect(mutationTokens).toHaveLength(5);
+    expect(mutationTokens.every((token) => token === CSRF_TOKEN)).toBe(true);
+  });
+});
 
 describe("loadBookmarkModalOptions", () => {
   const originalFetch = globalThis.fetch;

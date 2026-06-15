@@ -55,4 +55,43 @@ test.describe("Bookmark CRUD", () => {
     // Verify the bookmark is removed — empty state should show
     await expect(page.getByText(editedTitle, { exact: true })).not.toBeVisible();
   });
+
+  test("create bookmark with multiple ad-hoc tags via modal", async ({ page }, testInfo) => {
+    const bookmarkTitle = `E2E Ad-hoc Tags ${e2eResourceSuffix(testInfo)}`;
+    const tagA = `adhoc-a-${e2eResourceSuffix(testInfo)}`;
+    const tagB = `adhoc-b-${e2eResourceSuffix(testInfo)}`;
+
+    await loginAsWorker(page, testInfo.workerIndex);
+
+    await page.goto("/bookmarks");
+    await page.waitForSelector('[data-testid="bookmark-list-page"]');
+
+    await page.click('button[aria-label="New bookmark"]');
+    await page.waitForSelector('[data-testid="bookmark-modal"]');
+    await page.fill(
+      'input[name="url"]',
+      `https://example.com/e2e-adhoc-tags-${e2eResourceSuffix(testInfo)}`,
+    );
+    await page.fill('input[name="title"]', bookmarkTitle);
+
+    const tagInput = page.locator('[data-testid="tag-input"]');
+    for (const tagName of [tagA, tagB]) {
+      await tagInput.fill(tagName);
+      await tagInput.press("Enter");
+    }
+
+    await page.click('button[type="submit"]');
+    await page.waitForSelector('[data-testid="bookmark-modal"]', {
+      state: "hidden",
+      timeout: 10000,
+    });
+
+    await expect(page.getByText(bookmarkTitle, { exact: true })).toBeVisible();
+
+    await page.goto("/tags");
+    await page.waitForSelector('[data-testid="tag-list-toolbar"]');
+    const tagList = page.locator('[data-testid="tag-list"]');
+    await expect(tagList).toContainText(tagA);
+    await expect(tagList).toContainText(tagB);
+  });
 });

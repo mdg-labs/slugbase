@@ -87,6 +87,28 @@ describe("client-api-fetch", () => {
         }),
       );
     });
+
+    it("uses pre-fetched csrfHeaders without fetching a new token", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({ ok: true });
+
+      const { apiFetch } = await import("./client-api-fetch.js");
+      await apiFetch("/tags/t-1/bookmarks", {
+        method: "POST",
+        csrfHeaders: {
+          "Content-Type": "application/json",
+          "x-csrf-token": "shared-token",
+        },
+        body: JSON.stringify({ bookmarkId: "bm-1" }),
+      });
+
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        "/tags/t-1/bookmarks",
+        expect.objectContaining({
+          headers: expect.objectContaining({ "x-csrf-token": "shared-token" }),
+        }),
+      );
+    });
   });
 
   describe("serverFetchJson", () => {
