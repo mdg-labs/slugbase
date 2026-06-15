@@ -20,6 +20,7 @@ export class SmtpMailService implements MailService {
   private readonly logger = new Logger(SmtpMailService.name);
   private transport: Transporter;
   private fromAddress: string;
+  private configured: boolean;
 
   constructor(
     @Inject(ConfigService) config: ConfigService,
@@ -32,6 +33,7 @@ export class SmtpMailService implements MailService {
     const pass = config.get("SMTP_PASS");
 
     this.fromAddress = config.get("SMTP_FROM") ?? "noreply@localhost";
+    this.configured = Boolean(host);
 
     this.transport = nodemailer.createTransport({
       host,
@@ -42,6 +44,14 @@ export class SmtpMailService implements MailService {
   }
 
   async send(message: MailMessage): Promise<void> {
+    if (!this.configured) {
+      this.logger.warn("Mail transport not configured - dropping message", {
+        type: message.type,
+        to: message.to,
+      });
+      return;
+    }
+
     try {
       await this.transport.sendMail({
         from: this.fromAddress,
@@ -64,10 +74,15 @@ export class SmtpMailService implements MailService {
   }
 
   isAvailable(): boolean {
-    return true;
+    return this.configured;
   }
 
   async sendTest(to: string): Promise<void> {
+    if (!this.configured) {
+      this.logger.warn("Mail transport not configured - test send skipped", { to });
+      return;
+    }
+
     await this.send({
       to,
       subject: "SlugBase mail transport test",
@@ -86,12 +101,14 @@ export class SmtpMailService implements MailService {
     port: number;
     secure: boolean;
     encryptedUser?: string;
+    /** Plain-text username from DB-backed settings (password remains encrypted). */
+    user?: string;
     encryptedPass?: string;
     from: string;
   }): void {
     const user = encryptedCredentials.encryptedUser
       ? this.crypto.decrypt(encryptedCredentials.encryptedUser)
-      : undefined;
+      : encryptedCredentials.user;
     const pass = encryptedCredentials.encryptedPass
       ? this.crypto.decrypt(encryptedCredentials.encryptedPass)
       : undefined;
@@ -103,5 +120,29 @@ export class SmtpMailService implements MailService {
       auth: user && pass ? { user, pass } : undefined,
     });
     this.fromAddress = encryptedCredentials.from;
+    this.configured = true;
   }
+}
+
+/** Returns true when a nodemailer failure looks like an SMTP authentication error. */
+export function isSmtpAuthFailure(cause: unknown): boolean {
+  if (!(cause instanceof Error)) {
+    return false;
+  }
+
+  const withCode = cause as Error & { code?: string; responseCode?: number };
+  if (withCode.code === "EAUTH") {
+    return true;
+  }
+
+  if (withCode.responseCode === 535 || withCode.responseCode === 534) {
+    return true;
+  }
+
+  const message = cause.message.toLowerCase();
+  return (
+    message.includes("invalid login") ||
+    message.includes("authentication failed") ||
+    message.includes("username and password not accepted")
+  );
 }

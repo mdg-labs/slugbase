@@ -8,6 +8,7 @@ import { DbService } from "../db/db.service.js";
 import { instanceMetadata } from "../db/schema/index.js";
 import { eq } from "drizzle-orm";
 import type { DrizzleClient } from "../db/dialect/create-client.js";
+import type { SmtpMailService } from "../mail/smtp-mail.service.js";
 
 const MAIL_SETTINGS_KEY = "smtp_settings";
 
@@ -105,6 +106,34 @@ export class MailSettingsService {
     return toPublicSettings(updated);
   }
 
+  /**
+   * Applies persisted SMTP settings to the live transport (startup + after PATCH).
+   */
+  async applyToTransport(smtpMail: SmtpMailService): Promise<void> {
+    const stored = await this.loadStoredSettings();
+    if (!stored?.host) {
+      return;
+    }
+
+    smtpMail.reconfigureFromEncrypted({
+      host: stored.host,
+      port: stored.port ?? 587,
+      secure: stored.secure,
+      user: stored.user ?? undefined,
+      encryptedPass: stored.encryptedPass ?? undefined,
+      from: stored.from ?? "noreply@localhost",
+    });
+  }
+
+  async updateSettingsAndApply(
+    body: UpdateMailSettingsBody,
+    smtpMail: SmtpMailService,
+  ): Promise<MailSettings> {
+    const settings = await this.updateSettings(body);
+    await this.applyToTransport(smtpMail);
+    return settings;
+  }
+
   /** Resolves the stored encrypted password from an optional incoming plaintext value. */
   private resolveEncryptedPass(
     incoming: string | null | undefined,
@@ -131,16 +160,8 @@ export class MailSettingsService {
     pass: string | undefined;
     from: string;
   } | null> {
-    const rows = await this.db
-      .select()
-      .from(instanceMetadata)
-      .where(eq(instanceMetadata.key, MAIL_SETTINGS_KEY))
-      .limit(1);
-
-    if (!rows[0]) return null;
-
-    const stored = JSON.parse(rows[0].value) as StoredMailSettings;
-    if (!stored.host) return null;
+    const stored = await this.loadStoredSettings();
+    if (!stored?.host) return null;
 
     return {
       host: stored.host,
@@ -150,5 +171,19 @@ export class MailSettingsService {
       pass: stored.encryptedPass ? this.crypto.decrypt(stored.encryptedPass) : undefined,
       from: stored.from ?? "noreply@localhost",
     };
+  }
+
+  private async loadStoredSettings(): Promise<StoredMailSettings | null> {
+    const rows = await this.db
+      .select()
+      .from(instanceMetadata)
+      .where(eq(instanceMetadata.key, MAIL_SETTINGS_KEY))
+      .limit(1);
+
+    if (!rows[0]) {
+      return null;
+    }
+
+    return JSON.parse(rows[0].value) as StoredMailSettings;
   }
 }

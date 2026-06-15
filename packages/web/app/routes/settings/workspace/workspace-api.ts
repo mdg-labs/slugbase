@@ -1,3 +1,5 @@
+import type { MailSettings } from "@slugbase/shared-types";
+
 import {
   apiFetch,
   parseApiErrorMessage,
@@ -14,6 +16,41 @@ import type {
 interface ApiMember {
   userId: string;
   role: "OWNER" | "ADMIN" | "MEMBER";
+}
+
+export class MailTestRequestError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "MailTestRequestError";
+  }
+}
+
+function mapMailSettingsFromApi(settings: MailSettings): MailSettingsData {
+  return {
+    host: settings.host ?? "",
+    port: settings.port ?? 587,
+    secure: settings.secure,
+    username: settings.user ?? "",
+    hasPassword: settings.hasPassword,
+    fromAddress: settings.from ?? "",
+    fromName: "SlugBase",
+  };
+}
+
+function mapMailSettingsToApi(
+  body: Omit<MailSettingsData, "hasPassword"> & { password?: string },
+): Record<string, unknown> {
+  return {
+    host: body.host,
+    port: body.port,
+    secure: body.secure,
+    user: body.username,
+    from: body.fromAddress,
+    ...(body.password !== undefined ? { password: body.password } : {}),
+  };
 }
 
 export async function loadWorkspaceSettingsContext(
@@ -58,7 +95,8 @@ export async function loadWorkspaceSettingsContext(
 }
 
 export async function loadMailSettings(request: Request): Promise<MailSettingsData | null> {
-  return serverFetchJson<MailSettingsData>(request, "/workspace/settings/mail");
+  const settings = await serverFetchJson<MailSettings>(request, "/workspace/settings/mail");
+  return settings ? mapMailSettingsFromApi(settings) : null;
 }
 
 export async function loadAiSettings(request: Request): Promise<AiSettingsData | null> {
@@ -100,12 +138,12 @@ export async function updateMailSettings(
   const res = await apiFetch("/workspace/settings/mail", {
     method: "PATCH",
     csrf: true,
-    body: JSON.stringify(body),
+    body: JSON.stringify(mapMailSettingsToApi(body)),
   });
   if (!res.ok) {
     throw new Error(await parseApiErrorMessage(res));
   }
-  return (await res.json()) as MailSettingsData;
+  return mapMailSettingsFromApi((await res.json()) as MailSettings);
 }
 
 export async function sendMailTest(recipientEmail: string): Promise<void> {
@@ -115,7 +153,7 @@ export async function sendMailTest(recipientEmail: string): Promise<void> {
     body: JSON.stringify({ to: recipientEmail }),
   });
   if (!res.ok) {
-    throw new Error(await parseApiErrorMessage(res));
+    throw new MailTestRequestError(res.status, await parseApiErrorMessage(res));
   }
 }
 

@@ -5,10 +5,11 @@ import { Test } from "@nestjs/testing";
 import cookieParser from "cookie-parser";
 import type { Server } from "node:http";
 import request from "supertest";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { AppModule } from "../src/app.module.js";
 import { AccountsService } from "../src/accounts/accounts.service.js";
+import { SmtpMailService } from "../src/mail/smtp-mail.service.js";
 import { SESSION_COOKIE } from "../src/sessions/session-constants.js";
 import { SessionService } from "../src/sessions/session.service.js";
 import { applyTestEnv, clearTestEnv } from "../src/test-utils/test-env.js";
@@ -19,6 +20,7 @@ import { createTestDatabase } from "./test-database.js";
 describe("Workspace mail settings HTTP (integration)", () => {
   let app: INestApplication | undefined;
   let cleanup: () => Promise<void> = async () => {};
+  let smtpMail: SmtpMailService;
 
   let adminSessionCookie: string;
   let adminCsrfToken: string;
@@ -39,6 +41,8 @@ describe("Workspace mail settings HTTP (integration)", () => {
     app = moduleRef.createNestApplication();
     app.use(cookieParser());
     await app.init();
+
+    smtpMail = moduleRef.get(SmtpMailService);
 
     const accountsService = moduleRef.get(AccountsService);
     const workspacesService = moduleRef.get(WorkspacesService);
@@ -106,6 +110,18 @@ describe("Workspace mail settings HTTP (integration)", () => {
     return app.getHttpServer() as Server;
   }
 
+  describe("POST /workspace/settings/mail/test (unconfigured)", () => {
+    it("returns 503 when mail transport is not configured", async () => {
+      const res = await request(server())
+        .post("/workspace/settings/mail/test")
+        .set("Cookie", `${adminSessionCookie}; ${adminCsrfCookie}`)
+        .set("x-csrf-token", adminCsrfToken)
+        .send({ to: "admin@example.com" });
+
+      expect(res.status).toBe(503);
+    });
+  });
+
   describe("GET /workspace/settings/mail", () => {
     it("returns 200 with default settings for ADMIN", async () => {
       const res = await request(server())
@@ -152,6 +168,23 @@ describe("Workspace mail settings HTTP (integration)", () => {
       expect(body.port).toBe(587);
       expect(body.from).toBe("test@example.com");
       expect(body).not.toHaveProperty("encryptedPass");
+      expect(smtpMail.isAvailable()).toBe(true);
+    });
+
+    it("persists user and from fields from API contract", async () => {
+      const res = await request(server())
+        .patch("/workspace/settings/mail")
+        .set("Cookie", `${adminSessionCookie}; ${adminCsrfCookie}`)
+        .set("x-csrf-token", adminCsrfToken)
+        .send({
+          user: "smtp-user@example.com",
+          from: "noreply@example.com",
+        });
+
+      expect(res.status).toBe(200);
+      const body = res.body as Record<string, unknown>;
+      expect(body.user).toBe("smtp-user@example.com");
+      expect(body.from).toBe("noreply@example.com");
     });
 
     it("stores password as encrypted (hasPassword=true after setting)", async () => {
@@ -188,15 +221,41 @@ describe("Workspace mail settings HTTP (integration)", () => {
     });
   });
 
-  describe("POST /workspace/settings/mail/test", () => {
-    it("returns 503 when mail transport is not configured (noop in test env)", async () => {
+  describe("POST /workspace/settings/mail/test (configured)", () => {
+    it("returns 204 after DB settings wire the transport", async () => {
+      const sendTestSpy = vi.spyOn(smtpMail, "sendTest").mockResolvedValue(undefined);
+
       const res = await request(server())
         .post("/workspace/settings/mail/test")
         .set("Cookie", `${adminSessionCookie}; ${adminCsrfCookie}`)
         .set("x-csrf-token", adminCsrfToken)
         .send({ to: "admin@example.com" });
 
-      expect(res.status).toBe(503);
+      expect(res.status).toBe(204);
+      expect(sendTestSpy).toHaveBeenCalledWith("admin@example.com");
+
+      sendTestSpy.mockRestore();
+    });
+
+    it("returns 400 when SMTP authentication fails", async () => {
+      const { MailSendError } = await import("@slugbase/shared-types");
+      const sendTestSpy = vi.spyOn(smtpMail, "sendTest").mockRejectedValue(
+        new MailSendError(
+          "send failed",
+          Object.assign(new Error("Invalid login"), { code: "EAUTH" }),
+        ),
+      );
+
+      const res = await request(server())
+        .post("/workspace/settings/mail/test")
+        .set("Cookie", `${adminSessionCookie}; ${adminCsrfCookie}`)
+        .set("x-csrf-token", adminCsrfToken)
+        .send({ to: "admin@example.com" });
+
+      expect(res.status).toBe(400);
+      expect((res.body as { message?: string }).message).toContain("authentication");
+
+      sendTestSpy.mockRestore();
     });
 
     it("returns 403 for MEMBER", async () => {
