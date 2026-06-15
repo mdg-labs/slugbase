@@ -18,6 +18,7 @@ export async function fetchCsrfHeaders(request?: Request): Promise<JsonHeaders> 
   };
 }
 
+/** Prefer {@link fetchCsrfHeaders} for mutations — do not POST without a CSRF token. */
 export async function fetchCsrfHeadersOrEmpty(request?: Request): Promise<JsonHeaders> {
   try {
     return await fetchCsrfHeaders(request);

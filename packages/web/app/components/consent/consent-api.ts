@@ -1,7 +1,4 @@
-import {
-  apiFetch,
-  fetchCsrfHeadersOrEmpty,
-} from "../../lib/client-api-fetch.js";
+import { apiFetch, fetchCsrfHeaders } from "../../lib/client-api-fetch.js";
 
 export interface AnalyticsConsentStatus {
   enabled: boolean;
@@ -18,7 +15,7 @@ export async function fetchAnalyticsConsentStatus(): Promise<AnalyticsConsentSta
 }
 
 export async function persistAnalyticsConsent(granted: boolean): Promise<void> {
-  const headers = await fetchCsrfHeadersOrEmpty();
+  const headers = await fetchCsrfHeaders();
   await apiFetch("/analytics/consent", {
     method: "POST",
     headers,
