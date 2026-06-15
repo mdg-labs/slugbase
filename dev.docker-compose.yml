@@ -1,0 +1,84 @@
+# Local self-host smoke test — combined API + web on one port.
+# Image: staging CI pushes ghcr.io/mdg-labs/slugbase:dev on each staging deploy.
+#
+# Prerequisites:
+#   docker login ghcr.io -u <github-username> -p <github-pat-with-read:packages>
+#
+# Usage:
+#   docker compose -f docker-compose.self-hosted.yml up -d
+#   open http://localhost:3000
+#   curl -sf http://localhost:3000/health
+#
+# First visit: /setup (instance admin) unless PUBLIC_REGISTRATION=true.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: slugbase
+      POSTGRES_PASSWORD: slugbase
+      POSTGRES_DB: slugbase
+    volumes:
+      - slugbase_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U slugbase -d slugbase"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+
+  slugbase:
+    image: ghcr.io/mdg-labs/slugbase:dev
+    pull_policy: always
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "3341:3000"
+    environment:
+      # Required secrets (replace before any non-local use)
+      SESSION_SECRET: local-dev-session-secret-at-least-32-chars!!
+      ENCRYPTION_KEY: local-dev-encryption-key-at-least-32-chars!!
+
+      # Database — hostname is the compose service name
+      DATABASE_URL: postgresql://slugbase:slugbase@postgres:5432/slugbase
+
+      # Combined image: API + web share one origin
+      APP_BASE_URL: http://localhost:3000
+      FRONTEND_ORIGIN: http://localhost:3000
+      API_BASE_URL: http://localhost:3000
+
+      # Self-host defaults (easy local testing)
+      PUBLIC_REGISTRATION: "false"
+      EMAIL_VERIFICATION_REQUIRED: "false"
+      PORT: "3000"
+
+      # Preset in Dockerfile, listed for clarity:
+      # SERVE_WEB_CLIENT=true
+      # WEB_CLIENT_SERVER_BUILD=/app/packages/web/build/server/index.js
+
+      # No-op interfaces (leave empty for local)
+      # SMTP_*, OPENAI_API_KEY, STRIPE_*, TURNSTILE_*, UMAMI_*, SENTRY_* unset
+
+      # Optional: skip Turnstile in prod image when testing registration flows
+      # (noop challenge is used anyway when TURNSTILE_SECRET_KEY is unset)
+      CHALLENGE_DEV_SKIP: "true"
+
+      NODE_ENV: production
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 45s
+
+volumes:
+  slugbase_pgdata:
