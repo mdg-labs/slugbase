@@ -1,5 +1,6 @@
 # Local self-host smoke test — combined API + web on one port.
-# Image: staging CI pushes ghcr.io/mdg-labs/slugbase:dev on each staging deploy.
+# Image: staging CI pushes ghcr.io/mdg-labs/slugbase:dev on each staging deploy
+# (self-host VITE_* baked at build — see scripts/self-host-vite-build-args.sh).
 #
 # Prerequisites:
 #   docker login ghcr.io -u <github-username> -p <github-pat-with-read:packages>

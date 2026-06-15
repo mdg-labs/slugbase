@@ -102,12 +102,12 @@ PUBLIC_REGISTRATION=false                       # invite-only default
 EMAIL_VERIFICATION_REQUIRED=false               # configurable
 # SERVE_WEB_CLIENT=true and WEB_CLIENT_SERVER_BUILD are preset in the Dockerfile
 
-# Image build — pass VITE_* as docker build-args (see Dockerfile)
+# Image build — hardcoded self-host VITE_* (see scripts/self-host-vite-build-args.sh)
 VITE_BILLING_ENABLED=false
 VITE_MAIL_ADMIN_UI=true
 VITE_OIDC_ADMIN_UI=true
 VITE_AI_BYO_CREDENTIAL=true
-VITE_APP_BASE_URL=https://bookmarks.example.com
+# Do not bake VITE_APP_BASE_URL, VITE_UMAMI_*, or VITE_SENTRY_* — set APP_BASE_URL at runtime
 # Leave Stripe, Turnstile, Umami, Sentry empty for no-op interfaces
 ```
 
@@ -120,7 +120,7 @@ docker run -d \
   ghcr.io/<owner>/slugbase:latest
 ```
 
-CI builds the image with an allowlisted subset of `VITE_*` keys from Infisical as `--build-arg` (see [`.github/scripts/build-push-ghcr.sh`](../.github/scripts/build-push-ghcr.sh)). **`VITE_SENTRY_*` keys are never passed** — hosted error-reporting DSNs must not be baked into the self-host client bundle.
+CI GHCR builds (**`push-ghcr-staging-dev`**, **`push-ghcr-image`**) do **not** fetch Infisical. They pass hardcoded self-host `VITE_*` values from [`scripts/self-host-vite-build-args.sh`](../scripts/self-host-vite-build-args.sh) via [`.github/scripts/build-push-ghcr.sh`](../.github/scripts/build-push-ghcr.sh). **`VITE_SENTRY_*`**, **`VITE_UMAMI_*`**, **`VITE_APP_BASE_URL`**, and deprecated pricing keys are never passed — hosted telemetry and URLs must not be baked into the self-host client bundle.
 
 ### URL wiring (self-hosted)
 
@@ -345,7 +345,7 @@ Stored in Infisical `staging` / `prod`. Injected into GitHub Actions runners onl
 
 ### 9. Self-hosted — runtime and image build
 
-**Do not bake hosted telemetry at image build time.** Self-host operators and CI must never pass `VITE_SENTRY_*` (or other hosted-only telemetry keys) as Docker `--build-arg` values. The GHCR publish script uses an explicit allowlist that omits `VITE_SENTRY_*`; local/e2e builds mirror the same rule. Runtime `SENTRY_DSN` on the API container is optional and separate from client build-time keys — leave both empty for a fully no-op error-reporting install (spec §11.7).
+**Do not bake hosted telemetry at image build time.** Self-host operators and CI must never pass `VITE_SENTRY_*` (or other hosted-only telemetry keys) as Docker `--build-arg` values. GHCR CI and local/e2e builds share the same hardcoded self-host flags in [`scripts/self-host-vite-build-args.sh`](../scripts/self-host-vite-build-args.sh) — not Infisical. Runtime `SENTRY_DSN` on the API container is optional and separate from client build-time keys — leave both empty for a fully no-op error-reporting install (spec §11.7).
 
 | Key | What it does | Hosted | Self-host | Required | Secret | When set | Example value |
 |---|---|---|---|---|---|---|---|

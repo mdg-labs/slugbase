@@ -66,12 +66,9 @@ fail()  { echo -e "${RED}✗${NC} $1"; }
 header(){ echo -e "\n${CYAN}═══════════════════════════════════════════${NC}"; echo -e "${CYAN}  $1${NC}"; echo -e "${CYAN}═══════════════════════════════════════════${NC}"; }
 
 # Self-hosted Docker image build args (spec §15 — docs/internal/environment-variables.md)
-SELF_HOSTED_DOCKER_BUILD_ARGS=(
-  --build-arg VITE_BILLING_ENABLED=false
-  --build-arg VITE_MAIL_ADMIN_UI=true
-  --build-arg VITE_OIDC_ADMIN_UI=true
-  --build-arg VITE_AI_BYO_CREDENTIAL=true
-)
+# shellcheck source=scripts/self-host-vite-build-args.sh
+source "${REPO_ROOT}/scripts/self-host-vite-build-args.sh"
+SELF_HOSTED_DOCKER_BUILD_ARGS=("${SELF_HOST_VITE_BUILD_ARGS[@]}")
 
 # Hosted web bundle: billing on, workspace SMTP/OIDC/AI BYO panels off.
 # Optional second arg: marketing origin for VITE_MARKETING_ORIGIN (legal links in web UI).
