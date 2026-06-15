@@ -13,9 +13,11 @@ function createErrorReporting() {
   };
 }
 
-function createConfig(overrides: Partial<Record<string, string>> = {}) {
-  const values: Record<string, string | undefined> = {
+function createConfig(overrides: Partial<Record<string, string | boolean>> = {}) {
+  const values: Record<string, string | boolean | undefined> = {
     STRIPE_SECRET_KEY: "sk_test_example",
+    FRONTEND_ORIGIN: "https://app.slugbase.test",
+    isProduction: false,
     ...overrides,
   };
 
@@ -23,6 +25,9 @@ function createConfig(overrides: Partial<Record<string, string>> = {}) {
     get: (key: string) => values[key],
   } as ConfigService;
 }
+
+const frontendSuccessUrl = "https://app.slugbase.test/billing/success";
+const frontendCancelUrl = "https://app.slugbase.test/billing/cancel";
 
 function createStripeClient(
   overrides: Partial<StripeBillingClient> = {},
@@ -108,8 +113,8 @@ describe("StripeBillingService", () => {
       plan: "personal",
       mode: "recurring",
       priceId: "price_personal",
-      successUrl: "https://app.example/success",
-      cancelUrl: "https://app.example/cancel",
+      successUrl: frontendSuccessUrl,
+      cancelUrl: frontendCancelUrl,
       customerEmail: "owner@example.com",
     });
 
@@ -133,8 +138,8 @@ describe("StripeBillingService", () => {
       mode: "recurring",
       priceId: "price_team",
       seatQuantity: 5,
-      successUrl: "https://app.example/success",
-      cancelUrl: "https://app.example/cancel",
+      successUrl: frontendSuccessUrl,
+      cancelUrl: frontendCancelUrl,
       customerEmail: "owner@example.com",
     });
 
@@ -159,8 +164,8 @@ describe("StripeBillingService", () => {
       mode: "recurring",
       priceId: "price_personal",
       seatQuantity: 5,
-      successUrl: "https://app.example/success",
-      cancelUrl: "https://app.example/cancel",
+      successUrl: frontendSuccessUrl,
+      cancelUrl: frontendCancelUrl,
       customerEmail: "owner@example.com",
     });
 
@@ -184,8 +189,8 @@ describe("StripeBillingService", () => {
       plan: "team",
       mode: "recurring",
       priceId: "price_team",
-      successUrl: "https://app.example/success",
-      cancelUrl: "https://app.example/cancel",
+      successUrl: frontendSuccessUrl,
+      cancelUrl: frontendCancelUrl,
       customerEmail: "owner@example.com",
     });
 
@@ -211,8 +216,8 @@ describe("StripeBillingService", () => {
       plan: "personal",
       mode: "recurring",
       priceId: "price_personal",
-      successUrl: "https://app.example/success",
-      cancelUrl: "https://app.example/cancel",
+      successUrl: frontendSuccessUrl,
+      cancelUrl: frontendCancelUrl,
       customerEmail: "owner@example.com",
     });
 
@@ -241,8 +246,8 @@ describe("StripeBillingService", () => {
       plan: "personal",
       mode: "one_time",
       priceId: "price_supporter",
-      successUrl: "https://app.example/success",
-      cancelUrl: "https://app.example/cancel",
+      successUrl: frontendSuccessUrl,
+      cancelUrl: frontendCancelUrl,
       customerEmail: "owner@example.com",
     });
 

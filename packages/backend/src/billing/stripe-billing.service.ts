@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { BadRequestException, Inject, Injectable, Logger } from "@nestjs/common";
 import {
   BillingProviderError,
   BillingSeatFloorError,
@@ -54,6 +54,35 @@ export interface StripeBillingClient {
 }
 
 /**
+ * Validates Stripe checkout/portal redirect URLs against FRONTEND_ORIGIN (spec §11.4, §15).
+ */
+export function assertBillingRedirectUrlAllowed(
+  redirectUrl: string,
+  frontendOrigin: string,
+  requireHttps: boolean,
+): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(redirectUrl);
+  } catch {
+    throw new BadRequestException("Invalid redirect URL");
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new BadRequestException("Redirect URL must use HTTP or HTTPS");
+  }
+
+  if (requireHttps && parsed.protocol !== "https:") {
+    throw new BadRequestException("Redirect URL must use HTTPS in production");
+  }
+
+  const allowedOrigin = new URL(frontendOrigin).origin;
+  if (parsed.origin !== allowedOrigin) {
+    throw new BadRequestException("Redirect URL must match the configured frontend origin");
+  }
+}
+
+/**
  * Stripe billing implementation - used when STRIPE_SECRET_KEY is configured (spec §11.4).
  * Maps Stripe subscription/checkout state to the product billing contract.
  */
@@ -79,6 +108,7 @@ export class StripeBillingService implements BillingService {
     request: BillingCheckoutRequest,
   ): Promise<BillingCheckoutSession> {
     this.assertAvailable();
+    this.assertRedirectUrlsAllowed([request.successUrl, request.cancelUrl]);
 
     try {
       const quantity =
@@ -137,6 +167,7 @@ export class StripeBillingService implements BillingService {
 
   async createPortalSession(request: BillingPortalRequest): Promise<BillingPortalSession> {
     this.assertAvailable();
+    this.assertRedirectUrlsAllowed([request.returnUrl]);
 
     try {
       const session = await this.stripe.billingPortal.sessions.create({
@@ -288,6 +319,14 @@ export class StripeBillingService implements BillingService {
   private assertAvailable(): void {
     if (!this.isAvailable()) {
       throw new BillingUnavailableError();
+    }
+  }
+
+  private assertRedirectUrlsAllowed(urls: string[]): void {
+    const frontendOrigin = this.config.get("FRONTEND_ORIGIN");
+    const requireHttps = this.config.get("isProduction");
+    for (const url of urls) {
+      assertBillingRedirectUrlAllowed(url, frontendOrigin, requireHttps);
     }
   }
 }

@@ -31,6 +31,7 @@ import {
   readProductMarker,
 } from "./stripe-billing.mapper.js";
 import { DowngradeService } from "./downgrade/downgrade.service.js";
+import { assertBillingRedirectUrlAllowed } from "./stripe-billing.service.js";
 import {
   subscriptionStateToWorkspacePatch,
 } from "./workspace-billing.util.js";
@@ -105,6 +106,7 @@ export class BillingApplicationService {
 
   async startCheckout(input: StartCheckoutInput): Promise<{ checkoutUrl: string; sessionId: string }> {
     this.assertBillingAvailable();
+    this.assertBillingRedirectUrls([input.successUrl, input.cancelUrl]);
     await this.requireBillingOwner(input.workspaceId, input.requesterId);
 
     if (input.mode === "one_time" && !this.planConfig.isSupporterPromotionActive()) {
@@ -164,6 +166,7 @@ export class BillingApplicationService {
 
   async openPortal(input: OpenPortalInput): Promise<{ portalUrl: string }> {
     this.assertBillingAvailable();
+    this.assertBillingRedirectUrls([input.returnUrl]);
     await this.requireBillingOwner(input.workspaceId, input.requesterId);
 
     const workspace = await this.workspaceRepo.findById(input.workspaceId);
@@ -308,6 +311,14 @@ export class BillingApplicationService {
       await this.downgrade.handlePlanTransition(previous, updated);
     }
     return updated;
+  }
+
+  private assertBillingRedirectUrls(urls: string[]): void {
+    const frontendOrigin = this.config.get("FRONTEND_ORIGIN");
+    const requireHttps = this.config.get("isProduction");
+    for (const url of urls) {
+      assertBillingRedirectUrlAllowed(url, frontendOrigin, requireHttps);
+    }
   }
 
   private async requireBillingOwner(workspaceId: string, userId: string): Promise<void> {
