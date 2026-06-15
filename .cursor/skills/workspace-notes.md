@@ -179,6 +179,11 @@ _added: 2026-06-13_
 `infisical secrets get KEY` without `--type` merges layers and can false-positive "present" after shared secrets are deleted. For existence/delete checks use `--type=shared` and `--type=personal` separately. Delete shared: `infisical secrets delete KEY --env=ENV --type=shared`.
 _added: 2026-06-13_
 
+## Orchestrator — serialize CI on WSL (2026-06-15)
+
+Parallel Lane P execution agents each running the **full CI gate** (lint+typecheck+unit+build+integration+audit) can exhaust WSL/Cursor server memory and crash the host. **From batch 3 onward:** dispatch **one task at a time** (`run_in_background: false`); prefer **Lane S on `staging`** when scopes don't overlap, or Lane P with sequential verify→integrate before starting the next task. Never run 2+ full CI gates concurrently on the same machine.
+_added: 2026-06-15_
+
 ## localStorage view-mode pollution in BookmarkListPage tests (2026-06-09)
 
 BookmarkListPage tests share a jsdom environment. Prior tests that set `view: "table"` write to `localStorage`, which persists into subsequent tests expecting grid view. **Fix:** add `localStorage.clear()` in `beforeEach`. The `ECONNREFUSED 127.0.0.1:3000` warning in the test output is pre-existing and unrelated.
