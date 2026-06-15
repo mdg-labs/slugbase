@@ -69,16 +69,24 @@ describe("entry.client", () => {
 });
 
 describe("self-host GHCR build", () => {
-  it("build-push-ghcr.sh omits VITE_SENTRY_* from docker build-args", () => {
+  it("build-push-ghcr.sh uses hardcoded self-host vite build-args", () => {
     const script = readFileSync(
       join(__dirname, "../../../.github/scripts/build-push-ghcr.sh"),
       "utf-8",
     );
-
-    expect(script).toContain("Never pass VITE_SENTRY_*");
-    expect(script).toContain("SELF_HOST_VITE_BUILD_ARGS");
-    expect(script).not.toMatch(
-      /env \| grep '\^VITE_'/,
+    const sharedArgs = readFileSync(
+      join(__dirname, "../../../scripts/self-host-vite-build-args.sh"),
+      "utf-8",
     );
+
+    expect(script).toContain("self-host-vite-build-args.sh");
+    expect(script).toContain("SELF_HOST_VITE_BUILD_ARGS");
+    expect(script).not.toMatch(/env \| grep '\^VITE_'/);
+    expect(script).not.toMatch(/VITE_SENTRY_/);
+
+    expect(sharedArgs).toContain("VITE_BILLING_ENABLED=false");
+    expect(sharedArgs).toContain("VITE_MAIL_ADMIN_UI=true");
+    expect(sharedArgs).not.toMatch(/VITE_SENTRY_/);
+    expect(sharedArgs).not.toContain("${!key");
   });
 });
