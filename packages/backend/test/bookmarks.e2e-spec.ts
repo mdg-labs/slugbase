@@ -139,6 +139,14 @@ describe("Bookmarks (integration)", () => {
       expect(updated.forwardingEnabled).toBe(true);
     });
 
+    it("rejects data: URLs on update", async () => {
+      await expect(
+        bookmarksService.updateBookmark(workspace, ownerUserId, bookmarkId, {
+          url: "data:text/html,<script>alert(1)</script>",
+        }),
+      ).rejects.toThrow("Only http and https URLs are supported");
+    });
+
     it("toggles pin state", async () => {
       const pinned = await bookmarksService.togglePin(
         workspace,

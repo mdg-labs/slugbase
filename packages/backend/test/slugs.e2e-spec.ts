@@ -9,8 +9,10 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { AppModule } from "../src/app.module.js";
 import { AccountsService } from "../src/accounts/accounts.service.js";
+import { BookmarkRepository } from "../src/bookmarks/bookmark.repository.js";
 import { BookmarksService } from "../src/bookmarks/bookmarks.service.js";
 import { SESSION_COOKIE } from "../src/auth/login-logout.controller.js";
+import { DbService } from "../src/db/db.service.js";
 import { GoService } from "../src/slugs/go.service.js";
 import { applyTestEnv, clearTestEnv } from "../src/test-utils/test-env.js";
 import { WorkspaceMembersService } from "../src/workspaces/workspace-members.service.js";
@@ -24,6 +26,7 @@ describe("Slugs + /go (integration)", () => {
   let goService: GoService;
   let workspacesService: WorkspacesService;
   let membersService: WorkspaceMembersService;
+  let dbService: DbService;
 
   let ownerUserId: string;
   let memberUserId: string;
@@ -56,6 +59,7 @@ describe("Slugs + /go (integration)", () => {
     goService = moduleRef.get(GoService);
     workspacesService = moduleRef.get(WorkspacesService);
     membersService = moduleRef.get(WorkspaceMembersService);
+    dbService = moduleRef.get(DbService);
 
     const owner = await accountsService.registerAccount({
       email: OWNER_EMAIL,
@@ -138,6 +142,15 @@ describe("Slugs + /go (integration)", () => {
         }),
       ).rejects.toThrow('Slug "go" is reserved');
     });
+
+    it("rejects javascript: URLs on bookmark create", async () => {
+      await expect(
+        bookmarksService.createBookmark(workspace, ownerUserId, {
+          title: "XSS Attempt",
+          url: "javascript:alert(1)",
+        }),
+      ).rejects.toThrow("Only http and https URLs are supported");
+    });
   });
 
   describe("GET /go/:slug", () => {
@@ -169,6 +182,25 @@ describe("Slugs + /go (integration)", () => {
     it("returns 401 without authentication", async () => {
       const res = await request(server()).get("/go/react");
       expect(res.status).toBe(401);
+    });
+
+    it("returns 400 when stored bookmark URL is not http or https", async () => {
+      const bookmarkRepo = new BookmarkRepository(dbService.getOrm());
+      await bookmarkRepo.create(workspaceId, ownerUserId, {
+        title: "Legacy bad URL",
+        url: "javascript:alert(1)",
+        slug: "bad-redirect-url",
+        forwardingEnabled: true,
+      });
+
+      const res = await request(server())
+        .get("/go/bad-redirect-url")
+        .set("Cookie", sessionCookie);
+
+      expect(res.status).toBe(400);
+      expect(res.body).toMatchObject({
+        message: "Only http and https URLs are supported",
+      });
     });
 
     it("returns disambiguation when multiple accessible matches exist", async () => {

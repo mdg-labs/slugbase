@@ -2,6 +2,7 @@ import { BadRequestException, Inject, Injectable } from "@nestjs/common";
 
 import { BookmarkRepository } from "../bookmarks/bookmark.repository.js";
 import {
+  assertHttpUrl,
   assertSlugValid,
   normalizeOptionalSlug,
   sanitizeBookmarkTitle,
@@ -83,9 +84,16 @@ export class ImportService {
 
     for (const entry of entries) {
       const title = sanitizeBookmarkTitle(entry.title.trim());
-      const url = entry.url.trim();
 
-      if (!title || !url) {
+      if (!title) {
+        result.failureCount += 1;
+        continue;
+      }
+
+      let url: string;
+      try {
+        url = assertHttpUrl(entry.url);
+      } catch {
         result.failureCount += 1;
         continue;
       }
