@@ -62,6 +62,32 @@ vi.mock("../../components/list/SectionHead.js", () => ({
   ),
 }));
 
+vi.mock("../../components/import/ImportDialog.js", () => ({
+  ImportDialog: ({
+    open,
+    onOpenChange,
+    onSuccess,
+  }: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    onSuccess?: (result: { successCount: number; capLimitedCount: number }) => void;
+  }) =>
+    open ? (
+      <div data-testid="import-dialog">
+        <button
+          type="button"
+          data-testid="import-dialog-mock-submit"
+          onClick={() => {
+            onSuccess?.({ successCount: 2, capLimitedCount: 0 });
+            onOpenChange(false);
+          }}
+        >
+          Mock import
+        </button>
+      </div>
+    ) : null,
+}));
+
 let mockLoaderData: BookmarkListData;
 
 const makeBookmark = (overrides: Partial<BookmarkListItem> = {}): BookmarkListItem => ({
@@ -133,6 +159,32 @@ describe("BookmarkListPage", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("bookmark-modal")).toBeTruthy();
+    });
+  });
+
+  it("opens import dialog from empty-state import button", async () => {
+    renderPage();
+
+    fireEvent.click(screen.getByTestId("bookmark-import-action-empty"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("import-dialog")).toBeTruthy();
+    });
+  });
+
+  it("opens import dialog from toolbar when bookmarks exist", async () => {
+    mockLoaderData = {
+      ...emptyUnfilteredData,
+      items: [makeBookmark()],
+      total: 1,
+    };
+
+    renderPage();
+
+    fireEvent.click(screen.getByTestId("bookmark-import-action"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("import-dialog")).toBeTruthy();
     });
   });
 

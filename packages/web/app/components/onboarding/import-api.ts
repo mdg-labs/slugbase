@@ -5,10 +5,13 @@ async function getCsrfToken(): Promise<string> {
   return data.csrfToken;
 }
 
+/** Matches backend `ImportResultSchema` (shared-types import contract). */
 export interface ImportResult {
-  imported: number;
-  skipped: number;
-  errors: number;
+  total: number;
+  successCount: number;
+  failureCount: number;
+  skippedSlugCount: number;
+  capLimitedCount: number;
 }
 
 export async function importNetscapeHtml(html: string): Promise<ImportResult> {

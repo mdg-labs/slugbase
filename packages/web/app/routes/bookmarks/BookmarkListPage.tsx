@@ -16,6 +16,8 @@ import { resolveResourceSharingScope } from "../../components/sharing/sharing.ut
 import { useWorkspaceEntitlements } from "../../components/sharing/use-workspace-entitlements.js";
 import { useBookmarkModal } from "../../components/bookmark-modal/BookmarkModalProvider.js";
 import { useAppToast } from "../../components/feedback/AppToastProvider.js";
+import { ImportDialog } from "../../components/import/ImportDialog.js";
+import type { ImportResult } from "../../components/onboarding/import-api.js";
 import { navigateToExternalUrl } from "../../lib/safe-external-url.js";
 import {
   bulkAddTags,
@@ -1320,6 +1322,32 @@ export function BookmarkListPage() {
   const { showToast, showError } = useAppToast();
   const revalidator = useRevalidator();
 
+  const [importOpen, setImportOpen] = useState(false);
+
+  const atBookmarkCap =
+    data.bookmarkCap !== null && data.workspaceBookmarkTotal >= data.bookmarkCap;
+
+  const handleImportSuccess = useCallback(
+    (result: ImportResult) => {
+      if (result.successCount > 0) {
+        if (result.capLimitedCount > 0) {
+          showToast("bookmarks.import.toast_success_with_cap", {
+            count: String(result.successCount),
+            limited: String(result.capLimitedCount),
+          });
+        } else {
+          showToast("bookmarks.import.toast_success", {
+            count: String(result.successCount),
+          });
+        }
+      } else if (result.capLimitedCount > 0) {
+        showError(t("bookmarks.import.cap_blocked"));
+      }
+      void revalidator.revalidate();
+    },
+    [revalidator, showError, showToast, t],
+  );
+
   // Revalidate when the bookmark modal closes (submit success or cancel)
   const prevOpenRef = useRef(open);
   useEffect(() => {
@@ -1772,6 +1800,18 @@ export function BookmarkListPage() {
         {/* Spacer */}
         <div className="flex-1" />
 
+        {/* Import */}
+        <Button
+          variant="ghost"
+          type="button"
+          onClick={() => {
+            setImportOpen(true);
+          }}
+          data-testid="bookmark-import-action"
+        >
+          {t("bookmarks.list.import_action")}
+        </Button>
+
         {/* Result count */}
         <span
           className="font-mono text-small text-fg-subtle"
@@ -1910,7 +1950,14 @@ export function BookmarkListPage() {
                   >
                     {t("bookmarks.list.new_bookmark_action")}
                   </Button>
-                  <Button variant="ghost" type="button">
+                  <Button
+                    variant="ghost"
+                    type="button"
+                    onClick={() => {
+                      setImportOpen(true);
+                    }}
+                    data-testid="bookmark-import-action-empty"
+                  >
                     {t("bookmarks.list.import_action")}
                   </Button>
                 </div>
@@ -2128,6 +2175,13 @@ export function BookmarkListPage() {
         destructive
         busy={deleteBusy}
         testId="bookmark-delete-dialog"
+      />
+
+      <ImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onSuccess={handleImportSuccess}
+        atCap={atBookmarkCap}
       />
     </div>
   );

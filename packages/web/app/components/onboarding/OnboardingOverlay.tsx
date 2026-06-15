@@ -242,7 +242,7 @@ export function OnboardingOverlay({ workspaceName, onDone }: OnboardingOverlayPr
   };
 
   const importCount =
-    importState.phase === "done" ? importState.result.imported : 0;
+    importState.phase === "done" ? importState.result.successCount : 0;
 
   return (
     <div
