@@ -10,6 +10,9 @@ import type { LoaderFunctionArgs } from "react-router";
 
 import type { GoCandidate } from "../../components/command-palette/go-mode-api.js";
 
+import { useAppToast } from "../../components/feedback/AppToastProvider.js";
+import { navigateToExternalUrl } from "../../lib/safe-external-url.js";
+
 import { getServerApiBaseUrl } from "../../lib/server-api-base-url.js";
 
 interface GoDisambiguationResult {
@@ -122,6 +125,7 @@ async function submitGoChoose(
 
 export default function GoDisambiguatePage() {
   const { t } = useTranslation();
+  const { showError } = useAppToast();
   const { slug, candidates } = useLoaderData<typeof loader>();
 
   const [selectedId, setSelectedId] = useState<string>(candidates[0]?.id ?? "");
@@ -136,7 +140,15 @@ export default function GoDisambiguatePage() {
     void (async () => {
       try {
         const targetUrl = await submitGoChoose(slug, selected.id, remember);
-        window.location.assign(targetUrl);
+        const ok = navigateToExternalUrl(targetUrl, {
+          newTab: false,
+          onInvalid: () => {
+            showError(t("bookmarks.navigation.unsafe_url"));
+          },
+        });
+        if (!ok) {
+          setConfirmed(null);
+        }
       } catch {
         setConfirmed(null);
       }

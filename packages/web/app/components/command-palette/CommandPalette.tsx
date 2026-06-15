@@ -21,6 +21,8 @@ import {
   type PaletteActionId,
 } from "./palette-actions.js";
 import { BookmarkGlyph } from "../../routes/bookmarks/BookmarkGlyph.js";
+import { useAppToast } from "../feedback/AppToastProvider.js";
+import { navigateToExternalUrl } from "../../lib/safe-external-url.js";
 import { useDebouncedValue } from "./use-debounced-value.js";
 
 const SEARCH_PREVIEW_LIMIT = 3;
@@ -121,6 +123,7 @@ export function CommandPalette({
   onNewBookmark,
 }: CommandPaletteProps) {
   const { t } = useTranslation();
+  const { showError } = useAppToast();
   const navigate = useNavigate();
   const fetcher = useFetcher<GlobalSearchResult>();
   const [query, setQuery] = useState("");
@@ -257,14 +260,17 @@ export function CommandPalette({
 
   const openBookmark = useCallback(
     (url: string, newTab: boolean) => {
-      if (newTab) {
-        window.open(url, "_blank", "noopener,noreferrer");
-      } else {
-        window.location.assign(url);
+      const ok = navigateToExternalUrl(url, {
+        newTab,
+        onInvalid: () => {
+          showError(t("bookmarks.navigation.unsafe_url"));
+        },
+      });
+      if (ok) {
+        onOpenChange(false);
       }
-      onOpenChange(false);
     },
-    [onOpenChange],
+    [onOpenChange, showError, t],
   );
 
   const actionsByGroup = useMemo(() => {

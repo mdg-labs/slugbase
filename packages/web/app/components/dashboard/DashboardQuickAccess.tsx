@@ -1,5 +1,7 @@
 import { useTranslation } from "react-i18next";
 
+import { useAppToast } from "../feedback/AppToastProvider.js";
+import { navigateToExternalUrl } from "../../lib/safe-external-url.js";
 import type { DashboardBookmark } from "./dashboard.types.js";
 import { ZapIcon } from "lucide-react";
 
@@ -7,16 +9,20 @@ export type DashboardQuickAccessProps = {
   bookmarks: DashboardBookmark[];
 };
 
-function openBookmark(bookmark: DashboardBookmark): void {
+function openBookmark(
+  bookmark: DashboardBookmark,
+  onInvalidUrl: () => void,
+): void {
   if (bookmark.slug && bookmark.forwardingEnabled) {
     window.open(`/go/${bookmark.slug}`, "_blank", "noopener,noreferrer");
     return;
   }
-  window.open(bookmark.url, "_blank", "noopener,noreferrer");
+  navigateToExternalUrl(bookmark.url, { newTab: true, onInvalid: onInvalidUrl });
 }
 
 export function DashboardQuickAccess({ bookmarks }: DashboardQuickAccessProps) {
   const { t } = useTranslation();
+  const { showError } = useAppToast();
 
   return (
     <section
@@ -44,7 +50,9 @@ export function DashboardQuickAccess({ bookmarks }: DashboardQuickAccessProps) {
                 type="button"
                 className="flex w-full items-center gap-sp-4 border-b border-[color:var(--border-subtle)] px-sp-6 py-sp-4 text-left transition-colors duration-micro last:border-b-0 hover:bg-raised-2"
                 onClick={() => {
-                  openBookmark(bookmark);
+                  openBookmark(bookmark, () => {
+                    showError(t("bookmarks.navigation.unsafe_url"));
+                  });
                 }}
               >
                 <span className="min-w-0 flex-1 truncate font-medium text-fg">

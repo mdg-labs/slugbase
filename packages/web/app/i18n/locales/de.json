@@ -238,6 +238,7 @@
   "bookmarks.list.subtitle": "{count} Lesezeichen",
   "bookmarks.list.title": "Lesezeichen",
   "bookmarks.list.toast_deleted": "Lesezeichen gelöscht",
+  "bookmarks.navigation.unsafe_url": "Dieses Lesezeichen hat eine nicht unterstützte URL und kann nicht geöffnet werden.",
   "bookmarks.list.view_grid": "Rasteransicht",
   "bookmarks.list.view_table": "Tabellenansicht",
   "bookmarks.list.view_toggle_label": "Ansicht wechseln",

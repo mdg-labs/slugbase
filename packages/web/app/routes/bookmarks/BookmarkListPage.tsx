@@ -16,6 +16,7 @@ import { resolveResourceSharingScope } from "../../components/sharing/sharing.ut
 import { useWorkspaceEntitlements } from "../../components/sharing/use-workspace-entitlements.js";
 import { useBookmarkModal } from "../../components/bookmark-modal/BookmarkModalProvider.js";
 import { useAppToast } from "../../components/feedback/AppToastProvider.js";
+import { navigateToExternalUrl } from "../../lib/safe-external-url.js";
 import {
   bulkAddTags,
   bulkDeleteBookmarks,
@@ -549,7 +550,7 @@ function BookmarkCard({
                 className="flex cursor-pointer items-center gap-sp-3 rounded px-sp-3 py-sp-2 text-fg outline-none transition-colors hover:bg-[color:var(--raised-2)] focus:bg-[color:var(--raised-2)]"
                 style={{ fontSize: "var(--text-body)" }}
                 onSelect={() => {
-                  window.open(bookmark.url, "_blank", "noopener,noreferrer");
+                  onOpenUrl(bookmark.url);
                 }}
               >
                 <ExternalLinkIcon size={14} className="shrink-0 text-fg-muted" />
@@ -841,7 +842,7 @@ function BookmarkRow({
                 className="flex cursor-pointer items-center gap-sp-3 rounded px-sp-3 py-sp-2 text-fg outline-none transition-colors hover:bg-[color:var(--raised-2)] focus:bg-[color:var(--raised-2)]"
                 style={{ fontSize: "var(--text-body)" }}
                 onSelect={() => {
-                  window.open(bookmark.url, "_blank", "noopener,noreferrer");
+                  onOpenUrl(bookmark.url);
                 }}
               >
                 <ExternalLinkIcon size={14} className="shrink-0 text-fg-muted" />
@@ -1432,7 +1433,12 @@ export function BookmarkListPage() {
   };
 
   const handleOpenUrl = (url: string) => {
-    window.open(url, "_blank", "noopener,noreferrer");
+    navigateToExternalUrl(url, {
+      newTab: true,
+      onInvalid: () => {
+        showError(t("bookmarks.navigation.unsafe_url"));
+      },
+    });
   };
 
   const toggleBulkSelectMode = () => {

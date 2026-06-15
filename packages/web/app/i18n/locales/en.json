@@ -238,6 +238,7 @@
   "bookmarks.list.subtitle": "{count} bookmarks",
   "bookmarks.list.title": "Bookmarks",
   "bookmarks.list.toast_deleted": "Bookmark deleted",
+  "bookmarks.navigation.unsafe_url": "This bookmark uses an unsupported URL and cannot be opened.",
   "bookmarks.list.view_grid": "Grid view",
   "bookmarks.list.view_table": "Table view",
   "bookmarks.list.view_toggle_label": "Toggle view",

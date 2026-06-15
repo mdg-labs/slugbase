@@ -1,6 +1,8 @@
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 
+import { useAppToast } from "../feedback/AppToastProvider.js";
+import { navigateToExternalUrl } from "../../lib/safe-external-url.js";
 import { BookmarkGlyph } from "../../routes/bookmarks/BookmarkGlyph.js";
 import { formatRelativeTime } from "./dashboard.utils.js";
 import type { DashboardBookmark } from "./dashboard.types.js";
@@ -9,16 +11,20 @@ export type DashboardPinnedProps = {
   bookmarks: DashboardBookmark[];
 };
 
-function openBookmark(bookmark: DashboardBookmark): void {
+function openBookmark(
+  bookmark: DashboardBookmark,
+  onInvalidUrl: () => void,
+): void {
   if (bookmark.slug && bookmark.forwardingEnabled) {
     window.open(`/go/${bookmark.slug}`, "_blank", "noopener,noreferrer");
     return;
   }
-  window.open(bookmark.url, "_blank", "noopener,noreferrer");
+  navigateToExternalUrl(bookmark.url, { newTab: true, onInvalid: onInvalidUrl });
 }
 
 export function DashboardPinned({ bookmarks }: DashboardPinnedProps) {
   const { t } = useTranslation();
+  const { showError } = useAppToast();
 
   return (
     <section
@@ -50,7 +56,9 @@ export function DashboardPinned({ bookmarks }: DashboardPinnedProps) {
                 type="button"
                 className="flex flex-col gap-sp-3 rounded-md border border-[color:var(--border-subtle)] bg-raised-2 p-sp-5 text-left transition-colors duration-micro hover:border-[color:var(--border)]"
                 onClick={() => {
-                  openBookmark(bookmark);
+                  openBookmark(bookmark, () => {
+                    showError(t("bookmarks.navigation.unsafe_url"));
+                  });
                 }}
               >
                 <span className="flex items-center gap-sp-3">
