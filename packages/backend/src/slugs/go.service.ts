@@ -6,7 +6,7 @@ import {
 } from "@nestjs/common";
 import { ModuleRef } from "@nestjs/core";
 
-import { assertSlugValid } from "../bookmarks/bookmark.validation.js";
+import { assertHttpUrl, assertSlugValid } from "../bookmarks/bookmark.validation.js";
 import type { BookmarksService } from "../bookmarks/bookmarks.service.js";
 import { BOOKMARKS_SERVICE } from "../bookmarks/bookmarks.tokens.js";
 import { DbService } from "../db/db.service.js";
@@ -267,9 +267,18 @@ export class GoService {
   }
 
   private toRedirect(match: AccessibleForwardingMatch): GoRedirectResult {
+    let safeUrl: string;
+    try {
+      safeUrl = assertHttpUrl(match.url);
+    } catch (err) {
+      throw new BadRequestException(
+        err instanceof Error ? err.message : "Invalid bookmark URL",
+      );
+    }
+
     return {
       kind: "redirect",
-      url: match.url,
+      url: safeUrl,
       bookmarkId: match.id,
     };
   }

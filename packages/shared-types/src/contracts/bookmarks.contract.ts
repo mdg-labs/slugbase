@@ -1,7 +1,15 @@
 import { initContract } from "@ts-rest/core";
 import { z } from "zod";
 
+import { BOOKMARK_HTTP_URL_MESSAGE, isBookmarkHttpUrl } from "../validation/bookmark-url.js";
+
 const c = initContract();
+
+const bookmarkUrlField = z
+  .string()
+  .min(1)
+  .max(2048)
+  .refine(isBookmarkHttpUrl, { message: BOOKMARK_HTTP_URL_MESSAGE });
 
 const BookmarkFolderSummarySchema = z
   .object({
@@ -49,7 +57,7 @@ const slugField = z
 export const CreateBookmarkBodySchema = z
   .object({
     title: z.string().min(1).max(500),
-    url: z.string().min(1).max(2048),
+    url: bookmarkUrlField,
     slug: slugField,
     forwardingEnabled: z.boolean().optional(),
     pinned: z.boolean().optional(),
@@ -59,7 +67,7 @@ export const CreateBookmarkBodySchema = z
 export const UpdateBookmarkBodySchema = z
   .object({
     title: z.string().min(1).max(500).optional(),
-    url: z.string().min(1).max(2048).optional(),
+    url: bookmarkUrlField.optional(),
     slug: slugField,
     forwardingEnabled: z.boolean().optional(),
     pinned: z.boolean().optional(),

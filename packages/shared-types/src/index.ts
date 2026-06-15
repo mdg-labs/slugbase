@@ -95,6 +95,10 @@ export {
   OPENAPI_OUTPUT_PATH,
 } from "./openapi/generate-openapi.js";
 export {
+  BOOKMARK_HTTP_URL_MESSAGE,
+  isBookmarkHttpUrl,
+} from "./validation/bookmark-url.js";
+export {
   MailSettingsSchema,
   UpdateMailSettingsBodySchema,
   SendTestMailBodySchema,

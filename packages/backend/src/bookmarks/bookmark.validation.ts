@@ -1,3 +1,8 @@
+import {
+  BOOKMARK_HTTP_URL_MESSAGE,
+  isBookmarkHttpUrl,
+} from "@slugbase/shared-types";
+
 /** Slug grammar and reserved list - docs/internal/defaults-and-constants.md §1, spec §8. */
 export const SLUG_GRAMMAR = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
@@ -25,6 +30,32 @@ export type BookmarkSort =
 
 export function sanitizeBookmarkTitle(title: string): string {
   return title.replace(/<script>/gi, "").replace(/[<>]/g, "");
+}
+
+export { BOOKMARK_HTTP_URL_MESSAGE, isBookmarkHttpUrl };
+
+/** Validates a bookmark destination URL for persistence without altering its shape (spec §6.4). */
+export function assertHttpUrl(rawUrl: string): string {
+  const trimmed = rawUrl.trim();
+  if (trimmed.length === 0) {
+    throw new Error("url is required");
+  }
+  if (trimmed.startsWith("//")) {
+    throw new Error(BOOKMARK_HTTP_URL_MESSAGE);
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new Error("Invalid URL");
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error(BOOKMARK_HTTP_URL_MESSAGE);
+  }
+
+  return trimmed;
 }
 
 export function normalizeOptionalSlug(slug: string | null | undefined): string | null {

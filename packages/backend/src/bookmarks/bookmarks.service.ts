@@ -26,6 +26,7 @@ import type {
   UpdateBookmarkData,
 } from "./bookmark.types.js";
 import {
+  assertHttpUrl,
   assertSlugValid,
   normalizeOptionalSlug,
   parseBookmarkScope,
@@ -61,8 +62,14 @@ export class BookmarksService {
     const title = sanitizeBookmarkTitle(dto.title.trim());
     if (!title) throw new BadRequestException("title is required");
 
-    const url = dto.url.trim();
-    if (!url) throw new BadRequestException("url is required");
+    let url: string;
+    try {
+      url = assertHttpUrl(dto.url);
+    } catch (err) {
+      throw new BadRequestException(
+        err instanceof Error ? err.message : "Invalid URL",
+      );
+    }
 
     const slug = normalizeOptionalSlug(dto.slug);
     const forwardingEnabled = dto.forwardingEnabled ?? false;
@@ -127,8 +134,16 @@ export class BookmarksService {
       patch.title !== undefined ? sanitizeBookmarkTitle(patch.title.trim()) : existing.title;
     if (!nextTitle) throw new BadRequestException("title is required");
 
-    const nextUrl = patch.url !== undefined ? patch.url.trim() : existing.url;
-    if (!nextUrl) throw new BadRequestException("url is required");
+    let nextUrl = existing.url;
+    if (patch.url !== undefined) {
+      try {
+        nextUrl = assertHttpUrl(patch.url);
+      } catch (err) {
+        throw new BadRequestException(
+          err instanceof Error ? err.message : "Invalid URL",
+        );
+      }
+    }
 
     const nextSlug =
       patch.slug !== undefined

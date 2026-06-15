@@ -29,6 +29,26 @@ test.describe("Slug forwarding", () => {
     await page.waitForURL(targetUrl);
 
     // Verify we landed on the external URL
-    expect(page.url()).toMatch(/^https:\/\/example\.com\//);
+    expect(res.status()).toBe(400);
+  });
+
+  test("rejects bookmark create with javascript: URL via API", async ({
+    authedPage: page,
+    sessionCookie,
+    csrfToken,
+  }) => {
+    const apiUrl =
+      process.env.E2E_BASE_URL_API ??
+      process.env.E2E_BASE_URL_SELF_HOSTED ??
+      "http://localhost:4001";
+
+    const createRes = await page.request.post(`${apiUrl}/bookmarks`, {
+      headers: { Cookie: sessionCookie, "x-csrf-token": csrfToken },
+      data: {
+        title: "Malicious bookmark",
+        url: "javascript:alert(1)",
+      },
+    });
+    expect(createRes.status()).toBe(400);
   });
 });
