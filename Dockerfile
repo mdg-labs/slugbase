@@ -83,6 +83,13 @@ COPY --from=build /app/packages/backend/migrations ./packages/backend/migrations
 COPY --from=build /app/packages/web/build ./packages/web/build
 WORKDIR /app/packages/backend
 RUN ln -sf /app/node_modules ./node_modules
+
+RUN groupadd --system --gid 10001 slugbase \
+  && useradd --system --uid 10001 --gid slugbase --home-dir /app --no-create-home slugbase \
+  && mkdir -p /data \
+  && chown -R slugbase:slugbase /app /data
+
+USER slugbase
 EXPOSE 3000
 VOLUME ["/data"]
 CMD ["node", "dist/main.js"]

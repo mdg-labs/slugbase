@@ -33,5 +33,11 @@ FROM base AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=deploy /prod/backend ./
+
+RUN groupadd --system --gid 10001 slugbase \
+  && useradd --system --uid 10001 --gid slugbase --home-dir /app --no-create-home slugbase \
+  && chown -R slugbase:slugbase /app
+
+USER slugbase
 EXPOSE 3000
 CMD ["node", "dist/main.js"]

@@ -7,6 +7,7 @@ settings:
 overrides:
   esbuild@<0.28.1: '>=0.28.1'
   yaml@>=2.0.0 <2.8.3: '>=2.8.3'
+  uuid@<11.1.1: '>=11.1.1'
   vitest: ^4.1.6
 
 importers:
@@ -5462,9 +5463,8 @@ packages:
     resolution: {integrity: sha512-pMZTvIkT1d+TFGvDOqodOclx0QWkkgi6Tdoa8gC8ffGAAqz9pzPTZWAybbsHHoED/ztMtkv/VoYTYyShUn81hA==}
     engines: {node: '>= 0.4.0'}
 
-  uuid@9.0.1:
-    resolution: {integrity: sha512-b+1eJOlsR9K8HJpow9Ok3fiWOWSIcIzXodvv0rQjVoOVNpWMpxf1wZNpt4y9h10odCNrqnYp1OBzRktckBe3sA==}
-    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
+  uuid@14.0.0:
+    resolution: {integrity: sha512-Qo+uWgilfSmAhXCMav1uYFynlQO7fMFiMVZsQqZRMIXp0O7rR7qjkj+cPvBHLgBqi960QCoo/PH2/6ZtVqKvrg==}
     hasBin: true
 
   valibot@1.4.1:
@@ -7408,7 +7408,7 @@ snapshots:
       glob: 8.1.0
       ini: 2.0.0
       uniqid: 5.4.0
-      uuid: 9.0.1
+      uuid: 14.0.0
     transitivePeerDependencies:
       - debug
       - supports-color
@@ -7423,7 +7423,7 @@ snapshots:
       ini: 2.0.0
       proxy-from-env: 1.1.0
       uniqid: 5.4.0
-      uuid: 9.0.1
+      uuid: 14.0.0
     transitivePeerDependencies:
       - debug
       - supports-color
@@ -11497,7 +11497,7 @@ snapshots:
 
   utils-merge@1.0.1: {}
 
-  uuid@9.0.1: {}
+  uuid@14.0.0: {}
 
   valibot@1.4.1(typescript@5.9.3):
     optionalDependencies:
