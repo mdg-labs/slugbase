@@ -13,8 +13,12 @@ import {
 import type { Response } from "express";
 
 /**
- * IP-based rate-limit guard for auth endpoints (login, register, MFA challenge).
+ * IP-based rate-limit guard for auth endpoints (login, register, MFA challenge,
+ * forgot-password, setup/complete, invitation accept).
  * Uses the client IP address as the throttle key.
+ *
+ * Throttle profile: the `ip` throttler from ThrottlerModule (RATE_LIMIT_LOGIN_MAX /
+ * RATE_LIMIT_LOGIN_TTL_SECONDS) — same limits as login/register.
  *
  * Backed by an in-memory store - suitable for single-instance deployments.
  * Fast-Follow: switch to a distributed store (Redis/KV) for multi-instance deployments.

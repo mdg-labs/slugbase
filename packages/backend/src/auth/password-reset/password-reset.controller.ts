@@ -1,6 +1,8 @@
-import { Body, Controller, HttpCode, Inject, Post } from "@nestjs/common";
+import { Body, Controller, HttpCode, Inject, Post, UseGuards } from "@nestjs/common";
+import { SkipThrottle } from "@nestjs/throttler";
 
 import { SkipCsrf } from "../csrf/skip-csrf.decorator.js";
+import { IpThrottlerGuard } from "../rate-limit/ip-throttler.guard.js";
 import { PasswordResetService } from "./password-reset.service.js";
 
 interface ForgotPasswordBody {
@@ -28,6 +30,8 @@ export class PasswordResetController {
    */
   @Post("forgot-password")
   @HttpCode(200)
+  @UseGuards(IpThrottlerGuard)
+  @SkipThrottle({ "user-hour": true })
   async forgotPassword(
     @Body() body: ForgotPasswordBody,
   ): Promise<{ ok: true }> {

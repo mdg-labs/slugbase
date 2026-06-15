@@ -66,4 +66,60 @@ describe("Auth rate limiting (integration)", () => {
       expect(retryAfter).toBeGreaterThan(0);
     });
   });
+
+  describe("POST /auth/forgot-password - IP rate limit", () => {
+    it("returns 429 with Retry-After header after exceeding the limit", async () => {
+      const body = { email: "notexist@example.com" };
+
+      await request(server()).post("/auth/forgot-password").send(body);
+      await request(server()).post("/auth/forgot-password").send(body);
+      await request(server()).post("/auth/forgot-password").send(body);
+
+      const res = await request(server()).post("/auth/forgot-password").send(body);
+
+      expect(res.status).toBe(429);
+      expect(res.headers["retry-after"]).toBeDefined();
+      expect(Number(res.headers["retry-after"])).toBeGreaterThan(0);
+    });
+  });
+
+  describe("POST /setup/complete - IP rate limit", () => {
+    it("returns 429 with Retry-After header after exceeding the limit", async () => {
+      const body = {
+        email: "admin@ratelimit.test",
+        password: "adminPassword123!",
+        name: "Admin User",
+        workspaceName: "Admin Workspace",
+        workspaceSlug: "admin-ratelimit",
+      };
+
+      await request(server()).post("/setup/complete").send(body);
+      await request(server()).post("/setup/complete").send(body);
+      await request(server()).post("/setup/complete").send(body);
+
+      const res = await request(server()).post("/setup/complete").send(body);
+
+      expect(res.status).toBe(429);
+      expect(res.headers["retry-after"]).toBeDefined();
+      expect(Number(res.headers["retry-after"])).toBeGreaterThan(0);
+    });
+  });
+
+  describe("POST /invitations/:token/accept - IP rate limit", () => {
+    it("returns 429 with Retry-After header after exceeding the limit", async () => {
+      const body = { name: "Rate Limit User", password: "securepassword123!" };
+
+      await request(server()).post("/invitations/invalid-token/accept").send(body);
+      await request(server()).post("/invitations/invalid-token/accept").send(body);
+      await request(server()).post("/invitations/invalid-token/accept").send(body);
+
+      const res = await request(server())
+        .post("/invitations/invalid-token/accept")
+        .send(body);
+
+      expect(res.status).toBe(429);
+      expect(res.headers["retry-after"]).toBeDefined();
+      expect(Number(res.headers["retry-after"])).toBeGreaterThan(0);
+    });
+  });
 });
