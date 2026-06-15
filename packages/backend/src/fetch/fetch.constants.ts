@@ -6,3 +6,6 @@ export const FETCH_MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
 
 /** Metadata/favicon cache TTL - defaults-and-constants §2 (7 days). */
 export const FETCH_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Maximum redirect hops before aborting (spec §11.10). */
+export const FETCH_MAX_REDIRECTS = 10;
