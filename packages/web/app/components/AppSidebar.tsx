@@ -247,9 +247,11 @@ export function AppSidebar({
             <span className="block truncate text-[length:var(--text-body)] font-semibold text-fg leading-tight">
               {workspace.name}
             </span>
-            <span className="block text-[length:var(--text-micro)] text-fg-subtle capitalize leading-tight">
-              {workspace.plan} {t("app.workspace_switcher.plan_suffix")}
-            </span>
+            {isPlanGatingEnabled() && (
+              <span className="block text-[length:var(--text-micro)] text-fg-subtle capitalize leading-tight">
+                {workspace.plan} {t("app.workspace_switcher.plan_suffix")}
+              </span>
+            )}
           </span>
           <ChevronsUpDownIcon />
         </button>

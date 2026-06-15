@@ -1,5 +1,5 @@
 import { test, expect } from "../../fixtures/auth.js";
-import { isHostedE2eProject, isSelfHostedE2eProject } from "../../helpers/deployment-project.js";
+import { isHostedE2eProject } from "../../helpers/deployment-project.js";
 import { e2eResourceSuffix } from "../../helpers/e2e-resource-id.js";
 import { loginAsWorker } from "../../helpers/worker-login.js";
 
@@ -9,11 +9,6 @@ test.describe("Workspace switcher", () => {
     sessionCookie,
     csrfToken,
   }, testInfo) => {
-    test.skip(
-      isSelfHostedE2eProject(testInfo),
-      "WorkspaceSwitcherPanel gates create on plan string; self-host backend bypasses plan limits (#350)",
-    );
-
     // ── Phase 1: Login ──────────────────────────────────────────
     await loginAsWorker(page, testInfo.workerIndex);
 
