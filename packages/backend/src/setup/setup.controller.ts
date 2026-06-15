@@ -6,9 +6,12 @@ import {
   Inject,
   Post,
   Res,
+  UseGuards,
 } from "@nestjs/common";
+import { SkipThrottle } from "@nestjs/throttler";
 import type { Response } from "express";
 
+import { IpThrottlerGuard } from "../auth/rate-limit/ip-throttler.guard.js";
 import { ConfigService } from "../config/config.service.js";
 import { SkipCsrf } from "../auth/csrf/skip-csrf.decorator.js";
 import { SESSION_COOKIE } from "../auth/login-logout.controller.js";
@@ -33,6 +36,8 @@ export class SetupController {
 
   @Post("complete")
   @HttpCode(201)
+  @UseGuards(IpThrottlerGuard)
+  @SkipThrottle({ "user-hour": true })
   async completeSetup(
     @Body() body: CompleteSetupDto,
     @Res({ passthrough: true }) res: Response,

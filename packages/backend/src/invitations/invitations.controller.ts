@@ -11,9 +11,11 @@ import {
   Res,
   UseGuards,
 } from "@nestjs/common";
+import { SkipThrottle } from "@nestjs/throttler";
 import type { Request, Response } from "express";
 
 import { SkipCsrf } from "../auth/csrf/skip-csrf.decorator.js";
+import { IpThrottlerGuard } from "../auth/rate-limit/ip-throttler.guard.js";
 import { ConfigService } from "../config/config.service.js";
 import { SESSION_COOKIE } from "../sessions/session-constants.js";
 import { SESSION_USER_ID_KEY, SessionGuard } from "../sessions/session.guard.js";
@@ -109,6 +111,8 @@ export class InvitationsController {
   @Post("invitations/:token/accept")
   @HttpCode(200)
   @SkipCsrf()
+  @UseGuards(IpThrottlerGuard)
+  @SkipThrottle({ "user-hour": true })
   async acceptInvitation(
     @Param("token") token: string,
     @Body() body: AcceptInvitationDto,
