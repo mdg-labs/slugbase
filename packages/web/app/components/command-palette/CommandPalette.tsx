@@ -296,8 +296,8 @@ export function CommandPalette({
       open={open}
       onOpenChange={onOpenChange}
       label={t("command_palette.dialog_label")}
-      overlayClassName="fixed inset-0 z-[100] flex items-center justify-center bg-[color:var(--overlay-scrim)] px-sp-4 pb-sp-8 backdrop-blur-[3px]"
-      contentClassName="palette-panel w-full max-w-[640px] overflow-hidden rounded-xl border border-[color:var(--border-strong)] bg-overlay p-0 shadow-overlay"
+      overlayClassName="fixed inset-0 z-[100] bg-[color:var(--overlay-scrim)] backdrop-blur-[3px]"
+      contentClassName="palette-panel fixed left-1/2 top-1/2 z-[101] w-full max-w-[640px] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-[color:var(--border-strong)] bg-overlay p-0 shadow-overlay"
     >
       <div
         data-testid="command-palette-dialog"

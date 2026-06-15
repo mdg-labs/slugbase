@@ -90,6 +90,26 @@ describe("CommandPalette", () => {
     expect(view.getByText("Go to Folders")).toBeTruthy();
   });
 
+  it("centers the palette panel in the viewport", () => {
+    const view = renderWithToast(<CommandPalette open onOpenChange={vi.fn()} />);
+
+    const panel = document.querySelector("[cmdk-dialog]");
+    expect(panel).toBeTruthy();
+    expect(panel?.className).toContain("fixed");
+    expect(panel?.className).toContain("left-1/2");
+    expect(panel?.className).toContain("top-1/2");
+    expect(panel?.className).toContain("-translate-x-1/2");
+    expect(panel?.className).toContain("-translate-y-1/2");
+    expect(panel?.className).toContain("z-[101]");
+
+    const overlay = document.querySelector("[cmdk-overlay]");
+    expect(overlay?.className).toContain("backdrop-blur-[3px]");
+    expect(overlay?.className).not.toContain("items-center");
+    expect(overlay?.className).not.toContain("justify-center");
+
+    expect(view.getByTestId("command-palette-dialog")).toBeTruthy();
+  });
+
   it("enters search mode and loads results from the search API route", async () => {
     vi.useFakeTimers();
 
