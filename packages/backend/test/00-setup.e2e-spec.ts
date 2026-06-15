@@ -10,7 +10,62 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AppModule } from "../src/app.module.js";
 import { SESSION_COOKIE } from "../src/auth/login-logout.controller.js";
 import { applyTestEnv, clearTestEnv } from "../src/test-utils/test-env.js";
-import { createTestDatabase } from "./test-database.js";
+import { createTestDatabase, resetAppData } from "./test-database.js";
+
+describe("Setup concurrent completion (integration)", () => {
+  let app: INestApplication | undefined;
+  let cleanup: () => Promise<void> = async () => {};
+
+  beforeAll(async () => {
+    const testDatabase = await createTestDatabase();
+    cleanup = testDatabase.cleanup;
+    applyTestEnv({ DATABASE_URL: testDatabase.databaseUrl });
+
+    const moduleRef = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
+
+    app = moduleRef.createNestApplication();
+    app.use(cookieParser());
+    await app.init();
+  });
+
+  afterAll(async () => {
+    if (app) await app.close();
+    clearTestEnv();
+    await cleanup();
+  });
+
+  function server(): Server {
+    if (!app) throw new Error("app not initialized");
+    return app.getHttpServer() as Server;
+  }
+
+  it("allows only one concurrent POST /setup/complete to succeed", async () => {
+    const bodyA = {
+      email: "admin-a@setup.test",
+      password: "adminPassword123!",
+      name: "Admin A",
+      workspaceName: "Workspace A",
+      workspaceSlug: "workspace-a",
+    };
+    const bodyB = {
+      email: "admin-b@setup.test",
+      password: "adminPassword123!",
+      name: "Admin B",
+      workspaceName: "Workspace B",
+      workspaceSlug: "workspace-b",
+    };
+
+    const [resA, resB] = await Promise.all([
+      request(server()).post("/setup/complete").send(bodyA),
+      request(server()).post("/setup/complete").send(bodyB),
+    ]);
+
+    const statuses = [resA.status, resB.status].sort();
+    expect(statuses).toEqual([201, 409]);
+  });
+});
 
 describe("Setup (integration)", () => {
   let app: INestApplication | undefined;
@@ -19,6 +74,7 @@ describe("Setup (integration)", () => {
   beforeAll(async () => {
     const testDatabase = await createTestDatabase();
     cleanup = testDatabase.cleanup;
+    await resetAppData(testDatabase.databaseUrl);
     applyTestEnv({ DATABASE_URL: testDatabase.databaseUrl });
 
     const moduleRef = await Test.createTestingModule({

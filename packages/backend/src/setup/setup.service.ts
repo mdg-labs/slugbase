@@ -7,7 +7,7 @@ import {
 
 import { AccountsService } from "../accounts/accounts.service.js";
 import { ConfigService } from "../config/config.service.js";
-import { InstanceMetadataRepository } from "../db/instance-metadata.repository.js";
+import { InstanceMetadataRepository, SETUP_COMPLETE_VALUE } from "../db/instance-metadata.repository.js";
 import { SessionService } from "../sessions/session.service.js";
 import { EmailVerificationService } from "../auth/verification/email-verification.service.js";
 import { WorkspacesService } from "../workspaces/workspaces.service.js";
@@ -61,11 +61,24 @@ export class SetupService {
       throw new ForbiddenException("Instance setup is not available when public registration is enabled");
     }
 
-    const setupComplete = await this.instanceMetadata.get(SETUP_COMPLETE_KEY);
-    if (setupComplete === "true") {
+    const claimed = await this.instanceMetadata.tryClaimSetupCompletion(SETUP_COMPLETE_KEY);
+    if (!claimed) {
       throw new ConflictException("Instance setup has already been completed");
     }
 
+    try {
+      return await this.completeSetupUnderLock(dto);
+    } catch (error) {
+      if (error instanceof ConflictException) {
+        await this.instanceMetadata.set(SETUP_COMPLETE_KEY, SETUP_COMPLETE_VALUE);
+      } else {
+        await this.instanceMetadata.releaseSetupCompletionClaim(SETUP_COMPLETE_KEY);
+      }
+      throw error;
+    }
+  }
+
+  private async completeSetupUnderLock(dto: CompleteSetupDto): Promise<CompleteSetupResult> {
     const userCount = await this.accounts.countAll();
     if (userCount > 0) {
       throw new ConflictException("Instance setup has already been completed");
@@ -100,7 +113,7 @@ export class SetupService {
       data: sessionData,
     });
 
-    await this.instanceMetadata.set(SETUP_COMPLETE_KEY, "true");
+    await this.instanceMetadata.set(SETUP_COMPLETE_KEY, SETUP_COMPLETE_VALUE);
 
     if (emailVerificationRequired) {
       await this.emailVerification.issueToken(account.id, account.email);

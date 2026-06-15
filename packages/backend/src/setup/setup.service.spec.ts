@@ -72,6 +72,11 @@ async function buildService(opts: {
   const instanceMetadata = {
     get: vi.fn().mockResolvedValue(opts.setupComplete ?? null),
     set: vi.fn().mockResolvedValue(undefined),
+    tryClaimSetupCompletion: vi.fn().mockImplementation(() => {
+      const existing = opts.setupComplete ?? null;
+      return Promise.resolve(existing !== "true" && existing !== "in_progress");
+    }),
+    releaseSetupCompletionClaim: vi.fn().mockResolvedValue(undefined),
   } as unknown as MockedObject<InstanceMetadataRepository>;
 
   const emailVerification = {
@@ -215,5 +220,26 @@ describe("SetupService.completeSetup()", () => {
     const { service } = await buildService({ userCount: 0 });
     const result = await service.completeSetup(validDto);
     expect(result).toMatchObject({ userId: "user-1", cookieValue: "cookie-val" });
+  });
+
+  it("throws ConflictException when setup claim is not acquired", async () => {
+    const { service, instanceMetadata } = await buildService({ userCount: 0 });
+    vi.mocked(instanceMetadata.tryClaimSetupCompletion).mockResolvedValue(false);
+    await expect(service.completeSetup(validDto)).rejects.toThrow(ConflictException);
+    expect(instanceMetadata.releaseSetupCompletionClaim).not.toHaveBeenCalled();
+  });
+
+  it("releases the setup claim when completion fails with a transient error", async () => {
+    const { service, instanceMetadata, accounts } = await buildService({ userCount: 0 });
+    vi.mocked(accounts.registerAccount).mockRejectedValue(new Error("register failed"));
+    await expect(service.completeSetup(validDto)).rejects.toThrow("register failed");
+    expect(instanceMetadata.releaseSetupCompletionClaim).toHaveBeenCalledWith("setup_complete");
+  });
+
+  it("finalizes setup_complete when completion fails because users already exist", async () => {
+    const { service, instanceMetadata } = await buildService({ userCount: 1 });
+    await expect(service.completeSetup(validDto)).rejects.toThrow(ConflictException);
+    expect(instanceMetadata.set).toHaveBeenCalledWith("setup_complete", "true");
+    expect(instanceMetadata.releaseSetupCompletionClaim).not.toHaveBeenCalled();
   });
 });
