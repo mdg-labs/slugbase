@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { AppToastProvider } from "../feedback/AppToastProvider.js";
 import { staticMessages } from "../../i18n/messages.js";
 import { CommandPalette } from "../command-palette/CommandPalette.js";
 import { CommandPaletteProvider, useCommandPalette } from "../command-palette/CommandPaletteProvider.js";
@@ -131,9 +132,11 @@ function DashboardHarness() {
 
 function renderDashboard() {
   return render(
-    <CommandPaletteProvider>
-      <DashboardHarness />
-    </CommandPaletteProvider>,
+    <AppToastProvider>
+      <CommandPaletteProvider>
+        <DashboardHarness />
+      </CommandPaletteProvider>
+    </AppToastProvider>,
   );
 }
 

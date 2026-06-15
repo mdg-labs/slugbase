@@ -2,6 +2,7 @@ import { cleanup, render } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { AppToastProvider } from "../feedback/AppToastProvider.js";
 import { staticMessages } from "../../i18n/messages.js";
 import { DashboardPinned } from "./DashboardPinned.js";
 import { DashboardRecent } from "./DashboardRecent.js";
@@ -59,7 +60,11 @@ describe("DashboardPinned", () => {
   });
 
   it("renders monogram badges instead of favicon images", () => {
-    const view = render(<DashboardPinned bookmarks={[pinnedBookmark]} />);
+    const view = render(
+      <AppToastProvider>
+        <DashboardPinned bookmarks={[pinnedBookmark]} />
+      </AppToastProvider>,
+    );
 
     expect(view.container.querySelector("img")).toBeNull();
     expect(view.getByText(getBookmarkMonogramInitials(pinnedBookmark.title))).toBeTruthy();
@@ -72,7 +77,11 @@ describe("DashboardRecent", () => {
   });
 
   it("renders monogram badges instead of favicon images", () => {
-    const view = render(<DashboardRecent bookmarks={[recentBookmark]} />);
+    const view = render(
+      <AppToastProvider>
+        <DashboardRecent bookmarks={[recentBookmark]} />
+      </AppToastProvider>,
+    );
 
     expect(view.container.querySelector("img")).toBeNull();
     expect(view.getByText(getBookmarkMonogramInitials(recentBookmark.title))).toBeTruthy();

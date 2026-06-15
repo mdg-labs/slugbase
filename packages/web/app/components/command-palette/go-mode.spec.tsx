@@ -5,8 +5,10 @@ import {
   render,
   waitFor,
 } from "@testing-library/react";
+import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 
+import { AppToastProvider } from "../feedback/AppToastProvider.js";
 import { staticMessages } from "../../i18n/messages.js";
 import type { GlobalSearchResult } from "../../lib/search.types.js";
 import { CommandPalette } from "./CommandPalette.js";
@@ -49,6 +51,10 @@ vi.mock("react-router", async (importOriginal) => {
     }),
   };
 });
+
+function renderWithToast(ui: ReactElement) {
+  return render(<AppToastProvider>{ui}</AppToastProvider>);
+}
 
 const forwardingBookmark = (
   id: string,
@@ -142,7 +148,7 @@ describe("CommandPalette go mode", () => {
   it("enters go mode and loads slug matches from search", async () => {
     vi.useFakeTimers();
 
-    const view = render(<CommandPalette open onOpenChange={vi.fn()} />);
+    const view = renderWithToast(<CommandPalette open onOpenChange={vi.fn()} />);
 
     await act(async () => {
       fireEvent.change(view.getByTestId("command-palette-input"), {
@@ -180,7 +186,7 @@ describe("CommandPalette go mode", () => {
       },
     };
 
-    const view = render(<CommandPalette open onOpenChange={vi.fn()} />);
+    const view = renderWithToast(<CommandPalette open onOpenChange={vi.fn()} />);
 
     await act(async () => {
       fireEvent.change(view.getByTestId("command-palette-input"), {
@@ -219,7 +225,7 @@ describe("CommandPalette go mode", () => {
       },
     };
 
-    const view = render(<CommandPalette open onOpenChange={vi.fn()} />);
+    const view = renderWithToast(<CommandPalette open onOpenChange={vi.fn()} />);
 
     await act(async () => {
       fireEvent.change(view.getByTestId("command-palette-input"), {

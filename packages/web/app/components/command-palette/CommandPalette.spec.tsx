@@ -5,8 +5,10 @@ import {
   render,
   waitFor,
 } from "@testing-library/react";
+import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { AppToastProvider } from "../feedback/AppToastProvider.js";
 import { staticMessages } from "../../i18n/messages.js";
 import type { GlobalSearchResult } from "../../lib/search.types.js";
 import { CommandPalette } from "./CommandPalette.js";
@@ -45,6 +47,10 @@ function PaletteHarness() {
   return <CommandPalette open={open} onOpenChange={setOpen} />;
 }
 
+function renderWithToast(ui: ReactElement) {
+  return render(<AppToastProvider>{ui}</AppToastProvider>);
+}
+
 describe("CommandPalette", () => {
   beforeEach(() => {
     mockNavigate.mockReset();
@@ -57,7 +63,7 @@ describe("CommandPalette", () => {
   });
 
   it("opens when ⌘K is pressed", async () => {
-    const view = render(
+    const view = renderWithToast(
       <CommandPaletteProvider>
         <PaletteHarness />
       </CommandPaletteProvider>,
@@ -75,7 +81,7 @@ describe("CommandPalette", () => {
   });
 
   it("shows grouped quick actions when empty", () => {
-    const view = render(<CommandPalette open onOpenChange={vi.fn()} />);
+    const view = renderWithToast(<CommandPalette open onOpenChange={vi.fn()} />);
 
     expect(view.getByText("Create")).toBeTruthy();
     expect(view.getByText("Go to")).toBeTruthy();
@@ -87,7 +93,7 @@ describe("CommandPalette", () => {
   it("enters search mode and loads results from the search API route", async () => {
     vi.useFakeTimers();
 
-    const view = render(<CommandPalette open onOpenChange={vi.fn()} />);
+    const view = renderWithToast(<CommandPalette open onOpenChange={vi.fn()} />);
 
     await act(async () => {
       fireEvent.change(view.getByTestId("command-palette-input"), {
