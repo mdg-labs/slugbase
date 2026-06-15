@@ -1,4 +1,4 @@
-import { createHmac, randomBytes } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 import { Inject, Injectable } from "@nestjs/common";
 
@@ -34,8 +34,10 @@ export class CsrfService {
 
     const expected = createHmac(HMAC_ALGORITHM, this.secret)
       .update(value)
-      .digest("base64url");
+      .digest();
+    const macBuf = Buffer.from(mac, "base64url");
 
-    return mac === expected;
+    if (macBuf.length !== expected.length) return false;
+    return timingSafeEqual(macBuf, expected);
   }
 }

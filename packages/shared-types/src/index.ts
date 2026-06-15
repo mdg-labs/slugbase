@@ -53,6 +53,10 @@ export {
 } from "./contracts/billing.contract.js";
 export { apiContract, accountContract, authContract, healthContract, mfaContract } from "./contracts/index.js";
 export {
+  ChooseSlugBodySchema,
+  type ChooseSlugBody,
+} from "./contracts/slugs.contract.js";
+export {
   AccountSettingsResponseSchema,
   ALLOWED_ACCENT_COLORS,
   type AllowedAccentColor,

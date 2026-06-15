@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -12,6 +13,7 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import type { Request, Response } from "express";
+import { ChooseSlugBodySchema } from "@slugbase/shared-types";
 
 import { ActiveWorkspace } from "../workspaces/active-workspace.decorator.js";
 import { TenantGuard, TENANT_USER_ID_KEY } from "../workspaces/tenant.guard.js";
@@ -78,15 +80,20 @@ export class GoController {
     @Req() req: Request & Record<string, unknown>,
     @Param("slug") slug: string,
     @Res({ passthrough: true }) res: Response,
-    @Body() body: { bookmarkId: string; remember?: boolean },
+    @Body() body: unknown,
   ): Promise<void> {
+    const parsed = ChooseSlugBodySchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid request body");
+    }
+
     const userId = req[TENANT_USER_ID_KEY] as string;
     const result = await this.go.chooseSlugTarget(
       workspace,
       userId,
       slug,
-      body.bookmarkId,
-      body.remember ?? false,
+      parsed.data.bookmarkId,
+      parsed.data.remember ?? false,
     );
     this.go.recordRedirectAccess(workspace, userId, result.bookmarkId);
     res.redirect(302, result.url);

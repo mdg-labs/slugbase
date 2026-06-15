@@ -1,4 +1,4 @@
-import { createHmac, randomBytes } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 import { Inject, Injectable } from "@nestjs/common";
 
@@ -56,9 +56,11 @@ export class SessionService {
 
     const expected = createHmac(HMAC_ALGORITHM, this.sessionSecret)
       .update(sessionId)
-      .digest("base64url");
+      .digest();
+    const macBuf = Buffer.from(mac, "base64url");
 
-    if (mac !== expected) return null;
+    if (macBuf.length !== expected.length) return null;
+    if (!timingSafeEqual(macBuf, expected)) return null;
     return sessionId;
   }
 

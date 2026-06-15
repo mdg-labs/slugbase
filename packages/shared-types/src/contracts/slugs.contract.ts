@@ -57,6 +57,7 @@ const errorSchema = z.object({ message: z.string() }).strict();
 export type GoCandidate = z.infer<typeof GoCandidateSchema>;
 export type GoDisambiguation = z.infer<typeof GoDisambiguationSchema>;
 export type SlugPreference = z.infer<typeof SlugPreferenceSchema>;
+export type ChooseSlugBody = z.infer<typeof ChooseSlugBodySchema>;
 
 export const slugsContract = c.router({
   resolveGoSlug: {
