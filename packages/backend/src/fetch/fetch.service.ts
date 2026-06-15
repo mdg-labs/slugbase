@@ -2,6 +2,7 @@ import { lookup as dnsLookup } from "node:dns/promises";
 
 import {
   FETCH_CACHE_TTL_MS,
+  FETCH_MAX_REDIRECTS,
   FETCH_MAX_RESPONSE_BYTES,
   FETCH_TIMEOUT_MS,
 } from "./fetch.constants.js";
@@ -31,6 +32,7 @@ export type HttpExecutor = (
 export interface FetchServiceOptions {
   timeoutMs?: number;
   maxResponseBytes?: number;
+  maxRedirects?: number;
   cacheTtlMs?: number;
   lookup?: DnsLookupFn;
   httpExecutor?: HttpExecutor;
@@ -39,6 +41,7 @@ export interface FetchServiceOptions {
 export class FetchService implements FetchPort {
   private readonly timeoutMs: number;
   private readonly maxResponseBytes: number;
+  private readonly maxRedirects: number;
   private readonly cache: FetchCache;
   private readonly lookup: DnsLookupFn;
   private readonly httpExecutor: HttpExecutor;
@@ -47,6 +50,7 @@ export class FetchService implements FetchPort {
     this.timeoutMs = options.timeoutMs ?? FETCH_TIMEOUT_MS;
     this.maxResponseBytes =
       options.maxResponseBytes ?? FETCH_MAX_RESPONSE_BYTES;
+    this.maxRedirects = options.maxRedirects ?? FETCH_MAX_REDIRECTS;
     this.cache = new FetchCache(options.cacheTtlMs ?? FETCH_CACHE_TTL_MS);
     this.lookup =
       options.lookup ??
@@ -73,7 +77,6 @@ export class FetchService implements FetchPort {
   ): Promise<FetchResponse> {
     const method = options.method ?? "GET";
     const parsed = parseAndValidateRequestUrl(url);
-    await assertPublicHost(parsed.hostname, this.lookup);
 
     const cacheKey = `${method}:${parsed.toString()}`;
     if (!options.skipCache) {
@@ -89,11 +92,14 @@ export class FetchService implements FetchPort {
     }, this.timeoutMs);
 
     try {
-      const response = await this.httpExecutor(parsed.toString(), {
+      const { response, finalUrl } = await fetchWithValidatedRedirects({
+        initialUrl: parsed,
         method,
         headers: options.headers,
+        lookup: this.lookup,
+        httpExecutor: this.httpExecutor,
+        maxRedirects: this.maxRedirects,
         signal: controller.signal,
-        redirect: "follow",
       });
 
       const body = await readBodyWithLimit(response, this.maxResponseBytes);
@@ -102,7 +108,7 @@ export class FetchService implements FetchPort {
         status: response.status,
         headers,
         body,
-        url: response.url,
+        url: finalUrl,
       };
 
       if (!options.skipCache && method === "GET" && response.ok) {
@@ -133,6 +139,79 @@ export class FetchService implements FetchPort {
       clearTimeout(timeoutHandle);
     }
   }
+}
+
+interface FetchWithValidatedRedirectsParams {
+  initialUrl: URL;
+  method: FetchRequestOptions["method"];
+  headers: FetchRequestOptions["headers"];
+  lookup: DnsLookupFn;
+  httpExecutor: HttpExecutor;
+  maxRedirects: number;
+  signal: AbortSignal;
+}
+
+async function fetchWithValidatedRedirects(
+  params: FetchWithValidatedRedirectsParams,
+): Promise<{ response: Response; finalUrl: string }> {
+  let currentUrl = params.initialUrl;
+  let currentMethod = params.method ?? "GET";
+  let currentHeaders = params.headers;
+
+  for (let hop = 0; hop <= params.maxRedirects; hop += 1) {
+    await assertPublicHost(currentUrl.hostname, params.lookup);
+
+    const response = await params.httpExecutor(currentUrl.toString(), {
+      method: currentMethod,
+      headers: currentHeaders,
+      signal: params.signal,
+      redirect: "manual",
+    });
+
+    if (!isRedirectStatus(response.status)) {
+      return { response, finalUrl: currentUrl.toString() };
+    }
+
+    if (hop >= params.maxRedirects) {
+      throw new FetchRequestError("Too many redirects");
+    }
+
+    const location = response.headers.get("location");
+    if (!location) {
+      throw new FetchRequestError("Redirect response missing Location header");
+    }
+
+    currentUrl = resolveRedirectUrl(location, currentUrl);
+    currentMethod = redirectMethodForStatus(response.status, currentMethod);
+    currentHeaders = undefined;
+  }
+
+  throw new FetchRequestError("Too many redirects");
+}
+
+function isRedirectStatus(status: number): boolean {
+  return (
+    status === 301 ||
+    status === 302 ||
+    status === 303 ||
+    status === 307 ||
+    status === 308
+  );
+}
+
+function redirectMethodForStatus(
+  status: number,
+  method: NonNullable<FetchRequestOptions["method"]>,
+): NonNullable<FetchRequestOptions["method"]> {
+  if (status === 303 || (status !== 307 && status !== 308)) {
+    return "GET";
+  }
+
+  return method;
+}
+
+function resolveRedirectUrl(location: string, baseUrl: URL): URL {
+  return parseAndValidateRequestUrl(new URL(location, baseUrl).toString());
 }
 
 async function readBodyWithLimit(

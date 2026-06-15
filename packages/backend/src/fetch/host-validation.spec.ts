@@ -68,6 +68,21 @@ describe("assertPublicHost", () => {
       ),
     ).resolves.toBeUndefined();
   });
+
+  it("rejects common SSRF redirect targets", async () => {
+    const publicLookup = () =>
+      Promise.resolve([{ address: "93.184.216.34", family: 4 }]);
+
+    await expect(assertPublicHost("127.0.0.1", publicLookup)).rejects.toThrow(
+      /Blocked/,
+    );
+    await expect(
+      assertPublicHost("169.254.169.254", publicLookup),
+    ).rejects.toThrow(/Blocked/);
+    await expect(
+      assertPublicHost("metadata.google.internal", publicLookup),
+    ).rejects.toThrow(/Blocked/);
+  });
 });
 
 describe("parseAndValidateRequestUrl", () => {
@@ -81,5 +96,13 @@ describe("parseAndValidateRequestUrl", () => {
     expect(() => parseAndValidateRequestUrl("file:///etc/passwd")).toThrow(
       /Unsupported protocol/,
     );
+  });
+
+  it("rejects redirect targets with unsupported protocols", () => {
+    expect(() =>
+      parseAndValidateRequestUrl(
+        new URL("javascript:alert(1)", "https://example.com").toString(),
+      ),
+    ).toThrow(/Unsupported protocol/);
   });
 });

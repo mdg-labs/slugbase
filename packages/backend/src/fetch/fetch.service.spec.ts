@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   FetchBlockedError,
+  FetchRequestError,
   FetchSizeLimitError,
   FetchTimeoutError,
 } from "./fetch.errors.js";
@@ -12,11 +13,25 @@ const publicLookup = () =>
 
 function createMockResponse(
   body: Uint8Array,
-  init: { status?: number; headers?: Record<string, string> } = {},
+  init: {
+    status?: number;
+    headers?: Record<string, string>;
+    url?: string;
+  } = {},
 ): Response {
   return new Response(body, {
     status: init.status ?? 200,
     headers: init.headers,
+  });
+}
+
+function createRedirectResponse(
+  location: string,
+  status = 302,
+): Response {
+  return new Response(null, {
+    status,
+    headers: { location },
   });
 }
 
@@ -131,5 +146,133 @@ describe("FetchService", () => {
     await service.get("https://example.com/page", { skipCache: true });
 
     expect(httpExecutor).toHaveBeenCalledTimes(2);
+  });
+
+  it("blocks redirect chains that land on a private IP", async () => {
+    const httpExecutor = vi.fn<HttpExecutor>().mockImplementation((url) => {
+      if (url === "https://example.com/start") {
+        return Promise.resolve(createRedirectResponse("http://127.0.0.1/admin"));
+      }
+      return Promise.resolve(createMockResponse(new Uint8Array()));
+    });
+
+    const service = new FetchService({
+      httpExecutor,
+      lookup: publicLookup,
+    });
+
+    await expect(service.get("https://example.com/start")).rejects.toBeInstanceOf(
+      FetchBlockedError,
+    );
+    expect(httpExecutor).toHaveBeenCalledTimes(1);
+  });
+
+  it("blocks redirect chains that land on link-local metadata IPs", async () => {
+    const httpExecutor = vi.fn<HttpExecutor>().mockImplementation((url) => {
+      if (url === "https://example.com/start") {
+        return Promise.resolve(
+          createRedirectResponse("http://169.254.169.254/latest/meta-data"),
+        );
+      }
+      return Promise.resolve(createMockResponse(new Uint8Array()));
+    });
+
+    const service = new FetchService({
+      httpExecutor,
+      lookup: publicLookup,
+    });
+
+    await expect(service.get("https://example.com/start")).rejects.toBeInstanceOf(
+      FetchBlockedError,
+    );
+    expect(httpExecutor).toHaveBeenCalledTimes(1);
+  });
+
+  it("blocks redirect chains that resolve to private addresses", async () => {
+    const httpExecutor = vi.fn<HttpExecutor>().mockImplementation((url) => {
+      if (url === "https://example.com/start") {
+        return Promise.resolve(
+          createRedirectResponse("https://evil.example/resource"),
+        );
+      }
+      return Promise.resolve(createMockResponse(new Uint8Array()));
+    });
+
+    const service = new FetchService({
+      httpExecutor,
+      lookup: (hostname) => {
+        if (hostname === "evil.example") {
+          return Promise.resolve([{ address: "10.0.0.5", family: 4 }]);
+        }
+        return publicLookup();
+      },
+    });
+
+    await expect(service.get("https://example.com/start")).rejects.toBeInstanceOf(
+      FetchBlockedError,
+    );
+    expect(httpExecutor).toHaveBeenCalledTimes(1);
+  });
+
+  it("follows redirect chains that stay on public hosts", async () => {
+    const body = new TextEncoder().encode("final-body");
+    const httpExecutor = vi.fn<HttpExecutor>().mockImplementation((url) => {
+      if (url === "https://example.com/start") {
+        return Promise.resolve(
+          createRedirectResponse("https://example.com/final"),
+        );
+      }
+      if (url === "https://example.com/final") {
+        return Promise.resolve(createMockResponse(body, { status: 200 }));
+      }
+      return Promise.reject(new Error(`Unexpected URL: ${url}`));
+    });
+
+    const service = new FetchService({
+      httpExecutor,
+      lookup: publicLookup,
+    });
+
+    const response = await service.get("https://example.com/start");
+
+    expect(httpExecutor).toHaveBeenCalledTimes(2);
+    expect(response.body).toEqual(body);
+    expect(response.url).toBe("https://example.com/final");
+  });
+
+  it("rejects redirect chains that exceed the hop limit", async () => {
+    const httpExecutor = vi.fn<HttpExecutor>().mockImplementation((url) => {
+      if (url.endsWith("/hop")) {
+        return Promise.resolve(
+          createRedirectResponse("https://example.com/hop"),
+        );
+      }
+      return Promise.resolve(createMockResponse(new Uint8Array()));
+    });
+
+    const service = new FetchService({
+      httpExecutor,
+      lookup: publicLookup,
+      maxRedirects: 2,
+    });
+
+    await expect(service.get("https://example.com/hop")).rejects.toBeInstanceOf(
+      FetchRequestError,
+    );
+    expect(httpExecutor).toHaveBeenCalledTimes(3);
+  });
+
+  it("rejects redirect responses without a Location header", async () => {
+    const httpExecutor: HttpExecutor = () =>
+      Promise.resolve(new Response(null, { status: 302 }));
+
+    const service = new FetchService({
+      httpExecutor,
+      lookup: publicLookup,
+    });
+
+    await expect(service.get("https://example.com/start")).rejects.toBeInstanceOf(
+      FetchRequestError,
+    );
   });
 });
