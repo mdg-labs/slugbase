@@ -24,6 +24,8 @@ import type { ShareGrantKind as ApiShareGrantKind, ShareGrantRecord } from "./sh
 import type {
   AccessPathCandidate,
   DirectShareRow,
+  FolderAccessPathCandidate,
+  FolderDirectShareRow,
   ViaFolderShareRow,
 } from "./sharing-summary.assembler.js";
 
@@ -314,6 +316,62 @@ export class SharingRepository extends WorkspaceScopedRepository<{
     ];
   }
 
+  async batchListDirectFolderShares(
+    workspaceId: string,
+    folderIds: string[],
+  ): Promise<FolderDirectShareRow[]> {
+    if (folderIds.length === 0) return [];
+
+    const userRows = await this.db
+      .select({
+        folderId: folderUserShares.folderId,
+        targetId: folderUserShares.userId,
+        targetName: userAccounts.name,
+      })
+      .from(folderUserShares)
+      .innerJoin(userAccounts, eq(folderUserShares.userId, userAccounts.id))
+      .where(
+        and(
+          eq(folderUserShares.workspaceId, workspaceId),
+          inArray(folderUserShares.folderId, folderIds),
+        ),
+      );
+
+    const teamRows = await this.db
+      .select({
+        folderId: folderTeamShares.folderId,
+        targetId: folderTeamShares.teamId,
+        targetName: teams.name,
+      })
+      .from(folderTeamShares)
+      .innerJoin(teams, eq(folderTeamShares.teamId, teams.id))
+      .where(
+        and(
+          eq(folderTeamShares.workspaceId, workspaceId),
+          inArray(folderTeamShares.folderId, folderIds),
+        ),
+      );
+
+    return [
+      ...userRows.map((row) => ({
+        folderId: row.folderId,
+        recipient: {
+          kind: "user" as const,
+          targetId: row.targetId,
+          targetName: row.targetName,
+        },
+      })),
+      ...teamRows.map((row) => ({
+        folderId: row.folderId,
+        recipient: {
+          kind: "team" as const,
+          targetId: row.targetId,
+          targetName: row.targetName,
+        },
+      })),
+    ];
+  }
+
   async batchListFolderTransitiveShares(
     workspaceId: string,
     bookmarkIds: string[],
@@ -569,6 +627,85 @@ export class SharingRepository extends WorkspaceScopedRepository<{
           kind: "folder",
           ownerName: ownerNameByUserId.get(row.ownerUserId) ?? row.ownerUserId,
           folderName: row.folderName,
+        },
+      });
+    }
+
+    return candidates;
+  }
+
+  async batchResolveFolderAccessPaths(
+    workspaceId: string,
+    viewerUserId: string,
+    folderRefs: Array<{ folderId: string; ownerUserId: string }>,
+  ): Promise<FolderAccessPathCandidate[]> {
+    if (folderRefs.length === 0) return [];
+
+    const folderIds = folderRefs.map((ref) => ref.folderId);
+    const ownerNameByUserId = await this.fetchOwnerNames(
+      folderRefs.map((ref) => ref.ownerUserId),
+    );
+
+    const directUserRows = await this.db
+      .select({
+        folderId: folderUserShares.folderId,
+        ownerUserId: folders.userId,
+      })
+      .from(folderUserShares)
+      .innerJoin(folders, eq(folderUserShares.folderId, folders.id))
+      .where(
+        and(
+          eq(folderUserShares.workspaceId, workspaceId),
+          eq(folderUserShares.userId, viewerUserId),
+          inArray(folderUserShares.folderId, folderIds),
+        ),
+      );
+
+    const teamFolderRows = await this.db
+      .select({
+        folderId: folderTeamShares.folderId,
+        ownerUserId: folders.userId,
+        teamName: teams.name,
+      })
+      .from(folderTeamShares)
+      .innerJoin(folders, eq(folderTeamShares.folderId, folders.id))
+      .innerJoin(teams, eq(folderTeamShares.teamId, teams.id))
+      .innerJoin(
+        teamMemberships,
+        and(
+          eq(teamMemberships.workspaceId, workspaceId),
+          eq(teamMemberships.teamId, folderTeamShares.teamId),
+          eq(teamMemberships.userId, viewerUserId),
+        ),
+      )
+      .where(
+        and(
+          eq(folderTeamShares.workspaceId, workspaceId),
+          inArray(folderTeamShares.folderId, folderIds),
+        ),
+      );
+
+    const candidates: FolderAccessPathCandidate[] = [];
+
+    for (const row of directUserRows) {
+      candidates.push({
+        folderId: row.folderId,
+        priority: 1,
+        accessPath: {
+          kind: "direct",
+          ownerName: ownerNameByUserId.get(row.ownerUserId) ?? row.ownerUserId,
+        },
+      });
+    }
+
+    for (const row of teamFolderRows) {
+      candidates.push({
+        folderId: row.folderId,
+        priority: 2,
+        accessPath: {
+          kind: "team",
+          ownerName: ownerNameByUserId.get(row.ownerUserId) ?? row.ownerUserId,
+          teamName: row.teamName,
         },
       });
     }

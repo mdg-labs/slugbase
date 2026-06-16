@@ -28,6 +28,20 @@ export interface BookmarkSharingSummary {
   accessPath?: BookmarkSharingAccessPath;
 }
 
+export type FolderSharingScope = BookmarkSharingScope;
+
+export interface FolderSharingAccessPath {
+  kind: "direct" | "team";
+  ownerName: string;
+  teamName?: string;
+}
+
+export interface FolderSharingSummary {
+  scope: FolderSharingScope;
+  directRecipients: ShareRecipient[];
+  accessPath?: FolderSharingAccessPath;
+}
+
 export interface ShareGrantRecord {
   id: string;
   kind: ShareGrantKind;

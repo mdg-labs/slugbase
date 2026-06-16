@@ -2,11 +2,18 @@ import type {
   BookmarkSharingAccessPath,
   BookmarkSharingSummary,
   BookmarkViaFolderShare,
+  FolderSharingAccessPath,
+  FolderSharingSummary,
   ShareRecipient,
 } from "./sharing.types.js";
 
 export interface DirectShareRow {
   bookmarkId: string;
+  recipient: ShareRecipient;
+}
+
+export interface FolderDirectShareRow {
+  folderId: string;
   recipient: ShareRecipient;
 }
 
@@ -20,6 +27,12 @@ export interface ViaFolderShareRow {
 export interface AccessPathCandidate {
   bookmarkId: string;
   accessPath: BookmarkSharingAccessPath;
+  priority: number;
+}
+
+export interface FolderAccessPathCandidate {
+  folderId: string;
+  accessPath: FolderSharingAccessPath;
   priority: number;
 }
 
@@ -40,6 +53,18 @@ export function groupDirectShares(rows: DirectShareRow[]): Map<string, ShareReci
     const existing = map.get(row.bookmarkId) ?? [];
     existing.push(row.recipient);
     map.set(row.bookmarkId, existing);
+  }
+  return map;
+}
+
+export function groupDirectFolderShares(
+  rows: FolderDirectShareRow[],
+): Map<string, ShareRecipient[]> {
+  const map = new Map<string, ShareRecipient[]>();
+  for (const row of rows) {
+    const existing = map.get(row.folderId) ?? [];
+    existing.push(row.recipient);
+    map.set(row.folderId, existing);
   }
   return map;
 }
@@ -105,6 +130,23 @@ export function pickAccessPaths(
   );
 }
 
+export function pickFolderAccessPaths(
+  candidates: FolderAccessPathCandidate[],
+): Map<string, FolderSharingAccessPath> {
+  const best = new Map<string, FolderAccessPathCandidate>();
+
+  for (const candidate of candidates) {
+    const existing = best.get(candidate.folderId);
+    if (!existing || candidate.priority < existing.priority) {
+      best.set(candidate.folderId, candidate);
+    }
+  }
+
+  return new Map(
+    [...best.entries()].map(([folderId, entry]) => [folderId, entry.accessPath]),
+  );
+}
+
 export function assembleBookmarkSharingSummary(
   bookmarkId: string,
   ownerUserId: string,
@@ -132,5 +174,29 @@ export function assembleBookmarkSharingSummary(
     directRecipients: [],
     viaFolders: [],
     accessPath: accessPathsByBookmark.get(bookmarkId),
+  };
+}
+
+export function assembleFolderSharingSummary(
+  folderId: string,
+  ownerUserId: string,
+  viewerUserId: string,
+  directByFolder: Map<string, ShareRecipient[]>,
+  accessPathsByFolder: Map<string, FolderSharingAccessPath>,
+): FolderSharingSummary {
+  const isOwner = ownerUserId === viewerUserId;
+
+  if (isOwner) {
+    const directRecipients = directByFolder.get(folderId) ?? [];
+    return {
+      scope: directRecipients.length > 0 ? "shared-by-me" : "mine",
+      directRecipients,
+    };
+  }
+
+  return {
+    scope: "shared-with-me",
+    directRecipients: [],
+    accessPath: accessPathsByFolder.get(folderId),
   };
 }

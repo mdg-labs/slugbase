@@ -91,6 +91,24 @@ export const BookmarkSharingSummarySchema = z
   })
   .strict();
 
+export const FolderSharingScopeSchema = BookmarkSharingScopeSchema;
+
+export const FolderSharingAccessPathSchema = z
+  .object({
+    kind: z.enum(["direct", "team"]),
+    ownerName: z.string(),
+    teamName: z.string().optional(),
+  })
+  .strict();
+
+export const FolderSharingSummarySchema = z
+  .object({
+    scope: FolderSharingScopeSchema,
+    directRecipients: z.array(ShareRecipientSchema),
+    accessPath: FolderSharingAccessPathSchema.optional(),
+  })
+  .strict();
+
 export type ShareRecipient = z.infer<typeof ShareRecipientSchema>;
 export type BookmarkSharingScope = z.infer<typeof BookmarkSharingScopeSchema>;
 export type BookmarkSharingAccessPath = z.infer<
@@ -98,6 +116,9 @@ export type BookmarkSharingAccessPath = z.infer<
 >;
 export type BookmarkViaFolderShare = z.infer<typeof BookmarkViaFolderShareSchema>;
 export type BookmarkSharingSummary = z.infer<typeof BookmarkSharingSummarySchema>;
+export type FolderSharingScope = z.infer<typeof FolderSharingScopeSchema>;
+export type FolderSharingAccessPath = z.infer<typeof FolderSharingAccessPathSchema>;
+export type FolderSharingSummary = z.infer<typeof FolderSharingSummarySchema>;
 
 export type ShareGrant = z.infer<typeof ShareGrantSchema>;
 export type ShareGrantList = z.infer<typeof ShareGrantListSchema>;

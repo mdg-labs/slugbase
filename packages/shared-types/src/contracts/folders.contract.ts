@@ -1,6 +1,8 @@
 import { initContract } from "@ts-rest/core";
 import { z } from "zod";
 
+import { FolderSharingSummarySchema } from "./sharing.contract.js";
+
 const c = initContract();
 
 const iconField = z
@@ -29,9 +31,13 @@ export const FolderSchema = z
   })
   .strict();
 
+export const FolderListItemSchema = FolderSchema.extend({
+  sharingSummary: FolderSharingSummarySchema,
+}).strict();
+
 export const FolderListSchema = z
   .object({
-    items: z.array(FolderSchema),
+    items: z.array(FolderListItemSchema),
     total: z.number().int().nonnegative(),
     page: z.number().int().positive(),
     pageSize: z.number().int().positive(),
@@ -82,6 +88,7 @@ export const FolderListQuerySchema = z
   .strict();
 
 export type Folder = z.infer<typeof FolderSchema>;
+export type FolderListItem = z.infer<typeof FolderListItemSchema>;
 export type FolderList = z.infer<typeof FolderListSchema>;
 export type CreateFolderBody = z.infer<typeof CreateFolderBodySchema>;
 export type UpdateFolderBody = z.infer<typeof UpdateFolderBodySchema>;

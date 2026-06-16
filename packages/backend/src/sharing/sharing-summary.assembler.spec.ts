@@ -2,12 +2,16 @@ import { describe, expect, it } from "vitest";
 
 import {
   assembleBookmarkSharingSummary,
+  assembleFolderSharingSummary,
   computeShareGrantCount,
+  groupDirectFolderShares,
   groupDirectShares,
   groupViaFolderShares,
   pickAccessPaths,
+  pickFolderAccessPaths,
   type AccessPathCandidate,
   type DirectShareRow,
+  type FolderDirectShareRow,
   type ViaFolderShareRow,
 } from "./sharing-summary.assembler.js";
 
@@ -157,5 +161,85 @@ describe("sharing-summary assembler", () => {
     const grouped = groupDirectShares(rows);
     expect(grouped.get("bm-1")).toHaveLength(1);
     expect(grouped.get("bm-2")).toHaveLength(1);
+  });
+
+  it("assembles folder sharing summary for owned folders with direct recipients", () => {
+    const directByFolder = groupDirectFolderShares([
+      {
+        folderId: "f1",
+        recipient: { kind: "user", targetId: "u1", targetName: "User One" },
+      },
+    ]);
+
+    const summary = assembleFolderSharingSummary(
+      "f1",
+      "owner-1",
+      "owner-1",
+      directByFolder,
+      new Map(),
+    );
+
+    expect(summary.scope).toBe("shared-by-me");
+    expect(summary.directRecipients).toEqual([
+      { kind: "user", targetId: "u1", targetName: "User One" },
+    ]);
+    expect(summary.accessPath).toBeUndefined();
+  });
+
+  it("returns mine scope for owned folders without shares", () => {
+    const summary = assembleFolderSharingSummary(
+      "f1",
+      "owner-1",
+      "owner-1",
+      new Map(),
+      new Map(),
+    );
+
+    expect(summary.scope).toBe("mine");
+    expect(summary.directRecipients).toEqual([]);
+  });
+
+  it("returns accessPath for shared-with-me folders", () => {
+    const accessPaths = pickFolderAccessPaths([
+      {
+        folderId: "f1",
+        priority: 2,
+        accessPath: { kind: "team", ownerName: "Owner", teamName: "Team One" },
+      },
+      {
+        folderId: "f1",
+        priority: 1,
+        accessPath: { kind: "direct", ownerName: "Owner" },
+      },
+    ]);
+
+    const summary = assembleFolderSharingSummary(
+      "f1",
+      "owner-1",
+      "recipient-1",
+      new Map(),
+      accessPaths,
+    );
+
+    expect(summary.scope).toBe("shared-with-me");
+    expect(summary.directRecipients).toEqual([]);
+    expect(summary.accessPath).toEqual({ kind: "direct", ownerName: "Owner" });
+  });
+
+  it("groups direct folder shares per folder", () => {
+    const rows: FolderDirectShareRow[] = [
+      {
+        folderId: "f1",
+        recipient: { kind: "team", targetId: "t1", targetName: "Team" },
+      },
+      {
+        folderId: "f2",
+        recipient: { kind: "user", targetId: "u1", targetName: "User" },
+      },
+    ];
+
+    const grouped = groupDirectFolderShares(rows);
+    expect(grouped.get("f1")).toHaveLength(1);
+    expect(grouped.get("f2")).toHaveLength(1);
   });
 });

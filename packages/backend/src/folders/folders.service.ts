@@ -9,15 +9,17 @@ import {
 import { BookmarkRepository } from "../bookmarks/bookmark.repository.js";
 import { AuthzService } from "../common/authz/authz.service.js";
 import { DbService } from "../db/db.service.js";
+import { SharingSummaryService } from "../sharing/sharing-summary.service.js";
 import { WorkspaceDataGuard } from "../workspaces/workspace-data.guard.js";
 import type { WorkspaceRecord } from "../workspaces/workspace.types.js";
 import { FolderRepository } from "./folder.repository.js";
 import type {
   CreateFolderData,
+  FolderListItemRecord,
   FolderRecord,
   ListFoldersQuery,
   ParsedListFoldersQuery,
-  PaginatedFolders,
+  PaginatedFolderListItems,
   UpdateFolderData,
 } from "./folder.types.js";
 import {
@@ -37,6 +39,7 @@ export class FoldersService {
     @Inject(DbService) db: DbService,
     @Inject(WorkspaceDataGuard) private readonly wsDataGuard: WorkspaceDataGuard,
     @Inject(AuthzService) private readonly authz: AuthzService,
+    @Inject(SharingSummaryService) private readonly sharingSummary: SharingSummaryService,
   ) {
     this.folderRepo = new FolderRepository(db.getOrm());
     this.bookmarkRepo = new BookmarkRepository(db.getOrm());
@@ -78,7 +81,7 @@ export class FoldersService {
     workspace: WorkspaceRecord,
     userId: string,
     query: ListFoldersQuery,
-  ): Promise<PaginatedFolders> {
+  ): Promise<PaginatedFolderListItems> {
     let scope;
     let sort;
     try {
@@ -98,11 +101,28 @@ export class FoldersService {
       pageSize: query.pageSize,
     };
     const result = await this.folderRepo.list(workspace.id, userId, parsed);
+    const verifiedItems = result.items.map((item) =>
+      this.wsDataGuard.verifyOwnership(workspace.id, item),
+    );
+    const sharingSummaries = await this.sharingSummary.assembleForFolderList(
+      workspace.id,
+      userId,
+      verifiedItems,
+    );
+
+    const items: FolderListItemRecord[] = verifiedItems.map((item) => ({
+      ...item,
+      sharingSummary: sharingSummaries.get(item.id) ?? {
+        scope: item.userId === userId ? "mine" : "shared-with-me",
+        directRecipients: [],
+      },
+    }));
+
     return {
-      ...result,
-      items: result.items.map((item) =>
-        this.wsDataGuard.verifyOwnership(workspace.id, item),
-      ),
+      items,
+      total: result.total,
+      page: result.page,
+      pageSize: result.pageSize,
     };
   }
 

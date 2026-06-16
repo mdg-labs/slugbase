@@ -443,6 +443,117 @@ describe("Sharing + authorization (integration)", () => {
     });
   });
 
+  describe("folder list sharing summary", () => {
+    it("includes direct recipients for owned folders", async () => {
+      const folder = await foldersService.createFolder(workspace, ownerUserId, {
+        name: "Summary Shared Folder",
+      });
+
+      await sharingService.shareFolderWithUser(
+        workspace,
+        ownerUserId,
+        folder.id,
+        recipientUserId,
+      );
+
+      const list = await foldersService.listFolders(workspace, ownerUserId, {
+        scope: "all",
+      });
+      const item = list.items.find((entry) => entry.id === folder.id);
+      expect(item).toBeDefined();
+      if (!item) return;
+      expect(item.sharingSummary.scope).toBe("shared-by-me");
+      expect(item.sharingSummary.directRecipients).toEqual([
+        expect.objectContaining({
+          kind: "user",
+          targetId: recipientUserId,
+          targetName: "Share Recipient",
+        }),
+      ]);
+      expect(item.sharingSummary.accessPath).toBeUndefined();
+    });
+
+    it("includes team recipients on owned folders", async () => {
+      const team = await teamsService.createTeam(workspace, ownerUserId, {
+        name: "Summary Folder Team",
+        memberIds: [ownerUserId, recipientUserId],
+      });
+      const folder = await foldersService.createFolder(workspace, ownerUserId, {
+        name: "Summary Team Folder",
+      });
+
+      await sharingService.shareFolderWithTeam(
+        workspace,
+        ownerUserId,
+        folder.id,
+        team.id,
+      );
+
+      const list = await foldersService.listFolders(workspace, ownerUserId, {
+        scope: "all",
+      });
+      const item = list.items.find((entry) => entry.id === folder.id);
+      expect(item?.sharingSummary.directRecipients).toEqual([
+        expect.objectContaining({
+          kind: "team",
+          targetId: team.id,
+          targetName: "Summary Folder Team",
+        }),
+      ]);
+    });
+
+    it("returns direct accessPath for folder user share recipients", async () => {
+      const folder = await foldersService.createFolder(workspace, ownerUserId, {
+        name: "Summary Recipient Folder",
+      });
+
+      await sharingService.shareFolderWithUser(
+        workspace,
+        ownerUserId,
+        folder.id,
+        recipientUserId,
+      );
+
+      const list = await foldersService.listFolders(workspace, recipientUserId, {
+        scope: "shared-with-me",
+      });
+      const item = list.items.find((entry) => entry.id === folder.id);
+      expect(item?.sharingSummary.scope).toBe("shared-with-me");
+      expect(item?.sharingSummary.directRecipients).toEqual([]);
+      expect(item?.sharingSummary.accessPath).toEqual({
+        kind: "direct",
+        ownerName: "Share Owner",
+      });
+    });
+
+    it("returns team accessPath for team folder share recipients", async () => {
+      const team = await teamsService.createTeam(workspace, ownerUserId, {
+        name: "Summary Folder Access Team",
+        memberIds: [ownerUserId, recipientUserId],
+      });
+      const folder = await foldersService.createFolder(workspace, ownerUserId, {
+        name: "Summary Team Access Folder",
+      });
+
+      await sharingService.shareFolderWithTeam(
+        workspace,
+        ownerUserId,
+        folder.id,
+        team.id,
+      );
+
+      const list = await foldersService.listFolders(workspace, recipientUserId, {
+        scope: "shared-with-me",
+      });
+      const item = list.items.find((entry) => entry.id === folder.id);
+      expect(item?.sharingSummary.accessPath).toEqual({
+        kind: "team",
+        ownerName: "Share Owner",
+        teamName: "Summary Folder Access Team",
+      });
+    });
+  });
+
   describe("slug preference auto-prune on share revoke", () => {
     it("removes recipient preference when revoke leaves one accessible match", async () => {
       const ownerBookmark = await bookmarksService.createBookmark(workspace, ownerUserId, {

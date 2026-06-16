@@ -1,3 +1,4 @@
+import type { FolderSharingSummary } from "../sharing/sharing.types.js";
 import type { FolderScope, FolderSort } from "./folder.validation.js";
 
 export interface FolderRecord {
@@ -44,6 +45,17 @@ export interface ParsedListFoldersQuery {
 
 export interface PaginatedFolders {
   items: FolderRecord[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface FolderListItemRecord extends FolderRecord {
+  sharingSummary: FolderSharingSummary;
+}
+
+export interface PaginatedFolderListItems {
+  items: FolderListItemRecord[];
   total: number;
   page: number;
   pageSize: number;
