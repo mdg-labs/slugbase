@@ -1,3 +1,4 @@
+import type { FolderSharingSummary } from "../../components/sharing/sharing-recipients.utils.js";
 import type { SharingScope } from "../../components/sharing/sharing.types.js";
 import {
   buildScopedListQuery,
@@ -6,6 +7,11 @@ import {
 
 import { getServerApiBaseUrl } from "../../lib/server-api-base-url.js";
 
+export const PRIVATE_FOLDER_SHARING_SUMMARY: FolderSharingSummary = {
+  scope: "mine",
+  directRecipients: [],
+};
+
 export type FolderListItem = {
   id: string;
   userId: string;
@@ -13,7 +19,7 @@ export type FolderListItem = {
   icon: string | null;
   color: string | null;
   bookmarkCount: number;
-  shareGrantCount: number;
+  sharingSummary: FolderSharingSummary;
   updatedAt: string;
 };
 
@@ -35,6 +41,7 @@ interface ApiFolder {
   icon: string | null;
   color: string | null;
   bookmarkCount: number;
+  sharingSummary?: FolderSharingSummary;
   updatedAt: string;
 }
 
@@ -84,23 +91,6 @@ export async function loadFolderListData(
   const list = await fetchJson<PaginatedFolders>(request, listPath);
   if (!list) return null;
 
-  const ownedIds = list.items.map((item) => item.id);
-
-  const shareCounts = new Map<string, number>();
-  if (ownedIds.length > 0) {
-    await Promise.all(
-      ownedIds.map(async (folderId) => {
-        const shares = await fetchJson<{ grants: Array<{ id: string }> }>(
-          request,
-          `/sharing/folders/${folderId}`,
-        );
-        if (shares) {
-          shareCounts.set(folderId, shares.grants.length);
-        }
-      }),
-    );
-  }
-
   // Resolve owner names for shared-with-me scope
   const ownerNames: Record<string, string> = {};
   if (scope === "shared-with-me" && list.items.length > 0) {
@@ -125,7 +115,7 @@ export async function loadFolderListData(
     ownerNames,
     items: list.items.map((item) => ({
       ...item,
-      shareGrantCount: shareCounts.get(item.id) ?? 0,
+      sharingSummary: item.sharingSummary ?? PRIVATE_FOLDER_SHARING_SUMMARY,
       updatedAt: item.updatedAt,
     })),
   };

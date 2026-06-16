@@ -18,12 +18,10 @@ import {
 } from "lucide-react";
 import { Button, ColorPicker, ConfirmDialog, Dialog, DialogContent, EmptyState, FolderGlyph, IconPicker } from "@slugbase/ui";
 import { ScopeFilter } from "../../components/sharing/ScopeFilter.js";
-import { ScopeIcon } from "../../components/sharing/ScopeIcon.js";
-import { SharingLabel } from "../../components/sharing/SharingLabel.js";
+import { SharingRecipientsBadge } from "../../components/sharing/SharingRecipientsBadge.js";
 import { CompactShareModal } from "../../components/sharing/CompactShareModal.js";
 import { canShowShareMenu } from "../../components/sharing/share-menu.utils.js";
 import type { SharingScope } from "../../components/sharing/sharing.types.js";
-import { resolveResourceSharingScope } from "../../components/sharing/sharing.utils.js";
 import { useWorkspaceEntitlements } from "../../components/sharing/use-workspace-entitlements.js";
 import { useAppToast } from "../../components/feedback/AppToastProvider.js";
 import { formatRelativeTime } from "../../components/dashboard/dashboard.utils.js";
@@ -70,11 +68,6 @@ function FolderRow({
 }: FolderRowProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const itemScope = resolveResourceSharingScope(
-    folder.userId,
-    currentUserId ?? "",
-    folder.shareGrantCount,
-  );
   const showShareMenu = canShowShareMenu(canShare, folder.userId, currentUserId);
   const relativeTime = formatRelativeTime(folder.updatedAt);
 
@@ -85,7 +78,7 @@ function FolderRow({
         "hover:border-[color:var(--border-subtle)] hover:bg-[color:var(--raised-2)]",
       ].join(" ")}
       data-testid={`folder-list-item-${folder.id}`}
-      data-scope={itemScope}
+      data-scope={folder.sharingSummary.scope}
       onDoubleClick={() => { void navigate(`/bookmarks?folderId=${folder.id}`); }}
     >
       <FolderGlyph icon={folder.icon} color={folder.color} size={22} />
@@ -95,7 +88,6 @@ function FolderRow({
           <p className="truncate font-medium text-fg">
             {folder.name}
           </p>
-          <ScopeIcon scope={itemScope} />
           {ownerName && (
             <span
               className="text-fg-subtle"
@@ -104,12 +96,7 @@ function FolderRow({
               {t("folders.list.owner_label", { name: ownerName })}
             </span>
           )}
-          {canShare && (
-            <SharingLabel
-              scope={itemScope}
-              shareGrantCount={folder.shareGrantCount}
-            />
-          )}
+          <SharingRecipientsBadge summary={folder.sharingSummary} />
         </div>
         <p
           className="mt-sp-1 text-fg-subtle"
@@ -220,11 +207,6 @@ function FolderCard({
 }: FolderRowProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const itemScope = resolveResourceSharingScope(
-    folder.userId,
-    currentUserId ?? "",
-    folder.shareGrantCount,
-  );
   const showShareMenu = canShowShareMenu(canShare, folder.userId, currentUserId);
   const relativeTime = formatRelativeTime(folder.updatedAt);
 
@@ -239,7 +221,7 @@ function FolderCard({
         "hover:border-[color:var(--border-strong)] hover:bg-[color:var(--raised-2)]",
       ].join(" ")}
       data-testid={`folder-grid-item-${folder.id}`}
-      data-scope={itemScope}
+      data-scope={folder.sharingSummary.scope}
       onClick={openBookmarks}
       onDoubleClick={openBookmarks}
     >
@@ -319,7 +301,6 @@ function FolderCard({
       </div>
 
       <div className="flex flex-wrap items-center gap-sp-2">
-        <ScopeIcon scope={itemScope} />
         {ownerName && (
           <span
             className="truncate text-fg-subtle"
@@ -328,12 +309,7 @@ function FolderCard({
             {t("folders.list.owner_label", { name: ownerName })}
           </span>
         )}
-        {canShare && (
-          <SharingLabel
-            scope={itemScope}
-            shareGrantCount={folder.shareGrantCount}
-          />
-        )}
+        <SharingRecipientsBadge summary={folder.sharingSummary} />
         {relativeTime && (
           <span
             className="ml-auto font-mono text-fg-subtle"
