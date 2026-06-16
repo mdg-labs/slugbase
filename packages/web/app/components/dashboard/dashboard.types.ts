@@ -1,15 +1,8 @@
+import type { BookmarkListItem } from "../../routes/bookmarks/bookmarks-loader.js";
+
 export type WorkspacePlan = "free" | "personal";
 
-export interface DashboardBookmark {
-  id: string;
-  title: string;
-  url: string;
-  slug: string | null;
-  forwardingEnabled: boolean;
-  pinned: boolean;
-  accessCount: number;
-  lastAccessedAt: string | null;
-}
+export type DashboardBookmark = BookmarkListItem;
 
 export interface DashboardFolder {
   id: string;

@@ -39,6 +39,7 @@ const mockDashboardData: DashboardData = {
   quickAccess: [
     {
       id: "bm-1",
+      userId: "user-1",
       title: "React docs",
       url: "https://react.dev",
       slug: "react",
@@ -46,11 +47,16 @@ const mockDashboardData: DashboardData = {
       pinned: false,
       accessCount: 42,
       lastAccessedAt: "2026-05-30T10:00:00.000Z",
+      createdAt: "2026-05-01T10:00:00.000Z",
+      shareGrantCount: 0,
+      folders: [],
+      tags: [],
     },
   ],
   pinned: [
     {
       id: "bm-2",
+      userId: "user-1",
       title: "Pinned guide",
       url: "https://example.com/guide",
       slug: "guide",
@@ -58,11 +64,16 @@ const mockDashboardData: DashboardData = {
       pinned: true,
       accessCount: 3,
       lastAccessedAt: "2026-05-29T08:00:00.000Z",
+      createdAt: "2026-05-02T08:00:00.000Z",
+      shareGrantCount: 0,
+      folders: [],
+      tags: [],
     },
   ],
   recent: [
     {
       id: "bm-3",
+      userId: "user-1",
       title: "Recent article",
       url: "https://example.com/article",
       slug: null,
@@ -70,6 +81,10 @@ const mockDashboardData: DashboardData = {
       pinned: false,
       accessCount: 1,
       lastAccessedAt: "2026-05-31T09:00:00.000Z",
+      createdAt: "2026-05-03T09:00:00.000Z",
+      shareGrantCount: 0,
+      folders: [],
+      tags: [],
     },
   ],
   folders: [
@@ -115,6 +130,25 @@ vi.mock("../../lib/session-client.js", () => ({
   }),
 }));
 
+vi.mock("../bookmark-modal/BookmarkModalProvider.js", () => ({
+  useBookmarkModal: () => ({
+    openEdit: vi.fn(),
+    openCreate: vi.fn(),
+    open: vi.fn(),
+  }),
+}));
+
+vi.mock("../../routes/bookmarks/bookmarks-api.js", () => ({
+  toggleBookmarkPin: vi.fn(),
+  deleteBookmark: vi.fn(),
+}));
+
+vi.mock("../../routes/bookmarks/BookmarkFavicon.js", () => ({
+  BookmarkFavicon: ({ size }: { size: number }) => (
+    <span data-testid="bookmark-favicon" data-size={size} />
+  ),
+}));
+
 const useLoaderDataMock = vi.fn(() => mockDashboardData);
 const mockNavigate = vi.fn();
 const mockLoad = vi.fn();
@@ -123,9 +157,10 @@ vi.mock("react-router", async (importOriginal) => {
   const original = await importOriginal<typeof import("react-router")>();
   return {
     ...original,
-    useLoaderData: () => useLoaderDataMock(),
-    useNavigate: () => mockNavigate,
-    useFetcher: () => ({
+  useLoaderData: () => useLoaderDataMock(),
+  useNavigate: () => mockNavigate,
+  useRevalidator: () => ({ revalidate: vi.fn() }),
+  useFetcher: () => ({
       state: "idle" as const,
       data: undefined,
       load: mockLoad,

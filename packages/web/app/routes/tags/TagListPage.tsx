@@ -1,10 +1,11 @@
 import { useTranslation } from "react-i18next";
 import { useEffect, useRef, useState } from "react";
 import { useLoaderData, useNavigate, useNavigation, useRevalidator, useSearchParams } from "react-router";
-import { CheckIcon, ExternalLinkIcon, HashIcon, LinkIcon, PencilIcon, PlusIcon, SearchIcon, Trash2Icon, XIcon } from "lucide-react";
+import { CheckIcon, ExternalLinkIcon, HashIcon, PencilIcon, PlusIcon, SearchIcon, Trash2Icon, XIcon } from "lucide-react";
 import { Button, ColorPicker, ConfirmDialog, Dialog, DialogContent, EmptyState } from "@slugbase/ui";
 import { useAppToast } from "../../components/feedback/AppToastProvider.js";
-import { BookmarkFavicon } from "../bookmarks/BookmarkFavicon.js";
+import { BookmarkCard } from "../../components/bookmarks/BookmarkCard.js";
+import { useBookmarkCardActions } from "../../components/bookmarks/use-bookmark-card-actions.js";
 import { type TagListData, type TagListItem } from "./tags-loader.js";
 import { TagListSkeleton } from "./TagListSkeleton.js";
 import { createTag, renameTag, deleteTag, fetchTaggedBookmarks } from "./tags-api.js";
@@ -157,6 +158,28 @@ function TagDetailPanel({ tag, onClose, onRenameRequest, onDeleteRequest }: TagD
   const [bookmarks, setBookmarks] = useState<TaggedBookmark[] | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const reloadBookmarks = () => {
+    setLoading(true);
+    void fetchTaggedBookmarks(tag.id)
+      .then((items) => {
+        setBookmarks(items);
+        setLoading(false);
+      })
+      .catch(() => {
+        setBookmarks([]);
+        setLoading(false);
+      });
+  };
+
+  const {
+    currentUserId,
+    deleteDialog,
+    handleOpenBookmark,
+    handlePin,
+    handleEdit,
+    setDeleteTarget,
+  } = useBookmarkCardActions({ onAfterMutation: reloadBookmarks });
+
   useEffect(() => {
     let cancelled = false;
     setBookmarks(null);
@@ -225,43 +248,38 @@ function TagDetailPanel({ tag, onClose, onRenameRequest, onDeleteRequest }: TagD
             </p>
           </div>
         ) : (
-          <div className="flex flex-col gap-sp-1">
+          <div
+            className="grid gap-sp-5"
+            style={{
+              gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
+            }}
+            data-testid="tag-detail-bookmark-grid"
+          >
             {bookmarks.map((bm) => (
-              <div
+              <BookmarkCard
                 key={bm.id}
-                className="tag-bm-item flex cursor-pointer items-start gap-sp-3 rounded-md px-sp-3 py-sp-3 transition-colors hover:bg-[color:var(--raised-2)]"
-                onClick={() => { void navigate(`/bookmarks?tagId=${tag.id}`); }}
-                data-testid={`tag-bm-item-${bm.id}`}
-              >
-                <BookmarkFavicon title={bm.title} url={bm.url} size={24} className="mt-sp-1" />
-                <div className="tag-bm-info min-w-0 flex-1">
-                  <div
-                    className="tag-bm-title truncate font-medium text-fg"
-                    style={{ fontSize: "var(--text-body)" }}
-                  >
-                    {bm.title}
-                  </div>
-                  <div
-                    className="tag-bm-url truncate text-fg-subtle"
-                    style={{ fontSize: "var(--text-small)" }}
-                  >
-                    {bm.url}
-                  </div>
-                </div>
-                {bm.slug && (
-                  <span
-                    className="slug-line mt-sp-1 flex shrink-0 items-center gap-sp-1 text-fg-faint"
-                    style={{ fontSize: 11 }}
-                  >
-                    <LinkIcon size={11} />
-                    <span className="addr">/go/{bm.slug}</span>
-                  </span>
-                )}
-              </div>
+                bookmark={bm}
+                selected={false}
+                bulkSelectMode={false}
+                onToggleSelect={() => {}}
+                onOpenUrl={() => {
+                  handleOpenBookmark(bm);
+                }}
+                onPin={(pinned) => {
+                  void handlePin(bm.id, pinned);
+                }}
+                onEdit={handleEdit}
+                onDelete={(item) => {
+                  setDeleteTarget(item);
+                }}
+                currentUserId={currentUserId}
+              />
             ))}
           </div>
         )}
       </div>
+
+      {deleteDialog}
 
       <div className="flex flex-wrap gap-sp-3 border-t border-[color:var(--border)] p-sp-5">
         <Button

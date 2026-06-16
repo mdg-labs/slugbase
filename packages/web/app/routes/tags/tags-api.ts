@@ -1,5 +1,6 @@
 import { resolveClientApiPath } from "../../lib/client-api-path.js";
 import { apiFetch } from "../../lib/client-api-fetch.js";
+import type { BookmarkListItem } from "../bookmarks/bookmarks-loader.js";
 
 export async function createTag(name: string, color?: string | null): Promise<void> {
   const body: Record<string, unknown> = { name };
@@ -28,16 +29,44 @@ export async function deleteTag(id: string): Promise<void> {
   if (!res.ok) throw new Error("failed");
 }
 
-export type TaggedBookmark = {
+export type TaggedBookmark = BookmarkListItem;
+
+interface ApiBookmark {
   id: string;
+  userId: string;
   title: string;
   url: string;
   slug: string | null;
-};
+  forwardingEnabled: boolean;
+  pinned: boolean;
+  accessCount: number;
+  lastAccessedAt: string | null;
+  createdAt: string | null;
+  folders: Array<{ id: string; name: string; color: string | null }>;
+  tags: Array<{ id: string; name: string; color: string | null }>;
+}
 
 interface PaginatedBookmarks {
-  items: TaggedBookmark[];
+  items: ApiBookmark[];
   total: number;
+}
+
+function mapTaggedBookmark(item: ApiBookmark): TaggedBookmark {
+  return {
+    id: item.id,
+    userId: item.userId,
+    title: item.title,
+    url: item.url,
+    slug: item.slug,
+    forwardingEnabled: item.forwardingEnabled,
+    pinned: item.pinned,
+    accessCount: item.accessCount,
+    lastAccessedAt: item.lastAccessedAt,
+    createdAt: item.createdAt ?? null,
+    shareGrantCount: 0,
+    folders: item.folders ?? [],
+    tags: item.tags ?? [],
+  };
 }
 
 export async function fetchTaggedBookmarks(
@@ -48,10 +77,5 @@ export async function fetchTaggedBookmarks(
   );
   if (!res.ok) return [];
   const data = (await res.json()) as PaginatedBookmarks;
-  return data.items.map((item) => ({
-    id: item.id,
-    title: item.title,
-    url: item.url,
-    slug: item.slug,
-  }));
+  return data.items.map(mapTaggedBookmark);
 }
