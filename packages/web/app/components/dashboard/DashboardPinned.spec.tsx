@@ -9,6 +9,7 @@ import { DashboardRecent } from "./DashboardRecent.js";
 import { DashboardQuickAccess } from "./DashboardQuickAccess.js";
 import type { DashboardBookmark } from "./dashboard.types.js";
 import { PRIVATE_BOOKMARK_SHARING_SUMMARY } from "../../routes/bookmarks/bookmarks-loader.js";
+import type { BookmarkSharingSummary } from "../sharing/sharing-recipients.utils.js";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -139,6 +140,31 @@ describe("DashboardPinned", () => {
       expect(screen.getByText("Delete")).toBeTruthy();
     });
   });
+
+  it("shows sharing badge on shared pinned bookmark", () => {
+    const sharingSummary: BookmarkSharingSummary = {
+      scope: "shared-by-me",
+      directRecipients: [{ kind: "user", targetId: "u2", targetName: "Alice" }],
+      viaFolders: [],
+    };
+
+    renderWithToast(
+      <DashboardPinned
+        bookmarks={[{ ...pinnedBookmark, sharingSummary }]}
+      />,
+    );
+
+    expect(screen.getByTestId("sharing-recipients-badge").textContent).toContain(
+      "Shared with 1",
+    );
+    expect(screen.getByTestId("bookmark-favicon").getAttribute("data-size")).toBe(
+      "32",
+    );
+    expect(screen.getByText("/guide")).toBeTruthy();
+    expect(screen.getByTestId("bookmark-card-bm-1").className).toContain(
+      "shadow-[inset_3px_0_0_var(--accent)]",
+    );
+  });
 });
 
 describe("DashboardRecent", () => {
@@ -152,6 +178,34 @@ describe("DashboardRecent", () => {
     expect(screen.getByTestId("dashboard-recent")).toBeTruthy();
     expect(screen.getByTestId("bookmark-card-bm-2")).toBeTruthy();
     expect(screen.getByText("Recent article")).toBeTruthy();
+  });
+
+  it("shows shared-with-you badge on recent recipient bookmark", () => {
+    const sharingSummary: BookmarkSharingSummary = {
+      scope: "shared-with-me",
+      directRecipients: [],
+      viaFolders: [],
+      accessPath: {
+        kind: "direct",
+        ownerName: "Sarah K.",
+      },
+    };
+
+    renderWithToast(
+      <DashboardRecent
+        bookmarks={[
+          {
+            ...recentBookmark,
+            userId: "other-user",
+            sharingSummary,
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByTestId("sharing-recipients-badge").textContent).toContain(
+      "Shared with you",
+    );
   });
 });
 
@@ -168,5 +222,30 @@ describe("DashboardQuickAccess", () => {
     expect(screen.getByTestId("dashboard-quick-access")).toBeTruthy();
     expect(screen.getByTestId("bookmark-card-bm-3")).toBeTruthy();
     expect(screen.getByText("React docs")).toBeTruthy();
+  });
+
+  it("shows sharing badge on shared quick-access bookmark", () => {
+    const sharingSummary: BookmarkSharingSummary = {
+      scope: "shared-by-me",
+      directRecipients: [],
+      viaFolders: [
+        {
+          folderId: "f1",
+          folderName: "Reading",
+          recipients: [{ kind: "user", targetId: "u2", targetName: "Bob" }],
+        },
+      ],
+    };
+
+    renderWithToast(
+      <DashboardQuickAccess
+        bookmarks={[{ ...quickAccessBookmark, sharingSummary }]}
+      />,
+    );
+
+    expect(screen.getByTestId("sharing-recipients-badge").textContent).toContain(
+      "Shared with 1",
+    );
+    expect(screen.getByText("/react")).toBeTruthy();
   });
 });

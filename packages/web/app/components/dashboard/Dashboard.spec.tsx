@@ -10,6 +10,7 @@ import { DashboardPage } from "./DashboardPage.js";
 import { FREE_BOOKMARK_CAP } from "./dashboard.constants.js";
 import type { DashboardData } from "./dashboard.types.js";
 import { PRIVATE_BOOKMARK_SHARING_SUMMARY } from "../../routes/bookmarks/bookmarks-loader.js";
+import type { BookmarkSharingSummary } from "../sharing/sharing-recipients.utils.js";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -240,6 +241,38 @@ describe("DashboardPage", () => {
     fireEvent.click(view.getByTestId("dashboard-search-entry"));
 
     expect(view.getByTestId("command-palette-dialog")).toBeTruthy();
+  });
+
+  it("shows sharing badge on dashboard bookmark cards from loader data", () => {
+    const sharingSummary: BookmarkSharingSummary = {
+      scope: "shared-by-me",
+      directRecipients: [{ kind: "user", targetId: "u2", targetName: "Alice" }],
+      viaFolders: [],
+    };
+
+    const pinnedItem = mockDashboardData.pinned.at(0);
+    if (!pinnedItem) {
+      throw new Error("Expected pinned bookmark fixture");
+    }
+
+    useLoaderDataMock.mockReturnValue({
+      ...mockDashboardData,
+      pinned: [
+        {
+          ...pinnedItem,
+          sharingSummary,
+        },
+      ],
+    });
+
+    const view = renderDashboard();
+
+    expect(
+      view.getByTestId("dashboard-pinned").querySelector(
+        '[data-testid="sharing-recipients-badge"]',
+      )?.textContent,
+    ).toContain("Shared with 1");
+    expect(view.queryAllByTestId("sharing-recipients-badge")).toHaveLength(1);
   });
 });
 
