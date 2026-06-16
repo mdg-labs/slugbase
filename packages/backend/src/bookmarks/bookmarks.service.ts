@@ -15,13 +15,15 @@ import type { GoService } from "../slugs/go.service.js";
 import { GO_SERVICE } from "../slugs/go.tokens.js";
 import { WorkspaceDataGuard } from "../workspaces/workspace-data.guard.js";
 import type { WorkspaceRecord } from "../workspaces/workspace.types.js";
+import { SharingSummaryService } from "../sharing/sharing-summary.service.js";
 import { BookmarkRepository } from "./bookmark.repository.js";
 import type {
   BookmarkIdsResult,
+  BookmarkListItemRecord,
   BookmarkRecord,
   CreateBookmarkData,
   ListBookmarksQuery,
-  PaginatedBookmarks,
+  PaginatedBookmarkListItems,
   ParsedListBookmarksQuery,
   UpdateBookmarkData,
 } from "./bookmark.types.js";
@@ -46,6 +48,7 @@ export class BookmarksService {
     @Inject(EntitlementsService) private readonly entitlements: EntitlementsService,
     @Inject(AuthzService) private readonly authz: AuthzService,
     @Inject(ModuleRef) private readonly moduleRef: ModuleRef,
+    @Inject(SharingSummaryService) private readonly sharingSummary: SharingSummaryService,
   ) {
     this.repo = new BookmarkRepository(db.getOrm());
   }
@@ -93,14 +96,32 @@ export class BookmarksService {
     workspace: WorkspaceRecord,
     userId: string,
     query: ListBookmarksQuery,
-  ): Promise<PaginatedBookmarks> {
+  ): Promise<PaginatedBookmarkListItems> {
     const parsed = this.parseListQuery(query);
     const result = await this.repo.list(workspace.id, userId, parsed);
+    const verifiedItems = result.items.map((item) =>
+      this.wsDataGuard.verifyOwnership(workspace.id, item),
+    );
+    const sharingSummaries = await this.sharingSummary.assembleForBookmarkList(
+      workspace.id,
+      userId,
+      verifiedItems,
+    );
+
+    const items: BookmarkListItemRecord[] = verifiedItems.map((item) => ({
+      ...item,
+      sharingSummary: sharingSummaries.get(item.id) ?? {
+        scope: item.userId === userId ? "mine" : "shared-with-me",
+        directRecipients: [],
+        viaFolders: [],
+      },
+    }));
+
     return {
-      ...result,
-      items: result.items.map((item) =>
-        this.wsDataGuard.verifyOwnership(workspace.id, item),
-      ),
+      items,
+      total: result.total,
+      page: result.page,
+      pageSize: result.pageSize,
     };
   }
 

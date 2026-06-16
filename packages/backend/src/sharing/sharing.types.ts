@@ -1,5 +1,33 @@
 export type ShareGrantKind = "user" | "team";
 
+export interface ShareRecipient {
+  kind: ShareGrantKind;
+  targetId: string;
+  targetName: string;
+}
+
+export type BookmarkSharingScope = "mine" | "shared-by-me" | "shared-with-me";
+
+export interface BookmarkSharingAccessPath {
+  kind: "direct" | "team" | "folder";
+  ownerName: string;
+  teamName?: string;
+  folderName?: string;
+}
+
+export interface BookmarkViaFolderShare {
+  folderId: string;
+  folderName: string;
+  recipients: ShareRecipient[];
+}
+
+export interface BookmarkSharingSummary {
+  scope: BookmarkSharingScope;
+  directRecipients: ShareRecipient[];
+  viaFolders: BookmarkViaFolderShare[];
+  accessPath?: BookmarkSharingAccessPath;
+}
+
 export interface ShareGrantRecord {
   id: string;
   kind: ShareGrantKind;

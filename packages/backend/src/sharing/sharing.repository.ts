@@ -5,12 +5,14 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { DrizzleClient } from "../db/dialect/create-client.js";
 import { WorkspaceScopedRepository } from "../db/workspace-scoped.repository.js";
 import {
+  bookmarkFolders,
   bookmarkTeamShares,
   bookmarkUserShares,
   bookmarks,
   folderTeamShares,
   folderUserShares,
   folders,
+  teamMemberships,
   teams,
   userAccounts,
 } from "../db/schema/index.js";
@@ -19,6 +21,11 @@ import {
   folderSharedReadCondition,
 } from "../common/authz/authz-sql.js";
 import type { ShareGrantKind as ApiShareGrantKind, ShareGrantRecord } from "./sharing.types.js";
+import type {
+  AccessPathCandidate,
+  DirectShareRow,
+  ViaFolderShareRow,
+} from "./sharing-summary.assembler.js";
 
 export type ShareGrantKind = "bookmark-user" | "bookmark-team" | "folder-user" | "folder-team";
 
@@ -249,6 +256,336 @@ export class SharingRepository extends WorkspaceScopedRepository<{
       counts.set(row.bookmarkId, (counts.get(row.bookmarkId) ?? 0) + 1);
     }
     return counts;
+  }
+
+  async batchListDirectBookmarkShares(
+    workspaceId: string,
+    bookmarkIds: string[],
+  ): Promise<DirectShareRow[]> {
+    if (bookmarkIds.length === 0) return [];
+
+    const userRows = await this.db
+      .select({
+        bookmarkId: bookmarkUserShares.bookmarkId,
+        targetId: bookmarkUserShares.userId,
+        targetName: userAccounts.name,
+      })
+      .from(bookmarkUserShares)
+      .innerJoin(userAccounts, eq(bookmarkUserShares.userId, userAccounts.id))
+      .where(
+        and(
+          eq(bookmarkUserShares.workspaceId, workspaceId),
+          inArray(bookmarkUserShares.bookmarkId, bookmarkIds),
+        ),
+      );
+
+    const teamRows = await this.db
+      .select({
+        bookmarkId: bookmarkTeamShares.bookmarkId,
+        targetId: bookmarkTeamShares.teamId,
+        targetName: teams.name,
+      })
+      .from(bookmarkTeamShares)
+      .innerJoin(teams, eq(bookmarkTeamShares.teamId, teams.id))
+      .where(
+        and(
+          eq(bookmarkTeamShares.workspaceId, workspaceId),
+          inArray(bookmarkTeamShares.bookmarkId, bookmarkIds),
+        ),
+      );
+
+    return [
+      ...userRows.map((row) => ({
+        bookmarkId: row.bookmarkId,
+        recipient: {
+          kind: "user" as const,
+          targetId: row.targetId,
+          targetName: row.targetName,
+        },
+      })),
+      ...teamRows.map((row) => ({
+        bookmarkId: row.bookmarkId,
+        recipient: {
+          kind: "team" as const,
+          targetId: row.targetId,
+          targetName: row.targetName,
+        },
+      })),
+    ];
+  }
+
+  async batchListFolderTransitiveShares(
+    workspaceId: string,
+    bookmarkIds: string[],
+  ): Promise<ViaFolderShareRow[]> {
+    if (bookmarkIds.length === 0) return [];
+
+    const userRows = await this.db
+      .select({
+        bookmarkId: bookmarkFolders.bookmarkId,
+        folderId: folders.id,
+        folderName: folders.name,
+        targetId: folderUserShares.userId,
+        targetName: userAccounts.name,
+      })
+      .from(bookmarkFolders)
+      .innerJoin(
+        folders,
+        and(
+          eq(bookmarkFolders.folderId, folders.id),
+          eq(bookmarkFolders.workspaceId, workspaceId),
+        ),
+      )
+      .innerJoin(
+        folderUserShares,
+        and(
+          eq(folderUserShares.folderId, folders.id),
+          eq(folderUserShares.workspaceId, workspaceId),
+        ),
+      )
+      .innerJoin(userAccounts, eq(folderUserShares.userId, userAccounts.id))
+      .where(
+        and(
+          eq(bookmarkFolders.workspaceId, workspaceId),
+          inArray(bookmarkFolders.bookmarkId, bookmarkIds),
+        ),
+      );
+
+    const teamRows = await this.db
+      .select({
+        bookmarkId: bookmarkFolders.bookmarkId,
+        folderId: folders.id,
+        folderName: folders.name,
+        targetId: folderTeamShares.teamId,
+        targetName: teams.name,
+      })
+      .from(bookmarkFolders)
+      .innerJoin(
+        folders,
+        and(
+          eq(bookmarkFolders.folderId, folders.id),
+          eq(bookmarkFolders.workspaceId, workspaceId),
+        ),
+      )
+      .innerJoin(
+        folderTeamShares,
+        and(
+          eq(folderTeamShares.folderId, folders.id),
+          eq(folderTeamShares.workspaceId, workspaceId),
+        ),
+      )
+      .innerJoin(teams, eq(folderTeamShares.teamId, teams.id))
+      .where(
+        and(
+          eq(bookmarkFolders.workspaceId, workspaceId),
+          inArray(bookmarkFolders.bookmarkId, bookmarkIds),
+        ),
+      );
+
+    return [
+      ...userRows.map((row) => ({
+        bookmarkId: row.bookmarkId,
+        folderId: row.folderId,
+        folderName: row.folderName,
+        recipient: {
+          kind: "user" as const,
+          targetId: row.targetId,
+          targetName: row.targetName,
+        },
+      })),
+      ...teamRows.map((row) => ({
+        bookmarkId: row.bookmarkId,
+        folderId: row.folderId,
+        folderName: row.folderName,
+        recipient: {
+          kind: "team" as const,
+          targetId: row.targetId,
+          targetName: row.targetName,
+        },
+      })),
+    ];
+  }
+
+  async batchResolveAccessPaths(
+    workspaceId: string,
+    viewerUserId: string,
+    bookmarkRefs: Array<{ bookmarkId: string; ownerUserId: string }>,
+  ): Promise<AccessPathCandidate[]> {
+    if (bookmarkRefs.length === 0) return [];
+
+    const bookmarkIds = bookmarkRefs.map((ref) => ref.bookmarkId);
+    const ownerNameByUserId = await this.fetchOwnerNames(
+      bookmarkRefs.map((ref) => ref.ownerUserId),
+    );
+
+    const directUserRows = await this.db
+      .select({
+        bookmarkId: bookmarkUserShares.bookmarkId,
+        ownerUserId: bookmarks.userId,
+      })
+      .from(bookmarkUserShares)
+      .innerJoin(bookmarks, eq(bookmarkUserShares.bookmarkId, bookmarks.id))
+      .where(
+        and(
+          eq(bookmarkUserShares.workspaceId, workspaceId),
+          eq(bookmarkUserShares.userId, viewerUserId),
+          inArray(bookmarkUserShares.bookmarkId, bookmarkIds),
+        ),
+      );
+
+    const teamBookmarkRows = await this.db
+      .select({
+        bookmarkId: bookmarkTeamShares.bookmarkId,
+        ownerUserId: bookmarks.userId,
+        teamName: teams.name,
+      })
+      .from(bookmarkTeamShares)
+      .innerJoin(bookmarks, eq(bookmarkTeamShares.bookmarkId, bookmarks.id))
+      .innerJoin(teams, eq(bookmarkTeamShares.teamId, teams.id))
+      .innerJoin(
+        teamMemberships,
+        and(
+          eq(teamMemberships.workspaceId, workspaceId),
+          eq(teamMemberships.teamId, bookmarkTeamShares.teamId),
+          eq(teamMemberships.userId, viewerUserId),
+        ),
+      )
+      .where(
+        and(
+          eq(bookmarkTeamShares.workspaceId, workspaceId),
+          inArray(bookmarkTeamShares.bookmarkId, bookmarkIds),
+        ),
+      );
+
+    const folderUserRows = await this.db
+      .select({
+        bookmarkId: bookmarkFolders.bookmarkId,
+        ownerUserId: bookmarks.userId,
+        folderName: folders.name,
+      })
+      .from(bookmarkFolders)
+      .innerJoin(bookmarks, eq(bookmarkFolders.bookmarkId, bookmarks.id))
+      .innerJoin(
+        folders,
+        and(
+          eq(bookmarkFolders.folderId, folders.id),
+          eq(bookmarkFolders.workspaceId, workspaceId),
+        ),
+      )
+      .innerJoin(
+        folderUserShares,
+        and(
+          eq(folderUserShares.folderId, folders.id),
+          eq(folderUserShares.workspaceId, workspaceId),
+          eq(folderUserShares.userId, viewerUserId),
+        ),
+      )
+      .where(
+        and(
+          eq(bookmarkFolders.workspaceId, workspaceId),
+          inArray(bookmarkFolders.bookmarkId, bookmarkIds),
+        ),
+      );
+
+    const folderTeamRows = await this.db
+      .select({
+        bookmarkId: bookmarkFolders.bookmarkId,
+        ownerUserId: bookmarks.userId,
+        folderName: folders.name,
+      })
+      .from(bookmarkFolders)
+      .innerJoin(bookmarks, eq(bookmarkFolders.bookmarkId, bookmarks.id))
+      .innerJoin(
+        folders,
+        and(
+          eq(bookmarkFolders.folderId, folders.id),
+          eq(bookmarkFolders.workspaceId, workspaceId),
+        ),
+      )
+      .innerJoin(
+        folderTeamShares,
+        and(
+          eq(folderTeamShares.folderId, folders.id),
+          eq(folderTeamShares.workspaceId, workspaceId),
+        ),
+      )
+      .innerJoin(
+        teamMemberships,
+        and(
+          eq(teamMemberships.workspaceId, workspaceId),
+          eq(teamMemberships.teamId, folderTeamShares.teamId),
+          eq(teamMemberships.userId, viewerUserId),
+        ),
+      )
+      .where(
+        and(
+          eq(bookmarkFolders.workspaceId, workspaceId),
+          inArray(bookmarkFolders.bookmarkId, bookmarkIds),
+        ),
+      );
+
+    const candidates: AccessPathCandidate[] = [];
+
+    for (const row of directUserRows) {
+      candidates.push({
+        bookmarkId: row.bookmarkId,
+        priority: 1,
+        accessPath: {
+          kind: "direct",
+          ownerName: ownerNameByUserId.get(row.ownerUserId) ?? row.ownerUserId,
+        },
+      });
+    }
+
+    for (const row of teamBookmarkRows) {
+      candidates.push({
+        bookmarkId: row.bookmarkId,
+        priority: 2,
+        accessPath: {
+          kind: "team",
+          ownerName: ownerNameByUserId.get(row.ownerUserId) ?? row.ownerUserId,
+          teamName: row.teamName,
+        },
+      });
+    }
+
+    for (const row of folderUserRows) {
+      candidates.push({
+        bookmarkId: row.bookmarkId,
+        priority: 3,
+        accessPath: {
+          kind: "folder",
+          ownerName: ownerNameByUserId.get(row.ownerUserId) ?? row.ownerUserId,
+          folderName: row.folderName,
+        },
+      });
+    }
+
+    for (const row of folderTeamRows) {
+      candidates.push({
+        bookmarkId: row.bookmarkId,
+        priority: 3,
+        accessPath: {
+          kind: "folder",
+          ownerName: ownerNameByUserId.get(row.ownerUserId) ?? row.ownerUserId,
+          folderName: row.folderName,
+        },
+      });
+    }
+
+    return candidates;
+  }
+
+  private async fetchOwnerNames(userIds: string[]): Promise<Map<string, string>> {
+    const uniqueIds = [...new Set(userIds)];
+    if (uniqueIds.length === 0) return new Map();
+
+    const rows = await this.db
+      .select({ id: userAccounts.id, name: userAccounts.name })
+      .from(userAccounts)
+      .where(inArray(userAccounts.id, uniqueIds));
+
+    return new Map(rows.map((row) => [row.id, row.name]));
   }
 
   private async listResourceShares(

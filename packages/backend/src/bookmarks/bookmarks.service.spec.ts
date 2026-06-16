@@ -26,6 +26,7 @@ function createService(): BookmarksService {
   const entitlements = { assertCanCreateBookmark: vi.fn() };
   const authz = {};
   const moduleRef = { get: vi.fn() };
+  const sharingSummary = { assembleForBookmarkList: vi.fn(() => Promise.resolve(new Map())) };
 
   return new BookmarksService(
     db as never,
@@ -33,6 +34,7 @@ function createService(): BookmarksService {
     entitlements as never,
     authz as never,
     moduleRef as never,
+    sharingSummary as never,
   );
 }
 

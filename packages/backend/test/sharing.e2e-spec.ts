@@ -10,6 +10,7 @@ import { BookmarksService } from "../src/bookmarks/bookmarks.service.js";
 import { FoldersService } from "../src/folders/folders.service.js";
 import { GoService } from "../src/slugs/go.service.js";
 import { SharingService } from "../src/sharing/sharing.service.js";
+import { computeShareGrantCount } from "../src/sharing/sharing-summary.assembler.js";
 import { TeamsService } from "../src/teams/teams.service.js";
 import { applyTestEnv, clearTestEnv } from "../src/test-utils/test-env.js";
 import { WorkspaceMembersService } from "../src/workspaces/workspace-members.service.js";
@@ -252,6 +253,193 @@ describe("Sharing + authorization (integration)", () => {
       await expect(
         bookmarksService.getBookmark(workspace, outsiderUserId, teamBookmarkId),
       ).rejects.toThrow("Bookmark is not accessible");
+    });
+  });
+
+  describe("bookmark list sharing summary", () => {
+    it("includes direct recipients for owned bookmarks", async () => {
+      const bookmark = await bookmarksService.createBookmark(workspace, ownerUserId, {
+        title: "Summary Direct",
+        url: "https://summary-direct.example.com",
+      });
+
+      await sharingService.shareBookmarkWithUser(
+        workspace,
+        ownerUserId,
+        bookmark.id,
+        recipientUserId,
+      );
+
+      const list = await bookmarksService.listBookmarks(workspace, ownerUserId, {
+        scope: "all",
+      });
+      const item = list.items.find((entry) => entry.id === bookmark.id);
+      expect(item).toBeDefined();
+      if (!item) return;
+      expect(item.sharingSummary.scope).toBe("shared-by-me");
+      expect(item.sharingSummary.directRecipients).toEqual([
+        expect.objectContaining({
+          kind: "user",
+          targetId: recipientUserId,
+          targetName: "Share Recipient",
+        }),
+      ]);
+      expect(item.sharingSummary.viaFolders).toEqual([]);
+      expect(item.sharingSummary.accessPath).toBeUndefined();
+      expect(computeShareGrantCount(item.sharingSummary)).toBe(1);
+    });
+
+    it("includes folder-transitive recipients grouped by folder for owners", async () => {
+      const bookmark = await bookmarksService.createBookmark(workspace, ownerUserId, {
+        title: "Summary Folder Child",
+        url: "https://summary-folder-child.example.com",
+      });
+      const folder = await foldersService.createFolder(workspace, ownerUserId, {
+        name: "Summary Shared Folder",
+        bookmarkIds: [bookmark.id],
+      });
+
+      await sharingService.shareFolderWithUser(
+        workspace,
+        ownerUserId,
+        folder.id,
+        recipientUserId,
+      );
+
+      const list = await bookmarksService.listBookmarks(workspace, ownerUserId, {
+        scope: "all",
+      });
+      const item = list.items.find((entry) => entry.id === bookmark.id);
+      expect(item).toBeDefined();
+      if (!item) return;
+      expect(item.sharingSummary.scope).toBe("shared-by-me");
+      expect(item.sharingSummary.directRecipients).toEqual([]);
+      expect(item.sharingSummary.viaFolders).toEqual([
+        {
+          folderId: folder.id,
+          folderName: "Summary Shared Folder",
+          recipients: [
+            expect.objectContaining({
+              kind: "user",
+              targetId: recipientUserId,
+              targetName: "Share Recipient",
+            }),
+          ],
+        },
+      ]);
+      expect(computeShareGrantCount(item.sharingSummary)).toBe(1);
+    });
+
+    it("includes team recipients on owned bookmarks", async () => {
+      const team = await teamsService.createTeam(workspace, ownerUserId, {
+        name: "Summary Team",
+        memberIds: [ownerUserId, recipientUserId],
+      });
+      const bookmark = await bookmarksService.createBookmark(workspace, ownerUserId, {
+        title: "Summary Team Bookmark",
+        url: "https://summary-team.example.com",
+      });
+
+      await sharingService.shareBookmarkWithTeam(
+        workspace,
+        ownerUserId,
+        bookmark.id,
+        team.id,
+      );
+
+      const list = await bookmarksService.listBookmarks(workspace, ownerUserId, {
+        scope: "all",
+      });
+      const item = list.items.find((entry) => entry.id === bookmark.id);
+      expect(item?.sharingSummary.directRecipients).toEqual([
+        expect.objectContaining({
+          kind: "team",
+          targetId: team.id,
+          targetName: "Summary Team",
+        }),
+      ]);
+    });
+
+    it("returns direct accessPath for bookmark user share recipients", async () => {
+      const bookmark = await bookmarksService.createBookmark(workspace, ownerUserId, {
+        title: "Summary Recipient Direct",
+        url: "https://summary-recipient-direct.example.com",
+      });
+
+      await sharingService.shareBookmarkWithUser(
+        workspace,
+        ownerUserId,
+        bookmark.id,
+        recipientUserId,
+      );
+
+      const list = await bookmarksService.listBookmarks(workspace, recipientUserId, {
+        scope: "shared-with-me",
+      });
+      const item = list.items.find((entry) => entry.id === bookmark.id);
+      expect(item?.sharingSummary.scope).toBe("shared-with-me");
+      expect(item?.sharingSummary.directRecipients).toEqual([]);
+      expect(item?.sharingSummary.viaFolders).toEqual([]);
+      expect(item?.sharingSummary.accessPath).toEqual({
+        kind: "direct",
+        ownerName: "Share Owner",
+      });
+    });
+
+    it("returns team accessPath for team bookmark share recipients", async () => {
+      const team = await teamsService.createTeam(workspace, ownerUserId, {
+        name: "Summary Access Team",
+        memberIds: [ownerUserId, recipientUserId],
+      });
+      const bookmark = await bookmarksService.createBookmark(workspace, ownerUserId, {
+        title: "Summary Recipient Team",
+        url: "https://summary-recipient-team.example.com",
+      });
+
+      await sharingService.shareBookmarkWithTeam(
+        workspace,
+        ownerUserId,
+        bookmark.id,
+        team.id,
+      );
+
+      const list = await bookmarksService.listBookmarks(workspace, recipientUserId, {
+        scope: "shared-with-me",
+      });
+      const item = list.items.find((entry) => entry.id === bookmark.id);
+      expect(item?.sharingSummary.accessPath).toEqual({
+        kind: "team",
+        ownerName: "Share Owner",
+        teamName: "Summary Access Team",
+      });
+    });
+
+    it("returns folder accessPath for folder-share recipients", async () => {
+      const bookmark = await bookmarksService.createBookmark(workspace, ownerUserId, {
+        title: "Summary Recipient Folder",
+        url: "https://summary-recipient-folder.example.com",
+      });
+      const folder = await foldersService.createFolder(workspace, ownerUserId, {
+        name: "Summary Access Folder",
+        bookmarkIds: [bookmark.id],
+      });
+
+      await sharingService.shareFolderWithUser(
+        workspace,
+        ownerUserId,
+        folder.id,
+        recipientUserId,
+      );
+
+      const list = await bookmarksService.listBookmarks(workspace, recipientUserId, {
+        scope: "shared-with-me",
+      });
+      const item = list.items.find((entry) => entry.id === bookmark.id);
+      expect(item?.sharingSummary.accessPath).toEqual({
+        kind: "folder",
+        ownerName: "Share Owner",
+        folderName: "Summary Access Folder",
+      });
     });
   });
 

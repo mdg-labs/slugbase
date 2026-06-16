@@ -51,6 +51,54 @@ export const ShareTargetsSchema = z
   })
   .strict();
 
+export const ShareRecipientSchema = z
+  .object({
+    kind: ShareGrantKindSchema,
+    targetId: z.string(),
+    targetName: z.string(),
+  })
+  .strict();
+
+export const BookmarkSharingScopeSchema = z.enum([
+  "mine",
+  "shared-by-me",
+  "shared-with-me",
+]);
+
+export const BookmarkSharingAccessPathSchema = z
+  .object({
+    kind: z.enum(["direct", "team", "folder"]),
+    ownerName: z.string(),
+    teamName: z.string().optional(),
+    folderName: z.string().optional(),
+  })
+  .strict();
+
+export const BookmarkViaFolderShareSchema = z
+  .object({
+    folderId: z.string(),
+    folderName: z.string(),
+    recipients: z.array(ShareRecipientSchema),
+  })
+  .strict();
+
+export const BookmarkSharingSummarySchema = z
+  .object({
+    scope: BookmarkSharingScopeSchema,
+    directRecipients: z.array(ShareRecipientSchema),
+    viaFolders: z.array(BookmarkViaFolderShareSchema),
+    accessPath: BookmarkSharingAccessPathSchema.optional(),
+  })
+  .strict();
+
+export type ShareRecipient = z.infer<typeof ShareRecipientSchema>;
+export type BookmarkSharingScope = z.infer<typeof BookmarkSharingScopeSchema>;
+export type BookmarkSharingAccessPath = z.infer<
+  typeof BookmarkSharingAccessPathSchema
+>;
+export type BookmarkViaFolderShare = z.infer<typeof BookmarkViaFolderShareSchema>;
+export type BookmarkSharingSummary = z.infer<typeof BookmarkSharingSummarySchema>;
+
 export type ShareGrant = z.infer<typeof ShareGrantSchema>;
 export type ShareGrantList = z.infer<typeof ShareGrantListSchema>;
 export type GrantShareBody = z.infer<typeof GrantShareBodySchema>;

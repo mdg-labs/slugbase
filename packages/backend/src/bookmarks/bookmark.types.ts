@@ -1,4 +1,5 @@
 import type { BookmarkScope, BookmarkSort } from "./bookmark.validation.js";
+import type { BookmarkSharingSummary } from "../sharing/sharing.types.js";
 
 export interface BookmarkFolderSummary {
   id: string;
@@ -28,6 +29,10 @@ export interface BookmarkRecord {
   updatedAt: Date;
   folders: BookmarkFolderSummary[];
   tags: BookmarkTagSummary[];
+}
+
+export interface BookmarkListItemRecord extends BookmarkRecord {
+  sharingSummary: BookmarkSharingSummary;
 }
 
 export interface CreateBookmarkData {
@@ -88,6 +93,13 @@ export interface ParsedListBookmarksQuery {
 
 export interface PaginatedBookmarks {
   items: BookmarkRecord[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface PaginatedBookmarkListItems {
+  items: BookmarkListItemRecord[];
   total: number;
   page: number;
   pageSize: number;

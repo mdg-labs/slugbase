@@ -2,6 +2,7 @@ import { initContract } from "@ts-rest/core";
 import { z } from "zod";
 
 import { BOOKMARK_HTTP_URL_MESSAGE, isBookmarkHttpUrl } from "../validation/bookmark-url.js";
+import { BookmarkSharingSummarySchema } from "./sharing.contract.js";
 
 const c = initContract();
 
@@ -47,6 +48,10 @@ export const BookmarkSchema = z
   })
   .strict();
 
+export const BookmarkListItemSchema = BookmarkSchema.extend({
+  sharingSummary: BookmarkSharingSummarySchema,
+}).strict();
+
 export type BookmarkFolderSummary = z.infer<typeof BookmarkFolderSummarySchema>;
 export type BookmarkTagSummary = z.infer<typeof BookmarkTagSummarySchema>;
 
@@ -85,7 +90,7 @@ export const TogglePinBodySchema = z
 
 export const BookmarkListSchema = z
   .object({
-    items: z.array(BookmarkSchema),
+    items: z.array(BookmarkListItemSchema),
     total: z.number().int().nonnegative(),
     page: z.number().int().positive(),
     pageSize: z.number().int().positive(),
@@ -125,6 +130,7 @@ export const BookmarkListQuerySchema = z
   .strict();
 
 export type Bookmark = z.infer<typeof BookmarkSchema>;
+export type BookmarkListItem = z.infer<typeof BookmarkListItemSchema>;
 export type BookmarkList = z.infer<typeof BookmarkListSchema>;
 export type BookmarkIds = z.infer<typeof BookmarkIdsSchema>;
 export type CreateBookmarkBody = z.infer<typeof CreateBookmarkBodySchema>;
