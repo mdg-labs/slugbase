@@ -285,17 +285,24 @@ export function AppTopBar({
   const count = listMeta.count;
 
   return (
-    <div className="flex w-full items-center gap-sp-5 px-sp-6">
+    <div
+      className="grid w-full grid-cols-[1fr_auto_1fr] items-center gap-x-sp-5 px-sp-6"
+      data-testid="app-top-bar"
+    >
       {/* Breadcrumbs */}
-      <div className="flex items-center gap-sp-2 shrink-0" aria-label={t("app.shell.topbar.breadcrumbs_label")}>
+      <div
+        className="flex min-w-0 items-center gap-sp-2"
+        aria-label={t("app.shell.topbar.breadcrumbs_label")}
+        data-testid="app-top-bar-breadcrumbs"
+      >
         {breadcrumb.icon}
-        <span className="font-semibold text-[length:var(--text-body)] text-fg">{breadcrumb.label}</span>
+        <span className="truncate font-semibold text-[length:var(--text-body)] text-fg">{breadcrumb.label}</span>
         {subLabel ? (
           <>
             <ChevronRightIcon />
-            <span className="text-[length:var(--text-body)] text-fg-muted">{subLabel}</span>
+            <span className="truncate text-[length:var(--text-body)] text-fg-muted">{subLabel}</span>
             {count != null ? (
-              <Badge variant="neutral" className="ml-[2px]">
+              <Badge variant="neutral" className="ml-[2px] shrink-0">
                 {count}
               </Badge>
             ) : null}
@@ -303,21 +310,25 @@ export function AppTopBar({
         ) : null}
       </div>
 
-      {/* ⌘K cmd-trigger */}
+      {/* ⌘K cmd-trigger — centered in main column */}
       <button
-        className="flex flex-1 max-w-[420px] items-center gap-sp-4 h-[34px] px-sp-4 rounded-md bg-raised border border-[color:var(--border-subtle)] text-fg-subtle transition-colors hover:border-[color:var(--border)] hover:bg-raised-2"
+        className="flex w-full max-w-[420px] items-center gap-sp-4 h-[34px] px-sp-4 rounded-md bg-raised border border-[color:var(--border-subtle)] text-fg-subtle transition-colors hover:border-[color:var(--border)] hover:bg-raised-2 justify-self-center"
         onClick={onOpenPalette}
         aria-label={t("app.shell.topbar.search_label")}
+        data-testid="app-top-bar-cmd-trigger"
       >
         <SearchIcon />
-        <span className="flex-1 text-left text-[length:var(--text-body)]">
+        <span className="flex-1 truncate text-left text-[length:var(--text-body)]">
           {t("app.shell.topbar.search_placeholder")}
         </span>
         <Kbd>⌘K</Kbd>
       </button>
 
       {/* Right-side actions */}
-      <div className="ml-auto flex items-center gap-sp-4 shrink-0">
+      <div
+        className="flex items-center justify-self-end gap-sp-4"
+        data-testid="app-top-bar-actions"
+      >
         {/* Theme toggle */}
         <ThemeSwitcher labels={themeLabels} />
 
