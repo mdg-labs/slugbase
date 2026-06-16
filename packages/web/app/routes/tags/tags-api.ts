@@ -64,8 +64,8 @@ function mapTaggedBookmark(item: ApiBookmark): TaggedBookmark {
     lastAccessedAt: item.lastAccessedAt,
     createdAt: item.createdAt ?? null,
     shareGrantCount: 0,
-    folders: item.folders ?? [],
-    tags: item.tags ?? [],
+    folders: item.folders,
+    tags: item.tags,
   };
 }
 

@@ -58,8 +58,8 @@ function mapBookmark(
     lastAccessedAt: item.lastAccessedAt,
     createdAt: item.createdAt ?? null,
     shareGrantCount,
-    folders: item.folders ?? [],
-    tags: item.tags ?? [],
+    folders: item.folders,
+    tags: item.tags,
   };
 }
 
