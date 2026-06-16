@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string) => key,
+    i18n: { language: "en" },
   }),
 }));
 
@@ -42,6 +43,8 @@ vi.mock("../../lib/error-reporting-client.js", () => ({
 }));
 
 import { AppErrorPage } from "./AppErrorPage.js";
+import { formatDocumentTitle } from "../../lib/format-document-title.js";
+import { resolveErrorPageTitleKey } from "../../lib/resolve-page-title.js";
 
 describe("AppErrorPage", () => {
   afterEach(() => {
@@ -51,6 +54,9 @@ describe("AppErrorPage", () => {
   it("renders 404 with path and primary action", () => {
     render(<AppErrorPage status={404} />);
 
+    expect(document.title).toBe(
+      formatDocumentTitle("en", resolveErrorPageTitleKey(404)),
+    );
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(
       "error.page.404.title",
     );
