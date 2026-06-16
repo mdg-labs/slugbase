@@ -188,6 +188,40 @@ describe("BookmarkListPage", () => {
     });
   });
 
+  describe("Tag chip colors", () => {
+    it("applies tag color to grid card chips when set", () => {
+      mockLoaderData = {
+        ...emptyUnfilteredData,
+        items: [
+          makeBookmark({
+            id: "bk-1",
+            tags: [
+              { id: "tag-1", name: "alpha", color: "#7782f7" },
+              { id: "tag-2", name: "beta", color: null },
+            ],
+          }),
+        ],
+        total: 1,
+      };
+
+      renderPage();
+
+      const card = screen.getByTestId("bookmark-card-bk-1");
+      const chips = card.querySelectorAll(".font-mono");
+      const coloredChip = Array.from(chips).find((el) =>
+        el.textContent.includes("alpha"),
+      );
+      expect(coloredChip).toBeTruthy();
+      expect((coloredChip as HTMLElement).style.color).toBe("#7782f7");
+
+      const neutralChip = Array.from(chips).find((el) =>
+        el.textContent.includes("beta"),
+      );
+      expect(neutralChip).toBeTruthy();
+      expect((neutralChip as HTMLElement).style.color).toBe("");
+    });
+  });
+
   describe("Bookmark card click - normal mode", () => {
     it("opens bookmark URL in a new tab when a card is clicked", () => {
       const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);

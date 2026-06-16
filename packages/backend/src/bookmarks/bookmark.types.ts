@@ -8,6 +8,7 @@ export interface BookmarkFolderSummary {
 export interface BookmarkTagSummary {
   id: string;
   name: string;
+  color: string | null;
 }
 
 export interface BookmarkRecord {

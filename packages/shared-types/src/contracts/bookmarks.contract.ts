@@ -22,6 +22,7 @@ const BookmarkTagSummarySchema = z
   .object({
     id: z.string(),
     name: z.string(),
+    color: z.string().nullable(),
   })
   .strict();
 

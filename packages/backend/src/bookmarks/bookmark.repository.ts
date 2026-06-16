@@ -648,6 +648,7 @@ export class BookmarkRepository extends WorkspaceScopedRepository<BookmarkRecord
         bookmarkId: bookmarkTags.bookmarkId,
         tagId: tags.id,
         tagName: tags.name,
+        tagColor: tags.color,
       })
       .from(bookmarkTags)
       .innerJoin(tags, and(
@@ -664,7 +665,11 @@ export class BookmarkRepository extends WorkspaceScopedRepository<BookmarkRecord
     for (const row of tagRows) {
       const entry = result.get(row.bookmarkId);
       if (entry) {
-        entry.tags.push({ id: row.tagId, name: row.tagName });
+        entry.tags.push({
+          id: row.tagId,
+          name: row.tagName,
+          color: row.tagColor,
+        });
       }
     }
 

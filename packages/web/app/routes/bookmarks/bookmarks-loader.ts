@@ -17,7 +17,7 @@ export type BookmarkListItem = {
   createdAt: string | null;
   shareGrantCount: number;
   folders: Array<{ id: string; name: string }>;
-  tags: Array<{ id: string; name: string }>;
+  tags: Array<{ id: string; name: string; color: string | null }>;
 };
 
 export type ToolbarFolder = { id: string; name: string; bookmarkCount: number };
@@ -56,7 +56,7 @@ interface ApiBookmark {
   lastAccessedAt: string | null;
   createdAt: string | null;
   folders: Array<{ id: string; name: string }>;
-  tags: Array<{ id: string; name: string }>;
+  tags: Array<{ id: string; name: string; color: string | null }>;
 }
 
 interface PaginatedBookmarks {

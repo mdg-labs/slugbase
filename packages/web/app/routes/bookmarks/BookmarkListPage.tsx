@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { useLoaderData, useNavigate, useNavigation, useRevalidator } from "react-router";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
@@ -431,11 +431,25 @@ function formatRelativeTime(dateStr: string | null): string {
 }
 
 /* ── Tag chip ────────────────────────────────────────────────── */
-function TagChip({ name }: { name: string }) {
+function tagChipStyle(color: string | null | undefined): CSSProperties {
+  if (!color) return { fontSize: 11 };
+  return {
+    fontSize: 11,
+    backgroundColor: `color-mix(in srgb, ${color} 14%, var(--raised-2))`,
+    borderColor: `color-mix(in srgb, ${color} 38%, var(--border-subtle))`,
+    color,
+  };
+}
+
+function TagChip({ name, color }: { name: string; color?: string | null }) {
   return (
     <span
-      className="inline-flex items-center gap-sp-1 rounded border border-[color:var(--border-subtle)] bg-[color:var(--raised-2)] px-sp-3 py-sp-1 font-mono text-fg-subtle"
-      style={{ fontSize: 11 }}
+      className={
+        color
+          ? "inline-flex items-center gap-sp-1 rounded border px-sp-3 py-sp-1 font-mono"
+          : "inline-flex items-center gap-sp-1 rounded border border-[color:var(--border-subtle)] bg-[color:var(--raised-2)] px-sp-3 py-sp-1 font-mono text-fg-subtle"
+      }
+      style={tagChipStyle(color)}
     >
       <HashIcon />
       {name}
@@ -636,7 +650,7 @@ function BookmarkCard({
           </span>
         ) : null}
         {bookmark.tags.slice(0, 2).map((tag) => (
-          <TagChip key={tag.id} name={tag.name} />
+          <TagChip key={tag.id} name={tag.name} color={tag.color} />
         ))}
         {relative ? (
           <span
@@ -784,7 +798,7 @@ function BookmarkRow({
       {/* Tags */}
       <div className="flex flex-wrap gap-sp-2">
         {bookmark.tags.slice(0, 2).map((tag) => (
-          <TagChip key={tag.id} name={tag.name} />
+          <TagChip key={tag.id} name={tag.name} color={tag.color} />
         ))}
       </div>
 

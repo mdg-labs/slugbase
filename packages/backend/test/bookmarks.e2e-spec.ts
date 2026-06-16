@@ -248,6 +248,7 @@ describe("Bookmarks (integration)", () => {
 
       const tagA = await tagsService.createTag(workspace, ownerUserId, {
         name: "list-alpha-tag",
+        color: "#7782f7",
       });
       tagAId = tagA.id;
       const tagB = await tagsService.createTag(workspace, ownerUserId, {
@@ -423,6 +424,10 @@ describe("Bookmarks (integration)", () => {
       expect(Array.isArray(alpha?.tags)).toBe(true);
       expect(alpha?.tags.some((t) => t.id === tagAId)).toBe(true);
       expect(alpha?.tags.some((t) => t.id === tagBId)).toBe(true);
+      const alphaTagA = alpha?.tags.find((t) => t.id === tagAId);
+      expect(alphaTagA?.color).toBe("#7782f7");
+      const alphaTagB = alpha?.tags.find((t) => t.id === tagBId);
+      expect(alphaTagB?.color).toBeNull();
 
       const beta = list.items.find((b) => b.id === betaId);
       expect(beta?.folders.some((f) => f.id === folderId)).toBe(true);
@@ -438,6 +443,7 @@ describe("Bookmarks (integration)", () => {
       const bookmark = await bookmarksService.getBookmark(workspace, ownerUserId, alphaId);
       expect(bookmark.folders.some((f) => f.id === folderId)).toBe(true);
       expect(bookmark.tags.some((t) => t.id === tagAId)).toBe(true);
+      expect(bookmark.tags.find((t) => t.id === tagAId)?.color).toBe("#7782f7");
     });
   });
 
