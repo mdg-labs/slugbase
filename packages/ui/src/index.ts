@@ -59,6 +59,20 @@ export {
 } from "./components/ToastProvider.js";
 export { ConfirmDialog, type ConfirmDialogProps } from "./components/ConfirmDialog.js";
 export { Badge, type BadgeProps, type BadgeVariant } from "./components/Badge.js";
+export {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+  type TooltipContentProps,
+} from "./components/Tooltip.js";
+export {
+  Popover,
+  PopoverClose,
+  PopoverContent,
+  PopoverTrigger,
+  type PopoverContentProps,
+} from "./components/Popover.js";
 export { Tag, type TagProps } from "./components/Tag.js";
 export { SlugBadge, type SlugBadgeProps } from "./components/SlugBadge.js";
 export { Checkbox, type CheckboxProps } from "./components/Checkbox.js";
