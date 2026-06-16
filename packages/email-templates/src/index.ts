@@ -16,6 +16,7 @@ export {
   renderPasswordResetEmail,
   renderWorkspaceInvitationEmail,
   renderContactFormNotificationEmail,
+  renderMailTransportTestEmail,
 } from "./render.js";
 
 export type {

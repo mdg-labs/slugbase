@@ -20,3 +20,5 @@ export type { WorkspaceInvitationEmailProps } from "./templates/WorkspaceInvitat
 
 export { renderContactFormNotificationEmail } from "./templates/ContactFormNotificationEmail.js";
 export type { ContactFormNotificationEmailProps } from "./templates/ContactFormNotificationEmail.js";
+
+export { renderMailTransportTestEmail } from "./templates/MailTransportTestEmail.js";

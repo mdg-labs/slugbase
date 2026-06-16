@@ -4,6 +4,7 @@ import { renderEmailChangeVerificationEmail } from "../EmailChangeVerificationEm
 import { renderPasswordResetEmail } from "../PasswordResetEmail.js";
 import { renderWorkspaceInvitationEmail } from "../WorkspaceInvitationEmail.js";
 import { renderContactFormNotificationEmail } from "../ContactFormNotificationEmail.js";
+import { renderMailTransportTestEmail } from "../MailTransportTestEmail.js";
 
 describe("SignupVerificationEmail", () => {
   it("renders HTML with CTA button and verify link", () => {
@@ -70,6 +71,15 @@ describe("WorkspaceInvitationEmail", () => {
   });
 });
 
+describe("MailTransportTestEmail", () => {
+  it("renders HTML with transport success confirmation", () => {
+    const html = renderMailTransportTestEmail();
+    expect(html).toContain("Mail transport test");
+    expect(html).toContain("This is a test message from SlugBase");
+    expect(html).toContain("mail transport is working correctly");
+  });
+});
+
 describe("ContactFormNotificationEmail", () => {
   it("renders HTML with submitter info and message", () => {
     const html = renderContactFormNotificationEmail({
@@ -110,6 +120,7 @@ describe("branding consistency", () => {
       topic: "T",
       message: "M",
     }),
+    renderMailTransportTestEmail(),
   ];
 
   it("all templates use dark canvas background", () => {

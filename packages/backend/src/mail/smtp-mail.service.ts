@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
+import { renderMailTransportTestEmail } from "@slugbase/email-templates";
 import { MailSendError, type MailMessage, type MailService } from "@slugbase/shared-types";
 import type { CryptoService } from "@slugbase/shared-types";
 import nodemailer, { type Transporter } from "nodemailer";
@@ -87,7 +88,8 @@ export class SmtpMailService implements MailService {
       to,
       subject: "SlugBase mail transport test",
       text: "This is a test message from SlugBase. If you received this, the mail transport is working correctly.",
-      type: "contact_form_notification",
+      html: renderMailTransportTestEmail(),
+      type: "mail_transport_test",
     });
   }
 

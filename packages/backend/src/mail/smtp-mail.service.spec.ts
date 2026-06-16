@@ -111,7 +111,7 @@ describe("SmtpMailService", () => {
     ).rejects.toBeInstanceOf(MailSendError);
   });
 
-  it("sendTest sends to the given address", async () => {
+  it("sendTest sends branded HTML and plain-text fallback", async () => {
     const config = buildConfig();
     const service = new SmtpMailService(config, buildCrypto(config));
 
@@ -122,8 +122,16 @@ describe("SmtpMailService", () => {
     await service.sendTest("admin@example.com");
 
     expect(sendMailSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ to: "admin@example.com" }),
+      expect.objectContaining({
+        to: "admin@example.com",
+        subject: "SlugBase mail transport test",
+        text: "This is a test message from SlugBase. If you received this, the mail transport is working correctly.",
+        html: expect.stringContaining("mail transport is working correctly"),
+      }),
     );
+    const html = sendMailSpy.mock.calls[0]?.[0]?.html as string;
+    expect(html).toContain('src="cid:slugbase-logo"');
+    expect(html).toContain("safely ignore it");
   });
 
   it("reconfigureFromEncrypted decrypts credentials and rebuilds transport", () => {

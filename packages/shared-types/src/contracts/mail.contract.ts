@@ -12,7 +12,8 @@ export type MailMessageType =
   | "password_reset"
   | "member_invitation"
   | "workspace_invitation"
-  | "contact_form_notification";
+  | "contact_form_notification"
+  | "mail_transport_test";
 
 export interface MailMessage {
   /** Recipient email address. */
