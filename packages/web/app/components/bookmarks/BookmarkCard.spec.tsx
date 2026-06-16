@@ -3,13 +3,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { staticMessages } from "../../i18n/messages.js";
 import type { BookmarkListItem } from "../../routes/bookmarks/bookmarks-loader.js";
+import { PRIVATE_BOOKMARK_SHARING_SUMMARY } from "../../routes/bookmarks/bookmarks-loader.js";
+import type { BookmarkSharingSummary } from "../sharing/sharing-recipients.utils.js";
 import { BookmarkCard } from "./BookmarkCard.js";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
-    t: (key: string) => {
+    t: (key: string, params?: Record<string, string | number>) => {
       const messages = staticMessages.en as Record<string, string>;
-      return messages[key] ?? key;
+      const template = messages[key] ?? key;
+      if (!params) {
+        return template;
+      }
+      return Object.entries(params).reduce(
+        (value, [name, paramValue]) =>
+          value.replace(new RegExp(`\\{${name}\\}`, "g"), String(paramValue)),
+        template,
+      );
     },
   }),
 }));
@@ -31,7 +41,7 @@ const makeBookmark = (overrides: Partial<BookmarkListItem> = {}): BookmarkListIt
   accessCount: 5,
   lastAccessedAt: "2026-06-01T10:00:00Z",
   createdAt: "2026-05-01T10:00:00Z",
-  shareGrantCount: 0,
+  sharingSummary: PRIVATE_BOOKMARK_SHARING_SUMMARY,
   folders: [],
   tags: [],
   ...overrides,
@@ -67,7 +77,7 @@ describe("BookmarkCard", () => {
     cleanup();
   });
 
-  it("renders card anatomy with favicon, title, URL, slug, chips, and scope icon", () => {
+  it("renders card anatomy with favicon, title, URL, slug, and chips", () => {
     renderCard({
       bookmark: makeBookmark({
         id: "bk-42",
@@ -89,7 +99,70 @@ describe("BookmarkCard", () => {
 
     const favicon = screen.getByTestId("bookmark-favicon");
     expect(favicon.getAttribute("data-size")).toBe("32");
-    expect(screen.getByTestId("sharing-scope-icon-mine")).toBeTruthy();
+    expect(screen.queryByTestId("sharing-recipients-badge")).toBeNull();
+  });
+
+  it("shows sharing badge for owned bookmark shared directly", () => {
+    const sharingSummary: BookmarkSharingSummary = {
+      scope: "shared-by-me",
+      directRecipients: [{ kind: "user", targetId: "u2", targetName: "Alice" }],
+      viaFolders: [],
+    };
+
+    renderCard({
+      bookmark: makeBookmark({ id: "bk-shared", sharingSummary }),
+    });
+
+    expect(screen.getByTestId("sharing-recipients-badge").textContent).toContain(
+      "Shared with 1",
+    );
+  });
+
+  it("shows sharing badge for owned bookmark shared via folder only", () => {
+    const sharingSummary: BookmarkSharingSummary = {
+      scope: "shared-by-me",
+      directRecipients: [],
+      viaFolders: [
+        {
+          folderId: "f1",
+          folderName: "Reading",
+          recipients: [{ kind: "user", targetId: "u2", targetName: "Bob" }],
+        },
+      ],
+    };
+
+    renderCard({
+      bookmark: makeBookmark({ id: "bk-folder-share", sharingSummary }),
+    });
+
+    expect(screen.getByTestId("sharing-recipients-badge").textContent).toContain(
+      "Shared with 1",
+    );
+  });
+
+  it("shows shared-with-you badge for recipient bookmarks", () => {
+    const sharingSummary: BookmarkSharingSummary = {
+      scope: "shared-with-me",
+      directRecipients: [],
+      viaFolders: [],
+      accessPath: {
+        kind: "folder",
+        ownerName: "Sarah K.",
+        folderName: "Team Resources",
+      },
+    };
+
+    renderCard({
+      bookmark: makeBookmark({
+        id: "bk-recipient",
+        userId: "other-user",
+        sharingSummary,
+      }),
+    });
+
+    expect(screen.getByTestId("sharing-recipients-badge").textContent).toContain(
+      "Shared with you",
+    );
   });
 
   it("shows pinned left accent when bookmark is pinned", () => {

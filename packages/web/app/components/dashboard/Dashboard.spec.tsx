@@ -9,6 +9,7 @@ import { CommandPaletteProvider, useCommandPalette } from "../command-palette/Co
 import { DashboardPage } from "./DashboardPage.js";
 import { FREE_BOOKMARK_CAP } from "./dashboard.constants.js";
 import type { DashboardData } from "./dashboard.types.js";
+import { PRIVATE_BOOKMARK_SHARING_SUMMARY } from "../../routes/bookmarks/bookmarks-loader.js";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -48,7 +49,7 @@ const mockDashboardData: DashboardData = {
       accessCount: 42,
       lastAccessedAt: "2026-05-30T10:00:00.000Z",
       createdAt: "2026-05-01T10:00:00.000Z",
-      shareGrantCount: 0,
+      sharingSummary: PRIVATE_BOOKMARK_SHARING_SUMMARY,
       folders: [],
       tags: [],
     },
@@ -65,7 +66,7 @@ const mockDashboardData: DashboardData = {
       accessCount: 3,
       lastAccessedAt: "2026-05-29T08:00:00.000Z",
       createdAt: "2026-05-02T08:00:00.000Z",
-      shareGrantCount: 0,
+      sharingSummary: PRIVATE_BOOKMARK_SHARING_SUMMARY,
       folders: [],
       tags: [],
     },
@@ -82,7 +83,7 @@ const mockDashboardData: DashboardData = {
       accessCount: 1,
       lastAccessedAt: "2026-05-31T09:00:00.000Z",
       createdAt: "2026-05-03T09:00:00.000Z",
-      shareGrantCount: 0,
+      sharingSummary: PRIVATE_BOOKMARK_SHARING_SUMMARY,
       folders: [],
       tags: [],
     },

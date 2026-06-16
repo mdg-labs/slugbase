@@ -15,8 +15,7 @@ import { Button, ConfirmDialog, EmptyState } from "@slugbase/ui";
 import { ScopeFilter } from "../../components/sharing/ScopeFilter.js";
 import { CompactShareModal } from "../../components/sharing/CompactShareModal.js";
 import { canShowShareMenu } from "../../components/sharing/share-menu.utils.js";
-import { ScopeIcon } from "../../components/sharing/ScopeIcon.js";
-import { resolveResourceSharingScope } from "../../components/sharing/sharing.utils.js";
+import { SharingRecipientsBadge } from "../../components/sharing/SharingRecipientsBadge.js";
 import { useWorkspaceEntitlements } from "../../components/sharing/use-workspace-entitlements.js";
 import { useBookmarkModal } from "../../components/bookmark-modal/BookmarkModalProvider.js";
 import { useAppToast } from "../../components/feedback/AppToastProvider.js";
@@ -472,11 +471,6 @@ function BookmarkRow({
   const { t } = useTranslation();
   const [shareOpen, setShareOpen] = useState(false);
   const showShareMenu = canShowShareMenu(canShare, bookmark.userId, currentUserId);
-  const itemScope = resolveResourceSharingScope(
-    bookmark.userId,
-    currentUserId ?? "",
-    bookmark.shareGrantCount,
-  );
   const relative = formatRelativeTime(
     sort === "access-count-desc"
       ? bookmark.lastAccessedAt
@@ -591,7 +585,13 @@ function BookmarkRow({
 
       {/* Actions */}
       <div className="flex items-center justify-end gap-sp-2">
-        <ScopeIcon scope={itemScope} />
+        <span
+          onClick={(event) => {
+            event.stopPropagation();
+          }}
+        >
+          <SharingRecipientsBadge summary={bookmark.sharingSummary} />
+        </span>
         <DropdownMenu.Root>
           <DropdownMenu.Trigger asChild>
             <button

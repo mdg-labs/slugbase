@@ -13,8 +13,7 @@ import {
 
 import { CompactShareModal } from "../sharing/CompactShareModal.js";
 import { canShowShareMenu } from "../sharing/share-menu.utils.js";
-import { ScopeIcon } from "../sharing/ScopeIcon.js";
-import { resolveResourceSharingScope } from "../sharing/sharing.utils.js";
+import { SharingRecipientsBadge } from "../sharing/SharingRecipientsBadge.js";
 import type { BookmarkListItem } from "../../routes/bookmarks/bookmarks-loader.js";
 import { BookmarkFavicon } from "../../routes/bookmarks/BookmarkFavicon.js";
 
@@ -219,11 +218,6 @@ export function BookmarkCard({
   const { t } = useTranslation();
   const [shareOpen, setShareOpen] = useState(false);
   const showShareMenu = canShowShareMenu(canShare, bookmark.userId, currentUserId);
-  const itemScope = resolveResourceSharingScope(
-    bookmark.userId,
-    currentUserId ?? "",
-    bookmark.shareGrantCount,
-  );
   const relative = formatRelativeTime(bookmark.lastAccessedAt ?? bookmark.createdAt);
 
   const handleCardClick = () => {
@@ -406,7 +400,13 @@ export function BookmarkCard({
             {relative}
           </span>
         ) : null}
-        <ScopeIcon scope={itemScope} />
+        <span
+          onClick={(event) => {
+            event.stopPropagation();
+          }}
+        >
+          <SharingRecipientsBadge summary={bookmark.sharingSummary} />
+        </span>
       </div>
 
       {showShareMenu ? (

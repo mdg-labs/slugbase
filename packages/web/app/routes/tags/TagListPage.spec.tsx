@@ -6,6 +6,7 @@ import { staticMessages } from "../../i18n/messages.js";
 import type { TagListData } from "./tags-loader.js";
 import { TagListPage } from "./TagListPage.js";
 import type { TaggedBookmark } from "./tags-api.js";
+import { PRIVATE_BOOKMARK_SHARING_SUMMARY } from "../bookmarks/bookmarks-loader.js";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -102,7 +103,7 @@ const taggedBookmarks: TaggedBookmark[] = [
     accessCount: 4,
     lastAccessedAt: "2026-05-30T10:00:00.000Z",
     createdAt: "2026-05-01T10:00:00.000Z",
-    shareGrantCount: 0,
+    sharingSummary: PRIVATE_BOOKMARK_SHARING_SUMMARY,
     folders: [],
     tags: [{ id: "tag-1", name: "docs", color: "#7782f7" }],
   },

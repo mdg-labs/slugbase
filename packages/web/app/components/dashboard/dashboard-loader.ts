@@ -1,5 +1,7 @@
 import type { DashboardBookmark, DashboardData } from "./dashboard.types.js";
 
+import type { BookmarkSharingSummary } from "../sharing/sharing-recipients.utils.js";
+import { PRIVATE_BOOKMARK_SHARING_SUMMARY } from "../../routes/bookmarks/bookmarks-loader.js";
 import { getServerApiBaseUrl } from "../../lib/server-api-base-url.js";
 
 interface PaginatedResponse<T> {
@@ -18,6 +20,7 @@ interface ApiBookmark {
   accessCount: number;
   lastAccessedAt: string | null;
   createdAt: string | null;
+  sharingSummary?: BookmarkSharingSummary;
   folders: Array<{ id: string; name: string; color: string | null }>;
   tags: Array<{ id: string; name: string; color: string | null }>;
 }
@@ -42,10 +45,7 @@ interface ApiWorkspace {
   plan: "free" | "personal";
 }
 
-function mapBookmark(
-  item: ApiBookmark,
-  shareGrantCount = 0,
-): DashboardBookmark {
+function mapBookmark(item: ApiBookmark): DashboardBookmark {
   return {
     id: item.id,
     userId: item.userId,
@@ -57,43 +57,14 @@ function mapBookmark(
     accessCount: item.accessCount,
     lastAccessedAt: item.lastAccessedAt,
     createdAt: item.createdAt ?? null,
-    shareGrantCount,
+    sharingSummary: item.sharingSummary ?? PRIVATE_BOOKMARK_SHARING_SUMMARY,
     folders: item.folders,
     tags: item.tags,
   };
 }
 
-async function loadShareGrantCounts(
-  request: Request,
-  bookmarkIds: string[],
-): Promise<Map<string, number>> {
-  const shareCounts = new Map<string, number>();
-  if (bookmarkIds.length === 0) {
-    return shareCounts;
-  }
-
-  await Promise.all(
-    bookmarkIds.map(async (bookmarkId) => {
-      const shares = await fetchJson<{ grants: Array<{ id: string }> }>(
-        request,
-        `/sharing/bookmarks/${bookmarkId}`,
-      );
-      if (shares) {
-        shareCounts.set(bookmarkId, shares.grants.length);
-      }
-    }),
-  );
-
-  return shareCounts;
-}
-
-function mapBookmarksWithShares(
-  items: ApiBookmark[],
-  shareCounts: Map<string, number>,
-): DashboardBookmark[] {
-  return items.map((item) =>
-    mapBookmark(item, shareCounts.get(item.id) ?? 0),
-  );
+function mapBookmarks(items: ApiBookmark[]): DashboardBookmark[] {
+  return items.map((item) => mapBookmark(item));
 }
 
 async function fetchJson<T>(
@@ -169,14 +140,6 @@ export async function loadDashboardData(
     .slice(0, 6);
   const pinnedItems = pinnedResponse?.items ?? [];
   const recentItems = recentResponse?.items ?? [];
-  const allBookmarkIds = [
-    ...new Set(
-      [...quickAccessItems, ...pinnedItems, ...recentItems].map(
-        (item) => item.id,
-      ),
-    ),
-  ];
-  const shareCounts = await loadShareGrantCounts(request, allBookmarkIds);
 
   return {
     workspace: {
@@ -191,9 +154,9 @@ export async function loadDashboardData(
       sharedWithMe: sharedWithMeResponse?.total ?? 0,
       sharedByMe: sharedByMeResponse?.total ?? 0,
     },
-    quickAccess: mapBookmarksWithShares(quickAccessItems, shareCounts),
-    pinned: mapBookmarksWithShares(pinnedItems, shareCounts),
-    recent: mapBookmarksWithShares(recentItems, shareCounts),
+    quickAccess: mapBookmarks(quickAccessItems),
+    pinned: mapBookmarks(pinnedItems),
+    recent: mapBookmarks(recentItems),
     folders: foldersResponse.items.map((item) => ({
       id: item.id,
       name: item.name,

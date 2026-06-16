@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { staticMessages } from "../../i18n/messages.js";
 import type { BookmarkListData, BookmarkListItem } from "./bookmarks-loader.js";
+import { PRIVATE_BOOKMARK_SHARING_SUMMARY } from "./bookmarks-loader.js";
+import type { BookmarkSharingSummary } from "../../components/sharing/sharing-recipients.utils.js";
 import { BookmarkListPage } from "./BookmarkListPage.js";
 import { BookmarkModalProvider } from "../../components/bookmark-modal/BookmarkModalProvider.js";
 import { AppToastProvider } from "../../components/feedback/AppToastProvider.js";
@@ -101,7 +103,7 @@ const makeBookmark = (overrides: Partial<BookmarkListItem> = {}): BookmarkListIt
   accessCount: 5,
   lastAccessedAt: "2026-06-01T10:00:00Z",
   createdAt: "2026-05-01T10:00:00Z",
-  shareGrantCount: 0,
+  sharingSummary: PRIVATE_BOOKMARK_SHARING_SUMMARY,
   folders: [],
   tags: [],
   ...overrides,
@@ -289,6 +291,90 @@ describe("BookmarkListPage", () => {
         "noopener,noreferrer",
       );
       openSpy.mockRestore();
+    });
+  });
+
+  describe("Sharing recipients badge", () => {
+    it("shows sharing badge on grid card when bookmark is shared by me", () => {
+      const sharingSummary: BookmarkSharingSummary = {
+        scope: "shared-by-me",
+        directRecipients: [{ kind: "user", targetId: "u2", targetName: "Alice" }],
+        viaFolders: [],
+      };
+
+      mockLoaderData = {
+        ...emptyUnfilteredData,
+        items: [makeBookmark({ id: "bk-1", sharingSummary })],
+        total: 1,
+      };
+
+      renderPage();
+
+      expect(screen.getByTestId("sharing-recipients-badge").textContent).toContain(
+        "Shared with 1",
+      );
+    });
+
+    it("shows shared-with-you badge on table row for recipient bookmarks", () => {
+      const sharingSummary: BookmarkSharingSummary = {
+        scope: "shared-with-me",
+        directRecipients: [],
+        viaFolders: [],
+        accessPath: {
+          kind: "direct",
+          ownerName: "Sarah K.",
+        },
+      };
+
+      mockLoaderData = {
+        ...emptyUnfilteredData,
+        view: "table",
+        defaultBookmarkView: "table",
+        items: [
+          makeBookmark({
+            id: "bk-1",
+            userId: "other-user",
+            sharingSummary,
+          }),
+        ],
+        total: 1,
+      };
+
+      renderPage();
+
+      const row = screen.getByTestId("bookmark-row-bk-1");
+      expect(row.querySelector('[data-testid="sharing-recipients-badge"]')?.textContent).toContain(
+        "Shared with you",
+      );
+    });
+
+    it("shows via-folder share count on table row for folder-transitive shares", () => {
+      const sharingSummary: BookmarkSharingSummary = {
+        scope: "shared-by-me",
+        directRecipients: [],
+        viaFolders: [
+          {
+            folderId: "f1",
+            folderName: "Reading",
+            recipients: [{ kind: "user", targetId: "u2", targetName: "Bob" }],
+          },
+        ],
+      };
+
+      mockLoaderData = {
+        ...emptyUnfilteredData,
+        view: "table",
+        defaultBookmarkView: "table",
+        items: [makeBookmark({ id: "bk-1", sharingSummary })],
+        total: 1,
+      };
+
+      renderPage();
+
+      const row = screen.getByTestId("bookmark-row-bk-1");
+      expect(row.querySelector('[data-testid="sharing-recipients-badge"]')?.textContent).toContain(
+        "Shared with 1",
+      );
     });
   });
 

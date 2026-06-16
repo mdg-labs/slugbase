@@ -1,6 +1,8 @@
 import { resolveClientApiPath } from "../../lib/client-api-path.js";
 import { apiFetch } from "../../lib/client-api-fetch.js";
 import type { BookmarkListItem } from "../bookmarks/bookmarks-loader.js";
+import { PRIVATE_BOOKMARK_SHARING_SUMMARY } from "../bookmarks/bookmarks-loader.js";
+import type { BookmarkSharingSummary } from "../../components/sharing/sharing-recipients.utils.js";
 
 export async function createTag(name: string, color?: string | null): Promise<void> {
   const body: Record<string, unknown> = { name };
@@ -42,6 +44,7 @@ interface ApiBookmark {
   accessCount: number;
   lastAccessedAt: string | null;
   createdAt: string | null;
+  sharingSummary?: BookmarkSharingSummary;
   folders: Array<{ id: string; name: string; color: string | null }>;
   tags: Array<{ id: string; name: string; color: string | null }>;
 }
@@ -63,7 +66,7 @@ function mapTaggedBookmark(item: ApiBookmark): TaggedBookmark {
     accessCount: item.accessCount,
     lastAccessedAt: item.lastAccessedAt,
     createdAt: item.createdAt ?? null,
-    shareGrantCount: 0,
+    sharingSummary: item.sharingSummary ?? PRIVATE_BOOKMARK_SHARING_SUMMARY,
     folders: item.folders,
     tags: item.tags,
   };

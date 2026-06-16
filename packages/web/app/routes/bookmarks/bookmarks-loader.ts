@@ -1,8 +1,15 @@
+import type { BookmarkSharingSummary } from "../../components/sharing/sharing-recipients.utils.js";
 import type { SharingScope } from "../../components/sharing/sharing.types.js";
 import { parseSharingScope } from "../../components/sharing/sharing.utils.js";
 import { isPlanGatingEnabled } from "../../lib/billing-config.js";
 
 import { getServerApiBaseUrl } from "../../lib/server-api-base-url.js";
+
+export const PRIVATE_BOOKMARK_SHARING_SUMMARY: BookmarkSharingSummary = {
+  scope: "mine",
+  directRecipients: [],
+  viaFolders: [],
+};
 
 export type BookmarkListItem = {
   id: string;
@@ -15,7 +22,7 @@ export type BookmarkListItem = {
   accessCount: number;
   lastAccessedAt: string | null;
   createdAt: string | null;
-  shareGrantCount: number;
+  sharingSummary: BookmarkSharingSummary;
   folders: Array<{ id: string; name: string; color: string | null }>;
   tags: Array<{ id: string; name: string; color: string | null }>;
 };
@@ -55,6 +62,7 @@ interface ApiBookmark {
   accessCount: number;
   lastAccessedAt: string | null;
   createdAt: string | null;
+  sharingSummary?: BookmarkSharingSummary;
   folders: Array<{ id: string; name: string; color: string | null }>;
   tags: Array<{ id: string; name: string; color: string | null }>;
 }
@@ -165,22 +173,6 @@ export async function loadBookmarkListData(
 
   if (!list) return null;
 
-  const ownedIds = list.items.filter((item) => item.userId).map((item) => item.id);
-  const shareCounts = new Map<string, number>();
-  if (ownedIds.length > 0) {
-    await Promise.all(
-      ownedIds.map(async (bookmarkId) => {
-        const shares = await fetchJson<{ grants: Array<{ id: string }> }>(
-          request,
-          `/sharing/bookmarks/${bookmarkId}`,
-        );
-        if (shares) {
-          shareCounts.set(bookmarkId, shares.grants.length);
-        }
-      }),
-    );
-  }
-
   const plan = workspace?.plan ?? "personal";
   const bookmarkCap =
     isPlanGatingEnabled() && plan === "free" ? FREE_BOOKMARK_CAP : null;
@@ -200,7 +192,7 @@ export async function loadBookmarkListData(
     items: list.items.map((item) => ({
       ...item,
       createdAt: item.createdAt ?? null,
-      shareGrantCount: shareCounts.get(item.id) ?? 0,
+      sharingSummary: item.sharingSummary ?? PRIVATE_BOOKMARK_SHARING_SUMMARY,
       folders: item.folders,
       tags: item.tags,
     })),

@@ -8,6 +8,7 @@ import { DashboardPinned } from "./DashboardPinned.js";
 import { DashboardRecent } from "./DashboardRecent.js";
 import { DashboardQuickAccess } from "./DashboardQuickAccess.js";
 import type { DashboardBookmark } from "./dashboard.types.js";
+import { PRIVATE_BOOKMARK_SHARING_SUMMARY } from "../../routes/bookmarks/bookmarks-loader.js";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -69,7 +70,7 @@ const pinnedBookmark: DashboardBookmark = {
   accessCount: 3,
   lastAccessedAt: "2026-05-29T08:00:00.000Z",
   createdAt: "2026-05-01T08:00:00.000Z",
-  shareGrantCount: 0,
+  sharingSummary: PRIVATE_BOOKMARK_SHARING_SUMMARY,
   folders: [],
   tags: [],
 };
@@ -85,7 +86,7 @@ const recentBookmark: DashboardBookmark = {
   accessCount: 1,
   lastAccessedAt: "2026-05-31T09:00:00.000Z",
   createdAt: "2026-05-02T09:00:00.000Z",
-  shareGrantCount: 0,
+  sharingSummary: PRIVATE_BOOKMARK_SHARING_SUMMARY,
   folders: [],
   tags: [],
 };
@@ -101,7 +102,7 @@ const quickAccessBookmark: DashboardBookmark = {
   accessCount: 42,
   lastAccessedAt: "2026-05-30T10:00:00.000Z",
   createdAt: "2026-05-03T10:00:00.000Z",
-  shareGrantCount: 0,
+  sharingSummary: PRIVATE_BOOKMARK_SHARING_SUMMARY,
   folders: [],
   tags: [],
 };
