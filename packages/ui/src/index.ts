@@ -72,6 +72,12 @@ export {
   type IconPickerProps,
 } from "./components/IconPicker.js";
 export {
+  ColorPicker,
+  PRESET_COLORS,
+  type ColorPickerLabels,
+  type ColorPickerProps,
+} from "./components/ColorPicker.js";
+export {
   LucideIcon,
   resolveLucideIcon,
   kebabToPascalCase,

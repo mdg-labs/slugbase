@@ -2,7 +2,7 @@ import { useTranslation } from "react-i18next";
 import { useEffect, useRef, useState } from "react";
 import { useLoaderData, useNavigate, useNavigation, useRevalidator, useSearchParams } from "react-router";
 import { CheckIcon, ExternalLinkIcon, HashIcon, LinkIcon, PencilIcon, PlusIcon, SearchIcon, Trash2Icon, XIcon } from "lucide-react";
-import { Button, ConfirmDialog, Dialog, DialogContent, EmptyState } from "@slugbase/ui";
+import { Button, ColorPicker, ConfirmDialog, Dialog, DialogContent, EmptyState } from "@slugbase/ui";
 import { useAppToast } from "../../components/feedback/AppToastProvider.js";
 import { BookmarkFavicon } from "../bookmarks/BookmarkFavicon.js";
 import { type TagListData, type TagListItem } from "./tags-loader.js";
@@ -23,16 +23,6 @@ const SORT_OPTIONS: { value: TagSort; labelKey: string }[] = [
   { value: "created-desc", labelKey: "tags.list.sort_recent" },
 ];
 
-const PRESET_COLORS = [
-  "#7782f7",
-  "#45c98a",
-  "#e6b24e",
-  "#f0686b",
-  "#5ba4e6",
-  "#e8944a",
-  "#a77bea",
-  "#8a90a0",
-];
 
 function ColorDot({ color, size = 8 }: { color: string | null; size?: number }) {
   if (!color) return null;
@@ -45,52 +35,6 @@ function ColorDot({ color, size = 8 }: { color: string | null; size?: number }) 
   );
 }
 
-/* ---------- Color picker ---------- */
-
-interface ColorPickerProps {
-  value: string | null;
-  onChange: (color: string | null) => void;
-}
-
-function ColorPicker({ value, onChange }: ColorPickerProps) {
-  const { t } = useTranslation();
-  return (
-    <div className="flex flex-col gap-sp-2">
-      <label
-        className="text-fg-muted"
-        style={{ fontSize: "var(--text-small)", lineHeight: "var(--lh-small)" }}
-      >
-        {t("tags.modal.color_label")}
-      </label>
-      <div className="flex items-center gap-sp-3">
-        {PRESET_COLORS.map((swatch) => (
-          <button
-            key={swatch}
-            type="button"
-            className="relative h-7 w-7 rounded-full transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-[color:var(--accent)] focus:ring-offset-2 focus:ring-offset-[color:var(--overlay)]"
-            style={{ backgroundColor: swatch }}
-            aria-label={swatch}
-            onClick={() => { onChange(value === swatch ? null : swatch); }}
-          >
-            {value === swatch && (
-              <CheckIcon size={14} className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-white" />
-            )}
-          </button>
-        ))}
-        {value && (
-          <button
-            type="button"
-            className="text-fg-muted transition-colors hover:text-fg"
-            style={{ fontSize: "var(--text-small)" }}
-            onClick={() => { onChange(null); }}
-          >
-            {t("tags.modal.color_none")}
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
 
 /* ---------- Usage bar ---------- */
 
@@ -395,6 +339,7 @@ function TagModal({ open, onOpenChange, mode, initialName = "", initialColor = n
 
   const titleKey = mode === "create" ? "tags.modal.create_title" : "tags.modal.edit_title";
   const submitKey = mode === "create" ? "tags.modal.submit_create" : "tags.modal.submit_edit";
+  const savingKey = mode === "edit" ? "tags.modal.submit_saving" : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -426,7 +371,15 @@ function TagModal({ open, onOpenChange, mode, initialName = "", initialColor = n
               />
             </div>
 
-            <ColorPicker value={color} onChange={setColor} />
+            <ColorPicker
+              value={color}
+              onChange={setColor}
+              labels={{
+                label: t("tags.modal.color_label"),
+                none: t("tags.modal.color_none"),
+              }}
+              testId="tag-modal-color-picker"
+            />
           </div>
 
           <div className="flex items-center justify-end gap-sp-4 border-t border-[color:var(--border-subtle)] px-sp-8 py-sp-5">
@@ -434,7 +387,7 @@ function TagModal({ open, onOpenChange, mode, initialName = "", initialColor = n
               {t("tags.modal.cancel")}
             </Button>
             <Button type="submit" disabled={submitting || !name.trim()}>
-              {t(submitKey)}
+              {submitting && savingKey ? t(savingKey) : t(submitKey)}
             </Button>
           </div>
         </form>

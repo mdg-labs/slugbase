@@ -14,7 +14,7 @@ import {
   Trash2Icon,
   XIcon,
 } from "lucide-react";
-import { Button, ConfirmDialog, Dialog, DialogContent, EmptyState, FolderGlyph, IconPicker } from "@slugbase/ui";
+import { Button, ColorPicker, ConfirmDialog, Dialog, DialogContent, EmptyState, FolderGlyph, IconPicker } from "@slugbase/ui";
 import { ScopeFilter } from "../../components/sharing/ScopeFilter.js";
 import { ScopeIcon } from "../../components/sharing/ScopeIcon.js";
 import { SharingLabel } from "../../components/sharing/SharingLabel.js";
@@ -43,64 +43,6 @@ function isFolderSort(value: string): value is FolderSort {
   return (SORTS as readonly string[]).includes(value);
 }
 
-const PRESET_COLORS = [
-  "#7782f7",
-  "#45c98a",
-  "#e6b24e",
-  "#f0686b",
-  "#5ba4e6",
-  "#e8944a",
-  "#a77bea",
-  "#8a90a0",
-];
-
-interface ColorPickerProps {
-  value: string | null;
-  onChange: (color: string | null) => void;
-}
-
-function ColorPicker({ value, onChange }: ColorPickerProps) {
-  const { t } = useTranslation();
-  return (
-    <div className="flex flex-col gap-sp-2">
-      <label
-        className="text-fg-muted"
-        style={{ fontSize: "var(--text-small)", lineHeight: "var(--lh-small)" }}
-      >
-        {t("folders.modal.color_label")}
-      </label>
-      <div className="flex items-center gap-sp-3">
-        {PRESET_COLORS.map((swatch) => (
-          <button
-            key={swatch}
-            type="button"
-            className="relative h-7 w-7 rounded-full transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-[color:var(--accent)] focus:ring-offset-2 focus:ring-offset-[color:var(--overlay)]"
-            style={{ backgroundColor: swatch }}
-            aria-label={swatch}
-            onClick={() => { onChange(value === swatch ? null : swatch); }}
-          >
-            {value === swatch && (
-              <CheckIcon
-                size={14}
-                className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-white"
-              />
-            )}
-          </button>
-        ))}
-        {value && (
-          <button
-            type="button"
-            className="text-fg-muted transition-colors hover:text-fg"
-            style={{ fontSize: "var(--text-small)" }}
-            onClick={() => { onChange(null); }}
-          >
-            {t("folders.modal.color_none")}
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
 
 interface FolderRowProps {
   folder: FolderListItem;
@@ -355,7 +297,15 @@ function FolderFormDialog({
             />
           </div>
 
-          <ColorPicker value={color} onChange={setColor} />
+          <ColorPicker
+            value={color}
+            onChange={setColor}
+            labels={{
+              label: t("folders.modal.color_label"),
+              none: t("folders.modal.color_none"),
+            }}
+            testId={mode === "create" ? "folder-create-color-picker" : "folder-edit-color-picker"}
+          />
 
           <div className="flex flex-col gap-sp-2">
             <span
