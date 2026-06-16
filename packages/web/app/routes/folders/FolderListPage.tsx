@@ -12,7 +12,7 @@ import {
   MoreHorizontalIcon,
   PencilIcon,
   SearchIcon,
-  SettingsIcon,
+  Share2Icon,
   Trash2Icon,
   XIcon,
 } from "lucide-react";
@@ -20,7 +20,8 @@ import { Button, ColorPicker, ConfirmDialog, Dialog, DialogContent, EmptyState, 
 import { ScopeFilter } from "../../components/sharing/ScopeFilter.js";
 import { ScopeIcon } from "../../components/sharing/ScopeIcon.js";
 import { SharingLabel } from "../../components/sharing/SharingLabel.js";
-import { ShareDialog } from "../../components/sharing/ShareDialog.js";
+import { CompactShareModal } from "../../components/sharing/CompactShareModal.js";
+import { canShowShareMenu } from "../../components/sharing/share-menu.utils.js";
 import type { SharingScope } from "../../components/sharing/sharing.types.js";
 import { resolveResourceSharingScope } from "../../components/sharing/sharing.utils.js";
 import { useWorkspaceEntitlements } from "../../components/sharing/use-workspace-entitlements.js";
@@ -74,6 +75,7 @@ function FolderRow({
     currentUserId ?? "",
     folder.shareGrantCount,
   );
+  const showShareMenu = canShowShareMenu(canShare, folder.userId, currentUserId);
   const relativeTime = formatRelativeTime(folder.updatedAt);
 
   return (
@@ -179,16 +181,17 @@ function FolderRow({
                 <PencilIcon size={14} className="shrink-0 text-fg-muted" />
                 {t("folders.list.menu_rename")}
               </DropdownMenu.Item>
-              {canShare && (
+              {showShareMenu ? (
                 <DropdownMenu.Item
                   className="flex cursor-pointer items-center gap-sp-3 rounded px-sp-3 py-sp-2 text-fg outline-none transition-colors hover:bg-[color:var(--raised-2)] focus:bg-[color:var(--raised-2)]"
                   style={{ fontSize: "var(--text-body)" }}
+                  data-testid={`folder-row-share-${folder.id}`}
                   onSelect={() => { onShareSettings(folder); }}
                 >
-                  <SettingsIcon size={14} className="shrink-0 text-fg-muted" />
-                  {t("folders.list.menu_share_settings")}
+                  <Share2Icon size={14} className="shrink-0 text-fg-muted" />
+                  {t("sharing.controls.share_action")}
                 </DropdownMenu.Item>
-              )}
+              ) : null}
               <DropdownMenu.Separator className="my-sp-2 border-t border-[color:var(--border)]" />
               <DropdownMenu.Item
                 className="flex cursor-pointer items-center gap-sp-3 rounded px-sp-3 py-sp-2 text-[color:var(--danger-text)] outline-none transition-colors hover:bg-[color:var(--raised-2)] focus:bg-[color:var(--raised-2)]"
@@ -222,6 +225,7 @@ function FolderCard({
     currentUserId ?? "",
     folder.shareGrantCount,
   );
+  const showShareMenu = canShowShareMenu(canShare, folder.userId, currentUserId);
   const relativeTime = formatRelativeTime(folder.updatedAt);
 
   const openBookmarks = () => {
@@ -289,16 +293,17 @@ function FolderCard({
                 <PencilIcon size={14} className="shrink-0 text-fg-muted" />
                 {t("folders.list.menu_rename")}
               </DropdownMenu.Item>
-              {canShare && (
+              {showShareMenu ? (
                 <DropdownMenu.Item
                   className="flex cursor-pointer items-center gap-sp-3 rounded px-sp-3 py-sp-2 text-fg outline-none transition-colors hover:bg-[color:var(--raised-2)] focus:bg-[color:var(--raised-2)]"
                   style={{ fontSize: "var(--text-body)" }}
+                  data-testid={`folder-row-share-${folder.id}`}
                   onSelect={() => { onShareSettings(folder); }}
                 >
-                  <SettingsIcon size={14} className="shrink-0 text-fg-muted" />
-                  {t("folders.list.menu_share_settings")}
+                  <Share2Icon size={14} className="shrink-0 text-fg-muted" />
+                  {t("sharing.controls.share_action")}
                 </DropdownMenu.Item>
-              )}
+              ) : null}
               <DropdownMenu.Separator className="my-sp-2 border-t border-[color:var(--border)]" />
               <DropdownMenu.Item
                 className="flex cursor-pointer items-center gap-sp-3 rounded px-sp-3 py-sp-2 text-[color:var(--danger-text)] outline-none transition-colors hover:bg-[color:var(--raised-2)] focus:bg-[color:var(--raised-2)]"
@@ -851,7 +856,7 @@ export function FolderListPage() {
       />
 
       {shareFolder && (
-        <ShareDialog
+        <CompactShareModal
           open={true}
           onOpenChange={(open) => { if (!open) setShareFolder(null); }}
           resourceKind="folder"

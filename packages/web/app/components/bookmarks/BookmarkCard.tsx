@@ -1,14 +1,18 @@
 import { useTranslation } from "react-i18next";
 import type { CSSProperties } from "react";
+import { useState } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
   ExternalLinkIcon,
   LinkIcon,
   MoreHorizontalIcon,
   PencilIcon,
+  Share2Icon,
   Trash2Icon,
 } from "lucide-react";
 
+import { CompactShareModal } from "../sharing/CompactShareModal.js";
+import { canShowShareMenu } from "../sharing/share-menu.utils.js";
 import { ScopeIcon } from "../sharing/ScopeIcon.js";
 import { resolveResourceSharingScope } from "../sharing/sharing.utils.js";
 import type { BookmarkListItem } from "../../routes/bookmarks/bookmarks-loader.js";
@@ -24,6 +28,8 @@ export interface BookmarkCardProps {
   onEdit: (bookmark: BookmarkListItem) => void;
   onDelete: (bookmark: BookmarkListItem) => void;
   currentUserId: string | null;
+  canShare?: boolean;
+  onShareUpdated?: () => void;
 }
 
 function PinIcon({ filled }: { filled?: boolean }) {
@@ -207,8 +213,12 @@ export function BookmarkCard({
   onEdit,
   onDelete,
   currentUserId,
+  canShare = false,
+  onShareUpdated,
 }: BookmarkCardProps) {
   const { t } = useTranslation();
+  const [shareOpen, setShareOpen] = useState(false);
+  const showShareMenu = canShowShareMenu(canShare, bookmark.userId, currentUserId);
   const itemScope = resolveResourceSharingScope(
     bookmark.userId,
     currentUserId ?? "",
@@ -321,6 +331,19 @@ export function BookmarkCard({
                   ? t("bookmarks.list.menu_unpin")
                   : t("bookmarks.list.menu_pin")}
               </DropdownMenu.Item>
+              {showShareMenu ? (
+                <DropdownMenu.Item
+                  className="flex cursor-pointer items-center gap-sp-3 rounded px-sp-3 py-sp-2 text-fg outline-none transition-colors hover:bg-[color:var(--raised-2)] focus:bg-[color:var(--raised-2)]"
+                  style={{ fontSize: "var(--text-body)" }}
+                  data-testid={`bookmark-card-share-${bookmark.id}`}
+                  onSelect={() => {
+                    setShareOpen(true);
+                  }}
+                >
+                  <Share2Icon size={14} className="shrink-0 text-fg-muted" />
+                  {t("sharing.controls.share_action")}
+                </DropdownMenu.Item>
+              ) : null}
               <DropdownMenu.Separator className="my-sp-2 border-t border-[color:var(--border)]" />
               <DropdownMenu.Item
                 className="flex cursor-pointer items-center gap-sp-3 rounded px-sp-3 py-sp-2 text-[color:var(--danger-text)] outline-none transition-colors hover:bg-[color:var(--raised-2)] focus:bg-[color:var(--raised-2)]"
@@ -385,6 +408,17 @@ export function BookmarkCard({
         ) : null}
         <ScopeIcon scope={itemScope} />
       </div>
+
+      {showShareMenu ? (
+        <CompactShareModal
+          open={shareOpen}
+          onOpenChange={setShareOpen}
+          resourceKind="bookmark"
+          resourceId={bookmark.id}
+          resourceTitle={bookmark.title}
+          onUpdated={onShareUpdated}
+        />
+      ) : null}
     </div>
   );
 }

@@ -7,11 +7,14 @@ import {
   LinkIcon,
   MoreHorizontalIcon,
   PencilIcon,
+  Share2Icon,
   Trash2Icon,
 } from "lucide-react";
 import { Button, ConfirmDialog, EmptyState } from "@slugbase/ui";
 
 import { ScopeFilter } from "../../components/sharing/ScopeFilter.js";
+import { CompactShareModal } from "../../components/sharing/CompactShareModal.js";
+import { canShowShareMenu } from "../../components/sharing/share-menu.utils.js";
 import { ScopeIcon } from "../../components/sharing/ScopeIcon.js";
 import { resolveResourceSharingScope } from "../../components/sharing/sharing.utils.js";
 import { useWorkspaceEntitlements } from "../../components/sharing/use-workspace-entitlements.js";
@@ -449,6 +452,8 @@ function BookmarkRow({
   onEdit,
   onDelete,
   currentUserId,
+  canShare,
+  onShareUpdated,
   sort,
 }: {
   bookmark: BookmarkListItem;
@@ -460,9 +465,13 @@ function BookmarkRow({
   onEdit: (bookmark: BookmarkListItem) => void;
   onDelete: (bookmark: BookmarkListItem) => void;
   currentUserId: string | null;
+  canShare: boolean;
+  onShareUpdated: () => void;
   sort: string;
 }) {
   const { t } = useTranslation();
+  const [shareOpen, setShareOpen] = useState(false);
+  const showShareMenu = canShowShareMenu(canShare, bookmark.userId, currentUserId);
   const itemScope = resolveResourceSharingScope(
     bookmark.userId,
     currentUserId ?? "",
@@ -638,6 +647,19 @@ function BookmarkRow({
                   ? t("bookmarks.list.menu_unpin")
                   : t("bookmarks.list.menu_pin")}
               </DropdownMenu.Item>
+              {showShareMenu ? (
+                <DropdownMenu.Item
+                  className="flex cursor-pointer items-center gap-sp-3 rounded px-sp-3 py-sp-2 text-fg outline-none transition-colors hover:bg-[color:var(--raised-2)] focus:bg-[color:var(--raised-2)]"
+                  style={{ fontSize: "var(--text-body)" }}
+                  data-testid={`bookmark-row-share-${bookmark.id}`}
+                  onSelect={() => {
+                    setShareOpen(true);
+                  }}
+                >
+                  <Share2Icon size={14} className="shrink-0 text-fg-muted" />
+                  {t("sharing.controls.share_action")}
+                </DropdownMenu.Item>
+              ) : null}
               <DropdownMenu.Separator className="my-sp-2 border-t border-[color:var(--border)]" />
               <DropdownMenu.Item
                 className="flex cursor-pointer items-center gap-sp-3 rounded px-sp-3 py-sp-2 text-[color:var(--danger-text)] outline-none transition-colors hover:bg-[color:var(--raised-2)] focus:bg-[color:var(--raised-2)]"
@@ -652,6 +674,16 @@ function BookmarkRow({
             </DropdownMenu.Content>
           </DropdownMenu.Portal>
         </DropdownMenu.Root>
+        {showShareMenu ? (
+          <CompactShareModal
+            open={shareOpen}
+            onOpenChange={setShareOpen}
+            resourceKind="bookmark"
+            resourceId={bookmark.id}
+            resourceTitle={bookmark.title}
+            onUpdated={onShareUpdated}
+          />
+        ) : null}
       </div>
     </div>
   );
@@ -1092,6 +1124,10 @@ export function BookmarkListPage() {
 
   const atBookmarkCap =
     data.bookmarkCap !== null && data.workspaceBookmarkTotal >= data.bookmarkCap;
+
+  const handleShareUpdated = useCallback(() => {
+    void revalidator.revalidate();
+  }, [revalidator]);
 
   const handleImportSuccess = useCallback(
     (result: ImportResult) => {
@@ -1766,6 +1802,8 @@ export function BookmarkListPage() {
                       setDeleteTarget(item);
                     }}
                     currentUserId={currentUserId}
+                    canShare={canShare}
+                    onShareUpdated={handleShareUpdated}
                   />
                 ))}
               </div>
@@ -1799,6 +1837,8 @@ export function BookmarkListPage() {
                           setDeleteTarget(item);
                         }}
                         currentUserId={currentUserId}
+                        canShare={canShare}
+                        onShareUpdated={handleShareUpdated}
                       />
                     ))}
                   </div>
@@ -1830,6 +1870,8 @@ export function BookmarkListPage() {
                     setDeleteTarget(item);
                   }}
                   currentUserId={currentUserId}
+                  canShare={canShare}
+                  onShareUpdated={handleShareUpdated}
                 />
               ))}
             </div>
@@ -1874,6 +1916,8 @@ export function BookmarkListPage() {
                 setDeleteTarget(item);
               }}
               currentUserId={currentUserId}
+              canShare={canShare}
+              onShareUpdated={handleShareUpdated}
               sort={data.sort}
             />
           ))}
