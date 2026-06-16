@@ -26,6 +26,7 @@ import { MfaSection } from "./MfaSection.js";
 import { PasswordSection } from "./PasswordSection.js";
 import { PreferencesSection } from "./PreferencesSection.js";
 import { ProfileSection } from "./ProfileSection.js";
+import { SettingsPageShell } from "../../../../components/settings/SettingsPageShell.js";
 
 const SECTIONS: AccountSectionId[] = [
   "profile",
@@ -71,7 +72,7 @@ export function AccountSettingsPage({
   );
 
   return (
-    <div className="mx-auto max-w-[680px] px-sp-6 py-sp-8" data-testid="account-settings-page">
+    <SettingsPageShell testId="account-settings-page">
       {errorMessage ? (
         <p
           className="mb-sp-5 rounded-md border border-[color:var(--danger-subtle)] bg-[color:var(--danger-subtle)] px-sp-4 py-sp-3 text-danger-text"
@@ -191,6 +192,6 @@ export function AccountSettingsPage({
           }}
         />
       ) : null}
-    </div>
+    </SettingsPageShell>
   );
 }

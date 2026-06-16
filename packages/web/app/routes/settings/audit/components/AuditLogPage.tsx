@@ -9,6 +9,7 @@ import type {
   AuditEventsPage,
 } from "../audit.types.js";
 import { AUDIT_EVENT_TYPES, AUDIT_PAGE_SIZE } from "../audit.types.js";
+import { SettingsPageShell } from "../../../../components/settings/SettingsPageShell.js";
 
 const TYPE_LABEL_KEYS: Record<AuditEventType, string> = {
   bookmark: "settings.audit.type.bookmark",
@@ -169,7 +170,7 @@ export function AuditLogPage({ events }: AuditLogPageProps) {
   };
 
   return (
-    <div className="mx-auto max-w-[720px] px-sp-6 py-sp-8" data-testid="audit-log-page">
+    <SettingsPageShell testId="audit-log-page">
       <header className="mb-sp-7">
         <h1
           className="m-0 text-fg font-semibold"
@@ -376,7 +377,7 @@ export function AuditLogPage({ events }: AuditLogPageProps) {
           </>
         )}
       </div>
-    </div>
+    </SettingsPageShell>
   );
 }
 

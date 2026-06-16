@@ -31,6 +31,7 @@ import { PlanComparisonTable } from "./PlanComparisonTable.js";
 import { SeatManagementSection } from "./SeatManagementSection.js";
 import { SupporterOfferCard } from "./SupporterOfferCard.js";
 import { TeamCheckoutSeatPicker } from "./TeamCheckoutSeatPicker.js";
+import { SettingsPageShell } from "../../../../components/settings/SettingsPageShell.js";
 
 function formatDate(value: string | null, locale: string): string | null {
   if (!value) return null;
@@ -241,7 +242,7 @@ export function BillingSettingsPage({ initialData }: BillingSettingsPageProps) {
   }
 
   return (
-    <div className="mx-auto max-w-[680px] px-sp-6 py-sp-8" data-testid="billing-settings-page">
+    <SettingsPageShell testId="billing-settings-page">
       <header className="mb-sp-8">
         <h1 className="m-0 text-[length:var(--text-body-lg)] font-semibold text-fg">
           {t("settings.billing.page_title")}
@@ -536,6 +537,6 @@ export function BillingSettingsPage({ initialData }: BillingSettingsPageProps) {
           }}
         />
       ) : null}
-    </div>
+    </SettingsPageShell>
   );
 }

@@ -27,6 +27,7 @@ import type {
   TeamRow,
 } from "../members.types.js";
 import { MembersPlanGate } from "./MembersPlanGate.js";
+import { SettingsPageShell } from "../../../../components/settings/SettingsPageShell.js";
 
 function memberInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -273,7 +274,7 @@ export function MembersSettingsPage({ initialData }: MembersSettingsPageProps) {
   };
 
   return (
-    <div className="mx-auto max-w-[680px] px-sp-6 py-sp-8" data-testid="members-settings-page">
+    <SettingsPageShell testId="members-settings-page">
       <header className="mb-sp-8">
         <h1 className="m-0 text-[length:var(--text-body-lg)] font-semibold text-fg">
           {t("settings.members.page_title")}
@@ -785,6 +786,6 @@ export function MembersSettingsPage({ initialData }: MembersSettingsPageProps) {
         }}
         testId="members-team-delete-confirm"
       />
-    </div>
+    </SettingsPageShell>
   );
 }

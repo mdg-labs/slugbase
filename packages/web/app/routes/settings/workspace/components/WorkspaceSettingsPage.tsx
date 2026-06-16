@@ -31,6 +31,7 @@ import { GeneralSection } from "./GeneralSection.js";
 import { OperatorManagedGate } from "./OperatorManagedGate.js";
 import { SmtpSection, defaultMail } from "./SmtpSection.js";
 import { OidcSection } from "./OidcSection.js";
+import { SettingsPageShell } from "../../../../components/settings/SettingsPageShell.js";
 
 export interface WorkspaceSettingsPageProps {
   initialData: WorkspaceSettingsData;
@@ -63,7 +64,7 @@ export function WorkspaceSettingsPage({ initialData }: WorkspaceSettingsPageProp
 
   if (!canManageWorkspaceSettings(initialData.currentUserRole)) {
     return (
-      <div className="mx-auto max-w-[680px] px-sp-6 py-sp-8" data-testid="workspace-settings-page">
+      <SettingsPageShell testId="workspace-settings-page">
         <header className="mb-sp-7">
           <h1
             className="m-0 text-fg font-semibold"
@@ -73,7 +74,7 @@ export function WorkspaceSettingsPage({ initialData }: WorkspaceSettingsPageProp
           </h1>
         </header>
         <AdminRoleGate t={t} />
-      </div>
+      </SettingsPageShell>
     );
   }
 
@@ -208,7 +209,7 @@ export function WorkspaceSettingsPage({ initialData }: WorkspaceSettingsPageProp
   };
 
   return (
-    <div className="mx-auto max-w-[680px] px-sp-6 py-sp-8" data-testid="workspace-settings-page">
+    <SettingsPageShell testId="workspace-settings-page">
       {errorMessage ? (
         <p
           className="mb-sp-5 rounded-md border border-[color:var(--danger-subtle)] bg-[color:var(--danger-subtle)] px-sp-4 py-sp-3 text-danger-text"
@@ -220,6 +221,6 @@ export function WorkspaceSettingsPage({ initialData }: WorkspaceSettingsPageProp
       ) : null}
 
       {renderSection()}
-    </div>
+    </SettingsPageShell>
   );
 }
