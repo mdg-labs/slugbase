@@ -623,6 +623,7 @@ export class BookmarkRepository extends WorkspaceScopedRepository<BookmarkRecord
         bookmarkId: bookmarkFolders.bookmarkId,
         folderId: folders.id,
         folderName: folders.name,
+        folderColor: folders.color,
       })
       .from(bookmarkFolders)
       .innerJoin(folders, and(
@@ -639,7 +640,11 @@ export class BookmarkRepository extends WorkspaceScopedRepository<BookmarkRecord
     for (const row of folderRows) {
       const entry = result.get(row.bookmarkId);
       if (entry) {
-        entry.folders.push({ id: row.folderId, name: row.folderName });
+        entry.folders.push({
+          id: row.folderId,
+          name: row.folderName,
+          color: row.folderColor,
+        });
       }
     }
 

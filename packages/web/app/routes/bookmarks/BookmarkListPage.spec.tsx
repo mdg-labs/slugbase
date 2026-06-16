@@ -188,6 +188,54 @@ describe("BookmarkListPage", () => {
     });
   });
 
+  describe("Folder chip colors", () => {
+    it("applies folder color to grid card chips when set", () => {
+      mockLoaderData = {
+        ...emptyUnfilteredData,
+        items: [
+          makeBookmark({
+            id: "bk-1",
+            folders: [{ id: "folder-1", name: "work", color: "#45c98a" }],
+          }),
+        ],
+        total: 1,
+      };
+
+      renderPage();
+
+      const card = screen.getByTestId("bookmark-card-bk-1");
+      const chips = card.querySelectorAll(".font-mono");
+      const coloredChip = Array.from(chips).find((el) =>
+        el.textContent.includes("work"),
+      );
+      expect(coloredChip).toBeTruthy();
+      expect((coloredChip as HTMLElement).style.color).toBe("#45c98a");
+    });
+
+    it("renders neutral folder chip when color is null", () => {
+      mockLoaderData = {
+        ...emptyUnfilteredData,
+        items: [
+          makeBookmark({
+            id: "bk-1",
+            folders: [{ id: "folder-1", name: "inbox", color: null }],
+          }),
+        ],
+        total: 1,
+      };
+
+      renderPage();
+
+      const card = screen.getByTestId("bookmark-card-bk-1");
+      const chips = card.querySelectorAll(".font-mono");
+      const neutralChip = Array.from(chips).find((el) =>
+        el.textContent.includes("inbox"),
+      );
+      expect(neutralChip).toBeTruthy();
+      expect((neutralChip as HTMLElement).style.color).toBe("");
+    });
+  });
+
   describe("Tag chip colors", () => {
     it("applies tag color to grid card chips when set", () => {
       mockLoaderData = {

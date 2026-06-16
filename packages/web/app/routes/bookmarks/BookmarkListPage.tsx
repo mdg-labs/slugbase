@@ -457,6 +457,22 @@ function TagChip({ name, color }: { name: string; color?: string | null }) {
   );
 }
 
+function FolderChip({ name, color }: { name: string; color?: string | null }) {
+  return (
+    <span
+      className={
+        color
+          ? "inline-flex items-center gap-sp-1 rounded border px-sp-3 py-sp-1 font-mono"
+          : "inline-flex items-center gap-sp-1 rounded border border-[color:var(--border-subtle)] bg-[color:var(--raised-2)] px-sp-3 py-sp-1 font-mono text-fg-subtle"
+      }
+      style={tagChipStyle(color)}
+    >
+      <FolderIcon />
+      {name}
+    </span>
+  );
+}
+
 /* ── Bookmark card (grid view) ─────────────────────────────── */
 function BookmarkCard({
   bookmark,
@@ -644,10 +660,10 @@ function BookmarkCard({
       {/* Meta row */}
       <div className="flex flex-wrap items-center gap-sp-3">
         {bookmark.folders.length > 0 ? (
-          <span className="flex items-center gap-sp-2 text-fg-subtle" style={{ fontSize: 11 }}>
-            <FolderIcon />
-            <span>{bookmark.folders[0]?.name}</span>
-          </span>
+          <FolderChip
+            name={bookmark.folders[0]?.name ?? ""}
+            color={bookmark.folders[0]?.color}
+          />
         ) : null}
         {bookmark.tags.slice(0, 2).map((tag) => (
           <TagChip key={tag.id} name={tag.name} color={tag.color} />
@@ -781,13 +797,10 @@ function BookmarkRow({
       {/* Folder */}
       <div>
         {bookmark.folders.length > 0 ? (
-          <span
-            className="flex items-center gap-sp-2 text-fg-subtle"
-            style={{ fontSize: 12 }}
-          >
-            <FolderIcon />
-            <span className="truncate">{bookmark.folders[0]?.name}</span>
-          </span>
+          <FolderChip
+            name={bookmark.folders[0]?.name ?? ""}
+            color={bookmark.folders[0]?.color}
+          />
         ) : (
           <span className="text-fg-faint" style={{ fontSize: 12 }}>
             -

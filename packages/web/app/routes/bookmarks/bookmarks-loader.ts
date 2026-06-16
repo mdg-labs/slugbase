@@ -16,7 +16,7 @@ export type BookmarkListItem = {
   lastAccessedAt: string | null;
   createdAt: string | null;
   shareGrantCount: number;
-  folders: Array<{ id: string; name: string }>;
+  folders: Array<{ id: string; name: string; color: string | null }>;
   tags: Array<{ id: string; name: string; color: string | null }>;
 };
 
@@ -55,7 +55,7 @@ interface ApiBookmark {
   accessCount: number;
   lastAccessedAt: string | null;
   createdAt: string | null;
-  folders: Array<{ id: string; name: string }>;
+  folders: Array<{ id: string; name: string; color: string | null }>;
   tags: Array<{ id: string; name: string; color: string | null }>;
 }
 

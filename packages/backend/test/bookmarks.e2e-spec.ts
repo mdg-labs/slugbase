@@ -243,6 +243,7 @@ describe("Bookmarks (integration)", () => {
     beforeAll(async () => {
       const folder = await foldersService.createFolder(workspace, ownerUserId, {
         name: "List Filter Folder",
+        color: "#45c98a",
       });
       folderId = folder.id;
 
@@ -421,6 +422,8 @@ describe("Bookmarks (integration)", () => {
       expect(Array.isArray(alpha?.folders)).toBe(true);
       expect(alpha?.folders.some((f) => f.id === folderId)).toBe(true);
       expect(alpha?.folders.some((f) => f.name === "List Filter Folder")).toBe(true);
+      const alphaFolder = alpha?.folders.find((f) => f.id === folderId);
+      expect(alphaFolder?.color).toBe("#45c98a");
       expect(Array.isArray(alpha?.tags)).toBe(true);
       expect(alpha?.tags.some((t) => t.id === tagAId)).toBe(true);
       expect(alpha?.tags.some((t) => t.id === tagBId)).toBe(true);
@@ -442,6 +445,7 @@ describe("Bookmarks (integration)", () => {
     it("includes folder and tag summaries on single bookmark get", async () => {
       const bookmark = await bookmarksService.getBookmark(workspace, ownerUserId, alphaId);
       expect(bookmark.folders.some((f) => f.id === folderId)).toBe(true);
+      expect(bookmark.folders.find((f) => f.id === folderId)?.color).toBe("#45c98a");
       expect(bookmark.tags.some((t) => t.id === tagAId)).toBe(true);
       expect(bookmark.tags.find((t) => t.id === tagAId)?.color).toBe("#7782f7");
     });

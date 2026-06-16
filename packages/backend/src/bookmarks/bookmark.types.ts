@@ -3,6 +3,7 @@ import type { BookmarkScope, BookmarkSort } from "./bookmark.validation.js";
 export interface BookmarkFolderSummary {
   id: string;
   name: string;
+  color: string | null;
 }
 
 export interface BookmarkTagSummary {
