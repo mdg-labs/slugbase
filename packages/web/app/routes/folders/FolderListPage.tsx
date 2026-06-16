@@ -7,6 +7,8 @@ import {
   ExternalLinkIcon,
   FolderOpenIcon,
   FolderPlusIcon,
+  LayoutGrid,
+  List,
   MoreHorizontalIcon,
   PencilIcon,
   SearchIcon,
@@ -28,7 +30,7 @@ import {
   type FolderListData,
   type FolderListItem,
 } from "./folders-loader.js";
-import { FolderListSkeleton } from "./FolderListSkeleton.js";
+import { FolderListSkeleton, type FolderViewMode } from "./FolderListSkeleton.js";
 import {
   createFolder,
   renameFolder,
@@ -38,6 +40,8 @@ import {
 
 const SORTS = ["name-asc", "created-desc", "count-desc"] as const;
 type FolderSort = (typeof SORTS)[number];
+
+const VIEW_STORAGE_KEY = "sb:folders:view";
 
 function isFolderSort(value: string): value is FolderSort {
   return (SORTS as readonly string[]).includes(value);
@@ -75,7 +79,7 @@ function FolderRow({
   return (
     <div
       className={[
-        "group flex items-center gap-sp-4 rounded-lg border border-transparent px-sp-5 py-sp-4 transition-colors",
+        "group flex items-center gap-sp-5 rounded-lg border border-transparent px-sp-5 py-sp-4 transition-colors",
         "hover:border-[color:var(--border-subtle)] hover:bg-[color:var(--raised-2)]",
       ].join(" ")}
       data-testid={`folder-list-item-${folder.id}`}
@@ -197,6 +201,142 @@ function FolderRow({
             </DropdownMenu.Content>
           </DropdownMenu.Portal>
         </DropdownMenu.Root>
+      </div>
+    </div>
+  );
+}
+
+function FolderCard({
+  folder,
+  currentUserId,
+  canShare,
+  ownerName,
+  onEdit,
+  onDelete,
+  onShareSettings,
+}: FolderRowProps) {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const itemScope = resolveResourceSharingScope(
+    folder.userId,
+    currentUserId ?? "",
+    folder.shareGrantCount,
+  );
+  const relativeTime = formatRelativeTime(folder.updatedAt);
+
+  const openBookmarks = () => {
+    void navigate(`/bookmarks?folderId=${folder.id}`);
+  };
+
+  return (
+    <div
+      className={[
+        "group relative flex cursor-pointer flex-col gap-sp-3 rounded-lg border border-[color:var(--border)] bg-raised p-sp-4 transition-colors",
+        "hover:border-[color:var(--border-strong)] hover:bg-[color:var(--raised-2)]",
+      ].join(" ")}
+      data-testid={`folder-grid-item-${folder.id}`}
+      data-scope={itemScope}
+      onClick={openBookmarks}
+      onDoubleClick={openBookmarks}
+    >
+      <div className="flex items-start gap-sp-3">
+        <FolderGlyph icon={folder.icon} color={folder.color} size={22} />
+        <div className="min-w-0 flex-1" style={{ paddingRight: 24 }}>
+          <p className="truncate font-medium text-fg">{folder.name}</p>
+          <p
+            className="mt-sp-1 text-fg-subtle"
+            style={{ fontSize: "var(--text-small)", fontFamily: "var(--font-mono)" }}
+          >
+            {t("folders.list.bookmark_count", { count: folder.bookmarkCount })}
+          </p>
+        </div>
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger asChild>
+            <button
+              type="button"
+              title={t("folders.list.action_more")}
+              aria-label={t("folders.list.action_more")}
+              className="absolute right-sp-3 top-sp-3 rounded p-sp-1 text-fg-faint transition-colors hover:bg-[color:var(--overlay)] hover:text-fg"
+              onClick={(e) => {
+                e.stopPropagation();
+              }}
+            >
+              <MoreHorizontalIcon size={15} />
+            </button>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content
+              className="z-50 min-w-[180px] overflow-hidden rounded-lg border border-[color:var(--border)] bg-[color:var(--overlay)] p-sp-2 shadow-lg"
+              align="end"
+              sideOffset={4}
+              onClick={(e) => {
+                e.stopPropagation();
+              }}
+            >
+              <DropdownMenu.Item
+                className="flex cursor-pointer items-center gap-sp-3 rounded px-sp-3 py-sp-2 text-fg outline-none transition-colors hover:bg-[color:var(--raised-2)] focus:bg-[color:var(--raised-2)]"
+                style={{ fontSize: "var(--text-body)" }}
+                onSelect={openBookmarks}
+              >
+                <ExternalLinkIcon size={14} className="shrink-0 text-fg-muted" />
+                {t("folders.list.menu_open_bookmarks")}
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
+                className="flex cursor-pointer items-center gap-sp-3 rounded px-sp-3 py-sp-2 text-fg outline-none transition-colors hover:bg-[color:var(--raised-2)] focus:bg-[color:var(--raised-2)]"
+                style={{ fontSize: "var(--text-body)" }}
+                onSelect={() => { onEdit(folder); }}
+              >
+                <PencilIcon size={14} className="shrink-0 text-fg-muted" />
+                {t("folders.list.menu_rename")}
+              </DropdownMenu.Item>
+              {canShare && (
+                <DropdownMenu.Item
+                  className="flex cursor-pointer items-center gap-sp-3 rounded px-sp-3 py-sp-2 text-fg outline-none transition-colors hover:bg-[color:var(--raised-2)] focus:bg-[color:var(--raised-2)]"
+                  style={{ fontSize: "var(--text-body)" }}
+                  onSelect={() => { onShareSettings(folder); }}
+                >
+                  <SettingsIcon size={14} className="shrink-0 text-fg-muted" />
+                  {t("folders.list.menu_share_settings")}
+                </DropdownMenu.Item>
+              )}
+              <DropdownMenu.Separator className="my-sp-2 border-t border-[color:var(--border)]" />
+              <DropdownMenu.Item
+                className="flex cursor-pointer items-center gap-sp-3 rounded px-sp-3 py-sp-2 text-[color:var(--danger-text)] outline-none transition-colors hover:bg-[color:var(--raised-2)] focus:bg-[color:var(--raised-2)]"
+                style={{ fontSize: "var(--text-body)" }}
+                onSelect={() => { onDelete(folder); }}
+              >
+                <Trash2Icon size={14} className="shrink-0" />
+                {t("folders.list.menu_delete")}
+              </DropdownMenu.Item>
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-sp-2">
+        <ScopeIcon scope={itemScope} />
+        {ownerName && (
+          <span
+            className="truncate text-fg-subtle"
+            style={{ fontSize: "var(--text-small)" }}
+          >
+            {t("folders.list.owner_label", { name: ownerName })}
+          </span>
+        )}
+        {canShare && (
+          <SharingLabel
+            scope={itemScope}
+            shareGrantCount={folder.shareGrantCount}
+          />
+        )}
+        {relativeTime && (
+          <span
+            className="ml-auto font-mono text-fg-subtle"
+            style={{ fontSize: "var(--text-small)" }}
+          >
+            {relativeTime}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -369,6 +509,14 @@ export function FolderListPage() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const sortRef = useRef<HTMLDivElement>(null);
 
+  const [view, setView] = useState<FolderViewMode>(() => {
+    if (typeof window !== "undefined") {
+      const stored = window.localStorage.getItem(VIEW_STORAGE_KEY);
+      if (stored === "grid") return "grid";
+    }
+    return "list";
+  });
+
   const isLoading = navigation.state === "loading";
   const isFiltered = data.q.length > 0 || data.scope !== "all";
 
@@ -399,6 +547,12 @@ export function FolderListPage() {
     if (sortOpen) document.addEventListener("mousedown", handleClickOutside);
     return () => { document.removeEventListener("mousedown", handleClickOutside); };
   }, [sortOpen]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(VIEW_STORAGE_KEY, view);
+    }
+  }, [view]);
 
   const updateScope = (scope: SharingScope) => {
     const next = new URLSearchParams(searchParams);
@@ -444,7 +598,7 @@ export function FolderListPage() {
   };
 
   if (isLoading) {
-    return <FolderListSkeleton />;
+    return <FolderListSkeleton view={view} />;
   }
 
   return (
@@ -535,6 +689,42 @@ export function FolderListPage() {
           )}
         </div>
 
+        <div
+          className="flex overflow-hidden rounded-md border border-[color:var(--border)]"
+          role="group"
+          aria-label={t("folders.list.view_toggle_label")}
+          data-testid="folder-view-toggle"
+        >
+          <button
+            type="button"
+            className={[
+              "px-sp-3 py-sp-2 text-small transition-colors duration-micro",
+              view === "list"
+                ? "bg-accent text-accent-fg"
+                : "bg-[color:var(--base)] text-fg-muted hover:text-fg",
+            ].join(" ")}
+            onClick={() => { setView("list"); }}
+            aria-pressed={view === "list"}
+            title={t("folders.list.view_list")}
+          >
+            <List size={15} />
+          </button>
+          <button
+            type="button"
+            className={[
+              "px-sp-3 py-sp-2 text-small transition-colors duration-micro",
+              view === "grid"
+                ? "bg-accent text-accent-fg"
+                : "bg-[color:var(--base)] text-fg-muted hover:text-fg",
+            ].join(" ")}
+            onClick={() => { setView("grid"); }}
+            aria-pressed={view === "grid"}
+            title={t("folders.list.view_grid")}
+          >
+            <LayoutGrid size={15} />
+          </button>
+        </div>
+
         <Button
           type="button"
           variant="primary"
@@ -585,6 +775,25 @@ export function FolderListPage() {
           }
           testId="folder-list-empty-state"
         />
+      ) : view === "grid" ? (
+        <div
+          className="grid gap-sp-4"
+          style={{ gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))" }}
+          data-testid="folder-grid"
+        >
+          {data.items.map((folder) => (
+            <FolderCard
+              key={folder.id}
+              folder={folder}
+              currentUserId={currentUserId}
+              canShare={canShare}
+              ownerName={isSharedWithMe ? (data.ownerNames[folder.userId] ?? null) : null}
+              onEdit={(f) => { setEditFolder(f); }}
+              onDelete={(f) => { setDeleteFolderTarget(f); }}
+              onShareSettings={(f) => { setShareFolder(f); }}
+            />
+          ))}
+        </div>
       ) : (
         <ul className="flex flex-col gap-sp-0" data-testid="folder-list">
           {data.items.map((folder) => (
