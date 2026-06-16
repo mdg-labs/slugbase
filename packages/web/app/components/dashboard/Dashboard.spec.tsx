@@ -90,6 +90,31 @@ const mockDashboardData: DashboardData = {
   ],
 };
 
+vi.mock("../../lib/session-client.js", () => ({
+  useAppShellData: () => ({
+    user: {
+      id: "user-1",
+      email: "alex@example.com",
+      name: "Alex",
+      language: "en" as const,
+      mfaState: "not_enrolled" as const,
+      emailVerified: true,
+      onboardingCompletedAt: Date.now(),
+      dashboardChecklistDismissed: false,
+      dashboardChecklistManual: {
+        import: false,
+        browser_shortcut: false,
+        folder: false,
+        tag: false,
+      },
+    },
+    workspace: { id: "ws-1", name: "Personal workspace", plan: "free" as const },
+    workspaces: [],
+    sidebarFolders: [],
+    bookmarkTotal: 0,
+  }),
+}));
+
 const useLoaderDataMock = vi.fn(() => mockDashboardData);
 const mockNavigate = vi.fn();
 const mockLoad = vi.fn();

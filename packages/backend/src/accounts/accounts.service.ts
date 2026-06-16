@@ -2,7 +2,7 @@ import { ConflictException, Inject, Injectable } from "@nestjs/common";
 
 import { DbService } from "../db/db.service.js";
 import { AccountRepository } from "./account.repository.js";
-import type { AccountRecord, CreateAccountData } from "./account.types.js";
+import type { AccountRecord, CreateAccountData, DashboardChecklistManual } from "./account.types.js";
 import { OIDC_SENTINEL_PASSWORD_HASH } from "./account.types.js";
 import { PasswordService } from "./password.service.js";
 
@@ -113,9 +113,32 @@ export class AccountsService {
       accentColor?: string | null;
       aiOptOut?: boolean;
       defaultBookmarkView?: string;
+      onboardingCompletedAt?: number | null;
+      dashboardChecklistDismissed?: boolean;
+      dashboardChecklistManual?: Partial<DashboardChecklistManual>;
     },
   ): Promise<AccountRecord> {
-    await this.repo.updatePreferences(id, patch);
+    const existing = await this.repo.findById(id);
+    if (!existing) throw new Error("Account not found");
+
+    const mergedManual =
+      patch.dashboardChecklistManual === undefined
+        ? undefined
+        : {
+            ...existing.dashboardChecklistManual,
+            ...patch.dashboardChecklistManual,
+          };
+
+    await this.repo.updatePreferences(id, {
+      language: patch.language,
+      theme: patch.theme,
+      accentColor: patch.accentColor,
+      aiOptOut: patch.aiOptOut,
+      defaultBookmarkView: patch.defaultBookmarkView,
+      onboardingCompletedAt: patch.onboardingCompletedAt,
+      dashboardChecklistDismissed: patch.dashboardChecklistDismissed,
+      dashboardChecklistManual: mergedManual,
+    });
     const account = await this.repo.findById(id);
     if (!account) throw new Error("Account not found after preferences update");
     return account;

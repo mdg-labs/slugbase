@@ -3,16 +3,22 @@ import { useEffect, useMemo, useState } from "react";
 import { CheckIcon, CheckSquareIcon, XIcon } from "lucide-react";
 
 import {
-  CHECKLIST_DISMISSED_KEY,
   CHECKLIST_ITEM_IDS,
-  CHECKLIST_STORAGE_KEY,
   type ChecklistItemId,
 } from "./dashboard.constants.js";
 import { deriveChecklistCompletion } from "./dashboard.utils.js";
 import type { DashboardData } from "./dashboard.types.js";
+import type { DashboardChecklistManualState } from "../../routes/settings/account/account.types.js";
+import {
+  persistChecklistDismissed,
+  persistChecklistManual,
+  syncChecklistCache,
+} from "../../lib/onboarding-state.js";
 
 export type DashboardOnboardingChecklistProps = {
   data: DashboardData;
+  checklistManual: DashboardChecklistManualState;
+  checklistDismissed: boolean;
 };
 
 type ChecklistState = Record<ChecklistItemId, boolean>;
@@ -39,50 +45,33 @@ const CHECKLIST_LABEL_KEYS: Record<
   },
 };
 
-function readStoredChecklist(): ChecklistState {
-  const defaults: ChecklistState = {
-    import: false,
-    browser_shortcut: false,
-    folder: false,
-    tag: false,
+function toChecklistState(
+  manual: Record<ChecklistItemId, boolean>,
+): ChecklistState {
+  return {
+    import: manual.import,
+    browser_shortcut: manual.browser_shortcut,
+    folder: manual.folder,
+    tag: manual.tag,
   };
-
-  if (typeof window === "undefined") {
-    return defaults;
-  }
-
-  try {
-    const raw = window.localStorage.getItem(CHECKLIST_STORAGE_KEY);
-    if (!raw) {
-      return defaults;
-    }
-    const parsed = JSON.parse(raw) as Partial<ChecklistState>;
-    return { ...defaults, ...parsed };
-  } catch {
-    return defaults;
-  }
-}
-
-function readDismissed(): boolean {
-  if (typeof window === "undefined") {
-    return false;
-  }
-
-  try {
-    return window.localStorage.getItem(CHECKLIST_DISMISSED_KEY) === "true";
-  } catch {
-    return false;
-  }
 }
 
 export function DashboardOnboardingChecklist({
   data,
+  checklistManual,
+  checklistDismissed: initialDismissed,
 }: DashboardOnboardingChecklistProps) {
   const { t } = useTranslation();
   const [checked, setChecked] = useState<ChecklistState>(() =>
-    readStoredChecklist(),
+    toChecklistState(checklistManual),
   );
-  const [dismissed, setDismissed] = useState(() => readDismissed());
+  const [dismissed, setDismissed] = useState(initialDismissed);
+
+  useEffect(() => {
+    setChecked(toChecklistState(checklistManual));
+    setDismissed(initialDismissed);
+    syncChecklistCache(initialDismissed, checklistManual);
+  }, [initialDismissed, checklistManual]);
 
   const autoCompleted = useMemo(
     () => deriveChecklistCompletion(data),
@@ -96,20 +85,6 @@ export function DashboardOnboardingChecklist({
     }),
     [checked, autoCompleted],
   );
-
-  useEffect(() => {
-    window.localStorage.setItem(
-      CHECKLIST_STORAGE_KEY,
-      JSON.stringify(checked),
-    );
-  }, [checked]);
-
-  useEffect(() => {
-    window.localStorage.setItem(
-      CHECKLIST_DISMISSED_KEY,
-      dismissed ? "true" : "false",
-    );
-  }, [dismissed]);
 
   const doneCount = CHECKLIST_ITEM_IDS.filter(
     (id) => mergedChecked[id],
@@ -125,7 +100,12 @@ export function DashboardOnboardingChecklist({
     if (autoCompleted[id]) {
       return;
     }
-    setChecked((current) => ({ ...current, [id]: !current[id] }));
+    setChecked((current) => {
+      const next = { ...current, [id]: !current[id] };
+      void persistChecklistManual({ [id]: next[id] }).catch(() => undefined);
+      syncChecklistCache(dismissed, next);
+      return next;
+    });
   };
 
   return (
@@ -153,6 +133,8 @@ export function DashboardOnboardingChecklist({
             className="rounded-sm px-sp-2 py-sp-2 text-fg-subtle transition-colors duration-micro hover:bg-raised-2 hover:text-fg"
             onClick={() => {
               setDismissed(true);
+              void persistChecklistDismissed(true).catch(() => undefined);
+              syncChecklistCache(true, checked);
             }}
             aria-label={t("dashboard.checklist.dismiss_aria")}
           >
@@ -231,6 +213,8 @@ export function DashboardOnboardingChecklist({
               className="ml-sp-3 text-small text-accent-text hover:underline"
               onClick={() => {
                 setDismissed(false);
+                void persistChecklistDismissed(false).catch(() => undefined);
+                syncChecklistCache(false, checked);
               }}
             >
               {t("dashboard.checklist.show_again")}

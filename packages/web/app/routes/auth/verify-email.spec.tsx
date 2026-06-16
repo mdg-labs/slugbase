@@ -86,6 +86,14 @@ describe("Verify-email route - loader", () => {
       language: "en",
       mfaState: "not_enrolled",
       emailVerified: true,
+      onboardingCompletedAt: null,
+      dashboardChecklistDismissed: false,
+      dashboardChecklistManual: {
+        import: false,
+        browser_shortcut: false,
+        folder: false,
+        tag: false,
+      },
     });
 
     const request = new Request("http://localhost/verify-email");
@@ -104,6 +112,14 @@ describe("Verify-email route - loader", () => {
       language: "en",
       mfaState: "not_enrolled",
       emailVerified: false,
+      onboardingCompletedAt: null,
+      dashboardChecklistDismissed: false,
+      dashboardChecklistManual: {
+        import: false,
+        browser_shortcut: false,
+        folder: false,
+        tag: false,
+      },
     });
 
     const request = new Request("http://localhost/verify-email");

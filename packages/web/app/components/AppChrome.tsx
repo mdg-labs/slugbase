@@ -17,10 +17,13 @@ import {
 } from "./command-palette/CommandPaletteProvider.js";
 import {
   OnboardingOverlay,
-  isOnboardingDone,
-  markOnboardingDone,
 } from "./onboarding/OnboardingOverlay.js";
 import { useAppShellData } from "../lib/session-client.js";
+import {
+  isOnboardingComplete,
+  persistOnboardingComplete,
+  syncOnboardingDoneCache,
+} from "../lib/onboarding-state.js";
 
 function AppChromeInner() {
   const { t } = useTranslation();
@@ -33,10 +36,11 @@ function AppChromeInner() {
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
-    if (!isOnboardingDone()) {
+    syncOnboardingDoneCache(user.onboardingCompletedAt);
+    if (!isOnboardingComplete(user.onboardingCompletedAt)) {
       setShowOnboarding(true);
     }
-  }, []);
+  }, [user.onboardingCompletedAt]);
 
   const themeLabels = {
     group: t("theme.switcher.group"),
@@ -81,8 +85,13 @@ function AppChromeInner() {
         <OnboardingOverlay
           workspaceName={workspace.name}
           onDone={() => {
-            markOnboardingDone();
-            setShowOnboarding(false);
+            void persistOnboardingComplete()
+              .then(() => {
+                setShowOnboarding(false);
+              })
+              .catch(() => {
+                setShowOnboarding(false);
+              });
           }}
         />
       )}

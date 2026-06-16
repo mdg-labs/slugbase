@@ -65,6 +65,8 @@ export {
   AccountSettingsResponseSchema,
   ALLOWED_ACCENT_COLORS,
   type AllowedAccentColor,
+  DashboardChecklistManualSchema,
+  type DashboardChecklistManual,
   UpdateAccountEmailBodySchema,
   UpdateAccountPasswordBodySchema,
   UpdateAccountPreferencesBodySchema,

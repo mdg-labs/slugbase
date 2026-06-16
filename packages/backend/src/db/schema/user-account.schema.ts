@@ -15,6 +15,11 @@ export const userAccounts = pgTable(
     mfaTotpSecretEncrypted: text("mfa_totp_secret_encrypted"),
     aiOptOut: boolean("ai_opt_out").notNull().default(false),
     defaultBookmarkView: text("default_bookmark_view").notNull().default("grid"),
+    onboardingCompletedAt: bigint("onboarding_completed_at", { mode: "number" }),
+    dashboardChecklistDismissed: boolean("dashboard_checklist_dismissed")
+      .notNull()
+      .default(false),
+    dashboardChecklistManual: text("dashboard_checklist_manual"),
     pendingEmail: text("pending_email"),
     emailVerified: boolean("email_verified").notNull().default(false),
     createdAt: bigint("created_at", { mode: "number" }).notNull(),

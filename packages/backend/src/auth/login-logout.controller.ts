@@ -134,6 +134,9 @@ export class LoginLogoutController {
       language: account.language === "de" ? "de" : "en",
       mfaState: account.mfaState,
       emailVerified: account.emailVerified,
+      onboardingCompletedAt: account.onboardingCompletedAt,
+      dashboardChecklistDismissed: account.dashboardChecklistDismissed,
+      dashboardChecklistManual: account.dashboardChecklistManual,
     };
   }
 

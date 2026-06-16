@@ -11,6 +11,14 @@ export interface SessionUser {
   language: "en" | "de";
   mfaState: "not_enrolled" | "pending" | "enrolled";
   emailVerified: boolean;
+  onboardingCompletedAt: number | null;
+  dashboardChecklistDismissed: boolean;
+  dashboardChecklistManual: {
+    import: boolean;
+    browser_shortcut: boolean;
+    folder: boolean;
+    tag: boolean;
+  };
 }
 
 /**

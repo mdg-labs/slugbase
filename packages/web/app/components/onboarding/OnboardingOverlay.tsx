@@ -9,25 +9,6 @@ import {
   readFileAsText,
 } from "./import-api.js";
 
-const ONBOARDING_DONE_KEY = "sb_onboarding_done";
-
-export function isOnboardingDone(): boolean {
-  if (typeof window === "undefined") return true;
-  try {
-    return window.localStorage.getItem(ONBOARDING_DONE_KEY) === "true";
-  } catch {
-    return true;
-  }
-}
-
-export function markOnboardingDone(): void {
-  try {
-    window.localStorage.setItem(ONBOARDING_DONE_KEY, "true");
-  } catch {
-    /* ignore */
-  }
-}
-
 const SHORTCUT_URL = "/go/%s";
 
 type ImportState =
@@ -140,7 +121,6 @@ export function OnboardingOverlay({ workspaceName, onDone }: OnboardingOverlayPr
     if (step < TOTAL - 1) {
       setStep((s) => s + 1);
     } else {
-      markOnboardingDone();
       onDone();
     }
   }, [step, onDone]);

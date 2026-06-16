@@ -12,9 +12,11 @@ import { DashboardStatsRow } from "./DashboardStatsRow.js";
 import { DashboardTagsOverview } from "./DashboardTagsOverview.js";
 import { resolveEntitlementBanner } from "./dashboard.utils.js";
 import type { DashboardData } from "./dashboard.types.js";
+import { useAppShellData } from "../../lib/session-client.js";
 
 export function DashboardPage() {
   const data = useLoaderData<DashboardData>();
+  const { user } = useAppShellData();
   const entitlementBanner = resolveEntitlementBanner(
     data.workspace.plan,
     data.counts.bookmarks,
@@ -37,7 +39,11 @@ export function DashboardPage() {
         </div>
 
         <div className="flex flex-col gap-sp-7">
-          <DashboardOnboardingChecklist data={data} />
+          <DashboardOnboardingChecklist
+            data={data}
+            checklistManual={user.dashboardChecklistManual}
+            checklistDismissed={user.dashboardChecklistDismissed}
+          />
           <DashboardTagsOverview tags={data.tags} />
           <DashboardFoldersOverview folders={data.folders} />
           <DashboardSharingStats counts={data.counts} />

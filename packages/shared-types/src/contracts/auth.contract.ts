@@ -24,6 +24,15 @@ export const LogoutResponseSchema = z
   })
   .strict();
 
+const dashboardChecklistManualSchema = z
+  .object({
+    import: z.boolean(),
+    browser_shortcut: z.boolean(),
+    folder: z.boolean(),
+    tag: z.boolean(),
+  })
+  .strict();
+
 export const MeResponseSchema = z
   .object({
     id: z.string(),
@@ -32,6 +41,9 @@ export const MeResponseSchema = z
     language: z.enum(["en", "de"]),
     mfaState: z.enum(["not_enrolled", "pending", "enrolled"]),
     emailVerified: z.boolean(),
+    onboardingCompletedAt: z.number().int().nullable(),
+    dashboardChecklistDismissed: z.boolean(),
+    dashboardChecklistManual: dashboardChecklistManualSchema,
   })
   .strict();
 

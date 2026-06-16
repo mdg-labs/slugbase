@@ -52,6 +52,14 @@ const baseAccount: AccountSettingsData = {
   accentColor: null,
   aiOptOut: false,
   defaultBookmarkView: "grid",
+  onboardingCompletedAt: null,
+  dashboardChecklistDismissed: false,
+  dashboardChecklistManual: {
+    import: false,
+    browser_shortcut: false,
+    folder: false,
+    tag: false,
+  },
 };
 
 function renderPage(account: AccountSettingsData = baseAccount) {

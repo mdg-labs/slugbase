@@ -8,6 +8,17 @@ const languageSchema = z.enum(["en", "de"]);
 const themeSchema = z.enum(["light", "dark", "auto"]);
 const defaultBookmarkViewSchema = z.enum(["grid", "table"]);
 
+export const DashboardChecklistManualSchema = z
+  .object({
+    import: z.boolean(),
+    browser_shortcut: z.boolean(),
+    folder: z.boolean(),
+    tag: z.boolean(),
+  })
+  .strict();
+
+export type DashboardChecklistManual = z.infer<typeof DashboardChecklistManualSchema>;
+
 export const ALLOWED_ACCENT_COLORS = [
   "#7782f7",
   "#6366f1",
@@ -36,6 +47,9 @@ export const AccountSettingsResponseSchema = z
     accentColor: accentColorSchema,
     aiOptOut: z.boolean(),
     defaultBookmarkView: defaultBookmarkViewSchema,
+    onboardingCompletedAt: z.number().int().nullable(),
+    dashboardChecklistDismissed: z.boolean(),
+    dashboardChecklistManual: DashboardChecklistManualSchema,
     pendingEmail: z.string().email().nullable(),
     pendingEmailMasked: z.string().nullable(),
   })
@@ -75,6 +89,9 @@ export const UpdateAccountPreferencesBodySchema = z
     accentColor: accentColorSchema.optional(),
     aiOptOut: z.boolean().optional(),
     defaultBookmarkView: defaultBookmarkViewSchema.optional(),
+    onboardingCompleted: z.literal(true).optional(),
+    dashboardChecklistDismissed: z.boolean().optional(),
+    dashboardChecklistManual: DashboardChecklistManualSchema.partial().optional(),
   })
   .strict();
 

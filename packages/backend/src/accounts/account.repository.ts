@@ -9,7 +9,26 @@ import type {
   AccountRecord,
   CreateAccountData,
   CreateOidcAccountRepoData,
+  DashboardChecklistManual,
 } from "./account.types.js";
+import { EMPTY_DASHBOARD_CHECKLIST_MANUAL } from "./account.types.js";
+
+function parseDashboardChecklistManual(
+  raw: string | null | undefined,
+): DashboardChecklistManual {
+  if (!raw) return EMPTY_DASHBOARD_CHECKLIST_MANUAL;
+  try {
+    const parsed = JSON.parse(raw) as Partial<DashboardChecklistManual>;
+    return {
+      import: Boolean(parsed.import),
+      browser_shortcut: Boolean(parsed.browser_shortcut),
+      folder: Boolean(parsed.folder),
+      tag: Boolean(parsed.tag),
+    };
+  } catch {
+    return EMPTY_DASHBOARD_CHECKLIST_MANUAL;
+  }
+}
 
 function nowMs(): number {
   return Date.now();
@@ -28,6 +47,9 @@ function toRecord(row: {
   mfaTotpSecretEncrypted: string | null;
   aiOptOut: boolean | number;
   defaultBookmarkView: string;
+  onboardingCompletedAt: Date | number | null;
+  dashboardChecklistDismissed: boolean | number;
+  dashboardChecklistManual: string | null;
   pendingEmail: string | null;
   emailVerified: boolean | number;
   createdAt: Date | number;
@@ -47,6 +69,14 @@ function toRecord(row: {
     aiOptOut: Boolean(row.aiOptOut),
     defaultBookmarkView:
       row.defaultBookmarkView === "table" ? "table" : "grid",
+    onboardingCompletedAt:
+      row.onboardingCompletedAt == null
+        ? null
+        : row.onboardingCompletedAt instanceof Date
+          ? row.onboardingCompletedAt.getTime()
+          : row.onboardingCompletedAt,
+    dashboardChecklistDismissed: Boolean(row.dashboardChecklistDismissed),
+    dashboardChecklistManual: parseDashboardChecklistManual(row.dashboardChecklistManual),
     pendingEmail: row.pendingEmail ?? null,
     emailVerified: Boolean(row.emailVerified),
     createdAt: new Date(
@@ -174,6 +204,9 @@ export class AccountRepository {
       accentColor?: string | null;
       aiOptOut?: boolean;
       defaultBookmarkView?: string;
+      onboardingCompletedAt?: number | null;
+      dashboardChecklistDismissed?: boolean;
+      dashboardChecklistManual?: DashboardChecklistManual;
     },
   ): Promise<void> {
     const updatedAt = Date.now();
@@ -185,6 +218,15 @@ export class AccountRepository {
     if (patch.aiOptOut !== undefined) values["aiOptOut"] = patch.aiOptOut;
     if (patch.defaultBookmarkView !== undefined) {
       values["defaultBookmarkView"] = patch.defaultBookmarkView;
+    }
+    if (patch.onboardingCompletedAt !== undefined) {
+      values["onboardingCompletedAt"] = patch.onboardingCompletedAt;
+    }
+    if (patch.dashboardChecklistDismissed !== undefined) {
+      values["dashboardChecklistDismissed"] = patch.dashboardChecklistDismissed;
+    }
+    if (patch.dashboardChecklistManual !== undefined) {
+      values["dashboardChecklistManual"] = JSON.stringify(patch.dashboardChecklistManual);
     }
 
         await this.db

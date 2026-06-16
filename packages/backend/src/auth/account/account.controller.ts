@@ -160,7 +160,10 @@ export class AccountController {
       preferences.theme === undefined &&
       preferences.accentColor === undefined &&
       preferences.aiOptOut === undefined &&
-      preferences.defaultBookmarkView === undefined
+      preferences.defaultBookmarkView === undefined &&
+      preferences.onboardingCompleted === undefined &&
+      preferences.dashboardChecklistDismissed === undefined &&
+      preferences.dashboardChecklistManual === undefined
     ) {
       throw new BadRequestException("No preference fields provided");
     }
@@ -191,6 +194,10 @@ export class AccountController {
       accentColor,
       aiOptOut: preferences.aiOptOut,
       defaultBookmarkView,
+      onboardingCompletedAt:
+        preferences.onboardingCompleted === true ? Date.now() : undefined,
+      dashboardChecklistDismissed: preferences.dashboardChecklistDismissed,
+      dashboardChecklistManual: preferences.dashboardChecklistManual,
     });
 
     return this.buildSettingsResponse(userId);
@@ -239,6 +246,9 @@ export class AccountController {
       accentColor,
       aiOptOut: account.aiOptOut,
       defaultBookmarkView: account.defaultBookmarkView,
+      onboardingCompletedAt: account.onboardingCompletedAt,
+      dashboardChecklistDismissed: account.dashboardChecklistDismissed,
+      dashboardChecklistManual: account.dashboardChecklistManual,
     };
   }
 }
