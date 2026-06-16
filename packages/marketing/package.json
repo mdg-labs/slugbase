@@ -17,7 +17,7 @@
   "dependencies": {
     "@slugbase/shared-types": "workspace:^",
     "@slugbase/ui": "workspace:^",
-    "astro": "^6.4.2",
+    "astro": "^6.4.7",
     "marked": "^15.0.12"
   },
   "devDependencies": {
