@@ -222,3 +222,155 @@ export async function setupSharedSlugDisambiguation(
     userBTitle,
   };
 }
+
+export interface TeamSharingWorkspaceSetup {
+  workspaceId: string;
+  ownerSession: ApiSession;
+  memberSession: Pick<ApiSession, 'sessionCookie' | 'csrfToken' | 'email'>;
+  ownerWorkerIndex: number;
+  memberWorkerIndex: number;
+  ownerUserId: string;
+  memberUserId: string;
+  memberName: string;
+  memberEmail: string;
+  ownerName: string;
+}
+
+/**
+ * Team-plan workspace with owner (worker N+1) and member (worker N).
+ * Member is added to owner's workspace and activates it for cross-user sharing UI.
+ */
+export async function setupTeamSharingWorkspace(
+  page: Page,
+  memberWorkerIndex: number,
+  memberSession: Pick<ApiSession, 'sessionCookie' | 'csrfToken'>,
+  opts: { hosted: boolean },
+): Promise<TeamSharingWorkspaceSetup> {
+  const ownerWorkerIndex = (memberWorkerIndex + 1) % WORKER_COUNT;
+  const ownerSession = await loginWorkerApi(ownerWorkerIndex);
+  const memberCred = getWorkerCredentials(memberWorkerIndex);
+  const ownerCred = getWorkerCredentials(ownerWorkerIndex);
+  const apiUrl = resolveE2eApiUrl();
+
+  if (opts.hosted) {
+    await setActiveWorkspacePlan(
+      page,
+      ownerSession.sessionCookie,
+      ownerSession.csrfToken,
+      'team',
+    );
+  }
+
+  const workspaceRes = await page.request.get(`${apiUrl}/workspaces/active`, {
+    headers: { Cookie: ownerSession.sessionCookie },
+  });
+  expect(workspaceRes.ok(), `Active workspace fetch failed: ${workspaceRes.status()}`).toBeTruthy();
+  const workspace = (await workspaceRes.json()) as { id: string };
+
+  const memberUserId = await lookupUserId(memberCred.email);
+  const ownerUserId = await lookupUserId(ownerCred.email);
+  await addWorkspaceMember(workspace.id, memberUserId);
+
+  const activateRes = await page.request.post(`${apiUrl}/workspaces/${workspace.id}/activate`, {
+    headers: apiHeaders(memberSession),
+  });
+  expect(activateRes.ok(), `Workspace activate failed: ${activateRes.status()}`).toBeTruthy();
+
+  return {
+    workspaceId: workspace.id,
+    ownerSession,
+    memberSession: { ...memberSession, email: memberCred.email },
+    ownerWorkerIndex,
+    memberWorkerIndex,
+    ownerUserId,
+    memberUserId,
+    memberName: memberCred.name,
+    memberEmail: memberCred.email,
+    ownerName: ownerCred.name,
+  };
+}
+
+export async function createSharingBookmark(
+  page: Page,
+  session: Pick<ApiSession, 'sessionCookie' | 'csrfToken'>,
+  data: { title: string; url: string },
+): Promise<{ id: string }> {
+  const apiUrl = resolveE2eApiUrl();
+  const res = await page.request.post(`${apiUrl}/bookmarks`, {
+    headers: apiHeaders(session),
+    data: {
+      title: data.title,
+      url: data.url,
+    },
+  });
+  expect(
+    res.ok(),
+    `Bookmark create failed (${data.title}): ${res.status()} ${await res.text()}`,
+  ).toBeTruthy();
+  return (await res.json()) as { id: string };
+}
+
+export async function createSharingFolder(
+  page: Page,
+  session: Pick<ApiSession, 'sessionCookie' | 'csrfToken'>,
+  name: string,
+): Promise<{ id: string }> {
+  const apiUrl = resolveE2eApiUrl();
+  const res = await page.request.post(`${apiUrl}/folders`, {
+    headers: apiHeaders(session),
+    data: { name },
+  });
+  expect(res.ok(), `Folder create failed (${name}): ${res.status()} ${await res.text()}`).toBeTruthy();
+  return (await res.json()) as { id: string };
+}
+
+export async function linkBookmarkToFolder(
+  page: Page,
+  session: Pick<ApiSession, 'sessionCookie' | 'csrfToken'>,
+  folderId: string,
+  bookmarkId: string,
+): Promise<void> {
+  const apiUrl = resolveE2eApiUrl();
+  const res = await page.request.post(`${apiUrl}/folders/${folderId}/bookmarks`, {
+    headers: apiHeaders(session),
+    data: { bookmarkId },
+  });
+  expect(
+    res.ok(),
+    `Folder bookmark link failed: ${res.status()} ${await res.text()}`,
+  ).toBeTruthy();
+}
+
+export async function grantBookmarkShare(
+  page: Page,
+  session: Pick<ApiSession, 'sessionCookie' | 'csrfToken'>,
+  bookmarkId: string,
+  targetUserId: string,
+): Promise<void> {
+  const apiUrl = resolveE2eApiUrl();
+  const res = await page.request.post(`${apiUrl}/sharing/bookmarks/${bookmarkId}/grants`, {
+    headers: apiHeaders(session),
+    data: { kind: 'user', targetId: targetUserId },
+  });
+  expect(
+    res.ok(),
+    `Bookmark share grant failed: ${res.status()} ${await res.text()}`,
+  ).toBeTruthy();
+}
+
+export async function grantFolderShare(
+  page: Page,
+  session: Pick<ApiSession, 'sessionCookie' | 'csrfToken'>,
+  folderId: string,
+  targetUserId: string,
+): Promise<void> {
+  const apiUrl = resolveE2eApiUrl();
+  const res = await page.request.post(`${apiUrl}/sharing/folders/${folderId}/grants`, {
+    headers: apiHeaders(session),
+    data: { kind: 'user', targetId: targetUserId },
+  });
+  expect(
+    res.ok(),
+    `Folder share grant failed: ${res.status()} ${await res.text()}`,
+  ).toBeTruthy();
+}

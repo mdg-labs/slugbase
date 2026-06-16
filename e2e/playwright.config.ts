@@ -23,6 +23,8 @@ const HOSTED_ONLY_SPECS = [
   '**/entitlements/free-cap.spec.ts',
   '**/sharing/share-dialog.spec.ts',
   '**/sharing/scope-filters.spec.ts',
+  '**/sharing/compact-share-modal.spec.ts',
+  '**/sharing/sharing-badge.spec.ts',
   '**/billing/**',
 ] as const;
 
