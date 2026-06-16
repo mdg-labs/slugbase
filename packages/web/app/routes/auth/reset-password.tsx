@@ -11,6 +11,7 @@ import {
   useNavigation,
 } from "react-router";
 import { AuthShell, LockFieldIcon } from "./AuthShell.js";
+import { createRouteMeta } from "../../lib/route-meta.js";
 
 const API_BASE_URL = () => getServerApiBaseUrl();
 
@@ -73,6 +74,8 @@ export async function action({ request }: ActionFunctionArgs) {
 
   return redirect("/login?reset=success");
 }
+
+export const meta = createRouteMeta("app.page.reset_password");
 
 export default function ResetPasswordRoute() {
   const { t } = useTranslation();

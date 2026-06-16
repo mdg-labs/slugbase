@@ -1,9 +1,12 @@
 import { useTranslation } from "react-i18next";
 import { Button } from "@slugbase/ui";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation } from "react-router";
 import { isAnalyticsConsentGranted } from "../../components/consent/consent-storage.js";
 import { captureClientException } from "../../lib/error-reporting-client.js";
+import { formatDocumentTitle } from "../../lib/format-document-title.js";
+import { resolveErrorPageTitleKey } from "../../lib/resolve-page-title.js";
+import type { SupportedLocale } from "../../i18n/messages.js";
 import type { AppErrorStatus } from "./error-status.js";
 
 type AppErrorPageProps = {
@@ -36,9 +39,14 @@ const primaryActionKey: Record<AppErrorStatus, string> = {
 };
 
 export function AppErrorPage({ status, error }: AppErrorPageProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const location = useLocation();
   const [reported, setReported] = useState(false);
+
+  useEffect(() => {
+    const locale = i18n.language as SupportedLocale;
+    document.title = formatDocumentTitle(locale, resolveErrorPageTitleKey(status));
+  }, [i18n.language, status]);
 
   const showPath = status === 404 && location.pathname.length > 1;
   const primaryHref = status === 401 ? "/login" : status === 403 ? "/" : "/bookmarks";

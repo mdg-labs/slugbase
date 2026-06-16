@@ -6,6 +6,7 @@ import { Form, useActionData, useNavigation } from "react-router";
 import { applyApiSessionCookie, redirectAfterFormPost } from "../../../lib/api-session-cookie.js";
 import { TotpInput } from "../../../components/TotpInput.js";
 import { AuthShell, KeyFieldIcon } from "../AuthShell.js";
+import { createRouteMeta } from "../../../lib/route-meta.js";
 
 const API_BASE_URL = () => getServerApiBaseUrl();
 
@@ -45,6 +46,8 @@ export async function action({ request }: ActionFunctionArgs) {
   applyApiSessionCookie(redirectResponse, res);
   return redirectResponse;
 }
+
+export const meta = createRouteMeta("app.page.mfa");
 
 export default function MfaChallengeRoute() {
   const { t } = useTranslation();

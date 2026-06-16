@@ -3,6 +3,7 @@ import { getRelativeLocaleUrl } from "astro:i18n";
 import MarketingLayout from "../../layouts/MarketingLayout.astro";
 import { renderLegalHtml, type LegalTab } from "../../legal/load-legal-markdown.js";
 import { t, type MessageKey, type SupportedLocale } from "../../i18n/translate.js";
+import { formatMarketingPageTitle } from "../../i18n/format-marketing-page-title.js";
 
 export type { LegalTab };
 
@@ -21,7 +22,7 @@ const titleKeys: Record<LegalTab, MessageKey> = {
   datenschutz: "marketing.legal.datenschutz.title",
 };
 
-const pageTitle = `${t(locale, titleKeys[tab])} - ${t(locale, "marketing.nav.brand")}`;
+const pageTitle = formatMarketingPageTitle(locale, titleKeys[tab]);
 const legalHtml = renderLegalHtml(tab, locale);
 ---
 

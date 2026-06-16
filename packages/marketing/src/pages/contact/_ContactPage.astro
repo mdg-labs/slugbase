@@ -6,12 +6,13 @@ import {
   loadMarketingContactConfig,
 } from "../../lib/contact-config.js";
 import { t, type MessageKey, type SupportedLocale } from "../../i18n/translate.js";
+import { formatMarketingPageTitle } from "../../i18n/format-marketing-page-title.js";
 import type { ContactTopic } from "../../lib/contact-config.js";
 
 const locale = Astro.currentLocale as SupportedLocale;
 const config = loadMarketingContactConfig();
 const formReady = isContactFormConfigured(config);
-const title = `${t(locale, "marketing.contact.page_title")} - ${t(locale, "marketing.nav.brand")}`;
+const title = formatMarketingPageTitle(locale, "marketing.contact.page_title");
 
 const clientMessages = {
   errorGeneric: t(locale, "marketing.contact.error.generic"),

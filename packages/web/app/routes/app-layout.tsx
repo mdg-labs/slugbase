@@ -5,6 +5,7 @@ import { getSessionUser } from "../lib/session-client.js";
 import type { WorkspaceListItem } from "../components/workspace-switcher/workspace-switcher-api.js";
 import type { SidebarFolder } from "../components/AppSidebar.js";
 import { LoaderStatusError } from "./errors/loader-status-error.js";
+import { appRouteMeta } from "../lib/route-meta.js";
 
 import { getServerApiBaseUrl } from "../lib/server-api-base-url.js";
 
@@ -104,5 +105,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export default function AppLayoutRoute() {
   return <AppChrome />;
 }
+
+export const meta = appRouteMeta;
 
 export { AppShellErrorBoundary as ErrorBoundary } from "./errors/AppShellErrorBoundary.js";

@@ -2,6 +2,7 @@
 import { getRelativeLocaleUrl } from "astro:i18n";
 import MarketingLayout from "../../layouts/MarketingLayout.astro";
 import { t, type SupportedLocale } from "../../i18n/translate.js";
+import { formatMarketingPageTitle } from "../../i18n/format-marketing-page-title.js";
 import {
   buildMarketingPlanFeatureRows,
   isSupporterPromotionActive,
@@ -17,7 +18,7 @@ const supporterActive = isSupporterPromotionActive(config);
 const privacyHref = getRelativeLocaleUrl(locale, "/legal/datenschutz");
 const getStartedHref = appOrigin ? `${appOrigin}/register` : "/register";
 
-const title = `${t(locale, "marketing.pricing.page_title")} - ${t(locale, "marketing.nav.brand")}`;
+const title = formatMarketingPageTitle(locale, "marketing.pricing.page_title");
 
 function formatFeatureCell(locale: SupportedLocale, value: PlanFeatureCell): string {
   if (value === "included") return "✓";

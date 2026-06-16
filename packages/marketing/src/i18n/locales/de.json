@@ -133,6 +133,7 @@
   "marketing.legal.agb.title": "AGB",
   "marketing.legal.datenschutz.title": "Datenschutzerklärung",
   "marketing.legal.impressum.title": "Impressum",
+  "marketing.document_title": "{brand} | {page}",
   "marketing.meta.description": "SlugBase - tastaturgesteuerter Lesezeichenmanager mit Slug-Weiterleitung.",
   "marketing.nav.brand": "SlugBase",
   "marketing.nav.contact": "Kontakt",

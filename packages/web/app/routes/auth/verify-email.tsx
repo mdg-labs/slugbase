@@ -13,6 +13,7 @@ import {
 import { useAppToast } from "../../components/feedback/AppToastProvider.js";
 import { getSessionUser } from "../../lib/session-client.js";
 import { AuthShell } from "./AuthShell.js";
+import { createRouteMeta } from "../../lib/route-meta.js";
 
 const API_BASE_URL = () => getServerApiBaseUrl();
 
@@ -134,6 +135,8 @@ export async function action({ request }: ActionFunctionArgs): Promise<ActionRes
 
   return { intent: "resend", ok: false, error: "auth.verify_email.toast_resend_error" };
 }
+
+export const meta = createRouteMeta("app.page.verify_email");
 
 export default function VerifyEmailRoute() {
   const { t } = useTranslation();

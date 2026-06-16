@@ -12,6 +12,7 @@ import {
 import { TotpInput } from "../../../components/TotpInput.js";
 import { getSessionUser } from "../../../lib/session-client.js";
 import { AuthShell } from "../AuthShell.js";
+import { createRouteMeta } from "../../../lib/route-meta.js";
 
 const API_BASE_URL = () => getServerApiBaseUrl();
 
@@ -86,6 +87,8 @@ export async function action({ request }: ActionFunctionArgs) {
   const data = (await res.json()) as { backupCodes: string[] };
   return { backupCodes: data.backupCodes };
 }
+
+export const meta = createRouteMeta("app.page.mfa_enroll");
 
 export default function MfaEnrollRoute() {
   const loaderData = useLoaderData<typeof loader>();

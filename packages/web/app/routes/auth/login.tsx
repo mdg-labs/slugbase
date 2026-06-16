@@ -17,6 +17,7 @@ import {
   SuccessBanner,
   SsoSection,
 } from "./AuthShell.js";
+import { createRouteMeta } from "../../lib/route-meta.js";
 
 const API_BASE_URL = () => getServerApiBaseUrl();
 
@@ -90,6 +91,8 @@ export async function action({ request }: ActionFunctionArgs) {
   applyApiSessionCookie(redirectResponse, res);
   return redirectResponse;
 }
+
+export const meta = createRouteMeta("app.page.sign_in");
 
 export default function LoginRoute() {
   const { t } = useTranslation();

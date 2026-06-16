@@ -4,6 +4,10 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { t } from "./i18n/translate.js";
+import {
+  formatMarketingBrandTitle,
+  formatMarketingPageTitle,
+} from "./i18n/format-marketing-page-title.js";
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -36,6 +40,15 @@ describe("marketing build output", () => {
     expect(deHtml).toContain(t("de", "marketing.landing.hero_title_accent"));
     expect(enHtml).toContain('lang="en"');
     expect(deHtml).toContain('lang="de"');
+    expect(enHtml).toContain(`<title>${formatMarketingBrandTitle("en")}</title>`);
+    expect(deHtml).toContain(`<title>${formatMarketingBrandTitle("de")}</title>`);
+
+    expect(enPricing).toContain(
+      `<title>${formatMarketingPageTitle("en", "marketing.pricing.page_title")}</title>`,
+    );
+    expect(dePricing).toContain(
+      `<title>${formatMarketingPageTitle("de", "marketing.pricing.page_title")}</title>`,
+    );
 
     expect(enPricing).toContain(t("en", "marketing.pricing.plan.personal"));
     expect(enPricing).toContain('data-price-monthly="$4"');
@@ -45,6 +58,9 @@ describe("marketing build output", () => {
     expect(enPrivacy).toContain("Neon Postgres");
     expect(enPrivacy).toContain("Cloudflare");
 
+    expect(enContact).toContain(
+      `<title>${formatMarketingPageTitle("en", "marketing.contact.page_title")}</title>`,
+    );
     expect(enContact).toContain(t("en", "marketing.contact.headline"));
     expect(enContact).toContain('id="contact-form"');
     expect(deContact).toContain(t("de", "marketing.contact.headline"));
@@ -54,6 +70,9 @@ describe("marketing build output", () => {
     const de404 = readFileSync(join(packageRoot, "dist/de/404/index.html"), "utf8");
     const en500 = readFileSync(join(packageRoot, "dist/500.html"), "utf8");
 
+    expect(en404).toContain(
+      `<title>${formatMarketingPageTitle("en", "marketing.error.404.title")}</title>`,
+    );
     expect(en404).toContain(t("en", "marketing.error.404.title"));
     expect(en404).toContain(t("en", "marketing.error.action.home"));
     expect(de404).toContain(t("de", "marketing.error.404.title"));

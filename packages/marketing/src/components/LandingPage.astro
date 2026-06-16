@@ -1,11 +1,12 @@
 ---
 import LandingSections from "./LandingSections.astro";
 import MarketingLayout from "../layouts/MarketingLayout.astro";
-import { t, type SupportedLocale } from "../i18n/translate.js";
+import { formatMarketingBrandTitle } from "../i18n/format-marketing-page-title.js";
+import type { SupportedLocale } from "../i18n/translate.js";
 
 const locale = Astro.currentLocale as SupportedLocale;
 const appOrigin = import.meta.env.PUBLIC_FRONTEND_ORIGIN ?? "";
-const title = `${t(locale, "marketing.nav.brand")} - ${t(locale, "marketing.landing.hero_title")} ${t(locale, "marketing.landing.hero_title_accent")}`;
+const title = formatMarketingBrandTitle(locale);
 ---
 
 <MarketingLayout title={title}>

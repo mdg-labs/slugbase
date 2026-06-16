@@ -133,6 +133,7 @@
   "marketing.legal.agb.title": "Terms of Service",
   "marketing.legal.datenschutz.title": "Privacy Policy",
   "marketing.legal.impressum.title": "Impressum",
+  "marketing.document_title": "{brand} | {page}",
   "marketing.meta.description": "SlugBase - keyboard-driven bookmark manager with slug forwarding.",
   "marketing.nav.brand": "SlugBase",
   "marketing.nav.contact": "Contact",

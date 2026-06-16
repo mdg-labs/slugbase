@@ -4,6 +4,7 @@ import type { LoaderFunctionArgs } from "react-router";
 import { Link, useLoaderData } from "react-router";
 
 import { AuthHeading, AuthShell, ErrorBanner, SuccessBanner } from "./AuthShell.js";
+import { createRouteMeta } from "../../lib/route-meta.js";
 
 const API_BASE_URL = () => getServerApiBaseUrl();
 
@@ -40,6 +41,8 @@ export async function loader({ request }: LoaderFunctionArgs): Promise<LoaderDat
 
   return { success: false, error: "auth.verify_email_change.error_invalid" };
 }
+
+export const meta = createRouteMeta("app.page.verify_email_change");
 
 export default function VerifyEmailChangeRoute() {
   const { t } = useTranslation();

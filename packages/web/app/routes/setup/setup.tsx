@@ -10,6 +10,7 @@ import {
   MailFieldIcon,
   UserFieldIcon,
 } from "../auth/AuthShell.js";
+import { createRouteMeta } from "../../lib/route-meta.js";
 
 const API_BASE_URL = () => getServerApiBaseUrl();
 
@@ -112,6 +113,8 @@ export async function action({ request }: ActionFunctionArgs): Promise<ActionRes
   applyApiSessionCookie(redirectResponse, res);
   return redirectResponse;
 }
+
+export const meta = createRouteMeta("app.page.setup");
 
 export default function SetupRoute() {
   const { t } = useTranslation();

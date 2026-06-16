@@ -2,6 +2,7 @@
 import { getRelativeLocaleUrl } from "astro:i18n";
 import MarketingLayout from "../layouts/MarketingLayout.astro";
 import { t, type SupportedLocale } from "../i18n/translate.js";
+import { formatMarketingPageTitle } from "../i18n/format-marketing-page-title.js";
 
 interface Props {
   status: 404 | 403 | 500;
@@ -21,7 +22,7 @@ const primaryKey =
 const homeHref = getRelativeLocaleUrl(locale, "/");
 const signInHref = appOrigin ? `${appOrigin}/login` : "/login";
 const registerHref = appOrigin ? `${appOrigin}/register` : "/register";
-const pageTitle = `${status} · ${t(locale, titleKey)}`;
+const pageTitle = formatMarketingPageTitle(locale, titleKey);
 ---
 
 <MarketingLayout title={pageTitle}>

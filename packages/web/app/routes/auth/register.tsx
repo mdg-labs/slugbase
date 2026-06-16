@@ -21,6 +21,7 @@ import {
   SsoSection,
   UserFieldIcon,
 } from "./AuthShell.js";
+import { createRouteMeta } from "../../lib/route-meta.js";
 
 const API_BASE_URL = () => getServerApiBaseUrl();
 
@@ -137,6 +138,8 @@ export async function action({ request }: ActionFunctionArgs) {
   applyApiSessionCookie(redirectResponse, res);
   return redirectResponse;
 }
+
+export const meta = createRouteMeta("app.page.register");
 
 export default function RegisterRoute() {
   const { t } = useTranslation();

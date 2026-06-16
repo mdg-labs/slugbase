@@ -3,6 +3,7 @@ import { getServerApiBaseUrl } from "../../lib/server-api-base-url.js";
 import type { ActionFunctionArgs } from "react-router";
 import { Form, Link, useActionData, useNavigation } from "react-router";
 import { AuthShell, MailFieldIcon } from "./AuthShell.js";
+import { createRouteMeta } from "../../lib/route-meta.js";
 
 const API_BASE_URL = () => getServerApiBaseUrl();
 
@@ -29,6 +30,8 @@ export async function action({ request }: ActionFunctionArgs) {
 
   return { sent: true as const, email };
 }
+
+export const meta = createRouteMeta("app.page.forgot_password");
 
 export default function ForgotPasswordRoute() {
   const { t } = useTranslation();
