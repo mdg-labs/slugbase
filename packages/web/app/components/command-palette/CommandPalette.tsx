@@ -1,4 +1,4 @@
-import { Kbd } from "@slugbase/ui";
+import { FolderGlyph, Kbd } from "@slugbase/ui";
 import { useTranslation } from "react-i18next";
 import { Command } from "cmdk";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -74,24 +74,6 @@ function ActionIcon({ path }: { path: string }) {
     >
       <path d={path} />
     </svg>
-  );
-}
-
-function FolderGlyph({ color }: { color: string | null }) {
-  return (
-    <span
-      aria-hidden
-      className="inline-grid h-[22px] w-[22px] shrink-0 place-items-center rounded-md"
-      style={{ background: color ?? "var(--accent-subtle)" }}
-    >
-      <svg
-        className="h-[13px] w-[13px] text-[color:var(--accent-fg)]"
-        fill="currentColor"
-        viewBox="0 0 24 24"
-      >
-        <path d="M10 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V8a2 2 0 00-2-2h-8l-2-2z" />
-      </svg>
-    </span>
   );
 }
 
@@ -477,7 +459,7 @@ export function CommandPalette({
                     }}
                     className={ITEM_CLS}
                   >
-                    <FolderGlyph color={folder.icon} />
+                    <FolderGlyph icon={folder.icon} color={folder.color} />
                     <span className="flex-1 text-[length:var(--text-body-lg)]">
                       {folder.name}
                     </span>

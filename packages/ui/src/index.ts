@@ -64,3 +64,17 @@ export { SlugBadge, type SlugBadgeProps } from "./components/SlugBadge.js";
 export { Checkbox, type CheckboxProps } from "./components/Checkbox.js";
 export { IconButton, type IconButtonProps, type IconButtonSize } from "./components/IconButton.js";
 export { ThemeSwitcher, type ThemeSwitcherLabels, type ThemeSwitcherProps } from "./components/ThemeSwitcher.js";
+export { FolderGlyph, type FolderGlyphProps } from "./components/FolderGlyph.js";
+export {
+  IconPicker,
+  filterIconNames,
+  type IconPickerLabels,
+  type IconPickerProps,
+} from "./components/IconPicker.js";
+export {
+  LucideIcon,
+  resolveLucideIcon,
+  kebabToPascalCase,
+  type LucideIconProps,
+} from "./icons/lucide-icon.js";
+export { FOLDER_ICON_NAMES, type FolderIconName } from "./icons/folder-icon-names.js";

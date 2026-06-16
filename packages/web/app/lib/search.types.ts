@@ -22,6 +22,7 @@ export interface SearchFolderHit {
   userId: string;
   name: string;
   icon: string | null;
+  color: string | null;
   bookmarkCount: number;
   createdAt: string;
   updatedAt: string;

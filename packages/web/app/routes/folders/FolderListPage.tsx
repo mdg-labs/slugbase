@@ -14,7 +14,7 @@ import {
   Trash2Icon,
   XIcon,
 } from "lucide-react";
-import { Button, ConfirmDialog, Dialog, DialogContent, EmptyState } from "@slugbase/ui";
+import { Button, ConfirmDialog, Dialog, DialogContent, EmptyState, FolderGlyph, IconPicker } from "@slugbase/ui";
 import { ScopeFilter } from "../../components/sharing/ScopeFilter.js";
 import { ScopeIcon } from "../../components/sharing/ScopeIcon.js";
 import { SharingLabel } from "../../components/sharing/SharingLabel.js";
@@ -41,20 +41,6 @@ type FolderSort = (typeof SORTS)[number];
 
 function isFolderSort(value: string): value is FolderSort {
   return (SORTS as readonly string[]).includes(value);
-}
-
-function FolderColorDot({ color }: { color: string | null }) {
-  return (
-    <span
-      className="inline-block shrink-0 rounded"
-      style={{
-        width: 10,
-        height: 10,
-        background: color ?? "var(--fg-faint)",
-      }}
-      aria-hidden="true"
-    />
-  );
 }
 
 const PRESET_COLORS = [
@@ -154,12 +140,11 @@ function FolderRow({
       data-scope={itemScope}
       onDoubleClick={() => { void navigate(`/bookmarks?folderId=${folder.id}`); }}
     >
-      <FolderColorDot color={folder.color} />
+      <FolderGlyph icon={folder.icon} color={folder.color} size={22} />
 
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-sp-3">
           <p className="truncate font-medium text-fg">
-            {folder.icon ? `${folder.icon} ` : ""}
             {folder.name}
           </p>
           <ScopeIcon scope={itemScope} />
@@ -300,7 +285,7 @@ function FolderFormDialog({
   const { showToast, showError } = useAppToast();
   const [name, setName] = useState(initialName);
   const [color, setColor] = useState<string | null>(initialColor);
-  const [icon, setIcon] = useState(initialIcon ?? "");
+  const [icon, setIcon] = useState<string | null>(initialIcon);
   const [submitting, setSubmitting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -315,7 +300,7 @@ function FolderFormDialog({
       const payload: FolderFormData = {
         name: trimmed,
         color,
-        icon: icon.trim() || null,
+        icon: icon,
       };
       if (mode === "create") {
         await createFolder(payload);
@@ -373,21 +358,22 @@ function FolderFormDialog({
           <ColorPicker value={color} onChange={setColor} />
 
           <div className="flex flex-col gap-sp-2">
-            <label
-              htmlFor={`folder-${mode}-icon`}
+            <span
               className="text-fg-muted"
               style={{ fontSize: "var(--text-small)", lineHeight: "var(--lh-small)" }}
             >
               {t("folders.modal.icon_label")}
-            </label>
-            <input
+            </span>
+            <IconPicker
               id={`folder-${mode}-icon`}
               value={icon}
-              onChange={(e) => { setIcon(e.target.value); }}
-              placeholder={t("folders.modal.icon_placeholder")}
-              className="w-full rounded-md border border-[color:var(--border)] bg-[color:var(--base)] px-sp-4 py-sp-3 text-fg focus:outline-none focus:ring-2 focus:ring-[color:var(--accent)]"
-              style={{ fontSize: "var(--text-body)" }}
-              maxLength={2}
+              onChange={setIcon}
+              labels={{
+                searchPlaceholder: t("folders.modal.icon_search"),
+                noResults: t("folders.modal.icon_no_results"),
+                clear: t("folders.modal.icon_clear"),
+              }}
+              testId={mode === "create" ? "folder-create-icon-picker" : "folder-edit-icon-picker"}
             />
           </div>
 
