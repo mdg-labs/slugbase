@@ -4,6 +4,7 @@ import { useLoaderData, useNavigate, useNavigation, useRevalidator } from "react
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
   ExternalLinkIcon,
+  LinkIcon,
   MoreHorizontalIcon,
   PencilIcon,
   Trash2Icon,
@@ -613,8 +614,8 @@ function BookmarkCard({
           className="inline-flex items-center gap-sp-2 self-start rounded border border-[color:var(--accent-border)] bg-[color:var(--accent-subtle)] px-sp-3 py-sp-1 font-mono text-accent-text"
           style={{ fontSize: 12 }}
         >
-          <ArrowRightIcon size={12} />
-          /go/{bookmark.slug}
+          <LinkIcon size={12} />
+          /{bookmark.slug}
         </span>
       ) : (
         <span
@@ -648,24 +649,6 @@ function BookmarkCard({
         <ScopeIcon scope={itemScope} />
       </div>
     </div>
-  );
-}
-
-function ArrowRightIcon({ size = 14 }: { size?: number }) {
-  return (
-    <svg
-      aria-hidden
-      viewBox="0 0 14 14"
-      width={size}
-      height={size}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M2 7h10M8 3l4 4-4 4" />
-    </svg>
   );
 }
 
@@ -771,8 +754,8 @@ function BookmarkRow({
             className="inline-flex max-w-full items-center gap-sp-2 truncate font-mono text-accent-text"
             style={{ fontSize: 12 }}
           >
-            <ArrowRightIcon size={12} />
-            <span className="truncate">/go/{bookmark.slug}</span>
+            <LinkIcon size={12} />
+            <span className="truncate">/{bookmark.slug}</span>
           </span>
         ) : (
           <span className="text-fg-faint" style={{ fontSize: 12 }}>
