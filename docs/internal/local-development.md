@@ -1,6 +1,6 @@
 # Local development environment
 
-SlugBase requires **Node.js >=22.12.0** (root `package.json` `engines`). GitHub Actions uses **22.12** (`.github/workflows/ci-cd.yml`).
+SlugBase requires **Node.js >=22.12.0** (root `package.json` `engines`). GitHub Actions uses **22.12** (`.nvmrc` via setup action).
 
 ## Node version pin
 
@@ -62,23 +62,22 @@ To match CI exactly: `nvm alias default 22.12.0` (optional if you prefer 24 LTS 
 ```bash
 bash scripts/with-ci-env.sh pnpm typecheck
 bash scripts/with-ci-env.sh pnpm i18n:validate
-bash scripts/with-ci-env.sh pnpm test:integration   # no Infisical on integration
+bash scripts/with-ci-env.sh pnpm test:integration   # no Phase wrapper on integration
 ```
 
 Or: `source scripts/ci-env.sh` once per shell.
 
 Sanity: `pnpm env:check`
 
-## Infisical
+## Secrets (Phase)
 
-Login once (EU Cloud — not US `app.infisical.com`):
+Local development injects environment variables from the Phase **`Development`** environment via `phase run`. Full Phase CLI setup and workflow are documented in issue **#475** (migrate local dev from Infisical).
 
 ```bash
-infisical login --domain https://eu.infisical.com
-# or: export INFISICAL_API_URL=https://eu.infisical.com
+phase run -- pnpm dev   # example — see #475 for login and app wiring
 ```
 
-Full key inventory (hosted vs self-hosted, examples): [`docs/internal/environment-variables.md`](environment-variables.md).
+Key inventory (hosted vs self-hosted, GHA environments, platform sync): [`docs/internal/environment-variables.md`](environment-variables.md).
 
 ## preinstall guard
 

@@ -1,6 +1,6 @@
 # Environment variables
 
-Complete reference for every configuration key SlugBase reads from the environment. Values are managed in **Infisical Cloud (EU)** (project `slugbase-cloud`) for local dev and deployed environments; see [`.env.example`](../.env.example) for the machine-readable key list (names only, no values).
+Complete reference for every configuration key SlugBase reads from the environment. Values are managed in **Phase** (app `SlugBase`) for operator editing; Phase automatically syncs to **GitHub Actions environments** (`ci`, `staging`, `production`) for CI and deploy. Deploy pipelines push GHA secrets to Fly.io and Cloudflare Workers via `sync-secrets.sh`. See [`.env.example`](../.env.example) for the machine-readable key list (names only, no values).
 
 Product model: [slugbase-mvp-spec.md §15](slugbase-mvp-spec.md). Backend validation: [`packages/backend/src/config/env.schema.ts`](../packages/backend/src/config/env.schema.ts).
 
@@ -8,27 +8,33 @@ Product model: [slugbase-mvp-spec.md §15](slugbase-mvp-spec.md). Backend valida
 
 ## At a glance
 
-### Infisical project
+### Phase app and GHA environments
 
 | Field | Value |
 |---|---|
-| Instance | `https://eu.infisical.com` |
-| Hosting | Infisical Cloud (EU region) |
-| Project slug | `slugbase-cloud` |
-| Environments | `dev` · `staging` · `prod` |
-| Key layout | Project root only (no subfolders) |
+| Tool | **Phase** — operator secrets UI |
+| App | `SlugBase` (see [`.phase.json`](../.phase.json)) |
+| Phase environments | `Development` · `Staging` · `Production` |
+| GHA environments | `ci` · `staging` · `production` |
+
+**Phase ↔ GHA mapping**
+
+| Phase environment | GHA environment | Purpose |
+|---|---|---|
+| `Development` | _(local only — `phase run`)_ | Local development |
+| `Staging` | `staging` | Staging deploy + Fly/Workers runtime |
+| `Production` | `production` | Production deploy + Fly/Workers runtime |
+| _(CI-only keys in Phase)_ | `ci` | CI-only persistent secrets (ReportPortal, etc.) |
+
+Phase syncs operator edits to GHA automatically. CI jobs and deploy workflows read `${{ secrets.* }}` from the matching GHA environment. Deploy calls `sync-secrets.sh` to push secrets to Fly.io and Cloudflare Workers.
 
 **Local dev**
 
-Infisical CLI defaults to **US Cloud** (`https://app.infisical.com`). This project uses **EU Cloud** — set the domain once:
-
 ```bash
-infisical login --domain https://eu.infisical.com
-# optional: export INFISICAL_API_URL=https://eu.infisical.com  # applies to all CLI commands
-infisical run --env=dev -- pnpm dev
+phase run -- pnpm dev   # injects Phase Development env — full setup in #475
 ```
 
-**CI** fetches the full environment via OIDC (`Infisical/secrets-action`). Set GitHub secret `INFISICAL_DOMAIN` to `https://eu.infisical.com` (not `app.infisical.com`). Only `INFISICAL_DOMAIN` and `INFISICAL_OIDC_IDENTITY_ID` live in GitHub Actions secrets — see [GitHub Actions secrets](#github-actions-secrets-not-in-infisical).
+**CI** uses the GHA `ci` environment for CI-only keys (e.g. ReportPortal). Deploy uses `staging` or `production` GHA environments. No Phase CLI and no Infisical OIDC in workflows.
 
 ### Table legend
 
@@ -51,21 +57,23 @@ Every inventory table uses the same columns:
 Minimum keys to boot a **managed** deployment (API on Fly.io, web on Cloudflare Workers, marketing on Cloudflare Workers). See [full inventory](#full-inventory) for optional interfaces.
 
 ```bash
-# Generate secrets once (example — store in Infisical, not in shell history)
+# Generate secrets once (example — store in Phase, not in shell history)
 openssl rand -hex 32   # → SESSION_SECRET
 openssl rand -hex 32   # → ENCRYPTION_KEY
 
-# Set in Infisical staging/prod (projectId from .infisical.json)
-infisical secrets set SESSION_SECRET="<64-char hex>" --env=staging --projectId=<id>
-infisical secrets set ENCRYPTION_KEY="<64-char hex>" --env=staging --projectId=<id>
-infisical secrets set DATABASE_URL="postgresql://…" --env=staging --projectId=<id>
-infisical secrets set APP_BASE_URL="https://api.example.com" --env=staging --projectId=<id>
-infisical secrets set FRONTEND_ORIGIN="https://app.example.com" --env=staging --projectId=<id>
-infisical secrets set API_BASE_URL="https://api.example.com" --env=staging --projectId=<id>
-infisical secrets set VITE_API_URL="https://api.example.com" --env=staging --projectId=<id>
-infisical secrets set PUBLIC_REGISTRATION="true" --env=staging --projectId=<id>
-infisical secrets set EMAIL_VERIFICATION_REQUIRED="true" --env=staging --projectId=<id>
-infisical secrets set VITE_BILLING_ENABLED="true" --env=staging --projectId=<id>
+# Set in Phase Staging / Production (operator UI or Phase CLI — see #475)
+# Keys sync automatically to the matching GHA environment, then to Fly/Workers on deploy.
+# Example keys:
+SESSION_SECRET=<64-char hex>
+ENCRYPTION_KEY=<64-char hex>
+DATABASE_URL=postgresql://…
+APP_BASE_URL=https://api.example.com
+FRONTEND_ORIGIN=https://app.example.com
+API_BASE_URL=https://api.example.com
+VITE_API_URL=https://api.example.com
+PUBLIC_REGISTRATION=true
+EMAIL_VERIFICATION_REQUIRED=true
+VITE_BILLING_ENABLED=true
 # + Stripe, Turnstile, deploy tokens — see hosted tables below
 ```
 
@@ -120,7 +128,7 @@ docker run -d \
   ghcr.io/<owner>/slugbase:latest
 ```
 
-CI GHCR builds (**`push-ghcr-staging-dev`**, **`push-ghcr-image`**) do **not** fetch Infisical. They pass hardcoded self-host `VITE_*` values from [`scripts/self-host-vite-build-args.sh`](../scripts/self-host-vite-build-args.sh) via [`.github/scripts/build-push-ghcr.sh`](../.github/scripts/build-push-ghcr.sh). **`VITE_SENTRY_*`**, **`VITE_UMAMI_*`**, **`VITE_APP_BASE_URL`**, and deprecated pricing keys are never passed — hosted telemetry and URLs must not be baked into the self-host client bundle.
+CI GHCR builds do **not** read Phase or GHA runtime secrets. They pass hardcoded self-host `VITE_*` values from [`scripts/self-host-vite-build-args.sh`](../scripts/self-host-vite-build-args.sh) via [`.github/scripts/build-push-ghcr.sh`](../.github/scripts/build-push-ghcr.sh). **`VITE_SENTRY_*`**, **`VITE_UMAMI_*`**, **`VITE_APP_BASE_URL`**, and deprecated pricing keys are never passed — hosted telemetry and URLs must not be baked into the self-host client bundle.
 
 ### URL wiring (self-hosted)
 
@@ -135,25 +143,29 @@ CI GHCR builds (**`push-ghcr-staging-dev`**, **`push-ghcr-image`**) do **not** f
 
 ```mermaid
 flowchart LR
-  subgraph infisical [Infisical env root]
+  subgraph phase [Phase SlugBase app]
     keys[All keys]
   end
-  subgraph hosted [Hosted]
-    fly[Fly.io API runtime]
-    webBuild[Web VITE build]
-    mktBuild[Marketing PUBLIC build]
-    ci[CI deploy smoke]
+  subgraph gha [GHA environments]
+    ciEnv[ci]
+    stgEnv[staging]
+    prodEnv[production]
+  end
+  subgraph hosted [Hosted runtime]
+    fly[Fly.io API]
+    webWorker[CF Web Worker]
+    mktWorker[CF Marketing Worker]
   end
   subgraph selfhost [Self-hosted]
     dockerBuild[Docker VITE build-args]
     container[Combined container runtime]
   end
-  keys --> fly
-  keys --> webBuild
-  keys --> mktBuild
-  keys --> ci
-  keys --> dockerBuild
-  keys --> container
+  keys -->|auto sync| gha
+  ciEnv -->|CI jobs| ciRunner[CI runners]
+  stgEnv -->|sync-secrets.sh| hosted
+  prodEnv -->|sync-secrets.sh| hosted
+  keys -.->|phase run local only| localDev[Local dev]
+  dockerBuild --> container
 ```
 
 | When set | Where | Examples |
@@ -333,7 +345,7 @@ Optional on both shapes. Empty = no-op (no tracker, no Sentry init).
 
 ### 8. Hosted — CI and deploy
 
-Stored in Infisical `staging` / `prod`. Injected into GitHub Actions runners only — never client bundles or Fly/Worker runtime unless explicitly listed above.
+Stored in Phase `Staging` / `Production` (synced to GHA `staging` / `production`). Injected into GitHub Actions deploy jobs and pushed to Fly/Workers via `sync-secrets.sh` — never client bundles unless explicitly listed above.
 
 | Key | What it does | Hosted | Self-host | Required | Secret | When set | Example value |
 |---|---|---|---|---|---|---|---|
@@ -347,7 +359,7 @@ Stored in Infisical `staging` / `prod`. Injected into GitHub Actions runners onl
 
 ### 9. Self-hosted — runtime and image build
 
-**Do not bake hosted telemetry at image build time.** Self-host operators and CI must never pass `VITE_SENTRY_*` (or other hosted-only telemetry keys) as Docker `--build-arg` values. GHCR CI and local/e2e builds share the same hardcoded self-host flags in [`scripts/self-host-vite-build-args.sh`](../scripts/self-host-vite-build-args.sh) — not Infisical. Runtime `SENTRY_DSN` on the API container is optional and separate from client build-time keys — leave both empty for a fully no-op error-reporting install (spec §11.7).
+**Do not bake hosted telemetry at image build time.** Self-host operators and CI must never pass `VITE_SENTRY_*` (or other hosted-only telemetry keys) as Docker `--build-arg` values. GHCR CI and local/e2e builds share the same hardcoded self-host flags in [`scripts/self-host-vite-build-args.sh`](../scripts/self-host-vite-build-args.sh). Runtime `SENTRY_DSN` on the API container is optional and separate from client build-time keys — leave both empty for a fully no-op error-reporting install (spec §11.7).
 
 | Key | What it does | Hosted | Self-host | Required | Secret | When set | Example value |
 |---|---|---|---|---|---|---|---|
@@ -368,7 +380,7 @@ All other `VITE_*` pricing keys: deprecated — prices now fetched from `GET /pr
 
 ### 10. Test reporting — ReportPortal
 
-SlugBase publishes unit, integration, and e2e test results to a self-hosted **ReportPortal** instance. Keys are **CI-only** — stored in Infisical `dev` and `staging`, injected on GitHub Actions runners. Vitest and Playwright reporters no-op when `REPORTPORTAL_*` is unset (local dev default).
+SlugBase publishes unit, integration, and e2e test results to a self-hosted **ReportPortal** instance. Keys are **CI-only** — stored in Phase (synced to GHA `ci` environment), injected on GitHub Actions runners. Vitest and Playwright reporters no-op when `REPORTPORTAL_*` is unset (local dev default).
 
 **Canonical CI target**
 
@@ -384,41 +396,40 @@ SlugBase publishes unit, integration, and e2e test results to a self-hosted **Re
 | `REPORTPORTAL_PROJECT` | ReportPortal project name | Yes | No | CI only | No | CI | `slugbase` |
 | `REPORTPORTAL_API_KEY` | User API key for launch upload | Yes | No | CI only | Yes | CI | `<ReportPortal user API key>` |
 
-**Infisical `dev` (local / verifier)**
+**Phase / GHA `ci` (operator — CI)**
 
-```bash
-infisical secrets set REPORTPORTAL_URL="https://reportportal.mdg-labs.dev" --env=dev
-infisical secrets set REPORTPORTAL_PROJECT="slugbase" --env=dev
-infisical secrets set REPORTPORTAL_API_KEY="<key from ReportPortal UI>" --env=dev
-```
+Set `REPORTPORTAL_URL`, `REPORTPORTAL_PROJECT`, and `REPORTPORTAL_API_KEY` in Phase (they sync to the GHA `ci` environment). Generate the API key in ReportPortal under **Profile → API Keys** for a user with access to project `slugbase`. Never commit or log the key.
 
-**Infisical `staging` (operator — CI)**
-
-Set the same three keys in Infisical `staging` before enabling ReportPortal uploads in CI (#370). Generate the API key in ReportPortal under **Profile → API Keys** for a user with access to project `slugbase`. Never commit or log the key.
+For local development with ReportPortal uploads, set the same keys in Phase `Development` and run via `phase run` (see #475).
 
 Agent wiring (`@reportportal/agent-js-vitest`, `@reportportal/agent-js-playwright`) lands in #368–#370. See [ReportPortal JavaScript agents](https://reportportal.io/docs/log-data-in-reportportal/test-framework-integration/JavaScript/).
 
-**CI launch grouping:** GitHub Actions starts one shared launch per layer (`SlugBase · Unit · CI #<run>` / `SlugBase · Integration · CI #<run>`) and sets ephemeral `RP_LAUNCH_ID` on the runner before Turbo fan-out. Package reporters attach to that launch (attribute `package` still identifies the workspace package). Not stored in Infisical.
+**CI launch grouping:** GitHub Actions starts one shared launch per layer (`SlugBase · Unit · CI #<run>` / `SlugBase · Integration · CI #<run>`) and sets ephemeral `RP_LAUNCH_ID` on the runner before Turbo fan-out. Package reporters attach to that launch (attribute `package` still identifies the workspace package). Not stored in Phase.
 
-**CI summary links:** Launch UUIDs are uploaded as a workflow artifact; the separate `CI · ReportPortal summary` job (no Infisical / no `REPORTPORTAL_API_KEY` in env) writes HTML links to the job summary and PR comment. This avoids GitHub secret masking corrupting UUID substrings in markdown hrefs.
+**CI summary links:** Launch UUIDs are uploaded as a workflow artifact; the separate `CI · ReportPortal summary` job (no `REPORTPORTAL_API_KEY` in env) writes HTML links to the job summary and PR comment. This avoids GitHub secret masking corrupting UUID substrings in markdown hrefs.
 
 ---
 
-## GitHub Actions secrets (not in Infisical)
+## GitHub Actions environments
 
-These live in the **GitHub repository** secrets settings, not in the Infisical project. After migrating to Infisical Cloud (EU), update `INFISICAL_DOMAIN` from any legacy self-hosted URL to `https://eu.infisical.com`.
+SlugBase uses three **GitHub Actions environments** as the CI/deploy secret source (populated automatically from Phase):
 
-| Key | What it does | Example value |
+| GHA environment | Phase source | Used by |
 |---|---|---|
-| `INFISICAL_DOMAIN` | Infisical Cloud (EU) instance URL for OIDC | `https://eu.infisical.com` |
-| `INFISICAL_OIDC_IDENTITY_ID` | Infisical OIDC identity id for CI | `<identity uuid>` |
+| `ci` | CI-only keys in Phase | Parallel CI jobs (`ci.yml`) |
+| `staging` | Phase `Staging` | Staging deploy (`deploy.yml`), smoke, sync-secrets |
+| `production` | Phase `Production` | Production deploy (`release.yml` → `deploy.yml`), smoke, sync-secrets |
+
+Repository-level secrets are limited to what GitHub requires for its own integration (e.g. `GITHUB_TOKEN`). Application secrets live in Phase and flow through GHA environments — not in repository secrets. Deploy pipelines call `sync-secrets.sh` to push GHA environment values to Fly.io and Cloudflare Workers.
+
+See `docs/internal/ci-cd-example/` for the authoritative sync-secrets workflow and script layout.
 
 ---
 
 ## Related docs
 
 - [`.env.example`](../.env.example) — key names only (no values)
-- [`local-development.md`](local-development.md) — Node version, Infisical login, `infisical run`
+- [`local-development.md`](local-development.md) — Node version, Phase local dev (detail in #475)
 - [`defaults-and-constants.md`](defaults-and-constants.md) — product constants and Workers custom domains
 - [`slugbase-mvp-spec.md` §15](slugbase-mvp-spec.md) — configuration model (deployment vs DB vs user prefs)
 - Rule [`.cursor/rules/05-env-vars.mdc`](../.cursor/rules/05-env-vars.mdc) — four-step workflow when adding new keys
@@ -429,7 +440,7 @@ These live in the **GitHub repository** secrets settings, not in the Infisical p
 
 When introducing a new environment variable, complete all four steps in one commit:
 
-1. Set the value in Infisical `dev` via CLI
+1. Set the value in Phase (`Development` for local verification; `Staging` / `Production` for deploy keys)
 2. Add the key name to [`.env.example`](../.env.example)
 3. Add to [`packages/backend/src/config/env.schema.ts`](../packages/backend/src/config/env.schema.ts) (or client env types if `VITE_*` / `PUBLIC_*`)
 4. Add a row to **this document**

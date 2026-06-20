@@ -505,7 +505,7 @@ The hosted service uses a split deployment: the **web client** is served from th
 
 **Self-hosted is unaffected:** self-hosted users continue to run the combined container image (§14.2) on their own infrastructure. The split topology described here is exclusively for the operator-run hosted service.
 
-**App / Worker naming (settled — decision #51):** every operator-run platform app (Fly.io app names and Cloudflare Worker script names) follows **`slugbase-<env>-<app>`**, where `<env>` matches the Infisical environment name (`staging` / `production`) and `<app>` is `api`, `web`, or `marketing`:
+**App / Worker naming (settled — decision #51):** every operator-run platform app (Fly.io app names and Cloudflare Worker script names) follows **`slugbase-<env>-<app>`**, where `<env>` matches the Phase / GitHub Actions environment name (`staging` / `production`) and `<app>` is `api`, `web`, or `marketing`:
 
 | App | Platform | Staging name | Production name |
 |---|---|---|---|
@@ -513,7 +513,7 @@ The hosted service uses a split deployment: the **web client** is served from th
 | Web client | Cloudflare Workers | `slugbase-staging-web` | `slugbase-production-web` |
 | Marketing site | Cloudflare Workers | `slugbase-staging-marketing` | `slugbase-production-marketing` |
 
-There is **no `development` deployment** — local development runs the dev servers directly (Infisical `development` env). These are **platform app/script identifiers, not public hostnames**; public domains (and `APP_BASE_URL` / `FRONTEND_ORIGIN`) are configured separately. The self-hosted combined image is published to GHCR and is not subject to this scheme.
+There is **no `development` deployment** — local development runs the dev servers directly (Phase `Development` env via `phase run`). These are **platform app/script identifiers, not public hostnames**; public domains (and `APP_BASE_URL` / `FRONTEND_ORIGIN`) are configured separately. The self-hosted combined image is published to GHCR and is not subject to this scheme.
 
 **Staging scale-to-zero (current posture):** `slugbase-staging-api` runs **scaled to zero** on Fly.io (`auto_stop_machines` enabled, `min_machines_running = 0`) to save cost — it stops when idle and cold-starts on the next request, with startup latency tolerated on staging. Production (`slugbase-production-api`) stays warm (`min_machines_running ≥ 1`). This is a current cost posture, revisited as traffic grows; the Workers-hosted `web`/`marketing` surfaces scale to zero natively.
 
@@ -689,9 +689,9 @@ Every item below was previously an open question and is now **settled** and inte
 31. **Hosted deployment topology (settled):** web client on Cloudflare Workers (edge); API/back-end on Fly.io Frankfurt (`fra`); database on Neon Postgres Frankfurt (`aws-eu-central-1`). Railway was rejected — its only EU region (Amsterdam) has no collocated Neon region, causing cross-region DB latency. Self-hosted uses the combined container image (§14.2) and is unaffected. (Section 14.7.)
 32. **Hosted database engine (settled):** Neon Postgres (`aws-eu-central-1`) for the hosted deployment. Self-hosted v1 requires operator-provided Postgres (same schema/migrations). Embedded SQLite self-host is **deferred** (Fast-Follow).
 33. **i18n tooling (settled):** Message catalogs live in committed repo JSON (`packages/*/i18n/locales/{en,de}.json`). Web uses react-i18next; marketing uses native `t()` at build time. CI validates locale parity via `pnpm i18n:validate`. (Section 17, rule 10-i18n.mdc.)
-34. **Secrets management tooling (settled):** Infisical Cloud (EU) is the secrets manager for all environments (`dev` / `staging` / `prod`). Operators set `staging` and `prod` secrets via the Infisical UI or OIDC sync; developers use `infisical run --env=dev` locally. All keys live at the environment root (no subfolders). (Section 15, rule 05-env-vars.mdc.)
+34. **Secrets management tooling (settled):** **Phase** is the secrets manager. Operators edit secrets in the Phase app (`SlugBase`); Phase automatically syncs to matching **GitHub Actions environments** (`staging`, `production`, and the dedicated `ci` environment for CI-only keys). Local development injects the Phase `Development` environment via `phase run`. Deploy pipelines push GHA environment secrets to Fly.io and Cloudflare Workers via `sync-secrets.sh` — no runtime secret fetch in CI setup. (Section 15, §22.9, rule 05-env-vars.mdc.)
 
-35. **CI/CD pipeline (settled):** GitHub Actions on hosted runners; single workflow file (`.github/workflows/ci-cd.yml`); branches `staging` and `main`. (Section 22.)
+35. **CI/CD pipeline (settled):** GitHub Actions on hosted runners; **PipeWatch-aligned workflow split** — entry points `pr.yml`, `staging.yml`, `main.yml` (plus `release.yml` for production deploy); reusable `ci.yml`, `deploy.yml`, and `sync-secrets.yml`; branches `staging` and `main`. Authoritative reference: `docs/internal/ci-cd-example/`. (Section 22.)
 36. **Design system and UI prototype (settled):** A clickable V1 design prototype in `docs/internal/design-prototype/V1/` is the **visual and interaction-design source of truth** (design language, screen anatomy, states, copy tone). The MVP spec remains the **product source of truth** — where the prototype conflicts with the spec, the spec wins. Design tokens (periwinkle accent `#7782f7`, dark-first, IBM Plex Sans/Mono) are defined in `docs/internal/design-prototype/V1/colors_and_type.css`. (Section 23.)
 
 **Technology stack**
@@ -709,110 +709,135 @@ Every item below was previously an open question and is now **settled** and inte
 48. **Background work (settled):** in-process within the API — no separate worker process or external broker (§22.10, §6.3).
 49. **AI provider, v1 (settled):** OpenAI behind the vendor-neutral AI interface (§11.2); swapping providers is Fast-Follow.
 50. **Package layout (settled):** pnpm workspace packages `backend`, `web`, `marketing`, `shared-types`, `ui`, plus `docs`; the canonical web-package name is `web` (not `web-client`); marketing and app are separately buildable. (Section 19.)
-51. **Platform app naming (settled):** operator-run Fly.io apps and Cloudflare Worker scripts are named `slugbase-<env>-<app>` — `<env>` ∈ {`staging`, `production`} (matching Infisical env names; no `development` deployment), `<app>` ∈ {`api`, `web`, `marketing`}. These are platform identifiers, not public hostnames. Self-hosted GHCR image is exempt. (Section 14.7.)
+51. **Platform app naming (settled):** operator-run Fly.io apps and Cloudflare Worker scripts are named `slugbase-<env>-<app>` — `<env>` ∈ {`staging`, `production`} (matching Phase / GHA environment names; no `development` deployment), `<app>` ∈ {`api`, `web`, `marketing`}. These are platform identifiers, not public hostnames. Self-hosted GHCR image is exempt. (Section 14.7.)
 
 ---
 
 ## 22. CI/CD Pipeline
 
-A single GitHub Actions workflow file (`.github/workflows/ci-cd.yml`) covers the full lifecycle from pull-request checks through production deployment. The design follows the Dispatch One pipeline pattern, adapted for SlugBase's package layout and the hosted GitHub Actions runners (the repo is public).
+SlugBase CI/CD follows the **PipeWatch pipeline pattern**, adapted for SlugBase's package layout and hosted topology. The authoritative reference for workflow structure, reusable chains, and secret-sync scripts is **`docs/internal/ci-cd-example/`** — implementation lands in issues #471–#474; this section documents the target design.
 
 ### 22.1 Runners and concurrency
 
-**GitHub-hosted runners** (`ubuntu-latest`) are used throughout. Because each job runs in a fresh ephemeral VM, Docker cleanup and concurrency group protection for self-hosted runners are unnecessary and are omitted.
+**GitHub-hosted runners** (`ubuntu-latest`) are used throughout. Each job runs in a fresh ephemeral VM — no self-hosted runner disk cleanup.
 
 Concurrency: in-progress runs are cancelled for PR and `staging`-push triggers; production deploys (triggered by a published release) are never cancelled.
 
-### 22.2 Triggers
+### 22.2 Workflow entry points
 
-| Event | Branches / types | Jobs fired |
+| Workflow | Trigger | Purpose |
 |---|---|---|
-| `pull_request` | targeting `staging` or `main` | CI checks (+ E2E when `staging → main`) |
-| `push` | `staging` | CI checks → staging deploy |
-| `push` | `main` | CI checks → prepare release |
-| `release` published | — | Production deploy |
-| `workflow_dispatch` | — | Manual trigger (full run) |
+| `pr.yml` | `pull_request` | CI gate; version check; E2E when `staging → main` |
+| `staging.yml` | push to `staging` | CI gate → staging deploy (+ GHCR self-host image tags in parallel) |
+| `main.yml` | push to `main` | CI gate → prepare release (+ GHCR image tags) |
+| `release.yml` | `release` published | Production deploy (idempotent) + GHCR release tags |
 
-### 22.3 CI checks (all PRs and pushes)
+Reusable workflows (`workflow_call` only — never triggered directly):
 
-Run on every trigger before any deployment gate. Order within the job:
+| Workflow | Called by | Purpose |
+|---|---|---|
+| `ci.yml` | `pr.yml`, `staging.yml`, `main.yml` | Parallel CI gate |
+| `deploy.yml` | `staging.yml`, `release.yml` | Parameterized deploy chain |
+| `sync-secrets.yml` | `deploy.yml`, manual dispatch | GHA → Fly/CF secret sync |
+| `e2e.yml` | `pr.yml` | Playwright e2e (staging→main PR only) |
+| `prepare-release.yml` | `main.yml` | Version bump, changelog, draft release |
+| `build-and-push-ce-image.yml` | `staging.yml`, `main.yml`, `release.yml` | GHCR self-host image |
 
-1. `pnpm install --frozen-lockfile`
-2. **Fast-fail checks (no secrets, no build):** lint → typecheck → unit tests
-3. Fetch secrets from Infisical (`development` env, OIDC method)
-4. Build
-5. Integration tests (using the development-env secrets)
-6. `pnpm audit --audit-level=high` (dependency audit)
+### 22.3 CI checks (reusable `ci.yml`)
+
+Run on every PR and push before any deployment gate. Jobs run **in parallel** (with `build`, `integration`, and `audit` gated on `typecheck` success). All CI jobs use the GitHub Actions **`ci` environment** for CI-only secrets (e.g. ReportPortal).
+
+| Job | Steps (summary) |
+|---|---|
+| **Lint** | setup → `pnpm lint` |
+| **Typecheck** | setup → `pnpm typecheck` |
+| **Unit** | setup → `pnpm test:unit` → `pnpm test:scripts` → `pnpm i18n:validate` → `pnpm i18n:check:hardcoded` |
+| **Build** | setup → `pnpm build` → validate sync-secrets / workflow-secrets policy |
+| **Integration** | setup → build deps → integration tests per package (matrix) |
+| **Audit** | setup → `pnpm audit --audit-level=high` |
+| **ReportPortal summary** | aggregate launch links (no API key in env) |
+
+The shared **setup composite action** (`.github/actions/setup`) installs pnpm + Node from `.nvmrc`, runs `pnpm install --frozen-lockfile`, and caches **Turborepo** outputs (`.turbo` keyed on `pnpm-lock.yaml`). It does **not** fetch runtime secrets.
 
 ### 22.4 E2E (Playwright)
 
-Runs only on the `staging → main` pull request (i.e. the release-candidate PR). Depends on CI checks passing. Rebuilds from source against the release tag. Runs against a managed local stack. Timeout: 45 minutes.
+Runs only on the `staging → main` pull request (release-candidate PR). Depends on CI passing. Rebuilds from source. Timeout: 45 minutes. Invoked via reusable `e2e.yml` from `pr.yml`.
 
-### 22.5 Staging deploy (push to `staging`)
+### 22.5 Staging deploy (`staging.yml` → `deploy.yml`)
 
-Ordered pipeline, with server and web/marketing builds running **in parallel** for speed. Schema migrations apply automatically on **API startup** (before the server accepts traffic) — hosted Fly and self-host GHCR use the same bootstrap path (§14.2); CI does not connect to Neon for migrate.
+After CI passes on push to `staging`:
 
-| Step | Description |
-|---|---|
-| 1 | GitHub Deployment record — start |
-| 2a (parallel) | Build API/back-end with `staging` Infisical secrets |
-| 2b (parallel) | Build web client + marketing site bundles with `staging` Infisical secrets |
-| 3a | Deploy API to **Fly.io** `fra` (`flyctl deploy --remote-only`) — migrations run on API boot |
-| 3b | Deploy web client to **Cloudflare Workers** via `wrangler deploy` (with retry)  |
-| 3c | Deploy marketing site to **Cloudflare Workers** via `wrangler deploy` (with retry)  |
-| 4 | Smoke: API and web — `GET /health` and `/version` (HTTP 200 + JSON); marketing — `GET ${MARKETING_ORIGIN}/` site root liveness only (HTTP 200; static site has no health/version routes) |
-| 5 | GitHub Deployment record — finish (success/failure) |
+1. **`deploy.yml`** with `environment: staging`:
+   - **sync-secrets** — push GHA `staging` environment secrets to Fly.io (`slugbase-staging-api`) and Cloudflare Workers (`slugbase-staging-web`, `slugbase-staging-marketing`) via `.github/scripts/sync-secrets.sh`
+   - **migrate** (parallel with Sentry release derivation) — Drizzle migrations via `.github/scripts/run-migrate.sh` using `DATABASE_URL_UNPOOLED` from GHA secrets
+   - **parallel deploys** — API to Fly.io `fra`; web + marketing to Cloudflare Workers (with retry)
+   - **smoke** — API `GET /health` + `/version`; web health; marketing site root liveness
+2. **GHCR self-host image** — built in parallel (tags `dev`, `nightly`, short SHA); hardcoded self-host `VITE_*` build args only (no Phase/GHA runtime fetch).
 
-### 22.6 Prepare release (push to `main`)
+### 22.6 Prepare release (`main.yml` → `prepare-release.yml`)
 
-Runs after CI checks pass. Only proceeds if `package.json` version is greater than the latest git tag.
+Runs after CI passes on push to `main`. Only proceeds if `package.json` version is greater than the latest git tag.
 
-1. Check version bump (compare `package.json` version against latest `v*` tag).
-2. Fetch `staging` Infisical secrets.
-3. Verify translations: `pnpm i18n:validate` (locale parity + referenced keys in committed JSON). Fails if non-default locales are missing keys or UI code references unknown keys.
-4. Generate changelog from `git log` since last tag (conventional commits).
-5. Create annotated git tag `vX.Y.Z` and push.
-6. Create **draft** GitHub Release (changelog as body) — a human publishes it to trigger production.
+1. Check version bump.
+2. Verify translations: `pnpm i18n:validate`.
+3. Generate changelog from conventional commits since last tag.
+4. Create annotated git tag `vX.Y.Z` and push.
+5. Create **draft** GitHub Release — a human publishes it to trigger production.
 
-### 22.7 Production deploy (release published)
+Secrets for release preparation come from the GHA environment (Phase-synced) — no runtime Phase fetch in the workflow.
 
-Triggered when a draft release is manually published. Idempotent: compares the release tag against `DEPLOYED_VERSION` (a repository Actions variable); skips the deploy if already deployed. Schema migrations apply automatically on **API startup** (before the server accepts traffic) — same bootstrap path as self-host (§14.2); CI does not connect to Neon for migrate.
+### 22.7 Production deploy (`release.yml` → `deploy.yml`)
+
+Triggered when a draft release is manually published. Idempotent: compares release tag against `DEPLOYED_VERSION` repository variable; skips deploy if already deployed.
 
 | Step | Description |
 |---|---|
 | 1 | Idempotency check |
-| 2 | GitHub Deployment record — start |
-| 3 | Build all packages from the release tag with `production` Infisical secrets; upload Sentry source maps (if `SENTRY_AUTH_TOKEN` is set) |
-| 4a | Deploy API to **Fly.io** `fra` — migrations run on API boot |
-| 4b | Deploy web client to **Cloudflare Workers** |
-| 4c | Deploy marketing site to **Cloudflare Workers** |
-| 5 | Smoke: health endpoint on Fly API + web client health check on Workers |
-| 6 | GitHub Deployment record — finish |
-| 7 | Write release tag to `DEPLOYED_VERSION` repository variable |
+| 2 | **`deploy.yml`** with `environment: production`, `ref: <release tag>` — same chain as staging (sync-secrets → migrate ∥ Sentry → parallel deploys → smoke) against `slugbase-production-*` apps |
+| 3 | Write release tag to `DEPLOYED_VERSION` |
+| 4 | GHCR image tags (`latest`, release tag) in parallel with deploy |
 
 ### 22.8 Self-hosted container image
 
-On `release` published (same trigger as the hosted production deploy), the workflow also builds and pushes the **combined container image** (API + bundled web client) to the GitHub Container Registry (`ghcr.io`), tagged `vX.Y.Z` and `latest`. This is the artefact self-hosters pull and run.
+On `staging` push, `main` push, and `release` published, the workflow builds and pushes the **combined container image** (API + bundled web client) to GitHub Container Registry (`ghcr.io`), tagged per trigger. Self-host operators pull and run this image; it is not subject to the hosted Fly/Workers topology.
 
-### 22.9 Secrets in CI
+### 22.9 Secrets in CI and deploy
 
-All environment secrets are fetched from Infisical via the `Infisical/secrets-action` using **OIDC** (no long-lived tokens in GitHub Actions secrets). Secrets live in **Infisical Cloud (EU)** at `https://eu.infisical.com`, project slug `slugbase-cloud`. The only GitHub Actions secrets stored in the repository are:
-- `INFISICAL_DOMAIN` — Infisical Cloud (EU) instance URL
-- `INFISICAL_OIDC_IDENTITY_ID` — the machine identity for OIDC auth
+**Phase** is the operator-facing secrets manager. **GitHub Actions environments** are the runtime source for CI and deploy workflows. Phase automatically syncs secret changes to the matching GHA environments.
 
-**Secret organization (settled):** all keys for an environment live at the **Infisical project root** (no subfolders). Local dev and CI inject the full environment via `infisical run --env=<slug>` and `Infisical/secrets-action` respectively.
+#### Phase ↔ GHA environment mapping
 
+| Phase environment | GHA environment | Purpose |
+|---|---|---|
+| `Development` | _(local only — `phase run`)_ | Local development |
+| `Staging` | `staging` | Staging deploy + runtime secrets on Fly/Workers |
+| `Production` | `production` | Production deploy + runtime secrets |
+| _(CI-only keys stored in Phase)_ | `ci` | CI-only persistent secrets (ReportPortal, etc.) |
+
+#### Secret flow
+
+```
+Phase (SlugBase app)  →  GHA environments (automatic sync)
+                              ↓
+                    CI jobs read secrets.ci
+                    deploy reads secrets.staging | secrets.production
+                              ↓
+                    sync-secrets.sh → Fly.io + Cloudflare Workers runtime
+```
+
+- **No Infisical OIDC** and no `Infisical/secrets-action` in workflows.
+- **No Phase CLI** in CI — the setup action installs dependencies only; workflows read `${{ secrets.* }}` from the job's GHA environment.
+- **Deploy sync:** `sync-secrets.yml` maps GHA environment secrets to platform targets via `.github/scripts/sync-secrets.sh` and `.github/scripts/github-secret-map.sh`. Fly secrets are staged (`--stage`) during the deploy chain; `workflow_dispatch` can stage-and-deploy immediately.
 - **Server-only secrets** use keys without a client prefix (`SESSION_SECRET`, `DATABASE_URL`, etc.).
-- **Build-time public config** uses `VITE_*` (web) or `PUBLIC_*` (marketing) — these are inlined into client bundles; never store true secrets under those prefixes.
+- **Build-time public config** uses `VITE_*` (web) or `PUBLIC_*` (marketing) — inlined into client bundles; never store true secrets under those prefixes.
 
-**OIDC identity (settled):** a **single machine identity** (`INFISICAL_OIDC_IDENTITY_ID`) is used for all CI jobs, scoped read-only to the `slugbase-cloud` project. Per-surface CI identities (`ci-api` / `ci-web` / `ci-marketing`) are a possible later hardening, not v1.
+Adding a new key follows the Phase-first workflow in rule `05-env-vars` (Phase + `.env.example` + Zod config schema + this document), in one commit.
 
 ### 22.10 What is not in this pipeline
 
 - Self-hosted runner Docker cleanup (not needed on ephemeral hosted runners)
-- Concurrency guards for runner disk space (not needed)
+- A separate background worker deploy (SlugBase has no separate worker process; background work is in-process within the API)
 - A separate admin console deploy (no admin console in v1 — Fast-Follow)
-- A background worker service deploy (SlugBase has no separate worker process; background work is handled within the API process)
 
 ---
 

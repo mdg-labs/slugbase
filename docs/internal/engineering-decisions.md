@@ -27,7 +27,7 @@ This doc exists so roadmap tasks and sub-agents have concrete, runnable answers 
 | Background work | **In-process** (no worker/broker) | §22.10, §6.3 |
 | AI provider (v1) | **OpenAI** | Behind the vendor-neutral AI interface (§11.2) |
 | i18n | **react-i18next** (web) + repo JSON | en + de catalogs (§17) |
-| Secrets | **Infisical Cloud (EU)** | All envs (§15, §22.9) |
+| Secrets | **Phase** (`SlugBase` app) | Phase → GHA envs; local `phase run` (§15, §22.9) |
 
 ---
 
@@ -105,24 +105,35 @@ pnpm audit --audit-level=high
 ```
 
 - Playwright e2e is **not** in the local gate (CI-only).
-- Commands needing env run under Infisical: `infisical run --env=dev -- <cmd>`.
+- Commands needing env run under Phase: `phase run -- <cmd>` (local dev — full CLI detail in #475).
 - Exact `pnpm` script names are finalized in the P1 scaffold; this gate is the contract they must satisfy.
 
 ---
 
-## 8. Secrets — Infisical Cloud (EU) (spec §15, §22.9, decision #34)
+## 8. Secrets — Phase (spec §15, §22.9, decision #34)
 
 | Field | Value |
 |---|---|
-| Instance | `https://eu.infisical.com` (Infisical Cloud, EU) |
-| Project slug | `slugbase-cloud` |
-| Environments | `dev` · `staging` · `prod` (no `dev` *deployment* — local only) |
-| CI auth | OIDC via `Infisical/secrets-action`; **single** machine identity `INFISICAL_OIDC_IDENTITY_ID` (project-scoped read-only) |
-| GHA secrets | only `INFISICAL_DOMAIN` + `INFISICAL_OIDC_IDENTITY_ID` |
+| Tool | **Phase** — secrets manager |
+| App | `SlugBase` (`.phase.json`) |
+| Phase environments | `Development` · `Staging` · `Production` |
+| GHA environments | `ci` · `staging` · `production` |
+| Local dev | `phase run -- <cmd>` injects `Development` env |
+| CI / deploy | Workflows read `${{ secrets.* }}` from the job's GHA environment — **no Phase CLI in CI** |
+| Platform sync | `.github/scripts/sync-secrets.sh` pushes GHA secrets → Fly.io + Cloudflare Workers during deploy |
 
-**Layout:** all keys for an environment live at the **project root** (no Infisical subfolders). CI and `infisical run --env=<slug>` inject the full environment. Never put true secrets in `VITE_*` or `PUBLIC_*` keys (client bundles).
+**Phase ↔ GHA mapping (settled):**
 
-Adding an env var = the 4-step Infisical-first workflow in rule `05-env-vars` (Infisical + `.env.example` + Zod config schema + config-reference doc), in one commit. Security-critical secrets validated at startup; **no silent defaults** (§15).
+| Phase env | GHA environment | Purpose |
+|---|---|---|
+| `Development` | _(local only)_ | Local dev via `phase run` |
+| `Staging` | `staging` | Staging deploy + runtime secrets |
+| `Production` | `production` | Production deploy + runtime secrets |
+| _(CI-only keys in Phase)_ | `ci` | CI-only secrets (ReportPortal, etc.) |
+
+Phase automatically syncs operator edits to the matching GHA environments. Deploy pipelines call `sync-secrets.yml` to propagate GHA secrets to Fly/Workers runtime. Never put true secrets in `VITE_*` or `PUBLIC_*` keys (client bundles).
+
+Adding an env var = the 4-step Phase-first workflow in rule `05-env-vars` (Phase + `.env.example` + Zod config schema + config-reference doc), in one commit. Security-critical secrets validated at startup; **no silent defaults** (§15).
 
 ---
 
@@ -151,7 +162,7 @@ Every UI string is a catalog key `<scope>.<context>.<descriptor>`; en + de requi
 - **App naming:** `slugbase-<env>-<app>` — `<env>` ∈ {`staging`, `production`}, `<app>` ∈ {`api`, `web`, `marketing`}. Platform identifiers, not public hostnames. (decision #51)
 - **Staging API scale-to-zero:** `slugbase-staging-api` runs `auto_stop_machines` + `min_machines_running = 0` (cold-start on request). `slugbase-production-api` stays warm (`≥ 1`). Workers scale to zero natively.
 - **Self-hosted:** combined container image (API + bundled web) to GHCR on release; not subject to the hosted topology or naming.
-- **CI/CD:** single `.github/workflows/ci-cd.yml`, GitHub-hosted runners, branches `staging`/`main` (spec §22; reference `docs/example.ci-cd.yml`).
+- **CI/CD:** PipeWatch-aligned workflow split — `pr.yml` / `staging.yml` / `main.yml` entry points, reusable `ci.yml` + `deploy.yml` + `sync-secrets.yml`; GitHub-hosted runners; branches `staging`/`main` (spec §22; authoritative reference `docs/internal/ci-cd-example/`).
 
 ---
 
