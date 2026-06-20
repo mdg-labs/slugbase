@@ -825,8 +825,7 @@ Phase (SlugBase app)  →  GHA environments (automatic sync)
                     sync-secrets.sh → Fly.io + Cloudflare Workers runtime
 ```
 
-- **No Infisical OIDC** and no `Infisical/secrets-action` in workflows.
-- **No Phase CLI** in CI — the setup action installs dependencies only; workflows read `${{ secrets.* }}` from the job's GHA environment.
+- **No Phase CLI** in CI — workflows read `${{ secrets.* }}` from the job's GHA environment (`ci`, `staging`, `production`); Phase Console syncs operator edits automatically.
 - **Deploy sync:** `sync-secrets.yml` maps GHA environment secrets to platform targets via `.github/scripts/sync-secrets.sh` and `.github/scripts/github-secret-map.sh`. Fly secrets are staged (`--stage`) during the deploy chain; `workflow_dispatch` can stage-and-deploy immediately.
 - **Server-only secrets** use keys without a client prefix (`SESSION_SECRET`, `DATABASE_URL`, etc.).
 - **Build-time public config** uses `VITE_*` (web) or `PUBLIC_*` (marketing) — inlined into client bundles; never store true secrets under those prefixes.

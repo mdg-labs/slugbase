@@ -36,7 +36,7 @@ This PRD defines that portal. It deliberately excludes PipeWatch-style external 
 - Operator visibility into **account** and **workspace** statistics (counts, plan mix, growth trends)
 - **Product-usage aggregates** (bookmarks, members, billing state summaries) without PII-heavy exports
 - **No mixing** of operator-admin concerns with core product code/schema that also ships in self-hosted
-- Runnable on the existing hosted stack (Fly.io API region, Neon Postgres, Infisical secrets, Cloudflare edge)
+- Runnable on the existing hosted stack (Fly.io API region, Neon Postgres, Phase secrets, Cloudflare edge)
 - **Read-only** on all `public.*` product data in V1 — operator actions limited to platform-admin identity management
 
 ---
@@ -136,11 +136,11 @@ Aligns with spec §14.7 naming conventions (decision #51).
 | Artifact | Change |
 |---|---|
 | `.github/scripts/provision-fly-apps.sh` (or equivalent) | Provision `slugbase-{staging\|production}-admin` |
-| Infisical / deploy secret sync | `admin` service preflight + Fly secret push |
+| Phase / deploy secret sync | `admin` service preflight + Fly secret push |
 | `.github/workflows/deploy-staging.yml` | Parallel `deploy-admin-staging` job (after `db-admin` migrate) |
 | `.github/workflows/deploy-production.yml` | Parallel `deploy-admin-production` job (after migrate) |
 | Admin migrate script | Run `@slugbase/db-admin db:migrate` — **separate** from product API boot migrate |
-| `docs/internal/environment-variables.md` | Document new Infisical keys |
+| `docs/internal/environment-variables.md` | Document new Phase keys |
 
 ---
 
@@ -254,11 +254,11 @@ V1 has no product-side operator actions (no account suspension, plan override, o
 
 When `admin.admin_users` is empty on startup:
 
-1. Read `ADMIN_BOOTSTRAP_EMAIL` + `ADMIN_BOOTSTRAP_PASSWORD` from Infisical (set before first deploy)
+1. Read `ADMIN_BOOTSTRAP_EMAIL` + `ADMIN_BOOTSTRAP_PASSWORD` from Phase (set before first deploy)
 2. Create one `platform_admin` user with argon2id password hash
 3. Refuse bootstrap if any admin user already exists (no replay)
 
-After bootstrap, **remove or rotate** bootstrap password in Infisical. No CLI seed script required.
+After bootstrap, **remove or rotate** bootstrap password in Phase. No CLI seed script required.
 
 ### 8.3 Invite-only onboarding (after bootstrap)
 
@@ -366,7 +366,7 @@ Implementing the admin portal does **not** remove P5-06. Optionally, the portal 
 | Admin API unhandled errors | Sentry middleware |
 | Abnormal signup spike (optional) | `Sentry.captureMessage` level `warning` — configurable threshold vs 7-day baseline |
 
-- New Infisical key: `SENTRY_DSN_ADMIN` → runtime `SENTRY_DSN` on admin Fly app
+- New Phase key: `SENTRY_DSN_ADMIN` → runtime `SENTRY_DSN` on admin Fly app
 - Thresholds env-configurable: `ADMIN_ALERT_SIGNUP_SPIKE_MULTIPLIER` (default `3`)
 - Scrub secrets from events — same redaction rules as product (`03-security-baseline.mdc`)
 
@@ -378,10 +378,10 @@ Implementing the admin portal does **not** remove P5-06. Optionally, the portal 
 
 Follow `05-env-vars.mdc` when implementing. Admin-specific keys:
 
-| Infisical storage | Runtime (Fly) | Required | Notes |
+| Phase storage | Runtime (Fly) | Required | Notes |
 |---|---|---|---|
 | `DATABASE_URL` | `DATABASE_URL` | ✓ | Same Neon instance as API |
-| `ADMIN_SESSION_SECRET` | `ADMIN_SESSION_SECRET` | ✓ | Min 32 chars — new Infisical key |
+| `ADMIN_SESSION_SECRET` | `ADMIN_SESSION_SECRET` | ✓ | Min 32 chars — new Phase key |
 | `SENTRY_DSN_ADMIN` | `SENTRY_DSN` | optional | New Sentry project |
 | `NODE_ENV` | `NODE_ENV` | ✓ | |
 | `ADMIN_SNAPSHOT_CRON` | same | optional | Default `0 2 * * *` |
@@ -436,7 +436,7 @@ Follow `05-env-vars.mdc` when implementing. Admin-specific keys:
 ### 12.5 Hosted deploy
 
 - [ ] Admin Fly app provisioned staging + production
-- [ ] Infisical keys registered and synced to Fly
+- [ ] Phase keys registered and synced to Fly
 - [ ] `deploy-admin` jobs in staging + production workflows
 - [ ] `db-admin` migrate step before admin deploy
 - [ ] Self-host GHCR image build **excludes** `packages/admin` and `packages/db-admin`
@@ -485,7 +485,7 @@ Use this section with the **github-intake** skill. Create one **Feature (epic)**
 | 5 | `admin: daily snapshot rollup job` | `domain:backend` | Medium | S | 1, 4 | In-process cron, upsert `daily_snapshots`, retention purge |
 | 6 | `admin: overview and directory API` | `domain:backend` | High | M | 4, 5 | Overview, account list, workspace list, drill-down endpoints |
 | 7 | `admin: React UI — dashboards and directories` | `domain:frontend` | High | L | 6 | Charts, tables, drill-down, admin user management UI |
-| 8 | `admin: hosted deploy pipeline and Infisical wiring` | `domain:infra` | High | M | 2 | Fly provision, deploy jobs, migrate step, self-host exclusion check |
+| 8 | `admin: hosted deploy pipeline and Phase wiring` | `domain:infra` | High | M | 2 | Fly provision, deploy jobs, migrate step, self-host exclusion check |
 
 **Effort column:** t-shirt label (`S`/`M`/`L`) — map to org Effort field at intake.
 
@@ -549,8 +549,8 @@ Use this section with the **github-intake** skill. Create one **Feature (epic)**
 ### 14.1 Operator actions (out of scope for agents)
 
 - Configure Cloudflare Access policy for `admin.slugbase.app` / `staging-admin.slugbase.app`
-- Set `ADMIN_BOOTSTRAP_*` in Infisical before first deploy; remove after bootstrap
-- Add `ADMIN_URL`, `ADMIN_SESSION_SECRET`, `SENTRY_DSN_ADMIN` to Infisical staging/production
+- Set `ADMIN_BOOTSTRAP_*` in Phase before first deploy; remove after bootstrap
+- Add `ADMIN_URL`, `ADMIN_SESSION_SECRET`, `SENTRY_DSN_ADMIN` to Phase staging/production
 - Create Sentry project for admin service
 
 ---

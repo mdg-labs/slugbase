@@ -67,14 +67,14 @@ Three workflow files (split from monolith by SB-174, gated by SB-175):
 
 GitHub-hosted runners (`ubuntu-latest`). Strict dependency chains: `build-server → migrate → deploy-fly` (API track), `build-web → deploy-web + deploy-marketing` (web/marketing track). No `if:` conditions in staging jobs; production keeps `if:` for `should_deploy` output access.
 CI gates staging deploy via `workflow_call` — deploy only fires after CI passes. Same branch resolution (no `main` dependency). PRs to staging trigger only CI (deploy skipped by `if:` conditional).
-Secrets: Infisical OIDC via `Infisical/secrets-action` — only two GHA secrets: `INFISICAL_DOMAIN` + `INFISICAL_OIDC_IDENTITY_ID`.
+Secrets: Phase Console syncs `Staging` / `Production` to GHA environments (`ci`, `staging`, `production`); workflows read `${{ secrets.* }}` — no Phase CLI in CI. Deploy pipelines push secrets to Fly.io and Cloudflare via `sync-secrets.sh`.
 Branch protection: job names preserved from original monolith — existing rules apply unchanged.
 Spec: §22. Resolved decision #35.
 _added: 2026-05-31_ | _updated: 2026-06-10_
 
-## pnpm test:integration — NEVER wrap with infisical (2026-06-01)
+## pnpm test:integration — NEVER wrap with phase (2026-06-01)
 
-`pnpm test:integration` must be run **without** `infisical run --env=dev --` (avoids overriding test env). Backend deployment booleans in `env.schema.ts` use `envBoolean()` / `optionalEnvBoolean()` so Infisical `"false"` is not misread as true (fixed 2026-06-02; formerly `z.coerce.boolean()` on `PUBLIC_REGISTRATION`, `EMAIL_VERIFICATION_REQUIRED`, `SMTP_SECURE`, `CHALLENGE_DEV_SKIP`). Rule: `06-local-ci-before-commit.mdc`.
+`pnpm test:integration` must be run **without** `phase run --` (avoids overriding test env). Backend deployment booleans in `env.schema.ts` use `envBoolean()` / `optionalEnvBoolean()` so Phase string `"false"` is not misread as true (fixed 2026-06-02; formerly `z.coerce.boolean()` on `PUBLIC_REGISTRATION`, `EMAIL_VERIFICATION_REQUIRED`, `SMTP_SECURE`, `CHALLENGE_DEV_SKIP`). Rule: `06-local-ci-before-commit.mdc`.
 _added: 2026-06-01_
 
 ## Database migrations — split dispatch (SB-173, 2026-06-10)
@@ -83,7 +83,7 @@ Migrations are split by deployment topology via `SERVE_WEB_CLIENT` flag:
 - **Hosted** (`SERVE_WEB_CLIENT=false`): migrations run in CI via `migrate-staging` / `migrate-production` jobs (`drizzle-kit migrate`). Non-zero exit blocks deploy. `bootstrap()` skips `runMigrations()`.
 - **Self-hosted** (`SERVE_WEB_CLIENT=true`, Dockerfile preset): migrations run on **API bootstrap** before `app.listen()`. Single container, no race.
 `DATABASE_URL_UNPOOLED` is preferred when set (`resolveMigrationDatabaseUrl`). Local/operator manual apply: `pnpm db:migrate`.
-Staging smoke (`.github/scripts/smoke-staging-health.sh`) sends Cloudflare Access service-token headers when `CF_ACCESS_CLIENT_ID` + `CF_ACCESS_CLIENT_SECRET` are set in Infisical `staging`.
+Staging smoke (`.github/scripts/smoke-staging-health.sh`) sends Cloudflare Access service-token headers when `CF_ACCESS_CLIENT_ID` + `CF_ACCESS_CLIENT_SECRET` are set in the GHA `staging` environment.
 _added: 2026-06-01_ | _updated: 2026-06-10_
 
 ## i18n — repo JSON (2026-06-08)
@@ -120,21 +120,21 @@ _added: 2026-05-31_
 DB migrations: **Drizzle Kit** (`drizzle-kit generate` to create, `drizzle-kit migrate` to apply) — one forward-only history; never hand-write SQL or use `drizzle-kit push`. Rules/skills updated to match: `00-project.mdc`, `06-local-ci-before-commit.mdc`, `10-i18n.mdc`, `11-design-system.mdc`, orchestrator `doc-index.md` + `prompt-templates.md` + `SKILL.md`.
 _added: 2026-05-31_
 
-## Infisical env slugs: `dev`, `staging`, `prod` (2026-05-31, updated 2026-05-31)
+## Phase environments: `Development`, `Staging`, `Production` (2026-06-20)
 
-Infisical environment slugs are **`dev`**, **`staging`**, **`prod`** — NOT `development`, `staging`, `production`. Using the long form returns 404. Applies to:
-- Local CLI: `infisical run --env=dev -- <cmd>` and `infisical secrets set ... --env=dev`
-- CI workflow (`ci-cd.yml`): `env-slug: dev` for the CI/checks job; `env-slug: staging` for staging deploy; `env-slug: prod` for production deploy
-_added: 2026-05-31_
+Phase environment names are **`Development`**, **`Staging`**, **`Production`** — linked via `.phase.json` to the `SlugBase` app. Applies to:
+- Local CLI: `phase run -- <cmd>` and `phase secrets create|update … --env Development`
+- GHA: `ci`, `staging`, `production` environments (Phase Console syncs operator edits from `Staging` / `Production`)
+_added: 2026-05-31_ | _updated: 2026-06-20_
 
-## Confirmed tooling decisions (2026-05-31)
+## Confirmed tooling decisions (2026-05-31, updated 2026-06-20)
 
 | Concern | Tool | Notes |
 |---|---|---|
-| Secrets management | **Infisical** | Infisical Cloud (EU) — `https://eu.infisical.com`; project slug `slugbase-cloud`; envs `dev` / `staging` / `prod`; all keys at **environment root** (no subfolders); local `infisical run --env=dev -- <cmd>`; CI OIDC via `Infisical/secrets-action` — **single** machine identity (`INFISICAL_OIDC_IDENTITY_ID`), project-scoped read-only. **Phase CLI not used.** |
+| Secrets management | **Phase** | Phase Console — `SlugBase` app (`.phase.json`); envs `Development` / `Staging` / `Production`; all keys at **root path** (`/`); local `phase run -- <cmd>`; CI/deploy read GHA environment secrets — **no Phase CLI in workflows**. Operator syncs `Staging` / `Production` via Phase Console → GHA automatically. |
 | Translations | **repo JSON** | v1: en + de (spec §17); react-i18next (web) + native `t()` (marketing); CI `pnpm i18n:validate` |
 
-Rules touched: `00-project.mdc` (tech-stack + tooling), `05-env-vars.mdc` (Infisical project + workflow), `10-i18n.mdc` (repo-JSON workflow).
+Rules touched: `00-project.mdc` (tech-stack + tooling), `05-env-vars.mdc` (Phase project + workflow), `10-i18n.mdc` (repo-JSON workflow).
 _added: 2026-05-31_
 
 ## Hosted infrastructure topology (2026-05-31)
@@ -149,7 +149,7 @@ _added: 2026-05-31_
 Fly.io `fra` chosen over Railway because Railway's only EU region (Amsterdam) has no collocated Neon Postgres region → cross-region DB latency on every query.
 Self-hosted: combined container image, unaffected by hosted topology.
 Key env vars: `APP_BASE_URL` = Fly.io app domain (or custom), `FRONTEND_ORIGIN` = CF Workers domain.
-**App naming** (decision #51): `slugbase-<env>-<app>` — Fly.io app + CF Worker script names. Set: `slugbase-staging-api` (Fly), `slugbase-staging-web` (CF), `slugbase-staging-marketing` (CF), `slugbase-production-api` (Fly), `slugbase-production-web` (CF), `slugbase-production-marketing` (CF). `<env>` matches Infisical env (`staging`/`production`); **no `development` deployment** (local dev only). These are platform identifiers, not public hostnames. Self-hosted GHCR image is exempt. **No Fly/CF apps exist yet — created during infra setup.**
+**App naming** (decision #51): `slugbase-<env>-<app>` — Fly.io app + CF Worker script names. Set: `slugbase-staging-api` (Fly), `slugbase-staging-web` (CF), `slugbase-staging-marketing` (CF), `slugbase-production-api` (Fly), `slugbase-production-web` (CF), `slugbase-production-marketing` (CF). `<env>` matches GHA deploy environment (`staging`/`production`); **no `development` deployment** (local dev only). These are platform identifiers, not public hostnames. Self-hosted GHCR image is exempt. **No Fly/CF apps exist yet — created during infra setup.**
 Fly scaling: `slugbase-staging-api` **scaled to zero** (`auto_stop_machines`, `min_machines_running = 0`; cold-start on request) — current cost posture. `slugbase-production-api` stays warm (`min_machines_running ≥ 1`). CF Workers (`web`/`marketing`) scale to zero natively.
 Spec: §14.7, resolved decisions 31–32, 51.
 _added: 2026-05-31_
@@ -164,19 +164,14 @@ _added: 2026-06-09_
 The #315 branch verifier (`generalPurpose` subagent `3f9c15eb-60d2-4c95-909a-d8e82f0a005f`) completed verification correctly (Layer 1/2/3 all PASS, GitHub Done comment posted, status set to Done) but then hallucinated and attempted to write `/home/michael/PycharmProjects/ai-proxy/proxy-server/package.json` — a completely unrelated Electron HTTP proxy project. The file didn't exist on disk (path doesn't exist). The verifier prompt should be tightened with a hard block on path escape: add "DO NOT write files outside TARGET REPO or WORKTREE" to verifier prompts.
 _added: 2026-06-10_
 
-## E2E CI — no Infisical pollution on app under test (2026-06-13)
+## E2E CI — isolated test env (2026-06-13, updated 2026-06-20)
 
-`e2e.yml` mirrors `scripts/e2e.sh`: API/container start with explicit test env only (`SLUGBASE_E2E_MODE`, hardcoded session/encryption keys, localhost URLs, `PUBLIC_REGISTRATION=true`). **Hosted** also runs `pnpm --filter @slugbase/backend db:migrate` before API start (hosted API skips bootstrap migrations when `SERVE_WEB_CLIENT=false`). Infisical `staging` fetch runs immediately before Playwright; Playwright steps re-pin `DATABASE_URL` + e2e base URLs so staging secrets do not reach tests. CI Playwright uses `scripts/e2e-ci-playwright.sh` (process substitution + summary parse) — `pnpm | tee` could exit 0 while the log shows `N failed`. Follow-up: selective 3-key fetch via Infisical path `/ci/e2e` (option B).
-_added: 2026-06-13_
+`e2e.yml` mirrors `scripts/e2e.sh`: API/container start with explicit test env only (`SLUGBASE_E2E_MODE`, hardcoded session/encryption keys, localhost URLs, `PUBLIC_REGISTRATION=true`). **Hosted** also runs `pnpm --filter @slugbase/backend db:migrate` before API start (hosted API skips bootstrap migrations when `SERVE_WEB_CLIENT=false`). Playwright steps use pinned `DATABASE_URL` + e2e base URLs so GHA staging secrets do not reach tests. CI Playwright uses `scripts/e2e-ci-playwright.sh` (process substitution + summary parse) — `pnpm | tee` could exit 0 while the log shows `N failed`.
+_added: 2026-06-13_ | _updated: 2026-06-20_
 
 ## ReportPortal test reporting (#366 epic, 2026-06-13)
 
-Unit, integration, and e2e tests publish launches to self-hosted ReportPortal when `REPORTPORTAL_URL`, `REPORTPORTAL_PROJECT`, and `REPORTPORTAL_API_KEY` are set (CI via Infisical). Wiring: `scripts/reportportal-vitest.ts`, `scripts/reportportal-playwright.ts`, `scripts/reportportal-ci-summary.sh` (CI job summary + PR comments from `reportportal_launch_url=` stdout). Reporters no-op locally when env is incomplete. Allure + gh-pages test reports removed in #371.
-_added: 2026-06-13_
-
-## Infisical secrets delete — use --type (2026-06-13)
-
-`infisical secrets get KEY` without `--type` merges layers and can false-positive "present" after shared secrets are deleted. For existence/delete checks use `--type=shared` and `--type=personal` separately. Delete shared: `infisical secrets delete KEY --env=ENV --type=shared`.
+Unit, integration, and e2e tests publish launches to self-hosted ReportPortal when `REPORTPORTAL_URL`, `REPORTPORTAL_PROJECT`, and `REPORTPORTAL_API_KEY` are set (CI via GHA `ci` environment). Wiring: `scripts/reportportal-vitest.ts`, `scripts/reportportal-playwright.ts`, `scripts/reportportal-ci-summary.sh` (CI job summary + PR comments from `reportportal_launch_url=` stdout). Reporters no-op locally when env is incomplete. Allure + gh-pages test reports removed in #371.
 _added: 2026-06-13_
 
 ## Orchestrator — serialize CI on WSL (2026-06-15)

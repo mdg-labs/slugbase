@@ -304,14 +304,14 @@ pnpm typecheck   # or n/a
 pnpm test:unit   # or n/a
 ```
 
-Mark `n/a` for commands not yet defined. Stop if any defined check fails. Use Infisical (`infisical run --env=dev`) when env required.
+Mark `n/a` for commands not yet defined. Stop if any defined check fails. Use Phase (`phase run --`) when env required.
 
 **Layer 3 — Logic review:**
 
 - 3a. Each acceptance criterion — genuinely implemented?
 - 3b. Doc contract — spec `§` deviations with file:line + fix hint
 - 3c. Security baseline — server-side sessions (not JWT), no logged secrets, SSRF-safe egress, encrypted at-rest secrets, CSRF exempt list not widened; no deployment-mode branches (03-security-baseline.mdc)
-- 3c2. Env vars — any new var fully registered (Infisical + .env.example + schema + docs)? (05-env-vars.mdc)
+- 3c2. Env vars — any new var fully registered (Phase + .env.example + schema + docs)? (05-env-vars.mdc)
 - 3c3. GitHub commit link — subject includes `[#N]` or `[P*-*]`; body includes `fixes #<leaf>` when task is tracked on GitHub; body includes `fixes #<parent>` only for parents in `CLOSE_PARENTS`; no unrelated issue references (07-issue-commit-linking.mdc)
 - 3c4. Board Status only — agents must never set GitHub issue state (open/closed); all status management must be via project board Status (In Progress / In Review / Done / Ready); verifying code or comments that call `issue_state`, `close()`, `reopen()` on GitHub issues → **FAIL**
 - 3d. DB migrations — hand-written migration SQL or hand-created migration directories → **FAIL**
@@ -447,7 +447,7 @@ _agent: verification_
 
 Path: `.cursor/skills/workspace-notes.md`
 
-Store only durable knowledge: conventions, build/test quirks, Infisical/env notes, recurring verify failures, Lane P merge conflict patterns.
+Store only durable knowledge: conventions, build/test quirks, Phase/env notes, recurring verify failures, Lane P merge conflict patterns.
 
 ```markdown
 ## <topic>

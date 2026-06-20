@@ -81,4 +81,4 @@ Run from the repo root (Turborepo fans out to all packages). Mark a command `n/a
 | security audit | `pnpm audit --audit-level=high` |
 | e2e (CI only) | `pnpm test:e2e` (Playwright) — runs on the `staging → main` PR, **not** in per-task verification (spec §22.4) |
 
-**Stack note (settled):** backend = NestJS · web = React Router v7 · marketing = Astro · persistence = Drizzle ORM + Drizzle Kit. Local env via Infisical (`infisical run --env=dev`).
+**Stack note (settled):** backend = NestJS · web = React Router v7 · marketing = Astro · persistence = Drizzle ORM + Drizzle Kit. Local env via Phase (`phase run --`).

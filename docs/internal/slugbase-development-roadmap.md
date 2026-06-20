@@ -30,7 +30,7 @@ A Story is split into Sub-tasks **only** when its parts (a) live in **different 
 
 ## Universal acceptance criteria (apply to EVERY leaf — not repeated per row)
 
-Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit with `[SB-N]`/`[P*-*]` (`01`,`07`); TS strict, no `any`, no `console.log`; security baseline (`03`); every new UI string via repo JSON en+de (`10`); every new env var via the Infisical 4-step (`05`); **no `isCloud`/deployment-mode branches** — entitlements + interface selection (spec §15). The DB MIGRATIONS block (orchestrator `prompt-templates.md`) applies to every execution prompt.
+Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit with `[SB-N]`/`[P*-*]` (`01`,`07`); TS strict, no `any`, no `console.log`; security baseline (`03`); every new UI string via repo JSON en+de (`10`); every new env var via the Phase 4-step (`05`); **no `isCloud`/deployment-mode branches** — entitlements + interface selection (spec §15). The DB MIGRATIONS block (orchestrator `prompt-templates.md`) applies to every execution prompt.
 
 ## Phases (= Epics)
 
@@ -53,9 +53,9 @@ Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit w
 > **D-21 exit slice:** `P1-01`, `P1-03`, `P1-04`, `P1-09` green.
 
 ### P1-01 — Initialize pnpm + Turborepo monorepo scaffold — Infra · Lane S
-- **AC:** pnpm workspace with `packages/{backend,web,marketing,shared-types,ui}` placeholders; root strict `tsconfig`, ESLint/Prettier, `turbo.json`; root scripts `lint`/`typecheck`/`test:unit`/`test:integration`/`build` via Turbo; `.env.example` + `.infisical.json` (project `slugbase-cloud`).
+- **AC:** pnpm workspace with `packages/{backend,web,marketing,shared-types,ui}` placeholders; root strict `tsconfig`, ESLint/Prettier, `turbo.json`; root scripts `lint`/`typecheck`/`test:unit`/`test:integration`/`build` via Turbo; `.env.example` + `.phase.json` (Phase `SlugBase` app).
 - **Tests:** `pnpm lint && pnpm typecheck && pnpm build` succeed on empty packages.
-- **Files:** repo root (`package.json`, `pnpm-workspace.yaml`, `turbo.json`, `tsconfig*.json`, eslint/prettier configs, `.env.example`, `.infisical.json`, `packages/*/package.json`)
+- **Files:** repo root (`package.json`, `pnpm-workspace.yaml`, `turbo.json`, `tsconfig*.json`, eslint/prettier configs, `.env.example`, `.phase.json`, `packages/*/package.json`)
 - **Doc Ref:** spec §2.2, §19; eng §2, §3, §7 · **Deps:** — · **Status:** [ ]
 
 ### P1-02 — shared-types: Zod + ts-rest + OpenAPI generation — Infra · Lane S
@@ -101,7 +101,7 @@ Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit w
 - **Doc Ref:** spec §19, §23.1; eng §1, §3, §9; rule `11` · **Deps:** P1-01 · **Status:** [!] failed — SB-10: ErrorBoundary hard-coded strings in root.tsx
 
 ### P1-09 — CI checks job (`.github/workflows/ci-cd.yml`) — Infra · Lane S
-- **AC:** workflow with PR/push triggers (`staging`,`main`); CI job: install → lint/typecheck/unit → Infisical OIDC fetch → build → integration → `pnpm audit`; only `INFISICAL_DOMAIN`+`INFISICAL_OIDC_IDENTITY_ID` as GHA secrets.
+- **AC:** workflow with PR/push triggers (`staging`,`main`); CI job: install → lint/typecheck/unit → build → integration → `pnpm audit`; secrets from GHA `ci` environment (Phase-synced).
 - **Tests:** workflow YAML validates; CI green on the P1 scaffold.
 - **Files:** `.github/workflows/ci-cd.yml`, `.github/actions/**`
 - **Doc Ref:** spec §22.1–22.3, §22.9; eng §7, §8, §10 · **Deps:** P1-01 · **Status:** [x]
@@ -397,7 +397,7 @@ Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit w
 - **Doc Ref:** spec §12; proto (`SettingsBilling.jsx`); §23.4; rule `10`,`11` · **Deps:** P5-03 · **Status:** [x]
 
 ### P5-06 — Aggregate-stats endpoint (secret-protected) — BE · Lane P
-- **AC:** shared-secret-protected aggregate operational stats endpoint (hosted operator observability); no PII; secret via Infisical.
+- **AC:** shared-secret-protected aggregate operational stats endpoint (hosted operator observability); no PII; secret via Phase / GHA environment.
 - **Tests:** integration: rejects without secret; returns aggregates with it.
 - **Files:** `packages/backend/src/admin/stats/**`
 - **Doc Ref:** spec §10.2, §18; rule `05` · **Deps:** P1-03 · **Status:** [ ]
@@ -550,6 +550,6 @@ Story SB-B  "Build the authentication screens"          issuetype=Story · paren
 
 ## Open follow-ups (not v1 tasks)
 
-- Per-surface Infisical CI identities (hardening; eng §12).
+- Per-surface GHA environment secret scoping (hardening; eng §12).
 - `schema-reference.md` / `api-design.md` grow incrementally alongside P1–P5 domain tasks (eng §12).
 - Fast-Follow items per spec §20 (operator console, soft-delete, additional provider impls, etc.).

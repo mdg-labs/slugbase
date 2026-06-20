@@ -25,7 +25,7 @@ function parseEnvBoolean(value: unknown, defaultValue: boolean): boolean {
 const envBoolean = (defaultValue: boolean) =>
   z.preprocess((value) => parseEnvBoolean(value, defaultValue), z.boolean());
 
-/** Optional Infisical-style boolean: unset → `undefined`; `"false"` / `"true"` parse correctly. */
+/** Optional string-env boolean: unset → `undefined`; `"false"` / `"true"` parse correctly. */
 const optionalEnvBoolean = () =>
   z.preprocess((value) => {
     if (value === undefined || value === null || value === "") {

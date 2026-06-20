@@ -34,7 +34,7 @@ Phase syncs operator edits to GHA automatically. CI jobs and deploy workflows re
 phase run -- pnpm dev   # injects Phase Development env — full setup in #475
 ```
 
-**CI** uses the GHA `ci` environment for CI-only keys (e.g. ReportPortal). Deploy uses `staging` or `production` GHA environments. No Phase CLI and no Infisical OIDC in workflows.
+**CI** uses the GHA `ci` environment for CI-only keys (e.g. ReportPortal). Deploy uses `staging` or `production` GHA environments. No Phase CLI in workflows.
 
 ### Table legend
 

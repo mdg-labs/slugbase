@@ -44,7 +44,7 @@ describe("validateEnvConfig", () => {
     ).toThrow(/Production startup refused/);
   });
 
-  it("parses SERVE_WEB_CLIENT=false from Infisical-style string env", () => {
+  it("parses SERVE_WEB_CLIENT=false from string env", () => {
     const config = validateEnvConfig({
       ...validTestEnv,
       NODE_ENV: "production",
@@ -54,7 +54,7 @@ describe("validateEnvConfig", () => {
     expect(config.SERVE_WEB_CLIENT).toBe(false);
   });
 
-  it("parses SMTP_SECURE=false from Infisical-style string env", () => {
+  it("parses SMTP_SECURE=false from string env", () => {
     const config = validateEnvConfig({
       ...validTestEnv,
       NODE_ENV: "production",
@@ -64,7 +64,7 @@ describe("validateEnvConfig", () => {
     expect(config.SMTP_SECURE).toBe(false);
   });
 
-  it("parses PUBLIC_REGISTRATION=false from Infisical-style string env", () => {
+  it("parses PUBLIC_REGISTRATION=false from string env", () => {
     const config = validateEnvConfig({
       ...validTestEnv,
       NODE_ENV: "production",
@@ -74,7 +74,7 @@ describe("validateEnvConfig", () => {
     expect(config.PUBLIC_REGISTRATION).toBe(false);
   });
 
-  it("parses EMAIL_VERIFICATION_REQUIRED=false from Infisical-style string env", () => {
+  it("parses EMAIL_VERIFICATION_REQUIRED=false from string env", () => {
     const config = validateEnvConfig({
       ...validTestEnv,
       NODE_ENV: "production",
@@ -84,7 +84,7 @@ describe("validateEnvConfig", () => {
     expect(config.EMAIL_VERIFICATION_REQUIRED).toBe(false);
   });
 
-  it("parses CHALLENGE_DEV_SKIP=false from Infisical-style string env", () => {
+  it("parses CHALLENGE_DEV_SKIP=false from string env", () => {
     const config = validateEnvConfig({
       ...validTestEnv,
       NODE_ENV: "development",

@@ -4,7 +4,7 @@
 # State file (JSONL): {"layer":"<label>","uuid":"<uuid>"}
 # Launch URL: ${REPORTPORTAL_SUMMARY_URL}/ui/#${REPORTPORTAL_SUMMARY_PROJECT}/launches/all/{uuid}
 #
-# Job summary and PR links MUST run in a job without Infisical / REPORTPORTAL_API_KEY in env.
+# Job summary and PR links MUST run in a job without REPORTPORTAL_API_KEY in env.
 # GitHub masks secret substrings everywhere in that job's output (including GITHUB_STEP_SUMMARY),
 # which corrupts launch UUIDs and breaks markdown hrefs.
 set -euo pipefail

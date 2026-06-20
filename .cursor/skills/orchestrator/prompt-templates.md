@@ -72,7 +72,7 @@ FORBIDDEN:
 Copy into **every execution and verifier** prompt. Prevents Cursor agent shells (Node 20) from breaking Astro/marketing and misleading Turbo cache.
 
 ```text
-NODE ENV (mandatory — run from TARGET REPO before any pnpm/turbo/infisical command):
+NODE ENV (mandatory — run from TARGET REPO before any pnpm/turbo/phase command):
 - Pin: .nvmrc = 22.12.0 (matches CI); engines >=22.12.0
 - Wrapper (preferred): bash scripts/with-ci-env.sh <command> [args…]
 - Examples:
@@ -80,7 +80,7 @@ NODE ENV (mandatory — run from TARGET REPO before any pnpm/turbo/infisical com
     bash scripts/with-ci-env.sh pnpm typecheck
     bash scripts/with-ci-env.sh pnpm test:unit
     bash scripts/with-ci-env.sh pnpm build
-    bash scripts/with-ci-env.sh pnpm test:integration   # NO infisical wrapper on integration
+    bash scripts/with-ci-env.sh pnpm test:integration   # NO phase wrapper on integration
     bash scripts/with-ci-env.sh pnpm i18n:validate
 - Alternative: source scripts/ci-env.sh once per shell, then run commands
 - Sanity: bash scripts/with-ci-env.sh node -v  → must be v22.12.0+
@@ -167,7 +167,7 @@ GIT:
 - No Smart Commit commands. See `07-issue-commit-linking.mdc`.
 
 SECRETS / COMMANDS:
-- Local tests/dev that need env: use Infisical (`infisical run --env=dev -- <cmd>`); see `05-env-vars.mdc`
+- Local tests/dev that need env: use Phase (`phase run -- <cmd>`); see `05-env-vars.mdc`
 - Do not commit `.env` or secret exports
 
 DB MIGRATIONS — MANDATORY (schema-first; no exceptions):
@@ -266,7 +266,7 @@ GIT:
 PLAN FILE: READ ONLY. Do not set `[~]`, `[x]`, or `[!]`.
 
 SECRETS / COMMANDS:
-- Local tests/dev: use Infisical (`infisical run --env=dev -- <cmd>`); see `05-env-vars.mdc`
+- Local tests/dev that need env: use Phase (`phase run -- <cmd>`); see `05-env-vars.mdc`
 - Do not commit `.env` or secret exports
 
 DB MIGRATIONS — MANDATORY (schema-first; no exceptions):
@@ -361,7 +361,7 @@ GIT:
     fixes #<parent>                  # one line per issue in CLOSE_PARENTS (omit when none)
 - FORBIDDEN: fixes #<parent> when parent not in CLOSE_PARENTS
 - See `07-issue-commit-linking.mdc`.
-- Infisical for env when needed (`infisical run --env=dev`)
+- Phase for env when needed (`phase run --`)
 
 DB MIGRATIONS — MANDATORY (schema-first; no exceptions):
 <copy verbatim DB MIGRATIONS block>
@@ -437,13 +437,13 @@ LAYER 2 — Automated checks from TARGET REPO:
 - lint: bash scripts/with-ci-env.sh pnpm lint (or n/a)
 - typecheck: bash scripts/with-ci-env.sh pnpm typecheck (or n/a)
 - test: <from plan row Tests column, else doc-index defaults>
-Use bash scripts/with-ci-env.sh infisical run --env=dev -- … when env required. Integration tests: bash scripts/with-ci-env.sh pnpm test:integration only (no Infisical wrapper). Stop if any defined check fails.
+Use bash scripts/with-ci-env.sh phase run -- … when env required. Integration tests: bash scripts/with-ci-env.sh pnpm test:integration only (no Phase wrapper). Stop if any defined check fails.
 
 LAYER 3 — Logic review:
 3a. Each acceptance criterion — genuinely implemented?
 3b. Doc contract — spec section deviations with file:line + fix hint
 3c. Security baseline — sessions (not JWT), no logged secrets, SSRF-safe egress, encrypted at-rest secrets, CSRF (03-security-baseline.mdc)
-3c2. Env vars — any new env var fully registered in Infisical + .env.example + schema + docs? (05-env-vars.mdc)
+3c2. Env vars — any new env var fully registered in Phase + .env.example + schema + docs? (05-env-vars.mdc)
 3c3. Issue commit link — subject includes `[#N]` or `[P*-*]`; body includes `fixes #<leaf>` when task is tracked on GitHub; body includes `fixes #<parent>` only for parents in CLOSE_PARENTS; no Smart Commit commands (07-issue-commit-linking.mdc)
 3d. DB migrations — hand-written migration SQL or hand-created directories → FAIL
 3e. Stubs, TODO/FIXME, placeholder values, deployment-mode branches (`isCloud`) → FAIL
@@ -557,7 +557,7 @@ TASK OUTCOMES:
 
 CHECKS:
 1. Confirm branch verifiers reported GitHub Done comments for integrated tasks
-2. Post-merge smoke: bash scripts/with-ci-env.sh pnpm lint, bash scripts/with-ci-env.sh pnpm typecheck (Infisical for env when needed via with-ci-env wrapper)
+2. Post-merge smoke: bash scripts/with-ci-env.sh pnpm lint, bash scripts/with-ci-env.sh pnpm typecheck (Phase for env when needed via with-ci-env wrapper)
 3. If smoke fails → FAIL batch; do not mark [x]
 
 PLAN FILE:
