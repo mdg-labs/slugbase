@@ -1,34 +1,27 @@
 name: Setup workspace
-description: pnpm, Node.js, dependencies, and Infisical OIDC secrets
+description: pnpm, Node.js, and frozen lockfile install (no runtime secret fetch)
 
 inputs:
   skip-checkout:
     description: Set to true when checkout already ran in the job
     required: false
     default: "false"
-  skip-infisical:
-    description: Skip Infisical secrets fetch
-    required: false
-    default: "false"
-  infisical-env-slug:
-    description: Infisical environment slug (dev, staging, prod)
-    required: false
-    default: dev
-  infisical-domain:
-    description: Infisical Cloud (EU) instance URL (GitHub secret)
-    required: false
-    default: ""
-  infisical-identity-id:
-    description: Infisical OIDC machine identity id (GitHub secret)
-    required: false
-    default: ""
 
 runs:
   using: composite
   steps:
     - name: Checkout
       if: inputs.skip-checkout != 'true'
-      uses: actions/checkout@v6
+      uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+
+    - name: Cache Turborepo outputs
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      with:
+        path: .turbo
+        key: turbo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+        restore-keys: |
+          turbo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          turbo-${{ runner.os }}-
 
     - name: Setup pnpm
       uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
@@ -36,22 +29,11 @@ runs:
         version: 9.15.4
 
     - name: Setup Node.js
-      uses: actions/setup-node@v6
+      uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
       with:
-        node-version: 22.12
+        node-version-file: .nvmrc
         cache: pnpm
 
     - name: Install dependencies
       shell: bash
       run: pnpm install --frozen-lockfile
-
-    - name: Fetch secrets from Infisical
-      if: inputs.skip-infisical != 'true'
-      # All secrets for the env live at project root (no subfolders).
-      uses: Infisical/secrets-action@77ab1f4ccd183a543cb5b42435fbd181189f4995 # v1.0.16
-      with:
-        method: oidc
-        domain: ${{ inputs.infisical-domain }}
-        identity-id: ${{ inputs.infisical-identity-id }}
-        project-slug: slugbase-cloud
-        env-slug: ${{ inputs.infisical-env-slug }}

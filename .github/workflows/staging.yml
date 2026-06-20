@@ -1,0 +1,37 @@
+name: Staging
+
+# Push to staging — CI gate, then deploy (spec §22.4).
+# Deploy wiring moves to #474; interim workflow_call to deploy-staging.yml.
+
+on:
+  push:
+    branches: [staging]
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: CI
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
+  deploy-staging:
+    name: Deploy staging
+    needs: [ci]
+    if: needs.ci.result == 'success'
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
+    uses: ./.github/workflows/deploy-staging.yml
+    secrets: inherit

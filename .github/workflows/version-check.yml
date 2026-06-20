@@ -1,0 +1,87 @@
+name: Version check
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: version-check-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  version-check:
+    name: Validate package versions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Validate workspace package versions
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const semverRe =
+            /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([\da-z-]+(?:\.[\da-z-]+)*))?(?:\+([\da-z-]+(?:\.[\da-z-]+)*))?$/i;
+
+          function findPackageJsonFiles(dir, results = []) {
+            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+              if (entry.name === 'node_modules' || entry.name === '.git') continue;
+              const fullPath = path.join(dir, entry.name);
+              if (entry.isDirectory()) {
+                findPackageJsonFiles(fullPath, results);
+              } else if (entry.name === 'package.json') {
+                results.push(fullPath);
+              }
+            }
+            return results;
+          }
+
+          const rootPkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const rootVersion = rootPkg.version;
+
+          if (typeof rootVersion !== 'string' || !semverRe.test(rootVersion)) {
+            console.error(`Root package.json version "${rootVersion}" is not valid semver`);
+            process.exit(1);
+          }
+
+          const packageFiles = findPackageJsonFiles('.');
+          const mismatches = [];
+
+          for (const file of packageFiles) {
+            const pkg = JSON.parse(fs.readFileSync(file, 'utf8'));
+            if (typeof pkg.version !== 'string') {
+              mismatches.push({ file, version: String(pkg.version) });
+              continue;
+            }
+            if (!semverRe.test(pkg.version)) {
+              mismatches.push({ file, version: `${pkg.version} (invalid semver)` });
+              continue;
+            }
+            if (pkg.version !== rootVersion) {
+              mismatches.push({ file, version: pkg.version });
+            }
+          }
+
+          if (mismatches.length > 0) {
+            console.error(
+              `All workspace package.json files must use the root version (${rootVersion}):`,
+            );
+            for (const mismatch of mismatches) {
+              console.error(`  ${mismatch.file}: ${mismatch.version}`);
+            }
+            process.exit(1);
+          }
+
+          console.log(
+            `Validated ${packageFiles.length} package.json files at version ${rootVersion}`,
+          );
+          NODE

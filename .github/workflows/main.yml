@@ -1,0 +1,36 @@
+name: Main
+
+# Push to main — CI gate and draft release preparation (spec §22.4).
+# Production deploy remains on release published (#474).
+
+on:
+  push:
+    branches: [main]
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: main-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: CI
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
+  prepare-release:
+    name: Prepare release
+    needs: [ci]
+    if: needs.ci.result == 'success'
+    permissions:
+      contents: write
+      id-token: write
+    uses: ./.github/workflows/prepare-release.yml
+    secrets: inherit

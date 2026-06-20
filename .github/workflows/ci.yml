@@ -1,27 +1,161 @@
 name: CI
 
-# CI checks — runs on PRs and pushes to staging/main (spec §22.4).
+# Reusable CI gate — lint, typecheck, unit, build, integration, audit (parallel jobs).
+# Called by pr.yml, staging.yml, and main.yml; never triggered directly (spec §22.4).
 
 on:
-  pull_request:
-    branches: [staging, main]
+  workflow_call:
 
-  push:
-    branches: [staging, main]
-
-  workflow_dispatch:
-
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: false
+permissions:
+  contents: read
 
 jobs:
-  ci:
-    name: CI · Checks
+  lint:
+    name: CI · Lint
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
+    environment: ci
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup
+        with:
+          skip-checkout: "true"
+
+      - name: Lint
+        run: pnpm lint
+
+  typecheck:
+    name: CI · Typecheck
+    runs-on: ubuntu-latest
+    environment: ci
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup
+        with:
+          skip-checkout: "true"
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+  unit:
+    name: CI · Unit tests
+    runs-on: ubuntu-latest
+    environment: ci
+    env:
+      REPORTPORTAL_URL: ${{ secrets.REPORTPORTAL_URL }}
+      REPORTPORTAL_API_KEY: ${{ secrets.REPORTPORTAL_API_KEY }}
+      REPORTPORTAL_PROJECT: ${{ secrets.REPORTPORTAL_PROJECT }}
+      # Unit tests must not call the live API.
+      PUBLIC_API_BASE_URL: ""
+      API_BASE_URL: ""
+      VITE_API_URL: ""
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup
+        with:
+          skip-checkout: "true"
+
+      - name: Check ReportPortal configuration
+        run: |
+          missing=()
+          [ -z "${REPORTPORTAL_URL:-}" ] && missing+=("REPORTPORTAL_URL")
+          [ -z "${REPORTPORTAL_PROJECT:-}" ] && missing+=("REPORTPORTAL_PROJECT")
+          [ -z "${REPORTPORTAL_API_KEY:-}" ] && missing+=("REPORTPORTAL_API_KEY")
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::warning::ReportPortal disabled — unset: ${missing[*]} (set in GHA ci environment secrets)"
+          else
+            echo "ReportPortal configuration present"
+          fi
+
+      - name: Start ReportPortal unit launch
+        id: rp-unit-start
+        run: |
+          uuid=$(node --experimental-strip-types scripts/reportportal-ci-launch.ts start unit || true)
+          echo "launch_id=${uuid}" >> "$GITHUB_OUTPUT"
+          if [ -n "$uuid" ]; then
+            echo "RP_LAUNCH_ID=${uuid}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Unit tests
+        id: unit-tests
+        run: pnpm test:unit
+
+      - name: i18n catalog validation
+        run: pnpm run i18n:validate
+
+      - name: Hard-coded UI strings (rg)
+        run: pnpm run i18n:check:hardcoded
+
+      - name: Client API origin guard
+        run: pnpm run check:client-api-origin
+
+      - name: Finish ReportPortal unit launch
+        if: always() && steps.rp-unit-start.outputs.launch_id != ''
+        env:
+          RP_LAUNCH_STATUS: ${{ steps.unit-tests.outcome == 'success' && 'PASSED' || 'FAILED' }}
+        run: |
+          node --experimental-strip-types scripts/reportportal-ci-launch.ts finish unit \
+            "${{ steps.rp-unit-start.outputs.launch_id }}" \
+            "$RP_LAUNCH_STATUS"
+
+      - name: Record ReportPortal unit launch
+        if: always() && steps.rp-unit-start.outputs.launch_id != ''
+        env:
+          RP_LAUNCH_UUID: ${{ steps.rp-unit-start.outputs.launch_id }}
+        run: bash scripts/reportportal-ci-summary.sh record-env unit
+
+      - name: Upload ReportPortal launch state
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: reportportal-ci-launches
+          path: reportportal-launches.jsonl
+          if-no-files-found: ignore
+
+  build:
+    name: CI · Build
+    needs: typecheck
+    if: needs.typecheck.result == 'success'
+    runs-on: ubuntu-latest
+    environment: ci
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup
+        with:
+          skip-checkout: "true"
+
+      - name: Build
+        env:
+          NODE_ENV: production
+        run: pnpm build
+
+      - name: Validate sync-secrets manifest
+        run: node --experimental-strip-types scripts/validate-sync-secrets-manifest.ts
+
+      - name: Validate workflow secrets policy
+        run: node --experimental-strip-types scripts/validate-workflow-secrets-policy.ts
+
+  integration:
+    name: CI · Integration tests
+    needs: typecheck
+    if: needs.typecheck.result == 'success'
+    runs-on: ubuntu-latest
+    environment: ci
+    env:
+      REPORTPORTAL_URL: ${{ secrets.REPORTPORTAL_URL }}
+      REPORTPORTAL_API_KEY: ${{ secrets.REPORTPORTAL_API_KEY }}
+      REPORTPORTAL_PROJECT: ${{ secrets.REPORTPORTAL_PROJECT }}
     services:
       postgres:
         image: postgres:16-alpine
@@ -40,87 +174,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
+      - name: Setup workspace
+        uses: ./.github/actions/setup
         with:
-          version: 9.15.4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
-        with:
-          node-version: 22.12
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Fetch secrets from Infisical
-        uses: Infisical/secrets-action@77ab1f4ccd183a543cb5b42435fbd181189f4995 # v1.0.16
-        with:
-          method: oidc
-          domain: ${{ secrets.INFISICAL_DOMAIN }}
-          identity-id: ${{ secrets.INFISICAL_OIDC_IDENTITY_ID }}
-          project-slug: slugbase-cloud
-          env-slug: staging
-
-      - name: Lint
-        run: pnpm lint
-
-      - name: Typecheck
-        id: typecheck
-        run: pnpm typecheck
-
-      - name: Start ReportPortal unit launch
-        id: rp-unit-start
-        run: |
-          uuid=$(node --experimental-strip-types scripts/reportportal-ci-launch.ts start unit || true)
-          echo "launch_id=${uuid}" >> "$GITHUB_OUTPUT"
-          if [ -n "$uuid" ]; then
-            echo "RP_LAUNCH_ID=${uuid}" >> "$GITHUB_ENV"
-          fi
-
-      - name: Unit tests
-        id: unit-tests
-        env:
-          # Infisical injects full staging env; unit tests must not call the live API.
-          PUBLIC_API_BASE_URL: ""
-          API_BASE_URL: ""
-          VITE_API_URL: ""
-        run: pnpm test:unit
-
-      - name: Finish ReportPortal unit launch
-        if: always() && steps.rp-unit-start.outputs.launch_id != ''
-        env:
-          RP_LAUNCH_STATUS: ${{ steps.unit-tests.outcome == 'success' && 'PASSED' || 'FAILED' }}
-        run: |
-          node --experimental-strip-types scripts/reportportal-ci-launch.ts finish unit \
-            "${{ steps.rp-unit-start.outputs.launch_id }}" \
-            "$RP_LAUNCH_STATUS"
-
-      - name: Record ReportPortal unit launch
-        if: always() && steps.rp-unit-start.outputs.launch_id != ''
-        env:
-          RP_LAUNCH_UUID: ${{ steps.rp-unit-start.outputs.launch_id }}
-        run: bash scripts/reportportal-ci-summary.sh record-env unit
-
-      - name: i18n catalog validation
-        run: pnpm run i18n:validate
-
-      - name: Hard-coded UI strings (rg)
-        run: pnpm run i18n:check:hardcoded
-
-      - name: Client API origin guard
-        run: pnpm run check:client-api-origin
-
-      - name: Build
-        # Keep reporting integration to ReportPortal when unit fails; still skip if lint/typecheck failed.
-        if: always() && steps.typecheck.outcome == 'success'
-        env:
-          NODE_ENV: production
-        run: pnpm build
+          skip-checkout: "true"
 
       - name: Start ReportPortal integration launch
-        if: always() && steps.typecheck.outcome == 'success'
         id: rp-integration-start
         run: |
           uuid=$(node --experimental-strip-types scripts/reportportal-ci-launch.ts start integration || true)
@@ -130,7 +189,6 @@ jobs:
           fi
 
       - name: Integration tests
-        if: always() && steps.typecheck.outcome == 'success'
         id: integration-tests
         env:
           DATABASE_URL: postgresql://slugbase:slugbase@localhost:5432/slugbase_test
@@ -153,10 +211,6 @@ jobs:
           RP_LAUNCH_UUID: ${{ steps.rp-integration-start.outputs.launch_id }}
         run: bash scripts/reportportal-ci-summary.sh record-env integration
 
-      - name: Dependency audit
-        if: always() && steps.typecheck.outcome == 'success'
-        run: pnpm audit --audit-level=high
-
       - name: Upload ReportPortal launch state
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
@@ -165,18 +219,36 @@ jobs:
           path: reportportal-launches.jsonl
           if-no-files-found: ignore
 
-      - name: ReportPortal summary pointer
-        if: always()
-        run: echo 'ReportPortal launch links are in the **CI · ReportPortal summary** job below.' >> "$GITHUB_STEP_SUMMARY"
+  audit:
+    name: CI · Audit
+    needs: typecheck
+    if: needs.typecheck.result == 'success'
+    runs-on: ubuntu-latest
+    environment: ci
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup
+        with:
+          skip-checkout: "true"
+
+      - name: Dependency audit
+        run: pnpm audit --audit-level=high
 
   reportportal-summary:
     name: CI · ReportPortal summary
-    needs: ci
+    needs: [lint, typecheck, unit, build, integration, audit]
     if: always()
     runs-on: ubuntu-latest
+    environment: ci
     permissions:
       contents: read
       pull-requests: write
+    env:
+      REPORTPORTAL_SUMMARY_URL: ${{ secrets.REPORTPORTAL_URL }}
+      REPORTPORTAL_SUMMARY_PROJECT: ${{ secrets.REPORTPORTAL_PROJECT }}
     steps:
       - name: Checkout
         uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
@@ -186,6 +258,7 @@ jobs:
         continue-on-error: true
         with:
           name: reportportal-ci-launches
+          merge-multiple: true
 
       - name: ReportPortal job summary
         if: always()
@@ -198,29 +271,6 @@ jobs:
           GITHUB_PR_NUMBER: ${{ github.event.pull_request.number }}
         run: bash scripts/reportportal-ci-summary.sh update-pr-comment ci
 
-  deploy-staging:
-    if: >
-      always() &&
-      needs.ci.result == 'success' &&
-      github.event_name == 'push' &&
-      github.ref == 'refs/heads/staging'
-    needs: [ci]
-    permissions:
-      contents: read
-      id-token: write
-      packages: write
-    uses: ./.github/workflows/deploy-staging.yml
-    secrets: inherit
-
-  prepare-release:
-    if: >
-      always() &&
-      needs.ci.result == 'success' &&
-      github.event_name == 'push' &&
-      github.ref == 'refs/heads/main'
-    needs: [ci]
-    permissions:
-      contents: write
-      id-token: write
-    uses: ./.github/workflows/prepare-release.yml
-    secrets: inherit
+      - name: ReportPortal summary pointer
+        if: always()
+        run: echo 'ReportPortal launch links are in this job summary.' >> "$GITHUB_STEP_SUMMARY"
