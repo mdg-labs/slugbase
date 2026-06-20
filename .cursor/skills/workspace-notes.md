@@ -58,19 +58,14 @@ _added: 2026-05-31_
 SB-125: Do **not** add a dedicated Cloudflare Worker or `/health`/`/version` on marketing. Staging smoke should assert **HTTP 200 on `MARKETING_ORIGIN` (site root)** only; API/Web keep `/health` + `/version`. CI failure was **302** on `/health`, not missing static files.
 _added: 2026-06-02_
 
-## CI/CD pipeline (split + gated 2026-06-10)
+## CI/CD pipeline — PipeWatch pattern (#470 epic, 2026-06-20)
 
-Three workflow files (split from monolith by SB-174, gated by SB-175):
-- `.github/workflows/ci.yml` — CI checks (lint, typecheck, tests, build, integration, audit) + calls `deploy-staging.yml` via `workflow_call` when CI passes on push to staging. Concurrency: never cancel (required PR check).
-- `.github/workflows/deploy-staging.yml` — Reusable workflow (`on: workflow_call`). Staging deploy (build, migrate, deploy API/web/marketing, smoke). No own trigger — called from `ci.yml`. Concurrency: cancel in-progress.
-- `.github/workflows/deploy-production.yml` — Production deploy (same pattern + GHCR release image + version record). Trigger: release published. Concurrency: never cancel.
+**Entry points:** `pr.yml` (PRs + version-check), `staging.yml` (CI → deploy + GHCR dev), `main.yml` (CI → prepare-release), `release.yml` (production on release published).
 
-GitHub-hosted runners (`ubuntu-latest`). Strict dependency chains: `build-server → migrate → deploy-fly` (API track), `build-web → deploy-web + deploy-marketing` (web/marketing track). No `if:` conditions in staging jobs; production keeps `if:` for `should_deploy` output access.
-CI gates staging deploy via `workflow_call` — deploy only fires after CI passes. Same branch resolution (no `main` dependency). PRs to staging trigger only CI (deploy skipped by `if:` conditional).
-Secrets: Phase Console syncs `Staging` / `Production` to GHA environments (`ci`, `staging`, `production`); workflows read `${{ secrets.* }}` — no Phase CLI in CI. Deploy pipelines push secrets to Fly.io and Cloudflare via `sync-secrets.sh`.
-Branch protection: job names preserved from original monolith — existing rules apply unchanged.
-Spec: §22. Resolved decision #35.
-_added: 2026-05-31_ | _updated: 2026-06-10_
+**Reusable workflows:** `ci.yml` (parallel lint/typecheck/unit/build/integration/audit/reportportal-summary; GHA `ci` env; Turborepo cache in setup action); `deploy.yml` (sync-secrets → migrate ∥ sentry → parallel api/web/marketing → smoke); `sync-secrets.yml` (GHA → Fly + CF).
+
+Monolith `deploy-staging.yml` / `deploy-production.yml` removed. Secrets: Phase → GHA (automatic); platform runtime via `sync-secrets.sh`. Reference: `docs/internal/ci-cd-example/`. Spec §22; decision #34 → Phase.
+_added: 2026-06-20_
 
 ## pnpm test:integration — NEVER wrap with phase (2026-06-01)
 
