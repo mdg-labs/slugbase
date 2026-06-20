@@ -5,19 +5,44 @@ export interface StripeSubscriptionLike {
   id: string;
   customer: string | { id: string };
   status: string;
-  current_period_end: number;
+  /** Present on pre-Basil API responses; removed from Subscription in Basil/Clover webhooks. */
+  current_period_end?: number;
   cancel_at_period_end?: boolean;
   metadata?: Record<string, string>;
   items?: {
     data?: Array<{
       id?: string;
       quantity?: number | null;
+      /** Basil/Clover: period end lives on SubscriptionItem when absent at subscription level. */
+      current_period_end?: number;
       price?: {
         metadata?: Record<string, string>;
         recurring?: { interval?: string; usage_type?: string } | null;
       } | null;
     }>;
   };
+}
+
+/**
+ * Resolves subscription period end from top-level field or item-level fields (Basil/Clover).
+ * Uses the maximum item period end when multiple items differ (multi-interval future).
+ */
+export function resolveSubscriptionCurrentPeriodEnd(
+  subscription: Pick<StripeSubscriptionLike, "current_period_end" | "items">,
+): number | null {
+  if (typeof subscription.current_period_end === "number") {
+    return subscription.current_period_end;
+  }
+
+  const itemPeriodEnds = (subscription.items?.data ?? [])
+    .map((item) => item.current_period_end)
+    .filter((periodEnd): periodEnd is number => typeof periodEnd === "number");
+
+  if (itemPeriodEnds.length === 0) {
+    return null;
+  }
+
+  return Math.max(...itemPeriodEnds);
 }
 
 export interface StripeCheckoutSessionLike {
@@ -113,6 +138,8 @@ export function mapStripeSubscriptionToState(
     status = "cancelled";
   }
 
+  const currentPeriodEndUnix = resolveSubscriptionCurrentPeriodEnd(subscription);
+
   return {
     workspaceId,
     plan,
@@ -120,7 +147,8 @@ export function mapStripeSubscriptionToState(
     billingInterval,
     externalCustomerId: resolveCustomerId(subscription.customer),
     externalSubscriptionId: subscription.id,
-    currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+    currentPeriodEnd:
+      currentPeriodEndUnix !== null ? new Date(currentPeriodEndUnix * 1000) : null,
     includedSeats,
     extraSeats,
     permanentPersonal: isPermanentPersonal(mergedMetadata),
@@ -199,10 +227,12 @@ export function subscriptionFromStripeObject(
   if (typeof object.id !== "string") return null;
   if (object.object !== "subscription") return null;
   if (typeof object.status !== "string") return null;
-  if (typeof object.current_period_end !== "number") return null;
   if (object.customer === undefined || object.customer === null) return null;
 
-  return object as unknown as StripeSubscriptionLike;
+  const subscription = object as unknown as StripeSubscriptionLike;
+  if (resolveSubscriptionCurrentPeriodEnd(subscription) === null) return null;
+
+  return subscription;
 }
 
 export function checkoutSessionFromStripeObject(

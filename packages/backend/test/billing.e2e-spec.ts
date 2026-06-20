@@ -167,6 +167,49 @@ describe("Billing (integration)", () => {
     await cleanup();
   });
 
+  it("applies Basil-shaped subscription webhooks with item-level period end", async () => {
+    const payload = {
+      id: "evt_basil_team_created",
+      type: "customer.subscription.created",
+      data: {
+        object: {
+          id: "sub_basil_team",
+          object: "subscription",
+          status: "active",
+          customer: "cus_basil_team",
+          metadata: {
+            workspace_id: workspaceId,
+            plan: "team",
+            product: "slugbase",
+          },
+          items: {
+            data: [
+              {
+                id: "si_basil",
+                quantity: 5,
+                current_period_end: 1_813_508_084,
+                price: { metadata: { plan: "team" } },
+              },
+            ],
+          },
+        },
+      },
+    };
+
+    const result = await billingApp.applyBillingEvent({
+      eventId: "evt_basil_team_created",
+      payload,
+    });
+
+    expect(result).toEqual({ processed: true, stateUpdated: true });
+
+    const workspace = await workspacesService.getWorkspace(workspaceId);
+    expect(workspace.plan).toBe("team");
+    expect(workspace.billingCustomerId).toBe("cus_basil_team");
+    expect(workspace.billingSubscriptionId).toBe("sub_basil_team");
+    expect(workspace.billingStatus).toBe("active");
+  });
+
   it("applies subscription webhook events idempotently via dedupe store", async () => {
     const payload = {
       id: "evt_billing_idempotent",

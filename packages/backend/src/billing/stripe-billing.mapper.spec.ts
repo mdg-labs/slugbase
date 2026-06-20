@@ -5,6 +5,7 @@ import {
   mapSupporterCheckoutToState,
   parseStripeEvent,
   readProductMarker,
+  resolveSubscriptionCurrentPeriodEnd,
   subscriptionFromStripeObject,
 } from "./stripe-billing.mapper.js";
 
@@ -150,6 +151,80 @@ describe("stripe-billing.mapper", () => {
     });
 
     expect(subscription?.id).toBe("sub_1");
+  });
+
+  it("accepts Basil/Clover subscriptions with item-level current_period_end only", () => {
+    const basilPayload = {
+      id: "sub_1TkRXdL40gJO1frU1RI4uYNB",
+      object: "subscription",
+      status: "active",
+      customer: "cus_team_1",
+      metadata: {
+        workspace_id: "6552ebd3-c418-4005-9677-3047f885c86e",
+        plan: "team",
+        product: "slugbase",
+      },
+      items: {
+        data: [
+          {
+            id: "si_basil",
+            quantity: 5,
+            current_period_end: 1_813_508_084,
+            price: { metadata: { plan: "team" } },
+          },
+        ],
+      },
+    };
+
+    const subscription = subscriptionFromStripeObject(basilPayload);
+    expect(subscription).not.toBeNull();
+    if (!subscription) return;
+    expect(subscription.id).toBe("sub_1TkRXdL40gJO1frU1RI4uYNB");
+
+    const state = mapStripeSubscriptionToState(
+      "6552ebd3-c418-4005-9677-3047f885c86e",
+      subscription,
+    );
+    expect(state).toMatchObject({
+      workspaceId: "6552ebd3-c418-4005-9677-3047f885c86e",
+      plan: "team",
+      status: "active",
+      extraSeats: 5,
+    });
+    expect(state.currentPeriodEnd).toEqual(new Date(1_813_508_084 * 1000));
+  });
+
+  it("resolveSubscriptionCurrentPeriodEnd prefers top-level over items", () => {
+    expect(
+      resolveSubscriptionCurrentPeriodEnd({
+        current_period_end: 100,
+        items: { data: [{ current_period_end: 200 }] },
+      }),
+    ).toBe(100);
+  });
+
+  it("resolveSubscriptionCurrentPeriodEnd uses max item period end when top-level absent", () => {
+    expect(
+      resolveSubscriptionCurrentPeriodEnd({
+        items: {
+          data: [
+            { current_period_end: 100 },
+            { current_period_end: 250 },
+          ],
+        },
+      }),
+    ).toBe(250);
+  });
+
+  it("returns null for subscriptions with no resolvable period end", () => {
+    expect(
+      subscriptionFromStripeObject({
+        id: "sub_no_period",
+        object: "subscription",
+        status: "active",
+        customer: "cus_1",
+      }),
+    ).toBeNull();
   });
 
   describe("readProductMarker", () => {
