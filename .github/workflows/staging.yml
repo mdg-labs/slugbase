@@ -1,7 +1,6 @@
 name: Staging
 
-# Push to staging — CI gate, then deploy (spec §22.4).
-# Deploy wiring moves to #474; interim workflow_call to deploy-staging.yml.
+# Push to staging — CI gate, then deploy and GHCR dev image in parallel (spec §22.4).
 
 on:
   push:
@@ -25,13 +24,42 @@ jobs:
     uses: ./.github/workflows/ci.yml
     secrets: inherit
 
-  deploy-staging:
+  deploy:
     name: Deploy staging
     needs: [ci]
     if: needs.ci.result == 'success'
     permissions:
       contents: read
-      id-token: write
-      packages: write
-    uses: ./.github/workflows/deploy-staging.yml
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: staging
     secrets: inherit
+
+  push-ghcr-staging-dev:
+    name: Staging · Push self-host image (GHCR dev)
+    needs: [ci]
+    if: needs.ci.result == 'success'
+    runs-on: ubuntu-latest
+    environment: staging
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push combined image (dev tag)
+        env:
+          DOCKER_BUILDKIT: "1"
+        run: >
+          bash .github/scripts/build-push-ghcr.sh
+          ghcr.io/${{ github.repository }}
+          dev
+          --no-latest

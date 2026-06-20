@@ -2,8 +2,8 @@
 # Smoke-test staging deploys (spec §22.5):
 #   API + Web — GET /health and /version (JSON, HTTP 200)
 #   Marketing — GET site root / only (HTTP 200; static Astro has no /health+/version probes)
-# When CF_ACCESS_CLIENT_ID + CF_ACCESS_CLIENT_SECRET are set (Infisical staging), sends
-# Cloudflare Access service-token headers on every request (staging Workers sit behind Access).
+# When CF_ACCESS_CLIENT_ID + CF_ACCESS_CLIENT_SECRET are set (GHA environment secrets),
+# sends Cloudflare Access service-token headers on every request.
 set -euo pipefail
 
 : "${APP_BASE_URL:?APP_BASE_URL is required}"

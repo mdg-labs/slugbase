@@ -1,0 +1,96 @@
+name: Release
+
+# Published release — production deploy (no CI gate) and GHCR image push (spec §22.7–22.8).
+
+on:
+  release:
+    types: [published]
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  check-not-deployed:
+    name: Production · 0 · Check deploy needed
+    runs-on: ubuntu-latest
+    environment: production
+    outputs:
+      should_deploy: ${{ steps.compare.outputs.should_deploy }}
+    steps:
+      - name: Compare release tag to deployed version
+        id: compare
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          DEPLOYED="${{ vars.DEPLOYED_VERSION }}"
+          if [ -n "$DEPLOYED" ] && [ "$TAG" = "$DEPLOYED" ]; then
+            echo "should_deploy=false" >> "$GITHUB_OUTPUT"
+            echo "Tag ${TAG} already deployed — skipping"
+          else
+            echo "should_deploy=true" >> "$GITHUB_OUTPUT"
+            echo "Deploying release ${TAG}"
+          fi
+
+  deploy:
+    name: Deploy production
+    needs: [check-not-deployed]
+    permissions:
+      contents: read
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: production
+      ref: ${{ github.event.release.tag_name }}
+      should_deploy: ${{ needs.check-not-deployed.outputs.should_deploy }}
+    secrets: inherit
+
+  push-ghcr-image:
+    name: Production · GHCR · Push self-host image
+    runs-on: ubuntu-latest
+    environment: production
+    needs: [check-not-deployed]
+    if: needs.check-not-deployed.outputs.should_deploy == 'true'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Log in to GHCR
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push combined image
+        env:
+          DOCKER_BUILDKIT: "1"
+        run: >
+          bash .github/scripts/build-push-ghcr.sh
+          ghcr.io/${{ github.repository }}
+          ${{ github.event.release.tag_name }}
+
+  record-deployed-version:
+    name: Production · Record deployed version
+    needs: [check-not-deployed, deploy, push-ghcr-image]
+    if: >-
+      needs.check-not-deployed.outputs.should_deploy == 'true'
+      && needs.deploy.result == 'success'
+      && needs.push-ghcr-image.result == 'success'
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      actions: write
+    steps:
+      - name: Update DEPLOYED_VERSION
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh variable set DEPLOYED_VERSION --body "${{ github.event.release.tag_name }}"

@@ -1,0 +1,200 @@
+name: Deploy
+
+# Parameterized deploy pipeline — sync → (migrate ∥ Sentry) → parallel deploys → smoke.
+# Called from staging.yml (after CI) and release.yml (production).
+# workflow_call only — no direct triggers (spec §22).
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: GitHub Actions environment (staging | production)
+        type: string
+        required: true
+      ref:
+        description: Checkout ref (production release tag; omit for staging)
+        type: string
+        required: false
+        default: ""
+      should_deploy:
+        description: >-
+          When false, run sync only and skip migrate through smoke
+          (production re-publish of an already-deployed tag).
+        type: string
+        required: false
+        default: "true"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ inputs.environment }}${{ inputs.ref != '' && format('-{0}', inputs.ref) || '' }}
+  cancel-in-progress: ${{ inputs.environment != 'production' }}
+
+jobs:
+  sync-secrets:
+    name: Sync secrets (${{ inputs.environment }})
+    uses: ./.github/workflows/sync-secrets.yml
+    with:
+      environment: ${{ inputs.environment }}
+    secrets: inherit
+
+  migrate:
+    name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 1 · Run DB migrations
+    if: inputs.should_deploy == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    needs: [sync-secrets]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+        with:
+          ref: ${{ inputs.ref != '' && inputs.ref || github.sha }}
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup
+        with:
+          skip-checkout: "true"
+
+      - name: Run Drizzle migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: bash .github/scripts/run-migrate.sh
+
+  derive-sentry-release:
+    name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 2 · Derive Sentry release
+    if: inputs.should_deploy == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    needs: [sync-secrets]
+    outputs:
+      release: ${{ steps.release.outputs.release }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+        with:
+          ref: ${{ inputs.ref != '' && inputs.ref || github.sha }}
+
+      - name: Derive Sentry release
+        id: release
+        env:
+          RELEASE_VERSION: ${{ inputs.ref }}
+        run: bash .github/scripts/derive-sentry-release.sh
+
+  deploy-api:
+    name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 3 · Deploy API (Fly)
+    if: inputs.should_deploy == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    needs: [migrate, derive-sentry-release]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+        with:
+          ref: ${{ inputs.ref != '' && inputs.ref || github.sha }}
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup
+        with:
+          skip-checkout: "true"
+
+      - name: Build API and shared packages
+        env:
+          NODE_ENV: production
+        run: pnpm exec turbo run build --filter=@slugbase/backend...
+
+      - name: Create Sentry release and upload API source maps
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+        run: >-
+          bash .github/scripts/sentry-release.sh api packages/backend/dist
+          "${{ needs.derive-sentry-release.outputs.release }}" ${{ inputs.environment }}
+
+      - name: Setup flyctl
+        run: bash .github/scripts/setup-flyctl.sh
+
+      - name: Deploy API to Fly.io
+        env:
+          DOCKER_BUILDKIT: "1"
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          FLY_APP: slugbase-${{ inputs.environment == 'production' && 'production' || 'staging' }}-api
+        run: bash .github/scripts/deploy-fly.sh api
+
+  deploy-web:
+    name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 3 · Deploy web (CF)
+    if: inputs.should_deploy == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    needs: [migrate, derive-sentry-release]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+        with:
+          ref: ${{ inputs.ref != '' && inputs.ref || github.sha }}
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup
+        with:
+          skip-checkout: "true"
+
+      - name: Install Wrangler
+        run: npm install -g wrangler@4
+
+      - name: Deploy web to Cloudflare Workers
+        env:
+          DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+          VITE_SENTRY_RELEASE: ${{ needs.derive-sentry-release.outputs.release }}
+        run: bash .github/scripts/deploy-cf-worker.sh web
+
+  deploy-marketing:
+    name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 3 · Deploy marketing (CF)
+    if: inputs.should_deploy == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    needs: [migrate]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+        with:
+          ref: ${{ inputs.ref != '' && inputs.ref || github.sha }}
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup
+        with:
+          skip-checkout: "true"
+
+      - name: Install Wrangler
+        run: npm install -g wrangler@4
+
+      - name: Deploy marketing to Cloudflare Workers
+        env:
+          DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bash .github/scripts/deploy-cf-worker.sh marketing
+
+  smoke:
+    name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 4 · Smoke
+    if: inputs.should_deploy == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    needs: [deploy-api, deploy-web, deploy-marketing]
+    env:
+      APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+      FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
+      MARKETING_ORIGIN: ${{ vars.MARKETING_ORIGIN }}
+      CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+      CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+        with:
+          ref: ${{ inputs.ref != '' && inputs.ref || github.sha }}
+
+      - name: Smoke deploy surfaces
+        run: bash .github/scripts/smoke-staging-health.sh
