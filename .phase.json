@@ -1,0 +1,8 @@
+{
+  "version": "2",
+  "phaseApp": "SlugBase",
+  "appId": "5bfbf715-f340-44c3-8945-171fe92688a9",
+  "defaultEnv": "Development",
+  "envId": "ecdb2079-75b6-495c-9e24-ecf8cee5607e",
+  "monorepoSupport": true
+}
