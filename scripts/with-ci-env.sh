@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run any command with SlugBase Node/pnpm/Infisical PATH setup.
+# Run any command with SlugBase Node/pnpm/Phase PATH setup.
 # Usage: bash scripts/with-ci-env.sh pnpm typecheck
 
 set -euo pipefail

@@ -63,15 +63,15 @@ _slugbase_activate_corepack() {
   fi
 }
 
-_slugbase_resolve_infisical() {
-  if command -v infisical >/dev/null 2>&1; then
+_slugbase_resolve_phase() {
+  if command -v phase >/dev/null 2>&1; then
     return 0
   fi
-  local node_bin candidate
-  node_bin="$(command -v node 2>/dev/null || true)"
+  local candidate
   for candidate in \
-    "${HOME}/.local/bin/infisical" \
-    "${node_bin:+$(dirname "${node_bin}")/infisical}"; do
+    "${HOME}/.local/bin/phase" \
+    "/usr/local/bin/phase" \
+    "/usr/bin/phase"; do
     [[ -z "${candidate}" ]] && continue
     if [[ -x "${candidate}" ]]; then
       PATH="$(dirname "${candidate}"):${PATH}"
@@ -94,14 +94,14 @@ _slugbase_activate_nvm || {
 
 _slugbase_check_node || return 1
 _slugbase_activate_corepack
-_slugbase_resolve_infisical
+_slugbase_resolve_phase
 
 export SLUGBASE_CI_ENV=1
 
 if [[ "${SLUGBASE_CI_ENV_VERBOSE:-}" == "1" ]]; then
-  printf 'ci-env: repo=%s node=%s pnpm=%s infisical=%s\n' \
+  printf 'ci-env: repo=%s node=%s pnpm=%s phase=%s\n' \
     "${REPO_ROOT}" \
     "$(node -v 2>/dev/null || echo missing)" \
     "$(command -v pnpm 2>/dev/null || echo missing)" \
-    "$(command -v infisical 2>/dev/null || echo missing)"
+    "$(command -v phase 2>/dev/null || echo missing)"
 fi

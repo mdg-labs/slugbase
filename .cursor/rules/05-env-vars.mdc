@@ -1,23 +1,23 @@
 ---
-description: Every new env var must be registered via Infisical, added to .env.example, validated in the app config schema, and documented before commit
+description: Every new env var must be registered in Phase Development, added to .env.example, validated in the app config schema, and documented before commit
 alwaysApply: true
 ---
 
-# New environment variables — Infisical-first workflow
+# New environment variables — Phase-first workflow
 
 When introducing **any** new env var, complete all four steps below in the **same task commit**. The verifier (Layer 3c) checks all four. Grounded in spec §15 (configuration model).
 
-## Infisical project (this repo)
+## Phase app (this repo)
 
 | Field | Value |
 |---|---|
-| Instance URL | `https://eu.infisical.com` (Infisical Cloud, EU) |
-| Project slug | `slugbase-cloud` |
-| Environments | `dev` · `staging` · `prod` |
+| App | `SlugBase` (`.phase.json`) |
+| Phase environments | `Development` · `Staging` · `Production` |
+| GHA environments | `ci` · `staging` · `production` |
 
-All keys for an environment live at the **project root** in Infisical (no subfolders). CI (`Infisical/secrets-action`) and local `infisical run --env=<slug>` inject the full environment. **Never put true secrets in `VITE_*` or `PUBLIC_*` keys** — those values are inlined into client bundles at build time.
+All keys for an environment live at the **root path** (`/`). Local dev injects the `Development` environment via `phase run -- <command>`. CI and deploy workflows read `${{ secrets.* }}` from the job's GHA environment — **no Phase CLI in CI** (spec §22.9). Phase automatically syncs operator edits from `Staging` / `Production` to the matching GHA environments. **Never put true secrets in `VITE_*` or `PUBLIC_*` keys** — those values are inlined into client bundles at build time.
 
-Point the local CLI at Infisical Cloud (EU) once (`infisical login --domain https://eu.infisical.com`; CLI defaults to US `app.infisical.com` without this). Optionally `export INFISICAL_API_URL=https://eu.infisical.com`. Select the project via the committed `.infisical.json` (or `--projectId`). **Phase CLI is not used — Infisical only** (decision #34). CI fetches secrets via OIDC (`Infisical/secrets-action`); GitHub secret `INFISICAL_DOMAIN` must be `https://eu.infisical.com`. Only `INFISICAL_DOMAIN` and `INFISICAL_OIDC_IDENTITY_ID` live in GitHub Actions secrets (spec §22.9).
+Authenticate once with `phase auth`. The committed `.phase.json` links this repo to the `SlugBase` app (`defaultEnv`: `Development`). Override with `--app` / `--env` flags when `.phase.json` is absent.
 
 ## This rule fires when you
 
@@ -28,11 +28,17 @@ Point the local CLI at Infisical Cloud (EU) once (`infisical login --domain http
 
 ## Required steps (in order)
 
-### 1. Set the value in Infisical `dev` via CLI
+### 1. Set the value in Phase `Development` via CLI
 
 ```bash
-# instance domain is set once via `infisical login --domain https://eu.infisical.com`
-infisical secrets set <KEY>=<value> --env=dev --projectId=<slugbase-cloud projectId from .infisical.json>
+# literal value via stdin
+printf '<value>' | phase secrets create <KEY> --env Development
+
+# generated secret (preferred for SESSION_SECRET, ENCRYPTION_KEY)
+phase secrets create <KEY> --env Development --random hex --length 32
+
+# update existing key
+printf '<value>' | phase secrets update <KEY> --env Development
 ```
 
 For security-critical values (secrets, keys) that you shouldn't invent: **stop and ask the user** rather than generating a placeholder and committing code that references it.
@@ -42,7 +48,7 @@ For security-critical values (secrets, keys) that you shouldn't invent: **stop a
 | DB connection | `DATABASE_URL=postgresql://slugbase:slugbase@localhost:5432/slugbase` |
 | Boolean toggle | `PUBLIC_REGISTRATION=false` |
 | Optional / empty | `SENTRY_DSN=` |
-| Generated secret | `SESSION_SECRET=$(openssl rand -hex 32)` (run once, reuse) |
+| Generated secret | `phase secrets create SESSION_SECRET --env Development --random hex --length 32` |
 
 ### 2. Add the key to `.env.example`
 
@@ -85,8 +91,8 @@ Spec §15 lists the full set of required configuration categories:
 For any task that adds env-var references, verify:
 
 ```bash
-# Key exists in Infisical dev (env root — do not print values)
-infisical secrets get <KEY> --env=dev
+# Key exists in Phase Development (do not print values — rule 09-phase-secrets-handling)
+phase secrets get <KEY> --env Development >/dev/null
 
 # Key is in .env.example
 rg -n "^<KEY>=" .env.example
@@ -104,9 +110,9 @@ All four must pass. Missing any one fails the task.
 
 - **Hardcoded fallbacks for security-critical config** (`SESSION_SECRET || 'hardcoded'`) — use schema validation to enforce presence instead.
 - **Committing `.env` / `.env.local` with real values** — only `.env.example` is allowed.
-- **Partial registration** — code references the var but Infisical + `.env.example` + schema + docs are not all updated.
+- **Partial registration** — code references the var but Phase + `.env.example` + schema + docs are not all updated.
 - **Inventing values for unknown secrets** — stop and ask the user.
-- **Setting `staging` or `prod` secrets from a developer machine** — those flow via the operator's Infisical UI / OIDC sync.
+- **Setting `Staging` or `Production` secrets from a developer machine** — those flow via the operator's Phase Console and sync to GHA automatically.
 
 ## Required spec §15 secrets (never omit or soft-default)
 

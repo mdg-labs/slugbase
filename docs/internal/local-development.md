@@ -57,7 +57,7 @@ To match CI exactly: `nvm alias default 22.12.0` (optional if you prefer 24 LTS 
 
 ### Repo / agents
 
-`scripts/ci-env.sh` applies the same PATH cleanup, then `nvm use` from `.nvmrc`. Wrap commands:
+`scripts/ci-env.sh` applies the same PATH cleanup, then `nvm use` from `.nvmrc`, and resolves the **Phase CLI** on `PATH`. Wrap commands:
 
 ```bash
 bash scripts/with-ci-env.sh pnpm typecheck
@@ -71,11 +71,56 @@ Sanity: `pnpm env:check`
 
 ## Secrets (Phase)
 
-Local development injects environment variables from the Phase **`Development`** environment via `phase run`. Full Phase CLI setup and workflow are documented in issue **#475** (migrate local dev from Infisical).
+Local development injects environment variables from the Phase **`Development`** environment via `phase run`. CI and deploy read secrets from **GitHub Actions environments** (Phase syncs operator edits automatically) — no Phase CLI in CI (spec §22.9).
+
+### One-time setup
+
+1. **Install the Phase CLI** — [docs.phase.dev/cli/install](https://docs.phase.dev/cli/install)
+2. **Authenticate** — `phase auth` (opens browser; stores credentials locally)
+3. **Link the repo** — already committed as `.phase.json` (`SlugBase` app, default env `Development`). Re-link only if missing:
 
 ```bash
-phase run -- pnpm dev   # example — see #475 for login and app wiring
+phase init --app-id 5bfbf715-f340-44c3-8945-171fe92688a9 --env Development --monorepo
 ```
+
+### Running commands that need secrets
+
+Prefix the command with `phase run --` so Phase decrypts and injects the `Development` environment:
+
+```bash
+phase run -- pnpm dev
+phase run -- pnpm --filter @slugbase/backend dev
+```
+
+Combine with the Node bootstrap when Cursor/agent shells need the correct Node version:
+
+```bash
+bash scripts/with-ci-env.sh phase run -- pnpm dev
+bash scripts/with-ci-env.sh phase run -- pnpm build
+```
+
+**Do not** wrap integration tests — they use their own `validTestEnv` (see rule `06-local-ci-before-commit.mdc`).
+
+### Managing Development secrets
+
+Operators edit secrets in the [Phase Console](https://console.phase.dev) or via CLI. New keys follow the 4-step workflow in rule `05-env-vars.mdc` (Phase `Development` + `.env.example` + Zod config schema + `environment-variables.md`).
+
+```bash
+# Create with a literal value (stdin)
+printf 'postgresql://slugbase:slugbase@localhost:5432/slugbase' | \
+  phase secrets create DATABASE_URL --env Development
+
+# Create a generated secret
+phase secrets create SESSION_SECRET --env Development --random hex --length 32
+
+# Update an existing key (stdin)
+printf 'false' | phase secrets update PUBLIC_REGISTRATION --env Development
+
+# Existence check without printing the value (agents)
+phase secrets get SESSION_SECRET --env Development >/dev/null && echo "SESSION_SECRET: set"
+```
+
+Phase syncs `Staging` / `Production` edits to the matching GHA environments. **Do not set staging or production secrets from a developer machine** unless you are the operator — use the Phase Console.
 
 Key inventory (hosted vs self-hosted, GHA environments, platform sync): [`docs/internal/environment-variables.md`](environment-variables.md).
 
