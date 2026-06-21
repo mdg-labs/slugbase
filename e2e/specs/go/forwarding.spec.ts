@@ -6,7 +6,7 @@ test.describe("Slug forwarding", () => {
     sessionCookie,
     csrfToken,
   }) => {
-    const apiUrl = process.env.E2E_BASE_URL_API ?? process.env.E2E_BASE_URL_SELF_HOSTED ?? 'http://localhost:4001';
+    const apiUrl = process.env.E2E_BASE_URL_API ?? process.env.E2E_BASE_URL_CE ?? 'http://localhost:4001';
     const slug = `e2e-fwd-${Date.now()}`;
     const targetUrl = "https://example.com/e2e-forwarding-test";
 
@@ -39,7 +39,7 @@ test.describe("Slug forwarding", () => {
   }) => {
     const apiUrl =
       process.env.E2E_BASE_URL_API ??
-      process.env.E2E_BASE_URL_SELF_HOSTED ??
+      process.env.E2E_BASE_URL_CE ??
       "http://localhost:4001";
 
     const createRes = await page.request.post(`${apiUrl}/bookmarks`, {

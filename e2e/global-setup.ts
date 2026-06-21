@@ -86,14 +86,14 @@ async function seedUsersOnboarding(apiUrl: string, users: WorkerCredentials[]) {
  *    PATCH /auth/account/preferences (and keeps localStorage cache for tests).
  * 2. Registers N worker-scoped users for full test isolation.
  *    Writes credentials to `e2e/.worker-credentials.json`.
- * 3. For self-hosted runs, registers worker users via public registration
+ * 3. For CE runs, registers worker users via public registration
  *    (PUBLIC_REGISTRATION=true on the e2e container).
  */
 export default async function globalSetup(config: FullConfig) {
   // ── Seed onboarding-done localStorage for ALL projects ──────────────
   const webUrl =
     process.env.E2E_BASE_URL_WEB ??
-    process.env.E2E_BASE_URL_SELF_HOSTED ??
+    process.env.E2E_BASE_URL_CE ??
     'http://localhost:4002';
   const webOrigin = new URL(webUrl).origin;
 
@@ -128,12 +128,12 @@ export default async function globalSetup(config: FullConfig) {
     '.worker-credentials.json',
   );
 
-  const baseURL = process.env.E2E_BASE_URL_SELF_HOSTED;
+  const baseURL = process.env.E2E_BASE_URL_CE;
 
-  // ── Self-hosted: bootstrap via public registration (e2e container) ───
+  // ── CE: bootstrap via public registration (e2e container) ───
   if (baseURL) {
     console.log(
-      `[global-setup] Registering ${WORKER_COUNT} self-hosted worker users at ${baseURL} …`,
+      `[global-setup] Registering ${WORKER_COUNT} CE worker users at ${baseURL} …`,
     );
 
     const credentials: WorkerCredentials[] = [];
@@ -156,7 +156,7 @@ export default async function globalSetup(config: FullConfig) {
       } else {
         const body = await res.text();
         throw new Error(
-          `[global-setup] Self-hosted worker ${i} registration failed: ${res.status} ${body}`,
+          `[global-setup] CE worker ${i} registration failed: ${res.status} ${body}`,
         );
       }
     }
@@ -167,7 +167,7 @@ export default async function globalSetup(config: FullConfig) {
     );
     await seedUsersOnboarding(baseURL, credentials);
     console.log(
-      `[global-setup] Wrote ${credentials.length} self-hosted worker credentials to ${credentialsPath}`,
+      `[global-setup] Wrote ${credentials.length} CE worker credentials to ${credentialsPath}`,
     );
     return;
   }

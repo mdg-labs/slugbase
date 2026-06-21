@@ -2,7 +2,7 @@ import { test, expect } from "../../fixtures/auth.js";
 
 const apiUrl = () =>
   process.env.E2E_BASE_URL_API
-  ?? process.env.E2E_BASE_URL_SELF_HOSTED
+  ?? process.env.E2E_BASE_URL_CE
   ?? "http://localhost:4001";
 
 test.describe("Billing portal redirect", () => {

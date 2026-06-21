@@ -1,5 +1,5 @@
 import { test, expect } from "../../fixtures/auth.js";
-import { isHostedE2eProject } from "../../helpers/deployment-project.js";
+import { isCloudE2eProject } from "../../helpers/deployment-project.js";
 import { e2eResourceSuffix } from "../../helpers/e2e-resource-id.js";
 import { loginAsWorker } from "../../helpers/worker-login.js";
 
@@ -104,11 +104,11 @@ test.describe("Tags CRUD", () => {
     const tagName = `filter-me-${e2eResourceSuffix(testInfo)}`;
 
     // ── Phase 2: Seed tag + bookmarks in the ACTIVE workspace via API ──
-    const apiUrl = process.env.E2E_BASE_URL_API ?? process.env.E2E_BASE_URL_SELF_HOSTED ?? 'http://localhost:4001';
+    const apiUrl = process.env.E2E_BASE_URL_API ?? process.env.E2E_BASE_URL_CE ?? 'http://localhost:4001';
     const apiHeaders = { Cookie: sessionCookie, "x-csrf-token": csrfToken, "Content-Type": "application/json" };
 
     // Hosted only: parallel workers may be at the free bookmark cap (entitlements/free-cap).
-    if (isHostedE2eProject(testInfo)) {
+    if (isCloudE2eProject(testInfo)) {
       const planRes = await page.request.patch(`${apiUrl}/workspaces/active`, {
         headers: apiHeaders,
         data: { plan: "team" },

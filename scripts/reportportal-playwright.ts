@@ -6,7 +6,7 @@ import {
   reportPortalMode,
 } from "./reportportal-vitest.js";
 
-export type PlaywrightEdition = "hosted" | "self-hosted";
+export type PlaywrightEdition = "cloud" | "ce";
 
 type ReportPortalMode = "DEFAULT" | "DEBUG";
 
@@ -43,12 +43,12 @@ export function detectPlaywrightEdition(): PlaywrightEdition | null {
 
     if (arg.startsWith("--project=")) {
       const name = arg.slice("--project=".length);
-      return name === "hosted" || name === "self-hosted" ? name : null;
+      return name === "cloud" || name === "ce" ? name : null;
     }
 
     if (arg === "--project" && i + 1 < args.length) {
       const name = args[i + 1];
-      return name === "hosted" || name === "self-hosted" ? name : null;
+      return name === "cloud" || name === "ce" ? name : null;
     }
   }
 

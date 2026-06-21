@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('Self-hosted setup smoke', () => {
+test.describe('CE setup smoke', () => {
   test('fresh DB shows /setup flow and setup completes session', async ({ page }) => {
     // globalSetup already called /setup/complete — if setup is done, skip
     const statusRes = await page.request.get('/setup/status');
@@ -12,7 +12,7 @@ test.describe('Self-hosted setup smoke', () => {
       }
     }
 
-    // Navigate to setup page (self-hosted mode: fresh DB)
+    // Navigate to setup page (CE mode: fresh DB)
     await page.goto('/setup');
 
     // The setup page should render with the setup form

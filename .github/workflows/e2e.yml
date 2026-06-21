@@ -1,8 +1,8 @@
 # Playwright e2e tests — runs on staging→main release-candidate PRs,
 # on workflow_dispatch, and as a reusable workflow (spec §22.4).
 #
-# Two jobs: hosted (separate API/web/marketing services) and
-# self-hosted (combined Docker image, single port).
+# Two jobs: cloud (separate API/web/marketing services) and
+# ce (combined Docker image, single port).
 #
 # App under test uses explicit e2e env only (mirrors scripts/e2e.sh).
 # ReportPortal credentials come from the GHA ci environment — never staging runtime secrets.
@@ -18,7 +18,7 @@ on:
   workflow_call:
     inputs:
       mode:
-        description: 'Deployment mode to test'
+        description: 'Deployment edition to test'
         required: true
         type: string
 
@@ -27,7 +27,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # Postgres (shared across modes)
+  # Postgres (shared across editions)
   DATABASE_URL: postgresql://slugbase:slugbase@localhost:5432/slugbase_e2e
   # E2E mode flag
   SLUGBASE_E2E_MODE: 'true'
@@ -36,14 +36,14 @@ env:
   E2E_TEST_PASSWORD: e2e-test-password
 
 jobs:
-  e2e-hosted:
-    name: E2E · Hosted mode
+  e2e-cloud:
+    name: E2E · Cloud edition
     # Run on PR, workflow_dispatch, or workflow_call with matching mode
     if: >
       !cancelled() && (
         github.event_name != 'workflow_call'
         || inputs.mode == ''
-        || inputs.mode == 'hosted'
+        || inputs.mode == 'cloud'
       )
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -112,7 +112,7 @@ jobs:
           APP_BASE_URL: http://localhost:4001
           FRONTEND_ORIGIN: http://localhost:4002
         run: |
-          node packages/backend/dist/main.js >> hosted-services-api.log 2>&1 &
+          node packages/backend/dist/main.js >> cloud-services-api.log 2>&1 &
           echo "API_PID=$!" >> "$GITHUB_ENV"
 
       - name: Start Web (React Router serve)
@@ -120,12 +120,12 @@ jobs:
           PORT: '4002'
           API_BASE_URL: http://localhost:4001
         run: |
-          (cd packages/web && npx react-router-serve build/server/index.js) >> hosted-services-web.log 2>&1 &
+          (cd packages/web && npx react-router-serve build/server/index.js) >> cloud-services-web.log 2>&1 &
           echo "WEB_PID=$!" >> "$GITHUB_ENV"
 
       - name: Start Marketing (static serve)
         run: |
-          npx serve packages/marketing/dist -l 4003 >> hosted-services-marketing.log 2>&1 &
+          npx serve packages/marketing/dist -l 4003 >> cloud-services-marketing.log 2>&1 &
           echo "MARKETING_PID=$!" >> "$GITHUB_ENV"
 
       - name: Wait for health endpoints
@@ -152,28 +152,28 @@ jobs:
           done
           $mktg_ok || { echo "Marketing did not become healthy"; exit 1; }
 
-      - name: Run Playwright tests (hosted)
+      - name: Run Playwright tests (cloud)
         env:
           DATABASE_URL: postgresql://slugbase:slugbase@localhost:5432/slugbase_e2e
           E2E_BASE_URL_API: http://localhost:4001
           E2E_BASE_URL_WEB: http://localhost:4002
           E2E_BASE_URL_MARKETING: http://localhost:4003
-        run: bash scripts/e2e-ci-playwright.sh hosted rp-e2e-hosted.log
+        run: bash scripts/e2e-ci-playwright.sh cloud rp-e2e-cloud.log
 
-      - name: Extract ReportPortal launch UUID (hosted)
+      - name: Extract ReportPortal launch UUID (cloud)
         if: always()
-        run: bash scripts/reportportal-ci-summary.sh parse-uuids rp-e2e-hosted.log > rp-e2e-hosted.uuid || true
+        run: bash scripts/reportportal-ci-summary.sh parse-uuids rp-e2e-cloud.log > rp-e2e-cloud.uuid || true
 
-      - name: Upload ReportPortal launch log (hosted)
+      - name: Upload ReportPortal launch log (cloud)
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: reportportal-e2e-hosted-log
+          name: reportportal-e2e-cloud-log
           path: |
-            rp-e2e-hosted.log
-            rp-e2e-hosted.uuid
-            hosted-services-api.log
-            hosted-services-web.log
+            rp-e2e-cloud.log
+            rp-e2e-cloud.uuid
+            cloud-services-api.log
+            cloud-services-web.log
           if-no-files-found: ignore
 
       - name: Cleanup
@@ -188,14 +188,14 @@ jobs:
           # Prune Docker build cache (keeps volumes intact for the job VM)
           docker builder prune --force 2>/dev/null || true
 
-  e2e-self-hosted:
-    name: E2E · Self-hosted mode
+  e2e-ce:
+    name: E2E · CE edition
     # Run on PR, workflow_dispatch, or workflow_call with matching mode
     if: >
       !cancelled() && (
         github.event_name != 'workflow_call'
         || inputs.mode == ''
-        || inputs.mode == 'self-hosted'
+        || inputs.mode == 'ce'
       )
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -206,7 +206,7 @@ jobs:
       REPORTPORTAL_URL: ${{ secrets.REPORTPORTAL_URL }}
       REPORTPORTAL_API_KEY: ${{ secrets.REPORTPORTAL_API_KEY }}
       REPORTPORTAL_PROJECT: ${{ secrets.REPORTPORTAL_PROJECT }}
-      E2E_BASE_URL_SELF_HOSTED: http://localhost:3000
+      E2E_BASE_URL_CE: http://localhost:3000
     services:
       postgres:
         image: postgres:16-alpine
@@ -250,7 +250,7 @@ jobs:
         with:
           context: .
           load: true
-          tags: slugbase-e2e:self-hosted
+          tags: slugbase-e2e:ce
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
@@ -259,7 +259,7 @@ jobs:
       - name: Start combined container
         run: |
           docker run -d \
-            --name slugbase-e2e-self \
+            --name slugbase-e2e-ce \
             --network host \
             -e DATABASE_URL="$DATABASE_URL" \
             -e SLUGBASE_E2E_MODE=true \
@@ -273,7 +273,7 @@ jobs:
             -e API_BASE_URL='http://localhost:3000' \
             -e PUBLIC_REGISTRATION=true \
             -e PORT=3000 \
-            slugbase-e2e:self-hosted
+            slugbase-e2e:ce
 
       - name: Wait for health endpoint
         run: |
@@ -283,33 +283,33 @@ jobs:
             curl -sf "http://localhost:3000/health" >/dev/null 2>&1 && { ok=true; break; }
             sleep 2
           done
-          $ok || { echo "Self-hosted container did not become healthy"; exit 1; }
+          $ok || { echo "CE container did not become healthy"; exit 1; }
 
-      - name: Run Playwright tests (self-hosted)
+      - name: Run Playwright tests (ce)
         env:
           DATABASE_URL: postgresql://slugbase:slugbase@localhost:5432/slugbase_e2e
-          E2E_BASE_URL_SELF_HOSTED: http://localhost:3000
-        run: bash scripts/e2e-ci-playwright.sh self-hosted rp-e2e-self-hosted.log
+          E2E_BASE_URL_CE: http://localhost:3000
+        run: bash scripts/e2e-ci-playwright.sh ce rp-e2e-ce.log
 
-      - name: Extract ReportPortal launch UUID (self-hosted)
+      - name: Extract ReportPortal launch UUID (ce)
         if: always()
-        run: bash scripts/reportportal-ci-summary.sh parse-uuids rp-e2e-self-hosted.log > rp-e2e-self-hosted.uuid || true
+        run: bash scripts/reportportal-ci-summary.sh parse-uuids rp-e2e-ce.log > rp-e2e-ce.uuid || true
 
-      - name: Upload ReportPortal launch log (self-hosted)
+      - name: Upload ReportPortal launch log (ce)
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: reportportal-e2e-self-hosted-log
+          name: reportportal-e2e-ce-log
           path: |
-            rp-e2e-self-hosted.log
-            rp-e2e-self-hosted.uuid
+            rp-e2e-ce.log
+            rp-e2e-ce.uuid
           if-no-files-found: ignore
 
       - name: Cleanup — container
         if: always()
         run: |
-          docker stop slugbase-e2e-self 2>/dev/null || true
-          docker rm slugbase-e2e-self 2>/dev/null || true
+          docker stop slugbase-e2e-ce 2>/dev/null || true
+          docker rm slugbase-e2e-ce 2>/dev/null || true
 
       - name: Cleanup — builder prune
         if: always()
@@ -317,7 +317,7 @@ jobs:
 
   reportportal-summary:
     name: E2E · ReportPortal summary
-    needs: [e2e-hosted, e2e-self-hosted]
+    needs: [e2e-cloud, e2e-ce]
     if: always()
     runs-on: ubuntu-latest
     environment: ci
@@ -331,39 +331,39 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
 
-      - name: Download hosted launch log
+      - name: Download cloud launch log
         uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
         continue-on-error: true
         with:
-          name: reportportal-e2e-hosted-log
+          name: reportportal-e2e-cloud-log
           path: rp-logs
 
-      - name: Download self-hosted launch log
+      - name: Download CE launch log
         uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
         continue-on-error: true
         with:
-          name: reportportal-e2e-self-hosted-log
+          name: reportportal-e2e-ce-log
           path: rp-logs
 
       - name: Record ReportPortal e2e launches
         if: always()
         run: |
           # Prefer dedicated UUID files (avoids GitHub log secret masking in tee output).
-          if [ -s rp-logs/rp-e2e-hosted.uuid ]; then
+          if [ -s rp-logs/rp-e2e-cloud.uuid ]; then
             while IFS= read -r uuid; do
               [ -n "$uuid" ] || continue
-              RP_LAUNCH_UUID="$uuid" bash scripts/reportportal-ci-summary.sh record-env "e2e · hosted"
-            done < rp-logs/rp-e2e-hosted.uuid
+              RP_LAUNCH_UUID="$uuid" bash scripts/reportportal-ci-summary.sh record-env "e2e · cloud"
+            done < rp-logs/rp-e2e-cloud.uuid
           else
-            bash scripts/reportportal-ci-summary.sh record-log "e2e · hosted" rp-logs/rp-e2e-hosted.log
+            bash scripts/reportportal-ci-summary.sh record-log "e2e · cloud" rp-logs/rp-e2e-cloud.log
           fi
-          if [ -s rp-logs/rp-e2e-self-hosted.uuid ]; then
+          if [ -s rp-logs/rp-e2e-ce.uuid ]; then
             while IFS= read -r uuid; do
               [ -n "$uuid" ] || continue
-              RP_LAUNCH_UUID="$uuid" bash scripts/reportportal-ci-summary.sh record-env "e2e · self-hosted"
-            done < rp-logs/rp-e2e-self-hosted.uuid
+              RP_LAUNCH_UUID="$uuid" bash scripts/reportportal-ci-summary.sh record-env "e2e · ce"
+            done < rp-logs/rp-e2e-ce.uuid
           else
-            bash scripts/reportportal-ci-summary.sh record-log "e2e · self-hosted" rp-logs/rp-e2e-self-hosted.log
+            bash scripts/reportportal-ci-summary.sh record-log "e2e · ce" rp-logs/rp-e2e-ce.log
           fi
 
       - name: ReportPortal job summary

@@ -1,5 +1,5 @@
 import { test, expect } from "../../fixtures/auth.js";
-import { isHostedE2eProject } from "../../helpers/deployment-project.js";
+import { isCloudE2eProject } from "../../helpers/deployment-project.js";
 import { e2eResourceSuffix } from "../../helpers/e2e-resource-id.js";
 import { loginAsWorker } from "../../helpers/worker-login.js";
 
@@ -13,8 +13,8 @@ test.describe("Workspace switcher", () => {
     await loginAsWorker(page, testInfo.workerIndex);
 
     // Hosted only: team plan unlocks multi-workspace creation; self-host has no plan gate.
-    if (isHostedE2eProject(testInfo)) {
-      const apiUrl = process.env.E2E_BASE_URL_API ?? process.env.E2E_BASE_URL_SELF_HOSTED ?? 'http://localhost:4001';
+    if (isCloudE2eProject(testInfo)) {
+      const apiUrl = process.env.E2E_BASE_URL_API ?? process.env.E2E_BASE_URL_CE ?? 'http://localhost:4001';
       const planRes = await page.request.patch(`${apiUrl}/workspaces/active`, {
         headers: {
           Cookie: sessionCookie,

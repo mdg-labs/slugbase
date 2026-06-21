@@ -1,8 +1,8 @@
 import { test, expect } from '../../fixtures/auth.js';
 import { getWorkerCredentials } from '../../fixtures/auth.js';
 import {
-  isHostedE2eProject,
-  isSelfHostedE2eProject,
+  isCloudE2eProject,
+  isCeE2eProject,
 } from '../../helpers/deployment-project.js';
 
 test.describe('Legal links visibility', () => {
@@ -10,7 +10,7 @@ test.describe('Legal links visibility', () => {
     await page.goto('/login');
     await page.waitForSelector('[data-testid="login-form"]');
 
-    if (isHostedE2eProject(testInfo)) {
+    if (isCloudE2eProject(testInfo)) {
       const legalLinks = page.getByTestId('legal-links');
       await expect(legalLinks).toBeVisible();
       await expect(page.getByTestId('legal-link-impressum')).toBeVisible();
@@ -27,7 +27,7 @@ test.describe('Legal links visibility', () => {
       return;
     }
 
-    if (isSelfHostedE2eProject(testInfo)) {
+    if (isCeE2eProject(testInfo)) {
       await expect(page.getByTestId('legal-links')).toHaveCount(0);
     }
   });
@@ -42,14 +42,14 @@ test.describe('Legal links visibility', () => {
     await page.waitForURL(/\/$/);
     await page.waitForSelector('[data-testid="sidebar-nav"]');
 
-    if (isHostedE2eProject(testInfo)) {
+    if (isCloudE2eProject(testInfo)) {
       const sidebarFooter = page.getByTestId('sidebar-user-menu');
       await expect(sidebarFooter.getByTestId('legal-links')).toBeVisible();
       await expect(sidebarFooter.getByTestId('legal-link-impressum')).toBeVisible();
       return;
     }
 
-    if (isSelfHostedE2eProject(testInfo)) {
+    if (isCeE2eProject(testInfo)) {
       await expect(page.getByTestId('legal-links')).toHaveCount(0);
     }
   });

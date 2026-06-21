@@ -137,14 +137,14 @@ export async function setupSharedSlugDisambiguation(
   page: Page,
   userAWorkerIndex: number,
   userASession: Pick<ApiSession, 'sessionCookie' | 'csrfToken'>,
-  opts: { hosted: boolean },
+  opts: { cloud: boolean },
 ): Promise<SharedSlugDisambiguationSetup> {
   const userBWorkerIndex = (userAWorkerIndex + 1) % WORKER_COUNT;
   const userBSession = await loginWorkerApi(userBWorkerIndex);
   const userAEmail = getWorkerCredentials(userAWorkerIndex).email;
   const apiUrl = resolveE2eApiUrl();
 
-  if (opts.hosted) {
+  if (opts.cloud) {
     await setActiveWorkspacePlan(
       page,
       userBSession.sessionCookie,
@@ -244,7 +244,7 @@ export async function setupTeamSharingWorkspace(
   page: Page,
   memberWorkerIndex: number,
   memberSession: Pick<ApiSession, 'sessionCookie' | 'csrfToken'>,
-  opts: { hosted: boolean },
+  opts: { cloud: boolean },
 ): Promise<TeamSharingWorkspaceSetup> {
   const ownerWorkerIndex = (memberWorkerIndex + 1) % WORKER_COUNT;
   const ownerSession = await loginWorkerApi(ownerWorkerIndex);
@@ -252,7 +252,7 @@ export async function setupTeamSharingWorkspace(
   const ownerCred = getWorkerCredentials(ownerWorkerIndex);
   const apiUrl = resolveE2eApiUrl();
 
-  if (opts.hosted) {
+  if (opts.cloud) {
     await setActiveWorkspacePlan(
       page,
       ownerSession.sessionCookie,

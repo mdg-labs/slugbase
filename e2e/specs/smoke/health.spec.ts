@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
 
-const WEB_URL = process.env.E2E_BASE_URL_WEB ?? process.env.E2E_BASE_URL_SELF_HOSTED ?? 'http://localhost:4002';
+const WEB_URL = process.env.E2E_BASE_URL_WEB ?? process.env.E2E_BASE_URL_CE ?? 'http://localhost:4002';
 const MARKETING_URL = process.env.E2E_BASE_URL_MARKETING;
-const API_URL = process.env.E2E_BASE_URL_API ?? process.env.E2E_BASE_URL_SELF_HOSTED ?? 'http://localhost:4001';
+const API_URL = process.env.E2E_BASE_URL_API ?? process.env.E2E_BASE_URL_CE ?? 'http://localhost:4001';
 
 test.describe('Health + version smoke', () => {
   test('web /health returns 200 JSON', async ({ page }) => {
@@ -22,7 +22,7 @@ test.describe('Health + version smoke', () => {
   });
 
   test('marketing root returns 200', async ({ page }) => {
-    test.skip(!MARKETING_URL, 'Marketing site not available in self-hosted mode');
+    test.skip(!MARKETING_URL, 'Marketing site not available in CE mode');
     const res = await page.request.get(MARKETING_URL!);
     expect(res.ok()).toBeTruthy();
   });

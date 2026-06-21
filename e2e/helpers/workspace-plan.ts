@@ -2,7 +2,7 @@ import { expect, type Page } from '@playwright/test';
 
 function resolveApiUrl(): string {
   return process.env.E2E_BASE_URL_API
-    ?? process.env.E2E_BASE_URL_SELF_HOSTED
+    ?? process.env.E2E_BASE_URL_CE
     ?? 'http://localhost:4001';
 }
 
@@ -26,7 +26,7 @@ export async function setActiveWorkspacePlan(
 
 /**
  * Poll until the active workspace plan sticks and the audit log API is reachable.
- * Parallel hosted specs on the same worker flip plan to free; this avoids flakes
+ * Parallel Cloud specs on the same worker flip plan to free; this avoids flakes
  * when asserting team-plan audit settings.
  */
 export async function waitForTeamAuditLogAccess(

@@ -36,13 +36,13 @@ export interface E2eFixtures {
 
 function resolveApiUrl(): string {
   return process.env.E2E_BASE_URL_API
-    ?? process.env.E2E_BASE_URL_SELF_HOSTED
+    ?? process.env.E2E_BASE_URL_CE
     ?? 'http://localhost:4001';
 }
 
 function resolveWebHostname(): string {
   const webUrl = process.env.E2E_BASE_URL_WEB
-    ?? process.env.E2E_BASE_URL_SELF_HOSTED
+    ?? process.env.E2E_BASE_URL_CE
     ?? 'http://localhost:4002';
   return new URL(webUrl).hostname;
 }
@@ -73,7 +73,7 @@ function loadWorkerCredentials(): WorkerCredentials[] {
     }
   }
 
-  // Fallback: single legacy user (for self-hosted or when global-setup hasn't run)
+  // Fallback: single legacy user (for CE or when global-setup hasn't run)
   _workerCredentials = [
     { email: DEFAULT_EMAIL, password: DEFAULT_PASSWORD, name: 'E2E Test User' },
   ];

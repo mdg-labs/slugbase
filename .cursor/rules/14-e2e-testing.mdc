@@ -19,14 +19,14 @@ This invokes `bash scripts/e2e.sh`, which handles the full lifecycle: spins up e
 ### Allowed invocations
 
 ```bash
-# both modes (default)
+# both editions (default)
 pnpm test:e2e
 
-# Cloud only (Playwright project `hosted` — rename to `cloud` pending #484)
-pnpm test:e2e --project=hosted
+# Cloud only
+pnpm test:e2e --project=cloud
 
-# CE only (Playwright project `self-hosted` — rename to `ce` pending #484)
-pnpm test:e2e --project=self-hosted
+# CE only
+pnpm test:e2e --project=ce
 
 # single spec directory
 pnpm test:e2e specs/bookmarks/
@@ -43,8 +43,8 @@ Every `pnpm test:e2e` run streams full terminal output to log files under `e2e/t
 
 | Edition | Log file |
 |---|---|
-| Cloud (`hosted` project) | `e2e/test-results/hosted-output.log` |
-| CE (`self-hosted` project) | `e2e/test-results/self-hosted-output.log` |
+| Cloud (`cloud` project) | `e2e/test-results/cloud-output.log` |
+| CE (`ce` project) | `e2e/test-results/ce-output.log` |
 
 These files are **always produced** - the script uses `tee` to capture output while still printing to the terminal. If you need to inspect a failed run, read the relevant log file rather than re-running. The files are overwritten on each run so they always reflect the latest execution.
 

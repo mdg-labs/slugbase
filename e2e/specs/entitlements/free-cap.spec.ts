@@ -14,7 +14,7 @@ test.describe("Free bookmark cap", () => {
     await loginAsWorker(page, testInfo.workerIndex);
 
     // ── Phases 2–3: Reset plan, clear leftover bookmarks, seed to cap ─
-    // Other hosted specs on the same worker may leave bookmarks or a paid plan.
+    // Other Cloud specs on the same worker may leave bookmarks or a paid plan.
     // Bulk-delete first so the sidebar meter shows exactly 50/50 at cap.
     await page.evaluate(async (cap) => {
       const getCsrfToken = async (): Promise<string> => {
@@ -87,7 +87,7 @@ test.describe("Free bookmark cap", () => {
     // Verify the banner contains an upgrade CTA
     await expect(capBanner).toContainText("Upgrade to Personal");
 
-    // ── Phase 6: Sidebar usage meter at cap (hosted free plan only) ─
+    // ── Phase 6: Sidebar usage meter at cap (Cloud free plan only) ─
     const sidebarFooter = page.locator('[data-testid="sidebar-user-menu"]');
     const capPattern = new RegExp(`${String(FREE_CAP)}\\s*/\\s*${String(FREE_CAP)}`);
     await expect

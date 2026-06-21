@@ -21,12 +21,12 @@ describe("detectPlaywrightEdition", () => {
     process.argv = originalArgv;
   });
 
-  it("returns hosted or self-hosted from --project", () => {
-    process.argv = ["node", "playwright", "test", "--project=hosted"];
-    expect(detectPlaywrightEdition()).toBe("hosted");
+  it("returns cloud or ce from --project", () => {
+    process.argv = ["node", "playwright", "test", "--project=cloud"];
+    expect(detectPlaywrightEdition()).toBe("cloud");
 
-    process.argv = ["node", "playwright", "test", "--project", "self-hosted"];
-    expect(detectPlaywrightEdition()).toBe("self-hosted");
+    process.argv = ["node", "playwright", "test", "--project", "ce"];
+    expect(detectPlaywrightEdition()).toBe("ce");
   });
 
   it("returns null when --project is missing or unknown", () => {
@@ -50,9 +50,9 @@ describe("reportPortalPlaywrightAttributes", () => {
   it("includes layer, edition, repo, and CI metadata", () => {
     vi.stubEnv("GITHUB_SHA", "abc123");
 
-    expect(reportPortalPlaywrightAttributes("hosted")).toEqual([
+    expect(reportPortalPlaywrightAttributes("cloud")).toEqual([
       { key: "layer", value: "e2e" },
-      { key: "edition", value: "hosted" },
+      { key: "edition", value: "cloud" },
       { key: "repo", value: "slugbase" },
       { key: "github_sha", value: "abc123" },
     ]);
@@ -65,7 +65,7 @@ describe("reportPortalPlaywrightReporterConfig", () => {
   });
 
   it("returns null when ReportPortal env is incomplete", () => {
-    expect(reportPortalPlaywrightReporterConfig("hosted")).toBeNull();
+    expect(reportPortalPlaywrightReporterConfig("cloud")).toBeNull();
   });
 
   it("builds launch config per edition", () => {
@@ -74,19 +74,19 @@ describe("reportPortalPlaywrightReporterConfig", () => {
     }
     vi.stubEnv("CI", "true");
 
-    expect(reportPortalPlaywrightReporterConfig("hosted")).toEqual({
+    expect(reportPortalPlaywrightReporterConfig("cloud")).toEqual({
       apiKey: REQUIRED_ENV.REPORTPORTAL_API_KEY,
       endpoint: "https://reportportal.example.com/api/v2",
       project: REQUIRED_ENV.REPORTPORTAL_PROJECT,
-      launch: reportPortalPlaywrightLaunchName("hosted"),
+      launch: reportPortalPlaywrightLaunchName("cloud"),
       mode: "DEFAULT",
-      attributes: reportPortalPlaywrightAttributes("hosted"),
+      attributes: reportPortalPlaywrightAttributes("cloud"),
       launchUuidPrint: true,
       launchUuidPrintOutput: "STDOUT",
     });
 
-    expect(reportPortalPlaywrightReporterConfig("self-hosted")?.launch).toBe(
-      reportPortalPlaywrightLaunchName("self-hosted"),
+    expect(reportPortalPlaywrightReporterConfig("ce")?.launch).toBe(
+      reportPortalPlaywrightLaunchName("ce"),
     );
   });
 });
@@ -97,7 +97,7 @@ describe("reportPortalPlaywrightReporter", () => {
   });
 
   it("returns an empty array when env is unset", () => {
-    expect(reportPortalPlaywrightReporter("hosted")).toEqual([]);
+    expect(reportPortalPlaywrightReporter("cloud")).toEqual([]);
   });
 
   it("returns the ReportPortal tuple reporter when env is set", () => {
@@ -105,11 +105,11 @@ describe("reportPortalPlaywrightReporter", () => {
       vi.stubEnv(key, value);
     }
 
-    const reporters = reportPortalPlaywrightReporter("hosted");
+    const reporters = reportPortalPlaywrightReporter("cloud");
     expect(reporters).toHaveLength(1);
     expect(reporters[0]?.[0]).toBe("@reportportal/agent-js-playwright");
     expect(reporters[0]?.[1]).toMatchObject({
-      launch: reportPortalPlaywrightLaunchName("hosted"),
+      launch: reportPortalPlaywrightLaunchName("cloud"),
       project: REQUIRED_ENV.REPORTPORTAL_PROJECT,
     });
   });

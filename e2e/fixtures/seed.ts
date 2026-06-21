@@ -31,12 +31,12 @@ function resolveApiUrl(_page: Page): string {
   const envApi = process.env.E2E_BASE_URL_API;
   if (envApi) return envApi;
 
-  const envSelfHosted = process.env.E2E_BASE_URL_SELF_HOSTED;
-  if (envSelfHosted) return envSelfHosted;
+  const envCe = process.env.E2E_BASE_URL_CE;
+  if (envCe) return envCe;
 
   const origin = new URL(_page.url()).origin;
   const project = _page.context()['_project']?.['name'];
-  if (project === 'hosted') {
+  if (project === 'cloud') {
     return origin.replace(/:4002$/, ':4001');
   }
   return origin;

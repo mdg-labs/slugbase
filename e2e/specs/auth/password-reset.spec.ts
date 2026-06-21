@@ -11,11 +11,11 @@ test.describe("Password reset flow", () => {
 
   /**
    * Register a dedicated test user.
-   * Skipped in self-hosted mode (public registration disabled).
+   * Skipped in CE mode (public registration disabled).
    */
   test.beforeAll(async ({ request }) => {
-    // Skip in self-hosted — no public registration
-    if (process.env.E2E_BASE_URL_SELF_HOSTED && !process.env.E2E_BASE_URL_API) {
+    // Skip in CE — no public registration
+    if (process.env.E2E_BASE_URL_CE && !process.env.E2E_BASE_URL_API) {
       test.skip();
       return;
     }
@@ -28,8 +28,8 @@ test.describe("Password reset flow", () => {
   });
 
   test("forgot password -> reset link -> login with new password", async ({ page }) => {
-    // Skip in self-hosted — no public registration
-    if (process.env.E2E_BASE_URL_SELF_HOSTED && !process.env.E2E_BASE_URL_API) {
+    // Skip in CE — no public registration
+    if (process.env.E2E_BASE_URL_CE && !process.env.E2E_BASE_URL_API) {
       test.skip();
       return;
     }

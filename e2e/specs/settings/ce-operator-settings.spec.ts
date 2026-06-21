@@ -1,12 +1,12 @@
 import { test, expect } from "../../fixtures/auth.js";
 
 /**
- * Self-hosted operator surfaces (spec §11.3–§11.5, §12.4).
- * Runs only on the `self-hosted` Playwright project — see SELF_HOSTED_ONLY_SPECS
- * in playwright.config.ts. Worker accounts are bootstrapped via public
+ * CE operator surfaces (spec §11.3–§11.5, §12.4).
+ * Runs only on the `ce` Playwright project — see CE_ONLY_SPECS in
+ * playwright.config.ts. Worker accounts are bootstrapped via public
  * registration (PUBLIC_REGISTRATION=true in scripts/e2e.sh; prod default false).
  */
-test.describe("Self-hosted operator settings", () => {
+test.describe("CE operator settings", () => {
   test("members and audit accessible without plan upgrade", async ({ authedPage }) => {
     const page = authedPage;
 

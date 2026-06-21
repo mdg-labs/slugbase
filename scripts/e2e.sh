@@ -2,19 +2,19 @@
 # Full lifecycle for local Playwright e2e tests (spec §22.4).
 #
 # Spins up ephemeral Postgres on a random port, runs Playwright for one or
-# both deployment modes, and tears everything down — including volumes,
+# both deployment editions, and tears everything down — including volumes,
 # containers, and builder cache. Leaves zero artifacts behind.
 #
 # Usage:
-#   bash scripts/e2e.sh                              # hosted + self-hosted (default)
-#   bash scripts/e2e.sh --project=hosted              # hosted only
-#   bash scripts/e2e.sh --project=self-hosted         # self-hosted only
-#   bash scripts/e2e.sh specs/bookmarks/              # hosted + self-hosted, single spec dir
-#   bash scripts/e2e.sh --debug                       # hosted + self-hosted, debug mode
+#   bash scripts/e2e.sh                              # cloud + ce (default)
+#   bash scripts/e2e.sh --project=cloud              # cloud only
+#   bash scripts/e2e.sh --project=ce               # ce only
+#   bash scripts/e2e.sh specs/bookmarks/           # cloud + ce, single spec dir
+#   bash scripts/e2e.sh --debug                    # cloud + ce, debug mode
 #
 # Build paths (spec §15 — edition presets set VITE_* at build time; one bundle per edition):
-#   Hosted:     SLUGBASE_EDITION=cloud before pnpm build
-#   Self-host:  SLUGBASE_EDITION=ce via Docker build-arg (scripts/self-host-vite-build-args.sh)
+#   Cloud:  SLUGBASE_EDITION=cloud before pnpm build
+#   CE:     SLUGBASE_EDITION=ce via Docker build-arg (scripts/self-host-vite-build-args.sh)
 #
 # Prerequisites (one-time):
 #   npx playwright install --with-deps chromium
@@ -47,14 +47,14 @@ while [[ $# -gt 0 ]]; do
 done
 set -- "${REMAINING_ARGS[@]}"
 
-# Determine which modes to run
-RUN_HOSTED=false
-RUN_SELF_HOSTED=false
+# Determine which editions to run
+RUN_CLOUD=false
+RUN_CE=false
 case "$MODE" in
-  hosted)       RUN_HOSTED=true ;;
-  self-hosted)  RUN_SELF_HOSTED=true ;;
-  "")           RUN_HOSTED=true; RUN_SELF_HOSTED=true ;;
-  *)            echo "Unknown project: $MODE (expected: hosted, self-hosted)" >&2; exit 1 ;;
+  cloud) RUN_CLOUD=true ;;
+  ce)    RUN_CE=true ;;
+  "")    RUN_CLOUD=true; RUN_CE=true ;;
+  *)     echo "Unknown project: $MODE (expected: cloud, ce)" >&2; exit 1 ;;
 esac
 
 # Colours
@@ -65,16 +65,16 @@ warn()  { echo -e "${YELLOW}⚠${NC} $1"; }
 fail()  { echo -e "${RED}✗${NC} $1"; }
 header(){ echo -e "\n${CYAN}═══════════════════════════════════════════${NC}"; echo -e "${CYAN}  $1${NC}"; echo -e "${CYAN}═══════════════════════════════════════════${NC}"; }
 
-# Self-hosted Docker image build args (spec §15 — docs/internal/environment-variables.md)
+# CE Docker image build args (spec §15 — docs/internal/environment-variables.md)
 # shellcheck source=scripts/self-host-vite-build-args.sh
 source "${REPO_ROOT}/scripts/self-host-vite-build-args.sh"
-SELF_HOSTED_DOCKER_BUILD_ARGS=("${SELF_HOST_VITE_BUILD_ARGS[@]}")
+CE_DOCKER_BUILD_ARGS=("${SELF_HOST_VITE_BUILD_ARGS[@]}")
 
-# Hosted web bundle: cloud edition presets (billing on, admin UI panels off).
+# Cloud web bundle: cloud edition presets (billing on, admin UI panels off).
 # Optional second arg: marketing origin for VITE_MARKETING_ORIGIN (legal links in web UI).
-build_hosted_packages() {
+build_cloud_packages() {
   local marketing_origin="${1:-}"
-  header "Building hosted packages"
+  header "Building cloud packages"
   cd "$REPO_ROOT"
   info "SLUGBASE_EDITION=cloud"
   local -a build_env=(SLUGBASE_EDITION=cloud)
@@ -83,7 +83,7 @@ build_hosted_packages() {
     build_env+=(VITE_MARKETING_ORIGIN="$marketing_origin")
   fi
   "${build_env[@]}" bash scripts/with-ci-env.sh pnpm build 2>&1 | sed 's/^/  /'
-  ok "Hosted build complete"
+  ok "Cloud build complete"
 }
 
 # Track all e2e process PIDs for reliable cleanup.
@@ -157,15 +157,13 @@ cleanup() {
   echo ""
   header "Tearing down"
   kill_e2e_pids
-  docker stop slugbase-e2e-self 2>/dev/null || true
-  docker rm slugbase-e2e-self 2>/dev/null || true
+  docker stop slugbase-e2e-ce 2>/dev/null || true
+  docker rm slugbase-e2e-ce 2>/dev/null || true
   docker compose -f "$COMPOSE_FILE" down --volumes --remove-orphans 2>/dev/null || true
-  # Only prune the Docker build cache when the self-hosted image was actually
-  # built in this run. Pruning unconditionally adds 60-120s of wall time on
-  # hosted-only runs (no Docker build) because the stale cache from previous
-  # runs can be 1 GB+, causing the script to appear to hang after test
-  # completion. Skipping prune on hosted-only runs is safe — the cache is
-  # from a prior self-hosted build and will be pruned on the next full run.
+  # Only prune the Docker build cache when the CE image was actually built in
+  # this run. Pruning unconditionally adds 60-120s of wall time on cloud-only
+  # runs (no Docker build) because the stale cache from previous runs can be
+  # 1 GB+, causing the script to appear to hang after test completion.
   if [ "${DOCKER_BUILD_RAN:-false}" = true ]; then
     docker builder prune --force 2>/dev/null || true
   fi
@@ -186,15 +184,15 @@ npx playwright install chromium 2>&1 | sed 's/^/  /'
 ok "Playwright browsers ready"
 
 # ---------------------------------------------------------------------------
-# 3. Run hosted tests (if selected)
+# 3. Run cloud tests (if selected)
 #    Playwright webServer starts API, web, marketing on random ports
 # ---------------------------------------------------------------------------
-if [ "$RUN_HOSTED" = true ]; then
-  header "Running hosted tests"
+if [ "$RUN_CLOUD" = true ]; then
+  header "Running cloud tests"
 
   IFS=' ' read -r PORT_API PORT_WEB PORT_MKTG <<< "$(find_free_ports 3)"
 
-  build_hosted_packages "http://localhost:$PORT_MKTG"
+  build_cloud_packages "http://localhost:$PORT_MKTG"
 
   export E2E_BASE_URL_API="http://localhost:$PORT_API"
   export E2E_BASE_URL_WEB="http://localhost:$PORT_WEB"
@@ -202,7 +200,7 @@ if [ "$RUN_HOSTED" = true ]; then
   export E2E_PORT_API="$PORT_API"
   export E2E_PORT_WEB="$PORT_WEB"
   export E2E_PORT_MKTG="$PORT_MKTG"
-  export E2E_JSON_REPORT_PATH="$REPO_ROOT/e2e/test-results/report-hosted.json"
+  export E2E_JSON_REPORT_PATH="$REPO_ROOT/e2e/test-results/report-cloud.json"
 
   info "Ports — API:$PORT_API  Web:$PORT_WEB  Marketing:$PORT_MKTG"
 
@@ -211,12 +209,12 @@ if [ "$RUN_HOSTED" = true ]; then
   # Service logs — background processes must NOT inherit the script's stdout.
   # If stdout is piped (e.g. `pnpm test:e2e | tail`), inherited fds keep the
   # pipe open after Playwright exits and the shell appears to hang forever.
-  LOGFILE_HOSTED_API="$REPO_ROOT/e2e/test-results/hosted-services-api.log"
-  LOGFILE_HOSTED_WEB="$REPO_ROOT/e2e/test-results/hosted-services-web.log"
-  LOGFILE_HOSTED_MKTG="$REPO_ROOT/e2e/test-results/hosted-services-marketing.log"
-  : >"$LOGFILE_HOSTED_API"
-  : >"$LOGFILE_HOSTED_WEB"
-  : >"$LOGFILE_HOSTED_MKTG"
+  LOGFILE_CLOUD_API="$REPO_ROOT/e2e/test-results/cloud-services-api.log"
+  LOGFILE_CLOUD_WEB="$REPO_ROOT/e2e/test-results/cloud-services-web.log"
+  LOGFILE_CLOUD_MKTG="$REPO_ROOT/e2e/test-results/cloud-services-marketing.log"
+  : >"$LOGFILE_CLOUD_API"
+  : >"$LOGFILE_CLOUD_WEB"
+  : >"$LOGFILE_CLOUD_MKTG"
 
   # Start API
   info "Starting API on port $PORT_API …"
@@ -228,7 +226,7 @@ if [ "$RUN_HOSTED" = true ]; then
     ENCRYPTION_KEY='e2e-test-encryption-key-at-least-32-chars!!' \
     APP_BASE_URL="http://localhost:$PORT_API" \
     FRONTEND_ORIGIN="http://localhost:$PORT_WEB" \
-    node packages/backend/dist/main.js >>"$LOGFILE_HOSTED_API" 2>&1 &
+    node packages/backend/dist/main.js >>"$LOGFILE_CLOUD_API" 2>&1 &
   API_PID=$!
   E2E_PIDS+=("$API_PID")
 
@@ -236,13 +234,13 @@ if [ "$RUN_HOSTED" = true ]; then
   # API_BASE_URL must point at the backend so server-side loaders/actions can
   # reach it (login, session checks, workspace fetch, etc.).
   info "Starting Web on port $PORT_WEB …"
-  (cd packages/web && PORT="$PORT_WEB" API_BASE_URL="http://localhost:$PORT_API" npx react-router-serve build/server/index.js) >>"$LOGFILE_HOSTED_WEB" 2>&1 &
+  (cd packages/web && PORT="$PORT_WEB" API_BASE_URL="http://localhost:$PORT_API" npx react-router-serve build/server/index.js) >>"$LOGFILE_CLOUD_WEB" 2>&1 &
   WEB_PID=$!
   E2E_PIDS+=("$WEB_PID")
 
   # Start Marketing (static serve)
   info "Starting Marketing on port $PORT_MKTG …"
-  npx serve packages/marketing/dist -l "$PORT_MKTG" >>"$LOGFILE_HOSTED_MKTG" 2>&1 &
+  npx serve packages/marketing/dist -l "$PORT_MKTG" >>"$LOGFILE_CLOUD_MKTG" 2>&1 &
   MKTG_PID=$!
   E2E_PIDS+=("$MKTG_PID")
 
@@ -266,14 +264,14 @@ if [ "$RUN_HOSTED" = true ]; then
   # NOTE: Worker-scoped users are now registered by e2e/global-setup.ts
   # (via Playwright's globalSetup hook). No manual seed needed here.
 
-  LOGFILE_HOSTED="$REPO_ROOT/e2e/test-results/hosted-output.log"
+  LOGFILE_CLOUD="$REPO_ROOT/e2e/test-results/cloud-output.log"
 
   # shellcheck disable=SC2068
   bash scripts/with-ci-env.sh npx playwright test \
     --config e2e/playwright.config.ts \
-    --project=hosted \
-    "$@" 2>&1 | tee "$LOGFILE_HOSTED" | sed 's/^/  /' || {
-    fail "Hosted tests failed (exit code $?) — full log: $LOGFILE_HOSTED"
+    --project=cloud \
+    "$@" 2>&1 | tee "$LOGFILE_CLOUD" | sed 's/^/  /' || {
+    fail "Cloud tests failed (exit code $?) — full log: $LOGFILE_CLOUD"
     EXIT_CODE=1
   }
 
@@ -281,54 +279,54 @@ if [ "$RUN_HOSTED" = true ]; then
   # Subshells ( ) & and npx wrappers spawn child nodes that survive a plain kill.
   kill_e2e_pids
 
-  # Unset hosted env vars so self-hosted phase doesn't inherit them
+  # Unset cloud env vars so CE phase doesn't inherit them
   unset E2E_BASE_URL_API E2E_BASE_URL_WEB E2E_BASE_URL_MARKETING \
         E2E_PORT_API E2E_PORT_WEB E2E_PORT_MKTG
 fi
 
 # ---------------------------------------------------------------------------
-# 4. Run self-hosted tests (if selected)
+# 4. Run CE tests (if selected)
 #    Build combined Docker image, run container, test against it on random port
 # ---------------------------------------------------------------------------
-if [ "$RUN_SELF_HOSTED" = true ]; then
-  header "Running self-hosted tests"
+if [ "$RUN_CE" = true ]; then
+  header "Running CE tests"
 
-  read -r PORT_SELF <<< "$(find_free_ports 1)"
-  export E2E_JSON_REPORT_PATH="$REPO_ROOT/e2e/test-results/report-self-hosted.json"
+  read -r PORT_CE <<< "$(find_free_ports 1)"
+  export E2E_JSON_REPORT_PATH="$REPO_ROOT/e2e/test-results/report-ce.json"
 
   info "Building combined Docker image (SLUGBASE_EDITION=ce) …"
   DOCKER_BUILD_RAN=true
-  docker build -t slugbase-e2e:self-hosted \
-    "${SELF_HOSTED_DOCKER_BUILD_ARGS[@]}" \
+  docker build -t slugbase-e2e:ce \
+    "${CE_DOCKER_BUILD_ARGS[@]}" \
     . 2>&1 | sed 's/^/  /'
   ok "Docker image built"
 
-  info "Starting combined container on port $PORT_SELF …"
-  # Self-hosted prod default is PUBLIC_REGISTRATION=false (invite-only). E2e overrides
+  info "Starting combined container on port $PORT_CE …"
+  # CE prod default is PUBLIC_REGISTRATION=false (invite-only). E2e overrides
   # to true so global-setup can register per-worker accounts via /auth/register —
   # no invite flow in this harness (see e2e/global-setup.ts).
   docker run -d \
-    --name slugbase-e2e-self \
+    --name slugbase-e2e-ce \
     --network host \
     -e DATABASE_URL="$DATABASE_URL" \
     -e SLUGBASE_E2E_MODE=true \
     -e SLUGBASE_EDITION=ce \
-    -e PORT="$PORT_SELF" \
-    -e SESSION_SECRET='selfhosted-e2e-session-secret-at-least-32!!' \
-    -e ENCRYPTION_KEY='selfhosted-e2e-encryption-key-at-least-32!!' \
-    -e APP_BASE_URL="http://localhost:$PORT_SELF" \
-    -e FRONTEND_ORIGIN="http://localhost:$PORT_SELF" \
-    -e API_BASE_URL="http://localhost:$PORT_SELF" \
+    -e PORT="$PORT_CE" \
+    -e SESSION_SECRET='ce-e2e-session-secret-at-least-32-chars-long!!' \
+    -e ENCRYPTION_KEY='ce-e2e-encryption-key-at-least-32-chars-long!!' \
+    -e APP_BASE_URL="http://localhost:$PORT_CE" \
+    -e FRONTEND_ORIGIN="http://localhost:$PORT_CE" \
+    -e API_BASE_URL="http://localhost:$PORT_CE" \
     -e PUBLIC_REGISTRATION=true \
-    slugbase-e2e:self-hosted 2>&1 | sed 's/^/  /'
+    slugbase-e2e:ce 2>&1 | sed 's/^/  /'
   ok "Container started"
 
   info "Waiting for health endpoint …"
   for i in $(seq 1 30); do
-    curl -sf "http://localhost:$PORT_SELF/health" >/dev/null 2>&1 && break
+    curl -sf "http://localhost:$PORT_CE/health" >/dev/null 2>&1 && break
     sleep 2
   done
-  curl -sf "http://localhost:$PORT_SELF/health" >/dev/null 2>&1 || {
+  curl -sf "http://localhost:$PORT_CE/health" >/dev/null 2>&1 || {
     fail "Container did not become healthy within 60s"
     EXIT_CODE=1
     # Mark that container is not healthy so we skip the test run
@@ -336,25 +334,25 @@ if [ "$RUN_SELF_HOSTED" = true ]; then
   }
 
   if [ "${HEALTHY:-true}" = true ]; then
-    export E2E_BASE_URL_SELF_HOSTED="http://localhost:$PORT_SELF"
+    export E2E_BASE_URL_CE="http://localhost:$PORT_CE"
 
-    LOGFILE_SELF="$REPO_ROOT/e2e/test-results/self-hosted-output.log"
+    LOGFILE_CE="$REPO_ROOT/e2e/test-results/ce-output.log"
 
     # shellcheck disable=SC2068
     bash scripts/with-ci-env.sh npx playwright test \
       --config e2e/playwright.config.ts \
-      --project=self-hosted \
-      "$@" 2>&1 | tee "$LOGFILE_SELF" | sed 's/^/  /' || {
-      fail "Self-hosted tests failed (exit code $?) — full log: $LOGFILE_SELF"
+      --project=ce \
+      "$@" 2>&1 | tee "$LOGFILE_CE" | sed 's/^/  /' || {
+      fail "CE tests failed (exit code $?) — full log: $LOGFILE_CE"
       EXIT_CODE=1
     }
   else
-    fail "Skipping self-hosted tests — container not healthy"
+    fail "Skipping CE tests — container not healthy"
   fi
 fi
 
 # ---------------------------------------------------------------------------
-# 5. Print test summary (parse JSON reports from both modes)
+# 5. Print test summary (parse JSON reports from both editions)
 # ---------------------------------------------------------------------------
 print_summary() {
   local mode="$1" file="$2"
@@ -385,16 +383,16 @@ print(f'{m}m{s}s')
 }
 
 header "Test summary"
-printf "  %-14s │ %5s │ %5s │ %5s │ %7s │ %s\n" "Mode" "Total" "Passed" "Failed" "Skipped" "Duration"
+printf "  %-14s │ %5s │ %5s │ %5s │ %7s │ %s\n" "Edition" "Total" "Passed" "Failed" "Skipped" "Duration"
 printf "  %s\n" "──────────────────────────────────────────────────────────────"
-if [ "$RUN_HOSTED" = true ]; then
-  print_summary "Hosted" "$REPO_ROOT/e2e/test-results/report-hosted.json"
+if [ "$RUN_CLOUD" = true ]; then
+  print_summary "Cloud" "$REPO_ROOT/e2e/test-results/report-cloud.json"
 fi
-if [ "$RUN_SELF_HOSTED" = true ]; then
-  print_summary "Self-hosted" "$REPO_ROOT/e2e/test-results/report-self-hosted.json"
+if [ "$RUN_CE" = true ]; then
+  print_summary "CE" "$REPO_ROOT/e2e/test-results/report-ce.json"
 fi
 
-# All modes that were selected ran
+# All editions that were selected ran
 if [ "$EXIT_CODE" -eq 0 ]; then
   ok "All tests passed"
 else

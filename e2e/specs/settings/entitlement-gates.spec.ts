@@ -45,7 +45,7 @@ test.describe("Settings entitlement gates", () => {
     await expect(page.locator('[data-testid="members-plan-gate"]')).not.toBeVisible();
     await expect(page.locator('[data-testid="members-settings-page"]')).toBeVisible();
 
-    // Parallel hosted specs on the same worker may downgrade to free mid-run.
+    // Parallel Cloud specs on the same worker may downgrade to free mid-run.
     await waitForTeamAuditLogAccess(page, sessionCookie, csrfToken);
 
     await page.goto("/settings/audit");

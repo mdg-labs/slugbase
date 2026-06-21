@@ -17,8 +17,8 @@ const E2E_BASE_URL_MARKETING = process.env.E2E_BASE_URL_MARKETING ?? 'http://loc
 
 const ONBOARDING_STORAGE_STATE = resolve(__dirname, '.onboarding-storage-state.json');
 
-/** Plan-gating and Stripe billing paths — valid only on the hosted VITE_BILLING_ENABLED build (#358). */
-const HOSTED_ONLY_SPECS = [
+/** Plan-gating and Stripe billing paths — valid only on the Cloud VITE_BILLING_ENABLED build (#358). */
+const CLOUD_ONLY_SPECS = [
   '**/settings/entitlement-gates.spec.ts',
   '**/entitlements/free-cap.spec.ts',
   '**/sharing/share-dialog.spec.ts',
@@ -28,10 +28,10 @@ const HOSTED_ONLY_SPECS = [
   '**/billing/**',
 ] as const;
 
-/** Self-hosted operator surfaces — plan gates off, BYO admin panels (#357). */
-const SELF_HOSTED_ONLY_SPECS = [
+/** CE operator surfaces — plan gates off, BYO admin panels (#357). */
+const CE_ONLY_SPECS = [
   '**/auth/setup.spec.ts',
-  '**/settings/self-hosted-operator-settings.spec.ts',
+  '**/settings/ce-operator-settings.spec.ts',
 ] as const;
 
 // ── Build the reporter list ─────────────────────────────────────────────────
@@ -46,7 +46,7 @@ if (process.env.E2E_JSON_REPORT_PATH) {
 }
 
 // ReportPortal: one launch per Playwright project run (edition from --project).
-// e2e.sh invokes hosted and self-hosted separately; no-ops when REPORTPORTAL_* unset.
+// e2e.sh invokes cloud and ce separately; no-ops when REPORTPORTAL_* unset.
 const edition = detectPlaywrightEdition();
 if (edition) {
   reporters.push(...reportPortalPlaywrightReporter(edition));
@@ -70,8 +70,8 @@ export default defineConfig({
 
   projects: [
     {
-      name: 'hosted',
-      testIgnore: [...SELF_HOSTED_ONLY_SPECS],
+      name: 'cloud',
+      testIgnore: [...CE_ONLY_SPECS],
       use: {
         ...devices['Desktop Chrome'],
         baseURL: E2E_BASE_URL_WEB,
@@ -83,15 +83,15 @@ export default defineConfig({
       },
     },
     {
-      name: 'self-hosted',
-      // Marketing is a separate Cloudflare Worker; plan-gating specs need hosted billing build.
-      testIgnore: ['**/marketing/**', ...HOSTED_ONLY_SPECS],
+      name: 'ce',
+      // Marketing is a separate Cloudflare Worker; plan-gating specs need Cloud billing build.
+      testIgnore: ['**/marketing/**', ...CLOUD_ONLY_SPECS],
       use: {
         ...devices['Desktop Chrome'],
-        baseURL: process.env.E2E_BASE_URL_SELF_HOSTED ?? 'http://localhost:3000',
+        baseURL: process.env.E2E_BASE_URL_CE ?? 'http://localhost:3000',
         storageState: ONBOARDING_STORAGE_STATE,
         extraHTTPHeaders: {
-          'X-E2E-Base-URL-API': process.env.E2E_BASE_URL_SELF_HOSTED ?? 'http://localhost:3000',
+          'X-E2E-Base-URL-API': process.env.E2E_BASE_URL_CE ?? 'http://localhost:3000',
         },
       },
     },

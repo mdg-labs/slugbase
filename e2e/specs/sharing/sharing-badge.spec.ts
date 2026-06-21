@@ -7,7 +7,7 @@ import {
   linkBookmarkToFolder,
   setupTeamSharingWorkspace,
 } from "../../fixtures/sharing-setup.js";
-import { isHostedE2eProject } from "../../helpers/deployment-project.js";
+import { isCloudE2eProject } from "../../helpers/deployment-project.js";
 import { e2eResourceSuffix } from "../../helpers/e2e-resource-id.js";
 import { loginAsWorker } from "../../helpers/worker-login.js";
 
@@ -17,13 +17,13 @@ test.describe("Sharing recipients badge", () => {
     sessionCookie,
     csrfToken,
   }, testInfo) => {
-    test.skip(!isHostedE2eProject(testInfo), "Team sharing requires hosted billing build");
+    test.skip(!isCloudE2eProject(testInfo), "Team sharing requires Cloud billing build");
 
     const setup = await setupTeamSharingWorkspace(
       page,
       testInfo.workerIndex,
       { sessionCookie, csrfToken },
-      { hosted: true },
+      { cloud: true },
     );
 
     const suffix = e2eResourceSuffix(testInfo);
@@ -52,13 +52,13 @@ test.describe("Sharing recipients badge", () => {
     sessionCookie,
     csrfToken,
   }, testInfo) => {
-    test.skip(!isHostedE2eProject(testInfo), "Team sharing requires hosted billing build");
+    test.skip(!isCloudE2eProject(testInfo), "Team sharing requires Cloud billing build");
 
     const setup = await setupTeamSharingWorkspace(
       page,
       testInfo.workerIndex,
       { sessionCookie, csrfToken },
-      { hosted: true },
+      { cloud: true },
     );
 
     const suffix = e2eResourceSuffix(testInfo);
@@ -92,13 +92,13 @@ test.describe("Sharing recipients badge", () => {
     sessionCookie,
     csrfToken,
   }, testInfo) => {
-    test.skip(!isHostedE2eProject(testInfo), "Team sharing requires hosted billing build");
+    test.skip(!isCloudE2eProject(testInfo), "Team sharing requires Cloud billing build");
 
     const setup = await setupTeamSharingWorkspace(
       page,
       testInfo.workerIndex,
       { sessionCookie, csrfToken },
-      { hosted: true },
+      { cloud: true },
     );
 
     const suffix = e2eResourceSuffix(testInfo);

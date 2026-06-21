@@ -21,7 +21,7 @@ test.describe("Share dialog", () => {
     // ── Phase 1: Login ──────────────────────────────────────────────
     await loginAsWorker(page, testInfo.workerIndex);
 
-    const apiUrl = process.env.E2E_BASE_URL_API ?? process.env.E2E_BASE_URL_SELF_HOSTED ?? 'http://localhost:4001';
+    const apiUrl = process.env.E2E_BASE_URL_API ?? process.env.E2E_BASE_URL_CE ?? 'http://localhost:4001';
     const apiHeaders = { Cookie: sessionCookie, "x-csrf-token": csrfToken };
 
     // ── Phase 1.5: Reset workspace to free plan ─────────────────────

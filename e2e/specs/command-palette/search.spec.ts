@@ -13,7 +13,7 @@ test.describe('Command palette search', () => {
     const page = authedPage;
 
     // Create a bookmark that will appear in search results
-    const apiUrl = process.env.E2E_BASE_URL_API ?? process.env.E2E_BASE_URL_SELF_HOSTED ?? 'http://localhost:4001';
+    const apiUrl = process.env.E2E_BASE_URL_API ?? process.env.E2E_BASE_URL_CE ?? 'http://localhost:4001';
     const createRes = await page.request.post(`${apiUrl}/bookmarks`, {
       headers: { Cookie: sessionCookie, 'x-csrf-token': csrfToken },
       data: {

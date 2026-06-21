@@ -1,11 +1,11 @@
 import type { TestInfo } from '@playwright/test';
 
-/** Playwright project for the hosted (billing-enabled) deployment build. */
-export function isHostedE2eProject(testInfo: TestInfo): boolean {
-  return testInfo.project.name === 'hosted';
+/** Playwright project for the Cloud (billing-enabled) deployment build. */
+export function isCloudE2eProject(testInfo: TestInfo): boolean {
+  return testInfo.project.name === 'cloud';
 }
 
-/** Playwright project for the self-hosted combined-container deployment build. */
-export function isSelfHostedE2eProject(testInfo: TestInfo): boolean {
-  return testInfo.project.name === 'self-hosted';
+/** Playwright project for the CE combined-container deployment build. */
+export function isCeE2eProject(testInfo: TestInfo): boolean {
+  return testInfo.project.name === 'ce';
 }

@@ -9,13 +9,13 @@ export interface ApiSession {
 
 function resolveApiUrl(): string {
   return process.env.E2E_BASE_URL_API
-    ?? process.env.E2E_BASE_URL_SELF_HOSTED
+    ?? process.env.E2E_BASE_URL_CE
     ?? 'http://localhost:4001';
 }
 
 function resolveWebHostname(): string {
   const webUrl = process.env.E2E_BASE_URL_WEB
-    ?? process.env.E2E_BASE_URL_SELF_HOSTED
+    ?? process.env.E2E_BASE_URL_CE
     ?? 'http://localhost:4002';
   return new URL(webUrl).hostname;
 }
