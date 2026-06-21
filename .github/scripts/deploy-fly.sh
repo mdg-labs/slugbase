@@ -17,7 +17,7 @@ case "$SERVICE" in
     ;;
   admin)
     FLY_CONFIG="${ROOT}/packages/admin/fly.toml"
-    DEPLOY_DIR="${ROOT}/packages/admin"
+    DEPLOY_DIR="${ROOT}"
     ;;
   *)
     echo "deploy-fly: unsupported service: ${SERVICE} (expected api or admin)" >&2
