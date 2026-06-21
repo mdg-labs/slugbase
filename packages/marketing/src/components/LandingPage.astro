@@ -12,3 +12,9 @@ const title = formatMarketingBrandTitle(locale);
 <MarketingLayout title={title}>
   <LandingSections appOrigin={appOrigin} />
 </MarketingLayout>
+
+<script>
+  import { initLivePricing } from "../lib/pricing-hydrate.client.ts";
+
+  void initLivePricing();
+</script>

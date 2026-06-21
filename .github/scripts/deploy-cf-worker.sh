@@ -76,12 +76,6 @@ case "$APP" in
     if [[ -n "${API_BASE_URL:-}" ]]; then
       MARKETING_BUILD_ENV+=(PUBLIC_API_BASE_URL="${API_BASE_URL}")
     fi
-    if [[ -n "${CF_ACCESS_CLIENT_ID:-}" ]]; then
-      MARKETING_BUILD_ENV+=(CF_ACCESS_CLIENT_ID="${CF_ACCESS_CLIENT_ID}")
-    fi
-    if [[ -n "${CF_ACCESS_CLIENT_SECRET:-}" ]]; then
-      MARKETING_BUILD_ENV+=(CF_ACCESS_CLIENT_SECRET="${CF_ACCESS_CLIENT_SECRET}")
-    fi
 
     echo "deploy-cf-worker: building @slugbase/marketing"
     env "${MARKETING_BUILD_ENV[@]}" pnpm --filter @slugbase/marketing build

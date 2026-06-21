@@ -18,10 +18,7 @@ describe("marketing build output", () => {
       stdio: "pipe",
       env: {
         ...process.env,
-        PUBLIC_PLAN_PRICE_PERSONAL_MONTHLY: "$4/mo",
-        PUBLIC_PLAN_PRICE_PERSONAL_YEARLY: "$3.33/mo",
-        PUBLIC_PLAN_PRICE_TEAM_SEAT: "$9/seat/mo",
-        PUBLIC_PLAN_PRICE_SUPPORTER: "$59",
+        PUBLIC_API_BASE_URL: "https://api.slugbase.test",
         PUBLIC_CONTACT_ENDPOINT: "https://api.slugbase.test/contact",
       },
     });
@@ -36,6 +33,7 @@ describe("marketing build output", () => {
 
     expect(enHtml).toContain(t("en", "marketing.landing.hero_title"));
     expect(enHtml).toContain(t("en", "marketing.landing.hero_title_accent"));
+    expect(enHtml).toContain('data-pricing-teaser="personal-monthly"');
     expect(deHtml).toContain(t("de", "marketing.landing.hero_title"));
     expect(deHtml).toContain(t("de", "marketing.landing.hero_title_accent"));
     expect(enHtml).toContain('lang="en"');
@@ -51,8 +49,8 @@ describe("marketing build output", () => {
     );
 
     expect(enPricing).toContain(t("en", "marketing.pricing.plan.personal"));
-    expect(enPricing).toContain('data-price-monthly="$4"');
-    expect(enPricing).toContain("$59");
+    expect(enPricing).toContain('data-pricing-plan="personal"');
+    expect(enPricing).toContain('data-pricing-root');
     expect(dePricing).toContain(t("de", "marketing.pricing.plan.personal"));
     expect(enPrivacy).toContain("Fly.io");
     expect(enPrivacy).toContain("Neon Postgres");

@@ -1,7 +1,7 @@
-/** Config-driven marketing pricing display (spec §12.1).
+/** Marketing pricing display helpers (spec §12.1).
 
-Prices come from the public pricing API (GET /pricing/public) at build time,
-keeping Stripe as the single source of truth. Non-price config stays in env. */
+Live paid-tier amounts are fetched at runtime from GET /pricing/public (no auth).
+Static shell uses DEFAULT_FREE_BOOKMARK_CAP; client hydration fills prices. */
 
 import type { PricingResponse } from "./pricing-api-types.js";
 
@@ -15,103 +15,56 @@ export interface MarketingPricingConfig {
   freeBookmarkCap: number;
 }
 
-function readEnv(key: string): string | undefined {
-  if (!(key in import.meta.env)) {
-    const nodeValue = process.env[key];
-    return typeof nodeValue === "string" && nodeValue.length > 0 ? nodeValue : undefined;
-  }
-  const value: unknown = import.meta.env[key as keyof ImportMetaEnv];
-  if (typeof value === "string" && value.length > 0) {
-    return value;
-  }
-  const nodeValue = process.env[key];
-  return typeof nodeValue === "string" && nodeValue.length > 0 ? nodeValue : undefined;
-}
-
-function readPositiveInt(value: string | undefined, fallback: number): number {
-  if (!value) return fallback;
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-const DEFAULT_FREE_BOOKMARK_CAP = 50;
+export const DEFAULT_FREE_BOOKMARK_CAP = 50;
 
 /** Team plan minimum seats at checkout and while subscribed (spec §12.2, decision #17). */
 export const TEAM_MIN_SEATS = 2;
 
-/** Avoid hanging Vitest/CI when the pricing API is slow or behind Access. */
-const PRICING_API_FETCH_TIMEOUT_MS = 3_000;
-
-function buildPricingApiFetchInit(): RequestInit {
-  const headers: Record<string, string> = {};
-  const accessClientId = readEnv("CF_ACCESS_CLIENT_ID");
-  const accessClientSecret = readEnv("CF_ACCESS_CLIENT_SECRET");
-  if (accessClientId && accessClientSecret) {
-    headers["CF-Access-Client-Id"] = accessClientId;
-    headers["CF-Access-Client-Secret"] = accessClientSecret;
-  }
-
-  return {
-    ...(Object.keys(headers).length > 0 ? { headers } : {}),
-    signal: AbortSignal.timeout(PRICING_API_FETCH_TIMEOUT_MS),
-  };
-}
-
-/**
- * Fetches pricing data from the public API (build-time).
- * Falls back to env defaults when the API is unreachable (self-hosted without Stripe).
- */
-async function fetchPricingFromApi(): Promise<PricingResponse | null> {
-  const apiBase = readEnv("PUBLIC_API_BASE_URL");
-  if (!apiBase) return null;
-
-  try {
-    const res = await fetch(`${apiBase}/pricing/public`, buildPricingApiFetchInit());
-    if (!res.ok) return null;
-    return (await res.json()) as PricingResponse;
-  } catch {
-    return null;
-  }
-}
-
-export async function loadMarketingPricingConfig(
+/** Static shell config before client hydration (no paid-tier amounts). */
+export function createStaticMarketingPricingConfig(
   overrides: Partial<MarketingPricingConfig> = {},
-): Promise<MarketingPricingConfig> {
-  const apiPricing = await fetchPricingFromApi();
-
-  const supporterPromotionEnd = readEnv("PUBLIC_SUPPORTER_PROMOTION_END") ?? null;
-
-  if (apiPricing) {
-    return {
-      personalMonthlyPrice: apiPricing.plans.personal.monthly?.display ?? "",
-      personalYearlyPrice: apiPricing.plans.personal.annual?.display ?? "",
-      teamSeatMonthlyPrice: apiPricing.plans.team.monthly?.display ?? "",
-      teamSeatYearlyPrice: apiPricing.plans.team.annual?.display ?? "",
-      supporterPrice: apiPricing.plans.supporter?.display ?? "",
-      supporterPromotionEnd,
-      freeBookmarkCap: apiPricing.freeBookmarkCap,
-      ...overrides,
-    };
-  }
-
-  // Fallback: env-based config for self-hosted without a reachable API
-  const teamSeatMonthly = readEnv("PUBLIC_PLAN_PRICE_TEAM_SEAT") ?? "";
-  const teamSeatYearly =
-    readEnv("PUBLIC_PLAN_PRICE_TEAM_SEAT_YEARLY") ?? teamSeatMonthly;
-
+): MarketingPricingConfig {
   return {
-    personalMonthlyPrice: readEnv("PUBLIC_PLAN_PRICE_PERSONAL_MONTHLY") ?? "",
-    personalYearlyPrice: readEnv("PUBLIC_PLAN_PRICE_PERSONAL_YEARLY") ?? "",
-    teamSeatMonthlyPrice: teamSeatMonthly,
-    teamSeatYearlyPrice: teamSeatYearly,
-    supporterPrice: readEnv("PUBLIC_PLAN_PRICE_SUPPORTER") ?? "",
-    supporterPromotionEnd,
-    freeBookmarkCap: readPositiveInt(
-      readEnv("PUBLIC_FREE_BOOKMARK_CAP"),
-      DEFAULT_FREE_BOOKMARK_CAP,
-    ),
+    personalMonthlyPrice: "",
+    personalYearlyPrice: "",
+    teamSeatMonthlyPrice: "",
+    teamSeatYearlyPrice: "",
+    supporterPrice: "",
+    supporterPromotionEnd: null,
+    freeBookmarkCap: DEFAULT_FREE_BOOKMARK_CAP,
     ...overrides,
   };
+}
+
+/** Map the public API response into marketing display strings. */
+export function mapPricingResponseToConfig(
+  apiPricing: PricingResponse,
+  supporterPromotionEnd: string | null = null,
+): MarketingPricingConfig {
+  return {
+    personalMonthlyPrice: apiPricing.plans.personal.monthly?.display ?? "",
+    personalYearlyPrice: apiPricing.plans.personal.annual?.display ?? "",
+    teamSeatMonthlyPrice: apiPricing.plans.team.monthly?.display ?? "",
+    teamSeatYearlyPrice: apiPricing.plans.team.annual?.display ?? "",
+    supporterPrice: apiPricing.plans.supporter?.display ?? "",
+    supporterPromotionEnd,
+    freeBookmarkCap: apiPricing.freeBookmarkCap,
+  };
+}
+
+export function splitPrice(price: string): { amount: string; period: string } {
+  const slash = price.indexOf("/");
+  if (slash === -1) return { amount: price || "—", period: "" };
+  return {
+    amount: price.slice(0, slash),
+    period: price.slice(slash + 1),
+  };
+}
+
+/** Extract the currency prefix from a formatted price string. */
+export function extractCurrencyPrefix(price: string): string {
+  const match = price.match(/^([^\d]*)/);
+  return match?.[1]?.trimEnd() ?? "";
 }
 
 export function isSupporterPromotionActive(

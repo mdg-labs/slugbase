@@ -1,9 +1,6 @@
 ---
 import { t, type SupportedLocale } from "../i18n/translate.js";
-import {
-  isSupporterPromotionActive,
-  loadMarketingPricingConfig,
-} from "../lib/pricing-config.js";
+import { DEFAULT_FREE_BOOKMARK_CAP } from "../lib/pricing-config.js";
 
 interface Props {
   appOrigin: string;
@@ -14,13 +11,18 @@ const locale = Astro.currentLocale as SupportedLocale;
 const getStartedHref = appOrigin ? `${appOrigin}/register` : "/register";
 const pricingHref =
   locale === "de" ? "/de/pricing" : "/pricing";
+const placeholderAmount = "—";
+const supporterPromotionEnd =
+  typeof import.meta.env.PUBLIC_SUPPORTER_PROMOTION_END === "string" &&
+  import.meta.env.PUBLIC_SUPPORTER_PROMOTION_END.length > 0
+    ? import.meta.env.PUBLIC_SUPPORTER_PROMOTION_END
+    : null;
+const supporterCtaTemplate = t(locale, "marketing.pricing.supporter_cta", { price: "{price}" });
 
 const forwardingDomain =
   import.meta.env.PUBLIC_FORWARDING_DOMAIN || "cloud.slugbase.app";
 
-const pricingConfig = await loadMarketingPricingConfig();
-const freeBookmarkCap = String(pricingConfig.freeBookmarkCap);
-const supporterActive = isSupporterPromotionActive(pricingConfig);
+const freeBookmarkCap = String(DEFAULT_FREE_BOOKMARK_CAP);
 
 const features = [
   {
@@ -87,19 +89,7 @@ const teamFolders: TeamFolder[] = [
   { nameKey: "marketing.landing.team_folder_inbox", color: "var(--accent-text)", count: 6, sharingKey: "marketing.landing.team_sharing_private", isPrivate: true },
 ];
 
-/** Extract the currency prefix from a formatted price string. */
-function extractCurrencyPrefix(price: string): string {
-  const match = price.match(/^([^\d]*)/);
-  return match?.[1]?.trimEnd() ?? "";
-}
-
-const personalMonthlyPrice = pricingConfig.personalMonthlyPrice || "-";
-const teamSeatMonthlyPrice = pricingConfig.teamSeatMonthlyPrice || "-";
-const freeCurrency = extractCurrencyPrefix(pricingConfig.personalMonthlyPrice || "");
-const freePrice = freeCurrency ? `${freeCurrency}0` : "-";
 ---
-
-<!-- ---- Hero ---- -->
 <section class="mk-hero" data-testid="marketing-hero">
   <div class="mk-c">
     <div class="mk-hero-tag">{t(locale, "marketing.landing.hero_tag")}</div>
@@ -372,7 +362,7 @@ const freePrice = freeCurrency ? `${freeCurrency}0` : "-";
         <div class="mk-teaser-plan-header">
           <span class="mk-teaser-plan-name">{t(locale, "marketing.pricing.plan.free")}</span>
         </div>
-        <div class="mk-teaser-plan-price">{freePrice}</div>
+        <div class="mk-teaser-plan-price" data-pricing-teaser="free">{placeholderAmount}</div>
         <ul class="mk-plan-feats">
           <li>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -402,7 +392,7 @@ const freePrice = freeCurrency ? `${freeCurrency}0` : "-";
           <span class="mk-teaser-popular">{t(locale, "marketing.landing.pricing_popular")}</span>
         </div>
         <div class="mk-teaser-plan-price">
-          {personalMonthlyPrice}<span class="mk-teaser-period">/mo</span>
+          <span data-pricing-teaser="personal-monthly">{placeholderAmount}</span><span class="mk-teaser-period">/mo</span>
         </div>
         <ul class="mk-plan-feats">
           <li>
@@ -432,7 +422,7 @@ const freePrice = freeCurrency ? `${freeCurrency}0` : "-";
           <span class="mk-teaser-plan-name">{t(locale, "marketing.pricing.plan.team")}</span>
         </div>
         <div class="mk-teaser-plan-price">
-          {teamSeatMonthlyPrice}<span class="mk-teaser-period">/seat/mo</span>
+          <span data-pricing-teaser="team-monthly">{placeholderAmount}</span><span class="mk-teaser-period">/seat/mo</span>
         </div>
         <ul class="mk-plan-feats">
           <li>
@@ -467,23 +457,27 @@ const freePrice = freeCurrency ? `${freeCurrency}0` : "-";
   </div>
 </section>
 
-{pricingConfig.supporterPrice && supporterActive && (
-  <section class="mk-section--sm mk-section--alt">
+<section class="mk-section--sm mk-section--alt" data-pricing-supporter hidden>
     <div class="mk-c">
       <div class="mk-supporter">
         <div>
           <div class="mk-supporter-badge">{t(locale, "marketing.pricing.supporter_badge")}</div>
           <div class="mk-supporter-price">
-            {pricingConfig.supporterPrice}
+            <span data-pricing-supporter-price>{placeholderAmount}</span>
             <span>{t(locale, "marketing.pricing.supporter_price_suffix")}</span>
           </div>
           <p class="mk-supporter-body">{t(locale, "marketing.pricing.supporter_body")}</p>
-          <a class="mk-btn mk-btn--primary mk-btn--lg" href={getStartedHref}>
-            {t(locale, "marketing.pricing.supporter_cta", { price: pricingConfig.supporterPrice })}
+          <a
+            class="mk-btn mk-btn--primary mk-btn--lg"
+            href={getStartedHref}
+            data-pricing-supporter-cta
+            data-cta-template={supporterCtaTemplate}
+          >
+            {t(locale, "marketing.pricing.supporter_cta", { price: placeholderAmount })}
           </a>
         </div>
-        {pricingConfig.supporterPromotionEnd && (
-          <div class="mk-supporter-countdown" data-promotion-end={pricingConfig.supporterPromotionEnd}>
+        {supporterPromotionEnd && (
+          <div class="mk-supporter-countdown" data-promotion-end={supporterPromotionEnd}>
             <div class="mk-supporter-countdown-label">{t(locale, "marketing.pricing.supporter_expires")}</div>
             <div class="countdown" aria-live="polite">
               <div class="countdown-unit"><span class="countdown-n" data-unit="days">00</span><span class="countdown-label">{t(locale, "marketing.pricing.countdown_days")}</span></div>
@@ -499,7 +493,6 @@ const freePrice = freeCurrency ? `${freeCurrency}0` : "-";
       </div>
     </div>
   </section>
-)}
 
 <!-- ---- Final CTA ---- -->
 <section class="mk-section--cta">

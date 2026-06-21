@@ -98,35 +98,26 @@ check_marketing_root() {
 
 check_surface "API" "${APP_BASE_URL}"
 check_surface "Web" "${FRONTEND_ORIGIN}"
-check_marketing_pricing() {
-  local base="$1"
-  local pricing_url="${base%/}/pricing"
+check_pricing_api() {
+  local api_base="$1"
+  local pricing_url="${api_base%/}/pricing/public"
 
-  echo "Smoke: Marketing (${base}) — pricing page has live paid-tier amounts"
+  echo "Smoke: API (${api_base}) — live Stripe-backed public pricing"
 
-  local pricing_html
-  pricing_html="$(smoke_curl -fsS "${pricing_url}")"
+  local pricing_json
+  pricing_json="$(smoke_curl -fsS "${pricing_url}")"
 
-  local personal_block
-  personal_block="$(printf '%s' "${pricing_html}" | sed -n '/data-testid="pricing-plan-personal"/,/<\/article>/p')"
+  echo "  GET /pricing/public -> OK"
+  printf '%s\n' "${pricing_json}" | head -c 200
+  echo ""
 
-  if [[ -z "${personal_block}" ]]; then
-    echo "Smoke failed: personal pricing plan block not found on ${pricing_url}" >&2
-    return 1
-  fi
-
-  if printf '%s' "${personal_block}" | grep -q 'data-price-monthly="-"'; then
-    echo "Smoke failed: personal plan monthly price is placeholder (-)" >&2
-    return 1
-  fi
-
-  if ! printf '%s' "${personal_block}" | grep -Eq 'data-price-monthly="[^"]*[0-9€$£]'; then
-    echo "Smoke failed: personal plan monthly price lacks currency or digits" >&2
+  if ! printf '%s' "${pricing_json}" | grep -Eq '"display"[[:space:]]*:[[:space:]]*"[^"]*[0-9€$£]'; then
+    echo "Smoke failed: personal pricing display lacks currency or digits" >&2
     return 1
   fi
 }
 
 check_marketing_root "${MARKETING_ORIGIN}"
-check_marketing_pricing "${MARKETING_ORIGIN}"
+check_pricing_api "${APP_BASE_URL}"
 
 echo "Staging smoke passed"
