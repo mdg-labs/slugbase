@@ -3,14 +3,25 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { proxy } from "hono/proxy";
 
+import { bootstrapAdminIfNeeded } from "./auth/bootstrap.service.js";
+import { createAdminAuthRoutes } from "./auth/auth.routes.js";
 import { loadAdminConfig } from "./config/load-config.js";
+import type { AdminEnv } from "./config/env.schema.js";
+import { createAdminDb, type AdminDb } from "./db/create-db.js";
 
 const VITE_DEV_SERVER_URL =
   process.env["VITE_DEV_SERVER_URL"] ?? "http://localhost:5173";
 
-export function createApp(options?: { isProduction?: boolean }): Hono {
-  const config = loadAdminConfig();
+export interface CreateAppOptions {
+  isProduction?: boolean;
+  adminDb?: AdminDb;
+  config?: AdminEnv;
+}
+
+export function createApp(options?: CreateAppOptions): Hono {
+  const config = options?.config ?? loadAdminConfig();
   const isProduction = options?.isProduction ?? config.NODE_ENV === "production";
+  const adminDb = options?.adminDb ?? createAdminDb(config.DATABASE_URL);
   const app = new Hono();
 
   app.get("/health", (c) =>
@@ -20,6 +31,8 @@ export function createApp(options?: { isProduction?: boolean }): Hono {
   app.get("/api/health", (c) =>
     c.json({ status: "ok", service: "slugbase-admin" }, 200),
   );
+
+  app.route("/api/auth", createAdminAuthRoutes({ adminDb, config }));
 
   if (isProduction) {
     app.use(
@@ -41,9 +54,11 @@ export function createApp(options?: { isProduction?: boolean }): Hono {
   return app;
 }
 
-export function startServer(): void {
+export async function startServer(): Promise<void> {
   const config = loadAdminConfig();
-  const app = createApp();
+  const adminDb = createAdminDb(config.DATABASE_URL);
+  await bootstrapAdminIfNeeded(adminDb, config);
+  const app = createApp({ adminDb, config });
   serve(
     {
       fetch: app.fetch,
@@ -63,5 +78,5 @@ const isMain =
     process.argv[1].endsWith("/server.js"));
 
 if (isMain) {
-  startServer();
+  void startServer();
 }

@@ -8,5 +8,5 @@
     "lib": ["ES2022"]
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["src/**/*.spec.ts"]
+  "exclude": ["src/**/*.spec.ts", "src/**/*.e2e-spec.ts"]
 }

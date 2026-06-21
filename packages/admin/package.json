@@ -10,16 +10,21 @@
     "dev": "concurrently -k -n vite,server -c cyan,magenta \"vite --config web/vite.config.ts\" \"tsx watch src/server.ts\"",
     "start": "node dist/server.js",
     "test:unit": "vitest run --config vitest.config.ts",
-    "test:integration": "vitest run --passWithNoTests"
+    "test:integration": "bash scripts/run-integration-tests.sh"
   },
   "dependencies": {
     "@hono/node-server": "^1.14.4",
     "@slugbase/db-admin": "workspace:^",
+    "argon2": "^0.44.0",
+    "drizzle-orm": "^0.45.2",
     "hono": "^4.8.3",
+    "nodemailer": "^9.0.1",
+    "postgres": "^3.4.7",
     "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "25.9.1",
+    "@types/nodemailer": "^8.0.0",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.0.2",
