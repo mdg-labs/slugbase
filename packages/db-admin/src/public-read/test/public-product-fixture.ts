@@ -76,6 +76,14 @@ CREATE TABLE IF NOT EXISTS public.workspace_invitations (
   created_at bigint NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS public.workspace_members (
+  id text PRIMARY KEY,
+  workspace_id text NOT NULL,
+  user_id text NOT NULL,
+  role text NOT NULL,
+  joined_at bigint NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS public.billing_webhook_events (
   event_id text PRIMARY KEY,
   event_type text NOT NULL,
@@ -88,6 +96,7 @@ const PUBLIC_PRODUCT_TABLES = [
   "bookmarks",
   "sessions",
   "workspace_invitations",
+  "workspace_members",
   "workspaces",
   "user_accounts",
 ] as const;
@@ -127,11 +136,19 @@ export async function seedPublicProductOverviewData(
 
   await sql`
     INSERT INTO public.workspaces (
-      id, name, slug, plan, plan_archived, billing_status, billing_period_end, permanent_personal, created_at, updated_at
+      id, name, slug, plan, plan_seats, plan_archived, billing_status, billing_period_end, permanent_personal, created_at, updated_at
     ) VALUES
-      ('ws-free', 'Free WS', 'free-ws', 'free', false, null, null, false, ${tenDaysAgo}, ${tenDaysAgo}),
-      ('ws-personal', 'Personal WS', 'personal-ws', 'personal', false, 'active', ${futureExpiry}, false, ${tenDaysAgo}, ${tenDaysAgo}),
-      ('ws-team', 'Team WS', 'team-ws', 'team', false, 'trialing', ${futureExpiry}, false, ${nowMs}, ${nowMs})
+      ('ws-free', 'Free WS', 'free-ws', 'free', null, false, null, null, false, ${tenDaysAgo}, ${tenDaysAgo}),
+      ('ws-personal', 'Personal WS', 'personal-ws', 'personal', null, false, 'active', ${futureExpiry}, false, ${tenDaysAgo}, ${tenDaysAgo}),
+      ('ws-team', 'Team WS', 'team-ws', 'team', 5, false, 'trialing', ${futureExpiry}, false, ${nowMs}, ${nowMs})
+  `;
+
+  await sql`
+    INSERT INTO public.workspace_members (id, workspace_id, user_id, role, joined_at) VALUES
+      ('m-1', 'ws-free', 'u-old', 'OWNER', ${tenDaysAgo}),
+      ('m-2', 'ws-personal', 'u-old', 'OWNER', ${tenDaysAgo}),
+      ('m-3', 'ws-personal', 'u-recent', 'MEMBER', ${fiveDaysAgo}),
+      ('m-4', 'ws-team', 'u-new', 'OWNER', ${nowMs})
   `;
 
   await sql`

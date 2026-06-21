@@ -11,6 +11,11 @@ import { createAdminDb, type AdminDb } from "./db/create-db.js";
 import { initAdminSentry } from "./error-reporting/sentry.js";
 import { startAdminScheduler } from "./jobs/scheduler.js";
 import { createInternalRoutes } from "./routes/internal.routes.js";
+import { createOverviewRoutes } from "./routes/overview.routes.js";
+import { createAccountsRoutes } from "./routes/accounts.routes.js";
+import { createWorkspacesRoutes } from "./routes/workspaces.routes.js";
+import { createBillingRoutes } from "./routes/billing.routes.js";
+import { createMetricsRoutes } from "./routes/metrics.routes.js";
 
 const VITE_DEV_SERVER_URL =
   process.env["VITE_DEV_SERVER_URL"] ?? "http://localhost:5173";
@@ -37,6 +42,13 @@ export function createApp(options?: CreateAppOptions): Hono {
 
   app.route("/api/auth", createAdminAuthRoutes({ adminDb, config }));
   app.route("/api/internal", createInternalRoutes({ adminDb, config }));
+
+  const directoryDeps = { adminDb, config };
+  app.route("/api/overview", createOverviewRoutes(directoryDeps));
+  app.route("/api/accounts", createAccountsRoutes(directoryDeps));
+  app.route("/api/workspaces", createWorkspacesRoutes(directoryDeps));
+  app.route("/api/billing", createBillingRoutes(directoryDeps));
+  app.route("/api/metrics", createMetricsRoutes(directoryDeps));
 
   if (isProduction) {
     app.use(

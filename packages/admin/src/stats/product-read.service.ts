@@ -1,9 +1,23 @@
 import {
   createPublicReadDb,
+  fetchAccountById,
+  fetchAccountsPage,
+  fetchBillingSummary,
   fetchLiveOverviewStats,
+  fetchWorkspaceById,
+  fetchWorkspacesPage,
   FREE_BOOKMARK_CAP,
+  type AccountDetail,
+  type AccountListItem,
+  type AccountSortField,
+  type BillingSummary,
   type LiveOverviewRawStats,
+  type PaginatedAccounts,
+  type PaginatedWorkspaces,
   type PublicReadDb,
+  type SortOrder,
+  type WorkspaceDetail,
+  type WorkspaceListItem,
 } from "@slugbase/db-admin/public-read";
 
 export { FREE_BOOKMARK_CAP };
@@ -27,8 +41,72 @@ export type LiveOverviewStats = {
   processedWebhookEvents: LiveOverviewRawStats["processedWebhookEvents"];
 };
 
+export type ApiAccountListItem = Omit<AccountListItem, "createdAt"> & {
+  createdAt: string;
+};
+
+export type ApiAccountDetail = Omit<AccountDetail, "createdAt"> & {
+  createdAt: string;
+};
+
+export type ApiWorkspaceListItem = Omit<WorkspaceListItem, "createdAt" | "billingPeriodEnd"> & {
+  createdAt: string;
+  billingPeriodEnd: string | null;
+};
+
+export type ApiWorkspaceDetail = Omit<WorkspaceDetail, "createdAt" | "billingPeriodEnd"> & {
+  createdAt: string;
+  billingPeriodEnd: string | null;
+};
+
+export type ApiPaginatedAccounts = {
+  items: ApiAccountListItem[];
+  pagination: PaginatedAccounts["pagination"];
+};
+
+export type ApiPaginatedWorkspaces = {
+  items: ApiWorkspaceListItem[];
+  pagination: PaginatedWorkspaces["pagination"];
+};
+
 export function msToIso(epochMs: number): string {
   return new Date(epochMs).toISOString();
+}
+
+function mapAccountListItem(account: AccountListItem): ApiAccountListItem {
+  return {
+    ...account,
+    createdAt: msToIso(account.createdAt),
+  };
+}
+
+function mapAccountDetail(account: AccountDetail): ApiAccountDetail {
+  return {
+    ...account,
+    createdAt: msToIso(account.createdAt),
+  };
+}
+
+function mapWorkspaceListItem(workspace: WorkspaceListItem): ApiWorkspaceListItem {
+  return {
+    ...workspace,
+    createdAt: msToIso(workspace.createdAt),
+    billingPeriodEnd:
+      workspace.billingPeriodEnd === null
+        ? null
+        : msToIso(workspace.billingPeriodEnd),
+  };
+}
+
+function mapWorkspaceDetail(workspace: WorkspaceDetail): ApiWorkspaceDetail {
+  return {
+    ...workspace,
+    createdAt: msToIso(workspace.createdAt),
+    billingPeriodEnd:
+      workspace.billingPeriodEnd === null
+        ? null
+        : msToIso(workspace.billingPeriodEnd),
+  };
 }
 
 export class ProductReadService {
@@ -50,5 +128,43 @@ export class ProductReadService {
       freeBookmarkCap: FREE_BOOKMARK_CAP,
       ...raw,
     };
+  }
+
+  async listAccounts(options: {
+    page?: number;
+    limit?: number;
+    sort?: AccountSortField;
+    order?: SortOrder;
+  } = {}): Promise<ApiPaginatedAccounts> {
+    const result = await fetchAccountsPage(this.publicReadDb, options);
+    return {
+      items: result.items.map(mapAccountListItem),
+      pagination: result.pagination,
+    };
+  }
+
+  async getAccount(accountId: string): Promise<ApiAccountDetail | null> {
+    const account = await fetchAccountById(this.publicReadDb, accountId);
+    return account ? mapAccountDetail(account) : null;
+  }
+
+  async listWorkspaces(options: {
+    page?: number;
+    limit?: number;
+  } = {}): Promise<ApiPaginatedWorkspaces> {
+    const result = await fetchWorkspacesPage(this.publicReadDb, options);
+    return {
+      items: result.items.map(mapWorkspaceListItem),
+      pagination: result.pagination,
+    };
+  }
+
+  async getWorkspace(workspaceId: string): Promise<ApiWorkspaceDetail | null> {
+    const workspace = await fetchWorkspaceById(this.publicReadDb, workspaceId);
+    return workspace ? mapWorkspaceDetail(workspace) : null;
+  }
+
+  async getBillingSummary(): Promise<BillingSummary> {
+    return fetchBillingSummary(this.publicReadDb);
   }
 }
