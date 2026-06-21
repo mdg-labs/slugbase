@@ -13,14 +13,14 @@ This doc exists so roadmap tasks and sub-agents have concrete, runnable answers 
 |---|---|---|
 | Language | **TypeScript** (strict, no `any`) | All packages; shared types across boundaries (§19) |
 | Backend | **NestJS** | DI/modules host the config-selected external interfaces (§2.6, §11) — replaces deployment-mode branching; `@nestjs/swagger`/ts-rest → OpenAPI (§18). Runs as a Node container on Fly.io (§14.7) |
-| Web client | **React Router v7** (framework mode) | One app, two adapters: Cloudflare Workers (hosted SSR) + Node (self-host combined image) — §14.2, §14.7 |
+| Web client | **React Router v7** (framework mode) | One app, two adapters: Cloudflare Workers (Cloud SSR) + Node (CE combined image) — §14.2, §14.7 |
 | Marketing | **Astro** (static) | Zero-JS-by-default; separately built; Cloudflare Workers (§2.3, decision #28) |
-| Persistence | **Drizzle ORM** + **Drizzle Kit** | Data-access abstraction (§11.9); PostgreSQL-only at v1 (Neon hosted + self-host Postgres); SQLite self-host deferred (§16, #32/#41) |
+| Persistence | **Drizzle ORM** + **Drizzle Kit** | Data-access abstraction (§11.9); PostgreSQL-only at v1 (Neon (Cloud) + CE Postgres); SQLite CE deferred (§16, #32/#41) |
 | Contracts/validation | **Zod** + **ts-rest** | Server validation + env schema; single typed contract → OpenAPI, consumed by backend + web (§18, §19) |
 | UI | **Tailwind** + **Radix** + **cmdk** | Tailwind bridged to prototype tokens (§23.1); Radix = accessible primitives; cmdk = `⌘K` palette (§9) |
 | Tests | **Vitest** + **Supertest** + **Playwright** | Unit/integration (Vitest/Supertest), e2e (Playwright, CI-only, §22.4) |
 | Build | **Turborepo** over pnpm workspace | Cached lint/typecheck/test/build pipelines (`turbo.json`) |
-| Sessions | **DB-backed** server-side store | No Redis — bare self-host needs no extra services (§5.3, §14.5) |
+| Sessions | **DB-backed** server-side store | No Redis — bare CE needs no extra services (§5.3, §14.5) |
 | Password hashing | **argon2id** | OWASP-recommended adaptive hash (§5.4) |
 | MFA | **otplib** + QR | TOTP enrolment + verification (§5.7) |
 | CSRF | **double-submit token** | Over the §5.8 exempt allowlist |
@@ -57,14 +57,14 @@ Customer/operator docs: separate repo [`mdg-labs/slugbase-docs`](https://github.
 
 - **File/identifier naming:** rule `04-naming` (kebab-case files with NestJS suffixes `*.service.ts`/`*.controller.ts`; `PascalCase.tsx` React components; `snake_case` DB columns; `SCREAMING_SNAKE_CASE` env).
 - **TypeScript:** `strict: true`, `noUncheckedIndexedAccess`, no `any`, no `console.log` in committed code.
-- **Interface pattern (NestJS):** each external dependency is an injectable token (e.g. `MAIL`, `AI`, `BILLING`, `CHALLENGE`, `FETCH`, `CRYPTO`, `DB`) bound to a config-selected provider in a module. Application services depend on the **token/contract**, never a concrete impl, and never on a deployment-mode flag (§2.6, §15). Default/no-op impls let a bare self-host run.
+- **Interface pattern (NestJS):** each external dependency is an injectable token (e.g. `MAIL`, `AI`, `BILLING`, `CHALLENGE`, `FETCH`, `CRYPTO`, `DB`) bound to a config-selected provider in a module. Application services depend on the **token/contract**, never a concrete impl, and never on a deployment-mode flag (§2.6, §15). Default/no-op impls let a bare CE install.
 - **Public client env prefixes:** `VITE_` (the `web` app) / `PUBLIC_` (Astro `marketing`). Never put secrets in these — they are inlined into client bundles.
 
 ---
 
 ## 4. Data layer
 
-- **One logical schema** defined in Drizzle for **PostgreSQL**. Drizzle Kit generates migrations from the Postgres schema (`dialect: postgresql`); one forward-only history applies to hosted Neon and self-host Postgres alike. Every tenant-owned table carries `workspace_id` (§4, §16). Embedded SQLite self-host is **deferred** (Fast-Follow).
+- **One logical schema** defined in Drizzle for **PostgreSQL**. Drizzle Kit generates migrations from the Postgres schema (`dialect: postgresql`); one forward-only history applies to Cloud Neon and CE Postgres alike. Every tenant-owned table carries `workspace_id` (§4, §16). Embedded SQLite for CE is **deferred** (Fast-Follow).
 - **Migrations:** owned by **Drizzle Kit** — `drizzle-kit generate` to create, `drizzle-kit migrate` to apply (typically wrapped as `pnpm db:generate` / `pnpm db:migrate`). **Single forward-only history.** Never hand-write SQL, never `drizzle-kit push`, never edit generated files (rule + orchestrator `prompt-templates` DB MIGRATIONS block). Requires `DATABASE_URL` with a `postgresql://` scheme for generate/migrate.
 - **CI runs integration tests against Postgres** (GitHub Actions service container).
 - **Data access is centralized** so every tenant query is workspace-scoped; cross-tenant access is impossible through normal paths and is defended by tests (§4.4).
@@ -150,7 +150,7 @@ Every UI string is a catalog key `<scope>.<context>.<descriptor>`; en + de requi
 
 ---
 
-## 10. Hosted infrastructure & deploy (spec §14.7, decisions #31/#32/#51)
+## 10. Cloud infrastructure & deploy (spec §14.7, decisions #31/#32/#51)
 
 | Surface | Platform | Region |
 |---|---|---|
@@ -161,7 +161,7 @@ Every UI string is a catalog key `<scope>.<context>.<descriptor>`; en + de requi
 
 - **App naming:** `slugbase-<env>-<app>` — `<env>` ∈ {`staging`, `production`}, `<app>` ∈ {`api`, `web`, `marketing`}. Platform identifiers, not public hostnames. (decision #51)
 - **Staging API scale-to-zero:** `slugbase-staging-api` runs `auto_stop_machines` + `min_machines_running = 0` (cold-start on request). `slugbase-production-api` stays warm (`≥ 1`). Workers scale to zero natively.
-- **Self-hosted:** combined container image (API + bundled web) to GHCR on release; not subject to the hosted topology or naming.
+- **CE:** combined container image (API + bundled web) to GHCR on release; not subject to the Cloud topology or naming.
 - **CI/CD:** PipeWatch-aligned workflow split — `pr.yml` / `staging.yml` / `main.yml` entry points, reusable `ci.yml` + `deploy.yml` + `sync-secrets.yml`; GitHub-hosted runners; branches `staging`/`main` (spec §22; authoritative reference `docs/internal/ci-cd-example/`).
 
 ---

@@ -77,14 +77,15 @@ SESSION_SECRET: z.string().default('dev-secret'),
 
 ### 4. Document in the configuration reference
 
-Add a row to **[`docs/internal/environment-variables.md`](../../docs/internal/environment-variables.md)** using the standard table columns (key, purpose, hosted/self-host, required, secret, when set, example value).
+Add a row to **[`docs/internal/environment-variables.md`](../../docs/internal/environment-variables.md)** using the standard table columns (key, purpose, Cloud/CE, required, secret, when set, example value).
 
 Spec §15 lists the full set of required configuration categories:
 - Required secrets: `SESSION_SECRET`, `ENCRYPTION_KEY`
 - DB: engine choice + connection
 - Public base URL + frontend origin
 - Deployment flags: public registration, email verification required
-- Per-interface credentials: SMTP, AI, Stripe (hosted), Turnstile (hosted), analytics, error reporting
+- Edition selector: `SLUGBASE_EDITION=ce|cloud`
+- Per-interface credentials: SMTP, AI, Stripe (Cloud), Turnstile (Cloud), analytics, error reporting
 
 ## Verifier checks (Layer 3c)
 

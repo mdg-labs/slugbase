@@ -5,28 +5,28 @@ alwaysApply: true
 
 # SlugBase
 
-A bookmark manager with built-in URL shortening and keyboard-driven launcher — save bookmarks, assign short slugs, and jump to any URL from the address bar or command palette (`/go/<slug>`). Deployed as a managed hosted service and a self-hosted install from one codebase.
+A bookmark manager with built-in URL shortening and keyboard-driven launcher — save bookmarks, assign short slugs, and jump to any URL from the address bar or command palette (`/go/<slug>`). Deployed as **Cloud** (managed service) and **CE** (Community Edition operator install) from one codebase — selected via `SLUGBASE_EDITION=cloud|ce` (spec §15).
 
 ## Tech stack (settled — spec §19, decisions #37–#50)
 
 - **Single repo:** pnpm workspace monorepo with **Turborepo** task pipelines (spec §2.2, §19)
 - **Language:** **TypeScript** (strict, no `any`) everywhere (spec §19, decision #37)
 - **Backend:** **NestJS** — its DI/module system hosts the config-selected external interfaces (no deployment-mode branching) and generates OpenAPI; runs as a Node container on Fly.io — spec §19, §2.6, §11, §14.7
-- **Web client:** **React Router v7** (framework mode) — same app runs on Cloudflare Workers (hosted) and as Node inside the self-host image — spec §19, §14.7
+- **Web client:** **React Router v7** (framework mode) — same app runs on Cloudflare Workers (Cloud) and as Node inside the CE combined image — spec §19, §14.7
 - **Marketing:** **Astro** (static, zero-JS-by-default) on Cloudflare Workers — spec §2.3, §19
-- **Persistence:** **Drizzle ORM** + **Drizzle Kit** behind the data-access abstraction; **PostgreSQL** generates migrations and powers runtime (hosted Neon `aws-eu-central-1` + self-host Postgres). Embedded SQLite self-host is **deferred** (Fast-Follow) — spec §11.9, §16, decisions #32/#41
+- **Persistence:** **Drizzle ORM** + **Drizzle Kit** behind the data-access abstraction; **PostgreSQL** generates migrations and powers runtime (Neon `aws-eu-central-1` for Cloud + CE Postgres). Embedded SQLite for CE is **deferred** (Fast-Follow) — spec §11.9, §16, decisions #32/#41
 - **Contracts/validation:** **Zod** + **ts-rest** in `shared-types`; generates the OpenAPI description — spec §18, §19
 - **UI:** **Tailwind** (token-bridged to `colors_and_type.css`) + **Radix** primitives + **cmdk** palette — spec §23, rule `11-design-system`
 - **Tests:** **Vitest** + **Supertest** (unit/integration) + **Playwright** (e2e) — spec §22.4
 - **Packages:** `backend` · `web` · `marketing` · `shared-types` · `ui` · `docs` (spec §19)
 - **Auth:** server-side sessions (DB-backed, no JWT access/refresh); TOTP MFA (otplib); OIDC/SSO; **argon2id** password hashing; double-submit CSRF — spec §5
-- **Billing:** Stripe (hosted); no-op billing (self-hosted) — spec §11.4
+- **Billing:** Stripe (Cloud); no-op billing (CE) — spec §11.4
 - **AI:** **OpenAI** behind the vendor-neutral AI interface — spec §11.2, decision #49
 - **i18n:** English + German at launch; repo-JSON catalogs + react-i18next (web) / native `t()` (marketing) — spec §17
 - **Secrets:** **Phase** (`SlugBase` app — `.phase.json`; envs `Development` / `Staging` / `Production`); `phase run -- <command>` locally; Phase syncs to GHA environments for CI/deploy — decision #34
-- **Bot protection:** Cloudflare Turnstile (hosted default); no-op (self-hosted) — spec §11.8
+- **Bot protection:** Cloudflare Turnstile (Cloud default); no-op (CE) — spec §11.8
 
-### Hosted infrastructure (settled — spec §14.7, decisions #31–32)
+### Cloud infrastructure (settled — spec §14.7, decisions #31–32)
 
 | Layer | Platform | Region |
 |---|---|---|
@@ -37,13 +37,13 @@ A bookmark manager with built-in URL shortening and keyboard-driven launcher —
 
 **App naming** (Fly.io apps + CF Worker scripts): `slugbase-<env>-<app>`, `<env>` ∈ {`staging`, `production`}, `<app>` ∈ {`api`, `web`, `marketing`} — e.g. `slugbase-staging-api`, `slugbase-production-web`. No `development` deployment (local dev only). Platform identifiers, not public hostnames — spec §14.7, decision #51.
 
-Self-hosted: **combined container image**, single port, operator's own infrastructure — spec §14.2.
+CE: **combined container image**, single port, operator's own infrastructure — spec §14.2.
 
 ### CI/CD (settled — spec §22, decision #35)
 
 Single workflow file: `.github/workflows/ci-cd.yml`. **GitHub-hosted runners** (`ubuntu-latest`). Branches: `staging` and `main`.
 Secrets via **GitHub Actions environments** (`ci`, `staging`, `production`) — Phase syncs operator edits automatically; workflows read `${{ secrets.* }}` (no Phase CLI in CI — spec §22.9). Deploy pipelines push GHA secrets to Fly.io and Cloudflare Workers via `sync-secrets.sh`.
-Stages: CI checks → staging deploy (push `staging`) → prepare release (push `main`) → production deploy (release published) → GHCR self-hosted image push.
+Stages: CI checks → staging deploy (push `staging`) → prepare release (push `main`) → production deploy (release published) → GHCR CE image push.
 
 ## Repository state
 
@@ -51,7 +51,7 @@ This repo currently contains only docs. Application code is built phase-by-phase
 
 ## Spec doc precedence (when docs conflict)
 
-1. `docs/internal/slugbase-mvp-spec.md` — **product source of truth**: product vision, architecture, data model, interface contracts, billing, security, self-hosted story, resolved decisions
+1. `docs/internal/slugbase-mvp-spec.md` — **product source of truth**: product vision, architecture, data model, interface contracts, billing, security, CE deployment story, resolved decisions
 2. `docs/internal/engineering-decisions.md` — **engineering source of truth**: stack, tooling, conventions, infra, CI commands. `docs/internal/defaults-and-constants.md` holds pinned config values. The spec (1) wins on product conflicts.
 3. `docs/internal/design-prototype/V1/` — **visual & interaction-design source of truth** (design tokens, screens, states, copy tone). On any product conflict, the spec (1) wins — see spec §23.4 and rule `11-design-system.mdc`.
 
@@ -69,4 +69,4 @@ This repo currently contains only docs. Application code is built phase-by-phase
 - All user-facing strings must be i18n keys — no hardcoded English or German (spec §17). Never copy the prototype's hard-coded English strings.
 - UI follows the V1 design prototype + tokens (`docs/internal/design-prototype/V1/`, spec §23); paid tier is **"Personal"** not "Pro"; Free cap is **50**; no folder cap; API tokens not plan-gated (spec §23.4).
 - Single repo, no submodules, pnpm throughout — no npm or yarn lockfiles (spec §2.2).
-- Self-hosted and cloud are the **same code path** — no `isCloud`/deployment-mode branches in app logic (spec §1, §15).
+- CE and Cloud are the **same code path** — no `SLUGBASE_MODE`/`isCloud`/edition branches in app logic; use `SLUGBASE_EDITION` for presets only (spec §1, §15).

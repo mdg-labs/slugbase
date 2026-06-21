@@ -2,7 +2,7 @@
 
 **Status:** Approved as foundation; scoped to v1 launch.
 **Author:** Derived from a full scan of the existing `slugbase` (self-hosted core), `slugbase-cloud` (SaaS layer), and the customer-facing and internal documentation, then re-shaped to the new unified architecture and narrowed to a v1-launchable scope.
-**Scope of this document:** A complete, prose-only specification for rebuilding SlugBase from scratch as one codebase that launches both hosted and self-hosted. It defines the product, the feature set, the multi-tenant model, the deployment story, the authentication and AI capabilities, billing and plan enforcement, and the interface contracts for everything that depends on the outside world. It contains no code, no schemas, and no implementation snippets. It is the single source a development roadmap is derived from.
+**Scope of this document:** A complete, prose-only specification for rebuilding SlugBase from scratch as one codebase that launches both Cloud and CE. It defines the product, the feature set, the multi-tenant model, the deployment story, the authentication and AI capabilities, billing and plan enforcement, and the interface contracts for everything that depends on the outside world. It contains no code, no schemas, and no implementation snippets. It is the single source a development roadmap is derived from.
 
 This document treats a fixed set of architectural decisions as given (single repository, separate static marketing site, in-repo docs, multi-tenant from day one, everything external behind an interface, pnpm workspace), and a set of now-settled product/architecture decisions (recorded compactly in the final "Resolved Decisions" log). Decisions are integrated into the body so the spec reads as settled.
 
@@ -12,36 +12,36 @@ This document treats a fixed set of architectural decisions as given (single rep
 
 SlugBase is a bookmark manager with a distinctive twist: every saved link can be given a short, memorable **slug** that resolves to a personal redirect at a predictable address (today, `/go/<slug>`). This turns a bookmark library into a personal (and team) URL shortener and keyboard-driven launcher: a user types a slug into their browser's address bar — or into an in-app command palette — and is forwarded straight to the destination. The product combines three ideas that normally live in separate tools: a clean bookmark manager, a personal short-link service, and a fast command-palette launcher.
 
-The product identity and core idea are unchanged by this rebuild. What changes is the architecture: instead of an open-source core plus a separate "cloud delta" repository, SlugBase becomes one codebase that is multi-tenant from the first commit and is deployed in two shapes — a managed hosted service and a self-hosted install — using the **same code path** with **different configuration**.
+The product identity and core idea are unchanged by this rebuild. What changes is the architecture: instead of an open-source core plus a separate "cloud delta" repository, SlugBase becomes one codebase that is multi-tenant from the first commit and is deployed in two shapes — **Cloud** (managed service) and **Community Edition (CE)** (operator-run install) — using the **same code path** with **different configuration**.
 
 The audiences are:
 
-- **Individuals** who want a private, fast bookmark and short-link tool, either on the hosted service or self-hosted on their own server.
+- **Individuals** who want a private, fast bookmark and short-link tool, either on Cloud or as CE on their own server.
 - **Teams** who want to share curated folders and bookmarks and use shared slugs.
-- **Operators / self-hosters** who run their own instance and administer it via an instance-wide admin account.
-- **The SlugBase operator** (the company running the hosted service), who needs billing, plan enforcement, and (post-launch) an operator console; at v1 launch, hosted operations run via direct database access plus a secret-protected aggregate-statistics endpoint.
+- **CE operators** who run their own instance and administer it via an instance-wide admin account.
+- **The SlugBase operator** (the company running the Cloud service), who needs billing, plan enforcement, and (post-launch) an operator console; at v1 launch, Cloud operations run via direct database access plus a secret-protected aggregate-statistics endpoint.
 
-The guiding principle for the rebuild: **self-hosted and cloud are the same product**. There is no feature that exists only because of "cloud code." Differences between a hosted deployment and a self-hosted deployment are expressed entirely through configuration and through swappable implementations of the external-dependency interfaces, never through forked behavior in the application logic.
+The guiding principle for the rebuild: **CE and Cloud are the same product**. There is no feature that exists only because of "cloud code." Differences between Cloud and CE deployments are expressed entirely through configuration and through swappable implementations of the external-dependency interfaces, never through forked behavior in the application logic.
 
 ---
 
 ## Scope — v1 vs. Fast-Follow (read first)
 
-This rebuild targets a **v1-launchable scope**, not a full-parity reconstruction of everything the old two-repo product did. The goal of v1 is the **smallest coherent product that can launch hosted and self-hosted on one codebase**. Anything that is operationally deferrable is marked **Fast-Follow** (post-launch) and is deliberately excluded from v1 so the first release stays small and coherent. Where the body says "v1" it means "must ship for launch"; where it says "Fast-Follow" it means "explicitly out of the first release."
+This rebuild targets a **v1-launchable scope**, not a full-parity reconstruction of everything the old two-repo product did. The goal of v1 is the **smallest coherent product that can launch Cloud and CE on one codebase**. Anything that is operationally deferrable is marked **Fast-Follow** (post-launch) and is deliberately excluded from v1 so the first release stays small and coherent. Where the body says "v1" it means "must ship for launch"; where it says "Fast-Follow" it means "explicitly out of the first release."
 
 **In v1 (must ship for launch):**
 
 - Multi-tenant workspaces; membership and roles; session-carried active workspace with an explicit switch endpoint.
-- Server-side sessions; password auth; TOTP MFA with backup codes; personal API tokens; password reset; email verification; OIDC sign-in (DB-sourced providers on self-hosted, deployment-config providers on hosted).
+- Server-side sessions; password auth; TOTP MFA with backup codes; personal API tokens; password reset; email verification; OIDC sign-in (DB-sourced providers on CE, deployment-config providers on Cloud).
 - Bookmarks (modal create/edit, hard delete); folders; user-private tags; pinning; usage tracking; SSRF-safe metadata and favicon fetch.
 - Slugs and the `/go` redirect (authenticated, per-workspace, collision disambiguation, remembered "go preferences").
 - Global search, command palette, dashboard.
-- Sharing of bookmarks and folders with teams and members (entitlement-gated on hosted; fully on for self-hosted).
-- Workspace administration (members, teams, audit log, OIDC, SMTP, AI) plus a self-hosted instance-wide admin.
-- Entitlements engine; Stripe-backed billing on hosted; no-op billing (full entitlements) on self-hosted.
+- Sharing of bookmarks and folders with teams and members (entitlement-gated on Cloud; fully on for CE).
+- Workspace administration (members, teams, audit log, OIDC, SMTP, AI) plus a CE instance-wide admin.
+- Entitlements engine; Stripe-backed billing on Cloud; no-op billing (full entitlements) on CE.
 - Plans: Free, Personal, Team (plus a config-driven supporter/lifetime launch promotion that is entitlement-equivalent to Personal).
 - Downgrade-overflow handling (archive over-cap bookmarks, do not delete).
-- Lossless import/export and the documented self-host backup story.
+- Lossless import/export and the documented CE backup story.
 - One concrete implementation per external interface, with the clean seam in place (SMTP, one AI provider, Stripe, Cloudflare Turnstile, the existing analytics and error-reporting sinks behind no-op-able interfaces).
 - Both database engines (embedded file-based and networked) on an identical schema and migration story.
 - The separate static marketing site (in the same repo) and its contact form.
@@ -64,7 +64,7 @@ These are the constraints this spec is written against, stated up front so the r
 
 ### 2.1 Single repository
 
-Cloud and self-hosted live in one repository. There is no separate "cloud delta" repo, no vendored core tarball, and no build-time copy of the core into a second project. The previous model — where `slugbase-cloud` consumed `@mdguggenbichler/slugbase-core` as a published package and layered SaaS behavior on top — is discarded. All application logic, all tenancy logic, all billing logic, and all admin logic live together.
+Cloud and CE live in one repository. There is no separate "cloud delta" repo, no vendored core tarball, and no build-time copy of the core into a second project. The previous model — where `slugbase-cloud` consumed `@mdguggenbichler/slugbase-core` as a published package and layered SaaS behavior on top — is discarded. All application logic, all tenancy logic, all billing logic, and all admin logic live together.
 
 ### 2.2 pnpm workspace
 
@@ -84,11 +84,11 @@ The governing editorial principle is unchanged: **if a reader would need to be a
 
 ### 2.5 Multi-tenant from day one
 
-The data model, the request lifecycle, and the authorization model are multi-tenant from the first line of code. There is no "single-tenant mode" that is later retrofitted with tenancy. Every tenant-owned record carries a workspace identifier, and every request resolves to a workspace context. A self-hosted install is simply a deployment that happens to have one (or a few) workspaces and a configuration that disables paid billing; it runs the identical multi-tenant code.
+The data model, the request lifecycle, and the authorization model are multi-tenant from the first line of code. There is no "single-tenant mode" that is later retrofitted with tenancy. Every tenant-owned record carries a workspace identifier, and every request resolves to a workspace context. A CE install is simply a deployment that happens to have one (or a few) workspaces and a configuration that disables paid billing; it runs the identical multi-tenant code.
 
 ### 2.6 Everything externally-dependent is behind an interface
 
-Every capability that reaches outside the application's own database and process is expressed as an **interface (a contract)**, with swappable implementations selected by configuration. This applies to, at minimum: transactional email, AI suggestions, authentication/identity federation (OIDC/SSO), billing, product analytics, error reporting, bot/abuse protection, and object/blob storage if introduced. The spec defines **only the contract** for each — what it is responsible for, what inputs and outputs it has conceptually, and what the self-hosted versus hosted defaults are — not the provider-specific implementation. Each interface has a no-op or local default so that a bare self-hosted install runs with zero external services configured. **v1 ships exactly one concrete implementation per interface** (the seam exists; the choice does not yet); additional implementations are Fast-Follow.
+Every capability that reaches outside the application's own database and process is expressed as an **interface (a contract)**, with swappable implementations selected by configuration. This applies to, at minimum: transactional email, AI suggestions, authentication/identity federation (OIDC/SSO), billing, product analytics, error reporting, bot/abuse protection, and object/blob storage if introduced. The spec defines **only the contract** for each — what it is responsible for, what inputs and outputs it has conceptually, and what the CE versus Cloud defaults are — not the provider-specific implementation. Each interface has a no-op or local default so that a bare CE install runs with zero external services configured. **v1 ships exactly one concrete implementation per interface** (the seam exists; the choice does not yet); additional implementations are Fast-Follow.
 
 ---
 
@@ -106,9 +106,9 @@ These terms are the canonical product vocabulary and are used consistently throu
 - **Tag:** A user-private label used to filter and group bookmarks. Tags are not shared across users.
 - **Team:** A named group of workspace members used as a sharing target. Bookmarks and folders can be shared with a team.
 - **Pinning:** The single mechanism for marking a bookmark as prominent. **There is no separate "favorites" concept** anywhere in the product, the data model, or the UI.
-- **Plan / Entitlements:** The set of capabilities and limits granted to a workspace (bookmark limits, AI availability, team sharing, audit log, seats, etc.). Plans are the hosted-facing packaging; entitlements are the internal representation the application checks.
+- **Plan / Entitlements:** The set of capabilities and limits granted to a workspace (bookmark limits, AI availability, team sharing, audit log, seats, etc.). Plans are the Cloud-facing packaging; entitlements are the internal representation the application checks.
 - **Workspace admin:** A member with administrative rights within a workspace (manage members, teams, settings, etc.).
-- **Instance-wide admin (self-hosted):** A user account flagged as administrator across the whole deployment, distinct from a per-workspace admin. This is the v1 notion of "operator" for self-hosted; there is no separate operator surface in v1.
+- **Instance-wide admin (CE):** A user account flagged as administrator across the whole deployment, distinct from a per-workspace admin. This is the v1 notion of "operator" for CE; there is no separate operator surface in v1.
 
 ---
 
@@ -118,11 +118,11 @@ This is the backbone of the rebuild and the area where the old architecture is m
 
 ### 4.1 Workspaces and ownership
 
-Every tenant-owned entity belongs to exactly one workspace. There is no "default tenant" special case baked into the application logic. A self-hosted install creates its **first workspace as part of first-run setup**; after that, new self-hosted users are **placed into existing workspaces by an admin** (via invitation) rather than each getting a new workspace automatically. A **hosted signup auto-creates a personal workspace** for the new account. The difference is only in which configuration path is active, not in the code that creates and owns data.
+Every tenant-owned entity belongs to exactly one workspace. There is no "default tenant" special case baked into the application logic. A CE install creates its **first workspace as part of first-run setup**; after that, new CE users are **placed into existing workspaces by an admin** (via invitation) rather than each getting a new workspace automatically. A **Cloud signup auto-creates a personal workspace** for the new account. The difference is only in which configuration path is active, not in the code that creates and owns data.
 
-**Workspace creation is entitlement-gated on hosted.** The number of workspaces an account may create/own is itself an entitlement checked by the entitlements engine (Section 11.5), not an unbounded action: a hosted Free account may own exactly one workspace, and creating more requires a paid entitlement. On self-hosted, workspace creation is unrestricted (an instance-admin action under full entitlements). See Sections 11.5 and 12.2.
+**Workspace creation is entitlement-gated on Cloud.** The number of workspaces an account may create/own is itself an entitlement checked by the entitlements engine (Section 11.5), not an unbounded action: a Cloud Free account may own exactly one workspace, and creating more requires a paid entitlement. On CE, workspace creation is unrestricted (an instance-admin action under full entitlements). See Sections 11.5 and 12.2.
 
-A workspace has: a name, a plan/entitlement state, a billing linkage (which may be empty on self-hosted), an included-seat count, a set of members, and all the bookmarks/folders/tags/teams/slugs/settings scoped to it.
+A workspace has: a name, a plan/entitlement state, a billing linkage (which may be empty on CE), an included-seat count, a set of members, and all the bookmarks/folders/tags/teams/slugs/settings scoped to it.
 
 ### 4.2 Membership and roles
 
@@ -152,31 +152,31 @@ Tenant isolation is enforced at the data-access layer: every query for tenant-ow
 
 A workspace can be a single-person "personal workspace" or a multi-person "team workspace." There is no separate entity for these; the distinction is purely the number of members and the plan.
 
-**Self-hosted is, by design, an admin-curated multi-workspace product.** An instance-wide admin creates and manages workspaces and places users into them by invitation. It is **explicitly not** a model where every new user spins up their own tenant. This is the intended product shape, not a constraint to be relaxed: it keeps tenant isolation clean and puts the instance admin in control of who is placed where. (On hosted, by contrast, accounts self-serve their own personal workspace within the bounds of the workspace-creation entitlement — see Sections 4.1 and 12.2.)
+**CE is, by design, an admin-curated multi-workspace product.** An instance-wide admin creates and manages workspaces and places users into them by invitation. It is **explicitly not** a model where every new user spins up their own tenant. This is the intended product shape, not a constraint to be relaxed: it keeps tenant isolation clean and puts the instance admin in control of who is placed where. (On Cloud, by contrast, accounts self-serve their own personal workspace within the bounds of the workspace-creation entitlement — see Sections 4.1 and 12.2.)
 
 **Leaving a workspace** means the member's **membership is revoked**. Data authored by that member — their bookmarks, folders, and tags — **remains with the workspace**. There is **no spin-off and no cross-workspace data movement**; this preserves tenant isolation (data never crosses a workspace boundary). A user who wants to take their content with them **exports it** (see Section 13) before leaving. (Removing a member is distinct from deleting a workspace, which removes all of that workspace's data.)
 
 ### 4.6 Slug namespace and tenancy
 
-Slugs are unique **per owner within a workspace**, not globally. Two different workspaces may each have a slug `mail`; two members in the same workspace may each use `mail` on their own bookmarks. A self-hosted single-workspace install still has one slug namespace per user. The redirect subsystem always resolves slugs within the active workspace context.
+Slugs are unique **per owner within a workspace**, not globally. Two different workspaces may each have a slug `mail`; two members in the same workspace may each use `mail` on their own bookmarks. A CE single-workspace install still has one slug namespace per user. The redirect subsystem always resolves slugs within the active workspace context.
 
 ---
 
 ## 5. Identity, Authentication, and Security
 
-Authentication is unified: the same flows run on hosted and self-hosted, with differences expressed only through configuration (which identity providers are enabled, whether public registration is allowed, whether email verification is required).
+Authentication is unified: the same flows run on Cloud and CE, with differences expressed only through configuration (which identity providers are enabled, whether public registration is allowed, whether email verification is required).
 
 ### 5.1 Account model
 
-A user account is identified by a unique email address and has a display name, a preferred language, a theme preference, an optional password credential (absent for accounts that only sign in via federated identity), an instance-wide admin flag (self-hosted), and security state (MFA enrollment, verification status). Accounts are global to the deployment; membership in workspaces is separate.
+A user account is identified by a unique email address and has a display name, a preferred language, a theme preference, an optional password credential (absent for accounts that only sign in via federated identity), an instance-wide admin flag (CE), and security state (MFA enrollment, verification status). Accounts are global to the deployment; membership in workspaces is separate.
 
 ### 5.2 Entry paths: first-run setup, invitation, and public registration
 
-How a person gets into a deployment depends on configuration. Self-hosted is an **admin-curated multi-workspace product** (Section 4.5): the instance-wide admin owns onboarding, so **setup + invite-only is the intended self-hosted shape**, not a temporary default.
+How a person gets into a deployment depends on configuration. CE is an **admin-curated multi-workspace product** (Section 4.5): the instance-wide admin owns onboarding, so **setup + invite-only is the intended CE shape**, not a temporary default.
 
 - **First-run setup:** When a deployment has no users yet, a one-time setup flow creates the first account (as the instance-wide admin and as owner of the first workspace) and creates the first workspace.
-- **Invitation:** After setup, additional users are added by an admin inviting them into an existing workspace. This is the **default and only** way to add users on self-hosted unless public registration is explicitly enabled.
-- **Public registration:** An **off-by-default configuration flag**. When enabled, anyone can create an account, which triggers email verification and auto-provisions a personal workspace (subject to the workspace-creation entitlement on hosted — Section 12.2). **Self-hosted keeps public registration off by default** (admin-curated invitation is the intended path). **Hosted enables public registration with email verification required.**
+- **Invitation:** After setup, additional users are added by an admin inviting them into an existing workspace. This is the **default and only** way to add users on CE unless public registration is explicitly enabled.
+- **Public registration:** An **off-by-default configuration flag**. When enabled, anyone can create an account, which triggers email verification and auto-provisions a personal workspace (subject to the workspace-creation entitlement on Cloud — Section 12.2). **CE keeps public registration off by default** (admin-curated invitation is the intended path). **Cloud enables public registration with email verification required.**
 
 These paths are not contradictory: setup creates the very first account; invitations populate workspaces; public registration, where enabled, is an additional open door.
 
@@ -184,7 +184,7 @@ These paths are not contradictory: setup creates the very first account; invitat
 
 The product uses **server-side sessions** as its single session strategy, **identical on both deployments**. The old model (a JWT access cookie everywhere plus a cloud-only refresh-token flow) is **dropped entirely**. Server-side sessions give immediate revocation and clean multi-device logout, and the active-workspace selection already lives server-side, so the session is the natural home for it.
 
-- **Primary web session:** Established on login, carried in an HTTP-only cookie, backed by a **database-backed** server-side session store (no Redis/external cache, so a bare self-host install needs no extra services — decision #46). Sessions have a configurable lifetime and can be revoked individually (enabling "log out everywhere"). The session also carries transient state such as in-progress federated-login handshakes and the active-workspace selection.
+- **Primary web session:** Established on login, carried in an HTTP-only cookie, backed by a **database-backed** server-side session store (no Redis/external cache, so a bare CE install needs no extra services — decision #46). Sessions have a configurable lifetime and can be revoked individually (enabling "log out everywhere"). The session also carries transient state such as in-progress federated-login handshakes and the active-workspace selection.
 - **Personal API tokens:** Long-lived, user-created tokens (prefixed and stored only as hashes) for programmatic API access. Tokens are limited in number per user, individually named, track last-use, and can be revoked. API tokens bypass the interactive MFA step (they represent an already-trusted credential); this trade-off is documented.
 
 ### 5.4 Passwords and credentials
@@ -195,7 +195,7 @@ Passwords are hashed with a strong adaptive hashing algorithm. Password policy (
 
 Two distinct email-verification flows exist and stay distinct:
 
-- **Signup verification:** Confirms a newly registered account's email before it can fully sign in (required on hosted; configurable on self-hosted).
+- **Signup verification:** Confirms a newly registered account's email before it can fully sign in (required on Cloud; configurable on CE).
 - **Email-change verification:** Confirms a new address when an existing user changes their email, switching the address only once confirmed.
 
 All verification tokens are time-limited and stored as hashes.
@@ -204,14 +204,14 @@ All verification tokens are time-limited and stored as hashes.
 
 The product supports signing in via external OpenID Connect providers, expressed through the **auth/identity interface** (Section 11.3) so the source of provider configuration is swappable:
 
-- **Self-hosted:** Providers are configured by an admin through the admin UI and stored (secrets encrypted at rest). Custom endpoints can be specified for providers that are not auto-discoverable.
-- **Hosted:** Providers are configured by the operator through deployment configuration. **Hosted workspace admins cannot add their own OIDC providers in v1** (federated providers are an operator-level concern on hosted).
+- **CE:** Providers are configured by an admin through the admin UI and stored (secrets encrypted at rest). Custom endpoints can be specified for providers that are not auto-discoverable.
+- **Cloud:** Providers are configured by the operator through deployment configuration. **Cloud workspace admins cannot add their own OIDC providers in v1** (federated providers are an operator-level concern on Cloud).
 
 Behavioral rules: accounts are linked to a federated identity by verified email; optional auto-creation of accounts on first federated login is configurable; a federated login that lands on an unverified or disallowed state is routed to the appropriate "verify" or "not allowed" outcome; and a successful federated login does not additionally prompt for SlugBase's own MFA step (the external provider is trusted for that factor). The interface supports either "providers from the database" or "providers from deployment configuration" without changing the login UX.
 
 ### 5.7 Multi-factor authentication (TOTP)
 
-Accounts can enroll in time-based one-time-password MFA. Enrollment produces a secret (presented as a QR code and as text) and a set of one-time backup codes (shown once, stored only as hashes). After enrollment, password logins require a second-factor step. Users can disable MFA (with verification) and regenerate backup codes. The authenticator "issuer" label is configurable. MFA applies to interactive password logins; federated logins and API tokens do not trigger the second-factor step. A documented recovery procedure exists for locked-out users (self-hosted: a direct administrative reset by an instance-wide admin; hosted: a support-mediated reset).
+Accounts can enroll in time-based one-time-password MFA. Enrollment produces a secret (presented as a QR code and as text) and a set of one-time backup codes (shown once, stored only as hashes). After enrollment, password logins require a second-factor step. Users can disable MFA (with verification) and regenerate backup codes. The authenticator "issuer" label is configurable. MFA applies to interactive password logins; federated logins and API tokens do not trigger the second-factor step. A documented recovery procedure exists for locked-out users (CE: a direct administrative reset by an instance-wide admin; Cloud: a support-mediated reset).
 
 ### 5.8 CSRF, transport, and cookies
 
@@ -224,7 +224,7 @@ Within a workspace:
 - **Bookmarks and folders:** Readable by the owner and by anyone they are shared with (directly, via a team, or via a shared containing folder). Modifiable and deletable by the owner only.
 - **Tags:** Private to the owning user; not shared.
 - **Workspace administration:** Restricted to workspace admins/owners.
-- **Instance-wide administration (self-hosted):** Restricted to accounts with the instance-wide admin flag.
+- **Instance-wide administration (CE):** Restricted to accounts with the instance-wide admin flag.
 
 The authorization layer is explicit and centralized so that sharing logic is consistent across list, read, redirect, search, and bulk operations.
 
@@ -311,7 +311,7 @@ A keyboard-invoked command palette (Ctrl/Cmd-K) is a central navigation device. 
 
 ### 9.2 Dashboard
 
-The post-login home surface presents: counts (bookmarks, folders, tags); a prominent search/command entry; a quick-access section of frequently-used slugs; pinned bookmarks; a "most used tags" section; sharing-related stats (shared with you / by you); and a dismissible onboarding checklist that nudges first-run actions (import, set up the browser search engine, create a folder, create a tag). When a workspace's entitlements include caps or upgrade paths (hosted), the dashboard may surface plan limits and upgrade prompts; these are entitlement-driven, never hard-coded to a deployment mode.
+The post-login home surface presents: counts (bookmarks, folders, tags); a prominent search/command entry; a quick-access section of frequently-used slugs; pinned bookmarks; a "most used tags" section; sharing-related stats (shared with you / by you); and a dismissible onboarding checklist that nudges first-run actions (import, set up the browser search engine, create a folder, create a tag). When a workspace's entitlements include caps or upgrade paths (Cloud), the dashboard may surface plan limits and upgrade prompts; these are entitlement-driven, never hard-coded to a deployment mode.
 
 ---
 
@@ -324,9 +324,9 @@ Available to workspace admins/owners, scoped to a single workspace:
 - **Members:** Invite, add, edit, and remove members; set roles; resend invitations; set or reset passwords (where applicable); assign members to teams.
 - **Teams:** Create, edit, and delete teams; manage team membership. Teams are sharing targets.
 - **Audit log:** A read-only, paginated record of significant actions (who did what to which entity and when), scoped to the workspace.
-- **Identity providers (OIDC):** Configure federated identity providers (self-hosted; DB-sourced). Includes the callback URL to register with the provider. Hidden on hosted, where providers are operator-managed.
-- **Email (SMTP) settings:** Configure the workspace/instance's outbound email transport and send a test message (self-hosted). On hosted, email transport is operator-configured and this UI is hidden.
-- **AI settings:** On self-hosted, the full form — enable AI suggestions and configure the provider/credential/model. On hosted, an enable-only toggle (the credential is operator-supplied).
+- **Identity providers (OIDC):** Configure federated identity providers (CE; DB-sourced). Includes the callback URL to register with the provider. Hidden on Cloud, where providers are operator-managed.
+- **Email (SMTP) settings:** Configure the workspace/instance's outbound email transport and send a test message (CE). On Cloud, email transport is operator-configured and this UI is hidden.
+- **AI settings:** On CE, the full form — enable AI suggestions and configure the provider/credential/model. On Cloud, an enable-only toggle (the credential is operator-supplied).
 
 Which panels are visible depends on entitlements and on which configuration sources are active (for example, the OIDC and SMTP panels are hidden when those are operator-managed). This visibility is entitlement/config-driven, never a hard-coded deployment-mode branch.
 
@@ -334,66 +334,66 @@ Which panels are visible depends on entitlements and on which configuration sour
 
 There is **no separate operator / super-admin console in v1**; building a second authenticated surface is **Fast-Follow**.
 
-- **Self-hosted:** Deployment-level administration is performed by an account with the **instance-wide admin flag** (the first account created at setup, and any account an instance admin promotes). This is distinct from per-workspace admin: an instance-wide admin governs the deployment, while a workspace admin governs a single workspace. There is no separate operator tier.
-- **Hosted:** At launch, the SlugBase operator runs operations via **direct database access** plus the existing **secret-protected aggregate-statistics endpoint** (Section 18). A dedicated operator console (its own authenticated surface, workspace/account directory, operator invitations, MFA, and richer tooling) is a **Fast-Follow** deliverable, not part of v1.
+- **CE:** Deployment-level administration is performed by an account with the **instance-wide admin flag** (the first account created at setup, and any account an instance admin promotes). This is distinct from per-workspace admin: an instance-wide admin governs the deployment, while a workspace admin governs a single workspace. There is no separate operator tier.
+- **Cloud:** At launch, the SlugBase operator runs operations via **direct database access** plus the existing **secret-protected aggregate-statistics endpoint** (Section 18). A dedicated operator console (its own authenticated surface, workspace/account directory, operator invitations, MFA, and richer tooling) is a **Fast-Follow** deliverable, not part of v1.
 
 ---
 
 ## 11. External-Dependency Interfaces (Contracts)
 
-Each capability that reaches outside the application is defined here **as a contract only**. For every interface: the application depends solely on the contract; implementations are selected by configuration; there is always a default that lets a bare self-hosted install run with no external services; and implementations are swappable without touching application logic. **v1 ships one concrete implementation per interface** (named below as the "v1 implementation"); additional implementations are Fast-Follow.
+Each capability that reaches outside the application is defined here **as a contract only**. For every interface: the application depends solely on the contract; implementations are selected by configuration; there is always a default that lets a bare CE install run with no external services; and implementations are swappable without touching application logic. **v1 ships one concrete implementation per interface** (named below as the "v1 implementation"); additional implementations are Fast-Follow.
 
 ### 11.1 Transactional email (mail interface)
 
 - **Responsibility:** Deliver transactional messages — signup verification, email-change verification, password reset, member invitation, and contact-form notifications. The contract exposes the ability to send a message (recipient, subject, text/HTML body, and the logical message type) and to report whether the transport is currently configured/available.
-- **v1 implementation:** **SMTP, used on both deployments.** Self-hosted admins configure SMTP in the admin UI; hosted configures SMTP via deployment configuration. A "send test email" capability is available where the admin UI applies.
+- **v1 implementation:** **SMTP, used on both deployments.** CE admins configure SMTP in the admin UI; Cloud configures SMTP via deployment configuration. A "send test email" capability is available where the admin UI applies.
 - **Default when unconfigured:** A no-op/log implementation so the app still runs (email-dependent flows degrade gracefully and say so).
 - **Swappable:** Yes. The application calls "send" and "is available"; alternative providers are Fast-Follow.
 
 ### 11.2 AI suggestions (AI interface)
 
 - **Responsibility:** Given a destination URL (and optionally fetched page metadata) and a desired output language, return suggested bookmark fields — a title, a slug candidate, a set of tags, a detected language, and a confidence indicator. The contract also reports whether AI is available for the current context. Results are cacheable by (workspace, user, canonical URL, output language) for a bounded period, and usage can be recorded for analytics.
-- **v1 implementation:** **OpenAI**, behind a vendor-neutral contract (decision #49) — no application code depends on OpenAI specifics; alternative providers are Fast-Follow. **Self-hosted:** admins supply their own credential and model via the admin UI; disabled until configured. **Hosted:** the operator supplies the credential via deployment configuration, and per-workspace availability is gated by entitlements with a per-workspace enable toggle. Users can individually opt out on either deployment.
+- **v1 implementation:** **OpenAI**, behind a vendor-neutral contract (decision #49) — no application code depends on OpenAI specifics; alternative providers are Fast-Follow. **CE:** admins supply their own credential and model via the admin UI; disabled until configured. **Cloud:** the operator supplies the credential via deployment configuration, and per-workspace availability is gated by entitlements with a per-workspace enable toggle. Users can individually opt out on either deployment.
 - **Swappable:** Yes. The contract assumes no particular vendor, model naming, or request shape; the application asks for "suggestions for this URL" and gets a structured result.
 
 ### 11.3 Authentication / identity federation (auth-provider interface)
 
 - **Responsibility:** Supply the set of available federated identity providers and drive the OIDC handshake (start, callback, claims extraction), plus the rules for linking/auto-creating accounts. The contract abstracts **where provider configuration comes from**.
-- **v1 implementation:** **Self-hosted** reads providers from the database (admin-configured, with custom-endpoint overrides). **Hosted** reads providers from deployment configuration; hosted workspace admins cannot add their own.
+- **v1 implementation:** **CE** reads providers from the database (admin-configured, with custom-endpoint overrides). **Cloud** reads providers from deployment configuration; Cloud workspace admins cannot add their own.
 - **Swappable:** Yes. The login experience is identical regardless of provider source.
 
 ### 11.4 Billing (billing interface)
 
 - **Responsibility:** Translate between the product's plan/entitlement model and an external billing system. The contract covers: starting a checkout to purchase or change a plan (recurring or one-time), opening a self-service billing-management portal, reporting the current subscription/plan state for a workspace, adjusting quantities such as extra seats, and receiving asynchronous billing events (subscription created/updated/cancelled, payment succeeded/failed) that update entitlements. It handles idempotent event processing and tax/VAT collection where relevant.
-- **v1 implementation:** **Stripe**, on hosted. **Self-hosted uses the no-op billing implementation** that grants the full/unlimited entitlement set and never charges — no checkout, no portal, no payment, no paid self-host licensing in v1.
+- **v1 implementation:** **Stripe**, on Cloud. **CE uses the no-op billing implementation** that grants the full/unlimited entitlement set and never charges — no checkout, no portal, no payment, no paid CE licensing in v1.
 - **Swappable:** Yes. Application logic checks **entitlements**, never the billing provider directly. The billing provider's only job is to keep entitlements in sync with the external system.
 
 ### 11.5 Plan / entitlements engine
 
-The **entitlements engine** is the linchpin that replaces the old deployment-mode branching. Every feature that was previously gated by an "is this cloud?" check is instead gated by an **entitlement check** on the active workspace — or, in one case, on the acting **account**. The engine answers: how many bookmarks may this workspace hold; is AI available; is team sharing available; is the audit log available; how many seats are included and used; and **how many workspaces an account may create/own**. The last of these is an account-scoped entitlement (not workspace-scoped) because it gates the creation of new workspaces themselves: it closes the otherwise-obvious bypass of the per-workspace bookmark cap (without it, an account could create N workspaces to obtain 50×N free bookmarks). **On self-hosted the entitlement set is full/unlimited by default — all features on, no caps, and unrestricted workspace creation** (audit log, team sharing, and AI-if-a-key-is-present are all available; there is no artificial gating on self-hosted). On hosted it is derived from the account's/workspace's plan via the billing interface. Application code asks the entitlements engine, not the deployment mode.
+The **entitlements engine** is the linchpin that replaces the old deployment-mode branching. Every feature that was previously gated by an "is this cloud?" check is instead gated by an **entitlement check** on the active workspace — or, in one case, on the acting **account**. The engine answers: how many bookmarks may this workspace hold; is AI available; is team sharing available; is the audit log available; how many seats are included and used; and **how many workspaces an account may create/own**. The last of these is an account-scoped entitlement (not workspace-scoped) because it gates the creation of new workspaces themselves: it closes the otherwise-obvious bypass of the per-workspace bookmark cap (without it, an account could create N workspaces to obtain 50×N free bookmarks). **On CE the entitlement set is full/unlimited by default — all features on, no caps, and unrestricted workspace creation** (audit log, team sharing, and AI-if-a-key-is-present are all available; there is no artificial gating on CE). On Cloud it is derived from the account's/workspace's plan via the billing interface. Application code asks the entitlements engine, not the deployment mode.
 
 ### 11.6 Product analytics (analytics interface)
 
 - **Responsibility:** Record product-usage and conversion events (consent-gated) for understanding behavior. The contract exposes event recording and is a no-op when analytics is not configured or consent is not granted.
-- **v1 implementation:** The existing analytics sink, behind the no-op-able interface. **Self-hosted default:** off (no-op). **Hosted:** operator-configured, gated behind user consent (cookie/consent banner).
+- **v1 implementation:** The existing analytics sink, behind the no-op-able interface. **CE default:** off (no-op). **Cloud:** operator-configured, gated behind user consent (cookie/consent banner).
 - **Swappable:** Yes.
 
 ### 11.7 Error reporting (error-reporting interface)
 
 - **Responsibility:** Capture and report runtime errors/exceptions (front-end and back-end) for diagnostics, consent-gated and privacy-aware (control over whether personally-identifying data is attached). The contract exposes error capture and is a no-op when unconfigured.
-- **v1 implementation:** The existing Sentry-compatible error sink, behind the no-op-able interface. **Self-hosted default:** off; optionally enabled via configuration. **Hosted:** operator-configured, consent-gated.
+- **v1 implementation:** The existing Sentry-compatible error sink, behind the no-op-able interface. **CE default:** off; optionally enabled via configuration. **Cloud:** operator-configured, consent-gated.
 - **Swappable:** Yes; the contract assumes no specific vendor.
 
 ### 11.8 Bot / abuse protection (challenge interface)
 
 - **Responsibility:** Provide human-verification / bot mitigation for abuse-prone unauthenticated surfaces (notably the marketing site's contact form, and potentially registration). The contract exposes "verify this challenge token" and a way to skip verification in development.
-- **v1 implementation:** **Cloudflare Turnstile**, behind the contract. **Self-hosted default:** no-op/disabled. **Hosted:** operator-configured.
+- **v1 implementation:** **Cloudflare Turnstile**, behind the contract. **CE default:** no-op/disabled. **Cloud:** operator-configured.
 - **Swappable:** Yes.
 
 ### 11.9 Persistence (database interface)
 
 - **Responsibility:** Provide relational persistence for all application data via a single internal data-access abstraction, supporting more than one engine on an **identical schema and migration story**.
-- **v1 implementation:** **PostgreSQL** is the sole engine at v1 — hosted on **Neon Postgres** (`aws-eu-central-1`) and required/recommended for self-host (operator-provided Postgres instance or container). The data-access abstraction is implemented with **Drizzle ORM**; **Drizzle Kit** generates and applies migrations directly against Postgres (`dialect: postgresql`). **Embedded SQLite self-host is deferred** to Fast-Follow — the interface contract remains swappable, but v1 ships Postgres-only runtime and migration paths (decision #41, updated).
+- **v1 implementation:** **PostgreSQL** is the sole engine at v1 — Cloud on **Neon Postgres** (`aws-eu-central-1`) and required/recommended for CE (operator-provided Postgres instance or container). The data-access abstraction is implemented with **Drizzle ORM**; **Drizzle Kit** generates and applies migrations directly against Postgres (`dialect: postgresql`). **Embedded SQLite for CE is deferred** to Fast-Follow — the interface contract remains swappable, but v1 ships Postgres-only runtime and migration paths (decision #41, updated).
 - **Swappable:** Yes — application code targets the data-access abstraction, not a specific engine.
 
 ### 11.10 Outbound HTTP egress (fetch interface)
@@ -408,11 +408,11 @@ The **entitlements engine** is the linchpin that replaces the old deployment-mod
 
 ## 12. Billing and Plan Enforcement
 
-This section specifies the hosted-facing packaging and how it maps to entitlements. On self-hosted, none of the paid mechanics apply (the billing interface is the no-op implementation and the workspace has the full/unlimited entitlement set), but the entitlement checks themselves still run — they simply always pass.
+This section specifies the Cloud-facing packaging and how it maps to entitlements. On CE, none of the paid mechanics apply (the billing interface is the no-op implementation and the workspace has the full/unlimited entitlement set), but the entitlement checks themselves still run — they simply always pass.
 
 ### 12.1 Plans
 
-The hosted service offers:
+The Cloud service offers:
 
 - **Free:** A capped tier. Up to **50 bookmarks per workspace**; AI suggestions unavailable; no team sharing or team administration; no audit log; **an account may own exactly one workspace**. The entry point.
 - **Personal:** A paid individual tier. Unlimited bookmarks; AI suggestions available; single-user (no team sharing/administration); **a paid entitlement is required to create/own more than one workspace**.
@@ -426,12 +426,12 @@ Pricing specifics (amounts, monthly/yearly, per-seat pricing, the supporter pric
 The entitlements the application checks, with their plan mapping:
 
 - **Bookmark limit:** Free is capped at **50 bookmarks per workspace**; Personal, Team, and supporter-granted workspaces are unlimited. Reaching the cap blocks creation with a clear, actionable message (including on import). See Section 12.5 for what happens to existing over-cap bookmarks on a downgrade.
-- **Workspaces per account (account-scoped entitlement):** On hosted, a **Free account may create/own exactly one workspace**; creating additional workspaces requires a paid entitlement (Personal, Team, or supporter-granted). This is what makes the per-workspace 50-bookmark Free cap meaningful — without it, an account could create N free workspaces for 50×N free bookmarks. **On self-hosted, workspace creation is unrestricted** (an instance-admin action under full entitlements, consistent with the admin-curated multi-workspace shape in Section 4.5).
+- **Workspaces per account (account-scoped entitlement):** On Cloud, a **Free account may create/own exactly one workspace**; creating additional workspaces requires a paid entitlement (Personal, Team, or supporter-granted). This is what makes the per-workspace 50-bookmark Free cap meaningful — without it, an account could create N free workspaces for 50×N free bookmarks. **On CE, workspace creation is unrestricted** (an instance-admin action under full entitlements, consistent with the admin-curated multi-workspace shape in Section 4.5).
 - **AI availability:** Off on Free; on for Personal, Team, and supporter-granted (subject to the AI interface being configured and the user not having opted out).
-- **Team sharing (bookmarks and folders):** Team plan only on hosted. On other hosted plans the sharing UI is hidden and the API refuses. Always on for self-hosted.
-- **Team administration (Members and Teams admin):** Team plan only on hosted; always on for self-hosted.
-- **Member invitations:** Team plan only on hosted; always on for self-hosted.
-- **Audit log:** Team plan only on hosted; always on for self-hosted.
+- **Team sharing (bookmarks and folders):** Team plan only on Cloud. On other Cloud plans the sharing UI is hidden and the API refuses. Always on for CE.
+- **Team administration (Members and Teams admin):** Team plan only on Cloud; always on for CE.
+- **Member invitations:** Team plan only on Cloud; always on for CE.
+- **Audit log:** Team plan only on Cloud; always on for CE.
 - **Seats:** Team is priced per seat — each member occupies one seat. **Purchase and subscription require a minimum of 2 seats** (`TEAM_MIN_SEATS`); there is no separate base or "included" tier beyond that floor. Checkout lets the purchaser choose the initial seat quantity (at least 2). The billed seat count tracks the greater of the active member count and `TEAM_MIN_SEATS` while on Team. **An invitation consumes a seat on acceptance, not on send.** The seat count **cannot be reduced below the current member count** or below `TEAM_MIN_SEATS`, whichever is higher.
 
 ### 12.3 Lifecycle
@@ -440,7 +440,7 @@ Workspaces start on Free. A workspace owner/admin can start a checkout to move t
 
 ### 12.4 Enforcement points
 
-Enforcement is centralized through the entitlements engine and applied at: bookmark creation and import (bookmark limit), the **workspace-creation endpoint** (workspaces-per-account entitlement — a hosted Free account is held to one workspace; self-hosted is unrestricted), AI suggestion requests (AI availability), share operations and sharing UI (team sharing), member/team admin endpoints and UI (team administration), invitation endpoints and acceptance (seats and team plan), and audit-log access (audit availability). The UI reflects entitlements (hides or disables gated features and shows upgrade prompts — including offering an upgrade when a Free account tries to create a second workspace) while the API independently enforces them (never trusting the client).
+Enforcement is centralized through the entitlements engine and applied at: bookmark creation and import (bookmark limit), the **workspace-creation endpoint** (workspaces-per-account entitlement — a Cloud Free account is held to one workspace; CE is unrestricted), AI suggestion requests (AI availability), share operations and sharing UI (team sharing), member/team admin endpoints and UI (team administration), invitation endpoints and acceptance (seats and team plan), and audit-log access (audit availability). The UI reflects entitlements (hides or disables gated features and shows upgrade prompts — including offering an upgrade when a Free account tries to create a second workspace) while the API independently enforces them (never trusting the client).
 
 ### 12.5 Downgrade overflow (cancellation or expiry)
 
@@ -458,17 +458,17 @@ The plan-archived state is distinct from a user-facing trash/soft-delete (which 
 ## 13. Import and Export
 
 - **Import:** Users can import bookmarks from a JSON array (objects with at least title and URL, optionally slug, forwarding flag, pinned flag, folder names, and tag names) and from a browser-exported Netscape-format HTML file (parsed with a reasonable size cap). Folder and tag names referenced on import are created-or-matched by name. Invalid or duplicate slugs are skipped rather than failing the whole import. Imports are bounded (a maximum number of bookmarks per request) and report success/failure counts. On capped (Free) workspaces, import respects the bookmark limit.
-- **Export:** Export is **round-trip-complete (lossless)**. A user's export includes, for each accessible bookmark, the full record needed to recreate it: title, URL, slug, forwarding flag, pinned state, and the bookmark's **folder and tag associations** (by name). Because export is the documented self-host backup mechanism, it **must not be lossy** — an export followed by an import into a fresh workspace reproduces the user's bookmarks, folders, and tags faithfully. (Sharing grants and other workspace-level relationships are out of the personal export's scope; the export is the user's own content.)
+- **Export:** Export is **round-trip-complete (lossless)**. A user's export includes, for each accessible bookmark, the full record needed to recreate it: title, URL, slug, forwarding flag, pinned state, and the bookmark's **folder and tag associations** (by name). Because export is the documented CE backup mechanism, it **must not be lossy** — an export followed by an import into a fresh workspace reproduces the user's bookmarks, folders, and tags faithfully. (Sharing grants and other workspace-level relationships are out of the personal export's scope; the export is the user's own content.)
 
 ---
 
-## 14. Self-Hosted Deployment Story
+## 14. CE (Community Edition) Deployment Story
 
-Self-hosted is a first-class deployment of the identical codebase, not a stripped-down fork. It is, by design, an **admin-curated multi-workspace product**: an instance-wide admin creates and manages workspaces and invites users into them. It is explicitly not a self-serve "every user gets their own tenant" model.
+CE is a first-class deployment of the identical codebase, not a stripped-down fork. It is, by design, an **admin-curated multi-workspace product**: an instance-wide admin creates and manages workspaces and invites users into them. It is explicitly not a self-serve "every user gets their own tenant" model.
 
 ### 14.1 Shape
 
-A self-hosted install is a single deployable application (the API/back-end plus the bundled web client) backed by the **embedded file-based database by default** (a deliberate selling point — no external database to operate), or a networked relational database if configured. It runs the same multi-tenant code as the hosted service; it simply has the no-op billing implementation (full entitlements, including **unrestricted workspace creation** by the instance admin), admin-configured email/AI/identity, and the admin-curated set of workspaces.
+A CE install is a single deployable application (the API/back-end plus the bundled web client) backed by the **embedded file-based database by default** (a deliberate selling point — no external database to operate), or a networked relational database if configured. It runs the same multi-tenant code as the Cloud service; it simply has the no-op billing implementation (full entitlements, including **unrestricted workspace creation** by the instance admin), admin-configured email/AI/identity, and the admin-curated set of workspaces.
 
 ### 14.2 Packaging and run
 
@@ -484,26 +484,26 @@ The v1 backup story is: the **enriched, lossless JSON export** (Section 13) for 
 
 ### 14.5 Configuration
 
-Self-hosted behavior is entirely configuration-driven (see Section 15): required secrets, the public addresses, the database choice, whether public registration is open (off by default), whether email verification is required, and which external interfaces are wired up (SMTP for email, an AI credential, identity providers via the admin UI). With nothing optional configured, the install still runs: email-dependent flows degrade gracefully, AI is simply unavailable, and there is no billing.
+CE behavior is entirely configuration-driven (see Section 15): required secrets, the public addresses, the database choice, whether public registration is open (off by default), whether email verification is required, and which external interfaces are wired up (SMTP for email, an AI credential, identity providers via the admin UI). With nothing optional configured, the install still runs: email-dependent flows degrade gracefully, AI is simply unavailable, and there is no billing.
 
 ### 14.6 Reverse proxy and TLS
 
 The deployment is expected to sit behind a reverse proxy terminating TLS. The configured public base URL and front-end origin must match the externally reachable HTTPS addresses, the app must be told how many proxy hops to trust, and cross-origin allowances are configurable. Documentation provides proxy examples.
 
-### 14.7 Hosted Deployment Topology (settled)
+### 14.7 Cloud Deployment Topology (settled)
 
-The hosted service uses a split deployment: the **web client** is served from the edge, the **API/back-end** runs as a container in EU-Frankfurt, and the **database** is Neon Postgres in the same region.
+The Cloud service uses a split deployment: the **web client** is served from the edge, the **API/back-end** runs as a container in EU-Frankfurt, and the **database** is Neon Postgres in the same region.
 
 | Layer | Platform | Region / notes |
 |---|---|---|
 | **Web client (frontend)** | Cloudflare Workers | Global edge; static assets + SSR served from CF network |
 | **API / back-end** | Fly.io (`fra` — Frankfurt, DE) | Container image (API-only variant from §14.2); ~600 km from Vienna; primary EU serving region |
-| **Database (hosted)** | Neon Postgres (`aws-eu-central-1` — Frankfurt, DE) | Same AWS region as Fly.io `fra`; colocation keeps query latency sub-1 ms within the DC |
+| **Database (Cloud)** | Neon Postgres (`aws-eu-central-1` — Frankfurt, DE) | Same AWS region as Fly.io `fra`; colocation keeps query latency sub-1 ms within the DC |
 | **Marketing site** | Cloudflare Workers (static, separately built, §19, decision 28) | Global edge; independently deployable from the app |
 
 **Rationale for Fly.io over Railway:** Railway's only EU region is Amsterdam (`europe-west4-drams3a`, ~1200 km from Vienna). Neon Postgres has no Amsterdam region; colocating API and DB on Railway EU would require cross-region hops on every query. Fly.io Frankfurt is the closest EU region to Austria and shares the same Frankfurt AWS zone as Neon.
 
-**Self-hosted is unaffected:** self-hosted users continue to run the combined container image (§14.2) on their own infrastructure. The split topology described here is exclusively for the operator-run hosted service.
+**CE is unaffected:** CE operators continue to run the combined container image (§14.2) on their own infrastructure. The split topology described here is exclusively for the operator-run Cloud service.
 
 **App / Worker naming (settled — decision #51):** every operator-run platform app (Fly.io app names and Cloudflare Worker script names) follows **`slugbase-<env>-<app>`**, where `<env>` matches the Phase / GitHub Actions environment name (`staging` / `production`) and `<app>` is `api`, `web`, or `marketing`:
 
@@ -513,7 +513,7 @@ The hosted service uses a split deployment: the **web client** is served from th
 | Web client | Cloudflare Workers | `slugbase-staging-web` | `slugbase-production-web` |
 | Marketing site | Cloudflare Workers | `slugbase-staging-marketing` | `slugbase-production-marketing` |
 
-There is **no `development` deployment** — local development runs the dev servers directly (Phase `Development` env via `phase run`). These are **platform app/script identifiers, not public hostnames**; public domains (and `APP_BASE_URL` / `FRONTEND_ORIGIN`) are configured separately. The self-hosted combined image is published to GHCR and is not subject to this scheme.
+There is **no `development` deployment** — local development runs the dev servers directly (Phase `Development` env via `phase run`). These are **platform app/script identifiers, not public hostnames**; public domains (and `APP_BASE_URL` / `FRONTEND_ORIGIN`) are configured separately. The CE combined image is published to GHCR and is not subject to this scheme.
 
 **Staging scale-to-zero (current posture):** `slugbase-staging-api` runs **scaled to zero** on Fly.io (`auto_stop_machines` enabled, `min_machines_running = 0`) to save cost — it stops when idle and cold-starts on the next request, with startup latency tolerated on staging. Production (`slugbase-production-api`) stays warm (`min_machines_running ≥ 1`). This is a current cost posture, revisited as traffic grows; the Workers-hosted `web`/`marketing` surfaces scale to zero natively.
 
@@ -525,13 +525,28 @@ There is **no `development` deployment** — local development runs the dev serv
 
 Configuration is layered and explicit. Three kinds of settings exist:
 
-1. **Deployment configuration (environment):** Set by the operator at deploy time. Includes required security secrets (session-signing secret, at-rest encryption key), the public base URL and front-end origin, database selection and connection details, deployment flags (public registration on/off, email-verification required on/off), the selection and credentials for each external interface implementation (SMTP transport, AI credential, deployment-config identity providers on hosted, Stripe keys and price identifiers on hosted, analytics, error reporting, Turnstile), CORS allowances, proxy trust, cookie domain, and the secret for the aggregate-statistics endpoint. The application validates required secrets at startup and refuses to run insecurely in production.
+1. **Deployment configuration (environment):** Set by the operator at deploy time. Includes required security secrets (session-signing secret, at-rest encryption key), the public base URL and front-end origin, database selection and connection details, deployment flags (public registration on/off, email-verification required on/off), the selection and credentials for each external interface implementation (SMTP transport, AI credential, deployment-config identity providers on Cloud, Stripe keys and price identifiers on Cloud, analytics, error reporting, Turnstile), CORS allowances, proxy trust, cookie domain, and the secret for the aggregate-statistics endpoint. The application validates required secrets at startup and refuses to run insecurely in production.
 
-2. **Workspace/instance settings (database):** Set by admins through the UI and stored (secrets encrypted at rest). Includes admin-managed SMTP settings, admin-managed AI settings, and admin-managed identity providers — on self-hosted, where those sources are active.
+2. **Workspace/instance settings (database):** Set by admins through the UI and stored (secrets encrypted at rest). Includes admin-managed SMTP settings, admin-managed AI settings, and admin-managed identity providers — on CE, where those sources are active.
 
 3. **User preferences:** Per-account settings such as language, theme, accent color, default bookmark view, and AI opt-out.
 
-A guiding rule: a setting that distinguishes a hosted deployment from a self-hosted deployment is expressed as configuration or as an interface-implementation choice — **never** as a code branch on "which product is this." The old `SLUGBASE_MODE`/`isCloud` branching is replaced by (a) the entitlements engine and (b) interface selection.
+A guiding rule: a setting that distinguishes Cloud from CE is expressed as configuration or as an interface-implementation choice — **never** as a code branch on "which product is this." Application logic must not branch on edition strings; use the entitlements engine and config-selected interface implementations (§11).
+
+### Edition selector (`SLUGBASE_EDITION`)
+
+SlugBase ships as two **editions** from one codebase:
+
+| Edition | `SLUGBASE_EDITION` | Deployment shape |
+|---|---|---|
+| **Community Edition (CE)** | `ce` | Combined container image on operator infrastructure (§14.1–§14.6) |
+| **Cloud** | `cloud` | Split deploy — Fly.io API, Cloudflare Workers web/marketing, Neon Postgres (§14.7) |
+
+**`SLUGBASE_EDITION=ce|cloud`** is the canonical edition selector. Child implementation work (#479–#483) derives edition-specific defaults for deployment flags and interface wiring from this value; individual keys may still be set explicitly where documented. In production, values that conflict with the active edition preset are rejected at startup; in non-production they produce a warning.
+
+The deprecated **`SLUGBASE_MODE`** / **`isCloud`** branching is **superseded** by **`SLUGBASE_EDITION`**, the entitlements engine, and interface selection — do not reintroduce deployment-mode conditionals in application logic.
+
+> **E2e / CI naming (pending #484):** Playwright projects and log files still use `hosted` and `self-hosted`; a follow-up task renames them to `cloud` and `ce`.
 
 ---
 
@@ -551,7 +566,7 @@ Described in prose, as conceptual entities and relationships, generalized so tha
 - **Team membership:** Associates accounts with teams.
 - **Sharing records:** Bookmark-to-team, bookmark-to-user, folder-to-team, folder-to-user share grants.
 - **Slug preference:** Per-user remembered choice resolving an ambiguous slug to a specific bookmark, workspace-scoped.
-- **Identity provider configuration:** Federated provider definitions (key, client id, encrypted client secret, issuer, optional explicit endpoints, scopes, auto-create flag, default role), workspace/instance-scoped where database-sourced (self-hosted).
+- **Identity provider configuration:** Federated provider definitions (key, client id, encrypted client secret, issuer, optional explicit endpoints, scopes, auto-create flag, default role), workspace/instance-scoped where database-sourced (CE).
 - **Workspace/instance settings (key-value):** Settings such as SMTP and AI configuration, workspace-scoped, secrets encrypted.
 - **Credential tokens:** Password-reset tokens, signup-verification tokens, and email-change tokens — all hashed and time-limited. (No refresh tokens; sessions are server-side.)
 - **Personal API tokens:** Per-user named tokens, hashed, with last-use and revocation.
@@ -559,7 +574,7 @@ Described in prose, as conceptual entities and relationships, generalized so tha
 - **AI suggestion cache:** Cached suggestions keyed by workspace, user, canonical URL, and output language, with the suggested fields and a confidence value.
 - **AI suggestion usage:** Records of which suggested fields were actually used, for analytics.
 - **Audit events:** Workspace-scoped records of significant actions (actor, action, entity type/id, metadata, time).
-- **Billing/subscription state:** On the workspace (plan, external customer/subscription linkage, subscription status, current period end, included and extra seats) plus an idempotency ledger of processed billing events. Empty/no-op on self-hosted.
+- **Billing/subscription state:** On the workspace (plan, external customer/subscription linkage, subscription status, current period end, included and extra seats) plus an idempotency ledger of processed billing events. Empty/no-op on CE.
 - **Server-side session store and migration bookkeeping:** The session store backing the server-side session strategy, and a single schema-migration tracking record.
 
 (No operator-console entities ship in v1; if a future operator console is built, its operator accounts/invitations are a Fast-Follow addition.)
@@ -577,11 +592,11 @@ The product is multilingual. v1 ships **English and German**; the rebuild keeps 
 ## 18. Non-Functional Requirements
 
 - **Security:** Strong password hashing; encrypted at-rest secrets; hashed tokens; CSRF protection on mutations; SSRF-safe outbound fetches with host validation, timeouts, and size limits; strict transport and cookie settings; rate limiting on sensitive endpoints (login, token creation, registration, password reset); enforced tenant isolation defended by tests; server-side sessions with immediate revocation; a clear MFA recovery procedure. Security is a first-class requirement, and a periodic security audit is part of the operating rhythm.
-- **Privacy and consent:** Analytics and error reporting are consent-gated and privacy-aware, with control over personally-identifying data. A cookie/consent mechanism governs optional tracking on the hosted service. Self-hosted defaults to no external telemetry.
+- **Privacy and consent:** Analytics and error reporting are consent-gated and privacy-aware, with control over personally-identifying data. A cookie/consent mechanism governs optional tracking on the Cloud service. CE defaults to no external telemetry.
 - **Performance:** Bookmark lists, search, and the command palette feel instant for typical libraries; redirects are fast (usage tracking is asynchronous and never blocks the redirect); AI suggestions are cached.
-- **Observability:** Health and version endpoints; an aggregate operational-statistics endpoint protected by a shared secret for external monitoring (this is the hosted operator's primary observability hook at launch); consent-gated error reporting via the error-reporting interface.
+- **Observability:** Health and version endpoints; an aggregate operational-statistics endpoint protected by a shared secret for external monitoring (this is the Cloud operator's primary observability hook at launch); consent-gated error reporting via the error-reporting interface.
 - **Accessibility and UX quality:** A polished, accessible, keyboard-friendly experience (the command palette, confirmations for destructive actions, toasts, empty states, and loading skeletons are part of the expected baseline). Theming includes light/dark/auto and an accent color.
-- **API and integration:** A documented REST API covering auth (and MFA), bookmarks (CRUD, search, import/export, AI suggest), folders, tags, teams, tokens, workspace administration, identity providers, slug/go preferences, configuration/entitlements, and the hosted-only workspace/billing endpoints. An OpenAPI description is published, with optional interactive docs that can be disabled. The API is authenticated by session or by personal API token (Bearer), and CSRF applies to cookie-authenticated mutations.
+- **API and integration:** A documented REST API covering auth (and MFA), bookmarks (CRUD, search, import/export, AI suggest), folders, tags, teams, tokens, workspace administration, identity providers, slug/go preferences, configuration/entitlements, and the Cloud-only workspace/billing endpoints. An OpenAPI description is published, with optional interactive docs that can be disabled. The API is authenticated by session or by personal API token (Bearer), and CSRF applies to cookie-authenticated mutations.
 
 ---
 
@@ -595,9 +610,9 @@ The stack below is fixed for v1 (recorded compactly as decisions #37–#50 in §
 |---|---|---|
 | Language | **TypeScript** (strict, no `any`) | All packages. |
 | Backend | **NestJS** | Its module/DI system hosts the config-selected interface implementations (§2.6, §11) — interface swapping replaces deployment-mode branching; OpenAPI is generated from the contracts (§18). Runs as a Node container on Fly.io (§14.7). |
-| Web client | **React Router v7** (framework mode) | The same app runs on Cloudflare Workers (hosted edge SSR, §14.7) **and** as a Node server inside the combined self-host image (§14.2) — one codebase, two adapters (§1, §15). |
+| Web client | **React Router v7** (framework mode) | The same app runs on Cloudflare Workers (Cloud edge SSR, §14.7) **and** as a Node server inside the combined CE image (§14.2) — one codebase, two adapters (§1, §15). |
 | Marketing site | **Astro** (static) | Zero-JS-by-default; deployed to Cloudflare Workers; separately built (§2.3, decision #28). |
-| Persistence | **Drizzle ORM** (+ **Drizzle Kit**) | Behind the data-access abstraction (§11.9); **PostgreSQL** schema and migration history for hosted Neon and self-host. Embedded SQLite self-host deferred (Fast-Follow). |
+| Persistence | **Drizzle ORM** (+ **Drizzle Kit**) | Behind the data-access abstraction (§11.9); **PostgreSQL** schema and migration history for Cloud Neon and CE. Embedded SQLite CE deferred (Fast-Follow). |
 | Validation / contracts | **Zod** + **ts-rest** | Server-side validation and env schemas (Zod, rule `05-env-vars`); a single typed REST contract in `shared-types` generates the OpenAPI description (§18) and is consumed by both backend and web client. |
 | UI | **Tailwind** + **Radix** + **cmdk** | Tailwind bridged to the prototype design tokens (§23.1); components consume token variables only (rule `11-design-system`). `cmdk` realises the `⌘K` palette + `go` mode (§9). |
 | Tests | **Vitest** + **Supertest** + **Playwright** | Unit/integration (Vitest/Supertest) and e2e (Playwright, §22.4); these pin the CI-gate commands (§22.3). |
@@ -641,7 +656,7 @@ The following are explicitly **not** part of v1. Items marked Fast-Follow are in
 Every item below was previously an open question and is now **settled** and integrated into the body above. One line each.
 
 **Scope framing**
-- v1 is the smallest coherent product to launch hosted + self-hosted on one codebase; deferrable work is marked Fast-Follow (see "Scope — v1 vs. Fast-Follow").
+- v1 is the smallest coherent product to launch Cloud + CE on one codebase; deferrable work is marked Fast-Follow (see "Scope — v1 vs. Fast-Follow").
 
 **Terminology**
 1. Tenant term is **workspace** throughout; "organization" is deprecated.
@@ -650,72 +665,72 @@ Every item below was previously an open question and is now **settled** and inte
 
 **Tenancy**
 4. Tenant resolution = **session-carried active workspace + explicit switch endpoint**; no subdomain/path tenancy in v1, but the resolution interface allows them later without touching app logic.
-5. Self-hosted does **not** auto-create a workspace per user — first-run setup creates the first workspace; later users are admin-invited into existing workspaces. Hosted auto-creates a personal workspace on signup.
+5. CE does **not** auto-create a workspace per user — first-run setup creates the first workspace; later users are admin-invited into existing workspaces. Cloud auto-creates a personal workspace on signup.
 6. On leave, authored bookmarks **remain with the workspace**; no spin-off, no cross-workspace data movement; leaving = membership revoked; users export to take data.
 7. Slugs are unique **per owner within a workspace**.
-29. **Self-host vision (settled):** self-hosted is officially an **admin-curated multi-workspace product** — an instance-wide admin creates/manages workspaces and invites users into them; explicitly not a "every user spins up their own tenant" model. First-run setup + invite-only stays the default; public registration is an off-by-default config flag. (Sections 4.5, 5.2, 14.)
+29. **CE vision (settled):** CE is officially an **admin-curated multi-workspace product** — an instance-wide admin creates/manages workspaces and invites users into them; explicitly not a "every user spins up their own tenant" model. First-run setup + invite-only stays the default; public registration is an off-by-default config flag. (Sections 4.5, 5.2, 14.)
 
 **Auth & accounts**
-8. Self-hosted = **full/unlimited entitlements** by default (audit log, team sharing, AI-if-key-present all on); no artificial gating.
+8. CE = **full/unlimited entitlements** by default (audit log, team sharing, AI-if-key-present all on); no artificial gating.
 9. Session strategy = **server-side sessions**, identical on both deployments; the JWT-access + cloud-only-refresh model is dropped (immediate revocation, clean multi-device logout).
-10. Self-hosted is **setup + invite-only by default**; public open registration is a config flag (off self-hosted; on for hosted with email verification required).
-11. AI config: same AI interface — self-hosted admins supply their own credential/model in the admin UI; hosted uses an operator-supplied credential + per-workspace enable toggle.
-12. OIDC config: same auth interface — self-hosted configures providers in the admin UI (DB-sourced); hosted via deployment config; hosted workspace admins cannot add their own providers in v1.
+10. CE is **setup + invite-only by default**; public open registration is a config flag (off CE; on for Cloud with email verification required).
+11. AI config: same AI interface — CE admins supply their own credential/model in the admin UI; Cloud uses an operator-supplied credential + per-workspace enable toggle.
+12. OIDC config: same auth interface — CE configures providers in the admin UI (DB-sourced); Cloud via deployment config; Cloud workspace admins cannot add their own providers in v1.
 
 **Administration / operator**
-13. Operator console is **Fast-Follow**, not v1. v1 "operator" = first admin (instance-wide admin flag); hosted operations run via direct DB access + the secret-protected aggregate-stats endpoint. Self-hosted has an instance-wide admin distinct from per-workspace admins; **no second authenticated surface in v1**.
+13. Operator console is **Fast-Follow**, not v1. v1 "operator" = first admin (instance-wide admin flag); Cloud operations run via direct DB access + the secret-protected aggregate-stats endpoint. CE has an instance-wide admin distinct from per-workspace admins; **no second authenticated surface in v1**.
 
 **Billing & plans**
 14. Free bookmark cap = **50 per workspace** (concrete starting value, confirmable as config later).
 15. Supporter/lifetime is a **config-driven launch promotion**, entitlement-equivalent to "Personal, permanent"; no separate code path.
-16. Self-hosted has **no billing** (no-op billing impl, full entitlements); no paid self-host licensing in v1.
+16. CE has **no billing** (no-op billing impl, full entitlements); no paid CE licensing in v1.
 17. Team is pure per-seat — no base included seats; **minimum 2 seats** (`TEAM_MIN_SEATS`) at purchase and while subscribed; **checkout includes seat-quantity selection**; invitations consume a seat **on acceptance**; billed seat count cannot drop below current member count or below `TEAM_MIN_SEATS`, whichever is higher.
 18. **Downgrade overflow:** downgrade to Free takes effect at period-end with a grace period; over-cap bookmarks are **archived (preserved, hidden), not deleted**, and restored on re-upgrade (Section 12.5). Creation-blocking is not the only cap behavior.
-30. **Workspace-creation entitlement (settled):** "workspaces an account may create/own" is an entitlement checked by the engine. Hosted Free = exactly one workspace; additional workspaces require a paid entitlement (closes the 50×N free-cap bypass). Self-hosted = unrestricted. (Sections 4.1, 11.5, 12.2, 12.4.)
+30. **Workspace-creation entitlement (settled):** "workspaces an account may create/own" is an entitlement checked by the engine. Cloud Free = exactly one workspace; additional workspaces require a paid entitlement (closes the 50×N free-cap bypass). CE = unrestricted. (Sections 4.1, 11.5, 12.2, 12.4.)
 
 **Data & features**
 19. Bookmark editing stays **modal-only**; no detail route.
 20. **Soft-delete/trash out of scope** for v1 (Fast-Follow candidate).
-21. Export is **round-trip-complete** (folders, tags, slugs, forwarding flags) — lossless, because it is the documented self-host backup mechanism.
+21. Export is **round-trip-complete** (folders, tags, slugs, forwarding flags) — lossless, because it is the documented CE backup mechanism.
 22. v1 backup story = **enriched JSON export + data-volume copy** for the embedded DB; no first-class backup/restore in v1.
 23. Slugs remain **private to the workspace**; no anonymous `/go` resolution and no public pages in v1.
 24. The **contact form lives with the marketing static site**, calling a small public endpoint on the app; the challenge interface (bot protection) applies there.
 
 **Architecture & infrastructure**
 25. **Greenfield rebuild** with a single new **forward-only migration history**; migrating existing instance data is a separate workstream, out of scope here.
-26. **Both DB engines** ship on an identical schema/migration story; the embedded file-based engine is a deliberate self-host selling point.
+26. **Both DB engines** ship on an identical schema/migration story; the embedded file-based engine is a deliberate CE selling point.
 27. **One concrete implementation per interface in v1**, with the seam in place: SMTP (mail, both deployments), one AI provider, Stripe (billing), Cloudflare Turnstile (challenge), the existing analytics/error-reporting sinks behind no-op-able interfaces. Multiple providers per interface is Fast-Follow.
 28. **Marketing site** is a static site, separately built and deployed, in the same repo; deployed to **Cloudflare Workers** (same platform as the web client).
-31. **Hosted deployment topology (settled):** web client on Cloudflare Workers (edge); API/back-end on Fly.io Frankfurt (`fra`); database on Neon Postgres Frankfurt (`aws-eu-central-1`). Railway was rejected — its only EU region (Amsterdam) has no collocated Neon region, causing cross-region DB latency. Self-hosted uses the combined container image (§14.2) and is unaffected. (Section 14.7.)
-32. **Hosted database engine (settled):** Neon Postgres (`aws-eu-central-1`) for the hosted deployment. Self-hosted v1 requires operator-provided Postgres (same schema/migrations). Embedded SQLite self-host is **deferred** (Fast-Follow).
+31. **Cloud deployment topology (settled):** web client on Cloudflare Workers (edge); API/back-end on Fly.io Frankfurt (`fra`); database on Neon Postgres Frankfurt (`aws-eu-central-1`). Railway was rejected — its only EU region (Amsterdam) has no collocated Neon region, causing cross-region DB latency. CE uses the combined container image (§14.2) and is unaffected. (Section 14.7.)
+32. **Cloud database engine (settled):** Neon Postgres (`aws-eu-central-1`) for the Cloud deployment. CE v1 requires operator-provided Postgres (same schema/migrations). Embedded SQLite for CE is **deferred** (Fast-Follow).
 33. **i18n tooling (settled):** Message catalogs live in committed repo JSON (`packages/*/i18n/locales/{en,de}.json`). Web uses react-i18next; marketing uses native `t()` at build time. CI validates locale parity via `pnpm i18n:validate`. (Section 17, rule 10-i18n.mdc.)
 34. **Secrets management tooling (settled):** **Phase** is the secrets manager. Operators edit secrets in the Phase app (`SlugBase`); Phase automatically syncs to matching **GitHub Actions environments** (`staging`, `production`, and the dedicated `ci` environment for CI-only keys). Local development injects the Phase `Development` environment via `phase run`. Deploy pipelines push GHA environment secrets to Fly.io and Cloudflare Workers via `sync-secrets.sh` — no runtime secret fetch in CI setup. (Section 15, §22.9, rule 05-env-vars.mdc.)
 
-35. **CI/CD pipeline (settled):** GitHub Actions on hosted runners; **PipeWatch-aligned workflow split** — entry points `pr.yml`, `staging.yml`, `main.yml` (plus `release.yml` for production deploy); reusable `ci.yml`, `deploy.yml`, and `sync-secrets.yml`; branches `staging` and `main`. Authoritative reference: `docs/internal/ci-cd-example/`. (Section 22.)
+35. **CI/CD pipeline (settled):** GitHub Actions on GitHub-hosted runners; **PipeWatch-aligned workflow split** — entry points `pr.yml`, `staging.yml`, `main.yml` (plus `release.yml` for production deploy); reusable `ci.yml`, `deploy.yml`, and `sync-secrets.yml`; branches `staging` and `main`. Authoritative reference: `docs/internal/ci-cd-example/`. (Section 22.)
 36. **Design system and UI prototype (settled):** A clickable V1 design prototype in `docs/internal/design-prototype/V1/` is the **visual and interaction-design source of truth** (design language, screen anatomy, states, copy tone). The MVP spec remains the **product source of truth** — where the prototype conflicts with the spec, the spec wins. Design tokens (periwinkle accent `#7782f7`, dark-first, IBM Plex Sans/Mono) are defined in `docs/internal/design-prototype/V1/colors_and_type.css`. (Section 23.)
 
 **Technology stack**
 37. **Language (settled):** TypeScript everywhere, strict mode, no `any`. (Section 19.)
 38. **Backend framework (settled):** NestJS — its module/DI system hosts the config-selected external-interface implementations (§2.6, §11), replacing deployment-mode branching, and generates the OpenAPI description (§18); runs as a Node container on Fly.io (§14.7). (Section 19.)
-39. **Web client (settled):** React Router v7 (framework mode) — the same app runs on Cloudflare Workers (hosted edge SSR) and as a Node server inside the combined self-host image (§14.2). (Sections 14.7, 19.)
+39. **Web client (settled):** React Router v7 (framework mode) — the same app runs on Cloudflare Workers (Cloud edge SSR) and as a Node server inside the combined CE image (§14.2). (Sections 14.7, 19.)
 40. **Marketing site framework (settled):** Astro (static, zero-JS-by-default), deployed to Cloudflare Workers, separately built (§2.3, decision #28). (Section 19.)
-41. **Persistence (settled):** Drizzle ORM behind the data-access abstraction (§11.9); **PostgreSQL-only** at v1 — Drizzle Kit generates migrations from the Postgres schema and applies them natively on Neon (hosted) and operator Postgres (self-host). Embedded SQLite self-host deferred (Fast-Follow). (Sections 11.9, 16, 19.)
+41. **Persistence (settled):** Drizzle ORM behind the data-access abstraction (§11.9); **PostgreSQL-only** at v1 — Drizzle Kit generates migrations from the Postgres schema and applies them natively on Neon (Cloud) and operator Postgres (CE). Embedded SQLite CE deferred (Fast-Follow). (Sections 11.9, 16, 19.)
 42. **Validation & API contracts (settled):** Zod for all server-side validation and env schemas (rule `05-env-vars`); ts-rest contracts in `shared-types` generate the OpenAPI description (§18) and are consumed by backend and web client. (Section 19.)
 43. **UI system (settled):** Tailwind CSS bridged to the prototype design tokens (`colors_and_type.css`, §23.1) + Radix UI primitives + cmdk for the command palette; components consume token variables only. (Sections 19, 23, rule `11-design-system`.)
 44. **Tests (settled):** Vitest (unit + integration) + Supertest (API) + Playwright (e2e, §22.4); these pin the CI-gate commands (§22.3). (Section 19.)
 45. **Build orchestration (settled):** Turborepo over the pnpm workspace (`turbo.json`). (Sections 2.2, 19.)
-46. **Session store (settled):** database-backed server-side sessions — no Redis/external cache — so a bare self-host install needs no extra services. (Sections 5.3, 14.5.)
+46. **Session store (settled):** database-backed server-side sessions — no Redis/external cache — so a bare CE install needs no extra services. (Sections 5.3, 14.5.)
 47. **Security primitives (settled):** argon2id (password hashing, §5.4), otplib TOTP + QR (MFA, §5.7), double-submit-token CSRF over the §5.8 exempt allowlist.
 48. **Background work (settled):** in-process within the API — no separate worker process or external broker (§22.10, §6.3).
 49. **AI provider, v1 (settled):** OpenAI behind the vendor-neutral AI interface (§11.2); swapping providers is Fast-Follow.
 50. **Package layout (settled):** pnpm workspace packages `backend`, `web`, `marketing`, `shared-types`, `ui`, plus `docs`; the canonical web-package name is `web` (not `web-client`); marketing and app are separately buildable. (Section 19.)
-51. **Platform app naming (settled):** operator-run Fly.io apps and Cloudflare Worker scripts are named `slugbase-<env>-<app>` — `<env>` ∈ {`staging`, `production`} (matching Phase / GHA environment names; no `development` deployment), `<app>` ∈ {`api`, `web`, `marketing`}. These are platform identifiers, not public hostnames. Self-hosted GHCR image is exempt. (Section 14.7.)
+51. **Platform app naming (settled):** operator-run Fly.io apps and Cloudflare Worker scripts are named `slugbase-<env>-<app>` — `<env>` ∈ {`staging`, `production`} (matching Phase / GHA environment names; no `development` deployment), `<app>` ∈ {`api`, `web`, `marketing`}. These are platform identifiers, not public hostnames. CE GHCR image is exempt. (Section 14.7.)
 
 ---
 
 ## 22. CI/CD Pipeline
 
-SlugBase CI/CD follows the **PipeWatch pipeline pattern**, adapted for SlugBase's package layout and hosted topology. The authoritative reference for workflow structure, reusable chains, and secret-sync scripts is **`docs/internal/ci-cd-example/`** — implementation lands in issues #471–#474; this section documents the target design.
+SlugBase CI/CD follows the **PipeWatch pipeline pattern**, adapted for SlugBase's package layout and Cloud topology. The authoritative reference for workflow structure, reusable chains, and secret-sync scripts is **`docs/internal/ci-cd-example/`** — implementation lands in issues #471–#474; this section documents the target design.
 
 ### 22.1 Runners and concurrency
 
@@ -728,7 +743,7 @@ Concurrency: in-progress runs are cancelled for PR and `staging`-push triggers; 
 | Workflow | Trigger | Purpose |
 |---|---|---|
 | `pr.yml` | `pull_request` | CI gate; version check; E2E when `staging → main` |
-| `staging.yml` | push to `staging` | CI gate → staging deploy (+ GHCR self-host image tags in parallel) |
+| `staging.yml` | push to `staging` | CI gate → staging deploy (+ GHCR CE image tags in parallel) |
 | `main.yml` | push to `main` | CI gate → prepare release (+ GHCR image tags) |
 | `release.yml` | `release` published | Production deploy (idempotent) + GHCR release tags |
 
@@ -741,7 +756,7 @@ Reusable workflows (`workflow_call` only — never triggered directly):
 | `sync-secrets.yml` | `deploy.yml`, manual dispatch | GHA → Fly/CF secret sync |
 | `e2e.yml` | `pr.yml` | Playwright e2e (staging→main PR only) |
 | `prepare-release.yml` | `main.yml` | Version bump, changelog, draft release |
-| `build-and-push-ce-image.yml` | `staging.yml`, `main.yml`, `release.yml` | GHCR self-host image |
+| `build-and-push-ce-image.yml` | `staging.yml`, `main.yml`, `release.yml` | GHCR CE image |
 
 ### 22.3 CI checks (reusable `ci.yml`)
 
@@ -772,7 +787,7 @@ After CI passes on push to `staging`:
    - **migrate** (parallel with Sentry release derivation) — Drizzle migrations via `.github/scripts/run-migrate.sh` using `DATABASE_URL_UNPOOLED` from GHA secrets
    - **parallel deploys** — API to Fly.io `fra`; web + marketing to Cloudflare Workers (with retry)
    - **smoke** — API `GET /health` + `/version`; web health; marketing site root liveness
-2. **GHCR self-host image** — built in parallel (tags `dev`, `nightly`, short SHA); hardcoded self-host `VITE_*` build args only (no Phase/GHA runtime fetch).
+2. **GHCR CE image** — built in parallel (tags `dev`, `nightly`, short SHA); hardcoded CE `VITE_*` build args only (no Phase/GHA runtime fetch).
 
 ### 22.6 Prepare release (`main.yml` → `prepare-release.yml`)
 
@@ -797,9 +812,9 @@ Triggered when a draft release is manually published. Idempotent: compares relea
 | 3 | Write release tag to `DEPLOYED_VERSION` |
 | 4 | GHCR image tags (`latest`, release tag) in parallel with deploy |
 
-### 22.8 Self-hosted container image
+### 22.8 CE container image
 
-On `staging` push, `main` push, and `release` published, the workflow builds and pushes the **combined container image** (API + bundled web client) to GitHub Container Registry (`ghcr.io`), tagged per trigger. Self-host operators pull and run this image; it is not subject to the hosted Fly/Workers topology.
+On `staging` push, `main` push, and `release` published, the workflow builds and pushes the **combined container image** (API + bundled web client) to GitHub Container Registry (`ghcr.io`), tagged per trigger. CE operators pull and run this image; it is not subject to the Cloud Fly/Workers topology.
 
 ### 22.9 Secrets in CI and deploy
 
@@ -834,7 +849,7 @@ Adding a new key follows the Phase-first workflow in rule `05-env-vars` (Phase +
 
 ### 22.10 What is not in this pipeline
 
-- Self-hosted runner Docker cleanup (not needed on ephemeral hosted runners)
+- Self-hosted runner Docker cleanup (not needed on ephemeral GitHub-hosted runners)
 - A separate background worker deploy (SlugBase has no separate worker process; background work is in-process within the API)
 - A separate admin console deploy (no admin console in v1 — Fast-Follow)
 
@@ -876,7 +891,7 @@ Implementation note: these tokens become the foundation of the shared UI package
 | Onboarding flow + workspace create/switch | `prototype/EdgeFlows.jsx` | §5.2, §10 |
 | Settings shell + nav | `prototype/SettingsApp.jsx`, `SettingsShell.jsx`, `settings.css` | §10 |
 | Account settings (profile, password, MFA enroll/backup codes, API tokens, preferences) | `prototype/SettingsAccount.jsx` | §5 |
-| Workspace settings (general, SMTP, AI, OIDC; hosted vs self-hosted variants) | `prototype/SettingsWorkspace.jsx` | §10, §11.1, §11.3, §11.6, §15 |
+| Workspace settings (general, SMTP, AI, OIDC; Cloud vs CE variants) | `prototype/SettingsWorkspace.jsx` | §10, §11.1, §11.3, §11.6, §15 |
 | Members & teams (roles, invites, seats, ownership transfer) | `prototype/SettingsMembers.jsx` | §9, §12 |
 | Audit log (filters, pagination, entitlement gate) | `prototype/SettingsAudit.jsx` | §12 |
 | Plans & billing (plan table, supporter offer, cancel/downgrade, seats, invoices) | `prototype/SettingsBilling.jsx` | §12 |
@@ -892,7 +907,7 @@ These prototype conventions are endorsed as the intended UX baseline (they reali
 - **Entitlement surfacing:** sidebar usage meter, approaching-cap and at-cap banners, upsell modal, and plan gates — all entitlement-driven, never deployment-mode-driven (§12.4, §15).
 - **Shown-once secrets:** backup codes and freshly created API tokens use the "store this now, shown once" pattern (§5).
 - **Security-aware copy:** auth screens use non-enumerating language ("we always respond the same way") for reset/verify (§5).
-- **Self-hosted vs hosted variants:** SMTP and OIDC panels are hidden when operator-managed; first-run setup screen for empty instances (§5.2, §14.3, §15) — driven by config/interface selection, not a code branch.
+- **CE vs Cloud variants:** SMTP and OIDC panels are hidden when operator-managed; first-run setup screen for empty instances (§5.2, §14.3, §15) — driven by config/interface selection, not a code branch.
 - **Destructive-action confirmations**, toasts, loading skeletons, and empty states are part of the baseline (§18).
 
 ### 23.4 Known prototype↔spec divergences (spec wins)
@@ -907,7 +922,7 @@ The prototype was designed before some decisions were finalised. When building, 
 6. **No workspace identifier in URLs (v1).** `SettingsWorkspace.jsx` shows a "Workspace identifier — used in URLs" field and an error page uses a `/workspaces/acme/...` path. v1 resolves the active workspace **via the session**, not via URL path/subdomain (decision 4). Treat URL-based tenancy as a Fast-Follow-only forward hook; do not ship the URL-identifier field in v1.
 7. **Members row is illustrative.** The feature table "Members" cell previously showed a seat count; Team is per-seat with a **2-seat minimum** (no separate base tier).
 8. **Prices are illustrative and config-driven.** `$4` / `$9` / `$59` and the supporter deadline are placeholders; concrete pricing lives in deployment configuration and the marketing site, never hard-coded in application logic (§12.1).
-9. **Subprocessor copy in legal pages.** The prototype's Datenschutz lists "Hetzner Cloud (Hosting)". The settled hosted infrastructure is **Fly.io (Frankfurt) + Neon Postgres + Cloudflare Workers** (§14.7); the legal/subprocessor copy must be updated to match actual subprocessors before launch.
+9. **Subprocessor copy in legal pages.** The prototype's Datenschutz lists "Hetzner Cloud (Hosting)". The settled Cloud infrastructure is **Fly.io (Frankfurt) + Neon Postgres + Cloudflare Workers** (§14.7); the legal/subprocessor copy must be updated to match actual subprocessors before launch.
 10. **Forwarding domain string.** `go.slugbase.app` is the prototype's placeholder redirect host; the deployed value is `cloud.slugbase.app` (deployment configuration, §15), not a hard-coded constant.
 
 ### 23.5 Spec features under-represented in the prototype (build with the prototype's design language)
@@ -920,12 +935,12 @@ These v1 requirements are either stubbed or absent in the prototype. They must s
 - **Slug-preference management screen** — the disambiguation UI links to "manage remembered slug preferences"; build that management view (§8, data model "Slug preference").
 - **Forwarding management surface** — the sidebar has a "Forwarding" item with no page; define/build it or remove it to match the spec's slug/redirect model (§8). 
 - **Full internationalisation (EN/DE)** — the prototype has a language preference control but hard-coded English strings. All UI text must come from the repo JSON catalog with a German translation (§17).
-- **Consent / cookie mechanism** — the privacy/consent gating for analytics and error reporting on the hosted service (§18) is not in the prototype.
+- **Consent / cookie mechanism** — the privacy/consent gating for analytics and error reporting on the Cloud service (§18) is not in the prototype.
 - **Contact-form backend wiring** — the prototype renders the Turnstile widget and form; wire it to the public contact endpoint behind the challenge interface (§2.3, §11.1, §11.8).
 
 ---
 
 ## Assumptions carried forward
 
-- **Operator console timing (re. decision 13):** Running hosted operations via direct database access plus the aggregate-stats endpoint is accepted as sufficient **for launch only**. The operator console is expected to be an early Fast-Follow because direct DB access does not scale operationally; it is deferred, not dismissed.
+- **Operator console timing (re. decision 13):** Running Cloud operations via direct database access plus the aggregate-stats endpoint is accepted as sufficient **for launch only**. The operator console is expected to be an early Fast-Follow because direct DB access does not scale operationally; it is deferred, not dismissed.
 - **Free cap value (re. decision 14):** 50 bookmarks/workspace is used so the spec is concrete; it is expressed as configuration so it can be tuned without code changes.

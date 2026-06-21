@@ -30,7 +30,7 @@ A Story is split into Sub-tasks **only** when its parts (a) live in **different 
 
 ## Universal acceptance criteria (apply to EVERY leaf — not repeated per row)
 
-Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit with `[SB-N]`/`[P*-*]` (`01`,`07`); TS strict, no `any`, no `console.log`; security baseline (`03`); every new UI string via repo JSON en+de (`10`); every new env var via the Phase 4-step (`05`); **no `isCloud`/deployment-mode branches** — entitlements + interface selection (spec §15). The DB MIGRATIONS block (orchestrator `prompt-templates.md`) applies to every execution prompt.
+Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit with `[SB-N]`/`[P*-*]` (`01`,`07`); TS strict, no `any`, no `console.log`; security baseline (`03`); every new UI string via repo JSON en+de (`10`); every new env var via the Phase 4-step (`05`); **no `SLUGBASE_MODE`/`isCloud`/edition branches in app logic** — `SLUGBASE_EDITION` for presets only; entitlements + interface selection (spec §15). The DB MIGRATIONS block (orchestrator `prompt-templates.md`) applies to every execution prompt.
 
 ## Phases (= Epics)
 
@@ -40,8 +40,8 @@ Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit w
 | **P2** | Auth, accounts, tenancy, entitlements core | BE | MVP Alpha | set up/sign in (MFA, sessions); workspaces + membership + isolation |
 | **P3** | Bookmarks, organization, slugs, search, dashboard, AI | BE | MVP Alpha | core product usable end-to-end for one workspace |
 | **P4** | Sharing, teams, audit | BE | MVP Alpha | team collaboration + entitlement gating |
-| **P5** | Billing & plan enforcement | BE | MVP Alpha | Stripe (hosted) + no-op (self-host); downgrade overflow |
-| **P6** | Marketing, i18n completeness, deploy, polish | Ops | MVP Alpha | hosted + self-host deployable; launch-ready |
+| **P5** | Billing & plan enforcement | BE | MVP Alpha | Stripe (Cloud) + no-op (CE); downgrade overflow |
+| **P6** | Marketing, i18n completeness, deploy, polish | Ops | MVP Alpha | Cloud + CE deployable; launch-ready |
 
 > **All v1 work is `MVP Alpha`** (fix version `10035`). `Public Launch v1.0.0` (`10037`) is reserved for post-MVP / Fast-Follow.
 
@@ -77,7 +77,7 @@ Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit w
 - **Doc Ref:** spec §11.9, §16; eng §4, §11 · **Deps:** P1-03 · **Status:** [ ]
 
 ### P1-05 — Neon Postgres engine on identical schema + CI matrix — Infra · Lane S
-- **AC:** Postgres engine via `DATABASE_URL`; CI runs the integration suite against Postgres. *Note: dual SQLite/Postgres CI matrix deferred with SQLite self-host (Fast-Follow).*
+- **AC:** Postgres engine via `DATABASE_URL`; CI runs the integration suite against Postgres. *Note: dual SQLite/Postgres CI matrix deferred with SQLite for CE (Fast-Follow).*
 - **Tests:** integration suite passes on Postgres in CI.
 - **Files:** `packages/backend/src/db/**`, `.github/workflows/ci-cd.yml`
 - **Doc Ref:** spec §11.9, decision #32; eng §4, §6 · **Deps:** P1-04, P1-09 · **Status:** [x]
@@ -178,26 +178,26 @@ Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit w
 - **Files:** `packages/backend/src/db/**`, `packages/backend/src/common/tenant/**`
 - **Doc Ref:** spec §4.4, §18; eng §4, §6 · **Deps:** P2-09 · **Status:** [ ]
 
-### P2-11 — Entitlements engine (core; self-host unlimited) — BE · Lane S
-- **AC:** engine answers workspace + account entitlements (bookmark cap, AI, team sharing, admin, audit, seats, workspaces-per-account); self-host = unlimited; hosted defaults to Free (billing wired P5); central checks, no deployment-mode branch.
-- **Tests:** unit: self-host unlimited; hosted Free caps; workspaces-per-account enforced.
+### P2-11 — Entitlements engine (core; CE unlimited) — BE · Lane S
+- **AC:** engine answers workspace + account entitlements (bookmark cap, AI, team sharing, admin, audit, seats, workspaces-per-account); CE = unlimited; Cloud defaults to Free (billing wired P5); central checks, no deployment-mode branch.
+- **Tests:** unit: CE unlimited; Cloud Free caps; workspaces-per-account enforced.
 - **Files:** `packages/backend/src/entitlements/**`
 - **Doc Ref:** spec §11.5, §12.2; def §5 · **Deps:** P2-08 · **Status:** [ ]
 
 ### P2-12 — First-run setup + workspace creation (entitlement-gated) — BE · Lane S
-- **AC:** empty-DB setup creates first account (instance-admin + owner) + first workspace; workspace-creation enforces workspaces-per-account (hosted Free=1; self-host unrestricted); hosted signup auto-creates personal workspace.
-- **Tests:** integration: setup on empty DB; Free 2nd-workspace blocked; self-host unrestricted.
+- **AC:** empty-DB setup creates first account (instance-admin + owner) + first workspace; workspace-creation enforces workspaces-per-account (Cloud Free=1; CE unrestricted); Cloud signup auto-creates personal workspace.
+- **Tests:** integration: setup on empty DB; Free 2nd-workspace blocked; CE unrestricted.
 - **Files:** `packages/backend/src/setup/**`, `packages/backend/src/workspaces/**`
 - **Doc Ref:** spec §4.1, §5.2, §14.3, §12.2/§12.4 · **Deps:** P2-11 · **Status:** [ ]
 
 ### P2-13 — Invitations (seats on acceptance) — BE · Lane S · `[mig]`
 - **AC:** invite by email (hashed token, expiry); join workspace on acceptance; seat consumed on acceptance not send; seat count cannot drop below member count.
-- **Tests:** integration: invite → accept consumes seat; over-seat acceptance blocked on hosted Team.
+- **Tests:** integration: invite → accept consumes seat; over-seat acceptance blocked on Cloud Team.
 - **Files:** `packages/backend/src/invitations/**`
 - **Doc Ref:** spec §4.2, §5.2, §12.2; def §5 · **Deps:** P2-12, P2-03 · **Status:** [ ]
 
 ### P2-14 — OIDC / auth-provider interface — BE · Lane S · `[mig]`
-- **AC:** `AUTH_PROVIDER` (list, start, callback, claims, link/auto-create); self-host = DB-sourced admin config (encrypted secrets, custom endpoints); hosted = deployment-config; email-verified linking; federated login skips SlugBase MFA.
+- **AC:** `AUTH_PROVIDER` (list, start, callback, claims, link/auto-create); CE = DB-sourced admin config (encrypted secrets, custom endpoints); Cloud = deployment-config; email-verified linking; federated login skips SlugBase MFA.
 - **Tests:** integration (mock IdP): handshake → link/auto-create; unverified routed correctly.
 - **Files:** `packages/backend/src/auth/oidc/**`
 - **Doc Ref:** spec §5.6, §11.3; eng §1 · **Deps:** P2-02, P1-06 · **Status:** [ ]
@@ -312,7 +312,7 @@ Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit w
 - **Doc Ref:** spec §11.2, §6.4, §17; def §5; rule `05`,`10`
 - **Goal:** vendor-neutral `AI` interface with OpenAI impl, cache, and inline suggestions in the modal. BE interface + BE cache (migration) + FE integration are separate leaves.
 - `P3-14.1` — `AI` interface + OpenAI impl + availability + key config — BE · Lane P
-  - **AC:** `AI` interface (suggest title/slug/tags/detected-language/confidence + availability); OpenAI impl; self-host BYO key, hosted operator key; disabled when no key. · **Tests:** integration (mocked OpenAI): suggestions returned; disabled when no key. · **Files:** `packages/backend/src/ai/**` · **Deps:** P2-11, P1-06
+  - **AC:** `AI` interface (suggest title/slug/tags/detected-language/confidence + availability); OpenAI impl; CE BYO key, Cloud operator key; disabled when no key. · **Tests:** integration (mocked OpenAI): suggestions returned; disabled when no key. · **Files:** `packages/backend/src/ai/**` · **Deps:** P2-11, P1-06
 - `P3-14.2` — Suggestion cache — BE · Lane S · `[mig]`
   - **AC:** cache keyed by (workspace, user, canonical URL, output language) TTL def §5 (30d). · **Tests:** integration: cache hit/miss + key correctness. · **Files:** `packages/backend/src/ai/cache/**` (+ cache table) · **Deps:** P3-14.1
 - `P3-14.3` — Inline suggestions in modal + opt-out + entitlement gate — FE · Lane P
@@ -343,20 +343,20 @@ Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit w
 - **Doc Ref:** spec §6.5, §7.1; proto; rule `10`,`11` · **Deps:** P4-02 · **Status:** [ ]
 
 ### P4-04 — Audit log (workspace-scoped) — BE · Lane S · `[mig]`
-- **AC:** append-only events (actor, action, entity, metadata, time); read-only paginated view; entitlement-gated (Team on hosted; on for self-host).
+- **AC:** append-only events (actor, action, entity, metadata, time); read-only paginated view; entitlement-gated (Team on Cloud; on for CE).
 - **Tests:** integration: significant actions recorded; access gated by entitlement.
 - **Files:** `packages/backend/src/audit/**`
 - **Doc Ref:** spec §10.1, §16 · **Deps:** P2-11 · **Status:** [ ]
 
 ### P4-05 — Members & Teams admin UI — FE · Lane P
-- **AC:** invite/add/edit/remove members, set roles, resend invites, assign to teams, ownership transfer; team management; entitlement-gated (Team on hosted) with API enforcement independent of UI.
+- **AC:** invite/add/edit/remove members, set roles, resend invites, assign to teams, ownership transfer; team management; entitlement-gated (Team on Cloud) with API enforcement independent of UI.
 - **Tests:** component + integration: role changes; gated endpoints refuse off-plan.
 - **Files:** `packages/web/app/routes/settings/members/**`
 - **Doc Ref:** spec §10.1, §12.4; proto (`SettingsMembers.jsx`); rule `10`,`11` · **Deps:** P4-01, P2-13 · **Status:** [ ]
 
 ### P4-06 — Entitlement gating for sharing/admin/audit — BE · Lane S
-- **AC:** team sharing, team admin, member invitations, audit log gated to Team on hosted; UI hides/disables, API refuses; always on for self-host.
-- **Tests:** integration: each gated surface refused on non-Team hosted; allowed on self-host.
+- **AC:** team sharing, team admin, member invitations, audit log gated to Team on Cloud; UI hides/disables, API refuses; always on for CE.
+- **Tests:** integration: each gated surface refused on non-Team Cloud; allowed on CE.
 - **Files:** `packages/backend/src/{sharing,teams,invitations,audit}/**` (guards), `packages/backend/src/entitlements/**`
 - **Doc Ref:** spec §12.2, §12.4 · **Deps:** P4-02, P4-04, P4-05 · **Status:** [x]
 
@@ -367,7 +367,7 @@ Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit w
 > **Suggested order / batch plan:** Serial spine `P5-01 → P5-02 → P5-03 → P5-04`. Parallel: `P5-05` (UI) after `P5-03`; `P5-06` (stats) is an independent floater (after P1-03).
 
 ### P5-01 — Billing interface (Stripe + no-op) — BE · Lane S
-- **AC:** `BILLING` interface (checkout, portal, subscription state, seat quantity, async events); Stripe impl (hosted); no-op impl (self-host) granting full entitlements; app logic checks entitlements only.
+- **AC:** `BILLING` interface (checkout, portal, subscription state, seat quantity, async events); Stripe impl (Cloud); no-op impl (CE) granting full entitlements; app logic checks entitlements only.
 - **Tests:** unit: no-op grants unlimited; Stripe adapter maps state (mocked).
 - **Files:** `packages/backend/src/billing/**`
 - **Doc Ref:** spec §11.4, §12.3 · **Deps:** P2-11 · **Status:** [ ]
@@ -397,7 +397,7 @@ Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit w
 - **Doc Ref:** spec §12; proto (`SettingsBilling.jsx`); §23.4; rule `10`,`11` · **Deps:** P5-03 · **Status:** [x]
 
 ### P5-06 — Aggregate-stats endpoint (secret-protected) — BE · Lane P
-- **AC:** shared-secret-protected aggregate operational stats endpoint (hosted operator observability); no PII; secret via Phase / GHA environment.
+- **AC:** shared-secret-protected aggregate operational stats endpoint (Cloud operator observability); no PII; secret via Phase / GHA environment.
 - **Tests:** integration: rejects without secret; returns aggregates with it.
 - **Files:** `packages/backend/src/admin/stats/**`
 - **Doc Ref:** spec §10.2, §18; rule `05` · **Deps:** P1-03 · **Status:** [ ]
@@ -409,7 +409,7 @@ Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit w
 > **Suggested order / batch plan:** Independent floaters (after P1-03/P1-02): `{P6-01, P6-05, P6-09, P5-06}`. Chain `P6-01 → P6-02 → P6-03.1 → {P6-03.2, P6-03.3}`. Parallel FE (after their deps): `{P6-04, P6-06.1, P6-06.2, P6-08.1, P6-08.2}`. Tail S (cross-cutting + deploy, CI-file serial): `P6-07 → P6-10 → P6-11`.
 
 ### P6-01 — Challenge interface (Turnstile + no-op) — BE · Lane P
-- **AC:** `CHALLENGE` interface (verify token, dev-skip); Turnstile impl (hosted) + no-op (self-host default).
+- **AC:** `CHALLENGE` interface (verify token, dev-skip); Turnstile impl (Cloud) + no-op (CE default).
 - **Tests:** unit: no-op passes in dev; Turnstile verify (mocked).
 - **Files:** `packages/backend/src/challenge/**`
 - **Doc Ref:** spec §11.8, §2.3 · **Deps:** P1-03 · **Status:** [ ]
@@ -431,13 +431,13 @@ Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit w
   - **AC:** contact form + Turnstile widget, posts to P6-02. · **Tests:** form posts to endpoint (mocked). · **Files:** `packages/marketing/src/pages/contact/**` · **Deps:** P6-03.1, P6-02
 
 ### P6-04 — Analytics interface + consent/cookie mechanism — FE/BE · Lane P
-- **AC:** `ANALYTICS` interface (event record, no-op default); consent/cookie banner gating on hosted; self-host off.
+- **AC:** `ANALYTICS` interface (event record, no-op default); consent/cookie banner gating on Cloud; CE off.
 - **Tests:** unit: no-op when no consent/unconfigured; records when consented.
 - **Files:** `packages/backend/src/analytics/**`, `packages/web/app/components/consent/**`
 - **Doc Ref:** spec §11.6, §18 · **Deps:** P3-12 · **Status:** [ ]
 
 ### P6-05 — Error-reporting interface — BE · Lane P
-- **AC:** `ERROR_REPORTING` interface (capture, no-op default); consent/PII-aware; self-host off; hosted operator-configured; source maps on prod build (if token set).
+- **AC:** `ERROR_REPORTING` interface (capture, no-op default); consent/PII-aware; CE off; Cloud operator-configured; source maps on prod build (if token set).
 - **Tests:** unit: no-op unconfigured; capture invoked when configured (mocked).
 - **Files:** `packages/backend/src/error-reporting/**`
 - **Doc Ref:** spec §11.7, §18 · **Deps:** P1-03 · **Status:** [ ]
@@ -479,7 +479,7 @@ Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit w
 - **Doc Ref:** spec §22.5, §14.7; eng §10 · **Deps:** P1-10, P6-03 · **Status:** [ ]
 
 ### P6-11 — Prepare release + production deploy + GHCR image — Infra · Lane S
-- **AC:** push-`main` prepare-release (version-bump check, translations check, changelog, draft release); release-published production deploy (idempotent via `DEPLOYED_VERSION`, `slugbase-production-*`, migration on Neon, smoke); combined self-host image pushed to GHCR `vX.Y.Z`+`latest`.
+- **AC:** push-`main` prepare-release (version-bump check, translations check, changelog, draft release); release-published production deploy (idempotent via `DEPLOYED_VERSION`, `slugbase-production-*`, migration on Neon, smoke); combined CE image pushed to GHCR `vX.Y.Z`+`latest`.
 - **Tests:** workflow validates; dry-run/idempotency check; image builds + pushes.
 - **Files:** `.github/workflows/ci-cd.yml`, release scripts
 - **Doc Ref:** spec §22.6–22.8; eng §10 · **Deps:** P6-10 · **Status:** [ ]

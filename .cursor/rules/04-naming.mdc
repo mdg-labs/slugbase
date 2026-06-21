@@ -68,5 +68,6 @@ bookmark_card.tsx                   → ✅ BookmarkCard.tsx
 
 // ❌ deployment-mode constant
 const isCloud = process.env.SLUGBASE_MODE === 'cloud';
-// ✅ use entitlements engine (spec §11.5, §15)
+const edition = process.env.SLUGBASE_EDITION; // ❌ do not branch app logic on edition
+// ✅ use entitlements engine + config-selected interfaces (spec §11.5, §15)
 ```

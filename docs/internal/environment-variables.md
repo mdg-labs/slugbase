@@ -42,17 +42,27 @@ Every inventory table uses the same columns:
 
 | Column | Meaning |
 |---|---|
-| **Hosted** | Needed on managed Fly.io + Cloudflare Workers deployment |
-| **Self-host** | Needed on combined GHCR Docker image |
-| **Required** | `Always` · `Hosted` · `Optional` · `Dev only` · `CI only` |
+| **Cloud** | Needed on managed Fly.io + Cloudflare Workers deployment |
+| **CE** | Needed on combined GHCR Docker image |
+| **Required** | `Always` · `Cloud` · `Optional` · `Dev only` · `CI only` |
 | **Secret** | `Yes` = never commit or log; `No` = safe in client bundles |
 | **When set** | `Runtime` (process env at start) · `Build` (Vite/Astro bake-in) · `Both` · `CI` |
 
 > **Build-time warning:** Keys prefixed `VITE_` (web app) or `PUBLIC_` (marketing site) are **inlined into client bundles at build time**. Never put true secrets there — session keys, API secrets, SMTP passwords, Stripe keys, etc. belong in unprefixed runtime keys only.
 
+### Edition selector
+
+| Key | What it does | Cloud | CE | Required | Secret | When set | Example value |
+|---|---|---|---|---|---|---|---|
+| `SLUGBASE_EDITION` | Edition selector — `ce` (Community Edition combined image) or `cloud` (managed split deploy). Drives edition-specific defaults (#479–#483); supersedes deprecated `SLUGBASE_MODE`. | Yes | Yes | Optional (until preset wiring lands) | No | Runtime / Build | `cloud` or `ce` |
+
+> **Migration:** Until preset derivation ships (#479–#483), operators set edition-specific flags explicitly (see Cloud and CE quick starts below). Playwright e2e projects remain `hosted` / `self-hosted` until renamed in #484.
+
+
+
 ---
 
-## Quick start — hosted
+## Quick start — Cloud
 
 Minimum keys to boot a **managed** deployment (API on Fly.io, web on Cloudflare Workers, marketing on Cloudflare Workers). See [full inventory](#full-inventory) for optional interfaces.
 
@@ -74,10 +84,10 @@ VITE_API_URL=https://api.example.com
 PUBLIC_REGISTRATION=true
 EMAIL_VERIFICATION_REQUIRED=true
 VITE_BILLING_ENABLED=true
-# + Stripe, Turnstile, deploy tokens — see hosted tables below
+# + Stripe, Turnstile, deploy tokens — see Cloud tables below
 ```
 
-### URL wiring (hosted)
+### URL wiring (Cloud)
 
 Three public surfaces must agree on origins:
 
@@ -91,11 +101,11 @@ Three public surfaces must agree on origins:
 | Marketing deploy smoke | `MARKETING_ORIGIN` | `https://staging.slugbase.app` |
 | Marketing contact form | `PUBLIC_CONTACT_ENDPOINT` | `https://staging-api.slugbase.app/contact` |
 
-Typical hosted flags: `PUBLIC_REGISTRATION=true`, `EMAIL_VERIFICATION_REQUIRED=true`, `VITE_BILLING_ENABLED=true`, `VITE_MAIL_ADMIN_UI=false`, `VITE_OIDC_ADMIN_UI=false`, `VITE_AI_BYO_CREDENTIAL=false`.
+Typical Cloud flags: `PUBLIC_REGISTRATION=true`, `EMAIL_VERIFICATION_REQUIRED=true`, `VITE_BILLING_ENABLED=true`, `VITE_MAIL_ADMIN_UI=false`, `VITE_OIDC_ADMIN_UI=false`, `VITE_AI_BYO_CREDENTIAL=false`.
 
 ---
 
-## Quick start — self-hosted
+## Quick start — CE
 
 Minimum keys for the **combined GHCR image** (API + bundled web on one port). Marketing site is not included in the image.
 
@@ -110,7 +120,7 @@ PUBLIC_REGISTRATION=false                       # invite-only default
 EMAIL_VERIFICATION_REQUIRED=false               # configurable
 # SERVE_WEB_CLIENT=true and WEB_CLIENT_SERVER_BUILD are preset in the Dockerfile
 
-# Image build — hardcoded self-host VITE_* (see scripts/self-host-vite-build-args.sh)
+# Image build — hardcoded CE VITE_* (see scripts/CE-vite-build-args.sh)
 VITE_BILLING_ENABLED=false
 VITE_MAIL_ADMIN_UI=true
 VITE_OIDC_ADMIN_UI=true
@@ -128,9 +138,9 @@ docker run -d \
   ghcr.io/<owner>/slugbase:latest
 ```
 
-CI GHCR builds do **not** read Phase or GHA runtime secrets. They pass hardcoded self-host `VITE_*` values from [`scripts/self-host-vite-build-args.sh`](../scripts/self-host-vite-build-args.sh) via [`.github/scripts/build-push-ghcr.sh`](../.github/scripts/build-push-ghcr.sh). **`VITE_SENTRY_*`**, **`VITE_UMAMI_*`**, **`VITE_APP_BASE_URL`**, and deprecated pricing keys are never passed — hosted telemetry and URLs must not be baked into the self-host client bundle.
+CI GHCR builds do **not** read Phase or GHA runtime secrets. They pass hardcoded CE `VITE_*` values from [`scripts/CE-vite-build-args.sh`](../scripts/CE-vite-build-args.sh) via [`.github/scripts/build-push-ghcr.sh`](../.github/scripts/build-push-ghcr.sh). **`VITE_SENTRY_*`**, **`VITE_UMAMI_*`**, **`VITE_APP_BASE_URL`**, and deprecated pricing keys are never passed — Cloud telemetry and URLs must not be baked into the CE client bundle.
 
-### URL wiring (self-hosted)
+### URL wiring (CE)
 
 | Key | Example |
 |---|---|
@@ -151,26 +161,26 @@ flowchart LR
     stgEnv[staging]
     prodEnv[production]
   end
-  subgraph hosted [Hosted runtime]
+  subgraph cloud [Cloud runtime]
     fly[Fly.io API]
     webWorker[CF Web Worker]
     mktWorker[CF Marketing Worker]
   end
-  subgraph selfhost [Self-hosted]
+  subgraph ce [CE]
     dockerBuild[Docker VITE build-args]
     container[Combined container runtime]
   end
   keys -->|auto sync| gha
   ciEnv -->|CI jobs| ciRunner[CI runners]
-  stgEnv -->|sync-secrets.sh| hosted
-  prodEnv -->|sync-secrets.sh| hosted
+  stgEnv -->|sync-secrets.sh| cloud
+  prodEnv -->|sync-secrets.sh| cloud
   keys -.->|phase run local only| localDev[Local dev]
   dockerBuild --> container
 ```
 
 | When set | Where | Examples |
 |---|---|---|
-| **Runtime** | Fly.io API process, self-host container, Worker SSR (`process.env`) | `SESSION_SECRET`, `DATABASE_URL`, `STRIPE_SECRET_KEY` |
+| **Runtime** | Fly.io API process, CE container, Worker SSR (`process.env`) | `SESSION_SECRET`, `DATABASE_URL`, `STRIPE_SECRET_KEY` |
 | **Build** | `pnpm build` for web/marketing; Docker `ARG VITE_*` | `VITE_BILLING_ENABLED`, `PUBLIC_PLAN_PRICE_PERSONAL_MONTHLY` |
 | **Both** | Build + SSR fallback | `API_BASE_URL` (runtime Worker), `VITE_API_URL` (SSR fallback only) |
 | **CI** | GitHub Actions runner only; never shipped to production runtime | `FLY_API_TOKEN`, `CLOUDFLARE_API_TOKEN`, `SENTRY_AUTH_TOKEN`, `REPORTPORTAL_*` |
@@ -183,7 +193,7 @@ flowchart LR
 
 Every deployment must set these. The API refuses to start in production without valid values ([`env.schema.ts`](../packages/backend/src/config/env.schema.ts)).
 
-| Key | What it does | Hosted | Self-host | Required | Secret | When set | Example value |
+| Key | What it does | Cloud | CE | Required | Secret | When set | Example value |
 |---|---|---|---|---|---|---|---|
 | `SESSION_SECRET` | Signs and verifies server-side session cookies | Yes | Yes | Always | Yes | Runtime | `<openssl rand -hex 32>` (min 32 chars) |
 | `ENCRYPTION_KEY` | Encrypts at-rest sensitive values (SMTP, OIDC, MFA secrets) | Yes | Yes | Always | Yes | Runtime | `<openssl rand -hex 32>` (min 32 chars) |
@@ -191,11 +201,11 @@ Every deployment must set these. The API refuses to start in production without 
 | `DATABASE_URL_UNPOOLED` | Direct DB URL for migrations / drizzle-kit | Yes | Optional | Optional | Yes | Runtime | Neon direct URL; falls back to `DATABASE_URL` |
 | `APP_BASE_URL` | Public HTTPS base URL of the API (links, OIDC callbacks, CORS) | Yes | Yes | Always | No | Runtime | `https://api.example.com` |
 | `FRONTEND_ORIGIN` | Public web app origin (CORS allowlist) | Yes | Yes | Always | No | Runtime | `https://app.example.com` |
-| `API_BASE_URL` | API origin for Worker SSR loaders, actions, and proxy upstream | Yes | Optional | Hosted | No | Runtime (Worker) | Same as `APP_BASE_URL` on hosted |
-| `VITE_API_URL` | Build-time fallback when `API_BASE_URL` unset at SSR; **not** used for browser `fetch` | Yes | Optional | Hosted | No | Build | Same as `APP_BASE_URL` on hosted |
+| `API_BASE_URL` | API origin for Worker SSR loaders, actions, and proxy upstream | Yes | Optional | Cloud | No | Runtime (Worker) | Same as `APP_BASE_URL` on Cloud |
+| `VITE_API_URL` | Build-time fallback when `API_BASE_URL` unset at SSR; **not** used for browser `fetch` | Yes | Optional | Cloud | No | Build | Same as `APP_BASE_URL` on Cloud |
 
 **Client API routing (web):** Browser `fetch` always uses same-origin Worker proxy routes (`/auth/*`, `/api/*`, …). SSR loaders and proxy handlers call the NestJS API via `API_BASE_URL` (see `packages/web/app/lib/client-api-path.ts` and `client-api-fetch.ts`). Never read `VITE_API_URL` in UI modules for cross-origin browser requests — session cookies are `SameSite=Lax` on the web origin.
-| `MARKETING_ORIGIN` | Public marketing site URL (CI smoke only) | Yes | No | Hosted | No | CI | `https://www.example.com` |
+| `MARKETING_ORIGIN` | Public marketing site URL (CI smoke only) | Yes | No | Cloud | No | CI | `https://www.example.com` |
 
 ---
 
@@ -203,11 +213,11 @@ Every deployment must set these. The API refuses to start in production without 
 
 Control registration, email verification, and how the web UI is served.
 
-| Key | What it does | Hosted | Self-host | Required | Secret | When set | Example value |
+| Key | What it does | Cloud | CE | Required | Secret | When set | Example value |
 |---|---|---|---|---|---|---|---|
-| `PUBLIC_REGISTRATION` | Allow open signup (`POST /auth/register`) | Yes | Yes | Optional | No | Runtime | Hosted: `true`; self-host: `false` |
-| `EMAIL_VERIFICATION_REQUIRED` | Block login until email verified | Yes | Yes | Optional | No | Runtime | Hosted: `true`; self-host: `false` |
-| `SERVE_WEB_CLIENT` | Serves bundled RR7 web on same port; **also controls migration dispatch** — `bootstrap()` runs DB migrations only when `true` (self-hosted). Hosted deployments run migrations in CI via the `migrate-staging` / `migrate-production` workflow jobs (non-zero exit blocks deploy). | No | Yes | Optional | No | Runtime | Self-host image: `true` (preset in Dockerfile) |
+| `PUBLIC_REGISTRATION` | Allow open signup (`POST /auth/register`) | Yes | Yes | Optional | No | Runtime | Cloud: `true`; CE: `false` |
+| `EMAIL_VERIFICATION_REQUIRED` | Block login until email verified | Yes | Yes | Optional | No | Runtime | Cloud: `true`; CE: `false` |
+| `SERVE_WEB_CLIENT` | Serves bundled RR7 web on same port; **also controls migration dispatch** — `bootstrap()` runs DB migrations only when `true` (CE). Cloud deployments run migrations in CI via the `migrate-staging` / `migrate-production` workflow jobs (non-zero exit blocks deploy). | No | Yes | Optional | No | Runtime | CE image: `true` (preset in Dockerfile) |
 | `WEB_CLIENT_SERVER_BUILD` | Path to RR7 server build entry | No | Yes | Optional | No | Runtime | `/app/packages/web/build/server/index.js` |
 | `OPENAPI_INTERACTIVE_DOCS` | Scalar UI at `GET /docs` | Yes | Yes | Optional | No | Runtime | `true` (default) |
 | `CHALLENGE_DEV_SKIP` | Skip Turnstile verification in non-production | Yes | Yes | Optional | No | Runtime | Unset in prod; `true` in local dev |
@@ -220,7 +230,7 @@ Control registration, email verification, and how the web UI is served.
 
 Optional on both deployment shapes. Empty values activate **no-op** interface implementations.
 
-| Key | What it does | Hosted | Self-host | Required | Secret | When set | Example value |
+| Key | What it does | Cloud | CE | Required | Secret | When set | Example value |
 |---|---|---|---|---|---|---|---|
 | `SMTP_HOST` | SMTP server hostname | Optional | Optional | Optional | No | Runtime | `smtp.example.com` |
 | `SMTP_PORT` | SMTP port | Optional | Optional | Optional | No | Runtime | `587` (default) |
@@ -240,39 +250,39 @@ Optional on both deployment shapes. Empty values activate **no-op** interface im
 | `RATE_LIMIT_EMAIL_VERIFICATION_MAX` | Max verification emails per user window | Optional | Optional | Optional | No | Runtime | `3` (default) |
 | `RATE_LIMIT_EMAIL_VERIFICATION_TTL_SECONDS` | Verification-email window (seconds) | Optional | Optional | Optional | No | Runtime | `3600` (default) |
 
-> **Self-host note:** SMTP, OIDC, and AI credentials are usually configured via **workspace settings in the UI** (encrypted in DB). Deployment-level `SMTP_*` / `OPENAI_*` are optional fallbacks for operator-managed transport.
+> ****CE note:** SMTP, OIDC, and AI credentials are usually configured via **workspace settings in the UI** (encrypted in DB). Deployment-level `SMTP_*` / `OPENAI_*` are optional fallbacks for operator-managed transport.
 
 ---
 
-### 4. Hosted — Stripe and billing (API runtime)
+### 4. Cloud — Stripe and billing (API runtime)
 
-Required for paid entitlements on hosted. Leave empty on self-host (no-op billing grants full entitlements).
+Required for paid entitlements on Cloud. Leave empty on CE (no-op billing grants full entitlements).
 
-| Key | What it does | Hosted | Self-host | Required | Secret | When set | Example value |
+| Key | What it does | Cloud | CE | Required | Secret | When set | Example value |
 |---|---|---|---|---|---|---|---|
-| `STRIPE_SECRET_KEY` | Stripe API secret key | Yes | No | Hosted | Yes | Runtime | `sk_live_…` |
-| `STRIPE_WEBHOOK_SECRET` | Webhook signing secret | Yes | No | Hosted | Yes | Runtime | `whsec_…` |
-| `STRIPE_PRICE_PERSONAL_MONTHLY` | Stripe price id for Personal plan (monthly) | Yes | No | Hosted | No | Runtime | `price_…` |
-| `STRIPE_PRICE_PERSONAL_ANNUAL` | Stripe price id for Personal plan (annual) | Yes | No | Hosted | No | Runtime | `price_…` |
-| `STRIPE_PRICE_TEAM_MONTHLY` | Stripe price id for Team plan (monthly) | Yes | No | Hosted | No | Runtime | `price_…` |
-| `STRIPE_PRICE_TEAM_ANNUAL` | Stripe price id for Team plan (annual) | Yes | No | Hosted | No | Runtime | `price_…` |
+| `STRIPE_SECRET_KEY` | Stripe API secret key | Yes | No | Cloud | Yes | Runtime | `sk_live_…` |
+| `STRIPE_WEBHOOK_SECRET` | Webhook signing secret | Yes | No | Cloud | Yes | Runtime | `whsec_…` |
+| `STRIPE_PRICE_PERSONAL_MONTHLY` | Stripe price id for Personal plan (monthly) | Yes | No | Cloud | No | Runtime | `price_…` |
+| `STRIPE_PRICE_PERSONAL_ANNUAL` | Stripe price id for Personal plan (annual) | Yes | No | Cloud | No | Runtime | `price_…` |
+| `STRIPE_PRICE_TEAM_MONTHLY` | Stripe price id for Team plan (monthly) | Yes | No | Cloud | No | Runtime | `price_…` |
+| `STRIPE_PRICE_TEAM_ANNUAL` | Stripe price id for Team plan (annual) | Yes | No | Cloud | No | Runtime | `price_…` |
 | `STRIPE_PRICE_SUPPORTER` | Stripe price id for one-time supporter purchase | Yes | No | Optional | No | Runtime | `price_…` |
 | `SUPPORTER_PROMOTION_END` | ISO-8601 end of supporter offer | Yes | No | Optional | No | Runtime | `2026-12-31T23:59:59Z` |
 | `DOWNGRADE_GRACE_PERIOD_DAYS` | Days after period end before overflow archive | Yes | Optional | Optional | No | Runtime | `7` (default) |
 | `TURNSTILE_SECRET_KEY` | Turnstile server secret (API + contact) | Yes | No | Optional | Yes | Runtime | `<Turnstile secret>` |
-| `OIDC_DEPLOYMENT_PROVIDERS` | JSON array of hosted OIDC IdP configs (id, name, issuerUrl, clientId, clientSecret, scopes, enabled) | Yes | No | Optional | Yes | Runtime | `[{"id":"google","name":"Google","issuerUrl":"https://accounts.google.com","clientId":"…","clientSecret":"…"}]` |
+| `OIDC_DEPLOYMENT_PROVIDERS` | JSON array of Cloud OIDC IdP configs (id, name, issuerUrl, clientId, clientSecret, scopes, enabled) | Yes | No | Optional | Yes | Runtime | `[{"id":"google","name":"Google","issuerUrl":"https://accounts.google.com","clientId":"…","clientSecret":"…"}]` |
 
-> **Self-host note:** Leave `OIDC_DEPLOYMENT_PROVIDERS` unset so federated providers are configured in workspace settings (DB-sourced). When set (including `[]`), the deployment-config source is active and DB providers are ignored for login.
+> ****CE note:** Leave `OIDC_DEPLOYMENT_PROVIDERS` unset so federated providers are configured in workspace settings (DB-sourced). When set (including `[]`), the deployment-config source is active and DB providers are ignored for login.
 
 ---
 
-### 5. Hosted — Web client (`VITE_*`)
+### 5. Cloud — Web client (`VITE_*`)
 
 Baked in at **`pnpm --filter @slugbase/web build`**. Public display config only — never secrets.
 
-| Key | What it does | Hosted | Self-host | Required | Secret | When set | Example value |
+| Key | What it does | Cloud | CE | Required | Secret | When set | Example value |
 |---|---|---|---|---|---|---|---|
-| `VITE_BILLING_ENABLED` | Show billing settings and plan gates | Yes | Build only | Hosted | No | Build | Hosted: `true`; self-host: `false` |
+| `VITE_BILLING_ENABLED` | Show billing settings and plan gates | Yes | Build only | Cloud | No | Build | Cloud: `true`; CE: `false` |
 | ~~`VITE_PLAN_PRICE_PERSONAL_MONTHLY`~~ | **DEPRECATED** — prices fetched from `GET /pricing/public` | — | — | — | — | — | — |
 | ~~`VITE_PLAN_PRICE_PERSONAL_YEARLY`~~ | **DEPRECATED** — prices fetched from `GET /pricing/public` | — | — | — | — | — | — |
 | ~~`VITE_PLAN_PRICE_TEAM_SEAT`~~ | **DEPRECATED** — prices fetched from `GET /pricing/public` | — | — | — | — | — | — |
@@ -280,24 +290,24 @@ Baked in at **`pnpm --filter @slugbase/web build`**. Public display config only 
 | `VITE_SUPPORTER_PROMOTION_END` | Supporter deadline (display/countdown) | Yes | No | Optional | No | Build | `2026-12-31T23:59:59Z` |
 | `VITE_TEAM_BASE_SEATS` | Team seats shown in plan table | Yes | No | Optional | No | Build | `5` |
 | `VITE_FREE_BOOKMARK_CAP` | Free cap shown in billing meter | Yes | No | Optional | No | Build | `50` |
-| `VITE_MAIL_ADMIN_UI` | Show workspace SMTP admin panel | Yes | Build only | Optional | No | Build | Hosted: `false`; self-host: `true` |
-| `VITE_OIDC_ADMIN_UI` | Show workspace OIDC admin panel | Yes | Build only | Optional | No | Build | Hosted: `false`; self-host: `true` |
-| `VITE_AI_BYO_CREDENTIAL` | Show full AI credential form (BYO key) | Yes | Build only | Optional | No | Build | Hosted: `false`; self-host: `true` |
+| `VITE_MAIL_ADMIN_UI` | Show workspace SMTP admin panel | Yes | Build only | Optional | No | Build | Cloud: `false`; CE: `true` |
+| `VITE_OIDC_ADMIN_UI` | Show workspace OIDC admin panel | Yes | Build only | Optional | No | Build | Cloud: `false`; CE: `true` |
+| `VITE_AI_BYO_CREDENTIAL` | Show full AI credential form (BYO key) | Yes | Build only | Optional | No | Build | Cloud: `false`; CE: `true` |
 | `VITE_APP_BASE_URL` | API URL shown in OIDC callback settings | Yes | Build only | Optional | No | Build | `https://api.example.com` |
-| `VITE_MARKETING_ORIGIN` | Marketing site origin for absolute legal-page links in the web app; unset hides links (self-host) | Yes | Build only | Optional | No | Build | `https://www.example.com` |
+| `VITE_MARKETING_ORIGIN` | Marketing site origin for absolute legal-page links in the web app; unset hides links (CE) | Yes | Build only | Optional | No | Build | `https://www.example.com` |
 
 ---
 
-### 6. Hosted — Marketing site (`PUBLIC_*`)
+### 6. Cloud — Marketing site (`PUBLIC_*`)
 
-Baked in at **`pnpm --filter @slugbase/marketing build`**. Not used by the self-host combined image unless you deploy marketing separately.
+Baked in at **`pnpm --filter @slugbase/marketing build`**. Not used by the CE combined image unless you deploy marketing separately.
 
-| Key | What it does | Hosted | Self-host | Required | Secret | When set | Example value |
+| Key | What it does | Cloud | CE | Required | Secret | When set | Example value |
 |---|---|---|---|---|---|---|---|
-| `PUBLIC_FRONTEND_ORIGIN` | App URL for sign-in / register CTAs | Yes | No | Hosted | No | Build | `https://app.example.com` |
+| `PUBLIC_FRONTEND_ORIGIN` | App URL for sign-in / register CTAs | Yes | No | Cloud | No | Build | `https://app.example.com` |
 | `PUBLIC_FORWARDING_DOMAIN` | Forwarding domain shown in demo copy | Yes | No | Optional | No | Build | `go.example.com` |
-| `PUBLIC_API_BASE_URL` | API base URL for fetching prices from `GET /pricing/public` | Yes | No | Hosted | No | Build | `https://api.example.com` |
-| `PUBLIC_CONTACT_ENDPOINT` | `POST` target for contact form | Yes | No | Hosted | No | Build | `https://api.example.com/contact` |
+| `PUBLIC_API_BASE_URL` | API base URL for fetching prices from `GET /pricing/public` | Yes | No | Cloud | No | Build | `https://api.example.com` |
+| `PUBLIC_CONTACT_ENDPOINT` | `POST` target for contact form | Yes | No | Cloud | No | Build | `https://api.example.com/contact` |
 | `PUBLIC_TURNSTILE_SITE_KEY` | Turnstile site key (contact form) | Yes | No | Optional | No | Build | `<Turnstile site key>` |
 | ~~`PUBLIC_PLAN_PRICE_PERSONAL_MONTHLY`~~ | **DEPRECATED** — prices fetched from `GET /pricing/public` (fallback when `PUBLIC_API_BASE_URL` unset) | — | — | — | — | — | — |
 | ~~`PUBLIC_PLAN_PRICE_PERSONAL_YEARLY`~~ | **DEPRECATED** — prices fetched from `GET /pricing/public` | — | — | — | — | — | — |
@@ -314,7 +324,7 @@ Baked in at **`pnpm --filter @slugbase/marketing build`**. Not used by the self-
 
 Optional on both shapes. Empty = no-op (no tracker, no Sentry init).
 
-| Key | What it does | Hosted | Self-host | Required | Secret | When set | Example value |
+| Key | What it does | Cloud | CE | Required | Secret | When set | Example value |
 |---|---|---|---|---|---|---|---|
 | `UMAMI_HOST` | Umami base URL (server-side events) | Optional | No | Optional | No | Runtime | `https://analytics.example.com` |
 | `UMAMI_WEBSITE_ID` | Umami website UUID (API) | Optional | No | Optional | No | Runtime | `<uuid>` |
@@ -343,11 +353,11 @@ Optional on both shapes. Empty = no-op (no tracker, no Sentry init).
 
 ---
 
-### 8. Hosted — CI and deploy
+### 8. Cloud — CI and deploy
 
 Stored in Phase `Staging` / `Production` (synced to GHA `staging` / `production`). Injected into GitHub Actions deploy jobs and pushed to Fly/Workers via `sync-secrets.sh` — never client bundles unless explicitly listed above.
 
-| Key | What it does | Hosted | Self-host | Required | Secret | When set | Example value |
+| Key | What it does | Cloud | CE | Required | Secret | When set | Example value |
 |---|---|---|---|---|---|---|---|
 | `FLY_API_TOKEN` | Fly.io deploy token for `flyctl deploy` | Yes | No | CI only | Yes | CI | `<Fly deploy token>` |
 | `CLOUDFLARE_API_TOKEN` | Cloudflare API token for `wrangler deploy` | Yes | No | CI only | Yes | CI | `<CF API token>` |
@@ -357,11 +367,11 @@ Stored in Phase `Staging` / `Production` (synced to GHA `staging` / `production`
 
 ---
 
-### 9. Self-hosted — runtime and image build
+### 9. CE — runtime and image build
 
-**Do not bake hosted telemetry at image build time.** Self-host operators and CI must never pass `VITE_SENTRY_*` (or other hosted-only telemetry keys) as Docker `--build-arg` values. GHCR CI and local/e2e builds share the same hardcoded self-host flags in [`scripts/self-host-vite-build-args.sh`](../scripts/self-host-vite-build-args.sh). Runtime `SENTRY_DSN` on the API container is optional and separate from client build-time keys — leave both empty for a fully no-op error-reporting install (spec §11.7).
+**Do not bake Cloud telemetry at image build time.** CE operators and CI must never pass `VITE_SENTRY_*` (or other Cloud-only telemetry keys) as Docker `--build-arg` values. GHCR CI and local/e2e builds share the same hardcoded CE flags in [`scripts/CE-vite-build-args.sh`](../scripts/CE-vite-build-args.sh). Runtime `SENTRY_DSN` on the API container is optional and separate from client build-time keys — leave both empty for a fully no-op error-reporting install (spec §11.7).
 
-| Key | What it does | Hosted | Self-host | Required | Secret | When set | Example value |
+| Key | What it does | Cloud | CE | Required | Secret | When set | Example value |
 |---|---|---|---|---|---|---|---|
 | `SERVE_WEB_CLIENT` | Serve web from API container; controls migration dispatch (true = startup migrations) | No | Yes | Optional | No | Runtime | `true` (Dockerfile preset) |
 | `WEB_CLIENT_SERVER_BUILD` | RR7 server entry path | No | Yes | Optional | No | Runtime | `/app/packages/web/build/server/index.js` |
@@ -370,11 +380,11 @@ Stored in Phase `Staging` / `Production` (synced to GHA `staging` / `production`
 | `VITE_OIDC_ADMIN_UI` | Show OIDC workspace panel | No | Build only | Optional | No | Build | `true` |
 | `VITE_AI_BYO_CREDENTIAL` | Show BYO AI credential form | No | Build only | Optional | No | Build | `true` |
 | `VITE_APP_BASE_URL` | Public URL for OIDC display | No | Build only | Optional | No | Build | `https://bookmarks.example.com` |
-| `VITE_SENTRY_DSN` | Client error reporting — **must remain unset at self-host image build** | No | No (build) | No | No | Build | Empty (default; do not bake) |
+| `VITE_SENTRY_DSN` | Client error reporting — **must remain unset at CE image build** | No | No (build) | No | No | Build | Empty (default; do not bake) |
 | `VITE_UMAMI_HOST` | Client analytics | No | Optional | Optional | No | Build | Empty (default) |
 | `VITE_UMAMI_WEBSITE_ID` | Client analytics site id | No | Optional | Optional | No | Build | Empty (default) |
 
-All other `VITE_*` pricing keys: deprecated — prices now fetched from `GET /pricing/public` when `API_BASE_URL` is configured. Legacy env vars are still accepted as fallback on self-host when the API is unreachable.
+All other `VITE_*` pricing keys: deprecated — prices now fetched from `GET /pricing/public` when `API_BASE_URL` is configured. Legacy env vars are still accepted as fallback on CE when the API is unreachable.
 
 ---
 
@@ -390,7 +400,7 @@ SlugBase publishes unit, integration, and e2e test results to a self-hosted **Re
 | API endpoint | `https://reportportal.mdg-labs.dev/api/v2` (derived by agents — do not put `/api/v2` in `REPORTPORTAL_URL`) |
 | Project | `slugbase` |
 
-| Key | What it does | Hosted | Self-host | Required | Secret | When set | Example value |
+| Key | What it does | Cloud | CE | Required | Secret | When set | Example value |
 |---|---|---|---|---|---|---|---|
 | `REPORTPORTAL_URL` | ReportPortal instance base URL (no `/api/v2` suffix) | Yes | No | CI only | No | CI | `https://reportportal.mdg-labs.dev` |
 | `REPORTPORTAL_PROJECT` | ReportPortal project name | Yes | No | CI only | No | CI | `slugbase` |

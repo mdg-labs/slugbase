@@ -122,7 +122,7 @@ phase secrets get SESSION_SECRET --env Development >/dev/null && echo "SESSION_S
 
 Phase syncs `Staging` / `Production` edits to the matching GHA environments. **Do not set staging or production secrets from a developer machine** unless you are the operator — use the Phase Console.
 
-Key inventory (hosted vs self-hosted, GHA environments, platform sync): [`docs/internal/environment-variables.md`](environment-variables.md).
+Key inventory (Cloud vs CE, GHA environments, platform sync): [`docs/internal/environment-variables.md`](environment-variables.md).
 
 ## preinstall guard
 
