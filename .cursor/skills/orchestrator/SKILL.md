@@ -1,6 +1,6 @@
 ---
 name: orchestrator
-description: Run a chat as a pure orchestrator for SlugBase. Reads the development roadmap and/or the GitHub Issues board to find work, dispatches sub-agents with doc references (not pasted spec content), and runs verification after each batch. Execution agents set board Status to In Progress (leaf + epic parent when subtask); only verification agents set board Status to Done after PASS. Use when the user asks to orchestrate, delegate end-to-end, execute the roadmap, implement a GitHub issue/epic (e.g. #12), or coordinate parallel implementation tasks.
+description: Run a chat as a pure orchestrator for SlugBase. Reads the development roadmap and/or the GitHub Issues board to find work, dispatches sub-agents with doc references (not pasted spec content), and runs verification after each batch. Sends a session-end Slack DM to the operator when the run completes (see slack-session-end.md). Execution agents set board Status to In Progress (leaf + epic parent when subtask); only verification agents set board Status to Done after PASS. Use when the user asks to orchestrate, delegate end-to-end, execute the roadmap, implement a GitHub issue/epic (e.g. #12), or coordinate parallel implementation tasks.
 ---
 
 # Orchestrator (SlugBase)
@@ -22,6 +22,7 @@ The main agent in this chat is a **dispatcher only**. It reads the **roadmap** a
 | Workspace memory | `.cursor/skills/workspace-notes.md` |
 | Session memory | `.cursor/skills/agent-memory/active/<SESSION-ID>.md` — **local only** (gitignored) |
 | Prompt templates | [prompt-templates.md](prompt-templates.md) |
+| Slack session-end | [slack-session-end.md](slack-session-end.md) |
 
 **Single-repo model.** Session memory and implementation commits live in `slugbase`. Lane S commits directly on **`staging`**; Lane P commits on task branches first, then integration merges to **`staging`**. **`main` is off-limits** for development and pushes.
 
@@ -33,7 +34,8 @@ The main agent in this chat is a **dispatcher only**. It reads the **roadmap** a
 
 - Read the **plan file** (full file): phases, task rows, dependencies, Doc Ref column, traceability matrix, exit criteria
 - Read **GitHub issue payloads** via MCP (`user-github`): title, body, labels, sub-issues, state — see [github-board.md](github-board.md)
-- Read [doc-index.md](doc-index.md), [prompt-templates.md](prompt-templates.md), and [github-board.md](github-board.md)
+- Read [doc-index.md](doc-index.md), [prompt-templates.md](prompt-templates.md), [github-board.md](github-board.md), and [slack-session-end.md](slack-session-end.md)
+- Call Slack MCP (`plugin-slack-slack`) for **session-end DM** only — recipient resolution and send rules in [slack-session-end.md](slack-session-end.md)
 - Read `.cursor/skills/workspace-notes.md`; write durable learnings there
 - Use `TodoWrite` in **chat mode** / **GitHub mode**
 - In **plan-file mode**, edit the plan file for status reconciliation or **Lane P batch prep** (`[~]` at batch start)
@@ -53,6 +55,7 @@ The main agent in this chat is a **dispatcher only**. It reads the **roadmap** a
 - Paste entire issue bodies — extract AC, file paths, doc refs, and deps
 - Dispatch Lane P and Lane S tasks in the same batch
 - Allow execution agents to commit to **`staging`** during an in-flight Lane P batch (integration agent only — merge commits)
+- DM the Slack MCP authenticated user (`U0BB4FVDUNR` / `cursor@mdg-labs.dev`) as the notification recipient — always DM the **operator** per [slack-session-end.md](slack-session-end.md)
 
 ---
 
@@ -94,6 +97,7 @@ Default to **plan-file mode** only when the user asks for roadmap work and did n
 4. **Plan-file:** read plan file — current phase, next TODO with satisfied deps, BLOCKED items.
 5. **GitHub:** load issue(s) via MCP `issue_read` (method: `get`) or `search_issues` / `list_issues`. For sub-issues, use `issue_read` (method: `get_sub_issues`). For labels, use `issue_read` (method: `get_labels`).
 6. Confirm with user (briefly if intent is clear): mode, batch, lane (S vs P), commits in scope, GitHub sync ON/OFF.
+7. **Slack session-end:** note run override if user said `slack to <email>` or `slack to <user_id>`; skip entirely if user said `no slack` / `skip slack`. Otherwise default recipient from [slack-session-end.md](slack-session-end.md).
 
 **Commits:** Orchestrated runs default to **local commits per task** on **`staging`** (Lane S) or task branches (Lane P). **Never push** unless the user explicitly asks — and **never push to `main`**.
 
@@ -478,7 +482,36 @@ Orchestrator may read/write. Sub-agents may read; write only if task WRITE SCOPE
 14. **GitHub epic:** if subtask execution skipped epic In Progress, orchestrator recovery → epic **In Progress** label; if all subtasks PASS and epic not yet closed, recovery → set epic Done (board Status); or ensure last verifier prompt included epic issue number.
 15. Update workspace-notes if durable learning.
 16. Report batch result + next batch.
-17. Repeat.
+17. Repeat until no further batches (scope done, blocked, or user stop).
+18. **Session-end Slack DM** — when the run loop exits (step 17 does not continue), send operator notification per [slack-session-end.md](slack-session-end.md) unless skipped at startup. Confirm in chat with permalink or `SLACK_DM: SKIPPED (reason)`.
+
+---
+
+## Session-end Slack DM
+
+Send **once** when the orchestrator run loop exits (all planned work done, hard block, or user scope satisfied — not after every batch while auto-continuing). Use MCP `plugin-slack-slack` → `slack_send_message`. Recipient resolution: [slack-session-end.md](slack-session-end.md).
+
+**Message template** (fill placeholders; omit empty sections):
+
+```markdown
+**SlugBase orchestrator — run complete**
+
+- **Mode:** <plan-file | GitHub | chat>
+- **Scope:** <e.g. P1-03–P1-05 | #12 epic | ad-hoc task list>
+- **Lane:** <S | P | mixed across batches>
+- **Result:** <N passed · M failed · K blocked>
+
+**Tasks**
+<one line per task: TASK-ID or #N — PASS | FAIL | blocked — one-line summary>
+
+**Next**
+<recommended next batch, retry, or "none — scope complete">
+
+**Notes**
+<optional: integration conflicts, durable workspace-notes updates, operator action needed>
+```
+
+After send, confirm in chat: `Slack DM sent to <operator display name> (from cursor@mdg-labs.dev)` + message permalink from MCP response.
 
 ---
 
@@ -516,3 +549,5 @@ Orchestrator may read/write. Sub-agents may read; write only if task WRITE SCOPE
 - **Execution agent hand-writing DB migrations** — schema change → migration CLI only (see DB MIGRATIONS block in every execution prompt)
 - **Orchestrator omitting DB MIGRATIONS block** from an execution prompt
 - **Deployment-mode branches in code** — `isCloud`, `SLUGBASE_MODE` checks are forbidden; use entitlements engine (spec §15)
+- **Session-end Slack DM to service account** — recipient must be the operator (`U0ARDEK75UJ` by default), never `U0BB4FVDUNR`
+- **Skipping session-end Slack without reason** — only when user said `no slack` / `skip slack`, or recipient unresolved per [slack-session-end.md](slack-session-end.md)
