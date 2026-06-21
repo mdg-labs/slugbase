@@ -8,6 +8,10 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { defineConfig } from "vite";
 
+import { applyViteEditionEnv } from "./app/lib/vite-edition-env.js";
+
+applyViteEditionEnv();
+
 const sentryAuthToken = process.env["SENTRY_AUTH_TOKEN"];
 const sentryOrg = process.env["SENTRY_ORG"];
 const sentryProject = process.env["SENTRY_PROJECT"];

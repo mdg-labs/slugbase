@@ -32,6 +32,7 @@ case "$APP" in
 
     WEB_BUILD_ENV=(
       NODE_ENV=production
+      SLUGBASE_EDITION=cloud
       SENTRY_PROJECT=slugbase-web
       VITE_SENTRY_ENVIRONMENT="${DEPLOY_ENVIRONMENT}"
     )

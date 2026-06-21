@@ -93,8 +93,8 @@ describe("self-host GHCR build", () => {
     expect(script).not.toMatch(/env \| grep '\^VITE_'/);
     expect(script).not.toMatch(/VITE_SENTRY_/);
 
-    expect(sharedArgs).toContain("VITE_BILLING_ENABLED=false");
-    expect(sharedArgs).toContain("VITE_MAIL_ADMIN_UI=true");
+    expect(sharedArgs).toContain("SLUGBASE_EDITION=ce");
+    expect(sharedArgs).not.toContain("VITE_BILLING_ENABLED=");
     expect(sharedArgs).not.toMatch(/VITE_SENTRY_/);
     expect(sharedArgs).not.toContain("${!key");
   });
