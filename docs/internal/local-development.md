@@ -124,6 +124,25 @@ Phase syncs `Staging` / `Production` edits to the matching GHA environments. **D
 
 Key inventory (Cloud vs CE, GHA environments, platform sync): [`docs/internal/environment-variables.md`](environment-variables.md).
 
+## Database migrations
+
+Product and admin portal use **separate Drizzle migration histories** on the same Postgres instance:
+
+| Script | Package | Schema |
+|--------|---------|--------|
+| `.github/scripts/run-migrate.sh` | `@slugbase/backend` | `public` (product tables) |
+| `.github/scripts/run-migrate-admin.sh` | `@slugbase/db-admin` | `admin` (operator portal) |
+
+Local generate/migrate:
+
+```bash
+bash scripts/with-ci-env.sh pnpm --filter @slugbase/backend db:generate
+bash scripts/with-ci-env.sh pnpm --filter @slugbase/backend db:migrate
+
+bash scripts/with-ci-env.sh pnpm --filter @slugbase/db-admin db:generate
+bash scripts/with-ci-env.sh pnpm --filter @slugbase/db-admin db:migrate
+```
+
 ## preinstall guard
 
 `pnpm install` runs `scripts/check-node-version.mjs` and exits if Node is below 22.12.
