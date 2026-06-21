@@ -15,6 +15,10 @@
     "./public-read": {
       "types": "./dist/public-read/index.d.ts",
       "default": "./dist/public-read/index.js"
+    },
+    "./public-read/queries": {
+      "types": "./dist/public-read/overview-queries.d.ts",
+      "default": "./dist/public-read/overview-queries.js"
     }
   },
   "scripts": {

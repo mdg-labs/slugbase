@@ -1,3 +1,7 @@
+export { FREE_BOOKMARK_CAP } from "./constants.js";
+export { createPublicReadDb, type PublicReadDb } from "./create-public-read-db.js";
+export { fetchLiveOverviewStats } from "./overview-queries.js";
+export type { LiveOverviewRawStats } from "./overview-queries.types.js";
 export {
   MIRROR_ALLOWLIST,
   MIRROR_TABLE_NAMES,

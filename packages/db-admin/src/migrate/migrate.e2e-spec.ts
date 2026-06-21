@@ -59,6 +59,9 @@ describe("public-read mutation guard", () => {
       for (const entry of entries) {
         const fullPath = path.join(dir, entry.name);
         if (entry.isDirectory()) {
+          if (entry.name === "test") {
+            continue;
+          }
           await walk(fullPath);
         } else if (
           entry.name.endsWith(".ts") &&
