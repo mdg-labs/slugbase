@@ -23,6 +23,20 @@ export {
   parseUmamiAllowedOrigins,
 } from "./analytics/umami-host-allowlist.js";
 export {
+  EDITION_PRESET_KEYS,
+  EditionPresetConflictError,
+  getEditionPresets,
+  parseSlugbaseEdition,
+  resolveEnvWithEdition,
+  SLUGBASE_EDITION,
+  SlugbaseEditionParseError,
+  type EditionPresetConflict,
+  type EditionPresetKey,
+  type ResolvedEnv,
+  type ResolveEnvWithEditionOptions,
+  type SlugbaseEdition,
+} from "./edition/edition-presets.js";
+export {
   AiSuggestError,
   AiUnavailableError,
   type AiPageMetadata,
