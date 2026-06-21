@@ -1,10 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   buildMarketingPlanFeatureRows,
   isSupporterPromotionActive,
   loadMarketingPricingConfig,
 } from "./pricing-config.js";
+
+const originalFetch = globalThis.fetch;
+
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+  vi.unstubAllEnvs();
+});
 
 describe("loadMarketingPricingConfig", () => {
   it("returns config-driven prices from overrides", async () => {
@@ -26,6 +33,70 @@ describe("loadMarketingPricingConfig", () => {
   it("defaults free bookmark cap to 50 per spec §23.4", async () => {
     const config = await loadMarketingPricingConfig();
     expect(config.freeBookmarkCap).toBe(50);
+  });
+
+  it("uses API prices when PUBLIC_API_BASE_URL fetch succeeds", async () => {
+    vi.stubEnv("PUBLIC_API_BASE_URL", "https://api.example.com");
+
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          plans: {
+            personal: {
+              monthly: { display: "€3/mo" },
+              annual: { display: "€30/yr" },
+            },
+            team: {
+              monthly: { display: "€9/seat/mo" },
+              annual: { display: "€90/seat/yr" },
+            },
+            supporter: { display: "€69" },
+          },
+          freeBookmarkCap: 50,
+        }),
+    });
+
+    const config = await loadMarketingPricingConfig();
+
+    expect(config.personalMonthlyPrice).toBe("€3/mo");
+    expect(config.teamSeatMonthlyPrice).toBe("€9/seat/mo");
+    expect(config.personalMonthlyPrice).toMatch(/[€$£]|\d/);
+    expect(config.personalMonthlyPrice).not.toBe("-");
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "https://api.example.com/pricing/public",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
+  it("sends Cloudflare Access headers when CF_ACCESS_* env vars are set", async () => {
+    vi.stubEnv("PUBLIC_API_BASE_URL", "https://api.example.com");
+    vi.stubEnv("CF_ACCESS_CLIENT_ID", "cf-client-id");
+    vi.stubEnv("CF_ACCESS_CLIENT_SECRET", "cf-client-secret");
+
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          plans: {
+            personal: { monthly: { display: "€3/mo" } },
+            team: { monthly: { display: "€9/seat/mo" } },
+          },
+          freeBookmarkCap: 50,
+        }),
+    });
+
+    await loadMarketingPricingConfig();
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "https://api.example.com/pricing/public",
+      expect.objectContaining({
+        headers: {
+          "CF-Access-Client-Id": "cf-client-id",
+          "CF-Access-Client-Secret": "cf-client-secret",
+        },
+      }),
+    );
   });
 });
 

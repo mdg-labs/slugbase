@@ -42,6 +42,21 @@ export const TEAM_MIN_SEATS = 2;
 /** Avoid hanging Vitest/CI when the pricing API is slow or behind Access. */
 const PRICING_API_FETCH_TIMEOUT_MS = 3_000;
 
+function buildPricingApiFetchInit(): RequestInit {
+  const headers: Record<string, string> = {};
+  const accessClientId = readEnv("CF_ACCESS_CLIENT_ID");
+  const accessClientSecret = readEnv("CF_ACCESS_CLIENT_SECRET");
+  if (accessClientId && accessClientSecret) {
+    headers["CF-Access-Client-Id"] = accessClientId;
+    headers["CF-Access-Client-Secret"] = accessClientSecret;
+  }
+
+  return {
+    ...(Object.keys(headers).length > 0 ? { headers } : {}),
+    signal: AbortSignal.timeout(PRICING_API_FETCH_TIMEOUT_MS),
+  };
+}
+
 /**
  * Fetches pricing data from the public API (build-time).
  * Falls back to env defaults when the API is unreachable (self-hosted without Stripe).
@@ -51,9 +66,7 @@ async function fetchPricingFromApi(): Promise<PricingResponse | null> {
   if (!apiBase) return null;
 
   try {
-    const res = await fetch(`${apiBase}/pricing/public`, {
-      signal: AbortSignal.timeout(PRICING_API_FETCH_TIMEOUT_MS),
-    });
+    const res = await fetch(`${apiBase}/pricing/public`, buildPricingApiFetchInit());
     if (!res.ok) return null;
     return (await res.json()) as PricingResponse;
   } catch {

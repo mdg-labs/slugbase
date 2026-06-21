@@ -98,6 +98,35 @@ check_marketing_root() {
 
 check_surface "API" "${APP_BASE_URL}"
 check_surface "Web" "${FRONTEND_ORIGIN}"
+check_marketing_pricing() {
+  local base="$1"
+  local pricing_url="${base%/}/pricing"
+
+  echo "Smoke: Marketing (${base}) — pricing page has live paid-tier amounts"
+
+  local pricing_html
+  pricing_html="$(smoke_curl -fsS "${pricing_url}")"
+
+  local personal_block
+  personal_block="$(printf '%s' "${pricing_html}" | sed -n '/data-testid="pricing-plan-personal"/,/<\/article>/p')"
+
+  if [[ -z "${personal_block}" ]]; then
+    echo "Smoke failed: personal pricing plan block not found on ${pricing_url}" >&2
+    return 1
+  fi
+
+  if printf '%s' "${personal_block}" | grep -q 'data-price-monthly="-"'; then
+    echo "Smoke failed: personal plan monthly price is placeholder (-)" >&2
+    return 1
+  fi
+
+  if ! printf '%s' "${personal_block}" | grep -Eq 'data-price-monthly="[^"]*[0-9€$£]'; then
+    echo "Smoke failed: personal plan monthly price lacks currency or digits" >&2
+    return 1
+  fi
+}
+
 check_marketing_root "${MARKETING_ORIGIN}"
+check_marketing_pricing "${MARKETING_ORIGIN}"
 
 echo "Staging smoke passed"
