@@ -66,12 +66,22 @@ function main(): void {
     ...SYNC_SECRETS_MANIFEST.platformGhaKeys,
     "NODE_ENV",
     "SENTRY_DSN_API",
+    "SENTRY_DSN_ADMIN",
     ...SYNC_SECRETS_MANIFEST.services.api.requiredGhaKeys,
     ...SYNC_SECRETS_MANIFEST.services.web.requiredGhaKeys,
     ...SYNC_SECRETS_MANIFEST.services.marketing.requiredGhaKeys,
+    ...SYNC_SECRETS_MANIFEST.services.admin.requiredGhaKeys,
   ]);
 
   for (const runtimeKey of SYNC_SECRETS_MANIFEST.services.api.runtimeKeys) {
+    const storageKey =
+      Object.entries(SYNC_SECRETS_MANIFEST.storageToRuntimeAliases).find(
+        ([, runtime]) => runtime === runtimeKey,
+      )?.[0] ?? runtimeKey;
+    scriptStorageKeys.add(storageKey);
+  }
+
+  for (const runtimeKey of SYNC_SECRETS_MANIFEST.services.admin.runtimeKeys) {
     const storageKey =
       Object.entries(SYNC_SECRETS_MANIFEST.storageToRuntimeAliases).find(
         ([, runtime]) => runtime === runtimeKey,

@@ -19,7 +19,7 @@ usage() {
   cat <<'EOF'
 Usage: sync-secrets.sh <staging|production> [services]
 
-services: all (default) | api | web | marketing | comma-separated list
+services: all (default) | api | web | marketing | admin | comma-separated list
 
 FLY_SECRETS_MODE env:
   stage-only       — stage Fly secrets only (default for deploy pipeline)
@@ -153,6 +153,18 @@ preflight_required_gha_keys() {
     marketing)
       keys=()
       ;;
+    admin)
+      keys=(
+        DATABASE_URL
+        ADMIN_URL
+        SMTP_HOST
+        SMTP_PORT
+        SMTP_SECURE
+        SMTP_USER
+        SMTP_PASS
+        SMTP_FROM
+      )
+      ;;
     *)
       echo "sync-secrets: unknown service for preflight: ${service}" >&2
       exit 1
@@ -179,6 +191,7 @@ run_service_preflight() {
 }
 
 API_APP="slugbase-${GHA_ENV}-api"
+ADMIN_APP="slugbase-${GHA_ENV}-admin"
 WEB_WORKER="slugbase-${GHA_ENV}-web"
 MARKETING_WORKER="slugbase-${GHA_ENV}-marketing"
 
@@ -233,6 +246,27 @@ API_FLY_KEYS=(
   OIDC_DEPLOYMENT_PROVIDERS
 )
 
+ADMIN_FLY_KEYS=(
+  NODE_ENV
+  SLUGBASE_EDITION
+  DATABASE_URL
+  PORT
+  ADMIN_URL
+  SMTP_HOST
+  SMTP_PORT
+  SMTP_SECURE
+  SMTP_USER
+  SMTP_PASS
+  SMTP_FROM
+  ADMIN_SESSION_TTL_DAYS
+  ADMIN_SNAPSHOT_CRON
+  ADMIN_BOOTSTRAP_EMAIL
+  ADMIN_BOOTSTRAP_PASSWORD
+  ADMIN_ALERT_SIGNUP_SPIKE_MULTIPLIER
+  SENTRY_DSN
+  SENTRY_ENVIRONMENT
+)
+
 WEB_WRANGLER_KEYS=(
   API_BASE_URL
 )
@@ -244,10 +278,16 @@ echo "sync-secrets: Fly mode ${FLY_SECRETS_MODE}"
 run_service_preflight api
 run_service_preflight web
 run_service_preflight marketing
+run_service_preflight admin
 
 if service_selected api; then
   map_sentry_storage_to_runtime api
   sync_fly_secrets "$API_APP" "${API_FLY_KEYS[@]}"
+fi
+
+if service_selected admin; then
+  map_sentry_storage_to_runtime admin
+  sync_fly_secrets "$ADMIN_APP" "${ADMIN_FLY_KEYS[@]}"
 fi
 
 if service_selected web; then

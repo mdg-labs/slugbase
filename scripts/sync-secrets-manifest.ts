@@ -3,7 +3,7 @@
  * Validated against `.github/scripts/sync-secrets.sh` and `.github/workflows/sync-secrets.yml`.
  */
 
-export type SyncSecretsService = "api" | "web" | "marketing";
+export type SyncSecretsService = "api" | "web" | "marketing" | "admin";
 
 export type SyncSecretsManifest = {
   services: Record<
@@ -30,6 +30,7 @@ export const SYNC_SECRETS_MANIFEST: SyncSecretsManifest = {
   ],
   storageToRuntimeAliases: {
     SENTRY_DSN_API: "SENTRY_DSN",
+    SENTRY_DSN_ADMIN: "SENTRY_DSN",
   },
   services: {
     api: {
@@ -98,6 +99,38 @@ export const SYNC_SECRETS_MANIFEST: SyncSecretsManifest = {
     marketing: {
       requiredGhaKeys: [],
       runtimeKeys: [],
+    },
+    admin: {
+      requiredGhaKeys: [
+        "DATABASE_URL",
+        "ADMIN_URL",
+        "SMTP_HOST",
+        "SMTP_PORT",
+        "SMTP_SECURE",
+        "SMTP_USER",
+        "SMTP_PASS",
+        "SMTP_FROM",
+      ],
+      runtimeKeys: [
+        "NODE_ENV",
+        "SLUGBASE_EDITION",
+        "DATABASE_URL",
+        "PORT",
+        "ADMIN_URL",
+        "SMTP_HOST",
+        "SMTP_PORT",
+        "SMTP_SECURE",
+        "SMTP_USER",
+        "SMTP_PASS",
+        "SMTP_FROM",
+        "ADMIN_SESSION_TTL_DAYS",
+        "ADMIN_SNAPSHOT_CRON",
+        "ADMIN_BOOTSTRAP_EMAIL",
+        "ADMIN_BOOTSTRAP_PASSWORD",
+        "ADMIN_ALERT_SIGNUP_SPIKE_MULTIPLIER",
+        "SENTRY_DSN",
+        "SENTRY_ENVIRONMENT",
+      ],
     },
   },
 };

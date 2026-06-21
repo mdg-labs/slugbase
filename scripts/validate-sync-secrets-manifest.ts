@@ -70,6 +70,7 @@ function main(): void {
   const source = readSyncScript();
 
   const apiFlyKeys = parseBashArray(source, "API_FLY_KEYS");
+  const adminFlyKeys = parseBashArray(source, "ADMIN_FLY_KEYS");
   const webWranglerKeys = parseBashArray(source, "WEB_WRANGLER_KEYS");
   const marketingWranglerKeys = parseBashArray(source, "MARKETING_WRANGLER_KEYS");
 
@@ -77,6 +78,11 @@ function main(): void {
     "api runtime Fly keys",
     SYNC_SECRETS_MANIFEST.services.api.runtimeKeys,
     apiFlyKeys,
+  );
+  assertEqualSets(
+    "admin runtime Fly keys",
+    SYNC_SECRETS_MANIFEST.services.admin.runtimeKeys,
+    adminFlyKeys,
   );
   assertEqualSets(
     "web runtime Wrangler keys",
@@ -89,7 +95,7 @@ function main(): void {
     marketingWranglerKeys,
   );
 
-  for (const service of ["api", "web", "marketing"] as const) {
+  for (const service of ["api", "web", "marketing", "admin"] as const) {
     assertEqualSets(
       `${service} preflight required GHA keys`,
       SYNC_SECRETS_MANIFEST.services[service].requiredGhaKeys,

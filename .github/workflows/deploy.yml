@@ -61,6 +61,29 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: bash .github/scripts/run-migrate.sh
 
+  migrate-admin:
+    name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 1 · Run admin DB migrations
+    if: inputs.should_deploy == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    needs: [sync-secrets]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+        with:
+          ref: ${{ inputs.ref != '' && inputs.ref || github.sha }}
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup
+        with:
+          skip-checkout: "true"
+
+      - name: Run admin Drizzle migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+        run: bash .github/scripts/run-migrate-admin.sh
+
   derive-sentry-release:
     name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 2 · Derive Sentry release
     if: inputs.should_deploy == 'true'
@@ -182,16 +205,50 @@ jobs:
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: bash .github/scripts/deploy-cf-worker.sh marketing
 
+  deploy-admin:
+    name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 3 · Deploy admin (Fly)
+    if: inputs.should_deploy == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    needs: [migrate-admin]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+        with:
+          ref: ${{ inputs.ref != '' && inputs.ref || github.sha }}
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup
+        with:
+          skip-checkout: "true"
+
+      - name: Build admin packages
+        env:
+          NODE_ENV: production
+          SLUGBASE_EDITION: cloud
+        run: pnpm exec turbo run build --filter=@slugbase/admin...
+
+      - name: Setup flyctl
+        run: bash .github/scripts/setup-flyctl.sh
+
+      - name: Deploy admin to Fly.io
+        env:
+          DOCKER_BUILDKIT: "1"
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          FLY_APP: slugbase-${{ inputs.environment == 'production' && 'production' || 'staging' }}-admin
+        run: bash .github/scripts/deploy-fly.sh admin
+
   smoke:
     name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 4 · Smoke
     if: inputs.should_deploy == 'true'
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
-    needs: [deploy-api, deploy-web, deploy-marketing]
+    needs: [deploy-api, deploy-web, deploy-marketing, deploy-admin]
     env:
       APP_BASE_URL: ${{ vars.APP_BASE_URL }}
       FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
       MARKETING_ORIGIN: ${{ vars.MARKETING_ORIGIN }}
+      ADMIN_URL: ${{ vars.ADMIN_URL }}
       CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
       CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
     steps:
@@ -202,3 +259,6 @@ jobs:
 
       - name: Smoke deploy surfaces
         run: bash .github/scripts/smoke-staging-health.sh
+
+      - name: Smoke admin portal health
+        run: bash .github/scripts/smoke-admin-health.sh
