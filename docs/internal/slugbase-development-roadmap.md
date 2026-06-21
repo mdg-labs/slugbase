@@ -20,7 +20,7 @@ A Story is split into Sub-tasks **only** when its parts (a) live in **different 
 
 ## How to read
 
-- **Lifecycle:** `[ ]` not started · `[~]` awaiting verification · `[x]` verified · `[!]` failed.
+- **Lifecycle:** `[ ]` not started · `[~]` awaiting verification · `[x]` verified · `[!]` failed · `[—]` cancelled/superseded.
 - **ID:** `P<phase>-<seq>` (Story) · `P<phase>-<seq>.<n>` (Sub-task); mirrored to `SB-N` on Jira, kept in the **Roadmap ID** field.
 - **Domain:** `BE` Backend · `FE` Frontend · `Infra` Infrastructure · `Ops` Operations → Jira **Domain** field.
 - **Lane:** `S` serial on `main` · `P` parallel in an isolated worktree (disjoint WRITE scope). Default when uncertain: **S**.
@@ -364,7 +364,7 @@ Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit w
 
 ## P5 — Billing & plan enforcement · Epic · Domain BE
 
-> **Suggested order / batch plan:** Serial spine `P5-01 → P5-02 → P5-03 → P5-04`. Parallel: `P5-05` (UI) after `P5-03`; `P5-06` (stats) is an independent floater (after P1-03).
+> **Suggested order / batch plan:** Serial spine `P5-01 → P5-02 → P5-03 → P5-04`. Parallel: `P5-05` (UI) after `P5-03`.
 
 ### P5-01 — Billing interface (Stripe + no-op) — BE · Lane S
 - **AC:** `BILLING` interface (checkout, portal, subscription state, seat quantity, async events); Stripe impl (Cloud); no-op impl (CE) granting full entitlements; app logic checks entitlements only.
@@ -397,16 +397,19 @@ Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit w
 - **Doc Ref:** spec §12; proto (`SettingsBilling.jsx`); §23.4; rule `10`,`11` · **Deps:** P5-03 · **Status:** [x]
 
 ### P5-06 — Aggregate-stats endpoint (secret-protected) — BE · Lane P
-- **AC:** shared-secret-protected aggregate operational stats endpoint (Cloud operator observability); no PII; secret via Phase / GHA environment.
-- **Tests:** integration: rejects without secret; returns aggregates with it.
-- **Files:** `packages/backend/src/admin/stats/**`
-- **Doc Ref:** spec §10.2, §18; rule `05` · **Deps:** P1-03 · **Status:** [ ]
+
+> **Cancelled — superseded.** No implementation on `packages/backend`. Cloud operator observability moves to the standalone admin portal: [`docs/internal/admin-prd/slugbase-admin-prd.md`](admin-prd/slugbase-admin-prd.md) (epic #486). Spec §10.2 and §18 updated accordingly.
+
+- **AC:** *(superseded — see admin PRD)*
+- **Tests:** n/a
+- **Files:** n/a
+- **Doc Ref:** spec §10.2, §18 · **Deps:** P1-03 · **Status:** [—] cancelled/superseded
 
 ---
 
 ## P6 — Marketing, i18n completeness, deploy, polish · Epic · Domain Ops
 
-> **Suggested order / batch plan:** Independent floaters (after P1-03/P1-02): `{P6-01, P6-05, P6-09, P5-06}`. Chain `P6-01 → P6-02 → P6-03.1 → {P6-03.2, P6-03.3}`. Parallel FE (after their deps): `{P6-04, P6-06.1, P6-06.2, P6-08.1, P6-08.2}`. Tail S (cross-cutting + deploy, CI-file serial): `P6-07 → P6-10 → P6-11`.
+> **Suggested order / batch plan:** Independent floaters (after P1-03/P1-02): `{P6-01, P6-05, P6-09}`. Chain `P6-01 → P6-02 → P6-03.1 → {P6-03.2, P6-03.3}`. Parallel FE (after their deps): `{P6-04, P6-06.1, P6-06.2, P6-08.1, P6-08.2}`. Tail S (cross-cutting + deploy, CI-file serial): `P6-07 → P6-10 → P6-11`.
 
 ### P6-01 — Challenge interface (Turnstile + no-op) — BE · Lane P
 - **AC:** `CHALLENGE` interface (verify token, dev-skip); Turnstile impl (Cloud) + no-op (CE default).
@@ -544,7 +547,7 @@ Story SB-B  "Build the authentication screens"          issuetype=Story · paren
 
 ## Verification (this draft)
 
-- **No dependency cycles**; all `Deps` point to earlier-or-equal phases (P5-06/P6-01/P6-05/P6-09 are intentional early floaters depending only on P1).
+- **No dependency cycles**; all `Deps` point to earlier-or-equal phases (P6-01/P6-05/P6-09 are intentional early floaters depending only on P1).
 - **Every `[mig]` leaf is Lane S** (migration history is serial); every Lane P leaf touches a disjoint package/module per its **Files** hint.
 - **Each leaf is execution-ready**: AC + Tests + Files + Deps + Lane present; Doc Ref inherited from the Story for sub-tasks.
 

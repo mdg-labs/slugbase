@@ -19,7 +19,7 @@ The audiences are:
 - **Individuals** who want a private, fast bookmark and short-link tool, either on Cloud or as CE on their own server.
 - **Teams** who want to share curated folders and bookmarks and use shared slugs.
 - **CE operators** who run their own instance and administer it via an instance-wide admin account.
-- **The SlugBase operator** (the company running the Cloud service), who needs billing, plan enforcement, and (post-launch) an operator console; at v1 launch, Cloud operations run via direct database access plus a secret-protected aggregate-statistics endpoint.
+- **The SlugBase operator** (the company running the Cloud service), who needs billing, plan enforcement, and a standalone admin portal (Fast-Follow) for hosted operations visibility — not routes on the customer API.
 
 The guiding principle for the rebuild: **CE and Cloud are the same product**. There is no feature that exists only because of "cloud code." Differences between Cloud and CE deployments are expressed entirely through configuration and through swappable implementations of the external-dependency interfaces, never through forked behavior in the application logic.
 
@@ -49,7 +49,7 @@ This rebuild targets a **v1-launchable scope**, not a full-parity reconstruction
 
 **Fast-Follow (explicitly post-launch, not v1):**
 
-- A dedicated operator / super-admin console (a second authenticated surface). v1 ships no such surface.
+- A standalone admin portal for hosted Cloud operations (`packages/admin`, not routes on the customer API). v1 ships no such surface.
 - Additional provider implementations per interface (alternative mail, AI, billing, etc.). v1 ships one each.
 - Soft-delete / trash for user-initiated deletion.
 - Subdomain- or path-based tenancy.
@@ -332,10 +332,8 @@ Which panels are visible depends on entitlements and on which configuration sour
 
 ### 10.2 Deployment-level administration
 
-There is **no separate operator / super-admin console in v1**; building a second authenticated surface is **Fast-Follow**.
-
-- **CE:** Deployment-level administration is performed by an account with the **instance-wide admin flag** (the first account created at setup, and any account an instance admin promotes). This is distinct from per-workspace admin: an instance-wide admin governs the deployment, while a workspace admin governs a single workspace. There is no separate operator tier.
-- **Cloud:** At launch, the SlugBase operator runs operations via **direct database access** plus the existing **secret-protected aggregate-statistics endpoint** (Section 18). A dedicated operator console (its own authenticated surface, workspace/account directory, operator invitations, MFA, and richer tooling) is a **Fast-Follow** deliverable, not part of v1.
+- **CE:** Deployment-level administration is performed by an account with the **instance-wide admin flag** (the first account created at setup, and any account an instance admin promotes). This is distinct from per-workspace admin: an instance-wide admin governs the deployment, while a workspace admin governs a single workspace. There is no separate operator tier or second authenticated surface on the product app.
+- **Cloud:** The SlugBase operator runs operations via a **standalone admin portal** on a separate hostname (`packages/admin`, Fast-Follow #1 — see [`docs/internal/admin-prd/slugbase-admin-prd.md`](admin-prd/slugbase-admin-prd.md)): its own authenticated surface, read-only workspace/account directory, operator invitations, and product-usage aggregates. It does **not** ship in the CE image and adds **no routes to `packages/backend`**. Until the portal is deployed, hosted ops may use direct database access. The former roadmap item P5-06 (a secret-protected aggregate-statistics endpoint on the customer API) is **superseded** and will not be implemented.
 
 ---
 
@@ -525,7 +523,7 @@ There is **no `development` deployment** — local development runs the dev serv
 
 Configuration is layered and explicit. Three kinds of settings exist:
 
-1. **Deployment configuration (environment):** Set by the operator at deploy time. Includes required security secrets (session-signing secret, at-rest encryption key), the public base URL and front-end origin, database selection and connection details, deployment flags (public registration on/off, email-verification required on/off), the selection and credentials for each external interface implementation (SMTP transport, AI credential, deployment-config identity providers on Cloud, Stripe keys and price identifiers on Cloud, analytics, error reporting, Turnstile), CORS allowances, proxy trust, cookie domain, and the secret for the aggregate-statistics endpoint. The application validates required secrets at startup and refuses to run insecurely in production.
+1. **Deployment configuration (environment):** Set by the operator at deploy time. Includes required security secrets (session-signing secret, at-rest encryption key), the public base URL and front-end origin, database selection and connection details, deployment flags (public registration on/off, email-verification required on/off), the selection and credentials for each external interface implementation (SMTP transport, AI credential, deployment-config identity providers on Cloud, Stripe keys and price identifiers on Cloud, analytics, error reporting, Turnstile), CORS allowances, proxy trust, and cookie domain. The application validates required secrets at startup and refuses to run insecurely in production.
 
 2. **Workspace/instance settings (database):** Set by admins through the UI and stored (secrets encrypted at rest). Includes admin-managed SMTP settings, admin-managed AI settings, and admin-managed identity providers — on CE, where those sources are active.
 
@@ -594,7 +592,7 @@ The product is multilingual. v1 ships **English and German**; the rebuild keeps 
 - **Security:** Strong password hashing; encrypted at-rest secrets; hashed tokens; CSRF protection on mutations; SSRF-safe outbound fetches with host validation, timeouts, and size limits; strict transport and cookie settings; rate limiting on sensitive endpoints (login, token creation, registration, password reset); enforced tenant isolation defended by tests; server-side sessions with immediate revocation; a clear MFA recovery procedure. Security is a first-class requirement, and a periodic security audit is part of the operating rhythm.
 - **Privacy and consent:** Analytics and error reporting are consent-gated and privacy-aware, with control over personally-identifying data. A cookie/consent mechanism governs optional tracking on the Cloud service. CE defaults to no external telemetry.
 - **Performance:** Bookmark lists, search, and the command palette feel instant for typical libraries; redirects are fast (usage tracking is asynchronous and never blocks the redirect); AI suggestions are cached.
-- **Observability:** Health and version endpoints; an aggregate operational-statistics endpoint protected by a shared secret for external monitoring (this is the Cloud operator's primary observability hook at launch); consent-gated error reporting via the error-reporting interface.
+- **Observability:** Health and version endpoints on the product API; consent-gated error reporting via the error-reporting interface. **Cloud operator observability** is a standalone admin portal on a separate hostname (workspace/account directory, product-usage aggregates, daily snapshots) — Fast-Follow #1, see [`docs/internal/admin-prd/slugbase-admin-prd.md`](admin-prd/slugbase-admin-prd.md); not a secret-protected endpoint on the customer API.
 - **Accessibility and UX quality:** A polished, accessible, keyboard-friendly experience (the command palette, confirmations for destructive actions, toasts, empty states, and loading skeletons are part of the expected baseline). Theming includes light/dark/auto and an accent color.
 - **API and integration:** A documented REST API covering auth (and MFA), bookmarks (CRUD, search, import/export, AI suggest), folders, tags, teams, tokens, workspace administration, identity providers, slug/go preferences, configuration/entitlements, and the Cloud-only workspace/billing endpoints. An OpenAPI description is published, with optional interactive docs that can be disabled. The API is authenticated by session or by personal API token (Bearer), and CSRF applies to cookie-authenticated mutations.
 
@@ -632,7 +630,7 @@ As a pnpm workspace in a single repository:
 - **`packages/shared-types`** — cross-cutting Zod/ts-rest contracts, the external-interface contracts, and the generated API/OpenAPI types, consumed by both backend and web.
 - **`packages/ui`** — the shared component library and the design tokens (§23.1).
 - **Customer docs** — separate repository [`mdg-labs/slugbase-docs`](https://github.com/mdg-labs/slugbase-docs) (Documentation.AI MDX; published at docs.slugbase.app). Engineering docs remain in this monorepo under **`docs/internal/`**.
-- *(Fast-Follow)* an **operator console** package, if and when it is built (§10.2, §20).
+- *(Fast-Follow)* **`packages/admin`** — standalone operator portal for hosted Cloud only (§10.2, admin PRD); not part of the CE image.
 
 All members live in one repo, use pnpm, and the marketing site and the application are separately buildable.
 
@@ -642,7 +640,7 @@ All members live in one repo, use pnpm, and the marketing site and the applicati
 
 The following are explicitly **not** part of v1. Items marked Fast-Follow are intended for after launch:
 
-- A dedicated operator / super-admin console — *Fast-Follow*.
+- A standalone admin portal for hosted Cloud operations — *Fast-Follow*.
 - Additional provider implementations per interface (alternative mail/AI/billing/etc.) — *Fast-Follow*.
 - Soft-delete / trash for user deletions — *Fast-Follow candidate*.
 - Subdomain- or path-based tenancy — *Fast-Follow* (the resolution interface already allows it).
@@ -678,7 +676,7 @@ Every item below was previously an open question and is now **settled** and inte
 12. OIDC config: same auth interface — CE configures providers in the admin UI (DB-sourced); Cloud via deployment config; Cloud workspace admins cannot add their own providers in v1.
 
 **Administration / operator**
-13. Operator console is **Fast-Follow**, not v1. v1 "operator" = first admin (instance-wide admin flag); Cloud operations run via direct DB access + the secret-protected aggregate-stats endpoint. CE has an instance-wide admin distinct from per-workspace admins; **no second authenticated surface in v1**.
+13. Operator console is **Fast-Follow**, not v1. v1 "operator" = first admin (instance-wide admin flag) on CE. **Cloud** operator observability = standalone admin portal (`packages/admin`), not routes on `packages/backend`; direct DB access may persist until portal deploy. P5-06 aggregate-stats API **superseded**. CE has an instance-wide admin distinct from per-workspace admins; **no second authenticated surface on the product app in v1**.
 
 **Billing & plans**
 14. Free bookmark cap = **50 per workspace** (concrete starting value, confirmable as config later).
@@ -942,5 +940,5 @@ These v1 requirements are either stubbed or absent in the prototype. They must s
 
 ## Assumptions carried forward
 
-- **Operator console timing (re. decision 13):** Running Cloud operations via direct database access plus the aggregate-stats endpoint is accepted as sufficient **for launch only**. The operator console is expected to be an early Fast-Follow because direct DB access does not scale operationally; it is deferred, not dismissed.
+- **Operator console timing (re. decision 13):** Cloud operations transition from direct database access to the standalone admin portal (Fast-Follow #1). The secret-protected aggregate-stats API route (roadmap P5-06) is superseded and will not ship on `packages/backend`.
 - **Free cap value (re. decision 14):** 50 bookmarks/workspace is used so the spec is concrete; it is expressed as configuration so it can be tuned without code changes.
