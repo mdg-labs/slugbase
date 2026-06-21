@@ -8,6 +8,9 @@ import { createAdminAuthRoutes } from "./auth/auth.routes.js";
 import { loadAdminConfig } from "./config/load-config.js";
 import type { AdminEnv } from "./config/env.schema.js";
 import { createAdminDb, type AdminDb } from "./db/create-db.js";
+import { initAdminSentry } from "./error-reporting/sentry.js";
+import { startAdminScheduler } from "./jobs/scheduler.js";
+import { createInternalRoutes } from "./routes/internal.routes.js";
 
 const VITE_DEV_SERVER_URL =
   process.env["VITE_DEV_SERVER_URL"] ?? "http://localhost:5173";
@@ -33,6 +36,7 @@ export function createApp(options?: CreateAppOptions): Hono {
   );
 
   app.route("/api/auth", createAdminAuthRoutes({ adminDb, config }));
+  app.route("/api/internal", createInternalRoutes({ adminDb, config }));
 
   if (isProduction) {
     app.use(
@@ -56,8 +60,10 @@ export function createApp(options?: CreateAppOptions): Hono {
 
 export async function startServer(): Promise<void> {
   const config = loadAdminConfig();
+  initAdminSentry(config);
   const adminDb = createAdminDb(config.DATABASE_URL);
   await bootstrapAdminIfNeeded(adminDb, config);
+  const scheduler = startAdminScheduler(adminDb, config);
   const app = createApp({ adminDb, config });
   serve(
     {
@@ -70,6 +76,14 @@ export async function startServer(): Promise<void> {
       );
     },
   );
+
+  const shutdown = (): void => {
+    scheduler.stop();
+    void adminDb.close();
+  };
+
+  process.once("SIGINT", shutdown);
+  process.once("SIGTERM", shutdown);
 }
 
 const isMain =
