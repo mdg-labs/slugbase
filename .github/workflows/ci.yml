@@ -138,6 +138,7 @@ jobs:
       - name: Build
         env:
           NODE_ENV: production
+          SLUGBASE_EDITION: cloud
         run: pnpm build
 
       - name: Validate sync-secrets manifest

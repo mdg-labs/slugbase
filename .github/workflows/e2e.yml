@@ -92,14 +92,10 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Build all packages (hosted VITE flags)
+      - name: Build all packages (cloud edition)
         env:
           NODE_ENV: production
-          VITE_BILLING_ENABLED: 'true'
-          VITE_FREE_BOOKMARK_CAP: '50'
-          VITE_MAIL_ADMIN_UI: 'false'
-          VITE_OIDC_ADMIN_UI: 'false'
-          VITE_AI_BYO_CREDENTIAL: 'false'
+          SLUGBASE_EDITION: cloud
         run: pnpm build
 
       - name: Run DB migrations
@@ -109,6 +105,7 @@ jobs:
         env:
           PORT: '4001'
           SLUGBASE_E2E_MODE: 'true'
+          SLUGBASE_EDITION: cloud
           PUBLIC_REGISTRATION: 'true'
           SESSION_SECRET: 'ci-e2e-session-secret-at-least-32-chars-long!!'
           ENCRYPTION_KEY: 'ci-e2e-encryption-key-at-least-32-chars-long!!'
@@ -257,10 +254,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
-            VITE_BILLING_ENABLED=false
-            VITE_MAIL_ADMIN_UI=true
-            VITE_OIDC_ADMIN_UI=true
-            VITE_AI_BYO_CREDENTIAL=true
+            SLUGBASE_EDITION=ce
 
       - name: Start combined container
         run: |
@@ -269,6 +263,7 @@ jobs:
             --network host \
             -e DATABASE_URL="$DATABASE_URL" \
             -e SLUGBASE_E2E_MODE=true \
+            -e SLUGBASE_EDITION=ce \
             -e E2E_TEST_EMAIL="$E2E_TEST_EMAIL" \
             -e E2E_TEST_PASSWORD="$E2E_TEST_PASSWORD" \
             -e SESSION_SECRET='ci-e2e-session-secret-at-least-32-chars-long!!' \

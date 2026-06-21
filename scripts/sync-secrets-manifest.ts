@@ -42,6 +42,7 @@ export const SYNC_SECRETS_MANIFEST: SyncSecretsManifest = {
       ],
       runtimeKeys: [
         "NODE_ENV",
+        "SLUGBASE_EDITION",
         "SESSION_SECRET",
         "ENCRYPTION_KEY",
         "DATABASE_URL",

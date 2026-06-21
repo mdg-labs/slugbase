@@ -2,6 +2,9 @@
 # Push GitHub Actions environment secrets to Fly.io API and Cloudflare Workers.
 # Reads from process env (workflow maps secrets.* → env). No Phase CLI (spec §22.9).
 #
+# Cloud staging/production GHA secrets must include SLUGBASE_EDITION=cloud (operator sets
+# via Phase Console → GHA sync). CE GHCR/self-host images bake SLUGBASE_EDITION=ce instead.
+#
 # FLY_SECRETS_MODE (from workflow):
 #   stage-only       — flyctl secrets set --stage; no deploy (workflow_call / deploy chain)
 #   stage-and-deploy — flyctl secrets set --stage then flyctl secrets deploy (workflow_dispatch)
@@ -181,6 +184,7 @@ MARKETING_WORKER="slugbase-${GHA_ENV}-marketing"
 
 API_FLY_KEYS=(
   NODE_ENV
+  SLUGBASE_EDITION
   SESSION_SECRET
   ENCRYPTION_KEY
   DATABASE_URL

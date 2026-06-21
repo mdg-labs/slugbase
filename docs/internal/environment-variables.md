@@ -54,7 +54,7 @@ Every inventory table uses the same columns:
 
 | Key | What it does | Cloud | CE | Required | Secret | When set | Example value |
 |---|---|---|---|---|---|---|---|
-| `SLUGBASE_EDITION` | Edition selector — `ce` (Community Edition combined image) or `cloud` (managed split deploy). Drives edition-specific defaults (#479–#483); supersedes deprecated `SLUGBASE_MODE`. | Yes | Yes | Yes (production); defaults to `ce` in non-production when unset | No | Runtime / Build | `cloud` or `ce` |
+| `SLUGBASE_EDITION` | Edition selector — `ce` (Community Edition combined image) or `cloud` (managed split deploy). Drives edition-specific defaults (#479–#483); supersedes deprecated `SLUGBASE_MODE`. **Cloud staging/production:** set `cloud` in Phase → GHA (`sync-secrets` pushes to Fly API). **CE GHCR/self-host:** baked as `ce` in the combined image Dockerfile. | Yes | Yes | Yes (production); defaults to `ce` in non-production when unset | No | Runtime / Build | `cloud` or `ce` |
 
 > **Preset wiring:** Backend startup applies edition presets before Zod validation. Explicit env values override unset preset keys; values that conflict with the active edition preset are rejected in production and warned in development/test.
 

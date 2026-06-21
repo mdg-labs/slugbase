@@ -12,9 +12,9 @@
 #   bash scripts/e2e.sh specs/bookmarks/              # hosted + self-hosted, single spec dir
 #   bash scripts/e2e.sh --debug                       # hosted + self-hosted, debug mode
 #
-# Build paths (spec §15 — VITE_* flags are build-time; one bundle cannot serve both modes):
-#   Hosted:     pnpm build with VITE_BILLING_ENABLED=true and admin UI flags false
-#   Self-host:  docker build with VITE_BILLING_ENABLED=false and admin UI flags true
+# Build paths (spec §15 — edition presets set VITE_* at build time; one bundle per edition):
+#   Hosted:     SLUGBASE_EDITION=cloud before pnpm build
+#   Self-host:  SLUGBASE_EDITION=ce via Docker build-arg (scripts/self-host-vite-build-args.sh)
 #
 # Prerequisites (one-time):
 #   npx playwright install --with-deps chromium
@@ -70,19 +70,14 @@ header(){ echo -e "\n${CYAN}═════════════════�
 source "${REPO_ROOT}/scripts/self-host-vite-build-args.sh"
 SELF_HOSTED_DOCKER_BUILD_ARGS=("${SELF_HOST_VITE_BUILD_ARGS[@]}")
 
-# Hosted web bundle: billing on, workspace SMTP/OIDC/AI BYO panels off.
+# Hosted web bundle: cloud edition presets (billing on, admin UI panels off).
 # Optional second arg: marketing origin for VITE_MARKETING_ORIGIN (legal links in web UI).
 build_hosted_packages() {
   local marketing_origin="${1:-}"
   header "Building hosted packages"
   cd "$REPO_ROOT"
-  info "VITE_BILLING_ENABLED=true  VITE_MAIL_ADMIN_UI=false  VITE_OIDC_ADMIN_UI=false  VITE_AI_BYO_CREDENTIAL=false"
-  local -a build_env=(
-    VITE_BILLING_ENABLED=true
-    VITE_MAIL_ADMIN_UI=false
-    VITE_OIDC_ADMIN_UI=false
-    VITE_AI_BYO_CREDENTIAL=false
-  )
+  info "SLUGBASE_EDITION=cloud"
+  local -a build_env=(SLUGBASE_EDITION=cloud)
   if [ -n "$marketing_origin" ]; then
     info "VITE_MARKETING_ORIGIN=$marketing_origin"
     build_env+=(VITE_MARKETING_ORIGIN="$marketing_origin")
@@ -227,6 +222,7 @@ if [ "$RUN_HOSTED" = true ]; then
   info "Starting API on port $PORT_API …"
   PORT="$PORT_API" \
     SLUGBASE_E2E_MODE=true \
+    SLUGBASE_EDITION=cloud \
     PUBLIC_REGISTRATION=true \
     SESSION_SECRET='e2e-test-session-secret-at-least-32-chars!!' \
     ENCRYPTION_KEY='e2e-test-encryption-key-at-least-32-chars!!' \
@@ -300,8 +296,7 @@ if [ "$RUN_SELF_HOSTED" = true ]; then
   read -r PORT_SELF <<< "$(find_free_ports 1)"
   export E2E_JSON_REPORT_PATH="$REPO_ROOT/e2e/test-results/report-self-hosted.json"
 
-  info "Building combined Docker image (self-host VITE flags) …"
-  info "VITE_BILLING_ENABLED=false  VITE_MAIL_ADMIN_UI=true  VITE_OIDC_ADMIN_UI=true  VITE_AI_BYO_CREDENTIAL=true"
+  info "Building combined Docker image (SLUGBASE_EDITION=ce) …"
   DOCKER_BUILD_RAN=true
   docker build -t slugbase-e2e:self-hosted \
     "${SELF_HOSTED_DOCKER_BUILD_ARGS[@]}" \
@@ -317,6 +312,7 @@ if [ "$RUN_SELF_HOSTED" = true ]; then
     --network host \
     -e DATABASE_URL="$DATABASE_URL" \
     -e SLUGBASE_E2E_MODE=true \
+    -e SLUGBASE_EDITION=ce \
     -e PORT="$PORT_SELF" \
     -e SESSION_SECRET='selfhosted-e2e-session-secret-at-least-32!!' \
     -e ENCRYPTION_KEY='selfhosted-e2e-encryption-key-at-least-32!!' \

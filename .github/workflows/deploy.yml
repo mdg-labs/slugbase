@@ -101,6 +101,7 @@ jobs:
       - name: Build API and shared packages
         env:
           NODE_ENV: production
+          SLUGBASE_EDITION: cloud
         run: pnpm exec turbo run build --filter=@slugbase/backend...
 
       - name: Create Sentry release and upload API source maps
