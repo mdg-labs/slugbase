@@ -19,11 +19,10 @@ describe("Registration (integration) - PUBLIC_REGISTRATION=false", () => {
   beforeAll(async () => {
     const testDatabase = await createTestDatabase();
     cleanup = testDatabase.cleanup;
-    // PUBLIC_REGISTRATION is intentionally NOT set here - env.schema.ts defaults it to false
-    // PUBLIC_REGISTRATION defaults to false when unset (envBoolean parsing).
-    // we rely on the Zod default(false) when the env var is absent.
-    delete process.env["PUBLIC_REGISTRATION"];
-    applyTestEnv({ DATABASE_URL: testDatabase.databaseUrl });
+    applyTestEnv({
+      DATABASE_URL: testDatabase.databaseUrl,
+      PUBLIC_REGISTRATION: "false",
+    });
 
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],

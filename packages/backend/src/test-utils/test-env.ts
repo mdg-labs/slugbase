@@ -15,8 +15,8 @@ const testEnvKeys = [
 export const validTestEnv: NodeJS.ProcessEnv = {
   NODE_ENV: "test",
   SLUGBASE_EDITION: "cloud",
-  PUBLIC_REGISTRATION: "false",
-  EMAIL_VERIFICATION_REQUIRED: "false",
+  PUBLIC_REGISTRATION: "true",
+  EMAIL_VERIFICATION_REQUIRED: "true",
   SERVE_WEB_CLIENT: "false",
   SESSION_SECRET: "test-session-secret-with-32-chars-min",
   ENCRYPTION_KEY: "test-encryption-key-with-32-chars",
@@ -31,6 +31,11 @@ export function applyTestEnv(overrides: NodeJS.ProcessEnv = {}): void {
   const env: NodeJS.ProcessEnv = { ...validTestEnv, ...overrides };
   if (process.env.DATABASE_URL && overrides.DATABASE_URL === undefined) {
     env.DATABASE_URL = process.env.DATABASE_URL;
+  }
+  // Fixture users in integration tests are typically unverified; keep the
+  // cloud edition baseline in validTestEnv but relax the gate unless overridden.
+  if (overrides.EMAIL_VERIFICATION_REQUIRED === undefined) {
+    env.EMAIL_VERIFICATION_REQUIRED = "false";
   }
   Object.assign(process.env, env);
 }

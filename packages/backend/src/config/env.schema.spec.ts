@@ -78,6 +78,7 @@ describe("validateEnvConfig", () => {
       SERVE_WEB_CLIENT: "true",
       WEB_CLIENT_SERVER_BUILD: "/tmp/web-build",
       PUBLIC_REGISTRATION: "false",
+      EMAIL_VERIFICATION_REQUIRED: undefined,
     });
 
     expect(config.PUBLIC_REGISTRATION).toBe(false);
@@ -90,6 +91,7 @@ describe("validateEnvConfig", () => {
       SLUGBASE_EDITION: "ce",
       SERVE_WEB_CLIENT: "true",
       WEB_CLIENT_SERVER_BUILD: "/tmp/web-build",
+      PUBLIC_REGISTRATION: undefined,
       EMAIL_VERIFICATION_REQUIRED: "false",
     });
 

@@ -15,6 +15,7 @@ describe("loadAppConfig", () => {
       SLUGBASE_EDITION: "cloud",
       SERVE_WEB_CLIENT: undefined,
       PUBLIC_REGISTRATION: undefined,
+      EMAIL_VERIFICATION_REQUIRED: undefined,
     });
 
     expect(config.edition).toBe(SLUGBASE_EDITION.CLOUD);
@@ -29,6 +30,7 @@ describe("loadAppConfig", () => {
       SLUGBASE_EDITION: "ce",
       SERVE_WEB_CLIENT: undefined,
       PUBLIC_REGISTRATION: undefined,
+      EMAIL_VERIFICATION_REQUIRED: undefined,
       WEB_CLIENT_SERVER_BUILD: "/tmp/web-build",
     });
 
