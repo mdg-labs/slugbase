@@ -1,0 +1,56 @@
+/* SlugBase admin — dark-first local tokens (PRD §12.4) */
+:root,
+[data-theme="dark"] {
+  --accent: #7782f7;
+  --accent-hover: #8d96f9;
+  --accent-subtle: rgba(119, 130, 247, 0.13);
+  --accent-text: #9aa2fa;
+
+  --canvas: #0a0b10;
+  --base: #101220;
+  --raised: #171a2b;
+  --raised-2: #1e2236;
+  --overlay: #1b1f31;
+
+  --border-subtle: rgba(255, 255, 255, 0.055);
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.16);
+
+  --fg: #eceef6;
+  --fg-muted: #a7adc2;
+  --fg-subtle: #6e7489;
+  --fg-faint: #4b5067;
+
+  --success: #45c98a;
+  --success-subtle: rgba(69, 201, 138, 0.14);
+  --success-text: #5fd6a0;
+
+  --warning: #e6b24e;
+  --warning-subtle: rgba(230, 178, 78, 0.14);
+  --warning-text: #efc878;
+
+  --danger: #f0686b;
+  --danger-subtle: rgba(240, 104, 107, 0.14);
+  --danger-text: #f48a8c;
+
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-lg: 15px;
+  --text-xl: 18px;
+}
