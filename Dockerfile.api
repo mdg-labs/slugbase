@@ -18,6 +18,7 @@ COPY packages/shared-types/package.json packages/shared-types/
 COPY packages/email-templates/package.json packages/email-templates/
 COPY packages/web/package.json packages/web/
 COPY packages/marketing/package.json packages/marketing/
+COPY patches/ patches/
 RUN pnpm install --frozen-lockfile
 
 FROM build-deps AS build

@@ -19,6 +19,7 @@ COPY packages/shared-types/package.json packages/shared-types/
 COPY packages/email-templates/package.json packages/email-templates/
 COPY packages/ui/package.json packages/ui/
 COPY packages/marketing/package.json packages/marketing/
+COPY patches/ patches/
 RUN echo "shamefully-hoist=true" > .npmrc \
   && pnpm install --frozen-lockfile
 
