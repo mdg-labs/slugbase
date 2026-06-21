@@ -203,6 +203,11 @@ jobs:
           API_BASE_URL: ${{ secrets.API_BASE_URL }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          PUBLIC_PLAN_PRICE_PERSONAL_MONTHLY: ${{ secrets.PUBLIC_PLAN_PRICE_PERSONAL_MONTHLY }}
+          PUBLIC_PLAN_PRICE_PERSONAL_YEARLY: ${{ secrets.PUBLIC_PLAN_PRICE_PERSONAL_YEARLY }}
+          PUBLIC_PLAN_PRICE_TEAM_SEAT: ${{ secrets.PUBLIC_PLAN_PRICE_TEAM_SEAT }}
+          PUBLIC_PLAN_PRICE_TEAM_SEAT_YEARLY: ${{ secrets.PUBLIC_PLAN_PRICE_TEAM_SEAT_YEARLY }}
+          PUBLIC_PLAN_PRICE_SUPPORTER: ${{ secrets.PUBLIC_PLAN_PRICE_SUPPORTER }}
         run: bash .github/scripts/deploy-cf-worker.sh marketing
 
   deploy-admin:
