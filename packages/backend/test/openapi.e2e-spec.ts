@@ -118,7 +118,11 @@ describe("OpenAPI interactive docs in production (integration)", () => {
   beforeAll(async () => {
     const setup = await createApp({
       NODE_ENV: "production",
+      SLUGBASE_EDITION: "cloud",
       OPENAPI_INTERACTIVE_DOCS: "true",
+      PUBLIC_REGISTRATION: "true",
+      EMAIL_VERIFICATION_REQUIRED: "true",
+      SERVE_WEB_CLIENT: "false",
     });
     app = setup.app;
     cleanup = setup.cleanup;

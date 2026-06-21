@@ -10,10 +10,9 @@ import { AppModule } from "./app.module.js";
 import { ConfigService } from "./config/config.service.js";
 import { applySecurityHeaders } from "./security/apply-security-headers.js";
 import { runMigrations } from "./db/migrate/run-migrations.js";
-import {
-  validateEnvConfig,
-  resolveMigrationDatabaseUrl,
-} from "./config/env.schema.js";
+import { loadAppConfig } from "./config/load-config.js";
+import { resolveMigrationDatabaseUrl } from "./config/env.schema.js";
+import type { AppConfig } from "./config/env.schema.js";
 import {
   parseSentryLogLevel,
   resolveNestLogLevels,
@@ -24,7 +23,7 @@ import { SentryLoggerService } from "./logging/sentry-logger.service.js";
  * Run DB migrations only in the self-hosted deployment mode (SERVE_WEB_CLIENT=true).
  * Hosted deployments run migrations in CI before deploying to Fly.io (see CI/CD workflow).
  */
-async function runMigrationsIfNeeded(config: ReturnType<typeof validateEnvConfig>): Promise<void> {
+async function runMigrationsIfNeeded(config: AppConfig): Promise<void> {
   if (!config.SERVE_WEB_CLIENT) {
     return;
   }
@@ -32,7 +31,7 @@ async function runMigrationsIfNeeded(config: ReturnType<typeof validateEnvConfig
 }
 
 export async function bootstrap(): Promise<void> {
-  const startupConfig = validateEnvConfig(process.env);
+  const startupConfig = loadAppConfig(process.env);
   await runMigrationsIfNeeded(startupConfig);
 
   const nestLogLevels = resolveNestLogLevels({

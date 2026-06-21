@@ -11,9 +11,11 @@ describe("validateEnvConfig", () => {
     const config = validateEnvConfig({
       ...validTestEnv,
       NODE_ENV: "production",
+      SLUGBASE_EDITION: "cloud",
     });
 
     expect(config.isProduction).toBe(true);
+    expect(config.edition).toBe("cloud");
     expect(config.OPENAPI_INTERACTIVE_DOCS).toBe(false);
     expect(config.SESSION_SECRET.length).toBeGreaterThanOrEqual(32);
   });
@@ -22,6 +24,7 @@ describe("validateEnvConfig", () => {
     const config = validateEnvConfig({
       ...validTestEnv,
       NODE_ENV: "production",
+      SLUGBASE_EDITION: "cloud",
       OPENAPI_INTERACTIVE_DOCS: "true",
     });
 
@@ -39,6 +42,7 @@ describe("validateEnvConfig", () => {
       validateEnvConfig({
         ...validTestEnv,
         NODE_ENV: "production",
+        SLUGBASE_EDITION: "cloud",
         SESSION_SECRET: "too-short",
       }),
     ).toThrow(/Production startup refused/);
@@ -48,6 +52,7 @@ describe("validateEnvConfig", () => {
     const config = validateEnvConfig({
       ...validTestEnv,
       NODE_ENV: "production",
+      SLUGBASE_EDITION: "cloud",
       SERVE_WEB_CLIENT: "false",
     });
 
@@ -58,6 +63,7 @@ describe("validateEnvConfig", () => {
     const config = validateEnvConfig({
       ...validTestEnv,
       NODE_ENV: "production",
+      SLUGBASE_EDITION: "cloud",
       SMTP_SECURE: "false",
     });
 
@@ -68,6 +74,9 @@ describe("validateEnvConfig", () => {
     const config = validateEnvConfig({
       ...validTestEnv,
       NODE_ENV: "production",
+      SLUGBASE_EDITION: "ce",
+      SERVE_WEB_CLIENT: "true",
+      WEB_CLIENT_SERVER_BUILD: "/tmp/web-build",
       PUBLIC_REGISTRATION: "false",
     });
 
@@ -78,6 +87,9 @@ describe("validateEnvConfig", () => {
     const config = validateEnvConfig({
       ...validTestEnv,
       NODE_ENV: "production",
+      SLUGBASE_EDITION: "ce",
+      SERVE_WEB_CLIENT: "true",
+      WEB_CLIENT_SERVER_BUILD: "/tmp/web-build",
       EMAIL_VERIFICATION_REQUIRED: "false",
     });
 
@@ -130,6 +142,7 @@ describe("validateEnvConfig", () => {
     const config = validateEnvConfig({
       ...validTestEnv,
       NODE_ENV: "production",
+      SLUGBASE_EDITION: "cloud",
     });
 
     expect(config.OIDC_DEPLOYMENT_PROVIDERS).toBeUndefined();
@@ -139,6 +152,7 @@ describe("validateEnvConfig", () => {
     const config = validateEnvConfig({
       ...validTestEnv,
       NODE_ENV: "production",
+      SLUGBASE_EDITION: "cloud",
       OIDC_DEPLOYMENT_PROVIDERS: JSON.stringify([
         {
           id: "google",

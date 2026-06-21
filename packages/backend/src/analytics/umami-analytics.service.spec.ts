@@ -8,6 +8,7 @@ import { UmamiAnalyticsService } from "./umami-analytics.service.js";
 function buildConfig(overrides: Record<string, string | undefined>) {
   const base = validateEnvConfig({
     NODE_ENV: "test",
+    SLUGBASE_EDITION: "cloud",
     SESSION_SECRET: "a".repeat(32),
     ENCRYPTION_KEY: "b".repeat(32),
     DATABASE_URL: "file:./test.db",

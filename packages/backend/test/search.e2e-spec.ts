@@ -34,9 +34,10 @@ describe("Search (integration)", () => {
   beforeAll(async () => {
     const testDatabase = await createTestDatabase();
     cleanup = testDatabase.cleanup;
-    applyTestEnv({ DATABASE_URL: testDatabase.databaseUrl });
-    delete process.env.SERVE_WEB_CLIENT;
-    delete process.env.WEB_CLIENT_SERVER_BUILD;
+    applyTestEnv({
+      DATABASE_URL: testDatabase.databaseUrl,
+      SERVE_WEB_CLIENT: "false",
+    });
 
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],

@@ -34,6 +34,7 @@ function createCryptoService(overrides: Partial<AppConfig> = {}): AesGcmCryptoSe
     DOWNGRADE_GRACE_PERIOD_DAYS: 7,
     nodeEnv: "test",
     isProduction: false,
+    edition: "ce",
     ...overrides,
   };
 

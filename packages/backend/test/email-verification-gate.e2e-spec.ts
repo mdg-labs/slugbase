@@ -229,8 +229,10 @@ describe("Email verification gate disabled (integration)", () => {
 
     applyTestEnv({
       DATABASE_URL: testDatabase.databaseUrl,
+      SLUGBASE_EDITION: "ce",
+      EMAIL_VERIFICATION_REQUIRED: "false",
+      SERVE_WEB_CLIENT: "false",
     });
-    delete process.env.EMAIL_VERIFICATION_REQUIRED;
 
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],

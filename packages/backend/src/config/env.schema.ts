@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import type { SlugbaseEdition } from "@slugbase/shared-types";
+
 import {
   oidcDeploymentProviderSchema,
   parseOidcDeploymentProviders,
@@ -136,6 +138,7 @@ export type AppConfig = RequiredSecrets &
   OptionalFlags & {
     nodeEnv: NodeEnv;
     isProduction: boolean;
+    edition: SlugbaseEdition;
   };
 
 export type NodeEnv = "development" | "test" | "production";
@@ -217,9 +220,10 @@ export function resolveMigrationDatabaseUrl(
   return unpooled && unpooled.length > 0 ? unpooled : config.DATABASE_URL;
 }
 
-export function validateEnvConfig(
+/** Parses env that already has edition presets applied. */
+export function parseEnvConfig(
   env: NodeJS.ProcessEnv = process.env,
-): AppConfig {
+): Omit<AppConfig, "edition"> {
   const nodeEnv = parseNodeEnv(env.NODE_ENV);
   const isProduction = nodeEnv === "production";
   const secretsInput = readSecretsInput(env);
@@ -275,3 +279,5 @@ export function validateEnvConfig(
     isProduction,
   };
 }
+
+export { loadAppConfig as validateEnvConfig } from "./load-config.js";

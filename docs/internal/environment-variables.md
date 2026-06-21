@@ -54,9 +54,9 @@ Every inventory table uses the same columns:
 
 | Key | What it does | Cloud | CE | Required | Secret | When set | Example value |
 |---|---|---|---|---|---|---|---|
-| `SLUGBASE_EDITION` | Edition selector — `ce` (Community Edition combined image) or `cloud` (managed split deploy). Drives edition-specific defaults (#479–#483); supersedes deprecated `SLUGBASE_MODE`. | Yes | Yes | Optional (until preset wiring lands) | No | Runtime / Build | `cloud` or `ce` |
+| `SLUGBASE_EDITION` | Edition selector — `ce` (Community Edition combined image) or `cloud` (managed split deploy). Drives edition-specific defaults (#479–#483); supersedes deprecated `SLUGBASE_MODE`. | Yes | Yes | Yes (production); defaults to `ce` in non-production when unset | No | Runtime / Build | `cloud` or `ce` |
 
-> **Migration:** Until preset derivation ships (#479–#483), operators set edition-specific flags explicitly (see Cloud and CE quick starts below). Playwright e2e projects remain `hosted` / `self-hosted` until renamed in #484.
+> **Preset wiring:** Backend startup applies edition presets before Zod validation. Explicit env values override unset preset keys; values that conflict with the active edition preset are rejected in production and warned in development/test.
 
 
 

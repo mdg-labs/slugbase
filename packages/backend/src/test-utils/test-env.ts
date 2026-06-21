@@ -1,9 +1,11 @@
 const testEnvKeys = [
   "NODE_ENV",
+  "SLUGBASE_EDITION",
   "SESSION_SECRET",
   "ENCRYPTION_KEY",
   "APP_BASE_URL",
   "FRONTEND_ORIGIN",
+  "SERVE_WEB_CLIENT",
   "STRIPE_SECRET_KEY",
   "OIDC_DEPLOYMENT_PROVIDERS",
   "OPENAI_API_KEY",
@@ -12,6 +14,10 @@ const testEnvKeys = [
 
 export const validTestEnv: NodeJS.ProcessEnv = {
   NODE_ENV: "test",
+  SLUGBASE_EDITION: "cloud",
+  PUBLIC_REGISTRATION: "false",
+  EMAIL_VERIFICATION_REQUIRED: "false",
+  SERVE_WEB_CLIENT: "false",
   SESSION_SECRET: "test-session-secret-with-32-chars-min",
   ENCRYPTION_KEY: "test-encryption-key-with-32-chars",
   DATABASE_URL:
@@ -39,6 +45,7 @@ export function clearTestEnv(): void {
 export function productionEnvWithoutSessionSecret(): NodeJS.ProcessEnv {
   return {
     NODE_ENV: "production",
+    SLUGBASE_EDITION: "cloud",
     ENCRYPTION_KEY: validTestEnv.ENCRYPTION_KEY,
     DATABASE_URL: validTestEnv.DATABASE_URL,
     APP_BASE_URL: validTestEnv.APP_BASE_URL,

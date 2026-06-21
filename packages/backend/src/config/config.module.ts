@@ -2,14 +2,15 @@ import { Global, Module } from "@nestjs/common";
 
 import { ConfigService } from "./config.service.js";
 import { APP_CONFIG } from "./config.tokens.js";
-import { validateEnvConfig, type AppConfig } from "./env.schema.js";
+import { loadAppConfig } from "./load-config.js";
+import type { AppConfig } from "./env.schema.js";
 
 @Global()
 @Module({
   providers: [
     {
       provide: APP_CONFIG,
-      useFactory: (): AppConfig => validateEnvConfig(process.env),
+      useFactory: (): AppConfig => loadAppConfig(process.env),
     },
     ConfigService,
   ],

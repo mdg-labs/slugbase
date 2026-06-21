@@ -31,6 +31,7 @@ function createConfig(overrides: Partial<AppConfig>): AppConfig {
     SENTRY_ENABLE_CONSOLE_LOGGING: false,
     nodeEnv: "production",
     isProduction: true,
+    edition: "cloud",
     ...overrides,
   };
 }
@@ -68,5 +69,10 @@ describe("ConfigService.cookieSecure", () => {
       createConfig({ APP_BASE_URL: "https://slugbase.example.com" }),
     );
     expect(service.cookieSecure()).toBe(false);
+  });
+
+  it("exposes edition for diagnostics", () => {
+    const service = new ConfigService(createConfig({ edition: "ce" }));
+    expect(service.getEdition()).toBe("ce");
   });
 });

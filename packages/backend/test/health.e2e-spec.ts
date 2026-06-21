@@ -14,6 +14,7 @@ import {
   applyTestEnv,
   clearTestEnv,
   productionEnvWithoutSessionSecret,
+  validTestEnv,
 } from "../src/test-utils/test-env.js";
 import { createTestDatabase } from "./test-database.js";
 
@@ -93,6 +94,17 @@ describe("production startup validation (integration)", () => {
   it("throws when a required secret is missing in production mode", () => {
     expect(() =>
       validateEnvConfig(productionEnvWithoutSessionSecret()),
+    ).toThrow(/Production startup refused/);
+  });
+
+  it("throws when edition preset conflicts in production mode", () => {
+    expect(() =>
+      validateEnvConfig({
+        ...validTestEnv,
+        NODE_ENV: "production",
+        SLUGBASE_EDITION: "ce",
+        VITE_BILLING_ENABLED: "true",
+      }),
     ).toThrow(/Production startup refused/);
   });
 });

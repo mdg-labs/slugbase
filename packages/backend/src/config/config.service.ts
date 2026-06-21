@@ -1,6 +1,8 @@
 import { Inject, Injectable } from "@nestjs/common";
 
 import { APP_CONFIG } from "./config.tokens.js";
+import type { SlugbaseEdition } from "@slugbase/shared-types";
+
 import type { AppConfig } from "./env.schema.js";
 
 @Injectable()
@@ -13,6 +15,11 @@ export class ConfigService {
 
   getAll(): AppConfig {
     return this.config;
+  }
+
+  /** Active edition — diagnostics / health only; do not branch feature logic on this. */
+  getEdition(): SlugbaseEdition {
+    return this.config.edition;
   }
 
   /**

@@ -19,7 +19,10 @@ describe("Setup concurrent completion (integration)", () => {
   beforeAll(async () => {
     const testDatabase = await createTestDatabase();
     cleanup = testDatabase.cleanup;
-    applyTestEnv({ DATABASE_URL: testDatabase.databaseUrl });
+    applyTestEnv({
+      DATABASE_URL: testDatabase.databaseUrl,
+      PUBLIC_REGISTRATION: "false",
+    });
 
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
@@ -75,7 +78,10 @@ describe("Setup (integration)", () => {
     const testDatabase = await createTestDatabase();
     cleanup = testDatabase.cleanup;
     await resetAppData(testDatabase.databaseUrl);
-    applyTestEnv({ DATABASE_URL: testDatabase.databaseUrl });
+    applyTestEnv({
+      DATABASE_URL: testDatabase.databaseUrl,
+      PUBLIC_REGISTRATION: "false",
+    });
 
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],

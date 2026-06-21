@@ -33,6 +33,7 @@ function createCsrfService(overrides: Partial<AppConfig> = {}): CsrfService {
     DOWNGRADE_GRACE_PERIOD_DAYS: 7,
     nodeEnv: "test",
     isProduction: false,
+    edition: "ce",
     ...overrides,
   };
 

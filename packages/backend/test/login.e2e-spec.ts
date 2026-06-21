@@ -188,9 +188,13 @@ describe("Login cookie Secure flag — HTTP production (integration)", () => {
     cleanup = testDatabase.cleanup;
     applyTestEnv({
       NODE_ENV: "production",
+      SLUGBASE_EDITION: "cloud",
       DATABASE_URL: testDatabase.databaseUrl,
       APP_BASE_URL: "http://slugbase.local:3000",
       FRONTEND_ORIGIN: "http://slugbase.local:3000",
+      PUBLIC_REGISTRATION: "true",
+      EMAIL_VERIFICATION_REQUIRED: "true",
+      SERVE_WEB_CLIENT: "false",
     });
 
     const moduleRef = await Test.createTestingModule({
@@ -259,9 +263,13 @@ describe("Login cookie Secure flag — HTTPS production (integration)", () => {
     cleanup = testDatabase.cleanup;
     applyTestEnv({
       NODE_ENV: "production",
+      SLUGBASE_EDITION: "cloud",
       DATABASE_URL: testDatabase.databaseUrl,
       APP_BASE_URL: "https://slugbase.example.com",
       FRONTEND_ORIGIN: "https://slugbase.example.com",
+      PUBLIC_REGISTRATION: "true",
+      EMAIL_VERIFICATION_REQUIRED: "true",
+      SERVE_WEB_CLIENT: "false",
     });
 
     const moduleRef = await Test.createTestingModule({
