@@ -217,11 +217,14 @@ if [ "$RUN_CLOUD" = true ]; then
   : >"$LOGFILE_CLOUD_MKTG"
 
   # Start API
+  # Cloud edition preset sets EMAIL_VERIFICATION_REQUIRED=true; e2e global-setup
+  # registers users without verification — override after SLUGBASE_EDITION=cloud.
   info "Starting API on port $PORT_API …"
   PORT="$PORT_API" \
     SLUGBASE_E2E_MODE=true \
     SLUGBASE_EDITION=cloud \
     PUBLIC_REGISTRATION=true \
+    EMAIL_VERIFICATION_REQUIRED=false \
     SESSION_SECRET='e2e-test-session-secret-at-least-32-chars!!' \
     ENCRYPTION_KEY='e2e-test-encryption-key-at-least-32-chars!!' \
     APP_BASE_URL="http://localhost:$PORT_API" \

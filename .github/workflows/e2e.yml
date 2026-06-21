@@ -107,6 +107,8 @@ jobs:
           SLUGBASE_E2E_MODE: 'true'
           SLUGBASE_EDITION: cloud
           PUBLIC_REGISTRATION: 'true'
+          # Cloud preset requires email verification; e2e registers without it.
+          EMAIL_VERIFICATION_REQUIRED: 'false'
           SESSION_SECRET: 'ci-e2e-session-secret-at-least-32-chars-long!!'
           ENCRYPTION_KEY: 'ci-e2e-encryption-key-at-least-32-chars-long!!'
           APP_BASE_URL: http://localhost:4001
