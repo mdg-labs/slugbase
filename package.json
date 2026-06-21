@@ -57,6 +57,9 @@
       "multer@>=2.0.0 <2.2.0": ">=2.2.0",
       "undici@<7.28.0": ">=7.28.0",
       "ts-deepmerge@<8.0.0": ">=8.0.0"
+    },
+    "patchedDependencies": {
+      "@anatine/zod-openapi@1.14.2": "patches/@anatine__zod-openapi@1.14.2.patch"
     }
   }
 }
