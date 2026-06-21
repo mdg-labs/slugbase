@@ -1,0 +1,26 @@
+# Fly.io admin portal deploy (hosted — admin PRD §6, spec §14.7)
+# App name: slugbase-staging-admin (staging) / slugbase-production-admin (production)
+
+app = "slugbase-staging-admin"
+primary_region = "fra"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "3000"
+  SLUGBASE_EDITION = "cloud"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1

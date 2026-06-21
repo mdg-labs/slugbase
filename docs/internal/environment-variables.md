@@ -436,6 +436,37 @@ See `docs/internal/ci-cd-example/` for the authoritative sync-secrets workflow a
 
 ---
 
+## Admin portal (`packages/admin` — Cloud Fly app only)
+
+Admin PRD §11.1. Validated in [`packages/admin/src/config/env.schema.ts`](../packages/admin/src/config/env.schema.ts). Runtime on Fly app `slugbase-{staging|production}-admin`. Phase sync manifest maps `SENTRY_DSN_ADMIN` → runtime `SENTRY_DSN`.
+
+| Key | Purpose | Cloud | CE | Required | Secret | When set | Example |
+|---|---|---|---|---|---|---|---|
+| `DATABASE_URL` | Neon pooled URL (read `public.*`, write `admin.*`) | Yes | No | Always | Yes | Runtime | _(Neon pooled URL)_ |
+| `NODE_ENV` | Node environment | Yes | No | Always | No | Runtime | `production` |
+| `SLUGBASE_EDITION` | Edition selector — always `cloud` on admin | Yes | No | Always | No | Runtime | `cloud` |
+| `PORT` | HTTP listen port | Yes | No | Optional | No | Runtime | `3000` |
+| `ADMIN_URL` | Public admin origin (invite links, smoke) | Yes | No | Always | No | Runtime | `https://staging-admin.slugbase.app` |
+| `SMTP_HOST` | Invite mail transport host | Yes | No | Always | No | Runtime | _(reuse API SMTP)_ |
+| `SMTP_PORT` | SMTP port | Yes | No | Always | No | Runtime | `587` |
+| `SMTP_SECURE` | SMTP TLS | Yes | No | Always | No | Runtime | `false` |
+| `SMTP_USER` | SMTP username | Yes | No | Always | Yes | Runtime | |
+| `SMTP_PASS` | SMTP password | Yes | No | Always | Yes | Runtime | |
+| `SMTP_FROM` | SMTP from address | Yes | No | Always | No | Runtime | |
+| `ADMIN_SESSION_TTL_DAYS` | Operator session sliding TTL | Yes | No | Optional | No | Runtime | `7` |
+| `ADMIN_SNAPSHOT_CRON` | Daily snapshot cron expression | Yes | No | Optional | No | Runtime | `0 2 * * *` |
+| `ADMIN_BOOTSTRAP_EMAIL` | First platform admin email (remove after bootstrap) | Yes | No | Cloud | No | Runtime | |
+| `ADMIN_BOOTSTRAP_PASSWORD` | First platform admin password (remove after bootstrap) | Yes | No | Cloud | Yes | Runtime | |
+| `ADMIN_ALERT_SIGNUP_SPIKE_MULTIPLIER` | Signup spike Sentry warning threshold | Yes | No | Optional | No | Runtime | `3` |
+| `SENTRY_DSN` | Error reporting DSN on admin runtime | Yes | No | Optional | Yes | Runtime | _(from `SENTRY_DSN_ADMIN` in Phase)_ |
+| `SENTRY_ENVIRONMENT` | Sentry environment tag | Yes | No | Optional | No | Runtime | `staging` |
+
+**Migrate-only (CI):** `DATABASE_URL_UNPOOLED` when set, else `DATABASE_URL` — same pattern as product API.
+
+**Not used on admin:** `SESSION_SECRET`, `ENCRYPTION_KEY`, `STRIPE_*`, OIDC secrets, `FRONTEND_ORIGIN`, `APP_BASE_URL`.
+
+---
+
 ## Related docs
 
 - [`.env.example`](../.env.example) — key names only (no values)
