@@ -4,24 +4,15 @@ import { useSearchParams } from "react-router";
 
 import { useAppToast } from "../../../../components/feedback/AppToastProvider.js";
 
-import {
-  createOidcProvider,
-  deleteOidcProvider,
-  deleteWorkspace,
-  sendMailTest,
-  updateAiSettings,
-  updateMailSettings,
-  updateOidcProvider,
-  updateWorkspaceName,
-} from "../workspace-api.js";
+import { deleteWorkspace, updateAiSettings, updateWorkspaceName } from "../workspace-api.js";
 import {
   canManageWorkspaceSettings,
+  isOperatorManagedWorkspaceSection,
   isWorkspaceSectionVisible,
   listVisibleWorkspaceSections,
 } from "../workspace-entitlements.js";
 import type {
   AiSettingsData,
-  MailSettingsData,
   WorkspaceSectionId,
   WorkspaceSettingsData,
 } from "../workspace.types.js";
@@ -29,8 +20,6 @@ import { AiSection, defaultAi } from "./AiSection.js";
 import { AdminRoleGate } from "./AdminRoleGate.js";
 import { GeneralSection } from "./GeneralSection.js";
 import { OperatorManagedGate } from "./OperatorManagedGate.js";
-import { SmtpSection, defaultMail } from "./SmtpSection.js";
-import { OidcSection } from "./OidcSection.js";
 import { SettingsPageShell } from "../../../../components/settings/SettingsPageShell.js";
 
 export interface WorkspaceSettingsPageProps {
@@ -41,9 +30,7 @@ export function WorkspaceSettingsPage({ initialData }: WorkspaceSettingsPageProp
   const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const [workspace, setWorkspace] = useState(initialData.workspace);
-  const [mail, setMail] = useState<MailSettingsData | null>(initialData.mail);
   const [ai, setAi] = useState<AiSettingsData | null>(initialData.ai);
-  const [providers, setProviders] = useState(initialData.oidcProviders);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const { showToast } = useAppToast();
 
@@ -80,24 +67,7 @@ export function WorkspaceSettingsPage({ initialData }: WorkspaceSettingsPageProp
 
   const renderSection = () => {
     if (!isWorkspaceSectionVisible(section, initialData.interfaceConfig)) {
-      if (section === "smtp") {
-        return (
-          <OperatorManagedGate
-            titleKey="settings.workspace.smtp.operator_title"
-            bodyKey="settings.workspace.smtp.operator_body"
-            t={t}
-          />
-        );
-      }
-      if (section === "oidc") {
-        return (
-          <OperatorManagedGate
-            titleKey="settings.workspace.oidc.operator_title"
-            bodyKey="settings.workspace.oidc.operator_body"
-            t={t}
-          />
-        );
-      }
+      return null;
     }
 
     if (section === "general") {
@@ -126,23 +96,28 @@ export function WorkspaceSettingsPage({ initialData }: WorkspaceSettingsPageProp
       );
     }
 
-    if (section === "smtp" && initialData.interfaceConfig.mailAdminUi) {
+    if (
+      section === "smtp" &&
+      isOperatorManagedWorkspaceSection("smtp", initialData.interfaceConfig)
+    ) {
       return (
-        <SmtpSection
-          initial={mail ?? defaultMail}
+        <OperatorManagedGate
+          titleKey="settings.workspace.smtp.operator_title"
+          bodyKey="settings.workspace.smtp.operator_body"
           t={t}
-          onSave={async (payload) => {
-            try {
-              const updated = await updateMailSettings(payload);
-              setMail(updated);
-              showToast("settings.workspace.smtp.toast_saved");
-            } catch (err) {
-              showError(err instanceof Error ? err.message : t("settings.workspace.error_generic"));
-            }
-          }}
-          onSendTest={async (email) => {
-            await sendMailTest(email);
-          }}
+        />
+      );
+    }
+
+    if (
+      section === "oidc" &&
+      isOperatorManagedWorkspaceSection("oidc", initialData.interfaceConfig)
+    ) {
+      return (
+        <OperatorManagedGate
+          titleKey="settings.workspace.oidc.operator_title"
+          bodyKey="settings.workspace.oidc.operator_body"
+          t={t}
         />
       );
     }
@@ -158,45 +133,6 @@ export function WorkspaceSettingsPage({ initialData }: WorkspaceSettingsPageProp
               const updated = await updateAiSettings(payload);
               setAi(updated);
               showToast("settings.workspace.ai.toast_saved");
-            } catch (err) {
-              showError(err instanceof Error ? err.message : t("settings.workspace.error_generic"));
-            }
-          }}
-        />
-      );
-    }
-
-    if (section === "oidc" && initialData.interfaceConfig.oidcAdminUi) {
-      return (
-        <OidcSection
-          providers={providers}
-          appBaseUrl={initialData.appBaseUrl}
-          t={t}
-          onCreate={async (payload) => {
-            try {
-              const created = await createOidcProvider(payload);
-              setProviders((prev) => [...prev, created]);
-              showToast("settings.workspace.oidc.toast_created", { name: created.name });
-            } catch (err) {
-              showError(err instanceof Error ? err.message : t("settings.workspace.error_generic"));
-            }
-          }}
-          onToggle={async (providerId, enabled) => {
-            try {
-              const updated = await updateOidcProvider(providerId, { enabled });
-              setProviders((prev) =>
-                prev.map((item) => (item.id === providerId ? updated : item)),
-              );
-              showToast("settings.workspace.oidc.toast_updated");
-            } catch (err) {
-              showError(err instanceof Error ? err.message : t("settings.workspace.error_generic"));
-            }
-          }}
-          onDelete={async (providerId) => {
-            try {
-              await deleteOidcProvider(providerId);
-              setProviders((prev) => prev.filter((item) => item.id !== providerId));
-              showToast("settings.workspace.oidc.toast_deleted");
             } catch (err) {
               showError(err instanceof Error ? err.message : t("settings.workspace.error_generic"));
             }

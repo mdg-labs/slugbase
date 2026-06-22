@@ -59,8 +59,13 @@ export function isNavItemVisible(
   interfaceConfig: SettingsInterfaceConfig,
   workspacePlan: string,
 ): boolean {
-  if (item.id === "smtp") return interfaceConfig.mailAdminUi;
-  if (item.id === "oidc") return interfaceConfig.oidcAdminUi;
+  // Self-hosted CE: gate-only SMTP/OIDC nav when operator-managed; hosted Cloud hides them.
+  if (item.id === "smtp") {
+    return interfaceConfig.mailAdminUi || !interfaceConfig.billingEnabled;
+  }
+  if (item.id === "oidc") {
+    return interfaceConfig.oidcAdminUi || !interfaceConfig.billingEnabled;
+  }
   // Members are plan-gated only on hosted (spec §12.4): hide when billing
   // is enabled and the workspace plan is not Team. On self-hosted
   // (billingEnabled === false), members are always accessible.

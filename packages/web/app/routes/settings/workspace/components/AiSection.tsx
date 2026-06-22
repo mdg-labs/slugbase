@@ -29,18 +29,21 @@ export function AiSection({ initial, interfaceConfig, onSave, t }: AiSectionProp
     setApiKey("");
   }, [initial]);
 
-  const dirty =
-    enabled !== initial.enabled ||
-    model !== initial.model ||
-    apiKey.length > 0;
+  const dirty = interfaceConfig.aiByoCredential
+    ? enabled !== initial.enabled || model !== initial.model || apiKey.length > 0
+    : enabled !== initial.enabled;
 
   const handleSave = async (): Promise<void> => {
     setBusy(true);
     try {
       await onSave({
         enabled,
-        model,
-        ...(interfaceConfig.aiByoCredential && apiKey.length > 0 ? { apiKey } : {}),
+        ...(interfaceConfig.aiByoCredential
+          ? {
+              model,
+              ...(apiKey.length > 0 ? { apiKey } : {}),
+            }
+          : {}),
       });
       setApiKey("");
     } finally {

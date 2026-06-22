@@ -15,29 +15,10 @@ export interface WorkspaceInterfaceConfig {
   billingEnabled: boolean;
 }
 
-export interface MailSettingsData {
-  host: string;
-  port: number;
-  secure: boolean;
-  username: string;
-  hasPassword: boolean;
-  fromAddress: string;
-  fromName: string;
-}
-
 export interface AiSettingsData {
   enabled: boolean;
   hasApiKey: boolean;
   model: string;
-}
-
-export interface OidcProviderSummary {
-  id: string;
-  name: string;
-  clientId: string;
-  issuerUrl: string;
-  scopes: string;
-  enabled: boolean;
 }
 
 export interface WorkspaceSettingsData {
@@ -45,8 +26,5 @@ export interface WorkspaceSettingsData {
   currentUserRole: WorkspaceMemberRole;
   membersForbidden: boolean;
   interfaceConfig: WorkspaceInterfaceConfig;
-  appBaseUrl: string;
-  mail: MailSettingsData | null;
   ai: AiSettingsData | null;
-  oidcProviders: OidcProviderSummary[];
 }

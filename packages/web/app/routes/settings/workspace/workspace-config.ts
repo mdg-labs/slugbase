@@ -73,11 +73,3 @@ export async function loadWorkspaceInterfaceConfig(
     ...overrides,
   };
 }
-
-export function readAppBaseUrl(): string {
-  return (
-    readEnv("VITE_APP_BASE_URL") ??
-    readEnv("API_BASE_URL") ??
-    "http://localhost:3000"
-  ).replace(/\/$/, "");
-}

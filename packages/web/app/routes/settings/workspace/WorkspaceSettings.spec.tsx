@@ -8,11 +8,13 @@ import { AiSection } from "./components/AiSection.js";
 import { WorkspaceSettingsPage } from "./components/WorkspaceSettingsPage.js";
 import type { WorkspaceInterfaceConfig, WorkspaceSettingsData } from "./workspace.types.js";
 
+const mockSearchParams = vi.fn(() => [new URLSearchParams(), vi.fn()]);
+
 vi.mock("react-router", async () => {
   const actual = await vi.importActual<typeof import("react-router")>("react-router");
   return {
     ...actual,
-    useSearchParams: () => [new URLSearchParams(), vi.fn()],
+    useSearchParams: () => mockSearchParams(),
   };
 });
 
@@ -33,22 +35,23 @@ vi.mock("react-i18next", () => ({
 
 afterEach(() => {
   cleanup();
+  mockSearchParams.mockReset();
+  mockSearchParams.mockReturnValue([new URLSearchParams(), vi.fn()]);
 });
+
+const ceOperatorConfig: WorkspaceInterfaceConfig = {
+  mailAdminUi: false,
+  oidcAdminUi: false,
+  aiByoCredential: false,
+  billingEnabled: false,
+};
 
 const baseData: WorkspaceSettingsData = {
   workspace: { id: "ws-1", name: "Acme Engineering", plan: "team" },
   currentUserRole: "OWNER",
   membersForbidden: false,
-  interfaceConfig: {
-    mailAdminUi: true,
-    oidcAdminUi: true,
-    aiByoCredential: true,
-    billingEnabled: false,
-  },
-  appBaseUrl: "https://api.example.com",
-  mail: null,
+  interfaceConfig: ceOperatorConfig,
   ai: { enabled: true, hasApiKey: true, model: "gpt-4o-mini" },
-  oidcProviders: [],
 };
 
 function renderPage(data: WorkspaceSettingsData = baseData) {
@@ -69,28 +72,19 @@ describe("WorkspaceSettingsPage", () => {
     expect(view.getByDisplayValue("Acme Engineering")).toBeTruthy();
   });
 
-  it("renders workspace settings with all admin UI interfaces enabled (no tab strip)", () => {
+  it("renders operator-managed SMTP gate on CE when section is smtp", () => {
+    mockSearchParams.mockReturnValue([new URLSearchParams("section=smtp"), vi.fn()]);
     const view = renderPage();
-    expect(view.getByTestId("workspace-settings-page")).toBeTruthy();
-    expect(view.getByLabelText("Workspace name")).toBeTruthy();
-    expect(view.queryByRole("button", { name: "Email" })).toBeNull();
-    expect(view.queryByRole("button", { name: "Identity" })).toBeNull();
+    expect(view.getByTestId("workspace-operator-managed-gate")).toBeTruthy();
+    expect(view.getByText("Email managed by operator")).toBeTruthy();
+    expect(view.queryByLabelText("SMTP host")).toBeNull();
   });
 
-  it("renders workspace settings without horizontal nav when operator-managed interfaces are active", () => {
-    const view = renderPage({
-      ...baseData,
-      interfaceConfig: {
-        mailAdminUi: false,
-        oidcAdminUi: false,
-        aiByoCredential: false,
-        billingEnabled: true,
-      },
-    });
-    expect(view.getByTestId("workspace-settings-page")).toBeTruthy();
-    expect(view.queryByRole("button", { name: "Email" })).toBeNull();
-    expect(view.queryByRole("button", { name: "Identity" })).toBeNull();
-    expect(view.queryByRole("button", { name: "AI" })).toBeNull();
+  it("renders operator-managed OIDC gate on CE when section is oidc", () => {
+    mockSearchParams.mockReturnValue([new URLSearchParams("section=oidc"), vi.fn()]);
+    const view = renderPage();
+    expect(view.getByTestId("workspace-operator-managed-gate")).toBeTruthy();
+    expect(view.getByText("Identity providers managed by operator")).toBeTruthy();
   });
 
   it("shows admin-only gate for members", () => {
@@ -125,43 +119,44 @@ function renderAiSection(options: {
 }
 
 describe("AiSection", () => {
-  const selfHostConfig: WorkspaceInterfaceConfig = {
+  const selfHostByoConfig: WorkspaceInterfaceConfig = {
     mailAdminUi: true,
     oidcAdminUi: true,
     aiByoCredential: true,
     billingEnabled: false,
   };
 
-  const hostedConfig: WorkspaceInterfaceConfig = {
+  const operatorManagedConfig: WorkspaceInterfaceConfig = {
     mailAdminUi: false,
     oidcAdminUi: false,
     aiByoCredential: false,
-    billingEnabled: true,
+    billingEnabled: false,
   };
 
-  it("shows BYO credential fields without enabling AI on self-host", () => {
-    const view = renderAiSection({ interfaceConfig: selfHostConfig });
+  it("shows BYO credential fields without enabling AI when BYO is enabled", () => {
+    const view = renderAiSection({ interfaceConfig: selfHostByoConfig });
     expect(view.getByLabelText("API key")).toBeTruthy();
     expect(view.getByLabelText("Model")).toBeTruthy();
     const checkbox = view.getByRole("checkbox");
     expect((checkbox as HTMLInputElement).checked).toBe(false);
   });
 
-  it("shows BYO fields on self-host when AI is enabled", () => {
-    const view = renderAiSection({ enabled: true, hasApiKey: true, interfaceConfig: selfHostConfig });
+  it("shows BYO fields when BYO is enabled and AI is on", () => {
+    const view = renderAiSection({ enabled: true, hasApiKey: true, interfaceConfig: selfHostByoConfig });
     expect(view.getByLabelText("API key")).toBeTruthy();
     expect(view.getByLabelText("Model")).toBeTruthy();
     expect((view.getByRole("checkbox") as HTMLInputElement).checked).toBe(true);
   });
 
-  it("hides BYO fields on hosted and shows operator notice when enabled", () => {
-    const view = renderAiSection({ enabled: true, interfaceConfig: hostedConfig });
+  it("shows enable toggle only on CE operator-managed AI", () => {
+    const view = renderAiSection({ enabled: true, interfaceConfig: operatorManagedConfig });
     expect(view.queryByLabelText("API key")).toBeNull();
-    expect(view.getByText(/credential configured by the operator/)).toBeTruthy();
+    expect(view.queryByLabelText("Model")).toBeNull();
+    expect((view.getByRole("checkbox") as HTMLInputElement).checked).toBe(true);
   });
 
-  it("hides BYO fields and operator notice on hosted when disabled", () => {
-    const view = renderAiSection({ interfaceConfig: hostedConfig });
+  it("hides BYO fields and operator notice when AI is disabled on operator-managed", () => {
+    const view = renderAiSection({ interfaceConfig: operatorManagedConfig });
     expect(view.queryByLabelText("API key")).toBeNull();
     expect(view.queryByText(/credential configured by the operator/)).toBeNull();
   });
