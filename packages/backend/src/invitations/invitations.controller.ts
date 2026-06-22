@@ -23,9 +23,8 @@ import { ActiveWorkspace } from "../workspaces/active-workspace.decorator.js";
 import { TenantGuard, TENANT_USER_ID_KEY } from "../workspaces/tenant.guard.js";
 import type { WorkspaceRecord } from "../workspaces/workspace.types.js";
 import { WorkspacesService } from "../workspaces/workspaces.service.js";
-import type { AcceptInvitationDto, CreateInvitationDto, InvitationMetadata, PendingInvitationView } from "./invitations.service.js";
+import type { AcceptInvitationDto, CreateInvitationDto, CreateInvitationResult, InvitationLinkResult, InvitationMetadata, PendingInvitationView } from "./invitations.service.js";
 import { InvitationsService } from "./invitations.service.js";
-import type { WorkspaceInvitationRecord } from "./invitation.types.js";
 
 @Controller()
 export class InvitationsController {
@@ -36,7 +35,7 @@ export class InvitationsController {
   ) {}
 
   /**
-   * Creates a workspace invitation and sends an email with a magic link.
+   * Creates a workspace invitation and optionally sends an email with a magic link.
    * Requires an authenticated session with OWNER or ADMIN role in the workspace.
    * Entitlement check: free plan workspaces return 403 (spec §12.2, §4.2).
    */
@@ -47,7 +46,7 @@ export class InvitationsController {
     @Param("id") workspaceId: string,
     @Body() body: CreateInvitationDto,
     @Req() req: Request & Record<string, unknown>,
-  ): Promise<WorkspaceInvitationRecord> {
+  ): Promise<CreateInvitationResult> {
     const userId = req[SESSION_USER_ID_KEY] as string;
     await this.workspaces.requireWorkspaceRole(workspaceId, userId, "ADMIN");
     return this.invitations.createInvitation(workspaceId, userId, body);
@@ -74,6 +73,18 @@ export class InvitationsController {
   ): Promise<PendingInvitationView> {
     const userId = req[TENANT_USER_ID_KEY] as string;
     return this.invitations.resendInvitation(workspace.id, invitationId, userId);
+  }
+
+  @Post("workspace/invitations/:id/link")
+  @HttpCode(200)
+  @UseGuards(TenantGuard)
+  async getInvitationLink(
+    @ActiveWorkspace() workspace: WorkspaceRecord,
+    @Req() req: Request & Record<string, unknown>,
+    @Param("id") invitationId: string,
+  ): Promise<InvitationLinkResult> {
+    const userId = req[TENANT_USER_ID_KEY] as string;
+    return this.invitations.getInvitationLink(workspace.id, invitationId, userId);
   }
 
   @Delete("workspace/invitations/:id")

@@ -57,9 +57,20 @@ export function buildInvitationAcceptUrl(params: {
   return `${base}/invitations/${params.token}`;
 }
 
+export type InvitationDelivery = "email" | "link";
+
 export interface CreateInvitationDto {
   email: string;
   role: InvitationRole;
+  delivery?: InvitationDelivery;
+}
+
+export interface CreateInvitationResult extends WorkspaceInvitationRecord {
+  acceptUrl?: string;
+}
+
+export interface InvitationLinkResult {
+  acceptUrl: string;
 }
 
 export interface InvitationMetadata {
@@ -115,17 +126,20 @@ export class InvitationsService {
   }
 
   /**
-   * Creates a workspace invitation and dispatches the invitation email.
+   * Creates a workspace invitation and optionally dispatches the invitation email.
    *
    * Checks the 'workspace-members' entitlement - free plan workspaces may not
    * invite members (spec §12.2, §4.2). Enforces one pending invitation per
    * (workspace, email) pair to prevent duplicate sends.
+   *
+   * When `delivery` is `link`, skips email and returns `acceptUrl` in the response.
    */
   async createInvitation(
     workspaceId: string,
     inviterUserId: string,
     dto: CreateInvitationDto,
-  ): Promise<WorkspaceInvitationRecord> {
+  ): Promise<CreateInvitationResult> {
+    const delivery = dto.delivery ?? "email";
     const workspace = await this.workspaceRepo.findById(workspaceId);
     if (!workspace) throw new NotFoundException("Workspace not found");
 
@@ -154,53 +168,14 @@ export class InvitationsService {
       expiresAt,
     });
 
-    const inviter = await this.accounts.findById(inviterUserId);
-    const inviteUrl = buildInvitationAcceptUrl({
-      appBaseUrl: this.config.get("APP_BASE_URL"),
-      frontendOrigin: this.config.get("FRONTEND_ORIGIN"),
-      serveWebClient: this.config.get("SERVE_WEB_CLIENT"),
-      token: plaintext,
-    });
-
-    if (await this.mail.ensureAvailable()) {
-      try {
-        await this.mail.send({
-          to: dto.email,
-          subject: `You've been invited to ${workspace.name} on SlugBase`,
-          text: [
-            `${inviter?.name ?? "Someone"} has invited you to join "${workspace.name}" on SlugBase as ${dto.role}.`,
-            "",
-            "Accept your invitation:",
-            inviteUrl,
-            "",
-            `This invitation expires in ${String(INVITATION_TTL_DAYS)} days.`,
-            "",
-            "If you did not expect this invitation, you can safely ignore this email.",
-          ].join("\n"),
-          html: renderWorkspaceInvitationEmail({
-            acceptUrl: inviteUrl,
-            inviterName: inviter?.name ?? "Someone",
-            workspaceName: workspace.name,
-            role: dto.role,
-          }),
-          type: "workspace_invitation",
-        });
-      } catch (err) {
-        this.errorReporting.captureException(err, {
-          tags: { service: "invitations", operation: "createInvitationEmail" },
-          extra: { workspaceId },
-        });
-        this.logger.error(
-          "Failed to send invitation email - invitation was created",
-          { workspaceId, invitedEmail: dto.email, err },
-        );
-      }
-    } else {
-      this.logger.warn(
-        "Mail transport unavailable - invitation created but email not sent",
-        { workspaceId, invitedEmail: dto.email },
-      );
+    if (delivery === "link") {
+      return {
+        ...invitation,
+        acceptUrl: this.buildAcceptUrl(plaintext),
+      };
     }
+
+    await this.sendInvitationEmail(invitation, plaintext, inviterUserId);
 
     return invitation;
   }
@@ -246,26 +221,10 @@ export class InvitationsService {
     assertMemberInvitationsEntitlement(this.entitlements, workspace);
     await this.requireAdmin(workspaceId, requesterId);
 
-    const invitation = await this.invitationRepo.findById(invitationId);
-    if (!invitation || invitation.workspaceId !== workspaceId) {
-      throw new NotFoundException("Invitation not found");
-    }
-    if (invitation.acceptedAt !== null) {
-      throw new ConflictException("This invitation has already been accepted");
-    }
-
-    const plaintext = generateInvitationToken();
-    const tokenHash = hashInvitationToken(plaintext);
-    const expiresAt = new Date(Date.now() + INVITATION_TTL_MS);
-
-    const updated = await this.invitationRepo.updateTokenAndExpiry(
+    const { updated, plaintext } = await this.rotatePendingInvitationToken(
+      workspaceId,
       invitationId,
-      tokenHash,
-      expiresAt,
     );
-    if (!updated) {
-      throw new NotFoundException("Invitation not found after update");
-    }
 
     await this.sendInvitationEmail(updated, plaintext, requesterId);
 
@@ -280,6 +239,25 @@ export class InvitationsService {
       expiresAt: updated.expiresAt,
       createdAt: updated.createdAt,
     };
+  }
+
+  async getInvitationLink(
+    workspaceId: string,
+    invitationId: string,
+    requesterId: string,
+  ): Promise<InvitationLinkResult> {
+    const workspace = await this.workspaceRepo.findById(workspaceId);
+    if (!workspace) throw new NotFoundException("Workspace not found");
+
+    assertMemberInvitationsEntitlement(this.entitlements, workspace);
+    await this.requireAdmin(workspaceId, requesterId);
+
+    const { plaintext } = await this.rotatePendingInvitationToken(
+      workspaceId,
+      invitationId,
+    );
+
+    return { acceptUrl: this.buildAcceptUrl(plaintext) };
   }
 
   async revokeInvitation(
@@ -307,6 +285,43 @@ export class InvitationsService {
     }
   }
 
+  private buildAcceptUrl(plaintext: string): string {
+    return buildInvitationAcceptUrl({
+      appBaseUrl: this.config.get("APP_BASE_URL"),
+      frontendOrigin: this.config.get("FRONTEND_ORIGIN"),
+      serveWebClient: this.config.get("SERVE_WEB_CLIENT"),
+      token: plaintext,
+    });
+  }
+
+  private async rotatePendingInvitationToken(
+    workspaceId: string,
+    invitationId: string,
+  ): Promise<{ updated: WorkspaceInvitationRecord; plaintext: string }> {
+    const invitation = await this.invitationRepo.findById(invitationId);
+    if (!invitation || invitation.workspaceId !== workspaceId) {
+      throw new NotFoundException("Invitation not found");
+    }
+    if (invitation.acceptedAt !== null) {
+      throw new ConflictException("This invitation has already been accepted");
+    }
+
+    const plaintext = generateInvitationToken();
+    const tokenHash = hashInvitationToken(plaintext);
+    const expiresAt = new Date(Date.now() + INVITATION_TTL_MS);
+
+    const updated = await this.invitationRepo.updateTokenAndExpiry(
+      invitationId,
+      tokenHash,
+      expiresAt,
+    );
+    if (!updated) {
+      throw new NotFoundException("Invitation not found after update");
+    }
+
+    return { updated, plaintext };
+  }
+
   private async requireAdmin(
     workspaceId: string,
     requesterId: string,
@@ -329,12 +344,7 @@ export class InvitationsService {
     if (!workspace) return;
 
     const inviter = await this.accounts.findById(inviterUserId);
-    const inviteUrl = buildInvitationAcceptUrl({
-      appBaseUrl: this.config.get("APP_BASE_URL"),
-      frontendOrigin: this.config.get("FRONTEND_ORIGIN"),
-      serveWebClient: this.config.get("SERVE_WEB_CLIENT"),
-      token: plaintext,
-    });
+    const inviteUrl = this.buildAcceptUrl(plaintext);
 
     if (await this.mail.ensureAvailable()) {
       try {
@@ -369,6 +379,11 @@ export class InvitationsService {
           { workspaceId: invitation.workspaceId, invitedEmail: invitation.invitedEmail, err },
         );
       }
+    } else {
+      this.logger.warn(
+        "Mail transport unavailable - invitation created but email not sent",
+        { workspaceId: invitation.workspaceId, invitedEmail: invitation.invitedEmail },
+      );
     }
   }
 

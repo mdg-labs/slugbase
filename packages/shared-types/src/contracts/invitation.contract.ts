@@ -6,6 +6,9 @@ const c = initContract();
 export const InvitationRoleSchema = z.enum(["ADMIN", "MEMBER"]);
 export type InvitationRole = z.infer<typeof InvitationRoleSchema>;
 
+export const InvitationDeliverySchema = z.enum(["email", "link"]);
+export type InvitationDelivery = z.infer<typeof InvitationDeliverySchema>;
+
 export const InvitationSchema = z
   .object({
     id: z.string(),
@@ -34,6 +37,17 @@ export const CreateInvitationBodySchema = z
   .object({
     email: z.string().email(),
     role: InvitationRoleSchema,
+    delivery: InvitationDeliverySchema.default("email"),
+  })
+  .strict();
+
+export const CreateInvitationResponseSchema = InvitationSchema.extend({
+  acceptUrl: z.string().url().optional(),
+}).strict();
+
+export const InvitationLinkResponseSchema = z
+  .object({
+    acceptUrl: z.string().url(),
   })
   .strict();
 
@@ -67,6 +81,8 @@ export const PendingInvitationViewSchema = z
 export type PendingInvitationView = z.infer<typeof PendingInvitationViewSchema>;
 export type InvitationMetadata = z.infer<typeof InvitationMetadataSchema>;
 export type CreateInvitationBody = z.infer<typeof CreateInvitationBodySchema>;
+export type CreateInvitationResponse = z.infer<typeof CreateInvitationResponseSchema>;
+export type InvitationLinkResponse = z.infer<typeof InvitationLinkResponseSchema>;
 export type AcceptInvitationBody = z.infer<typeof AcceptInvitationBodySchema>;
 export type AcceptInvitationResponse = z.infer<typeof AcceptInvitationResponseSchema>;
 
@@ -77,7 +93,7 @@ export const invitationContract = c.router({
     pathParams: z.object({ workspaceId: z.string() }),
     body: CreateInvitationBodySchema,
     responses: {
-      201: InvitationSchema,
+      201: CreateInvitationResponseSchema,
       403: z.object({ message: z.string() }).strict(),
       409: z.object({ message: z.string() }).strict(),
     },
@@ -142,5 +158,18 @@ export const invitationContract = c.router({
       409: z.object({ message: z.string() }).strict(),
     },
     summary: "Revoke a pending workspace invitation",
+  },
+  getInvitationLink: {
+    method: "POST",
+    path: "/workspace/invitations/:id/link",
+    pathParams: z.object({ id: z.string() }),
+    body: c.noBody(),
+    responses: {
+      200: InvitationLinkResponseSchema,
+      403: z.object({ message: z.string() }).strict(),
+      404: z.object({ message: z.string() }).strict(),
+      409: z.object({ message: z.string() }).strict(),
+    },
+    summary: "Rotate invitation token and return accept URL without sending email",
   },
 });

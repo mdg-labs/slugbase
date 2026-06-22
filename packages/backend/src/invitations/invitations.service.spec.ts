@@ -11,6 +11,25 @@ import {
 import type { InvitationRole, WorkspaceInvitationRecord } from "./invitation.types.js";
 
 // ---------------------------------------------------------------------------
+// Invitation delivery mode (pure logic)
+// ---------------------------------------------------------------------------
+
+describe("invitation delivery mode", () => {
+  function shouldSendInvitationEmail(delivery: "email" | "link" = "email"): boolean {
+    return delivery !== "link";
+  }
+
+  it("sends email for default email delivery", () => {
+    expect(shouldSendInvitationEmail()).toBe(true);
+    expect(shouldSendInvitationEmail("email")).toBe(true);
+  });
+
+  it("skips email for link delivery", () => {
+    expect(shouldSendInvitationEmail("link")).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Token helpers
 // ---------------------------------------------------------------------------
 
