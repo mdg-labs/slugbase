@@ -25,7 +25,7 @@ Linzer Straße 17, 4100 Ottensheim, Austria
 VAT UID: ATU82945789
 hello@slugbase.app
 
-The Service enables users to save, organise, and manage bookmarks. Optional features include link forwarding and AI-assisted suggestions for slugs, titles, and tags. These Terms apply to the hosted version of SlugBase at slugbase.app. Self-hosted deployments are governed exclusively by the AGPL-3.0 licence (see Section 13).
+The Service enables users to save, organise, and manage bookmarks. Optional features include link forwarding and AI-assisted suggestions for slugs, titles, and tags. These Terms apply to the hosted version of SlugBase at slugbase.app. Self-hosted deployments are governed exclusively by the Elastic License 2.0 (ELv2) (see Section 14).
 
 By creating an account or using the Service you agree to these Terms in full.
 
@@ -113,7 +113,7 @@ To exercise the right of withdrawal (where applicable), contact: hello@slugbase.
 
 8.2 You retain ownership of all content you submit to the Service ("User Content"). By submitting User Content you grant us a limited, non-exclusive, royalty-free licence to store, process, and display that content solely as necessary to provide the Service to you.
 
-8.3 The core software underlying the Service is made available under the GNU Affero General Public License v3.0 (AGPL-3.0). These Terms do not restrict the rights granted under the AGPL-3.0 in respect of the source code; these Terms govern the hosted service only.
+8.3 The core software underlying the Service is made available under the Elastic License 2.0 (ELv2). These Terms do not restrict the rights granted under the ELv2 in respect of the source code; these Terms govern the hosted service only.
 
 #### 9. Data Protection
 
@@ -143,7 +143,11 @@ We may update these Terms from time to time. Material changes will be communicat
 
 #### 14. Self-Hosted Deployments
 
-The self-hosted version of SlugBase is made available exclusively under the GNU Affero General Public License v3.0 (AGPL-3.0). These Terms do not apply to self-hosted deployments. Operators of self-hosted instances are solely responsible for compliance with all applicable laws, including data protection obligations towards their own users.
+The self-hosted version of SlugBase is made available exclusively under the Elastic License 2.0 (ELv2). These Terms do not apply to self-hosted deployments.
+
+Under the ELv2, individuals and businesses may self-host SlugBase for internal use. You may not offer SlugBase — or substantially similar functionality — as a hosted or managed service to third parties. There is no separate commercial licence or dual-licensing workflow in v1; the ELv2 is the sole licence for self-hosted deployments, and no licence key is required.
+
+Operators of self-hosted instances are solely responsible for compliance with all applicable laws, including data protection obligations towards their own users.
 
 #### 15. Governing Law and Jurisdiction
 
@@ -178,7 +182,7 @@ Linzer Straße 17, 4100 Ottensheim, Österreich
 UID-Nummer: ATU82945789
 hello@slugbase.app
 
-Der Dienst ermöglicht es Nutzer:innen, Lesezeichen zu speichern, zu organisieren und abzurufen. Optionale Funktionen umfassen Link-Forwarding sowie KI-gestützte Vorschläge für Slugs, Titel und Tags. Diese AGB gelten für die gehostete Version von SlugBase unter slugbase.app. Selbst gehostete Installationen unterliegen ausschließlich der AGPL-3.0-Lizenz (vgl. § 14).
+Der Dienst ermöglicht es Nutzer:innen, Lesezeichen zu speichern, zu organisieren und abzurufen. Optionale Funktionen umfassen Link-Forwarding sowie KI-gestützte Vorschläge für Slugs, Titel und Tags. Diese AGB gelten für die gehostete Version von SlugBase unter slugbase.app. Selbst gehostete Installationen unterliegen ausschließlich der Elastic License 2.0 (ELv2) (vgl. § 14).
 
 Mit der Erstellung eines Kontos oder der Nutzung des Dienstes erklären Sie sich mit diesen AGB vollumfänglich einverstanden.
 
@@ -266,7 +270,7 @@ Zur Ausübung des Widerrufsrechts (soweit anwendbar) wenden Sie sich an: hello@s
 
 8.2 Sie behalten das Eigentum an allen von Ihnen in den Dienst eingestellten Inhalten („Nutzerinhalte"). Mit dem Einstellen von Nutzerinhalten räumen Sie uns eine beschränkte, nicht-exklusive, vergütungsfreie Lizenz ein, Ihre Nutzerinhalte ausschließlich zur Erbringung des Dienstes zu speichern, zu verarbeiten und anzuzeigen.
 
-8.3 Die dem Dienst zugrundeliegende Kernsoftware wird unter der GNU Affero General Public License v3.0 (AGPL-3.0) bereitgestellt. Diese AGB schränken die unter der AGPL-3.0 gewährten Rechte in Bezug auf den Quellcode nicht ein; diese AGB regeln ausschließlich den gehosteten Dienst.
+8.3 Die dem Dienst zugrundeliegende Kernsoftware wird unter der Elastic License 2.0 (ELv2) bereitgestellt. Diese AGB schränken die unter der ELv2 gewährten Rechte in Bezug auf den Quellcode nicht ein; diese AGB regeln ausschließlich den gehosteten Dienst.
 
 #### 9. Datenschutz
 
@@ -296,7 +300,11 @@ Wir können diese AGB von Zeit zu Zeit aktualisieren. Wesentliche Änderungen we
 
 #### 14. Selbst gehostete Installationen
 
-Die selbst gehostete Version von SlugBase wird ausschließlich unter der GNU Affero General Public License v3.0 (AGPL-3.0) bereitgestellt. Diese AGB gelten nicht für selbst gehostete Installationen. Betreiber:innen selbst gehosteter Instanzen sind allein für die Einhaltung aller anwendbaren Gesetze — einschließlich datenschutzrechtlicher Pflichten gegenüber ihren eigenen Nutzer:innen — verantwortlich.
+Die selbst gehostete Version von SlugBase wird ausschließlich unter der Elastic License 2.0 (ELv2) bereitgestellt. Diese AGB gelten nicht für selbst gehostete Installationen.
+
+Unter der ELv2 dürfen Einzelpersonen und Unternehmen SlugBase für den internen Gebrauch selbst hosten. Es ist untersagt, SlugBase — oder wesentlich vergleichbare Funktionalität — Dritten als gehosteten oder verwalteten Dienst anzubieten. Es gibt in v1 keinen separaten kommerziellen Lizenz- oder Dual-Licensing-Workflow; die ELv2 ist die alleinige Lizenz für selbst gehostete Installationen, und es ist kein Lizenzschlüssel erforderlich.
+
+Betreiber:innen selbst gehosteter Instanzen sind allein für die Einhaltung aller anwendbaren Gesetze — einschließlich datenschutzrechtlicher Pflichten gegenüber ihren eigenen Nutzer:innen — verantwortlich.
 
 #### 15. Anwendbares Recht und Gerichtsstand
 
