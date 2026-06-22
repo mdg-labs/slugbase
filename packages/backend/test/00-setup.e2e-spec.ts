@@ -19,6 +19,7 @@ describe("Setup concurrent completion (integration)", () => {
   beforeAll(async () => {
     const testDatabase = await createTestDatabase();
     cleanup = testDatabase.cleanup;
+    await resetAppData(testDatabase.databaseUrl);
     applyTestEnv({
       DATABASE_URL: testDatabase.databaseUrl,
       PUBLIC_REGISTRATION: "false",
@@ -176,6 +177,7 @@ describe("Setup status with public registration (integration)", () => {
   beforeAll(async () => {
     const testDatabase = await createTestDatabase();
     cleanup = testDatabase.cleanup;
+    await resetAppData(testDatabase.databaseUrl);
     applyTestEnv({
       DATABASE_URL: testDatabase.databaseUrl,
       PUBLIC_REGISTRATION: "true",
