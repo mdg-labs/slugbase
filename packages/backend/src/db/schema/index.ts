@@ -19,7 +19,6 @@ import { emailVerificationTokens } from "./email-verification-token.schema.js";
 import { mfaBackupCodes } from "./mfa-backup-code.schema.js";
 import { instanceMetadata } from "./system.schema.js";
 import { oidcAccounts } from "./oidc-account.schema.js";
-import { oidcProviders } from "./oidc-provider.schema.js";
 import { passwordResetTokens } from "./password-reset-token.schema.js";
 import { sessions } from "./session.schema.js";
 import { slugPreferences } from "./slug-preference.schema.js";
@@ -49,7 +48,6 @@ export { emailVerificationTokens } from "./email-verification-token.schema.js";
 export { mfaBackupCodes } from "./mfa-backup-code.schema.js";
 export { instanceMetadata } from "./system.schema.js";
 export { oidcAccounts } from "./oidc-account.schema.js";
-export { oidcProviders } from "./oidc-provider.schema.js";
 export { passwordResetTokens } from "./password-reset-token.schema.js";
 export { sessions } from "./session.schema.js";
 export { slugPreferences } from "./slug-preference.schema.js";
@@ -80,7 +78,6 @@ export const schema = {
   emailVerificationTokens,
   mfaBackupCodes,
   oidcAccounts,
-  oidcProviders,
   passwordResetTokens,
   sessions,
   slugPreferences,

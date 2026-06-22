@@ -6,7 +6,7 @@ export const oidcAccounts = pgTable(
     id: text("id").primaryKey(),
     /** FK → user_accounts.id */
     userId: text("user_id").notNull(),
-    /** FK → oidc_providers.id */
+    /** Env-configured provider slug (no FK; spec §16) */
     providerId: text("provider_id").notNull(),
     /** The OIDC `sub` claim from the IdP */
     subject: text("subject").notNull(),
