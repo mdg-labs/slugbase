@@ -246,7 +246,7 @@ jobs:
       APP_BASE_URL: ${{ vars.APP_BASE_URL }}
       FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
       MARKETING_ORIGIN: ${{ vars.MARKETING_ORIGIN }}
-      ADMIN_URL: ${{ vars.ADMIN_URL }}
+      ADMIN_URL: ${{ secrets.ADMIN_URL }}
       CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
       CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
     steps:
