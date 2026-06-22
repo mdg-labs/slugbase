@@ -28,6 +28,7 @@ This doc exists so roadmap tasks and sub-agents have concrete, runnable answers 
 | AI provider (v1) | **OpenAI** | Behind the vendor-neutral AI interface (§11.2) |
 | i18n | **react-i18next** (web) + repo JSON | en + de catalogs (§17) |
 | Secrets | **Phase** (`SlugBase` app) | Phase → GHA envs; local `phase run` (§15, §22.9) |
+| Operator credentials | **Deployment env** (`SMTP_*`, `OPENAI_*`, `OIDC_{SLUG}_*`) | Same sources on CE and Cloud — no workspace DB credential storage (spec §15, epic #510) |
 
 ---
 

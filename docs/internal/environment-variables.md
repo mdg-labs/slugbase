@@ -122,9 +122,9 @@ EMAIL_VERIFICATION_REQUIRED=false               # configurable
 
 # Image build — hardcoded CE VITE_* (see scripts/CE-vite-build-args.sh)
 VITE_BILLING_ENABLED=false
-VITE_MAIL_ADMIN_UI=true
-VITE_OIDC_ADMIN_UI=true
-VITE_AI_BYO_CREDENTIAL=true
+VITE_MAIL_ADMIN_UI=false
+VITE_OIDC_ADMIN_UI=false
+VITE_AI_BYO_CREDENTIAL=false
 # Do not bake VITE_APP_BASE_URL, VITE_UMAMI_*, or VITE_SENTRY_* — set APP_BASE_URL at runtime
 # Leave Stripe, Turnstile, Umami, Sentry empty for no-op interfaces
 ```
@@ -196,7 +196,7 @@ Every deployment must set these. The API refuses to start in production without 
 | Key | What it does | Cloud | CE | Required | Secret | When set | Example value |
 |---|---|---|---|---|---|---|---|
 | `SESSION_SECRET` | Signs and verifies server-side session cookies | Yes | Yes | Always | Yes | Runtime | `<openssl rand -hex 32>` (min 32 chars) |
-| `ENCRYPTION_KEY` | Encrypts at-rest sensitive values (SMTP, OIDC, MFA secrets) | Yes | Yes | Always | Yes | Runtime | `<openssl rand -hex 32>` (min 32 chars) |
+| `ENCRYPTION_KEY` | Encrypts at-rest sensitive DB values (e.g. MFA secrets) | Yes | Yes | Always | Yes | Runtime | `<openssl rand -hex 32>` (min 32 chars) |
 | `DATABASE_URL` | PostgreSQL connection (pooled URL for runtime) | Yes | Yes | Always | Yes | Runtime | `postgresql://user:pass@host:5432/slugbase` |
 | `DATABASE_URL_UNPOOLED` | Direct DB URL for migrations / drizzle-kit | Yes | Optional | Optional | Yes | Runtime | Neon direct URL; falls back to `DATABASE_URL` |
 | `APP_BASE_URL` | Public HTTPS base URL of the API (links, OIDC callbacks, CORS) | Yes | Yes | Always | No | Runtime | `https://api.example.com` |
@@ -250,7 +250,29 @@ Optional on both deployment shapes. Empty values activate **no-op** interface im
 | `RATE_LIMIT_EMAIL_VERIFICATION_MAX` | Max verification emails per user window | Optional | Optional | Optional | No | Runtime | `3` (default) |
 | `RATE_LIMIT_EMAIL_VERIFICATION_TTL_SECONDS` | Verification-email window (seconds) | Optional | Optional | Optional | No | Runtime | `3600` (default) |
 
-> ****CE note:** SMTP, OIDC, and AI credentials are usually configured via **workspace settings in the UI** (encrypted in DB). Deployment-level `SMTP_*` / `OPENAI_*` are optional fallbacks for operator-managed transport.
+> **Operator-managed credentials (CE and Cloud):** SMTP (`SMTP_*`), AI (`OPENAI_*`), and OIDC providers (`OIDC_{SLUG}_*`) are configured exclusively via deployment environment variables on both editions. Workspace admin UI does not store transport, AI, or OIDC credentials.
+
+#### Per-provider OIDC (`OIDC_{SLUG}_*`)
+
+Each federated identity provider is configured with a slug (e.g. `google`, `github`). Replace `{SLUG}` with an uppercase slug in env var names (e.g. `google` → `OIDC_google_CLIENT_ID`). A provider is active when the required trio (`CLIENT_ID`, `CLIENT_SECRET`, `ISSUER_URL`) is present and `OIDC_{SLUG}_ENABLED` is not `false`.
+
+| Key pattern | What it does | Cloud | CE | Required | Secret | When set | Example value |
+|---|---|---|---|---|---|---|---|
+| `OIDC_{SLUG}_CLIENT_ID` | OIDC client id | Optional | Optional | Per provider | No | Runtime | `…apps.googleusercontent.com` |
+| `OIDC_{SLUG}_CLIENT_SECRET` | OIDC client secret | Optional | Optional | Per provider | Yes | Runtime | `<client secret>` |
+| `OIDC_{SLUG}_ISSUER_URL` | OIDC issuer / discovery URL | Optional | Optional | Per provider | No | Runtime | `https://accounts.google.com` |
+| `OIDC_{SLUG}_NAME` | Display name in login UI | Optional | Optional | Optional | No | Runtime | `Google` (default: title-case slug) |
+| `OIDC_{SLUG}_SCOPES` | Space-separated OIDC scopes | Optional | Optional | Optional | No | Runtime | `openid email profile` (default) |
+| `OIDC_{SLUG}_ENABLED` | Enable this provider | Optional | Optional | Optional | No | Runtime | `true` (default when required trio present) |
+
+Example (Google):
+
+```bash
+OIDC_google_CLIENT_ID=…
+OIDC_google_CLIENT_SECRET=…
+OIDC_google_ISSUER_URL=https://accounts.google.com
+OIDC_google_NAME=Google
+```
 
 ---
 
@@ -270,9 +292,6 @@ Required for paid entitlements on Cloud. Leave empty on CE (no-op billing grants
 | `SUPPORTER_PROMOTION_END` | ISO-8601 end of supporter offer | Yes | No | Optional | No | Runtime | `2026-12-31T23:59:59Z` |
 | `DOWNGRADE_GRACE_PERIOD_DAYS` | Days after period end before overflow archive | Yes | Optional | Optional | No | Runtime | `7` (default) |
 | `TURNSTILE_SECRET_KEY` | Turnstile server secret (API + contact) | Yes | No | Optional | Yes | Runtime | `<Turnstile secret>` |
-| `OIDC_DEPLOYMENT_PROVIDERS` | JSON array of Cloud OIDC IdP configs (id, name, issuerUrl, clientId, clientSecret, scopes, enabled) | Yes | No | Optional | Yes | Runtime | `[{"id":"google","name":"Google","issuerUrl":"https://accounts.google.com","clientId":"…","clientSecret":"…"}]` |
-
-> ****CE note:** Leave `OIDC_DEPLOYMENT_PROVIDERS` unset so federated providers are configured in workspace settings (DB-sourced). When set (including `[]`), the deployment-config source is active and DB providers are ignored for login.
 
 ---
 
@@ -290,9 +309,9 @@ Baked in at **`pnpm --filter @slugbase/web build`**. Public display config only 
 | `VITE_SUPPORTER_PROMOTION_END` | Supporter deadline (display/countdown) | Yes | No | Optional | No | Build | `2026-12-31T23:59:59Z` |
 | `VITE_TEAM_BASE_SEATS` | Team seats shown in plan table | Yes | No | Optional | No | Build | `5` |
 | `VITE_FREE_BOOKMARK_CAP` | Free cap shown in billing meter | Yes | No | Optional | No | Build | `50` |
-| `VITE_MAIL_ADMIN_UI` | Show workspace SMTP admin panel | Yes | Build only | Optional | No | Build | Cloud: `false`; CE: `true` |
-| `VITE_OIDC_ADMIN_UI` | Show workspace OIDC admin panel | Yes | Build only | Optional | No | Build | Cloud: `false`; CE: `true` |
-| `VITE_AI_BYO_CREDENTIAL` | Show full AI credential form (BYO key) | Yes | Build only | Optional | No | Build | Cloud: `false`; CE: `true` |
+| `VITE_MAIL_ADMIN_UI` | Show workspace SMTP admin panel | Yes | Build only | Optional | No | Build | `false` (both editions) |
+| `VITE_OIDC_ADMIN_UI` | Show workspace OIDC admin panel | Yes | Build only | Optional | No | Build | `false` (both editions) |
+| `VITE_AI_BYO_CREDENTIAL` | Show full AI credential form (BYO key) | Yes | Build only | Optional | No | Build | `false` (both editions) |
 | `VITE_APP_BASE_URL` | API URL shown in OIDC callback settings | Yes | Build only | Optional | No | Build | `https://api.example.com` |
 | `VITE_MARKETING_ORIGIN` | Marketing site origin for absolute legal-page links in the web app; unset hides links (CE) | Yes | Build only | Optional | No | Build | `https://www.example.com` |
 
@@ -376,9 +395,9 @@ Stored in Phase `Staging` / `Production` (synced to GHA `staging` / `production`
 | `SERVE_WEB_CLIENT` | Serve web from API container; controls migration dispatch (true = startup migrations) | No | Yes | Optional | No | Runtime | `true` (Dockerfile preset) |
 | `WEB_CLIENT_SERVER_BUILD` | RR7 server entry path | No | Yes | Optional | No | Runtime | `/app/packages/web/build/server/index.js` |
 | `VITE_BILLING_ENABLED` | Hide billing UI | No | Build only | Optional | No | Build | `false` |
-| `VITE_MAIL_ADMIN_UI` | Show SMTP workspace panel | No | Build only | Optional | No | Build | `true` |
-| `VITE_OIDC_ADMIN_UI` | Show OIDC workspace panel | No | Build only | Optional | No | Build | `true` |
-| `VITE_AI_BYO_CREDENTIAL` | Show BYO AI credential form | No | Build only | Optional | No | Build | `true` |
+| `VITE_MAIL_ADMIN_UI` | Hide SMTP workspace panel (operator-managed) | No | Build only | Optional | No | Build | `false` |
+| `VITE_OIDC_ADMIN_UI` | Hide OIDC workspace panel (operator-managed) | No | Build only | Optional | No | Build | `false` |
+| `VITE_AI_BYO_CREDENTIAL` | Hide BYO AI credential form (operator-managed key) | No | Build only | Optional | No | Build | `false` |
 | `VITE_APP_BASE_URL` | Public URL for OIDC display | No | Build only | Optional | No | Build | `https://bookmarks.example.com` |
 | `VITE_SENTRY_DSN` | Client error reporting — **must remain unset at CE image build** | No | No (build) | No | No | Build | Empty (default; do not bake) |
 | `VITE_UMAMI_HOST` | Client analytics | No | Optional | Optional | No | Build | Empty (default) |

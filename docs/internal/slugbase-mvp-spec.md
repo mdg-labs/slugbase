@@ -32,12 +32,12 @@ This rebuild targets a **v1-launchable scope**, not a full-parity reconstruction
 **In v1 (must ship for launch):**
 
 - Multi-tenant workspaces; membership and roles; session-carried active workspace with an explicit switch endpoint.
-- Server-side sessions; password auth; TOTP MFA with backup codes; personal API tokens; password reset; email verification; OIDC sign-in (DB-sourced providers on CE, deployment-config providers on Cloud).
+- Server-side sessions; password auth; TOTP MFA with backup codes; personal API tokens; password reset; email verification; OIDC sign-in (operator-configured federated providers on both CE and Cloud).
 - Bookmarks (modal create/edit, hard delete); folders; user-private tags; pinning; usage tracking; SSRF-safe metadata and favicon fetch.
 - Slugs and the `/go` redirect (authenticated, per-workspace, collision disambiguation, remembered "go preferences").
 - Global search, command palette, dashboard.
 - Sharing of bookmarks and folders with teams and members (entitlement-gated on Cloud; fully on for CE).
-- Workspace administration (members, teams, audit log, OIDC, SMTP, AI) plus a CE instance-wide admin.
+- Workspace administration (members, teams, audit log, per-workspace AI enable toggle) plus a CE instance-wide admin; SMTP, OIDC, and AI credentials are operator-managed on both editions.
 - Entitlements engine; Stripe-backed billing on Cloud; no-op billing (full entitlements) on CE.
 - Plans: Free, Personal, Team (plus a config-driven supporter/lifetime launch promotion that is entitlement-equivalent to Personal).
 - Downgrade-overflow handling (archive over-cap bookmarks, do not delete).
@@ -202,12 +202,9 @@ All verification tokens are time-limited and stored as hashes.
 
 ### 5.6 Federated identity (OIDC / SSO)
 
-The product supports signing in via external OpenID Connect providers, expressed through the **auth/identity interface** (Section 11.3) so the source of provider configuration is swappable:
+The product supports signing in via external OpenID Connect providers, expressed through the **auth/identity interface** (Section 11.3). On **both CE and Cloud**, providers are configured by the operator through deployment environment variables — one provider per slug, using the `OIDC_{SLUG}_*` convention (Section 15). **Workspace admins cannot add or edit OIDC providers in v1**; federated identity is an operator-level concern on both editions.
 
-- **CE:** Providers are configured by an admin through the admin UI and stored (secrets encrypted at rest). Custom endpoints can be specified for providers that are not auto-discoverable.
-- **Cloud:** Providers are configured by the operator through deployment configuration. **Cloud workspace admins cannot add their own OIDC providers in v1** (federated providers are an operator-level concern on Cloud).
-
-Behavioral rules: accounts are linked to a federated identity by verified email; optional auto-creation of accounts on first federated login is configurable; a federated login that lands on an unverified or disallowed state is routed to the appropriate "verify" or "not allowed" outcome; and a successful federated login does not additionally prompt for SlugBase's own MFA step (the external provider is trusted for that factor). The interface supports either "providers from the database" or "providers from deployment configuration" without changing the login UX.
+Behavioral rules: accounts are linked to a federated identity by verified email; optional auto-creation of accounts on first federated login is configurable; a federated login that lands on an unverified or disallowed state is routed to the appropriate "verify" or "not allowed" outcome; and a successful federated login does not additionally prompt for SlugBase's own MFA step (the external provider is trusted for that factor). The login UX is identical regardless of how many providers the operator has configured.
 
 ### 5.7 Multi-factor authentication (TOTP)
 
@@ -324,11 +321,10 @@ Available to workspace admins/owners, scoped to a single workspace:
 - **Members:** Invite, add, edit, and remove members; set roles; resend invitations; set or reset passwords (where applicable); assign members to teams.
 - **Teams:** Create, edit, and delete teams; manage team membership. Teams are sharing targets.
 - **Audit log:** A read-only, paginated record of significant actions (who did what to which entity and when), scoped to the workspace.
-- **Identity providers (OIDC):** Configure federated identity providers (CE; DB-sourced). Includes the callback URL to register with the provider. Hidden on Cloud, where providers are operator-managed.
-- **Email (SMTP) settings:** Configure the workspace/instance's outbound email transport and send a test message (CE). On Cloud, email transport is operator-configured and this UI is hidden.
-- **AI settings:** On CE, the full form — enable AI suggestions and configure the provider/credential/model. On Cloud, an enable-only toggle (the credential is operator-supplied).
+- **AI settings:** Per-workspace enable toggle for AI suggestions (operator supplies the credential via deployment configuration on both editions). No credential or model fields in the workspace UI.
+- **Operator-managed panels (hidden on both editions):** Identity providers (OIDC) and email (SMTP) are configured exclusively by the operator via deployment environment variables — there is no workspace admin UI for provider or transport credentials in v1.
 
-Which panels are visible depends on entitlements and on which configuration sources are active (for example, the OIDC and SMTP panels are hidden when those are operator-managed). This visibility is entitlement/config-driven, never a hard-coded deployment-mode branch.
+Which panels are visible depends on entitlements and on edition build-time presets (for example, `VITE_MAIL_ADMIN_UI`, `VITE_OIDC_ADMIN_UI`, and `VITE_AI_BYO_CREDENTIAL` are `false` on both CE and Cloud). This visibility is entitlement/config-driven, never a hard-coded deployment-mode branch.
 
 ### 10.2 Deployment-level administration
 
@@ -344,21 +340,21 @@ Each capability that reaches outside the application is defined here **as a cont
 ### 11.1 Transactional email (mail interface)
 
 - **Responsibility:** Deliver transactional messages — signup verification, email-change verification, password reset, member invitation, and contact-form notifications. The contract exposes the ability to send a message (recipient, subject, text/HTML body, and the logical message type) and to report whether the transport is currently configured/available.
-- **v1 implementation:** **SMTP, used on both deployments.** CE admins configure SMTP in the admin UI; Cloud configures SMTP via deployment configuration. A "send test email" capability is available where the admin UI applies.
+- **v1 implementation:** **SMTP, used on both deployments.** The operator configures SMTP transport via `SMTP_*` deployment environment variables on CE and Cloud. There is no workspace admin UI for SMTP credentials in v1.
 - **Default when unconfigured:** A no-op/log implementation so the app still runs (email-dependent flows degrade gracefully and say so).
 - **Swappable:** Yes. The application calls "send" and "is available"; alternative providers are Fast-Follow.
 
 ### 11.2 AI suggestions (AI interface)
 
 - **Responsibility:** Given a destination URL (and optionally fetched page metadata) and a desired output language, return suggested bookmark fields — a title, a slug candidate, a set of tags, a detected language, and a confidence indicator. The contract also reports whether AI is available for the current context. Results are cacheable by (workspace, user, canonical URL, output language) for a bounded period, and usage can be recorded for analytics.
-- **v1 implementation:** **OpenAI**, behind a vendor-neutral contract (decision #49) — no application code depends on OpenAI specifics; alternative providers are Fast-Follow. **CE:** admins supply their own credential and model via the admin UI; disabled until configured. **Cloud:** the operator supplies the credential via deployment configuration, and per-workspace availability is gated by entitlements with a per-workspace enable toggle. Users can individually opt out on either deployment.
+- **v1 implementation:** **OpenAI**, behind a vendor-neutral contract (decision #49) — no application code depends on OpenAI specifics; alternative providers are Fast-Follow. On **both CE and Cloud**, the operator supplies the credential and model via `OPENAI_API_KEY` and `OPENAI_MODEL` deployment environment variables. Per-workspace availability is gated by entitlements with a per-workspace enable toggle (workspace admin UI); there is no bring-your-own-credential UI or database storage. Users can individually opt out on either deployment. AI is unavailable when the operator has not configured a key.
 - **Swappable:** Yes. The contract assumes no particular vendor, model naming, or request shape; the application asks for "suggestions for this URL" and gets a structured result.
 
 ### 11.3 Authentication / identity federation (auth-provider interface)
 
-- **Responsibility:** Supply the set of available federated identity providers and drive the OIDC handshake (start, callback, claims extraction), plus the rules for linking/auto-creating accounts. The contract abstracts **where provider configuration comes from**.
-- **v1 implementation:** **CE** reads providers from the database (admin-configured, with custom-endpoint overrides). **Cloud** reads providers from deployment configuration; Cloud workspace admins cannot add their own.
-- **Swappable:** Yes. The login experience is identical regardless of provider source.
+- **Responsibility:** Supply the set of available federated identity providers and drive the OIDC handshake (start, callback, claims extraction), plus the rules for linking/auto-creating accounts.
+- **v1 implementation:** On **both CE and Cloud**, providers are discovered from per-provider deployment environment variables (`OIDC_{SLUG}_CLIENT_ID`, `OIDC_{SLUG}_CLIENT_SECRET`, `OIDC_{SLUG}_ISSUER_URL`, plus optional `OIDC_{SLUG}_NAME`, `OIDC_{SLUG}_SCOPES`, `OIDC_{SLUG}_ENABLED`). Workspace admins cannot add or edit providers in v1.
+- **Swappable:** Yes. The login experience is identical regardless of how many providers the operator configures.
 
 ### 11.4 Billing (billing interface)
 
@@ -400,7 +396,7 @@ The **entitlements engine** is the linchpin that replaces the old deployment-mod
 
 ### 11.11 Secret encryption (crypto interface)
 
-- **Responsibility:** Encrypt and decrypt sensitive at-rest values (email credentials, AI credentials, federated-identity client secrets, MFA secrets) using a configured key. The contract exposes encrypt/decrypt and a strict mode that refuses to silently fail in production. This boundary is consistent across all secret-bearing fields.
+- **Responsibility:** Encrypt and decrypt sensitive at-rest values (MFA secrets and any other secrets persisted in the database) using a configured key. SMTP, AI, and OIDC credentials are operator-supplied via deployment environment variables and are not stored in the database. The contract exposes encrypt/decrypt and a strict mode that refuses to silently fail in production.
 
 ---
 
@@ -482,7 +478,7 @@ The v1 backup story is: the **enriched, lossless JSON export** (Section 13) for 
 
 ### 14.5 Configuration
 
-CE behavior is entirely configuration-driven (see Section 15): required secrets, the public addresses, the database choice, whether public registration is open (off by default), whether email verification is required, and which external interfaces are wired up (SMTP for email, an AI credential, identity providers via the admin UI). With nothing optional configured, the install still runs: email-dependent flows degrade gracefully, AI is simply unavailable, and there is no billing.
+CE behavior is entirely configuration-driven (see Section 15): required secrets, the public addresses, the database choice, whether public registration is open (off by default), whether email verification is required, and which external interfaces are wired up via operator environment variables (`SMTP_*` for email, `OPENAI_*` for AI, `OIDC_{SLUG}_*` for federated identity). With nothing optional configured, the install still runs: email-dependent flows degrade gracefully, AI is simply unavailable, federated login is unavailable until providers are configured, and there is no billing.
 
 ### 14.6 Reverse proxy and TLS
 
@@ -523,9 +519,9 @@ There is **no `development` deployment** — local development runs the dev serv
 
 Configuration is layered and explicit. Three kinds of settings exist:
 
-1. **Deployment configuration (environment):** Set by the operator at deploy time. Includes required security secrets (session-signing secret, at-rest encryption key), the public base URL and front-end origin, database selection and connection details, deployment flags (public registration on/off, email-verification required on/off), the selection and credentials for each external interface implementation (SMTP transport, AI credential, deployment-config identity providers on Cloud, Stripe keys and price identifiers on Cloud, analytics, error reporting, Turnstile), CORS allowances, proxy trust, and cookie domain. The application validates required secrets at startup and refuses to run insecurely in production.
+1. **Deployment configuration (environment):** Set by the operator at deploy time. Includes required security secrets (session-signing secret, at-rest encryption key), the public base URL and front-end origin, database selection and connection details, deployment flags (public registration on/off, email-verification required on/off), the selection and credentials for each external interface implementation (`SMTP_*` transport, `OPENAI_*` AI credential, per-provider `OIDC_{SLUG}_*` identity providers on both CE and Cloud, Stripe keys and price identifiers on Cloud, analytics, error reporting, Turnstile), edition build-time presets (`VITE_MAIL_ADMIN_UI`, `VITE_OIDC_ADMIN_UI`, `VITE_AI_BYO_CREDENTIAL` — all `false` on both editions), CORS allowances, proxy trust, and cookie domain. The application validates required secrets at startup and refuses to run insecurely in production.
 
-2. **Workspace/instance settings (database):** Set by admins through the UI and stored (secrets encrypted at rest). Includes admin-managed SMTP settings, admin-managed AI settings, and admin-managed identity providers — on CE, where those sources are active.
+2. **Workspace settings (database):** Set by workspace admins through the UI. In v1 this is limited to non-credential workspace configuration — notably the per-workspace **AI suggestions enable toggle**. SMTP transport, AI credentials, and OIDC provider definitions are **not** stored in the database.
 
 3. **User preferences:** Per-account settings such as language, theme, accent color, default bookmark view, and AI opt-out.
 
@@ -564,8 +560,7 @@ Described in prose, as conceptual entities and relationships, generalized so tha
 - **Team membership:** Associates accounts with teams.
 - **Sharing records:** Bookmark-to-team, bookmark-to-user, folder-to-team, folder-to-user share grants.
 - **Slug preference:** Per-user remembered choice resolving an ambiguous slug to a specific bookmark, workspace-scoped.
-- **Identity provider configuration:** Federated provider definitions (key, client id, encrypted client secret, issuer, optional explicit endpoints, scopes, auto-create flag, default role), workspace/instance-scoped where database-sourced (CE).
-- **Workspace/instance settings (key-value):** Settings such as SMTP and AI configuration, workspace-scoped, secrets encrypted.
+- **Workspace settings (key-value):** Non-credential workspace configuration stored by admins — in v1, primarily the per-workspace AI suggestions enable toggle. SMTP, AI credentials, and OIDC provider definitions are operator env only and are not persisted.
 - **Credential tokens:** Password-reset tokens, signup-verification tokens, and email-change tokens — all hashed and time-limited. (No refresh tokens; sessions are server-side.)
 - **Personal API tokens:** Per-user named tokens, hashed, with last-use and revocation.
 - **MFA backup codes:** Per-user one-time codes, hashed.
@@ -672,8 +667,8 @@ Every item below was previously an open question and is now **settled** and inte
 8. CE = **full/unlimited entitlements** by default (audit log, team sharing, AI-if-key-present all on); no artificial gating.
 9. Session strategy = **server-side sessions**, identical on both deployments; the JWT-access + cloud-only-refresh model is dropped (immediate revocation, clean multi-device logout).
 10. CE is **setup + invite-only by default**; public open registration is a config flag (off CE; on for Cloud with email verification required).
-11. AI config: same AI interface — CE admins supply their own credential/model in the admin UI; Cloud uses an operator-supplied credential + per-workspace enable toggle.
-12. OIDC config: same auth interface — CE configures providers in the admin UI (DB-sourced); Cloud via deployment config; Cloud workspace admins cannot add their own providers in v1.
+11. AI config: same AI interface on both editions — operator supplies credential/model via `OPENAI_*` env; workspace admins get an enable-only toggle (no BYO credential UI or DB storage).
+12. OIDC config: same auth interface on both editions — operator configures providers via per-provider `OIDC_{SLUG}_*` env vars; workspace admins cannot add their own providers in v1.
 
 **Administration / operator**
 13. Operator console is **Fast-Follow**, not v1. v1 "operator" = first admin (instance-wide admin flag) on CE. **Cloud** operator observability = standalone admin portal (`packages/admin`), not routes on `packages/backend`; direct DB access may persist until portal deploy. P5-06 aggregate-stats API **superseded**. CE has an instance-wide admin distinct from per-workspace admins; **no second authenticated surface on the product app in v1**.
