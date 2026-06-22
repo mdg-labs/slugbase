@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, type OnModuleInit, forwardRef } from "@nestjs/common";
+import { Inject, Injectable, Logger, type OnModuleInit } from "@nestjs/common";
 import { eq } from "drizzle-orm";
 
 import { ConfigService } from "../config/config.service.js";
@@ -34,7 +34,7 @@ export class MailRuntimeService implements OnModuleInit, MailTransportHydrator {
   constructor(
     @Inject(ConfigService) private readonly config: ConfigService,
     @Inject(DbService) dbService: DbService,
-    @Inject(forwardRef(() => SmtpMailService)) private readonly smtpMail: SmtpMailService,
+    @Inject(SmtpMailService) private readonly smtpMail: SmtpMailService,
   ) {
     this.db = dbService.getOrm();
   }

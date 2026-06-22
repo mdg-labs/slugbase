@@ -5,7 +5,7 @@ import { CryptoModule } from "../crypto/crypto.module.js";
 import { DbModule } from "../db/db.module.js";
 import { MailRuntimeService } from "./mail-runtime.service.js";
 import { NoopMailService } from "./noop-mail.service.js";
-import { MAIL } from "./mail.tokens.js";
+import { MAIL, MAIL_TRANSPORT_HYDRATOR } from "./mail.tokens.js";
 import { SmtpMailService } from "./smtp-mail.service.js";
 
 /**
@@ -25,6 +25,10 @@ import { SmtpMailService } from "./smtp-mail.service.js";
     {
       provide: MAIL,
       useExisting: SmtpMailService,
+    },
+    {
+      provide: MAIL_TRANSPORT_HYDRATOR,
+      useExisting: MailRuntimeService,
     },
   ],
   exports: [MAIL, SmtpMailService, NoopMailService, MailRuntimeService],

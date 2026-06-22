@@ -1,4 +1,5 @@
-import { Inject, Injectable, Logger, Optional, forwardRef } from "@nestjs/common";
+import { Inject, Injectable, Logger } from "@nestjs/common";
+import { ModuleRef } from "@nestjs/core";
 import { renderMailTransportTestEmail } from "@slugbase/email-templates";
 import { MailSendError, type MailMessage, type MailService } from "@slugbase/shared-types";
 import type { CryptoService } from "@slugbase/shared-types";
@@ -6,7 +7,8 @@ import nodemailer, { type Transporter } from "nodemailer";
 
 import { ConfigService } from "../config/config.service.js";
 import { CRYPTO } from "../crypto/crypto.tokens.js";
-import { MailRuntimeService } from "./mail-runtime.service.js";
+import type { MailTransportHydrator } from "./mail-transport-hydrator.js";
+import { MAIL_TRANSPORT_HYDRATOR } from "./mail.tokens.js";
 
 /**
  * SMTP-backed mail implementation (spec §11.1, v1 implementation).
@@ -27,9 +29,7 @@ export class SmtpMailService implements MailService {
   constructor(
     @Inject(ConfigService) config: ConfigService,
     @Inject(CRYPTO) private readonly crypto: CryptoService,
-    @Optional()
-    @Inject(forwardRef(() => MailRuntimeService))
-    private readonly mailRuntime?: MailRuntimeService,
+    @Inject(ModuleRef) private readonly moduleRef: ModuleRef,
   ) {
     const host = config.get("SMTP_HOST");
     const port = config.get("SMTP_PORT");
@@ -87,11 +87,18 @@ export class SmtpMailService implements MailService {
       return true;
     }
 
-    if (!this.mailRuntime) {
+    const hydrator = this.getTransportHydrator();
+    if (!hydrator) {
       return false;
     }
 
-    return this.mailRuntime.hydrateIfNeeded();
+    return hydrator.hydrateIfNeeded();
+  }
+
+  private getTransportHydrator(): MailTransportHydrator | undefined {
+    return this.moduleRef.get<MailTransportHydrator>(MAIL_TRANSPORT_HYDRATOR, {
+      strict: false,
+    });
   }
 
   async sendTest(to: string): Promise<void> {

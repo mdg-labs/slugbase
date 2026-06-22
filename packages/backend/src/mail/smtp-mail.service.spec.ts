@@ -4,6 +4,7 @@ import { ConfigService } from "../config/config.service.js";
 import { validateEnvConfig } from "../config/env.schema.js";
 import { AesGcmCryptoService } from "../crypto/aes-gcm-crypto.service.js";
 import { validTestEnv } from "../test-utils/test-env.js";
+import { MAIL_TRANSPORT_HYDRATOR } from "./mail.tokens.js";
 import { SmtpMailService } from "./smtp-mail.service.js";
 
 function buildConfig(overrides: NodeJS.ProcessEnv = {}): ConfigService {
@@ -25,6 +26,14 @@ function buildCrypto(config: ConfigService): AesGcmCryptoService {
   return new AesGcmCryptoService(config);
 }
 
+function buildModuleRef(hydrator?: { hydrateIfNeeded: ReturnType<typeof vi.fn> }) {
+  return {
+    get: vi.fn((token: symbol) =>
+      token === MAIL_TRANSPORT_HYDRATOR ? hydrator : undefined,
+    ),
+  };
+}
+
 describe("SmtpMailService", () => {
   it("reports unavailable when SMTP_HOST is not configured", () => {
     const config = new ConfigService(
@@ -33,13 +42,13 @@ describe("SmtpMailService", () => {
         SMTP_FROM: "noreply@example.com",
       }),
     );
-    const service = new SmtpMailService(config, buildCrypto(config));
+    const service = new SmtpMailService(config, buildCrypto(config), buildModuleRef() as never);
     expect(service.isAvailable()).toBe(false);
   });
 
   it("reports as available when SMTP_HOST is configured", () => {
     const config = buildConfig();
-    const service = new SmtpMailService(config, buildCrypto(config));
+    const service = new SmtpMailService(config, buildCrypto(config), buildModuleRef() as never);
     expect(service.isAvailable()).toBe(true);
   });
 
@@ -50,7 +59,7 @@ describe("SmtpMailService", () => {
         SMTP_FROM: "noreply@example.com",
       }),
     );
-    const service = new SmtpMailService(config, buildCrypto(config));
+    const service = new SmtpMailService(config, buildCrypto(config), buildModuleRef() as never);
 
     const sendMailSpy = vi.spyOn(service["transport"], "sendMail");
 
@@ -66,7 +75,7 @@ describe("SmtpMailService", () => {
 
   it("calls transport.sendMail with the correct payload", async () => {
     const config = buildConfig();
-    const service = new SmtpMailService(config, buildCrypto(config));
+    const service = new SmtpMailService(config, buildCrypto(config), buildModuleRef() as never);
 
     const sendMailSpy = vi
       .spyOn(service["transport"], "sendMail")
@@ -94,7 +103,7 @@ describe("SmtpMailService", () => {
 
   it("throws MailSendError when transport fails", async () => {
     const config = buildConfig();
-    const service = new SmtpMailService(config, buildCrypto(config));
+    const service = new SmtpMailService(config, buildCrypto(config), buildModuleRef() as never);
 
     vi.spyOn(service["transport"], "sendMail").mockRejectedValue(
       new Error("Connection refused"),
@@ -113,7 +122,7 @@ describe("SmtpMailService", () => {
 
   it("sendTest sends branded HTML and plain-text fallback", async () => {
     const config = buildConfig();
-    const service = new SmtpMailService(config, buildCrypto(config));
+    const service = new SmtpMailService(config, buildCrypto(config), buildModuleRef() as never);
 
     const sendMailSpy = vi
       .spyOn(service["transport"], "sendMail")
@@ -137,7 +146,7 @@ describe("SmtpMailService", () => {
   it("reconfigureFromEncrypted decrypts credentials and rebuilds transport", () => {
     const config = buildConfig();
     const crypto = buildCrypto(config);
-    const service = new SmtpMailService(config, crypto);
+    const service = new SmtpMailService(config, crypto, buildModuleRef() as never);
 
     const encryptedUser = crypto.encrypt("newuser@example.com");
     const encryptedPass = crypto.encrypt("newpassword123");
@@ -164,17 +173,17 @@ describe("SmtpMailService", () => {
         SMTP_FROM: "noreply@example.com",
       }),
     );
-    const mailRuntime = {
+    const transportHydrator = {
       hydrateIfNeeded: vi.fn().mockResolvedValue(true),
     };
     const service = new SmtpMailService(
       config,
       buildCrypto(config),
-      mailRuntime as never,
+      buildModuleRef(transportHydrator) as never,
     );
 
     await expect(service.ensureAvailable()).resolves.toBe(true);
-    expect(mailRuntime.hydrateIfNeeded).toHaveBeenCalledOnce();
+    expect(transportHydrator.hydrateIfNeeded).toHaveBeenCalledOnce();
   });
 
   it("ensureAvailable returns false without hydrator when env SMTP is absent", async () => {
@@ -184,7 +193,7 @@ describe("SmtpMailService", () => {
         SMTP_FROM: "noreply@example.com",
       }),
     );
-    const service = new SmtpMailService(config, buildCrypto(config));
+    const service = new SmtpMailService(config, buildCrypto(config), buildModuleRef() as never);
 
     await expect(service.ensureAvailable()).resolves.toBe(false);
   });
@@ -197,11 +206,15 @@ describe("SmtpMailService", () => {
       }),
     );
     const crypto = buildCrypto(config);
-    const mailRuntime = {
+    const transportHydrator = {
       hydrateIfNeeded: vi.fn(),
     };
-    const service = new SmtpMailService(config, crypto, mailRuntime as never);
-    mailRuntime.hydrateIfNeeded.mockImplementation(() => {
+    const service = new SmtpMailService(
+      config,
+      crypto,
+      buildModuleRef(transportHydrator) as never,
+    );
+    transportHydrator.hydrateIfNeeded.mockImplementation(() => {
       service.reconfigureFromEncrypted({
         host: "smtp.example.com",
         port: 587,
@@ -220,7 +233,7 @@ describe("SmtpMailService", () => {
       type: "member_invitation",
     });
 
-    expect(mailRuntime.hydrateIfNeeded).toHaveBeenCalledOnce();
+    expect(transportHydrator.hydrateIfNeeded).toHaveBeenCalledOnce();
     expect(service["transport"].sendMail).toHaveBeenCalledOnce();
   });
 });
