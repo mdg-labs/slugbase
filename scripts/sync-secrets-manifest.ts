@@ -1,6 +1,12 @@
 /**
  * Canonical sync-secrets manifest for SlugBase hosted deploy (spec §22.9, §14.7).
  * Validated against `.github/scripts/sync-secrets.sh` and `.github/workflows/sync-secrets.yml`.
+ *
+ * OIDC identity providers use per-provider env vars (spec §11.3, §15) — not a single JSON blob.
+ * Pattern per IdP slug: `OIDC_{SLUG}_CLIENT_ID`, `OIDC_{SLUG}_CLIENT_SECRET`,
+ * `OIDC_{SLUG}_ISSUER_URL`, optional `OIDC_{SLUG}_NAME`, `OIDC_{SLUG}_SCOPES`,
+ * `OIDC_{SLUG}_ENABLED`. Register each provider in Phase/GHA individually; dynamic slugs
+ * are not enumerated in this manifest.
  */
 
 export type SyncSecretsService = "api" | "web" | "marketing" | "admin";

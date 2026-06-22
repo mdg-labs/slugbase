@@ -42,9 +42,9 @@ describe("getEditionPresets", () => {
       EMAIL_VERIFICATION_REQUIRED: "false",
       SERVE_WEB_CLIENT: "true",
       VITE_BILLING_ENABLED: "false",
-      VITE_MAIL_ADMIN_UI: "true",
-      VITE_OIDC_ADMIN_UI: "true",
-      VITE_AI_BYO_CREDENTIAL: "true",
+      VITE_MAIL_ADMIN_UI: "false",
+      VITE_OIDC_ADMIN_UI: "false",
+      VITE_AI_BYO_CREDENTIAL: "false",
     });
   });
 });
@@ -116,7 +116,7 @@ describe("resolveEnvWithEdition", () => {
       VITE_MAIL_ADMIN_UI: "   ",
     });
 
-    expect(resolved.env.VITE_MAIL_ADMIN_UI).toBe("true");
+    expect(resolved.env.VITE_MAIL_ADMIN_UI).toBe("false");
   });
 
   it("uses editionRaw option when SLUGBASE_EDITION is absent from rawEnv", () => {

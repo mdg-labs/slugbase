@@ -49,9 +49,9 @@ describe("applyViteEditionEnv", () => {
 
     expect(process.env.SLUGBASE_EDITION).toBe("ce");
     expect(process.env.VITE_BILLING_ENABLED).toBe("false");
-    expect(process.env.VITE_MAIL_ADMIN_UI).toBe("true");
-    expect(process.env.VITE_OIDC_ADMIN_UI).toBe("true");
-    expect(process.env.VITE_AI_BYO_CREDENTIAL).toBe("true");
+    expect(process.env.VITE_MAIL_ADMIN_UI).toBe("false");
+    expect(process.env.VITE_OIDC_ADMIN_UI).toBe("false");
+    expect(process.env.VITE_AI_BYO_CREDENTIAL).toBe("false");
   });
 
   it("defaults to ce in non-production when SLUGBASE_EDITION is unset", () => {
@@ -62,28 +62,28 @@ describe("applyViteEditionEnv", () => {
 
     expect(process.env.SLUGBASE_EDITION).toBe("ce");
     expect(process.env.VITE_BILLING_ENABLED).toBe("false");
-    expect(process.env.VITE_MAIL_ADMIN_UI).toBe("true");
+    expect(process.env.VITE_MAIL_ADMIN_UI).toBe("false");
   });
 
   it("keeps explicit VITE_* overrides that match the edition preset", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("SLUGBASE_EDITION", "ce");
     vi.stubEnv("VITE_BILLING_ENABLED", "false");
-    vi.stubEnv("VITE_MAIL_ADMIN_UI", "true");
-    vi.stubEnv("VITE_OIDC_ADMIN_UI", "true");
-    vi.stubEnv("VITE_AI_BYO_CREDENTIAL", "true");
+    vi.stubEnv("VITE_MAIL_ADMIN_UI", "false");
+    vi.stubEnv("VITE_OIDC_ADMIN_UI", "false");
+    vi.stubEnv("VITE_AI_BYO_CREDENTIAL", "false");
 
     applyViteEditionEnv(process.env);
 
-    expect(process.env.VITE_MAIL_ADMIN_UI).toBe("true");
+    expect(process.env.VITE_MAIL_ADMIN_UI).toBe("false");
   });
 
   it("rejects conflicting explicit VITE_* values in production builds", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("SLUGBASE_EDITION", "ce");
-    vi.stubEnv("VITE_MAIL_ADMIN_UI", "true");
-    vi.stubEnv("VITE_OIDC_ADMIN_UI", "true");
-    vi.stubEnv("VITE_AI_BYO_CREDENTIAL", "true");
+    vi.stubEnv("VITE_MAIL_ADMIN_UI", "false");
+    vi.stubEnv("VITE_OIDC_ADMIN_UI", "false");
+    vi.stubEnv("VITE_AI_BYO_CREDENTIAL", "false");
     vi.stubEnv("VITE_BILLING_ENABLED", "true");
 
     expect(() => {

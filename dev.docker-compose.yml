@@ -60,8 +60,30 @@ services:
       # SERVE_WEB_CLIENT=true
       # WEB_CLIENT_SERVER_BUILD=/app/packages/web/build/server/index.js
 
-      # No-op interfaces (leave empty for local)
-      # SMTP_*, OPENAI_API_KEY, STRIPE_*, TURNSTILE_*, UMAMI_*, SENTRY_* unset
+      # Operator-managed credentials (spec §11.1–§11.3, §15) — env-only on CE and Cloud.
+      # Omit all blocks below for no-op mail / AI / OIDC (graceful degrade on send).
+      #
+      # SMTP transactional mail:
+      # SMTP_HOST: mail.example.com
+      # SMTP_PORT: "587"
+      # SMTP_SECURE: "false"
+      # SMTP_USER: smtp-user@example.com
+      # SMTP_PASS: replace-me
+      # SMTP_FROM: noreply@example.com
+      #
+      # OpenAI suggestions:
+      # OPENAI_API_KEY: sk-replace-me
+      # OPENAI_MODEL: gpt-4o-mini
+      #
+      # Per-provider OIDC (one slug per IdP — pattern OIDC_{SLUG}_*):
+      # OIDC_google_CLIENT_ID: replace-me
+      # OIDC_google_CLIENT_SECRET: replace-me
+      # OIDC_google_ISSUER_URL: https://accounts.google.com
+      # OIDC_google_NAME: Google
+      # OIDC_google_SCOPES: openid email profile
+      # OIDC_google_ENABLED: "true"
+      #
+      # Other optional interfaces: STRIPE_*, TURNSTILE_*, UMAMI_*, SENTRY_* unset
 
       # Optional: skip Turnstile in prod image when testing registration flows
       # (noop challenge is used anyway when TURNSTILE_SECRET_KEY is unset)

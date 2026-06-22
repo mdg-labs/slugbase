@@ -38,9 +38,9 @@ const CE_PRESETS: EditionPresetMap = {
   EMAIL_VERIFICATION_REQUIRED: "false",
   SERVE_WEB_CLIENT: "true",
   VITE_BILLING_ENABLED: "false",
-  VITE_MAIL_ADMIN_UI: "true",
-  VITE_OIDC_ADMIN_UI: "true",
-  VITE_AI_BYO_CREDENTIAL: "true",
+  VITE_MAIL_ADMIN_UI: "false",
+  VITE_OIDC_ADMIN_UI: "false",
+  VITE_AI_BYO_CREDENTIAL: "false",
 };
 
 export class SlugbaseEditionParseError extends Error {

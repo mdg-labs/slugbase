@@ -70,6 +70,21 @@ header(){ echo -e "\n${CYAN}═════════════════�
 source "${REPO_ROOT}/scripts/self-host-vite-build-args.sh"
 CE_DOCKER_BUILD_ARGS=("${SELF_HOST_VITE_BUILD_ARGS[@]}")
 
+# CE operator credential env for combined-container e2e (spec §11.1–§11.3).
+# Placeholder values — not real secrets; exercise env-configured interfaces at boot.
+CE_E2E_OPERATOR_ENV=(
+  SMTP_HOST=localhost
+  SMTP_PORT=1025
+  SMTP_SECURE=false
+  SMTP_FROM=e2e@slugbase.test
+  OPENAI_API_KEY=sk-e2e-test-openai-key
+  OPENAI_MODEL=gpt-4o-mini
+  OIDC_e2e_CLIENT_ID=e2e-oidc-client-id
+  OIDC_e2e_CLIENT_SECRET=e2e-oidc-client-secret
+  OIDC_e2e_ISSUER_URL=https://idp.slugbase.test
+  OIDC_e2e_NAME="E2E IdP"
+)
+
 # Cloud web bundle: cloud edition presets (billing on, admin UI panels off).
 # Args: marketing origin for VITE_MARKETING_ORIGIN; API base for marketing PUBLIC_API_BASE_URL.
 build_cloud_packages() {
@@ -314,6 +329,10 @@ if [ "$RUN_CE" = true ]; then
   # CE prod default is PUBLIC_REGISTRATION=false (invite-only). E2e overrides
   # to true so global-setup can register per-worker accounts via /auth/register —
   # no invite flow in this harness (see e2e/global-setup.ts).
+  CE_E2E_DOCKER_ENV=()
+  for kv in "${CE_E2E_OPERATOR_ENV[@]}"; do
+    CE_E2E_DOCKER_ENV+=(-e "$kv")
+  done
   docker run -d \
     --name slugbase-e2e-ce \
     --network host \
@@ -327,6 +346,7 @@ if [ "$RUN_CE" = true ]; then
     -e FRONTEND_ORIGIN="http://localhost:$PORT_CE" \
     -e API_BASE_URL="http://localhost:$PORT_CE" \
     -e PUBLIC_REGISTRATION=true \
+    "${CE_E2E_DOCKER_ENV[@]}" \
     slugbase-e2e:ce 2>&1 | sed 's/^/  /'
   ok "Container started"
 
