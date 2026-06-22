@@ -100,6 +100,7 @@ check_surface "API" "${APP_BASE_URL}"
 check_surface "Web" "${FRONTEND_ORIGIN}"
 check_pricing_api() {
   local api_base="$1"
+  local marketing_origin="$2"
   local pricing_url="${api_base%/}/pricing/public"
 
   echo "Smoke: API (${api_base}) — live Stripe-backed public pricing"
@@ -115,9 +116,35 @@ check_pricing_api() {
     echo "Smoke failed: personal pricing display lacks currency or digits" >&2
     return 1
   fi
+
+  echo "Smoke: API (${api_base}) — CORS for marketing origin"
+
+  local acao
+  acao="$(
+    smoke_curl -s -D - -o /dev/null \
+      -H "Origin: ${marketing_origin}" \
+      "${pricing_url}" \
+      | tr -d '\r' \
+      | awk 'BEGIN{IGNORECASE=1} /^access-control-allow-origin:/ {sub(/^[^:]+:[[:space:]]*/, ""); print; exit}'
+  )"
+
+  if [[ -z "${acao}" ]]; then
+    echo "Smoke failed: missing Access-Control-Allow-Origin for Origin ${marketing_origin}" >&2
+    return 1
+  fi
+
+  local marketing_lc origin_lc
+  marketing_lc="$(printf '%s' "${marketing_origin}" | tr '[:upper:]' '[:lower:]')"
+  origin_lc="$(printf '%s' "${acao}" | tr '[:upper:]' '[:lower:]')"
+  if [[ "${origin_lc}" != "${marketing_lc}" ]]; then
+    echo "Smoke failed: Access-Control-Allow-Origin '${acao}' does not match marketing origin" >&2
+    return 1
+  fi
+
+  echo "  GET /pricing/public (Origin: ${marketing_origin}) -> Access-Control-Allow-Origin: ${acao}"
 }
 
 check_marketing_root "${MARKETING_ORIGIN}"
-check_pricing_api "${APP_BASE_URL}"
+check_pricing_api "${APP_BASE_URL}" "${MARKETING_ORIGIN}"
 
 echo "Staging smoke passed"

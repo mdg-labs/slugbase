@@ -52,6 +52,12 @@ export async function bootstrap(): Promise<void> {
     rawBody: true,
   });
 
+  // CORS for cross-origin client requests (hosted: web + marketing CF Workers → Fly.io API)
+  app.enableCors({
+    origin: resolveCorsOrigins(startupConfig),
+    credentials: true,
+  });
+
   applySecurityHeaders(app, {
     enableHsts: startupConfig.nodeEnv === "production",
   });
@@ -73,12 +79,6 @@ export async function bootstrap(): Promise<void> {
   await app.init();
 
   const config = app.get(ConfigService);
-
-  // CORS for cross-origin client requests (hosted: web + marketing CF Workers → Fly.io API)
-  app.enableCors({
-    origin: resolveCorsOrigins(config.getAll()),
-    credentials: true,
-  });
 
   await app.listen(config.get("PORT"));
 }

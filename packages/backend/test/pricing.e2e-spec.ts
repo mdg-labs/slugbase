@@ -7,6 +7,8 @@ import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { AppModule } from "../src/app.module.js";
+import { loadAppConfig } from "../src/config/load-config.js";
+import { resolveCorsOrigins } from "../src/config/resolve-cors-origins.js";
 import { STRIPE_CLIENT } from "../src/billing/billing.tokens.js";
 import type { StripeBillingClient } from "../src/billing/stripe-billing.service.js";
 import type { PricingResponse } from "../src/billing/pricing.service.js";
@@ -42,6 +44,7 @@ describe("GET /pricing/public (integration)", () => {
     cleanup = testDatabase.cleanup;
     applyTestEnv({
       DATABASE_URL: testDatabase.databaseUrl,
+      MARKETING_ORIGIN: "https://www.slugbase.test",
       STRIPE_SECRET_KEY: "sk_test_pricing_integration",
       STRIPE_PRICE_PERSONAL_MONTHLY: "price_pm_monthly",
       STRIPE_PRICE_PERSONAL_ANNUAL: "price_pm_annual",
@@ -58,6 +61,11 @@ describe("GET /pricing/public (integration)", () => {
       .compile();
 
     app = moduleRef.createNestApplication();
+    const config = loadAppConfig(process.env);
+    app.enableCors({
+      origin: resolveCorsOrigins(config),
+      credentials: true,
+    });
     await app.init();
   });
 
@@ -106,8 +114,21 @@ describe("GET /pricing/public (integration)", () => {
     expect(response.status).toBe(200);
   });
 
+  it("returns Access-Control-Allow-Origin for marketing origin", async () => {
+    const marketingOrigin = "https://www.slugbase.test";
+    const server = (app as INestApplication).getHttpServer() as Server;
+    const response = await request(server)
+      .get("/pricing/public")
+      .set("Origin", marketingOrigin);
+
+    expect(response.status).toBe(200);
+    expect(response.headers["access-control-allow-origin"]).toBe(
+      marketingOrigin,
+    );
+  });
+
   it("calls Stripe prices.retrieve for each configured price", () => {
-    // Two requests so far (first test + this) × 5 configured prices = 10 calls
-    expect(stripeClient.prices.retrieve).toHaveBeenCalledTimes(10);
+    // Three requests × 5 configured prices = 15 calls
+    expect(stripeClient.prices.retrieve).toHaveBeenCalledTimes(15);
   });
 });
