@@ -5,11 +5,13 @@ import { useMemo, useState } from "react";
 import { useAppToast } from "../../../../components/feedback/AppToastProvider.js";
 import { useAppLocale } from "../../../../i18n/use-app-locale.js";
 
+import { ShownOncePanel } from "../../account/components/ShownOncePanel.js";
 import {
   addTeamMember,
   createInvitation,
   createTeam,
   deleteTeam,
+  getInvitationLink,
   removeMember,
   removeTeamMember,
   resendInvitation,
@@ -17,6 +19,7 @@ import {
   transferOwnership,
   updateMemberRole,
 } from "../members-api.js";
+import type { InvitationDelivery } from "../members-api.js";
 import { canAccessMembersSettings, seatUsage } from "../members-entitlements.js";
 import type {
   InvitationRole,
@@ -79,6 +82,8 @@ export function MembersSettingsPage({ initialData }: MembersSettingsPageProps) {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<InvitationRole>("MEMBER");
+  const [inviteDelivery, setInviteDelivery] = useState<InvitationDelivery>("email");
+  const [shownAcceptUrl, setShownAcceptUrl] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<string | null>(null);
   const [transferTarget, setTransferTarget] = useState<string | null>(null);
   const [teamCreateOpen, setTeamCreateOpen] = useState(false);
@@ -110,12 +115,14 @@ export function MembersSettingsPage({ initialData }: MembersSettingsPageProps) {
 
   const handleInvite = async () => {
     if (seats.atLimit || !inviteEmail.trim()) return;
+    const email = inviteEmail.trim();
     setBusy(true);
     try {
       const created = await createInvitation(
         initialData.workspace.id,
-        inviteEmail.trim(),
+        email,
         inviteRole,
+        inviteDelivery,
       );
       setPending((items) => [
         ...items,
@@ -127,7 +134,26 @@ export function MembersSettingsPage({ initialData }: MembersSettingsPageProps) {
       setInviteOpen(false);
       setInviteEmail("");
       setInviteRole("MEMBER");
-      showToast("settings.members.toast_invite_sent", { email: inviteEmail.trim() });
+      setInviteDelivery("email");
+      if (inviteDelivery === "link" && created.acceptUrl) {
+        setShownAcceptUrl(created.acceptUrl);
+        showToast("settings.members.toast_invite_link_created", { email });
+      } else {
+        showToast("settings.members.toast_invite_sent", { email });
+      }
+    } catch (err) {
+      showError(err instanceof Error ? err.message : t("settings.members.error_generic"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleCopyPendingLink = async (invitationId: string, email: string) => {
+    setBusy(true);
+    try {
+      const acceptUrl = await getInvitationLink(invitationId);
+      await navigator.clipboard.writeText(acceptUrl);
+      showToast("settings.members.toast_invite_link_copied", { email });
     } catch (err) {
       showError(err instanceof Error ? err.message : t("settings.members.error_generic"));
     } finally {
@@ -363,36 +389,84 @@ export function MembersSettingsPage({ initialData }: MembersSettingsPageProps) {
             ) : null}
           </div>
 
+          {shownAcceptUrl ? (
+            <div data-testid="invite-link-shown-once-panel">
+              <ShownOncePanel
+                values={[shownAcceptUrl]}
+                labelKey="settings.members.invite_link_shown_once_label"
+                warningKey="settings.members.invite_link_shown_once_warning"
+                copyActionKey="settings.members.invite_link_shown_once_copy"
+                copiedKey="settings.members.invite_link_shown_once_copied"
+                t={t}
+              />
+            </div>
+          ) : null}
+
           {inviteOpen && isAdmin ? (
             <div className="rounded-lg border border-[color:var(--border-subtle)] bg-raised p-sp-5">
-              <div className="flex flex-col gap-sp-4 md:flex-row md:items-end">
-                <div className="flex-1">
-                  <Label htmlFor="invite-email">{t("settings.members.invite_email_label")}</Label>
-                  <Input
-                    id="invite-email"
-                    value={inviteEmail}
-                    onChange={(event) => {
-                      setInviteEmail(event.target.value);
-                    }}
-                    placeholder={t("settings.members.invite_email_placeholder")}
-                    disabled={busy || seats.atLimit}
-                  />
+              <div className="flex flex-col gap-sp-4">
+                <div className="flex flex-col gap-sp-4 md:flex-row md:items-end">
+                  <div className="flex-1">
+                    <Label htmlFor="invite-email">{t("settings.members.invite_email_label")}</Label>
+                    <Input
+                      id="invite-email"
+                      value={inviteEmail}
+                      onChange={(event) => {
+                        setInviteEmail(event.target.value);
+                      }}
+                      placeholder={t("settings.members.invite_email_placeholder")}
+                      disabled={busy || seats.atLimit}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="invite-role">{t("settings.members.invite_role_label")}</Label>
+                    <select
+                      id="invite-role"
+                      className="w-full rounded-md border border-[color:var(--border)] bg-base px-sp-4 py-sp-3 text-[length:var(--text-body)] text-fg"
+                      value={inviteRole}
+                      onChange={(event) => {
+                        setInviteRole(event.target.value as InvitationRole);
+                      }}
+                      disabled={busy || seats.atLimit}
+                    >
+                      <option value="MEMBER">{t("settings.members.role_member")}</option>
+                      <option value="ADMIN">{t("settings.members.role_admin")}</option>
+                    </select>
+                  </div>
                 </div>
-                <div>
-                  <Label htmlFor="invite-role">{t("settings.members.invite_role_label")}</Label>
-                  <select
-                    id="invite-role"
-                    className="w-full rounded-md border border-[color:var(--border)] bg-base px-sp-4 py-sp-3 text-[length:var(--text-body)] text-fg"
-                    value={inviteRole}
-                    onChange={(event) => {
-                      setInviteRole(event.target.value as InvitationRole);
-                    }}
-                    disabled={busy || seats.atLimit}
-                  >
-                    <option value="MEMBER">{t("settings.members.role_member")}</option>
-                    <option value="ADMIN">{t("settings.members.role_admin")}</option>
-                  </select>
-                </div>
+                <fieldset className="m-0 border-0 p-0">
+                  <legend className="mb-sp-2 text-[length:var(--text-small)] text-fg-muted">
+                    {t("settings.members.invite_delivery_label")}
+                  </legend>
+                  <div className="flex flex-wrap gap-sp-5">
+                    <label className="flex cursor-pointer items-center gap-sp-2 text-[length:var(--text-body)] text-fg">
+                      <input
+                        type="radio"
+                        name="invite-delivery"
+                        value="email"
+                        checked={inviteDelivery === "email"}
+                        onChange={() => {
+                          setInviteDelivery("email");
+                        }}
+                        disabled={busy || seats.atLimit}
+                      />
+                      {t("settings.members.invite_delivery_email")}
+                    </label>
+                    <label className="flex cursor-pointer items-center gap-sp-2 text-[length:var(--text-body)] text-fg">
+                      <input
+                        type="radio"
+                        name="invite-delivery"
+                        value="link"
+                        checked={inviteDelivery === "link"}
+                        onChange={() => {
+                          setInviteDelivery("link");
+                        }}
+                        disabled={busy || seats.atLimit}
+                      />
+                      {t("settings.members.invite_delivery_link")}
+                    </label>
+                  </div>
+                </fieldset>
                 <div className="flex gap-sp-3">
                   <Button
                     disabled={busy || !inviteEmail.trim() || seats.atLimit}
@@ -400,8 +474,11 @@ export function MembersSettingsPage({ initialData }: MembersSettingsPageProps) {
                       void handleInvite();
                     }}
                     type="button"
+                    data-testid="invite-submit-action"
                   >
-                    {t("settings.members.invite_send_action")}
+                    {inviteDelivery === "link"
+                      ? t("settings.members.invite_create_link_action")
+                      : t("settings.members.invite_send_action")}
                   </Button>
                   <Button
                     variant="ghost"
@@ -517,6 +594,17 @@ export function MembersSettingsPage({ initialData }: MembersSettingsPageProps) {
                     </span>
                     {isAdmin ? (
                       <>
+                        <Button
+                          variant="ghost"
+                          disabled={busy}
+                          onClick={() => {
+                            void handleCopyPendingLink(invitation.id, invitation.invitedEmail);
+                          }}
+                          type="button"
+                          data-testid={`pending-copy-link-${invitation.id}`}
+                        >
+                          {t("settings.members.copy_link_action")}
+                        </Button>
                         <Button
                           variant="ghost"
                           disabled={busy}

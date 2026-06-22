@@ -1,11 +1,30 @@
 import { ToastProvider } from "@slugbase/ui";
-import { cleanup, render } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { staticMessages } from "../../../i18n/messages.js";
 import { MembersPlanGate } from "./components/MembersPlanGate.js";
 import { MembersSettingsPage } from "./components/MembersSettingsPage.js";
 import type { MembersSettingsData } from "./members.types.js";
+
+const { createInvitation, getInvitationLink } = vi.hoisted(() => ({
+  createInvitation: vi.fn(),
+  getInvitationLink: vi.fn(),
+}));
+
+vi.mock("./members-api.js", () => ({
+  addTeamMember: vi.fn(),
+  createInvitation,
+  createTeam: vi.fn(),
+  deleteTeam: vi.fn(),
+  getInvitationLink,
+  removeMember: vi.fn(),
+  removeTeamMember: vi.fn(),
+  resendInvitation: vi.fn(),
+  revokeInvitation: vi.fn(),
+  transferOwnership: vi.fn(),
+  updateMemberRole: vi.fn(),
+}));
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -24,6 +43,7 @@ vi.mock("react-i18next", () => ({
 
 afterEach(() => {
   cleanup();
+  vi.clearAllMocks();
 });
 
 const teamData: MembersSettingsData = {
@@ -74,39 +94,98 @@ const teamData: MembersSettingsData = {
   membersForbidden: false,
 };
 
+function renderMembersPage(data: MembersSettingsData = teamData) {
+  return render(
+    <ToastProvider dismissLabel="Dismiss notification">
+      <MembersSettingsPage initialData={data} />
+    </ToastProvider>,
+  );
+}
+
 describe("MembersSettingsPage", () => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+
+  beforeEach(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+    writeText.mockClear();
+  });
+
   it("shows plan gate for non-Team workspaces", () => {
-    const view = render(
-      <ToastProvider dismissLabel="Dismiss notification">
-        <MembersSettingsPage
-          initialData={{
-            ...teamData,
-            workspace: { ...teamData.workspace, plan: "personal" },
-          }}
-        />
-      </ToastProvider>,
-    );
+    const view = renderMembersPage({
+      ...teamData,
+      workspace: { ...teamData.workspace, plan: "personal" },
+    });
     expect(view.getByTestId("members-plan-gate")).toBeTruthy();
   });
 
   it("renders members tab content for Team workspaces", () => {
-    const view = render(
-      <ToastProvider dismissLabel="Dismiss notification">
-        <MembersSettingsPage initialData={teamData} />
-      </ToastProvider>,
-    );
+    const view = renderMembersPage();
     expect(view.getByTestId("members-settings-page")).toBeTruthy();
     expect(view.getByText("Alex Kerr")).toBeTruthy();
     expect(view.getByText("pending@example.com")).toBeTruthy();
   });
 
   it("shows owner role controls for the current owner", () => {
-    const view = render(
-      <ToastProvider dismissLabel="Dismiss notification">
-        <MembersSettingsPage initialData={teamData} />
-      </ToastProvider>,
-    );
+    const view = renderMembersPage();
     expect(view.getAllByText("Transfer ownership…").length).toBeGreaterThan(0);
+  });
+
+  it("shows invite delivery choice in the invite form", () => {
+    const view = renderMembersPage();
+    fireEvent.click(view.getByRole("button", { name: "Invite member" }));
+    expect(view.getByText("Delivery")).toBeTruthy();
+    expect(view.getByLabelText("Send email")).toBeTruthy();
+    expect(view.getByLabelText("Copy link")).toBeTruthy();
+    expect(view.getByTestId("invite-submit-action").textContent).toBe("Send invite");
+    fireEvent.click(view.getByLabelText("Copy link"));
+    expect(view.getByTestId("invite-submit-action").textContent).toBe("Create invite link");
+  });
+
+  it("shows ShownOncePanel after creating an invite link", async () => {
+    createInvitation.mockResolvedValue({
+      id: "inv-2",
+      invitedEmail: "link@example.com",
+      role: "MEMBER",
+      invitedByName: "",
+      expiresAt: "2026-07-01T00:00:00.000Z",
+      acceptUrl: "https://app.slugbase.test/invitations/token-abc",
+    });
+
+    const view = renderMembersPage();
+    fireEvent.click(view.getByRole("button", { name: "Invite member" }));
+    fireEvent.change(view.getByLabelText("Email address"), {
+      target: { value: "link@example.com" },
+    });
+    fireEvent.click(view.getByLabelText("Copy link"));
+    fireEvent.click(view.getByTestId("invite-submit-action"));
+
+    await waitFor(() => {
+      expect(createInvitation).toHaveBeenCalledWith(
+        "ws-team",
+        "link@example.com",
+        "MEMBER",
+        "link",
+      );
+    });
+    expect(view.getByTestId("invite-link-shown-once-panel")).toBeTruthy();
+    expect(view.getByText("https://app.slugbase.test/invitations/token-abc")).toBeTruthy();
+  });
+
+  it("copies a fresh invitation link from the pending list", async () => {
+    getInvitationLink.mockResolvedValue("https://app.slugbase.test/invitations/token-rotated");
+
+    const view = renderMembersPage();
+    fireEvent.click(view.getByTestId("pending-copy-link-inv-1"));
+
+    await waitFor(() => {
+      expect(getInvitationLink).toHaveBeenCalledWith("inv-1");
+    });
+    expect(writeText).toHaveBeenCalledWith(
+      "https://app.slugbase.test/invitations/token-rotated",
+    );
   });
 });
 

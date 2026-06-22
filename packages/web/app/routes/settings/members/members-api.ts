@@ -79,15 +79,22 @@ export async function loadMembersSettingsData(
   };
 }
 
+export type InvitationDelivery = "email" | "link";
+
+export interface CreateInvitationResult extends PendingInvitationRow {
+  acceptUrl?: string;
+}
+
 export async function createInvitation(
   workspaceId: string,
   email: string,
   role: InvitationRole,
-): Promise<PendingInvitationRow> {
+  delivery: InvitationDelivery = "email",
+): Promise<CreateInvitationResult> {
   const res = await apiFetch(`/workspaces/${workspaceId}/invitations`, {
     method: "POST",
     csrf: true,
-    body: JSON.stringify({ email, role }),
+    body: JSON.stringify({ email, role, delivery }),
   });
   if (!res.ok) {
     throw new Error(await parseApiErrorMessage(res));
@@ -98,6 +105,7 @@ export async function createInvitation(
     role: InvitationRole;
     invitedByUserId: string;
     expiresAt: string;
+    acceptUrl?: string;
   };
   return {
     id: body.id,
@@ -105,7 +113,21 @@ export async function createInvitation(
     role: body.role,
     invitedByName: "",
     expiresAt: body.expiresAt,
+    acceptUrl: body.acceptUrl,
   };
+}
+
+export async function getInvitationLink(invitationId: string): Promise<string> {
+  const res = await apiFetch(`/workspace/invitations/${invitationId}/link`, {
+    method: "POST",
+    csrf: true,
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) {
+    throw new Error(await parseApiErrorMessage(res));
+  }
+  const body = (await res.json()) as { acceptUrl: string };
+  return body.acceptUrl;
 }
 
 export async function updateMemberRole(
