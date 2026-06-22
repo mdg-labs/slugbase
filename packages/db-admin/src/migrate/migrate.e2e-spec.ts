@@ -30,7 +30,10 @@ describe("db-admin migrations (integration)", () => {
       const migrationRows = await sql<
         Array<{ id: number; hash: string }>
       >`SELECT id, hash FROM drizzle.__drizzle_migrations ORDER BY id`;
-      expect(migrationRows.length).toBe(expectedHashes.length);
+      const appliedHashes = new Set(migrationRows.map((row) => row.hash));
+      for (const hash of expectedHashes) {
+        expect(appliedHashes.has(hash)).toBe(true);
+      }
 
       const adminTables = await sql<Array<{ tablename: string }>>`
         SELECT tablename FROM pg_tables WHERE schemaname = 'admin' ORDER BY tablename

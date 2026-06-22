@@ -32,7 +32,10 @@ describe("database migrations and repository (integration)", () => {
     >`SELECT id, hash FROM drizzle.__drizzle_migrations`;
     await sql.end({ timeout: 5 });
 
-    expect(migrationRows.length).toBe(expectedHashes.length);
+    const appliedHashes = new Set(migrationRows.map((row) => row.hash));
+    for (const hash of expectedHashes) {
+      expect(appliedHashes.has(hash)).toBe(true);
+    }
     expect(migrationRows[0]?.hash).toBeTruthy();
   });
 
