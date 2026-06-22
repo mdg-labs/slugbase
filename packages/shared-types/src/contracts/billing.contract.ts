@@ -103,6 +103,41 @@ export interface BillingEventResult {
   subscriptionState?: BillingSubscriptionState;
 }
 
+export type BillingInvoiceStatus =
+  | "draft"
+  | "open"
+  | "paid"
+  | "uncollectible"
+  | "void";
+
+export interface BillingInvoice {
+  id: string;
+  /** ISO-8601 invoice date (created timestamp). */
+  createdAt: string;
+  description: string;
+  /** Amount in minor currency units (e.g. cents). */
+  amount: number;
+  currency: string;
+  status: BillingInvoiceStatus;
+  /** Hosted invoice PDF URL when available from the provider. */
+  invoicePdfUrl: string | null;
+}
+
+export interface BillingInvoiceListRequest {
+  workspaceId: string;
+  externalCustomerId: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface BillingInvoiceListResult {
+  items: BillingInvoice[];
+  total: number;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+}
+
 export interface BillingService {
   /**
    * Returns true when an external billing provider is configured (hosted Stripe).
@@ -143,6 +178,12 @@ export interface BillingService {
    * No-op acknowledges events without mutating state.
    */
   handleAsyncEvent(event: BillingAsyncEvent): Promise<BillingEventResult>;
+
+  /**
+   * Lists invoices for a linked billing customer.
+   * No-op returns an empty list without error (CE / self-host).
+   */
+  listInvoices(request: BillingInvoiceListRequest): Promise<BillingInvoiceListResult>;
 }
 
 export class BillingUnavailableError extends Error {

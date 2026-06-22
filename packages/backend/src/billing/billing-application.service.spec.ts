@@ -47,6 +47,13 @@ function createMockBilling(): BillingService {
     getSubscriptionState: vi.fn(),
     updateSeatQuantity: vi.fn(),
     handleAsyncEvent: vi.fn().mockResolvedValue({ processed: true, stateUpdated: false }),
+    listInvoices: vi.fn().mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 20,
+      hasMore: false,
+    }),
   };
 }
 

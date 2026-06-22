@@ -46,6 +46,7 @@ function createStripeClient(
         return { id, ...price };
       }),
     },
+    invoices: { list: vi.fn() },
   };
 }
 

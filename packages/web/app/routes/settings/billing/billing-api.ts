@@ -5,6 +5,7 @@ import {
 } from "../../../lib/client-api-fetch.js";
 import type {
   BillingPlanId,
+  BillingInvoiceList,
   BillingSettingsData,
   BillingWorkspaceSummary,
   StartCheckoutParams,
@@ -164,4 +165,25 @@ export async function updateSeatQuantity(
     permanentPersonal: body.permanentPersonal,
     billingInterval: body.billingInterval,
   };
+}
+
+export async function fetchBillingInvoices(
+  workspaceId: string,
+  options: { page?: number; pageSize?: number } = {},
+): Promise<BillingInvoiceList> {
+  const params = new URLSearchParams();
+  if (options.page !== undefined) {
+    params.set("page", String(options.page));
+  }
+  if (options.pageSize !== undefined) {
+    params.set("pageSize", String(options.pageSize));
+  }
+  const query = params.toString();
+  const res = await apiFetch(
+    `/workspaces/${workspaceId}/billing/invoices${query ? `?${query}` : ""}`,
+  );
+  if (!res.ok) {
+    throw new Error(await parseApiErrorMessage(res));
+  }
+  return (await res.json()) as BillingInvoiceList;
 }

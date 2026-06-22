@@ -1,4 +1,11 @@
-import type { BillingInterval, BillingPlan, BillingSubscriptionState, BillingSubscriptionStatus } from "@slugbase/shared-types";
+import type {
+  BillingInterval,
+  BillingInvoice,
+  BillingInvoiceStatus,
+  BillingPlan,
+  BillingSubscriptionState,
+  BillingSubscriptionStatus,
+} from "@slugbase/shared-types";
 
 /** Stripe subscription shape used by the billing mapper (subset of Stripe SDK types). */
 export interface StripeSubscriptionLike {
@@ -250,5 +257,61 @@ export function checkoutSessionFromStripeObject(
     customerId: customer,
     workspaceId: readWorkspaceIdFromMetadata(metadata),
     mode,
+  };
+}
+
+/** Stripe invoice shape used by the billing mapper (subset of Stripe SDK types). */
+export interface StripeInvoiceLike {
+  id: string;
+  created: number;
+  description: string | null;
+  total: number;
+  currency: string;
+  status: string | null;
+  invoice_pdf: string | null;
+  lines?: {
+    data?: Array<{
+      description?: string | null;
+    }>;
+  };
+}
+
+export interface StripeInvoiceListLike {
+  data: StripeInvoiceLike[];
+  has_more: boolean;
+}
+
+function mapStripeInvoiceStatus(status: string | null): BillingInvoiceStatus {
+  switch (status) {
+    case "draft":
+    case "open":
+    case "paid":
+    case "uncollectible":
+    case "void":
+      return status;
+    default:
+      return "open";
+  }
+}
+
+function resolveInvoiceDescription(invoice: StripeInvoiceLike): string {
+  if (invoice.description && invoice.description.trim().length > 0) {
+    return invoice.description.trim();
+  }
+  const lineDescription = invoice.lines?.data?.find(
+    (line) => typeof line.description === "string" && line.description.trim().length > 0,
+  )?.description;
+  return lineDescription?.trim() ?? "";
+}
+
+export function mapStripeInvoiceToBillingInvoice(invoice: StripeInvoiceLike): BillingInvoice {
+  return {
+    id: invoice.id,
+    createdAt: new Date(invoice.created * 1000).toISOString(),
+    description: resolveInvoiceDescription(invoice),
+    amount: invoice.total,
+    currency: invoice.currency.toLowerCase(),
+    status: mapStripeInvoiceStatus(invoice.status),
+    invoicePdfUrl: invoice.invoice_pdf ?? null,
   };
 }

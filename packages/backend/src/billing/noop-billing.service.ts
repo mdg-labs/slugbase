@@ -5,6 +5,8 @@ import {
   type BillingCheckoutRequest,
   type BillingCheckoutSession,
   type BillingEventResult,
+  type BillingInvoiceListRequest,
+  type BillingInvoiceListResult,
   type BillingPortalRequest,
   type BillingPortalSession,
   type BillingSeatQuantityRequest,
@@ -63,5 +65,17 @@ export class NoopBillingService implements BillingService {
       eventId: event.eventId,
     });
     return Promise.resolve({ processed: true, stateUpdated: false });
+  }
+
+  listInvoices(request: BillingInvoiceListRequest): Promise<BillingInvoiceListResult> {
+    const page = request.page ?? 1;
+    const pageSize = request.pageSize ?? 20;
+    return Promise.resolve({
+      items: [],
+      total: 0,
+      page,
+      pageSize,
+      hasMore: false,
+    });
   }
 }

@@ -7,6 +7,8 @@ import {
   type BillingCheckoutRequest,
   type BillingCheckoutSession,
   type BillingEventResult,
+  type BillingInvoiceListRequest,
+  type BillingInvoiceListResult,
   type BillingPortalRequest,
   type BillingPortalSession,
   type BillingSeatQuantityRequest,
@@ -22,11 +24,13 @@ import { TEAM_MIN_SEATS } from "./plans/entitlement-sets.js";
 import { STRIPE_CLIENT } from "./billing.tokens.js";
 import {
   checkoutSessionFromStripeObject,
+  mapStripeInvoiceToBillingInvoice,
   mapStripeSubscriptionToState,
   mapSupporterCheckoutToState,
   parseStripeEvent,
   subscriptionFromStripeObject,
   type StripeCheckoutSessionLike,
+  type StripeInvoiceListLike,
   type StripePortalSessionLike,
   type StripePriceLike,
   type StripeSubscriptionLike,
@@ -50,6 +54,9 @@ export interface StripeBillingClient {
   };
   prices: {
     retrieve(id: string): Promise<StripePriceLike>;
+  };
+  invoices: {
+    list(params: Record<string, unknown>): Promise<StripeInvoiceListLike>;
   };
 }
 
@@ -309,6 +316,52 @@ export class StripeBillingService implements BillingService {
       default:
         return Promise.resolve({ processed: true, stateUpdated: false });
     }
+  }
+
+  async listInvoices(request: BillingInvoiceListRequest): Promise<BillingInvoiceListResult> {
+    this.assertAvailable();
+
+    const page = request.page ?? 1;
+    const pageSize = request.pageSize ?? 20;
+    let startingAfter: string | undefined;
+    let response: StripeInvoiceListLike = { data: [], has_more: false };
+
+    try {
+      for (let currentPage = 1; currentPage <= page; currentPage += 1) {
+        response = await this.stripe.invoices.list({
+          customer: request.externalCustomerId,
+          limit: pageSize,
+          ...(startingAfter ? { starting_after: startingAfter } : {}),
+        });
+        if (currentPage === page) {
+          break;
+        }
+        if (!response.has_more || response.data.length === 0) {
+          response = { data: [], has_more: false };
+          break;
+        }
+        startingAfter = response.data[response.data.length - 1]?.id;
+      }
+    } catch (error) {
+      this.errorReporting.captureException(error, {
+        tags: { service: "stripe-billing", operation: "listInvoices" },
+        extra: { workspaceId: request.workspaceId },
+      });
+      throw new BillingProviderError("Failed to list Stripe invoices", error);
+    }
+
+    const items = response.data.map(mapStripeInvoiceToBillingInvoice);
+    const total = response.has_more
+      ? page * pageSize + 1
+      : (page - 1) * pageSize + items.length;
+
+    return {
+      items,
+      total,
+      page,
+      pageSize,
+      hasMore: response.has_more,
+    };
   }
 
   private hasStripeKey(): boolean {

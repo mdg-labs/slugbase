@@ -91,6 +91,7 @@ function createUnavailableStripeClient(): StripeBillingClient {
     billingPortal: { sessions: { create: unavailable } },
     subscriptions: { retrieve: unavailable, update: unavailable },
     prices: { retrieve: unavailable },
+    invoices: { list: unavailable },
   };
 }
 

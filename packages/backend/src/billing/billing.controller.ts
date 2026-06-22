@@ -2,12 +2,14 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Get,
   Headers,
   HttpCode,
   Inject,
   Param,
   Patch,
   Post,
+  Query,
   Req,
   UseGuards,
 } from "@nestjs/common";
@@ -93,6 +95,33 @@ export class BillingController {
       workspaceId,
       requesterId: userId,
       totalSeats: body.totalSeats,
+    });
+  }
+
+  @Get("workspaces/:workspaceId/billing/invoices")
+  @UseGuards(SessionGuard)
+  async listInvoices(
+    @Param("workspaceId") workspaceId: string,
+    @Query("page") page: string | undefined,
+    @Query("pageSize") pageSize: string | undefined,
+    @Req() req: Request & Record<string, unknown>,
+  ) {
+    const userId = req[SESSION_USER_ID_KEY] as string;
+    const parsedPage = page !== undefined ? Number.parseInt(page, 10) : undefined;
+    const parsedPageSize = pageSize !== undefined ? Number.parseInt(pageSize, 10) : undefined;
+    return this.billingApp.listInvoices({
+      workspaceId,
+      requesterId: userId,
+      page:
+        parsedPage !== undefined && Number.isFinite(parsedPage) && parsedPage > 0
+          ? parsedPage
+          : undefined,
+      pageSize:
+        parsedPageSize !== undefined &&
+        Number.isFinite(parsedPageSize) &&
+        parsedPageSize > 0
+          ? parsedPageSize
+          : undefined,
     });
   }
 

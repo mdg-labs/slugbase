@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  mapStripeInvoiceToBillingInvoice,
   mapStripeSubscriptionToState,
   mapSupporterCheckoutToState,
   parseStripeEvent,
@@ -272,5 +273,27 @@ describe("stripe-billing.mapper", () => {
       });
       expect(marker).toBeNull();
     });
+  });
+
+  it("maps Stripe invoices to billing invoice DTOs", () => {
+    const invoice = mapStripeInvoiceToBillingInvoice({
+      id: "in_1",
+      created: 1_735_689_600,
+      description: "SlugBase Personal",
+      total: 400,
+      currency: "eur",
+      status: "paid",
+      invoice_pdf: "https://pay.stripe.test/invoice/in_1/pdf",
+    });
+
+    expect(invoice).toMatchObject({
+      id: "in_1",
+      description: "SlugBase Personal",
+      amount: 400,
+      currency: "eur",
+      status: "paid",
+      invoicePdfUrl: "https://pay.stripe.test/invoice/in_1/pdf",
+    });
+    expect(invoice.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 });

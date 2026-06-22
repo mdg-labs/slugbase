@@ -59,6 +59,13 @@ export interface UpdateSeatsInput {
   totalSeats: number;
 }
 
+export interface ListInvoicesInput {
+  workspaceId: string;
+  requesterId: string;
+  page?: number;
+  pageSize?: number;
+}
+
 /** Stripe webhook signature verifier surface. */
 export interface StripeWebhookClient {
   webhooks: {
@@ -226,6 +233,30 @@ export class BillingApplicationService {
     }
   }
 
+  async listInvoices(input: ListInvoicesInput) {
+    await this.requireWorkspaceMember(input.workspaceId, input.requesterId);
+
+    const workspace = await this.workspaceRepo.findById(input.workspaceId);
+    if (!workspace?.billingCustomerId) {
+      const page = input.page ?? 1;
+      const pageSize = input.pageSize ?? 20;
+      return {
+        items: [],
+        total: 0,
+        page,
+        pageSize,
+        hasMore: false,
+      };
+    }
+
+    return this.billing.listInvoices({
+      workspaceId: input.workspaceId,
+      externalCustomerId: workspace.billingCustomerId,
+      page: input.page,
+      pageSize: input.pageSize,
+    });
+  }
+
   async processWebhookEvent(rawBody: Buffer, signature: string): Promise<{ received: true }> {
     this.assertBillingAvailable();
 
@@ -325,6 +356,13 @@ export class BillingApplicationService {
     const member = await this.memberRepo.findByWorkspaceAndUser(workspaceId, userId);
     if (!member || member.role !== "OWNER") {
       throw new ForbiddenException("Only the workspace owner may manage billing");
+    }
+  }
+
+  private async requireWorkspaceMember(workspaceId: string, userId: string): Promise<void> {
+    const member = await this.memberRepo.findByWorkspaceAndUser(workspaceId, userId);
+    if (!member) {
+      throw new ForbiddenException("Workspace membership required");
     }
   }
 }

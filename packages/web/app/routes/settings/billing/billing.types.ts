@@ -14,6 +14,26 @@ export interface BillingPlanDisplayConfig {
   freeBookmarkCap: number;
 }
 
+export type BillingInvoiceStatus = "draft" | "open" | "paid" | "uncollectible" | "void";
+
+export interface BillingInvoice {
+  id: string;
+  createdAt: string;
+  description: string;
+  amount: number;
+  currency: string;
+  status: BillingInvoiceStatus;
+  invoicePdfUrl: string | null;
+}
+
+export interface BillingInvoiceList {
+  items: BillingInvoice[];
+  total: number;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+}
+
 export interface BillingWorkspaceSummary {
   id: string;
   name: string;

@@ -109,6 +109,22 @@ describe("Billing (integration)", () => {
         recurring: { interval: "month" },
       }),
     },
+    invoices: {
+      list: vi.fn().mockResolvedValue({
+        data: [
+          {
+            id: "in_billing_1",
+            created: 1_735_689_600,
+            description: "SlugBase Team",
+            total: 4500,
+            currency: "eur",
+            status: "paid",
+            invoice_pdf: "https://pay.stripe.test/invoice/in_billing_1/pdf",
+          },
+        ],
+        has_more: false,
+      }),
+    },
   };
 
   beforeAll(async () => {
@@ -423,5 +439,52 @@ describe("Billing (integration)", () => {
     const result = await billingApp.processWebhookEvent(rawBody, "sig_test_wrong_marker");
 
     expect(result).toEqual({ received: true });
+  });
+
+  it("lists invoices for workspace owner with linked billing customer", async () => {
+    await billingApp.applyBillingEvent({
+      eventId: "evt_invoice_list_customer",
+      payload: teamSubscriptionPayload(workspaceId),
+    });
+
+    const invoices = await billingApp.listInvoices({
+      workspaceId,
+      requesterId: ownerUserId,
+      page: 1,
+      pageSize: 20,
+    });
+
+    expect(invoices.items).toHaveLength(1);
+    expect(invoices.items[0]).toMatchObject({
+      id: "in_billing_1",
+      description: "SlugBase Team",
+      amount: 4500,
+      currency: "eur",
+      status: "paid",
+    });
+    expect(stripeClient.invoices.list).toHaveBeenCalledWith({
+      customer: "cus_team_1",
+      limit: 20,
+    });
+  });
+
+  it("returns empty invoice list when workspace has no billing customer", async () => {
+    const emptyWorkspace = await workspacesService.createWorkspace(
+      { name: "No Billing WS", slug: "no-billing-ws" },
+      ownerUserId,
+    );
+
+    const invoices = await billingApp.listInvoices({
+      workspaceId: emptyWorkspace.id,
+      requesterId: ownerUserId,
+    });
+
+    expect(invoices).toEqual({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 20,
+      hasMore: false,
+    });
   });
 });

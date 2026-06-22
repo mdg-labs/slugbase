@@ -37,6 +37,7 @@ describe("GET /pricing/public (integration)", () => {
         return { id, ...price };
       }),
     },
+    invoices: { list: vi.fn() },
   };
 
   beforeAll(async () => {

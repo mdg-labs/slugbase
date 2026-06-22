@@ -79,6 +79,22 @@ function createStripeClient(
         recurring: { interval: "month" },
       }),
     },
+    invoices: {
+      list: vi.fn().mockResolvedValue({
+        data: [
+          {
+            id: "in_test_1",
+            created: 1_735_689_600,
+            description: "SlugBase Personal",
+            total: 400,
+            currency: "eur",
+            status: "paid",
+            invoice_pdf: "https://pay.stripe.test/invoice/in_test_1/pdf",
+          },
+        ],
+        has_more: false,
+      }),
+    },
     ...overrides,
   };
 }
@@ -328,6 +344,32 @@ describe("StripeBillingService", () => {
       workspaceId: "ws-supporter",
       plan: "personal",
       permanentPersonal: true,
+    });
+  });
+
+  it("lists invoices for a Stripe customer", async () => {
+    const stripe = createStripeClient();
+    const service = new StripeBillingService(createConfig(), stripe, createErrorReporting());
+
+    const result = await service.listInvoices({
+      workspaceId: "ws-1",
+      externalCustomerId: "cus_team_1",
+      page: 1,
+      pageSize: 20,
+    });
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({
+      id: "in_test_1",
+      description: "SlugBase Personal",
+      amount: 400,
+      currency: "eur",
+      status: "paid",
+      invoicePdfUrl: "https://pay.stripe.test/invoice/in_test_1/pdf",
+    });
+    expect(stripe.invoices.list).toHaveBeenCalledWith({
+      customer: "cus_team_1",
+      limit: 20,
     });
   });
 });

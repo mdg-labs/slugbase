@@ -68,4 +68,22 @@ describe("NoopBillingService", () => {
       expect.objectContaining({ eventId: "evt_noop_1" }),
     );
   });
+
+  it("returns an empty invoice list without error", async () => {
+    const service = new NoopBillingService();
+    const result = await service.listInvoices({
+      workspaceId: "ws-1",
+      externalCustomerId: "cus_test",
+      page: 1,
+      pageSize: 20,
+    });
+
+    expect(result).toEqual({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 20,
+      hasMore: false,
+    });
+  });
 });

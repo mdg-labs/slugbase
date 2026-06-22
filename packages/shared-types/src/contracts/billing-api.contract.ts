@@ -47,6 +47,36 @@ export const BillingUpdateSeatsBodySchema = z
   })
   .strict();
 
+export const BillingInvoiceStatusSchema = z.enum([
+  "draft",
+  "open",
+  "paid",
+  "uncollectible",
+  "void",
+]);
+
+export const BillingInvoiceSchema = z
+  .object({
+    id: z.string(),
+    createdAt: z.string().datetime(),
+    description: z.string(),
+    amount: z.number().int(),
+    currency: z.string(),
+    status: BillingInvoiceStatusSchema,
+    invoicePdfUrl: z.string().url().nullable(),
+  })
+  .strict();
+
+export const BillingInvoiceListSchema = z
+  .object({
+    items: z.array(BillingInvoiceSchema),
+    total: z.number().int().nonnegative(),
+    page: z.number().int().positive(),
+    pageSize: z.number().int().positive(),
+    hasMore: z.boolean(),
+  })
+  .strict();
+
 export const billingContract = c.router({
   startCheckout: {
     method: "POST",
@@ -83,6 +113,20 @@ export const billingContract = c.router({
       403: z.object({ message: z.string() }).strict(),
     },
     summary: "Adjust Team seat quantity (not below current member count)",
+  },
+  listInvoices: {
+    method: "GET",
+    path: "/workspaces/:workspaceId/billing/invoices",
+    pathParams: z.object({ workspaceId: z.string() }),
+    query: z.object({
+      page: z.coerce.number().int().positive().optional(),
+      pageSize: z.coerce.number().int().positive().max(100).optional(),
+    }),
+    responses: {
+      200: BillingInvoiceListSchema,
+      403: z.object({ message: z.string() }).strict(),
+    },
+    summary: "List invoices for the workspace billing customer",
   },
   stripeWebhook: {
     method: "POST",
