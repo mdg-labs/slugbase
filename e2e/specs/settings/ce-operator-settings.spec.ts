@@ -23,7 +23,7 @@ test.describe("CE operator settings", () => {
     await expect(page.locator('[data-testid="audit-log-page"]')).toBeVisible();
   });
 
-  test("workspace settings show SMTP, OIDC, and AI BYO sections", async ({
+  test("workspace settings show operator-managed SMTP and OIDC gates", async ({
     authedPage,
   }) => {
     const page = authedPage;
@@ -37,15 +37,39 @@ test.describe("CE operator settings", () => {
 
     await page.goto("/settings/workspace?section=smtp");
     await page.waitForSelector('[data-testid="workspace-settings-page"]');
-    await expect(page.locator('[data-testid="workspace-operator-managed-gate"]')).not.toBeVisible();
+    await expect(page.locator('[data-testid="workspace-operator-managed-gate"]')).toBeVisible();
+    await expect(page.getByLabel("SMTP host")).not.toBeVisible();
 
     await page.goto("/settings/workspace?section=oidc");
     await page.waitForSelector('[data-testid="workspace-settings-page"]');
-    await expect(page.locator('[data-testid="workspace-operator-managed-gate"]')).not.toBeVisible();
+    await expect(page.locator('[data-testid="workspace-operator-managed-gate"]')).toBeVisible();
+    await expect(page.getByRole("button", { name: "Add provider" })).not.toBeVisible();
 
     await page.goto("/settings/workspace?section=ai");
     await page.waitForSelector('[data-testid="workspace-settings-page"]');
     await expect(page.locator('[data-testid="workspace-operator-managed-gate"]')).not.toBeVisible();
+    await expect(page.getByLabel("API key")).not.toBeVisible();
+    await expect(page.locator("#ai-model")).not.toBeVisible();
+  });
+
+  test("workspace AI enable toggle works with operator-configured key", async ({
+    authedPage,
+  }) => {
+    const page = authedPage;
+
+    await page.goto("/settings/workspace?section=ai");
+    await page.waitForSelector('[data-testid="workspace-settings-page"]');
+
+    const enableToggle = page.getByRole("checkbox", { name: "Enable AI suggestions" });
+    await expect(enableToggle).toBeVisible();
+    await expect(enableToggle).not.toBeChecked();
+
+    await enableToggle.check();
+    await page.getByRole("button", { name: "Save changes" }).click();
+
+    await expect(page.locator('[data-testid="toast-viewport"]')).toContainText("AI settings saved");
+    await expect(page.getByText(/credential configured by the operator/)).toBeVisible();
+    await expect(enableToggle).toBeChecked();
   });
 
   test("billing settings show unavailable gate", async ({ authedPage }) => {

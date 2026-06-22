@@ -329,6 +329,8 @@ if [ "$RUN_CE" = true ]; then
   # CE prod default is PUBLIC_REGISTRATION=false (invite-only). E2e overrides
   # to true so global-setup can register per-worker accounts via /auth/register —
   # no invite flow in this harness (see e2e/global-setup.ts).
+  # The image bakes NODE_ENV=production, which rejects preset overrides; use
+  # development here (same idea as cloud API — no production NODE_ENV in e2e.sh).
   CE_E2E_DOCKER_ENV=()
   for kv in "${CE_E2E_OPERATOR_ENV[@]}"; do
     CE_E2E_DOCKER_ENV+=(-e "$kv")
@@ -336,6 +338,7 @@ if [ "$RUN_CE" = true ]; then
   docker run -d \
     --name slugbase-e2e-ce \
     --network host \
+    -e NODE_ENV=development \
     -e DATABASE_URL="$DATABASE_URL" \
     -e SLUGBASE_E2E_MODE=true \
     -e SLUGBASE_EDITION=ce \
