@@ -13,6 +13,7 @@ export default [
   route("setup", "routes/setup/setup.tsx"),
   route("forgot-password", "routes/auth/forgot-password.tsx"),
   route("reset-password", "routes/auth/reset-password.tsx"),
+  route("invitations/:token", "routes/auth/accept-invitation.tsx"),
 
   // Proxy routes - forward backend API requests to the NestJS backend.
   // These sit before the app layout so they match bare paths like

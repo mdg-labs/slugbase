@@ -40,6 +40,23 @@ export function hashInvitationToken(plaintext: string): string {
   return createHash("sha256").update(plaintext).digest("hex");
 }
 
+/**
+ * Builds the invitation-accept link for the web client.
+ *
+ * Hosted (API + separate web Worker): use FRONTEND_ORIGIN (spec §14.7).
+ * Self-hosted combined image (SERVE_WEB_CLIENT): use APP_BASE_URL as the single public origin.
+ */
+export function buildInvitationAcceptUrl(params: {
+  appBaseUrl: string;
+  frontendOrigin: string;
+  serveWebClient: boolean;
+  token: string;
+}): string {
+  const origin = params.serveWebClient ? params.appBaseUrl : params.frontendOrigin;
+  const base = origin.replace(/\/$/, "");
+  return `${base}/invitations/${params.token}`;
+}
+
 export interface CreateInvitationDto {
   email: string;
   role: InvitationRole;
@@ -138,8 +155,12 @@ export class InvitationsService {
     });
 
     const inviter = await this.accounts.findById(inviterUserId);
-    const baseUrl = this.config.get("APP_BASE_URL");
-    const inviteUrl = `${baseUrl}/invitations/${plaintext}`;
+    const inviteUrl = buildInvitationAcceptUrl({
+      appBaseUrl: this.config.get("APP_BASE_URL"),
+      frontendOrigin: this.config.get("FRONTEND_ORIGIN"),
+      serveWebClient: this.config.get("SERVE_WEB_CLIENT"),
+      token: plaintext,
+    });
 
     if (this.mail.isAvailable()) {
       try {
@@ -308,8 +329,12 @@ export class InvitationsService {
     if (!workspace) return;
 
     const inviter = await this.accounts.findById(inviterUserId);
-    const baseUrl = this.config.get("APP_BASE_URL");
-    const inviteUrl = `${baseUrl}/invitations/${plaintext}`;
+    const inviteUrl = buildInvitationAcceptUrl({
+      appBaseUrl: this.config.get("APP_BASE_URL"),
+      frontendOrigin: this.config.get("FRONTEND_ORIGIN"),
+      serveWebClient: this.config.get("SERVE_WEB_CLIENT"),
+      token: plaintext,
+    });
 
     if (this.mail.isAvailable()) {
       try {

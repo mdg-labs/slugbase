@@ -21,13 +21,26 @@ import { createRouteMeta } from "../../lib/route-meta.js";
 
 const API_BASE_URL = () => getServerApiBaseUrl();
 
+function sanitizeReturnTo(value: string | null | undefined): string | null {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) {
+    return null;
+  }
+  return value;
+}
+
 /** Redirect already-authenticated users away from the login page. */
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await getSessionUser(request);
+  const url = new URL(request.url);
+  const returnTo = sanitizeReturnTo(url.searchParams.get("returnTo"));
+
   if (user) {
+    if (returnTo) {
+      return redirect(returnTo);
+    }
     return redirect(user.emailVerified ? "/" : "/verify-email");
   }
-  const url = new URL(request.url);
+
   const passwordReset = url.searchParams.get("reset") === "success";
 
   let oidcProviders: OidcProviderItem[] = [];
@@ -43,7 +56,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // public provider listing is optional - degrade gracefully
   }
 
-  return { passwordReset, oidcProviders };
+  return { passwordReset, oidcProviders, returnTo };
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -51,6 +64,10 @@ export async function action({ request }: ActionFunctionArgs) {
   const rawEmail = formData.get("email");
   const rawPassword = formData.get("password");
   const rememberMe = formData.get("rememberMe") === "on";
+  const rawReturnTo = formData.get("returnTo");
+  const returnTo = sanitizeReturnTo(
+    typeof rawReturnTo === "string" ? rawReturnTo : null,
+  );
   const email = typeof rawEmail === "string" ? rawEmail.trim() : "";
   const password = typeof rawPassword === "string" ? rawPassword : "";
 
@@ -86,7 +103,7 @@ export async function action({ request }: ActionFunctionArgs) {
       ? "/mfa"
       : "emailVerificationRequired" in data && data.emailVerificationRequired
         ? "/verify-email"
-        : "/";
+        : returnTo ?? "/";
   const redirectResponse = redirectAfterFormPost(destination);
   applyApiSessionCookie(redirectResponse, res);
   return redirectResponse;
@@ -96,7 +113,7 @@ export const meta = createRouteMeta("app.page.sign_in");
 
 export default function LoginRoute() {
   const { t } = useTranslation();
-  const { passwordReset, oidcProviders } = useLoaderData<typeof loader>();
+  const { passwordReset, oidcProviders, returnTo } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
@@ -111,6 +128,7 @@ export default function LoginRoute() {
       <AuthHeading title={t("auth.login.title")} />
 
       <Form method="post" className="flex flex-col" noValidate style={{ gap: "var(--sp-6)" }} data-testid="login-form">
+        {returnTo && <input type="hidden" name="returnTo" value={returnTo} />}
         {passwordReset && <SuccessBanner message={t("auth.login.reset_success")} />}
         {error && <ErrorBanner message={t(error)} />}
 

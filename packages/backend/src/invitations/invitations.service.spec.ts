@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   INVITATION_TTL_DAYS,
+  buildInvitationAcceptUrl,
   generateInvitationToken,
   hashInvitationToken,
 } from "./invitations.service.js";
@@ -22,6 +23,43 @@ describe("generateInvitationToken", () => {
   it("generates unique tokens on each call", () => {
     const tokens = new Set(Array.from({ length: 50 }, () => generateInvitationToken()));
     expect(tokens.size).toBe(50);
+  });
+});
+
+describe("buildInvitationAcceptUrl", () => {
+  const token = "abc123def456";
+
+  it("uses FRONTEND_ORIGIN when web is not served by the API", () => {
+    const url = buildInvitationAcceptUrl({
+      appBaseUrl: "https://api.slugbase.test",
+      frontendOrigin: "https://app.slugbase.test",
+      serveWebClient: false,
+      token,
+    });
+
+    expect(url).toBe(`https://app.slugbase.test/invitations/${token}`);
+  });
+
+  it("uses APP_BASE_URL when SERVE_WEB_CLIENT is enabled (combined self-host)", () => {
+    const url = buildInvitationAcceptUrl({
+      appBaseUrl: "https://slugbase.example.com",
+      frontendOrigin: "https://app.slugbase.test",
+      serveWebClient: true,
+      token,
+    });
+
+    expect(url).toBe(`https://slugbase.example.com/invitations/${token}`);
+  });
+
+  it("normalizes trailing slashes on the configured origin", () => {
+    const url = buildInvitationAcceptUrl({
+      appBaseUrl: "https://api.slugbase.test/",
+      frontendOrigin: "https://app.slugbase.test/",
+      serveWebClient: false,
+      token,
+    });
+
+    expect(url).toBe(`https://app.slugbase.test/invitations/${token}`);
   });
 });
 
