@@ -38,10 +38,10 @@ _added: 2026-05-31_
 SlugBase uses **server-side sessions**, not JWT access + refresh. Never introduce JWT cookies, `localStorage` token storage, or refresh-token rotation. Active-workspace selection lives in the session (spec §4.3). Personal API tokens are long-lived, hashed, bypass MFA. All mutations are CSRF-protected except the explicit allowlist in spec §5.8.
 _added: 2026-05-31_
 
-## CORS — enabled via FRONTEND_ORIGIN (SB-176, 2026-06-10)
+## CORS — FRONTEND_ORIGIN + MARKETING_ORIGIN (#498, 2026-06-22)
 
-Backend enables CORS via `app.enableCors()` in `main.ts` using `FRONTEND_ORIGIN` from `ConfigService` with `credentials: true`. Enabled unconditionally (harmless for self-hosted same-origin). No wildcards, no reflection. Hosted architecture requires this: web on CF Workers, API on Fly.io (different origins). Spec §14.7, §5.8.
-_added: 2026-06-10_
+Backend enables CORS via `app.enableCors()` in `main.ts` using `resolveCorsOrigins()` — `[FRONTEND_ORIGIN, MARKETING_ORIGIN?]` from `ConfigService` with `credentials: true`. `MARKETING_ORIGIN` optional (CE/self-host); required on Cloud so marketing site can `fetch` `GET /pricing/public` at runtime. No wildcards, no reflection. Hosted: web CF Workers + marketing CF Workers + API Fly.io = three origins. Spec §12.1, §14.7, §5.8; issue #310.
+_added: 2026-06-10_ | _updated: 2026-06-22_
 
 ## Workspace list API — includes role (SB-177, 2026-06-10)
 
@@ -52,6 +52,11 @@ _added: 2026-06-10_
 
 Never introduce `isCloud`, `SLUGBASE_MODE`, or any deployment-mode conditional in application logic. Differences between hosted and self-hosted are expressed via (a) the entitlements engine (spec §11.5) and (b) interface implementation selection. Verifier Layer 3e fails on any deployment-mode branch found in committed code.
 _added: 2026-05-31_
+
+## Admin bootstrap env — optional after first user (#499, 2026-06-22)
+
+`ADMIN_BOOTSTRAP_EMAIL` / `ADMIN_BOOTSTRAP_PASSWORD` are **optional at startup** once `admin_users` exists. `bootstrap.service.ts` returns silently when users exist (stale Fly secrets tolerated); fails fast only when DB is empty and creds missing. Removing bootstrap secrets from Phase/Fly is **recommended hygiene**, not a runtime requirement (admin PRD §8.2). Prior deadlock: schema required creds in production while service threw if creds present after bootstrap → 502 before `listen()`.
+_added: 2026-06-22_
 
 ## Marketing staging smoke — root URL only (2026-06-02)
 
