@@ -35,6 +35,7 @@ function createCryptoService(overrides: Partial<AppConfig> = {}): AesGcmCryptoSe
     nodeEnv: "test",
     isProduction: false,
     edition: "ce",
+    OIDC_PROVIDERS: [],
     ...overrides,
   };
 

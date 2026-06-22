@@ -19,6 +19,7 @@ function createConfig(overrides: Partial<AppConfig> = {}): ConfigService {
   const config = {
     APP_BASE_URL: "https://api.slugbase.test",
     OPENAPI_INTERACTIVE_DOCS: true,
+    OIDC_PROVIDERS: [],
     ...overrides,
   } as AppConfig;
 

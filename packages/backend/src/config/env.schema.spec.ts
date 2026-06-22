@@ -140,33 +140,28 @@ describe("validateEnvConfig", () => {
     );
   });
 
-  it("leaves OIDC_DEPLOYMENT_PROVIDERS undefined when unset", () => {
+  it("returns an empty OIDC provider list when no per-provider env vars are set", () => {
     const config = validateEnvConfig({
       ...validTestEnv,
       NODE_ENV: "production",
       SLUGBASE_EDITION: "cloud",
     });
 
-    expect(config.OIDC_DEPLOYMENT_PROVIDERS).toBeUndefined();
+    expect(config.OIDC_PROVIDERS).toEqual([]);
   });
 
-  it("parses OIDC_DEPLOYMENT_PROVIDERS JSON array at startup", () => {
+  it("parses per-provider OIDC env vars at startup", () => {
     const config = validateEnvConfig({
       ...validTestEnv,
       NODE_ENV: "production",
       SLUGBASE_EDITION: "cloud",
-      OIDC_DEPLOYMENT_PROVIDERS: JSON.stringify([
-        {
-          id: "google",
-          name: "Google",
-          issuerUrl: "https://accounts.google.com",
-          clientId: "google-client",
-          clientSecret: "google-secret",
-        },
-      ]),
+      OIDC_google_CLIENT_ID: "google-client",
+      OIDC_google_CLIENT_SECRET: "google-secret",
+      OIDC_google_ISSUER_URL: "https://accounts.google.com",
+      OIDC_google_NAME: "Google",
     });
 
-    expect(config.OIDC_DEPLOYMENT_PROVIDERS).toEqual([
+    expect(config.OIDC_PROVIDERS).toEqual([
       {
         id: "google",
         name: "Google",

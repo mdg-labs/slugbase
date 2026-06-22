@@ -3,10 +3,9 @@ import { z } from "zod";
 import type { SlugbaseEdition } from "@slugbase/shared-types";
 
 import {
-  oidcDeploymentProviderSchema,
-  parseOidcDeploymentProviders,
-  type OidcDeploymentProvider,
-} from "./oidc-deployment-providers.js";
+  parseOidcEnvProviders,
+  type OidcEnvProvider,
+} from "./oidc-env-providers.js";
 
 /** Parses env-style booleans; `z.coerce.boolean()` treats the string `"false"` as true. */
 function parseEnvBoolean(value: unknown, defaultValue: boolean): boolean {
@@ -110,14 +109,6 @@ const optionalFlagsSchema = z
     OPENAPI_INTERACTIVE_DOCS: envBoolean(true),
     // Marketing site origin for API CORS (spec §14.7) - optional; CE may omit when marketing is separate
     MARKETING_ORIGIN: z.string().url().optional(),
-    // Hosted OIDC providers (spec §11.3) - JSON array; unset = DB-sourced (self-host)
-    OIDC_DEPLOYMENT_PROVIDERS: z.preprocess(
-      (value) =>
-        parseOidcDeploymentProviders(
-          typeof value === "string" ? value : undefined,
-        ),
-      z.array(oidcDeploymentProviderSchema).optional(),
-    ),
   })
   .strict()
   .superRefine((flags, ctx) => {
@@ -134,13 +125,14 @@ const optionalFlagsSchema = z
 export type RequiredSecrets = z.infer<typeof requiredSecretsSchema>;
 export type OptionalFlags = z.infer<typeof optionalFlagsSchema>;
 
-export type { OidcDeploymentProvider };
+export type { OidcEnvProvider };
 
 export type AppConfig = RequiredSecrets &
   OptionalFlags & {
     nodeEnv: NodeEnv;
     isProduction: boolean;
     edition: SlugbaseEdition;
+    OIDC_PROVIDERS: OidcEnvProvider[];
   };
 
 export type NodeEnv = "development" | "test" | "production";
@@ -212,7 +204,6 @@ function readFlagsInput(env: NodeJS.ProcessEnv) {
     SENTRY_ENABLE_CONSOLE_LOGGING: env.SENTRY_ENABLE_CONSOLE_LOGGING,
     OPENAPI_INTERACTIVE_DOCS: env.OPENAPI_INTERACTIVE_DOCS,
     MARKETING_ORIGIN: env.MARKETING_ORIGIN,
-    OIDC_DEPLOYMENT_PROVIDERS: env.OIDC_DEPLOYMENT_PROVIDERS,
   };
 }
 
@@ -256,6 +247,7 @@ export function parseEnvConfig(
     return {
       ...secretsResult.data,
       ...flags,
+      OIDC_PROVIDERS: parseOidcEnvProviders(env),
       nodeEnv,
       isProduction,
     };
@@ -278,6 +270,7 @@ export function parseEnvConfig(
   return {
     ...secretsResult.data,
     ...flagsResult.data,
+    OIDC_PROVIDERS: parseOidcEnvProviders(env),
     nodeEnv,
     isProduction,
   };

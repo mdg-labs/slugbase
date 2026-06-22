@@ -44,8 +44,8 @@ export class OidcController {
    */
   @Get("providers")
   @HttpCode(200)
-  async listPublicProviders(): Promise<ListPublicOidcProvidersResponse> {
-    const providers = await this.oidc.listPublicProviders();
+  listPublicProviders(): ListPublicOidcProvidersResponse {
+    const providers = this.oidc.listPublicProviders();
     return { providers };
   }
 

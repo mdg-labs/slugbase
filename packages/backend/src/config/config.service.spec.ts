@@ -32,6 +32,7 @@ function createConfig(overrides: Partial<AppConfig>): AppConfig {
     nodeEnv: "production",
     isProduction: true,
     edition: "cloud",
+    OIDC_PROVIDERS: [],
     ...overrides,
   };
 }

@@ -89,7 +89,6 @@ export const SYNC_SECRETS_MANIFEST: SyncSecretsManifest = {
         "SENTRY_REPLAY_SAMPLE_RATE",
         "SENTRY_LOG_LEVEL",
         "SENTRY_ENABLE_CONSOLE_LOGGING",
-        "OIDC_DEPLOYMENT_PROVIDERS",
       ],
     },
     web: {

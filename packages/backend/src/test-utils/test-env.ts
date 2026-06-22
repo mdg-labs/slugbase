@@ -7,7 +7,6 @@ const testEnvKeys = [
   "FRONTEND_ORIGIN",
   "SERVE_WEB_CLIENT",
   "STRIPE_SECRET_KEY",
-  "OIDC_DEPLOYMENT_PROVIDERS",
   "OPENAI_API_KEY",
   "OPENAPI_INTERACTIVE_DOCS",
 ] as const;
@@ -44,6 +43,12 @@ export function clearTestEnv(): void {
   for (const key of testEnvKeys) {
     // eslint-disable-next-line @typescript-eslint/no-dynamic-delete -- test teardown
     delete process.env[key];
+  }
+  for (const key of Object.keys(process.env)) {
+    if (key.startsWith("OIDC_")) {
+      // eslint-disable-next-line @typescript-eslint/no-dynamic-delete -- test teardown
+      delete process.env[key];
+    }
   }
 }
 

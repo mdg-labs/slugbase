@@ -34,6 +34,7 @@ function createSessionService(overrides: Partial<AppConfig> = {}): SessionServic
     nodeEnv: "test",
     isProduction: false,
     edition: "ce",
+    OIDC_PROVIDERS: [],
     ...overrides,
   };
 

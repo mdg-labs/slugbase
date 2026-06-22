@@ -34,6 +34,7 @@ function createCsrfService(overrides: Partial<AppConfig> = {}): CsrfService {
     nodeEnv: "test",
     isProduction: false,
     edition: "ce",
+    OIDC_PROVIDERS: [],
     ...overrides,
   };
 

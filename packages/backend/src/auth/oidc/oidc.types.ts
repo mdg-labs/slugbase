@@ -1,38 +1,9 @@
-export interface OidcProviderRecord {
-  id: string;
-  name: string;
-  issuerUrl: string;
-  clientId: string;
-  clientSecretEncrypted: string;
-  scopes: string;
-  enabled: boolean;
-  createdAt: Date;
-}
-
 export interface OidcAccountRecord {
   id: string;
   userId: string;
   providerId: string;
   subject: string;
   createdAt: Date;
-}
-
-export interface CreateOidcProviderData {
-  name: string;
-  issuerUrl: string;
-  clientId: string;
-  clientSecretEncrypted: string;
-  scopes?: string;
-  enabled?: boolean;
-}
-
-export interface UpdateOidcProviderData {
-  name?: string;
-  issuerUrl?: string;
-  clientId?: string;
-  clientSecretEncrypted?: string;
-  scopes?: string;
-  enabled?: boolean;
 }
 
 export interface CreateOidcAccountData {

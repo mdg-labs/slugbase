@@ -4,14 +4,12 @@ import { AccountsModule } from "../../accounts/accounts.module.js";
 import { CryptoModule } from "../../crypto/crypto.module.js";
 import { DbModule } from "../../db/db.module.js";
 import { SessionsModule } from "../../sessions/sessions.module.js";
-import { WorkspacesModule } from "../../workspaces/workspaces.module.js";
-import { OidcAdminController } from "./oidc-admin.controller.js";
 import { OidcController } from "./oidc.controller.js";
 import { OidcService } from "./oidc.service.js";
 
 @Module({
-  imports: [DbModule, CryptoModule, AccountsModule, SessionsModule, WorkspacesModule],
-  controllers: [OidcController, OidcAdminController],
+  imports: [DbModule, CryptoModule, AccountsModule, SessionsModule],
+  controllers: [OidcController],
   providers: [OidcService],
   exports: [OidcService],
 })

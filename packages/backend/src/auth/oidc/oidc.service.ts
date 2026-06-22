@@ -9,36 +9,17 @@ import {
   randomState,
 } from "openid-client";
 
-import { ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
-
-import type { CryptoService } from "@slugbase/shared-types";
+import { Inject, Injectable, NotFoundException } from "@nestjs/common";
 
 import { AccountsService } from "../../accounts/accounts.service.js";
 import { ConfigService } from "../../config/config.service.js";
-import { CRYPTO } from "../../crypto/crypto.tokens.js";
+import type { OidcEnvProvider } from "../../config/oidc-env-providers.js";
 import { DbService } from "../../db/db.service.js";
 import { OidcRepository } from "./oidc.repository.js";
 import type { PublicOidcProviderItem } from "@slugbase/shared-types";
 
-import {
-  toPublicOidcLoginProviders,
-  toPublicOidcLoginProvidersFromDeployment,
-} from "./oidc-public-providers.js";
-import type {
-  CreateOidcProviderData,
-  OidcFlowState,
-  OidcProviderRecord,
-} from "./oidc.types.js";
-
-interface ResolvedOidcProvider {
-  id: string;
-  name: string;
-  issuerUrl: string;
-  clientId: string;
-  clientSecret: string;
-  scopes: string;
-  enabled: boolean;
-}
+import { toPublicOidcLoginProviders } from "./oidc-public-providers.js";
+import type { OidcFlowState } from "./oidc.types.js";
 
 /** OIDC scopes always requested in addition to provider-configured scopes */
 const REQUIRED_SCOPES = ["openid", "email", "profile"] as const;
@@ -50,7 +31,6 @@ export class OidcService {
   constructor(
     @Inject(DbService) private readonly db: DbService,
     @Inject(ConfigService) private readonly config: ConfigService,
-    @Inject(CRYPTO) private readonly crypto: CryptoService,
     @Inject(AccountsService) private readonly accounts: AccountsService,
   ) {
     this.repo = new OidcRepository(db.getOrm());
@@ -64,7 +44,7 @@ export class OidcService {
     redirectUrl: string;
     flowState: OidcFlowState;
   }> {
-    const provider = await this.getEnabledProvider(providerId);
+    const provider = this.getEnabledProvider(providerId);
     const config = await this.discoverClient(
       provider.issuerUrl,
       provider.clientId,
@@ -105,7 +85,7 @@ export class OidcService {
     flowState: OidcFlowState,
     currentUrl: string,
   ): Promise<string> {
-    const provider = await this.getEnabledProvider(providerId);
+    const provider = this.getEnabledProvider(providerId);
     const config = await this.discoverClient(
       provider.issuerUrl,
       provider.clientId,
@@ -186,98 +166,9 @@ export class OidcService {
     return userId;
   }
 
-  /**
-   * Creates a new OIDC provider with the client secret encrypted at rest.
-   * The plaintext secret is never stored.
-   */
-  async createProvider(
-    data: Omit<CreateOidcProviderData, "clientSecretEncrypted"> & {
-      clientSecret: string;
-    },
-  ): Promise<OidcProviderRecord> {
-    const clientSecretEncrypted = this.crypto.encrypt(data.clientSecret);
-    return this.repo.createProvider({
-      name: data.name,
-      issuerUrl: data.issuerUrl,
-      clientId: data.clientId,
-      clientSecretEncrypted,
-      scopes: data.scopes,
-      enabled: data.enabled,
-    });
-  }
-
-  /** Lists all OIDC providers (admin view - includes disabled providers). */
-  async listProviders(): Promise<OidcProviderRecord[]> {
-    return this.repo.listProviders();
-  }
-
-  /**
-   * Public login/register provider list — id and display name only.
-   * Self-hosted: enabled DB providers. Hosted interim: empty until #354.
-   */
-  async listPublicProviders(): Promise<PublicOidcProviderItem[]> {
-    const deploymentProviders = this.config.get("OIDC_DEPLOYMENT_PROVIDERS");
-    if (deploymentProviders !== undefined) {
-      return toPublicOidcLoginProvidersFromDeployment(deploymentProviders);
-    }
-
-    const providers = await this.repo.listEnabledProviders();
-    return toPublicOidcLoginProviders(providers);
-  }
-
-  /**
-   * Updates an existing OIDC provider.
-   * If a new clientSecret is provided, it is encrypted before storage.
-   */
-  async updateProvider(
-    id: string,
-    data: Omit<Parameters<OidcRepository["updateProvider"]>[1], "clientSecretEncrypted"> & {
-      clientSecret?: string;
-    },
-  ): Promise<OidcProviderRecord> {
-    const existing = await this.repo.findProviderById(id);
-    if (!existing) {
-      throw new NotFoundException("OIDC provider not found");
-    }
-
-    const updateData: Parameters<OidcRepository["updateProvider"]>[1] = {
-      ...(data.name !== undefined && { name: data.name }),
-      ...(data.issuerUrl !== undefined && { issuerUrl: data.issuerUrl }),
-      ...(data.clientId !== undefined && { clientId: data.clientId }),
-      ...(data.clientSecret !== undefined && {
-        clientSecretEncrypted: this.crypto.encrypt(data.clientSecret),
-      }),
-      ...(data.scopes !== undefined && { scopes: data.scopes }),
-      ...(data.enabled !== undefined && { enabled: data.enabled }),
-    };
-
-    if (data.issuerUrl !== undefined || data.clientId !== undefined) {
-      const newIssuerUrl = data.issuerUrl ?? existing.issuerUrl;
-      const newClientId = data.clientId ?? existing.clientId;
-      const providers = await this.repo.listProviders();
-      const duplicate = providers.find(
-        (p) => p.id !== id && p.issuerUrl === newIssuerUrl && p.clientId === newClientId,
-      );
-      if (duplicate) {
-        throw new ConflictException(
-          "An OIDC provider with this issuer URL and client ID already exists",
-        );
-      }
-    }
-
-    const updated = await this.repo.updateProvider(id, updateData);
-    if (!updated) {
-      throw new NotFoundException("OIDC provider not found");
-    }
-    return updated;
-  }
-
-  /** Deletes an OIDC provider. Returns true when deleted, false when not found. */
-  async deleteProvider(id: string): Promise<void> {
-    const deleted = await this.repo.deleteProvider(id);
-    if (!deleted) {
-      throw new NotFoundException("OIDC provider not found");
-    }
+  /** Public login/register provider list — id and display name only. */
+  listPublicProviders(): PublicOidcProviderItem[] {
+    return toPublicOidcLoginProviders(this.config.get("OIDC_PROVIDERS"));
   }
 
   /** Generates the PKCE verifier/challenge pair - exposed for testing */
@@ -300,36 +191,14 @@ export class OidcService {
     return randomNonce();
   }
 
-  private usesDeploymentProviderSource(): boolean {
-    return this.config.get("OIDC_DEPLOYMENT_PROVIDERS") !== undefined;
-  }
-
-  private async getEnabledProvider(
-    providerId: string,
-  ): Promise<ResolvedOidcProvider> {
-    if (this.usesDeploymentProviderSource()) {
-      const deploymentProviders = this.config.get("OIDC_DEPLOYMENT_PROVIDERS");
-      const provider = deploymentProviders?.find((entry) => entry.id === providerId);
-      if (!provider || !provider.enabled) {
-        throw new NotFoundException("OIDC provider not found or disabled");
-      }
-      return provider;
-    }
-
-    const provider = await this.repo.findProviderById(providerId);
+  private getEnabledProvider(providerId: string): OidcEnvProvider {
+    const provider = this.config
+      .get("OIDC_PROVIDERS")
+      .find((entry) => entry.id === providerId);
     if (!provider || !provider.enabled) {
       throw new NotFoundException("OIDC provider not found or disabled");
     }
-
-    return {
-      id: provider.id,
-      name: provider.name,
-      issuerUrl: provider.issuerUrl,
-      clientId: provider.clientId,
-      clientSecret: this.crypto.decrypt(provider.clientSecretEncrypted),
-      scopes: provider.scopes,
-      enabled: provider.enabled,
-    };
+    return provider;
   }
 
   private async discoverClient(

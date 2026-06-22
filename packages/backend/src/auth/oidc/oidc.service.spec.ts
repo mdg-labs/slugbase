@@ -4,11 +4,11 @@ import { calculatePKCECodeChallenge, randomNonce, randomPKCECodeVerifier, random
 import type { AccountRecord } from "../../accounts/account.types.js";
 import type { AccountsService, CreateOidcAccountDto } from "../../accounts/accounts.service.js";
 import type { ConfigService } from "../../config/config.service.js";
+import type { OidcEnvProvider } from "../../config/oidc-env-providers.js";
 import type { DbService } from "../../db/db.service.js";
-import type { CryptoService } from "@slugbase/shared-types";
 import { OidcRepository } from "./oidc.repository.js";
 import { OidcService } from "./oidc.service.js";
-import type { OidcFlowState, OidcProviderRecord, CreateOidcAccountData } from "./oidc.types.js";
+import type { OidcFlowState, CreateOidcAccountData } from "./oidc.types.js";
 
 vi.mock("openid-client", async (importOriginal) => {
   const original = await importOriginal<typeof import("openid-client")>();
@@ -59,16 +59,15 @@ function makeAccount(overrides: Partial<AccountRecord> = {}): AccountRecord {
   };
 }
 
-function makeProvider(): OidcProviderRecord {
+function makeEnvProvider(): OidcEnvProvider {
   return {
     id: "provider-1",
     name: "Test IdP",
     issuerUrl: "https://idp.example.com",
     clientId: "client-id",
-    clientSecretEncrypted: "encrypted",
+    clientSecret: "client-secret",
     scopes: "openid email profile",
     enabled: true,
-    createdAt: new Date(),
   };
 }
 
@@ -106,21 +105,16 @@ async function buildOidcServiceForCallback(opts: {
   const config = {
     get: vi.fn((key: string) => {
       if (key === "APP_BASE_URL") return "https://app.example.com";
+      if (key === "OIDC_PROVIDERS") return [makeEnvProvider()];
       return undefined;
     }),
   } as unknown as MockedObject<ConfigService>;
-
-  const crypto = {
-    decrypt: vi.fn().mockReturnValue("client-secret"),
-    encrypt: vi.fn(),
-  } as unknown as MockedObject<CryptoService>;
 
   const db = {
     getOrm: vi.fn().mockReturnValue({}),
   } as unknown as MockedObject<DbService>;
 
   vi.spyOn(OidcRepository.prototype, "findAccountByProviderAndSubject").mockResolvedValue(null);
-  vi.spyOn(OidcRepository.prototype, "findProviderById").mockResolvedValue(makeProvider());
   const createOidcLink = vi
     .spyOn(OidcRepository.prototype, "createAccount")
     .mockImplementation((data: CreateOidcAccountData) =>
@@ -133,7 +127,7 @@ async function buildOidcServiceForCallback(opts: {
       }),
     );
 
-  const service = new OidcService(db, config, crypto, accounts);
+  const service = new OidcService(db, config, accounts);
 
   return { service, accounts, createOidcLink };
 }

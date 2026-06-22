@@ -9,9 +9,6 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { AppModule } from "../src/app.module.js";
 import { SESSION_COOKIE } from "../src/auth/login-logout.controller.js";
-import { OidcRepository } from "../src/auth/oidc/oidc.repository.js";
-import { AesGcmCryptoService } from "../src/crypto/aes-gcm-crypto.service.js";
-import { DbService } from "../src/db/db.service.js";
 import { applyTestEnv, clearTestEnv, validTestEnv } from "../src/test-utils/test-env.js";
 import { createTestDatabase } from "./test-database.js";
 
@@ -35,16 +32,22 @@ const MOCK_ISSUER = "https://idp.example.com";
 const MOCK_CLIENT_ID = "test-client-id";
 const MOCK_CLIENT_SECRET = "test-client-secret-value";
 const MOCK_AUTH_URL = "https://idp.example.com/authorize?response_type=code";
+const TEST_PROVIDER_ID = "testprovider";
 
 describe("OIDC (integration)", () => {
   let app: INestApplication | undefined;
   let cleanup: () => Promise<void> = async () => {};
-  let testProviderId: string;
 
   beforeAll(async () => {
     const testDatabase = await createTestDatabase();
     cleanup = testDatabase.cleanup;
-    applyTestEnv({ DATABASE_URL: testDatabase.databaseUrl });
+    applyTestEnv({
+      DATABASE_URL: testDatabase.databaseUrl,
+      OIDC_testprovider_CLIENT_ID: MOCK_CLIENT_ID,
+      OIDC_testprovider_CLIENT_SECRET: MOCK_CLIENT_SECRET,
+      OIDC_testprovider_ISSUER_URL: MOCK_ISSUER,
+      OIDC_testprovider_NAME: "Test IdP",
+    });
 
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
@@ -53,21 +56,6 @@ describe("OIDC (integration)", () => {
     app = moduleRef.createNestApplication();
     app.use(cookieParser());
     await app.init();
-
-    const db = moduleRef.get(DbService);
-    const cryptoService = moduleRef.get(AesGcmCryptoService);
-    const oidcRepo = new OidcRepository(db.getOrm());
-
-    const secretEncrypted = cryptoService.encrypt(MOCK_CLIENT_SECRET);
-    const provider = await oidcRepo.createProvider({
-      name: "Test IdP",
-      issuerUrl: MOCK_ISSUER,
-      clientId: MOCK_CLIENT_ID,
-      clientSecretEncrypted: secretEncrypted,
-      scopes: "openid email profile",
-      enabled: true,
-    });
-    testProviderId = provider.id;
   });
 
   afterAll(async () => {
@@ -89,7 +77,7 @@ describe("OIDC (integration)", () => {
       vi.mocked(buildAuthorizationUrl).mockReturnValue(new URL(MOCK_AUTH_URL));
 
       const res = await request(server()).get(
-        `/auth/oidc/${testProviderId}/authorize`,
+        `/auth/oidc/${TEST_PROVIDER_ID}/authorize`,
       );
 
       expect(res.status).toBe(302);
@@ -109,7 +97,7 @@ describe("OIDC (integration)", () => {
 
     it("returns 404 for an unknown or disabled provider", async () => {
       const res = await request(server()).get(
-        "/auth/oidc/00000000-0000-0000-0000-000000000000/authorize",
+        "/auth/oidc/unknown-provider/authorize",
       );
       expect(res.status).toBe(404);
     });
@@ -137,7 +125,7 @@ describe("OIDC (integration)", () => {
 
       // Step 1 - initiate flow to get encrypted OIDC state cookie
       const authorizeRes = await request(server()).get(
-        `/auth/oidc/${testProviderId}/authorize`,
+        `/auth/oidc/${TEST_PROVIDER_ID}/authorize`,
       );
       expect(authorizeRes.status).toBe(302);
 
@@ -154,7 +142,7 @@ describe("OIDC (integration)", () => {
       // Step 2 - simulate IdP redirect back with state cookie present
       const callbackRes = await request(server())
         .get(
-          `/auth/oidc/${testProviderId}/callback?code=mock_code&state=mock_state`,
+          `/auth/oidc/${TEST_PROVIDER_ID}/callback?code=mock_code&state=mock_state`,
         )
         .set("Cookie", oidcStateCookie ?? "");
 
@@ -173,7 +161,7 @@ describe("OIDC (integration)", () => {
 
     it("returns 401 when OIDC state cookie is absent", async () => {
       const res = await request(server()).get(
-        `/auth/oidc/${testProviderId}/callback?code=x&state=y`,
+        `/auth/oidc/${TEST_PROVIDER_ID}/callback?code=x&state=y`,
       );
       expect(res.status).toBe(401);
     });
