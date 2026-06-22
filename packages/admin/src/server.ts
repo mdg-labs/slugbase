@@ -104,5 +104,9 @@ const isMain =
     process.argv[1].endsWith("/server.js"));
 
 if (isMain) {
-  void startServer();
+  void startServer().catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`slugbase-admin failed to start: ${message}\n`);
+    process.exit(1);
+  });
 }

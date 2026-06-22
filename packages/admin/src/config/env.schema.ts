@@ -43,25 +43,7 @@ const adminEnvSchema = z
     ADMIN_BOOTSTRAP_EMAIL: z.string().email().optional(),
     ADMIN_BOOTSTRAP_PASSWORD: z.string().min(12).optional(),
   })
-  .strict()
-  .superRefine((data, ctx) => {
-    if (data.NODE_ENV === "production") {
-      if (!data.ADMIN_BOOTSTRAP_EMAIL) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "ADMIN_BOOTSTRAP_EMAIL is required in production",
-          path: ["ADMIN_BOOTSTRAP_EMAIL"],
-        });
-      }
-      if (!data.ADMIN_BOOTSTRAP_PASSWORD) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "ADMIN_BOOTSTRAP_PASSWORD is required in production",
-          path: ["ADMIN_BOOTSTRAP_PASSWORD"],
-        });
-      }
-    }
-  });
+  .strict();
 
 export type AdminEnv = z.infer<typeof adminEnvSchema>;
 

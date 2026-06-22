@@ -256,9 +256,9 @@ When `admin.admin_users` is empty on startup:
 
 1. Read `ADMIN_BOOTSTRAP_EMAIL` + `ADMIN_BOOTSTRAP_PASSWORD` from Phase (set before first deploy)
 2. Create one `platform_admin` user with argon2id password hash
-3. Refuse bootstrap if any admin user already exists (no replay)
+3. Refuse bootstrap if any admin user already exists (no replay) — stale `ADMIN_BOOTSTRAP_*` env vars are ignored when users already exist
 
-After bootstrap, **remove or rotate** bootstrap password in Phase. No CLI seed script required.
+After bootstrap, **removing or rotating** bootstrap credentials in Phase/Fly is **recommended hygiene** (reduces credential exposure) but **not required for the app to boot**. No CLI seed script required.
 
 ### 8.3 Invite-only onboarding (after bootstrap)
 
@@ -385,8 +385,8 @@ Follow `05-env-vars.mdc` when implementing. Admin-specific keys:
 | `SENTRY_DSN_ADMIN` | `SENTRY_DSN` | optional | New Sentry project |
 | `NODE_ENV` | `NODE_ENV` | ✓ | |
 | `ADMIN_SNAPSHOT_CRON` | same | optional | Default `0 2 * * *` |
-| `ADMIN_BOOTSTRAP_EMAIL` | same | ✓ (first deploy) | One-time; remove after bootstrap |
-| `ADMIN_BOOTSTRAP_PASSWORD` | same | ✓ (first deploy) | One-time; remove after bootstrap |
+| `ADMIN_BOOTSTRAP_EMAIL` | same | ✓ (first deploy only) | Required when `admin_users` is empty; optional afterward |
+| `ADMIN_BOOTSTRAP_PASSWORD` | same | ✓ (first deploy only) | Required when `admin_users` is empty; optional afterward |
 | `SMTP_HOST` | same | ✓ | Reuse hosted SMTP — invite emails |
 | `SMTP_PORT` | same | ✓ | |
 | `SMTP_USER` | same | ✓ | |
@@ -549,7 +549,7 @@ Use this section with the **github-intake** skill. Create one **Feature (epic)**
 ### 14.1 Operator actions (out of scope for agents)
 
 - Configure Cloudflare Access policy for `admin.slugbase.app` / `staging-admin.slugbase.app`
-- Set `ADMIN_BOOTSTRAP_*` in Phase before first deploy; remove after bootstrap
+- Set `ADMIN_BOOTSTRAP_*` in Phase before first deploy; remove when convenient (recommended hygiene, not a boot requirement)
 - Add `ADMIN_URL`, `ADMIN_SESSION_SECRET`, `SENTRY_DSN_ADMIN` to Phase staging/production
 - Create Sentry project for admin service
 

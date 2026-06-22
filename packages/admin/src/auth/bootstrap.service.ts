@@ -28,11 +28,6 @@ export async function bootstrapAdminIfNeeded(
     config.ADMIN_BOOTSTRAP_PASSWORD !== undefined;
 
   if (userCount > 0) {
-    if (hasBootstrapCredentials) {
-      throw new AdminBootstrapError(
-        "Admin users already exist; remove ADMIN_BOOTSTRAP_EMAIL and ADMIN_BOOTSTRAP_PASSWORD",
-      );
-    }
     return;
   }
 
