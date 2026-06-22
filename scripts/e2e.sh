@@ -71,9 +71,10 @@ source "${REPO_ROOT}/scripts/self-host-vite-build-args.sh"
 CE_DOCKER_BUILD_ARGS=("${SELF_HOST_VITE_BUILD_ARGS[@]}")
 
 # Cloud web bundle: cloud edition presets (billing on, admin UI panels off).
-# Optional second arg: marketing origin for VITE_MARKETING_ORIGIN (legal links in web UI).
+# Args: marketing origin for VITE_MARKETING_ORIGIN; API base for marketing PUBLIC_API_BASE_URL.
 build_cloud_packages() {
   local marketing_origin="${1:-}"
+  local api_base_url="${2:-}"
   header "Building cloud packages"
   cd "$REPO_ROOT"
   info "SLUGBASE_EDITION=cloud"
@@ -81,6 +82,10 @@ build_cloud_packages() {
   if [ -n "$marketing_origin" ]; then
     info "VITE_MARKETING_ORIGIN=$marketing_origin"
     build_env+=(VITE_MARKETING_ORIGIN="$marketing_origin")
+  fi
+  if [ -n "$api_base_url" ]; then
+    info "PUBLIC_API_BASE_URL=$api_base_url"
+    build_env+=(PUBLIC_API_BASE_URL="$api_base_url")
   fi
   "${build_env[@]}" bash scripts/with-ci-env.sh pnpm build 2>&1 | sed 's/^/  /'
   ok "Cloud build complete"
@@ -192,7 +197,7 @@ if [ "$RUN_CLOUD" = true ]; then
 
   IFS=' ' read -r PORT_API PORT_WEB PORT_MKTG <<< "$(find_free_ports 3)"
 
-  build_cloud_packages "http://localhost:$PORT_MKTG"
+  build_cloud_packages "http://localhost:$PORT_MKTG" "http://localhost:$PORT_API"
 
   export E2E_BASE_URL_API="http://localhost:$PORT_API"
   export E2E_BASE_URL_WEB="http://localhost:$PORT_WEB"
@@ -229,6 +234,7 @@ if [ "$RUN_CLOUD" = true ]; then
     ENCRYPTION_KEY='e2e-test-encryption-key-at-least-32-chars!!' \
     APP_BASE_URL="http://localhost:$PORT_API" \
     FRONTEND_ORIGIN="http://localhost:$PORT_WEB" \
+    MARKETING_ORIGIN="http://localhost:$PORT_MKTG" \
     node packages/backend/dist/main.js >>"$LOGFILE_CLOUD_API" 2>&1 &
   API_PID=$!
   E2E_PIDS+=("$API_PID")

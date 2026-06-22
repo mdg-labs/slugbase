@@ -108,6 +108,8 @@ const optionalFlagsSchema = z
     SENTRY_ENABLE_CONSOLE_LOGGING: envBoolean(false),
     // OpenAPI interactive docs (spec §18) - optional Scalar UI at GET /docs
     OPENAPI_INTERACTIVE_DOCS: envBoolean(true),
+    // Marketing site origin for API CORS (spec §14.7) - optional; CE may omit when marketing is separate
+    MARKETING_ORIGIN: z.string().url().optional(),
     // Hosted OIDC providers (spec §11.3) - JSON array; unset = DB-sourced (self-host)
     OIDC_DEPLOYMENT_PROVIDERS: z.preprocess(
       (value) =>
@@ -209,6 +211,7 @@ function readFlagsInput(env: NodeJS.ProcessEnv) {
     SENTRY_LOG_LEVEL: env.SENTRY_LOG_LEVEL,
     SENTRY_ENABLE_CONSOLE_LOGGING: env.SENTRY_ENABLE_CONSOLE_LOGGING,
     OPENAPI_INTERACTIVE_DOCS: env.OPENAPI_INTERACTIVE_DOCS,
+    MARKETING_ORIGIN: env.MARKETING_ORIGIN,
     OIDC_DEPLOYMENT_PROVIDERS: env.OIDC_DEPLOYMENT_PROVIDERS,
   };
 }

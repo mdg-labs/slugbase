@@ -205,7 +205,7 @@ Every deployment must set these. The API refuses to start in production without 
 | `VITE_API_URL` | Build-time fallback when `API_BASE_URL` unset at SSR; **not** used for browser `fetch` | Yes | Optional | Cloud | No | Build | Same as `APP_BASE_URL` on Cloud |
 
 **Client API routing (web):** Browser `fetch` always uses same-origin Worker proxy routes (`/auth/*`, `/api/*`, …). SSR loaders and proxy handlers call the NestJS API via `API_BASE_URL` (see `packages/web/app/lib/client-api-path.ts` and `client-api-fetch.ts`). Never read `VITE_API_URL` in UI modules for cross-origin browser requests — session cookies are `SameSite=Lax` on the web origin.
-| `MARKETING_ORIGIN` | Public marketing site URL (CI smoke only) | Yes | No | Cloud | No | CI | `https://www.example.com` |
+| `MARKETING_ORIGIN` | Public marketing site origin (API CORS allowlist + deploy smoke) | Yes | No | Cloud | No | Runtime | `https://www.example.com` |
 
 ---
 

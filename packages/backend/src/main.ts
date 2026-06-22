@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 
 import { AppModule } from "./app.module.js";
 import { ConfigService } from "./config/config.service.js";
+import { resolveCorsOrigins } from "./config/resolve-cors-origins.js";
 import { applySecurityHeaders } from "./security/apply-security-headers.js";
 import { runMigrations } from "./db/migrate/run-migrations.js";
 import { loadAppConfig } from "./config/load-config.js";
@@ -73,9 +74,9 @@ export async function bootstrap(): Promise<void> {
 
   const config = app.get(ConfigService);
 
-  // CORS for cross-origin client requests (hosted: CF Workers → Fly.io API)
+  // CORS for cross-origin client requests (hosted: web + marketing CF Workers → Fly.io API)
   app.enableCors({
-    origin: config.get("FRONTEND_ORIGIN"),
+    origin: resolveCorsOrigins(config.getAll()),
     credentials: true,
   });
 
