@@ -1,36 +1,25 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import { ModuleRef } from "@nestjs/core";
 import { renderMailTransportTestEmail } from "@slugbase/email-templates";
 import { MailSendError, type MailMessage, type MailService } from "@slugbase/shared-types";
-import type { CryptoService } from "@slugbase/shared-types";
 import nodemailer, { type Transporter } from "nodemailer";
 
 import { ConfigService } from "../config/config.service.js";
-import { CRYPTO } from "../crypto/crypto.tokens.js";
-import type { MailTransportHydrator } from "./mail-transport-hydrator.js";
-import { MAIL_TRANSPORT_HYDRATOR } from "./mail.tokens.js";
 
 /**
  * SMTP-backed mail implementation (spec §11.1, v1 implementation).
  *
- * Transport settings are read from deployment configuration (env vars).
- * {@link CryptoService} is injected to support the future admin-UI settings path
- * where credentials are stored encrypted at rest (spec §11.11, §15).
- * Call {@link reconfigureFromEncrypted} from the settings service when DB-backed
- * credentials are set.
+ * Transport settings are read from deployment configuration (`SMTP_*` env vars)
+ * at construction time. Unconfigured transport reports unavailable and degrades
+ * gracefully on send (spec §15).
  */
 @Injectable()
 export class SmtpMailService implements MailService {
   private readonly logger = new Logger(SmtpMailService.name);
-  private transport: Transporter;
-  private fromAddress: string;
-  private configured: boolean;
+  private readonly transport: Transporter;
+  private readonly fromAddress: string;
+  private readonly configured: boolean;
 
-  constructor(
-    @Inject(ConfigService) config: ConfigService,
-    @Inject(CRYPTO) private readonly crypto: CryptoService,
-    @Inject(ModuleRef) private readonly moduleRef: ModuleRef,
-  ) {
+  constructor(@Inject(ConfigService) config: ConfigService) {
     const host = config.get("SMTP_HOST");
     const port = config.get("SMTP_PORT");
     const secure = config.get("SMTP_SECURE");
@@ -82,23 +71,8 @@ export class SmtpMailService implements MailService {
     return this.configured;
   }
 
-  async ensureAvailable(): Promise<boolean> {
-    if (this.configured) {
-      return true;
-    }
-
-    const hydrator = this.getTransportHydrator();
-    if (!hydrator) {
-      return false;
-    }
-
-    return hydrator.hydrateIfNeeded();
-  }
-
-  private getTransportHydrator(): MailTransportHydrator | undefined {
-    return this.moduleRef.get<MailTransportHydrator>(MAIL_TRANSPORT_HYDRATOR, {
-      strict: false,
-    });
+  ensureAvailable(): Promise<boolean> {
+    return Promise.resolve(this.configured);
   }
 
   async sendTest(to: string): Promise<void> {
@@ -114,38 +88,6 @@ export class SmtpMailService implements MailService {
       html: renderMailTransportTestEmail(),
       type: "mail_transport_test",
     });
-  }
-
-  /**
-   * Reconfigure the transport using credentials stored encrypted via
-   * {@link CryptoService} in instance/workspace settings (spec §11.1, §10).
-   * Decryption happens here; plain credentials are never returned to callers.
-   */
-  reconfigureFromEncrypted(encryptedCredentials: {
-    host: string;
-    port: number;
-    secure: boolean;
-    encryptedUser?: string;
-    /** Plain-text username from DB-backed settings (password remains encrypted). */
-    user?: string;
-    encryptedPass?: string;
-    from: string;
-  }): void {
-    const user = encryptedCredentials.encryptedUser
-      ? this.crypto.decrypt(encryptedCredentials.encryptedUser)
-      : encryptedCredentials.user;
-    const pass = encryptedCredentials.encryptedPass
-      ? this.crypto.decrypt(encryptedCredentials.encryptedPass)
-      : undefined;
-
-    this.transport = nodemailer.createTransport({
-      host: encryptedCredentials.host,
-      port: encryptedCredentials.port,
-      secure: encryptedCredentials.secure,
-      auth: user && pass ? { user, pass } : undefined,
-    });
-    this.fromAddress = encryptedCredentials.from;
-    this.configured = true;
   }
 }
 

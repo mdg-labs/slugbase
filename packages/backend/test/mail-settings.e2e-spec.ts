@@ -2,16 +2,13 @@ import "reflect-metadata";
 
 import type { INestApplication } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
-import { eq } from "drizzle-orm";
 import cookieParser from "cookie-parser";
 import type { Server } from "node:http";
 import request from "supertest";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { AppModule } from "../src/app.module.js";
 import { AccountsService } from "../src/accounts/accounts.service.js";
-import { instanceMetadata } from "../src/db/schema/index.js";
-import { SmtpMailService } from "../src/mail/smtp-mail.service.js";
 import { SESSION_COOKIE } from "../src/sessions/session-constants.js";
 import { SessionService } from "../src/sessions/session.service.js";
 import { applyTestEnv, clearTestEnv } from "../src/test-utils/test-env.js";
@@ -22,27 +19,16 @@ import { createTestDatabase } from "./test-database.js";
 describe("Workspace mail settings HTTP (integration)", () => {
   let app: INestApplication | undefined;
   let cleanup: () => Promise<void> = async () => {};
-  let smtpMail: SmtpMailService;
 
   let adminSessionCookie: string;
   let adminCsrfToken: string;
   let adminCsrfCookie: string;
   let memberSessionCookie: string;
-  let memberCsrfToken: string;
-  let memberCsrfCookie: string;
 
   beforeAll(async () => {
     const testDatabase = await createTestDatabase();
     cleanup = testDatabase.cleanup;
     applyTestEnv({ DATABASE_URL: testDatabase.databaseUrl });
-
-    const { client, close } = await import("../src/db/dialect/create-client.js").then(
-      ({ createDbClient }) => createDbClient(testDatabase.databaseUrl),
-    );
-    await client
-      .delete(instanceMetadata)
-      .where(eq(instanceMetadata.key, "smtp_settings"));
-    await close();
 
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
@@ -51,8 +37,6 @@ describe("Workspace mail settings HTTP (integration)", () => {
     app = moduleRef.createNestApplication();
     app.use(cookieParser());
     await app.init();
-
-    smtpMail = moduleRef.get(SmtpMailService);
 
     const accountsService = moduleRef.get(AccountsService);
     const workspacesService = moduleRef.get(WorkspacesService);
@@ -98,15 +82,6 @@ describe("Workspace mail settings HTTP (integration)", () => {
       (adminCsrfRes.headers["set-cookie"] as string[]).find((c) =>
         c.startsWith("csrf_token="),
       )?.split(";")[0] ?? "";
-
-    const memberCsrfRes = await request(app.getHttpServer() as Server)
-      .get("/auth/csrf-token")
-      .set("Cookie", memberSessionCookie);
-    memberCsrfToken = (memberCsrfRes.body as { csrfToken: string }).csrfToken;
-    memberCsrfCookie =
-      (memberCsrfRes.headers["set-cookie"] as string[]).find((c) =>
-        c.startsWith("csrf_token="),
-      )?.split(";")[0] ?? "";
   });
 
   afterAll(async () => {
@@ -120,171 +95,46 @@ describe("Workspace mail settings HTTP (integration)", () => {
     return app.getHttpServer() as Server;
   }
 
-  describe("POST /workspace/settings/mail/test (unconfigured)", () => {
-    it("returns 503 when mail transport is not configured", async () => {
-      const res = await request(server())
-        .post("/workspace/settings/mail/test")
-        .set("Cookie", `${adminSessionCookie}; ${adminCsrfCookie}`)
-        .set("x-csrf-token", adminCsrfToken)
-        .send({ to: "admin@example.com" });
-
-      expect(res.status).toBe(503);
-    });
-  });
-
-  describe("GET /workspace/settings/mail", () => {
-    it("returns 200 with default settings for ADMIN", async () => {
+  describe("operator-managed SMTP (workspace mail settings removed)", () => {
+    it("returns 404 for GET /workspace/settings/mail", async () => {
       const res = await request(server())
         .get("/workspace/settings/mail")
         .set("Cookie", adminSessionCookie);
 
-      expect(res.status).toBe(200);
-      const body = res.body as Record<string, unknown>;
-      expect(body).toHaveProperty("host");
-      expect(body).toHaveProperty("port");
-      expect(body).toHaveProperty("secure");
-      expect(body).toHaveProperty("user");
-      expect(body).toHaveProperty("hasPassword");
-      expect(body).toHaveProperty("from");
-      expect(body).not.toHaveProperty("encryptedPass");
-      expect(body).not.toHaveProperty("password");
+      expect(res.status).toBe(404);
     });
 
-    it("returns 403 for MEMBER", async () => {
+    it("returns 404 for PATCH /workspace/settings/mail", async () => {
+      const res = await request(server())
+        .patch("/workspace/settings/mail")
+        .set("Cookie", `${adminSessionCookie}; ${adminCsrfCookie}`)
+        .set("x-csrf-token", adminCsrfToken)
+        .send({ host: "smtp.test.com" });
+
+      expect(res.status).toBe(404);
+    });
+
+    it("returns 404 for POST /workspace/settings/mail/test", async () => {
+      const res = await request(server())
+        .post("/workspace/settings/mail/test")
+        .set("Cookie", `${adminSessionCookie}; ${adminCsrfCookie}`)
+        .set("x-csrf-token", adminCsrfToken)
+        .send({ to: "admin@example.com" });
+
+      expect(res.status).toBe(404);
+    });
+
+    it("returns 404 for GET without session (no auth surface leak)", async () => {
+      const res = await request(server()).get("/workspace/settings/mail");
+      expect(res.status).toBe(404);
+    });
+
+    it("returns 404 for MEMBER (endpoints no longer exist)", async () => {
       const res = await request(server())
         .get("/workspace/settings/mail")
         .set("Cookie", memberSessionCookie);
 
-      expect(res.status).toBe(403);
-    });
-
-    it("returns 401 without session", async () => {
-      const res = await request(server()).get("/workspace/settings/mail");
-      expect(res.status).toBe(401);
-    });
-  });
-
-  describe("PATCH /workspace/settings/mail", () => {
-    it("updates settings and returns them for ADMIN", async () => {
-      const res = await request(server())
-        .patch("/workspace/settings/mail")
-        .set("Cookie", `${adminSessionCookie}; ${adminCsrfCookie}`)
-        .set("x-csrf-token", adminCsrfToken)
-        .send({ host: "smtp.test.com", port: 587, secure: false, from: "test@example.com" });
-
-      expect(res.status).toBe(200);
-      const body = res.body as Record<string, unknown>;
-      expect(body.host).toBe("smtp.test.com");
-      expect(body.port).toBe(587);
-      expect(body.from).toBe("test@example.com");
-      expect(body).not.toHaveProperty("encryptedPass");
-      expect(smtpMail.isAvailable()).toBe(true);
-    });
-
-    it("persists user and from fields from API contract", async () => {
-      const res = await request(server())
-        .patch("/workspace/settings/mail")
-        .set("Cookie", `${adminSessionCookie}; ${adminCsrfCookie}`)
-        .set("x-csrf-token", adminCsrfToken)
-        .send({
-          user: "smtp-user@example.com",
-          from: "noreply@example.com",
-        });
-
-      expect(res.status).toBe(200);
-      const body = res.body as Record<string, unknown>;
-      expect(body.user).toBe("smtp-user@example.com");
-      expect(body.from).toBe("noreply@example.com");
-    });
-
-    it("stores password as encrypted (hasPassword=true after setting)", async () => {
-      const res = await request(server())
-        .patch("/workspace/settings/mail")
-        .set("Cookie", `${adminSessionCookie}; ${adminCsrfCookie}`)
-        .set("x-csrf-token", adminCsrfToken)
-        .send({ password: "s3cr3t-smtp-pass" });
-
-      expect(res.status).toBe(200);
-      const body = res.body as Record<string, unknown>;
-      expect(body.hasPassword).toBe(true);
-      expect(body).not.toHaveProperty("password");
-      expect(body).not.toHaveProperty("encryptedPass");
-    });
-
-    it("returns 403 for MEMBER", async () => {
-      const res = await request(server())
-        .patch("/workspace/settings/mail")
-        .set("Cookie", `${memberSessionCookie}; ${memberCsrfCookie}`)
-        .set("x-csrf-token", memberCsrfToken)
-        .send({ host: "smtp.test.com" });
-
-      expect(res.status).toBe(403);
-    });
-
-    it("returns 403 without CSRF token", async () => {
-      const res = await request(server())
-        .patch("/workspace/settings/mail")
-        .set("Cookie", adminSessionCookie)
-        .send({ host: "smtp.test.com" });
-
-      expect(res.status).toBe(403);
-    });
-  });
-
-  describe("POST /workspace/settings/mail/test (configured)", () => {
-    it("returns 204 after DB settings wire the transport", async () => {
-      const sendTestSpy = vi.spyOn(smtpMail, "sendTest").mockResolvedValue(undefined);
-
-      const res = await request(server())
-        .post("/workspace/settings/mail/test")
-        .set("Cookie", `${adminSessionCookie}; ${adminCsrfCookie}`)
-        .set("x-csrf-token", adminCsrfToken)
-        .send({ to: "admin@example.com" });
-
-      expect(res.status).toBe(204);
-      expect(sendTestSpy).toHaveBeenCalledWith("admin@example.com");
-
-      sendTestSpy.mockRestore();
-    });
-
-    it("returns 400 when SMTP authentication fails", async () => {
-      const { MailSendError } = await import("@slugbase/shared-types");
-      const sendTestSpy = vi.spyOn(smtpMail, "sendTest").mockRejectedValue(
-        new MailSendError(
-          "send failed",
-          Object.assign(new Error("Invalid login"), { code: "EAUTH" }),
-        ),
-      );
-
-      const res = await request(server())
-        .post("/workspace/settings/mail/test")
-        .set("Cookie", `${adminSessionCookie}; ${adminCsrfCookie}`)
-        .set("x-csrf-token", adminCsrfToken)
-        .send({ to: "admin@example.com" });
-
-      expect(res.status).toBe(400);
-      expect((res.body as { message?: string }).message).toContain("authentication");
-
-      sendTestSpy.mockRestore();
-    });
-
-    it("returns 403 for MEMBER", async () => {
-      const res = await request(server())
-        .post("/workspace/settings/mail/test")
-        .set("Cookie", `${memberSessionCookie}; ${memberCsrfCookie}`)
-        .set("x-csrf-token", memberCsrfToken)
-        .send({ to: "admin@example.com" });
-
-      expect(res.status).toBe(403);
-    });
-
-    it("returns 403 without CSRF token", async () => {
-      const res = await request(server())
-        .post("/workspace/settings/mail/test")
-        .set("Cookie", adminSessionCookie)
-        .send({ to: "admin@example.com" });
-
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
   });
 });

@@ -2,9 +2,11 @@
  * Workspace settings HTTP contracts (spec §11.5, §11.2, §5.6, §15).
  *
  * Covers operator-level settings managed by workspace admins:
- *   - Mail (SMTP) transport configuration
  *   - AI provider configuration (self-hosted)
  *   - OIDC identity provider admin CRUD
+ *
+ * SMTP transport is operator-managed via deployment env vars (spec §15) — no
+ * workspace mail settings HTTP surface in v1.
  */
 
 import { initContract } from "@ts-rest/core";
@@ -124,39 +126,6 @@ export type UpdateOidcProviderBody = z.infer<typeof UpdateOidcProviderBodySchema
 const errorSchema = z.object({ message: z.string() }).strict();
 
 export const workspaceSettingsContract = c.router({
-  // Mail settings
-  getMailSettings: {
-    method: "GET",
-    path: "/workspace/settings/mail",
-    responses: {
-      200: MailSettingsSchema,
-      403: errorSchema,
-    },
-    summary: "Get workspace SMTP mail settings (ADMIN+, spec §11.5)",
-  },
-  updateMailSettings: {
-    method: "PATCH",
-    path: "/workspace/settings/mail",
-    body: UpdateMailSettingsBodySchema,
-    responses: {
-      200: MailSettingsSchema,
-      400: errorSchema,
-      403: errorSchema,
-    },
-    summary: "Update workspace SMTP mail settings (ADMIN+, spec §11.5, §11.11)",
-  },
-  sendTestMail: {
-    method: "POST",
-    path: "/workspace/settings/mail/test",
-    body: SendTestMailBodySchema,
-    responses: {
-      204: c.noBody(),
-      400: errorSchema,
-      403: errorSchema,
-      503: errorSchema,
-    },
-    summary: "Send a test email to verify SMTP transport (ADMIN+, spec §11.5)",
-  },
   // AI settings
   getAiSettings: {
     method: "GET",

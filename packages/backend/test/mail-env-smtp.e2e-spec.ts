@@ -7,12 +7,14 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { AppModule } from "../src/app.module.js";
 import { AccountsService } from "../src/accounts/accounts.service.js";
+import { ConfigService } from "../src/config/config.service.js";
+import { validateEnvConfig } from "../src/config/env.schema.js";
+import { AesGcmCryptoService } from "../src/crypto/aes-gcm-crypto.service.js";
 import { DbService } from "../src/db/db.service.js";
 import { instanceMetadata } from "../src/db/schema/index.js";
 import { InvitationsService } from "../src/invitations/invitations.service.js";
-import { MailRuntimeService } from "../src/mail/mail-runtime.service.js";
 import { SmtpMailService } from "../src/mail/smtp-mail.service.js";
-import { applyTestEnv, clearTestEnv } from "../src/test-utils/test-env.js";
+import { applyTestEnv, clearTestEnv, validTestEnv } from "../src/test-utils/test-env.js";
 import { WorkspacesService } from "../src/workspaces/workspaces.service.js";
 import { createTestDatabase } from "./test-database.js";
 
@@ -20,7 +22,6 @@ describe("SMTP env transport (integration)", () => {
   let app: INestApplication | undefined;
   let cleanup: () => Promise<void> = async () => {};
   let smtpMail: SmtpMailService;
-  let mailRuntime: MailRuntimeService;
   let invitationsService: InvitationsService;
   let teamWorkspaceId: string;
   let ownerUserId: string;
@@ -48,7 +49,6 @@ describe("SMTP env transport (integration)", () => {
     await app.init();
 
     smtpMail = moduleRef.get(SmtpMailService);
-    mailRuntime = moduleRef.get(MailRuntimeService);
     invitationsService = moduleRef.get(InvitationsService);
 
     const accountsService = moduleRef.get(AccountsService);
@@ -86,18 +86,24 @@ describe("SMTP env transport (integration)", () => {
     await expect(smtpMail.ensureAvailable()).resolves.toBe(true);
   });
 
-  it("does not overwrite env credentials when DB smtp_settings exist", async () => {
+  it("ignores legacy DB smtp_settings when env SMTP_* is configured", async () => {
     if (!app) {
       throw new Error("app not initialized");
     }
 
-    const reconfigureSpy = vi.spyOn(smtpMail, "reconfigureFromEncrypted");
+    const config = new ConfigService(
+      validateEnvConfig({
+        ...validTestEnv,
+        DATABASE_URL: process.env.DATABASE_URL,
+      }),
+    );
+    const crypto = new AesGcmCryptoService(config);
     const stored = {
       host: "smtp.db-override.test",
       port: 465,
       secure: true,
       user: "db-user@db.test",
-      encryptedPass: "cipher",
+      encryptedPass: crypto.encrypt("db-password"),
       from: "db@db.test",
     };
 
@@ -112,15 +118,6 @@ describe("SMTP env transport (integration)", () => {
         set: { value: JSON.stringify(stored), updatedAt: now },
       });
 
-    await mailRuntime.hydrateIfNeeded();
-
-    expect(reconfigureSpy).not.toHaveBeenCalled();
-    expect(smtpMail.isAvailable()).toBe(true);
-
-    reconfigureSpy.mockRestore();
-  });
-
-  it("sends invitation email using env-configured transport", async () => {
     const sendMailSpy = vi
       .spyOn(smtpMail["transport"], "sendMail")
       .mockResolvedValue({ messageId: "env-smtp-test" });
@@ -135,6 +132,27 @@ describe("SMTP env transport (integration)", () => {
       expect.objectContaining({
         from: "noreply@env.test",
         to: "invited-env@example.com",
+      }),
+    );
+
+    sendMailSpy.mockRestore();
+  });
+
+  it("sends invitation email using env-configured transport", async () => {
+    const sendMailSpy = vi
+      .spyOn(smtpMail["transport"], "sendMail")
+      .mockResolvedValue({ messageId: "env-smtp-test" });
+
+    await invitationsService.createInvitation(teamWorkspaceId, ownerUserId, {
+      email: "invited-env-2@example.com",
+      role: "MEMBER",
+    });
+
+    expect(sendMailSpy).toHaveBeenCalledOnce();
+    expect(sendMailSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        from: "noreply@env.test",
+        to: "invited-env-2@example.com",
       }),
     );
 

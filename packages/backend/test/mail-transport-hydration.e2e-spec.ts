@@ -4,22 +4,19 @@ import type { INestApplication } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import cookieParser from "cookie-parser";
 import { eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { AppModule } from "../src/app.module.js";
-import { AccountsService } from "../src/accounts/accounts.service.js";
 import { ConfigService } from "../src/config/config.service.js";
 import { validateEnvConfig } from "../src/config/env.schema.js";
 import { AesGcmCryptoService } from "../src/crypto/aes-gcm-crypto.service.js";
 import { DbService } from "../src/db/db.service.js";
 import { instanceMetadata } from "../src/db/schema/index.js";
-import { InvitationsService } from "../src/invitations/invitations.service.js";
 import { SmtpMailService } from "../src/mail/smtp-mail.service.js";
 import { applyTestEnv, clearTestEnv, validTestEnv } from "../src/test-utils/test-env.js";
-import { WorkspacesService } from "../src/workspaces/workspaces.service.js";
 import { createTestDatabase } from "./test-database.js";
 
-async function seedSmtpSettings(databaseUrl: string): Promise<void> {
+async function seedLegacySmtpSettings(databaseUrl: string): Promise<void> {
   const config = new ConfigService(
     validateEnvConfig({
       ...validTestEnv,
@@ -50,18 +47,15 @@ async function seedSmtpSettings(databaseUrl: string): Promise<void> {
   await close();
 }
 
-describe("SMTP transport DB hydration (integration)", () => {
+describe("SMTP transport DB hydration removed (integration)", () => {
   let app: INestApplication | undefined;
   let cleanup: () => Promise<void> = async () => {};
   let smtpMail: SmtpMailService;
-  let invitationsService: InvitationsService;
-  let teamWorkspaceId: string;
-  let ownerUserId: string;
 
   beforeAll(async () => {
     const testDatabase = await createTestDatabase();
     cleanup = testDatabase.cleanup;
-    await seedSmtpSettings(testDatabase.databaseUrl);
+    await seedLegacySmtpSettings(testDatabase.databaseUrl);
 
     applyTestEnv({
       DATABASE_URL: testDatabase.databaseUrl,
@@ -81,23 +75,6 @@ describe("SMTP transport DB hydration (integration)", () => {
     await app.init();
 
     smtpMail = moduleRef.get(SmtpMailService);
-    invitationsService = moduleRef.get(InvitationsService);
-
-    const accountsService = moduleRef.get(AccountsService);
-    const workspacesService = moduleRef.get(WorkspacesService);
-
-    const owner = await accountsService.registerAccount({
-      email: "mail-hydration-owner@example.com",
-      name: "Mail Hydration Owner",
-      password: "password-abc-123",
-    });
-    ownerUserId = owner.id;
-
-    const teamWs = await workspacesService.createWorkspace(
-      { name: "Mail Hydration Team", slug: "mail-hydration-team", plan: "team", planSeats: 10 },
-      ownerUserId,
-    );
-    teamWorkspaceId = teamWs.id;
   });
 
   afterAll(async () => {
@@ -113,32 +90,15 @@ describe("SMTP transport DB hydration (integration)", () => {
     await cleanup();
   });
 
-  it("hydrates SMTP from DB on bootstrap when SMTP_HOST env is absent", () => {
-    expect(smtpMail.isAvailable()).toBe(true);
+  it("does not hydrate SMTP from legacy smtp_settings when SMTP_HOST env is absent", () => {
+    expect(smtpMail.isAvailable()).toBe(false);
   });
 
-  it("sends invitation email when only DB SMTP settings exist", async () => {
-    const sendMailSpy = vi
-      .spyOn(smtpMail["transport"], "sendMail")
-      .mockResolvedValue({ messageId: "hydration-test" });
-
-    await invitationsService.createInvitation(teamWorkspaceId, ownerUserId, {
-      email: "invited-hydration@example.com",
-      role: "MEMBER",
-    });
-
-    expect(sendMailSpy).toHaveBeenCalledOnce();
-    expect(sendMailSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        from: "noreply@hydration.test",
-        to: "invited-hydration@example.com",
-      }),
-    );
-
-    sendMailSpy.mockRestore();
+  it("ensureAvailable stays false with only legacy DB smtp_settings", async () => {
+    await expect(smtpMail.ensureAvailable()).resolves.toBe(false);
   });
 
-  it("lazy-hydrates when settings are inserted after startup", async () => {
+  it("does not become available after legacy settings are inserted post-startup", async () => {
     if (!app) {
       throw new Error("app not initialized");
     }
@@ -147,9 +107,6 @@ describe("SMTP transport DB hydration (integration)", () => {
     if (!databaseUrl) {
       throw new Error("DATABASE_URL is required");
     }
-
-    const db = app.get(DbService);
-    await db.getOrm().delete(instanceMetadata).where(eq(instanceMetadata.key, "smtp_settings"));
 
     const freshModuleRef = await Test.createTestingModule({
       imports: [AppModule],
@@ -160,9 +117,9 @@ describe("SMTP transport DB hydration (integration)", () => {
     const freshSmtp = freshModuleRef.get(SmtpMailService);
     expect(freshSmtp.isAvailable()).toBe(false);
 
-    await seedSmtpSettings(databaseUrl);
-    await expect(freshSmtp.ensureAvailable()).resolves.toBe(true);
-    expect(freshSmtp.isAvailable()).toBe(true);
+    await seedLegacySmtpSettings(databaseUrl);
+    await expect(freshSmtp.ensureAvailable()).resolves.toBe(false);
+    expect(freshSmtp.isAvailable()).toBe(false);
 
     await freshApp.close();
   });
