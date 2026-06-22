@@ -50,26 +50,24 @@ export type MailSettings = z.infer<typeof MailSettingsSchema>;
 export type UpdateMailSettingsBody = z.infer<typeof UpdateMailSettingsBodySchema>;
 export type SendTestMailBody = z.infer<typeof SendTestMailBodySchema>;
 
-// ─── AI settings (spec §11.2, §11.11, §15) ───────────────────────────────────
+// ─── AI settings (spec §11.2, §15) ───────────────────────────────────────────
 
 export const AiProviderSchema = z.enum(["openai"]);
 
 export const AiSettingsSchema = z
   .object({
     provider: AiProviderSchema.nullable(),
-    /** True when an API key is stored - never return the encrypted value */
+    /** True when OPENAI_API_KEY is set in deployment env — never return the key */
     hasApiKey: z.boolean(),
+    /** Model from OPENAI_MODEL env — read-only, not persisted per workspace */
     model: z.string().nullable(),
+    /** Per-workspace enable toggle (workspace-scoped storage) */
     enabled: z.boolean(),
   })
   .strict();
 
 export const UpdateAiSettingsBodySchema = z
   .object({
-    provider: AiProviderSchema.optional().nullable(),
-    /** Supply to set or replace the API key. Omit to leave unchanged. */
-    apiKey: z.string().max(512).optional().nullable(),
-    model: z.string().max(100).optional().nullable(),
     enabled: z.boolean().optional(),
   })
   .strict();
@@ -145,7 +143,7 @@ export const workspaceSettingsContract = c.router({
       400: errorSchema,
       403: errorSchema,
     },
-    summary: "Update workspace AI settings (ADMIN+, spec §11.2, §11.11)",
+    summary: "Update workspace AI settings (ADMIN+, spec §11.2)",
   },
   // OIDC provider admin
   listOidcProviders: {

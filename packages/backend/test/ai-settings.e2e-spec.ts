@@ -47,7 +47,10 @@ describe("Workspace AI settings HTTP (integration)", () => {
   beforeAll(async () => {
     const testDatabase = await createTestDatabase();
     cleanup = testDatabase.cleanup;
-    applyTestEnv({ DATABASE_URL: testDatabase.databaseUrl });
+    applyTestEnv({
+      DATABASE_URL: testDatabase.databaseUrl,
+      OPENAI_API_KEY: "sk-test-env-key",
+    });
 
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
@@ -131,10 +134,9 @@ describe("Workspace AI settings HTTP (integration)", () => {
 
       expect(res.status).toBe(200);
       const body = res.body as Record<string, unknown>;
-      expect(body).toHaveProperty("provider");
-      expect(body).toHaveProperty("hasApiKey");
-      expect(body).toHaveProperty("model");
       expect(body).toHaveProperty("enabled");
+      expect(body).toHaveProperty("hasApiKey");
+      expect(body.hasApiKey).toBe(true);
       expect(body).not.toHaveProperty("apiKey");
       expect(body).not.toHaveProperty("encryptedApiKey");
     });
@@ -154,34 +156,29 @@ describe("Workspace AI settings HTTP (integration)", () => {
   });
 
   describe("PATCH /workspace/settings/ai", () => {
-    it("updates settings and returns them for ADMIN", async () => {
+    it("updates enable toggle and returns env-derived settings for ADMIN", async () => {
       const res = await request(server())
         .patch("/workspace/settings/ai")
         .set("Cookie", `${adminSessionCookie}; ${adminCsrfCookie}`)
         .set("x-csrf-token", adminCsrfToken)
-        .send({ provider: "openai", model: "gpt-4o-mini", enabled: true });
+        .send({ enabled: true });
 
       expect(res.status).toBe(200);
       const body = res.body as Record<string, unknown>;
-      expect(body.provider).toBe("openai");
-      expect(body.model).toBe("gpt-4o-mini");
       expect(body.enabled).toBe(true);
+      expect(body.hasApiKey).toBe(true);
       expect(body).not.toHaveProperty("apiKey");
       expect(body).not.toHaveProperty("encryptedApiKey");
     });
 
-    it("stores API key as encrypted (hasApiKey=true after setting)", async () => {
+    it("rejects BYO credential fields in request body", async () => {
       const res = await request(server())
         .patch("/workspace/settings/ai")
         .set("Cookie", `${adminSessionCookie}; ${adminCsrfCookie}`)
         .set("x-csrf-token", adminCsrfToken)
         .send({ apiKey: "sk-test-api-key-value" });
 
-      expect(res.status).toBe(200);
-      const body = res.body as Record<string, unknown>;
-      expect(body.hasApiKey).toBe(true);
-      expect(body).not.toHaveProperty("apiKey");
-      expect(body).not.toHaveProperty("encryptedApiKey");
+      expect(res.status).toBe(400);
     });
 
     it("returns 403 for MEMBER", async () => {
@@ -219,13 +216,13 @@ describe("AI runtime wiring (integration)", () => {
     cleanup = testDatabase.cleanup;
     applyTestEnv({
       DATABASE_URL: testDatabase.databaseUrl,
+      OPENAI_API_KEY: "sk-test-env-key",
     });
-    delete process.env.OPENAI_API_KEY;
 
     httpExecutor = vi.fn<OpenAiHttpExecutor>().mockResolvedValue(
       createOpenAiResponse({
-        title: "UI Configured Docs",
-        slug: "ui-configured-docs",
+        title: "Env Configured Docs",
+        slug: "env-configured-docs",
         tags: ["docs"],
         detectedLanguage: "en",
         confidence: 0.87,
@@ -285,17 +282,12 @@ describe("AI runtime wiring (integration)", () => {
     return app.getHttpServer() as Server;
   }
 
-  it("serves suggestions after UI-only AI configuration without OPENAI_API_KEY env", async () => {
+  it("serves suggestions with env credential when workspace AI is enabled", async () => {
     const patchRes = await request(server())
       .patch("/workspace/settings/ai")
       .set("Cookie", `${adminSessionCookie}; ${adminCsrfCookie}`)
       .set("x-csrf-token", adminCsrfToken)
-      .send({
-        provider: "openai",
-        apiKey: "sk-ui-configured-key",
-        model: "gpt-4o-mini",
-        enabled: true,
-      });
+      .send({ enabled: true });
 
     expect(patchRes.status).toBe(200);
 
@@ -310,13 +302,13 @@ describe("AI runtime wiring (integration)", () => {
 
     expect(suggestRes.status).toBe(200);
     expect(suggestRes.body).toMatchObject({
-      title: "UI Configured Docs",
-      slug: "ui-configured-docs",
+      title: "Env Configured Docs",
+      slug: "env-configured-docs",
     });
     expect(httpExecutor).toHaveBeenCalled();
   });
 
-  it("returns 503 when instance AI is disabled even if a key exists", async () => {
+  it("returns 503 when workspace AI is disabled", async () => {
     await request(server())
       .patch("/workspace/settings/ai")
       .set("Cookie", `${adminSessionCookie}; ${adminCsrfCookie}`)
@@ -335,6 +327,98 @@ describe("AI runtime wiring (integration)", () => {
     expect(suggestRes.status).toBe(503);
     expect((suggestRes.body as { message: string }).message).toContain(
       "disabled",
+    );
+  });
+});
+
+describe("AI env credential gate (integration)", () => {
+  let app: INestApplication | undefined;
+  let cleanup: () => Promise<void> = async () => {};
+
+  let adminSessionCookie: string;
+  let adminCsrfToken: string;
+  let adminCsrfCookie: string;
+
+  beforeAll(async () => {
+    const testDatabase = await createTestDatabase();
+    cleanup = testDatabase.cleanup;
+    applyTestEnv({
+      DATABASE_URL: testDatabase.databaseUrl,
+    });
+    delete process.env.OPENAI_API_KEY;
+
+    const moduleRef = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
+
+    app = moduleRef.createNestApplication();
+    app.use(cookieParser());
+    await app.init();
+
+    const accountsService = moduleRef.get(AccountsService);
+    const workspacesService = moduleRef.get(WorkspacesService);
+    const sessions = moduleRef.get(SessionService);
+
+    const adminUser = await accountsService.registerAccount({
+      email: "ai-no-env-admin@example.com",
+      name: "AI No Env Admin",
+      password: "password-abc-123",
+    });
+
+    const workspace = await workspacesService.createWorkspace(
+      { name: "AI No Env WS", slug: "ai-no-env-ws", plan: "personal" },
+      adminUser.id,
+    );
+
+    const adminSession = await sessions.createSession({
+      userId: adminUser.id,
+      data: { activeWorkspaceId: workspace.id },
+    });
+    adminSessionCookie = `${SESSION_COOKIE}=${adminSession.cookieValue}`;
+
+    const adminCsrfRes = await request(app.getHttpServer() as Server)
+      .get("/auth/csrf-token")
+      .set("Cookie", adminSessionCookie);
+    adminCsrfToken = (adminCsrfRes.body as { csrfToken: string }).csrfToken;
+    adminCsrfCookie =
+      (adminCsrfRes.headers["set-cookie"] as string[]).find((c) =>
+        c.startsWith("csrf_token="),
+      )?.split(";")[0] ?? "";
+  });
+
+  afterAll(async () => {
+    if (app) await app.close();
+    clearTestEnv();
+    await cleanup();
+  });
+
+  function server(): Server {
+    if (!app) throw new Error("app not initialized");
+    return app.getHttpServer() as Server;
+  }
+
+  it("returns 503 when OPENAI_API_KEY env is unset even if workspace is enabled", async () => {
+    const patchRes = await request(server())
+      .patch("/workspace/settings/ai")
+      .set("Cookie", `${adminSessionCookie}; ${adminCsrfCookie}`)
+      .set("x-csrf-token", adminCsrfToken)
+      .send({ enabled: true });
+
+    expect(patchRes.status).toBe(200);
+    expect((patchRes.body as { hasApiKey: boolean }).hasApiKey).toBe(false);
+
+    const suggestRes = await request(server())
+      .post("/ai/suggest")
+      .set("Cookie", `${adminSessionCookie}; ${adminCsrfCookie}`)
+      .set("x-csrf-token", adminCsrfToken)
+      .send({
+        url: "https://example.com/docs",
+        outputLanguage: "en",
+      });
+
+    expect(suggestRes.status).toBe(503);
+    expect((suggestRes.body as { message: string }).message).toContain(
+      "not configured",
     );
   });
 });

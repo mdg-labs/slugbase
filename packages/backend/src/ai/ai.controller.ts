@@ -18,13 +18,13 @@ import type {
 } from "@slugbase/shared-types";
 
 import { AccountsService } from "../accounts/accounts.service.js";
+import { AiSettingsService } from "../admin/ai-settings.service.js";
 import { EntitlementsService } from "../entitlements/entitlements.service.js";
 import { ActiveWorkspace } from "../workspaces/active-workspace.decorator.js";
 import { TenantGuard, TENANT_USER_ID_KEY } from "../workspaces/tenant.guard.js";
 import type { WorkspaceRecord } from "../workspaces/workspace.types.js";
 import { AiSuggestionCacheService } from "./cache/ai-suggestion-cache.service.js";
 import type { AiSuggestionCacheContext } from "./cache/ai-suggestion-cache.types.js";
-import { AiRuntimeService } from "./ai-runtime.service.js";
 import { AI } from "./ai.tokens.js";
 
 interface AiSuggestBody {
@@ -39,14 +39,15 @@ interface AiSuggestBody {
  * Gate order (spec §11.2, §12.4, §17):
  *   1. Entitlement check - workspace plan must include `ai-suggestions`.
  *   2. Per-user opt-out   - `account.aiOptOut` must be false.
- *   3. Provider check     - AI credential must be configured.
+ *   3. Workspace toggle   - per-workspace enable flag must be on.
+ *   4. Provider check     - OPENAI_API_KEY env must be configured.
  */
 @Controller("ai")
 @UseGuards(TenantGuard)
 export class AiController {
   constructor(
     @Inject(AI) private readonly ai: AiService,
-    @Inject(AiRuntimeService) private readonly aiRuntime: AiRuntimeService,
+    @Inject(AiSettingsService) private readonly aiSettings: AiSettingsService,
     @Inject(AiSuggestionCacheService)
     private readonly cache: AiSuggestionCacheService,
     @Inject(AccountsService) private readonly accounts: AccountsService,
@@ -75,9 +76,9 @@ export class AiController {
       );
     }
 
-    if (!this.aiRuntime.isInstanceEnabled()) {
+    if (!(await this.aiSettings.isWorkspaceEnabled(workspace.id))) {
       throw new ServiceUnavailableException(
-        "AI suggestions are disabled for this instance",
+        "AI suggestions are disabled for this workspace",
       );
     }
 

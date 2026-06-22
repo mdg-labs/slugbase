@@ -1,98 +1,30 @@
-import { describe, expect, it, vi, type MockedObject } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import type { ConfigService } from "../config/config.service.js";
-import type { DbService } from "../db/db.service.js";
 import { AiRuntimeService } from "./ai-runtime.service.js";
-import type { OpenAiAiService } from "./openai-ai.service.js";
 
-function createDbService(rows: Array<{ value: string }>): MockedObject<DbService> {
-  const limit = vi.fn().mockResolvedValue(rows);
-  const where = vi.fn().mockReturnValue({ limit });
-  const from = vi.fn().mockReturnValue({ where });
-  const select = vi.fn().mockReturnValue({ from });
+function createConfig(overrides: Partial<Record<string, string>> = {}): ConfigService {
+  const values: Record<string, string | undefined> = {
+    OPENAI_API_KEY: undefined,
+    OPENAI_MODEL: "gpt-4o-mini",
+    ...overrides,
+  };
 
   return {
-    getOrm: vi.fn().mockReturnValue({ select }),
-  } as unknown as MockedObject<DbService>;
-}
-
-function createConfig(envKey?: string): ConfigService {
-  return {
-    get: (key: string) => (key === "OPENAI_API_KEY" ? envKey : undefined),
+    get: (key: string) => values[key],
   } as ConfigService;
 }
 
-function createOpenAi(): MockedObject<OpenAiAiService> {
-  return {
-    reconfigureFromEncrypted: vi.fn(),
-    clearCredentials: vi.fn(),
-  } as unknown as MockedObject<OpenAiAiService>;
-}
-
 describe("AiRuntimeService", () => {
-  it("applies DB credentials on bootstrap when env key is absent", async () => {
-    const openAi = createOpenAi();
-    const stored = {
-      provider: "openai",
-      encryptedApiKey: "cipher",
-      model: "gpt-4o-mini",
-      enabled: true,
-    };
-    const service = new AiRuntimeService(
-      createConfig(undefined),
-      createDbService([{ value: JSON.stringify(stored) }]),
-      openAi,
-    );
-
-    await service.onModuleInit();
-
-    expect(service.isInstanceEnabled()).toBe(true);
-    expect(openAi.reconfigureFromEncrypted).toHaveBeenCalledWith(
-      "cipher",
-      "gpt-4o-mini",
-    );
-    expect(openAi.clearCredentials).not.toHaveBeenCalled();
+  it("reports env configured when OPENAI_API_KEY is set", () => {
+    const service = new AiRuntimeService(createConfig({ OPENAI_API_KEY: "sk-test" }));
+    expect(service.isEnvConfigured()).toBe(true);
+    expect(service.getConfiguredModel()).toBe("gpt-4o-mini");
   });
 
-  it("skips DB credentials when env key is set at startup", async () => {
-    const openAi = createOpenAi();
-    const stored = {
-      provider: "openai",
-      encryptedApiKey: "cipher",
-      model: "gpt-4o-mini",
-      enabled: true,
-    };
-    const service = new AiRuntimeService(
-      createConfig("env-openai-key"),
-      createDbService([{ value: JSON.stringify(stored) }]),
-      openAi,
-    );
-
-    await service.onModuleInit();
-
-    expect(service.isInstanceEnabled()).toBe(true);
-    expect(openAi.reconfigureFromEncrypted).not.toHaveBeenCalled();
-    expect(openAi.clearCredentials).not.toHaveBeenCalled();
-  });
-
-  it("clears credentials when disabled without env key", async () => {
-    const openAi = createOpenAi();
-    const stored = {
-      provider: "openai",
-      encryptedApiKey: "cipher",
-      model: "gpt-4o-mini",
-      enabled: false,
-    };
-    const service = new AiRuntimeService(
-      createConfig(undefined),
-      createDbService([{ value: JSON.stringify(stored) }]),
-      openAi,
-    );
-
-    await service.onModuleInit();
-
-    expect(service.isInstanceEnabled()).toBe(false);
-    expect(openAi.clearCredentials).toHaveBeenCalledOnce();
-    expect(openAi.reconfigureFromEncrypted).not.toHaveBeenCalled();
+  it("reports env not configured when OPENAI_API_KEY is absent", () => {
+    const service = new AiRuntimeService(createConfig());
+    expect(service.isEnvConfigured()).toBe(false);
+    expect(service.getConfiguredModel()).toBe("gpt-4o-mini");
   });
 });

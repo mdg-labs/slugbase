@@ -1,112 +1,60 @@
 import { Inject, Injectable } from "@nestjs/common";
-import { eq } from "drizzle-orm";
 
-import type { CryptoService } from "@slugbase/shared-types";
 import type { AiSettings, UpdateAiSettingsBody } from "@slugbase/shared-types";
 
-import {
-  AiRuntimeService,
-  type StoredAiSettings,
-} from "../ai/ai-runtime.service.js";
-import { CRYPTO } from "../crypto/crypto.tokens.js";
+import { ConfigService } from "../config/config.service.js";
+import { InstanceMetadataRepository } from "../db/instance-metadata.repository.js";
 import { DbService } from "../db/db.service.js";
-import type { DrizzleClient } from "../db/dialect/create-client.js";
-import { instanceMetadata } from "../db/schema/index.js";
 
-const AI_SETTINGS_KEY = "ai_settings";
-
-function defaultSettings(): StoredAiSettings {
-  return {
-    provider: null,
-    encryptedApiKey: null,
-    model: null,
-    enabled: false,
-  };
-}
-
-function toPublicSettings(stored: StoredAiSettings): AiSettings {
-  return {
-    provider: stored.provider as AiSettings["provider"],
-    hasApiKey: stored.encryptedApiKey !== null,
-    model: stored.model,
-    enabled: stored.enabled,
-  };
+function workspaceAiEnabledKey(workspaceId: string): string {
+  return `workspace_ai_enabled:${workspaceId}`;
 }
 
 /**
- * Persists AI provider settings in {@link instanceMetadata} under key
- * `ai_settings`. The API key is encrypted at rest (spec §11.11).
- * Plain-text credentials are never stored or returned.
+ * Persists the per-workspace AI enable toggle in {@link instanceMetadata} under
+ * a workspace-scoped key. Credentials and model come from deployment env only
+ * (spec §11.2, §15).
  */
 @Injectable()
 export class AiSettingsService {
-  private readonly db: DrizzleClient;
+  private readonly metadata: InstanceMetadataRepository;
 
   constructor(
     @Inject(DbService) dbService: DbService,
-    @Inject(CRYPTO) private readonly crypto: CryptoService,
-    @Inject(AiRuntimeService) private readonly aiRuntime: AiRuntimeService,
+    @Inject(ConfigService) private readonly config: ConfigService,
   ) {
-    this.db = dbService.getOrm();
+    this.metadata = new InstanceMetadataRepository(dbService.getOrm());
   }
 
-  async getSettings(): Promise<AiSettings> {
-    const rows = await this.db
-      .select()
-      .from(instanceMetadata)
-      .where(eq(instanceMetadata.key, AI_SETTINGS_KEY))
-      .limit(1);
-
-    if (!rows[0]) {
-      return toPublicSettings(defaultSettings());
-    }
-
-    const stored = JSON.parse(rows[0].value) as StoredAiSettings;
-    return toPublicSettings(stored);
+  async getSettings(workspaceId: string): Promise<AiSettings> {
+    const enabled = await this.isWorkspaceEnabled(workspaceId);
+    return this.toPublicSettings(enabled);
   }
 
-  async updateSettings(body: UpdateAiSettingsBody): Promise<AiSettings> {
-    const rows = await this.db
-      .select()
-      .from(instanceMetadata)
-      .where(eq(instanceMetadata.key, AI_SETTINGS_KEY))
-      .limit(1);
+  async updateSettings(
+    workspaceId: string,
+    body: UpdateAiSettingsBody,
+  ): Promise<AiSettings> {
+    const currentEnabled = await this.isWorkspaceEnabled(workspaceId);
+    const enabled = body.enabled !== undefined ? body.enabled : currentEnabled;
 
-    const current: StoredAiSettings = rows[0]
-      ? (JSON.parse(rows[0].value) as StoredAiSettings)
-      : defaultSettings();
+    await this.metadata.set(workspaceAiEnabledKey(workspaceId), enabled ? "true" : "false");
 
-    const updated: StoredAiSettings = {
-      provider: body.provider !== undefined ? (body.provider ?? null) : current.provider,
-      encryptedApiKey: this.resolveEncryptedApiKey(body.apiKey, current.encryptedApiKey),
-      model: body.model !== undefined ? (body.model ?? null) : current.model,
-      enabled: body.enabled !== undefined ? body.enabled : current.enabled,
+    return this.toPublicSettings(enabled);
+  }
+
+  async isWorkspaceEnabled(workspaceId: string): Promise<boolean> {
+    const stored = await this.metadata.get(workspaceAiEnabledKey(workspaceId));
+    return stored === "true";
+  }
+
+  private toPublicSettings(enabled: boolean): AiSettings {
+    const hasApiKey = Boolean(this.config.get("OPENAI_API_KEY"));
+    return {
+      provider: hasApiKey ? "openai" : null,
+      hasApiKey,
+      model: this.config.get("OPENAI_MODEL"),
+      enabled,
     };
-
-    const now = Date.now();
-    await this.db
-      .insert(instanceMetadata)
-      .values({ key: AI_SETTINGS_KEY, value: JSON.stringify(updated), updatedAt: now })
-      .onConflictDoUpdate({
-        target: instanceMetadata.key,
-        set: { value: JSON.stringify(updated), updatedAt: now },
-      });
-
-    this.aiRuntime.applyStoredSettings(updated);
-
-    return toPublicSettings(updated);
-  }
-
-  private resolveEncryptedApiKey(
-    incoming: string | null | undefined,
-    current: string | null,
-  ): string | null {
-    if (incoming === undefined) {
-      return current;
-    }
-    if (incoming === null || incoming === "") {
-      return null;
-    }
-    return this.crypto.encrypt(incoming);
   }
 }

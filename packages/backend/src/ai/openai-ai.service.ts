@@ -5,11 +5,9 @@ import {
   type AiService,
   type AiSuggestionRequest,
   type AiSuggestions,
-  type CryptoService,
 } from "@slugbase/shared-types";
 
 import { ConfigService } from "../config/config.service.js";
-import { CRYPTO } from "../crypto/crypto.tokens.js";
 import { OPENAI_HTTP } from "./ai.tokens.js";
 
 const OPENAI_CHAT_COMPLETIONS_URL = "https://api.openai.com/v1/chat/completions";
@@ -30,12 +28,11 @@ interface OpenAiJsonPayload {
 @Injectable()
 export class OpenAiAiService implements AiService {
   private readonly logger = new Logger(OpenAiAiService.name);
-  private apiKey: string | undefined;
-  private model: string;
+  private readonly apiKey: string | undefined;
+  private readonly model: string;
 
   constructor(
     @Inject(ConfigService) config: ConfigService,
-    @Inject(CRYPTO) private readonly crypto: CryptoService,
     @Inject(OPENAI_HTTP) private readonly http: OpenAiHttpExecutor,
   ) {
     this.apiKey = config.get("OPENAI_API_KEY");
@@ -105,22 +102,6 @@ export class OpenAiAiService implements AiService {
 
   isAvailable(): boolean {
     return Boolean(this.apiKey);
-  }
-
-  /**
-   * Reconfigure using credentials stored encrypted via {@link CryptoService}
-   * in instance/workspace settings (spec §11.2, §11.11, §15).
-   */
-  reconfigureFromEncrypted(encryptedApiKey: string, model?: string): void {
-    this.apiKey = this.crypto.decrypt(encryptedApiKey);
-    if (model) {
-      this.model = model;
-    }
-  }
-
-  /** Clears DB-applied credentials; env-configured keys are not touched. */
-  clearCredentials(): void {
-    this.apiKey = undefined;
   }
 }
 

@@ -29,7 +29,7 @@ function makeReq(userId = "user-1"): Record<string, unknown> {
 
 const MOCK_AI_SETTINGS: AiSettings = {
   provider: "openai",
-  hasApiKey: false,
+  hasApiKey: true,
   model: "gpt-4o-mini",
   enabled: false,
 };
@@ -55,8 +55,10 @@ function buildController(opts: { roleAllowed?: boolean; settings?: AiSettings })
 
 describe("AiSettingsController.getSettings", () => {
   it("returns settings for an ADMIN user", async () => {
-    const { controller } = buildController({});
-    const result = await controller.getSettings(makeWorkspace(), makeReq() as never);
+    const { controller, aiSettings } = buildController({});
+    const workspace = makeWorkspace();
+    const result = await controller.getSettings(workspace, makeReq() as never);
+    expect(aiSettings.getSettings).toHaveBeenCalledWith("ws-1");
     expect(result).toEqual(MOCK_AI_SETTINGS);
   });
 
@@ -67,7 +69,7 @@ describe("AiSettingsController.getSettings", () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it("never includes encrypted API key in response", async () => {
+  it("never includes API key in response", async () => {
     const { controller } = buildController({ settings: { ...MOCK_AI_SETTINGS, hasApiKey: true } });
     const result = await controller.getSettings(makeWorkspace(), makeReq() as never);
     expect(result).not.toHaveProperty("apiKey");
@@ -79,18 +81,19 @@ describe("AiSettingsController.getSettings", () => {
 describe("AiSettingsController.updateSettings", () => {
   it("updates and returns settings", async () => {
     const { controller, aiSettings } = buildController({});
-    const body = { provider: "openai" as const, model: "gpt-4o-mini", enabled: true };
-    const result = await controller.updateSettings(makeWorkspace(), makeReq() as never, body);
-    expect(aiSettings.updateSettings).toHaveBeenCalledWith(body);
+    const body = { enabled: true };
+    const workspace = makeWorkspace();
+    const result = await controller.updateSettings(workspace, makeReq() as never, body);
+    expect(aiSettings.updateSettings).toHaveBeenCalledWith("ws-1", body);
     expect(result).toEqual(MOCK_AI_SETTINGS);
   });
 
-  it("does not expose encrypted key after setting", async () => {
+  it("does not expose secrets in response", async () => {
     const { controller } = buildController({
       settings: { ...MOCK_AI_SETTINGS, hasApiKey: true },
     });
     const result = await controller.updateSettings(makeWorkspace(), makeReq() as never, {
-      apiKey: "sk-some-key",
+      enabled: true,
     });
     expect(result.hasApiKey).toBe(true);
     expect(result).not.toHaveProperty("apiKey");
