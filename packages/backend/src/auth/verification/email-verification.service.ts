@@ -118,7 +118,7 @@ export class EmailVerificationService {
       token: plaintext,
     });
 
-    if (this.mail.isAvailable()) {
+    if (await this.mail.ensureAvailable()) {
       await this.mail.send({
         to: email,
         subject: "Verify your SlugBase email address",

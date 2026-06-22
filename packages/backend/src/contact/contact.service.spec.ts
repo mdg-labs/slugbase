@@ -21,6 +21,7 @@ function createChallenge(overrides: Partial<ChallengeService> = {}): ChallengeSe
 function createMail(overrides: Partial<MailService> = {}): MailService {
   return {
     isAvailable: () => true,
+    ensureAvailable: () => Promise.resolve(true),
     send: vi.fn().mockResolvedValue(undefined),
     sendTest: vi.fn().mockResolvedValue(undefined),
     ...overrides,
@@ -92,7 +93,10 @@ describe("ContactService", () => {
   it("rejects when mail transport is unavailable", async () => {
     const service = new ContactService(
       createChallenge(),
-      createMail({ isAvailable: () => false }),
+      createMail({
+        isAvailable: () => false,
+        ensureAvailable: () => Promise.resolve(false),
+      }),
       createConfig({ SMTP_FROM: "support@slugbase.test" }),
     );
 

@@ -52,7 +52,7 @@ export class ContactService {
       throw error;
     }
 
-    if (!this.mail.isAvailable()) {
+    if (!(await this.mail.ensureAvailable())) {
       throw new ServiceUnavailableException(
         "Contact form is temporarily unavailable",
       );

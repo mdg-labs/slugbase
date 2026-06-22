@@ -35,6 +35,7 @@ async function createPasswordResetApp(params: {
     .overrideProvider(MAIL)
     .useValue({
       isAvailable: () => true,
+      ensureAvailable: () => Promise.resolve(true),
       send: params.mailSend,
       sendTest: vi.fn().mockResolvedValue(undefined),
     } satisfies MailService)

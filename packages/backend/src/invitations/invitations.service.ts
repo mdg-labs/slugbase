@@ -162,7 +162,7 @@ export class InvitationsService {
       token: plaintext,
     });
 
-    if (this.mail.isAvailable()) {
+    if (await this.mail.ensureAvailable()) {
       try {
         await this.mail.send({
           to: dto.email,
@@ -336,7 +336,7 @@ export class InvitationsService {
       token: plaintext,
     });
 
-    if (this.mail.isAvailable()) {
+    if (await this.mail.ensureAvailable()) {
       try {
         await this.mail.send({
           to: invitation.invitedEmail,

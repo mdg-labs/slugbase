@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional, forwardRef } from "@nestjs/common";
 import { renderMailTransportTestEmail } from "@slugbase/email-templates";
 import { MailSendError, type MailMessage, type MailService } from "@slugbase/shared-types";
 import type { CryptoService } from "@slugbase/shared-types";
@@ -6,6 +6,7 @@ import nodemailer, { type Transporter } from "nodemailer";
 
 import { ConfigService } from "../config/config.service.js";
 import { CRYPTO } from "../crypto/crypto.tokens.js";
+import { MailRuntimeService } from "./mail-runtime.service.js";
 
 /**
  * SMTP-backed mail implementation (spec §11.1, v1 implementation).
@@ -26,6 +27,9 @@ export class SmtpMailService implements MailService {
   constructor(
     @Inject(ConfigService) config: ConfigService,
     @Inject(CRYPTO) private readonly crypto: CryptoService,
+    @Optional()
+    @Inject(forwardRef(() => MailRuntimeService))
+    private readonly mailRuntime?: MailRuntimeService,
   ) {
     const host = config.get("SMTP_HOST");
     const port = config.get("SMTP_PORT");
@@ -45,7 +49,7 @@ export class SmtpMailService implements MailService {
   }
 
   async send(message: MailMessage): Promise<void> {
-    if (!this.configured) {
+    if (!(await this.ensureAvailable())) {
       this.logger.warn("Mail transport not configured - dropping message", {
         type: message.type,
         to: message.to,
@@ -78,8 +82,20 @@ export class SmtpMailService implements MailService {
     return this.configured;
   }
 
+  async ensureAvailable(): Promise<boolean> {
+    if (this.configured) {
+      return true;
+    }
+
+    if (!this.mailRuntime) {
+      return false;
+    }
+
+    return this.mailRuntime.hydrateIfNeeded();
+  }
+
   async sendTest(to: string): Promise<void> {
-    if (!this.configured) {
+    if (!(await this.ensureAvailable())) {
       this.logger.warn("Mail transport not configured - test send skipped", { to });
       return;
     }

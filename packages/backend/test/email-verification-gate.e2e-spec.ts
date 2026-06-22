@@ -67,6 +67,7 @@ describe("Email verification session gate (integration)", () => {
       .overrideProvider(MAIL)
       .useValue({
         isAvailable: () => true,
+        ensureAvailable: () => Promise.resolve(true),
         send: mailSend,
         sendTest: vi.fn().mockResolvedValue(undefined),
       } satisfies MailService)

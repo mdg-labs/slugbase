@@ -59,6 +59,7 @@ function buildController(opts: {
 
   const mail = {
     isAvailable: vi.fn().mockReturnValue(opts.mailAvailable ?? true),
+    ensureAvailable: vi.fn().mockResolvedValue(opts.mailAvailable ?? true),
     sendTest: vi.fn().mockResolvedValue(undefined),
   } as unknown as MockedObject<MailService>;
 

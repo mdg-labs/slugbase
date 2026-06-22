@@ -22,6 +22,10 @@ export class NoopMailService implements MailService {
     return false;
   }
 
+  ensureAvailable(): Promise<boolean> {
+    return Promise.resolve(false);
+  }
+
   sendTest(to: string): Promise<void> {
     this.logger.warn("Mail transport not configured - test send skipped", {
       to,

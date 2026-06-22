@@ -164,7 +164,7 @@ export class EmailChangeService {
       token: plaintext,
     });
 
-    if (this.mail.isAvailable()) {
+    if (await this.mail.ensureAvailable()) {
       await this.mail.send({
         to: pendingEmail,
         subject: "Confirm your new SlugBase email address",

@@ -71,7 +71,7 @@ export class MailSettingsController {
   ): Promise<void> {
     await this.requireAdmin(workspace.id, req);
 
-    if (!this.mail.isAvailable()) {
+    if (!(await this.mail.ensureAvailable())) {
       throw new ServiceUnavailableException(
         "Mail transport is not configured. Save SMTP settings with a host first.",
       );

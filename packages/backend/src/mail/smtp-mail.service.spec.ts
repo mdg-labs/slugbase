@@ -154,5 +154,73 @@ describe("SmtpMailService", () => {
 
     expect(service["transport"]).not.toBe(originalTransport);
     expect(service["fromAddress"]).toBe("new@example.com");
+    expect(service.isAvailable()).toBe(true);
+  });
+
+  it("ensureAvailable hydrates from DB when runtime is injected", async () => {
+    const config = new ConfigService(
+      validateEnvConfig({
+        ...validTestEnv,
+        SMTP_FROM: "noreply@example.com",
+      }),
+    );
+    const mailRuntime = {
+      hydrateIfNeeded: vi.fn().mockResolvedValue(true),
+    };
+    const service = new SmtpMailService(
+      config,
+      buildCrypto(config),
+      mailRuntime as never,
+    );
+
+    await expect(service.ensureAvailable()).resolves.toBe(true);
+    expect(mailRuntime.hydrateIfNeeded).toHaveBeenCalledOnce();
+  });
+
+  it("ensureAvailable returns false without hydrator when env SMTP is absent", async () => {
+    const config = new ConfigService(
+      validateEnvConfig({
+        ...validTestEnv,
+        SMTP_FROM: "noreply@example.com",
+      }),
+    );
+    const service = new SmtpMailService(config, buildCrypto(config));
+
+    await expect(service.ensureAvailable()).resolves.toBe(false);
+  });
+
+  it("send triggers lazy hydration before delivering", async () => {
+    const config = new ConfigService(
+      validateEnvConfig({
+        ...validTestEnv,
+        SMTP_FROM: "noreply@example.com",
+      }),
+    );
+    const crypto = buildCrypto(config);
+    const mailRuntime = {
+      hydrateIfNeeded: vi.fn(),
+    };
+    const service = new SmtpMailService(config, crypto, mailRuntime as never);
+    mailRuntime.hydrateIfNeeded.mockImplementation(() => {
+      service.reconfigureFromEncrypted({
+        host: "smtp.example.com",
+        port: 587,
+        secure: false,
+        user: "user@example.com",
+        from: "noreply@example.com",
+      });
+      vi.spyOn(service["transport"], "sendMail").mockResolvedValue({ messageId: "test-id" });
+      return Promise.resolve(true);
+    });
+
+    await service.send({
+      to: "recipient@example.com",
+      subject: "Test",
+      text: "body",
+      type: "member_invitation",
+    });
+
+    expect(mailRuntime.hydrateIfNeeded).toHaveBeenCalledOnce();
+    expect(service["transport"].sendMail).toHaveBeenCalledOnce();
   });
 });

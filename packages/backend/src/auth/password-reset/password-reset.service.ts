@@ -94,7 +94,7 @@ export class PasswordResetService {
       token: plaintext,
     });
 
-    if (this.mail.isAvailable()) {
+    if (await this.mail.ensureAvailable()) {
       try {
         await this.mail.send({
           to: email,

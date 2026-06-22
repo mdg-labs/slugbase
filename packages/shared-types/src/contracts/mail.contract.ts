@@ -43,6 +43,12 @@ export interface MailService {
   isAvailable(): boolean;
 
   /**
+   * Ensures DB-backed settings are loaded when env credentials are absent, then
+   * returns whether the transport is available.
+   */
+  ensureAvailable(): Promise<boolean>;
+
+  /**
    * Send a test message to the given address to verify the transport is working.
    * Used by the admin UI's "send test email" action.
    * Resolves on success; rejects with a descriptive error on failure.

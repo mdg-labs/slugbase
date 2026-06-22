@@ -2,6 +2,7 @@ import "reflect-metadata";
 
 import type { INestApplication } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
+import { eq } from "drizzle-orm";
 import cookieParser from "cookie-parser";
 import type { Server } from "node:http";
 import request from "supertest";
@@ -9,6 +10,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { AppModule } from "../src/app.module.js";
 import { AccountsService } from "../src/accounts/accounts.service.js";
+import { instanceMetadata } from "../src/db/schema/index.js";
 import { SmtpMailService } from "../src/mail/smtp-mail.service.js";
 import { SESSION_COOKIE } from "../src/sessions/session-constants.js";
 import { SessionService } from "../src/sessions/session.service.js";
@@ -33,6 +35,14 @@ describe("Workspace mail settings HTTP (integration)", () => {
     const testDatabase = await createTestDatabase();
     cleanup = testDatabase.cleanup;
     applyTestEnv({ DATABASE_URL: testDatabase.databaseUrl });
+
+    const { client, close } = await import("../src/db/dialect/create-client.js").then(
+      ({ createDbClient }) => createDbClient(testDatabase.databaseUrl),
+    );
+    await client
+      .delete(instanceMetadata)
+      .where(eq(instanceMetadata.key, "smtp_settings"));
+    await close();
 
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
