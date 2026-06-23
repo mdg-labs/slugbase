@@ -20,11 +20,15 @@ describe("marketing build output", () => {
         ...process.env,
         PUBLIC_API_BASE_URL: "https://api.slugbase.test",
         PUBLIC_CONTACT_ENDPOINT: "https://api.slugbase.test/contact",
+        PUBLIC_MARKETING_ORIGIN: "https://www.slugbase.test",
       },
     });
 
     const enHtml = readFileSync(join(packageRoot, "dist/index.html"), "utf8");
     const deHtml = readFileSync(join(packageRoot, "dist/de/index.html"), "utf8");
+    const enBlog = readFileSync(join(packageRoot, "dist/blog/index.html"), "utf8");
+    const deBlog = readFileSync(join(packageRoot, "dist/de/blog/index.html"), "utf8");
+    const enRss = readFileSync(join(packageRoot, "dist/blog/rss.xml"), "utf8");
     const enPricing = readFileSync(join(packageRoot, "dist/pricing/index.html"), "utf8");
     const dePricing = readFileSync(join(packageRoot, "dist/de/pricing/index.html"), "utf8");
     const enPrivacy = readFileSync(join(packageRoot, "dist/legal/datenschutz/index.html"), "utf8");
@@ -77,5 +81,17 @@ describe("marketing build output", () => {
     expect(de404).toContain(t("de", "marketing.error.action.home"));
     expect(en500).toContain(t("en", "marketing.error.500.title"));
     expect(en500).toContain(t("en", "marketing.error.action.reload"));
+
+    expect(enBlog).toContain('lang="en"');
+    expect(enBlog).toContain(`<title>${formatMarketingBrandTitle("en")}</title>`);
+    expect(enBlog).toContain('class="blog-post-list"');
+    expect(deBlog).toContain('lang="de"');
+    expect(deBlog).toContain(`<title>${formatMarketingBrandTitle("de")}</title>`);
+    expect(deBlog).toContain('class="blog-post-list"');
+
+    expect(enRss).toContain('<?xml version="1.0" encoding="UTF-8"?>');
+    expect(enRss).toContain("<rss");
+    expect(enRss).toContain(`<link>https://www.slugbase.test</link>`);
+    expect(enRss).toContain(t("en", "marketing.nav.brand"));
   });
 });

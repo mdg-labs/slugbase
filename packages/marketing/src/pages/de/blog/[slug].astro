@@ -1,0 +1,37 @@
+---
+import { getCollection, render } from "astro:content";
+import {
+  blogMdxComponents,
+  filterByLocale,
+  filterPublished,
+  resolvePostSlug,
+} from "@mdg-labs/blog";
+import BlogPostLayout from "@mdg-labs/blog/layouts/BlogPostLayout.astro";
+import MarketingLayout from "../../../layouts/MarketingLayout.astro";
+import "../../../styles/blog.css";
+
+export const prerender = true;
+
+export async function getStaticPaths() {
+  const posts = filterByLocale(
+    filterPublished(await getCollection("blog")),
+    "de",
+  );
+  return posts.map((entry) => ({
+    params: { slug: resolvePostSlug(entry) },
+    props: { entry },
+  }));
+}
+
+const { entry } = Astro.props;
+const { Content, headings } = await render(entry);
+const title = entry.data.title;
+---
+
+<MarketingLayout title={title}>
+  <div class="mk-c blog-index">
+    <BlogPostLayout post={entry.data} headings={headings}>
+      <Content components={blogMdxComponents} />
+    </BlogPostLayout>
+  </div>
+</MarketingLayout>

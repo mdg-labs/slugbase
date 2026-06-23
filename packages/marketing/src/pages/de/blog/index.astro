@@ -1,0 +1,26 @@
+---
+import { getCollection } from "astro:content";
+import {
+  filterByLocale,
+  filterPublished,
+  sortPostsByDate,
+} from "@mdg-labs/blog";
+import PostList from "@mdg-labs/blog/layouts/PostList.astro";
+import MarketingLayout from "../../../layouts/MarketingLayout.astro";
+import { formatMarketingBrandTitle } from "../../../i18n/format-marketing-page-title.js";
+import "../../../styles/blog.css";
+
+export const prerender = true;
+
+const posts = sortPostsByDate(
+  filterByLocale(filterPublished(await getCollection("blog")), "de"),
+);
+
+const title = formatMarketingBrandTitle("de");
+---
+
+<MarketingLayout title={title}>
+  <div class="mk-c blog-index">
+    <PostList posts={posts} basePath="/de/blog" />
+  </div>
+</MarketingLayout>
