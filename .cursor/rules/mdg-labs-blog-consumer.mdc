@@ -1,0 +1,77 @@
+---
+description: Consume @mdg-labs/blog from npm — publish-first semver, validate before build, no file: in commits
+alwaysApply: true
+---
+
+# `@mdg-labs/blog` — consumer site rules
+
+This repo is a **consumer** of [`@mdg-labs/blog`](https://www.npmjs.com/package/@mdg-labs/blog). Package implementation lives in [`mdg-labs/blog`](https://github.com/mdg-labs/blog) — not here.
+
+For full setup steps, read `.cursor/skills/mdg-labs-blog-consumer/SKILL.md` (copy from `blog/dist/` if missing).
+
+## Scope
+
+- **In scope:** Astro **marketing** sites with Content Collections — blog routes, MDX posts, RSS, `blog-validate` in CI.
+- **Out of scope:** Product app UIs (SlugBase web, PipeWatch dashboard, etc.).
+
+## Install — npm only in commits
+
+```json
+"@mdg-labs/blog": "^0.1.5",
+"@astrojs/mdx": "^7.0.0",
+"astro": "^7.0.0"
+```
+
+Registry: **public npm** (`registry.npmjs.org`) — no token or `.npmrc` required.
+
+## Publish-first workflow (agents)
+
+When this site needs a new package export, schema field, layout, or CLI behaviour:
+
+1. **Implement** in `mdg-labs/blog` (`packages/blog/`), bump `version`, merge to `main`.
+2. **Wait** for npm publish (`.github/workflows/publish.yml` tags `v<version>` on merge).
+3. **Then** bump semver + lockfile in **this** repo and verify build.
+
+### Forbidden in commits / PRs
+
+```json
+"@mdg-labs/blog": "file:../blog/packages/blog"
+```
+
+Do not patch `node_modules/@mdg-labs/blog`. Do not add unpublished imports.
+
+### Blocked
+
+If code imports symbols not yet on npm, report **`blocked: needs @mdg-labs/blog@X.Y.Z published`**. Do not switch to `file:` to unblock.
+
+`file:` is for **human local iteration only** when explicitly requested — never for agent commits.
+
+## Required integration pieces
+
+1. `mdx()` in `astro.config`
+2. `defineBlogCollection({ contentBase, locales })` in `content.config.ts`
+3. Route templates under `src/pages/blog/` (and `src/pages/de/blog/` when bilingual)
+4. `@mdg-labs/blog/styles/blog-prose.css` + site token bridge CSS
+5. **`blog-validate`** before `astro build` in CI
+
+## CI gate (adjust `contentBase` path per site)
+
+```yaml
+- run: npm ci   # or pnpm install
+- run: node --import tsx node_modules/@mdg-labs/blog/bin/blog-validate.ts src/content/blog
+- run: npm run check    # if configured
+- run: npm run build
+```
+
+PipeWatch marketing: `blog-validate content/blog` (no `src/` prefix).
+
+## Content rules
+
+- Posts: MDX under `<contentBase>/<locale>/<folder>/index.mdx`
+- Every post needs `title`, `description`, `pubDate`, `locale`
+- Bilingual sites: matching folder names under `en/` and `de/` for translation linking
+- `draft: true` excludes from index and RSS — use for WIP posts
+
+## When integrating or extending blog
+
+Load skill **`mdg-labs-blog-consumer`**. Copy route templates from `node_modules/@mdg-labs/blog` is wrong — use paths documented in the skill (templates ship in the `blog` repo; reference consumer's existing pages or the skill).
