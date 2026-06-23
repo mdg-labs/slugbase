@@ -5,6 +5,10 @@ import { fileURLToPath } from "node:url";
 import postgres from "postgres";
 import { describe, expect, it } from "vitest";
 
+import {
+  ADMIN_MIGRATIONS_SCHEMA,
+  ADMIN_MIGRATIONS_TABLE,
+} from "../migrate/migration-bookkeeping.js";
 import { listMigrationHashes } from "../migrate/migration-utils.js";
 import {
   getMigrationsFolder,
@@ -29,7 +33,7 @@ describe("db-admin migrations (integration)", () => {
     try {
       const migrationRows = await sql<
         Array<{ id: number; hash: string }>
-      >`SELECT id, hash FROM drizzle.__drizzle_migrations ORDER BY id`;
+      >`SELECT id, hash FROM ${sql(ADMIN_MIGRATIONS_SCHEMA)}.${sql(ADMIN_MIGRATIONS_TABLE)} ORDER BY id`;
       const appliedHashes = new Set(migrationRows.map((row) => row.hash));
       for (const hash of expectedHashes) {
         expect(appliedHashes.has(hash)).toBe(true);

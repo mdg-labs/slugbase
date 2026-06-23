@@ -5,6 +5,11 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 
+import {
+  ADMIN_MIGRATIONS_SCHEMA,
+  ADMIN_MIGRATIONS_TABLE,
+} from "./migration-bookkeeping.js";
+
 const packageRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "../..",
@@ -33,7 +38,11 @@ export async function runMigrations(databaseUrl: string): Promise<void> {
 
   try {
     await sql`CREATE SCHEMA IF NOT EXISTS admin`;
-    await migrate(db, { migrationsFolder });
+    await migrate(db, {
+      migrationsFolder,
+      migrationsSchema: ADMIN_MIGRATIONS_SCHEMA,
+      migrationsTable: ADMIN_MIGRATIONS_TABLE,
+    });
   } finally {
     await sql.end({ timeout: 5 });
   }
