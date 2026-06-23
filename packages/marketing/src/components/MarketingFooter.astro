@@ -6,6 +6,7 @@ const locale = Astro.currentLocale as SupportedLocale;
 const year = new Date().getFullYear();
 const homeHref = getRelativeLocaleUrl(locale, "/");
 const pricingHref = getRelativeLocaleUrl(locale, "/pricing");
+const blogHref = getRelativeLocaleUrl(locale, "/blog");
 const contactHref = getRelativeLocaleUrl(locale, "/contact");
 ---
 
@@ -30,6 +31,7 @@ const contactHref = getRelativeLocaleUrl(locale, "/contact");
         <div class="mk-footer-links">
           <a class="mk-footer-link" href={`${homeHref}#features`}>{t(locale, "marketing.footer.features")}</a>
           <a class="mk-footer-link" href={pricingHref}>{t(locale, "marketing.footer.pricing")}</a>
+          <a class="mk-footer-link" href={blogHref}>{t(locale, "marketing.footer.blog")}</a>
           <a class="mk-footer-link" href={contactHref}>{t(locale, "marketing.footer.contact")}</a>
           <span class="mk-footer-link mk-footer-link--muted">{t(locale, "marketing.footer.docs")}</span>
         </div>

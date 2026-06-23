@@ -8,6 +8,7 @@ import {
 } from "@mdg-labs/blog";
 import BlogPostLayout from "@mdg-labs/blog/layouts/BlogPostLayout.astro";
 import MarketingLayout from "../../layouts/MarketingLayout.astro";
+import { staticMessages } from "../../i18n/messages.js";
 import "../../styles/blog.css";
 
 export const prerender = true;
@@ -25,7 +26,11 @@ export async function getStaticPaths() {
 
 const { entry } = Astro.props;
 const { Content, headings } = await render(entry);
-const title = entry.data.title;
+const locale = "en";
+const messages = staticMessages[locale];
+const title = messages["marketing.document_title"]
+  .replaceAll("{brand}", messages["marketing.nav.brand"])
+  .replaceAll("{page}", entry.data.title);
 ---
 
 <MarketingLayout title={title}>

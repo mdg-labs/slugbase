@@ -1,4 +1,7 @@
 {
+  "marketing.blog.index_description": "Product updates, engineering notes, and tips for getting more from SlugBase.",
+  "marketing.blog.index_headline": "Blog",
+  "marketing.blog.page_title": "Blog",
   "marketing.consent.accept": "Accept analytics",
   "marketing.consent.decline": "Decline",
   "marketing.consent.message": "We use privacy-friendly analytics to understand product usage. You can accept or decline optional tracking.",
@@ -44,6 +47,7 @@
   "marketing.error.action.home": "Back to home",
   "marketing.error.action.reload": "Reload the page",
   "marketing.error.action.sign_in": "Sign in",
+  "marketing.footer.blog": "Blog",
   "marketing.footer.contact": "Contact",
   "marketing.footer.copyright": "© {year} SlugBase. All rights reserved.",
   "marketing.footer.docs": "Docs",
@@ -135,6 +139,7 @@
   "marketing.legal.impressum.title": "Impressum",
   "marketing.document_title": "{brand} | {page}",
   "marketing.meta.description": "SlugBase - keyboard-driven bookmark manager with slug forwarding.",
+  "marketing.nav.blog": "Blog",
   "marketing.nav.brand": "SlugBase",
   "marketing.nav.contact": "Contact",
   "marketing.nav.features": "Features",
