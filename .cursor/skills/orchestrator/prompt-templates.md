@@ -13,6 +13,8 @@ Sub-agents perform GitHub status updates — not the orchestrator.
 
 **Every execution and verifier prompt** must include the **NODE ENV** block below — copy verbatim even when the task has no pnpm commands (verifiers always run checks).
 
+**Every execution and verifier prompt** must include the **SCOPED CI GATE** block below — copy verbatim.
+
 **Every execution prompt** (Lane S, Lane P, chat) **must** include the **DB MIGRATIONS** block below — copy verbatim even when the task has no schema changes.
 
 ---
@@ -86,6 +88,42 @@ NODE ENV (mandatory — run from TARGET REPO before any pnpm/turbo/phase command
 - Sanity: bash scripts/with-ci-env.sh node -v  → must be v22.12.0+
 - Docs: docs/internal/local-development.md
 - FORBIDDEN: bare pnpm/turbo from agent shell without with-ci-env (Node 20 false passes / Astro failures)
+```
+
+---
+
+## SCOPED CI GATE — sub-agents (mandatory in every execution and verifier prompt)
+
+Copy into **every execution and verifier** prompt. Full rules: `.cursor/rules/06-local-ci-before-commit.mdc`.
+
+```text
+SCOPED CI GATE — MANDATORY (commit + verify; NOT pre-push):
+- Derive --filter from WRITE SCOPE (execution) or committed paths (verifier)
+- Path → filter mapping:
+    packages/backend/       → @slugbase/backend
+    packages/web/           → @slugbase/web
+    packages/marketing/     → @slugbase/marketing
+    packages/ui/            → @slugbase/ui
+    packages/shared-types/  → @slugbase/shared-types
+    packages/db-admin/      → @slugbase/db-admin
+    packages/admin/         → @slugbase/admin
+    packages/email-templates/ → @slugbase/email-templates
+- Filter suffix rules:
+    App/package-only change → --filter @slugbase/<pkg>
+    Contract package (shared-types, ui) → --filter @slugbase/<pkg>...  (downstream consumers)
+    Multiple packages in one task → repeat per package or union filters
+- Commands (all via bash scripts/with-ci-env.sh):
+    bash scripts/with-ci-env.sh pnpm turbo run lint typecheck test:unit build --filter=@slugbase/<pkg>
+    # integration only when that package defines test:integration and task warrants it:
+    bash scripts/with-ci-env.sh pnpm turbo run test:integration --filter=@slugbase/backend
+- Root-level extras (not turbo-filtered):
+    Locale JSON touched → pnpm i18n:validate (+ pnpm i18n:codegen if en key set changed)
+    Marketing blog content → pnpm blog:validate
+- Use bash scripts/with-ci-env.sh phase run -- … when env required. Integration: NO Phase wrapper.
+- FORBIDDEN at commit/verify time:
+    Full workspace gate (pnpm lint / typecheck / test:unit / build without --filter)
+- Full gate runs ONLY when prompt includes PUSH PREP block or user explicitly requested push
+- Reference: .cursor/rules/06-local-ci-before-commit.mdc
 ```
 
 ---
@@ -165,6 +203,11 @@ GIT:
     fixes #<parent>                  # one line per issue in CLOSE_PARENTS (omit when none)
 - FORBIDDEN: fixes #<parent> when parent not in CLOSE_PARENTS
 - No Smart Commit commands. See `07-issue-commit-linking.mdc`.
+
+PRE-COMMIT — SCOPED CI (mandatory before implementation commit):
+- Map staged paths → @slugbase/<pkg> filter(s); see SCOPED CI GATE block
+- Run scoped gate; on failure → blocked, no commit
+- Do NOT run full workspace gate
 
 SECRETS / COMMANDS:
 - Local tests/dev that need env: use Phase (`phase run -- <cmd>`); see `05-env-vars.mdc`
@@ -263,6 +306,11 @@ GIT:
 - FORBIDDEN: fixes #<parent> when parent not in CLOSE_PARENTS
 - See `07-issue-commit-linking.mdc`.
 
+PRE-COMMIT — SCOPED CI (mandatory before implementation commit):
+- Map staged paths → @slugbase/<pkg> filter(s); see SCOPED CI GATE block
+- Run scoped gate; on failure → blocked, no commit
+- Do NOT run full workspace gate
+
 PLAN FILE: READ ONLY. Do not set `[~]`, `[x]`, or `[!]`.
 
 SECRETS / COMMANDS:
@@ -305,7 +353,7 @@ REQUIRED OUTPUT:
 
 ## Execution agent (chat mode)
 
-Same as Lane S except: no plan checkbox update; TASK from orchestrator todo; acceptance criteria copied into prompt. **Must include the DB MIGRATIONS — MANDATORY block** in every chat-mode execution prompt.
+Same as Lane S except: no plan checkbox update; TASK from orchestrator todo; acceptance criteria copied into prompt. **Must include the DB MIGRATIONS — MANDATORY block** and **SCOPED CI GATE block** in every chat-mode execution prompt.
 
 ---
 
@@ -362,6 +410,11 @@ GIT:
 - FORBIDDEN: fixes #<parent> when parent not in CLOSE_PARENTS
 - See `07-issue-commit-linking.mdc`.
 - Phase for env when needed (`phase run --`)
+
+PRE-COMMIT — SCOPED CI (mandatory before implementation commit):
+- Map staged paths → @slugbase/<pkg> filter(s); see SCOPED CI GATE block
+- Run scoped gate; on failure → blocked, no commit
+- Do NOT run full workspace gate
 
 DB MIGRATIONS — MANDATORY (schema-first; no exceptions):
 <copy verbatim DB MIGRATIONS block>
@@ -432,12 +485,13 @@ VERIFICATION:
 
 LAYER 1 — Scope audit: committed paths vs declared WRITE SCOPE
 
-LAYER 2 — Automated checks from TARGET REPO:
+LAYER 2 — Scoped automated checks (committed paths only):
+- Derive filter(s) from committed paths; same rules as SCOPED CI GATE block
 - All commands via: bash scripts/with-ci-env.sh … (see NODE ENV block; docs/internal/local-development.md)
-- lint: bash scripts/with-ci-env.sh pnpm lint (or n/a)
-- typecheck: bash scripts/with-ci-env.sh pnpm typecheck (or n/a)
-- test: <from plan row Tests column, else doc-index defaults>
-Use bash scripts/with-ci-env.sh phase run -- … when env required. Integration tests: bash scripts/with-ci-env.sh pnpm test:integration only (no Phase wrapper). Stop if any defined check fails.
+- Example: bash scripts/with-ci-env.sh pnpm turbo run lint typecheck test:unit build --filter=@slugbase/<pkg>
+- test: <from plan row Tests column, else doc-index scoped defaults>
+- Use bash scripts/with-ci-env.sh phase run -- … when env required. Integration: bash scripts/with-ci-env.sh pnpm turbo run test:integration --filter=@slugbase/<pkg> only (no Phase wrapper). Stop if any defined check fails.
+- FORBIDDEN: full workspace gate (full gate is pre-push only per 06-local-ci-before-commit.mdc)
 
 LAYER 3 — Logic review:
 3a. Each acceptance criterion — genuinely implemented?
@@ -557,7 +611,7 @@ TASK OUTCOMES:
 
 CHECKS:
 1. Confirm branch verifiers reported GitHub Done comments for integrated tasks
-2. Post-merge smoke: bash scripts/with-ci-env.sh pnpm lint, bash scripts/with-ci-env.sh pnpm typecheck (Phase for env when needed via with-ci-env wrapper)
+2. Post-merge scoped smoke: union of @slugbase/<pkg> filters for all packages touched by integrated tasks — e.g. bash scripts/with-ci-env.sh pnpm turbo run lint typecheck --filter=@slugbase/<pkg> per package (Phase for env when needed via with-ci-env wrapper). NOT full workspace gate.
 3. If smoke fails → FAIL batch; do not mark [x]
 
 PLAN FILE:
@@ -593,4 +647,24 @@ REQUIRED OUTPUT:
 1. Removed worktrees
 2. Deleted branches
 3. Skipped items + reason
+```
+
+---
+
+## Push prep — when user requests push
+
+Include this block when the orchestrator or user explicitly requests `git push`. The pushing agent (not the orchestrator) runs the full gate.
+
+```text
+PUSH PREP — FULL CI GATE (mandatory before git push):
+- Run full workspace gate from TARGET REPO per .cursor/rules/06-local-ci-before-commit.mdc:
+    bash scripts/with-ci-env.sh pnpm lint && \
+    bash scripts/with-ci-env.sh pnpm typecheck && \
+    bash scripts/with-ci-env.sh pnpm test:unit && \
+    bash scripts/with-ci-env.sh pnpm build && \
+    bash scripts/with-ci-env.sh pnpm test:integration && \
+    bash scripts/with-ci-env.sh pnpm audit --audit-level=high
+- On failure → do not push; fix and rerun from the start
+- On success → report "full gate passed" then push (staging only; never main per 01-git-workflow.mdc)
+- Integration tests: NO Phase wrapper (with-ci-env.sh only)
 ```

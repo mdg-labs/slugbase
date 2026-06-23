@@ -99,7 +99,7 @@ Default to **plan-file mode** only when the user asks for roadmap work and did n
 6. Confirm with user (briefly if intent is clear): mode, batch, lane (S vs P), commits in scope, GitHub sync ON/OFF.
 7. **Slack session-end:** note run override if user said `slack to <email>` or `slack to <user_id>`; skip entirely if user said `no slack` / `skip slack`. Otherwise default recipient from [slack-session-end.md](slack-session-end.md).
 
-**Commits:** Orchestrated runs default to **local commits per task** on **`staging`** (Lane S) or task branches (Lane P). **Never push** unless the user explicitly asks — and **never push to `main`**.
+**Commits:** Orchestrated runs default to **local commits per task** on **`staging`** (Lane S) or task branches (Lane P). Each commit is preceded by a **scoped CI gate** on touched packages only — not the full workspace gate. **Never push** unless the user explicitly asks — and **never push to `main`**. When pushing is requested, the pushing agent runs the **full CI gate** first (see `06-local-ci-before-commit.mdc`).
 
 **GitHub sync (default ON):** Orchestrator resolves issue number(s) and label set via MCP, then passes **role-specific** GITHUB SYNC blocks — execution prompts get **In Progress label only** (board Status only); verifier prompts set Status **Done**. Sub-agents perform the updates — orchestrator does **not** call `issue_write` itself unless recovering from a sub-agent failure. Skip only if user says **"don't update GitHub issues"**.
 
@@ -128,6 +128,7 @@ When building a prompt:
    - **Execution prompt:** Set project Status → "In Progress" via GraphQL `updateProjectV2ItemFieldValue` — **never** set Done; when subtask, also list parent epic issue number
    - **Verifier prompt:** Set project Status → "Done" via GraphQL `updateProjectV2ItemFieldValue` (+ optional epic Done for final subtask); post mandatory comment via MCP `add_issue_comment`
 10. **DB MIGRATIONS block** — **mandatory in every execution prompt** (copy verbatim from [prompt-templates.md](prompt-templates.md) even when the task has no schema changes)
+11. **SCOPED CI GATE block** — **mandatory in every execution and verifier prompt** (copy verbatim from [prompt-templates.md](prompt-templates.md))
 
 One prompt = one **leaf** task ID unless user requested batching or shared-file serialization requires it.
 
@@ -224,7 +225,7 @@ Always: **execute batch → verify (per task) → integrate (Lane P) → batch v
 6. Branch verifier PASS → report to orchestrator; no plan file write; board Status Done is the handoff record
 7. Branch verifier FAIL → append VERIFICATION FAILED in local session memory; do not merge
 8. Integration agent: merge PASS branches onto **`staging`** (dependency order, one at a time)
-9. Batch verifier: post-merge smoke checks; [x] integrated tasks; [!] branch-failed tasks
+9. Batch verifier: post-merge **scoped** smoke on union of packages touched by integrated tasks (not full workspace gate); [x] integrated tasks; [!] branch-failed tasks
 10. Cleanup agent (shell): remove worktrees; delete merged task branches
 ```
 
@@ -247,7 +248,8 @@ Base:      STAGING_BASE_SHA           # do not chase moving staging during execu
 1. **GitHub (first action when GITHUB SYNC present):** `issue_write` (method: `update`) → add **In Progress** label for every listed leaf issue **and** epic parent issue
 2. **Session memory** — create `active/<SESSION-ID>.md`; record `started` timestamp
 3. **Implementation** — task files only
-4. **Pre-handoff** — set `ended` + `duration`; `add_issue_comment` on each leaf issue; set board Status to 'In Review' for each leaf issue → **single implementation commit** (task files only; never commit session memory)
+4. **Pre-commit — scoped CI gate** — map staged paths → `@slugbase/<pkg>` filter(s) per `06-local-ci-before-commit.mdc`; run scoped gate via `with-ci-env.sh`; on failure → blocked, no commit. **Do not** run full workspace gate.
+5. **Pre-handoff** — set `ended` + `duration`; `add_issue_comment` on each leaf issue; set board Status to 'In Review' for each leaf issue → **single implementation commit** (task files only; never commit session memory)
 
 Never push to **`main`**. When pushing is explicitly requested, target **`staging`** only. Stage explicit paths only. Stop if branch ≠ **`staging`**.
 
@@ -263,6 +265,7 @@ Same flow on **`orchestrator/<TASK-ID>` only** — one implementation commit per
 - Never checkout **`staging`**, never merge, never push (during Lane P execution).
 - Plan file: **read-only**.
 - If `git status` shows unexpected changes outside WRITE SCOPE → `blocked`.
+- **Pre-commit — scoped CI gate** (same rules as Lane S step 4) before implementation commit.
 
 ### Commit messages
 
@@ -300,15 +303,15 @@ One verifier after execution. Input: session ID, commit SHAs, WRITE scopes, comm
 
 **Layer 1 — Scope audit:** committed paths vs declared WRITE SCOPE.
 
-**Layer 2 — Automated checks** from repo root (see plan Tests column, else [doc-index.md](doc-index.md)):
+**Layer 2 — Scoped automated checks** derived from **committed paths** (see plan Tests column, else [doc-index.md](doc-index.md); full rules in `06-local-ci-before-commit.mdc`):
 
 ```bash
-pnpm lint        # or n/a
-pnpm typecheck   # or n/a
-pnpm test:unit   # or n/a
+bash scripts/with-ci-env.sh pnpm turbo run lint typecheck test:unit build --filter=@slugbase/<pkg>
+# integration only when that package defines test:integration and the task warrants it:
+bash scripts/with-ci-env.sh pnpm turbo run test:integration --filter=@slugbase/backend
 ```
 
-Mark `n/a` for commands not yet defined. Stop if any defined check fails. Use Phase (`phase run --`) when env required.
+Map committed paths → `@slugbase/<pkg>` filter(s). Contract packages (`shared-types`, `ui`) use `...` suffix. Mark `n/a` for commands not yet defined. Stop if any defined check fails. Use Phase (`phase run --`) when env required (via `with-ci-env.sh`). **Do not** run the full workspace gate — full gate is pre-push only.
 
 **Layer 3 — Logic review:**
 
@@ -551,3 +554,7 @@ After send, confirm in chat: `Slack DM sent to <operator display name> (from cur
 - **Deployment-mode branches in code** — `isCloud`, `SLUGBASE_MODE` checks are forbidden; use entitlements engine (spec §15)
 - **Session-end Slack DM to service account** — recipient must be the operator (`U0ARDEK75UJ` by default), never `U0BB4FVDUNR`
 - **Skipping session-end Slack without reason** — only when user said `no slack` / `skip slack`, or recipient unresolved per [slack-session-end.md](slack-session-end.md)
+- **Running full CI gate before every task commit** — use scoped gate at commit/verify; full gate only before push
+- **Pushing without running full CI gate first** — mandatory pre-push per `06-local-ci-before-commit.mdc`
+- **Running scoped gate with no `--filter`** — accidental full workspace run
+- **Orchestrator omitting SCOPED CI GATE block** from an execution or verifier prompt

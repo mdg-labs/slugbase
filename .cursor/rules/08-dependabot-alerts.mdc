@@ -21,7 +21,7 @@ The correct resolution is to **upgrade the vulnerable dependency** and land the 
 1. Read the alert: identify the package, vulnerable version range, and patched version.
 2. Upgrade the package (`pnpm update <pkg>@<patched>` or edit `package.json` + `pnpm install`).
 3. Confirm `pnpm-lock.yaml` no longer pins the vulnerable version.
-4. Run the full CI gate (`06-local-ci-before-commit.mdc`).
+4. Run scoped CI on affected packages at commit; run the **full CI gate before push** (`06-local-ci-before-commit.mdc`).
 5. Commit: `fix(deps)[SB-N]: bump <pkg> to <version> (CVE-XXXX-XXXX)`.
 6. Alert auto-closes once the commit lands on the default branch.
 

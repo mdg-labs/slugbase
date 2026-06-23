@@ -1,15 +1,22 @@
 ---
-description: Require local CI checks for code-impacting commits
+description: Local CI — scoped gate at commit/verify, full gate before push
 alwaysApply: true
 ---
 
-# Local CI gate before commit
+# Local CI gate — scoped at commit · full before push
 
-Before creating a commit, run the checks below and confirm success.
+Two tiers:
+
+| Tier | When | Scope |
+|---|---|---|
+| **Scoped gate** | Before local **commits** and orchestrator **verification (Layer 2)** | Packages derived from staged/committed paths only |
+| **Full gate** | Immediately before **`git push`** to any remote | Entire workspace (Turborepo) |
+
+Orchestrated sub-agents: see `.cursor/skills/orchestrator/SKILL.md` and `prompt-templates.md` (SCOPED CI GATE block).
 
 ## Gate trigger: code-impacting changes only
 
-Run the **full CI gate** when staged changes are in directories/files exercised by CI commands:
+Run the **scoped gate** (or full gate before push) when staged changes are in directories/files exercised by CI commands:
 
 - `packages/**`
 - `apps/**`
@@ -18,27 +25,79 @@ Run the **full CI gate** when staged changes are in directories/files exercised 
 - `scripts/**`
 - `.github/scripts/**`
 
-Also require the full gate for these shared root files:
+Also apply when these shared root files are staged:
 
 - `package.json`
 - `pnpm-lock.yaml`
 - `pnpm-workspace.yaml`
 - `turbo.json` (if present)
 
-## Non-code changes (full gate not required)
+For root workspace files: run scoped gate on the implementation packages in the commit; run the **full gate before push** (lockfile changes affect the whole graph).
 
-Skip the full gate when staged changes are only in:
+## Non-code changes (scoped/full gate not required)
+
+Skip scoped and full gates when staged changes are only in:
 
 - `docs/**`, `*.md`
 - `.cursor/**` (rules, skills, memory files)
 - `.github/workflows/**`
 - Other repo metadata that does not affect shipped runtime code
 
-For these commits, run **targeted validation only** (e.g. YAML parse for workflow edits) and report that the full gate was intentionally skipped.
+For these commits, run **targeted validation only** (e.g. YAML parse for workflow edits) and report that CI gates were intentionally skipped.
+
+## Scoped gate
+
+**Default before local commits** and during **orchestrator verification (Layer 2)**. Derive `--filter` from touched paths (staged paths for commit; committed paths for verify).
+
+### Path → filter mapping
+
+| Path prefix | pnpm filter |
+|---|---|
+| `packages/backend/` | `@slugbase/backend` |
+| `packages/web/` | `@slugbase/web` |
+| `packages/marketing/` | `@slugbase/marketing` |
+| `packages/ui/` | `@slugbase/ui` |
+| `packages/shared-types/` | `@slugbase/shared-types` |
+| `packages/db-admin/` | `@slugbase/db-admin` |
+| `packages/admin/` | `@slugbase/admin` |
+| `packages/email-templates/` | `@slugbase/email-templates` |
+| `apps/**` | map to matching `@slugbase/*` if present |
+
+### Filter suffix rules
+
+- App/package-only change → `--filter @slugbase/<pkg>`
+- Contract package (`shared-types`, `ui`) → `--filter @slugbase/<pkg>...` (include downstream consumers)
+- Multiple packages in one task → union filters or repeat commands per package
+
+### Commands
+
+**Always** use the repo Node bootstrap (`bash scripts/with-ci-env.sh`) so marketing/Astro runs on Node >=22.12 (not Cursor's bundled Node 20):
+
+```bash
+bash scripts/with-ci-env.sh pnpm turbo run lint typecheck test:unit build --filter=@slugbase/<pkg>
+# integration only when that package defines test:integration and the task warrants it:
+bash scripts/with-ci-env.sh pnpm turbo run test:integration --filter=@slugbase/backend
+```
+
+Mark a command `n/a` only when a package legitimately has no such task yet — never to skip a defined check.
+
+### Root-level extras (not turbo-filtered)
+
+- Locale JSON touched → `pnpm i18n:validate` (+ `pnpm i18n:codegen` if en key set changed)
+- Marketing blog content → `pnpm blog:validate`
+- `scripts/**` or `e2e/**` touched → include filters for affected packages or run relevant root scripts from the plan Tests column
+
+### Scoped gate enforcement
+
+- If any scoped-gate command fails, **do not commit** (execution) or mark verifier **FAIL**.
+- **Do not** run the full workspace gate before commit to substitute for scoped failures.
+- **Do not** run scoped commands without `--filter` (that runs the full workspace accidentally).
 
 ## Full gate
 
-When code-impacting files are staged, run (via Turborepo across the workspace). **Always** use the repo Node bootstrap so marketing/Astro runs on Node >=22.12 (not Cursor’s bundled Node 20):
+**Mandatory immediately before `git push`** to any remote (typically `staging`; never `main` per `01-git-workflow.mdc`). **Not** required before every local commit.
+
+When pushing code-impacting work, run (via Turborepo across the workspace):
 
 ```bash
 bash scripts/with-ci-env.sh pnpm lint && \
@@ -52,6 +111,12 @@ bash scripts/with-ci-env.sh pnpm audit --audit-level=high
 Quick sanity check: `pnpm env:check` (see `docs/internal/local-development.md`).
 
 **Stack note (settled — spec §19):** `lint`/`typecheck`/`test:unit`/`build`/`test:integration` are root Turborepo tasks fanning out to `backend` (NestJS), `web` (React Router v7), `marketing` (Astro), `shared-types`, and `ui`. Unit/integration use **Vitest** (+ Supertest for the API). **Playwright e2e is not part of the local gate** — it runs only on the `staging → main` PR in CI (spec §22.4). If a package legitimately has no task yet, mark that command `n/a` and note it; do not invent skips for code-impacting changes.
+
+### Full gate enforcement
+
+- If any full-gate command fails, **do not push**. Fix failures first, then rerun from the start.
+- After a successful pre-push full gate, explicitly report that the full gate passed.
+- Do not skip the full gate before push because failures are "likely unrelated".
 
 ## Critical: integration tests must NOT use the Phase wrapper
 
@@ -69,10 +134,4 @@ pnpm test:integration
 
 **Rule:** `pnpm lint`, `pnpm typecheck`, `pnpm test:unit`, and `pnpm build` may be run with `phase run --` when secrets are required (wrap via `bash scripts/with-ci-env.sh phase run -- pnpm …`). `pnpm test:integration` must always be run **without** the Phase wrapper (still use `with-ci-env.sh` for Node only).
 
-This applies equally to **execution agents** (pre-commit gate) and **verification agents** (Layer 2 checks).
-
-## Enforcement
-
-- If any full-gate command fails, **do not commit**. Fix failures first, then rerun from the start.
-- After a full-gate commit, explicitly report that the full gate passed.
-- Do not skip the full gate for code-impacting changes because failures are "likely unrelated".
+This applies equally to **execution agents** (scoped pre-commit gate), **verification agents** (scoped Layer 2), and **pre-push** full gate runs.

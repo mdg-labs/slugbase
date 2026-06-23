@@ -69,7 +69,24 @@ Issues tracked via GitHub Issues on `mdg-labs/slugbase`. Org-level issue types: 
 
 ## Default verification commands (settled — spec §19)
 
-Run from the repo root (Turborepo fans out to all packages). Mark a command `n/a` only when a package legitimately has no such task yet — never to skip a defined check.
+Two tiers — see `06-local-ci-before-commit.mdc` for full rules.
+
+### Scoped gate (Layer 2 / pre-commit)
+
+Derive `--filter` from committed or staged paths. Mark a command `n/a` only when a package legitimately has no such task yet.
+
+| Check | Scoped command |
+|---|---|
+| lint + typecheck + unit + build | `bash scripts/with-ci-env.sh pnpm turbo run lint typecheck test:unit build --filter=@slugbase/<pkg>` |
+| integration | `bash scripts/with-ci-env.sh pnpm turbo run test:integration --filter=@slugbase/<pkg>` (when package defines it) |
+| i18n | `pnpm i18n:validate` (+ `pnpm i18n:codegen` if en keys changed) |
+| blog | `pnpm blog:validate` |
+
+Contract packages (`shared-types`, `ui`): use `@slugbase/<pkg>...` suffix.
+
+### Full gate (pre-push only)
+
+Run from repo root across the entire workspace — **not** during per-task verification:
 
 | Check | Command |
 |---|---|
