@@ -4,8 +4,8 @@ export function canManageWorkspaceSettings(role: WorkspaceMemberRole): boolean {
   return role === "OWNER" || role === "ADMIN";
 }
 
-export function isWorkspaceSectionVisible(section: WorkspaceSectionId): boolean {
-  return section === "general" || section === "ai";
+export function isWorkspaceSectionVisible(_section: WorkspaceSectionId): boolean {
+  return true;
 }
 
 export function listVisibleWorkspaceSections(): WorkspaceSectionId[] {

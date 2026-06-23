@@ -7,7 +7,6 @@ import { useAppToast } from "../../../../components/feedback/AppToastProvider.js
 import { deleteWorkspace, updateAiSettings, updateWorkspaceName } from "../workspace-api.js";
 import {
   canManageWorkspaceSettings,
-  isWorkspaceSectionVisible,
   listVisibleWorkspaceSections,
 } from "../workspace-entitlements.js";
 import type {
@@ -61,10 +60,6 @@ export function WorkspaceSettingsPage({ initialData }: WorkspaceSettingsPageProp
   }
 
   const renderSection = () => {
-    if (!isWorkspaceSectionVisible(section)) {
-      return null;
-    }
-
     if (section === "general") {
       return (
         <GeneralSection
@@ -91,26 +86,22 @@ export function WorkspaceSettingsPage({ initialData }: WorkspaceSettingsPageProp
       );
     }
 
-    if (section === "ai") {
-      return (
-        <AiSection
-          initial={ai ?? defaultAi}
-          interfaceConfig={initialData.interfaceConfig}
-          t={t}
-          onSave={async (payload) => {
-            try {
-              const updated = await updateAiSettings(payload);
-              setAi(updated);
-              showToast("settings.workspace.ai.toast_saved");
-            } catch (err) {
-              showError(err instanceof Error ? err.message : t("settings.workspace.error_generic"));
-            }
-          }}
-        />
-      );
-    }
-
-    return null;
+    return (
+      <AiSection
+        initial={ai ?? defaultAi}
+        interfaceConfig={initialData.interfaceConfig}
+        t={t}
+        onSave={async (payload) => {
+          try {
+            const updated = await updateAiSettings(payload);
+            setAi(updated);
+            showToast("settings.workspace.ai.toast_saved");
+          } catch (err) {
+            showError(err instanceof Error ? err.message : t("settings.workspace.error_generic"));
+          }
+        }}
+      />
+    );
   };
 
   return (

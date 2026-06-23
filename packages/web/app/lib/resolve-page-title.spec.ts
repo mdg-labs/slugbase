@@ -18,7 +18,10 @@ describe("resolvePageTitleKey", () => {
   it("uses nav item label for settings section/tab query params", () => {
     expect(resolvePageTitleKey("/settings/account", "?section=mfa")).toBe("settings.nav.item.mfa");
     expect(resolvePageTitleKey("/settings/billing", "?tab=seats")).toBe("settings.nav.item.seats");
-    expect(resolvePageTitleKey("/settings/workspace", "?section=smtp")).toBe("settings.nav.item.smtp");
+    expect(resolvePageTitleKey("/settings/workspace", "?section=smtp")).toBe(
+      "settings.workspace.page_title",
+    );
+    expect(resolvePageTitleKey("/settings/workspace", "?section=ai")).toBe("settings.nav.item.ai");
   });
 });
 
