@@ -35,7 +35,11 @@
       "cache": false
     },
     "@slugbase/admin#test:integration": {
-      "dependsOn": ["@slugbase/backend#test:integration", "^build"],
+      "dependsOn": [
+        "@slugbase/backend#test:integration",
+        "@slugbase/db-admin#test:integration",
+        "^build"
+      ],
       "cache": false
     },
     "build": {
