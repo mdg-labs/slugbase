@@ -174,10 +174,10 @@ _added: 2026-06-13_ | _updated: 2026-06-20_
 Unit, integration, and e2e tests publish launches to self-hosted ReportPortal when `REPORTPORTAL_URL`, `REPORTPORTAL_PROJECT`, and `REPORTPORTAL_API_KEY` are set (CI via GHA `ci` environment). Wiring: `scripts/reportportal-vitest.ts`, `scripts/reportportal-playwright.ts`, `scripts/reportportal-ci-summary.sh` (CI job summary + PR comments from `reportportal_launch_url=` stdout). Reporters no-op locally when env is incomplete. Allure + gh-pages test reports removed in #371.
 _added: 2026-06-13_
 
-## Orchestrator — serialize CI on WSL (2026-06-15)
+## Orchestrator — host environment & parallelism (2026-06-23)
 
-Parallel Lane P execution agents each running the **full CI gate** (lint+typecheck+unit+build+integration+audit) can exhaust WSL/Cursor server memory and crash the host. **From batch 3 onward:** dispatch **one task at a time** (`run_in_background: false`); prefer **Lane S on `staging`** when scopes don't overlap, or Lane P with sequential verify→integrate before starting the next task. Never run 2+ full CI gates concurrently on the same machine.
-_added: 2026-06-15_
+Development runs on **Ubuntu 26.04 LTS desktop** (native — not WSL). **Lane P parallelism is allowed:** dispatch up to **3** parallel execution sub-agents per batch (`run_in_background: true`); never exceed 3 concurrent sub-agents on this machine. Lane P still requires `best-of-n-runner` worktree isolation per task.
+_added: 2026-06-23_ | _supersedes: 2026-06-15 WSL serialize-CI note_
 
 ## localStorage view-mode pollution in BookmarkListPage tests (2026-06-09)
 

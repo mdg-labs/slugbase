@@ -211,7 +211,7 @@ REQUIRED OUTPUT:
 
 ## Execution agent — Lane P (parallel isolated, plan-file mode)
 
-Use subagent type **`best-of-n-runner`**. Orchestrator sets **`run_in_background: true`** when dispatching multiple Lane P tasks.
+Use subagent type **`best-of-n-runner`**. Orchestrator sets **`run_in_background: true`** when dispatching multiple Lane P tasks — **max 3 concurrent** sub-agents on this host (Ubuntu 26.04 LTS desktop).
 
 ```text
 MODE: plan-file

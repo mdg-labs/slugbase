@@ -40,7 +40,7 @@ The main agent in this chat is a **dispatcher only**. It reads the **roadmap** a
 - Use `TodoWrite` in **chat mode** / **GitHub mode**
 - In **plan-file mode**, edit the plan file for status reconciliation or **Lane P batch prep** (`[~]` at batch start)
 - Launch sub-agents via the **Task** tool (`generalPurpose`, `best-of-n-runner`, `shell`, `explore`, `ci-investigator`)
-- Set `run_in_background: true` on Task when dispatching parallel Lane P execution agents
+- Set `run_in_background: true` on Task when dispatching parallel Lane P execution agents (max **3** concurrent on this host)
 - List filenames in `agent-memory/active/` (names only, not contents)
 - Ask clarifying questions
 
@@ -165,7 +165,7 @@ When user asks to implement an **epic** (parent issue with sub-issues):
 
 **Model:** Do not hardcode a model slug. Omit unless the user specifies one.
 
-**Parallel Lane P:** dispatch execution agents with `run_in_background: true`.
+**Parallel Lane P:** dispatch execution agents with `run_in_background: true` — **max 3 concurrent sub-agents** on this host (Ubuntu 26.04 LTS desktop; see workspace-notes).
 
 ### Cross-cutting scope exceptions
 
@@ -184,7 +184,7 @@ Not valid for unrelated cleanup, broad formatting, or dependency churn. **Lane P
 | Lane | When | Where agents work | Who touches `staging` |
 |---|---|---|---|
 | **S — Serial** | Single task; uncertain overlap; migrations; shared contracts; integration conflicts | `staging` working tree | Execution + verifier |
-| **P — Parallel isolated** | 2–3 tasks; deps satisfied; disjoint WRITE scopes; no shared-file contention | **Worktree + `orchestrator/<TASK-ID>` per task** | Integration agent + batch verifier only |
+| **P — Parallel isolated** | 2–3 tasks (hard cap: **3 concurrent sub-agents**); deps satisfied; disjoint WRITE scopes; no shared-file contention | **Worktree + `orchestrator/<TASK-ID>` per task** | Integration agent + batch verifier only |
 | **B — Blocked** | Same file must change in multiple tasks in one batch | — | Serialize, split batch, or run Lane S one at a time |
 
 **Default when uncertain:** Lane S.
@@ -473,7 +473,7 @@ Orchestrator may read/write. Sub-agents may read; write only if task WRITE SCOPE
 5. Choose lane: **S**, **P**, or **B** (blocked → split or serialize).
 6. Generate SESSION ID per leaf task; if Lane P, record `BATCH_ID` + `STAGING_BASE_SHA`.
 7. Batch prep: plan `[~]` / todos `in_progress` (orchestrator does **not** set GitHub In Progress — execution agent does).
-8. Spawn execution sub-agent(s) — `best-of-n-runner` + `run_in_background: true` for Lane P.
+8. Spawn execution sub-agent(s) — `best-of-n-runner` + `run_in_background: true` for Lane P (max **3** concurrent).
 9. Collect: local SESSION ID path, implementation SHA, scopes, paths, status per task.
 10. Spawn one **branch verifier** per Lane P task, or one **task verifier** for Lane S.
 11. Lane P: spawn **integration agent** → **batch verifier**.
