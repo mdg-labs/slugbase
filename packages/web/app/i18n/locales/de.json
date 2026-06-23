@@ -893,6 +893,7 @@
   "settings.members.invite_link_shown_once_warning": "Kopiere diesen Link jetzt. Du kannst ihn später nicht mehr einsehen. Ein neuer Link macht alle vorherigen Links für diese Einladung ungültig.",
   "settings.members.invite_role_label": "Rolle",
   "settings.members.invite_send_action": "Einladung senden",
+  "settings.members.mail_unavailable_banner": "E-Mail-Versand ist auf dieser Instanz nicht konfiguriert. Erstellen Sie einen Einladungslink und teilen Sie ihn manuell mit der eingeladenen Person.",
   "settings.members.members_heading": "Mitglieder ({count})",
   "settings.members.page_subtitle": "Personen und Gruppen in {workspace} verwalten.",
   "settings.members.page_title": "Mitglieder & Teams",

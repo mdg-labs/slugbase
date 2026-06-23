@@ -82,7 +82,9 @@ export function MembersSettingsPage({ initialData }: MembersSettingsPageProps) {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<InvitationRole>("MEMBER");
-  const [inviteDelivery, setInviteDelivery] = useState<InvitationDelivery>("email");
+  const [inviteDelivery, setInviteDelivery] = useState<InvitationDelivery>(
+    initialData.mailTransportAvailable ? "email" : "link",
+  );
   const [shownAcceptUrl, setShownAcceptUrl] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<string | null>(null);
   const [transferTarget, setTransferTarget] = useState<string | null>(null);
@@ -108,6 +110,10 @@ export function MembersSettingsPage({ initialData }: MembersSettingsPageProps) {
   const isOwner = currentUserRole === "OWNER";
   const isAdmin = currentUserRole === "ADMIN" || isOwner;
   const ownerCount = members.filter((member) => member.role === "OWNER").length;
+  const mailTransportAvailable = initialData.mailTransportAvailable;
+  const effectiveInviteDelivery: InvitationDelivery = mailTransportAvailable
+    ? inviteDelivery
+    : "link";
 
   const showError = (message: string) => {
     setErrorMessage(message);
@@ -122,7 +128,7 @@ export function MembersSettingsPage({ initialData }: MembersSettingsPageProps) {
         initialData.workspace.id,
         email,
         inviteRole,
-        inviteDelivery,
+        effectiveInviteDelivery,
       );
       setPending((items) => [
         ...items,
@@ -134,8 +140,11 @@ export function MembersSettingsPage({ initialData }: MembersSettingsPageProps) {
       setInviteOpen(false);
       setInviteEmail("");
       setInviteRole("MEMBER");
-      setInviteDelivery("email");
-      if (inviteDelivery === "link" && created.acceptUrl) {
+      setInviteDelivery(mailTransportAvailable ? "email" : "link");
+      if (
+        (effectiveInviteDelivery === "link" || !mailTransportAvailable) &&
+        created.acceptUrl
+      ) {
         setShownAcceptUrl(created.acceptUrl);
         showToast("settings.members.toast_invite_link_created", { email });
       } else {
@@ -405,6 +414,15 @@ export function MembersSettingsPage({ initialData }: MembersSettingsPageProps) {
           {inviteOpen && isAdmin ? (
             <div className="rounded-lg border border-[color:var(--border-subtle)] bg-raised p-sp-5">
               <div className="flex flex-col gap-sp-4">
+                {!mailTransportAvailable ? (
+                  <p
+                    className="m-0 rounded-md border border-[color:var(--border-subtle)] bg-raised px-sp-4 py-sp-3 text-fg-muted"
+                    style={{ fontSize: "var(--text-small)", lineHeight: "var(--lh-small)" }}
+                    data-testid="members-mail-unavailable-banner"
+                  >
+                    {t("settings.members.mail_unavailable_banner")}
+                  </p>
+                ) : null}
                 <div className="flex flex-col gap-sp-4 md:flex-row md:items-end">
                   <div className="flex-1">
                     <Label htmlFor="invite-email">{t("settings.members.invite_email_label")}</Label>
@@ -434,39 +452,41 @@ export function MembersSettingsPage({ initialData }: MembersSettingsPageProps) {
                     </select>
                   </div>
                 </div>
-                <fieldset className="m-0 border-0 p-0">
-                  <legend className="mb-sp-2 text-[length:var(--text-small)] text-fg-muted">
-                    {t("settings.members.invite_delivery_label")}
-                  </legend>
-                  <div className="flex flex-wrap gap-sp-5">
-                    <label className="flex cursor-pointer items-center gap-sp-2 text-[length:var(--text-body)] text-fg">
-                      <input
-                        type="radio"
-                        name="invite-delivery"
-                        value="email"
-                        checked={inviteDelivery === "email"}
-                        onChange={() => {
-                          setInviteDelivery("email");
-                        }}
-                        disabled={busy || seats.atLimit}
-                      />
-                      {t("settings.members.invite_delivery_email")}
-                    </label>
-                    <label className="flex cursor-pointer items-center gap-sp-2 text-[length:var(--text-body)] text-fg">
-                      <input
-                        type="radio"
-                        name="invite-delivery"
-                        value="link"
-                        checked={inviteDelivery === "link"}
-                        onChange={() => {
-                          setInviteDelivery("link");
-                        }}
-                        disabled={busy || seats.atLimit}
-                      />
-                      {t("settings.members.invite_delivery_link")}
-                    </label>
-                  </div>
-                </fieldset>
+                {mailTransportAvailable ? (
+                  <fieldset className="m-0 border-0 p-0">
+                    <legend className="mb-sp-2 text-[length:var(--text-small)] text-fg-muted">
+                      {t("settings.members.invite_delivery_label")}
+                    </legend>
+                    <div className="flex flex-wrap gap-sp-5">
+                      <label className="flex cursor-pointer items-center gap-sp-2 text-[length:var(--text-body)] text-fg">
+                        <input
+                          type="radio"
+                          name="invite-delivery"
+                          value="email"
+                          checked={inviteDelivery === "email"}
+                          onChange={() => {
+                            setInviteDelivery("email");
+                          }}
+                          disabled={busy || seats.atLimit}
+                        />
+                        {t("settings.members.invite_delivery_email")}
+                      </label>
+                      <label className="flex cursor-pointer items-center gap-sp-2 text-[length:var(--text-body)] text-fg">
+                        <input
+                          type="radio"
+                          name="invite-delivery"
+                          value="link"
+                          checked={inviteDelivery === "link"}
+                          onChange={() => {
+                            setInviteDelivery("link");
+                          }}
+                          disabled={busy || seats.atLimit}
+                        />
+                        {t("settings.members.invite_delivery_link")}
+                      </label>
+                    </div>
+                  </fieldset>
+                ) : null}
                 <div className="flex gap-sp-3">
                   <Button
                     disabled={busy || !inviteEmail.trim() || seats.atLimit}
@@ -476,7 +496,7 @@ export function MembersSettingsPage({ initialData }: MembersSettingsPageProps) {
                     type="button"
                     data-testid="invite-submit-action"
                   >
-                    {inviteDelivery === "link"
+                    {effectiveInviteDelivery === "link"
                       ? t("settings.members.invite_create_link_action")
                       : t("settings.members.invite_send_action")}
                   </Button>
@@ -605,16 +625,19 @@ export function MembersSettingsPage({ initialData }: MembersSettingsPageProps) {
                         >
                           {t("settings.members.copy_link_action")}
                         </Button>
-                        <Button
-                          variant="ghost"
-                          disabled={busy}
-                          onClick={() =>
-                            void handleResend(invitation.id, invitation.invitedEmail)
-                          }
-                          type="button"
-                        >
-                          {t("settings.members.resend_action")}
-                        </Button>
+                        {mailTransportAvailable ? (
+                          <Button
+                            variant="ghost"
+                            disabled={busy}
+                            onClick={() =>
+                              void handleResend(invitation.id, invitation.invitedEmail)
+                            }
+                            type="button"
+                            data-testid={`pending-resend-${invitation.id}`}
+                          >
+                            {t("settings.members.resend_action")}
+                          </Button>
+                        ) : null}
                         <Button
                           variant="ghost"
                           disabled={busy}

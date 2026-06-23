@@ -893,6 +893,7 @@
   "settings.members.invite_link_shown_once_warning": "Copy this link now. You won't be able to see it again. Generating a new link invalidates any previous link for this invitation.",
   "settings.members.invite_role_label": "Role",
   "settings.members.invite_send_action": "Send invite",
+  "settings.members.mail_unavailable_banner": "Email delivery is not configured on this instance. Create an invitation link and share it with the invitee manually.",
   "settings.members.members_heading": "Members ({count})",
   "settings.members.page_subtitle": "Manage people and groups in {workspace}.",
   "settings.members.page_title": "Members & teams",

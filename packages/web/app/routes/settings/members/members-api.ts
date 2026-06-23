@@ -35,6 +35,7 @@ export async function loadMembersSettingsData(
   teams: TeamRow[];
   currentUserRole: MemberRole;
   membersForbidden: boolean;
+  mailTransportAvailable: boolean;
 } | null> {
   const workspace = await serverFetchJson<ApiWorkspace>(request, "/workspaces/active");
   const { members: rawMembers, forbidden } = await fetchMembersWithFallback<MemberRow>(request);
@@ -53,15 +54,21 @@ export async function loadMembersSettingsData(
       teams: [],
       currentUserRole: "ADMIN",
       membersForbidden: true,
+      mailTransportAvailable: false,
     };
   }
 
   const currentMember = rawMembers.find((member) => member.userId === currentUserId);
   if (!currentMember) return null;
 
-  const pendingInvitations =
-    (await serverFetchJson<PendingInvitationRow[]>(request, "/workspace/invitations")) ?? [];
-  const teamsResponse = await serverFetchJson<PaginatedTeams>(request, "/teams?pageSize=100");
+  const [pendingInvitations, teamsResponse, mailStatus] = await Promise.all([
+    serverFetchJson<PendingInvitationRow[]>(request, "/workspace/invitations"),
+    serverFetchJson<PaginatedTeams>(request, "/teams?pageSize=100"),
+    serverFetchJson<{ mailTransportAvailable: boolean }>(
+      request,
+      "/workspace/settings/mail/status",
+    ),
+  ]);
   const teams = teamsResponse?.items ?? [];
 
   return {
@@ -72,10 +79,11 @@ export async function loadMembersSettingsData(
       planSeats: workspace.planSeats,
     },
     members: rawMembers,
-    pendingInvitations,
+    pendingInvitations: pendingInvitations ?? [],
     teams,
     currentUserRole: currentMember.role,
     membersForbidden: false,
+    mailTransportAvailable: mailStatus?.mailTransportAvailable ?? false,
   };
 }
 

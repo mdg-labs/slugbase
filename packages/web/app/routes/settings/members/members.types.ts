@@ -42,6 +42,7 @@ export interface MembersSettingsData {
   currentUserId: string;
   currentUserRole: MemberRole;
   membersForbidden: boolean;
+  mailTransportAvailable: boolean;
 }
 
 export type MembersTabId = "members" | "teams";

@@ -92,6 +92,7 @@ const teamData: MembersSettingsData = {
   currentUserId: "u-owner",
   currentUserRole: "OWNER",
   membersForbidden: false,
+  mailTransportAvailable: true,
 };
 
 function renderMembersPage(data: MembersSettingsData = teamData) {
@@ -186,6 +187,62 @@ describe("MembersSettingsPage", () => {
     expect(writeText).toHaveBeenCalledWith(
       "https://app.slugbase.test/invitations/token-rotated",
     );
+  });
+
+  it("shows resend on pending invitations when mail transport is available", () => {
+    const view = renderMembersPage();
+    expect(view.getByTestId("pending-resend-inv-1")).toBeTruthy();
+  });
+});
+
+describe("MembersSettingsPage — mail transport unavailable", () => {
+  const mailUnavailableData: MembersSettingsData = {
+    ...teamData,
+    mailTransportAvailable: false,
+  };
+
+  it("hides delivery choice and shows info banner in invite form", () => {
+    const view = renderMembersPage(mailUnavailableData);
+    fireEvent.click(view.getByRole("button", { name: "Invite member" }));
+    expect(view.getByTestId("members-mail-unavailable-banner")).toBeTruthy();
+    expect(view.queryByText("Delivery")).toBeNull();
+    expect(view.queryByLabelText("Send email")).toBeNull();
+    expect(view.getByTestId("invite-submit-action").textContent).toBe("Create invite link");
+  });
+
+  it("forces link delivery and shows ShownOncePanel after invite", async () => {
+    createInvitation.mockResolvedValue({
+      id: "inv-3",
+      invitedEmail: "manual@example.com",
+      role: "MEMBER",
+      invitedByName: "",
+      expiresAt: "2026-07-01T00:00:00.000Z",
+      acceptUrl: "https://app.slugbase.test/invitations/token-manual",
+    });
+
+    const view = renderMembersPage(mailUnavailableData);
+    fireEvent.click(view.getByRole("button", { name: "Invite member" }));
+    fireEvent.change(view.getByLabelText("Email address"), {
+      target: { value: "manual@example.com" },
+    });
+    fireEvent.click(view.getByTestId("invite-submit-action"));
+
+    await waitFor(() => {
+      expect(createInvitation).toHaveBeenCalledWith(
+        "ws-team",
+        "manual@example.com",
+        "MEMBER",
+        "link",
+      );
+    });
+    expect(view.getByTestId("invite-link-shown-once-panel")).toBeTruthy();
+    expect(view.getByText("https://app.slugbase.test/invitations/token-manual")).toBeTruthy();
+  });
+
+  it("hides resend on pending invitations when mail transport is unavailable", () => {
+    const view = renderMembersPage(mailUnavailableData);
+    expect(view.queryByTestId("pending-resend-inv-1")).toBeNull();
+    expect(view.getByTestId("pending-copy-link-inv-1")).toBeTruthy();
   });
 });
 
