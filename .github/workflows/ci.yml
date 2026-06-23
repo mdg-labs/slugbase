@@ -135,6 +135,9 @@ jobs:
         with:
           skip-checkout: "true"
 
+      - name: Validate blog content
+        run: pnpm blog:validate
+
       - name: Build
         env:
           NODE_ENV: production
