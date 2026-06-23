@@ -7,6 +7,7 @@ import {
 } from "@mdg-labs/blog";
 import PostList from "@mdg-labs/blog/layouts/PostList.astro";
 import MarketingLayout from "../../layouts/MarketingLayout.astro";
+import { resolveBlogIndexAlternateHref } from "../../lib/blog-locale-nav.js";
 import { formatMarketingPageTitle } from "../../i18n/format-marketing-page-title.js";
 import { t } from "../../i18n/translate.js";
 import "../../styles/blog.css";
@@ -19,9 +20,10 @@ const posts = sortPostsByDate(
 );
 
 const title = formatMarketingPageTitle(locale, "marketing.blog.page_title");
+const localeAlternateHref = resolveBlogIndexAlternateHref(locale);
 ---
 
-<MarketingLayout title={title}>
+<MarketingLayout title={title} localeAlternateHref={localeAlternateHref}>
   <div class="mk-c blog-index">
     <header>
       <span class="mk-eyebrow">{t(locale, "marketing.blog.page_title")}</span>

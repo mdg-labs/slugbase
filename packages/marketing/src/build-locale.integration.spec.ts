@@ -121,9 +121,11 @@ describe("marketing build output", () => {
 
     expect(enIntroducingPost).toContain("Introducing SlugBase");
     expect(enIntroducingPost).toContain('lang="en"');
+    expect(enIntroducingPost).toContain('href="/de/blog/slugbase-vorstellung"');
     expect(enBlog).toContain("Introducing SlugBase");
     expect(deIntroducingPost).toContain("SlugBase stellt sich vor");
     expect(deIntroducingPost).toContain('lang="de"');
+    expect(deIntroducingPost).toContain('href="/blog/introducing-slugbase"');
     expect(deBlog).toContain("SlugBase stellt sich vor");
 
     expect(enRss).toContain("Introducing SlugBase");

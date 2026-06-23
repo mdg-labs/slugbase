@@ -8,6 +8,7 @@ import {
 } from "@mdg-labs/blog";
 import BlogPostLayout from "@mdg-labs/blog/layouts/BlogPostLayout.astro";
 import MarketingLayout from "../../../layouts/MarketingLayout.astro";
+import { resolveBlogPostAlternateHref } from "../../../lib/blog-locale-nav.js";
 import { staticMessages } from "../../../i18n/messages.js";
 import "../../../styles/blog.css";
 
@@ -25,15 +26,17 @@ export async function getStaticPaths() {
 }
 
 const { entry } = Astro.props;
+const allPosts = filterPublished(await getCollection("blog"));
 const { Content, headings } = await render(entry);
 const locale = "de";
 const messages = staticMessages[locale];
 const title = messages["marketing.document_title"]
   .replaceAll("{brand}", messages["marketing.nav.brand"])
   .replaceAll("{page}", entry.data.title);
+const localeAlternateHref = resolveBlogPostAlternateHref(entry, allPosts);
 ---
 
-<MarketingLayout title={title}>
+<MarketingLayout title={title} localeAlternateHref={localeAlternateHref}>
   <div class="mk-c blog-index">
     <BlogPostLayout post={entry.data} headings={headings}>
       <Content components={blogMdxComponents} />

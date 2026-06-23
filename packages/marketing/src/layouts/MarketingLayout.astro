@@ -7,9 +7,10 @@ import AnalyticsConsent from "../components/AnalyticsConsent.astro";
 import { t, type SupportedLocale } from "../i18n/translate.js";
 interface Props {
   title: string;
+  localeAlternateHref?: string;
 }
 
-const { title } = Astro.props;
+const { title, localeAlternateHref } = Astro.props;
 const locale = Astro.currentLocale as SupportedLocale;
 const appOrigin = import.meta.env.PUBLIC_FRONTEND_ORIGIN ?? "";
 ---
@@ -24,7 +25,7 @@ const appOrigin = import.meta.env.PUBLIC_FRONTEND_ORIGIN ?? "";
     <title>{title}</title>
   </head>
   <body>
-    <MarketingNav appOrigin={appOrigin} />
+    <MarketingNav appOrigin={appOrigin} localeAlternateHref={localeAlternateHref} />
     <main>
       <slot />
     </main>

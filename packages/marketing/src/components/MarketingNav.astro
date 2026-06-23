@@ -4,16 +4,19 @@ import { t, type SupportedLocale } from "../i18n/translate.js";
 
 interface Props {
   appOrigin: string;
+  /** Override locale-switcher target (e.g. blog post translation). */
+  localeAlternateHref?: string;
 }
 
-const { appOrigin } = Astro.props;
+const { appOrigin, localeAlternateHref } = Astro.props;
 const locale = Astro.currentLocale as SupportedLocale;
 const alternateLocale: SupportedLocale = locale === "en" ? "de" : "en";
 const homeHref = getRelativeLocaleUrl(locale, "/");
 const pricingHref = getRelativeLocaleUrl(locale, "/pricing");
 const blogHref = getRelativeLocaleUrl(locale, "/blog");
 const contactHref = getRelativeLocaleUrl(locale, "/contact");
-const alternateHref = getRelativeLocaleUrl(alternateLocale, "/");
+const alternateHref =
+  localeAlternateHref ?? getRelativeLocaleUrl(alternateLocale, "/");
 const signInHref = appOrigin ? `${appOrigin}/login` : "/login";
 const getStartedHref = appOrigin ? `${appOrigin}/register` : "/register";
 ---
