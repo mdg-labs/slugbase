@@ -4,9 +4,10 @@ description: >-
   Create or enrich SlugBase GitHub Issues from a feature description, spec section,
   codebase change, or user-drafted issue. Single Task/Bug for small work;
   Feature (epic) + children for multi-task features. Dual mode: create net-new issues or
-  enrich an existing #N issue. Stops at Ready. Use when the user describes a
-  new feature, asks to plan or ticket work, flesh out a draft issue, or
-  break a change into board tasks before implementation.
+  enrich an existing #N issue (never enrich when board Status is Done/Closed; never attach sub-issues
+  to a Done/Closed parent epic — create standalone issues instead). Stops at Ready. Use when the user describes a new feature, asks to plan
+  or ticket work, flesh out a draft issue, or break a change into board tasks before
+  implementation.
 ---
 
 # GitHub intake (SlugBase)
@@ -22,7 +23,7 @@ Board sync for execution/verification: [orchestrator/github-board.md](../orchest
 | Feature or spec section needing **2+ tasks** | **Feature (epic)** + child Tasks/Bugs |
 | Single task sufficient | **One** Task or Bug — no epic |
 | Bug fix (one task) | Bug in affected domain; `type: Bug` |
-| User provides `#N` draft issue | **Enrich mode** — add AC, spec refs, files, tests, children |
+| User provides `#N` draft issue | **Enrich mode** — add AC, spec refs, files, tests, children — **only if board Status is not Done/Closed** |
 | User says "don't create issues" | Skip MCP; optionally draft markdown plan only |
 
 **Ask before creating** if priority, owning domain, or product rules are unclear.
@@ -39,6 +40,49 @@ Project number: 2 (SlugBase Roadmap)
 Org-level issue types: **Task**, **Bug**, **Feature** — see [github-board.md](../orchestrator/github-board.md).
 
 Org-level issue fields: **Priority** (Critical/High/Medium/Low), **Effort** (High/Medium/Low).
+
+## Board Status vs GitHub issue state
+
+SlugBase uses **two separate status systems** (see rule `12-github-project-board.mdc`):
+
+| System | Values | Authority for intake |
+|---|---|---|
+| **Project board Status** | Backlog / Ready / In Progress / In Review / Done / Closed | **Use this** to decide whether an issue is finished |
+| **GitHub issue state** | `open` / `closed` | **Do not use alone** — Done on the board often still shows `open` until release to `main` |
+
+**When investigating duplicates or deciding enrich vs create:**
+
+1. Query **project board Status** for each candidate issue (GraphQL below).
+2. If board Status is **Done** or **Closed** → treat as **delivered work**. **Do not** propose or perform **enrich mode** on that issue — even if GitHub issue state is still `open`.
+3. Instead: propose **new net-new issues** (or a new epic + children) for follow-up, extended scope, or corrections. Reference the Done issue in the new description as context (`Related: #N — Done on board`).
+4. If board Status is **Ready**, **In Progress**, **In Review**, or **Backlog** → enrich mode is allowed when the user names `#N` or scope clearly belongs on that ticket.
+
+```bash
+# Board Status for issue #N (project 2)
+gh api graphql -f 'query=query { repository(owner:"mdg-labs",name:"slugbase") {
+  issue(number:N) {
+    number title state
+    projectItems(first:10) {
+      nodes {
+        project { number }
+        fieldValueByName(name:"Status") {
+          ... on ProjectV2ItemFieldSingleSelectValue { name }
+        }
+      }
+    }
+  }
+} }' --jq '.data.repository.issue | {number, title, github_state: .state, board_status: [.projectItems.nodes[] | select(.project.number == 2) | .fieldValueByName.name][0]}'
+```
+
+**Draft-plan wording:** When a related issue is Done on the board, say *"create new issues (#516 is Done on board — do not enrich)"* — never *"Enrich #516"*.
+
+**Parent epic / sub-issue linking:** Before `sub_issue_write` (method: add) or updating an epic's sub-issues table:
+
+1. Query the **proposed parent** epic's board Status (same GraphQL as above).
+2. If parent board Status is **Done** or **Closed** → **do not** link new issues as sub-issues; **do not** append them to the epic's sub-issues table. Create **standalone** leaf issues (or a **new** epic if scope warrants it). Cite the finished epic in the body as `Related: #N (Done on board)` only.
+3. GitHub issue state on the parent may still be `open` — board Status is the authority (same as enrich rule above).
+
+**Draft-plan wording:** When the natural parent epic is Done on the board, say *"standalone tasks #?? / #?? — related to #510 (Done on board), not sub-issues"* — never *"under epic #510"*.
 
 ## Issue summaries
 
@@ -62,7 +106,9 @@ User describes a feature with no existing issue number.
 
 ### Mode B — Enrich existing
 
-User names `#N`. Fetch with MCP `issue_read` (method: get, issue_number: N), **merge** structured sections into body via MCP `issue_write` (method: update). Rewrite summary when vague. Add sub-issues if scope grew. Do not wipe user prose.
+User names `#N`. **First:** fetch board Status (see § Board Status vs GitHub issue state). If Status is **Done** or **Closed**, **stop** — do not enrich; propose new issues instead and explain why.
+
+Otherwise: fetch with MCP `issue_read` (method: get, issue_number: N), **merge** structured sections into body via MCP `issue_write` (method: update). Rewrite summary when vague. Add sub-issues if scope grew. Do not wipe user prose.
 
 ## Domain labels
 
@@ -122,7 +168,7 @@ MCP issue_write (method: create):
 
 1. Read relevant spec sections (`spec §N` from [doc-index.md](../orchestrator/doc-index.md)) — cite `§` refs in descriptions.
 2. Search the codebase for patterns / file paths.
-3. Search for duplicates: MCP `search_issues` (query: "<keywords>", owner: "mdg-labs", repo: "slugbase").
+3. Search for duplicates: MCP `search_issues` (query: "<keywords>", owner: "mdg-labs", repo: "slugbase"). For each candidate, check **board Status** — Done/Closed candidates are context only, not enrich targets (see § Board Status vs GitHub issue state).
 4. Split into **leaf issues** — each independently implementable and verifiable.
 
 ### 2. Draft plan — STOP. Propose structure first.
@@ -145,6 +191,8 @@ MCP issue_write (method: create):
 ```
 
 Wait for approval. **Agents must not create any issues before proposing the draft structure and receiving user approval.** Proceeding directly to step 3 (or any MCP write) without approval is forbidden.
+
+When listing related existing issues in the draft plan, note board Status. **Never recommend "Enrich #N" when #N is Done or Closed on the board** — recommend new issues and cite the Done issue as related context only.
 
 Unless the user said "create the issues now", you must stop at the draft plan and wait for an explicit approval response. A vague or non-committal user message does not count as approval.
 
@@ -197,16 +245,18 @@ MCP issue_write (method: update):
 
 ### 5. Sub-issue relationships
 
+**Guard:** Check parent epic board Status first (see § Board Status vs GitHub issue state). Skip this section entirely when the parent is Done or Closed on the board — use standalone issues with a `Related:` line instead.
+
 ```text
 # Get database IDs via GraphQL (CLI — needed for sub_issue_write)
 gh api graphql -f 'query=query { repository(owner:"mdg-labs", name:"slugbase") {
   issue(number: 8) { databaseId } issue(number: 9) { databaseId } } }'
 
-# Create sub-issue relationship via MCP
+# Create sub-issue relationship via MCP (parent must NOT be Done/Closed on board)
 # sub_issue_write: method: add, issue_number: 8, sub_issue_id: <database ID of child>
 ```
 
-Document sub-issue relationships in each leaf description with `#N` references.
+Document sub-issue relationships in each leaf description with `#N` references. For standalone follow-ups to a finished epic, use `Related: #N` — not `Parent feature:`.
 
 ### 5a. Dependencies (blocked-by / blocking)
 
@@ -260,6 +310,8 @@ gh api graphql -f 'query=query { repository(owner:"mdg-labs", name:"slugbase") {
 
 Update the Feature epic — **Sub-issues table** with every child number, domain, one-line scope, and **Suggested implementation order**. Include relevant spec `§` refs.
 
+**Skip epic body updates** when the Feature epic's board Status is **Done** or **Closed** — do not add new rows to its sub-issues table; reference new work as standalone issues in handoff text only.
+
 ### 7. Set project Status to Ready
 
 Issues are automatically added to the project board by the repo connection. Just get the project item ID and set Status.
@@ -309,6 +361,8 @@ Ready for orchestrator: "implement #11" or "orchestrate #8 epic"
 
 ## Forbidden
 
+- **Enriching or proposing enrich mode on issues with board Status Done or Closed** — GitHub issue state may still be `open`; create new issues for follow-up work instead
+- **Linking new issues as sub-issues of a parent epic with board Status Done or Closed** — create standalone issues with `Related: #N`; do not call `sub_issue_write` or update the epic sub-issues table
 - **Creating issues via `gh issue create`** — always use MCP `issue_write` (org-level types and fields require it)
 - Setting In Progress or Done during intake
 - Inventing product behaviour not in spec docs — ask first
