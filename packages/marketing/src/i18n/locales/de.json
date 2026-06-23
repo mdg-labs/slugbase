@@ -1,4 +1,7 @@
 {
+  "marketing.blog.index_description": "Produktupdates, Engineering-Notizen und Tipps für mehr aus SlugBase.",
+  "marketing.blog.index_headline": "Blog",
+  "marketing.blog.page_title": "Blog",
   "marketing.consent.accept": "Analytics akzeptieren",
   "marketing.consent.decline": "Ablehnen",
   "marketing.consent.message": "Wir nutzen datenschutzfreundliche Analytics, um die Produktnutzung zu verstehen. Du kannst optionales Tracking akzeptieren oder ablehnen.",
@@ -44,6 +47,7 @@
   "marketing.error.action.home": "Zur Startseite",
   "marketing.error.action.reload": "Seite neu laden",
   "marketing.error.action.sign_in": "Anmelden",
+  "marketing.footer.blog": "Blog",
   "marketing.footer.contact": "Kontakt",
   "marketing.footer.copyright": "© {year} SlugBase. Alle Rechte vorbehalten.",
   "marketing.footer.docs": "Dokumentation",
@@ -135,6 +139,7 @@
   "marketing.legal.impressum.title": "Impressum",
   "marketing.document_title": "{brand} | {page}",
   "marketing.meta.description": "SlugBase - tastaturgesteuerter Lesezeichenmanager mit Slug-Weiterleitung.",
+  "marketing.nav.blog": "Blog",
   "marketing.nav.brand": "SlugBase",
   "marketing.nav.contact": "Kontakt",
   "marketing.nav.features": "Funktionen",

@@ -11,6 +11,7 @@ const locale = Astro.currentLocale as SupportedLocale;
 const alternateLocale: SupportedLocale = locale === "en" ? "de" : "en";
 const homeHref = getRelativeLocaleUrl(locale, "/");
 const pricingHref = getRelativeLocaleUrl(locale, "/pricing");
+const blogHref = getRelativeLocaleUrl(locale, "/blog");
 const contactHref = getRelativeLocaleUrl(locale, "/contact");
 const alternateHref = getRelativeLocaleUrl(alternateLocale, "/");
 const signInHref = appOrigin ? `${appOrigin}/login` : "/login";
@@ -26,6 +27,7 @@ const getStartedHref = appOrigin ? `${appOrigin}/register` : "/register";
     <div class="mk-nav-links">
       <a class="mk-nav-link" href={`${homeHref}#features`}>{t(locale, "marketing.nav.features")}</a>
       <a class="mk-nav-link" href={pricingHref}>{t(locale, "marketing.nav.pricing")}</a>
+      <a class="mk-nav-link" href={blogHref}>{t(locale, "marketing.nav.blog")}</a>
       <a class="mk-nav-link" href={contactHref}>{t(locale, "marketing.nav.contact")}</a>
     </div>
     <div class="mk-nav-ctas">

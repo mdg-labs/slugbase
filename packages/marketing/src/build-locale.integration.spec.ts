@@ -40,6 +40,10 @@ describe("marketing build output", () => {
     expect(enHtml).toContain('data-pricing-teaser="personal-monthly"');
     expect(deHtml).toContain(t("de", "marketing.landing.hero_title"));
     expect(deHtml).toContain(t("de", "marketing.landing.hero_title_accent"));
+    expect(enHtml).toContain(t("en", "marketing.nav.blog"));
+    expect(enHtml).toContain(t("en", "marketing.footer.blog"));
+    expect(deHtml).toContain(t("de", "marketing.nav.blog"));
+    expect(deHtml).toContain(t("de", "marketing.footer.blog"));
     expect(enHtml).toContain('lang="en"');
     expect(deHtml).toContain('lang="de"');
     expect(enHtml).toContain(`<title>${formatMarketingBrandTitle("en")}</title>`);
@@ -83,10 +87,22 @@ describe("marketing build output", () => {
     expect(en500).toContain(t("en", "marketing.error.action.reload"));
 
     expect(enBlog).toContain('lang="en"');
-    expect(enBlog).toContain(`<title>${formatMarketingBrandTitle("en")}</title>`);
+    expect(enBlog).toContain(
+      `<title>${formatMarketingPageTitle("en", "marketing.blog.page_title")}</title>`,
+    );
+    expect(enBlog).toContain(t("en", "marketing.blog.index_headline"));
+    expect(enBlog).toContain(t("en", "marketing.blog.index_description"));
+    expect(enBlog).toContain(t("en", "marketing.nav.blog"));
+    expect(enBlog).toContain(t("en", "marketing.footer.blog"));
     expect(enBlog).toContain('class="blog-post-list"');
     expect(deBlog).toContain('lang="de"');
-    expect(deBlog).toContain(`<title>${formatMarketingBrandTitle("de")}</title>`);
+    expect(deBlog).toContain(
+      `<title>${formatMarketingPageTitle("de", "marketing.blog.page_title")}</title>`,
+    );
+    expect(deBlog).toContain(t("de", "marketing.blog.index_headline"));
+    expect(deBlog).toContain(t("de", "marketing.blog.index_description"));
+    expect(deBlog).toContain(t("de", "marketing.nav.blog"));
+    expect(deBlog).toContain(t("de", "marketing.footer.blog"));
     expect(deBlog).toContain('class="blog-post-list"');
 
     expect(enRss).toContain('<?xml version="1.0" encoding="UTF-8"?>');

@@ -7,20 +7,27 @@ import {
 } from "@mdg-labs/blog";
 import PostList from "@mdg-labs/blog/layouts/PostList.astro";
 import MarketingLayout from "../../layouts/MarketingLayout.astro";
-import { formatMarketingBrandTitle } from "../../i18n/format-marketing-page-title.js";
+import { formatMarketingPageTitle } from "../../i18n/format-marketing-page-title.js";
+import { t } from "../../i18n/translate.js";
 import "../../styles/blog.css";
 
 export const prerender = true;
 
+const locale = "en";
 const posts = sortPostsByDate(
-  filterByLocale(filterPublished(await getCollection("blog")), "en"),
+  filterByLocale(filterPublished(await getCollection("blog")), locale),
 );
 
-const title = formatMarketingBrandTitle("en");
+const title = formatMarketingPageTitle(locale, "marketing.blog.page_title");
 ---
 
 <MarketingLayout title={title}>
   <div class="mk-c blog-index">
+    <header>
+      <span class="mk-eyebrow">{t(locale, "marketing.blog.page_title")}</span>
+      <h1 class="mk-h2">{t(locale, "marketing.blog.index_headline")}</h1>
+      <p class="mk-body">{t(locale, "marketing.blog.index_description")}</p>
+    </header>
     <PostList posts={posts} basePath="/blog" />
   </div>
 </MarketingLayout>
