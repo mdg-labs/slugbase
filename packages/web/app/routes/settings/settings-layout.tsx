@@ -8,8 +8,6 @@ import type { NavItem } from "./settings-nav-config.js";
 
 type SettingsLayoutData = {
   interfaceConfig: {
-    mailAdminUi: boolean;
-    oidcAdminUi: boolean;
     billingEnabled: boolean;
   };
 };

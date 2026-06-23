@@ -1,6 +1,6 @@
 export type WorkspaceMemberRole = "OWNER" | "ADMIN" | "MEMBER";
 
-export type WorkspaceSectionId = "general" | "smtp" | "ai" | "oidc";
+export type WorkspaceSectionId = "general" | "ai";
 
 export interface WorkspaceSummary {
   id: string;
@@ -9,8 +9,6 @@ export interface WorkspaceSummary {
 }
 
 export interface WorkspaceInterfaceConfig {
-  mailAdminUi: boolean;
-  oidcAdminUi: boolean;
   aiByoCredential: boolean;
   billingEnabled: boolean;
 }
