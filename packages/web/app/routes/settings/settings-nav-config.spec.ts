@@ -13,57 +13,39 @@ function itemIds(groups: ReturnType<typeof filterNavGroups>, groupLabel: string)
 }
 
 describe("settings-nav-config", () => {
-  const selfHostedAdminUiConfig = {
-    mailAdminUi: true,
-    oidcAdminUi: true,
+  const selfHostedConfig = {
     billingEnabled: false,
   };
 
   const hostedConfig = {
-    mailAdminUi: false,
-    oidcAdminUi: false,
     billingEnabled: true,
   };
 
-  const ceOperatorConfig = {
-    mailAdminUi: false,
-    oidcAdminUi: false,
-    billingEnabled: false,
-  };
-
-  it("self-hosted with admin UI: shows all nav groups except billing", () => {
-    const groups = filterNavGroups(ALL_NAV_GROUPS, selfHostedAdminUiConfig, "free");
+  it("self-hosted: shows workspace nav with general and ai only", () => {
+    const groups = filterNavGroups(ALL_NAV_GROUPS, selfHostedConfig, "free");
     expect(groupLabelKeys(groups)).toEqual([
       "settings.nav.group.account",
       "settings.nav.group.workspace",
       "settings.nav.group.administration",
     ]);
-    expect(itemIds(groups, "settings.nav.group.workspace")).toEqual([
-      "general",
-      "smtp",
-      "ai",
-      "oidc",
-    ]);
+    expect(itemIds(groups, "settings.nav.group.workspace")).toEqual(["general", "ai"]);
   });
 
   it("self-hosted: members nav is always visible regardless of plan", () => {
-    const groups = filterNavGroups(ALL_NAV_GROUPS, selfHostedAdminUiConfig, "free");
+    const groups = filterNavGroups(ALL_NAV_GROUPS, selfHostedConfig, "free");
     expect(itemIds(groups, "settings.nav.group.administration")).toContain("members");
   });
 
-  it("hosted Cloud: hides SMTP and OIDC nav items when operator-managed", () => {
+  it("hosted Cloud: workspace nav has general and ai only", () => {
     const groups = filterNavGroups(ALL_NAV_GROUPS, hostedConfig, "free");
     expect(itemIds(groups, "settings.nav.group.workspace")).toEqual(["general", "ai"]);
   });
 
-  it("CE operator-managed: shows gate-only SMTP and OIDC nav items", () => {
-    const groups = filterNavGroups(ALL_NAV_GROUPS, ceOperatorConfig, "free");
-    expect(itemIds(groups, "settings.nav.group.workspace")).toEqual([
-      "general",
-      "smtp",
-      "ai",
-      "oidc",
-    ]);
+  it("CE: workspace nav never shows SMTP or OIDC items", () => {
+    const groups = filterNavGroups(ALL_NAV_GROUPS, selfHostedConfig, "free");
+    const workspaceItems = itemIds(groups, "settings.nav.group.workspace");
+    expect(workspaceItems).not.toContain("smtp");
+    expect(workspaceItems).not.toContain("oidc");
   });
 
   it("hosted: shows entire billing group when billing is enabled", () => {
@@ -91,8 +73,8 @@ describe("settings-nav-config", () => {
     expect(itemIds(groups, "settings.nav.group.administration")).toEqual(["members", "audit"]);
   });
 
-  it("CE operator-managed: billing hidden, members always visible", () => {
-    const groups = filterNavGroups(ALL_NAV_GROUPS, ceOperatorConfig, "free");
+  it("CE: billing hidden, members always visible", () => {
+    const groups = filterNavGroups(ALL_NAV_GROUPS, selfHostedConfig, "free");
     expect(groupLabelKeys(groups)).toEqual([
       "settings.nav.group.account",
       "settings.nav.group.workspace",

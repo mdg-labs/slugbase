@@ -12,8 +12,6 @@ export type NavGroup = {
 };
 
 export type SettingsInterfaceConfig = {
-  mailAdminUi: boolean;
-  oidcAdminUi: boolean;
   billingEnabled: boolean;
 };
 
@@ -32,9 +30,7 @@ export const ALL_NAV_GROUPS: NavGroup[] = [
     labelKey: "settings.nav.group.workspace",
     items: [
       { id: "general", labelKey: "settings.nav.item.general", path: "/settings/workspace" },
-      { id: "smtp", labelKey: "settings.nav.item.smtp", path: "/settings/workspace", section: "smtp" },
       { id: "ai", labelKey: "settings.nav.item.ai", path: "/settings/workspace", section: "ai" },
-      { id: "oidc", labelKey: "settings.nav.item.oidc", path: "/settings/workspace", section: "oidc" },
     ],
   },
   {
@@ -59,13 +55,6 @@ export function isNavItemVisible(
   interfaceConfig: SettingsInterfaceConfig,
   workspacePlan: string,
 ): boolean {
-  // Self-hosted CE: gate-only SMTP/OIDC nav when operator-managed; hosted Cloud hides them.
-  if (item.id === "smtp") {
-    return interfaceConfig.mailAdminUi || !interfaceConfig.billingEnabled;
-  }
-  if (item.id === "oidc") {
-    return interfaceConfig.oidcAdminUi || !interfaceConfig.billingEnabled;
-  }
   // Members are plan-gated only on hosted (spec §12.4): hide when billing
   // is enabled and the workspace plan is not Team. On self-hosted
   // (billingEnabled === false), members are always accessible.

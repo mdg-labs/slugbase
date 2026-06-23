@@ -40,8 +40,6 @@ afterEach(() => {
 });
 
 const ceOperatorConfig: WorkspaceInterfaceConfig = {
-  mailAdminUi: false,
-  oidcAdminUi: false,
   aiByoCredential: false,
   billingEnabled: false,
 };
@@ -72,19 +70,18 @@ describe("WorkspaceSettingsPage", () => {
     expect(view.getByDisplayValue("Acme Engineering")).toBeTruthy();
   });
 
-  it("renders operator-managed SMTP gate on CE when section is smtp", () => {
+  it("falls back to general when section is smtp", () => {
     mockSearchParams.mockReturnValue([new URLSearchParams("section=smtp"), vi.fn()]);
     const view = renderPage();
-    expect(view.getByTestId("workspace-operator-managed-gate")).toBeTruthy();
-    expect(view.getByText("Email managed by operator")).toBeTruthy();
-    expect(view.queryByLabelText("SMTP host")).toBeNull();
+    expect(view.getByLabelText("Workspace name")).toBeTruthy();
+    expect(view.queryByTestId("workspace-operator-managed-gate")).toBeNull();
   });
 
-  it("renders operator-managed OIDC gate on CE when section is oidc", () => {
+  it("falls back to general when section is oidc", () => {
     mockSearchParams.mockReturnValue([new URLSearchParams("section=oidc"), vi.fn()]);
     const view = renderPage();
-    expect(view.getByTestId("workspace-operator-managed-gate")).toBeTruthy();
-    expect(view.getByText("Identity providers managed by operator")).toBeTruthy();
+    expect(view.getByLabelText("Workspace name")).toBeTruthy();
+    expect(view.queryByTestId("workspace-operator-managed-gate")).toBeNull();
   });
 
   it("shows admin-only gate for members", () => {
@@ -120,15 +117,11 @@ function renderAiSection(options: {
 
 describe("AiSection", () => {
   const selfHostByoConfig: WorkspaceInterfaceConfig = {
-    mailAdminUi: true,
-    oidcAdminUi: true,
     aiByoCredential: true,
     billingEnabled: false,
   };
 
   const operatorManagedConfig: WorkspaceInterfaceConfig = {
-    mailAdminUi: false,
-    oidcAdminUi: false,
     aiByoCredential: false,
     billingEnabled: false,
   };

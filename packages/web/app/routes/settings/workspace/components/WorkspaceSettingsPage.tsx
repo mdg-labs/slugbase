@@ -7,7 +7,6 @@ import { useAppToast } from "../../../../components/feedback/AppToastProvider.js
 import { deleteWorkspace, updateAiSettings, updateWorkspaceName } from "../workspace-api.js";
 import {
   canManageWorkspaceSettings,
-  isOperatorManagedWorkspaceSection,
   isWorkspaceSectionVisible,
   listVisibleWorkspaceSections,
 } from "../workspace-entitlements.js";
@@ -19,7 +18,6 @@ import type {
 import { AiSection, defaultAi } from "./AiSection.js";
 import { AdminRoleGate } from "./AdminRoleGate.js";
 import { GeneralSection } from "./GeneralSection.js";
-import { OperatorManagedGate } from "./OperatorManagedGate.js";
 import { SettingsPageShell } from "../../../../components/settings/SettingsPageShell.js";
 
 export interface WorkspaceSettingsPageProps {
@@ -34,15 +32,12 @@ export function WorkspaceSettingsPage({ initialData }: WorkspaceSettingsPageProp
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const { showToast } = useAppToast();
 
-  const visibleSections = useMemo(
-    () => listVisibleWorkspaceSections(initialData.interfaceConfig),
-    [initialData.interfaceConfig],
-  );
+  const visibleSections = useMemo(() => listVisibleWorkspaceSections(), []);
 
-  const sectionParam = searchParams.get("section") as WorkspaceSectionId | null;
-  const section =
-    sectionParam && visibleSections.includes(sectionParam)
-      ? sectionParam
+  const sectionParam = searchParams.get("section");
+  const section: WorkspaceSectionId =
+    sectionParam && visibleSections.includes(sectionParam as WorkspaceSectionId)
+      ? (sectionParam as WorkspaceSectionId)
       : visibleSections[0] ?? "general";
 
   const showError = (message: string) => {
@@ -66,7 +61,7 @@ export function WorkspaceSettingsPage({ initialData }: WorkspaceSettingsPageProp
   }
 
   const renderSection = () => {
-    if (!isWorkspaceSectionVisible(section, initialData.interfaceConfig)) {
+    if (!isWorkspaceSectionVisible(section)) {
       return null;
     }
 
@@ -92,32 +87,6 @@ export function WorkspaceSettingsPage({ initialData }: WorkspaceSettingsPageProp
               showError(err instanceof Error ? err.message : t("settings.workspace.error_generic"));
             }
           }}
-        />
-      );
-    }
-
-    if (
-      section === "smtp" &&
-      isOperatorManagedWorkspaceSection("smtp", initialData.interfaceConfig)
-    ) {
-      return (
-        <OperatorManagedGate
-          titleKey="settings.workspace.smtp.operator_title"
-          bodyKey="settings.workspace.smtp.operator_body"
-          t={t}
-        />
-      );
-    }
-
-    if (
-      section === "oidc" &&
-      isOperatorManagedWorkspaceSection("oidc", initialData.interfaceConfig)
-    ) {
-      return (
-        <OperatorManagedGate
-          titleKey="settings.workspace.oidc.operator_title"
-          bodyKey="settings.workspace.oidc.operator_body"
-          t={t}
         />
       );
     }

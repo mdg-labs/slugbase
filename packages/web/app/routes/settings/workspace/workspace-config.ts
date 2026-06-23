@@ -10,10 +10,7 @@ import type { WorkspaceInterfaceConfig } from "./workspace.types.js";
 
 type ViteEditionEnvKey = Extract<
   EditionPresetKey,
-  | "VITE_BILLING_ENABLED"
-  | "VITE_MAIL_ADMIN_UI"
-  | "VITE_OIDC_ADMIN_UI"
-  | "VITE_AI_BYO_CREDENTIAL"
+  "VITE_BILLING_ENABLED" | "VITE_AI_BYO_CREDENTIAL"
 >;
 
 function readEnv(key: string): string | undefined {
@@ -66,8 +63,6 @@ export async function loadWorkspaceInterfaceConfig(
 ): Promise<WorkspaceInterfaceConfig> {
   const billing = await loadBillingPlanDisplayConfig();
   return {
-    mailAdminUi: readEditionAwareViteBoolean("VITE_MAIL_ADMIN_UI"),
-    oidcAdminUi: readEditionAwareViteBoolean("VITE_OIDC_ADMIN_UI"),
     aiByoCredential: readEditionAwareViteBoolean("VITE_AI_BYO_CREDENTIAL"),
     billingEnabled: billing.billingEnabled,
     ...overrides,
