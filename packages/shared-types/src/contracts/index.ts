@@ -61,12 +61,6 @@ export { tagsContract } from "./tags.contract.js";
 export { workspaceContract } from "./workspace.contract.js";
 export { workspaceSettingsContract } from "./workspace-settings.contract.js";
 export type {
-  MailSettings,
-  UpdateMailSettingsBody,
-  SendTestMailBody,
   AiSettings,
   UpdateAiSettingsBody,
-  OidcProvider,
-  CreateOidcProviderBody,
-  UpdateOidcProviderBody,
 } from "./workspace-settings.contract.js";
