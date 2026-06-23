@@ -129,7 +129,9 @@ export {
 } from "./validation/bookmark-url.js";
 export {
   AiSettingsSchema,
+  MailTransportStatusSchema,
   UpdateAiSettingsBodySchema,
   type AiSettings,
+  type MailTransportStatus,
   type UpdateAiSettingsBody,
 } from "./contracts/workspace-settings.contract.js";

@@ -43,6 +43,17 @@ export type AiProvider = z.infer<typeof AiProviderSchema>;
 export type AiSettings = z.infer<typeof AiSettingsSchema>;
 export type UpdateAiSettingsBody = z.infer<typeof UpdateAiSettingsBodySchema>;
 
+// ─── Mail transport status (spec §11.1, §10.1) ──────────────────────────────
+
+export const MailTransportStatusSchema = z
+  .object({
+    /** True when the runtime mail transport is configured and operational */
+    mailTransportAvailable: z.boolean(),
+  })
+  .strict();
+
+export type MailTransportStatus = z.infer<typeof MailTransportStatusSchema>;
+
 // ─── HTTP contracts ───────────────────────────────────────────────────────────
 
 const errorSchema = z.object({ message: z.string() }).strict();
@@ -67,5 +78,14 @@ export const workspaceSettingsContract = c.router({
       403: errorSchema,
     },
     summary: "Update workspace AI settings (ADMIN+, spec §11.2)",
+  },
+  getMailTransportStatus: {
+    method: "GET",
+    path: "/workspace/settings/mail/status",
+    responses: {
+      200: MailTransportStatusSchema,
+      403: errorSchema,
+    },
+    summary: "Get mail transport availability for Members settings (ADMIN+, spec §11.1)",
   },
 });

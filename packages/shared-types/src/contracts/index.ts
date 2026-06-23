@@ -62,5 +62,6 @@ export { workspaceContract } from "./workspace.contract.js";
 export { workspaceSettingsContract } from "./workspace-settings.contract.js";
 export type {
   AiSettings,
+  MailTransportStatus,
   UpdateAiSettingsBody,
 } from "./workspace-settings.contract.js";
