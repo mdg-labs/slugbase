@@ -128,20 +128,8 @@ export {
   isBookmarkHttpUrl,
 } from "./validation/bookmark-url.js";
 export {
-  MailSettingsSchema,
-  UpdateMailSettingsBodySchema,
-  SendTestMailBodySchema,
   AiSettingsSchema,
   UpdateAiSettingsBodySchema,
-  OidcProviderSchema,
-  CreateOidcProviderBodySchema,
-  UpdateOidcProviderBodySchema,
-  type MailSettings,
-  type UpdateMailSettingsBody,
-  type SendTestMailBody,
   type AiSettings,
   type UpdateAiSettingsBody,
-  type OidcProvider,
-  type CreateOidcProviderBody,
-  type UpdateOidcProviderBody,
 } from "./contracts/workspace-settings.contract.js";
