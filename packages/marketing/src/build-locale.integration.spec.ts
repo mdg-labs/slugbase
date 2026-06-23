@@ -109,5 +109,24 @@ describe("marketing build output", () => {
     expect(enRss).toContain("<rss");
     expect(enRss).toContain(`<link>https://www.slugbase.test</link>`);
     expect(enRss).toContain(t("en", "marketing.nav.brand"));
+
+    const enIntroducingPost = readFileSync(
+      join(packageRoot, "dist/blog/introducing-slugbase/index.html"),
+      "utf8",
+    );
+    const deIntroducingPost = readFileSync(
+      join(packageRoot, "dist/de/blog/slugbase-vorstellung/index.html"),
+      "utf8",
+    );
+
+    expect(enIntroducingPost).toContain("Introducing SlugBase");
+    expect(enIntroducingPost).toContain('lang="en"');
+    expect(enBlog).toContain("Introducing SlugBase");
+    expect(deIntroducingPost).toContain("SlugBase stellt sich vor");
+    expect(deIntroducingPost).toContain('lang="de"');
+    expect(deBlog).toContain("SlugBase stellt sich vor");
+
+    expect(enRss).toContain("Introducing SlugBase");
+    expect(enRss).toContain("SlugBase stellt sich vor");
   });
 });
