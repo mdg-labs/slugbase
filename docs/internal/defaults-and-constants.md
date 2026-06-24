@@ -82,6 +82,31 @@ Machine-readable key list (names only): [`.env.example`](../.env.example). Backe
 
 When adding a new key, follow rule `05-env-vars.mdc` (Phase + `.env.example` + schema + update `environment-variables.md`).
 
+### Per-package versioning (Changesets)
+
+| Constant | Value | Kind | Notes |
+|---|---|---|---|
+| Deployable starting version | `0.1.0` | config | `@slugbase/backend`, `@slugbase/web`, `@slugbase/marketing`, `@slugbase/admin` |
+| Shared library version | `0.0.0` | config | `shared-types`, `ui`, `email-templates`, `db-admin` — Changesets `ignore` |
+| Production deploy floor | `1.0.0` per package | config | Production skips deploy for a surface when that package semver &lt; `1.0.0`; staging has no minimum |
+| Git tag format | `@slugbase/<pkg>@X.Y.Z` | config | Per-package Changesets tags; no root `v*` tag for routine releases |
+| Root `package.json` version | workspace metadata | config | Not a release gate |
+
+### Deploy state (`DEPLOYED_STATE_*`)
+
+Repository variables `DEPLOYED_STATE_staging` and `DEPLOYED_STATE_production` hold JSON per surface. Update a surface entry **only** after that surface's deploy + smoke succeeded.
+
+| Surface key | Tracks |
+|---|---|
+| `api` | Cloud API (Fly) |
+| `web` | Cloud web (CF Worker) |
+| `marketing` | Marketing site (CF Worker) |
+| `admin` | Admin portal (Fly) |
+| `ghcr_api` | CE API image |
+| `ghcr_web` | CE web image |
+
+Each entry: `{ "version": "<package-semver>", "sha": "<short-sha>" }`. Missing or invalid JSON forces a conservative full deploy (all surfaces). Initialize `{}` before enabling selective deploy on an existing environment. Full schema: `environment-variables.md`.
+
 ### Sentry release auto-derivation
 
 Per-package Sentry release identifiers are derived in CI only when the corresponding surface deploys (`deploy_api` / `deploy_web`). Marketing-only deploys do **not** create a Sentry release.

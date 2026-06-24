@@ -63,14 +63,18 @@ _added: 2026-06-22_
 SB-125: Do **not** add a dedicated Cloudflare Worker or `/health`/`/version` on marketing. Staging smoke should assert **HTTP 200 on `MARKETING_ORIGIN` (site root)** only; API/Web keep `/health` + `/version`. CI failure was **302** on `/health`, not missing static files.
 _added: 2026-06-02_
 
-## CI/CD pipeline — PipeWatch pattern (#470 epic, 2026-06-20)
+## CI/CD pipeline — PipeWatch pattern + selective deploy (#470 epic, #532 epic, 2026-06-24)
 
-**Entry points:** `pr.yml` (PRs + version-check), `staging.yml` (CI → deploy + GHCR dev), `main.yml` (CI → prepare-release), `release.yml` (production on release published).
+**Entry points:** `pr.yml` (PRs + version-check), `staging.yml` (CI → selective deploy + GHCR `:dev`), `main.yml` (CI → `changesets.yml`), `release.yml` (production on release published).
 
-**Reusable workflows:** `ci.yml` (parallel lint/typecheck/unit/build/integration/audit/reportportal-summary; GHA `ci` env; Turborepo cache in setup action); `deploy.yml` (sync-secrets → migrate ∥ sentry → parallel api/web/marketing → smoke); `sync-secrets.yml` (GHA → Fly + CF).
+**Reusable workflows:** `ci.yml` (parallel lint/typecheck/unit/build/integration/audit/reportportal-summary; GHA `ci` env; Turborepo cache in setup action); `deploy.yml` (detect-deploy-targets → sync-secrets → migrate ∥ sentry → selective api/web/marketing/admin → smoke → `DEPLOYED_STATE_*` update); `sync-secrets.yml` (GHA → Fly + CF); `changesets.yml` (Version PR, per-package `@slugbase/<pkg>@X.Y.Z` tags, draft release).
 
-Monolith `deploy-staging.yml` / `deploy-production.yml` removed. Secrets: Phase → GHA (automatic); platform runtime via `sync-secrets.sh`. Reference: `docs/internal/ci-cd-example/`. Spec §22; decision #34 → Phase.
-_added: 2026-06-20_
+**Versioning:** Changesets — deployables version independently; root `package.json` is not a release gate. Production deploy skips surfaces with package semver &lt; `1.0.0`.
+
+**CE GHCR:** split `ghcr.io/mdg-labs/slugbase-api` + `slugbase-web` (not a single combined image). API runs `SERVE_WEB_CLIENT=false`.
+
+Monolith `deploy-staging.yml` / `deploy-production.yml` removed. Secrets: Phase → GHA (automatic); platform runtime via `sync-secrets.sh`. Reference: `docs/internal/ci-cd-example/`, `docs/internal/granular-deployment-recommendations.md`. Spec §22; decision #34 → Phase.
+_added: 2026-06-20_ | _updated: 2026-06-24_
 
 ## pnpm test:integration — NEVER wrap with phase (2026-06-01)
 
@@ -105,7 +109,7 @@ _added: 2026-05-31_
 |---|---|
 | Language | TypeScript (strict, no `any`) |
 | Backend | NestJS (DI hosts the config-selected external interfaces) |
-| Web client | React Router v7 (framework mode) — CF Workers (hosted) + Node (self-host image) |
+| Web client | React Router v7 (framework mode) — CF Workers (hosted) + Node (`slugbase-web` GHCR image) |
 | Marketing | Astro (static) on CF Workers |
 | Persistence | Drizzle ORM + Drizzle Kit; PostgreSQL-only at v1 (Neon hosted + self-host Postgres); SQLite self-host deferred |
 | Contracts/validation | Zod + ts-rest (in `shared-types`) → OpenAPI |
@@ -147,7 +151,7 @@ _added: 2026-05-31_
 | Marketing site | **Cloudflare Workers** | Global edge; separately built — spec §19 |
 
 Fly.io `fra` chosen over Railway because Railway's only EU region (Amsterdam) has no collocated Neon Postgres region → cross-region DB latency on every query.
-Self-hosted: combined container image, unaffected by hosted topology.
+Self-hosted: split GHCR images (`slugbase-api` + `slugbase-web`); unaffected by hosted topology.
 Key env vars: `APP_BASE_URL` = Fly.io app domain (or custom), `FRONTEND_ORIGIN` = CF Workers domain.
 **App naming** (decision #51): `slugbase-<env>-<app>` — Fly.io app + CF Worker script names. Set: `slugbase-staging-api` (Fly), `slugbase-staging-web` (CF), `slugbase-staging-marketing` (CF), `slugbase-production-api` (Fly), `slugbase-production-web` (CF), `slugbase-production-marketing` (CF). `<env>` matches GHA deploy environment (`staging`/`production`); **no `development` deployment** (local dev only). These are platform identifiers, not public hostnames. Self-hosted GHCR image is exempt. **No Fly/CF apps exist yet — created during infra setup.**
 Fly scaling: `slugbase-staging-api` **scaled to zero** (`auto_stop_machines`, `min_machines_running = 0`; cold-start on request) — current cost posture. `slugbase-production-api` stays warm (`min_machines_running ≥ 1`). CF Workers (`web`/`marketing`) scale to zero natively.

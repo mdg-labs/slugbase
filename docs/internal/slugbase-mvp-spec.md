@@ -737,19 +737,20 @@ Concurrency: in-progress runs are cancelled for PR and `staging`-push triggers; 
 |---|---|---|
 | `pr.yml` | `pull_request` | CI gate; version check; E2E when `staging → main` |
 | `staging.yml` | push to `staging` | CI gate → staging deploy (+ GHCR CE image tags in parallel) |
-| `main.yml` | push to `main` | CI gate → prepare release (+ GHCR image tags) |
-| `release.yml` | `release` published | Production deploy (idempotent) + GHCR release tags |
+| `main.yml` | push to `main` | CI gate → Changesets Version PR workflow |
+| `release.yml` | `release` published | Production deploy (per-surface idempotent) + GHCR release tags |
+| `changesets.yml` | `main.yml` | Changesets Version PR, per-package tags, draft release |
 
 Reusable workflows (`workflow_call` only — never triggered directly):
 
 | Workflow | Called by | Purpose |
 |---|---|---|
 | `ci.yml` | `pr.yml`, `staging.yml`, `main.yml` | Parallel CI gate |
-| `deploy.yml` | `staging.yml`, `release.yml` | Parameterized deploy chain |
+| `deploy.yml` | `staging.yml`, `release.yml` | Selective deploy chain (target detection → sync-secrets → migrate → deploy → smoke → state update) |
 | `sync-secrets.yml` | `deploy.yml`, manual dispatch | GHA → Fly/CF secret sync |
 | `e2e.yml` | `pr.yml` | Playwright e2e (staging→main PR only) |
-| `prepare-release.yml` | `main.yml` | Version bump, changelog, draft release |
-| `build-and-push-ce-image.yml` | `staging.yml`, `main.yml`, `release.yml` | GHCR CE image |
+| `prepare-release.yml` | `changesets.yml` | Draft GitHub Release from aggregated per-package changelogs |
+| `build-and-push-ce-image.yml` | `staging.yml`, `main.yml`, `release.yml` | GHCR CE images (`slugbase-api`, `slugbase-web`) |
 
 ### 22.3 CI checks (reusable `ci.yml`)
 
@@ -773,41 +774,56 @@ Runs only on the `staging → main` pull request (release-candidate PR). Depends
 
 ### 22.5 Staging deploy (`staging.yml` → `deploy.yml`)
 
-After CI passes on push to `staging`:
+After CI passes on push to `staging`, **`deploy.yml`** runs with `environment: staging`. Deploy scope is **selective** — only surfaces affected by the commit range (or conservatively all surfaces when forced).
 
-1. **`deploy.yml`** with `environment: staging`:
-   - **sync-secrets** — push GHA `staging` environment secrets to Fly.io (`slugbase-staging-api`) and Cloudflare Workers (`slugbase-staging-web`, `slugbase-staging-marketing`) via `.github/scripts/sync-secrets.sh`
-   - **migrate** (parallel with Sentry release derivation) — Drizzle migrations via `.github/scripts/run-migrate.sh` using `DATABASE_URL_UNPOOLED` from GHA secrets
-   - **parallel deploys** — API to Fly.io `fra`; web + marketing to Cloudflare Workers (with retry)
-   - **smoke** — API `GET /health` + `/version`; web health; marketing site root liveness
-2. **GHCR CE image** — built in parallel (tags `dev`, `nightly`, short SHA); hardcoded CE `VITE_*` build args only (no Phase/GHA runtime fetch).
+1. **`detect-deploy-targets`** — `.github/scripts/detect-deploy-targets.sh` uses Turborepo affected output plus an explicit package → target map (see `docs/internal/granular-deployment-recommendations.md`). Emits boolean outputs: `deploy_api`, `deploy_web`, `deploy_marketing`, `deploy_admin`, `run_migrate`, `run_migrate_admin`, `push_ghcr_api`, `push_ghcr_web`, `sync_services`. **Conservative overrides (deploy all):** `workflow_dispatch` with `force_full_deploy: true`; missing or invalid `DEPLOYED_STATE_staging`; first run after enablement.
+2. **`deploy.yml`** chain (each step gated by detection outputs):
+   - **sync-secrets** — push GHA `staging` secrets only to services in `sync_services` (Fly `slugbase-staging-api`, `slugbase-staging-admin`; CF Workers `slugbase-staging-web`, `slugbase-staging-marketing`) via `.github/scripts/sync-secrets.sh`
+   - **migrate** / **migrate-admin** (when flagged; parallel with Sentry release derivation for deployed API/web surfaces) — Drizzle migrations via `.github/scripts/run-migrate.sh` using `DATABASE_URL_UNPOOLED` / admin DB URL from GHA secrets
+   - **parallel deploys** — API to Fly.io `fra`; web + marketing + admin to their platforms (with retry); only for flagged surfaces
+   - **smoke** — per deployed surface: API `GET /health` + `/version`; web health; marketing site root liveness; admin `GET /health`
+   - **update-deployed-state** — merge successful surfaces into repository variable `DEPLOYED_STATE_staging` (JSON per surface: `version` + `sha`; see §22.7)
+3. **GHCR CE images** (when flagged) — build and push **`ghcr.io/mdg-labs/slugbase-api`** and **`ghcr.io/mdg-labs/slugbase-web`** independently. Staging tags: `:dev` per image when that package is in the affected set; hardcoded CE `VITE_*` build args only (no Phase/GHA runtime fetch). API image runs with `SERVE_WEB_CLIENT=false` (same posture as Cloud API).
 
-### 22.6 Prepare release (`main.yml` → `prepare-release.yml`)
+### 22.6 Release versioning (`main.yml` → `changesets.yml`)
 
-Runs after CI passes on push to `main`. Only proceeds if `package.json` version is greater than the latest git tag.
+Deployable packages (`@slugbase/backend`, `@slugbase/web`, `@slugbase/marketing`, `@slugbase/admin`) are versioned **independently** via [Changesets](https://github.com/changesets/changesets) (`privatePackages: { version: true, tag: true }`). Shared libraries (`shared-types`, `ui`, `email-templates`, `db-admin`) stay at `0.0.0` and are ignored. Root `package.json` `version` is workspace metadata only — **not** a release gate.
 
-1. Check version bump.
-2. Verify translations: `pnpm i18n:validate`.
-3. Generate changelog from conventional commits since last tag.
-4. Create annotated git tag `vX.Y.Z` and push.
-5. Create **draft** GitHub Release — a human publishes it to trigger production.
+After CI passes on push to `main`:
 
-Secrets for release preparation come from the GHA environment (Phase-synced) — no runtime Phase fetch in the workflow.
+1. **`changesets.yml`** — Changesets GitHub Action opens or updates a **Version PR** when pending changesets exist.
+2. On Version PR merge — `pnpm version-packages` (`changeset version`) bumps only packages with changesets; `changeset tag` creates per-package annotated tags `@slugbase/<pkg>@X.Y.Z` (no collision between packages).
+3. **`prepare-release.yml`** (invoked from `changesets.yml` when publish runs) — verify `pnpm i18n:validate`; aggregate per-package `CHANGELOG.md` sections into one **draft** GitHub Release (title: comma-separated package list when ≤3 bumped, else calendar date + detail in body). A human publishes the draft to trigger production (§22.7).
+
+Developers add changesets locally via `pnpm changeset` before merging feature work to `main`. Secrets for release preparation come from the GHA environment (Phase-synced) — no runtime Phase fetch in the workflow.
 
 ### 22.7 Production deploy (`release.yml` → `deploy.yml`)
 
-Triggered when a draft release is manually published. Idempotent: compares release tag against `DEPLOYED_VERSION` repository variable; skips deploy if already deployed.
+Triggered **only** when a draft GitHub Release is manually published (`release: published`). Uses the same selective **`deploy.yml`** chain as staging with `environment: production` and `ref: <release tag>`.
+
+**Per-surface idempotency:** repository variable `DEPLOYED_STATE_production` holds the last successfully deployed `version` + `sha` per surface (`api`, `web`, `marketing`, `admin`, `ghcr_api`, `ghcr_web`). Before deploy, compare each flagged surface against the release; skip surfaces already at the target version+SHA. Update entries **only** after that surface's deploy + smoke succeeded — never advance state on partial failure.
+
+**Production version gate:** in production only, clear each `deploy_*` flag when that package's semver is **&lt; `1.0.0`** (staging has no minimum). Surfaces below `1.0.0` continue to receive staging deploys but are skipped in production until they reach GA semver.
 
 | Step | Description |
 |---|---|
-| 1 | Idempotency check |
-| 2 | **`deploy.yml`** with `environment: production`, `ref: <release tag>` — same chain as staging (sync-secrets → migrate ∥ Sentry → parallel deploys → smoke) against `slugbase-production-*` apps |
-| 3 | Write release tag to `DEPLOYED_VERSION` |
-| 4 | GHCR image tags (`latest`, release tag) in parallel with deploy |
+| 1 | Compare release surfaces to `DEPLOYED_STATE_production`; skip already-deployed surfaces |
+| 2 | **`deploy.yml`** — selective chain against `slugbase-production-*` apps (sync-secrets → migrate ∥ Sentry → parallel deploys → smoke) |
+| 3 | Merge successful surfaces into `DEPLOYED_STATE_production` |
+| 4 | GHCR production tags (`:<package-semver>` + `:latest` per image) when `push_ghcr_*` is true |
 
-### 22.8 CE container image
+Legacy aggregate variable `DEPLOYED_VERSION` is deprecated; per-surface state in `DEPLOYED_STATE_*` is authoritative.
 
-On `staging` push, `main` push, and `release` published, the workflow builds and pushes the **combined container image** (API + bundled web client) to GitHub Container Registry (`ghcr.io`), tagged per trigger. CE operators pull and run this image; it is not subject to the Cloud Fly/Workers topology.
+### 22.8 CE container images
+
+CE ships as **two** GHCR images — not a single combined image:
+
+| Image | Contents | Runtime |
+|---|---|---|
+| `ghcr.io/mdg-labs/slugbase-api` | NestJS API (`Dockerfile.api`) | `SERVE_WEB_CLIENT=false`; migrations on bootstrap when enabled |
+| `ghcr.io/mdg-labs/slugbase-web` | React Router v7 Node server (`Dockerfile.web`) | Serves bundled web client |
+
+On `staging` push, `main` push (via Changesets publish), and `release` published, each image is built and pushed **only when its package is in the affected deploy set** (§22.5). Tag scheme: staging `:dev` per image; production `:<package-semver>` (e.g. `:1.0.0`) plus `:latest` per image. CE operators run both containers (documented compose example); images are not subject to the Cloud Fly/Workers topology.
 
 ### 22.9 Secrets in CI and deploy
 

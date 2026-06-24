@@ -106,10 +106,10 @@ Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit w
 - **Files:** `.github/workflows/ci-cd.yml`, `.github/actions/**`
 - **Doc Ref:** spec §22.1–22.3, §22.9; eng §7, §8, §10 · **Deps:** P1-01 · **Status:** [x]
 
-### P1-10 — Container images (combined + API-only) — Infra · Lane P
-- **AC:** API-only + combined (API + bundled web) images; single port; mounted volume for embedded DB; health/version reachable in-container.
-- **Tests:** image builds; container smoke hits `/health` + `/version`.
-- **Files:** `Dockerfile`, `Dockerfile.api`, `.dockerignore`, `fly.toml`, worker config
+### P1-10 — Container images (split CE api + web) — Infra · Lane P
+- **AC:** `Dockerfile.api` + `Dockerfile.web` produce independent GHCR images; API runs `SERVE_WEB_CLIENT=false`; web image serves bundled RR7 client; health/version reachable per container; documented compose wires both services.
+- **Tests:** image builds; container smoke hits `/health` + `/version` on each image.
+- **Files:** `Dockerfile.api`, `Dockerfile.web`, `.dockerignore`, `fly.toml`, worker config
 - **Doc Ref:** spec §14.2, §22.8; eng §10 · **Deps:** P1-03, P1-08 · **Status:** [x]
 
 ---
@@ -475,16 +475,16 @@ Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit w
 - **Files:** `packages/backend/src/openapi/**`
 - **Doc Ref:** spec §18; eng §5 · **Deps:** P1-02 · **Status:** [ ]
 
-### P6-10 — Staging deploy pipeline (Fly + Workers + migration + smoke) — Infra · Lane S
-- **AC:** push-`staging` pipeline: parallel API + web/marketing builds with staging secrets; DB migration; deploy `slugbase-staging-api` (Fly, scale-to-zero) + `slugbase-staging-web`/`-marketing` (Workers, retry); `/health`+`/version` smoke; GitHub Deployment records.
-- **Tests:** workflow validates; staging deploy succeeds + smoke green.
-- **Files:** `.github/workflows/ci-cd.yml`, `fly.toml`, worker deploy config
+### P6-10 — Staging deploy pipeline (selective Fly + Workers + migration + smoke) — Infra · Lane S
+- **AC:** push-`staging` pipeline: `detect-deploy-targets` gates deploy scope; parallel API + web/marketing/admin builds with staging secrets; DB migration when flagged; deploy `slugbase-staging-*` surfaces; per-surface smoke; update `DEPLOYED_STATE_staging`; GitHub Deployment records.
+- **Tests:** workflow validates; staging deploy succeeds + smoke green; marketing-only diff deploys marketing only.
+- **Files:** `.github/workflows/deploy.yml`, `fly.toml`, worker deploy config
 - **Doc Ref:** spec §22.5, §14.7; eng §10 · **Deps:** P1-10, P6-03 · **Status:** [ ]
 
-### P6-11 — Prepare release + production deploy + GHCR image — Infra · Lane S
-- **AC:** push-`main` prepare-release (version-bump check, translations check, changelog, draft release); release-published production deploy (idempotent via `DEPLOYED_VERSION`, `slugbase-production-*`, migration on Neon, smoke); combined CE image pushed to GHCR `vX.Y.Z`+`latest`.
-- **Tests:** workflow validates; dry-run/idempotency check; image builds + pushes.
-- **Files:** `.github/workflows/ci-cd.yml`, release scripts
+### P6-11 — Changesets release + production deploy + split GHCR images — Infra · Lane S
+- **AC:** push-`main` Changesets Version PR (per-package bump + `@slugbase/<pkg>@X.Y.Z` tags); draft aggregate GitHub Release; release-published production deploy (per-surface idempotent via `DEPLOYED_STATE_production`, production `1.0.0` floor); split CE images pushed to GHCR with per-package semver + `:latest`.
+- **Tests:** workflow validates; dry-run/idempotency check; image builds + pushes; marketing-only changeset bumps marketing only.
+- **Files:** `.github/workflows/changesets.yml`, `.github/workflows/release.yml`, release scripts
 - **Doc Ref:** spec §22.6–22.8; eng §10 · **Deps:** P6-10 · **Status:** [ ]
 
 ---

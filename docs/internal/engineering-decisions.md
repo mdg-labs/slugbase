@@ -13,7 +13,7 @@ This doc exists so roadmap tasks and sub-agents have concrete, runnable answers 
 |---|---|---|
 | Language | **TypeScript** (strict, no `any`) | All packages; shared types across boundaries (§19) |
 | Backend | **NestJS** | DI/modules host the config-selected external interfaces (§2.6, §11) — replaces deployment-mode branching; `@nestjs/swagger`/ts-rest → OpenAPI (§18). Runs as a Node container on Fly.io (§14.7) |
-| Web client | **React Router v7** (framework mode) | One app, two adapters: Cloudflare Workers (Cloud SSR) + Node (CE combined image) — §14.2, §14.7 |
+| Web client | **React Router v7** (framework mode) | One app, two adapters: Cloudflare Workers (Cloud SSR) + Node (CE `slugbase-web` image) — §14.2, §14.7 |
 | Marketing | **Astro** (static) | Zero-JS-by-default; separately built; Cloudflare Workers (§2.3, decision #28) |
 | Persistence | **Drizzle ORM** + **Drizzle Kit** | Data-access abstraction (§11.9); PostgreSQL-only at v1 (Neon (Cloud) + CE Postgres); SQLite CE deferred (§16, #32/#41) |
 | Contracts/validation | **Zod** + **ts-rest** | Server validation + env schema; single typed contract → OpenAPI, consumed by backend + web (§18, §19) |
@@ -162,8 +162,8 @@ Every UI string is a catalog key `<scope>.<context>.<descriptor>`; en + de requi
 
 - **App naming:** `slugbase-<env>-<app>` — `<env>` ∈ {`staging`, `production`}, `<app>` ∈ {`api`, `web`, `marketing`}. Platform identifiers, not public hostnames. (decision #51)
 - **Staging API scale-to-zero:** `slugbase-staging-api` runs `auto_stop_machines` + `min_machines_running = 0` (cold-start on request). `slugbase-production-api` stays warm (`≥ 1`). Workers scale to zero natively.
-- **CE:** combined container image (API + bundled web) to GHCR on release; not subject to the Cloud topology or naming.
-- **CI/CD:** PipeWatch-aligned workflow split — `pr.yml` / `staging.yml` / `main.yml` entry points, reusable `ci.yml` + `deploy.yml` + `sync-secrets.yml`; GitHub-hosted runners; branches `staging`/`main` (spec §22; authoritative reference `docs/internal/ci-cd-example/`).
+- **CE:** split GHCR images — `ghcr.io/mdg-labs/slugbase-api` + `ghcr.io/mdg-labs/slugbase-web`; API runs `SERVE_WEB_CLIENT=false`; not subject to Cloud topology or naming.
+- **CI/CD:** PipeWatch-aligned workflow split — `pr.yml` / `staging.yml` / `main.yml` / `changesets.yml` entry points; reusable `ci.yml` + selective `deploy.yml` + `sync-secrets.yml`; per-package Changesets versioning; `DEPLOYED_STATE_staging` / `DEPLOYED_STATE_production` per-surface deploy state; GitHub-hosted runners; branches `staging`/`main` (spec §22; authoritative reference `docs/internal/ci-cd-example/`).
 
 ---
 
