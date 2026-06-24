@@ -20,6 +20,11 @@ const ALLOWED_PATHS = new Set([
   "packages/backend/src/main.bootstrap-migrations.spec.ts",
   "packages/shared-types/src/edition/edition-presets.ts",
   "packages/shared-types/src/edition/edition-presets.spec.ts",
+  // Deployable version seed at 0.1.0 (WP-6 / #538) — version field only.
+  "packages/backend/package.json",
+  "packages/web/package.json",
+  "packages/marketing/package.json",
+  "packages/admin/package.json",
 ]);
 
 function resolveBaseRef(): string {
