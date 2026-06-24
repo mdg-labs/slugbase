@@ -12,10 +12,11 @@
 Restore a **simple, reliable deploy pipeline** where:
 
 1. **Every deploy runs only after CI passes** (lint, typecheck, unit, build, integration, audit — the full gate).
-2. **Deploy decisions use package semver only** — read `version` from each deployable service’s `package.json`, compare to what is already deployed, deploy when the version is **higher**.
+2. **Deploy decisions use live `/version` probes** — read `version` from each service’s `package.json` at the deploy commit; `GET {origin}/version` on the target environment (with retries + backoff); deploy when **intended > live**.
 3. **No path-based or Turbo-affected detection** — no `git diff` file lists, no `turbo run build --dry-run=json --filter=...[REF]`, no “shared lib changed → redeploy everything” heuristics.
-4. **Fewer moving parts** — collapse the current shell-script + workflow indirection into a small, testable core and inline workflow steps where that is clearer.
-5. **Operator control** — `workflow_dispatch` can deploy one service or the full stack to staging or production, including pinned versions / GHCR image rollback, still behind CI on the chosen ref.
+4. **No `DEPLOYED_STATE` repo variables as deploy gate** — live endpoints are authoritative; avoids drift when a post-deploy state-write job fails.
+5. **Fewer moving parts** — collapse the current shell-script + workflow indirection into a small, testable core and inline workflow steps where that is clearer.
+6. **Operator control** — `workflow_dispatch` can deploy one service or the full stack to staging or production, including pinned versions / GHCR image rollback, still behind CI on the chosen ref.
 
 ---
 
@@ -50,13 +51,13 @@ Production deploy must **not** bypass CI. Today `release.yml` runs on `release: 
 |---|---|
 | Deploy on `release: published` (today) | **Reject** — no CI, manual publish step, aggregate `release-YYYY-MM-DD` tag is a poor deploy identity for per-service versions |
 | Auto-publish draft release, then deploy on release | **Reject** — still couples deploy to GitHub Release machinery |
-| **Deploy on `push` → `main` when service version > `DEPLOYED_STATE_production`** | **Adopt** — one workflow run per merge, selective per-surface deploy jobs |
+| **Deploy on `push` → `main` when intended version > live `/version`** | **Adopt** — one workflow run per merge, selective per-surface deploy jobs |
 
 **Why this fits independent service versions:**
 
 - A Changesets Version PR can bump one or more packages in a **single** merge → **one** `main` push → **one** deploy workflow → plan deploys only surfaces whose semver increased (not four separate production runs).
 - `changeset tag` already creates per-package git tags (`@slugbase/backend@1.0.2`) for audit and rollback — those are refs, not deploy triggers.
-- `DEPLOYED_STATE_production` is the source of truth for what is live per surface; GitHub Releases are not.
+- Plan job probes **live** `/version` on the target environment — not repo variables.
 
 **GitHub Releases (decoupled from deploy):** see [GitHub Releases & tags — recommended workflow](#github-releases--tags--recommended-workflow) below.
 
@@ -69,48 +70,118 @@ push main
   ├─ ci                    (full gate — required)
   ├─ changesets            (needs ci — Version PR or tag-packages on publish)
   ├─ prepare-release       (needs changesets, if published — draft only, no deploy dependency)
-  └─ deploy-production     (needs ci — same SHA; version plan vs DEPLOYED_STATE_production)
+  └─ deploy-production     (needs ci — same SHA; plan: intended vs live /version)
        └─ GHCR push        (same plan outputs as deploy jobs)
 ```
 
 `prepare-release` and `deploy-production` may run **in parallel** after their respective `needs` pass — deploy does not wait for the draft release.
 
-### Version-based deploy rule (single rule for both environments)
+### Live `/version` deploy gate — **locked decision**
 
-For each deployable surface `S` with package version `V_current`:
+Deploy planning compares **intended** semver (from `package.json` at the checkout ref) to **live** semver (from each service’s `/version` endpoint in the **target environment**).
 
 ```
-deploy(S) = semver_gt(V_current, V_deployed[S])
+deploy(S) = semver_gt(V_intended, V_live)
 ```
 
-- `V_deployed[S]` comes from the repo variable `DEPLOYED_STATE_{environment}` — JSON map per surface, e.g. `{ "api": { "version": "0.1.1", "sha": "abc1234" }, ... }`.
-- If `DEPLOYED_STATE` is missing or invalid for an environment → **first-run bootstrap**: deploy all surfaces whose version check would pass (staging: all bumped; production: only those ≥ `1.0.0`).
-- **No other inputs** to the deploy decision (no changed paths, no turbo graph, no lockfile-only rules).
+- `V_intended` — `packages/<service>/package.json` `version` at the commit being deployed.
+- `V_live` — `GET {origin}/version` → `{ "version": "x.y.z" }` (shared `VersionResponseSchema` from `@slugbase/shared-types`).
+- **Production additional gate:** deploy only if `V_intended >= 1.0.0` **and** `semver_gt(V_intended, V_live)`.
+- **No `DEPLOYED_STATE`**, no turbo, no path rules — live data only (with explicit bootstrap rules below).
+
+#### `/version` on all four services (parity)
+
+Every deployable surface exposes a dedicated **`GET /version`** JSON probe. **`/health` stays health-only** (`{ status: "ok" }`) — do not embed version in `/health`; keep parity across services.
+
+| Surface | Package | Origin (GHA env var) | `/version` today | Implementation work |
+|---|---|---|---|---|
+| API | `@slugbase/backend` | `APP_BASE_URL` | Yes | None — already split from `/health` |
+| Web | `@slugbase/web` | `FRONTEND_ORIGIN` | Yes | None |
+| Marketing | `@slugbase/marketing` | `MARKETING_ORIGIN` | Yes (prerendered Astro route) | Update smoke/plan to use `/version` instead of site root only |
+| Admin | `@slugbase/admin` | `ADMIN_URL` | **Missing** | Add `GET /version` → `{ version }` from `package.json`; `/health` unchanged |
+
+Contract (all surfaces): `VersionResponseSchema` — `{ "version": "<semver>" }`, `Content-Type: application/json`, HTTP 200.
+
+Version is **build-time** baked (package.json at image/worker build) — same as today for API/web/marketing.
+
+#### Plan job: probe live versions
+
+`resolve-deploy-plan.mjs` (in `scripts/ci/`):
+
+1. Read `V_intended` for all four packages from the checkout (no network).
+2. For each surface, `GET {origin}/version` with **retries + exponential backoff** (e.g. 6 attempts, 2s base, cap ~30s total per surface).
+3. Parse JSON; validate semver; set `V_live`.
+4. Emit deploy flags + `skip_reasons` (job summary).
+
+**Parallel probes** per surface are fine; failures are per-surface.
+
+#### Cloudflare Access on **staging** (required)
+
+Staging hostnames sit behind **Cloudflare Access**. Probes **must** send service-token headers on every staging request (same as smoke today):
+
+```http
+CF-Access-Client-Id: {CF_ACCESS_CLIENT_ID}
+CF-Access-Client-Secret: {CF_ACCESS_CLIENT_SECRET}
+```
+
+| Environment | CF Access headers |
+|---|---|
+| **staging** | **Required** when `CF_ACCESS_CLIENT_ID` + `CF_ACCESS_CLIENT_SECRET` are set in the GHA `staging` environment |
+| **production** | Omit unless production is later placed behind Access |
+
+**Without headers on staging**, probes get **403** (or similar) — the plan must **not** treat that as `V_live = 0.0.0` bootstrap. Missing or failed Access auth → **fail the plan** with a clear error after retries.
+
+Production probes use public URLs only (no Access headers unless config is added later).
+
+#### First deploy & unreachable endpoints (bootstrap)
+
+When an environment has **never been deployed** (today: **production** — only staging is live), `/version` probes will fail (connection refused, DNS NXDOMAIN, 404, 502, timeout).
+
+**Bootstrap rule (locked):** after retries are exhausted, if the probe fails with an **infrastructure / not-deployed** outcome, treat `V_live = 0.0.0` for that surface and **allow deploy** when `V_intended` passes environment gates (`>= 1.0.0` on production).
+
+| Probe outcome | `V_live` | Deploy if `V_intended` qualifies? |
+|---|---|---|
+| 200 + valid `{ version }` | parsed semver | `semver_gt(V_intended, V_live)` |
+| Not deployed / unreachable (refused, NXDOMAIN, 404, 502, timeout after retries) | `0.0.0` | **Yes** — first deploy bootstrap |
+| **403** on staging (likely missing CF Access headers) | — | **Fail plan** — misconfiguration |
+| 200 on `/health` but `/version` missing | — | **Fail plan** — implement `/version` |
+| Service was deployed; `/version` still failing after retries | — | **Fail plan** — do not silently skip or redeploy-all |
+
+**First production cutover:** all four production URLs may bootstrap as `0.0.0` → first Version PR merge with `backend`/`web` ≥ `1.0.0` deploys those surfaces; marketing/admin deploy when their versions qualify. No manual `DEPLOYED_STATE` seeding required.
+
+**Staging** is already deployed — live probes should return real versions; bootstrap should rarely trigger except net-new surfaces.
+
+#### Retire `DEPLOYED_STATE`
+
+| Item | Action |
+|---|---|
+| `DEPLOYED_STATE_staging` / `DEPLOYED_STATE_production` repo variables | **Remove** — not used for deploy planning |
+| `update-deployed-state` deploy job | **Delete** |
+| `scripts/update-deployed-state.mjs` | **Delete** (or keep briefly for one-time migration read only) |
+| `DEPLOYED_VERSION` | **Remove** |
+
+Optional: log `{ surface, intended, live, deploy }` in the plan job summary and workflow annotations — no persistent variable.
 
 #### Staging (`push` → `staging`)
 
 After CI succeeds:
 
-1. Read the four service versions from the commit being deployed.
-2. Compare each to `DEPLOYED_STATE_staging`.
-3. Deploy only surfaces where `V_current > V_deployed`.
-4. Run `sync-secrets` only for surfaces being deployed.
-5. Run migrations only when API or admin is deploying.
-6. On successful smoke → update `DEPLOYED_STATE_staging` for deployed surfaces.
+1. Plan job probes **staging** origins with **CF Access headers**.
+2. Compare `V_intended` vs `V_live` per surface.
+3. Deploy surfaces where `semver_gt(V_intended, V_live)`.
+4. `sync-secrets` / migrate only for deploying surfaces.
+5. Post-deploy smoke (still validates `/health` + `/version` with same Access headers).
 
 #### Production (`push` → `main`)
 
-Triggered automatically on every `main` push (including Version PR merges). **Not** triggered by `release: published`.
-
 After CI succeeds:
 
-1. Read service versions from the pushed commit’s `package.json` files.
-2. Same version comparison against `DEPLOYED_STATE_production`.
-3. **Additional gate:** a surface deploys only if `V_current >= 1.0.0` **and** `V_current > V_deployed`.
-4. Surfaces still on `0.x` are skipped with a clear log reason (not a silent failure).
-5. GHCR image push (`:semver` + `:latest`) follows the same version bump — push API image when `@slugbase/backend` version increased; push web image when `@slugbase/web` increased.
+1. Plan job probes **production** origins (no CF Access unless later required).
+2. Bootstrap `V_live = 0.0.0` for unreachable surfaces (first prod deploy).
+3. Deploy where `V_intended >= 1.0.0` and `semver_gt(V_intended, V_live)`.
+4. GHCR push follows same plan outputs for api/web.
 
-**Example:** Version PR merges with `backend@1.0.2` and `web@1.0.1` bumped → one `main` push → one deploy workflow → `deploy_api` + `deploy_web` jobs run; marketing and admin skipped.
+**Example:** Production never deployed; `backend@1.0.2` on `main` → live probe fails → `V_live = 0.0.0` → deploy API. Web still `1.0.1` intended, live `0.0.0` → deploy web too if ≥ `1.0.0`.
 
 ### What explicitly does **not** gate deploys
 
@@ -183,7 +254,7 @@ SlugBase API 1.0.2 · Web 1.0.1
 push main
   → ci
   → changesets (Version PR merge → published=true + published-packages JSON)
-  → deploy-production (semver vs DEPLOYED_STATE; may deploy api and/or web)
+  → deploy-production (intended vs live /version; may deploy api and/or web)
   → prepare-release   ← only when gate below passes
 ```
 
@@ -277,7 +348,7 @@ pnpm exec turbo run build --dry-run=json --filter=...[BASE_REF]
 
 via `scripts/with-ci-env.sh`, but the **detect jobs** in `staging.yml`, `deploy.yml`, and `release.yml` only `actions/checkout` — they never run `.github/actions/setup` (pnpm install). Turbo is not available in `node_modules`; the call fails, `collectAffectedPackages()` returns `[]`, and deploy targets fall through to path rules or end up empty.
 
-**Symptom:** pushes that should deploy nothing do nothing; pushes that should deploy something often do nothing too; `force_full_deploy` and missing `DEPLOYED_STATE` mask the bug intermittently.
+**Symptom:** pushes that should deploy nothing do nothing; pushes that should deploy something often do nothing too; `force_full_deploy` masks the bug intermittently.
 
 ### 2. Fragile multi-signal detection
 
@@ -287,7 +358,7 @@ via `scripts/with-ci-env.sh`, but the **detect jobs** in `staging.yml`, `deploy.
 |---|---|---|
 | Turbo affected packages | `--filter=...[BASE_REF]` | Needs install + valid base ref; breaks on shallow checkout, first push, force-push |
 | Git changed paths | `git diff --name-only` | Duplicates turbo; special-cases lockfile/workflows → full redeploy |
-| Production idempotency | `DEPLOYED_STATE` + SHA match | Correct idea, but applied **after** turbo/path noise |
+| Production idempotency | `DEPLOYED_STATE` + SHA match | Replaced by live `/version` probes |
 
 Path rules (`PATH_RULES`) and `PACKAGE_TARGET_MAP` for shared libs mean a lockfile or workflow edit can force a **full** redeploy even when no service version changed — the opposite of the desired model.
 
@@ -299,7 +370,7 @@ Path rules (`PATH_RULES`) and `PACKAGE_TARGET_MAP` for shared libs mean a lockfi
 
 **Locked:** **push to `main`** → CI → version compare → production deploy.
 
-**Current:** `main.yml` runs CI + Changesets only; production deploy is on **GitHub Release publish** (`release.yml`). That splits “code landed on main” from “deploy ran”, requires a manual publish step, and does not align with per-service semver + `DEPLOYED_STATE`.
+**Current:** `main.yml` runs CI + Changesets only; production deploy is on **GitHub Release publish** (`release.yml`). That splits “code landed on main” from “deploy ran”, requires a manual publish step, and does not align with live `/version` gating.
 
 ### 5. Too many shell wrappers in `.github/scripts/`
 
@@ -316,9 +387,9 @@ Keep: platform-specific scripts that truly need bash (`sync-secrets.sh`, `flyctl
 
 `version-check.yml` still requires **every** workspace `package.json` to match the **root** version. Granular deployment introduced independent service versions (`backend` `0.1.1`, `shared-types` `0.0.0`, etc.). This check is either dead, failing, or blocking the model we want.
 
-### 7. `DEPLOYED_STATE` bootstrap forces full deploy
+### 7. `DEPLOYED_STATE` can drift from reality
 
-When `DEPLOYED_STATE` is missing, detect forces `force_full_deploy=true`. Combined with broken turbo detection, this creates unpredictable “deploy everything” vs “deploy nothing” behaviour.
+Repo-variable deploy state is updated in a **separate job after smoke**. If that job fails (runner timeout, `gh variable set` error), the next run either spuriously redeploys or skips incorrectly. **Live `/version` probes eliminate this failure class.**
 
 ---
 
@@ -328,42 +399,48 @@ When `DEPLOYED_STATE` is missing, detect forces `force_full_deploy=true`. Combin
 flowchart TD
   subgraph staging [Push to staging]
     S_CI[ci.yml — full gate]
-    S_VER[Compare service versions vs DEPLOYED_STATE_staging]
+    S_PROBE[Probe live /version + CF Access headers]
     S_DEP[deploy changed surfaces only]
-    S_STATE[Update DEPLOYED_STATE_staging]
-    S_CI --> S_VER --> S_DEP --> S_STATE
+    S_SMOKE[smoke /health + /version]
+    S_CI --> S_PROBE --> S_DEP --> S_SMOKE
   end
 
   subgraph main [Push to main]
     M_CI[ci.yml — full gate]
     M_CS[changesets.yml — Version PR or tag-packages]
     M_REL[prepare-release — draft GitHub Release only]
-    M_VER[Compare service versions vs DEPLOYED_STATE_production + 1.0.0 gate]
+    M_PROBE[Probe live /version — bootstrap 0.0.0 if unreachable]
     M_DEP[deploy changed surfaces only]
     M_GHCR[GHCR push for bumped api/web]
-    M_STATE[Update DEPLOYED_STATE_production]
+    M_SMOKE[smoke]
     M_CI --> M_CS
-    M_CI --> M_VER
+    M_CI --> M_PROBE
     M_CS --> M_REL
-    M_VER --> M_DEP --> M_STATE
-    M_VER --> M_GHCR
+    M_PROBE --> M_DEP --> M_SMOKE
+    M_PROBE --> M_GHCR
   end
 ```
 
 ### One deploy decision function
 
-Replace `detect-deploy-targets.mjs` + `check-production-deploy-needed.mjs` + bash wrapper with a **single** module, e.g. `scripts/resolve-deploy-plan.mjs`:
+Replace `detect-deploy-targets.mjs` + `check-production-deploy-needed.mjs` + bash wrapper with a **single** module: `scripts/ci/resolve-deploy-plan.mjs`.
 
 **Inputs:**
 
 - `environment`: `staging` | `production`
 - `deployMode`: `auto` | `manual` (default `auto`)
-- `packageVersions`: `{ "@slugbase/backend": "0.1.2", ... }` (read from checkout at `git_ref` — plain `fs`, no turbo)
-- `deployedStateJson`: from `vars.DEPLOYED_STATE_{environment}`
+- `packageVersions`: `{ "@slugbase/backend": "0.1.2", ... }` (read from checkout at `git_ref`)
+- `probeOrigins`: per-surface base URLs from GHA env (`APP_BASE_URL`, `FRONTEND_ORIGIN`, `MARKETING_ORIGIN`, `ADMIN_URL`)
+- `cfAccessClientId` / `cfAccessClientSecret`: required for **staging** probes
 - `minProductionVersion`: `1.0.0` (production only)
-- `manualServices`: list of surfaces (manual mode only)
-- `versionOverrides`: optional per-surface version pins (manual / rollback)
-- `imageSource`: `build` | `registry` (manual API/web GHCR rollback)
+- `manualServices`, `versionOverrides`, `imageSource`: manual mode only
+- `probeRetries` / `probeBackoffMs`: retry policy (defaults documented in module)
+
+**Probe behaviour:**
+
+- `GET {origin}/version` with staging CF Access headers when `environment === staging`.
+- Exponential backoff on transient errors.
+- Classify outcomes: **live semver** | **bootstrap `0.0.0`** | **fail plan** (see bootstrap table above).
 
 **Outputs:**
 
@@ -385,7 +462,7 @@ Unit tests already exist for parts of this (`detect-deploy-targets.spec.ts`, etc
 | `main.yml` | `push` + `workflow_dispatch` → `ci` → `changesets` → `deploy` (production, needs ci) + `prepare-release` (draft only) + GHCR semver push |
 | `deploy.yml` | Reusable; accepts `git_ref`, `deploy_mode`, `services`, version overrides, `image_source` |
 | `ci.yml` | Reusable CI gate (unchanged structure) |
-| `deploy.yml` (cont.) | Chain: `plan` → `sync-secrets` → migrate → deploy jobs → smoke → `DEPLOYED_STATE` |
+| `deploy.yml` (cont.) | Chain: `plan` (live probes) → `sync-secrets` → migrate → deploy jobs → smoke |
 | `pr.yml` | CI only |
 | `sync-secrets.yml` | Keep as reusable workflow |
 
@@ -394,18 +471,12 @@ Unit tests already exist for parts of this (`detect-deploy-targets.spec.ts`, etc
 - **`release.yml`** — delete as deploy entry point. Production deploy lives in `main.yml` (`needs: [ci]`). GitHub Releases remain changelog-only via `prepare-release.yml`.
 - Duplicate `detect-ghcr-targets` jobs in `staging.yml` / `release.yml` — GHCR push predicates come from the same `plan` job outputs as Fly/CF deploys.
 
-### `DEPLOYED_STATE` (keep, simplify semantics)
-
-Keep repo variables `DEPLOYED_STATE_staging` and `DEPLOYED_STATE_production`. Each surface stores `{ version, sha }` after successful smoke.
-
-**Version compare is the deploy gate.** SHA match is useful for logging and idempotency (“re-run workflow on same commit”) but must **not** be a second conflicting gate — if version is unchanged, skip; if version bumped, deploy even when SHA differs.
-
 ### Automatic vs manual deploy modes
 
 | Mode | Trigger | Plan logic |
 |---|---|---|
-| **Automatic** (default) | `push` to `staging` / `main` | Semver compare vs `DEPLOYED_STATE` (rules above) |
-| **Manual** | `workflow_dispatch` on deploy workflow | Operator-selected surfaces, ref, and optional target versions — **no path/turbo detection** |
+| **Automatic** (default) | `push` to `staging` / `main` | `semver_gt(V_intended, V_live)` from live `/version` probes |
+| **Manual** | `workflow_dispatch` | Operator-selected surfaces + optional version pins — **no live compare** (deploy selected surfaces regardless of live version) |
 
 Automatic pushes never deploy on path changes alone. Manual dispatches never need a version *increase* — they are how operators redeploy or roll back on purpose.
 
@@ -434,14 +505,13 @@ Operators must be able to deploy from the GitHub Actions UI (or `gh workflow run
 
 When `deploy_mode=manual`:
 
-1. **Selected surfaces deploy** regardless of whether semver increased vs `DEPLOYED_STATE`.
-2. **Version labels** for Sentry, smoke summaries, and `DEPLOYED_STATE` use explicit `*_version` inputs when set; otherwise the version from `package.json` at `git_ref`.
-3. **Production ≥ `1.0.0` gate** still applies unless the operator sets an explicit pin ≥ `1.0.0` (rollback to `0.x` on production is blocked by design).
-4. **Migrations** run when `api` or `admin` is in the selected set (same as automatic).
-5. **`sync-secrets`** runs only for selected surfaces.
-6. On success, **`DEPLOYED_STATE` is updated** to the deployed version + SHA — including rollbacks (state reflects what is *live*, not “highest ever”).
+1. **Selected surfaces deploy** regardless of live `/version` (rollback / redeploy without bump).
+2. **Version labels** for Sentry and smoke use explicit `*_version` inputs when set; otherwise `package.json` at `git_ref`.
+3. **Production ≥ `1.0.0` gate** on intended version unless operator pins ≥ `1.0.0`.
+4. **Migrations** / **sync-secrets** for selected surfaces only.
+5. Plan summary logs intended vs live for audit — no repo variable write.
 
-When `deploy_mode=auto` on `workflow_dispatch`, behaviour matches a normal push (useful to re-run a skipped deploy after fixing `DEPLOYED_STATE` without a new commit).
+When `deploy_mode=auto` on `workflow_dispatch`, behaviour matches a normal push (live probes + semver compare).
 
 #### Single service vs whole stack
 
@@ -485,17 +555,17 @@ Automatic path unchanged. Manual path sets deploy flags directly from `manualSer
 
 #### Audit / safety
 
-- Job summary lists: mode, `git_ref`, selected services, resolved versions, `image_source`.
+- Plan summary lists: mode, `git_ref`, selected services, intended vs live versions, `image_source`.
 - Manual production runs use the `production` GHA environment (approval rules unchanged).
-- `DEPLOYED_STATE` after rollback shows the rolled-back version so the next automatic push only deploys if semver increases again.
+- After rollback, the **next automatic** run compares live `/version` (rolled-back) vs `package.json` — no variable to fix.
 
-### First-run bootstrap (operator only)
+### First-run bootstrap (summary)
 
 | Condition | Behaviour |
 |---|---|
-| Missing / invalid `DEPLOYED_STATE` on automatic push | Deploy all surfaces that pass environment gates (production: ≥ `1.0.0` only), then write state |
-
-No other “smart” detection on automatic pushes.
+| Live `/version` unreachable after retries (not deployed yet) | `V_live = 0.0.0` → deploy if `V_intended` passes environment gates |
+| Staging probe without CF Access headers | **Fail plan** (403 ≠ bootstrap) |
+| All surfaces live | Normal `semver_gt(V_intended, V_live)` |
 
 ---
 
@@ -525,7 +595,7 @@ No other “smart” detection on automatic pushes.
 |---|---|
 | `.github/scripts/detect-deploy-targets.sh` embeds Node heredoc → `scripts/detect-deploy-targets.mjs` | Untested bash glue; turbo without install |
 | `.github/scripts/derive-sentry-release.sh` → `scripts/derive-sentry-release.mjs` | Same |
-| `.github/scripts/update-deployed-state.sh` → `scripts/update-deployed-state.mjs` | Same |
+| `.github/scripts/update-deployed-state.sh` | **Delete** — `DEPLOYED_STATE` retired |
 | `create-draft-release.mjs` under `.github/scripts/` | Wrong tree; only `scripts/ci/` |
 | 20 files in `.github/scripts/` | Hides pipeline in shell indirection |
 
@@ -540,7 +610,7 @@ No other “smart” detection on automatic pushes.
 | `detect-deploy-targets.sh` | `node scripts/ci/resolve-deploy-plan.mjs` |
 | `check-production-deploy-needed.sh` | merged into `resolve-deploy-plan.mjs` |
 | `derive-sentry-release.sh` | `node scripts/ci/derive-sentry-release.mjs` (move from `scripts/`) |
-| `update-deployed-state.sh` | `node scripts/ci/update-deployed-state.mjs` (move from `scripts/`) |
+| `update-deployed-state.sh` | **Delete** |
 
 #### Move to `scripts/ci/` (keep behaviour, single home)
 
@@ -564,7 +634,7 @@ No other “smart” detection on automatic pushes.
 |---|---|
 | `scripts/detect-deploy-targets.mjs` | **Delete** — superseded by `resolve-deploy-plan.mjs` |
 | `scripts/check-production-deploy-needed.mjs` | **Delete** — merged |
-| `scripts/update-deployed-state.mjs` | `scripts/ci/update-deployed-state.mjs` |
+| `scripts/update-deployed-state.mjs` | **Delete** |
 | `scripts/derive-sentry-release.mjs` | `scripts/ci/derive-sentry-release.mjs` |
 | `scripts/detect-deploy-targets.spec.ts` | `scripts/ci/resolve-deploy-plan.spec.ts` |
 
@@ -581,11 +651,15 @@ No other “smart” detection on automatic pushes.
 ### What workflows should call (examples)
 
 ```yaml
-# Plan — no pnpm install required
+# Plan — probes live /version (CF Access on staging); no pnpm install required
 - run: node scripts/ci/resolve-deploy-plan.mjs
-
-# State update — no bash wrapper
-- run: node scripts/ci/update-deployed-state.mjs
+  env:
+    APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+    FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
+    MARKETING_ORIGIN: ${{ vars.MARKETING_ORIGIN }}
+    ADMIN_URL: ${{ secrets.ADMIN_URL }}
+    CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+    CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
 
 # Platform — bash in scripts/ci only
 - run: bash scripts/ci/deploy-fly.sh api
@@ -629,7 +703,7 @@ Optional hardening:
 
 Deploy signals come from **service `package.json` version bumps**, typically via Changesets on `main`:
 
-1. Feature work merges to `staging` (versions may stay unchanged → **no staging deploy** if state already matches).
+1. Feature work merges to `staging` (versions may stay unchanged → **no staging deploy** if live `/version` already matches).
 2. When ready to release, add a changeset; the Changesets Version PR bumps affected package(s) on `main`.
 3. Merge Version PR → **one** push to `main` → CI → **automatic** production deploy for bumped services only (no GitHub Release publish step).
 4. Optionally publish the draft GitHub Release for changelog visibility — does not affect deploy.
@@ -642,19 +716,20 @@ Document this in `docs/internal/local-development.md` / engineering-decisions wh
 
 ## Migration / cutover checklist (implementation phase)
 
-1. Implement `scripts/ci/resolve-deploy-plan.mjs` + tests; delete turbo/path logic and `.github/scripts/detect-deploy-targets.sh`.
-2. Create `scripts/ci/`; migrate remaining deploy scripts; update all workflow paths; delete `.github/scripts/`.
-3. Wire `deploy.yml` plan job: `node scripts/ci/resolve-deploy-plan.mjs` (no pnpm install required for plan).
-4. Fix `staging.yml` / `main.yml` so deploy always `needs: [ci]`.
-5. Move production deploy from `release.yml` to `main.yml` (`needs: [ci]`); delete `release.yml`; keep `prepare-release.yml` as draft-only changelog.
-6. Align GHCR jobs to plan outputs (remove duplicate detect jobs).
-7. Fix or remove `version-check.yml` root-version equality check.
-8. Update `create-draft-release.mjs` → `scripts/ci/` (backend + web scope, both versions in title).
-9. Seed / verify `DEPLOYED_STATE_staging` and `DEPLOYED_STATE_production` before cutover.
-10. Update `validate-sync-secrets-manifest.ts` and specs for `scripts/ci/` paths.
-11. Delete obsolete modules and update `engineering-decisions.md` §10 / spec §22 references.
-12. Run manual `workflow_dispatch` tests: single service, `all`, pinned version, and registry rollback on staging.
-13. Document operator runbook (manual deploy + rollback) in `docs/internal/` when implemented.
+1. Implement `scripts/ci/resolve-deploy-plan.mjs` (live `/version` probes, CF Access, bootstrap) + `scripts/ci/probe-version.mjs` helper + tests.
+2. Add `GET /version` to **admin**; confirm marketing `/version` route; update smoke to probe `/version` on all four surfaces.
+3. Create `scripts/ci/`; migrate remaining deploy scripts; update all workflow paths; delete `.github/scripts/`.
+4. Wire `deploy.yml` plan job with staging CF Access env vars; remove `update-deployed-state` job; delete `DEPLOYED_STATE_*` repo variables.
+5. Fix `staging.yml` / `main.yml` so deploy always `needs: [ci]`.
+6. Move production deploy from `release.yml` to `main.yml` (`needs: [ci]`); delete `release.yml`; keep `prepare-release.yml` as draft-only changelog.
+7. Align GHCR jobs to plan outputs (remove duplicate detect jobs).
+8. Fix or remove `version-check.yml` root-version equality check.
+9. Update `create-draft-release.mjs` → `scripts/ci/` (backend + web scope, both versions in title).
+10. **First production deploy:** verify bootstrap (`V_live = 0.0.0`) deploys surfaces with `V_intended >= 1.0.0` without manual seeding.
+11. Update `validate-sync-secrets-manifest.ts` and specs for `scripts/ci/` paths.
+12. Delete obsolete modules (`detect-deploy-targets`, `check-production-deploy-needed`, `update-deployed-state`) and update `engineering-decisions.md` §10 / spec §22 references.
+13. Run manual `workflow_dispatch` tests: single service, `all`, pinned version, and registry rollback on staging.
+14. Document operator runbook (manual deploy + rollback) in `docs/internal/` when implemented.
 
 ---
 
@@ -662,10 +737,13 @@ Document this in `docs/internal/local-development.md` / engineering-decisions wh
 
 | Decision | Resolution |
 |---|---|
-| **Production deploy trigger** | `push` → `main` after CI; semver vs `DEPLOYED_STATE_production`; **not** `release: published` |
-| **GitHub Releases** | One **aggregate** draft per customer-facing prod ship (**API + Web** only); title shows both current versions; trigger after deploy-success for api/web or Changesets publish filter; **does not gate deploy** |
-| **Per-service versioning** | Independent semver per deployable package; shared libs stay `0.0.0` / Changesets `ignore` |
-| **Deploy plan signal** | Version bump only — no path/turbo detection |
+| **Production deploy trigger** | `push` → `main` after CI; **live `/version`** vs intended semver; **not** `release: published` |
+| **Deploy plan signal** | `semver_gt(V_intended, V_live)` from `GET /version` on target environment — no path/turbo, no `DEPLOYED_STATE` |
+| **Staging probes** | CF Access service-token headers on all `/version` requests |
+| **`/version` on all surfaces** | Dedicated `GET /version` per service; `/health` health-only; **add admin** `/version` |
+| **First prod deploy** | Unreachable `/version` → `V_live = 0.0.0` bootstrap — no variable seeding |
+| **GitHub Releases** | Aggregate draft (**API + Web** only); does not gate deploy |
+| **Per-service versioning** | Independent semver per deployable; shared libs `0.0.0` / Changesets `ignore` |
 | **CI before deploy** | Always, including production and manual `workflow_dispatch` |
 | **CI/deploy scripts** | Single tree: `scripts/ci/` only; **delete** `.github/scripts/`; workflows call Node or bash there directly — no bash→Node wrappers |
 
@@ -675,7 +753,8 @@ Document this in `docs/internal/local-development.md` / engineering-decisions wh
 
 | Version | Role | Example |
 |---|---|---|
-| **Per-service** (`packages/*/package.json`) | Deploy gate, Sentry release, GHCR `:semver`, rollback refs | `backend@1.0.2` |
+| **Per-service** (`packages/*/package.json`) | Intended deploy version, Sentry release, GHCR `:semver`, rollback refs | `backend@1.0.2` |
+| **Live `/version`** | Authoritative **live** semver per environment | `GET APP_BASE_URL/version` → `1.0.1` |
 | **Per-package git tags** (`changeset tag`) | Audit, manual `git_ref` | `@slugbase/backend@1.0.2` |
 | **Aggregate GitHub Release tag** (`prepare-release`) | Changelog bundle identifier | `release-2026-06-24` |
 | **Root** (`package.json` at repo root) | Workspace metadata only — may stay static or bump independently | `0.1.5` (unchanged across service releases) |
@@ -690,7 +769,7 @@ Document this in `docs/internal/local-development.md` / engineering-decisions wh
 
 - `version-check.yml` — delete the “all packages must match root version” rule (or remove the workflow).
 - Any CI/docs still deriving `VITE_SENTRY_RELEASE` from root version — use per-package version (already the direction in `derive-sentry-release.sh`).
-- `DEPLOYED_VERSION` repo variable — retire; `DEPLOYED_STATE_production` is authoritative per surface.
+- `DEPLOYED_VERSION` / `DEPLOYED_STATE_*` repo variables — **delete**; live `/version` is authoritative.
 
 **Optional later (not required):** a “workspace marketing version” bumped only when `prepare-release` runs, for comms only — still must not gate deploy or replace per-service semver. Not recommended until there is a concrete consumer.
 
@@ -719,10 +798,14 @@ Document this in `docs/internal/local-development.md` / engineering-decisions wh
 - [ ] No job uses `git diff` path lists for deploy planning.
 - [ ] Production path never runs without a successful CI job on the same SHA.
 - [ ] Plan resolver has unit tests; workflow YAML readable without opening five bash files.
-- [ ] Failed deploy does not advance `DEPLOYED_STATE` for that surface.
+- [ ] Staging plan job sends CF Access headers; without them the plan **fails** (not bootstrap).
+- [ ] First production deploy: unreachable prod `/version` → bootstrap `0.0.0` → deploys eligible surfaces without seeding repo variables.
+- [ ] After successful deploy, live `/version` matches intended; failed post-deploy variable write is N/A (`DEPLOYED_STATE` removed).
+- [ ] Admin exposes `GET /version`; smoke checks `/version` on all four surfaces.
 - [ ] `workflow_dispatch` deploys a **single** service to staging/production after CI, without a version bump on push.
 - [ ] `workflow_dispatch` with `services=all` deploys the full stack to staging/production.
 - [ ] Manual deploy with `git_ref` + `api_version` (or `image_source=registry`) can roll back API on staging; production rollback respects ≥ `1.0.0`.
+- [ ] After rollback, live `/version` reflects rolled-back semver; next automatic run uses live compare.
 - [ ] `rg '\.github/scripts'` returns no hits in workflows or active scripts.
 - [ ] No bash script exists whose only job is to invoke a `.mjs` file.
 
@@ -737,6 +820,7 @@ Document this in `docs/internal/local-development.md` / engineering-decisions wh
 | `.github/workflows/release.yml` | **Delete** — production deploy moves to `main.yml` |
 | `.github/workflows/prepare-release.yml` | **Keep** — draft GitHub Release only, no deploy dependency |
 | `.github/workflows/deploy.yml` | 500+ line reusable deploy chain |
-| `scripts/detect-deploy-targets.mjs` | Turbo + path + version + DEPLOYED_STATE |
+| `scripts/detect-deploy-targets.mjs` | Turbo + path — **delete**; replaced by live `/version` plan |
+| `scripts/update-deployed-state.mjs` | **Delete** — `DEPLOYED_STATE` retired |
 | `scripts/check-production-deploy-needed.mjs` | Overlapping production logic |
 | `docs/internal/granular-deployment-recommendations.md` | Superseded by this proposal (turbo-based detection explicitly rejected) |
