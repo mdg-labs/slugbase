@@ -2,6 +2,7 @@
 
 interface ImportMetaEnv {
   readonly VITE_MARKETING_ORIGIN?: string;
+  readonly VITE_DOCS_BASE_URL?: string;
 }
 
 interface ImportMeta {

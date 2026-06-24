@@ -92,4 +92,28 @@ describe("AppSidebar", () => {
 
     expect(screen.getByText("Members")).toBeTruthy();
   });
+
+  it("links Help to CE docs introduction on self-hosted builds", () => {
+    vi.stubEnv("VITE_BILLING_ENABLED", "false");
+
+    render(<AppSidebar {...baseProps} />);
+
+    const helpLink = screen.getByTestId("sidebar-help-link");
+    expect(helpLink.getAttribute("href")).toBe(
+      "https://docs.slugbase.app/ce/introduction",
+    );
+    expect(helpLink.getAttribute("target")).toBe("_blank");
+    expect(helpLink.getAttribute("rel")).toBe("noopener noreferrer");
+  });
+
+  it("links Help to cloud docs introduction on hosted builds", () => {
+    vi.stubEnv("VITE_BILLING_ENABLED", "true");
+
+    render(<AppSidebar {...baseProps} />);
+
+    const helpLink = screen.getByTestId("sidebar-help-link");
+    expect(helpLink.getAttribute("href")).toBe(
+      "https://docs.slugbase.app/cloud/introduction",
+    );
+  });
 });

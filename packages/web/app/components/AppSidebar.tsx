@@ -3,6 +3,7 @@ import { useState } from "react";
 import { NavLink, useLocation } from "react-router";
 
 import { isPlanGatingEnabled } from "../lib/billing-config.js";
+import { buildDocsIntroductionUrl } from "../lib/docs-url.js";
 import { canManageWorkspaceSettings } from "../routes/settings/workspace/workspace-entitlements.js";
 import { LegalLinks } from "./LegalLinks.js";
 import type { WorkspaceListItem } from "./workspace-switcher/workspace-switcher-api.js";
@@ -378,10 +379,16 @@ export function AppSidebar({
             </div>
           )}
 
-          <button className="flex items-center gap-sp-4 rounded-md px-sp-4 py-[7px] text-[length:var(--text-body)] text-fg-muted transition-colors hover:bg-raised hover:text-fg">
+          <a
+            href={buildDocsIntroductionUrl()}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-testid="sidebar-help-link"
+            className="flex items-center gap-sp-4 rounded-md px-sp-4 py-[7px] text-[length:var(--text-body)] text-fg-muted transition-colors hover:bg-raised hover:text-fg"
+          >
             <LifeBuoyIcon />
             {t("app.shell.nav.help")}
-          </button>
+          </a>
 
           <LegalLinks variant="sidebar" />
         </div>

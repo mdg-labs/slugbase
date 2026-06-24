@@ -14,6 +14,7 @@ const optionalPublicUrl = z.preprocess((value) => {
 export const clientEnvSchema = z
   .object({
     VITE_MARKETING_ORIGIN: optionalPublicUrl,
+    VITE_DOCS_BASE_URL: optionalPublicUrl,
   })
   .strict();
 

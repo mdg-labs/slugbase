@@ -19,6 +19,18 @@ describe("validateClientEnvConfig", () => {
     ).toEqual({ VITE_MARKETING_ORIGIN: "https://www.example.com" });
   });
 
+  it("accepts unset VITE_DOCS_BASE_URL", () => {
+    expect(validateClientEnvConfig({})).toEqual({});
+  });
+
+  it("accepts a valid docs base URL", () => {
+    expect(
+      validateClientEnvConfig({
+        VITE_DOCS_BASE_URL: "https://docs.example.com",
+      }),
+    ).toEqual({ VITE_DOCS_BASE_URL: "https://docs.example.com" });
+  });
+
   it("rejects an invalid marketing origin URL", () => {
     expect(() =>
       validateClientEnvConfig({ VITE_MARKETING_ORIGIN: "not-a-url" }),

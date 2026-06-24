@@ -314,6 +314,7 @@ Baked in at **`pnpm --filter @slugbase/web build`**. Public display config only 
 | `VITE_AI_BYO_CREDENTIAL` | Show full AI credential form (BYO key) | Yes | Build only | Optional | No | Build | `false` (both editions) |
 | `VITE_APP_BASE_URL` | API URL shown in OIDC callback settings | Yes | Build only | Optional | No | Build | `https://api.example.com` |
 | `VITE_MARKETING_ORIGIN` | Marketing site origin for absolute legal-page links in the web app; unset hides links (CE) | Yes | Build only | Optional | No | Build | `https://www.example.com` |
+| `VITE_DOCS_BASE_URL` | Customer docs site origin for the sidebar Help link; unset defaults to `https://docs.slugbase.app` | Yes | Build only | Optional | No | Build | `https://docs.slugbase.app` |
 
 ---
 
