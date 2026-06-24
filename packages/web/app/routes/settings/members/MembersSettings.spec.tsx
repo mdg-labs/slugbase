@@ -193,6 +193,18 @@ describe("MembersSettingsPage", () => {
     const view = renderMembersPage();
     expect(view.getByTestId("pending-resend-inv-1")).toBeTruthy();
   });
+
+  it("shows admin role gate for MEMBER users", () => {
+    const view = renderMembersPage({
+      ...teamData,
+      currentUserRole: "MEMBER",
+      membersForbidden: true,
+      members: [],
+      pendingInvitations: [],
+    });
+    expect(view.getByTestId("workspace-admin-role-gate")).toBeTruthy();
+    expect(view.queryByRole("button", { name: "Invite member" })).toBeNull();
+  });
 });
 
 describe("MembersSettingsPage — mail transport unavailable", () => {

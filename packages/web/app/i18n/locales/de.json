@@ -671,6 +671,7 @@
   "settings.account.prefs.accent_teal": "Teal",
   "settings.account.prefs.ai_opt_out_hint": "Wenn aktiviert, verwendet SlugBase keine KI-Funktionen für deine Inhalte.",
   "settings.account.prefs.ai_opt_out_label": "KI-Vorschläge abmelden",
+  "settings.account.prefs.ai_opt_out_unavailable_hint": "KI-Vorschläge sind für diesen Workspace nicht verfügbar; diese Einstellung kann nicht geändert werden.",
   "settings.account.prefs.default_view_grid": "Kartenraster",
   "settings.account.prefs.default_view_label": "Standard-Lesezeichenansicht",
   "settings.account.prefs.default_view_table": "Tabelle",

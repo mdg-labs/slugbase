@@ -3,6 +3,8 @@ import {
   parseApiErrorMessage,
   serverFetchJson,
 } from "../../../lib/client-api-fetch.js";
+import { canRequestBookmarkModalAiSuggestions } from "../../../components/bookmark-modal/ai/bookmark-modal-ai-gates.js";
+import { hasAiSuggestionsEntitlement } from "../workspace/workspace-entitlements.js";
 import type {
   AccountSettingsData,
   ApiTokenSummary,
@@ -16,6 +18,28 @@ export async function loadAccountSettings(
   request: Request,
 ): Promise<AccountSettingsData | null> {
   return serverFetchJson<AccountSettingsData>(request, "/auth/account");
+}
+
+export async function loadAccountAiSuggestionsAvailable(
+  request: Request,
+): Promise<boolean> {
+  const workspace = await serverFetchJson<{ plan: "free" | "personal" | "team" }>(
+    request,
+    "/workspaces/active",
+  );
+  const plan = workspace?.plan ?? "free";
+  const aiSettings = await serverFetchJson<{ enabled: boolean; hasApiKey: boolean }>(
+    request,
+    "/workspace/settings/ai",
+  );
+
+  return canRequestBookmarkModalAiSuggestions({
+    hasAiEntitlement: hasAiSuggestionsEntitlement(plan),
+    workspaceAiEnabled: aiSettings?.enabled ?? false,
+    userAiOptOut: false,
+    aiProviderAvailable: aiSettings?.hasApiKey ?? false,
+    outputLanguage: "en",
+  });
 }
 
 export async function refreshAccountSettings(): Promise<AccountSettingsData | null> {

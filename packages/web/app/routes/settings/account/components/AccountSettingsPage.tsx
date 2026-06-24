@@ -39,11 +39,13 @@ const SECTIONS: AccountSectionId[] = [
 export interface AccountSettingsPageProps {
   initialAccount: AccountSettingsData;
   initialTokens: ApiTokenSummary[];
+  aiSuggestionsAvailable: boolean;
 }
 
 export function AccountSettingsPage({
   initialAccount,
   initialTokens,
+  aiSuggestionsAvailable,
 }: AccountSettingsPageProps) {
   const { t } = useTranslation();
   const [searchParams] = useSearchParams();
@@ -178,6 +180,7 @@ export function AccountSettingsPage({
       {validSection === "preferences" ? (
         <PreferencesSection
           account={account}
+          aiSuggestionsAvailable={aiSuggestionsAvailable}
           t={t}
           onSave={async (payload) => {
             try {

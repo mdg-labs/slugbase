@@ -21,6 +21,7 @@ import {
 } from "../members-api.js";
 import type { InvitationDelivery } from "../members-api.js";
 import { canAccessMembersSettings, seatUsage } from "../members-entitlements.js";
+import { canManageWorkspaceSettings } from "../../workspace/workspace-entitlements.js";
 import type {
   InvitationRole,
   MemberRole,
@@ -30,6 +31,7 @@ import type {
   TeamRow,
 } from "../members.types.js";
 import { MembersPlanGate } from "./MembersPlanGate.js";
+import { AdminRoleGate } from "../../workspace/components/AdminRoleGate.js";
 import { SettingsPageShell } from "../../../../components/settings/SettingsPageShell.js";
 
 function memberInitials(name: string): string {
@@ -102,6 +104,19 @@ export function MembersSettingsPage({ initialData }: MembersSettingsPageProps) {
     () => seatUsage(members.length, pending.length, initialData.workspace.planSeats),
     [members.length, pending.length, initialData.workspace.planSeats],
   );
+
+  if (!canManageWorkspaceSettings(initialData.currentUserRole)) {
+    return (
+      <SettingsPageShell testId="members-settings-page">
+        <header className="mb-sp-8">
+          <h1 className="m-0 text-[length:var(--text-body-lg)] font-semibold text-fg">
+            {t("settings.members.page_title")}
+          </h1>
+        </header>
+        <AdminRoleGate t={t} />
+      </SettingsPageShell>
+    );
+  }
 
   if (!canAccessMembersSettings(initialData.workspace.plan)) {
     return <MembersPlanGate />;

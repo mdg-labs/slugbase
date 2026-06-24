@@ -49,6 +49,7 @@ export interface AppShellLoaderData {
   user: SessionUser;
   workspace: { id: string; name: string; plan: "free" | "personal" | "team" };
   workspaces: WorkspaceListItem[];
+  currentUserRole: WorkspaceListItem["role"];
   sidebarFolders: SidebarFolder[];
   bookmarkTotal: number;
 }

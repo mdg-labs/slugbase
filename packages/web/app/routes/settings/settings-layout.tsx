@@ -55,7 +55,12 @@ export default function SettingsLayout() {
   const appShell = useAppShellData();
   const workspacePlan = appShell.workspace.plan;
 
-  const navGroups = filterNavGroups(ALL_NAV_GROUPS, interfaceConfig, workspacePlan);
+  const navGroups = filterNavGroups(
+    ALL_NAV_GROUPS,
+    interfaceConfig,
+    workspacePlan,
+    appShell.currentUserRole,
+  );
 
   return (
     <div className="flex min-h-0 flex-1" data-testid="settings-layout">

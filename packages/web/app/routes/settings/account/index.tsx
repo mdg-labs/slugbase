@@ -6,6 +6,12 @@ import { AccountSettingsPage } from "./components/AccountSettingsPage.js";
 export { accountSettingsLoader as loader } from "./account-loader.js";
 
 export default function AccountSettingsRoute() {
-  const { account, tokens } = useLoaderData<AccountSettingsLoaderData>();
-  return <AccountSettingsPage initialAccount={account} initialTokens={tokens} />;
+  const { account, tokens, aiSuggestionsAvailable } = useLoaderData<AccountSettingsLoaderData>();
+  return (
+    <AccountSettingsPage
+      initialAccount={account}
+      initialTokens={tokens}
+      aiSuggestionsAvailable={aiSuggestionsAvailable}
+    />
+  );
 }

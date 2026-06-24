@@ -3,6 +3,8 @@ import {
   parseApiErrorMessage,
   serverFetchJson,
 } from "../../../lib/client-api-fetch.js";
+import { listWorkspaces } from "../../../components/workspace-switcher/workspace-switcher-api.js";
+import { resolveActiveWorkspaceRole } from "../workspace/workspace-entitlements.js";
 import type {
   InvitationRole,
   MemberRow,
@@ -42,6 +44,9 @@ export async function loadMembersSettingsData(
   if (!workspace) return null;
 
   if (forbidden || !rawMembers) {
+    const workspaces = await listWorkspaces(request);
+    const currentUserRole = resolveActiveWorkspaceRole(workspace.id, workspaces);
+
     return {
       workspace: {
         id: workspace.id,
@@ -52,7 +57,7 @@ export async function loadMembersSettingsData(
       members: [],
       pendingInvitations: [],
       teams: [],
-      currentUserRole: "ADMIN",
+      currentUserRole,
       membersForbidden: true,
       mailTransportAvailable: false,
     };

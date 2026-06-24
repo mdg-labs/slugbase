@@ -3,6 +3,8 @@ import {
   parseApiErrorMessage,
   serverFetchJson,
 } from "../../../lib/client-api-fetch.js";
+import { listWorkspaces } from "../../../components/workspace-switcher/workspace-switcher-api.js";
+import { resolveActiveWorkspaceRole } from "./workspace-entitlements.js";
 import { fetchMembersWithFallback } from "../members-fetch.js";
 import type { AiSettingsData, WorkspaceSummary } from "./workspace.types.js";
 
@@ -27,13 +29,16 @@ export async function loadWorkspaceSettingsContext(
   if (!workspace) return null;
 
   if (forbidden || !members) {
+    const workspaces = await listWorkspaces(request);
+    const currentUserRole = resolveActiveWorkspaceRole(workspace.id, workspaces);
+
     return {
       workspace: {
         id: workspace.id,
         name: workspace.name,
         plan: workspace.plan,
       },
-      currentUserRole: "ADMIN",
+      currentUserRole,
       membersForbidden: true,
     };
   }

@@ -36,6 +36,7 @@ const baseProps = {
   workspaces: [
     { id: "ws-1", name: "My Workspace", plan: "free" as const, role: "OWNER" as const },
   ],
+  currentUserRole: "OWNER" as const,
   folders: [],
   bookmarkTotal: 3,
 };
@@ -61,5 +62,34 @@ describe("AppSidebar", () => {
     render(<AppSidebar {...baseProps} />);
 
     expect(screen.getByText("free plan")).toBeTruthy();
+  });
+
+  it("hides Members nav link for MEMBER role", () => {
+    render(
+      <AppSidebar
+        {...baseProps}
+        currentUserRole="MEMBER"
+        workspaces={[
+          { id: "ws-1", name: "My Workspace", plan: "free", role: "MEMBER" },
+        ]}
+      />,
+    );
+
+    expect(screen.queryByText("Members")).toBeNull();
+    expect(screen.getByText("Settings")).toBeTruthy();
+  });
+
+  it("shows Members nav link for ADMIN role", () => {
+    render(
+      <AppSidebar
+        {...baseProps}
+        currentUserRole="ADMIN"
+        workspaces={[
+          { id: "ws-1", name: "My Workspace", plan: "team", role: "ADMIN" },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Members")).toBeTruthy();
   });
 });

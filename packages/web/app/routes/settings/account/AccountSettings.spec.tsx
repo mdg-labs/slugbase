@@ -62,11 +62,15 @@ const baseAccount: AccountSettingsData = {
   },
 };
 
-function renderPage(account: AccountSettingsData = baseAccount) {
+function renderPage(account: AccountSettingsData = baseAccount, aiSuggestionsAvailable = true) {
   return render(
     <ThemeProvider>
       <ToastProvider dismissLabel="Dismiss notification">
-        <AccountSettingsPage initialAccount={account} initialTokens={[]} />
+        <AccountSettingsPage
+          initialAccount={account}
+          initialTokens={[]}
+          aiSuggestionsAvailable={aiSuggestionsAvailable}
+        />
       </ToastProvider>
     </ThemeProvider>,
   );
@@ -113,6 +117,7 @@ describe("AccountSettingsPage", () => {
       <ThemeProvider>
         <PreferencesSection
           account={baseAccount}
+          aiSuggestionsAvailable
           t={(key: string) => (staticMessages.en as Record<string, string>)[key] ?? key}
           onSave={onSave}
         />
@@ -134,5 +139,26 @@ describe("AccountSettingsPage", () => {
         defaultBookmarkView: "grid",
       });
     });
+  });
+
+  it("disables AI opt-out when suggestions are unavailable", () => {
+    const view = render(
+      <ThemeProvider>
+        <PreferencesSection
+          account={baseAccount}
+          aiSuggestionsAvailable={false}
+          t={(key: string) => (staticMessages.en as Record<string, string>)[key] ?? key}
+          onSave={vi.fn()}
+        />
+      </ThemeProvider>,
+    );
+
+    const checkbox = view.getByRole("checkbox") as HTMLInputElement;
+    expect(checkbox.disabled).toBe(true);
+    expect(
+      view.getByText(
+        "AI suggestions are not available for this workspace, so this preference cannot be changed.",
+      ),
+    ).toBeTruthy();
   });
 });

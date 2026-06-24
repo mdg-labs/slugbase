@@ -12,6 +12,7 @@ import { SaveBar, SettingsSection } from "./SettingsSection.js";
 
 interface PreferencesSectionProps {
   account: AccountSettingsData;
+  aiSuggestionsAvailable: boolean;
   onSave: (payload: {
     language: "en" | "de";
     theme: ThemePreference;
@@ -24,7 +25,12 @@ interface PreferencesSectionProps {
 
 const THEME_OPTIONS: ThemePreference[] = ["dark", "light", "auto"];
 
-export function PreferencesSection({ account, onSave, t }: PreferencesSectionProps) {
+export function PreferencesSection({
+  account,
+  aiSuggestionsAvailable,
+  onSave,
+  t,
+}: PreferencesSectionProps) {
   const { setPreference } = useTheme();
   const setAppLocale = useSetAppLocale();
   const [language, setLanguage] = useState(account.language);
@@ -198,10 +204,13 @@ export function PreferencesSection({ account, onSave, t }: PreferencesSectionPro
         </div>
       </div>
 
-      <label className="flex cursor-pointer items-start gap-sp-3">
+      <label
+        className={`flex items-start gap-sp-3 ${aiSuggestionsAvailable ? "cursor-pointer" : "cursor-not-allowed opacity-70"}`}
+      >
         <input
           type="checkbox"
           checked={aiOptOut}
+          disabled={!aiSuggestionsAvailable}
           onChange={(event) => { setAiOptOut(event.target.checked); }}
           className="mt-0.5 h-4 w-4 rounded border-[color:var(--border)] accent-[color:var(--accent)]"
         />
@@ -210,7 +219,9 @@ export function PreferencesSection({ account, onSave, t }: PreferencesSectionPro
             {t("settings.account.prefs.ai_opt_out_label")}
           </span>
           <span className="text-fg-subtle" style={{ fontSize: "var(--text-small)" }}>
-            {t("settings.account.prefs.ai_opt_out_hint")}
+            {aiSuggestionsAvailable
+              ? t("settings.account.prefs.ai_opt_out_hint")
+              : t("settings.account.prefs.ai_opt_out_unavailable_hint")}
           </span>
         </span>
       </label>

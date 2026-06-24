@@ -40,7 +40,7 @@ export class AiSettingsController {
     @ActiveWorkspace() workspace: WorkspaceRecord,
     @Req() req: Request & Record<string, unknown>,
   ): Promise<AiSettings> {
-    await this.requireAdmin(workspace.id, req);
+    await this.requireMember(workspace.id, req);
     return this.aiSettings.getSettings(workspace.id);
   }
 
@@ -62,5 +62,10 @@ export class AiSettingsController {
   private async requireAdmin(workspaceId: string, req: Request & Record<string, unknown>): Promise<void> {
     const userId = req[TENANT_USER_ID_KEY] as string;
     await this.workspaces.requireWorkspaceRole(workspaceId, userId, "ADMIN");
+  }
+
+  private async requireMember(workspaceId: string, req: Request & Record<string, unknown>): Promise<void> {
+    const userId = req[TENANT_USER_ID_KEY] as string;
+    await this.workspaces.requireWorkspaceRole(workspaceId, userId, "MEMBER");
   }
 }

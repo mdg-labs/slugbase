@@ -671,6 +671,7 @@
   "settings.account.prefs.accent_teal": "Teal",
   "settings.account.prefs.ai_opt_out_hint": "When enabled, SlugBase will not use AI features on your content.",
   "settings.account.prefs.ai_opt_out_label": "AI suggestions opt-out",
+  "settings.account.prefs.ai_opt_out_unavailable_hint": "AI suggestions are not available for this workspace, so this preference cannot be changed.",
   "settings.account.prefs.default_view_grid": "Card grid",
   "settings.account.prefs.default_view_label": "Default bookmark view",
   "settings.account.prefs.default_view_table": "Table",

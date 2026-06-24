@@ -93,10 +93,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const bookmarkTotal = bookmarksResult.ok ? bookmarksResult.data.total : 0;
 
+  const activeWorkspaceItem = workspaces.find((item) => item.id === workspace.id);
+  const currentUserRole = activeWorkspaceItem?.role ?? "OWNER";
+
   return {
     user,
     workspace: { id: workspace.id, name: workspace.name, plan: workspace.plan },
     workspaces,
+    currentUserRole,
     sidebarFolders,
     bookmarkTotal,
   };

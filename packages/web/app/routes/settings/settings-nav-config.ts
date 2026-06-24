@@ -1,3 +1,7 @@
+import { canManageBilling } from "./billing/billing-entitlements.js";
+import { canManageWorkspaceSettings } from "./workspace/workspace-entitlements.js";
+import type { WorkspaceMemberRole } from "./workspace/workspace.types.js";
+
 export type NavItem = {
   id: string;
   labelKey: string;
@@ -68,12 +72,26 @@ export function filterNavGroups(
   groups: NavGroup[],
   interfaceConfig: SettingsInterfaceConfig,
   workspacePlan: string,
+  currentUserRole: WorkspaceMemberRole,
 ): NavGroup[] {
+  const isWorkspaceAdmin = canManageWorkspaceSettings(currentUserRole);
+  const canSeeBilling = canManageBilling(currentUserRole);
+
   return groups
     .map((group) => {
-      // Entire billing group is hidden when billing is disabled (self-hosted)
-      if (group.labelKey === "settings.nav.group.billing" && !interfaceConfig.billingEnabled) {
+      if (group.labelKey === "settings.nav.group.account") {
+        return group;
+      }
+      if (group.labelKey === "settings.nav.group.workspace" && !isWorkspaceAdmin) {
         return null;
+      }
+      if (group.labelKey === "settings.nav.group.administration" && !isWorkspaceAdmin) {
+        return null;
+      }
+      if (group.labelKey === "settings.nav.group.billing") {
+        if (!interfaceConfig.billingEnabled || !canSeeBilling) {
+          return null;
+        }
       }
       const filteredItems = group.items.filter((item) =>
         isNavItemVisible(item, interfaceConfig, workspacePlan),

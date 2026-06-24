@@ -30,7 +30,7 @@ function AppChromeInner() {
   const navigate = useNavigate();
   const { open, setOpen } = useCommandPalette();
   const { openCreate } = useBookmarkModal();
-  const { user, workspace, workspaces, sidebarFolders, bookmarkTotal } =
+  const { user, workspace, workspaces, currentUserRole, sidebarFolders, bookmarkTotal } =
     useAppShellData();
 
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -57,6 +57,7 @@ function AppChromeInner() {
             <AppSidebar
               workspace={workspace}
               workspaces={workspaces}
+              currentUserRole={currentUserRole}
               folders={sidebarFolders}
               bookmarkTotal={bookmarkTotal}
               bookmarksUsed={bookmarkTotal}

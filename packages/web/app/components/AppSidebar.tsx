@@ -3,6 +3,7 @@ import { useState } from "react";
 import { NavLink, useLocation } from "react-router";
 
 import { isPlanGatingEnabled } from "../lib/billing-config.js";
+import { canManageWorkspaceSettings } from "../routes/settings/workspace/workspace-entitlements.js";
 import { LegalLinks } from "./LegalLinks.js";
 import type { WorkspaceListItem } from "./workspace-switcher/workspace-switcher-api.js";
 import { WorkspaceSwitcherPanel } from "./workspace-switcher/WorkspaceSwitcherPanel.js";
@@ -18,6 +19,7 @@ export type SidebarFolder = {
 export type AppSidebarProps = {
   workspace: { id: string; name: string; plan: "free" | "personal" | "team" };
   workspaces: WorkspaceListItem[];
+  currentUserRole: WorkspaceListItem["role"];
   folders: SidebarFolder[];
   bookmarkTotal: number;
   /** Free plan usage: current bookmark count used */
@@ -196,6 +198,7 @@ function FolderNavItem({
 export function AppSidebar({
   workspace,
   workspaces,
+  currentUserRole,
   folders,
   bookmarkTotal,
   bookmarksUsed,
@@ -210,6 +213,7 @@ export function AppSidebar({
   const used = bookmarksUsed ?? bookmarkTotal;
   const pct = Math.min(100, Math.round((used / bookmarkCap) * 100));
   const showMeter = isPlanGatingEnabled() && workspace.plan === "free";
+  const showMembersNav = canManageWorkspaceSettings(currentUserRole);
 
   const wsLetter = workspace.name.trim().charAt(0).toUpperCase() || "?";
 
@@ -310,11 +314,13 @@ export function AppSidebar({
                 icon={<SettingsIcon />}
                 label={t("app.shell.nav.settings")}
               />
-              <NavItem
-                to="/settings/members"
-                icon={<UsersIcon />}
-                label={t("app.shell.nav.members")}
-              />
+              {showMembersNav ? (
+                <NavItem
+                  to="/settings/members"
+                  icon={<UsersIcon />}
+                  label={t("app.shell.nav.members")}
+                />
+              ) : null}
             </div>
           </div>
         </nav>
