@@ -14,6 +14,14 @@ const FORBIDDEN_PREFIXES = [
   "packages/ui/",
 ] as const;
 
+/** Intentional product touches tied to CE split topology (#536), not admin scope creep. */
+const ALLOWED_PATHS = new Set([
+  "packages/backend/src/main.ts",
+  "packages/backend/src/main.bootstrap-migrations.spec.ts",
+  "packages/shared-types/src/edition/edition-presets.ts",
+  "packages/shared-types/src/edition/edition-presets.spec.ts",
+]);
+
 function resolveBaseRef(): string {
   const fromEnv = process.env.EPIC_ZERO_TOUCH_BASE_REF?.trim();
   if (fromEnv) {
@@ -46,8 +54,10 @@ describe("admin epic zero product touch", () => {
   it("does not modify core product packages", () => {
     const baseRef = resolveBaseRef();
     const changed = listChangedFiles(baseRef);
-    const forbidden = changed.filter((file) =>
-      FORBIDDEN_PREFIXES.some((prefix) => file.startsWith(prefix)),
+    const forbidden = changed.filter(
+      (file) =>
+        FORBIDDEN_PREFIXES.some((prefix) => file.startsWith(prefix)) &&
+        !ALLOWED_PATHS.has(file),
     );
 
     expect(

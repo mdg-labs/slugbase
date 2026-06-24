@@ -4,10 +4,18 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const REPO_ROOT = resolve(import.meta.dirname, "../..");
-const CE_DOCKERFILE = resolve(REPO_ROOT, "Dockerfile");
+const CE_DOCKERFILES = [
+  "Dockerfile.api",
+  "Dockerfile.web",
+  "Dockerfile.legacy",
+] as const;
 
-describe("CE Dockerfile excludes admin packages", () => {
-  const dockerfile = readFileSync(CE_DOCKERFILE, "utf8");
+function readDockerfile(name: (typeof CE_DOCKERFILES)[number]): string {
+  return readFileSync(resolve(REPO_ROOT, name), "utf8");
+}
+
+describe.each(CE_DOCKERFILES)("CE Dockerfile %s excludes admin packages", (name) => {
+  const dockerfile = readDockerfile(name);
 
   it("does not COPY packages/admin", () => {
     expect(dockerfile).not.toMatch(/COPY[^\n]*packages\/admin/);
