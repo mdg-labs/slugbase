@@ -1,17 +1,35 @@
-# SlugBase
+<p align="center">
+  <img src="packages/web/public/slugbase_icon.png" alt="SlugBase" width="80" height="80" />
+</p>
 
-SlugBase is a bookmark manager with built-in URL shortening and a keyboard-driven launcher. Save links, assign short **slugs**, and jump to any destination from the address bar or command palette (`/go/<slug>`).
+<h1 align="center">SlugBase</h1>
 
-**SlugBase Cloud** — managed service at [cloud.slugbase.app](https://cloud.slugbase.app). **Self-hosted** — run the same product on your own infrastructure with the Community Edition (CE) container image.
+<p align="center">
+  Bookmark manager with built-in URL shortening and a keyboard-driven launcher.<br />
+  Save links, assign short <strong>slugs</strong>, and jump to any destination from the address bar or command palette (<code>/go/&lt;slug&gt;</code>).
+</p>
+
+<p align="center">
+  <a href="https://github.com/mdg-labs/slugbase/actions/workflows/pr.yml"><img src="https://github.com/mdg-labs/slugbase/actions/workflows/pr.yml/badge.svg" alt="CI" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Elastic--2.0-blue" alt="License: Elastic-2.0" /></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D22.12-brightgreen" alt="Node >=22.12" /></a>
+  <a href="https://github.com/mdg-labs/slugbase/pkgs/container/slugbase"><img src="https://img.shields.io/badge/ghcr.io-mdg--labs%2Fslugbase-blue" alt="Container image" /></a>
+  <a href="https://docs.slugbase.app"><img src="https://img.shields.io/badge/docs-docs.slugbase.app-informational" alt="Documentation" /></a>
+</p>
+
+<p align="center">
+  <a href="https://slugbase.app"><strong>SlugBase Cloud</strong></a> — managed service ·
+  <a href="https://docs.slugbase.app/selfhosted/quick-start"><strong>Self-host</strong></a> — Community Edition (CE) container image
+</p>
 
 ## Documentation
 
-Customer and operator guides live at **[docs.slugbase.app](https://docs.slugbase.app)**.
+Customer and operator guides are published at **[docs.slugbase.app](https://docs.slugbase.app)**.
 
+- [SlugBase Cloud](https://docs.slugbase.app/cloud/introduction) — sign up, workspaces, and billing on the hosted service
 - [Self-hosted quick start](https://docs.slugbase.app/selfhosted/quick-start) — install, configure, and verify your instance
-- [SlugBase Cloud](https://cloud.slugbase.app) — sign up for the hosted service
 
-To contribute to public documentation, use the separate **[mdg-labs/slugbase-docs](https://github.com/mdg-labs/slugbase-docs)** repository. Engineering specs, roadmaps, and design prototypes in this repo stay under **`docs/internal/`** and are not published as customer docs — see [`docs/README.md`](docs/README.md).
+Engineering specs, roadmaps, and design prototypes in this repo stay under **`docs/internal/`** and are not published as customer docs — see [`docs/README.md`](docs/README.md).
 
 ## Self-host with Docker Compose
 
