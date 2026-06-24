@@ -51,6 +51,7 @@ jobs:
       push_ghcr_api: ${{ steps.detect.outputs.push_ghcr_api }}
       push_ghcr_web: ${{ steps.detect.outputs.push_ghcr_web }}
       sync_services: ${{ steps.detect.outputs.sync_services }}
+      skip_reasons: ${{ steps.detect.outputs.skip_reasons }}
     steps:
       - name: Checkout
         uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
@@ -89,6 +90,7 @@ jobs:
           DEPLOY_MARKETING: ${{ steps.detect.outputs.deploy_marketing }}
           DEPLOY_ADMIN: ${{ steps.detect.outputs.deploy_admin }}
           SYNC_SERVICES: ${{ steps.detect.outputs.sync_services }}
+          SKIP_REASONS: ${{ steps.detect.outputs.skip_reasons }}
         run: |
           {
             echo "### Deploy targets (${{ inputs.environment }})"
@@ -101,6 +103,15 @@ jobs:
             echo "| Admin | ${DEPLOY_ADMIN} |"
             echo ""
             echo "**sync-secrets services:** \`${SYNC_SERVICES}\`"
+            if [ -n "${SKIP_REASONS}" ]; then
+              echo ""
+              echo "### Production version gate skips"
+              echo ""
+              while IFS= read -r reason; do
+                [ -z "${reason}" ] && continue
+                echo "- ${reason}"
+              done <<< "${SKIP_REASONS}"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
   sync-secrets:
@@ -400,16 +411,27 @@ jobs:
         with:
           ref: ${{ inputs.ref != '' && inputs.ref || github.sha }}
 
-      - name: Smoke deploy surfaces
-        if: >-
-          needs.detect-deploy-targets.outputs.deploy_api == 'true' ||
-          needs.detect-deploy-targets.outputs.deploy_web == 'true' ||
-          needs.detect-deploy-targets.outputs.deploy_marketing == 'true'
-        run: bash .github/scripts/smoke-staging-health.sh
+      - name: Build smoke flags
+        id: smoke_flags
+        run: |
+          FLAGS=()
+          if [ "${{ needs.detect-deploy-targets.outputs.deploy_api }}" = "true" ]; then
+            FLAGS+=(--api)
+          fi
+          if [ "${{ needs.detect-deploy-targets.outputs.deploy_web }}" = "true" ]; then
+            FLAGS+=(--web)
+          fi
+          if [ "${{ needs.detect-deploy-targets.outputs.deploy_marketing }}" = "true" ]; then
+            FLAGS+=(--marketing)
+          fi
+          if [ "${{ needs.detect-deploy-targets.outputs.deploy_admin }}" = "true" ]; then
+            FLAGS+=(--admin)
+          fi
+          echo "flags=${FLAGS[*]}" >> "$GITHUB_OUTPUT"
 
-      - name: Smoke admin portal health
-        if: needs.detect-deploy-targets.outputs.deploy_admin == 'true'
-        run: bash .github/scripts/smoke-admin-health.sh
+      - name: Smoke deployed surfaces
+        if: steps.smoke_flags.outputs.flags != ''
+        run: bash .github/scripts/smoke-staging-health.sh ${{ steps.smoke_flags.outputs.flags }}
 
   update-deployed-state:
     name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 5 · Update DEPLOYED_STATE

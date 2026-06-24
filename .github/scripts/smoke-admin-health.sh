@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Smoke-test admin portal deploy (admin PRD §12.5): GET ${ADMIN_URL}/health (HTTP 200).
+# Smoke-test admin portal deploy (admin PRD §12.5, granular-deployment WP-3):
+#   GET ${ADMIN_URL}/health (HTTP 200)
+# Invoked directly from deploy.yml or via smoke-staging-health.sh --admin.
 # When CF_ACCESS_CLIENT_ID + CF_ACCESS_CLIENT_SECRET are set, sends Cloudflare Access headers.
 set -euo pipefail
 
