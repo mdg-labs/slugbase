@@ -28,8 +28,7 @@ test.describe("Slug forwarding", () => {
     await page.goto(`/go/${slug}`);
     await page.waitForURL(targetUrl);
 
-    // Verify we landed on the external URL
-    expect(res.status()).toBe(400);
+    expect(page.url()).toContain('example.com');
   });
 
   test("rejects bookmark create with javascript: URL via API", async ({

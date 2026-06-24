@@ -85,13 +85,14 @@ export default defineConfig({
     {
       name: 'ce',
       // Marketing is a separate Cloudflare Worker; plan-gating specs need Cloud billing build.
+      // CE split topology: web SSR container + api container (e2e.sh sets both base URLs).
       testIgnore: ['**/marketing/**', ...CLOUD_ONLY_SPECS],
       use: {
         ...devices['Desktop Chrome'],
-        baseURL: process.env.E2E_BASE_URL_CE ?? 'http://localhost:3000',
+        baseURL: process.env.E2E_BASE_URL_WEB ?? 'http://localhost:4002',
         storageState: ONBOARDING_STORAGE_STATE,
         extraHTTPHeaders: {
-          'X-E2E-Base-URL-API': process.env.E2E_BASE_URL_CE ?? 'http://localhost:3000',
+          'X-E2E-Base-URL-API': process.env.E2E_BASE_URL_API ?? 'http://localhost:4001',
         },
       },
     },

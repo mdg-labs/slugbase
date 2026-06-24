@@ -128,12 +128,13 @@ export default async function globalSetup(config: FullConfig) {
     '.worker-credentials.json',
   );
 
-  const baseURL = process.env.E2E_BASE_URL_CE;
+  const isCeMode = process.env.E2E_CE_MODE === 'true';
+  const ceApiUrl = process.env.E2E_BASE_URL_API;
 
-  // ── CE: bootstrap via public registration (e2e container) ───
-  if (baseURL) {
+  // ── CE: bootstrap via public registration (split api + web containers) ───
+  if (isCeMode && ceApiUrl) {
     console.log(
-      `[global-setup] Registering ${WORKER_COUNT} CE worker users at ${baseURL} …`,
+      `[global-setup] Registering ${WORKER_COUNT} CE worker users at ${ceApiUrl} …`,
     );
 
     const credentials: WorkerCredentials[] = [];
@@ -145,7 +146,7 @@ export default async function globalSetup(config: FullConfig) {
         name: `E2E Worker ${i}`,
       };
 
-      const res = await fetch(`${baseURL}/auth/register`, {
+      const res = await fetch(`${ceApiUrl}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(cred),
@@ -165,7 +166,7 @@ export default async function globalSetup(config: FullConfig) {
       credentialsPath,
       JSON.stringify(credentials, null, 2),
     );
-    await seedUsersOnboarding(baseURL, credentials);
+    await seedUsersOnboarding(ceApiUrl, credentials);
     console.log(
       `[global-setup] Wrote ${credentials.length} CE worker credentials to ${credentialsPath}`,
     );
