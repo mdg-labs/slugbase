@@ -143,6 +143,18 @@ bash scripts/with-ci-env.sh pnpm --filter @slugbase/db-admin db:generate
 bash scripts/with-ci-env.sh pnpm --filter @slugbase/db-admin db:migrate
 ```
 
+## Versioning (Changesets)
+
+Deployable packages (`@slugbase/backend`, `@slugbase/web`, `@slugbase/marketing`, `@slugbase/admin`) are versioned independently via [Changesets](https://github.com/changesets/changesets). Shared libraries (`shared-types`, `ui`, `email-templates`, `db-admin`) stay at `0.0.0` and are ignored by Changesets.
+
+When your change affects a deployable surface (anything that ships to staging/production), add a changeset before opening a PR:
+
+```bash
+pnpm changeset
+```
+
+Follow the prompts to pick the bumped package(s) and semver level. The Version PR workflow on `main` applies `pnpm version-packages` and tags releases — see spec §22.6.
+
 ## preinstall guard
 
 `pnpm install` runs `scripts/check-node-version.mjs` and exits if Node is below 22.12.
