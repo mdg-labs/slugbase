@@ -1,6 +1,6 @@
 name: Prepare Release
 
-# Draft GitHub Release after Changesets Version PR merge (spec §22.6, WP-7).
+# Draft GitHub Release after Changesets publish and api/web production deploy (spec §22.6, §22.8).
 # Per-package git tags are created by changeset tag in changesets.yml.
 
 on:
@@ -36,4 +36,4 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PUBLISHED_PACKAGES: ${{ inputs.published-packages }}
-        run: node .github/scripts/create-draft-release.mjs
+        run: node scripts/ci/create-draft-release.mjs

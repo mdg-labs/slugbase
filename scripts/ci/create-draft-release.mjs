@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * Create an aggregate draft GitHub Release after Changesets publish.
- * Title: package list (≤3) or "Release YYYY-MM-DD". Tag: release-YYYY-MM-DD[*].
+ * Create an aggregate draft GitHub Release after Changesets publish + api/web deploy.
+ * Title: SlugBase API {x} · Web {y} (from package.json). Tag: release-YYYY-MM-DD[*].
+ * Skips when Version PR bumps only marketing/admin.
  */
 import { execFileSync, execSync } from "node:child_process";
 import fs from "node:fs";
@@ -11,9 +12,10 @@ import path from "node:path";
 const PKG_TO_DIR = {
   "@slugbase/backend": "packages/backend",
   "@slugbase/web": "packages/web",
-  "@slugbase/marketing": "packages/marketing",
-  "@slugbase/admin": "packages/admin",
 };
+
+const API_PKG = "@slugbase/backend";
+const WEB_PKG = "@slugbase/web";
 
 /** @type {Array<{ name: string; version: string }>} */
 const published = JSON.parse(process.env.PUBLISHED_PACKAGES ?? "[]");
@@ -23,18 +25,38 @@ if (published.length === 0) {
   process.exit(0);
 }
 
-const date = new Date().toISOString().slice(0, 10);
-const title =
-  published.length <= 3
-    ? published.map((pkg) => `${pkg.name}@${pkg.version}`).join(", ")
-    : `Release ${date}`;
+const publishedApiOrWeb = published.some(
+  (pkg) => pkg.name === API_PKG || pkg.name === WEB_PKG,
+);
+if (!publishedApiOrWeb) {
+  console.log(
+    "Only marketing/admin packages published — skipping draft release",
+  );
+  process.exit(0);
+}
+
+/**
+ * @param {string} pkgDir
+ */
+function readPackageVersion(pkgDir) {
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(pkgDir, "package.json"), "utf8"),
+  );
+  return manifest.version;
+}
+
+const backendVer = readPackageVersion(PKG_TO_DIR[API_PKG]);
+const webVer = readPackageVersion(PKG_TO_DIR[WEB_PKG]);
+const title = `SlugBase API ${backendVer} · Web ${webVer}`;
 
 /** @type {string[]} */
 const bodyParts = [];
 for (const pkg of published) {
+  if (pkg.name !== API_PKG && pkg.name !== WEB_PKG) {
+    continue;
+  }
   const dir = PKG_TO_DIR[pkg.name];
   if (!dir) {
-    console.warn(`Unknown package ${pkg.name} — skipping changelog section`);
     continue;
   }
   const changelogPath = path.join(dir, "CHANGELOG.md");
@@ -52,6 +74,7 @@ for (const pkg of published) {
 const body =
   bodyParts.length > 0 ? bodyParts.join("\n\n") : `Packages: ${title}`;
 
+const date = new Date().toISOString().slice(0, 10);
 let tag = `release-${date}`;
 let suffix = 1;
 while (tagExists(tag)) {
