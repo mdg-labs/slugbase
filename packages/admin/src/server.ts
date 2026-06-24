@@ -1,7 +1,11 @@
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
+import { VersionResponseSchema } from "@slugbase/shared-types";
 import { Hono } from "hono";
 import { proxy } from "hono/proxy";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { bootstrapAdminIfNeeded } from "./auth/bootstrap.service.js";
 import { createAdminAuthRoutes } from "./auth/auth.routes.js";
@@ -19,6 +23,16 @@ import { createMetricsRoutes } from "./routes/metrics.routes.js";
 
 const VITE_DEV_SERVER_URL =
   process.env["VITE_DEV_SERVER_URL"] ?? "http://localhost:5173";
+
+function readPackageVersion(): string {
+  const currentDir = dirname(fileURLToPath(import.meta.url));
+  const packageJsonPath = join(currentDir, "..", "package.json");
+  const raw = readFileSync(packageJsonPath, "utf8");
+  const parsed = JSON.parse(raw) as { version?: string };
+  return parsed.version ?? "0.0.0";
+}
+
+const adminPackageVersion = readPackageVersion();
 
 export interface CreateAppOptions {
   isProduction?: boolean;
@@ -39,6 +53,11 @@ export function createApp(options?: CreateAppOptions): Hono {
   app.get("/api/health", (c) =>
     c.json({ status: "ok", service: "slugbase-admin" }, 200),
   );
+
+  app.get("/version", (c) => {
+    const body = VersionResponseSchema.parse({ version: adminPackageVersion });
+    return c.json(body, 200);
+  });
 
   app.route("/api/auth", createAdminAuthRoutes({ adminDb, config }));
   app.route("/api/internal", createInternalRoutes({ adminDb, config }));

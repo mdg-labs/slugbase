@@ -1,7 +1,19 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { resetAdminConfigCache } from "./config/load-config.js";
 import { createApp } from "./server.js";
+
+const adminPackageVersion = (
+  JSON.parse(
+    readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "../package.json"),
+      "utf8",
+    ),
+  ) as { version: string }
+).version;
 
 const testEnv = {
   DATABASE_URL: "postgresql://slugbase:slugbase@localhost:5432/slugbase",
@@ -34,6 +46,26 @@ describe("GET /health", () => {
     await expect(response.json()).resolves.toEqual({
       status: "ok",
       service: "slugbase-admin",
+    });
+  });
+});
+
+describe("GET /version", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    resetAdminConfigCache();
+  });
+
+  it("returns package version as JSON", async () => {
+    for (const [key, value] of Object.entries(testEnv)) {
+      vi.stubEnv(key, value);
+    }
+
+    const app = createApp({ isProduction: true });
+    const response = await app.request("/version");
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      version: adminPackageVersion,
     });
   });
 });
