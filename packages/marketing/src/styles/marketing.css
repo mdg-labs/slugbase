@@ -200,7 +200,7 @@ img { display: block; }
 .mk-footer-gdpr { display:flex; align-items:center; gap:var(--sp-3); }
 .mk-footer-gdpr svg { color:var(--success-text); }
 
-/* ---- Open source pill ---- */
+/* ---- Source-available license pill ---- */
 .mk-oss { display:inline-flex; align-items:center; gap:var(--sp-3); height:28px; padding:0 var(--sp-4); border-radius:var(--r-full); background:var(--raised); border:1px solid var(--border-subtle); font:var(--weight-medium) var(--text-small)/1 var(--font-sans); color:var(--fg-muted); cursor:pointer; transition:border-color var(--dur-micro), color var(--dur-micro); }
 .mk-oss:hover { color:var(--fg); border-color:var(--border); }
 

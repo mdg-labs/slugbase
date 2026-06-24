@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import type { ReactNode } from "react";
 
 import { LegalLinks } from "../../components/LegalLinks.js";
+import { isBillingEnabled } from "../../lib/billing-config.js";
 import { getClientApiOrigin } from "../../lib/client-api-path.js";
 import {
   AuthButton,
@@ -47,7 +48,7 @@ export function AuthShell({ children, showSlugRows = true }: AuthShellWrapperPro
       brand={{
         headline: t("auth.brand.headline"),
         subline: t("auth.brand.subline"),
-        footer: t("auth.brand.footer"),
+        footer: t(isBillingEnabled() ? "auth.brand.footer_cloud" : "auth.brand.footer_ce"),
       }}
     >
       {children}
