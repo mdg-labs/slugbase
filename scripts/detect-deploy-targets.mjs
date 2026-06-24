@@ -3,6 +3,9 @@
  * Consumed by `.github/scripts/detect-deploy-targets.sh` and unit tests.
  */
 
+import { applyAlreadyDeployedSkip } from "./check-production-deploy-needed.mjs";
+import { parseDeployedState } from "./update-deployed-state.mjs";
+
 /** @typedef {'staging' | 'production'} DeployEnvironment */
 
 /**
@@ -25,6 +28,8 @@
  * @property {string[]} changedPaths
  * @property {Record<string, string>} packageVersions
  * @property {boolean} forceFullDeploy
+ * @property {string | undefined} [deployedStateJson]
+ * @property {string | undefined} [releaseSha]
  */
 
 /**
@@ -303,6 +308,23 @@ export function detectDeployTargets(input) {
     input.packageVersions,
     log,
   );
+
+  if (
+    input.environment === "production" &&
+    input.releaseSha &&
+    input.deployedStateJson !== undefined
+  ) {
+    const deployedState = parseDeployedState(input.deployedStateJson);
+    if (deployedState !== null) {
+      applyAlreadyDeployedSkip(targets, {
+        deployedState,
+        packageVersions: input.packageVersions,
+        releaseSha: input.releaseSha,
+        log,
+        skipReasons,
+      });
+    }
+  }
 
   targets.sync_services = deriveSyncServices(targets);
   return { targets, skipReasons, log };

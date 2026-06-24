@@ -81,6 +81,7 @@ jobs:
           HEAD_REF: ${{ inputs.ref != '' && inputs.ref || github.sha }}
           BASE_REF: ${{ inputs.environment == 'staging' && (github.event.before != '' && github.event.before || 'HEAD~1') || '' }}
           FORCE_FULL_DEPLOY: ${{ steps.force.outputs.force_full_deploy }}
+          DEPLOYED_STATE_JSON: ${{ vars[format('DEPLOYED_STATE_{0}', inputs.environment)] }}
         run: bash .github/scripts/detect-deploy-targets.sh
 
       - name: Write deploy plan summary
