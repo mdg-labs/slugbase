@@ -26,9 +26,12 @@
     "db:generate": "pnpm --filter @slugbase/backend db:generate",
     "db:migrate": "pnpm --filter @slugbase/backend db:migrate",
     "test:e2e": "bash scripts/e2e.sh",
-    "e2e:direct": "playwright test --config e2e/playwright.config.ts"
+    "e2e:direct": "playwright test --config e2e/playwright.config.ts",
+    "changeset": "changeset",
+    "version-packages": "changeset version"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.29.8",
     "@eslint/js": "^9.28.0",
     "@playwright/test": "^1.60.0",
     "@reportportal/agent-js-playwright": "5.2.3",
@@ -56,6 +59,7 @@
       "form-data@>=4.0.0 <4.0.6": ">=4.0.6",
       "vite@>=7.0.0 <=7.3.4": ">=7.3.5",
       "js-yaml@<=4.1.1": ">=4.2.0",
+      "read-yaml-file": "2.1.0",
       "@opentelemetry/core@<2.8.0": ">=2.8.0",
       "multer@>=2.0.0 <2.2.0": ">=2.2.0",
       "undici@<7.28.0": ">=7.28.0",
