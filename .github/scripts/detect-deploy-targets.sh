@@ -167,3 +167,25 @@ for (const entry of payload.log) {
 }
 ' "$RESULT_JSON"
 )
+
+SKIP_REASONS="$(
+  node -e '
+const payload = JSON.parse(process.argv[1]);
+process.stdout.write(payload.skipReasons.join("\n"));
+' "$RESULT_JSON"
+)"
+
+if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+  {
+    echo "skip_reasons<<EOF"
+    printf '%s\n' "${SKIP_REASONS}"
+    echo "EOF"
+  } >>"$GITHUB_OUTPUT"
+fi
+
+if [[ -n "${SKIP_REASONS}" ]]; then
+  while IFS= read -r reason; do
+    [[ -z "${reason}" ]] && continue
+    echo "detect-deploy-targets: ${reason}"
+  done <<<"${SKIP_REASONS}"
+fi
