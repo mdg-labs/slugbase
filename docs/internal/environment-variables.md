@@ -43,7 +43,7 @@ Every inventory table uses the same columns:
 | Column | Meaning |
 |---|---|
 | **Cloud** | Needed on managed Fly.io + Cloudflare Workers deployment |
-| **CE** | Needed on combined GHCR Docker image |
+| **CE** | Needed on CE GHCR images (`slugbase-api` and/or `slugbase-web`) |
 | **Required** | `Always` · `Cloud` · `Optional` · `Dev only` · `CI only` |
 | **Secret** | `Yes` = never commit or log; `No` = safe in client bundles |
 | **When set** | `Runtime` (process env at start) · `Build` (Vite/Astro bake-in) · `Both` · `CI` |
@@ -54,7 +54,7 @@ Every inventory table uses the same columns:
 
 | Key | What it does | Cloud | CE | Required | Secret | When set | Example value |
 |---|---|---|---|---|---|---|---|
-| `SLUGBASE_EDITION` | Edition selector — `ce` (Community Edition combined image) or `cloud` (managed split deploy). Drives edition-specific defaults (#479–#483); supersedes deprecated `SLUGBASE_MODE`. **Cloud staging/production:** set `cloud` in Phase → GHA (`sync-secrets` pushes to Fly API). **CE GHCR/self-host:** baked as `ce` in the combined image Dockerfile. | Yes | Yes | Yes (production); defaults to `ce` in non-production when unset | No | Runtime / Build | `cloud` or `ce` |
+| `SLUGBASE_EDITION` | Edition selector — `ce` (Community Edition split images) or `cloud` (managed split deploy). Drives edition-specific defaults (#479–#483); supersedes deprecated `SLUGBASE_MODE`. **Cloud staging/production:** set `cloud` in Phase → GHA (`sync-secrets` pushes to Fly API). **CE GHCR/self-host:** set `ce` on the **api** container (`Dockerfile.api` preset). | Yes | Yes (api) | Yes (production); defaults to `ce` in non-production when unset | No | Runtime / Build | `cloud` or `ce` |
 
 > **Preset wiring:** Backend startup applies edition presets before Zod validation. Explicit env values override unset preset keys; values that conflict with the active edition preset are rejected in production and warned in development/test.
 
@@ -107,45 +107,61 @@ Typical Cloud flags: `PUBLIC_REGISTRATION=true`, `EMAIL_VERIFICATION_REQUIRED=tr
 
 ## Quick start — CE
 
-Minimum keys for the **combined GHCR image** (API + bundled web on one port). Marketing site is not included in the image.
+Minimum keys for the **split CE GHCR images** (`ghcr.io/mdg-labs/slugbase-api` + `ghcr.io/mdg-labs/slugbase-web`). The API container holds secrets, database access, and operator integrations; the web container serves the SSR client and calls the API. Marketing site is not included in either image.
 
 ```bash
-# Runtime env (docker compose env_file or -e flags)
+# api service — runtime env (docker compose env_file or -e flags)
+SLUGBASE_EDITION=ce
+SERVE_WEB_CLIENT=false
 SESSION_SECRET=<64-char hex>          # openssl rand -hex 32
 ENCRYPTION_KEY=<64-char hex>
 DATABASE_URL=postgresql://slugbase:slugbase@postgres:5432/slugbase
 APP_BASE_URL=https://bookmarks.example.com
-FRONTEND_ORIGIN=https://bookmarks.example.com   # same origin (combined image)
+FRONTEND_ORIGIN=https://bookmarks.example.com   # user-facing origin (web); may match APP_BASE_URL behind one hostname
 PUBLIC_REGISTRATION=false                       # invite-only default
 EMAIL_VERIFICATION_REQUIRED=false               # configurable
-# SERVE_WEB_CLIENT=true and WEB_CLIENT_SERVER_BUILD are preset in the Dockerfile
+# SMTP_*, OIDC_{SLUG}_*, OPENAI_* — api service only
 
-# Image build — hardcoded CE VITE_* (see scripts/CE-vite-build-args.sh)
+# web service — runtime env
+API_BASE_URL=http://api:3000                    # internal compose hostname; or public API URL behind proxy
+
+# web image build — hardcoded CE VITE_* (see scripts/CE-vite-build-args.sh)
 VITE_BILLING_ENABLED=false
 VITE_MAIL_ADMIN_UI=false
 VITE_OIDC_ADMIN_UI=false
 VITE_AI_BYO_CREDENTIAL=false
-# Do not bake VITE_APP_BASE_URL, VITE_UMAMI_*, or VITE_SENTRY_* — set APP_BASE_URL at runtime
+# Do not bake VITE_APP_BASE_URL, VITE_UMAMI_*, or VITE_SENTRY_* — set APP_BASE_URL at runtime on api
 # Leave Stripe, Turnstile, Umami, Sentry empty for no-op interfaces
 ```
 
-Example `docker run` (illustrative — use secrets from your vault, not inline):
+Example compose services (illustrative — pin semver tags in production):
 
-```bash
-docker run -d \
-  --env-file /path/to/slugbase.env \
-  -p 3000:3000 \
-  ghcr.io/<owner>/slugbase:latest
+```yaml
+services:
+  api:
+    image: ghcr.io/mdg-labs/slugbase-api:1.0.0
+    env_file: /path/to/slugbase.env
+    environment:
+      SERVE_WEB_CLIENT: "false"
+  web:
+    image: ghcr.io/mdg-labs/slugbase-web:1.0.0
+    environment:
+      API_BASE_URL: http://api:3000
+    ports:
+      - "3000:3000"
 ```
 
-CI GHCR builds do **not** read Phase or GHA runtime secrets. They pass hardcoded CE `VITE_*` values from [`scripts/CE-vite-build-args.sh`](../scripts/CE-vite-build-args.sh) via [`.github/scripts/build-push-ghcr.sh`](../.github/scripts/build-push-ghcr.sh). **`VITE_SENTRY_*`**, **`VITE_UMAMI_*`**, **`VITE_APP_BASE_URL`**, and deprecated pricing keys are never passed — Cloud telemetry and URLs must not be baked into the CE client bundle.
+CI GHCR builds do **not** read Phase or GHA runtime secrets. The **web** image build passes hardcoded CE `VITE_*` values from [`scripts/CE-vite-build-args.sh`](../scripts/CE-vite-build-args.sh) via [`.github/scripts/build-push-ghcr.sh`](../.github/scripts/build-push-ghcr.sh). **`VITE_SENTRY_*`**, **`VITE_UMAMI_*`**, **`VITE_APP_BASE_URL`**, and deprecated pricing keys are never passed — Cloud telemetry and URLs must not be baked into the CE client bundle.
+
+Staging tags: `slugbase-api:dev` and `slugbase-web:dev` (pushed independently when each package is in the affected deploy set). Production tags: `:<package-semver>` per image (e.g. `slugbase-api:1.0.0`, `slugbase-web:1.0.1`) plus `:latest` per image.
 
 ### URL wiring (CE)
 
-| Key | Example |
-|---|---|
-| `APP_BASE_URL` | `https://bookmarks.example.com` |
-| `FRONTEND_ORIGIN` | `https://bookmarks.example.com` |
+| Key | Service | Example |
+|---|---|---|
+| `APP_BASE_URL` | api | `https://bookmarks.example.com` |
+| `FRONTEND_ORIGIN` | api | `https://bookmarks.example.com` (CORS — match the hostname users open) |
+| `API_BASE_URL` | web | `http://api:3000` (internal) or `https://api.bookmarks.example.com` (split public hostnames) |
 
 ---
 
@@ -167,20 +183,24 @@ flowchart LR
     mktWorker[CF Marketing Worker]
   end
   subgraph ce [CE]
-    dockerBuild[Docker VITE build-args]
-    container[Combined container runtime]
+    apiBuild[API image build]
+    webBuild[Web VITE build-args]
+    apiContainer[slugbase-api runtime]
+    webContainer[slugbase-web runtime]
   end
   keys -->|auto sync| gha
   ciEnv -->|CI jobs| ciRunner[CI runners]
   stgEnv -->|sync-secrets.sh| cloud
   prodEnv -->|sync-secrets.sh| cloud
   keys -.->|phase run local only| localDev[Local dev]
-  dockerBuild --> container
+  apiBuild --> apiContainer
+  webBuild --> webContainer
+  webContainer -->|API_BASE_URL| apiContainer
 ```
 
 | When set | Where | Examples |
 |---|---|---|
-| **Runtime** | Fly.io API process, CE container, Worker SSR (`process.env`) | `SESSION_SECRET`, `DATABASE_URL`, `STRIPE_SECRET_KEY` |
+| **Runtime** | Fly.io API process, CE api/web containers, Worker SSR (`process.env`) | `SESSION_SECRET`, `DATABASE_URL`, `API_BASE_URL` (web), `STRIPE_SECRET_KEY` |
 | **Build** | `pnpm build` for web/marketing; Docker `ARG VITE_*` | `VITE_BILLING_ENABLED`, `PUBLIC_PLAN_PRICE_PERSONAL_MONTHLY` |
 | **Both** | Build + SSR fallback | `API_BASE_URL` (runtime Worker), `VITE_API_URL` (SSR fallback only) |
 | **CI** | GitHub Actions runner only; never shipped to production runtime | `FLY_API_TOKEN`, `CLOUDFLARE_API_TOKEN`, `SENTRY_AUTH_TOKEN`, `REPORTPORTAL_*` |
@@ -217,8 +237,8 @@ Control registration, email verification, and how the web UI is served.
 |---|---|---|---|---|---|---|---|
 | `PUBLIC_REGISTRATION` | Allow open signup (`POST /auth/register`) | Yes | Yes | Optional | No | Runtime | Cloud: `true`; CE: `false` |
 | `EMAIL_VERIFICATION_REQUIRED` | Block login until email verified | Yes | Yes | Optional | No | Runtime | Cloud: `true`; CE: `false` |
-| `SERVE_WEB_CLIENT` | Serves bundled RR7 web on same port; **also controls migration dispatch** — `bootstrap()` runs DB migrations only when `true` (CE). Cloud deployments run migrations in CI via the `migrate-staging` / `migrate-production` workflow jobs (non-zero exit blocks deploy). | No | Yes | Optional | No | Runtime | CE image: `true` (preset in Dockerfile) |
-| `WEB_CLIENT_SERVER_BUILD` | Path to RR7 server build entry | No | Yes | Optional | No | Runtime | `/app/packages/web/build/server/index.js` |
+| `SERVE_WEB_CLIENT` | Serves bundled RR7 web on same port (legacy combined image only). On split CE, set **`false`** on the api container; web runs in `slugbase-web`. **Also controls migration dispatch** — `bootstrap()` runs DB migrations when enabled on CE api startup. Cloud deployments run migrations in CI via the `migrate-staging` / `migrate-production` workflow jobs (non-zero exit blocks deploy). | No | Yes (api) | Optional | No | Runtime | Split CE api: `false`; legacy combined: `true` |
+| `WEB_CLIENT_SERVER_BUILD` | Path to RR7 server build entry (legacy combined image only) | No | Yes (combined) | Optional | No | Runtime | `/app/packages/web/build/server/index.js` |
 | `OPENAPI_INTERACTIVE_DOCS` | Scalar UI at `GET /docs` | Yes | Yes | Optional | No | Runtime | `true` (default) |
 | `CHALLENGE_DEV_SKIP` | Skip Turnstile verification in non-production | Yes | Yes | Optional | No | Runtime | Unset in prod; `true` in local dev |
 | `PORT` | HTTP listen port | Yes | Yes | Optional | No | Runtime | `3000` (default) |
@@ -320,7 +340,7 @@ Baked in at **`pnpm --filter @slugbase/web build`**. Public display config only 
 
 ### 6. Cloud — Marketing site (`PUBLIC_*`)
 
-Baked in at **`pnpm --filter @slugbase/marketing build`**. Not used by the CE combined image unless you deploy marketing separately.
+Baked in at **`pnpm --filter @slugbase/marketing build`**. Not used by CE api/web images unless you deploy marketing separately.
 
 | Key | What it does | Cloud | CE | Required | Secret | When set | Example value |
 |---|---|---|---|---|---|---|---|
@@ -389,12 +409,15 @@ Stored in Phase `Staging` / `Production` (synced to GHA `staging` / `production`
 
 ### 9. CE — runtime and image build
 
-**Do not bake Cloud telemetry at image build time.** CE operators and CI must never pass `VITE_SENTRY_*` (or other Cloud-only telemetry keys) as Docker `--build-arg` values. GHCR CI and local/e2e builds share the same hardcoded CE flags in [`scripts/CE-vite-build-args.sh`](../scripts/CE-vite-build-args.sh). Runtime `SENTRY_DSN` on the API container is optional and separate from client build-time keys — leave both empty for a fully no-op error-reporting install (spec §11.7).
+CE ships as **`slugbase-api`** (NestJS API, migrations, operator integrations) and **`slugbase-web`** (React Router SSR client). Set `SERVE_WEB_CLIENT=false` on the api image; the web image receives `API_BASE_URL` at runtime.
+
+**Do not bake Cloud telemetry at image build time.** CE operators and CI must never pass `VITE_SENTRY_*` (or other Cloud-only telemetry keys) as Docker `--build-arg` values on the **web** image. GHCR CI and local/e2e builds share the same hardcoded CE flags in [`scripts/CE-vite-build-args.sh`](../scripts/CE-vite-build-args.sh). Runtime `SENTRY_DSN` on the API container is optional and separate from client build-time keys — leave both empty for a fully no-op error-reporting install (spec §11.7).
 
 | Key | What it does | Cloud | CE | Required | Secret | When set | Example value |
 |---|---|---|---|---|---|---|---|
-| `SERVE_WEB_CLIENT` | Serve web from API container; controls migration dispatch (true = startup migrations) | No | Yes | Optional | No | Runtime | `true` (Dockerfile preset) |
-| `WEB_CLIENT_SERVER_BUILD` | RR7 server entry path | No | Yes | Optional | No | Runtime | `/app/packages/web/build/server/index.js` |
+| `SERVE_WEB_CLIENT` | Serve web from API container (legacy combined image); split CE api must use `false` | No | Yes (api) | Optional | No | Runtime | `false` (`Dockerfile.api` preset) |
+| `WEB_CLIENT_SERVER_BUILD` | RR7 server entry path (legacy combined image only) | No | Yes (combined) | Optional | No | Runtime | `/app/packages/web/build/server/index.js` |
+| `API_BASE_URL` | Upstream API for web SSR loaders and server actions | Yes (web Worker) | Yes (web container) | Yes (web) | No | Runtime | `http://api:3000` |
 | `VITE_BILLING_ENABLED` | Hide billing UI | No | Build only | Optional | No | Build | `false` |
 | `VITE_MAIL_ADMIN_UI` | Hide SMTP workspace panel (operator-managed) | No | Build only | Optional | No | Build | `false` |
 | `VITE_OIDC_ADMIN_UI` | Hide OIDC workspace panel (operator-managed) | No | Build only | Optional | No | Build | `false` |

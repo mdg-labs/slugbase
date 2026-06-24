@@ -1,14 +1,16 @@
-# Local self-host smoke test — combined API + web on one port.
-# Image: staging CI pushes ghcr.io/mdg-labs/slugbase:dev on each staging deploy
-# (self-host VITE_* baked at build — see scripts/self-host-vite-build-args.sh).
+# Local self-host smoke test — split API + web containers.
+# Staging CI pushes ghcr.io/mdg-labs/slugbase-api:dev and slugbase-web:dev on each
+# affected staging deploy (CE VITE_* baked at web image build — see
+# scripts/self-host-vite-build-args.sh).
 #
 # Prerequisites:
 #   docker login ghcr.io -u <github-username> -p <github-pat-with-read:packages>
 #
 # Usage:
-#   docker compose -f docker-compose.self-hosted.yml up -d
-#   open http://localhost:3000
-#   curl -sf http://localhost:3000/health
+#   docker compose -f dev.docker-compose.yml up -d
+#   open http://localhost:3341
+#   curl -sf http://localhost:3341/health
+#   curl -sf http://localhost:3000/health   # API (published for local debugging)
 #
 # First visit: /setup (instance admin) unless PUBLIC_REGISTRATION=true.
 
@@ -29,16 +31,19 @@ services:
       retries: 20
       start_period: 5s
 
-  slugbase:
-    image: ghcr.io/mdg-labs/slugbase:dev
+  api:
+    image: ghcr.io/mdg-labs/slugbase-api:dev
     pull_policy: always
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
     ports:
-      - "3341:3000"
+      - "3000:3000"
     environment:
+      SLUGBASE_EDITION: ce
+      SERVE_WEB_CLIENT: "false"
+
       # Required secrets (replace before any non-local use)
       SESSION_SECRET: local-dev-session-secret-at-least-32-chars!!
       ENCRYPTION_KEY: local-dev-encryption-key-at-least-32-chars!!
@@ -46,24 +51,18 @@ services:
       # Database — hostname is the compose service name
       DATABASE_URL: postgresql://slugbase:slugbase@postgres:5432/slugbase
 
-      # Combined image: API + web share one origin
-      APP_BASE_URL: http://localhost:3000
-      FRONTEND_ORIGIN: http://localhost:3000
-      API_BASE_URL: http://localhost:3000
+      # Public URLs — match what users open in the browser (web service port)
+      APP_BASE_URL: http://localhost:3341
+      FRONTEND_ORIGIN: http://localhost:3341
 
       # Self-host defaults (easy local testing)
       PUBLIC_REGISTRATION: "false"
       EMAIL_VERIFICATION_REQUIRED: "false"
       PORT: "3000"
 
-      # Preset in Dockerfile, listed for clarity:
-      # SERVE_WEB_CLIENT=true
-      # WEB_CLIENT_SERVER_BUILD=/app/packages/web/build/server/index.js
-
-      # Operator-managed credentials (spec §11.1–§11.3, §15) — env-only on CE and Cloud.
+      # Operator-managed credentials (spec §11.1–§11.3, §15) — env on api only.
       # Omit all blocks below for no-op mail / AI / OIDC (graceful degrade on send).
       #
-      # SMTP transactional mail:
       # SMTP_HOST: mail.example.com
       # SMTP_PORT: "587"
       # SMTP_SECURE: "false"
@@ -71,24 +70,43 @@ services:
       # SMTP_PASS: replace-me
       # SMTP_FROM: noreply@example.com
       #
-      # OpenAI suggestions:
       # OPENAI_API_KEY: sk-replace-me
       # OPENAI_MODEL: gpt-4o-mini
       #
-      # Per-provider OIDC (one slug per IdP — pattern OIDC_{SLUG}_*):
       # OIDC_google_CLIENT_ID: replace-me
       # OIDC_google_CLIENT_SECRET: replace-me
       # OIDC_google_ISSUER_URL: https://accounts.google.com
       # OIDC_google_NAME: Google
       # OIDC_google_SCOPES: openid email profile
       # OIDC_google_ENABLED: "true"
-      #
-      # Other optional interfaces: STRIPE_*, TURNSTILE_*, UMAMI_*, SENTRY_* unset
 
-      # Optional: skip Turnstile in prod image when testing registration flows
-      # (noop challenge is used anyway when TURNSTILE_SECRET_KEY is unset)
       CHALLENGE_DEV_SKIP: "true"
+      NODE_ENV: production
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 45s
 
+  web:
+    image: ghcr.io/mdg-labs/slugbase-web:dev
+    pull_policy: always
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "3341:3000"
+    environment:
+      API_BASE_URL: http://api:3000
+      PORT: "3000"
       NODE_ENV: production
     healthcheck:
       test:
