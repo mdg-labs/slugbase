@@ -452,6 +452,29 @@ SlugBase uses three **GitHub Actions environments** as the CI/deploy secret sour
 
 Repository-level secrets are limited to what GitHub requires for its own integration (e.g. `GITHUB_TOKEN`). Application secrets live in Phase and flow through GHA environments — not in repository secrets. Deploy pipelines call `sync-secrets.sh` to push GHA environment values to Fly.io and Cloudflare Workers.
 
+### Repository variables (deploy state)
+
+Granular deploy tracks the last successfully deployed **version + SHA per surface** in repository variables (not secrets). Updated by `.github/scripts/update-deployed-state.sh` after smoke passes — only for surfaces that deployed successfully in that run.
+
+| Variable | Purpose | Set by |
+|---|---|---|
+| `DEPLOYED_STATE_staging` | JSON map of staging surfaces (`api`, `web`, `marketing`, `admin`, optional `ghcr_*`) | `deploy.yml` → `update-deployed-state` job |
+| `DEPLOYED_STATE_production` | Same for production | `deploy.yml` → `update-deployed-state` job |
+| `DEPLOYED_VERSION` | Legacy aggregate release tag idempotency gate (production) | `release.yml` → `record-deployed-version` until WP-9 |
+
+Example `DEPLOYED_STATE_staging` value:
+
+```json
+{
+  "api": { "version": "0.1.0", "sha": "abc1234" },
+  "web": { "version": "0.1.0", "sha": "def5678" },
+  "marketing": { "version": "0.1.0", "sha": "ghi9012" },
+  "admin": { "version": "0.1.0", "sha": "jkl3456" }
+}
+```
+
+When a variable is missing or invalid JSON, `deploy.yml` conservatively forces a full deploy (all surfaces). Initialize empty objects (`{}`) before enabling selective deploy on an existing environment.
+
 See `docs/internal/ci-cd-example/` for the authoritative sync-secrets workflow and script layout.
 
 ---

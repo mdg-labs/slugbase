@@ -1,6 +1,6 @@
 name: Deploy
 
-# Parameterized deploy pipeline — sync → (migrate ∥ Sentry) → parallel deploys → smoke.
+# Parameterized deploy pipeline — detect → sync → (migrate ∥ Sentry) → selective deploys → smoke → DEPLOYED_STATE.
 # Called from staging.yml (after CI) and release.yml (production).
 # workflow_call only — no direct triggers (spec §22).
 
@@ -23,6 +23,11 @@ on:
         type: string
         required: false
         default: "true"
+      force_full_deploy:
+        description: Deploy all surfaces regardless of change detection
+        type: string
+        required: false
+        default: "false"
 
 permissions:
   contents: read
@@ -32,19 +37,100 @@ concurrency:
   cancel-in-progress: ${{ inputs.environment != 'production' }}
 
 jobs:
+  detect-deploy-targets:
+    name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 0 · Detect deploy targets
+    if: inputs.should_deploy == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      deploy_api: ${{ steps.detect.outputs.deploy_api }}
+      deploy_web: ${{ steps.detect.outputs.deploy_web }}
+      deploy_marketing: ${{ steps.detect.outputs.deploy_marketing }}
+      deploy_admin: ${{ steps.detect.outputs.deploy_admin }}
+      run_migrate: ${{ steps.detect.outputs.run_migrate }}
+      run_migrate_admin: ${{ steps.detect.outputs.run_migrate_admin }}
+      push_ghcr_api: ${{ steps.detect.outputs.push_ghcr_api }}
+      push_ghcr_web: ${{ steps.detect.outputs.push_ghcr_web }}
+      sync_services: ${{ steps.detect.outputs.sync_services }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+        with:
+          ref: ${{ inputs.ref != '' && inputs.ref || github.sha }}
+          fetch-depth: ${{ inputs.environment == 'production' && 0 || 2 }}
+
+      - name: Resolve force full deploy
+        id: force
+        env:
+          REQUESTED_FORCE: ${{ inputs.force_full_deploy }}
+          DEPLOYED_STATE_JSON: ${{ vars[format('DEPLOYED_STATE_{0}', inputs.environment)] }}
+        run: |
+          FORCE="$REQUESTED_FORCE"
+          if [ "$FORCE" != "true" ]; then
+            if [ -z "$DEPLOYED_STATE_JSON" ] || ! node -e 'try{const p=JSON.parse(process.argv[1]);process.exit(p&&typeof p==="object"&&!Array.isArray(p)?0:1)}catch{process.exit(1)}' "$DEPLOYED_STATE_JSON"; then
+              echo "detect-deploy-targets: missing or invalid DEPLOYED_STATE — forcing full deploy"
+              FORCE="true"
+            fi
+          fi
+          echo "force_full_deploy=$FORCE" >> "$GITHUB_OUTPUT"
+
+      - name: Detect deploy targets
+        id: detect
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          HEAD_REF: ${{ inputs.ref != '' && inputs.ref || github.sha }}
+          BASE_REF: ${{ inputs.environment == 'staging' && (github.event.before != '' && github.event.before || 'HEAD~1') || '' }}
+          FORCE_FULL_DEPLOY: ${{ steps.force.outputs.force_full_deploy }}
+        run: bash .github/scripts/detect-deploy-targets.sh
+
+      - name: Write deploy plan summary
+        env:
+          DEPLOY_API: ${{ steps.detect.outputs.deploy_api }}
+          DEPLOY_WEB: ${{ steps.detect.outputs.deploy_web }}
+          DEPLOY_MARKETING: ${{ steps.detect.outputs.deploy_marketing }}
+          DEPLOY_ADMIN: ${{ steps.detect.outputs.deploy_admin }}
+          SYNC_SERVICES: ${{ steps.detect.outputs.sync_services }}
+        run: |
+          {
+            echo "### Deploy targets (${{ inputs.environment }})"
+            echo ""
+            echo "| Surface | Deploy |"
+            echo "|---|---|"
+            echo "| API | ${DEPLOY_API} |"
+            echo "| Web | ${DEPLOY_WEB} |"
+            echo "| Marketing | ${DEPLOY_MARKETING} |"
+            echo "| Admin | ${DEPLOY_ADMIN} |"
+            echo ""
+            echo "**sync-secrets services:** \`${SYNC_SERVICES}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   sync-secrets:
     name: Sync secrets (${{ inputs.environment }})
+    needs: [detect-deploy-targets]
+    if: >-
+      always() &&
+      (
+        inputs.should_deploy != 'true' ||
+        (
+          needs.detect-deploy-targets.result == 'success' &&
+          needs.detect-deploy-targets.outputs.sync_services != 'none'
+        )
+      )
     uses: ./.github/workflows/sync-secrets.yml
     with:
       environment: ${{ inputs.environment }}
+      services: ${{ inputs.should_deploy == 'true' && needs.detect-deploy-targets.outputs.sync_services || 'all' }}
     secrets: inherit
 
   migrate:
     name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 1 · Run DB migrations
-    if: inputs.should_deploy == 'true'
+    if: >-
+      always() &&
+      inputs.should_deploy == 'true' &&
+      needs.detect-deploy-targets.outputs.run_migrate == 'true' &&
+      needs.sync-secrets.result == 'success'
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
-    needs: [sync-secrets]
+    needs: [detect-deploy-targets, sync-secrets]
     steps:
       - name: Checkout
         uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
@@ -63,10 +149,14 @@ jobs:
 
   migrate-admin:
     name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 1 · Run admin DB migrations
-    if: inputs.should_deploy == 'true'
+    if: >-
+      always() &&
+      inputs.should_deploy == 'true' &&
+      needs.detect-deploy-targets.outputs.run_migrate_admin == 'true' &&
+      needs.sync-secrets.result == 'success'
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
-    needs: [sync-secrets]
+    needs: [detect-deploy-targets, sync-secrets]
     steps:
       - name: Checkout
         uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
@@ -86,10 +176,17 @@ jobs:
 
   derive-sentry-release:
     name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 2 · Derive Sentry release
-    if: inputs.should_deploy == 'true'
+    if: >-
+      always() &&
+      inputs.should_deploy == 'true' &&
+      needs.sync-secrets.result == 'success' &&
+      (
+        needs.detect-deploy-targets.outputs.deploy_api == 'true' ||
+        needs.detect-deploy-targets.outputs.deploy_web == 'true'
+      )
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
-    needs: [sync-secrets]
+    needs: [detect-deploy-targets, sync-secrets]
     outputs:
       release: ${{ steps.release.outputs.release }}
     steps:
@@ -106,10 +203,18 @@ jobs:
 
   deploy-api:
     name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 3 · Deploy API (Fly)
-    if: inputs.should_deploy == 'true'
+    if: >-
+      always() &&
+      inputs.should_deploy == 'true' &&
+      needs.detect-deploy-targets.outputs.deploy_api == 'true' &&
+      needs.sync-secrets.result == 'success' &&
+      needs.migrate.result != 'failure' &&
+      needs.derive-sentry-release.result != 'failure' &&
+      (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') &&
+      (needs.derive-sentry-release.result == 'success' || needs.derive-sentry-release.result == 'skipped')
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
-    needs: [migrate, derive-sentry-release]
+    needs: [detect-deploy-targets, sync-secrets, migrate, derive-sentry-release]
     steps:
       - name: Checkout
         uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
@@ -148,10 +253,18 @@ jobs:
 
   deploy-web:
     name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 3 · Deploy web (CF)
-    if: inputs.should_deploy == 'true'
+    if: >-
+      always() &&
+      inputs.should_deploy == 'true' &&
+      needs.detect-deploy-targets.outputs.deploy_web == 'true' &&
+      needs.sync-secrets.result == 'success' &&
+      needs.migrate.result != 'failure' &&
+      needs.derive-sentry-release.result != 'failure' &&
+      (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') &&
+      (needs.derive-sentry-release.result == 'success' || needs.derive-sentry-release.result == 'skipped')
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
-    needs: [migrate, derive-sentry-release]
+    needs: [detect-deploy-targets, sync-secrets, migrate, derive-sentry-release]
     steps:
       - name: Checkout
         uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
@@ -177,10 +290,16 @@ jobs:
 
   deploy-marketing:
     name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 3 · Deploy marketing (CF)
-    if: inputs.should_deploy == 'true'
+    if: >-
+      always() &&
+      inputs.should_deploy == 'true' &&
+      needs.detect-deploy-targets.outputs.deploy_marketing == 'true' &&
+      needs.sync-secrets.result == 'success' &&
+      needs.migrate.result != 'failure' &&
+      (needs.migrate.result == 'success' || needs.migrate.result == 'skipped')
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
-    needs: [migrate]
+    needs: [detect-deploy-targets, sync-secrets, migrate]
     steps:
       - name: Checkout
         uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
@@ -205,10 +324,16 @@ jobs:
 
   deploy-admin:
     name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 3 · Deploy admin (Fly)
-    if: inputs.should_deploy == 'true'
+    if: >-
+      always() &&
+      inputs.should_deploy == 'true' &&
+      needs.detect-deploy-targets.outputs.deploy_admin == 'true' &&
+      needs.sync-secrets.result == 'success' &&
+      needs.migrate-admin.result != 'failure' &&
+      (needs.migrate-admin.result == 'success' || needs.migrate-admin.result == 'skipped')
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
-    needs: [migrate-admin]
+    needs: [detect-deploy-targets, sync-secrets, migrate-admin]
     steps:
       - name: Checkout
         uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
@@ -238,10 +363,30 @@ jobs:
 
   smoke:
     name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 4 · Smoke
-    if: inputs.should_deploy == 'true'
+    if: >-
+      always() &&
+      inputs.should_deploy == 'true' &&
+      needs.detect-deploy-targets.result == 'success' &&
+      (
+        needs.detect-deploy-targets.outputs.deploy_api == 'true' ||
+        needs.detect-deploy-targets.outputs.deploy_web == 'true' ||
+        needs.detect-deploy-targets.outputs.deploy_marketing == 'true' ||
+        needs.detect-deploy-targets.outputs.deploy_admin == 'true'
+      ) &&
+      needs.deploy-api.result != 'failure' &&
+      needs.deploy-web.result != 'failure' &&
+      needs.deploy-marketing.result != 'failure' &&
+      needs.deploy-admin.result != 'failure'
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
-    needs: [deploy-api, deploy-web, deploy-marketing, deploy-admin]
+    needs:
+      [
+        detect-deploy-targets,
+        deploy-api,
+        deploy-web,
+        deploy-marketing,
+        deploy-admin,
+      ]
     env:
       APP_BASE_URL: ${{ vars.APP_BASE_URL }}
       FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
@@ -256,7 +401,58 @@ jobs:
           ref: ${{ inputs.ref != '' && inputs.ref || github.sha }}
 
       - name: Smoke deploy surfaces
+        if: >-
+          needs.detect-deploy-targets.outputs.deploy_api == 'true' ||
+          needs.detect-deploy-targets.outputs.deploy_web == 'true' ||
+          needs.detect-deploy-targets.outputs.deploy_marketing == 'true'
         run: bash .github/scripts/smoke-staging-health.sh
 
       - name: Smoke admin portal health
+        if: needs.detect-deploy-targets.outputs.deploy_admin == 'true'
         run: bash .github/scripts/smoke-admin-health.sh
+
+  update-deployed-state:
+    name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 5 · Update DEPLOYED_STATE
+    if: >-
+      always() &&
+      inputs.should_deploy == 'true' &&
+      needs.smoke.result == 'success'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    needs:
+      [
+        detect-deploy-targets,
+        deploy-api,
+        deploy-web,
+        deploy-marketing,
+        deploy-admin,
+        smoke,
+      ]
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+        with:
+          ref: ${{ inputs.ref != '' && inputs.ref || github.sha }}
+
+      - name: Resolve deployed SHA
+        id: sha
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Merge successful surfaces into DEPLOYED_STATE
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ENVIRONMENT: ${{ inputs.environment }}
+          GIT_SHA: ${{ steps.sha.outputs.sha }}
+          DEPLOYED_STATE_JSON: ${{ vars[format('DEPLOYED_STATE_{0}', inputs.environment)] }}
+          DEPLOY_API_FLAG: ${{ needs.detect-deploy-targets.outputs.deploy_api }}
+          DEPLOY_WEB_FLAG: ${{ needs.detect-deploy-targets.outputs.deploy_web }}
+          DEPLOY_MARKETING_FLAG: ${{ needs.detect-deploy-targets.outputs.deploy_marketing }}
+          DEPLOY_ADMIN_FLAG: ${{ needs.detect-deploy-targets.outputs.deploy_admin }}
+          DEPLOY_API_RESULT: ${{ needs.deploy-api.result }}
+          DEPLOY_WEB_RESULT: ${{ needs.deploy-web.result }}
+          DEPLOY_MARKETING_RESULT: ${{ needs.deploy-marketing.result }}
+          DEPLOY_ADMIN_RESULT: ${{ needs.deploy-admin.result }}
+        run: bash .github/scripts/update-deployed-state.sh

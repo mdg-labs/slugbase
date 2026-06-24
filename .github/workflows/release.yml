@@ -7,6 +7,11 @@ on:
     types: [published]
 
   workflow_dispatch:
+    inputs:
+      force_full_deploy:
+        description: Deploy all surfaces regardless of change detection
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -46,6 +51,7 @@ jobs:
       environment: production
       ref: ${{ github.event.release.tag_name }}
       should_deploy: ${{ needs.check-not-deployed.outputs.should_deploy }}
+      force_full_deploy: ${{ github.event_name == 'workflow_dispatch' && inputs.force_full_deploy && 'true' || 'false' }}
     secrets: inherit
 
   push-ghcr-image:

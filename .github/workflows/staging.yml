@@ -7,6 +7,11 @@ on:
     branches: [staging]
 
   workflow_dispatch:
+    inputs:
+      force_full_deploy:
+        description: Deploy all surfaces regardless of change detection
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -33,6 +38,7 @@ jobs:
     uses: ./.github/workflows/deploy.yml
     with:
       environment: staging
+      force_full_deploy: ${{ github.event_name == 'workflow_dispatch' && inputs.force_full_deploy && 'true' || 'false' }}
     secrets: inherit
 
   push-ghcr-staging-dev:
