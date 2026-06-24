@@ -26,20 +26,44 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     outputs:
-      should_deploy: ${{ steps.compare.outputs.should_deploy }}
+      should_deploy: ${{ steps.check.outputs.should_deploy }}
+      deploy_api_needed: ${{ steps.check.outputs.deploy_api_needed }}
+      deploy_web_needed: ${{ steps.check.outputs.deploy_web_needed }}
+      deploy_marketing_needed: ${{ steps.check.outputs.deploy_marketing_needed }}
+      deploy_admin_needed: ${{ steps.check.outputs.deploy_admin_needed }}
     steps:
-      - name: Compare release tag to deployed version
-        id: compare
+      - name: Checkout release tag
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          fetch-depth: 0
+
+      - name: Compare release surfaces to DEPLOYED_STATE
+        id: check
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          DEPLOYED_STATE_JSON: ${{ vars.DEPLOYED_STATE_production }}
+        run: bash .github/scripts/check-production-deploy-needed.sh
+
+      - name: Write deploy gate summary
+        env:
+          SHOULD_DEPLOY: ${{ steps.check.outputs.should_deploy }}
+          SKIP_REASONS: ${{ steps.check.outputs.skip_reasons }}
         run: |
-          TAG="${{ github.event.release.tag_name }}"
-          DEPLOYED="${{ vars.DEPLOYED_VERSION }}"
-          if [ -n "$DEPLOYED" ] && [ "$TAG" = "$DEPLOYED" ]; then
-            echo "should_deploy=false" >> "$GITHUB_OUTPUT"
-            echo "Tag ${TAG} already deployed — skipping"
-          else
-            echo "should_deploy=true" >> "$GITHUB_OUTPUT"
-            echo "Deploying release ${TAG}"
-          fi
+          {
+            echo "### Production release gate"
+            echo ""
+            echo "**should_deploy:** \`${SHOULD_DEPLOY}\`"
+            if [ -n "${SKIP_REASONS}" ]; then
+              echo ""
+              echo "### Skipped surfaces"
+              echo ""
+              while IFS= read -r reason; do
+                [ -z "${reason}" ] && continue
+                echo "- ${reason}"
+              done <<< "${SKIP_REASONS}"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
   deploy:
     name: Deploy production
@@ -92,6 +116,7 @@ jobs:
           HEAD_REF: ${{ github.event.release.tag_name }}
           BASE_REF: ""
           FORCE_FULL_DEPLOY: ${{ steps.force.outputs.force_full_deploy }}
+          DEPLOYED_STATE_JSON: ${{ vars.DEPLOYED_STATE_production }}
         run: bash .github/scripts/detect-deploy-targets.sh
 
   push-ghcr-api:
@@ -101,6 +126,7 @@ jobs:
     needs: [check-not-deployed, detect-ghcr-targets]
     if: >-
       needs.check-not-deployed.outputs.should_deploy == 'true' &&
+      needs.check-not-deployed.outputs.deploy_api_needed == 'true' &&
       needs.detect-ghcr-targets.outputs.push_ghcr_api == 'true'
     permissions:
       contents: read
@@ -139,6 +165,7 @@ jobs:
     needs: [check-not-deployed, detect-ghcr-targets]
     if: >-
       needs.check-not-deployed.outputs.should_deploy == 'true' &&
+      needs.check-not-deployed.outputs.deploy_web_needed == 'true' &&
       needs.detect-ghcr-targets.outputs.push_ghcr_web == 'true'
     permissions:
       contents: read
@@ -171,7 +198,7 @@ jobs:
           --latest
 
   record-deployed-version:
-    name: Production · Record deployed version
+    name: Production · Record release tag
     needs:
       [
         check-not-deployed,
@@ -189,7 +216,7 @@ jobs:
     permissions:
       actions: write
     steps:
-      - name: Update DEPLOYED_VERSION
+      - name: Record aggregate release tag
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh variable set DEPLOYED_VERSION --body "${{ github.event.release.tag_name }}"

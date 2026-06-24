@@ -6,6 +6,8 @@
 #   HEAD_REF             git ref for head (default: HEAD)
 #   BASE_REF             optional git base for turbo --filter=...[BASE_REF]
 #   FORCE_FULL_DEPLOY    true | false (default: false)
+#   DEPLOYED_STATE_JSON  optional production idempotency map (WP-8)
+#   RELEASE_SHA          optional deployed commit SHA (defaults to HEAD)
 #
 # Outputs (GITHUB_OUTPUT when set):
 #   deploy_api, deploy_web, deploy_marketing, deploy_admin,
@@ -20,6 +22,8 @@ ENVIRONMENT="${ENVIRONMENT:-}"
 HEAD_REF="${HEAD_REF:-HEAD}"
 BASE_REF="${BASE_REF:-}"
 FORCE_FULL_DEPLOY="${FORCE_FULL_DEPLOY:-false}"
+DEPLOYED_STATE_JSON="${DEPLOYED_STATE_JSON:-}"
+RELEASE_SHA="${RELEASE_SHA:-}"
 
 usage() {
   echo "Usage: ENVIRONMENT=staging|production [HEAD_REF=ref] [BASE_REF=ref] [FORCE_FULL_DEPLOY=true|false] $0" >&2
@@ -48,6 +52,8 @@ export DETECT_ENVIRONMENT="$ENVIRONMENT"
 export DETECT_HEAD_REF="$HEAD_REF"
 export DETECT_BASE_REF="$BASE_REF"
 export DETECT_FORCE_FULL_DEPLOY="$FORCE_FULL_DEPLOY"
+export DETECT_DEPLOYED_STATE_JSON="$DEPLOYED_STATE_JSON"
+export DETECT_RELEASE_SHA="${RELEASE_SHA:-$(git rev-parse HEAD)}"
 
 RESULT_JSON="$(
   node <<'NODE'
@@ -64,6 +70,8 @@ const environment = process.env.DETECT_ENVIRONMENT;
 const headRef = process.env.DETECT_HEAD_REF || "HEAD";
 const baseRef = process.env.DETECT_BASE_REF || "";
 const forceFullDeploy = process.env.DETECT_FORCE_FULL_DEPLOY === "true";
+const deployedStateJson = process.env.DETECT_DEPLOYED_STATE_JSON ?? "";
+const releaseSha = process.env.DETECT_RELEASE_SHA ?? "";
 
 function readPackageVersions() {
   const packagesDir = join(process.cwd(), "packages");
@@ -126,6 +134,8 @@ const result = detectDeployTargets({
   changedPaths: collectChangedPaths(),
   packageVersions: readPackageVersions(),
   forceFullDeploy,
+  deployedStateJson,
+  releaseSha,
 });
 
 process.stdout.write(
