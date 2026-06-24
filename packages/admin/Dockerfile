@@ -15,10 +15,12 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.js
 COPY scripts/check-node-version.mjs scripts/check-node-version.mjs
 COPY packages/admin/package.json packages/admin/
 COPY packages/db-admin/package.json packages/db-admin/
+COPY packages/shared-types/package.json packages/shared-types/
 COPY patches/ patches/
 RUN pnpm install --frozen-lockfile
 
 FROM build-deps AS build
+COPY packages/shared-types packages/shared-types
 COPY packages/db-admin packages/db-admin
 COPY packages/admin packages/admin
 RUN pnpm exec turbo run build --filter=@slugbase/admin...
