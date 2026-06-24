@@ -11,6 +11,12 @@ export { renderLayout } from "./components/EmailLayout.js";
 export type { EmailLayoutProps } from "./components/EmailLayout.js";
 
 export {
+  SLUGBASE_LOGO_CID,
+  SLUGBASE_LOGO_FILENAME,
+  resolveSlugbaseLogoPath,
+} from "./logo.js";
+
+export {
   renderSignupVerificationEmail,
   renderEmailChangeVerificationEmail,
   renderPasswordResetEmail,

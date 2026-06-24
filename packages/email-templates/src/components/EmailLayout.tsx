@@ -1,3 +1,5 @@
+import { SLUGBASE_LOGO_CID } from "../logo.js";
+
 /**
  * Shared dark-themed email layout (spec section 23, colors_and_type.css tokens).
  *
@@ -67,10 +69,10 @@ export function renderLayout({ children, title }: EmailLayoutProps): string {
           <tr>
             <td align="center" style="padding-bottom:32px;">
               <img
-                src="cid:slugbase-logo"
+                src="cid:${SLUGBASE_LOGO_CID}"
                 alt="SlugBase"
-                width="140"
-                height="28"
+                width="48"
+                height="48"
                 style="display:block;border:0;outline:none;"
               />
             </td>

@@ -52,6 +52,7 @@ COPY --from=build /app/packages/shared-types/package.json ./packages/shared-type
 COPY --from=build /app/packages/shared-types/dist ./packages/shared-types/dist
 COPY --from=build /app/packages/email-templates/package.json ./packages/email-templates/package.json
 COPY --from=build /app/packages/email-templates/dist ./packages/email-templates/dist
+COPY --from=build /app/packages/email-templates/assets ./packages/email-templates/assets
 COPY --from=build /app/packages/backend/package.json ./packages/backend/package.json
 COPY --from=build /app/packages/backend/dist ./packages/backend/dist
 COPY --from=build /app/packages/backend/migrations ./packages/backend/migrations

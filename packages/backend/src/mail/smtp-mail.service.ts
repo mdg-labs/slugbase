@@ -1,5 +1,10 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import { renderMailTransportTestEmail } from "@slugbase/email-templates";
+import {
+  renderMailTransportTestEmail,
+  SLUGBASE_LOGO_CID,
+  SLUGBASE_LOGO_FILENAME,
+  resolveSlugbaseLogoPath,
+} from "@slugbase/email-templates";
 import { MailSendError, type MailMessage, type MailService } from "@slugbase/shared-types";
 import nodemailer, { type Transporter } from "nodemailer";
 
@@ -53,6 +58,18 @@ export class SmtpMailService implements MailService {
         subject: message.subject,
         text: message.text,
         html: message.html,
+        ...(message.html
+          ? {
+              attachments: [
+                {
+                  filename: SLUGBASE_LOGO_FILENAME,
+                  path: resolveSlugbaseLogoPath(),
+                  cid: SLUGBASE_LOGO_CID,
+                  contentDisposition: "inline",
+                },
+              ],
+            }
+          : {}),
       });
     } catch (error) {
       this.logger.error("Failed to send mail", {

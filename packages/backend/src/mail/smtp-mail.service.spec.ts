@@ -3,6 +3,11 @@ import { describe, expect, it, vi } from "vitest";
 import { ConfigService } from "../config/config.service.js";
 import { validateEnvConfig } from "../config/env.schema.js";
 import { validTestEnv } from "../test-utils/test-env.js";
+import {
+  SLUGBASE_LOGO_CID,
+  SLUGBASE_LOGO_FILENAME,
+  resolveSlugbaseLogoPath,
+} from "@slugbase/email-templates";
 import { SmtpMailService } from "./smtp-mail.service.js";
 
 function buildConfig(overrides: NodeJS.ProcessEnv = {}): ConfigService {
@@ -83,6 +88,36 @@ describe("SmtpMailService", () => {
         subject: "Password reset",
         text: "Click here to reset.",
         html: "<p>Click here to reset.</p>",
+        attachments: [
+          {
+            filename: SLUGBASE_LOGO_FILENAME,
+            path: resolveSlugbaseLogoPath(),
+            cid: SLUGBASE_LOGO_CID,
+            contentDisposition: "inline",
+          },
+        ],
+      }),
+    );
+  });
+
+  it("omits logo attachment for plain-text-only messages", async () => {
+    const config = buildConfig();
+    const service = new SmtpMailService(config);
+
+    const sendMailSpy = vi
+      .spyOn(service["transport"], "sendMail")
+      .mockResolvedValue({ messageId: "test-id" });
+
+    await service.send({
+      to: "recipient@example.com",
+      subject: "Test",
+      text: "body",
+      type: "member_invitation",
+    });
+
+    expect(sendMailSpy).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        attachments: expect.anything(),
       }),
     );
   });
@@ -122,6 +157,14 @@ describe("SmtpMailService", () => {
         subject: "SlugBase mail transport test",
         text: "This is a test message from SlugBase. If you received this, the mail transport is working correctly.",
         html: expect.stringContaining("mail transport is working correctly"),
+        attachments: [
+          {
+            filename: SLUGBASE_LOGO_FILENAME,
+            path: resolveSlugbaseLogoPath(),
+            cid: SLUGBASE_LOGO_CID,
+            contentDisposition: "inline",
+          },
+        ],
       }),
     );
     const html = sendMailSpy.mock.calls[0]?.[0]?.html as string;
