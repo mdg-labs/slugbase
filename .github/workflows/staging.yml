@@ -57,18 +57,14 @@ jobs:
             echo "deploy_mode=auto" >> "$GITHUB_OUTPUT"
           fi
 
-  assert-ci-ref:
-    name: Verify CI runs on git_ref
-    needs: [resolve-deploy-ref]
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    steps:
       - name: Checkout git_ref
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
         with:
           ref: ${{ inputs.git_ref }}
 
       - name: Assert workflow ref matches git_ref
+        if: github.event_name == 'workflow_dispatch'
         run: |
           TARGET_SHA="$(git rev-parse HEAD)"
           if [ "$TARGET_SHA" != "${{ github.sha }}" ]; then
@@ -78,10 +74,7 @@ jobs:
 
   ci:
     name: CI
-    needs: [assert-ci-ref]
-    if: >-
-      always() &&
-      (needs.assert-ci-ref.result == 'success' || needs.assert-ci-ref.result == 'skipped')
+    needs: [resolve-deploy-ref]
     permissions:
       contents: read
       pull-requests: write
@@ -89,39 +82,24 @@ jobs:
     secrets: inherit
 
   plan:
-    name: Staging · Deploy plan (GHCR gate)
+    name: Staging · Deploy plan
     needs: [ci, resolve-deploy-ref]
     if: needs.ci.result == 'success'
-    runs-on: ubuntu-latest
-    environment: staging
-    outputs:
-      push_ghcr_api: ${{ steps.plan.outputs.push_ghcr_api }}
-      push_ghcr_web: ${{ steps.plan.outputs.push_ghcr_web }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
-        with:
-          ref: ${{ needs.resolve-deploy-ref.outputs.checkout_ref != '' && needs.resolve-deploy-ref.outputs.checkout_ref || github.sha }}
-
-      - name: Resolve deploy plan
-        id: plan
-        env:
-          ENVIRONMENT: staging
-          DEPLOY_MODE: ${{ needs.resolve-deploy-ref.outputs.deploy_mode }}
-          SHOULD_DEPLOY: "true"
-          FORCE_FULL_DEPLOY: ${{ needs.resolve-deploy-ref.outputs.deploy_mode == 'manual' && 'true' || 'false' }}
-          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
-          FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
-          MARKETING_ORIGIN: ${{ vars.MARKETING_ORIGIN }}
-          ADMIN_URL: ${{ secrets.ADMIN_URL }}
-          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
-          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
-        run: node scripts/ci/resolve-deploy-plan.mjs
+    permissions:
+      contents: read
+    uses: ./.github/workflows/deploy-plan.yml
+    with:
+      environment: staging
+      ref: ${{ needs.resolve-deploy-ref.outputs.checkout_ref }}
+      deploy_mode: ${{ needs.resolve-deploy-ref.outputs.deploy_mode }}
+      force_full_deploy: ${{ needs.resolve-deploy-ref.outputs.deploy_mode == 'manual' && 'true' || 'false' }}
+      should_deploy: "true"
+    secrets: inherit
 
   deploy:
     name: Deploy staging
-    needs: [ci, resolve-deploy-ref]
-    if: needs.ci.result == 'success'
+    needs: [plan, resolve-deploy-ref]
+    if: needs.plan.result == 'success'
     permissions:
       actions: write
       contents: read
@@ -131,14 +109,23 @@ jobs:
       ref: ${{ needs.resolve-deploy-ref.outputs.checkout_ref }}
       deploy_mode: ${{ needs.resolve-deploy-ref.outputs.deploy_mode }}
       force_full_deploy: ${{ needs.resolve-deploy-ref.outputs.deploy_mode == 'manual' && 'true' || 'false' }}
+      caller_plan: "true"
+      deploy_api: ${{ needs.plan.outputs.deploy_api }}
+      deploy_web: ${{ needs.plan.outputs.deploy_web }}
+      deploy_marketing: ${{ needs.plan.outputs.deploy_marketing }}
+      deploy_admin: ${{ needs.plan.outputs.deploy_admin }}
+      run_migrate: ${{ needs.plan.outputs.run_migrate }}
+      run_migrate_admin: ${{ needs.plan.outputs.run_migrate_admin }}
+      push_ghcr_api: ${{ needs.plan.outputs.push_ghcr_api }}
+      push_ghcr_web: ${{ needs.plan.outputs.push_ghcr_web }}
+      sync_services: ${{ needs.plan.outputs.sync_services }}
+      skip_reasons: ${{ needs.plan.outputs.skip_reasons }}
     secrets: inherit
 
   push-ghcr-api:
     name: Staging · Push slugbase-api (GHCR dev)
-    needs: [ci, plan, resolve-deploy-ref]
-    if: >-
-      needs.ci.result == 'success' &&
-      needs.plan.outputs.push_ghcr_api == 'true'
+    needs: [plan, resolve-deploy-ref]
+    if: needs.plan.outputs.push_ghcr_api == 'true'
     runs-on: ubuntu-latest
     environment: staging
     permissions:
@@ -169,10 +156,8 @@ jobs:
 
   push-ghcr-web:
     name: Staging · Push slugbase-web (GHCR dev)
-    needs: [ci, plan, resolve-deploy-ref]
-    if: >-
-      needs.ci.result == 'success' &&
-      needs.plan.outputs.push_ghcr_web == 'true'
+    needs: [plan, resolve-deploy-ref]
+    if: needs.plan.outputs.push_ghcr_web == 'true'
     runs-on: ubuntu-latest
     environment: staging
     permissions:

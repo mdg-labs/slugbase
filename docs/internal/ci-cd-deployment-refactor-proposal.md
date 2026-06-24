@@ -66,10 +66,12 @@ Shared libs (`shared-types`, `ui`, `email-templates`, `db-admin`) are not deploy
 ### Staging (`staging.yml`)
 
 ```text
-ci → deploy(staging) → smoke
+resolve-deploy-ref → ci → plan (deploy-plan.yml, once) → deploy(staging, caller_plan) + GHCR*
 ```
 
-Plan job: `environment: staging`, probe `/version` with **CF Access headers**, backoff retries.
+- **Single plan per push:** `deploy-plan.yml` probes live `/version` once; `deploy.yml` receives `caller_plan=true` and skips re-probing.
+- **Dispatch ref guard:** `workflow_dispatch` ref assertion runs inside `resolve-deploy-ref` (no separate skipped job in the CI `needs` chain).
+- Plan job: `environment: staging`, probe `/version` with **CF Access headers**, backoff retries.
 
 ### Production (`main.yml`)
 
@@ -87,10 +89,12 @@ push main
 ### `deploy.yml` (reusable)
 
 ```text
-plan (live probes) → sync-secrets → migrate* → deploy* → smoke
+plan (live probes OR caller_plan bridge) → sync-secrets → migrate* → deploy* → smoke
 ```
 
-Plan job **must** set `environment: ${{ inputs.environment }}` for correct URLs/secrets. CF Access env vars passed **only when `environment=staging`**.
+When `caller_plan=true` (staging), plan outputs are passed from `deploy-plan.yml` — no second probe.
+
+Plan job **must** set `environment: ${{ inputs.environment }}` for correct URLs/secrets when probing. CF Access env vars passed **only when `environment=staging`**.
 
 **Delete:** `release.yml`, `update-deployed-state` job, `detect-ghcr-targets` duplicate jobs (GHCR predicates from plan outputs).
 
@@ -134,7 +138,7 @@ Today only **staging** is live. Production probes will bootstrap (`V_live = 0.0.
 |---|---|
 | `scripts/ci/` | `resolve-deploy-plan.mjs`, `probe-version.mjs`, `create-draft-release.mjs`, `derive-sentry-release.mjs`, platform bash (`deploy-fly.sh`, `sync-secrets.sh`, smoke, GHCR, migrate, …) |
 | `scripts/` | Local dev, e2e, i18n, validation (`with-ci-env.sh`, reportportal, …) |
-| `.github/workflows/` | YAML + composite actions only |
+| `.github/workflows/` | YAML + composite actions only (`deploy-plan.yml` shared plan; `deploy.yml` migrate/deploy/smoke) |
 | `.github/scripts/` | **Delete** after migration |
 
 Workflows call `node scripts/ci/…` or `bash scripts/ci/…` directly — **no bash→Node wrappers**.

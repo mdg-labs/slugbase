@@ -1,0 +1,142 @@
+name: Deploy Plan
+
+# Live /version probe deploy plan — shared by staging.yml (once per push) and callable standalone.
+# workflow_call only (spec §22).
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: GitHub Actions environment (staging | production)
+        type: string
+        required: true
+      ref:
+        description: Checkout ref (empty uses github.sha)
+        type: string
+        required: false
+        default: ""
+      deploy_mode:
+        description: auto (live /version probes) | manual (skip live compare)
+        type: string
+        required: false
+        default: "auto"
+      force_full_deploy:
+        description: Deploy all surfaces regardless of live version compare
+        type: string
+        required: false
+        default: "false"
+      should_deploy:
+        description: When false, emit empty plan (sync-only callers)
+        type: string
+        required: false
+        default: "true"
+    outputs:
+      deploy_api:
+        description: Whether to deploy API
+        value: ${{ jobs.plan.outputs.deploy_api }}
+      deploy_web:
+        description: Whether to deploy web
+        value: ${{ jobs.plan.outputs.deploy_web }}
+      deploy_marketing:
+        description: Whether to deploy marketing
+        value: ${{ jobs.plan.outputs.deploy_marketing }}
+      deploy_admin:
+        description: Whether to deploy admin
+        value: ${{ jobs.plan.outputs.deploy_admin }}
+      run_migrate:
+        description: Whether to run API DB migrations
+        value: ${{ jobs.plan.outputs.run_migrate }}
+      run_migrate_admin:
+        description: Whether to run admin DB migrations
+        value: ${{ jobs.plan.outputs.run_migrate_admin }}
+      push_ghcr_api:
+        description: Whether to push API GHCR image
+        value: ${{ jobs.plan.outputs.push_ghcr_api }}
+      push_ghcr_web:
+        description: Whether to push web GHCR image
+        value: ${{ jobs.plan.outputs.push_ghcr_web }}
+      sync_services:
+        description: Comma-separated services for sync-secrets
+        value: ${{ jobs.plan.outputs.sync_services }}
+      deployed_api:
+        description: API marked deployed (prepare-release gate)
+        value: ${{ jobs.plan.outputs.deployed_api }}
+      deployed_web:
+        description: Web marked deployed (prepare-release gate)
+        value: ${{ jobs.plan.outputs.deployed_web }}
+      skip_reasons:
+        description: Newline-separated skip reasons from plan
+        value: ${{ jobs.plan.outputs.skip_reasons }}
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · Deploy plan
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    outputs:
+      deploy_api: ${{ steps.plan.outputs.deploy_api }}
+      deploy_web: ${{ steps.plan.outputs.deploy_web }}
+      deploy_marketing: ${{ steps.plan.outputs.deploy_marketing }}
+      deploy_admin: ${{ steps.plan.outputs.deploy_admin }}
+      run_migrate: ${{ steps.plan.outputs.run_migrate }}
+      run_migrate_admin: ${{ steps.plan.outputs.run_migrate_admin }}
+      push_ghcr_api: ${{ steps.plan.outputs.push_ghcr_api }}
+      push_ghcr_web: ${{ steps.plan.outputs.push_ghcr_web }}
+      sync_services: ${{ steps.plan.outputs.sync_services }}
+      deployed_api: ${{ steps.plan.outputs.deployed_api }}
+      deployed_web: ${{ steps.plan.outputs.deployed_web }}
+      skip_reasons: ${{ steps.plan.outputs.skip_reasons }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+        with:
+          ref: ${{ inputs.ref != '' && inputs.ref || github.sha }}
+
+      - name: Resolve deploy plan
+        id: plan
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          DEPLOY_MODE: ${{ inputs.deploy_mode }}
+          SHOULD_DEPLOY: ${{ inputs.should_deploy }}
+          FORCE_FULL_DEPLOY: ${{ inputs.force_full_deploy }}
+          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+          FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
+          MARKETING_ORIGIN: ${{ vars.MARKETING_ORIGIN }}
+          ADMIN_URL: ${{ secrets.ADMIN_URL }}
+          CF_ACCESS_CLIENT_ID: ${{ inputs.environment == 'staging' && secrets.CF_ACCESS_CLIENT_ID || '' }}
+          CF_ACCESS_CLIENT_SECRET: ${{ inputs.environment == 'staging' && secrets.CF_ACCESS_CLIENT_SECRET || '' }}
+        run: node scripts/ci/resolve-deploy-plan.mjs
+
+      - name: Write deploy plan summary
+        env:
+          DEPLOY_API: ${{ steps.plan.outputs.deploy_api }}
+          DEPLOY_WEB: ${{ steps.plan.outputs.deploy_web }}
+          DEPLOY_MARKETING: ${{ steps.plan.outputs.deploy_marketing }}
+          DEPLOY_ADMIN: ${{ steps.plan.outputs.deploy_admin }}
+          SYNC_SERVICES: ${{ steps.plan.outputs.sync_services }}
+          SKIP_REASONS: ${{ steps.plan.outputs.skip_reasons }}
+        run: |
+          {
+            echo "### Deploy plan (${{ inputs.environment }})"
+            echo ""
+            echo "| Surface | Deploy |"
+            echo "|---|---|"
+            echo "| API | ${DEPLOY_API} |"
+            echo "| Web | ${DEPLOY_WEB} |"
+            echo "| Marketing | ${DEPLOY_MARKETING} |"
+            echo "| Admin | ${DEPLOY_ADMIN} |"
+            echo ""
+            echo "**sync-secrets services:** \`${SYNC_SERVICES}\`"
+            if [ -n "${SKIP_REASONS}" ]; then
+              echo ""
+              echo "### Skipped surfaces"
+              echo ""
+              while IFS= read -r reason; do
+                [ -z "${reason}" ] && continue
+                echo "- ${reason}"
+              done <<< "${SKIP_REASONS}"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

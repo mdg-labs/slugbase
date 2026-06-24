@@ -76,9 +76,8 @@ jobs:
 
   push-ghcr-api:
     name: Production · GHCR · Push slugbase-api
-    needs: [ci, plan, deploy-production]
+    needs: [plan, deploy-production]
     if: >-
-      needs.ci.result == 'success' &&
       needs.deploy-production.result == 'success' &&
       needs.plan.outputs.push_ghcr_api == 'true'
     runs-on: ubuntu-latest
@@ -113,9 +112,8 @@ jobs:
 
   push-ghcr-web:
     name: Production · GHCR · Push slugbase-web
-    needs: [ci, plan, deploy-production]
+    needs: [plan, deploy-production]
     if: >-
-      needs.ci.result == 'success' &&
       needs.deploy-production.result == 'success' &&
       needs.plan.outputs.push_ghcr_web == 'true'
     runs-on: ubuntu-latest

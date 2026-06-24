@@ -1,7 +1,7 @@
 name: Deploy
 
-# Parameterized deploy pipeline — plan (live /version probes) → sync → migrate → deploy → smoke.
-# Called from staging.yml (after CI) and release.yml (production).
+# Parameterized deploy pipeline — plan (live /version probes or caller_plan) → sync → migrate → deploy → smoke.
+# Called from staging.yml (after CI + shared plan) and main.yml (production).
 # workflow_call only — no direct triggers (spec §22).
 
 on:
@@ -34,6 +34,61 @@ on:
         type: string
         required: false
         default: "auto"
+      caller_plan:
+        description: When true, use plan inputs from caller (skip live /version probes)
+        type: string
+        required: false
+        default: "false"
+      deploy_api:
+        description: Caller plan — deploy API
+        type: string
+        required: false
+        default: "false"
+      deploy_web:
+        description: Caller plan — deploy web
+        type: string
+        required: false
+        default: "false"
+      deploy_marketing:
+        description: Caller plan — deploy marketing
+        type: string
+        required: false
+        default: "false"
+      deploy_admin:
+        description: Caller plan — deploy admin
+        type: string
+        required: false
+        default: "false"
+      run_migrate:
+        description: Caller plan — run API migrations
+        type: string
+        required: false
+        default: "false"
+      run_migrate_admin:
+        description: Caller plan — run admin migrations
+        type: string
+        required: false
+        default: "false"
+      push_ghcr_api:
+        description: Caller plan — push API GHCR image
+        type: string
+        required: false
+        default: "false"
+      push_ghcr_web:
+        description: Caller plan — push web GHCR image
+        type: string
+        required: false
+        default: "false"
+      sync_services:
+        description: Caller plan — sync-secrets services list
+        type: string
+        required: false
+        default: "none"
+      skip_reasons:
+        description: Caller plan — skip reasons (newline-separated)
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -45,7 +100,9 @@ concurrency:
 jobs:
   plan:
     name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 0 · Deploy plan
-    if: inputs.should_deploy == 'true'
+    if: >-
+      inputs.caller_plan == 'true' ||
+      inputs.should_deploy == 'true'
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     outputs:
@@ -63,13 +120,25 @@ jobs:
       skip_reasons: ${{ steps.plan.outputs.skip_reasons }}
     steps:
       - name: Checkout
+        if: inputs.caller_plan != 'true'
         uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
         with:
           ref: ${{ inputs.ref != '' && inputs.ref || github.sha }}
 
-      - name: Resolve deploy plan
+      - name: Resolve or apply deploy plan
         id: plan
         env:
+          CALLER_PLAN: ${{ inputs.caller_plan }}
+          DEPLOY_API: ${{ inputs.deploy_api }}
+          DEPLOY_WEB: ${{ inputs.deploy_web }}
+          DEPLOY_MARKETING: ${{ inputs.deploy_marketing }}
+          DEPLOY_ADMIN: ${{ inputs.deploy_admin }}
+          RUN_MIGRATE: ${{ inputs.run_migrate }}
+          RUN_MIGRATE_ADMIN: ${{ inputs.run_migrate_admin }}
+          PUSH_GHCR_API: ${{ inputs.push_ghcr_api }}
+          PUSH_GHCR_WEB: ${{ inputs.push_ghcr_web }}
+          SYNC_SERVICES: ${{ inputs.sync_services }}
+          SKIP_REASONS: ${{ inputs.skip_reasons }}
           ENVIRONMENT: ${{ inputs.environment }}
           DEPLOY_MODE: ${{ inputs.deploy_mode }}
           SHOULD_DEPLOY: ${{ inputs.should_deploy }}
@@ -80,9 +149,28 @@ jobs:
           ADMIN_URL: ${{ secrets.ADMIN_URL }}
           CF_ACCESS_CLIENT_ID: ${{ inputs.environment == 'staging' && secrets.CF_ACCESS_CLIENT_ID || '' }}
           CF_ACCESS_CLIENT_SECRET: ${{ inputs.environment == 'staging' && secrets.CF_ACCESS_CLIENT_SECRET || '' }}
-        run: node scripts/ci/resolve-deploy-plan.mjs
+        run: |
+          if [ "${CALLER_PLAN}" = "true" ]; then
+            echo "deploy_api=${DEPLOY_API}" >> "$GITHUB_OUTPUT"
+            echo "deploy_web=${DEPLOY_WEB}" >> "$GITHUB_OUTPUT"
+            echo "deploy_marketing=${DEPLOY_MARKETING}" >> "$GITHUB_OUTPUT"
+            echo "deploy_admin=${DEPLOY_ADMIN}" >> "$GITHUB_OUTPUT"
+            echo "run_migrate=${RUN_MIGRATE}" >> "$GITHUB_OUTPUT"
+            echo "run_migrate_admin=${RUN_MIGRATE_ADMIN}" >> "$GITHUB_OUTPUT"
+            echo "push_ghcr_api=${PUSH_GHCR_API}" >> "$GITHUB_OUTPUT"
+            echo "push_ghcr_web=${PUSH_GHCR_WEB}" >> "$GITHUB_OUTPUT"
+            echo "sync_services=${SYNC_SERVICES}" >> "$GITHUB_OUTPUT"
+            echo "deployed_api=false" >> "$GITHUB_OUTPUT"
+            echo "deployed_web=false" >> "$GITHUB_OUTPUT"
+            echo "skip_reasons<<EOF" >> "$GITHUB_OUTPUT"
+            printf '%s\n' "${SKIP_REASONS}" >> "$GITHUB_OUTPUT"
+            echo "EOF" >> "$GITHUB_OUTPUT"
+          else
+            node scripts/ci/resolve-deploy-plan.mjs
+          fi
 
       - name: Write deploy plan summary
+        if: inputs.caller_plan != 'true'
         env:
           DEPLOY_API: ${{ steps.plan.outputs.deploy_api }}
           DEPLOY_WEB: ${{ steps.plan.outputs.deploy_web }}
