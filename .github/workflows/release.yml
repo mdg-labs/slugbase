@@ -54,12 +54,54 @@ jobs:
       force_full_deploy: ${{ github.event_name == 'workflow_dispatch' && inputs.force_full_deploy && 'true' || 'false' }}
     secrets: inherit
 
-  push-ghcr-image:
-    name: Production · GHCR · Push self-host image
-    runs-on: ubuntu-latest
-    environment: production
+  detect-ghcr-targets:
+    name: Production · Detect GHCR targets
     needs: [check-not-deployed]
     if: needs.check-not-deployed.outputs.should_deploy == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    outputs:
+      push_ghcr_api: ${{ steps.detect.outputs.push_ghcr_api }}
+      push_ghcr_web: ${{ steps.detect.outputs.push_ghcr_web }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          fetch-depth: 0
+
+      - name: Resolve force full deploy
+        id: force
+        env:
+          REQUESTED_FORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.force_full_deploy && 'true' || 'false' }}
+          DEPLOYED_STATE_JSON: ${{ vars.DEPLOYED_STATE_production }}
+        run: |
+          FORCE="$REQUESTED_FORCE"
+          if [ "$FORCE" != "true" ]; then
+            if [ -z "$DEPLOYED_STATE_JSON" ] || ! node -e 'try{const p=JSON.parse(process.argv[1]);process.exit(p&&typeof p==="object"&&!Array.isArray(p)?0:1)}catch{process.exit(1)}' "$DEPLOYED_STATE_JSON"; then
+              echo "detect-deploy-targets: missing or invalid DEPLOYED_STATE — forcing full deploy"
+              FORCE="true"
+            fi
+          fi
+          echo "force_full_deploy=$FORCE" >> "$GITHUB_OUTPUT"
+
+      - name: Detect deploy targets
+        id: detect
+        env:
+          ENVIRONMENT: production
+          HEAD_REF: ${{ github.event.release.tag_name }}
+          BASE_REF: ""
+          FORCE_FULL_DEPLOY: ${{ steps.force.outputs.force_full_deploy }}
+        run: bash .github/scripts/detect-deploy-targets.sh
+
+  push-ghcr-api:
+    name: Production · GHCR · Push slugbase-api
+    runs-on: ubuntu-latest
+    environment: production
+    needs: [check-not-deployed, detect-ghcr-targets]
+    if: >-
+      needs.check-not-deployed.outputs.should_deploy == 'true' &&
+      needs.detect-ghcr-targets.outputs.push_ghcr_api == 'true'
     permissions:
       contents: read
       packages: write
@@ -69,6 +111,10 @@ jobs:
         with:
           ref: ${{ github.event.release.tag_name }}
 
+      - name: Read API package version
+        id: version
+        run: echo "semver=$(node -p "require('./packages/backend/package.json').version")" >> "$GITHUB_OUTPUT"
+
       - name: Log in to GHCR
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
         with:
@@ -76,21 +122,68 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push combined image
+      - name: Build and push API image
         env:
           DOCKER_BUILDKIT: "1"
         run: >
           bash .github/scripts/build-push-ghcr.sh
-          ghcr.io/${{ github.repository }}
-          ${{ github.event.release.tag_name }}
+          --target api
+          ghcr.io/${{ format('{0}-api', github.repository) }}
+          ${{ steps.version.outputs.semver }}
+          --latest
+
+  push-ghcr-web:
+    name: Production · GHCR · Push slugbase-web
+    runs-on: ubuntu-latest
+    environment: production
+    needs: [check-not-deployed, detect-ghcr-targets]
+    if: >-
+      needs.check-not-deployed.outputs.should_deploy == 'true' &&
+      needs.detect-ghcr-targets.outputs.push_ghcr_web == 'true'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Read web package version
+        id: version
+        run: echo "semver=$(node -p "require('./packages/web/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push web image
+        env:
+          DOCKER_BUILDKIT: "1"
+        run: >
+          bash .github/scripts/build-push-ghcr.sh
+          --target web
+          ghcr.io/${{ format('{0}-web', github.repository) }}
+          ${{ steps.version.outputs.semver }}
+          --latest
 
   record-deployed-version:
     name: Production · Record deployed version
-    needs: [check-not-deployed, deploy, push-ghcr-image]
+    needs:
+      [
+        check-not-deployed,
+        deploy,
+        push-ghcr-api,
+        push-ghcr-web,
+      ]
     if: >-
       needs.check-not-deployed.outputs.should_deploy == 'true'
       && needs.deploy.result == 'success'
-      && needs.push-ghcr-image.result == 'success'
+      && needs.push-ghcr-api.result != 'failure'
+      && needs.push-ghcr-web.result != 'failure'
     runs-on: ubuntu-latest
     environment: production
     permissions:
