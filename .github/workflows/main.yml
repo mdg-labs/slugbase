@@ -1,6 +1,6 @@
 name: Main
 
-# Push to main — CI gate and draft release preparation (spec §22.4).
+# Push to main — CI gate, Changesets Version PR, and draft release (spec §22.4, §22.6).
 # Production deploy remains on release published (#474).
 
 on:
@@ -25,11 +25,23 @@ jobs:
     uses: ./.github/workflows/ci.yml
     secrets: inherit
 
-  prepare-release:
-    name: Prepare release
+  changesets:
+    name: Changesets
     needs: [ci]
     if: needs.ci.result == 'success'
     permissions:
       contents: write
+      pull-requests: write
+    uses: ./.github/workflows/changesets.yml
+    secrets: inherit
+
+  prepare-release:
+    name: Prepare release
+    needs: [changesets]
+    if: needs.changesets.outputs.published == 'true'
+    permissions:
+      contents: write
     uses: ./.github/workflows/prepare-release.yml
+    with:
+      published-packages: ${{ needs.changesets.outputs.published-packages }}
     secrets: inherit
