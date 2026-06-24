@@ -71,7 +71,11 @@ Issues tracked via GitHub Issues on `mdg-labs/slugbase`. Org-level issue types: 
 
 Two tiers — see `06-local-ci-before-commit.mdc` for full rules.
 
-### Scoped gate (Layer 2 / pre-commit)
+**Direct commit and push** (interactive agent, not orchestrator): full gate once before push only — no scoped gate at commit.
+
+**Orchestrator sub-agents:** scoped gate at commit/verify; full gate only when push is requested.
+
+### Scoped gate (Layer 2 / pre-commit — orchestrator only)
 
 Derive `--filter` from committed or staged paths. Mark a command `n/a` only when a package legitimately has no such task yet.
 

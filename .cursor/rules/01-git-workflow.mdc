@@ -52,7 +52,7 @@ Session memory (`.cursor/skills/agent-memory/`) is **gitignored** — local work
 
 **Never push** unless the user explicitly asks. Local commits only.
 
-Before any `git push`, run the **full CI gate** per `06-local-ci-before-commit.mdc` (scoped gate at commit is not sufficient).
+Before any `git push` on code-impacting work, run the **full CI gate** once per `06-local-ci-before-commit.mdc`. **Do not** run a scoped gate before commit when the user asked to commit and push in the same turn — full gate immediately before push is sufficient.
 
 **Never push to `main` on GitHub** — not even when the user asks for a push during development. For now, the only valid remote target for task work is **`staging`** (or a Lane P task branch).
 

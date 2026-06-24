@@ -94,10 +94,10 @@ NODE ENV (mandatory — run from TARGET REPO before any pnpm/turbo/phase command
 
 ## SCOPED CI GATE — sub-agents (mandatory in every execution and verifier prompt)
 
-Copy into **every execution and verifier** prompt. Full rules: `.cursor/rules/06-local-ci-before-commit.mdc`.
+Copy into **every orchestrator execution and verifier** prompt. **Not** for direct/interactive agent commits. Full rules: `.cursor/rules/06-local-ci-before-commit.mdc`.
 
 ```text
-SCOPED CI GATE — MANDATORY (commit + verify; NOT pre-push):
+SCOPED CI GATE — ORCHESTRATOR SUB-AGENTS ONLY (commit + verify; NOT pre-push):
 - Derive --filter from WRITE SCOPE (execution) or committed paths (verifier)
 - Path → filter mapping:
     packages/backend/       → @slugbase/backend
@@ -123,6 +123,7 @@ SCOPED CI GATE — MANDATORY (commit + verify; NOT pre-push):
 - FORBIDDEN at commit/verify time:
     Full workspace gate (pnpm lint / typecheck / test:unit / build without --filter)
 - Full gate runs ONLY when prompt includes PUSH PREP block or user explicitly requested push
+- Direct/interactive agents (user says commit and push without orchestrator): skip this block; full gate once before push only
 - Reference: .cursor/rules/06-local-ci-before-commit.mdc
 ```
 

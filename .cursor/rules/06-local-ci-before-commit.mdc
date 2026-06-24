@@ -9,14 +9,25 @@ Two tiers:
 
 | Tier | When | Scope |
 |---|---|---|
-| **Scoped gate** | Before local **commits** and orchestrator **verification (Layer 2)** | Packages derived from staged/committed paths only |
+| **Scoped gate** | Orchestrator **execution commits** and **verification (Layer 2)** only | Packages derived from staged/committed paths only |
 | **Full gate** | Immediately before **`git push`** to any remote | Entire workspace (Turborepo) |
+
+## Who runs what
+
+| Workflow | Before commit | Before push |
+|---|---|---|
+| **Direct / interactive agent** (user says commit, commit and push, etc. — **not** an orchestrator sub-agent) | **No CI gate** — commit after staging explicit paths | **Full gate only** (once; do not run scoped gate first) |
+| **Orchestrator sub-agents** (execution + verification) | **Scoped gate** on touched packages | **Full gate** only when user/orchestrator explicitly requests push (PUSH PREP) |
+
+**Direct commit and push:** run the full gate **once**, immediately before `git push`. Do **not** run a scoped gate before the commit — that would duplicate work.
 
 Orchestrated sub-agents: see `.cursor/skills/orchestrator/SKILL.md` and `prompt-templates.md` (SCOPED CI GATE block).
 
 ## Gate trigger: code-impacting changes only
 
-Run the **scoped gate** (or full gate before push) when staged changes are in directories/files exercised by CI commands:
+These paths determine whether CI gates apply. **Which gate** depends on the workflow table above.
+
+When staged changes are in directories/files exercised by CI commands:
 
 - `packages/**`
 - `apps/**`
@@ -32,7 +43,7 @@ Also apply when these shared root files are staged:
 - `pnpm-workspace.yaml`
 - `turbo.json` (if present)
 
-For root workspace files: run scoped gate on the implementation packages in the commit; run the **full gate before push** (lockfile changes affect the whole graph).
+For root workspace files: orchestrator sub-agents run scoped gate on implementation packages in the commit plus **full gate before push**; direct agents skip scoped gate and run **full gate before push** only.
 
 ## Non-code changes (scoped/full gate not required)
 
@@ -45,9 +56,11 @@ Skip scoped and full gates when staged changes are only in:
 
 For these commits, run **targeted validation only** (e.g. YAML parse for workflow edits) and report that CI gates were intentionally skipped.
 
-## Scoped gate
+## Scoped gate (orchestrator sub-agents only)
 
-**Default before local commits** and during **orchestrator verification (Layer 2)**. Derive `--filter` from touched paths (staged paths for commit; committed paths for verify).
+**Orchestrator execution agents** before implementation commit and **verification agents** at Layer 2. **Not** used for direct/interactive commits (user says commit or commit and push without orchestrator dispatch).
+
+Derive `--filter` from touched paths (staged paths for commit; committed paths for verify).
 
 ### Path → filter mapping
 
@@ -95,7 +108,11 @@ Mark a command `n/a` only when a package legitimately has no such task yet — n
 
 ## Full gate
 
-**Mandatory immediately before `git push`** to any remote (typically `staging`; never `main` per `01-git-workflow.mdc`). **Not** required before every local commit.
+**Mandatory immediately before `git push`** to any remote (typically `staging`; never `main` per `01-git-workflow.mdc`).
+
+- **Direct commit and push:** this is the **only** CI gate — do not run scoped gate before commit.
+- **Orchestrator sub-agents:** run scoped gate at commit/verify; run full gate only when push is explicitly requested.
+- **Commit without push (direct):** full gate not required until a later push.
 
 When pushing code-impacting work, run (via Turborepo across the workspace):
 
@@ -134,4 +151,4 @@ pnpm test:integration
 
 **Rule:** `pnpm lint`, `pnpm typecheck`, `pnpm test:unit`, and `pnpm build` may be run with `phase run --` when secrets are required (wrap via `bash scripts/with-ci-env.sh phase run -- pnpm …`). `pnpm test:integration` must always be run **without** the Phase wrapper (still use `with-ci-env.sh` for Node only).
 
-This applies equally to **execution agents** (scoped pre-commit gate), **verification agents** (scoped Layer 2), and **pre-push** full gate runs.
+This applies to **orchestrator sub-agents** (scoped pre-commit gate, scoped Layer 2) and **pre-push** full gate runs (all workflows).
