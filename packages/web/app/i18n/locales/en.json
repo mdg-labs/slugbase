@@ -736,6 +736,7 @@
   "settings.audit.gate_body": "Audit log is available on the Team plan. Upgrade to view workspace activity.",
   "settings.audit.gate_title": "Upgrade to access audit log",
   "settings.audit.gate_upgrade_action": "Upgrade to Team",
+  "settings.audit.load_error": "Could not load audit log.",
   "settings.audit.page_subtitle": "A read-only record of significant workspace actions. Only visible to admins and owners.",
   "settings.audit.page_title": "Audit log",
   "settings.audit.pagination.next": "Next page",

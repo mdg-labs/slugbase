@@ -736,6 +736,7 @@
   "settings.audit.gate_body": "Das Audit-Protokoll ist im Team-Plan verfügbar. Upgraden Sie, um Arbeitsbereichsaktivitäten einzusehen.",
   "settings.audit.gate_title": "Upgrade für Zugriff auf Audit-Protokoll erforderlich",
   "settings.audit.gate_upgrade_action": "Auf Team upgraden",
+  "settings.audit.load_error": "Audit-Protokoll konnte nicht geladen werden.",
   "settings.audit.page_subtitle": "Eine schreibgeschützte Aufzeichnung wichtiger Arbeitsbereichsaktionen. Nur für Admins und Eigentümer sichtbar.",
   "settings.audit.page_title": "Audit-Protokoll",
   "settings.audit.pagination.next": "Nächste Seite",

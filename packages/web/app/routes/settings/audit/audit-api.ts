@@ -1,25 +1,36 @@
 import type {
   AuditActor,
   AuditEventsPage,
+  WorkspaceMemberRole,
   WorkspacePlanSummary,
 } from "./audit.types.js";
 
+import { listWorkspaces } from "../../../components/workspace-switcher/workspace-switcher-api.js";
 import { getServerApiBaseUrl } from "../../../lib/server-api-base-url.js";
+import { resolveActiveWorkspaceRole } from "../workspace/workspace-entitlements.js";
 
-async function fetchJson<T>(request: Request, path: string): Promise<T | null> {
+type FetchJsonResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; status: number | null };
+
+async function fetchJsonWithStatus<T>(
+  request: Request,
+  path: string,
+): Promise<FetchJsonResult<T>> {
   const cookie = request.headers.get("Cookie") ?? "";
   try {
     const res = await fetch(`${getServerApiBaseUrl()}${path}`, {
       headers: cookie ? { Cookie: cookie } : {},
     });
-    if (!res.ok) return null;
-    return (await res.json()) as T;
+    if (!res.ok) return { ok: false, status: res.status };
+    return { ok: true, data: (await res.json()) as T };
   } catch {
-    return null;
+    return { ok: false, status: null };
   }
 }
 
 interface ApiWorkspace {
+  id: string;
   plan: "free" | "personal" | "team";
 }
 
@@ -69,12 +80,38 @@ export function normalizeAuditEventsPage(
   };
 }
 
+export async function loadAuditSettingsContext(
+  request: Request,
+): Promise<{
+  workspace: WorkspacePlanSummary | null;
+  currentUserRole: WorkspaceMemberRole;
+}> {
+  const workspaceResult = await fetchJsonWithStatus<ApiWorkspace>(
+    request,
+    "/workspaces/active",
+  );
+  const workspaces = await listWorkspaces(request);
+
+  if (!workspaceResult.ok) {
+    return { workspace: null, currentUserRole: "MEMBER" };
+  }
+
+  const workspace: WorkspacePlanSummary = {
+    id: workspaceResult.data.id,
+    plan: workspaceResult.data.plan,
+  };
+
+  return {
+    workspace,
+    currentUserRole: resolveActiveWorkspaceRole(workspace.id, workspaces),
+  };
+}
+
 export async function loadAuditWorkspacePlan(
   request: Request,
 ): Promise<WorkspacePlanSummary | null> {
-  const workspace = await fetchJson<ApiWorkspace>(request, "/workspaces/active");
-  if (!workspace) return null;
-  return { plan: workspace.plan };
+  const context = await loadAuditSettingsContext(request);
+  return context.workspace;
 }
 
 export async function loadAuditEvents(
@@ -86,7 +123,7 @@ export async function loadAuditEvents(
     actorId?: string;
     type?: string;
   },
-): Promise<AuditEventsPage | null> {
+): Promise<FetchJsonResult<AuditEventsPage>> {
   const qs = new URLSearchParams({
     page: String(params.page),
     pageSize: String(params.pageSize),
@@ -97,11 +134,11 @@ export async function loadAuditEvents(
   }
   if (params.type && params.type !== "all") qs.set("entityType", params.type);
 
-  const response = await fetchJson<ApiPaginatedAuditEvents>(
+  const response = await fetchJsonWithStatus<ApiPaginatedAuditEvents>(
     request,
     `/audit/events?${qs.toString()}`,
   );
-  if (!response) return null;
+  if (!response.ok) return response;
 
-  return normalizeAuditEventsPage(response);
+  return { ok: true, data: normalizeAuditEventsPage(response.data) };
 }

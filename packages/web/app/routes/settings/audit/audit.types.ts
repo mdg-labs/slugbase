@@ -32,14 +32,20 @@ export type AuditEventsPage = {
   actors: AuditActor[];
 };
 
+export type WorkspaceMemberRole = "OWNER" | "ADMIN" | "MEMBER";
+
 export type WorkspacePlanSummary = {
+  id: string;
   plan: "free" | "personal" | "team";
 };
 
 export type AuditLoaderData = {
-  canAccess: boolean;
-  workspace: WorkspacePlanSummary;
+  currentUserRole: WorkspaceMemberRole;
+  workspace: WorkspacePlanSummary | null;
   events: AuditEventsPage | null;
+  roleDenied: boolean;
+  planDenied: boolean;
+  loadError: boolean;
 };
 
 export const AUDIT_EVENT_TYPES: AuditEventType[] = [

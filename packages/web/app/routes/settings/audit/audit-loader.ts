@@ -2,10 +2,11 @@ import { redirect } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
 
 import { getSessionUser } from "../../../lib/session-client.js";
-import { loadAuditEvents, loadAuditWorkspacePlan } from "./audit-api.js";
+import { loadAuditEvents, loadAuditSettingsContext } from "./audit-api.js";
 import { canAccessAuditLog } from "./audit-entitlements.js";
 import type { AuditLoaderData } from "./audit.types.js";
 import { AUDIT_PAGE_SIZE } from "./audit.types.js";
+import { canManageWorkspaceSettings } from "../workspace/workspace-entitlements.js";
 
 export async function auditSettingsLoader({
   request,
@@ -15,16 +16,39 @@ export async function auditSettingsLoader({
     return redirect("/login") as never;
   }
 
-  const workspace = await loadAuditWorkspacePlan(request);
+  const { workspace, currentUserRole } = await loadAuditSettingsContext(request);
+
   if (!workspace) {
-    // Workspace fetch failed — render the plan gate rather than throwing,
-    // which would bubble to the app-level error boundary and hide the
-    // settings layout entirely.
-    return { canAccess: false, workspace: { plan: "free" }, events: null };
+    return {
+      currentUserRole,
+      workspace: null,
+      events: null,
+      roleDenied: false,
+      planDenied: false,
+      loadError: true,
+    };
+  }
+
+  if (!canManageWorkspaceSettings(currentUserRole)) {
+    return {
+      currentUserRole,
+      workspace,
+      events: null,
+      roleDenied: true,
+      planDenied: false,
+      loadError: false,
+    };
   }
 
   if (!canAccessAuditLog(workspace)) {
-    return { canAccess: false, workspace, events: null };
+    return {
+      currentUserRole,
+      workspace,
+      events: null,
+      roleDenied: false,
+      planDenied: true,
+      loadError: false,
+    };
   }
 
   const url = new URL(request.url);
@@ -33,7 +57,7 @@ export async function auditSettingsLoader({
   const actorId = url.searchParams.get("actor") ?? undefined;
   const type = url.searchParams.get("type") ?? undefined;
 
-  const events = await loadAuditEvents(request, {
+  const eventsResult = await loadAuditEvents(request, {
     page,
     pageSize: AUDIT_PAGE_SIZE,
     search,
@@ -41,5 +65,23 @@ export async function auditSettingsLoader({
     type,
   });
 
-  return { canAccess: true, workspace, events };
+  if (!eventsResult.ok) {
+    return {
+      currentUserRole,
+      workspace,
+      events: null,
+      roleDenied: false,
+      planDenied: false,
+      loadError: true,
+    };
+  }
+
+  return {
+    currentUserRole,
+    workspace,
+    events: eventsResult.data,
+    roleDenied: false,
+    planDenied: false,
+    loadError: false,
+  };
 }
