@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# API-only container — CE GHCR (ghcr.io/mdg-labs/slugbase-api) and Fly.io Cloud API (spec §14.2, §14.7)
+# CE web SSR container — ghcr.io/mdg-labs/slugbase-web (spec §14.2)
 
 FROM node:22-bookworm-slim AS base
 ENV PNPM_HOME="/pnpm"
@@ -13,31 +13,34 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json tsconfig.json ./
 COPY scripts/check-node-version.mjs scripts/check-node-version.mjs
-COPY packages/backend/package.json packages/backend/
-COPY packages/shared-types/package.json packages/shared-types/
-COPY packages/email-templates/package.json packages/email-templates/
 COPY packages/web/package.json packages/web/
+COPY packages/shared-types/package.json packages/shared-types/
+COPY packages/ui/package.json packages/ui/
+COPY packages/backend/package.json packages/backend/
 COPY packages/marketing/package.json packages/marketing/
 COPY patches/ patches/
 RUN pnpm install --frozen-lockfile
 
 FROM build-deps AS build
 COPY packages/shared-types packages/shared-types
-COPY packages/email-templates packages/email-templates
-COPY packages/backend packages/backend
-RUN pnpm exec turbo run build --filter=@slugbase/backend...
+COPY packages/ui packages/ui
+COPY packages/web packages/web
+
+ARG SLUGBASE_EDITION=ce
+ENV SLUGBASE_EDITION=$SLUGBASE_EDITION
+
+RUN pnpm exec turbo run build --filter=@slugbase/web...
+
+RUN find packages/web/build -name '*.js.map' -delete
 
 FROM build AS deploy
-RUN pnpm deploy --filter=@slugbase/backend --prod /prod/backend
+RUN pnpm deploy --filter=@slugbase/web --prod /prod/web
 
 FROM base AS runtime
 ENV NODE_ENV=production
-ARG SLUGBASE_EDITION=ce
-ENV SLUGBASE_EDITION=$SLUGBASE_EDITION
-ENV SERVE_WEB_CLIENT=false
+ENV PORT=3000
 WORKDIR /app
-COPY --from=deploy /prod/backend ./
-COPY --from=build /app/packages/backend/migrations ./migrations
+COPY --from=deploy /prod/web ./
 
 RUN groupadd --system --gid 10001 slugbase \
   && useradd --system --uid 10001 --gid slugbase --home-dir /app --no-create-home slugbase \
@@ -45,4 +48,4 @@ RUN groupadd --system --gid 10001 slugbase \
 
 USER slugbase
 EXPOSE 3000
-CMD ["node", "dist/main.js"]
+CMD ["node", "./node_modules/@react-router/serve/dist/cli.js", "./build/server/index.js"]

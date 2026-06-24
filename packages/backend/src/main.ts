@@ -11,6 +11,8 @@ import { ConfigService } from "./config/config.service.js";
 import { resolveCorsOrigins } from "./config/resolve-cors-origins.js";
 import { applySecurityHeaders } from "./security/apply-security-headers.js";
 import { runMigrations } from "./db/migrate/run-migrations.js";
+import { SLUGBASE_EDITION } from "@slugbase/shared-types";
+
 import { loadAppConfig } from "./config/load-config.js";
 import { resolveMigrationDatabaseUrl } from "./config/env.schema.js";
 import type { AppConfig } from "./config/env.schema.js";
@@ -21,11 +23,18 @@ import {
 import { SentryLoggerService } from "./logging/sentry-logger.service.js";
 
 /**
- * Run DB migrations only in the self-hosted deployment mode (SERVE_WEB_CLIENT=true).
- * Hosted deployments run migrations in CI before deploying to Fly.io (see CI/CD workflow).
+ * Run DB migrations on API bootstrap for CE (combined or split images).
+ * Hosted Cloud API skips bootstrap migrations — CI runs them before Fly deploy.
  */
+export function shouldRunBootstrapMigrations(config: AppConfig): boolean {
+  if (config.SERVE_WEB_CLIENT) {
+    return true;
+  }
+  return config.edition === SLUGBASE_EDITION.CE;
+}
+
 async function runMigrationsIfNeeded(config: AppConfig): Promise<void> {
-  if (!config.SERVE_WEB_CLIENT) {
+  if (!shouldRunBootstrapMigrations(config)) {
     return;
   }
   await runMigrations(resolveMigrationDatabaseUrl(config));
