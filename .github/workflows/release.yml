@@ -69,6 +69,7 @@ jobs:
     name: Deploy production
     needs: [check-not-deployed]
     permissions:
+      actions: write
       contents: read
     uses: ./.github/workflows/deploy.yml
     with:
