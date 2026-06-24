@@ -196,8 +196,8 @@ jobs:
         env:
           DATABASE_URL: postgresql://slugbase:slugbase@localhost:5432/slugbase_test
         run: |
-          bash .github/scripts/run-migrate.sh
-          bash .github/scripts/run-migrate-admin.sh
+          bash scripts/ci/run-migrate.sh
+          bash scripts/ci/run-migrate-admin.sh
 
       - name: Integration tests
         id: integration-tests

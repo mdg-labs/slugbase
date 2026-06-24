@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const repoRoot = join(__dirname, "..");
-const scriptPath = join(repoRoot, ".github/scripts/build-push-ghcr.sh");
+const scriptPath = join(repoRoot, "scripts/ci/build-push-ghcr.sh");
 const sharedArgsPath = join(repoRoot, "scripts/self-host-vite-build-args.sh");
 
 describe("build-push-ghcr.sh", () => {

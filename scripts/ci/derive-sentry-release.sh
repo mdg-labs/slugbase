@@ -51,7 +51,7 @@ VERSION="$(node -p "require('./${PKG_DIR}/package.json').version")"
 GIT_SHA="${GIT_SHA:-$(git rev-parse HEAD)}"
 
 RELEASE="$(node --input-type=module -e "
-import { deriveSentryRelease } from './scripts/derive-sentry-release.mjs';
+import { deriveSentryRelease } from './scripts/ci/derive-sentry-release.mjs';
 console.log(deriveSentryRelease({
   packageName: '${PACKAGE}',
   packageVersion: '${VERSION}',

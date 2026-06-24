@@ -1,6 +1,6 @@
 name: Deploy
 
-# Parameterized deploy pipeline — detect → sync → (migrate ∥ Sentry) → selective deploys → smoke → DEPLOYED_STATE.
+# Parameterized deploy pipeline — plan (live /version probes) → sync → migrate → deploy → smoke.
 # Called from staging.yml (after CI) and release.yml (production).
 # workflow_call only — no direct triggers (spec §22).
 
@@ -24,10 +24,16 @@ on:
         required: false
         default: "true"
       force_full_deploy:
-        description: Deploy all surfaces regardless of change detection
+        description: >-
+          Deploy all surfaces regardless of live version compare (maps to manual plan mode).
         type: string
         required: false
         default: "false"
+      deploy_mode:
+        description: auto (live /version probes) | manual (skip live compare)
+        type: string
+        required: false
+        default: "auto"
 
 permissions:
   contents: read
@@ -37,64 +43,56 @@ concurrency:
   cancel-in-progress: ${{ inputs.environment != 'production' }}
 
 jobs:
-  detect-deploy-targets:
-    name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 0 · Detect deploy targets
+  plan:
+    name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 0 · Deploy plan
     if: inputs.should_deploy == 'true'
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
     outputs:
-      deploy_api: ${{ steps.detect.outputs.deploy_api }}
-      deploy_web: ${{ steps.detect.outputs.deploy_web }}
-      deploy_marketing: ${{ steps.detect.outputs.deploy_marketing }}
-      deploy_admin: ${{ steps.detect.outputs.deploy_admin }}
-      run_migrate: ${{ steps.detect.outputs.run_migrate }}
-      run_migrate_admin: ${{ steps.detect.outputs.run_migrate_admin }}
-      push_ghcr_api: ${{ steps.detect.outputs.push_ghcr_api }}
-      push_ghcr_web: ${{ steps.detect.outputs.push_ghcr_web }}
-      sync_services: ${{ steps.detect.outputs.sync_services }}
-      skip_reasons: ${{ steps.detect.outputs.skip_reasons }}
+      deploy_api: ${{ steps.plan.outputs.deploy_api }}
+      deploy_web: ${{ steps.plan.outputs.deploy_web }}
+      deploy_marketing: ${{ steps.plan.outputs.deploy_marketing }}
+      deploy_admin: ${{ steps.plan.outputs.deploy_admin }}
+      run_migrate: ${{ steps.plan.outputs.run_migrate }}
+      run_migrate_admin: ${{ steps.plan.outputs.run_migrate_admin }}
+      push_ghcr_api: ${{ steps.plan.outputs.push_ghcr_api }}
+      push_ghcr_web: ${{ steps.plan.outputs.push_ghcr_web }}
+      sync_services: ${{ steps.plan.outputs.sync_services }}
+      deployed_api: ${{ steps.plan.outputs.deployed_api }}
+      deployed_web: ${{ steps.plan.outputs.deployed_web }}
+      skip_reasons: ${{ steps.plan.outputs.skip_reasons }}
     steps:
       - name: Checkout
         uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
         with:
           ref: ${{ inputs.ref != '' && inputs.ref || github.sha }}
-          fetch-depth: ${{ inputs.environment == 'production' && 0 || 2 }}
 
-      - name: Resolve force full deploy
-        id: force
-        env:
-          REQUESTED_FORCE: ${{ inputs.force_full_deploy }}
-          DEPLOYED_STATE_JSON: ${{ vars[format('DEPLOYED_STATE_{0}', inputs.environment)] }}
-        run: |
-          FORCE="$REQUESTED_FORCE"
-          if [ "$FORCE" != "true" ]; then
-            if [ -z "$DEPLOYED_STATE_JSON" ] || ! node -e 'try{const p=JSON.parse(process.argv[1]);process.exit(p&&typeof p==="object"&&!Array.isArray(p)?0:1)}catch{process.exit(1)}' "$DEPLOYED_STATE_JSON"; then
-              echo "detect-deploy-targets: missing or invalid DEPLOYED_STATE — forcing full deploy"
-              FORCE="true"
-            fi
-          fi
-          echo "force_full_deploy=$FORCE" >> "$GITHUB_OUTPUT"
-
-      - name: Detect deploy targets
-        id: detect
+      - name: Resolve deploy plan
+        id: plan
         env:
           ENVIRONMENT: ${{ inputs.environment }}
-          HEAD_REF: ${{ inputs.ref != '' && inputs.ref || github.sha }}
-          BASE_REF: ${{ inputs.environment == 'staging' && (github.event.before != '' && github.event.before || 'HEAD~1') || '' }}
-          FORCE_FULL_DEPLOY: ${{ steps.force.outputs.force_full_deploy }}
-          DEPLOYED_STATE_JSON: ${{ vars[format('DEPLOYED_STATE_{0}', inputs.environment)] }}
-        run: bash .github/scripts/detect-deploy-targets.sh
+          DEPLOY_MODE: ${{ inputs.deploy_mode }}
+          SHOULD_DEPLOY: ${{ inputs.should_deploy }}
+          FORCE_FULL_DEPLOY: ${{ inputs.force_full_deploy }}
+          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+          FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
+          MARKETING_ORIGIN: ${{ vars.MARKETING_ORIGIN }}
+          ADMIN_URL: ${{ secrets.ADMIN_URL }}
+          CF_ACCESS_CLIENT_ID: ${{ inputs.environment == 'staging' && secrets.CF_ACCESS_CLIENT_ID || '' }}
+          CF_ACCESS_CLIENT_SECRET: ${{ inputs.environment == 'staging' && secrets.CF_ACCESS_CLIENT_SECRET || '' }}
+        run: node scripts/ci/resolve-deploy-plan.mjs
 
       - name: Write deploy plan summary
         env:
-          DEPLOY_API: ${{ steps.detect.outputs.deploy_api }}
-          DEPLOY_WEB: ${{ steps.detect.outputs.deploy_web }}
-          DEPLOY_MARKETING: ${{ steps.detect.outputs.deploy_marketing }}
-          DEPLOY_ADMIN: ${{ steps.detect.outputs.deploy_admin }}
-          SYNC_SERVICES: ${{ steps.detect.outputs.sync_services }}
-          SKIP_REASONS: ${{ steps.detect.outputs.skip_reasons }}
+          DEPLOY_API: ${{ steps.plan.outputs.deploy_api }}
+          DEPLOY_WEB: ${{ steps.plan.outputs.deploy_web }}
+          DEPLOY_MARKETING: ${{ steps.plan.outputs.deploy_marketing }}
+          DEPLOY_ADMIN: ${{ steps.plan.outputs.deploy_admin }}
+          SYNC_SERVICES: ${{ steps.plan.outputs.sync_services }}
+          SKIP_REASONS: ${{ steps.plan.outputs.skip_reasons }}
         run: |
           {
-            echo "### Deploy targets (${{ inputs.environment }})"
+            echo "### Deploy plan (${{ inputs.environment }})"
             echo ""
             echo "| Surface | Deploy |"
             echo "|---|---|"
@@ -106,7 +104,7 @@ jobs:
             echo "**sync-secrets services:** \`${SYNC_SERVICES}\`"
             if [ -n "${SKIP_REASONS}" ]; then
               echo ""
-              echo "### Production version gate skips"
+              echo "### Skipped surfaces"
               echo ""
               while IFS= read -r reason; do
                 [ -z "${reason}" ] && continue
@@ -117,20 +115,20 @@ jobs:
 
   sync-secrets:
     name: Sync secrets (${{ inputs.environment }})
-    needs: [detect-deploy-targets]
+    needs: [plan]
     if: >-
       always() &&
       (
         inputs.should_deploy != 'true' ||
         (
-          needs.detect-deploy-targets.result == 'success' &&
-          needs.detect-deploy-targets.outputs.sync_services != 'none'
+          needs.plan.result == 'success' &&
+          needs.plan.outputs.sync_services != 'none'
         )
       )
     uses: ./.github/workflows/sync-secrets.yml
     with:
       environment: ${{ inputs.environment }}
-      services: ${{ inputs.should_deploy == 'true' && needs.detect-deploy-targets.outputs.sync_services || 'all' }}
+      services: ${{ inputs.should_deploy == 'true' && needs.plan.outputs.sync_services || 'all' }}
     secrets: inherit
 
   migrate:
@@ -138,11 +136,11 @@ jobs:
     if: >-
       always() &&
       inputs.should_deploy == 'true' &&
-      needs.detect-deploy-targets.outputs.run_migrate == 'true' &&
+      needs.plan.outputs.run_migrate == 'true' &&
       needs.sync-secrets.result == 'success'
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
-    needs: [detect-deploy-targets, sync-secrets]
+    needs: [plan, sync-secrets]
     steps:
       - name: Checkout
         uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
@@ -157,18 +155,18 @@ jobs:
       - name: Run Drizzle migrations
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: bash .github/scripts/run-migrate.sh
+        run: bash scripts/ci/run-migrate.sh
 
   migrate-admin:
     name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 1 · Run admin DB migrations
     if: >-
       always() &&
       inputs.should_deploy == 'true' &&
-      needs.detect-deploy-targets.outputs.run_migrate_admin == 'true' &&
+      needs.plan.outputs.run_migrate_admin == 'true' &&
       needs.sync-secrets.result == 'success'
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
-    needs: [detect-deploy-targets, sync-secrets]
+    needs: [plan, sync-secrets]
     steps:
       - name: Checkout
         uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
@@ -184,18 +182,18 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
-        run: bash .github/scripts/run-migrate-admin.sh
+        run: bash scripts/ci/run-migrate-admin.sh
 
   derive-sentry-release-api:
     name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 2 · Derive API Sentry release
     if: >-
       always() &&
       inputs.should_deploy == 'true' &&
-      needs.detect-deploy-targets.outputs.deploy_api == 'true' &&
+      needs.plan.outputs.deploy_api == 'true' &&
       needs.sync-secrets.result == 'success'
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
-    needs: [detect-deploy-targets, sync-secrets]
+    needs: [plan, sync-secrets]
     outputs:
       release: ${{ steps.release.outputs.release }}
     steps:
@@ -208,18 +206,18 @@ jobs:
         id: release
         env:
           GIT_SHA: ${{ github.sha }}
-        run: bash .github/scripts/derive-sentry-release.sh --package api
+        run: bash scripts/ci/derive-sentry-release.sh --package api
 
   derive-sentry-release-web:
     name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 2 · Derive web Sentry release
     if: >-
       always() &&
       inputs.should_deploy == 'true' &&
-      needs.detect-deploy-targets.outputs.deploy_web == 'true' &&
+      needs.plan.outputs.deploy_web == 'true' &&
       needs.sync-secrets.result == 'success'
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
-    needs: [detect-deploy-targets, sync-secrets]
+    needs: [plan, sync-secrets]
     outputs:
       release: ${{ steps.release.outputs.release }}
     steps:
@@ -232,14 +230,14 @@ jobs:
         id: release
         env:
           GIT_SHA: ${{ github.sha }}
-        run: bash .github/scripts/derive-sentry-release.sh --package web
+        run: bash scripts/ci/derive-sentry-release.sh --package web
 
   deploy-api:
     name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 3 · Deploy API (Fly)
     if: >-
       always() &&
       inputs.should_deploy == 'true' &&
-      needs.detect-deploy-targets.outputs.deploy_api == 'true' &&
+      needs.plan.outputs.deploy_api == 'true' &&
       needs.sync-secrets.result == 'success' &&
       needs.migrate.result != 'failure' &&
       needs.derive-sentry-release-api.result != 'failure' &&
@@ -247,7 +245,7 @@ jobs:
       (needs.derive-sentry-release-api.result == 'success' || needs.derive-sentry-release-api.result == 'skipped')
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
-    needs: [detect-deploy-targets, sync-secrets, migrate, derive-sentry-release-api]
+    needs: [plan, sync-secrets, migrate, derive-sentry-release-api]
     steps:
       - name: Checkout
         uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
@@ -270,25 +268,25 @@ jobs:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
         run: >-
-          bash .github/scripts/sentry-release.sh api packages/backend/dist
+          bash scripts/ci/sentry-release.sh api packages/backend/dist
           "${{ needs.derive-sentry-release-api.outputs.release }}" ${{ inputs.environment }}
 
       - name: Setup flyctl
-        run: bash .github/scripts/setup-flyctl.sh
+        run: bash scripts/ci/setup-flyctl.sh
 
       - name: Deploy API to Fly.io
         env:
           DOCKER_BUILDKIT: "1"
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           FLY_APP: slugbase-${{ inputs.environment == 'production' && 'production' || 'staging' }}-api
-        run: bash .github/scripts/deploy-fly.sh api
+        run: bash scripts/ci/deploy-fly.sh api
 
   deploy-web:
     name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 3 · Deploy web (CF)
     if: >-
       always() &&
       inputs.should_deploy == 'true' &&
-      needs.detect-deploy-targets.outputs.deploy_web == 'true' &&
+      needs.plan.outputs.deploy_web == 'true' &&
       needs.sync-secrets.result == 'success' &&
       needs.migrate.result != 'failure' &&
       needs.derive-sentry-release-web.result != 'failure' &&
@@ -296,7 +294,7 @@ jobs:
       (needs.derive-sentry-release-web.result == 'success' || needs.derive-sentry-release-web.result == 'skipped')
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
-    needs: [detect-deploy-targets, sync-secrets, migrate, derive-sentry-release-web]
+    needs: [plan, sync-secrets, migrate, derive-sentry-release-web]
     steps:
       - name: Checkout
         uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
@@ -318,20 +316,20 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           API_BASE_URL: ${{ secrets.API_BASE_URL }}
           VITE_SENTRY_RELEASE: ${{ needs.derive-sentry-release-web.outputs.release }}
-        run: bash .github/scripts/deploy-cf-worker.sh web
+        run: bash scripts/ci/deploy-cf-worker.sh web
 
   deploy-marketing:
     name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 3 · Deploy marketing (CF)
     if: >-
       always() &&
       inputs.should_deploy == 'true' &&
-      needs.detect-deploy-targets.outputs.deploy_marketing == 'true' &&
+      needs.plan.outputs.deploy_marketing == 'true' &&
       needs.sync-secrets.result == 'success' &&
       needs.migrate.result != 'failure' &&
       (needs.migrate.result == 'success' || needs.migrate.result == 'skipped')
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
-    needs: [detect-deploy-targets, sync-secrets, migrate]
+    needs: [plan, sync-secrets, migrate]
     steps:
       - name: Checkout
         uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
@@ -352,20 +350,20 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           API_BASE_URL: ${{ secrets.API_BASE_URL }}
-        run: bash .github/scripts/deploy-cf-worker.sh marketing
+        run: bash scripts/ci/deploy-cf-worker.sh marketing
 
   deploy-admin:
     name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 3 · Deploy admin (Fly)
     if: >-
       always() &&
       inputs.should_deploy == 'true' &&
-      needs.detect-deploy-targets.outputs.deploy_admin == 'true' &&
+      needs.plan.outputs.deploy_admin == 'true' &&
       needs.sync-secrets.result == 'success' &&
       needs.migrate-admin.result != 'failure' &&
       (needs.migrate-admin.result == 'success' || needs.migrate-admin.result == 'skipped')
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
-    needs: [detect-deploy-targets, sync-secrets, migrate-admin]
+    needs: [plan, sync-secrets, migrate-admin]
     steps:
       - name: Checkout
         uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
@@ -384,26 +382,26 @@ jobs:
         run: pnpm exec turbo run build --filter=@slugbase/admin...
 
       - name: Setup flyctl
-        run: bash .github/scripts/setup-flyctl.sh
+        run: bash scripts/ci/setup-flyctl.sh
 
       - name: Deploy admin to Fly.io
         env:
           DOCKER_BUILDKIT: "1"
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           FLY_APP: slugbase-${{ inputs.environment == 'production' && 'production' || 'staging' }}-admin
-        run: bash .github/scripts/deploy-fly.sh admin
+        run: bash scripts/ci/deploy-fly.sh admin
 
   smoke:
     name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 4 · Smoke
     if: >-
       always() &&
       inputs.should_deploy == 'true' &&
-      needs.detect-deploy-targets.result == 'success' &&
+      needs.plan.result == 'success' &&
       (
-        needs.detect-deploy-targets.outputs.deploy_api == 'true' ||
-        needs.detect-deploy-targets.outputs.deploy_web == 'true' ||
-        needs.detect-deploy-targets.outputs.deploy_marketing == 'true' ||
-        needs.detect-deploy-targets.outputs.deploy_admin == 'true'
+        needs.plan.outputs.deploy_api == 'true' ||
+        needs.plan.outputs.deploy_web == 'true' ||
+        needs.plan.outputs.deploy_marketing == 'true' ||
+        needs.plan.outputs.deploy_admin == 'true'
       ) &&
       needs.deploy-api.result != 'failure' &&
       needs.deploy-web.result != 'failure' &&
@@ -413,7 +411,7 @@ jobs:
     environment: ${{ inputs.environment }}
     needs:
       [
-        detect-deploy-targets,
+        plan,
         deploy-api,
         deploy-web,
         deploy-marketing,
@@ -436,66 +434,20 @@ jobs:
         id: smoke_flags
         run: |
           FLAGS=()
-          if [ "${{ needs.detect-deploy-targets.outputs.deploy_api }}" = "true" ]; then
+          if [ "${{ needs.plan.outputs.deploy_api }}" = "true" ]; then
             FLAGS+=(--api)
           fi
-          if [ "${{ needs.detect-deploy-targets.outputs.deploy_web }}" = "true" ]; then
+          if [ "${{ needs.plan.outputs.deploy_web }}" = "true" ]; then
             FLAGS+=(--web)
           fi
-          if [ "${{ needs.detect-deploy-targets.outputs.deploy_marketing }}" = "true" ]; then
+          if [ "${{ needs.plan.outputs.deploy_marketing }}" = "true" ]; then
             FLAGS+=(--marketing)
           fi
-          if [ "${{ needs.detect-deploy-targets.outputs.deploy_admin }}" = "true" ]; then
+          if [ "${{ needs.plan.outputs.deploy_admin }}" = "true" ]; then
             FLAGS+=(--admin)
           fi
           echo "flags=${FLAGS[*]}" >> "$GITHUB_OUTPUT"
 
       - name: Smoke deployed surfaces
         if: steps.smoke_flags.outputs.flags != ''
-        run: bash .github/scripts/smoke-staging-health.sh ${{ steps.smoke_flags.outputs.flags }}
-
-  update-deployed-state:
-    name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 5 · Update DEPLOYED_STATE
-    if: >-
-      always() &&
-      inputs.should_deploy == 'true' &&
-      needs.smoke.result == 'success'
-    runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
-    needs:
-      [
-        detect-deploy-targets,
-        deploy-api,
-        deploy-web,
-        deploy-marketing,
-        deploy-admin,
-        smoke,
-      ]
-    permissions:
-      actions: write
-      contents: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
-        with:
-          ref: ${{ inputs.ref != '' && inputs.ref || github.sha }}
-
-      - name: Resolve deployed SHA
-        id: sha
-        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-
-      - name: Merge successful surfaces into DEPLOYED_STATE
-        env:
-          GH_TOKEN: ${{ github.token }}
-          ENVIRONMENT: ${{ inputs.environment }}
-          GIT_SHA: ${{ steps.sha.outputs.sha }}
-          DEPLOYED_STATE_JSON: ${{ vars[format('DEPLOYED_STATE_{0}', inputs.environment)] }}
-          DEPLOY_API_FLAG: ${{ needs.detect-deploy-targets.outputs.deploy_api }}
-          DEPLOY_WEB_FLAG: ${{ needs.detect-deploy-targets.outputs.deploy_web }}
-          DEPLOY_MARKETING_FLAG: ${{ needs.detect-deploy-targets.outputs.deploy_marketing }}
-          DEPLOY_ADMIN_FLAG: ${{ needs.detect-deploy-targets.outputs.deploy_admin }}
-          DEPLOY_API_RESULT: ${{ needs.deploy-api.result }}
-          DEPLOY_WEB_RESULT: ${{ needs.deploy-web.result }}
-          DEPLOY_MARKETING_RESULT: ${{ needs.deploy-marketing.result }}
-          DEPLOY_ADMIN_RESULT: ${{ needs.deploy-admin.result }}
-        run: bash .github/scripts/update-deployed-state.sh
+        run: bash scripts/ci/smoke-staging-health.sh ${{ steps.smoke_flags.outputs.flags }}

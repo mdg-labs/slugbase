@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -6,10 +7,17 @@ import {
   deriveSentryRelease,
   isSentryPackage,
   shortGitSha,
-} from "./derive-sentry-release.mjs";
+} from "./ci/derive-sentry-release.mjs";
 
 const repoRoot = join(import.meta.dirname, "..");
-const deriveScript = join(repoRoot, ".github/scripts/derive-sentry-release.sh");
+const deriveScript = join(repoRoot, "scripts/ci/derive-sentry-release.sh");
+
+function readPackageVersion(pkgDir: string) {
+  const manifest = JSON.parse(
+    readFileSync(join(repoRoot, pkgDir, "package.json"), "utf8"),
+  ) as { version: string };
+  return manifest.version;
+}
 
 function runDeriveScript(packageName: "api" | "web", gitSha: string) {
   return execFileSync("bash", [deriveScript, "--package", packageName], {
@@ -74,7 +82,9 @@ describe("derive-sentry-release.sh", () => {
       "995c3b3c2d8bfd69e2a4f1f99f10df2f9d017b8b",
     );
 
-    expect(output).toContain("slugbase-api@0.1.0+995c3b3");
+    expect(output).toContain(
+      `slugbase-api@${readPackageVersion("packages/backend")}+995c3b3`,
+    );
     expect(output).not.toContain("slugbase@0.1.5");
   });
 
@@ -84,6 +94,8 @@ describe("derive-sentry-release.sh", () => {
       "995c3b3c2d8bfd69e2a4f1f99f10df2f9d017b8b",
     );
 
-    expect(output).toContain("slugbase-web@0.1.0+995c3b3");
+    expect(output).toContain(
+      `slugbase-web@${readPackageVersion("packages/web")}+995c3b3`,
+    );
   });
 });

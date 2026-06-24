@@ -7,7 +7,7 @@ import {
 } from "./sync-secrets-manifest.ts";
 
 const REPO_ROOT = resolve(import.meta.dirname, "..");
-const SYNC_SCRIPT = resolve(REPO_ROOT, ".github/scripts/sync-secrets.sh");
+const SYNC_SCRIPT = resolve(REPO_ROOT, "scripts/ci/sync-secrets.sh");
 
 function readSyncScript(): string {
   return readFileSync(SYNC_SCRIPT, "utf8");
