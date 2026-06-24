@@ -28,7 +28,8 @@
     "test:e2e": "bash scripts/e2e.sh",
     "e2e:direct": "playwright test --config e2e/playwright.config.ts",
     "changeset": "changeset",
-    "version-packages": "changeset version"
+    "version-packages": "changeset version",
+    "tag-packages": "changeset tag"
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.8",
