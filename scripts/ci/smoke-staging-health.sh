@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
 # Smoke-test deploy surfaces (spec §22.5, granular-deployment WP-3):
-#   API + Web — GET /health and /version (JSON, HTTP 200)
-#   Marketing — GET site root / only (HTTP 200; static Astro has no /health+/version probes)
+#   API + Web + Marketing + Admin — GET /health and /version (JSON, HTTP 200)
 #   API pricing + CORS — when both API and marketing are selected
 #
 # Flags (default: all api/web/marketing when no flags):
 #   --api        APP_BASE_URL /health + /version (+ pricing when --marketing too)
 #   --web        FRONTEND_ORIGIN /health + /version
-#   --marketing  MARKETING_ORIGIN site root liveness
-#   --admin      delegates to smoke-admin-health.sh (ADMIN_URL /health)
+#   --marketing  MARKETING_ORIGIN /health + /version
+#   --admin      delegates to smoke-admin-health.sh (ADMIN_URL /health + /version)
 #
 # When CF_ACCESS_CLIENT_ID + CF_ACCESS_CLIENT_SECRET are set (GHA environment secrets),
 # sends Cloudflare Access service-token headers on every request.
@@ -116,37 +115,6 @@ check_surface() {
   fi
 }
 
-check_marketing_root() {
-  local base="$1"
-  local root_url="${base%/}/"
-
-  echo "Smoke: Marketing (${base}) — site root liveness"
-
-  local attempt=1
-  local root_status=""
-  while [[ "${attempt}" -le "${MAX_ATTEMPTS}" ]]; do
-    root_status="$(smoke_curl -s -o /dev/null -w '%{http_code}' "${root_url}")"
-    if [[ "${root_status}" == "200" ]]; then
-      break
-    fi
-    if [[ "${attempt}" -eq "${MAX_ATTEMPTS}" ]]; then
-      echo "Timed out waiting for ${root_url} (last HTTP ${root_status})" >&2
-      return 1
-    fi
-    echo "  waiting for ${root_url} (attempt ${attempt}/${MAX_ATTEMPTS}, last HTTP ${root_status})..."
-    sleep "${SLEEP_SECONDS}"
-    attempt=$((attempt + 1))
-  done
-
-  root_status="$(smoke_curl -s -o /tmp/slugbase-smoke-marketing-root.html -w '%{http_code}' "${root_url}")"
-  echo "  GET / -> HTTP ${root_status}"
-
-  if [[ "${root_status}" != "200" ]]; then
-    echo "Smoke failed for Marketing" >&2
-    return 1
-  fi
-}
-
 check_pricing_api() {
   local api_base="$1"
   local marketing_origin="$2"
@@ -202,7 +170,7 @@ if $DO_WEB; then
 fi
 
 if $DO_MARKETING; then
-  check_marketing_root "${MARKETING_ORIGIN}"
+  check_surface "Marketing" "${MARKETING_ORIGIN}"
 fi
 
 if $DO_API && $DO_MARKETING; then

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Smoke-test admin portal deploy (admin PRD §12.5, granular-deployment WP-3):
-#   GET ${ADMIN_URL}/health (HTTP 200)
+#   GET ${ADMIN_URL}/health and /version (HTTP 200)
 # Invoked directly from deploy.yml or via smoke-staging-health.sh --admin.
 # When CF_ACCESS_CLIENT_ID + CF_ACCESS_CLIENT_SECRET are set, sends Cloudflare Access headers.
 set -euo pipefail
@@ -24,6 +24,7 @@ smoke_curl() {
 }
 
 health_url="${ADMIN_URL%/}/health"
+version_url="${ADMIN_URL%/}/version"
 
 echo "Smoke admin: ${ADMIN_URL}"
 
@@ -42,12 +43,16 @@ while [[ "${attempt}" -le "${MAX_ATTEMPTS}" ]]; do
 done
 
 health_status="$(smoke_curl -s -o /tmp/slugbase-smoke-admin-health.json -w '%{http_code}' "${health_url}")"
+version_status="$(smoke_curl -s -o /tmp/slugbase-smoke-admin-version.json -w '%{http_code}' "${version_url}")"
 
 echo "  GET /health -> HTTP ${health_status}"
 cat /tmp/slugbase-smoke-admin-health.json
 echo ""
+echo "  GET /version -> HTTP ${version_status}"
+cat /tmp/slugbase-smoke-admin-version.json
+echo ""
 
-if [[ "${health_status}" != "200" ]]; then
+if [[ "${health_status}" != "200" || "${version_status}" != "200" ]]; then
   echo "Smoke failed for admin portal" >&2
   exit 1
 fi
