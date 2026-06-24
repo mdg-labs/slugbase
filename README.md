@@ -13,13 +13,14 @@
   <a href="https://github.com/mdg-labs/slugbase/actions/workflows/pr.yml"><img src="https://github.com/mdg-labs/slugbase/actions/workflows/pr.yml/badge.svg" alt="CI" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Elastic--2.0-blue" alt="License: Elastic-2.0" /></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D22.12-brightgreen" alt="Node >=22.12" /></a>
-  <a href="https://github.com/mdg-labs/slugbase/pkgs/container/slugbase"><img src="https://img.shields.io/badge/ghcr.io-mdg--labs%2Fslugbase-blue" alt="Container image" /></a>
+  <a href="https://github.com/mdg-labs/slugbase/pkgs/container/slugbase-api"><img src="https://img.shields.io/badge/ghcr.io-slugbase--api-blue" alt="CE API image" /></a>
+  <a href="https://github.com/mdg-labs/slugbase/pkgs/container/slugbase-web"><img src="https://img.shields.io/badge/ghcr.io-slugbase--web-blue" alt="CE web image" /></a>
   <a href="https://docs.slugbase.app"><img src="https://img.shields.io/badge/docs-docs.slugbase.app-informational" alt="Documentation" /></a>
 </p>
 
 <p align="center">
   <a href="https://slugbase.app"><strong>SlugBase Cloud</strong></a> — managed service ·
-  <a href="https://docs.slugbase.app/selfhosted/quick-start"><strong>Self-host</strong></a> — Community Edition (CE) container image
+  <a href="https://docs.slugbase.app/ce/quick-start"><strong>Self-host</strong></a> — Community Edition (CE) container images
 </p>
 
 ## Documentation
@@ -27,13 +28,13 @@
 Customer and operator guides are published at **[docs.slugbase.app](https://docs.slugbase.app)**.
 
 - [SlugBase Cloud](https://docs.slugbase.app/cloud/introduction) — sign up, workspaces, and billing on the hosted service
-- [Self-hosted quick start](https://docs.slugbase.app/selfhosted/quick-start) — install, configure, and verify your instance
+- [CE quick start](https://docs.slugbase.app/ce/quick-start) — install, configure, and verify your instance
 
 Engineering specs, roadmaps, and design prototypes in this repo stay under **`docs/internal/`** and are not published as customer docs — see [`docs/README.md`](docs/README.md).
 
 ## Self-host with Docker Compose
 
-The CE image bundles the API and web client. Pull from GitHub Container Registry and run alongside PostgreSQL:
+Community Edition ships as **two GHCR images** — `slugbase-api` (NestJS API + migrations) and `slugbase-web` (React Router SSR client). Run them alongside PostgreSQL:
 
 ```yaml
 services:
@@ -46,23 +47,35 @@ services:
     volumes:
       - slugbase_pg:/var/lib/postgresql/data
 
-  slugbase:
-    image: ghcr.io/mdg-labs/slugbase:latest
+  api:
+    image: ghcr.io/mdg-labs/slugbase-api:1.0.0
     env_file: ./slugbase.env
+    environment:
+      SLUGBASE_EDITION: ce
+      SERVE_WEB_CLIENT: "false"
+    depends_on:
+      - postgres
+
+  web:
+    image: ghcr.io/mdg-labs/slugbase-web:1.0.0
+    environment:
+      API_BASE_URL: http://api:3000
     ports:
       - "3000:3000"
     depends_on:
-      - postgres
+      - api
 
 volumes:
   slugbase_pg:
 ```
 
-Create `slugbase.env` with required settings (`SESSION_SECRET`, `ENCRYPTION_KEY`, `DATABASE_URL`, `APP_BASE_URL`, `FRONTEND_ORIGIN`, and related keys). See the [quick start guide](https://docs.slugbase.app/selfhosted/quick-start) for a complete compose file, environment reference, reverse-proxy notes, and production tagging guidance.
+Create `slugbase.env` with required API settings (`SESSION_SECRET`, `ENCRYPTION_KEY`, `DATABASE_URL`, `APP_BASE_URL`, `FRONTEND_ORIGIN`, and related keys). See the [CE quick start guide](https://docs.slugbase.app/ce/quick-start) for a complete compose file, environment reference, reverse-proxy notes, and independent image version pins for upgrades.
 
 ```bash
 docker compose up -d
 ```
+
+For a local smoke test against staging `:dev` tags, use [`dev.docker-compose.yml`](dev.docker-compose.yml).
 
 ## Repository layout
 
