@@ -41,10 +41,50 @@ jobs:
       force_full_deploy: ${{ github.event_name == 'workflow_dispatch' && inputs.force_full_deploy && 'true' || 'false' }}
     secrets: inherit
 
-  push-ghcr-staging-dev:
-    name: Staging · Push self-host image (GHCR dev)
+  detect-ghcr-targets:
+    name: Staging · Detect GHCR targets
     needs: [ci]
     if: needs.ci.result == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      push_ghcr_api: ${{ steps.detect.outputs.push_ghcr_api }}
+      push_ghcr_web: ${{ steps.detect.outputs.push_ghcr_web }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+        with:
+          fetch-depth: 2
+
+      - name: Resolve force full deploy
+        id: force
+        env:
+          REQUESTED_FORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.force_full_deploy && 'true' || 'false' }}
+          DEPLOYED_STATE_JSON: ${{ vars.DEPLOYED_STATE_staging }}
+        run: |
+          FORCE="$REQUESTED_FORCE"
+          if [ "$FORCE" != "true" ]; then
+            if [ -z "$DEPLOYED_STATE_JSON" ] || ! node -e 'try{const p=JSON.parse(process.argv[1]);process.exit(p&&typeof p==="object"&&!Array.isArray(p)?0:1)}catch{process.exit(1)}' "$DEPLOYED_STATE_JSON"; then
+              echo "detect-deploy-targets: missing or invalid DEPLOYED_STATE — forcing full deploy"
+              FORCE="true"
+            fi
+          fi
+          echo "force_full_deploy=$FORCE" >> "$GITHUB_OUTPUT"
+
+      - name: Detect deploy targets
+        id: detect
+        env:
+          ENVIRONMENT: staging
+          HEAD_REF: ${{ github.sha }}
+          BASE_REF: ${{ github.event.before != '' && github.event.before || 'HEAD~1' }}
+          FORCE_FULL_DEPLOY: ${{ steps.force.outputs.force_full_deploy }}
+        run: bash .github/scripts/detect-deploy-targets.sh
+
+  push-ghcr-api:
+    name: Staging · Push slugbase-api (GHCR dev)
+    needs: [ci, detect-ghcr-targets]
+    if: >-
+      needs.ci.result == 'success' &&
+      needs.detect-ghcr-targets.outputs.push_ghcr_api == 'true'
     runs-on: ubuntu-latest
     environment: staging
     permissions:
@@ -61,11 +101,44 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push combined image (dev tag)
+      - name: Build and push API image (dev tag)
         env:
           DOCKER_BUILDKIT: "1"
         run: >
           bash .github/scripts/build-push-ghcr.sh
-          ghcr.io/${{ github.repository }}
+          --target api
+          ghcr.io/${{ format('{0}-api', github.repository) }}
+          dev
+          --no-latest
+
+  push-ghcr-web:
+    name: Staging · Push slugbase-web (GHCR dev)
+    needs: [ci, detect-ghcr-targets]
+    if: >-
+      needs.ci.result == 'success' &&
+      needs.detect-ghcr-targets.outputs.push_ghcr_web == 'true'
+    runs-on: ubuntu-latest
+    environment: staging
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push web image (dev tag)
+        env:
+          DOCKER_BUILDKIT: "1"
+        run: >
+          bash .github/scripts/build-push-ghcr.sh
+          --target web
+          ghcr.io/${{ format('{0}-web', github.repository) }}
           dev
           --no-latest
