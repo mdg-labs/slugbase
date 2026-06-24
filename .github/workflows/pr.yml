@@ -1,6 +1,6 @@
 name: PR
 
-# Pull request entry point — CI and version check (spec §22.4).
+# Pull request entry point — CI only (spec §22.4).
 # E2E remains on e2e.yml until #474 consolidates entry points.
 
 on:
@@ -21,9 +21,3 @@ jobs:
       pull-requests: write
     uses: ./.github/workflows/ci.yml
     secrets: inherit
-
-  version-check:
-    name: Version check
-    permissions:
-      contents: read
-    uses: ./.github/workflows/version-check.yml

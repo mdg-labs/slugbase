@@ -130,8 +130,8 @@ Product and admin portal use **separate Drizzle migration histories** on the sam
 
 | Script | Package | Schema |
 |--------|---------|--------|
-| `.github/scripts/run-migrate.sh` | `@slugbase/backend` | `public` (product tables) |
-| `.github/scripts/run-migrate-admin.sh` | `@slugbase/db-admin` | `admin` (operator portal) |
+| `scripts/ci/run-migrate.sh` | `@slugbase/backend` | `public` (product tables) |
+| `scripts/ci/run-migrate-admin.sh` | `@slugbase/db-admin` | `admin` (operator portal) |
 
 Local generate/migrate:
 
@@ -153,7 +153,27 @@ When your change affects a deployable surface (anything that ships to staging/pr
 pnpm changeset
 ```
 
-Follow the prompts to pick the bumped package(s) and semver level. The Version PR workflow on `main` applies `pnpm version-packages` and tags releases — see spec §22.6.
+Follow the prompts to pick the bumped package(s) and semver level. The Version PR workflow on `main` applies `pnpm version-packages` and tags per-package tags — see spec §22.6.
+
+Root `package.json` `version` is workspace metadata only; deployable packages (`backend`, `web`, `marketing`, `admin`) version independently. PR CI does **not** enforce root/package version equality.
+
+## Deploy pipeline (CI)
+
+Staging and production deploys use a **live `/version` probe gate** — not Turborepo affected output, path rules, or `DEPLOYED_STATE_*` repository variables (removed).
+
+| Trigger | Workflow | Deploy |
+|---------|----------|--------|
+| PR → `staging` | `pr.yml` | No (CI only) |
+| Push → `staging` | `staging.yml` | Staging (`deploy.yml`) |
+| Push → `main` | `main.yml` | Production (`deploy.yml`) after CI |
+
+**Deploy plan:** `scripts/ci/resolve-deploy-plan.mjs` probes `GET {origin}/version` on each surface and deploys when `semver_gt(V_intended, V_live)`. `V_intended` comes from the deployable package's `package.json` at the deploy ref; `V_live` from the live endpoint. Staging probes send Cloudflare Access service-token headers (`CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` in the GHA `staging` environment).
+
+**Manual override:** `workflow_dispatch` on `staging.yml` with `deploy_mode=manual` skips live compare.
+
+**E2E:** `.github/workflows/e2e.yml` is unchanged — Playwright runs on staging→main release-candidate PRs (and `workflow_dispatch`), not on every PR to `staging`.
+
+Authoritative design: [`docs/internal/ci-cd-deployment-refactor-proposal.md`](ci-cd-deployment-refactor-proposal.md). Supersedes `docs/internal/granular-deployment-recommendations.md` (retired).
 
 ## preinstall guard
 

@@ -163,7 +163,7 @@ Every UI string is a catalog key `<scope>.<context>.<descriptor>`; en + de requi
 - **App naming:** `slugbase-<env>-<app>` — `<env>` ∈ {`staging`, `production`}, `<app>` ∈ {`api`, `web`, `marketing`}. Platform identifiers, not public hostnames. (decision #51)
 - **Staging API scale-to-zero:** `slugbase-staging-api` runs `auto_stop_machines` + `min_machines_running = 0` (cold-start on request). `slugbase-production-api` stays warm (`≥ 1`). Workers scale to zero natively.
 - **CE:** split GHCR images — `ghcr.io/mdg-labs/slugbase-api` + `ghcr.io/mdg-labs/slugbase-web`; API runs `SERVE_WEB_CLIENT=false`; not subject to Cloud topology or naming.
-- **CI/CD:** PipeWatch-aligned workflow split — `pr.yml` / `staging.yml` / `main.yml` / `changesets.yml` entry points; reusable `ci.yml` + selective `deploy.yml` + `sync-secrets.yml`; per-package Changesets versioning; `DEPLOYED_STATE_staging` / `DEPLOYED_STATE_production` per-surface deploy state; GitHub-hosted runners; branches `staging`/`main` (spec §22; authoritative reference `docs/internal/ci-cd-example/`).
+- **CI/CD:** PipeWatch-aligned workflow split — `pr.yml` / `staging.yml` / `main.yml` / `changesets.yml` entry points; reusable `ci.yml` + `deploy.yml` (live `/version` probe gate via `scripts/ci/resolve-deploy-plan.mjs`) + `sync-secrets.yml`; per-package Changesets versioning (root `package.json` version is workspace metadata only — no PR equality gate); production deploy on `push` → `main` after CI; GitHub-hosted runners; branches `staging`/`main` (spec §22; authoritative reference `docs/internal/ci-cd-deployment-refactor-proposal.md`). **`e2e.yml` unchanged** — Playwright e2e on staging→main PRs only.
 
 ---
 
