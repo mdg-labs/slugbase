@@ -19,6 +19,7 @@ const alternateHref =
   localeAlternateHref ?? getRelativeLocaleUrl(alternateLocale, "/");
 const signInHref = appOrigin ? `${appOrigin}/login` : "/login";
 const getStartedHref = appOrigin ? `${appOrigin}/register` : "/register";
+const docsHref = t(locale, "marketing.links.docs_root");
 ---
 
 <nav class="mk-nav" aria-label={t(locale, "marketing.nav.brand")} data-testid="marketing-nav">
@@ -32,6 +33,7 @@ const getStartedHref = appOrigin ? `${appOrigin}/register` : "/register";
       <a class="mk-nav-link" href={pricingHref}>{t(locale, "marketing.nav.pricing")}</a>
       <a class="mk-nav-link" href={blogHref}>{t(locale, "marketing.nav.blog")}</a>
       <a class="mk-nav-link" href={contactHref}>{t(locale, "marketing.nav.contact")}</a>
+      <a class="mk-nav-link" href={docsHref} target="_blank" rel="noopener noreferrer">{t(locale, "marketing.nav.docs")}</a>
     </div>
     <div class="mk-nav-ctas">
       <div class="mk-nav-locale-switcher" data-testid="locale-switcher">
