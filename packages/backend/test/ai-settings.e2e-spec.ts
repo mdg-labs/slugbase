@@ -141,12 +141,15 @@ describe("Workspace AI settings HTTP (integration)", () => {
       expect(body).not.toHaveProperty("encryptedApiKey");
     });
 
-    it("returns 403 for MEMBER", async () => {
+    it("returns 200 for MEMBER (read-only)", async () => {
       const res = await request(server())
         .get("/workspace/settings/ai")
         .set("Cookie", memberSessionCookie);
 
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(200);
+      const body = res.body as Record<string, unknown>;
+      expect(body).toHaveProperty("enabled");
+      expect(body).toHaveProperty("hasApiKey");
     });
 
     it("returns 401 without session", async () => {
