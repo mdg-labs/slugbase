@@ -84,12 +84,14 @@ When adding a new key, follow rule `05-env-vars.mdc` (Phase + `.env.example` + s
 
 ### Sentry release auto-derivation
 
-The Sentry release identifier (`SENTRY_RELEASE` for the API, `VITE_SENTRY_RELEASE` for the web client) is **auto-derived** from root `package.json` `version` field (format: `slugbase@<version>`):
+Per-package Sentry release identifiers are derived in CI only when the corresponding surface deploys (`deploy_api` / `deploy_web`). Marketing-only deploys do **not** create a Sentry release.
 
-- **API** (`SENTRY_RELEASE`): when the env var is unset, `sentry-error-reporting.service.ts` reads root `package.json` at startup and formats the release as `slugbase@<version>`. CI also derives the string and exports it for Fly.io deploy steps.
-- **Web** (`VITE_SENTRY_RELEASE`): inlined at build time via Vite `define`. CI sets this from the root `package.json` version; no extra GHA secret required.
-- **Override**: setting `SENTRY_RELEASE` or `VITE_SENTRY_RELEASE` explicitly still works — the auto-derived value is only a fallback.
-- **Root version bump**: the release version is bumped during the release promotion workflow (`release published` on `main`).
+Format: `slugbase-<surface>@<package-version>+<short-sha>` (e.g. `slugbase-api@0.1.0+995c3b3`, `slugbase-web@0.1.0+995c3b3`).
+
+- **API** (`SENTRY_RELEASE`): CI reads `packages/backend/package.json` `version` via `derive-sentry-release.sh --package api` and uploads source maps to the `slugbase-api` Sentry project when `deploy_api` is true. Runtime may still auto-derive when unset (see `packages/backend/src/instrument.ts`).
+- **Web** (`VITE_SENTRY_RELEASE`): CI reads `packages/web/package.json` `version` via `derive-sentry-release.sh --package web` and passes the value into the web Worker build when `deploy_web` is true.
+- **Marketing**: no Sentry release derivation or upload in v1 deploy pipeline.
+- **Override**: setting `SENTRY_RELEASE` or `VITE_SENTRY_RELEASE` explicitly still works — CI-derived values apply only when those surfaces deploy.
 
 ---
 
