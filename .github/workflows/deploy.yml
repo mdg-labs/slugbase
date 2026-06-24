@@ -185,16 +185,13 @@ jobs:
           DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
         run: bash .github/scripts/run-migrate-admin.sh
 
-  derive-sentry-release:
-    name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 2 · Derive Sentry release
+  derive-sentry-release-api:
+    name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 2 · Derive API Sentry release
     if: >-
       always() &&
       inputs.should_deploy == 'true' &&
-      needs.sync-secrets.result == 'success' &&
-      (
-        needs.detect-deploy-targets.outputs.deploy_api == 'true' ||
-        needs.detect-deploy-targets.outputs.deploy_web == 'true'
-      )
+      needs.detect-deploy-targets.outputs.deploy_api == 'true' &&
+      needs.sync-secrets.result == 'success'
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     needs: [detect-deploy-targets, sync-secrets]
@@ -206,11 +203,35 @@ jobs:
         with:
           ref: ${{ inputs.ref != '' && inputs.ref || github.sha }}
 
-      - name: Derive Sentry release
+      - name: Derive API Sentry release
         id: release
         env:
-          RELEASE_VERSION: ${{ inputs.ref }}
-        run: bash .github/scripts/derive-sentry-release.sh
+          GIT_SHA: ${{ github.sha }}
+        run: bash .github/scripts/derive-sentry-release.sh --package api
+
+  derive-sentry-release-web:
+    name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 2 · Derive web Sentry release
+    if: >-
+      always() &&
+      inputs.should_deploy == 'true' &&
+      needs.detect-deploy-targets.outputs.deploy_web == 'true' &&
+      needs.sync-secrets.result == 'success'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    needs: [detect-deploy-targets, sync-secrets]
+    outputs:
+      release: ${{ steps.release.outputs.release }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+        with:
+          ref: ${{ inputs.ref != '' && inputs.ref || github.sha }}
+
+      - name: Derive web Sentry release
+        id: release
+        env:
+          GIT_SHA: ${{ github.sha }}
+        run: bash .github/scripts/derive-sentry-release.sh --package web
 
   deploy-api:
     name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 3 · Deploy API (Fly)
@@ -220,12 +241,12 @@ jobs:
       needs.detect-deploy-targets.outputs.deploy_api == 'true' &&
       needs.sync-secrets.result == 'success' &&
       needs.migrate.result != 'failure' &&
-      needs.derive-sentry-release.result != 'failure' &&
+      needs.derive-sentry-release-api.result != 'failure' &&
       (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') &&
-      (needs.derive-sentry-release.result == 'success' || needs.derive-sentry-release.result == 'skipped')
+      (needs.derive-sentry-release-api.result == 'success' || needs.derive-sentry-release-api.result == 'skipped')
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
-    needs: [detect-deploy-targets, sync-secrets, migrate, derive-sentry-release]
+    needs: [detect-deploy-targets, sync-secrets, migrate, derive-sentry-release-api]
     steps:
       - name: Checkout
         uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
@@ -247,10 +268,9 @@ jobs:
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
-          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
         run: >-
           bash .github/scripts/sentry-release.sh api packages/backend/dist
-          "${{ needs.derive-sentry-release.outputs.release }}" ${{ inputs.environment }}
+          "${{ needs.derive-sentry-release-api.outputs.release }}" ${{ inputs.environment }}
 
       - name: Setup flyctl
         run: bash .github/scripts/setup-flyctl.sh
@@ -270,12 +290,12 @@ jobs:
       needs.detect-deploy-targets.outputs.deploy_web == 'true' &&
       needs.sync-secrets.result == 'success' &&
       needs.migrate.result != 'failure' &&
-      needs.derive-sentry-release.result != 'failure' &&
+      needs.derive-sentry-release-web.result != 'failure' &&
       (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') &&
-      (needs.derive-sentry-release.result == 'success' || needs.derive-sentry-release.result == 'skipped')
+      (needs.derive-sentry-release-web.result == 'success' || needs.derive-sentry-release-web.result == 'skipped')
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
-    needs: [detect-deploy-targets, sync-secrets, migrate, derive-sentry-release]
+    needs: [detect-deploy-targets, sync-secrets, migrate, derive-sentry-release-web]
     steps:
       - name: Checkout
         uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
@@ -296,7 +316,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           API_BASE_URL: ${{ secrets.API_BASE_URL }}
-          VITE_SENTRY_RELEASE: ${{ needs.derive-sentry-release.outputs.release }}
+          VITE_SENTRY_RELEASE: ${{ needs.derive-sentry-release-web.outputs.release }}
         run: bash .github/scripts/deploy-cf-worker.sh web
 
   deploy-marketing:

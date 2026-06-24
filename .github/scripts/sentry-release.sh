@@ -18,7 +18,7 @@ if [[ -z "${SENTRY_AUTH_TOKEN:-}" || -z "${SENTRY_ORG:-}" ]]; then
   exit 0
 fi
 
-PROJECT="${SENTRY_PROJECT:-slugbase-${SERVICE}}"
+PROJECT="slugbase-${SERVICE}"
 
 if [[ ! -d "$SOURCE_DIR" ]]; then
   echo "sentry-release: source dir ${SOURCE_DIR} missing — skipping ${SERVICE}"
