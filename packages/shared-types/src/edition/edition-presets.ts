@@ -43,6 +43,9 @@ const CE_PRESETS: EditionPresetMap = {
   VITE_AI_BYO_CREDENTIAL: "false",
 };
 
+/** CE supports combined (SERVE_WEB_CLIENT=true) and split (false) topologies — not a hard preset. */
+const CE_CONFLICT_EXEMPT_KEYS = new Set<EditionPresetKey>(["SERVE_WEB_CLIENT"]);
+
 export class SlugbaseEditionParseError extends Error {
   constructor(raw: string | undefined) {
     super(
@@ -167,7 +170,10 @@ export function resolveEnvWithEdition(
       continue;
     }
     const explicitValue = explicit as string;
-    if (envValuesConflict(explicitValue, preset)) {
+    if (
+      envValuesConflict(explicitValue, preset) &&
+      !(edition === SLUGBASE_EDITION.CE && CE_CONFLICT_EXEMPT_KEYS.has(key))
+    ) {
       conflicts.push({ key, explicit: explicitValue, preset });
     }
     env[key] = explicitValue;

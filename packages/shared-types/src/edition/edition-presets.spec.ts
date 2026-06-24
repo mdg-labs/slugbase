@@ -99,6 +99,18 @@ describe("resolveEnvWithEdition", () => {
     expect(resolved.env.PUBLIC_REGISTRATION).toBe("false");
   });
 
+  it("allows CE SERVE_WEB_CLIENT override for split API topology in production", () => {
+    const resolved = resolveEnvWithEdition({
+      SLUGBASE_EDITION: "ce",
+      NODE_ENV: "production",
+      SERVE_WEB_CLIENT: "false",
+      SESSION_SECRET: "x".repeat(32),
+    });
+
+    expect(resolved.env.SERVE_WEB_CLIENT).toBe("false");
+    expect(resolved.conflicts).toEqual([]);
+  });
+
   it("throws on conflicts in production", () => {
     expect(() =>
       resolveEnvWithEdition({
