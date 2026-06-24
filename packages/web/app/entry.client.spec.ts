@@ -80,7 +80,7 @@ describe("entry.client", () => {
 describe("self-host GHCR build", () => {
   it("build-push-ghcr.sh uses hardcoded self-host vite build-args", () => {
     const script = readFileSync(
-      join(__dirname, "../../../.github/scripts/build-push-ghcr.sh"),
+      join(__dirname, "../../../scripts/ci/build-push-ghcr.sh"),
       "utf-8",
     );
     const sharedArgs = readFileSync(
