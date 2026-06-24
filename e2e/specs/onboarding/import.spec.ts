@@ -14,6 +14,11 @@ test.describe("Onboarding import", () => {
   test("first login shows OnboardingOverlay → upload Netscape HTML → bookmarks imported → overlay dismissed", async ({
     page,
   }, testInfo) => {
+    test.skip(
+      process.env.E2E_CE_MODE === "true",
+      "CE split topology seeds onboarding complete in global-setup; overlay flow covered on cloud",
+    );
+
     // ── Phase 1: Login ──────────────────────────────────────────
     await loginAsWorker(page, testInfo.workerIndex);
 

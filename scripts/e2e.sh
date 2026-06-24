@@ -14,7 +14,7 @@
 #
 # Build paths (spec §15 — edition presets set VITE_* at build time; one bundle per edition):
 #   Cloud:  SLUGBASE_EDITION=cloud before pnpm build
-#   CE:     SLUGBASE_EDITION=ce via Docker build-arg (scripts/self-host-vite-build-args.sh)
+#   CE:     SLUGBASE_EDITION=ce via Docker build-arg on Dockerfile.api + Dockerfile.web
 #
 # Prerequisites (one-time):
 #   npx playwright install --with-deps chromium
@@ -177,8 +177,8 @@ cleanup() {
   echo ""
   header "Tearing down"
   kill_e2e_pids
-  docker stop slugbase-e2e-ce 2>/dev/null || true
-  docker rm slugbase-e2e-ce 2>/dev/null || true
+  docker stop slugbase-e2e-ce-api slugbase-e2e-ce-web 2>/dev/null || true
+  docker rm slugbase-e2e-ce-api slugbase-e2e-ce-web 2>/dev/null || true
   docker compose -f "$COMPOSE_FILE" down --volumes --remove-orphans 2>/dev/null || true
   # Only prune the Docker build cache when the CE image was actually built in
   # this run. Pruning unconditionally adds 60-120s of wall time on cloud-only
@@ -310,63 +310,94 @@ fi
 
 # ---------------------------------------------------------------------------
 # 4. Run CE tests (if selected)
-#    Build combined Docker image, run container, test against it on random port
+#    Build split api + web Docker images, run two containers on random ports
 # ---------------------------------------------------------------------------
 if [ "$RUN_CE" = true ]; then
   header "Running CE tests"
 
-  read -r PORT_CE <<< "$(find_free_ports 1)"
+  IFS=' ' read -r PORT_CE_API PORT_CE_WEB <<< "$(find_free_ports 2)"
   export E2E_JSON_REPORT_PATH="$REPO_ROOT/e2e/test-results/report-ce.json"
 
-  info "Building combined Docker image (SLUGBASE_EDITION=ce) …"
+  info "Building CE api image (Dockerfile.api, SLUGBASE_EDITION=ce) …"
   DOCKER_BUILD_RAN=true
-  docker build -t slugbase-e2e:ce \
+  docker build -f Dockerfile.api -t slugbase-e2e:api \
     "${CE_DOCKER_BUILD_ARGS[@]}" \
     . 2>&1 | sed 's/^/  /'
-  ok "Docker image built"
+  ok "API image built"
 
-  info "Starting combined container on port $PORT_CE …"
+  info "Building CE web image (Dockerfile.web, SLUGBASE_EDITION=ce) …"
+  docker build -f Dockerfile.web -t slugbase-e2e:web \
+    "${CE_DOCKER_BUILD_ARGS[@]}" \
+    . 2>&1 | sed 's/^/  /'
+  ok "Web image built"
+
   # CE prod default is PUBLIC_REGISTRATION=false (invite-only). E2e overrides
   # to true so global-setup can register per-worker accounts via /auth/register —
   # no invite flow in this harness (see e2e/global-setup.ts).
-  # The image bakes NODE_ENV=production, which rejects preset overrides; use
+  # Images bake NODE_ENV=production, which rejects preset overrides; use
   # development here (same idea as cloud API — no production NODE_ENV in e2e.sh).
   CE_E2E_DOCKER_ENV=()
   for kv in "${CE_E2E_OPERATOR_ENV[@]}"; do
     CE_E2E_DOCKER_ENV+=(-e "$kv")
   done
+
+  info "Starting API container on port $PORT_CE_API …"
   docker run -d \
-    --name slugbase-e2e-ce \
+    --name slugbase-e2e-ce-api \
     --network host \
     -e NODE_ENV=development \
     -e DATABASE_URL="$DATABASE_URL" \
     -e SLUGBASE_E2E_MODE=true \
     -e SLUGBASE_EDITION=ce \
-    -e PORT="$PORT_CE" \
+    -e SERVE_WEB_CLIENT=false \
+    -e PORT="$PORT_CE_API" \
     -e SESSION_SECRET='ce-e2e-session-secret-at-least-32-chars-long!!' \
     -e ENCRYPTION_KEY='ce-e2e-encryption-key-at-least-32-chars-long!!' \
-    -e APP_BASE_URL="http://localhost:$PORT_CE" \
-    -e FRONTEND_ORIGIN="http://localhost:$PORT_CE" \
-    -e API_BASE_URL="http://localhost:$PORT_CE" \
+    -e APP_BASE_URL="http://localhost:$PORT_CE_API" \
+    -e FRONTEND_ORIGIN="http://localhost:$PORT_CE_WEB" \
     -e PUBLIC_REGISTRATION=true \
     "${CE_E2E_DOCKER_ENV[@]}" \
-    slugbase-e2e:ce 2>&1 | sed 's/^/  /'
-  ok "Container started"
+    slugbase-e2e:api 2>&1 | sed 's/^/  /'
+  ok "API container started"
 
-  info "Waiting for health endpoint …"
+  info "Starting web container on port $PORT_CE_WEB …"
+  docker run -d \
+    --name slugbase-e2e-ce-web \
+    --network host \
+    -e NODE_ENV=development \
+    -e PORT="$PORT_CE_WEB" \
+    -e API_BASE_URL="http://localhost:$PORT_CE_API" \
+    slugbase-e2e:web 2>&1 | sed 's/^/  /'
+  ok "Web container started"
+
+  info "Ports — API:$PORT_CE_API  Web:$PORT_CE_WEB"
+  info "Waiting for health endpoints …"
+  HEALTHY=true
   for i in $(seq 1 30); do
-    curl -sf "http://localhost:$PORT_CE/health" >/dev/null 2>&1 && break
+    curl -sf "http://localhost:$PORT_CE_API/health" >/dev/null 2>&1 && break
     sleep 2
   done
-  curl -sf "http://localhost:$PORT_CE/health" >/dev/null 2>&1 || {
-    fail "Container did not become healthy within 60s"
+  curl -sf "http://localhost:$PORT_CE_API/health" >/dev/null 2>&1 || {
+    fail "API container did not become healthy within 60s"
     EXIT_CODE=1
-    # Mark that container is not healthy so we skip the test run
     HEALTHY=false
   }
+  if [ "$HEALTHY" = true ]; then
+    for i in $(seq 1 30); do
+      curl -sf "http://localhost:$PORT_CE_WEB/health" >/dev/null 2>&1 && break
+      sleep 2
+    done
+    curl -sf "http://localhost:$PORT_CE_WEB/health" >/dev/null 2>&1 || {
+      fail "Web container did not become healthy within 60s"
+      EXIT_CODE=1
+      HEALTHY=false
+    }
+  fi
 
-  if [ "${HEALTHY:-true}" = true ]; then
-    export E2E_BASE_URL_CE="http://localhost:$PORT_CE"
+  if [ "$HEALTHY" = true ]; then
+    export E2E_CE_MODE=true
+    export E2E_BASE_URL_API="http://localhost:$PORT_CE_API"
+    export E2E_BASE_URL_WEB="http://localhost:$PORT_CE_WEB"
 
     LOGFILE_CE="$REPO_ROOT/e2e/test-results/ce-output.log"
 
@@ -379,7 +410,7 @@ if [ "$RUN_CE" = true ]; then
       EXIT_CODE=1
     }
   else
-    fail "Skipping CE tests — container not healthy"
+    fail "Skipping CE tests — containers not healthy"
   fi
 fi
 

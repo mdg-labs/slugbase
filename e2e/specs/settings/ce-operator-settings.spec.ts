@@ -23,33 +23,19 @@ test.describe("CE operator settings", () => {
     await expect(page.locator('[data-testid="audit-log-page"]')).toBeVisible();
   });
 
-  test("workspace settings show operator-managed SMTP and OIDC gates", async ({
+  test("workspace settings show general and AI nav sections", async ({
     authedPage,
   }) => {
     const page = authedPage;
 
     await page.goto("/settings/workspace");
-    await page.waitForSelector('[data-testid="settings-layout"]');
-
-    await expect(page.locator('a[href="/settings/workspace?section=smtp"]')).toBeVisible();
-    await expect(page.locator('a[href="/settings/workspace?section=oidc"]')).toBeVisible();
-    await expect(page.locator('a[href="/settings/workspace?section=ai"]')).toBeVisible();
-
-    await page.goto("/settings/workspace?section=smtp");
     await page.waitForSelector('[data-testid="workspace-settings-page"]');
-    await expect(page.locator('[data-testid="workspace-operator-managed-gate"]')).toBeVisible();
-    await expect(page.getByLabel("SMTP host")).not.toBeVisible();
 
-    await page.goto("/settings/workspace?section=oidc");
-    await page.waitForSelector('[data-testid="workspace-settings-page"]');
-    await expect(page.locator('[data-testid="workspace-operator-managed-gate"]')).toBeVisible();
-    await expect(page.getByRole("button", { name: "Add provider" })).not.toBeVisible();
-
-    await page.goto("/settings/workspace?section=ai");
-    await page.waitForSelector('[data-testid="workspace-settings-page"]');
-    await expect(page.locator('[data-testid="workspace-operator-managed-gate"]')).not.toBeVisible();
-    await expect(page.getByLabel("API key")).not.toBeVisible();
-    await expect(page.locator("#ai-model")).not.toBeVisible();
+    const nav = page.getByRole("navigation", { name: "Settings navigation" });
+    await expect(nav.getByRole("link", { name: "General" })).toBeVisible();
+    await expect(nav.getByRole("link", { name: "AI suggestions" })).toBeVisible();
+    await expect(nav.getByRole("link", { name: /smtp/i })).not.toBeVisible();
+    await expect(nav.getByRole("link", { name: /oidc/i })).not.toBeVisible();
   });
 
   test("workspace AI enable toggle works with operator-configured key", async ({

@@ -1,9 +1,14 @@
 import { test, expect } from '@playwright/test';
 
+const apiUrl =
+  process.env.E2E_BASE_URL_API ??
+  process.env.E2E_BASE_URL_CE ??
+  'http://localhost:4001';
+
 test.describe('CE setup smoke', () => {
   test('fresh DB shows /setup flow and setup completes session', async ({ page }) => {
     // globalSetup already called /setup/complete — if setup is done, skip
-    const statusRes = await page.request.get('/setup/status');
+    const statusRes = await page.request.get(`${apiUrl}/setup/status`);
     if (statusRes.ok()) {
       const status = (await statusRes.json()) as { needsSetup?: boolean };
       if (status.needsSetup === false) {
