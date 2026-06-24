@@ -1,6 +1,7 @@
 ---
 import { getRelativeLocaleUrl } from "astro:i18n";
 import MarketingLayout from "../../layouts/MarketingLayout.astro";
+import MarketingSelfHostActions from "../../components/MarketingSelfHostActions.astro";
 import { t, type SupportedLocale } from "../../i18n/translate.js";
 import { formatMarketingPageTitle } from "../../i18n/format-marketing-page-title.js";
 import {
@@ -196,6 +197,7 @@ const faqItems = [
           <div class="mk-selfhost-copy">
             <h3>{t(locale, "marketing.pricing.selfhost_title")}</h3>
             <p>{t(locale, "marketing.pricing.selfhost_body")}</p>
+            <MarketingSelfHostActions class="mk-selfhost-actions" />
           </div>
         </div>
       </div>
@@ -418,6 +420,10 @@ const faqItems = [
     font-size: 15px;
     color: var(--fg-muted);
     line-height: 1.6;
+  }
+
+  .mk-selfhost-actions {
+    margin-top: var(--sp-5);
   }
 
   .mk-faq-head {

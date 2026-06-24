@@ -8,6 +8,7 @@ const homeHref = getRelativeLocaleUrl(locale, "/");
 const pricingHref = getRelativeLocaleUrl(locale, "/pricing");
 const blogHref = getRelativeLocaleUrl(locale, "/blog");
 const contactHref = getRelativeLocaleUrl(locale, "/contact");
+const docsHref = t(locale, "marketing.links.docs_root");
 ---
 
 <footer class="mk-footer" data-testid="marketing-footer">
@@ -33,7 +34,7 @@ const contactHref = getRelativeLocaleUrl(locale, "/contact");
           <a class="mk-footer-link" href={pricingHref}>{t(locale, "marketing.footer.pricing")}</a>
           <a class="mk-footer-link" href={blogHref}>{t(locale, "marketing.footer.blog")}</a>
           <a class="mk-footer-link" href={contactHref}>{t(locale, "marketing.footer.contact")}</a>
-          <span class="mk-footer-link mk-footer-link--muted">{t(locale, "marketing.footer.docs")}</span>
+          <a class="mk-footer-link" href={docsHref} target="_blank" rel="noopener noreferrer">{t(locale, "marketing.footer.docs")}</a>
         </div>
       </div>
       <div>
@@ -83,7 +84,4 @@ const contactHref = getRelativeLocaleUrl(locale, "/contact");
     font-weight: var(--weight-semi);
   }
 
-  .mk-footer-link--muted {
-    cursor: default;
-  }
 </style>
