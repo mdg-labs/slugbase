@@ -148,4 +148,5 @@ if [[ -z "${GH_TOKEN:-}" ]]; then
   exit 1
 fi
 
-printf '%s' "$BODY" | gh variable set "$VARIABLE_NAME" --body-file -
+# gh reads value from stdin when --body is omitted (no --body-file flag in gh CLI)
+printf '%s' "$BODY" | gh variable set "$VARIABLE_NAME"
