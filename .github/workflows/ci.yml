@@ -97,6 +97,9 @@ jobs:
       - name: Client API origin guard
         run: pnpm run check:client-api-origin
 
+      - name: External font CDN guard
+        run: pnpm run check:no-external-fonts
+
       - name: Finish ReportPortal unit launch
         if: always() && steps.rp-unit-start.outputs.launch_id != ''
         env:

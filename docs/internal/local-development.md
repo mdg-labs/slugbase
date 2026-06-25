@@ -69,6 +69,22 @@ Or: `source scripts/ci-env.sh` once per shell.
 
 Sanity: `pnpm env:check`
 
+## Repository guards
+
+CI runs lightweight policy checks from the root `package.json` scripts:
+
+| Command | Purpose |
+|---------|---------|
+| `pnpm check:client-api-origin` | Browser code must not read `VITE_API_URL` for cross-origin fetch |
+| `pnpm check:no-external-fonts` | `packages/**` must not reference Google Fonts or other external font CDNs |
+
+Font assets are self-hosted (for example `@fontsource/*`). The external-font guard scans `packages/**` only — design prototype CSS under `docs/` is out of scope.
+
+```bash
+pnpm check:no-external-fonts
+pnpm test:scripts   # includes both guards plus script unit tests
+```
+
 ## Secrets (Phase)
 
 Local development injects environment variables from the Phase **`Development`** environment via `phase run`. CI and deploy read secrets from **GitHub Actions environments** (Phase syncs operator edits automatically) — no Phase CLI in CI (spec §22.9).
