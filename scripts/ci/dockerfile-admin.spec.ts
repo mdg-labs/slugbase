@@ -15,4 +15,9 @@ describe("admin Dockerfile workspace deps", () => {
     expect(dockerfile).toMatch(/COPY packages\/shared-types\/package\.json packages\/shared-types\//);
     expect(dockerfile).toMatch(/COPY packages\/shared-types packages\/shared-types/);
   });
+
+  it("installs ui workspace package for admin Vite font styles", () => {
+    expect(dockerfile).toMatch(/COPY packages\/ui\/package\.json packages\/ui\//);
+    expect(dockerfile).toMatch(/COPY packages\/ui packages\/ui/);
+  });
 });
