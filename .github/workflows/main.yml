@@ -1,6 +1,6 @@
 name: Main
 
-# Push to main — CI, Changesets, production deploy, GHCR prod tags, draft release (spec §22.4, §22.6–22.8).
+# Push to main — CI, production deploy, GHCR prod tags, draft release (spec §22.4, §22.6–22.8).
 
 on:
   push:
@@ -22,16 +22,6 @@ jobs:
       contents: read
       pull-requests: write
     uses: ./.github/workflows/ci.yml
-    secrets: inherit
-
-  changesets:
-    name: Changesets
-    needs: [ci]
-    if: needs.ci.result == 'success'
-    permissions:
-      contents: write
-      pull-requests: write
-    uses: ./.github/workflows/changesets.yml
     secrets: inherit
 
   plan:
@@ -148,9 +138,8 @@ jobs:
 
   prepare-release:
     name: Prepare release
-    needs: [changesets, deploy-production, plan]
+    needs: [deploy-production, plan]
     if: >-
-      needs.changesets.outputs.published == 'true' &&
       needs.deploy-production.result == 'success' &&
       (
         needs.plan.outputs.deploy_api == 'true' ||
@@ -160,5 +149,6 @@ jobs:
       contents: write
     uses: ./.github/workflows/prepare-release.yml
     with:
-      published-packages: ${{ needs.changesets.outputs.published-packages }}
+      deploy-api: ${{ needs.plan.outputs.deploy_api }}
+      deploy-web: ${{ needs.plan.outputs.deploy_web }}
     secrets: inherit

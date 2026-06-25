@@ -82,15 +82,17 @@ Machine-readable key list (names only): [`.env.example`](../.env.example). Backe
 
 When adding a new key, follow rule `05-env-vars.mdc` (Phase + `.env.example` + schema + update `environment-variables.md`).
 
-### Per-package versioning (Changesets)
+### Per-package versioning (manual bumps)
 
 | Constant | Value | Kind | Notes |
 |---|---|---|---|
 | Deployable starting version | `0.1.0` | config | `@slugbase/backend`, `@slugbase/web`, `@slugbase/marketing`, `@slugbase/admin` |
-| Shared library version | `0.0.0` | config | `shared-types`, `ui`, `email-templates`, `db-admin` — Changesets `ignore` |
+| Shared library version | `0.0.0` | config | `shared-types`, `ui`, `email-templates`, `db-admin` — not deployed |
 | Production deploy floor | `1.0.0` per package | config | Production skips deploy for a surface when that package semver &lt; `1.0.0`; staging has no minimum |
-| Git tag format | `@slugbase/<pkg>@X.Y.Z` | config | Per-package Changesets tags; no root `v*` tag for routine releases |
+| Release tag format | `release-YYYY-MM-DD[*]` | config | Draft GitHub Release tags from `prepare-release.yml` |
 | Root `package.json` version | workspace metadata | config | Not a release gate |
+| Local bump helper | `pnpm bump:versions` | tooling | Interactive semver bumps before push |
+| Pre-push gate | `check-push-version-bumps.mjs` | tooling | Enforces bumps on push to `staging`/`main` |
 
 ### Deploy state (`DEPLOYED_STATE_*`)
 

@@ -65,11 +65,11 @@ _added: 2026-06-02_
 
 ## CI/CD pipeline — PipeWatch pattern + selective deploy (#470 epic, #532 epic, 2026-06-24)
 
-**Entry points:** `pr.yml` (PRs + version-check), `staging.yml` (CI → selective deploy + GHCR `:dev`), `main.yml` (CI → `changesets.yml`), `release.yml` (production on release published).
+**Entry points:** `pr.yml` (PRs + version-check), `staging.yml` (CI → selective deploy + GHCR `:dev`), `main.yml` (CI → production deploy + draft release), `release.yml` (production on release published).
 
-**Reusable workflows:** `ci.yml` (parallel lint/typecheck/unit/build/integration/audit/reportportal-summary; GHA `ci` env; Turborepo cache in setup action); `deploy.yml` (detect-deploy-targets → sync-secrets → migrate ∥ sentry → selective api/web/marketing/admin → smoke → `DEPLOYED_STATE_*` update); `sync-secrets.yml` (GHA → Fly + CF); `changesets.yml` (Version PR, per-package `@slugbase/<pkg>@X.Y.Z` tags, draft release).
+**Reusable workflows:** `ci.yml` (parallel lint/typecheck/unit/build/integration/audit/reportportal-summary; GHA `ci` env; Turborepo cache in setup action); `deploy.yml` (live `/version` probe gate via `resolve-deploy-plan.mjs` → sync-secrets → migrate ∥ sentry → selective api/web/marketing/admin → smoke); `sync-secrets.yml` (GHA → Fly + CF); `prepare-release.yml` (draft GitHub Release after api/web prod deploy).
 
-**Versioning:** Changesets — deployables version independently; root `package.json` is not a release gate. Production deploy skips surfaces with package semver &lt; `1.0.0`.
+**Versioning:** Manual `package.json` bumps per deployable (`pnpm bump:versions` locally); pre-push hook enforces bumps before push to `staging`/`main`. Shared libs stay `0.0.0` — consumer bumps required. Production deploy skips surfaces with package semver &lt; `1.0.0`.
 
 **CE GHCR:** split `ghcr.io/mdg-labs/slugbase-api` + `slugbase-web` (not a single combined image). API runs `SERVE_WEB_CLIENT=false`.
 

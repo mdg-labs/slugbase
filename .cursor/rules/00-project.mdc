@@ -43,7 +43,7 @@ CE: **combined container image**, single port, operator's own infrastructure —
 
 Single workflow file: `.github/workflows/ci-cd.yml`. **GitHub-hosted runners** (`ubuntu-latest`). Branches: `staging` and `main`.
 Secrets via **GitHub Actions environments** (`ci`, `staging`, `production`) — Phase syncs operator edits automatically; workflows read `${{ secrets.* }}` (no Phase CLI in CI — spec §22.9). Deploy pipelines push GHA secrets to Fly.io and Cloudflare Workers via `sync-secrets.sh`.
-Stages: CI checks → staging deploy (push `staging`) → prepare release (push `main`) → production deploy (release published) → GHCR CE image push.
+Stages: CI checks → staging deploy (push `staging`) → production deploy (push `main`) → draft release when api/web deploy → GHCR CE image push. **Versioning:** manual per-package `package.json` bumps locally (`pnpm bump:versions`); pre-push hook enforces bumps before push (rule `15-deploy-version-bumps.mdc`).
 
 ## Repository state
 

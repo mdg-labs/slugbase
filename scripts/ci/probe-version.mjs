@@ -68,6 +68,26 @@ export function semverGte(left, right) {
 }
 
 /**
+ * @param {string} version
+ * @param {"patch" | "minor" | "major"} level
+ * @returns {string}
+ */
+export function incrementSemver(version, level) {
+  const parts = parseSemver(version);
+  if (!parts) {
+    throw new Error(`incrementSemver: invalid version "${version}"`);
+  }
+  const [major, minor, patch] = parts;
+  if (level === "major") {
+    return `${major + 1}.0.0`;
+  }
+  if (level === "minor") {
+    return `${major}.${minor + 1}.0`;
+  }
+  return `${major}.${minor}.${patch + 1}`;
+}
+
+/**
  * @param {number} status
  * @param {DeployEnvironment} environment
  * @returns {'ok' | 'bootstrap' | 'fail'}

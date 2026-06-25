@@ -78,13 +78,12 @@ resolve-deploy-ref → ci → plan (deploy-plan.yml, once) → deploy(staging, c
 ```text
 push main
   ├─ ci
-  ├─ changesets          (Version PR / tag-packages)
   ├─ deploy(production)  (needs ci — live probes, bootstrap 0.0.0)
   │    └─ GHCR api/web   (same plan outputs)
-  └─ prepare-release     (needs changesets + deploy; if published ∧ deploy succeeded for api/web)
+  └─ prepare-release     (needs deploy + plan; if api/web deploy succeeded)
 ```
 
-`prepare-release` and deploy run in parallel only where `needs` allow; **draft release waits for successful api/web deploy**.
+`prepare-release` waits for successful api/web deploy. Versions come from committed `package.json` (local `pnpm bump:versions` before push).
 
 ### `deploy.yml` (reusable)
 
@@ -116,19 +115,16 @@ Path changes, lockfile-only edits, workflow edits, shared-lib changes — **with
 
 ## GitHub Releases (comms only)
 
-- **Trigger:** `changesets.published` ∧ production deploy succeeded for api and/or web.
-- **Skip** when Version PR bumps only marketing/admin.
-- **Title:** `SlugBase API {backendVer} · Web {webVer}` — always both from `package.json` at release commit.
-- **Body:** changelog sections only for backend/web if in `published-packages`.
+- **Trigger:** production deploy succeeded for api and/or web (`plan.deploy_api` / `plan.deploy_web`).
+- **Title:** `SlugBase API {backendVer} · Web {webVer}` — from `package.json` at release commit.
+- **Body:** `git log` since last `release-*` tag.
 - **Tag:** `release-YYYY-MM-DD[*]` — not a deploy identity.
-- Per-package git tags from `changeset tag` remain for audit/rollback refs.
-- `createGithubReleases: false` on changesets action (unchanged).
 
 ---
 
 ## First production cutover
 
-Today only **staging** is live. Production probes will bootstrap (`V_live = 0.0.0`). First Version PR with `backend`/`web` ≥ `1.0.0` deploys those surfaces without seeding repo variables. Marketing/admin deploy when `V_intended >= 1.0.0` and live is behind.
+Today only **staging** is live. Production probes will bootstrap (`V_live = 0.0.0`). First push to `main` with `backend`/`web` ≥ `1.0.0` in `package.json` deploys those surfaces without seeding repo variables. Marketing/admin deploy when `V_intended >= 1.0.0` and live is behind.
 
 ---
 

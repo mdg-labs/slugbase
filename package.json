@@ -22,17 +22,16 @@
     "i18n:check:hardcoded": "bash scripts/check-hardcoded-ui-strings.sh",
     "blog:validate": "pnpm --filter @slugbase/marketing blog:validate",
     "check:client-api-origin": "bash scripts/check-client-api-origin.sh",
+    "check:push-version-bumps": "node scripts/check-push-version-bumps.mjs",
+    "bump:versions": "node scripts/bump-package-versions.mjs",
+    "setup:hooks": "git config core.hooksPath .githooks",
     "test:scripts": "bash scripts/check-client-api-origin.sh && vitest run --config vitest.scripts.config.ts",
     "db:generate": "pnpm --filter @slugbase/backend db:generate",
     "db:migrate": "pnpm --filter @slugbase/backend db:migrate",
     "test:e2e": "bash scripts/e2e.sh",
-    "e2e:direct": "playwright test --config e2e/playwright.config.ts",
-    "changeset": "changeset",
-    "version-packages": "changeset version",
-    "tag-packages": "changeset tag"
+    "e2e:direct": "playwright test --config e2e/playwright.config.ts"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.29.8",
     "@eslint/js": "^9.28.0",
     "@playwright/test": "^1.60.0",
     "@reportportal/agent-js-playwright": "5.2.3",

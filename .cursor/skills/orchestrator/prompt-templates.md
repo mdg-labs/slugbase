@@ -657,15 +657,23 @@ REQUIRED OUTPUT:
 Include this block when the orchestrator or user explicitly requests `git push`. The pushing agent (not the orchestrator) runs the full gate.
 
 ```text
-PUSH PREP — FULL CI GATE (mandatory before git push):
-- Run full workspace gate from TARGET REPO per .cursor/rules/06-local-ci-before-commit.mdc:
+PUSH PREP — BEFORE git push (staging only; never main per 01-git-workflow.mdc):
+
+1. VERSION BUMPS (when deploy surfaces changed since upstream):
+   pnpm bump:versions
+   git add packages/*/package.json && git commit -m "chore(repo)[#N]: bump versions for push"
+   See .cursor/rules/15-deploy-version-bumps.mdc
+
+2. FULL CI GATE (mandatory):
     bash scripts/with-ci-env.sh pnpm lint && \
     bash scripts/with-ci-env.sh pnpm typecheck && \
     bash scripts/with-ci-env.sh pnpm test:unit && \
     bash scripts/with-ci-env.sh pnpm build && \
     bash scripts/with-ci-env.sh pnpm test:integration && \
     bash scripts/with-ci-env.sh pnpm audit --audit-level=high
-- On failure → do not push; fix and rerun from the start
-- On success → report "full gate passed" then push (staging only; never main per 01-git-workflow.mdc)
-- Integration tests: NO Phase wrapper (with-ci-env.sh only)
+   - On failure → do not push; fix and rerun from the start
+   - On success → report "full gate passed" then push
+   - Integration tests: NO Phase wrapper (with-ci-env.sh only)
+
+3. Pre-push hook validates version bumps automatically (or run pnpm check:push-version-bumps manually)
 ```

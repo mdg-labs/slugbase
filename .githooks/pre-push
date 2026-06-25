@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Local pre-push — deployable changes since remote require package.json version bumps.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+
+node scripts/check-push-version-bumps.mjs

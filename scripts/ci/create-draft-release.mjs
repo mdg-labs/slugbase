@@ -1,37 +1,20 @@
 #!/usr/bin/env node
 /**
- * Create an aggregate draft GitHub Release after Changesets publish + api/web deploy.
- * Title: SlugBase API {x} · Web {y} (from package.json). Tag: release-YYYY-MM-DD[*].
- * Skips when Version PR bumps only marketing/admin.
+ * Create a draft GitHub Release after api/web production deploy.
+ * Title from package.json versions; body from git log since last release-* tag.
  */
 import { execFileSync, execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
-/** @type {Record<string, string>} */
-const PKG_TO_DIR = {
-  "@slugbase/backend": "packages/backend",
-  "@slugbase/web": "packages/web",
-};
+const API_DIR = "packages/backend";
+const WEB_DIR = "packages/web";
 
-const API_PKG = "@slugbase/backend";
-const WEB_PKG = "@slugbase/web";
+const deployApi = process.env.DEPLOY_API === "true";
+const deployWeb = process.env.DEPLOY_WEB === "true";
 
-/** @type {Array<{ name: string; version: string }>} */
-const published = JSON.parse(process.env.PUBLISHED_PACKAGES ?? "[]");
-
-if (published.length === 0) {
-  console.log("No published packages — skipping draft release");
-  process.exit(0);
-}
-
-const publishedApiOrWeb = published.some(
-  (pkg) => pkg.name === API_PKG || pkg.name === WEB_PKG,
-);
-if (!publishedApiOrWeb) {
-  console.log(
-    "Only marketing/admin packages published — skipping draft release",
-  );
+if (!deployApi && !deployWeb) {
+  console.log("Neither api nor web deployed — skipping draft release");
   process.exit(0);
 }
 
@@ -45,34 +28,31 @@ function readPackageVersion(pkgDir) {
   return manifest.version;
 }
 
-const backendVer = readPackageVersion(PKG_TO_DIR[API_PKG]);
-const webVer = readPackageVersion(PKG_TO_DIR[WEB_PKG]);
-const title = `SlugBase API ${backendVer} · Web ${webVer}`;
+const backendVer = readPackageVersion(API_DIR);
+const webVer = readPackageVersion(WEB_DIR);
 
 /** @type {string[]} */
-const bodyParts = [];
-for (const pkg of published) {
-  if (pkg.name !== API_PKG && pkg.name !== WEB_PKG) {
-    continue;
-  }
-  const dir = PKG_TO_DIR[pkg.name];
-  if (!dir) {
-    continue;
-  }
-  const changelogPath = path.join(dir, "CHANGELOG.md");
-  if (!fs.existsSync(changelogPath)) {
-    console.warn(`Missing ${changelogPath} — skipping changelog section`);
-    continue;
-  }
-  const content = fs.readFileSync(changelogPath, "utf8");
-  const section = extractVersionSection(content, pkg.version);
-  if (section) {
-    bodyParts.push(`## ${pkg.name}@${pkg.version}\n\n${section}`);
-  }
+const titleParts = [];
+if (deployApi) {
+  titleParts.push(`API ${backendVer}`);
 }
+if (deployWeb) {
+  titleParts.push(`Web ${webVer}`);
+}
+const title = `SlugBase ${titleParts.join(" · ")}`;
 
-const body =
-  bodyParts.length > 0 ? bodyParts.join("\n\n") : `Packages: ${title}`;
+const lastTag = findLastReleaseTag();
+const logRange = lastTag ? `${lastTag}..HEAD` : "HEAD";
+const body = execFileSync(
+  "git",
+  ["log", logRange, "--pretty=format:- %s (%h)", "--no-merges"],
+  { encoding: "utf8" },
+).trim();
+
+const notesBody =
+  body.length > 0
+    ? `## Changes since ${lastTag ?? "initial release"}\n\n${body}`
+    : `Packages: ${title}`;
 
 const date = new Date().toISOString().slice(0, 10);
 let tag = `release-${date}`;
@@ -88,7 +68,7 @@ execSync(`git tag -a ${shellQuote(tag)} -m ${shellQuote(title)}`, {
 execSync(`git push origin ${shellQuote(tag)}`, { stdio: "inherit" });
 
 const notesFile = path.join(process.cwd(), ".draft-release-notes.md");
-fs.writeFileSync(notesFile, body);
+fs.writeFileSync(notesFile, notesBody);
 try {
   execFileSync(
     "gh",
@@ -102,18 +82,22 @@ try {
 console.log(`Created draft release ${tag}: ${title}`);
 
 /**
- * @param {string} content
- * @param {string} version
+ * @returns {string | null}
  */
-function extractVersionSection(content, version) {
-  const header = `## ${version}`;
-  const idx = content.indexOf(header);
-  if (idx === -1) {
+function findLastReleaseTag() {
+  try {
+    const output = execFileSync(
+      "git",
+      ["tag", "--list", "release-*", "--sort=-creatordate"],
+      { encoding: "utf8" },
+    ).trim();
+    if (!output) {
+      return null;
+    }
+    return output.split("\n")[0] ?? null;
+  } catch {
     return null;
   }
-  const start = idx + header.length;
-  const nextHeader = content.indexOf("\n## ", start);
-  return (nextHeader === -1 ? content.slice(start) : content.slice(start, nextHeader)).trim();
 }
 
 /**

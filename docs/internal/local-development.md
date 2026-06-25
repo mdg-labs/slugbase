@@ -143,19 +143,36 @@ bash scripts/with-ci-env.sh pnpm --filter @slugbase/db-admin db:generate
 bash scripts/with-ci-env.sh pnpm --filter @slugbase/db-admin db:migrate
 ```
 
-## Versioning (Changesets)
+## Versioning (deploy packages)
 
-Deployable packages (`@slugbase/backend`, `@slugbase/web`, `@slugbase/marketing`, `@slugbase/admin`) are versioned independently via [Changesets](https://github.com/changesets/changesets). Shared libraries (`shared-types`, `ui`, `email-templates`, `db-admin`) stay at `0.0.0` and are ignored by Changesets.
+Deployable packages (`@slugbase/backend`, `@slugbase/web`, `@slugbase/marketing`, `@slugbase/admin`) are versioned independently in each package's `package.json`. Shared libraries (`shared-types`, `ui`, `email-templates`, `db-admin`) stay at `0.0.0`.
 
-When your change affects a deployable surface (anything that ships to staging/production), add a changeset before opening a PR:
+**Bump before push, not per commit.** Multiple local commits are fine; run the bump helper once before pushing:
 
 ```bash
-pnpm changeset
+pnpm setup:hooks   # once per clone: git config core.hooksPath .githooks
+
+pnpm bump:versions              # interactive: patch / minor / major per package
+pnpm bump:versions --dry-run    # preview without writing
+git add packages/*/package.json && git commit -m "chore(repo)[#N]: bump versions for push"
 ```
 
-Follow the prompts to pick the bumped package(s) and semver level. The Version PR workflow on `main` applies `pnpm version-packages` and tags per-package tags — see spec §22.6.
+A **pre-push** hook (not pre-commit) blocks pushes to `staging`/`main` when deploy-relevant source changed since the remote but semver did not increase. On failure, stderr points to `pnpm bump:versions`.
 
-Root `package.json` `version` is workspace metadata only; deployable packages (`backend`, `web`, `marketing`, `admin`) version independently. PR CI does **not** enforce root/package version equality.
+| Command | Purpose |
+|---|---|
+| `pnpm bump:versions` | Detect changes + bump consumers |
+| `pnpm check:push-version-bumps` | Manual check (upstream..HEAD) |
+| `SKIP_DEPLOY_VERSION_BUMP_CHECK=1 git push --no-verify` | Skip once (operator only) |
+
+| Shared package | Affected deployables |
+|---|---|
+| `shared-types` | backend, web, marketing, admin |
+| `ui` | web, marketing |
+| `email-templates` | backend |
+| `db-admin` | admin |
+
+Root `package.json` `version` is workspace metadata only. Deploy uses each deployable's `package.json` version (live `/version` probe gate). See spec §22.6 and rule `15-deploy-version-bumps.mdc`.
 
 ## Deploy pipeline (CI)
 

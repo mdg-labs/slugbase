@@ -1,0 +1,63 @@
+---
+description: Deploy package versioning — bump before push, pre-push gate, bump:versions helper
+alwaysApply: true
+---
+
+# Deploy package versioning
+
+Deployable packages (`backend`, `web`, `marketing`, `admin`) version **independently** in each package's `package.json`. Shared libs (`shared-types`, `ui`, `email-templates`, `db-admin`) stay at `0.0.0`; their changes require **consumer** version bumps.
+
+## When to bump
+
+- **Before `git push`** to `staging` or `main` — not on every commit.
+- Multiple local commits are fine; one version-bump commit before push covers the whole push range.
+
+## Local workflow
+
+```bash
+pnpm setup:hooks   # once per clone — enables .githooks/pre-push
+
+# ... feature commits without version bumps ...
+
+pnpm bump:versions              # interactive: patch / minor / major per package
+git add packages/*/package.json
+git commit -m "chore(repo)[#N]: bump versions for push"
+
+bash scripts/with-ci-env.sh pnpm lint && ...   # full CI gate (rule 06)
+git push origin staging
+```
+
+| Command | Purpose |
+|---|---|
+| `pnpm bump:versions` | Detect changed deployables + shared-lib consumers; bump `package.json` after confirm |
+| `pnpm bump:versions --dry-run` | Show proposed bumps without writing |
+| `pnpm check:push-version-bumps` | Manual pre-push check (upstream..HEAD) |
+| `pnpm setup:hooks` | Install pre-push version gate |
+
+## Pre-push gate
+
+`.githooks/pre-push` runs `scripts/check-push-version-bumps.mjs` on pushes to `staging`/`main`. It compares **remote..local** (all commits being pushed). If deploy-relevant source changed but semver did not increase → push blocked.
+
+On failure, stderr includes **`pnpm bump:versions`** — use that script to fix.
+
+Escape (operator only): `SKIP_DEPLOY_VERSION_BUMP_CHECK=1 git push --no-verify`
+
+## Shared-lib → consumer map
+
+| Shared package | Bump these deployables |
+|---|---|
+| `shared-types` | backend, web, marketing, admin |
+| `ui` | web, marketing |
+| `email-templates` | backend |
+| `db-admin` | admin |
+
+## Agent obligations
+
+When pushing deployable code to `staging`:
+
+1. Run `pnpm bump:versions` (or bump `package.json` manually) if the push includes deploy-relevant changes.
+2. Commit version bumps in a separate commit before push.
+3. Run full CI gate (rule `06-local-ci-before-commit.mdc`).
+4. Push — pre-push hook validates the push range.
+
+**No Changesets.** No per-commit version requirement. CI does not auto-bump versions.

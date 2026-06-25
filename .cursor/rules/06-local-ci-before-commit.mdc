@@ -110,7 +110,13 @@ Mark a command `n/a` only when a package legitimately has no such task yet — n
 
 **Mandatory immediately before `git push`** to any remote (typically `staging`; never `main` per `01-git-workflow.mdc`).
 
-- **Direct commit and push:** this is the **only** CI gate — do not run scoped gate before commit.
+**Separate from the version bump gate:** `.githooks/pre-push` runs `check-push-version-bumps.mjs` automatically on push to `staging`/`main`. Fix failures with `pnpm bump:versions` (rule `15-deploy-version-bumps.mdc`). Recommended order before push:
+
+1. `pnpm bump:versions` → commit `package.json` (when deploy code changed)
+2. Full CI gate (below)
+3. `git push`
+
+- **Direct commit and push:** full gate is the only manual CI gate — do not run scoped gate before commit.
 - **Orchestrator sub-agents:** run scoped gate at commit/verify; run full gate only when push is explicitly requested.
 - **Commit without push (direct):** full gate not required until a later push.
 

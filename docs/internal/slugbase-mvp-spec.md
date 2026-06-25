@@ -737,9 +737,8 @@ Concurrency: in-progress runs are cancelled for PR and `staging`-push triggers; 
 |---|---|---|
 | `pr.yml` | `pull_request` | CI gate; version check; E2E when `staging → main` |
 | `staging.yml` | push to `staging` | CI gate → staging deploy (+ GHCR CE image tags in parallel) |
-| `main.yml` | push to `main` | CI gate → Changesets Version PR workflow |
+| `main.yml` | push to `main` | CI gate → production deploy → draft release (when api/web deploy) |
 | `release.yml` | `release` published | Production deploy (per-surface idempotent) + GHCR release tags |
-| `changesets.yml` | `main.yml` | Changesets Version PR, per-package tags, draft release |
 
 Reusable workflows (`workflow_call` only — never triggered directly):
 
@@ -749,7 +748,7 @@ Reusable workflows (`workflow_call` only — never triggered directly):
 | `deploy.yml` | `staging.yml`, `release.yml` | Selective deploy chain (target detection → sync-secrets → migrate → deploy → smoke → state update) |
 | `sync-secrets.yml` | `deploy.yml`, manual dispatch | GHA → Fly/CF secret sync |
 | `e2e.yml` | `pr.yml` | Playwright e2e (staging→main PR only) |
-| `prepare-release.yml` | `changesets.yml` | Draft GitHub Release from aggregated per-package changelogs |
+| `prepare-release.yml` | `main.yml` | Draft GitHub Release after api/web production deploy |
 | `build-and-push-ce-image.yml` | `staging.yml`, `main.yml`, `release.yml` | GHCR CE images (`slugbase-api`, `slugbase-web`) |
 
 ### 22.3 CI checks (reusable `ci.yml`)
@@ -785,17 +784,22 @@ After CI passes on push to `staging`, **`deploy.yml`** runs with `environment: s
    - **update-deployed-state** — merge successful surfaces into repository variable `DEPLOYED_STATE_staging` (JSON per surface: `version` + `sha`; see §22.7)
 3. **GHCR CE images** (when flagged) — build and push **`ghcr.io/mdg-labs/slugbase-api`** and **`ghcr.io/mdg-labs/slugbase-web`** independently. Staging tags: `:dev` per image when that package is in the affected set; hardcoded CE `VITE_*` build args only (no Phase/GHA runtime fetch). API image runs with `SERVE_WEB_CLIENT=false` (same posture as Cloud API).
 
-### 22.6 Release versioning (`main.yml` → `changesets.yml`)
+### 22.6 Release versioning (`main.yml` → `prepare-release.yml`)
 
-Deployable packages (`@slugbase/backend`, `@slugbase/web`, `@slugbase/marketing`, `@slugbase/admin`) are versioned **independently** via [Changesets](https://github.com/changesets/changesets) (`privatePackages: { version: true, tag: true }`). Shared libraries (`shared-types`, `ui`, `email-templates`, `db-admin`) stay at `0.0.0` and are ignored. Root `package.json` `version` is workspace metadata only — **not** a release gate.
+Deployable packages (`@slugbase/backend`, `@slugbase/web`, `@slugbase/marketing`, `@slugbase/admin`) are versioned **independently** in each package's `package.json`. Shared libraries (`shared-types`, `ui`, `email-templates`, `db-admin`) stay at `0.0.0`. Root `package.json` `version` is workspace metadata only — **not** a release gate.
 
-After CI passes on push to `main`:
+**Local workflow (before push to `staging`/`main`):**
 
-1. **`changesets.yml`** — Changesets GitHub Action opens or updates a **Version PR** when pending changesets exist.
-2. On Version PR merge — `pnpm version-packages` (`changeset version`) bumps only packages with changesets; `changeset tag` creates per-package annotated tags `@slugbase/<pkg>@X.Y.Z` (no collision between packages).
-3. **`prepare-release.yml`** (invoked from `changesets.yml` when publish runs) — verify `pnpm i18n:validate`; aggregate per-package `CHANGELOG.md` sections into one **draft** GitHub Release (title: comma-separated package list when ≤3 bumped, else calendar date + detail in body). A human publishes the draft to trigger production (§22.7).
+1. Developers commit feature work without per-commit version bumps.
+2. **`pnpm bump:versions`** — interactive helper detects changed deployables and shared-lib consumers; writes `package.json` semver (patch/minor/major per package).
+3. Commit version bumps; **pre-push hook** validates the push range (`remote..local`).
+4. Staging/production deploy uses live **`/version` probe** — deploy runs when package semver &gt; live version.
 
-Developers add changesets locally via `pnpm changeset` before merging feature work to `main`. Secrets for release preparation come from the GHA environment (Phase-synced) — no runtime Phase fetch in the workflow.
+After CI and production deploy on push to `main`:
+
+1. **`prepare-release.yml`** — when api and/or web deployed successfully: verify `pnpm i18n:validate`; create **draft** GitHub Release (title from `package.json` versions; body from `git log` since last `release-*` tag). A human publishes the draft to trigger production (§22.7).
+
+No Changesets, no CI-driven version PRs. See `docs/internal/local-development.md` and rule `15-deploy-version-bumps.mdc`.
 
 ### 22.7 Production deploy (`release.yml` → `deploy.yml`)
 
@@ -823,7 +827,7 @@ CE ships as **two** GHCR images — not a single combined image:
 | `ghcr.io/mdg-labs/slugbase-api` | NestJS API (`Dockerfile.api`) | `SERVE_WEB_CLIENT=false`; migrations on bootstrap when enabled |
 | `ghcr.io/mdg-labs/slugbase-web` | React Router v7 Node server (`Dockerfile.web`) | Serves bundled web client |
 
-On `staging` push, `main` push (via Changesets publish), and `release` published, each image is built and pushed **only when its package is in the affected deploy set** (§22.5). Tag scheme: staging `:dev` per image; production `:<package-semver>` (e.g. `:1.0.0`) plus `:latest` per image. CE operators run both containers (documented compose example); images are not subject to the Cloud Fly/Workers topology.
+On `staging` push, `main` push, and `release` published, each image is built and pushed **only when its package is in the affected deploy set** (§22.5). Tag scheme: staging `:dev` per image; production `:<package-semver>` (e.g. `:1.0.0`) plus `:latest` per image. CE operators run both containers (documented compose example); images are not subject to the Cloud Fly/Workers topology.
 
 ### 22.9 Secrets in CI and deploy
 
