@@ -24,6 +24,7 @@
     "check:client-api-origin": "bash scripts/check-client-api-origin.sh",
     "check:push-version-bumps": "node scripts/check-push-version-bumps.mjs",
     "bump:versions": "node scripts/bump-package-versions.mjs",
+    "bump:versions:force": "node scripts/bump-package-versions.mjs --force",
     "setup:hooks": "git config core.hooksPath .githooks",
     "test:scripts": "bash scripts/check-client-api-origin.sh && vitest run --config vitest.scripts.config.ts",
     "db:generate": "pnpm --filter @slugbase/backend db:generate",

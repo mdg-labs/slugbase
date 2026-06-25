@@ -8,7 +8,7 @@ import {
   isIgnoredPath,
   parsePrePushLine,
 } from "./lib/package-version-policy.mjs";
-import { parseBumpChoice, parseCliArgs } from "./bump-package-versions.mjs";
+import { parseAssignmentTokens, parseBumpChoice, parseCliArgs } from "./bump-package-versions.mjs";
 
 describe("findAffectedSharedLibs", () => {
   it("detects shared-types source changes", () => {
@@ -96,19 +96,52 @@ describe("parseCliArgs", () => {
   it("parses dry-run and base", () => {
     expect(parseCliArgs(["--dry-run", "--base", "origin/staging"])).toEqual({
       dryRun: true,
+      force: false,
       baseRef: "origin/staging",
       assignments: [],
+    });
+  });
+
+  it("parses --force", () => {
+    expect(parseCliArgs(["--force", "--", "patch"])).toEqual({
+      dryRun: false,
+      force: true,
+      assignments: [
+        { shortName: "backend", level: "patch" },
+        { shortName: "web", level: "patch" },
+        { shortName: "marketing", level: "patch" },
+        { shortName: "admin", level: "patch" },
+      ],
     });
   });
 
   it("parses non-interactive assignments after --", () => {
     expect(parseCliArgs(["--", "web", "patch", "backend", "minor"])).toEqual({
       dryRun: false,
+      force: false,
       assignments: [
         { shortName: "web", level: "patch" },
         { shortName: "backend", level: "minor" },
       ],
     });
+  });
+});
+
+describe("parseAssignmentTokens", () => {
+  it("expands a single level to all deployables", () => {
+    expect(parseAssignmentTokens(["minor"])).toEqual([
+      { shortName: "backend", level: "minor" },
+      { shortName: "web", level: "minor" },
+      { shortName: "marketing", level: "minor" },
+      { shortName: "admin", level: "minor" },
+    ]);
+  });
+
+  it("parses per-package pairs", () => {
+    expect(parseAssignmentTokens(["web", "patch", "admin", "major"])).toEqual([
+      { shortName: "web", level: "patch" },
+      { shortName: "admin", level: "major" },
+    ]);
   });
 });
 

@@ -10,21 +10,69 @@ import { stdin as input, stdout as output } from "node:process";
 
 import { incrementSemver } from "./ci/probe-version.mjs";
 import {
+  DEPLOYABLE_DIRS,
+  PACKAGE_DIR_TO_NAME,
   SHORT_NAME_TO_DIR,
   analyzeVersionGaps,
+  readPackageVersionAtSha,
   resolveUpstreamRange,
 } from "./lib/package-version-policy.mjs";
 
 /** @typedef {"patch" | "minor" | "major" | "skip"} BumpLevel */
 
 /**
+ * @param {string} value
+ * @returns {value is BumpLevel}
+ */
+export function isBumpLevel(value) {
+  return value === "patch" || value === "minor" || value === "major";
+}
+
+/**
+ * @param {string[]} remainder Args after `--`
+ * @returns {Array<{ shortName: string; level: BumpLevel }>}
+ */
+export function parseAssignmentTokens(remainder) {
+  if (remainder.length === 0) {
+    return [];
+  }
+
+  if (remainder.length === 1 && isBumpLevel(remainder[0])) {
+    const level = remainder[0];
+    return Object.keys(SHORT_NAME_TO_DIR).map((shortName) => ({ shortName, level }));
+  }
+
+  /** @type {Array<{ shortName: string; level: BumpLevel }>} */
+  const assignments = [];
+  let index = 0;
+  while (index < remainder.length) {
+    const shortName = remainder[index];
+    const level = remainder[index + 1];
+    if (!shortName || !level) {
+      break;
+    }
+    if (!isBumpLevel(level)) {
+      throw new Error(`Invalid bump level "${level}" for ${shortName}`);
+    }
+    if (!SHORT_NAME_TO_DIR[shortName]) {
+      throw new Error(`Unknown package "${shortName}"`);
+    }
+    assignments.push({ shortName, level });
+    index += 2;
+  }
+
+  return assignments;
+}
+
+/**
  * @param {string[]} argv
- * @returns {{ dryRun: boolean; baseRef?: string; assignments: Array<{ shortName: string; level: BumpLevel }> }}
+ * @returns {{ dryRun: boolean; force: boolean; baseRef?: string; assignments: Array<{ shortName: string; level: BumpLevel }> }}
  */
 export function parseCliArgs(argv) {
-  /** @type {{ dryRun: boolean; baseRef?: string; assignments: Array<{ shortName: string; level: BumpLevel }> }} */
+  /** @type {{ dryRun: boolean; force: boolean; baseRef?: string; assignments: Array<{ shortName: string; level: BumpLevel }> }} */
   const result = {
     dryRun: false,
+    force: false,
     assignments: [],
   };
 
@@ -36,6 +84,11 @@ export function parseCliArgs(argv) {
       index += 1;
       continue;
     }
+    if (arg === "--force") {
+      result.force = true;
+      index += 1;
+      continue;
+    }
     if (arg === "--base") {
       result.baseRef = argv[index + 1];
       index += 2;
@@ -43,25 +96,10 @@ export function parseCliArgs(argv) {
     }
     if (arg === "--") {
       index += 1;
+      result.assignments = parseAssignmentTokens(argv.slice(index));
       break;
     }
     index += 1;
-  }
-
-  while (index < argv.length) {
-    const shortName = argv[index];
-    const level = argv[index + 1];
-    if (!shortName || !level) {
-      break;
-    }
-    if (level !== "patch" && level !== "minor" && level !== "major") {
-      throw new Error(`Invalid bump level "${level}" for ${shortName}`);
-    }
-    if (!SHORT_NAME_TO_DIR[shortName]) {
-      throw new Error(`Unknown package "${shortName}"`);
-    }
-    result.assignments.push({ shortName, level });
-    index += 2;
   }
 
   return result;
@@ -102,14 +140,28 @@ export function writePackageVersion(repoRoot, packageDir, newVersion) {
 
 /**
  * @param {string} repoRoot
- * @param {{ dryRun: boolean; baseRef?: string; assignments: Array<{ shortName: string; level: BumpLevel }> }} options
+ * @param {string} packageDir
+ * @returns {{ dir: string; name: string; currentVersion: string }}
+ */
+export function readDeployableTarget(repoRoot, packageDir) {
+  return {
+    dir: packageDir,
+    name: PACKAGE_DIR_TO_NAME[packageDir] ?? packageDir,
+    currentVersion: readPackageVersionAtSha(repoRoot, "HEAD", packageDir),
+  };
+}
+
+/**
+ * @param {string} repoRoot
+ * @param {{ dryRun: boolean; force: boolean; baseRef?: string; assignments: Array<{ shortName: string; level: BumpLevel }> }} options
  */
 export async function runBumpVersions(repoRoot, options) {
   const { sha, label } = resolveUpstreamRange(repoRoot, options.baseRef);
   const gaps = analyzeVersionGaps(repoRoot, sha, "HEAD");
 
-  if (gaps.length === 0) {
+  if (!options.force && gaps.length === 0) {
     console.log(`No deployable changes since ${label}.`);
+    console.log("Use pnpm bump:versions:force to bump without detected changes.");
     return;
   }
 
@@ -120,18 +172,60 @@ export async function runBumpVersions(repoRoot, options) {
     const gapByShortName = new Map(
       gaps.map((gap) => [gap.dir.replace("packages/", ""), gap]),
     );
+
     for (const assignment of options.assignments) {
+      const packageDir = SHORT_NAME_TO_DIR[assignment.shortName];
+      if (!packageDir) {
+        continue;
+      }
+
       const gap = gapByShortName.get(assignment.shortName);
-      if (!gap) {
+      if (!options.force && !gap) {
         console.warn(`Skipping ${assignment.shortName}: no version gap detected`);
         continue;
       }
+
+      const target = gap
+        ? {
+            dir: gap.dir,
+            name: gap.name,
+            currentVersion: gap.currentVersion,
+          }
+        : readDeployableTarget(repoRoot, packageDir);
+
       plans.push({
-        dir: gap.dir,
-        name: gap.name,
-        from: gap.currentVersion,
-        to: incrementSemver(gap.currentVersion, assignment.level),
+        dir: target.dir,
+        name: target.name,
+        from: target.currentVersion,
+        to: incrementSemver(target.currentVersion, assignment.level),
       });
+    }
+  } else if (options.force) {
+    const rl = createInterface({ input, output });
+    try {
+      console.log("Force bump — all deployable packages:\n");
+      for (const packageDir of DEPLOYABLE_DIRS) {
+        const target = readDeployableTarget(repoRoot, packageDir);
+        console.log(`${target.name}`);
+        console.log(`  current: ${target.currentVersion}`);
+        const answer = await rl.question(
+          "  bump? [p]atch / [m]inor / [M]ajor / [s]kip [p]: ",
+        );
+        const level = parseBumpChoice(answer);
+        if (level === "skip") {
+          console.log("");
+          continue;
+        }
+        plans.push({
+          dir: target.dir,
+          name: target.name,
+          from: target.currentVersion,
+          to: incrementSemver(target.currentVersion, level),
+        });
+        console.log("");
+      }
+    } finally {
+      rl.close();
     }
   } else {
     const rl = createInterface({ input, output });

@@ -162,6 +162,9 @@ A **pre-push** hook (not pre-commit) blocks pushes to `staging`/`main` when depl
 | Command | Purpose |
 |---|---|
 | `pnpm bump:versions` | Detect changes + bump consumers |
+| `pnpm bump:versions -- patch` | Patch all packages that need a bump (since upstream) |
+| `pnpm bump:versions:force -- patch` | Patch all deployables (no change detection) |
+| `pnpm bump:versions:force -- web minor` | Force minor bump on one package |
 | `pnpm check:push-version-bumps` | Manual check (upstream..HEAD) |
 | `SKIP_DEPLOY_VERSION_BUMP_CHECK=1 git push --no-verify` | Skip once (operator only) |
 

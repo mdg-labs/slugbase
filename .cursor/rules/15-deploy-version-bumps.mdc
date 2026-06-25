@@ -30,6 +30,9 @@ git push origin staging
 | Command | Purpose |
 |---|---|
 | `pnpm bump:versions` | Detect changed deployables + shared-lib consumers; bump `package.json` after confirm |
+| `pnpm bump:versions -- patch` | Patch all packages that need a bump (since upstream) |
+| `pnpm bump:versions:force -- patch` | Patch **all** deployables (ignores change detection) |
+| `pnpm bump:versions:force -- web minor` | Force bump one package |
 | `pnpm bump:versions --dry-run` | Show proposed bumps without writing |
 | `pnpm check:push-version-bumps` | Manual pre-push check (upstream..HEAD) |
 | `pnpm setup:hooks` | Install pre-push version gate |
