@@ -1,6 +1,7 @@
 name: Main
 
-# Push to main — CI, production deploy, GHCR prod tags, draft release (spec §22.4, §22.6–22.8).
+# Push to main — CI, production deploy, draft release (spec §22.4, §22.6–22.8).
+# Live /version probes run once via deploy-plan.yml; deploy.yml uses caller_plan (spec §22.7).
 
 on:
   push:
@@ -28,113 +29,36 @@ jobs:
     name: Production · Deploy plan
     needs: [ci]
     if: needs.ci.result == 'success'
-    runs-on: ubuntu-latest
-    environment: production
-    outputs:
-      deploy_api: ${{ steps.plan.outputs.deploy_api }}
-      deploy_web: ${{ steps.plan.outputs.deploy_web }}
-      push_ghcr_api: ${{ steps.plan.outputs.push_ghcr_api }}
-      push_ghcr_web: ${{ steps.plan.outputs.push_ghcr_web }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
-
-      - name: Resolve deploy plan
-        id: plan
-        env:
-          ENVIRONMENT: production
-          DEPLOY_MODE: auto
-          SHOULD_DEPLOY: "true"
-          FORCE_FULL_DEPLOY: "false"
-          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
-          FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
-          MARKETING_ORIGIN: ${{ vars.MARKETING_ORIGIN }}
-          ADMIN_URL: ${{ secrets.ADMIN_URL }}
-        run: node scripts/ci/resolve-deploy-plan.mjs
+    permissions:
+      contents: read
+    uses: ./.github/workflows/deploy-plan.yml
+    with:
+      environment: production
+      should_deploy: "true"
+    secrets: inherit
 
   deploy-production:
     name: Deploy production
-    needs: [ci]
-    if: needs.ci.result == 'success'
+    needs: [plan]
+    if: needs.plan.result == 'success'
     permissions:
       actions: write
       contents: read
     uses: ./.github/workflows/deploy.yml
     with:
       environment: production
+      caller_plan: "true"
+      deploy_api: ${{ needs.plan.outputs.deploy_api }}
+      deploy_web: ${{ needs.plan.outputs.deploy_web }}
+      deploy_marketing: ${{ needs.plan.outputs.deploy_marketing }}
+      deploy_admin: ${{ needs.plan.outputs.deploy_admin }}
+      run_migrate: ${{ needs.plan.outputs.run_migrate }}
+      run_migrate_admin: ${{ needs.plan.outputs.run_migrate_admin }}
+      push_ghcr_api: ${{ needs.plan.outputs.push_ghcr_api }}
+      push_ghcr_web: ${{ needs.plan.outputs.push_ghcr_web }}
+      sync_services: ${{ needs.plan.outputs.sync_services }}
+      skip_reasons: ${{ needs.plan.outputs.skip_reasons }}
     secrets: inherit
-
-  push-ghcr-api:
-    name: Production · GHCR · Push slugbase-api
-    needs: [plan, deploy-production]
-    if: >-
-      needs.deploy-production.result == 'success' &&
-      needs.plan.outputs.push_ghcr_api == 'true'
-    runs-on: ubuntu-latest
-    environment: production
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
-
-      - name: Read API package version
-        id: version
-        run: echo "semver=$(node -p "require('./packages/backend/package.json').version")" >> "$GITHUB_OUTPUT"
-
-      - name: Log in to GHCR
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push API image
-        env:
-          DOCKER_BUILDKIT: "1"
-        run: >
-          bash scripts/ci/build-push-ghcr.sh
-          --target api
-          ghcr.io/${{ format('{0}-api', github.repository) }}
-          ${{ steps.version.outputs.semver }}
-          --latest
-
-  push-ghcr-web:
-    name: Production · GHCR · Push slugbase-web
-    needs: [plan, deploy-production]
-    if: >-
-      needs.deploy-production.result == 'success' &&
-      needs.plan.outputs.push_ghcr_web == 'true'
-    runs-on: ubuntu-latest
-    environment: production
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
-
-      - name: Read web package version
-        id: version
-        run: echo "semver=$(node -p "require('./packages/web/package.json').version")" >> "$GITHUB_OUTPUT"
-
-      - name: Log in to GHCR
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push web image
-        env:
-          DOCKER_BUILDKIT: "1"
-        run: >
-          bash scripts/ci/build-push-ghcr.sh
-          --target web
-          ghcr.io/${{ format('{0}-web', github.repository) }}
-          ${{ steps.version.outputs.semver }}
-          --latest
 
   prepare-release:
     name: Prepare release
