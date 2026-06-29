@@ -1,6 +1,6 @@
 /**
  * Canonical sync-secrets manifest for SlugBase hosted deploy (spec §22.9, §14.7).
- * Validated against `.github/scripts/sync-secrets.sh` and `.github/workflows/sync-secrets.yml`.
+ * Validated against `scripts/ci/sync-secrets.sh` and `.github/workflows/sync-secrets.yml`.
  *
  * OIDC identity providers use per-provider env vars (spec §11.3, §15) — not a single JSON blob.
  * Pattern per IdP slug: `OIDC_{SLUG}_CLIENT_ID`, `OIDC_{SLUG}_CLIENT_SECRET`,
@@ -23,7 +23,7 @@ export type SyncSecretsManifest = {
   platformGhaKeys: readonly string[];
   /**
    * GHA storage keys mapped to a different runtime key before platform sync
-   * (see `.github/scripts/github-secret-map.sh`).
+   * (see `scripts/ci/github-secret-map.sh`).
    */
   storageToRuntimeAliases: Readonly<Record<string, string>>;
 };

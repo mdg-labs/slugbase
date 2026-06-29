@@ -79,7 +79,7 @@ Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit w
 ### P1-05 — Neon Postgres engine on identical schema + CI matrix — Infra · Lane S
 - **AC:** Postgres engine via `DATABASE_URL`; CI runs the integration suite against Postgres. *Note: dual SQLite/Postgres CI matrix deferred with SQLite for CE (Fast-Follow).*
 - **Tests:** integration suite passes on Postgres in CI.
-- **Files:** `packages/backend/src/db/**`, `.github/workflows/ci-cd.yml`
+- **Files:** `packages/backend/src/db/**`, `.github/workflows/ci.yml`
 - **Doc Ref:** spec §11.9, decision #32; eng §4, §6 · **Deps:** P1-04, P1-09 · **Status:** [x]
 
 ### P1-06 — Crypto interface (at-rest encryption) — BE · Lane P
@@ -100,10 +100,10 @@ Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit w
 - **Files:** `packages/ui/**`, `packages/web/**`
 - **Doc Ref:** spec §19, §23.1; eng §1, §3, §9; rule `11` · **Deps:** P1-01 · **Status:** [!] failed — SB-10: ErrorBoundary hard-coded strings in root.tsx
 
-### P1-09 — CI checks job (`.github/workflows/ci-cd.yml`) — Infra · Lane S
-- **AC:** workflow with PR/push triggers (`staging`,`main`); CI job: install → lint/typecheck/unit → build → integration → `pnpm audit`; secrets from GHA `ci` environment (Phase-synced).
+### P1-09 — CI checks job (`.github/workflows/ci.yml`) — Infra · Lane S
+- **AC:** workflow entry points (`pr.yml`, `staging.yml`, `main.yml`) call reusable `ci.yml` on PR/push (`staging`, `main`); CI job: install → lint/typecheck/unit → build → integration → `pnpm audit`; secrets from GHA `ci` environment (Phase-synced).
 - **Tests:** workflow YAML validates; CI green on the P1 scaffold.
-- **Files:** `.github/workflows/ci-cd.yml`, `.github/actions/**`
+- **Files:** `.github/workflows/pr.yml`, `.github/workflows/staging.yml`, `.github/workflows/main.yml`, `.github/workflows/ci.yml`, `.github/actions/**`
 - **Doc Ref:** spec §22.1–22.3, §22.9; eng §7, §8, §10 · **Deps:** P1-01 · **Status:** [x]
 
 ### P1-10 — Container images (split CE api + web) — Infra · Lane P
@@ -459,7 +459,7 @@ Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit w
 - `P6-07.1` — String audit + en/de completeness + language resolution — FE · Lane P
   - **AC:** all UI strings catalog keys with en+de; language resolution (user → Accept-Language → en); AI output-language honored. · **Tests:** rg finds no hard-coded UI strings. · **Files:** `packages/web/**`, `packages/marketing/**`, `packages/ui/**` (key usage) · **Deps:** P3-13, P4-03, P5-05, P6-03
 - `P6-07.2` — i18n validation build gate in CI — Infra · Lane S
-  - **AC:** `pnpm i18n:validate` fails build on missing keys or locale parity gaps; rg hard-coded-string check in CI. · **Tests:** CI translation check passes. · **Files:** `.github/workflows/ci-cd.yml`, i18n scripts · **Deps:** P6-07.1, P1-09
+  - **AC:** `pnpm i18n:validate` fails build on missing keys or locale parity gaps; rg hard-coded-string check in CI. · **Tests:** CI translation check passes. · **Files:** `.github/workflows/ci.yml`, i18n scripts · **Deps:** P6-07.1, P1-09
 
 ### P6-08 — Error pages + UX polish — parent Story · Domain FE
 - **Doc Ref:** spec §18, §23.3; proto (`EdgePages.jsx`,`EdgeStates.html`); rule `11`
@@ -475,16 +475,16 @@ Per rule `02-orchestrator`: file/identifier naming (`04`); Conventional Commit w
 - **Files:** `packages/backend/src/openapi/**`
 - **Doc Ref:** spec §18; eng §5 · **Deps:** P1-02 · **Status:** [ ]
 
-### P6-10 — Staging deploy pipeline (selective Fly + Workers + migration + smoke) — Infra · Lane S
-- **AC:** push-`staging` pipeline: `detect-deploy-targets` gates deploy scope; parallel API + web/marketing/admin builds with staging secrets; DB migration when flagged; deploy `slugbase-staging-*` surfaces; per-surface smoke; update `DEPLOYED_STATE_staging`; GitHub Deployment records.
-- **Tests:** workflow validates; staging deploy succeeds + smoke green; marketing-only diff deploys marketing only.
-- **Files:** `.github/workflows/deploy.yml`, `fly.toml`, worker deploy config
+### P6-10 — Staging deploy pipeline (probe-gated Fly + Workers + migration + smoke) — Infra · Lane S
+- **AC:** push-`staging` pipeline: `deploy-plan.yml` live `/version` probes gate deploy scope; parallel API + web/marketing/admin deploys with staging secrets; DB migration when flagged; deploy `slugbase-staging-*` surfaces; per-surface smoke (`/health` + `/version`); optional GHCR `:dev` when plan flags `push_ghcr_*`.
+- **Tests:** workflow validates; staging deploy succeeds + smoke green; marketing-only version bump deploys marketing only.
+- **Files:** `.github/workflows/staging.yml`, `.github/workflows/deploy-plan.yml`, `.github/workflows/deploy.yml`, `scripts/ci/resolve-deploy-plan.mjs`, `fly.toml`, worker deploy config
 - **Doc Ref:** spec §22.5, §14.7; eng §10 · **Deps:** P1-10, P6-03 · **Status:** [ ]
 
-### P6-11 — Changesets release + production deploy + split GHCR images — Infra · Lane S
-- **AC:** push-`main` Changesets Version PR (per-package bump + `@slugbase/<pkg>@X.Y.Z` tags); draft aggregate GitHub Release; release-published production deploy (per-surface idempotent via `DEPLOYED_STATE_production`, production `1.0.0` floor); split CE images pushed to GHCR with per-package semver + `:latest`.
-- **Tests:** workflow validates; dry-run/idempotency check; image builds + pushes; marketing-only changeset bumps marketing only.
-- **Files:** `.github/workflows/changesets.yml`, `.github/workflows/release.yml`, release scripts
+### P6-11 — Production deploy + bump-scoped draft release + CE GHCR on publish — Infra · Lane S
+- **AC:** push-`main`: CI → live `/version` production deploy (`main.yml` → `deploy-plan.yml` → `deploy.yml`); production `1.0.0` hard floor; bump-scoped draft GitHub Release decoupled from deploy (`prepare-release.yml`); `release: published` pushes CE GHCR `:latest` + `release-YYYY-MM-DD` tags only (no cloud deploy on publish).
+- **Tests:** workflow validates; dry-run/idempotency check via probe mocks; CE image builds + pushes on published release; marketing-only version bump deploys marketing only.
+- **Files:** `.github/workflows/main.yml`, `.github/workflows/prepare-release.yml`, `.github/workflows/release.yml`, `scripts/ci/create-draft-release.mjs`, `scripts/ci/list-release-service-tags.mjs`
 - **Doc Ref:** spec §22.6–22.8; eng §10 · **Deps:** P6-10 · **Status:** [ ]
 
 ---

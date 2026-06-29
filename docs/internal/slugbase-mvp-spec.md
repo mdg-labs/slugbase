@@ -699,7 +699,7 @@ Every item below was previously an open question and is now **settled** and inte
 33. **i18n tooling (settled):** Message catalogs live in committed repo JSON (`packages/*/i18n/locales/{en,de}.json`). Web uses react-i18next; marketing uses native `t()` at build time. CI validates locale parity via `pnpm i18n:validate`. (Section 17, rule 10-i18n.mdc.)
 34. **Secrets management tooling (settled):** **Phase** is the secrets manager. Operators edit secrets in the Phase app (`SlugBase`); Phase automatically syncs to matching **GitHub Actions environments** (`staging`, `production`, and the dedicated `ci` environment for CI-only keys). Local development injects the Phase `Development` environment via `phase run`. Deploy pipelines push GHA environment secrets to Fly.io and Cloudflare Workers via `sync-secrets.sh` — no runtime secret fetch in CI setup. (Section 15, §22.9, rule 05-env-vars.mdc.)
 
-35. **CI/CD pipeline (settled):** GitHub Actions on GitHub-hosted runners; **PipeWatch-aligned workflow split** — entry points `pr.yml`, `staging.yml`, `main.yml` (plus `release.yml` for production deploy); reusable `ci.yml`, `deploy.yml`, and `sync-secrets.yml`; branches `staging` and `main`. Authoritative reference: `docs/internal/ci-cd-example/`. (Section 22.)
+35. **CI/CD pipeline (settled):** GitHub Actions on GitHub-hosted runners; **PipeWatch-aligned workflow split** — entry points `pr.yml`, `staging.yml`, `main.yml`, and `release.yml` (CE GHCR only); reusable `ci.yml`, `deploy-plan.yml`, `deploy.yml`, `sync-secrets.yml`, and `prepare-release.yml`; live `/version` probe gate (`scripts/ci/resolve-deploy-plan.mjs`); production cloud deploy on `push` → `main` after CI (not `release: published`); CE `:latest` on `release: published` only; branches `staging` and `main`. Authoritative reference: `docs/internal/ci-cd-deployment-refactor-proposal.md` and `docs/internal/ci-cd-example2/` (IssueSmith); PipeWatch `docs/internal/ci-cd-example/` is lineage only. (Section 22.)
 36. **Design system and UI prototype (settled):** A clickable V1 design prototype in `docs/internal/design-prototype/V1/` is the **visual and interaction-design source of truth** (design language, screen anatomy, states, copy tone). The MVP spec remains the **product source of truth** — where the prototype conflicts with the spec, the spec wins. Design tokens (periwinkle accent `#7782f7`, dark-first, IBM Plex Sans/Mono) are defined in `docs/internal/design-prototype/V1/colors_and_type.css`. (Section 23.)
 
 **Technology stack**
@@ -723,33 +723,38 @@ Every item below was previously an open question and is now **settled** and inte
 
 ## 22. CI/CD Pipeline
 
-SlugBase CI/CD follows the **PipeWatch pipeline pattern**, adapted for SlugBase's package layout and Cloud topology. The authoritative reference for workflow structure, reusable chains, and secret-sync scripts is **`docs/internal/ci-cd-example/`** — implementation lands in issues #471–#474; this section documents the target design.
+SlugBase CI/CD follows the **PipeWatch pipeline pattern**, adapted for SlugBase's package layout and Cloud topology. **Authoritative references:** `docs/internal/ci-cd-deployment-refactor-proposal.md` (design rationale and locked decisions) and `docs/internal/ci-cd-example2/` (IssueSmith reference implementation). PipeWatch `docs/internal/ci-cd-example/` is **lineage only** — do not treat it as the live workflow map.
+
+Deploy automation lives under **`scripts/ci/`** (plan probes, platform deploy, smoke, GHCR, secret sync). Workflows call `node scripts/ci/…` or `bash scripts/ci/…` directly.
 
 ### 22.1 Runners and concurrency
 
 **GitHub-hosted runners** (`ubuntu-latest`) are used throughout. Each job runs in a fresh ephemeral VM — no self-hosted runner disk cleanup.
 
-Concurrency: in-progress runs are cancelled for PR and `staging`-push triggers; production deploys (triggered by a published release) are never cancelled.
+Concurrency: in-progress runs are cancelled for PR and `staging`/`main` push triggers. **`release.yml`** (CE GHCR publish) uses `cancel-in-progress: false`.
 
 ### 22.2 Workflow entry points
 
+Three **independent** production paths — cloud deploy, draft release comms, and CE operator images — share CI but do not gate one another.
+
 | Workflow | Trigger | Purpose |
 |---|---|---|
-| `pr.yml` | `pull_request` | CI gate; version check; E2E when `staging → main` |
-| `staging.yml` | push to `staging` | CI gate → staging deploy (+ GHCR CE image tags in parallel) |
-| `main.yml` | push to `main` | CI gate → production deploy → draft release (when api/web deploy) |
-| `release.yml` | `release` published | Production deploy (per-surface idempotent) + GHCR release tags |
+| `pr.yml` | `pull_request` | CI gate; E2E when `staging → main` |
+| `staging.yml` | push to `staging` | CI → live `/version` deploy plan → staging deploy + optional GHCR `:dev` |
+| `main.yml` | push to `main` | CI → production cloud deploy (probe-gated) **and** bump-scoped draft release (parallel, decoupled) |
+| `release.yml` | `release` published | CE GHCR `:latest` + release-date tags only — **no cloud deploy** |
 
 Reusable workflows (`workflow_call` only — never triggered directly):
 
 | Workflow | Called by | Purpose |
 |---|---|---|
 | `ci.yml` | `pr.yml`, `staging.yml`, `main.yml` | Parallel CI gate |
-| `deploy.yml` | `staging.yml`, `release.yml` | Selective deploy chain (target detection → sync-secrets → migrate → deploy → smoke → state update) |
+| `deploy-plan.yml` | `staging.yml`, `main.yml` | Live `/version` probe plan (`scripts/ci/resolve-deploy-plan.mjs`) |
+| `deploy.yml` | `staging.yml`, `main.yml` | Deploy chain (sync-secrets → migrate → deploy → smoke) |
 | `sync-secrets.yml` | `deploy.yml`, manual dispatch | GHA → Fly/CF secret sync |
 | `e2e.yml` | `pr.yml` | Playwright e2e (staging→main PR only) |
-| `prepare-release.yml` | `main.yml` | Draft GitHub Release after api/web production deploy |
-| `build-and-push-ce-image.yml` | `staging.yml`, `main.yml`, `release.yml` | GHCR CE images (`slugbase-api`, `slugbase-web`) |
+| `prepare-release.yml` | `main.yml` | Bump-scoped **draft** GitHub Release (comms only — not coupled to deploy success) |
+| `build-and-push-ce-image.yml` | `staging.yml`, `release.yml` | GHCR CE images (`slugbase-api`, `slugbase-web`) |
 
 ### 22.3 CI checks (reusable `ci.yml`)
 
@@ -769,54 +774,67 @@ The shared **setup composite action** (`.github/actions/setup`) installs pnpm + 
 
 ### 22.4 E2E (Playwright)
 
-Runs only on the `staging → main` pull request (release-candidate PR). Depends on CI passing. Rebuilds from source. Timeout: 45 minutes. Invoked via reusable `e2e.yml` from `pr.yml`.
+Runs only on the `staging → main` pull request (release-candidate PR). Depends on CI passing. Rebuilds from source. Timeout: 45 minutes. Invoked via reusable `e2e.yml` from `pr.yml`. **Not** part of the per-task local CI gate.
 
-### 22.5 Staging deploy (`staging.yml` → `deploy.yml`)
+### 22.5 Deploy gate — live `/version` probes
 
-After CI passes on push to `staging`, **`deploy.yml`** runs with `environment: staging`. Deploy scope is **selective** — only surfaces affected by the commit range (or conservatively all surfaces when forced).
+Deploy scope is **selective** and **probe-based** — not Turborepo affected output, path rules, or repository variables. **`deploy-plan.yml`** runs `scripts/ci/resolve-deploy-plan.mjs` once per push; **`deploy.yml`** receives `caller_plan=true` and does not re-probe.
 
-1. **`detect-deploy-targets`** — `.github/scripts/detect-deploy-targets.sh` uses Turborepo affected output plus an explicit package → target map (see `docs/internal/granular-deployment-recommendations.md`). Emits boolean outputs: `deploy_api`, `deploy_web`, `deploy_marketing`, `deploy_admin`, `run_migrate`, `run_migrate_admin`, `push_ghcr_api`, `push_ghcr_web`, `sync_services`. **Conservative overrides (deploy all):** `workflow_dispatch` with `force_full_deploy: true`; missing or invalid `DEPLOYED_STATE_staging`; first run after enablement.
-2. **`deploy.yml`** chain (each step gated by detection outputs):
-   - **sync-secrets** — push GHA `staging` secrets only to services in `sync_services` (Fly `slugbase-staging-api`, `slugbase-staging-admin`; CF Workers `slugbase-staging-web`, `slugbase-staging-marketing`) via `.github/scripts/sync-secrets.sh`
-   - **migrate** / **migrate-admin** (when flagged; parallel with Sentry release derivation for deployed API/web surfaces) — Drizzle migrations via `.github/scripts/run-migrate.sh` using `DATABASE_URL_UNPOOLED` / admin DB URL from GHA secrets
-   - **parallel deploys** — API to Fly.io `fra`; web + marketing + admin to their platforms (with retry); only for flagged surfaces
-   - **smoke** — per deployed surface: API `GET /health` + `/version`; web health; marketing site root liveness; admin `GET /health`
-   - **update-deployed-state** — merge successful surfaces into repository variable `DEPLOYED_STATE_staging` (JSON per surface: `version` + `sha`; see §22.7)
-3. **GHCR CE images** (when flagged) — build and push **`ghcr.io/mdg-labs/slugbase-api`** and **`ghcr.io/mdg-labs/slugbase-web`** independently. Staging tags: `:dev` per image when that package is in the affected set; hardcoded CE `VITE_*` build args only (no Phase/GHA runtime fetch). API image runs with `SERVE_WEB_CLIENT=false` (same posture as Cloud API).
+**Gate rule per surface:** deploy when `semver_gt(V_intended, V_live)` where `V_intended` is the deployable's `package.json` version at the deploy ref and `V_live` comes from `GET {origin}/version`. **Self-heal:** if a prior deploy failed but live still lags intended, the next push redeploys without a new version bump.
 
-### 22.6 Release versioning (`main.yml` → `prepare-release.yml`)
+**Staging** (`staging.yml`):
 
-Deployable packages (`@slugbase/backend`, `@slugbase/web`, `@slugbase/marketing`, `@slugbase/admin`) are versioned **independently** in each package's `package.json`. Shared libraries (`shared-types`, `ui`, `email-templates`, `db-admin`) stay at `0.0.0`. Root `package.json` `version` is workspace metadata only — **not** a release gate.
+```text
+resolve-deploy-ref → ci → deploy-plan(staging) → deploy(staging, caller_plan) + GHCR :dev*
+```
+
+- Staging probes send Cloudflare Access service-token headers (`CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET`); HTTP 403 fails the plan.
+- Unreachable surfaces bootstrap as `V_live = 0.0.0` after retries (first deploy).
+- `workflow_dispatch` with `deploy_mode=manual` skips live compare and deploys all surfaces.
+
+**Production** (`main.yml`):
+
+```text
+ci → deploy-plan(production) → deploy(production, caller_plan)
+```
+
+- **Hard floor:** surfaces with `V_intended < 1.0.0` are skipped in production (staging has no minimum).
+- **No GHCR push on `main`** — CE production tags are published only via `release.yml` (§22.8).
+
+**`deploy.yml` chain** (each step gated by plan outputs):
+
+1. **sync-secrets** — push GHA secrets for services in `sync_services` via `scripts/ci/sync-secrets.sh`
+2. **migrate** / **migrate-admin** (when flagged; parallel with Sentry release derivation for deployed API/web surfaces) — Drizzle migrations via `scripts/ci/run-migrate.sh`
+3. **parallel deploys** — API to Fly.io `fra`; web, marketing, and admin to their platforms; only for flagged surfaces
+4. **smoke** — per deployed surface: `GET /health` and `GET /version` on all four surfaces
+
+Live endpoints are authoritative — there is **no** `DEPLOYED_STATE_*` repository variable or `update-deployed-state` job.
+
+### 22.6 Release versioning and draft releases
+
+Deployable packages (`@slugbase/backend`, `@slugbase/web`, `@slugbase/marketing`, `@slugbase/admin`) are versioned **independently** in each package's `package.json`. Shared libraries (`shared-types`, `ui`, `email-templates`, `db-admin`) stay at `0.0.0`. Root `package.json` `version` is workspace metadata only — **not** a release or deploy gate.
 
 **Local workflow (before push to `staging`/`main`):**
 
 1. Developers commit feature work without per-commit version bumps.
 2. **`pnpm bump:versions`** — interactive helper detects changed deployables and shared-lib consumers; writes `package.json` semver (patch/minor/major per package).
 3. Commit version bumps; **pre-push hook** validates the push range (`remote..local`).
-4. Staging/production deploy uses live **`/version` probe** — deploy runs when package semver &gt; live version.
+4. Staging/production cloud deploy uses the live **`/version` probe** (§22.5).
 
-After CI and production deploy on push to `main`:
+**Draft GitHub Release** (`main.yml` → `prepare-release.yml`):
 
-1. **`prepare-release.yml`** — when api and/or web deployed successfully: verify `pnpm i18n:validate`; create **draft** GitHub Release (title from `package.json` versions; body from `git log` since last `release-*` tag). A human publishes the draft to trigger production (§22.7).
+- Runs after CI on `push` → `main` — **decoupled** from deploy success or failure.
+- **`scripts/ci/create-draft-release.mjs`** compares deployable `package.json` versions since the last `release-*` tag; creates a draft only for bumped surfaces.
+- Tags bumped services as `slugbase-{surface}/v{semver}` on the commit; release identity tag `release-YYYY-MM-DD`.
+- Human publishes the draft for operator comms and to trigger CE GHCR publish (§22.8) — **not** cloud production deploy.
 
 No Changesets, no CI-driven version PRs. See `docs/internal/local-development.md` and rule `15-deploy-version-bumps.mdc`.
 
-### 22.7 Production deploy (`release.yml` → `deploy.yml`)
+### 22.7 Production cloud deploy (`main.yml` → `deploy.yml`)
 
-Triggered **only** when a draft GitHub Release is manually published (`release: published`). Uses the same selective **`deploy.yml`** chain as staging with `environment: production` and `ref: <release tag>`.
+Triggered on **`push` → `main`** after CI passes — **not** `release: published`.
 
-**Per-surface idempotency:** repository variable `DEPLOYED_STATE_production` holds the last successfully deployed `version` + `sha` per surface (`api`, `web`, `marketing`, `admin`, `ghcr_api`, `ghcr_web`). Before deploy, compare each flagged surface against the release; skip surfaces already at the target version+SHA. Update entries **only** after that surface's deploy + smoke succeeded — never advance state on partial failure.
-
-**Production version gate:** in production only, clear each `deploy_*` flag when that package's semver is **&lt; `1.0.0`** (staging has no minimum). Surfaces below `1.0.0` continue to receive staging deploys but are skipped in production until they reach GA semver.
-
-| Step | Description |
-|---|---|
-| 1 | Compare release surfaces to `DEPLOYED_STATE_production`; skip already-deployed surfaces |
-| 2 | **`deploy.yml`** — selective chain against `slugbase-production-*` apps (sync-secrets → migrate ∥ Sentry → parallel deploys → smoke) |
-| 3 | Merge successful surfaces into `DEPLOYED_STATE_production` |
-| 4 | GHCR production tags (`:<package-semver>` + `:latest` per image) when `push_ghcr_*` is true |
-
-Legacy aggregate variable `DEPLOYED_VERSION` is deprecated; per-surface state in `DEPLOYED_STATE_*` is authoritative.
+Uses the same probe-gated **`deploy.yml`** chain as staging with `environment: production`. Idempotency comes from live `/version` comparison: surfaces already at `V_intended` are skipped. Surfaces below **`1.0.0`** are always skipped in production (hard floor — same rule as CE `:latest` publish).
 
 ### 22.8 CE container images
 
@@ -827,7 +845,12 @@ CE ships as **two** GHCR images — not a single combined image:
 | `ghcr.io/mdg-labs/slugbase-api` | NestJS API (`Dockerfile.api`) | `SERVE_WEB_CLIENT=false`; migrations on bootstrap when enabled |
 | `ghcr.io/mdg-labs/slugbase-web` | React Router v7 Node server (`Dockerfile.web`) | Serves bundled web client |
 
-On `staging` push, `main` push, and `release` published, each image is built and pushed **only when its package is in the affected deploy set** (§22.5). Tag scheme: staging `:dev` per image; production `:<package-semver>` (e.g. `:1.0.0`) plus `:latest` per image. CE operators run both containers (documented compose example); images are not subject to the Cloud Fly/Workers topology.
+| Trigger | Tags | Gate |
+|---|---|---|
+| Push to `staging` | `:dev` per image | Plan `push_ghcr_*` from live `/version` probe (§22.5) |
+| `release: published` | `release-YYYY-MM-DD` + `:latest` per image | Service tag `slugbase-{api\|web}/v{semver}` on release commit; **skipped when version &lt; `1.0.0`** |
+
+**No GHCR push on `main` push.** Operators pin `:<package-semver>` or `:latest` in compose; images are not subject to the Cloud Fly/Workers topology. Builds use hardcoded CE `VITE_*` args from `scripts/CE-vite-build-args.sh` via `scripts/ci/build-push-ghcr.sh` — no Phase/GHA runtime fetch.
 
 ### 22.9 Secrets in CI and deploy
 
@@ -850,11 +873,11 @@ Phase (SlugBase app)  →  GHA environments (automatic sync)
                     CI jobs read secrets.ci
                     deploy reads secrets.staging | secrets.production
                               ↓
-                    sync-secrets.sh → Fly.io + Cloudflare Workers runtime
+                    scripts/ci/sync-secrets.sh → Fly.io + Cloudflare Workers runtime
 ```
 
 - **No Phase CLI** in CI — workflows read `${{ secrets.* }}` from the job's GHA environment (`ci`, `staging`, `production`); Phase Console syncs operator edits automatically.
-- **Deploy sync:** `sync-secrets.yml` maps GHA environment secrets to platform targets via `.github/scripts/sync-secrets.sh` and `.github/scripts/github-secret-map.sh`. Fly secrets are staged (`--stage`) during the deploy chain; `workflow_dispatch` can stage-and-deploy immediately.
+- **Deploy sync:** `sync-secrets.yml` maps GHA environment secrets to platform targets via `scripts/ci/sync-secrets.sh` and `scripts/ci/github-secret-map.sh`. Fly secrets are staged (`--stage`) during the deploy chain; `workflow_dispatch` can stage-and-deploy immediately.
 - **Server-only secrets** use keys without a client prefix (`SESSION_SECRET`, `DATABASE_URL`, etc.).
 - **Build-time public config** uses `VITE_*` (web) or `PUBLIC_*` (marketing) — inlined into client bundles; never store true secrets under those prefixes.
 

@@ -151,9 +151,9 @@ services:
       - "3000:3000"
 ```
 
-CI GHCR builds do **not** read Phase or GHA runtime secrets. The **web** image build passes hardcoded CE `VITE_*` values from [`scripts/CE-vite-build-args.sh`](../scripts/CE-vite-build-args.sh) via [`.github/scripts/build-push-ghcr.sh`](../.github/scripts/build-push-ghcr.sh). **`VITE_SENTRY_*`**, **`VITE_UMAMI_*`**, **`VITE_APP_BASE_URL`**, and deprecated pricing keys are never passed — Cloud telemetry and URLs must not be baked into the CE client bundle.
+CI GHCR builds do **not** read Phase or GHA runtime secrets. The **web** image build passes hardcoded CE `VITE_*` values from [`scripts/CE-vite-build-args.sh`](../scripts/CE-vite-build-args.sh) via [`scripts/ci/build-push-ghcr.sh`](../scripts/ci/build-push-ghcr.sh). **`VITE_SENTRY_*`**, **`VITE_UMAMI_*`**, **`VITE_APP_BASE_URL`**, and deprecated pricing keys are never passed — Cloud telemetry and URLs must not be baked into the CE client bundle.
 
-Staging tags: `slugbase-api:dev` and `slugbase-web:dev` (pushed independently when each package is in the affected deploy set). Production tags: `:<package-semver>` per image (e.g. `slugbase-api:1.0.0`, `slugbase-web:1.0.1`) plus `:latest` per image.
+Staging tags: `slugbase-api:dev` and `slugbase-web:dev` (pushed when the live `/version` probe plan flags `push_ghcr_*`). Production tags: `release-YYYY-MM-DD` and `:latest` per image on `release: published` only — surfaces below `1.0.0` are skipped. **No GHCR push on `main` push.**
 
 ### URL wiring (CE)
 
@@ -471,34 +471,15 @@ SlugBase uses three **GitHub Actions environments** as the CI/deploy secret sour
 |---|---|---|
 | `ci` | CI-only keys in Phase | Parallel CI jobs (`ci.yml`) |
 | `staging` | Phase `Staging` | Staging deploy (`deploy.yml`), smoke, sync-secrets |
-| `production` | Phase `Production` | Production deploy (`release.yml` → `deploy.yml`), smoke, sync-secrets |
+| `production` | Phase `Production` | Production deploy (`main.yml` → `deploy.yml`), smoke, sync-secrets |
 
-Repository-level secrets are limited to what GitHub requires for its own integration (e.g. `GITHUB_TOKEN`). Application secrets live in Phase and flow through GHA environments — not in repository secrets. Deploy pipelines call `sync-secrets.sh` to push GHA environment values to Fly.io and Cloudflare Workers.
+Repository-level secrets are limited to what GitHub requires for its own integration (e.g. `GITHUB_TOKEN`). Application secrets live in Phase and flow through GHA environments — not in repository secrets. Deploy pipelines call `scripts/ci/sync-secrets.sh` to push GHA environment values to Fly.io and Cloudflare Workers.
 
-### Repository variables (deploy state)
+### Deploy idempotency (live `/version` probes)
 
-Granular deploy tracks the last successfully deployed **version + SHA per surface** in repository variables (not secrets). Updated by `.github/scripts/update-deployed-state.sh` after smoke passes — only for surfaces that deployed successfully in that run.
+Cloud deploy scope is **not** tracked in repository variables. **`deploy-plan.yml`** probes each surface's live `GET /version` and deploys when `semver_gt(V_intended, V_live)`. Production skips surfaces with `V_intended < 1.0.0` (hard floor). See spec §22.5 and `docs/internal/ci-cd-deployment-refactor-proposal.md`.
 
-| Variable | Purpose | Set by |
-|---|---|---|
-| `DEPLOYED_STATE_staging` | JSON map of staging surfaces (`api`, `web`, `marketing`, `admin`, optional `ghcr_*`) | `deploy.yml` → `update-deployed-state` job |
-| `DEPLOYED_STATE_production` | Same for production | `deploy.yml` → `update-deployed-state` job |
-| `DEPLOYED_VERSION` | Legacy aggregate release tag idempotency gate (production) | `release.yml` → `record-deployed-version` until WP-9 |
-
-Example `DEPLOYED_STATE_staging` value:
-
-```json
-{
-  "api": { "version": "0.1.0", "sha": "abc1234" },
-  "web": { "version": "0.1.0", "sha": "def5678" },
-  "marketing": { "version": "0.1.0", "sha": "ghi9012" },
-  "admin": { "version": "0.1.0", "sha": "jkl3456" }
-}
-```
-
-When a variable is missing or invalid JSON, `deploy.yml` conservatively forces a full deploy (all surfaces). Initialize empty objects (`{}`) before enabling selective deploy on an existing environment.
-
-See `docs/internal/ci-cd-example/` for the authoritative sync-secrets workflow and script layout.
+See `docs/internal/ci-cd-deployment-refactor-proposal.md` and `docs/internal/ci-cd-example2/` for the authoritative sync-secrets workflow and script layout.
 
 ---
 
