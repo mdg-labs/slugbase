@@ -121,7 +121,7 @@ pnpm audit --audit-level=high
 | GHA environments | `ci` · `staging` · `production` |
 | Local dev | `phase run -- <cmd>` injects `Development` env |
 | CI / deploy | Workflows read `${{ secrets.* }}` from the job's GHA environment — **no Phase CLI in CI** |
-| Platform sync | `.github/scripts/sync-secrets.sh` pushes GHA secrets → Fly.io + Cloudflare Workers during deploy |
+| Platform sync | `scripts/ci/sync-secrets.sh` pushes GHA secrets → Fly.io + Cloudflare Workers during deploy |
 
 **Phase ↔ GHA mapping (settled):**
 
@@ -163,7 +163,7 @@ Every UI string is a catalog key `<scope>.<context>.<descriptor>`; en + de requi
 - **App naming:** `slugbase-<env>-<app>` — `<env>` ∈ {`staging`, `production`}, `<app>` ∈ {`api`, `web`, `marketing`}. Platform identifiers, not public hostnames. (decision #51)
 - **Staging API scale-to-zero:** `slugbase-staging-api` runs `auto_stop_machines` + `min_machines_running = 0` (cold-start on request). `slugbase-production-api` stays warm (`≥ 1`). Workers scale to zero natively.
 - **CE:** split GHCR images — `ghcr.io/mdg-labs/slugbase-api` + `ghcr.io/mdg-labs/slugbase-web`; API runs `SERVE_WEB_CLIENT=false`; not subject to Cloud topology or naming.
-- **CI/CD:** PipeWatch-aligned workflow split — `pr.yml` / `staging.yml` / `main.yml` entry points; reusable `ci.yml` + `deploy.yml` (live `/version` probe gate via `scripts/ci/resolve-deploy-plan.mjs`) + `sync-secrets.yml` + `prepare-release.yml`; manual per-package `package.json` versioning (`pnpm bump:versions` + pre-push hook — rule `15-deploy-version-bumps.mdc`); root `package.json` version is workspace metadata only; production deploy on `push` → `main` after CI; GitHub-hosted runners; branches `staging`/`main` (spec §22; authoritative reference `docs/internal/ci-cd-deployment-refactor-proposal.md`). **`e2e.yml` unchanged** — Playwright e2e on staging→main PRs only.
+- **CI/CD:** PipeWatch-aligned workflow split — entry points `pr.yml`, `staging.yml`, `main.yml`, and `release.yml` (CE GHCR only); reusable `ci.yml`, `deploy-plan.yml`, `deploy.yml`, `sync-secrets.yml`, and `prepare-release.yml`; live `/version` probe gate (`scripts/ci/resolve-deploy-plan.mjs`); production cloud deploy on `push` → `main` after CI (not `release: published`); CE `:latest` on `release: published` only; manual per-package `package.json` versioning (`pnpm bump:versions` + pre-push hook — rule `15-deploy-version-bumps.mdc`); root `package.json` version is workspace metadata only; GitHub-hosted runners; branches `staging` and `main` (spec §22; authoritative references `docs/internal/ci-cd-deployment-refactor-proposal.md` and `docs/internal/ci-cd-example2/` (IssueSmith); PipeWatch `docs/internal/ci-cd-example/` is lineage only). **`e2e.yml` unchanged** — Playwright e2e on staging→main PRs only.
 
 ---
 
