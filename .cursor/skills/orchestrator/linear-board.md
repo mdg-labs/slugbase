@@ -40,7 +40,7 @@ Complete before agents rely on this workflow:
 | **Set workflow state** | Linear `save_issue` (`state`) | e.g. `"In Progress"`, `"Done"` — exact name match |
 | **Read issue** | Linear `get_issue` | `includeRelations: true` for parent/children/blocking |
 | **Search/list issues** | Linear `list_issues` | `query`, `team`, `state`, `label` filters |
-| **Add comment** | Linear `save_comment` | Verifier PASS/FAIL; syncs to GitHub synced thread |
+| **Add comment** | Linear `save_comment` | Verifier PASS/FAIL — **reply** on GitHub-linked thread (`parentId`); see § Comment threading |
 | **Sub-issues** | Linear `save_issue` (`parentId`) | Epic hierarchy |
 | **Blocking deps** | Linear `save_issue` (`blockedBy` / `blocks`) | Native relations |
 | **Read synced GitHub #** | Linear `get_issue` links/attachments | After sync settles; or `user-github` `issue_read` |
@@ -159,21 +159,42 @@ save_issue: { id: "SB-<parent>", state: "In Progress" }   # when parent listed
 ### Verifier — after all layers PASS
 
 ```text
-1. save_comment — mandatory clean summary (see § Verifier Done comment)
-2. save_issue state → "Done" for each leaf (+ parent if final child)
+1. list_comments on leaf issue → find GitHub-linked thread (see § Comment threading)
+2. save_comment as reply (parentId) — mandatory clean summary (see § Verifier Done comment)
+3. save_issue state → "Done" for each leaf (+ parent if final child)
 ```
 
 ### Verifier — on FAIL
 
 ```text
-save_issue state → "Ready" for each leaf
-save_comment with FAIL template
+1. list_comments on leaf issue → find GitHub-linked thread (see § Comment threading)
+2. save_comment as reply (parentId) with FAIL template
+3. save_issue state → "Ready" for each leaf
 Do NOT set Done
 ```
 
+## Comment threading — reply on GitHub-linked thread (mandatory)
+
+Two-way GitHub sync creates a **top-level Linear comment** linking to the mirrored `mdg-labs/slugbase` issue. Agent comments must land **in that thread** so they appear on the synced GitHub issue conversation — not as a separate top-level Linear comment.
+
+**Before every `save_comment`:**
+
+```text
+1. list_comments: { issueId: "SB-N" }
+2. Find the GitHub-linked thread — top-level comment (no parentId) whose body or metadata references
+   github.com/mdg-labs/slugbase/issues/<N> or the synced GitHub issue title/link
+3. save_comment: { parentId: "<thread-comment-id>", body: "..." }   # reply — preferred
+```
+
+**Do not** post verifier PASS/FAIL as a new top-level comment (`issueId` only) when a GitHub-linked thread exists.
+
+**Fallback:** If sync is pending and no GitHub-linked thread exists yet, post top-level `save_comment { issueId: "SB-N", body: "..." }` and note `GitHub thread: pending sync` in REQUIRED OUTPUT.
+
+Applies to **all agents** that comment on Linear issues (verifier PASS/FAIL, orchestrator recovery notes, intake follow-ups) — not only verifiers.
+
 ## Verifier Done comment (mandatory on PASS)
 
-Post via `save_comment` on each **leaf** Linear issue before setting Done.
+Post as a **reply** on the GitHub-linked thread on each **leaf** Linear issue before setting Done.
 
 ```markdown
 **Verified** `abc1234`
@@ -190,11 +211,12 @@ Lint, typecheck, unit tests pass. No deviations.
 
 ### Comment rules
 
-1. **First line:** `**Verified** <sha>`
-2. Brief summary — 2–3 sentences max
-3. **AC checklist** — which criteria were met
-4. **No session IDs** or sub-agent identifiers
-5. **Omit empty sections**
+1. **Thread:** reply via `parentId` on the GitHub-linked thread (see § Comment threading) — never a stray top-level comment when the thread exists
+2. **First line:** `**Verified** <sha>`
+3. Brief summary — 2–3 sentences max
+4. **AC checklist** — which criteria were met
+5. **No session IDs** or sub-agent identifiers
+6. **Omit empty sections**
 
 ## Verifier FAIL comment (mandatory on FAIL)
 
@@ -245,8 +267,9 @@ LINEAR SYNC — VERIFIER (mandatory unless user opted out):
     github: 8
 - CLOSE_PARENTS: linear=[SB-8] github=[8] | none
 - PRE-HANDOFF: local session memory verification ended/duration
-- AFTER PASS: save_comment (mandatory) → state → "Done" for leaf (+ parent if final child)
-- AFTER FAIL: save_comment (FAIL template) → state → "Ready"; do NOT set Done
+- COMMENTS: list_comments → reply on GitHub-linked thread via save_comment parentId (see § Comment threading); never top-level when thread exists
+- AFTER PASS: save_comment reply (mandatory) → state → "Done" for leaf (+ parent if final child)
+- AFTER FAIL: save_comment reply (FAIL template) → state → "Ready"; do NOT set Done
 - Layer 3c3: verify commit body has fixes SB-<leaf> AND fixes #<leaf>; subject must NOT contain issue keys
 - Reference: .cursor/skills/orchestrator/linear-board.md
 ```

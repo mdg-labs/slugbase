@@ -126,7 +126,7 @@ When building a prompt:
 8. **LINEAR TOOLS block** — **mandatory in every LINEAR SYNC prompt** (copy verbatim from [prompt-templates.md](prompt-templates.md))
 9. **LINEAR SYNC block** — when task(s) are on SlugBase team, include role-specific blocks from [linear-board.md](linear-board.md):
    - **Execution prompt:** `save_issue` state → "In Progress" — **never** Done; when subtask, also list parent epic
-   - **Verifier prompt:** state → "Done" (+ parent if final subtask); `save_comment` mandatory
+   - **Verifier prompt:** state → "Done" (+ parent if final subtask); `save_comment` mandatory — **reply** on the GitHub-linked thread (`parentId`), not a new top-level comment
 10. **DB MIGRATIONS block** — **mandatory in every execution prompt** (copy verbatim from [prompt-templates.md](prompt-templates.md) even when the task has no schema changes)
 11. **SCOPED CI GATE block** — **mandatory in every execution and verifier prompt** (copy verbatim from [prompt-templates.md](prompt-templates.md))
 
@@ -331,8 +331,8 @@ Map committed paths → `@slugbase/<pkg>` filter(s). Contract packages (`shared-
 
 | Result | Plan (plan-file mode) | GitHub (sub-agent) | Local session memory |
 |---|---|---|---|
-| PASS | `[x]`; commit plan file | Verifier → mandatory PASS comment + Linear Done | Delete active or move to local archive/ (never commit) |
-| FAIL | `[!]` + note; commit plan file | Verifier → FAIL comment; Linear Ready; do NOT set Done | Append VERIFICATION FAILED in active/ (never commit) |
+| PASS | `[x]`; commit plan file | Verifier → mandatory PASS comment (GitHub-thread reply) + Linear Done | Delete active or move to local archive/ (never commit) |
+| FAIL | `[!]` + note; commit plan file | Verifier → FAIL comment (GitHub-thread reply); Linear Ready; do NOT set Done | Append VERIFICATION FAILED in active/ (never commit) |
 
 ---
 
@@ -385,9 +385,9 @@ Path: `.cursor/skills/agent-memory/` — **never committed**.
 | Phase 3 | Execution | Finalize sections locally (do not commit) |
 | Pre-handoff | Execution | Set `ended` + `duration`; set Status **In Review**; **one implementation commit** |
 | Verifier start | Verifier | Read active file if present; set verification `started` when LINEAR SYNC present |
-| Verifier end | Verifier | Set verification `ended` + `duration`; set Linear state Done/Ready; mandatory comment |
-| PASS | Verifier | Mandatory PASS comment + Linear Done; optionally delete active or move to local `archive/` |
-| FAIL | Verifier | Mandatory FAIL comment; append VERIFICATION FAILED in active/ if file exists |
+| Verifier end | Verifier | Set verification `ended` + `duration`; set Linear state Done/Ready; mandatory comment (reply on GitHub-linked thread) |
+| PASS | Verifier | Mandatory PASS comment as thread reply + Linear Done; optionally delete active or move to local `archive/` |
+| FAIL | Verifier | Mandatory FAIL comment as thread reply; append VERIFICATION FAILED in active/ if file exists |
 
 **Retry after FAIL:** same SESSION ID; execution reads FAIL comment and local active file.
 
@@ -536,7 +536,8 @@ After send, confirm in chat: `Slack DM sent to <operator display name> (from cur
 - Execution agent starting implementation before setting In Progress (when sync required)
 - Execution agent setting In Progress on subtask without parent
 - Verifier setting In Progress (execution owns that)
-- Committing session memory files to git (local only; Linear comment is the durable record)
+- Committing session memory files to git (local only; Linear thread reply is the durable record)
+- **Top-level Linear comments when a GitHub-linked thread exists** — use `list_comments` + `save_comment` with `parentId` so comments sync to the mirrored GitHub issue thread (see [linear-board.md](linear-board.md) § Comment threading)
 - Verifier proceeding without local session memory **and** without execution REQUIRED OUTPUT
 - Reusing SESSION ID across different tasks
 - Reusing verifier thread across batches

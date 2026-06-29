@@ -32,7 +32,9 @@ LINEAR TOOLS — MANDATORY (Linear MCP primary; GitHub read-only for mirror):
   - State names are exact — use "In Progress" not in_progress
 - Read issue + relations: get_issue { id: "SB-N", includeRelations: true }
 - Search/list: list_issues { team: "SlugBase", query, state, label }
-- Comments (verifier): save_comment { issueId: "SB-N", body: "..." }
+- Comments: list_comments { issueId: "SB-N" } → find GitHub-linked thread → save_comment { parentId: "<thread-id>", body: "..." }
+  - Reply on the synced GitHub thread — do NOT post top-level issueId comments when the thread exists
+  - Fallback (sync pending): save_comment { issueId: "SB-N", body: "..." }
 - Sub-issues: save_issue { parentId: "<parent-uuid-or-SB-N>" }
 - Blocking: save_issue { blockedBy: ["SB-N"] }
 - Synced GitHub #: get_issue links/attachments after create, or user-github issue_read when #N known
@@ -444,8 +446,8 @@ LINEAR SYNC — VERIFIER (include when execution prompt had execution variant):
     github: 12
   - linear: SB-8          # parent if final subtask
     github: 8
-- AFTER PASS: save_comment (mandatory) → save_issue state → "Done" for each issue (+ parent if listed)
-- AFTER FAIL: save_comment (FAIL detail) → state → "Ready"; do NOT set Done
+- AFTER PASS: list_comments → save_comment reply on GitHub-linked thread (mandatory) → save_issue state → "Done" for each issue (+ parent if listed)
+- AFTER FAIL: list_comments → save_comment reply (FAIL detail) → state → "Ready"; do NOT set Done
 - Layer 3c3: subject key-free; body has fixes SB-<leaf> AND fixes #<leaf>; parent lines per CLOSE_PARENTS only
 
 SESSION MEMORY (local, gitignored):
@@ -529,7 +531,7 @@ CLOSE_PARENTS: <same as execution prompt — linear=[SB-8] github=[8] | none>
 
 LINEAR SYNC — VERIFIER (include when execution prompt had execution variant):
 - MCP server: plugin-linear-linear (see LINEAR TOOLS block); team: SlugBase
-- Same rules as Lane S verifier: save_comment + save_issue state (Done / Ready)
+- Same rules as Lane S verifier: list_comments → save_comment reply on GitHub-linked thread + save_issue state (Done / Ready)
 
 WORK DEP — MANDATORY (Lane P worktrees have no node_modules):
 - Worktrees are bare checkouts — **no `node_modules`** present at branch start

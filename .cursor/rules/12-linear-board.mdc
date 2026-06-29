@@ -35,7 +35,7 @@ A task that depends on another issue (e.g. "Depends on: SB-325" / `#325`) is **u
 |---|---|
 | Create / update issues | Linear MCP `save_issue` (team: `SlugBase`) |
 | Set state (In Progress, Done, …) | Linear MCP `save_issue` (`state`) |
-| Comments (verifier) | Linear MCP `save_comment` |
+| Comments (verifier) | Linear `list_comments` + `save_comment` (`parentId` reply on GitHub-linked thread) |
 | Read synced GitHub # | Linear `get_issue` links/attachments or MCP `user-github` `issue_read` |
 
 Reference: `.cursor/skills/orchestrator/linear-board.md`

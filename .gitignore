@@ -6,7 +6,7 @@ docs/skill-examples/agent-memory/
 
 # examples
 docs/example.ci-cd.yml
-docs/internal/ci-cd-example/
+docs/internal/ci-cd-example*/
 
 # dependencies & build
 node_modules/

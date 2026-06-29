@@ -156,6 +156,11 @@ Fly scaling: `slugbase-staging-api` **scaled to zero** (`auto_stop_machines`, `m
 Spec: §14.7, resolved decisions 31–32, 51.
 _added: 2026-05-31_
 
+## Lane P worktree cleanup — sandbox (2026-06-29)
+
+`git worktree remove` for paths under `~/.cursor/worktrees/` may fail in the default agent sandbox (`Keine Berechtigung`). Branches can still be deleted with `git branch -d orchestrator/<TASK-ID>`. **Cleanup shell agents:** request `all` permissions for `git worktree remove` and `rm -rf` on orphan dirs, or operator removes `~/.cursor/worktrees/<id>/` manually.
+_added: 2026-06-29_
+
 ## Lane P branch-merge no-op pattern (2026-06-09)
 
 SB-161 branch `orchestrator/SB-161` pointed at the staging base SHA with no implementation commits — the execution agent likely committed to a different worktree path than the branch tracked. The branch verifier verified worktree files (which were correct) but the git branch had zero diff from base. Integration agent detected the no-op and skipped. Recovery: re-ran as Lane S on staging. **Orchestrator should verify `git log orchestrator/<TASK-ID> --not staging` shows at least one commit before dispatching branch verifiers.** Also affects Lane S when agents commit in worktree paths — the commit lands on a detached HEAD and must be cherry-picked onto `staging`.
