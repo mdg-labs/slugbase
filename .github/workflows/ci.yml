@@ -88,6 +88,9 @@ jobs:
         id: unit-tests
         run: pnpm test:unit
 
+      - name: Script tests
+        run: pnpm test:scripts
+
       - name: i18n catalog validation
         run: pnpm run i18n:validate
 
