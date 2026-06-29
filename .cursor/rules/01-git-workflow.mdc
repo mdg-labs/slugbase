@@ -18,29 +18,32 @@ alwaysApply: true
 
 ## Commit messages (Conventional Commits)
 
-Subject ≤72 chars, imperative mood, **scoped**. **Task commits must link a work item** in square brackets — see `07-issue-commit-linking.mdc`.
+Subject ≤72 chars, imperative mood, **scoped**. **Task commits link work items in the commit body only** — see `07-issue-commit-linking.mdc`. Subjects are **key-free** (no `[SB-N]` or `[#N]`).
 
 ```
-feat(<scope>)[#123]: <imperative summary>
-fix(<scope>)[#123]: <summary>
-chore(<scope>)[#123]: <summary>
-refactor(<scope>)[P2-01]: <summary>   # roadmap-only when no GitHub issue exists
-docs(<scope>)[#123]: <summary>
-test(<scope>)[#123]: <summary>
-ci(<scope>)[#123]: <summary>
-build(<scope>)[#123]: <summary>
-perf(<scope>)[#123]: <summary>
+feat(<scope>): <imperative summary>
+fix(<scope>): <summary>
+chore(<scope>): <summary>
+refactor(<scope>)[P2-01]: <summary>   # roadmap-only when no tracker issue exists
+docs(<scope>): <summary>
 ```
 
-Use `[#N]` when the task is on GitHub Issues; `[P*-*]` only when no GitHub issue exists yet. The commit body must include `fixes #N` to auto-close the issue on merge to `main`. Subtasks under an epic also close parent Features via `fixes #<parent>` on the **final in-scope child** only — see `07-issue-commit-linking.mdc` (Epic section).
+**Body** (Linear-tracked tasks — both lines required):
+
+```
+fixes SB-N
+fixes #N
+```
+
+Use `[P*-*]` in the subject only for roadmap-only tasks with no Linear/GitHub issue yet. Epic parent close lines go in the body on the **final in-scope child** only — see `07-issue-commit-linking.mdc`.
 
 **Allowed scopes**: `repo`, `ci`, `web`, `backend`, `marketing`, `ui`, `shared`, `db`, `docs`, `bookmarks`, `slugs`, `go`, `folders`, `tags`, `workspaces`, `auth`, `mfa`, `oidc`, `sessions`, `billing`, `entitlements`, `admin`, `search`, `import`, `export`, `i18n`, `infra`, `plan`, `memory`
 
 (`ui` = `packages/ui` shared components/tokens · `shared` = `packages/shared-types` contracts · `db` = Drizzle schema/migrations/data-access — spec §19.)
 
-Plan-file verifier commits: `chore(plan)[#123]: mark P1-03 verified` (prefer `[#N]` when a GitHub issue exists).
+Plan-file verifier commits: `chore(plan): mark P1-03 verified` with body `fixes SB-N` / `fixes #N` when a tracker issue exists.
 
-Session memory (`.cursor/skills/agent-memory/`) is **gitignored** — local working notes only. Verifiers post outcomes to GitHub issues; never commit session files.
+Session memory (`.cursor/skills/agent-memory/`) is **gitignored** — local working notes only. Verifiers post outcomes to Linear issues (synced to GitHub); never commit session files.
 
 ## Commit rules
 
@@ -66,12 +69,13 @@ This includes never running `git push --force`, `git push --tags`, or any push t
 ## Examples
 
 ```bash
-# GOOD — GitHub issue work (subject + body)
+# GOOD — Linear-tracked work (key-free subject + dual fixes in body)
 git add packages/backend/src/auth/session.service.ts \
         packages/backend/src/auth/session.service.spec.ts
-git commit -m "feat(auth)[#12]: add server-side session store with configurable TTL
+git commit -m "feat(auth): add server-side session store with configurable TTL
 
-fixes #12"
+fixes SB-12
+fixes #612"
 
 # GOOD — roadmap-only (no GitHub issue yet)
 feat(workspaces)[P2-01]: implement workspace creation with entitlement check

@@ -1,0 +1,65 @@
+---
+description: Linear workflow — state authority, blocking deps, no GitHub Project board mutations
+alwaysApply: true
+---
+
+# Linear board — state authority and blocking
+
+## Context
+
+SlugBase uses **Linear** (SlugBase team, issue key `SB-N`) as the **primary** tracker. GitHub Issues (`mdg-labs/slugbase`) are a **two-way synced mirror** for Development panel linking and `fixes #N` auto-close on `main`.
+
+Two separate status systems:
+
+| System | Authority | Who manages |
+|---|---|---|
+| **Linear workflow state** | Day-to-day tracking | Agents via Linear MCP `save_issue` (`state`) |
+| **GitHub issue state** (`open`/`closed`) | Release | Commit body `fixes #N` on `main` only |
+
+**Linear state is what matters** for orchestration, intake, and blocking. Verifiers set **Done** on Linear; the GitHub mirror often stays `open` until release to `main`.
+
+## Blocking dependencies — unblocked when Linear state is Done or Closed
+
+A task that depends on another issue (e.g. "Depends on: SB-325" / `#325`) is **unblocked** when the blocking issue's Linear state is **Done** or **Closed** — regardless of GitHub issue state alone.
+
+| Linear state | GitHub issue state | Meaning |
+|---|---|---|
+| Done | `open` (typical) | Verified on `staging` — **unblocks dependents** |
+| Closed | `closed` | Released on `main` — ceremonial; work was usable at Done |
+
+**Corollary:** Never use GitHub `open`/`closed` alone to judge if a dependency is resolved. Check **Linear state**.
+
+## Agent workflow
+
+| Operation | Tool |
+|---|---|
+| Create / update issues | Linear MCP `save_issue` (team: `SlugBase`) |
+| Set state (In Progress, Done, …) | Linear MCP `save_issue` (`state`) |
+| Comments (verifier) | Linear MCP `save_comment` |
+| Read synced GitHub # | Linear `get_issue` links/attachments or MCP `user-github` `issue_read` |
+
+Reference: `.cursor/skills/orchestrator/linear-board.md`
+
+## Forbidden
+
+- **GraphQL `updateProjectV2ItemFieldValue`** on GitHub Project 2 — agents no longer set GitHub Projects board Status.
+- **`gh project item-list`**, **`addProjectV2ItemById`** — obsolete for agent workflow.
+- **Setting GitHub issue state** (`open`/`closed`) directly — commit keywords on `main` only.
+- **Issue keys in commit subjects** — `SB-N` and `#N` belong in commit **body** only (rule `07-issue-commit-linking.mdc`).
+
+## Anti-patterns
+
+```bash
+# NEVER — GitHub project board status (deprecated)
+gh api graphql -f 'query=mutation { updateProjectV2ItemFieldValue(...) }'
+
+# NEVER — keys in commit subject
+git commit -m "feat(auth)[SB-12][#612]: add sessions"
+
+# CORRECT — Linear state + body-only keys
+# save_issue: { id: "SB-12", state: "In Progress" }
+git commit -m "feat(auth): add sessions
+
+fixes SB-12
+fixes #612"
+```

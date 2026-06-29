@@ -2,14 +2,14 @@
 
 Copy and fill. Sub-agents do not see the orchestrator chat.
 
-When an issue is tracked on the GitHub project board, orchestrator includes **role-specific** GITHUB SYNC blocks (see [github-board.md](github-board.md)):
+When an issue is tracked on Linear (SlugBase team), orchestrator includes **role-specific** LINEAR SYNC blocks (see [linear-board.md](linear-board.md)):
 
-- **Execution prompts:** Status → In Progress on leaf + parent (when subtask); **no Status → Done** — verifier only; pass `CLOSE_PARENTS` for epic commit close
-- **Verifier prompts:** on PASS → Status → Done; on FAIL → Status → Ready; **mandatory structured comment**
+- **Execution prompts:** state → In Progress on leaf + parent (when subtask); **no state → Done** — verifier only; pass `CLOSE_PARENTS` for epic commit close
+- **Verifier prompts:** on PASS → state → Done; on FAIL → state → Ready; **mandatory structured comment**
 
-Sub-agents perform GitHub status updates — not the orchestrator.
+Sub-agents perform Linear state updates — not the orchestrator.
 
-**Every execution and verifier prompt** must include the **GITHUB TOOLS** block below — copy verbatim. Defines which tool (MCP vs CLI) to use for each operation.
+**Every execution and verifier prompt** must include the **LINEAR TOOLS** block below — copy verbatim. Defines which tool (Linear MCP vs GitHub read-only) to use for each operation.
 
 **Every execution and verifier prompt** must include the **NODE ENV** block below — copy verbatim even when the task has no pnpm commands (verifiers always run checks).
 
@@ -19,52 +19,34 @@ Sub-agents perform GitHub status updates — not the orchestrator.
 
 ---
 
-## GITHUB TOOLS — sub-agents (mandatory in every GITHUB SYNC prompt)
+## LINEAR TOOLS — sub-agents (mandatory in every LINEAR SYNC prompt)
 
-Copy this block into **every** execution and verifier prompt that has a GITHUB SYNC section. Tells sub-agents which tool to use for each operation.
+Copy this block into **every** execution and verifier prompt that has a LINEAR SYNC section.
 
 ```text
-GITHUB TOOLS — MANDATORY (MCP preferred; GraphQL for project board):
-- MCP server: user-github (always preferred for issue operations)
-- Issue create/update (title, body, type, labels, fields): MCP issue_write
-  - ALWAYS set type, labels, Priority, Effort, AND assignees on create — all five are mandatory
-  - ALWAYS assign to the logged-in user (discover via MCP get_me, then use the returned username in assignees)
-  - Valid Priority options: Urgent, High, Medium, Low
-  - Valid Effort options: High, Medium, Low
-  - gh issue create --type does NOT work for org-level issue types — MCP only
-- Issue read (body, labels, state, type, fields): MCP issue_read (method: get)
-- Issue comments: MCP add_issue_comment
-- Sub-issues (link/unlink/reorder): MCP sub_issue_write (requires database IDs, not issue numbers)
-  - Get database IDs: gh api graphql -f 'query=query { repository(owner:"mdg-labs",name:"slugbase") { issue(number:N) { databaseId } } }'
-- Issue search: MCP search_issues
-- Issue list with field filters: MCP list_issues (field_filters for Priority, Effort, etc.)
+LINEAR TOOLS — MANDATORY (Linear MCP primary; GitHub read-only for mirror):
+- MCP server: plugin-linear-linear (always preferred for issue tracking)
+- Team: SlugBase | Issue key: SB-N
+- Create/update issue: save_issue (team: "SlugBase" on create; id: "SB-N" on update)
+- Set workflow state: save_issue { id: "SB-N", state: "In Progress" | "In Review" | "Done" | "Ready" }
+  - State names are exact — use "In Progress" not in_progress
+- Read issue + relations: get_issue { id: "SB-N", includeRelations: true }
+- Search/list: list_issues { team: "SlugBase", query, state, label }
+- Comments (verifier): save_comment { issueId: "SB-N", body: "..." }
+- Sub-issues: save_issue { parentId: "<parent-uuid-or-SB-N>" }
+- Blocking: save_issue { blockedBy: ["SB-N"] }
+- Synced GitHub #: get_issue links/attachments after create, or user-github issue_read when #N known
 
-PROJECT STATUS (In Progress / In Review / Done / Ready) — via GraphQL:
-Status is a project-board field — MCP issue_write cannot set it. Do NOT check "is issue in project" (see always-applied rule 12-github-project-board.mdc) — if the GITHUB SYNC block lists the issue, it IS in the project. Do NOT use gh project CLI — use GraphQL.
-
-Hardcoded IDs (never change):
-- Project node ID: PVT_kwDODv-LLc4BaOr9
-- Status field ID: PVTSSF_lADODv-LLc4BaOr9zhVHxUI
-- Option IDs: Backlog=9485f8e2, Ready=a0e7153f, In Progress=47fc9ee4, In Review=81f76819, Done=98236657, Declined=e36e1062
-
-Step 1: Get project item ID for the issue (one query per issue):
-  gh api graphql -f 'query=query { repository(owner:"mdg-labs",name:"slugbase") { issue(number:N) { projectItems(first:10) { nodes { id project { number } } } } } }'
-  → Filter nodes where project.number == 2, take .id
-
-Step 2: Set Status (one mutation):
-  gh api graphql -f 'query=mutation { updateProjectV2ItemFieldValue(input: {
-    projectId: "PVT_kwDODv-LLc4BaOr9"
-    itemId: "<ITEM_ID from Step 1>"
-    fieldId: "PVTSSF_lADODv-LLc4BaOr9zhVHxUI"
-    value: { singleSelectOptionId: "<OPTION_ID>" }
-  }) { projectV2Item { fieldValueByName(name: "Status") { ... on ProjectV2ItemFieldSingleSelectValue { name } } } } }'
+GITHUB READ-ONLY (synced mirror — mdg-labs/slugbase):
+- MCP server: user-github — issue_read, search_issues only when Linear attachment has #N
+- Dependabot alerts: gh api REST (no Linear equivalent)
 
 FORBIDDEN:
-- gh issue create, gh issue edit, gh issue view (always use MCP instead)
-- Setting issue fields via gh CLI (always use MCP issue_write)
-- Checking "is issue in project" — if it's in the GITHUB SYNC block, it's in the project
-- gh project item-list, gh project item-edit, gh project field-list (use GraphQL instead)
-- Setting GitHub issue state (open/closed) — board Status only; never modify GitHub issue state directly
+- GraphQL updateProjectV2ItemFieldValue (GitHub Project board deprecated)
+- gh project item-list, addProjectV2ItemById
+- Setting GitHub issue state (open/closed) directly
+- Issue keys in commit subject ([SB-N], [#N]) — body only per 07-issue-commit-linking.mdc
+- Reference: .cursor/skills/orchestrator/linear-board.md
 ```
 
 ---
@@ -163,24 +145,26 @@ PLAN FILE: /home/michael/projects/slugbase/docs/internal/slugbase-development-ro
 TASK ID: <e.g. P1-03>
 SESSION ID: <TASK-ID>-<YYYYMMDD>-<4hex>
 PARENT: <parent issue number or none>
-CLOSE_PARENTS: <[#8] | [#10, #1] | none>   # parents to fixes-close in this commit
+CLOSE_PARENTS: linear=[SB-8] github=[8] | linear=[SB-10, SB-1] github=[10, 1] | none
 
-GITHUB SYNC — EXECUTION (include when issue is on GitHub project board — omit if none):
-- MCP server: user-github (always preferred — see GITHUB TOOLS block)
-- owner: mdg-labs
-- repo: slugbase
-- project: <PROJECT_NUMBER>
-- issues: [{ number: 12 }, …]
-- parent (when subtask): { number: 8 }   # parent — Status → In Progress with leaves
-- FIRST ACTION: Set project Status → "In Progress" for each leaf issue AND parent issue (if listed) BEFORE session memory
-- LAST ACTIONS (in order): Set project Status → "In Review" (leaf only) → single implementation commit
-- FORBIDDEN: Set Status → Done; add comment for verification outcomes; set parent Done
-- Status is set via GraphQL `updateProjectV2ItemFieldValue` (see GITHUB TOOLS block for IDs)
-- Reference: .cursor/skills/orchestrator/github-board.md
+LINEAR SYNC — EXECUTION (include when issue is on SlugBase team — omit if none):
+- MCP server: plugin-linear-linear (see LINEAR TOOLS block)
+- team: SlugBase
+- issues:
+  - linear: SB-12
+    github: 12
+  - linear: SB-8          # parent when subtask
+    github: 8
+- FIRST ACTION: save_issue state → "In Progress" for EVERY listed issue (leaf + parent) BEFORE session memory
+- LAST ACTIONS (in order): state → "In Review" (leaf only) → single implementation commit
+- FORBIDDEN: state → Done; verifier comments; parent Done
+- COMMIT SUBJECT: key-free — feat(<scope>): <summary> only; NO [SB-N] or [#N] in subject
+- COMMIT BODY: fixes SB-<leaf> + fixes #<leaf> always; add parent lines per CLOSE_PARENTS (both keys)
+- Reference: .cursor/skills/orchestrator/linear-board.md
 
 SESSION MEMORY:
 - Path: /home/michael/projects/slugbase/.cursor/skills/agent-memory/active/<SESSION-ID>.md
-- After GitHub In Progress (if GITHUB SYNC present): PHASE 1 create file; header + Task; set started: <ISO 8601 UTC>
+- After Linear In Progress (if LINEAR SYNC present): PHASE 1 create file; header + Task; set started: <ISO 8601 UTC>
 - PHASE 2: update Scope, Decisions, Doc deviations in place
 - PHASE 3: finalize all sections locally (never commit session memory)
 - Pre-handoff: set ended + duration in local file; then In Review; single implementation commit
@@ -198,11 +182,13 @@ GIT:
 - One commit: implementation task files only (session memory is gitignored — never staged)
 - Stage explicit paths only (`git add <path> …`). Never `git add .` or `-A`. Never stage `.cursor/skills/agent-memory/**`.
 - Never push to `main`. When pushing is explicitly requested, target `staging` only.
-- Commit subject: `feat(<scope>)[#<leaf>]: <summary>` or `fix(<scope>)[P*-*]: <summary>` (roadmap-only). Leaf number only in brackets. Subject ≤72 chars.
-- Commit body (GitHub-tracked):
-    fixes #<leaf>                    # always
-    fixes #<parent>                  # one line per issue in CLOSE_PARENTS (omit when none)
-- FORBIDDEN: fixes #<parent> when parent not in CLOSE_PARENTS
+- Commit subject: `feat(<scope>): <summary>` — key-free; `[P*-*]` only for roadmap-only tasks. Subject ≤72 chars.
+- Commit body (Linear-tracked):
+    fixes SB-<leaf>
+    fixes #<leaf>
+    fixes SB-<parent>              # per CLOSE_PARENTS linear list
+    fixes #<parent>                # per CLOSE_PARENTS github list
+- FORBIDDEN: parent fixes when parent not in CLOSE_PARENTS; issue keys in subject
 - No Smart Commit commands. See `07-issue-commit-linking.mdc`.
 
 PRE-COMMIT — SCOPED CI (mandatory before implementation commit):
@@ -241,13 +227,13 @@ ACCEPTANCE CRITERIA (must all pass):
 - <verbatim from plan row>
 
 REQUIRED OUTPUT:
-1. GitHub In Progress confirmation (leaf + parent issues updated, or skipped + why)
+1. Linear In Progress confirmation (leaf + parent issues updated, or skipped + why)
 2. Session timing: started, ended, duration
 3. Summary (≤5 bullets)
 4. Changed files (absolute paths)
-5. Implementation commit: SHA + subject + body (`fixes #<leaf>` + `fixes #<parent>` per CLOSE_PARENTS) + committed paths (or "no commit" + why)
+5. Implementation commit: SHA + subject + body (`fixes SB-<leaf>` + `fixes #<leaf>` + parent lines per CLOSE_PARENTS) + committed paths (or "no commit" + why)
 6. Plan checkbox: `[~]` only if PLAN FILE in WRITE SCOPE; never `[x]`
-7. Implementation status: complete | blocked | partial + reason (NOT GitHub Done — verifier sets that)
+7. Implementation status: complete | blocked | partial + reason (NOT Linear Done — verifier sets that)
 8. Blockers or scope deviations
 ```
 
@@ -269,15 +255,15 @@ PLAN FILE: /home/michael/projects/slugbase/docs/internal/slugbase-development-ro
 TASK ID: <e.g. P2-05>
 SESSION ID: <TASK-ID>-<YYYYMMDD>-<4hex>
 PARENT: <parent issue number or none>
-CLOSE_PARENTS: <[#8] | [#10, #1] | none>   # parents to fixes-close in this commit
+CLOSE_PARENTS: linear=[SB-8] github=[8] | linear=[SB-10, SB-1] github=[10, 1] | none
 
-GITHUB SYNC — EXECUTION (include when issue is on GitHub project board — omit if none):
-- Same block as Lane S execution template (Status → In Progress only — no Done; parent when subtask)
-- FIRST ACTION: Set project Status → "In Progress" for each leaf issue AND parent issue BEFORE session memory
+LINEAR SYNC — EXECUTION (include when issue is on SlugBase team — omit if none):
+- Same block as Lane S execution template (state → In Progress only — no Done; parent when subtask)
+- FIRST ACTION: save_issue state → "In Progress" for each leaf issue AND parent issue BEFORE session memory
 
 WORK DEP — MANDATORY (Lane P worktrees have no node_modules):
 - Worktrees are bare checkouts — **no `node_modules`** present at branch start
-- FIRST action after GitHub In Progress (before session memory and implementation code):
+- FIRST action after Linear In Progress (before session memory and implementation code):
     cd <WORKTREE> && bash scripts/with-ci-env.sh pnpm install
 - If `pnpm install` fails → blocked; report install error
 - After install, confirm node -v via bash scripts/with-ci-env.sh node -v (must be v22.12.0+)
@@ -300,11 +286,13 @@ GIT:
 - Stage explicit paths only. Never `git add .` or `-A`.
 - Never push.
 - If git status shows changes outside WRITE SCOPE → blocked.
-- Commit subject: `feat(<scope>)[#<leaf>]: <summary>`. Leaf number only in brackets. Subject ≤72 chars. No Smart Commit.
-- Commit body (GitHub-tracked):
-    fixes #<leaf>                    # always
-    fixes #<parent>                  # one line per issue in CLOSE_PARENTS (omit when none)
-- FORBIDDEN: fixes #<parent> when parent not in CLOSE_PARENTS
+- Commit subject: `feat(<scope>): <summary>` — key-free. Subject ≤72 chars.
+- Commit body (Linear-tracked):
+    fixes SB-<leaf>
+    fixes #<leaf>
+    fixes SB-<parent>              # per CLOSE_PARENTS
+    fixes #<parent>                # per CLOSE_PARENTS
+- FORBIDDEN: parent fixes when parent not in CLOSE_PARENTS; issue keys in subject
 - See `07-issue-commit-linking.mdc`.
 
 PRE-COMMIT — SCOPED CI (mandatory before implementation commit):
@@ -340,13 +328,13 @@ ACCEPTANCE CRITERIA:
 - <verbatim from plan row>
 
 REQUIRED OUTPUT:
-1. GitHub In Progress confirmation
+1. Linear In Progress confirmation
 2. Session timing
 3. Summary (≤5 bullets)
 4. Worktree path + branch name
 5. Changed files (absolute paths)
-6. Implementation commit: SHA + subject + body (`fixes #<leaf>` + `fixes #<parent>` per CLOSE_PARENTS) + committed paths
-7. Implementation status: complete | blocked | partial (NOT GitHub Done)
+6. Implementation commit: SHA + subject + body (`fixes SB-<leaf>` + `fixes #<leaf>` + parent lines per CLOSE_PARENTS) + committed paths
+7. Implementation status: complete | blocked | partial (NOT Linear Done)
 8. Blockers or scope deviations
 ```
 
@@ -358,44 +346,45 @@ Same as Lane S except: no plan checkbox update; TASK from orchestrator todo; acc
 
 ---
 
-## Execution agent — GitHub mode (Lane S on staging)
+## Execution agent — Linear mode (Lane S on staging)
 
-Use when the user names a GitHub issue (`#12`), URL, or parent/child.
+Use when the user names a Linear issue (`SB-12`), GitHub issue (`#12`), URL, or parent/child.
 
 ```text
-MODE: GitHub
+MODE: Linear
 LANE: S
 TARGET REPO: /home/michael/projects/slugbase
 WORK BRANCH: staging
-ISSUE NUMBER: <e.g. 12>
-SESSION ID: #<ISSUE-NUMBER>-<YYYYMMDD>-<4hex>
-PARENT: <parent issue number e.g. 8 or none>
-CLOSE_PARENTS: <[#8] | [#10, #1] | none>   # parents to fixes-close in this commit
+LINEAR KEY: <e.g. SB-12>
+GITHUB NUMBER: <e.g. 12 — synced mirror>
+SESSION ID: SB-<ISSUE-NUMBER>-<YYYYMMDD>-<4hex>
+PARENT: linear=SB-8 github=8 | none
+CLOSE_PARENTS: linear=[SB-8] github=[8] | linear=[SB-10, SB-1] github=[10, 1] | none
 
-GITHUB SYNC — EXECUTION (include when issue is on GitHub project board — omit if none):
-- MCP server: user-github (always preferred — see GITHUB TOOLS block)
-- owner: mdg-labs
-- repo: slugbase
-- project: <PROJECT_NUMBER>
-- issues: [{ number: 12 }]
-- parent (when PARENT header is not "none"):
-  - { number: 8 }
+LINEAR SYNC — EXECUTION (include when issue is on SlugBase team — omit if none):
+- MCP server: plugin-linear-linear (see LINEAR TOOLS block)
+- team: SlugBase
+- issues:
+  - linear: SB-12
+    github: 12
+  - linear: SB-8          # when PARENT is not none
+    github: 8
 
-GITHUB — EXECUTION (first action, before session memory):
-1. Set project Status → "In Progress" for EVERY leaf issue AND parent issue (if listed) via GraphQL updateProjectV2ItemFieldValue
-2. If status update fails → blocked; do not proceed
-3. FORBIDDEN: Set Status → Done; add comment for verification outcomes; set parent Done before verifier
+LINEAR — EXECUTION (first action, before session memory):
+1. save_issue state → "In Progress" for EVERY leaf AND parent (if listed)
+2. If state update fails → blocked; do not proceed
+3. FORBIDDEN: state → Done; verifier comments; parent Done before verifier
 
-GITHUB — EXECUTION (pre-handoff, after implementation):
+LINEAR — EXECUTION (pre-handoff, after implementation):
 1. Local session memory: set ended + duration
-2. Set project Status → "In Review" for leaf issue only via GraphQL updateProjectV2ItemFieldValue
-3. Single implementation commit — task files only
+2. save_issue state → "In Review" for leaf only
+3. Single implementation commit — task files only; keys in body only
 
-Reference: .cursor/skills/orchestrator/github-board.md
+Reference: .cursor/skills/orchestrator/linear-board.md
 
 SESSION MEMORY:
 - Path: /home/michael/projects/slugbase/.cursor/skills/agent-memory/active/<SESSION-ID>.md
-- PHASE 1/2/3 after GitHub In Progress; set started at Phase 1
+- PHASE 1/2/3 after Linear In Progress; set started at Phase 1
 
 DOC REFERENCE (read these):
 - <paths + § from issue description>
@@ -404,11 +393,13 @@ DOC REFERENCE (read these):
 GIT:
 - Branch staging; one implementation commit; explicit git add only; never stage `.cursor/skills/agent-memory/**`
 - Never push to `main`. When pushing is explicitly requested, target `staging` only.
-- Commit subject: `feat(<scope>)[#<leaf>]: <summary>` — leaf number required. No Smart Commit.
-- Commit body (GitHub-tracked):
-    fixes #<leaf>                    # always
-    fixes #<parent>                  # one line per issue in CLOSE_PARENTS (omit when none)
-- FORBIDDEN: fixes #<parent> when parent not in CLOSE_PARENTS
+- Commit subject: `feat(<scope>): <summary>` — key-free. No Smart Commit.
+- Commit body (Linear-tracked):
+    fixes SB-<leaf>
+    fixes #<leaf>
+    fixes SB-<parent>              # per CLOSE_PARENTS
+    fixes #<parent>                # per CLOSE_PARENTS
+- FORBIDDEN: parent fixes when parent not in CLOSE_PARENTS; issue keys in subject
 - See `07-issue-commit-linking.mdc`.
 - Phase for env when needed (`phase run --`)
 
@@ -423,13 +414,13 @@ DB MIGRATIONS — MANDATORY (schema-first; no exceptions):
 READ / WRITE SCOPE / DO NOT TOUCH / AC / TESTS: <orchestrator fills>
 
 REQUIRED OUTPUT:
-1. GitHub In Progress: leaf + parent issues updated (or blocked reason)
+1. Linear In Progress: leaf + parent issues updated (or blocked reason)
 2. Session timing: started, ended, duration
-3. GitHub In Review confirmation
+3. Linear In Review confirmation
 4. Summary (≤5 bullets)
 5. Changed files (absolute paths)
-6. Implementation commit: SHA + subject + body (`fixes #<leaf>` + `fixes #<parent>` per CLOSE_PARENTS) + paths
-7. Implementation status: complete | blocked | partial (NOT GitHub Done)
+6. Implementation commit: SHA + subject + body (`fixes SB-<leaf>` + `fixes #<leaf>` + parent lines per CLOSE_PARENTS) + paths
+7. Implementation status: complete | blocked | partial (NOT Linear Done)
 8. Blockers or scope deviations
 ```
 
@@ -438,27 +429,31 @@ REQUIRED OUTPUT:
 ## Verification agent — Lane S (task verifier on staging)
 
 ```text
-MODE: plan-file | chat | GitHub
+MODE: plan-file | chat | Linear
 LANE: S
 TARGET REPO: /home/michael/projects/slugbase
 WORK BRANCH: staging
 PLAN FILE: <path or n/a>
 SESSION ID: <same as execution>
-CLOSE_PARENTS: <same as execution prompt — [#8] | none>
+CLOSE_PARENTS: <same as execution prompt — linear=[SB-8] github=[8] | none>
 
-GITHUB SYNC — VERIFIER (include when execution prompt had execution variant):
-- MCP server: user-github (always preferred — see GITHUB TOOLS block); owner: mdg-labs; repo: slugbase; project: <PROJECT_NUMBER>
-- issues: [{ number: 12 }]
-- parent (optional): number if final subtask
-- AFTER PASS: MCP add_issue_comment (mandatory clean summary) → GraphQL updateProjectV2ItemFieldValue → Status "Done" for each issue (+ parent if listed)
-- AFTER FAIL: MCP add_issue_comment (FAIL detail) → GraphQL updateProjectV2ItemFieldValue → Status "Ready"; do NOT set Done
+LINEAR SYNC — VERIFIER (include when execution prompt had execution variant):
+- MCP server: plugin-linear-linear (see LINEAR TOOLS block); team: SlugBase
+- issues:
+  - linear: SB-12
+    github: 12
+  - linear: SB-8          # parent if final subtask
+    github: 8
+- AFTER PASS: save_comment (mandatory) → save_issue state → "Done" for each issue (+ parent if listed)
+- AFTER FAIL: save_comment (FAIL detail) → state → "Ready"; do NOT set Done
+- Layer 3c3: subject key-free; body has fixes SB-<leaf> AND fixes #<leaf>; parent lines per CLOSE_PARENTS only
 
 SESSION MEMORY (local, gitignored):
 - FIRST ACTION: read active/<SESSION-ID>.md if it exists
 - Missing file → use execution REQUIRED OUTPUT; blocked only if insufficient
 - Pre-handoff: set verification ended + duration
-- PASS: mandatory GitHub Done comment; optionally delete active or move to local archive/ (never commit)
-- FAIL: mandatory GitHub FAIL comment; append VERIFICATION FAILED in active/ (never commit)
+- PASS: mandatory Linear Done comment; optionally delete active or move to local archive/ (never commit)
+- FAIL: mandatory Linear FAIL comment; append VERIFICATION FAILED in active/ (never commit)
 
 EXECUTION COMMITS:
 - task id: <id>
@@ -499,7 +494,8 @@ LAYER 3 — Logic review:
 3b. Doc contract — spec section deviations with file:line + fix hint
 3c. Security baseline — sessions (not JWT), no logged secrets, SSRF-safe egress, encrypted at-rest secrets, CSRF (03-security-baseline.mdc)
 3c2. Env vars — any new env var fully registered in Phase + .env.example + schema + docs? (05-env-vars.mdc)
-3c3. Issue commit link — subject includes `[#N]` or `[P*-*]`; body includes `fixes #<leaf>` when task is tracked on GitHub; body includes `fixes #<parent>` only for parents in CLOSE_PARENTS; no Smart Commit commands (07-issue-commit-linking.mdc)
+3c3. Issue commit link — subject key-free (`[P*-*]` only for roadmap-only); body includes `fixes SB-<leaf>` AND `fixes #<leaf>` when Linear-tracked; parent lines only per CLOSE_PARENTS; no issue keys in subject (07-issue-commit-linking.mdc)
+3c4. Linear state only — agents must never set GitHub issue state (open/closed); status via save_issue state; verifying code that closes GitHub issues directly → **FAIL**
 3d. DB migrations — hand-written migration SQL or hand-created directories → FAIL
 3e. Stubs, TODO/FIXME, placeholder values, deployment-mode branches (`isCloud`) → FAIL
 
@@ -513,7 +509,7 @@ REQUIRED OUTPUT:
 3. Layer 3 breakdown
 4. Overall PASS | FAIL
 5. Plan file update + SHA or skipped
-6. GitHub sync: issues → Done | Ready + comment (or n/a)
+6. Linear sync: issues → Done | Ready + comment (or n/a)
 7. Issue list (≤10 bullets)
 ```
 
@@ -529,11 +525,11 @@ WORK BRANCH: orchestrator/<TASK-ID>
 WORKTREE: <path>
 BATCH_ID: <id>
 SESSION ID: <same as execution>
-CLOSE_PARENTS: <same as execution prompt — [#8] | none>
+CLOSE_PARENTS: <same as execution prompt — linear=[SB-8] github=[8] | none>
 
-GITHUB SYNC — VERIFIER (include when execution prompt had execution variant):
-- MCP server: user-github (always preferred — see GITHUB TOOLS block); owner: mdg-labs; repo: slugbase
-- Same rules as Lane S verifier: MCP add_issue_comment + GraphQL updateProjectV2ItemFieldValue for Status (Done / Ready)
+LINEAR SYNC — VERIFIER (include when execution prompt had execution variant):
+- MCP server: plugin-linear-linear (see LINEAR TOOLS block); team: SlugBase
+- Same rules as Lane S verifier: save_comment + save_issue state (Done / Ready)
 
 WORK DEP — MANDATORY (Lane P worktrees have no node_modules):
 - Worktrees are bare checkouts — **no `node_modules`** present at branch start
@@ -544,8 +540,8 @@ WORK DEP — MANDATORY (Lane P worktrees have no node_modules):
 
 SESSION MEMORY (local, gitignored):
 - FIRST ACTION: read active/<SESSION-ID>.md in WORKTREE if it exists
-- PASS: mandatory GitHub Done comment; optionally delete active or move to local archive/ (never commit)
-- FAIL: mandatory GitHub FAIL comment; append VERIFICATION FAILED in active/ (never commit)
+- PASS: mandatory Linear Done comment; optionally delete active or move to local archive/ (never commit)
+- FAIL: mandatory Linear FAIL comment; append VERIFICATION FAILED in active/ (never commit)
 - Do NOT edit PLAN FILE
 
 EXECUTION COMMITS (on task branch):
@@ -559,7 +555,7 @@ REQUIRED OUTPUT:
 1. Layer 1/2/3 results
 2. Overall PASS | FAIL
 3. Branch tip SHA for integration
-4. GitHub sync results
+4. Linear sync results
 5. Issue list (≤10 bullets)
 ```
 
@@ -611,7 +607,7 @@ TASK OUTCOMES:
 - <TASK-ID>: branch-verify PASS, merged | branch-verify FAIL, not merged
 
 CHECKS:
-1. Confirm branch verifiers reported GitHub Done comments for integrated tasks
+1. Confirm branch verifiers reported Linear Done comments for integrated tasks
 2. Post-merge scoped smoke: union of @slugbase/<pkg> filters for all packages touched by integrated tasks — e.g. bash scripts/with-ci-env.sh pnpm turbo run lint typecheck --filter=@slugbase/<pkg> per package (Phase for env when needed via with-ci-env wrapper). NOT full workspace gate.
 3. If smoke fails → FAIL batch; do not mark [x]
 
@@ -620,7 +616,7 @@ PLAN FILE:
 - Branch-FAIL (not merged) → [!] + note; commit plan file
 
 REQUIRED OUTPUT:
-1. GitHub Done comment confirmation per integrated task
+1. Linear Done comment confirmation per integrated task
 2. Smoke check results
 3. Plan file updates + SHA
 4. Overall batch PASS | FAIL

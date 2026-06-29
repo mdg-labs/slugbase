@@ -1,129 +1,134 @@
 ---
-description: Link every task commit to a GitHub issue for Development panel traceability — use [#N] in subject + fixes #N in body
+description: Link every task commit to Linear (SB-N) and GitHub (#N) — keys in commit body only, not subject
 alwaysApply: true
 ---
 
 # Issue commit linking
 
-Every **task-related** commit must reference a GitHub issue so the **Development** panel links correctly and the issue auto-closes on merge to `main`.
+Every **task-related** commit must reference both trackers in the **commit body** so Linear links commits, the GitHub **Development** panel links correctly, and GitHub issues auto-close on merge to `main`.
+
+**Issue keys never go in the commit subject** — keep subjects clean: `<type>(<scope>): <summary>` only.
 
 ## Required subject format
 
 ```
-<type>(<scope>)[#N]: <imperative summary>
+<type>(<scope>): <imperative summary>
 ```
 
 | Part | Rule |
 |---|---|
 | `<type>` | Conventional Commits: `feat`, `fix`, `chore`, `refactor`, `docs`, `test`, `ci`, `build`, `perf` |
 | `<scope>` | Allowed scopes from `01-git-workflow.mdc` (`bookmarks`, `auth`, `billing`, `go`, …) |
-| `[#N]` | **Mandatory** on task commits — square brackets, `#` prefix, issue number |
 | Summary | Imperative mood; whole subject ≤72 chars |
+| **Forbidden in subject** | `[SB-N]`, `[#N]`, `(#N)`, `SB-N`, or any issue key |
 
-## Required body format
+## Required body format (new Linear-tracked work)
 
-The commit body must include a closing keyword so GitHub auto-closes the issue on merge to `main`:
+The commit body must include **both** closing lines — one per tracker:
 
 ```
+fixes SB-N
 fixes #N
 ```
 
-Place this on its own line in the commit body (not the subject). Multiple issues: one per line.
+Place each on its own line. Use the synced pair for the leaf issue (`SB-42` ↔ `#612`).
 
-## Epic (parent Feature) issues
+- `fixes SB-N` → Linear commit linking (In Progress on push; Done on `main` per team automations)
+- `fixes #N` → GitHub auto-close on merge to `main` + Development panel
 
-Subtasks under a parent Feature (epic) follow the same subject/body rules, with **parent auto-close only on the final in-scope child**.
+## Epic (parent) issues
+
+Subtasks under a parent epic follow the same rules, with **parent auto-close only on the final in-scope child**.
 
 | Commit | Subject | Body |
 |---|---|---|
-| Any subtask under a parent | `[#<leaf>]` | `fixes #<leaf>` |
-| **Final** child of parent P | `[#<leaf>]` | `fixes #<leaf>` + one `fixes #<P>` line per parent whose last in-scope child this is |
-| Atomic leaf (no parent) | `[#<leaf>]` | `fixes #<leaf>` |
-| Roadmap-only | `[P*-*]` | no `fixes` lines |
+| Any subtask under a parent | key-free | `fixes SB-<leaf>` + `fixes #<leaf>` |
+| **Final** child of parent P | key-free | leaf lines + one `fixes SB-<P>` + `fixes #<P>` per parent in `CLOSE_PARENTS` |
+| Atomic leaf (no parent) | key-free | `fixes SB-<leaf>` + `fixes #<leaf>` |
+| Roadmap-only | `[P*-*]` allowed in subject | no `fixes` lines |
 
-**Do not** put `fixes #<epic>` on intermediate subtasks — that would auto-close the epic when the first subtask lands on `main`.
+**Do not** put parent `fixes` lines on intermediate subtasks.
 
-The orchestrator passes `CLOSE_PARENTS: [#P, …]` or `none` in execution prompts (computed from the epic batch plan). Execution agents **must not guess** which parents to close.
+The orchestrator passes `CLOSE_PARENTS: linear=[SB-P, …] github=[#P, …] | none`. Execution agents **must not guess**.
 
 ```bash
-# GOOD — intermediate subtask under epic #8
-feat(auth)[#11]: add sign-in shell
+# GOOD — intermediate subtask under epic SB-8 / #8
+feat(auth): add sign-in shell
 
+fixes SB-11
 fixes #11
 
-# GOOD — last in-scope child of epic #8
-feat(auth)[#12]: add MFA challenge screen
+# GOOD — last in-scope child of epic SB-8 / #8
+feat(auth): add MFA challenge screen
 
+fixes SB-12
 fixes #12
+fixes SB-8
 fixes #8
 
-# GOOD — nested: last child of #10 but not top epic #1
-feat(auth)[#13]: add register + verify flow
+# BAD — keys in subject
+feat(auth)[SB-11][#11]: add sign-in shell
 
-fixes #13
-fixes #10
+# BAD — missing GitHub line
+feat(auth): add sign-in shell
 
-# BAD — premature epic close on non-final subtask
-feat(auth)[#11]: add sign-in shell
+fixes SB-11
 
+# BAD — premature epic close
+fixes SB-11
 fixes #11
+fixes SB-8
 fixes #8
-
-# BAD — final child omitting parent close when CLOSE_PARENTS lists #8
-feat(auth)[#12]: add MFA challenge screen
-
-fixes #12
 ```
 
-**Verifier FAIL** when GitHub sync was in scope:
+**Verifier FAIL** when Linear sync was in scope:
 
-- Body missing `fixes #<leaf>`
-- Body includes `fixes #<parent>` when parent is **not** in `CLOSE_PARENTS`
-- Body missing `fixes #<parent>` when parent **is** in `CLOSE_PARENTS`
+- Body missing `fixes SB-<leaf>` or `fixes #<leaf>`
+- Subject contains `[SB-N]`, `[#N]`, or bare `SB-N` / `#N` as issue keys
+- Body includes parent `fixes` when parent is **not** in `CLOSE_PARENTS`
+- Body missing parent `fixes` when parent **is** in `CLOSE_PARENTS`
 
 ### Issue key precedence
 
-1. **GitHub issue** — `#12` when the task exists on the board (orchestrator GITHUB SYNC, user named `#N`, or roadmap row has a GitHub issue)
-2. **Roadmap only** — `[P2-01]` when no GitHub issue exists yet
-3. **Combined batch** — primary issue number in brackets; list siblings in session memory
+1. **Linear + GitHub pair** — `SB-N` + `#N` when task exists on SlugBase team (orchestrator LINEAR SYNC, user named `SB-N` or `#N`)
+2. **Roadmap only** — `[P2-01]` in subject when no tracker issue exists yet
+3. **Legacy GitHub-only** — body-only `fixes #N` (no Linear issue); subject key-free
 
 ### Examples
 
 ```bash
-# GOOD — GitHub issue work
-feat(auth)[#12]: add server-side session store with configurable TTL
+# GOOD — Linear-tracked work
+feat(auth): add server-side session store with configurable TTL
 
-In the commit body:
-fixes #12
+fixes SB-12
+fixes #612
 
-# GOOD — roadmap-only (no GitHub issue)
+# GOOD — roadmap-only (no tracker issue)
 feat(workspaces)[P2-01]: implement workspace creation with entitlement check
 
-# GOOD — plan-file verifier commit
-chore(plan)[#12]: mark P1-03 verified
-
-# BAD — key at end (old format)
-feat(auth): add session store (#12)
-
-# BAD — missing key on task work
+# GOOD — legacy GitHub-only (no Linear issue yet)
 feat(auth): add session store
 
-# BAD — no closing keyword in body
+fixes #12
+
+# BAD — keys in subject (old format)
 feat(auth)[#12]: add session store
-(no "fixes #12" in body)
+
+# BAD — no closing keywords in body
+feat(auth): add session store
 ```
 
 ## Auto-close on merge
 
-GitHub auto-closes issues referenced with `fixes #N`, `closes #N`, or `resolves #N` in the commit body when merged to the default branch (`main`). The project's built-in "Auto-close issue" workflow is **disabled** — we rely on commit body keywords exclusively.
+GitHub auto-closes issues referenced with `fixes #N`, `closes #N`, or `resolves #N` in the commit body when merged to `main`. Linear links via `fixes SB-N` in the body per the GitHub commit-linking webhook.
 
 ## Exceptions (no issue key required)
 
-- Pure repo hygiene with no task ID: `chore(repo): init pnpm workspace` (rare; prefer a GitHub issue when in doubt)
-- Integration merge commits: `chore(repo)[#N]: integrate orchestrator batch (<BATCH_ID>)`
+- Pure repo hygiene: `chore(repo): init pnpm workspace`
+- Integration merge commits: `chore(repo): integrate orchestrator batch (<BATCH_ID>)` — body may reference batch issues if needed
 
 ## Enforcement
 
-- **Execution agents:** implementation commits include `[#N]` or `[P*-*]` in subject + `fixes #<leaf>` in body; add `fixes #<parent>` only for issues listed in `CLOSE_PARENTS`
-- **Verifiers:** Layer 3 — FAIL if a task commit subject lacks a valid issue number when GitHub sync was in scope; FAIL on epic parent `fixes` mismatches (see Epic section above)
-- **Orchestrator prompts:** pass leaf issue number, `PARENT`, and `CLOSE_PARENTS` in the GIT block; see `.cursor/skills/orchestrator/prompt-templates.md`
+- **Execution agents:** key-free subject; body `fixes SB-<leaf>` + `fixes #<leaf>`; parent lines only per `CLOSE_PARENTS`
+- **Verifiers:** Layer 3 — FAIL on missing body lines, keys in subject, or epic parent mismatches
+- **Orchestrator prompts:** pass `LINEAR_KEY`, `GITHUB_NUMBER`, and `CLOSE_PARENTS` in the GIT block; see `.cursor/skills/orchestrator/prompt-templates.md`

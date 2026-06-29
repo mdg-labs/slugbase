@@ -10,7 +10,7 @@ Sub-agents read these files themselves — never paste content into prompts.
 3. `docs/internal/defaults-and-constants.md` — pinned default/config values (slug grammar, caps, TTLs, rate limits, archive rule)
 4. `docs/internal/design-prototype/V1/` — **visual/interaction source of truth** (spec wins on product conflict; divergences in spec §23.4)
 
-The phased work plan is `docs/internal/slugbase-development-roadmap.md` (pre-GitHub; once converted, GitHub Issues is the execution source of truth). `schema-reference.md` / `api-design.md` grow incrementally with the roadmap — add them here when created.
+The phased work plan is `docs/internal/slugbase-development-roadmap.md`. **Linear** (SlugBase team) is the execution source of truth; GitHub Issues sync two-way.
 
 ## Doc shorthand (use in roadmap Doc Ref column)
 
@@ -56,16 +56,19 @@ Reference sections as `§N` or heading, e.g. `spec §5`, `spec §11.4`, `spec §
 
 `docs/internal/design-prototype/V1/` is the **visual & interaction source of truth** (design tokens in `colors_and_type.css`; screens mapped in spec §23.2). The MVP spec is the **product source of truth** — on any conflict, spec wins (catalogued in spec §23.4). Any UI task must reference the matching prototype file(s) **and** check §23.4/§23.5 before building.
 
-## GitHub issue tracking
+## Linear issue tracking
 
-Issues tracked via GitHub Issues on `mdg-labs/slugbase`. Org-level issue types: Task, Bug, Feature. Org-level issue fields: Priority, Effort, Start date, Target date. Status via Projects v2.
+Primary tracker: **Linear** SlugBase team (`SB-N`). GitHub Issues (`mdg-labs/slugbase`) mirror via two-way sync.
 
 | Field | Purpose |
 |---|---|
-| Issue number | Commit suffixes, session memory (`#12-20260531-a1b2.md`) |
-| Labels | Domain routing (`domain:frontend`, `domain:backend`, etc.) |
+| `SB-N` | Linear issue key; commit body `fixes SB-N` |
+| `#N` | Synced GitHub issue; Development panel + `fixes #N` on `main` |
+| Labels | Domain routing (`domain:frontend`, etc.) — sync to GitHub |
 
-**Execution agents** set project Status **In Progress** (+ **In Review** before handoff); **verification agents** set **Done** after PASS — see [github-board.md](github-board.md).
+**Execution agents** set Linear **In Progress** (+ **In Review** before handoff); **verification agents** set **Done** after PASS — see [linear-board.md](linear-board.md).
+
+Commit linking: keys in **body only** — see `07-issue-commit-linking.mdc`.
 
 ## Default verification commands (settled — spec §19)
 

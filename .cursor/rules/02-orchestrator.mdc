@@ -36,20 +36,20 @@ If you're acting as the orchestrator chat: never edit checkboxes during normal f
 
 **Parallel batches (Lane P):** execution in isolated worktrees (`best-of-n-runner`); integration merges to **`staging`**. See orchestrator SKILL.md § Parallelism. **Never push to `main`.**
 
-## GitHub board status (when orchestrating)
+## Linear board status (when orchestrating)
 
-SlugBase project on GitHub (`mdg-labs/slugbase`). Commit subjects use issue number: `[#12]`.
+SlugBase team on Linear (`SB-N`). Commit bodies use `fixes SB-N` + `fixes #N` — not in the subject.
 
-- **Execution agents** → set project Status **In Progress** on leaf issue(s) and parent when dispatching a child (first action, before code); set **In Review** before verifier handoff
-- **Verification agents** → set **Done** only after all layers PASS; FAIL → **Todo** + comment
-- Execution prompts must **not** set Done — see `.cursor/skills/orchestrator/github-board.md`
+- **Execution agents** → set Linear state **In Progress** on leaf issue(s) and parent when dispatching a child (first action, before code); set **In Review** before verifier handoff
+- **Verification agents** → set **Done** only after all layers PASS; FAIL → **Ready** + comment
+- Execution prompts must **not** set Done — see `.cursor/skills/orchestrator/linear-board.md`
 
 ## Universal acceptance criteria (every task)
 
 Even when not listed in a task row, the verifier applies:
 
 - File / directory naming (`04-naming.mdc`)
-- Conventional commits with `[#N]` (`01-git-workflow.mdc`, `07-issue-commit-linking.mdc`)
+- Conventional commits with body linking (`07-issue-commit-linking.mdc`)
 - TypeScript strict, no `any`, no `console.log` (when TypeScript is in scope)
 - Security defaults — server-side sessions, no logged secrets, server-side validation (`03-security-baseline.mdc`)
 - i18n — every UI string via the i18n layer, no hardcoded strings (spec §17)

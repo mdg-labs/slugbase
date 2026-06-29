@@ -12,21 +12,19 @@ _added: 2026-06-02_
 **`staging`** = development integration branch (Lane S commits, Lane P merges). **`main`** = protected production branch on GitHub — agents never push to `main`. SB-3 scaffold cherry-picked onto `staging` as `778368d` after branch realignment.
 _added: 2026-05-31_
 
-## Jira SB project — live constants (verified 2026-05-31)
+## Linear + GitHub issue tracking (2026-06-29)
 
-Site: `mdg-labs.atlassian.net` · cloudId: `mdg-labs.atlassian.net` (hostname shorthand)
-Transitions: Backlog `11` · Ready `2` · In Progress `21` · In Review `31` · Done `41` · Paused `4` · Cancelled `3`
-Domain field: `customfield_10081` → Frontend `10092` · Backend `10093` · Infra `10094` · Ops `10095`
-Roadmap ID: `customfield_10082` · Legacy Key: `customfield_10083` (unused on greenfield SB)
-Fix versions: `MVP Alpha` · `Public Launch v1.0.0`
-Depends link type id: `10006` (outward: `depends on`, inward: `is required by`)
-Probe issue SB-1 was created to resolve transitions — it can be deleted or left as a backlog item.
-_added: 2026-05-31_
+**Linear** SlugBase team (`SB-N`) is the primary tracker. GitHub `mdg-labs/slugbase` issues mirror via two-way sync. Agents set Linear workflow state (not GitHub Projects board). Commits: key-free subject; body `fixes SB-N` + `fixes #N`. See `linear-board.md`, `07-issue-commit-linking.mdc`.
+_added: 2026-06-29_
 
-## Session memory — local + Jira handoff
+## Session memory — local + Linear handoff
 
-`.cursor/skills/agent-memory/` is **gitignored**. Execution/verifier agents write session files locally during a run; **never commit** them. Verifier → **Done** posts a structured summary via `addCommentToJiraIssue` on the leaf issue; **Ready** (FAIL) posts layer failures. One implementation commit per task. See orchestrator SKILL.md + jira-board.md § Verifier Done comment.
-_added: 2026-05-31_
+`.cursor/skills/agent-memory/` is **gitignored**. Verifier → **Done** posts via Linear `save_comment` on the leaf issue; **Ready** on FAIL. One implementation commit per task. See orchestrator SKILL.md + linear-board.md.
+_added: 2026-06-29_
+
+## Jira SB project — deprecated (historical)
+
+Jira constants below are **obsolete** — migrated to Linear. Kept for archaeology only.
 
 ## Jira Depends link type
 
