@@ -126,62 +126,28 @@ jobs:
     name: Staging · Push slugbase-api (GHCR dev)
     needs: [plan, resolve-deploy-ref]
     if: needs.plan.outputs.push_ghcr_api == 'true'
-    runs-on: ubuntu-latest
     environment: staging
     permissions:
       contents: read
       packages: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
-        with:
-          ref: ${{ needs.resolve-deploy-ref.outputs.checkout_ref != '' && needs.resolve-deploy-ref.outputs.checkout_ref || github.sha }}
-
-      - name: Log in to GHCR
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push API image (dev tag)
-        env:
-          DOCKER_BUILDKIT: "1"
-        run: >
-          bash scripts/ci/build-push-ghcr.sh
-          --target api
-          ghcr.io/${{ format('{0}-api', github.repository) }}
-          dev
-          --no-latest
+    uses: ./.github/workflows/build-and-push-ce-image.yml
+    with:
+      service: api
+      tags: dev
+      ref: ${{ needs.resolve-deploy-ref.outputs.checkout_ref != '' && needs.resolve-deploy-ref.outputs.checkout_ref || github.sha }}
+    secrets: inherit
 
   push-ghcr-web:
     name: Staging · Push slugbase-web (GHCR dev)
     needs: [plan, resolve-deploy-ref]
     if: needs.plan.outputs.push_ghcr_web == 'true'
-    runs-on: ubuntu-latest
     environment: staging
     permissions:
       contents: read
       packages: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
-        with:
-          ref: ${{ needs.resolve-deploy-ref.outputs.checkout_ref != '' && needs.resolve-deploy-ref.outputs.checkout_ref || github.sha }}
-
-      - name: Log in to GHCR
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push web image (dev tag)
-        env:
-          DOCKER_BUILDKIT: "1"
-        run: >
-          bash scripts/ci/build-push-ghcr.sh
-          --target web
-          ghcr.io/${{ format('{0}-web', github.repository) }}
-          dev
-          --no-latest
+    uses: ./.github/workflows/build-and-push-ce-image.yml
+    with:
+      service: web
+      tags: dev
+      ref: ${{ needs.resolve-deploy-ref.outputs.checkout_ref != '' && needs.resolve-deploy-ref.outputs.checkout_ref || github.sha }}
+    secrets: inherit
