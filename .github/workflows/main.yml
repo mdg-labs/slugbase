@@ -1,6 +1,6 @@
 name: Main
 
-# Push to main — CI, production deploy, draft release (spec §22.4, §22.6–22.8).
+# Push to main — CI, production deploy, bump-scoped draft release (spec §22.4, §22.6–22.7).
 # Live /version probes run once via deploy-plan.yml; deploy.yml uses caller_plan (spec §22.7).
 
 on:
@@ -62,17 +62,9 @@ jobs:
 
   prepare-release:
     name: Prepare release
-    needs: [deploy-production, plan]
-    if: >-
-      needs.deploy-production.result == 'success' &&
-      (
-        needs.plan.outputs.deploy_api == 'true' ||
-        needs.plan.outputs.deploy_web == 'true'
-      )
+    needs: [ci]
+    if: needs.ci.result == 'success'
     permissions:
       contents: write
     uses: ./.github/workflows/prepare-release.yml
-    with:
-      deploy-api: ${{ needs.plan.outputs.deploy_api }}
-      deploy-web: ${{ needs.plan.outputs.deploy_web }}
     secrets: inherit

@@ -1,18 +1,9 @@
 name: Prepare Release
 
-# Draft GitHub Release after api/web production deploy (spec §22.6, §22.8).
+# Bump-scoped draft GitHub Release after CI on main (spec §22.6).
 
 on:
   workflow_call:
-    inputs:
-      deploy-api:
-        description: Whether api was deployed in this production run
-        type: string
-        required: true
-      deploy-web:
-        description: Whether web was deployed in this production run
-        type: string
-        required: true
 
 permissions:
   contents: write
@@ -38,6 +29,4 @@ jobs:
       - name: Create draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DEPLOY_API: ${{ inputs.deploy-api }}
-          DEPLOY_WEB: ${{ inputs.deploy-web }}
         run: node scripts/ci/create-draft-release.mjs
