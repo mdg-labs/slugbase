@@ -1,7 +1,6 @@
 name: PR
 
-# Pull request entry point — CI only (spec §22.4).
-# E2E remains on e2e.yml until #474 consolidates entry points.
+# Pull request entry point — CI for all PRs; E2E chain for staging→main (spec §22.4).
 
 on:
   pull_request:
@@ -20,4 +19,18 @@ jobs:
       contents: read
       pull-requests: write
     uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
+  e2e:
+    name: E2E
+    needs: ci
+    if: >
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.head.ref == 'staging'
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: ./.github/workflows/e2e.yml
+    with:
+      mode: ''
     secrets: inherit

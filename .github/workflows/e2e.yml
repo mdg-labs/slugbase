@@ -1,5 +1,5 @@
-# Playwright e2e tests — runs on staging→main release-candidate PRs,
-# on workflow_dispatch, and as a reusable workflow (spec §22.4).
+# Playwright e2e tests — called from pr.yml for staging→main PRs,
+# on workflow_dispatch, and via workflow_call (spec §22.4).
 #
 # Two jobs: cloud (separate API/web/marketing services) and
 # ce (combined Docker image, single port).
@@ -10,15 +10,12 @@
 name: E2E
 
 on:
-  pull_request:
-    branches: [main]
-
   workflow_dispatch:
 
   workflow_call:
     inputs:
       mode:
-        description: 'Deployment edition to test'
+        description: 'Deployment edition to test (cloud, ce, or empty for both)'
         required: true
         type: string
 
@@ -373,7 +370,7 @@ jobs:
         run: bash scripts/reportportal-ci-summary.sh write-summary e2e
 
       - name: ReportPortal PR comment
-        if: always() && github.event_name == 'pull_request'
+        if: always() && github.event.pull_request != null
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_PR_NUMBER: ${{ github.event.pull_request.number }}
