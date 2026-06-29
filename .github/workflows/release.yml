@@ -1,0 +1,95 @@
+name: Release
+
+# Published GitHub Release — CE GHCR :latest + release-date tags only (spec §22.8).
+# No cloud production deploy; service tags discovered on target_commitish.
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  discover:
+    name: Release · Discover CE service tags
+    runs-on: ubuntu-latest
+    outputs:
+      push_ghcr_api: ${{ steps.tags.outputs.push_ghcr_api }}
+      push_ghcr_web: ${{ steps.tags.outputs.push_ghcr_web }}
+      release_tag: ${{ steps.tags.outputs.release_tag }}
+      checkout_ref: ${{ github.event.release.target_commitish }}
+    steps:
+      - name: Checkout release commit
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+        with:
+          ref: ${{ github.event.release.target_commitish }}
+          fetch-depth: 0
+
+      - name: List CE service tags on commit
+        id: tags
+        env:
+          COMMIT_SHA: HEAD
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: node scripts/ci/list-release-service-tags.mjs
+
+      - name: Write discover summary
+        env:
+          PUSH_API: ${{ steps.tags.outputs.push_ghcr_api }}
+          PUSH_WEB: ${{ steps.tags.outputs.push_ghcr_web }}
+          RELEASE_TAG: ${{ steps.tags.outputs.release_tag }}
+          SKIPPED: ${{ steps.tags.outputs.skipped_below_floor }}
+        run: |
+          {
+            echo "### CE release publish"
+            echo ""
+            echo "**Release tag:** \`${RELEASE_TAG}\`"
+            echo "**Checkout ref:** \`${{ github.event.release.target_commitish }}\`"
+            echo ""
+            echo "| Surface | Push GHCR |"
+            echo "|---|---|"
+            echo "| api | ${PUSH_API} |"
+            echo "| web | ${PUSH_WEB} |"
+            if [ -n "${SKIPPED}" ]; then
+              echo ""
+              echo "**Skipped (below 1.0.0):** ${SKIPPED}"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  push-ghcr-api:
+    name: Release · Push slugbase-api (GHCR)
+    needs: [discover]
+    if: needs.discover.outputs.push_ghcr_api == 'true'
+    environment: production
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/build-and-push-ce-image.yml
+    with:
+      service: api
+      tags: |
+        ${{ needs.discover.outputs.release_tag }}
+        latest
+      ref: ${{ needs.discover.outputs.checkout_ref }}
+    secrets: inherit
+
+  push-ghcr-web:
+    name: Release · Push slugbase-web (GHCR)
+    needs: [discover]
+    if: needs.discover.outputs.push_ghcr_web == 'true'
+    environment: production
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/build-and-push-ce-image.yml
+    with:
+      service: web
+      tags: |
+        ${{ needs.discover.outputs.release_tag }}
+        latest
+      ref: ${{ needs.discover.outputs.checkout_ref }}
+    secrets: inherit
