@@ -1282,9 +1282,9 @@ TASK-028  EU sovereignty legal refresh (AGB + Datenschutz + impressum)
 - **Verify:** `cd commerce && pnpm install && pnpm build` (empty exports OK)
 
 ### TASK-002 — commerce-core from stash
-- [ ] `git show stash@{0}^3:packages/backend/src/billing/billing-tax.service.ts` → port + adapt
-- [ ] Invoice ledger + drizzle schema (generic — no `workspace_id` coupling in core; adapter in slugbase-billing)
-- [ ] Vitest: Kleinunternehmer note string
+- [x] `git show stash@{0}^3:packages/backend/src/billing/billing-tax.service.ts` → port + adapt
+- [x] Invoice ledger + drizzle schema (generic — no `workspace_id` coupling in core; adapter in slugbase-billing)
+- [x] Vitest: Kleinunternehmer note string
 - **Verify:** `pnpm --filter @mdg-labs/commerce-core test:unit`
 
 ### TASK-003 — commerce-mollie from stash
@@ -1627,7 +1627,7 @@ Status column: orchestrator sets `[~]` at batch start, verifier sets `[x]` or `[
 |------|--------|---------|------|-----------|------------------------|
 | TASK-000 | `[x]` | slugbase | — | | `docs/internal/open-core-refactor-plan.md`, `docs/internal/REFACTOR-IN-PROGRESS.md` |
 | TASK-001 | `[x]` | commerce | 000 | | `commerce/**` (scaffold root + empty packages) |
-| TASK-002 | `[ ]` | commerce | 001 | | `commerce/packages/commerce-core/**` |
+| TASK-002 | `[x]` | commerce | 001 | | `commerce/packages/commerce-core/**` |
 | TASK-003 | `[ ]` | commerce | 002 | | `commerce/packages/commerce-mollie/**` |
 | TASK-004 | `[ ]` | commerce | 003 | | `commerce/.github/**`, `commerce/.npmrc`, publish workflow |
 | TASK-005 | `[ ]` | slugbase-cloud | 000 | | `slugbase-cloud/**` (scaffold) |
