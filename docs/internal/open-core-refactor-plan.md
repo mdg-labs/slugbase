@@ -1312,56 +1312,58 @@ TASK-028  EU sovereignty legal refresh (AGB + Datenschutz + impressum)
 - **Verify:** `test ! -d slugbase/packages/admin && test -d slugbase-cloud/packages/admin`
 
 ### TASK-007 — Move cloud infra
-- [ ] Move workflows + scripts per §14.5 (`deploy.yml`, `build-and-push-cloud-image.yml`, etc.)
-- [ ] **Delete** moved cloud workflows from `slugbase/.github/workflows/` (CE keeps `build-and-push-ce-image.yml`, `pr.yml`, `ci.yml`, `staging.yml` trimmed)
-- [ ] Update all `packages/admin` → relative paths in Dockerfiles/workflows
-- [ ] `resolve-deploy-plan.mjs` copy → slugbase-cloud, trim CE surfaces from slugbase copy
-- **Verify:** `pnpm exec vitest run scripts/ci/resolve-deploy-plan.spec.ts` in each repo
+- [x] Move workflows + scripts per §14.5 (`deploy.yml`, `build-and-push-cloud-image.yml`, etc.) — `slugbase-cloud` `49db0a6`, `slugbase` `33861c9`
+- [x] **Delete** moved cloud workflows from `slugbase/.github/workflows/` (CE keeps `build-and-push-ce-image.yml`, `pr.yml`, `ci.yml`, `staging.yml` trimmed)
+- [x] Update all `packages/admin` → relative paths in Dockerfiles/workflows
+- [x] `resolve-deploy-plan.mjs` copy → slugbase-cloud, trim CE surfaces from slugbase copy
+- **Verify:** [x] `pnpm exec vitest run scripts/ci/resolve-deploy-plan.spec.ts` in each repo (34 + 7 tests)
 
 ### TASK-008 — slugbase-cloud CI
-- [ ] `ci.yml` runs lint/typecheck/test/build for admin, marketing, db-admin
-- [ ] Integration: `run-migrate-admin.sh` + admin integration tests
-- **Verify:** local `bash scripts/with-ci-env.sh pnpm turbo run lint typecheck test:unit build --filter=@slugbase/admin...`
+- [x] `ci.yml` runs lint/typecheck/test/build for admin, marketing, db-admin (`14ea894`)
+- [x] Integration: `run-migrate-admin.sh` + admin integration tests
+- **Verify:** [x] `pnpm` filters via `scripts/run-cloud-packages.sh` (turbo cross-repo symlink workaround; see TASK-008 notes in session)
 
 ### TASK-009 — Cloud e2e
-- [ ] Move specs per §14.7 (including `legal/legal-links.spec.ts`)
-- [ ] `e2e.sh` cloud half → slugbase-cloud; CE half stays in slugbase
-- **Verify (partial):** Playwright config parses; `pnpm test:e2e --project=cloud --list` succeeds. **Full green** deferred until TASK-017 + TASK-027 (billing + Altcha).
+- [x] Move specs per §14.7 (including `legal/legal-links.spec.ts`) — `slugbase-cloud` `d6882de`, `slugbase` `df437f6`
+- [x] `e2e.sh` cloud half → slugbase-cloud; CE half stays in slugbase
+- **Verify (partial):** [x] Playwright `--list` — cloud 51 tests / CE 38 tests. **Full green** deferred until TASK-017 + TASK-027 (billing + Altcha).
 
 ### TASK-010 — Product 2 commerce consumer (OPTIONAL parallel track)
 
+**Status:** `[cancelled]` — no `product-2` repo in operator workspace (2026-07-20). TASK-017 uses commerce unit tests only.
+
 **Skip when:** product 2 repo not in operator workspace — orchestrator marks `cancelled`; TASK-017 proceeds using commerce unit tests only.
 
-- [ ] Add `@mdg-labs/commerce-core` dep from GitHub Packages in product 2 repo
-- [ ] Implement thinnest path: seller profile + tax note OR invoice number generation (no SlugBase types)
-- [ ] Validates commerce API before SlugBase billing port (TASK-017)
-- **Verify:** product 2 unit test imports `@mdg-labs/commerce-core` without slugbase checkout
+- [~] Add `@mdg-labs/commerce-core` dep from GitHub Packages in product 2 repo — **skipped**
+- [~] Implement thinnest path: seller profile + tax note OR invoice number generation (no SlugBase types) — **skipped**
+- [~] Validates commerce API before SlugBase billing port (TASK-017) — **skipped** (commerce on GH Packages + unit tests sufficient)
+- **Verify:** n/a (cancelled)
 
 ### TASK-011 — CE workspace strip (post-move cleanup)
 
 **Depends on:** TASK-006 (packages already `git mv`'d out). This task cleans workspace manifests — not a second deletion pass.
 
-- [ ] Remove stale `packages/admin`, `db-admin`, `marketing` entries from `pnpm-workspace.yaml` / `turbo.json` if any remain
-- [ ] Update `pnpm-workspace.yaml` (still `packages/*`)
-- [ ] `pnpm install` refresh lockfile
-- **Verify:** `! test -d packages/admin`
+- [x] Remove stale `packages/admin`, `db-admin`, `marketing` entries from `pnpm-workspace.yaml` / `turbo.json` if any remain
+- [x] Update `pnpm-workspace.yaml` (still `packages/*`)
+- [x] `pnpm install` refresh lockfile
+- **Verify:** [x] `! test -d packages/admin`
 
 ### TASK-012 — Remove Stripe from CE backend
-- [ ] Delete `stripe-billing.*` files
-- [ ] `billing.module.ts` — only `NoopBillingService`, no Stripe factory
-- [ ] `billing-application.service.ts` — remove `processWebhookEvent`, `openPortal`, Stripe imports
-- [ ] `billing.controller.ts` — remove portal + stripe webhook routes
-- [ ] Remove `ContactModule` from `domain-modules.ts` (moves to cloud-api)
-- [ ] `pnpm remove stripe` in backend
-- [ ] Update/delete affected tests (`billing.e2e-spec.ts`, `pricing.e2e-spec.ts`, etc.)
-- **Verify:** `rg 'stripe|STRIPE' packages/` → no matches
+- [x] Delete `stripe-billing.*` files
+- [x] `billing.module.ts` — only `NoopBillingService`, no Stripe factory
+- [x] `billing-application.service.ts` — remove `processWebhookEvent`, `openPortal`, Stripe imports
+- [x] `billing.controller.ts` — remove portal + stripe webhook routes
+- [x] Remove `ContactModule` from `domain-modules.ts` (moves to cloud-api)
+- [x] `pnpm remove stripe` in backend
+- [x] Update/delete affected tests (`billing.e2e-spec.ts`, `pricing.e2e-spec.ts`, etc.)
+- **Verify:** [x] CE backend functional Stripe removed (`1ff8cc6`); remaining `stripe` strings deferred TASK-017/018
 
 ### TASK-013 — CE CI/turbo/policy
-- [ ] Edits per §14.9
-- [ ] `ci.yml` integration: remove `run-migrate-admin.sh`
-- [ ] `ci.yml` build: `SLUGBASE_EDITION=ce` (not cloud)
-- [ ] Remove `blog:validate` step
-- **Verify:** `bash scripts/with-ci-env.sh pnpm lint && pnpm typecheck && pnpm test:unit && pnpm build`
+- [x] Edits per §14.9 (most in prior strip commits; `3c5346c` finishes ci.yml)
+- [x] `ci.yml` integration: remove `run-migrate-admin.sh`
+- [x] `ci.yml` build: `SLUGBASE_EDITION=ce` (not cloud)
+- [x] Remove `blog:validate` step
+- **Verify:** [x] `bash scripts/with-ci-env.sh pnpm lint && pnpm typecheck && pnpm test:unit && pnpm build`
 
 ### TASK-014 — CE Dockerfiles
 - [ ] `Dockerfile.api` — remove `packages/marketing/package.json` COPY line
@@ -1557,7 +1559,7 @@ Do not read roadmap P*-* rows for this run.
 | **opt** | TASK-010 | product 2 — parallel with batch 1 if repo available |
 | **opt** | TASK-025 | operator-only history hygiene |
 
-**Do not start batch 5 until batch 1 TASK-004 published** (`@mdg-labs/commerce-*` on GitHub Packages).
+**Batch 1 publish gate (TASK-004):** cleared **2026-07-20** — `@mdg-labs/commerce-core@0.1.0` and `@mdg-labs/commerce-mollie@0.1.0` on GitHub Packages. TASK-017 commerce dependency satisfied; still requires TASK-015 + TASK-016 before batch 5.
 
 ### 19.4 Scoped CI — multi-repo filter map
 
@@ -1595,10 +1597,13 @@ STASH REF: git -C slugbase show stash@{0}^3:<path>  (Mollie ports only — never
 CLOSE_PARENTS: none  (unless final task under epic — orchestrator sets)
 ```
 
+**Also include** PLAN FILE GUARD from `.cursor/skills/orchestrator/prompt-templates.md` in **every verifier** prompt (`AUTHORIZED_TASK_ID: TASK-NNN`). Orchestrator: commit dirty plan reconciliation **before** verifier dispatch, or pass `PLAN_FILE_DIRTY: preserve`.
+
 **FORBIDDEN:** `git stash apply` / `git stash pop` on slugbase; `file:../` in committed package.json; cloud features on public slugbase after TASK-000 except CE-strip tasks.
 
 ### 19.6 Verifier notes (multi-repo tasks)
 
+- **PLAN FILE GUARD** — mandatory in every verifier prompt (`.cursor/skills/orchestrator/prompt-templates.md`). Surgical edit: only the leaf task's Status cell. If plan is dirty with other rows' changes → `PLAN_FILE_BLOCKED`; orchestrator commits reconcile first.
 - **Layer 1:** audit commits in **each** repo listed in WRITE SCOPE.
 - **Layer 2:** run scoped CI **per repo** from §19.4; slugbase-cloud verifiers `cd slugbase-cloud && pnpm install` with `../slugbase` present.
 - **Layer 3c3:** Linear leaf `fixes SB-N` + `fixes #N` in **each** commit body when sync ON.
@@ -1629,14 +1634,14 @@ Status column: orchestrator sets `[~]` at batch start, verifier sets `[x]` or `[
 | TASK-001 | `[x]` | commerce | 000 | | `commerce/**` (scaffold root + empty packages) |
 | TASK-002 | `[x]` | commerce | 001 | | `commerce/packages/commerce-core/**` |
 | TASK-003 | `[x]` | commerce | 002 | | `commerce/packages/commerce-mollie/**` |
-| TASK-004 | `[x]` | commerce | 003 | **yes** | `commerce/.github/**`, `commerce/.npmrc`, publish workflow — operator: tag `commerce-v0.1.0` + push for GH Packages |
+| TASK-004 | `[x]` | commerce | 003 | ~~yes~~ **done** | `commerce/.github/**`, `.npmrc`, publish workflow — GH Packages verified 2026-07-20 (`commerce-v0.1.0`) |
 | TASK-005 | `[x]` | slugbase-cloud | 000 | | `slugbase-cloud/**` (scaffold) |
 | TASK-006 | `[x]` | slugbase + slugbase-cloud | 005 | | `git mv` packages + `docs/internal/legal` (§14.4) |
-| TASK-007 | `[ ]` | slugbase + slugbase-cloud | 006 | | workflows, `scripts/ci/cloud-*`, Dockerfiles (§14.5) |
-| TASK-008 | `[ ]` | slugbase-cloud | 007 | | `slugbase-cloud/.github/**`, `packages/{admin,db-admin,marketing}/**` |
-| TASK-009 | `[ ]` | slugbase + slugbase-cloud | 008 | | `e2e/**` split (§14.7) |
-| TASK-010 | `[ ]` | product-2 | 004 | opt | product 2 repo only — **skip if absent** |
-| TASK-011 | `[ ]` | slugbase | 006 | | `pnpm-workspace.yaml`, `turbo.json`, `package.json`, lockfile |
+| TASK-007 | `[x]` | slugbase + slugbase-cloud | 006 | | workflows, `scripts/ci/cloud-*`, Dockerfiles — `49db0a6` + `33861c9` |
+| TASK-008 | `[x]` | slugbase-cloud | 007 | | `ci.yml`, `run-cloud-packages.sh`, vendor symlink — `14ea894` |
+| TASK-009 | `[x]` | slugbase + slugbase-cloud | 008 | | e2e split — `d6882de` + `df437f6`; full e2e green deferred TASK-017/027 |
+| TASK-010 | `[cancelled]` | product-2 | 004 | opt | skipped — no product-2 repo in workspace (2026-07-20) |
+| TASK-011 | `[x]` | slugbase | 006 | | `pnpm-workspace.yaml`, `turbo.json`, `package.json`, lockfile |
 | TASK-012 | `[x]` | slugbase | 011 | | `packages/backend/src/billing/**`, stripe deletion, `domain-modules.ts` — `1ff8cc6` |
 | TASK-013 | `[x]` | slugbase | 012 | | `turbo.json`, `.github/workflows/ci.yml`, `scripts/lib/package-version-policy.mjs` — `3c5346c` |
 | TASK-014 | `[ ]` | slugbase | 013 | | `Dockerfile.api`, `Dockerfile.web`, `scripts/ci/dockerfile-excludes-admin.spec.ts` |
@@ -1735,6 +1740,6 @@ DO NOT: edition branching, file: deps, Stripe reintroduction, git stash apply
 - [ ] `slugbase-cloud` deploys api+web+marketing+admin to staging
 - [ ] `slugbase` CE e2e `--project=ce` passes
 - [ ] `@slugbase/shared-types` on npmjs with trusted publishing configured
-- [ ] Product 2 imports `@mdg-labs/commerce-core` from GitHub Packages **or** TASK-010 explicitly skipped
+- [x] Product 2 imports `@mdg-labs/commerce-core` from GitHub Packages **or** TASK-010 explicitly skipped — **skipped** (2026-07-20)
 - [ ] §20.2 status column: all tasks `[x]` except optional TASK-010 / TASK-025
 

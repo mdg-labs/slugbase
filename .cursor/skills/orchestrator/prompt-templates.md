@@ -17,6 +17,8 @@ Sub-agents perform Linear state updates — not the orchestrator.
 
 **Every execution prompt** (Lane S, Lane P, chat) **must** include the **DB MIGRATIONS** block below — copy verbatim even when the task has no schema changes.
 
+**Every prompt where an agent may read or write the plan file** (execution with plan in WRITE SCOPE; **all** Lane S / batch verifiers in plan-file mode; orchestrator plan reconciliation) **must** include the **PLAN FILE GUARD** block below — copy verbatim. **Verifiers:** always include even when PLAN FILE is the only write target.
+
 ---
 
 ## LINEAR TOOLS — sub-agents (mandatory in every LINEAR SYNC prompt)
@@ -113,6 +115,59 @@ SCOPED CI GATE — ORCHESTRATOR SUB-AGENTS ONLY (commit + verify; NOT pre-push):
 
 ---
 
+## PLAN FILE GUARD — sub-agents (mandatory when plan file is read or written)
+
+Copy into **every** execution prompt that lists the plan file in WRITE SCOPE, and into **every** verifier / batch-verifier prompt in plan-file mode — **even when the plan file is the only write target**.
+
+```text
+PLAN FILE GUARD — MANDATORY (never clobber status you did not verify):
+
+PLAN_FILE_PATH: <absolute path, e.g. docs/internal/slugbase-development-roadmap.md or docs/internal/open-core-refactor-plan.md>
+AUTHORIZED_TASK_ID: <TASK-ID or P*-* row you may touch — one leaf only>
+AUTHORIZED_EDIT: <execution: Status → [~] only on AUTHORIZED_TASK_ID row | verifier: Status → [x] or [!] on AUTHORIZED_TASK_ID row only; optional impl SHA suffix on THAT row's scope column only>
+
+BEFORE any Read/Write/Edit on PLAN_FILE_PATH:
+1. git status -- <PLAN_FILE_PATH>
+2. git diff -- <PLAN_FILE_PATH>
+3. git diff --cached -- <PLAN_FILE_PATH>   (if staged)
+4. Re-read PLAN_FILE_PATH from disk immediately before edit — NEVER edit from chat memory, an earlier Read result, or git HEAD alone.
+
+SURGICAL EDIT RULES:
+- Change ONLY the AUTHORIZED_TASK_ID status cell (and impl SHA on that same table row if verifier PASS).
+- Do NOT change any other task row, §18 checkbox, §19 table, or prose — even if you "think" they look wrong.
+- Do NOT revert [x]→[ ] or [cancelled]→[ ] on rows you are not verifying.
+- Do NOT "normalize", "clean up", or rewrite the status table from a mental model.
+- If status rows in the working tree differ from git HEAD, the working tree wins — preserve every row you are not authorized to change.
+
+WHEN PLAN_FILE_PATH IS DIRTY (uncommitted or staged changes exist):
+- Parse diff hunks. If ANY hunk is outside AUTHORIZED_TASK_ID's single status row (± impl SHA on that row) → **BLOCKED**
+  - Do NOT commit PLAN_FILE_PATH
+  - REQUIRED OUTPUT must include: PLAN_FILE_BLOCKED: dirty; unauthorized hunks outside <AUTHORIZED_TASK_ID>
+  - List task IDs whose Status cells differ from HEAD (from diff) for orchestrator reconciliation
+- If orchestrator passed PLAN_FILE_DIRTY: preserve — verifier must NOT commit plan; report handoff to orchestrator
+- If orchestrator passed PLAN_FILE_RECONCILE_SHA: <sha> — only proceed when working tree already matches that reconcile commit
+
+PLAN-ONLY COMMIT (verifier / orchestrator):
+- Stage ONLY: git add <PLAN_FILE_PATH>
+- Before commit: git diff --cached -- <PLAN_FILE_PATH> — every hunk must be within AUTHORIZED_EDIT scope
+- If cached diff touches other rows → git restore --staged <PLAN_FILE_PATH> and BLOCKED
+- FORBIDDEN: git checkout -- / git restore <PLAN_FILE_PATH> (discards operator edits)
+- FORBIDDEN: git commit --amend to "drop accidental hunks" — blocked means blocked, not amend-trim
+
+EXECUTION AGENTS: plan file is usually NOT in WRITE SCOPE — if not listed, do not edit or commit plan file.
+
+VERIFIER Layer 3c5 — plan file integrity:
+- FAIL if plan commit changes any task Status outside AUTHORIZED_TASK_ID
+- FAIL if verifier reverted a row from [x]/[cancelled] to [ ] without orchestrator-directed reconcile
+- FAIL if plan commit made when PLAN_FILE_BLOCKED applied
+
+ORCHESTRATOR MUST (dispatcher — not sub-agent):
+- Before verifier dispatch: git status -- <PLAN_FILE_PATH>; if dirty with rows outside the about-to-verify task → commit reconciliation first OR pass PLAN_FILE_DIRTY: preserve and skip plan commit in verifier
+- Never assume HEAD has latest [x] rows — operator/orchestrator may have uncommitted plan progress
+```
+
+---
+
 ## DB MIGRATIONS — execution agents (mandatory block)
 
 Copy this block into **every** execution agent prompt without omission:
@@ -197,6 +252,8 @@ PRE-COMMIT — SCOPED CI (mandatory before implementation commit):
 - Map staged paths → @slugbase/<pkg> filter(s); see SCOPED CI GATE block
 - Run scoped gate; on failure → blocked, no commit
 - Do NOT run full workspace gate
+
+PLAN FILE GUARD — include block from § PLAN FILE GUARD when PLAN FILE is in WRITE SCOPE; otherwise plan file is DO NOT TOUCH.
 
 SECRETS / COMMANDS:
 - Local tests/dev that need env: use Phase (`phase run -- <cmd>`); see `05-env-vars.mdc`
@@ -476,8 +533,13 @@ READ SCOPE:
 - TARGET REPO (run checks)
 
 WRITE SCOPE:
-- PLAN FILE (plan-file mode only: [x] or [!])
+- PLAN FILE (plan-file mode only: [x] or [!] on AUTHORIZED_TASK_ID row only — see PLAN FILE GUARD)
 - DO NOT commit `.cursor/skills/agent-memory/**`
+
+PLAN FILE GUARD — MANDATORY (copy verbatim from prompt-templates.md § PLAN FILE GUARD):
+- PLAN_FILE_PATH: <same as PLAN FILE above>
+- AUTHORIZED_TASK_ID: <TASK-ID being verified>
+- AUTHORIZED_EDIT: verifier — Status → [x] or [!] on that row only; optional impl SHA on that row's scope column
 
 VERIFICATION:
 
@@ -500,10 +562,13 @@ LAYER 3 — Logic review:
 3c4. Linear state only — agents must never set GitHub issue state (open/closed); status via save_issue state; verifying code that closes GitHub issues directly → **FAIL**
 3d. DB migrations — hand-written migration SQL or hand-created directories → FAIL
 3e. Stubs, TODO/FIXME, placeholder values, deployment-mode branches (`isCloud`) → FAIL
+3c5. Plan file integrity — PLAN FILE GUARD; unauthorized row changes or plan commit while BLOCKED → FAIL
 
 PLAN FILE (plan-file mode):
-- PASS all layers → [x]; commit plan file only
-- FAIL → [!] + note; commit plan file (mandatory)
+- Follow PLAN FILE GUARD before any edit
+- PASS all layers → [x] on AUTHORIZED_TASK_ID row only; commit plan file only if not BLOCKED
+- FAIL → [!] on AUTHORIZED_TASK_ID row only; commit plan file only if not BLOCKED and diff is surgical
+- If PLAN_FILE_BLOCKED → do not commit plan; overall FAIL; hand off to orchestrator
 
 REQUIRED OUTPUT:
 1. Layer 1 result per commit
@@ -614,8 +679,10 @@ CHECKS:
 3. If smoke fails → FAIL batch; do not mark [x]
 
 PLAN FILE:
-- Integrated + branch-PASS → [x]; commit plan file
-- Branch-FAIL (not merged) → [!] + note; commit plan file
+- PLAN FILE GUARD — MANDATORY; batch may update multiple task rows but ONLY integrated PASS → [x] and branch-FAIL → [!] for tasks in this BATCH_ID — no other rows
+- Run git diff before commit; if hunks touch rows outside batch outcomes → BLOCKED
+- Integrated + branch-PASS → [x] on those rows only; commit plan if not BLOCKED
+- Branch-FAIL (not merged) → [!] on those rows only; commit plan if not BLOCKED
 
 REQUIRED OUTPUT:
 1. Linear Done comment confirmation per integrated task

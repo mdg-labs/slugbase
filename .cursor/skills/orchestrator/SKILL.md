@@ -129,8 +129,18 @@ When building a prompt:
    - **Verifier prompt:** state → "Done" (+ parent if final subtask); `save_comment` mandatory — **reply** on the GitHub-linked thread (`parentId`), not a new top-level comment
 10. **DB MIGRATIONS block** — **mandatory in every execution prompt** (copy verbatim from [prompt-templates.md](prompt-templates.md) even when the task has no schema changes)
 11. **SCOPED CI GATE block** — **mandatory in every execution and verifier prompt** (copy verbatim from [prompt-templates.md](prompt-templates.md))
+12. **PLAN FILE GUARD block** — **mandatory** when the plan file is in WRITE SCOPE (execution) or for **every** verifier / batch verifier in plan-file mode (copy verbatim from [prompt-templates.md](prompt-templates.md) — fill `AUTHORIZED_TASK_ID`)
 
 One prompt = one **leaf** task ID unless user requested batching or shared-file serialization requires it.
+
+### Plan file — orchestrator pre-verifier gate
+
+Before dispatching any **verifier** or **batch verifier** that will commit plan status:
+
+1. Note `PLAN_FILE_PATH` (roadmap or initiative plan, e.g. `open-core-refactor-plan.md`).
+2. Sub-agents run `git status` + `git diff` on that path (PLAN FILE GUARD) — orchestrator should **assume** dirty is possible.
+3. If operator/orchestrator has **uncommitted** `[x]` / `[cancelled]` rows for tasks **other than** the leaf being verified → **commit a reconciliation chore first** (`chore(plan): reconcile TASK-… status`) **or** pass `PLAN_FILE_DIRTY: preserve` and instruct verifier **not** to commit plan (orchestrator commits after reconcile).
+4. **Never** dispatch a verifier with only "mark TASK-N verified" and no PLAN FILE GUARD — that caused status-table regressions (see workspace-notes).
 
 ### Linear epic batches
 
@@ -328,11 +338,13 @@ Map committed paths → `@slugbase/<pkg>` filter(s). Contract packages (`shared-
 - 3c4. Linear state only — agents must never set GitHub issue state (open/closed); status via `save_issue` state; verifying code that closes GitHub issues directly → **FAIL**
 - 3d. DB migrations — hand-written migration SQL or hand-created migration directories → **FAIL**
 - 3e. Stubs, TODO/FIXME, placeholder values, `isCloud`/deployment-mode branches → **FAIL**
+- 3c5. Plan file integrity — PLAN FILE GUARD; plan commit that changes rows outside the verified task, or commit while `PLAN_FILE_BLOCKED`, or `git restore` on plan file → **FAIL**
 
 | Result | Plan (plan-file mode) | GitHub (sub-agent) | Local session memory |
 |---|---|---|---|
-| PASS | `[x]`; commit plan file | Verifier → mandatory PASS comment (GitHub-thread reply) + Linear Done | Delete active or move to local archive/ (never commit) |
-| FAIL | `[!]` + note; commit plan file | Verifier → FAIL comment (GitHub-thread reply); Linear Ready; do NOT set Done | Append VERIFICATION FAILED in active/ (never commit) |
+| PASS | `[x]` on **that task row only**; commit plan if not BLOCKED | Verifier → mandatory PASS comment (GitHub-thread reply) + Linear Done | Delete active or move to local archive/ (never commit) |
+| FAIL | `[!]` on **that task row only**; commit plan if not BLOCKED | Verifier → FAIL comment (GitHub-thread reply); Linear Ready; do NOT set Done | Append VERIFICATION FAILED in active/ (never commit) |
+| BLOCKED (dirty plan) | **No plan commit** — orchestrator reconciles | n/a or comment only if sync ON | Report `PLAN_FILE_BLOCKED` |
 
 ---
 
@@ -565,3 +577,7 @@ After send, confirm in chat: `Slack DM sent to <operator display name> (from cur
 - **Pushing without running full CI gate first** — mandatory pre-push per `06-local-ci-before-commit.mdc`
 - **Running scoped gate with no `--filter`** — accidental full workspace run
 - **Orchestrator omitting SCOPED CI GATE block** from an execution or verifier prompt
+- **Orchestrator omitting PLAN FILE GUARD** from a verifier / batch-verifier prompt in plan-file mode
+- **Verifier committing plan file from stale HEAD** while working tree has other uncommitted `[x]` rows — use PLAN FILE GUARD; BLOCKED if dirty outside authorized row
+- **Verifier rewriting or reverting task status rows** it did not verify (e.g. `[x]`→`[ ]` on TASK-007–011) — immediate FAIL Layer 3c5
+- **`git checkout --` / `git restore` on plan file** to "fix" a bad commit — forbidden; orchestrator reconciles from operator snapshot

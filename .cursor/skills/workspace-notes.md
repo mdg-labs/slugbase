@@ -181,7 +181,11 @@ _added: 2026-06-13_ | _updated: 2026-06-20_
 Development runs on **Ubuntu 26.04 LTS desktop** (native — not WSL). **Lane P parallelism is allowed:** dispatch up to **3** parallel execution sub-agents per batch (`run_in_background: true`); never exceed 3 concurrent sub-agents on this machine. Lane P still requires `best-of-n-runner` worktree isolation per task.
 _added: 2026-06-23_ | _supersedes: 2026-06-15 WSL serialize-CI note_
 
-## localStorage view-mode pollution in BookmarkListPage tests (2026-06-09)
+## Open-core plan status — verifier must not clobber uncommitted rows (2026-07-20)
+
+TASK-007–011 were `[x]` in operator **uncommitted** plan edits; TASK-012 verifier (`546ee8d`) committed from stale git HEAD (only TASK-000–006 ever committed as `[x]`) and overwrote rows 007–011 back to `[ ]`. **Fix:** PLAN FILE GUARD block now mandatory in all verifier prompts; orchestrator commits reconcile before verifier or passes `PLAN_FILE_DIRTY: preserve`. Stash `stash@{0}` (`verifier-temp`) held partial recovery.
+_added: 2026-07-20_
+
 
 BookmarkListPage tests share a jsdom environment. Prior tests that set `view: "table"` write to `localStorage`, which persists into subsequent tests expecting grid view. **Fix:** add `localStorage.clear()` in `beforeEach`. The `ECONNREFUSED 127.0.0.1:3000` warning in the test output is pre-existing and unrelated.
 _added: 2026-06-09_
