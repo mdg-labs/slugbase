@@ -204,7 +204,7 @@ jobs:
         needs.plan.outputs.run_migrate == 'true' ||
         needs.plan.outputs.run_migrate_admin == 'true'
       )
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     concurrency:
       group: cloud-db-migrate-${{ inputs.environment }}
