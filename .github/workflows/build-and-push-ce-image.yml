@@ -5,7 +5,6 @@ name: Build and Push CE Image
 
 on:
   workflow_call:
-    secrets: inherit
     inputs:
       service:
         description: CE image surface (api or web)

@@ -5,7 +5,6 @@ name: Build and Push Cloud Image
 
 on:
   workflow_call:
-    secrets: inherit
     inputs:
       service:
         description: Cloud image surface (api, web, marketing, or admin)
