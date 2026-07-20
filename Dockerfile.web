@@ -17,7 +17,6 @@ COPY packages/web/package.json packages/web/
 COPY packages/shared-types/package.json packages/shared-types/
 COPY packages/ui/package.json packages/ui/
 COPY packages/backend/package.json packages/backend/
-COPY packages/marketing/package.json packages/marketing/
 COPY patches/ patches/
 RUN pnpm install --frozen-lockfile
 
