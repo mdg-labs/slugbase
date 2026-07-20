@@ -6,7 +6,7 @@ import { SentryModule, SentryGlobalFilter } from "@sentry/nestjs/setup";
 import { RateLimitModule } from "./auth/rate-limit/rate-limit.module.js";
 import { ConfigModule } from "./config/config.module.js";
 import { ConfigService } from "./config/config.service.js";
-import { domainModules } from "./domain-modules.js";
+import { defaultDomainModules } from "./domain-modules.js";
 import { HealthModule } from "./health/health.module.js";
 
 @Module({
@@ -36,7 +36,7 @@ import { HealthModule } from "./health/health.module.js";
       }),
     }),
     RateLimitModule,
-    ...domainModules,
+    ...defaultDomainModules,
   ],
   providers: [
     {

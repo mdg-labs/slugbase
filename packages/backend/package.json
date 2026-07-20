@@ -7,6 +7,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./domain-modules": {
+      "types": "./dist/domain-modules.registry.d.ts",
+      "default": "./dist/domain-modules.registry.js"
     }
   },
   "scripts": {
