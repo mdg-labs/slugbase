@@ -1384,13 +1384,13 @@ TASK-028  EU sovereignty legal refresh (AGB + Datenschutz + impressum)
 
 ### TASK-017 — slugbase-billing + Mollie port
 
-**Status:** `[!] failed — Layer 2 slugbase-cloud lint/typecheck/build; pnpm install 401 GH Packages commerce`
+**Status:** `[x]` verified 2026-07-20 (retry `3aee53d`)
 
 **Depends on:** TASK-004 (commerce on GH Packages), TASK-015, TASK-016.
 - [x] Implement `SlugbaseMollieBillingService` using commerce packages — `436858b` (slugbase-cloud)
 - [x] Port stash controller routes (cancel, reactivate, change-plan, payment-method, mollie webhook) — `slugbase-billing.controller.ts`
-- [x] Delete portal flow; update web `billing-api.ts` if needed — `bcf1c2b` (slugbase); **remaining:** `e2e/specs/billing/portal-redirect.spec.ts` still Stripe portal
-- **Verify:** [~] `test:unit` PASS (3/3); lint FAIL (139 eslint errors); typecheck/build FAIL (`@nestjs/common` unresolved — `pnpm install` 401 `@mdg-labs/commerce-*`); `cloud-api` build FAIL; slugbase `@slugbase/shared-types...` + backend/web billing tests PASS
+- [x] Delete portal flow; update web `billing-api.ts` if needed — `bcf1c2b` (slugbase); **remaining:** `e2e/specs/billing/portal-redirect.spec.ts` still Stripe portal (e2e green deferred TASK-019)
+- **Verify:** [x] slugbase-cloud `pnpm install` OK; `@slugbase/slugbase-billing` lint/typecheck/test:unit/build PASS (3/3); `@slugbase/cloud-api` build PASS; slugbase `@slugbase/shared-types...` test:unit PASS (20/20); backend + web billing tests PASS
 
 ### TASK-018 — Env split
 - [ ] CE `env.schema.ts` — no STRIPE/MOLLIE
@@ -1649,8 +1649,8 @@ Status column: orchestrator sets `[~]` at batch start, verifier sets `[x]` or `[
 | TASK-014 | `[x]` | slugbase | 013 | | `Dockerfile.api`, `Dockerfile.web`, `scripts/ci/dockerfile-excludes-admin.spec.ts` — `41cb2b3` |
 | TASK-015 | `[x]` | slugbase | 012 | | `packages/backend/src/domain-modules*.ts`, `package.json` exports — `1e2acde` |
 | TASK-016 | `[x]` | slugbase-cloud | 015 | | `packages/cloud-api/**`, `Dockerfile.api`, contact move — `e79eed7`, `01b33c4` |
-| TASK-017 | `[~]` | slugbase-cloud + slugbase | 004,015,016 | | `packages/slugbase-billing/**`, `packages/web/**` billing API, `shared-types` contracts — retry 3aee53d |
-| TASK-018 | `[ ]` | all three | 012,017 | | `env.schema.ts` per repo, `environment-variables.md`, `.env.example` |
+| TASK-017 | `[x]` | slugbase-cloud + slugbase | 004,015,016 | | `packages/slugbase-billing/**`, `packages/web/**` billing API, `shared-types` contracts — `436858b` + `3aee53d`, `bcf1c2b` |
+| TASK-018 | `[~]` | all three | 012,017 | | `env.schema.ts` per repo, `environment-variables.md`, `.env.example` |
 | TASK-019 | `[ ]` | slugbase | 018 | | `e2e/**`, `scripts/e2e.sh` (CE only) |
 | TASK-020 | `[ ]` | slugbase-cloud | 017,019,027 | **yes** | deploy runbook, Phase inventory — manual payment |
 | TASK-021 | `[ ]` | slugbase | 019 | **yes** | `packages/{ui,shared-types}/package.json`, local npm publish |
