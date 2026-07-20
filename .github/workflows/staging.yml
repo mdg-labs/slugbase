@@ -124,8 +124,7 @@ jobs:
   push-ghcr-api:
     name: Staging · Push slugbase-api (GHCR dev)
     needs: [plan, resolve-deploy-ref]
-    if: needs.plan.outputs.push_ghcr_api == 'true'
-    environment: staging
+    if: needs.plan.result == 'success' && needs.plan.outputs.push_ghcr_api == 'true'
     permissions:
       contents: read
       packages: write
@@ -139,8 +138,7 @@ jobs:
   push-ghcr-web:
     name: Staging · Push slugbase-web (GHCR dev)
     needs: [plan, resolve-deploy-ref]
-    if: needs.plan.outputs.push_ghcr_web == 'true'
-    environment: staging
+    if: needs.plan.result == 'success' && needs.plan.outputs.push_ghcr_web == 'true'
     permissions:
       contents: read
       packages: write

@@ -64,7 +64,6 @@ jobs:
     name: Release · Push slugbase-api (GHCR)
     needs: [discover]
     if: needs.discover.outputs.push_ghcr_api == 'true'
-    environment: production
     permissions:
       contents: read
       packages: write
@@ -81,7 +80,6 @@ jobs:
     name: Release · Push slugbase-web (GHCR)
     needs: [discover]
     if: needs.discover.outputs.push_ghcr_web == 'true'
-    environment: production
     permissions:
       contents: read
       packages: write
