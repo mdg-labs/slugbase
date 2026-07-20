@@ -1,4 +1,5 @@
 import { test, expect } from "../../fixtures/auth.js";
+import { loginAsWorker } from "../../helpers/worker-login.js";
 
 /**
  * CE operator surfaces (spec §11.3–§11.5, §12.4).
@@ -24,18 +25,26 @@ test.describe("CE operator settings", () => {
   });
 
   test("workspace settings show general and AI nav sections", async ({
-    authedPage,
-  }) => {
-    const page = authedPage;
+    page,
+  }, testInfo) => {
+    // Form login establishes a full session (active workspace + role). The
+    // authedPage API-login cache can serve mfaPending or stale sessions when
+    // worker indices collide across a large parallel run.
+    await loginAsWorker(page, testInfo.workerIndex);
 
     await page.goto("/settings/workspace");
+    const layout = page.locator('[data-testid="settings-layout"]');
+    await layout.waitFor();
     await page.waitForSelector('[data-testid="workspace-settings-page"]');
+    await expect(page.locator('[data-testid="workspace-admin-role-gate"]')).not.toBeVisible();
 
-    const nav = page.getByRole("navigation", { name: "Settings navigation" });
-    await expect(nav.getByRole("link", { name: "General" })).toBeVisible();
-    await expect(nav.getByRole("link", { name: "AI suggestions" })).toBeVisible();
-    await expect(nav.getByRole("link", { name: /smtp/i })).not.toBeVisible();
-    await expect(nav.getByRole("link", { name: /oidc/i })).not.toBeVisible();
+    // Href selectors are locale-independent and match settings-nav-config paths.
+    await expect(layout.locator('a[href="/settings/workspace"]')).toBeVisible();
+    await expect(
+      layout.locator('a[href="/settings/workspace?section=ai"]'),
+    ).toBeVisible();
+    await expect(layout.locator('a[href*="section=smtp"]')).not.toBeVisible();
+    await expect(layout.locator('a[href*="section=oidc"]')).not.toBeVisible();
   });
 
   test("workspace AI enable toggle works with operator-configured key", async ({
