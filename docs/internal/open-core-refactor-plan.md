@@ -1426,9 +1426,12 @@ TASK-028  EU sovereignty legal refresh (AGB + Datenschutz + impressum)
 - **Verify:** dry-run workflow on tag
 
 ### TASK-023 — AGPL
-- [ ] Replace `LICENSE`, root `package.json` license field, `README.md` badge
-- [ ] Add `TRADEMARK.md`
-- **Verify:** `rg 'Elastic' LICENSE README.md` → no matches
+
+**Status:** `[x]` verified 2026-07-20 (`66e9034`)
+
+- [x] Replace `LICENSE`, root `package.json` license field, `README.md` badge
+- [x] Add `TRADEMARK.md`
+- **Verify:** [x] `rg 'Elastic' LICENSE README.md` → no matches; AGPL `LICENSE`; `TRADEMARK.md`; `package.json` `AGPL-3.0-only`; README badge + license section
 
 ### TASK-024 — Docs & Cursor rules
 - [ ] Update spec §2.2, engineering-decisions, `environment-variables.md`
@@ -1658,7 +1661,7 @@ Status column: orchestrator sets `[~]` at batch start, verifier sets `[x]` or `[
 | TASK-020 | `[ ]` | slugbase-cloud | 017,019,027 | **yes** | deploy runbook, Phase inventory — manual payment |
 | TASK-021 | `[ ]` | slugbase | 019 | **yes** | `packages/{ui,shared-types}/package.json`, local npm publish |
 | TASK-022 | `[ ]` | slugbase | 021 | | `.github/workflows/publish-npm.yml` |
-| TASK-023 | `[ ]` | slugbase | 019 | | `LICENSE`, `TRADEMARK.md`, `README.md` |
+| TASK-023 | `[x]` | slugbase | 019 | | `LICENSE`, `TRADEMARK.md`, `README.md` — `66e9034` |
 | TASK-024 | `[ ]` | slugbase + cloud + commerce | 023 | | spec, engineering-decisions, READMEs, `.cursor/rules/**` |
 | TASK-025 | `[ ]` | slugbase | all | **yes** | optional `git filter-repo` |
 | TASK-026 | `[ ]` | slugbase-cloud | 020 | | `scripts/lib/package-version-policy.mjs`, `.githooks/**` |
