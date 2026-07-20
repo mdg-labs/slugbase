@@ -1626,7 +1626,7 @@ Status column: orchestrator sets `[~]` at batch start, verifier sets `[x]` or `[
 | Task | Status | Repo(s) | Deps | Operator? | WRITE SCOPE (summary) |
 |------|--------|---------|------|-----------|------------------------|
 | TASK-000 | `[x]` | slugbase | — | | `docs/internal/open-core-refactor-plan.md`, `docs/internal/REFACTOR-IN-PROGRESS.md` |
-| TASK-001 | `[ ]` | commerce | 000 | | `commerce/**` (scaffold root + empty packages) |
+| TASK-001 | `[x]` | commerce | 000 | | `commerce/**` (scaffold root + empty packages) |
 | TASK-002 | `[ ]` | commerce | 001 | | `commerce/packages/commerce-core/**` |
 | TASK-003 | `[ ]` | commerce | 002 | | `commerce/packages/commerce-mollie/**` |
 | TASK-004 | `[ ]` | commerce | 003 | | `commerce/.github/**`, `commerce/.npmrc`, publish workflow |
