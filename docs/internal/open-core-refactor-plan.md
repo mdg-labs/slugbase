@@ -1298,10 +1298,10 @@ TASK-028  EU sovereignty legal refresh (AGB + Datenschutz + impressum)
 - **Verify:** Package visible at `https://github.com/mdg-labs/commerce/packages` — operator follow-up after tag push
 
 ### TASK-005 — Scaffold slugbase-cloud
-- [ ] **Bootstrap repo:** `slugbase-cloud` has remote but **no commits** — create `staging` branch; first commit is this scaffold.
-- [ ] Root workspace files (mirror commerce structure)
-- [ ] `.github/actions/setup-slugbase/action.yml` dual checkout
-- [ ] `pnpm-workspace.yaml` with `../slugbase/packages/*` paths
+- [x] **Bootstrap repo:** `slugbase-cloud` has remote but **no commits** — create `staging` branch; first commit is this scaffold.
+- [x] Root workspace files (mirror commerce structure)
+- [x] `.github/actions/setup-slugbase/action.yml` dual checkout
+- [x] `pnpm-workspace.yaml` with `../slugbase/packages/*` paths
 - **Verify:** `pnpm install` from slugbase-cloud with slugbase sibling present
 
 ### TASK-006 — Move operator packages
@@ -1630,8 +1630,8 @@ Status column: orchestrator sets `[~]` at batch start, verifier sets `[x]` or `[
 | TASK-002 | `[x]` | commerce | 001 | | `commerce/packages/commerce-core/**` |
 | TASK-003 | `[x]` | commerce | 002 | | `commerce/packages/commerce-mollie/**` |
 | TASK-004 | `[x]` | commerce | 003 | **yes** | `commerce/.github/**`, `commerce/.npmrc`, publish workflow — operator: tag `commerce-v0.1.0` + push for GH Packages |
-| TASK-005 | `[ ]` | slugbase-cloud | 000 | | `slugbase-cloud/**` (scaffold) |
-| TASK-006 | `[ ]` | slugbase + slugbase-cloud | 005 | | `git mv` packages + `docs/internal/legal` (§14.4) |
+| TASK-005 | `[x]` | slugbase-cloud | 000 | | `slugbase-cloud/**` (scaffold) |
+| TASK-006 | `[x]` | slugbase + slugbase-cloud | 005 | | `git mv` packages + `docs/internal/legal` (§14.4) |
 | TASK-007 | `[ ]` | slugbase + slugbase-cloud | 006 | | workflows, `scripts/ci/cloud-*`, Dockerfiles (§14.5) |
 | TASK-008 | `[ ]` | slugbase-cloud | 007 | | `slugbase-cloud/.github/**`, `packages/{admin,db-admin,marketing}/**` |
 | TASK-009 | `[ ]` | slugbase + slugbase-cloud | 008 | | `e2e/**` split (§14.7) |
