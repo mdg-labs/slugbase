@@ -9,10 +9,6 @@ export const MARKETING_KEY_PREFIX = "marketing.";
 const repoRoot = resolve(import.meta.dirname, "..");
 
 export const WEB_LOCALES_DIR = join(repoRoot, "packages/web/app/i18n/locales");
-export const MARKETING_LOCALES_DIR = join(
-  repoRoot,
-  "packages/marketing/src/i18n/locales",
-);
 export const SUPPORTED_LOCALES_PATH = join(repoRoot, "i18n/supported-locales.json");
 
 /** @returns {string[]} */
@@ -43,14 +39,13 @@ export function readLocaleJsonFile(dir, locale) {
 export function loadPackageLocaleCatalog(locale) {
   return {
     web: readLocaleJsonFile(WEB_LOCALES_DIR, locale),
-    marketing: readLocaleJsonFile(MARKETING_LOCALES_DIR, locale),
   };
 }
 
 /** @returns {Record<string, string>} merged flat catalog for one locale */
 export function loadMergedLocalCatalog(locale) {
-  const { web, marketing } = loadPackageLocaleCatalog(locale);
-  return mergeLocaleCatalogs(web, marketing);
+  const { web } = loadPackageLocaleCatalog(locale);
+  return { ...web };
 }
 
 /** @param {Record<string, string>} web @param {Record<string, string>} marketing */

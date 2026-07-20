@@ -7,17 +7,15 @@ import { SUPPORTED_APP_LOCALES } from "./resolve-locale.js";
 
 const repoRoot = join(process.cwd(), "../..");
 const webLocalesDir = join(repoRoot, "packages/web/app/i18n/locales");
-const marketingLocalesDir = join(repoRoot, "packages/marketing/src/i18n/locales");
 
 describe("i18n supported locale registry", () => {
   it("matches web AppLocale list", () => {
     expect([...SUPPORTED_APP_LOCALES]).toEqual(supportedLocalesJson);
   });
 
-  it("has locale JSON files in web and marketing", () => {
+  it("has locale JSON files in web", () => {
     for (const locale of supportedLocalesJson) {
       expect(existsSync(join(webLocalesDir, `${locale}.json`))).toBe(true);
-      expect(existsSync(join(marketingLocalesDir, `${locale}.json`))).toBe(true);
     }
   });
 });

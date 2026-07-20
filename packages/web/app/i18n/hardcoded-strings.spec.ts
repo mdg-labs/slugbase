@@ -6,7 +6,6 @@ const repoRoot = join(process.cwd(), "../..");
 
 const SCAN_ROOTS = [
   join(repoRoot, "packages/web/app"),
-  join(repoRoot, "packages/marketing/src"),
   join(repoRoot, "packages/ui/src/components"),
 ];
 
@@ -68,7 +67,7 @@ function collectViolations(content: string, file: string): string[] {
 }
 
 describe("i18n hard-coded UI string audit", () => {
-  it("finds no hard-coded user-visible strings in web, marketing, and ui components", () => {
+  it("finds no hard-coded user-visible strings in web and ui components", () => {
     const violations: string[] = [];
 
     for (const root of SCAN_ROOTS) {

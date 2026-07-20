@@ -14,39 +14,24 @@ export { incrementSemver };
 
 /** Shared workspace libs (stay at 0.0.0) → deployable consumers. */
 export const SHARED_LIB_CONSUMERS = {
-  "packages/shared-types": [
-    "packages/backend",
-    "packages/web",
-    "packages/marketing",
-    "packages/admin",
-  ],
-  "packages/ui": ["packages/web", "packages/marketing"],
+  "packages/shared-types": ["packages/backend", "packages/web"],
+  "packages/ui": ["packages/web"],
   "packages/email-templates": ["packages/backend"],
-  "packages/db-admin": ["packages/admin"],
 };
 
 /** Deployable surfaces probed at /version. */
-export const DEPLOYABLE_DIRS = [
-  "packages/backend",
-  "packages/web",
-  "packages/marketing",
-  "packages/admin",
-];
+export const DEPLOYABLE_DIRS = ["packages/backend", "packages/web"];
 
 /** @type {Record<string, string>} */
 export const PACKAGE_DIR_TO_NAME = {
   "packages/backend": "@slugbase/backend",
   "packages/web": "@slugbase/web",
-  "packages/marketing": "@slugbase/marketing",
-  "packages/admin": "@slugbase/admin",
 };
 
 /** @type {Record<string, string>} */
 export const SHORT_NAME_TO_DIR = {
   backend: "packages/backend",
   web: "packages/web",
-  marketing: "packages/marketing",
-  admin: "packages/admin",
 };
 
 export const ZERO_SHA = "0".repeat(40);

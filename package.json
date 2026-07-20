@@ -20,7 +20,6 @@
     "i18n:merge": "node scripts/i18n-merge-local-catalog.mjs",
     "i18n:validate": "node scripts/i18n-validate.mjs",
     "i18n:check:hardcoded": "bash scripts/check-hardcoded-ui-strings.sh",
-    "blog:validate": "pnpm --filter @slugbase/marketing blog:validate",
     "check:client-api-origin": "bash scripts/check-client-api-origin.sh",
     "check:no-external-fonts": "node scripts/check-no-external-fonts.mjs",
     "check:push-version-bumps": "node scripts/check-push-version-bumps.mjs",

@@ -26,23 +26,7 @@
       "dependsOn": ["^build"],
       "cache": false
     },
-    "@slugbase/db-admin#test:integration": {
-      "dependsOn": ["@slugbase/backend#test:integration", "^build"],
-      "cache": false
-    },
-    "@slugbase/admin#test:integration": {
-      "dependsOn": [
-        "@slugbase/backend#test:integration",
-        "@slugbase/db-admin#test:integration",
-        "^build"
-      ],
-      "cache": false
-    },
     "build": {
-      "dependsOn": ["^build"],
-      "outputs": ["dist/**"]
-    },
-    "@slugbase/admin#build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**"]
     }

@@ -27,7 +27,6 @@ RG="$(resolve_rg)"
 
 scan_paths=(
   packages/web/app
-  packages/marketing/src
   packages/ui/src/components
 )
 
@@ -72,12 +71,5 @@ run_rg_check "hard-coded user-visible strings found (use i18n catalog keys)" \
   '(?:>|(?:placeholder|aria-label|title|alt)=)["\x27]([A-Z][^"\x27{]{1,})["\x27]' \
   "${scan_paths[@]}" \
   "${glob_flags[@]}"
-
-run_rg_check "hard-coded element text found in marketing Astro (use i18n catalog keys)" \
-  '\>\s*\n\s*([A-Z][^\n<{]{2,})' \
-  packages/marketing/src \
-  -g '*.astro' \
-  -g '!*.spec.*' \
-  -g '!messages.ts'
 
 echo "check-hardcoded-ui-strings: OK"

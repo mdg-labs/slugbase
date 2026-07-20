@@ -23,9 +23,3 @@ codegenPackage(
   WEB_LOCALES_DIR,
   join(repoRoot, "packages/web/app/i18n/message-keys.generated.ts"),
 );
-
-codegenPackage(
-  "marketing",
-  join(repoRoot, "packages/marketing/src/i18n/locales"),
-  join(repoRoot, "packages/marketing/src/i18n/message-keys.generated.ts"),
-);

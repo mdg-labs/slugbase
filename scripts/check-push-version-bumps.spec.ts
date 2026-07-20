@@ -34,16 +34,13 @@ describe("findAffectedSharedLibs", () => {
 });
 
 describe("deriveRequiredConsumers", () => {
-  it("maps shared-types to all deployables", () => {
+  it("maps shared-types to CE deployables", () => {
     const consumers = deriveRequiredConsumers(["packages/shared-types"]);
-    expect(consumers).toContain("packages/backend");
-    expect(consumers).toContain("packages/web");
-    expect(consumers).toContain("packages/marketing");
-    expect(consumers).toContain("packages/admin");
+    expect(consumers).toEqual(["packages/backend", "packages/web"]);
   });
 
-  it("maps db-admin to admin only", () => {
-    expect(deriveRequiredConsumers(["packages/db-admin"])).toEqual(["packages/admin"]);
+  it("maps ui to web only", () => {
+    expect(deriveRequiredConsumers(["packages/ui"])).toEqual(["packages/web"]);
   });
 });
 
@@ -109,8 +106,6 @@ describe("parseCliArgs", () => {
       assignments: [
         { shortName: "backend", level: "patch" },
         { shortName: "web", level: "patch" },
-        { shortName: "marketing", level: "patch" },
-        { shortName: "admin", level: "patch" },
       ],
     });
   });
@@ -132,15 +127,13 @@ describe("parseAssignmentTokens", () => {
     expect(parseAssignmentTokens(["minor"])).toEqual([
       { shortName: "backend", level: "minor" },
       { shortName: "web", level: "minor" },
-      { shortName: "marketing", level: "minor" },
-      { shortName: "admin", level: "minor" },
     ]);
   });
 
   it("parses per-package pairs", () => {
-    expect(parseAssignmentTokens(["web", "patch", "admin", "major"])).toEqual([
+    expect(parseAssignmentTokens(["web", "patch", "backend", "major"])).toEqual([
       { shortName: "web", level: "patch" },
-      { shortName: "admin", level: "major" },
+      { shortName: "backend", level: "major" },
     ]);
   });
 });
