@@ -160,7 +160,7 @@ ok "API image built"
 info "Building CE web image (Dockerfile.web, SLUGBASE_EDITION=ce) …"
 docker build -f Dockerfile.web -t slugbase-e2e:web \
   "${CE_DOCKER_BUILD_ARGS[@]}" \
-  . 2>&1 | sed 's/^/  /'
+  . 2>&1 | sed 's/^/  /' || exit 1
 ok "Web image built"
 
 CE_E2E_DOCKER_ENV=()

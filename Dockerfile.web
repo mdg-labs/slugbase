@@ -25,6 +25,10 @@ COPY packages/shared-types packages/shared-types
 COPY packages/ui packages/ui
 COPY packages/web packages/web
 
+# Host tsbuildinfo can be copied despite .dockerignore; stale incremental state
+# makes tsc exit 0 without emitting packages/ui/dist (breaks @slugbase/ui resolution).
+RUN find packages -name '*.tsbuildinfo' -delete
+
 ARG SLUGBASE_EDITION=ce
 ENV SLUGBASE_EDITION=$SLUGBASE_EDITION
 
@@ -33,7 +37,10 @@ RUN pnpm exec turbo run build --filter=@slugbase/web...
 RUN find packages/web/build -name '*.js.map' -delete
 
 FROM build AS deploy
-RUN pnpm deploy --filter=@slugbase/web --prod /prod/web
+# SSR server bundle imports zod (web devDependency); copy from workspace install after prod deploy.
+RUN pnpm deploy --filter=@slugbase/web --prod /prod/web \
+  && mkdir -p /prod/web/node_modules \
+  && cp -rL "$(ls -d /app/node_modules/.pnpm/zod@*/node_modules/zod | head -1)" /prod/web/node_modules/zod
 
 FROM base AS runtime
 ENV NODE_ENV=production
