@@ -1288,8 +1288,8 @@ TASK-028  EU sovereignty legal refresh (AGB + Datenschutz + impressum)
 - **Verify:** `pnpm --filter @mdg-labs/commerce-core test:unit`
 
 ### TASK-003 — commerce-mollie from stash
-- [ ] Port client factory + mapper from stash
-- [ ] No SlugBase plan types in this package
+- [x] Port client factory + mapper from stash
+- [x] No SlugBase plan types in this package
 - **Verify:** `pnpm --filter @mdg-labs/commerce-mollie test:unit`
 
 ### TASK-004 — Publish commerce to GitHub Packages
@@ -1628,7 +1628,7 @@ Status column: orchestrator sets `[~]` at batch start, verifier sets `[x]` or `[
 | TASK-000 | `[x]` | slugbase | — | | `docs/internal/open-core-refactor-plan.md`, `docs/internal/REFACTOR-IN-PROGRESS.md` |
 | TASK-001 | `[x]` | commerce | 000 | | `commerce/**` (scaffold root + empty packages) |
 | TASK-002 | `[x]` | commerce | 001 | | `commerce/packages/commerce-core/**` |
-| TASK-003 | `[ ]` | commerce | 002 | | `commerce/packages/commerce-mollie/**` |
+| TASK-003 | `[x]` | commerce | 002 | | `commerce/packages/commerce-mollie/**` |
 | TASK-004 | `[ ]` | commerce | 003 | | `commerce/.github/**`, `commerce/.npmrc`, publish workflow |
 | TASK-005 | `[ ]` | slugbase-cloud | 000 | | `slugbase-cloud/**` (scaffold) |
 | TASK-006 | `[ ]` | slugbase + slugbase-cloud | 005 | | `git mv` packages + `docs/internal/legal` (§14.4) |
