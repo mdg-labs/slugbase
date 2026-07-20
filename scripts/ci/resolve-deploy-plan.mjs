@@ -25,7 +25,6 @@ import {
  * @property {boolean} run_migrate_admin
  * @property {boolean} push_ghcr_api
  * @property {boolean} push_ghcr_web
- * @property {string} sync_services
  * @property {boolean} deployed_api
  * @property {boolean} deployed_web
  */
@@ -86,32 +85,9 @@ export function createEmptyPlan() {
     run_migrate_admin: false,
     push_ghcr_api: false,
     push_ghcr_web: false,
-    sync_services: "",
     deployed_api: false,
     deployed_web: false,
   };
-}
-
-/**
- * @param {DeployPlan} plan
- * @returns {string}
- */
-export function deriveSyncServices(plan) {
-  /** @type {string[]} */
-  const services = [];
-  if (plan.deploy_api) {
-    services.push("api");
-  }
-  if (plan.deploy_web) {
-    services.push("web");
-  }
-  if (plan.deploy_marketing) {
-    services.push("marketing");
-  }
-  if (plan.deploy_admin) {
-    services.push("admin");
-  }
-  return services.join(",");
 }
 
 /**
@@ -159,8 +135,6 @@ function setSurfaceDeploy(plan, surface, shouldDeploy) {
  * @param {Record<string, string>} input.packageVersions
  * @param {Record<string, string | undefined>} input.origins
  * @param {typeof fetch} [input.fetchFn]
- * @param {string} [input.cfAccessClientId]
- * @param {string} [input.cfAccessClientSecret]
  * @param {number} [input.maxAttempts]
  * @param {number} [input.initialDelayMs]
  * @returns {Promise<{ plan: DeployPlan; skipReasons: string[]; log: string[] }>}
@@ -203,8 +177,6 @@ export async function resolveDeployPlan(input) {
     const probe = await probeLiveVersion({
       origin,
       environment: input.environment,
-      cfAccessClientId: input.cfAccessClientId,
-      cfAccessClientSecret: input.cfAccessClientSecret,
       fetchFn: input.fetchFn,
       maxAttempts: input.maxAttempts,
       initialDelayMs: input.initialDelayMs,
@@ -230,7 +202,6 @@ export async function resolveDeployPlan(input) {
     }
   }
 
-  plan.sync_services = deriveSyncServices(plan) || "none";
   return { plan, skipReasons, log };
 }
 
@@ -248,7 +219,6 @@ export function formatGithubOutputs(plan) {
     run_migrate_admin: String(plan.run_migrate_admin),
     push_ghcr_api: String(plan.push_ghcr_api),
     push_ghcr_web: String(plan.push_ghcr_web),
-    sync_services: plan.sync_services || "none",
     deployed_api: String(plan.deployed_api),
     deployed_web: String(plan.deployed_web),
   };
@@ -288,8 +258,7 @@ export async function main() {
 
   if (!shouldDeploy) {
     const plan = createEmptyPlan();
-    plan.sync_services = "all";
-    const skipReasons = ["should_deploy=false — sync only"];
+    const skipReasons = ["should_deploy=false — deploy skipped"];
     for (const line of skipReasons) {
       process.stderr.write(`resolve-deploy-plan: ${line}\n`);
     }
@@ -316,8 +285,6 @@ export async function main() {
     deployMode: effectiveMode,
     packageVersions,
     origins,
-    cfAccessClientId: process.env.CF_ACCESS_CLIENT_ID,
-    cfAccessClientSecret: process.env.CF_ACCESS_CLIENT_SECRET,
   });
 
   for (const entry of log) {

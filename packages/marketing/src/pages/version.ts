@@ -3,7 +3,7 @@ import pkg from "../../package.json";
 
 export const prerender = true;
 
-/** Static version probe for Workers smoke (spec §22.5). */
+/** Static version probe for deploy smoke (spec §22.5). */
 export const GET: APIRoute = () =>
   new Response(JSON.stringify({ version: pkg.version }), {
     status: 200,

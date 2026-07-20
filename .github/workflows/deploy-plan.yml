@@ -26,7 +26,7 @@ on:
         required: false
         default: "false"
       should_deploy:
-        description: When false, emit empty plan (sync-only callers)
+        description: When false, emit empty plan (skip deploy callers)
         type: string
         required: false
         default: "true"
@@ -55,9 +55,6 @@ on:
       push_ghcr_web:
         description: Whether to push web GHCR image
         value: ${{ jobs.plan.outputs.push_ghcr_web }}
-      sync_services:
-        description: Comma-separated services for sync-secrets
-        value: ${{ jobs.plan.outputs.sync_services }}
       deployed_api:
         description: API marked deployed (prepare-release gate)
         value: ${{ jobs.plan.outputs.deployed_api }}
@@ -85,7 +82,6 @@ jobs:
       run_migrate_admin: ${{ steps.plan.outputs.run_migrate_admin }}
       push_ghcr_api: ${{ steps.plan.outputs.push_ghcr_api }}
       push_ghcr_web: ${{ steps.plan.outputs.push_ghcr_web }}
-      sync_services: ${{ steps.plan.outputs.sync_services }}
       deployed_api: ${{ steps.plan.outputs.deployed_api }}
       deployed_web: ${{ steps.plan.outputs.deployed_web }}
       skip_reasons: ${{ steps.plan.outputs.skip_reasons }}
@@ -106,8 +102,6 @@ jobs:
           FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
           MARKETING_ORIGIN: ${{ vars.MARKETING_ORIGIN }}
           ADMIN_URL: ${{ secrets.ADMIN_URL }}
-          CF_ACCESS_CLIENT_ID: ${{ inputs.environment == 'staging' && secrets.CF_ACCESS_CLIENT_ID || '' }}
-          CF_ACCESS_CLIENT_SECRET: ${{ inputs.environment == 'staging' && secrets.CF_ACCESS_CLIENT_SECRET || '' }}
         run: node scripts/ci/resolve-deploy-plan.mjs
 
       - name: Write deploy plan summary
@@ -116,7 +110,6 @@ jobs:
           DEPLOY_WEB: ${{ steps.plan.outputs.deploy_web }}
           DEPLOY_MARKETING: ${{ steps.plan.outputs.deploy_marketing }}
           DEPLOY_ADMIN: ${{ steps.plan.outputs.deploy_admin }}
-          SYNC_SERVICES: ${{ steps.plan.outputs.sync_services }}
           SKIP_REASONS: ${{ steps.plan.outputs.skip_reasons }}
         run: |
           {
@@ -128,8 +121,6 @@ jobs:
             echo "| Web | ${DEPLOY_WEB} |"
             echo "| Marketing | ${DEPLOY_MARKETING} |"
             echo "| Admin | ${DEPLOY_ADMIN} |"
-            echo ""
-            echo "**sync-secrets services:** \`${SYNC_SERVICES}\`"
             if [ -n "${SKIP_REASONS}" ]; then
               echo ""
               echo "### Skipped surfaces"

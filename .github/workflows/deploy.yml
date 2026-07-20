@@ -1,6 +1,6 @@
 name: Deploy
 
-# Parameterized deploy pipeline — plan (live /version probes or caller_plan) → sync → migrate → deploy → smoke.
+# Parameterized deploy pipeline — plan (live /version probes or caller_plan) → migrate → build/push images → Coolify webhook → smoke.
 # Called from staging.yml (after CI + shared plan) and main.yml (production).
 # workflow_call only — no direct triggers (spec §22).
 
@@ -18,7 +18,7 @@ on:
         default: ""
       should_deploy:
         description: >-
-          When false, run sync only and skip migrate through smoke
+          When false, skip migrate through smoke
           (production re-publish of an already-deployed tag).
         type: string
         required: false
@@ -70,20 +70,15 @@ on:
         required: false
         default: "false"
       push_ghcr_api:
-        description: Caller plan — push API GHCR image
+        description: Caller plan — push API GHCR image (CE)
         type: string
         required: false
         default: "false"
       push_ghcr_web:
-        description: Caller plan — push web GHCR image
+        description: Caller plan — push web GHCR image (CE)
         type: string
         required: false
         default: "false"
-      sync_services:
-        description: Caller plan — sync-secrets services list
-        type: string
-        required: false
-        default: "none"
       skip_reasons:
         description: Caller plan — skip reasons (newline-separated)
         type: string
@@ -114,7 +109,6 @@ jobs:
       run_migrate_admin: ${{ steps.plan.outputs.run_migrate_admin }}
       push_ghcr_api: ${{ steps.plan.outputs.push_ghcr_api }}
       push_ghcr_web: ${{ steps.plan.outputs.push_ghcr_web }}
-      sync_services: ${{ steps.plan.outputs.sync_services }}
       deployed_api: ${{ steps.plan.outputs.deployed_api }}
       deployed_web: ${{ steps.plan.outputs.deployed_web }}
       skip_reasons: ${{ steps.plan.outputs.skip_reasons }}
@@ -137,7 +131,6 @@ jobs:
           RUN_MIGRATE_ADMIN: ${{ inputs.run_migrate_admin }}
           PUSH_GHCR_API: ${{ inputs.push_ghcr_api }}
           PUSH_GHCR_WEB: ${{ inputs.push_ghcr_web }}
-          SYNC_SERVICES: ${{ inputs.sync_services }}
           SKIP_REASONS: ${{ inputs.skip_reasons }}
           ENVIRONMENT: ${{ inputs.environment }}
           DEPLOY_MODE: ${{ inputs.deploy_mode }}
@@ -147,8 +140,6 @@ jobs:
           FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
           MARKETING_ORIGIN: ${{ vars.MARKETING_ORIGIN }}
           ADMIN_URL: ${{ secrets.ADMIN_URL }}
-          CF_ACCESS_CLIENT_ID: ${{ inputs.environment == 'staging' && secrets.CF_ACCESS_CLIENT_ID || '' }}
-          CF_ACCESS_CLIENT_SECRET: ${{ inputs.environment == 'staging' && secrets.CF_ACCESS_CLIENT_SECRET || '' }}
         run: |
           if [ "${CALLER_PLAN}" = "true" ]; then
             echo "deploy_api=${DEPLOY_API}" >> "$GITHUB_OUTPUT"
@@ -159,7 +150,6 @@ jobs:
             echo "run_migrate_admin=${RUN_MIGRATE_ADMIN}" >> "$GITHUB_OUTPUT"
             echo "push_ghcr_api=${PUSH_GHCR_API}" >> "$GITHUB_OUTPUT"
             echo "push_ghcr_web=${PUSH_GHCR_WEB}" >> "$GITHUB_OUTPUT"
-            echo "sync_services=${SYNC_SERVICES}" >> "$GITHUB_OUTPUT"
             echo "deployed_api=false" >> "$GITHUB_OUTPUT"
             echo "deployed_web=false" >> "$GITHUB_OUTPUT"
             echo "skip_reasons<<EOF" >> "$GITHUB_OUTPUT"
@@ -176,7 +166,6 @@ jobs:
           DEPLOY_WEB: ${{ steps.plan.outputs.deploy_web }}
           DEPLOY_MARKETING: ${{ steps.plan.outputs.deploy_marketing }}
           DEPLOY_ADMIN: ${{ steps.plan.outputs.deploy_admin }}
-          SYNC_SERVICES: ${{ steps.plan.outputs.sync_services }}
           SKIP_REASONS: ${{ steps.plan.outputs.skip_reasons }}
         run: |
           {
@@ -188,8 +177,6 @@ jobs:
             echo "| Web | ${DEPLOY_WEB} |"
             echo "| Marketing | ${DEPLOY_MARKETING} |"
             echo "| Admin | ${DEPLOY_ADMIN} |"
-            echo ""
-            echo "**sync-secrets services:** \`${SYNC_SERVICES}\`"
             if [ -n "${SKIP_REASONS}" ]; then
               echo ""
               echo "### Skipped surfaces"
@@ -201,34 +188,16 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
-  sync-secrets:
-    name: Sync secrets (${{ inputs.environment }})
-    needs: [plan]
-    if: >-
-      always() &&
-      (
-        inputs.should_deploy != 'true' ||
-        (
-          needs.plan.result == 'success' &&
-          needs.plan.outputs.sync_services != 'none'
-        )
-      )
-    uses: ./.github/workflows/sync-secrets.yml
-    with:
-      environment: ${{ inputs.environment }}
-      services: ${{ inputs.should_deploy == 'true' && needs.plan.outputs.sync_services || 'all' }}
-    secrets: inherit
-
   migrate:
     name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 1 · Run DB migrations
     if: >-
       always() &&
       inputs.should_deploy == 'true' &&
       needs.plan.outputs.run_migrate == 'true' &&
-      needs.sync-secrets.result == 'success'
+      needs.plan.result == 'success'
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
-    needs: [plan, sync-secrets]
+    needs: [plan]
     steps:
       - name: Checkout
         uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
@@ -251,10 +220,10 @@ jobs:
       always() &&
       inputs.should_deploy == 'true' &&
       needs.plan.outputs.run_migrate_admin == 'true' &&
-      needs.sync-secrets.result == 'success'
+      needs.plan.result == 'success'
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
-    needs: [plan, sync-secrets]
+    needs: [plan]
     steps:
       - name: Checkout
         uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
@@ -278,10 +247,10 @@ jobs:
       always() &&
       inputs.should_deploy == 'true' &&
       needs.plan.outputs.deploy_api == 'true' &&
-      needs.sync-secrets.result == 'success'
+      needs.plan.result == 'success'
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
-    needs: [plan, sync-secrets]
+    needs: [plan]
     outputs:
       release: ${{ steps.release.outputs.release }}
     steps:
@@ -302,10 +271,10 @@ jobs:
       always() &&
       inputs.should_deploy == 'true' &&
       needs.plan.outputs.deploy_web == 'true' &&
-      needs.sync-secrets.result == 'success'
+      needs.plan.result == 'success'
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
-    needs: [plan, sync-secrets]
+    needs: [plan]
     outputs:
       release: ${{ steps.release.outputs.release }}
     steps:
@@ -321,19 +290,19 @@ jobs:
         run: bash scripts/ci/derive-sentry-release.sh --package web
 
   deploy-api:
-    name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 3 · Deploy API (Fly)
+    name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 3 · Deploy API (registry + Coolify)
     if: >-
       always() &&
       inputs.should_deploy == 'true' &&
       needs.plan.outputs.deploy_api == 'true' &&
-      needs.sync-secrets.result == 'success' &&
+      needs.plan.result == 'success' &&
       needs.migrate.result != 'failure' &&
       needs.derive-sentry-release-api.result != 'failure' &&
       (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') &&
       (needs.derive-sentry-release-api.result == 'success' || needs.derive-sentry-release-api.result == 'skipped')
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
-    needs: [plan, sync-secrets, migrate, derive-sentry-release-api]
+    needs: [plan, migrate, derive-sentry-release-api]
     steps:
       - name: Checkout
         uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
@@ -359,30 +328,49 @@ jobs:
           bash scripts/ci/sentry-release.sh api packages/backend/dist
           "${{ needs.derive-sentry-release-api.outputs.release }}" ${{ inputs.environment }}
 
-      - name: Setup flyctl
-        run: bash scripts/ci/setup-flyctl.sh
+      - name: Resolve image tag
+        id: tag
+        run: echo "version=$(node -p "require('./packages/backend/package.json').version")" >> "$GITHUB_OUTPUT"
 
-      - name: Deploy API to Fly.io
+      - name: Log in to private registry
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ${{ secrets.REGISTRY }}
+          username: ${{ secrets.REGISTRY_USER }}
+          password: ${{ secrets.REGISTRY_TOKEN }}
+
+      - name: Build and push API image
         env:
           DOCKER_BUILDKIT: "1"
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          FLY_APP: slugbase-${{ inputs.environment == 'production' && 'production' || 'staging' }}-api
-        run: bash scripts/ci/deploy-fly.sh api
+          REGISTRY: ${{ secrets.REGISTRY }}
+        run: |
+          args=(--target api "${REGISTRY}/slugbase-api" "${{ steps.tag.outputs.version }}")
+          if [ "${{ inputs.environment }}" = "staging" ]; then
+            args+=(--dev)
+          fi
+          args+=(--no-latest)
+          bash scripts/ci/build-push-registry.sh "${args[@]}"
+
+      - name: Trigger Coolify deploy
+        env:
+          COOLIFY_DEPLOY_WEBHOOK_API: ${{ secrets.COOLIFY_DEPLOY_WEBHOOK_API }}
+          COOLIFY_DEPLOY_TOKEN: ${{ secrets.COOLIFY_DEPLOY_TOKEN }}
+        run: bash scripts/ci/trigger-coolify-deploy.sh "$COOLIFY_DEPLOY_WEBHOOK_API" "$COOLIFY_DEPLOY_TOKEN"
 
   deploy-web:
-    name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 3 · Deploy web (CF)
+    name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 3 · Deploy web (registry + Coolify)
     if: >-
       always() &&
       inputs.should_deploy == 'true' &&
       needs.plan.outputs.deploy_web == 'true' &&
-      needs.sync-secrets.result == 'success' &&
+      needs.plan.result == 'success' &&
       needs.migrate.result != 'failure' &&
       needs.derive-sentry-release-web.result != 'failure' &&
       (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') &&
       (needs.derive-sentry-release-web.result == 'success' || needs.derive-sentry-release-web.result == 'skipped')
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
-    needs: [plan, sync-secrets, migrate, derive-sentry-release-web]
+    needs: [plan, migrate, derive-sentry-release-web]
     steps:
       - name: Checkout
         uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
@@ -394,90 +382,148 @@ jobs:
         with:
           skip-checkout: "true"
 
-      - name: Install Wrangler
-        run: npm install -g wrangler@4
-
-      - name: Deploy web to Cloudflare Workers
+      - name: Build web packages for Sentry
         env:
-          DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          NODE_ENV: production
+          SLUGBASE_EDITION: cloud
           API_BASE_URL: ${{ secrets.API_BASE_URL }}
           VITE_SENTRY_RELEASE: ${{ needs.derive-sentry-release-web.outputs.release }}
-        run: bash scripts/ci/deploy-cf-worker.sh web
+        run: pnpm exec turbo run build --filter=@slugbase/web...
+
+      - name: Create Sentry release and upload web source maps
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+        run: >-
+          bash scripts/ci/sentry-release.sh web packages/web/build
+          "${{ needs.derive-sentry-release-web.outputs.release }}" ${{ inputs.environment }}
+
+      - name: Resolve image tag
+        id: tag
+        run: echo "version=$(node -p "require('./packages/web/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to private registry
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ${{ secrets.REGISTRY }}
+          username: ${{ secrets.REGISTRY_USER }}
+          password: ${{ secrets.REGISTRY_TOKEN }}
+
+      - name: Build and push web image
+        env:
+          DOCKER_BUILDKIT: "1"
+          REGISTRY: ${{ secrets.REGISTRY }}
+        run: |
+          args=(--target web "${REGISTRY}/slugbase-web" "${{ steps.tag.outputs.version }}")
+          if [ "${{ inputs.environment }}" = "staging" ]; then
+            args+=(--dev)
+          fi
+          args+=(--no-latest)
+          bash scripts/ci/build-push-registry.sh "${args[@]}"
+
+      - name: Trigger Coolify deploy
+        env:
+          COOLIFY_DEPLOY_WEBHOOK_WEB: ${{ secrets.COOLIFY_DEPLOY_WEBHOOK_WEB }}
+          COOLIFY_DEPLOY_TOKEN: ${{ secrets.COOLIFY_DEPLOY_TOKEN }}
+        run: bash scripts/ci/trigger-coolify-deploy.sh "$COOLIFY_DEPLOY_WEBHOOK_WEB" "$COOLIFY_DEPLOY_TOKEN"
 
   deploy-marketing:
-    name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 3 · Deploy marketing (CF)
+    name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 3 · Deploy marketing (registry + Coolify)
     if: >-
       always() &&
       inputs.should_deploy == 'true' &&
       needs.plan.outputs.deploy_marketing == 'true' &&
-      needs.sync-secrets.result == 'success' &&
+      needs.plan.result == 'success' &&
       needs.migrate.result != 'failure' &&
       (needs.migrate.result == 'success' || needs.migrate.result == 'skipped')
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
-    needs: [plan, sync-secrets, migrate]
+    needs: [plan, migrate]
     steps:
       - name: Checkout
         uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
         with:
           ref: ${{ inputs.ref != '' && inputs.ref || github.sha }}
 
-      - name: Setup workspace
-        uses: ./.github/actions/setup
+      - name: Resolve image tag
+        id: tag
+        run: echo "version=$(node -p "require('./packages/marketing/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to private registry
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
         with:
-          skip-checkout: "true"
+          registry: ${{ secrets.REGISTRY }}
+          username: ${{ secrets.REGISTRY_USER }}
+          password: ${{ secrets.REGISTRY_TOKEN }}
 
-      - name: Install Wrangler
-        run: npm install -g wrangler@4
-
-      - name: Deploy marketing to Cloudflare Workers
+      - name: Build and push marketing image
         env:
-          DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          API_BASE_URL: ${{ secrets.API_BASE_URL }}
-        run: bash scripts/ci/deploy-cf-worker.sh marketing
+          DOCKER_BUILDKIT: "1"
+          REGISTRY: ${{ secrets.REGISTRY }}
+          PUBLIC_API_BASE_URL: ${{ secrets.API_BASE_URL }}
+          PUBLIC_FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
+          PUBLIC_MARKETING_ORIGIN: ${{ vars.MARKETING_ORIGIN }}
+          MARKETING_ORIGIN: ${{ vars.MARKETING_ORIGIN }}
+        run: |
+          args=(--target marketing "${REGISTRY}/slugbase-marketing" "${{ steps.tag.outputs.version }}")
+          if [ "${{ inputs.environment }}" = "staging" ]; then
+            args+=(--dev)
+          fi
+          args+=(--no-latest)
+          bash scripts/ci/build-push-registry.sh "${args[@]}"
+
+      - name: Trigger Coolify deploy
+        env:
+          COOLIFY_DEPLOY_WEBHOOK_MARKETING: ${{ secrets.COOLIFY_DEPLOY_WEBHOOK_MARKETING }}
+          COOLIFY_DEPLOY_TOKEN: ${{ secrets.COOLIFY_DEPLOY_TOKEN }}
+        run: bash scripts/ci/trigger-coolify-deploy.sh "$COOLIFY_DEPLOY_WEBHOOK_MARKETING" "$COOLIFY_DEPLOY_TOKEN"
 
   deploy-admin:
-    name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 3 · Deploy admin (Fly)
+    name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 3 · Deploy admin (registry + Coolify)
     if: >-
       always() &&
       inputs.should_deploy == 'true' &&
       needs.plan.outputs.deploy_admin == 'true' &&
-      needs.sync-secrets.result == 'success' &&
+      needs.plan.result == 'success' &&
       needs.migrate-admin.result != 'failure' &&
       (needs.migrate-admin.result == 'success' || needs.migrate-admin.result == 'skipped')
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
-    needs: [plan, sync-secrets, migrate-admin]
+    needs: [plan, migrate-admin]
     steps:
       - name: Checkout
         uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
         with:
           ref: ${{ inputs.ref != '' && inputs.ref || github.sha }}
 
-      - name: Setup workspace
-        uses: ./.github/actions/setup
+      - name: Resolve image tag
+        id: tag
+        run: echo "version=$(node -p "require('./packages/admin/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to private registry
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
         with:
-          skip-checkout: "true"
+          registry: ${{ secrets.REGISTRY }}
+          username: ${{ secrets.REGISTRY_USER }}
+          password: ${{ secrets.REGISTRY_TOKEN }}
 
-      - name: Build admin packages
-        env:
-          NODE_ENV: production
-          SLUGBASE_EDITION: cloud
-        run: pnpm exec turbo run build --filter=@slugbase/admin...
-
-      - name: Setup flyctl
-        run: bash scripts/ci/setup-flyctl.sh
-
-      - name: Deploy admin to Fly.io
+      - name: Build and push admin image
         env:
           DOCKER_BUILDKIT: "1"
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          FLY_APP: slugbase-${{ inputs.environment == 'production' && 'production' || 'staging' }}-admin
-        run: bash scripts/ci/deploy-fly.sh admin
+          REGISTRY: ${{ secrets.REGISTRY }}
+        run: |
+          args=(--target admin "${REGISTRY}/slugbase-admin" "${{ steps.tag.outputs.version }}")
+          if [ "${{ inputs.environment }}" = "staging" ]; then
+            args+=(--dev)
+          fi
+          args+=(--no-latest)
+          bash scripts/ci/build-push-registry.sh "${args[@]}"
+
+      - name: Trigger Coolify deploy
+        env:
+          COOLIFY_DEPLOY_WEBHOOK_ADMIN: ${{ secrets.COOLIFY_DEPLOY_WEBHOOK_ADMIN }}
+          COOLIFY_DEPLOY_TOKEN: ${{ secrets.COOLIFY_DEPLOY_TOKEN }}
+        run: bash scripts/ci/trigger-coolify-deploy.sh "$COOLIFY_DEPLOY_WEBHOOK_ADMIN" "$COOLIFY_DEPLOY_TOKEN"
 
   smoke:
     name: ${{ inputs.environment == 'production' && 'Production' || 'Staging' }} · 4 · Smoke
@@ -510,8 +556,6 @@ jobs:
       FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
       MARKETING_ORIGIN: ${{ vars.MARKETING_ORIGIN }}
       ADMIN_URL: ${{ secrets.ADMIN_URL }}
-      CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
-      CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
     steps:
       - name: Checkout
         uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3

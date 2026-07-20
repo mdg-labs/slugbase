@@ -486,32 +486,21 @@ The deployment is expected to sit behind a reverse proxy terminating TLS. The co
 
 ### 14.7 Cloud Deployment Topology (settled)
 
-The Cloud service uses a split deployment: the **web client** is served from the edge, the **API/back-end** runs as a container in EU-Frankfurt, and the **database** is Neon Postgres in the same region.
+The Cloud service runs as **four container images** (API, web, marketing, admin) on **Coolify** at mdg-labs, pulled from a **private container registry**. PostgreSQL is operator-hosted (Coolify-managed or external).
 
-| Layer | Platform | Region / notes |
+| Layer | Platform | Notes |
 |---|---|---|
-| **Web client (frontend)** | Cloudflare Workers | Global edge; static assets + SSR served from CF network |
-| **API / back-end** | Fly.io (`fra` — Frankfurt, DE) | Container image (API-only variant from §14.2); ~600 km from Vienna; primary EU serving region |
-| **Database (Cloud)** | Neon Postgres (`aws-eu-central-1` — Frankfurt, DE) | Same AWS region as Fly.io `fra`; colocation keeps query latency sub-1 ms within the DC |
-| **Marketing site** | Cloudflare Workers (static, separately built, §19, decision 28) | Global edge; independently deployable from the app |
+| **API / back-end** | Coolify (`slugbase-api` image) | NestJS container; `SERVE_WEB_CLIENT=false` |
+| **Web client** | Coolify (`slugbase-web` image) | React Router v7 Node SSR |
+| **Marketing site** | Coolify (`slugbase-marketing` image) | Astro static site behind nginx |
+| **Admin portal** | Coolify (`slugbase-admin` image) | Standalone admin app (Fast-Follow) |
+| **Database (Cloud)** | PostgreSQL (operator-hosted) | `DATABASE_URL` in Phase → GHA for CI migrations; runtime config in Coolify |
 
-**Rationale for Fly.io over Railway:** Railway's only EU region is Amsterdam (`europe-west4-drams3a`, ~1200 km from Vienna). Neon Postgres has no Amsterdam region; colocating API and DB on Railway EU would require cross-region hops on every query. Fly.io Frankfurt is the closest EU region to Austria and shares the same Frankfurt AWS zone as Neon.
+**CI deploy flow:** GitHub Actions builds images with `SLUGBASE_EDITION=cloud`, pushes to `{REGISTRY}/slugbase-{service}:{version}` (staging also tags `:dev`), then triggers per-service **Coolify deploy webhooks** with Bearer auth (`COOLIFY_DEPLOY_TOKEN`).
 
-**CE is unaffected:** CE operators continue to run the combined container image (§14.2) on their own infrastructure. The split topology described here is exclusively for the operator-run Cloud service.
+**CE is unaffected:** CE operators continue to run split GHCR images (§14.2, §22.8) on their own infrastructure.
 
-**App / Worker naming (settled — decision #51):** every operator-run platform app (Fly.io app names and Cloudflare Worker script names) follows **`slugbase-<env>-<app>`**, where `<env>` matches the Phase / GitHub Actions environment name (`staging` / `production`) and `<app>` is `api`, `web`, or `marketing`:
-
-| App | Platform | Staging name | Production name |
-|---|---|---|---|
-| API / back-end | Fly.io (`fra`) | `slugbase-staging-api` | `slugbase-production-api` |
-| Web client | Cloudflare Workers | `slugbase-staging-web` | `slugbase-production-web` |
-| Marketing site | Cloudflare Workers | `slugbase-staging-marketing` | `slugbase-production-marketing` |
-
-There is **no `development` deployment** — local development runs the dev servers directly (Phase `Development` env via `phase run`). These are **platform app/script identifiers, not public hostnames**; public domains (and `APP_BASE_URL` / `FRONTEND_ORIGIN`) are configured separately. The CE combined image is published to GHCR and is not subject to this scheme.
-
-**Staging scale-to-zero (current posture):** `slugbase-staging-api` runs **scaled to zero** on Fly.io (`auto_stop_machines` enabled, `min_machines_running = 0`) to save cost — it stops when idle and cold-starts on the next request, with startup latency tolerated on staging. Production (`slugbase-production-api`) stays warm (`min_machines_running ≥ 1`). This is a current cost posture, revisited as traffic grows; the Workers-hosted `web`/`marketing` surfaces scale to zero natively.
-
-**CORS and origin configuration:** `APP_BASE_URL` points to the Fly.io app URL (or a custom domain in front of it); `FRONTEND_ORIGIN` points to the Cloudflare Workers frontend origin. Both are required secrets (§15) validated at startup.
+**CORS and origin configuration:** `APP_BASE_URL`, `FRONTEND_ORIGIN`, and `MARKETING_ORIGIN` point at the publicly reachable HTTPS origins configured in Coolify. All are required (§15) and validated at API startup.
 
 ---
 

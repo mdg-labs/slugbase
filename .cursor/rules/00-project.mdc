@@ -11,10 +11,10 @@ A bookmark manager with built-in URL shortening and keyboard-driven launcher —
 
 - **Single repo:** pnpm workspace monorepo with **Turborepo** task pipelines (spec §2.2, §19)
 - **Language:** **TypeScript** (strict, no `any`) everywhere (spec §19, decision #37)
-- **Backend:** **NestJS** — its DI/module system hosts the config-selected external interfaces (no deployment-mode branching) and generates OpenAPI; runs as a Node container on Fly.io — spec §19, §2.6, §11, §14.7
-- **Web client:** **React Router v7** (framework mode) — same app runs on Cloudflare Workers (Cloud) and as Node inside the CE combined image — spec §19, §14.7
-- **Marketing:** **Astro** (static, zero-JS-by-default) on Cloudflare Workers — spec §2.3, §19
-- **Persistence:** **Drizzle ORM** + **Drizzle Kit** behind the data-access abstraction; **PostgreSQL** generates migrations and powers runtime (Neon `aws-eu-central-1` for Cloud + CE Postgres). Embedded SQLite for CE is **deferred** (Fast-Follow) — spec §11.9, §16, decisions #32/#41
+- **Backend:** **NestJS** — its DI/module system hosts the config-selected external interfaces (no deployment-mode branching) and generates OpenAPI; runs as a Node container on Coolify — spec §19, §2.6, §11, §14.7
+- **Web client:** **React Router v7** (framework mode) — Node SSR container on Cloud (Coolify) and CE (`slugbase-web` image) — spec §19, §14.7
+- **Marketing:** **Astro** (static, zero-JS-by-default) as nginx container on Coolify — spec §2.3, §19
+- **Persistence:** **Drizzle ORM** + **Drizzle Kit** behind the data-access abstraction; **PostgreSQL** generates migrations and powers runtime (operator-hosted Postgres for Cloud + CE). Embedded SQLite for CE is **deferred** (Fast-Follow) — spec §11.9, §16, decisions #32/#41
 - **Contracts/validation:** **Zod** + **ts-rest** in `shared-types`; generates the OpenAPI description — spec §18, §19
 - **UI:** **Tailwind** (token-bridged to `colors_and_type.css`) + **Radix** primitives + **cmdk** palette — spec §23, rule `11-design-system`
 - **Tests:** **Vitest** + **Supertest** (unit/integration) + **Playwright** (e2e) — spec §22.4
@@ -26,24 +26,21 @@ A bookmark manager with built-in URL shortening and keyboard-driven launcher —
 - **Secrets:** **Phase** (`SlugBase` app — `.phase.json`; envs `Development` / `Staging` / `Production`); `phase run -- <command>` locally; Phase syncs to GHA environments for CI/deploy — decision #34
 - **Bot protection:** Cloudflare Turnstile (Cloud default); no-op (CE) — spec §11.8
 
-### Cloud infrastructure (settled — spec §14.7, decisions #31–32)
+### Cloud infrastructure (settled — spec §14.7)
 
-| Layer | Platform | Region |
+| Layer | Platform | Notes |
 |---|---|---|
-| Web client | **Cloudflare Workers** | Global edge |
-| API / back-end | **Fly.io** (`fra`) | Frankfurt, DE |
-| Database | **Neon Postgres** (`aws-eu-central-1`) | Frankfurt, DE |
-| Marketing site | **Cloudflare Workers** | Global edge; separately built |
+| API / web / marketing / admin | **Coolify** on mdg-labs servers | Four container images from private registry |
+| Container registry | **berth.mdg-labs.dev** (private) | CI builds and pushes; Coolify pulls |
+| Database | **PostgreSQL** (operator-hosted) | Coolify-managed or external; `DATABASE_URL` for CI migrations |
 
-**App naming** (Fly.io apps + CF Worker scripts): `slugbase-<env>-<app>`, `<env>` ∈ {`staging`, `production`}, `<app>` ∈ {`api`, `web`, `marketing`} — e.g. `slugbase-staging-api`, `slugbase-production-web`. No `development` deployment (local dev only). Platform identifiers, not public hostnames — spec §14.7, decision #51.
+**Image naming:** `{REGISTRY}/slugbase-{api|web|marketing|admin}:{version}` with `:dev` alias on staging.
 
-CE: **combined container image**, single port, operator's own infrastructure — spec §14.2.
+CE: **split GHCR images** (`slugbase-api` + `slugbase-web`) on operator infrastructure — spec §14.2, §22.8.
 
 ### CI/CD (settled — spec §22, decision #35)
 
-Single workflow file: `.github/workflows/ci-cd.yml`. **GitHub-hosted runners** (`ubuntu-latest`). Branches: `staging` and `main`.
-Secrets via **GitHub Actions environments** (`ci`, `staging`, `production`) — Phase syncs operator edits automatically; workflows read `${{ secrets.* }}` (no Phase CLI in CI — spec §22.9). Deploy pipelines push GHA secrets to Fly.io and Cloudflare Workers via `sync-secrets.sh`.
-Stages: CI checks → staging deploy (push `staging`) → production deploy (push `main`) → draft release when api/web deploy → GHCR CE image push. **Versioning:** manual per-package `package.json` bumps locally (`pnpm bump:versions`); pre-push hook enforces bumps before push (rule `15-deploy-version-bumps.mdc`).
+Workflow entry points: `pr.yml`, `staging.yml`, `main.yml`, `release.yml`. Secrets via **GitHub Actions environments** (`ci`, `staging`, `production`) — Phase syncs operator edits automatically. Cloud deploy: build images → push private registry → Coolify webhook (Bearer auth). CE GHCR publish unchanged.
 
 ## Repository state
 

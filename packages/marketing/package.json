@@ -10,10 +10,8 @@
     "lint": "eslint src/",
     "typecheck": "astro check",
     "build": "astro build",
-    "deploy": "wrangler deploy",
     "dev": "astro dev",
     "preview": "astro preview",
-    "preview:workers": "wrangler dev",
     "blog:validate": "blog-validate \"$(pwd)/src/content/blog\"",
     "test:unit": "vitest run --config vitest.config.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts"
@@ -29,7 +27,6 @@
   "devDependencies": {
     "@astrojs/check": "^0.9.9",
     "typescript": "^5.8.3",
-    "vitest": "4.1.6",
-    "wrangler": "^4.24.0"
+    "vitest": "4.1.6"
   }
 }

@@ -1,16 +1,5 @@
 #!/usr/bin/env bash
 # Smoke-test deploy surfaces (spec §22.5, granular-deployment WP-3):
-#   API + Web + Marketing + Admin — GET /health and /version (JSON, HTTP 200)
-#   API pricing + CORS — when both API and marketing are selected
-#
-# Flags (default: all api/web/marketing when no flags):
-#   --api        APP_BASE_URL /health + /version (+ pricing when --marketing too)
-#   --web        FRONTEND_ORIGIN /health + /version
-#   --marketing  MARKETING_ORIGIN /health + /version
-#   --admin      delegates to smoke-admin-health.sh (ADMIN_URL /health + /version)
-#
-# When CF_ACCESS_CLIENT_ID + CF_ACCESS_CLIENT_SECRET are set (GHA environment secrets),
-# sends Cloudflare Access service-token headers on every request.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -63,19 +52,6 @@ fi
 MAX_ATTEMPTS="${SMOKE_MAX_ATTEMPTS:-30}"
 SLEEP_SECONDS="${SMOKE_SLEEP_SECONDS:-10}"
 
-CURL_ACCESS_ARGS=()
-if [[ -n "${CF_ACCESS_CLIENT_ID:-}" && -n "${CF_ACCESS_CLIENT_SECRET:-}" ]]; then
-  CURL_ACCESS_ARGS=(
-    -H "CF-Access-Client-Id: ${CF_ACCESS_CLIENT_ID}"
-    -H "CF-Access-Client-Secret: ${CF_ACCESS_CLIENT_SECRET}"
-  )
-  echo "Smoke: using Cloudflare Access service token headers"
-fi
-
-smoke_curl() {
-  curl "${CURL_ACCESS_ARGS[@]}" "$@"
-}
-
 check_surface() {
   local name="$1"
   local base="$2"
@@ -86,7 +62,7 @@ check_surface() {
 
   local attempt=1
   while [[ "${attempt}" -le "${MAX_ATTEMPTS}" ]]; do
-    if smoke_curl -fsS "${health_url}" >/dev/null 2>&1; then
+    if curl -fsS "${health_url}" >/dev/null 2>&1; then
       break
     fi
     if [[ "${attempt}" -eq "${MAX_ATTEMPTS}" ]]; then
@@ -99,8 +75,8 @@ check_surface() {
   done
 
   local health_status version_status
-  health_status="$(smoke_curl -s -o /tmp/slugbase-smoke-health.json -w '%{http_code}' "${health_url}")"
-  version_status="$(smoke_curl -s -o /tmp/slugbase-smoke-version.json -w '%{http_code}' "${version_url}")"
+  health_status="$(curl -s -o /tmp/slugbase-smoke-health.json -w '%{http_code}' "${health_url}")"
+  version_status="$(curl -s -o /tmp/slugbase-smoke-version.json -w '%{http_code}' "${version_url}")"
 
   echo "  GET /health -> HTTP ${health_status}"
   cat /tmp/slugbase-smoke-health.json
@@ -123,7 +99,7 @@ check_pricing_api() {
   echo "Smoke: API (${api_base}) — live Stripe-backed public pricing"
 
   local pricing_json
-  pricing_json="$(smoke_curl -fsS "${pricing_url}")"
+  pricing_json="$(curl -fsS "${pricing_url}")"
 
   echo "  GET /pricing/public -> OK"
   printf '%s\n' "${pricing_json}" | head -c 200
@@ -138,7 +114,7 @@ check_pricing_api() {
 
   local acao
   acao="$(
-    smoke_curl -s -D - -o /dev/null \
+    curl -s -D - -o /dev/null \
       -H "Origin: ${marketing_origin}" \
       "${pricing_url}" \
       | tr -d '\r' \

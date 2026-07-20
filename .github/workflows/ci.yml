@@ -150,11 +150,8 @@ jobs:
           SLUGBASE_EDITION: cloud
         run: pnpm build
 
-      - name: Validate sync-secrets manifest
-        run: node --experimental-strip-types scripts/validate-sync-secrets-manifest.ts
-
-      - name: Validate workflow secrets policy
-        run: node --experimental-strip-types scripts/validate-workflow-secrets-policy.ts
+      - name: Validate deploy workflow secrets policy
+        run: node --experimental-strip-types scripts/validate-deploy-workflow-secrets.ts
 
   integration:
     name: CI · Integration tests

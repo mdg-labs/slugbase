@@ -17,8 +17,6 @@ export const BOOTSTRAP_VERSION = "0.0.0";
  * @typedef {object} ProbeVersionOptions
  * @property {string} origin
  * @property {DeployEnvironment} environment
- * @property {string} [cfAccessClientId]
- * @property {string} [cfAccessClientSecret]
  * @property {typeof fetch} [fetchFn]
  * @property {number} [maxAttempts]
  * @property {number} [initialDelayMs]
@@ -89,13 +87,10 @@ export function incrementSemver(version, level) {
 
 /**
  * @param {number} status
- * @param {DeployEnvironment} environment
+ * @param {DeployEnvironment} _environment
  * @returns {'ok' | 'bootstrap' | 'fail'}
  */
-export function classifyProbeStatus(status, environment) {
-  if (status === 403 && environment === "staging") {
-    return "fail";
-  }
+export function classifyProbeStatus(status, _environment) {
   if (status === 200) {
     return "ok";
   }
@@ -104,6 +99,7 @@ export function classifyProbeStatus(status, environment) {
     status === 502 ||
     status === 503 ||
     status === 504 ||
+    status === 403 ||
     status === 0
   ) {
     return "bootstrap";
@@ -148,10 +144,6 @@ export async function probeLiveVersion(options) {
 
   /** @type {Record<string, string>} */
   const headers = { Accept: "application/json" };
-  if (options.environment === "staging") {
-    headers["CF-Access-Client-Id"] = options.cfAccessClientId ?? "";
-    headers["CF-Access-Client-Secret"] = options.cfAccessClientSecret ?? "";
-  }
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     let status = 0;
@@ -161,9 +153,7 @@ export async function probeLiveVersion(options) {
       const kind = classifyProbeStatus(status, options.environment);
 
       if (kind === "fail") {
-        throw new Error(
-          `probe-version: ${url} returned HTTP 403 on staging — check CF Access service token credentials`,
-        );
+        throw new Error(`probe-version: ${url} returned HTTP ${status}`);
       }
 
       if (kind === "ok") {
@@ -188,12 +178,6 @@ export async function probeLiveVersion(options) {
         };
       }
     } catch (error) {
-      if (
-        error instanceof Error &&
-        error.message.includes("returned HTTP 403 on staging")
-      ) {
-        throw error;
-      }
       if (attempt === maxAttempts) {
         return {
           liveVersion: BOOTSTRAP_VERSION,

@@ -1,4 +1,3 @@
-import { cloudflare } from "@cloudflare/vite-plugin";
 import { reactRouter } from "@react-router/dev/vite";
 import {
   sentryReactRouter,
@@ -53,11 +52,7 @@ const sentryConfig: SentryReactRouterBuildOptions = {
 };
 
 export default defineConfig((config) => ({
-  plugins: [
-    cloudflare({ viteEnvironment: { name: "ssr" } }),
-    reactRouter(),
-    sentryReactRouter(sentryConfig, config),
-  ],
+  plugins: [reactRouter(), sentryReactRouter(sentryConfig, config)],
   build: {
     sourcemap: Boolean(sentryAuthToken),
   },

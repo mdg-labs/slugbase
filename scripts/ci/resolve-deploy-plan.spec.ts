@@ -5,7 +5,6 @@ import {
 } from "./probe-version.mjs";
 import {
   createEmptyPlan,
-  deriveSyncServices,
   formatGithubOutputs,
   PRODUCTION_MIN_VERSION,
   resolveDeployPlan,
@@ -45,7 +44,6 @@ describe("resolveDeployPlan", () => {
     expect(plan.push_ghcr_web).toBe(true);
     expect(plan.deploy_marketing).toBe(true);
     expect(plan.deploy_admin).toBe(true);
-    expect(plan.sync_services).toBe("api,web,marketing,admin");
     expect(skipReasons).toHaveLength(0);
   });
 
@@ -149,13 +147,11 @@ describe("resolveDeployPlan", () => {
   it("formats GitHub outputs with deployed flags false in plan", () => {
     const plan = createEmptyPlan();
     plan.deploy_api = true;
-    plan.sync_services = deriveSyncServices(plan);
 
     expect(formatGithubOutputs(plan)).toMatchObject({
       deploy_api: "true",
       deployed_api: "false",
       deployed_web: "false",
-      sync_services: "api",
     });
   });
 });

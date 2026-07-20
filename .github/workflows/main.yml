@@ -56,7 +56,6 @@ jobs:
       run_migrate_admin: ${{ needs.plan.outputs.run_migrate_admin }}
       push_ghcr_api: ${{ needs.plan.outputs.push_ghcr_api }}
       push_ghcr_web: ${{ needs.plan.outputs.push_ghcr_web }}
-      sync_services: ${{ needs.plan.outputs.sync_services }}
       skip_reasons: ${{ needs.plan.outputs.skip_reasons }}
     secrets: inherit
 

@@ -1,0 +1,97 @@
+name: Build and Push Cloud Image
+
+# Reusable private-registry publish for Cloud containers (api, web, marketing, admin).
+# workflow_call only — invoked from deploy.yml.
+
+on:
+  workflow_call:
+    inputs:
+      service:
+        description: Cloud image surface (api, web, marketing, or admin)
+        type: string
+        required: true
+      tags:
+        description: Newline-separated image tag suffixes (e.g. 1.0.0, dev, latest)
+        type: string
+        required: true
+      ref:
+        description: Optional checkout ref (empty uses github.sha)
+        type: string
+        required: false
+        default: ""
+      push_dev:
+        description: Also tag and push :dev
+        type: string
+        required: false
+        default: "false"
+
+permissions:
+  contents: read
+
+jobs:
+  push:
+    name: Cloud · Push slugbase-${{ inputs.service }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate service
+        env:
+          SERVICE: ${{ inputs.service }}
+        run: |
+          case "$SERVICE" in
+            api|web|marketing|admin) ;;
+            *)
+              echo "::error::Invalid service '${SERVICE}' — expected api, web, marketing, or admin"
+              exit 1
+              ;;
+          esac
+
+      - name: Checkout
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+        with:
+          ref: ${{ inputs.ref != '' && inputs.ref || github.sha }}
+
+      - name: Log in to private registry
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ${{ secrets.REGISTRY }}
+          username: ${{ secrets.REGISTRY_USER }}
+          password: ${{ secrets.REGISTRY_TOKEN }}
+
+      - name: Build and push Cloud image
+        env:
+          SERVICE: ${{ inputs.service }}
+          TAGS: ${{ inputs.tags }}
+          REGISTRY: ${{ secrets.REGISTRY }}
+          PUSH_DEV: ${{ inputs.push_dev }}
+          DOCKER_BUILDKIT: "1"
+        run: |
+          set -euo pipefail
+          primary=""
+          push_latest=false
+          while IFS= read -r suffix || [[ -n "$suffix" ]]; do
+            suffix="${suffix//$'\r'/}"
+            [[ -z "$suffix" ]] && continue
+            if [[ "$suffix" == "latest" ]]; then
+              push_latest=true
+            elif [[ -z "$primary" ]]; then
+              primary="$suffix"
+            fi
+          done <<< "$TAGS"
+
+          if [[ -z "$primary" ]]; then
+            echo "::error::No primary tag in tags input"
+            exit 1
+          fi
+
+          image="${REGISTRY}/slugbase-${SERVICE}"
+          args=(--target "$SERVICE" "$image" "$primary")
+          if [[ "$PUSH_DEV" == "true" ]]; then
+            args+=(--dev)
+          fi
+          if [[ "$push_latest" == "true" ]]; then
+            args+=(--latest)
+          else
+            args+=(--no-latest)
+          fi
+
+          bash scripts/ci/build-push-registry.sh "${args[@]}"

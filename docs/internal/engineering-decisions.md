@@ -12,9 +12,9 @@ This doc exists so roadmap tasks and sub-agents have concrete, runnable answers 
 | Concern | Choice | Rationale (spec anchor) |
 |---|---|---|
 | Language | **TypeScript** (strict, no `any`) | All packages; shared types across boundaries (§19) |
-| Backend | **NestJS** | DI/modules host the config-selected external interfaces (§2.6, §11) — replaces deployment-mode branching; `@nestjs/swagger`/ts-rest → OpenAPI (§18). Runs as a Node container on Fly.io (§14.7) |
-| Web client | **React Router v7** (framework mode) | One app, two adapters: Cloudflare Workers (Cloud SSR) + Node (CE `slugbase-web` image) — §14.2, §14.7 |
-| Marketing | **Astro** (static) | Zero-JS-by-default; separately built; Cloudflare Workers (§2.3, decision #28) |
+| Backend | **NestJS** | DI/modules host the config-selected external interfaces (§2.6, §11) — replaces deployment-mode branching; `@nestjs/swagger`/ts-rest → OpenAPI (§18). Runs as a Node container on Coolify (§14.7) |
+| Web client | **React Router v7** (framework mode) | Node SSR container on Cloud (Coolify) and CE `slugbase-web` image — §14.2, §14.7 |
+| Marketing | **Astro** (static) | Zero-JS-by-default; nginx container on Coolify (§2.3, decision #28) |
 | Persistence | **Drizzle ORM** + **Drizzle Kit** | Data-access abstraction (§11.9); PostgreSQL-only at v1 (Neon (Cloud) + CE Postgres); SQLite CE deferred (§16, #32/#41) |
 | Contracts/validation | **Zod** + **ts-rest** | Server validation + env schema; single typed contract → OpenAPI, consumed by backend + web (§18, §19) |
 | UI | **Tailwind** + **Radix** + **cmdk** | Tailwind bridged to prototype tokens (§23.1); Radix = accessible primitives; cmdk = `⌘K` palette (§9) |
@@ -121,7 +121,7 @@ pnpm audit --audit-level=high
 | GHA environments | `ci` · `staging` · `production` |
 | Local dev | `phase run -- <cmd>` injects `Development` env |
 | CI / deploy | Workflows read `${{ secrets.* }}` from the job's GHA environment — **no Phase CLI in CI** |
-| Platform sync | `scripts/ci/sync-secrets.sh` pushes GHA secrets → Fly.io + Cloudflare Workers during deploy |
+| Cloud deploy | CI builds container images, pushes to private registry (`REGISTRY`), triggers Coolify webhooks |
 
 **Phase ↔ GHA mapping (settled):**
 
@@ -132,7 +132,7 @@ pnpm audit --audit-level=high
 | `Production` | `production` | Production deploy + runtime secrets |
 | _(CI-only keys in Phase)_ | `ci` | CI-only secrets (ReportPortal, etc.) |
 
-Phase automatically syncs operator edits to the matching GHA environments. Deploy pipelines call `sync-secrets.yml` to propagate GHA secrets to Fly/Workers runtime. Never put true secrets in `VITE_*` or `PUBLIC_*` keys (client bundles).
+Phase automatically syncs operator edits to the matching GHA environments. Coolify applications receive runtime env from the Coolify UI (operators mirror Phase → GHA values). Never put true secrets in `VITE_*` or `PUBLIC_*` keys (client bundles).
 
 Adding an env var = the 4-step Phase-first workflow in rule `05-env-vars` (Phase + `.env.example` + Zod config schema + config-reference doc), in one commit. Security-critical secrets validated at startup; **no silent defaults** (§15).
 
@@ -151,19 +151,20 @@ Every UI string is a catalog key `<scope>.<context>.<descriptor>`; en + de requi
 
 ---
 
-## 10. Cloud infrastructure & deploy (spec §14.7, decisions #31/#32/#51)
+## 10. Cloud infrastructure & deploy (spec §14.7)
 
-| Surface | Platform | Region |
+| Surface | Platform | Notes |
 |---|---|---|
-| API | Fly.io `fra` (container, API-only variant) | Frankfurt |
-| Web | Cloudflare Workers | Global edge |
-| Marketing | Cloudflare Workers | Global edge |
-| Database | Neon Postgres `aws-eu-central-1` | Frankfurt |
+| API | Coolify container (`slugbase-api` image) | Private registry |
+| Web | Coolify container (`slugbase-web` image) | Node SSR |
+| Marketing | Coolify container (`slugbase-marketing` image) | Astro static + nginx |
+| Admin | Coolify container (`slugbase-admin` image) | Admin portal |
+| Database | Operator PostgreSQL | Coolify-managed or external |
 
-- **App naming:** `slugbase-<env>-<app>` — `<env>` ∈ {`staging`, `production`}, `<app>` ∈ {`api`, `web`, `marketing`}. Platform identifiers, not public hostnames. (decision #51)
-- **Staging API scale-to-zero:** `slugbase-staging-api` runs `auto_stop_machines` + `min_machines_running = 0` (cold-start on request). `slugbase-production-api` stays warm (`≥ 1`). Workers scale to zero natively.
-- **CE:** split GHCR images — `ghcr.io/mdg-labs/slugbase-api` + `ghcr.io/mdg-labs/slugbase-web`; API runs `SERVE_WEB_CLIENT=false`; not subject to Cloud topology or naming.
-- **CI/CD:** PipeWatch-aligned workflow split — entry points `pr.yml`, `staging.yml`, `main.yml`, and `release.yml` (CE GHCR only); reusable `ci.yml`, `deploy-plan.yml`, `deploy.yml`, `sync-secrets.yml`, and `prepare-release.yml`; live `/version` probe gate (`scripts/ci/resolve-deploy-plan.mjs`); production cloud deploy on `push` → `main` after CI (not `release: published`); CE `:latest` on `release: published` only; manual per-package `package.json` versioning (`pnpm bump:versions` + pre-push hook — rule `15-deploy-version-bumps.mdc`); root `package.json` version is workspace metadata only; GitHub-hosted runners; branches `staging` and `main` (spec §22; authoritative references `docs/internal/ci-cd-deployment-refactor-proposal.md` and `docs/internal/ci-cd-example2/` (IssueSmith); PipeWatch `docs/internal/ci-cd-example/` is lineage only). **`e2e.yml` unchanged** — Playwright e2e on staging→main PRs only.
+- **Registry:** CI pushes `{REGISTRY}/slugbase-{service}:{version}`; staging also tags `:dev`.
+- **Coolify deploy:** per-service webhook URLs + `COOLIFY_DEPLOY_TOKEN` (Bearer) in GHA `staging` / `production`.
+- **CE:** split GHCR images — `ghcr.io/mdg-labs/slugbase-api` + `slugbase-web`; unchanged.
+- **CI/CD:** `ci.yml`, `deploy-plan.yml`, `deploy.yml`, `build-and-push-cloud-image.yml`; live `/version` probe gate; production on `push` → `main`; CE `:latest` on `release: published` only.
 
 ---
 

@@ -1,6 +1,6 @@
 # Environment variables
 
-Complete reference for every configuration key SlugBase reads from the environment. Values are managed in **Phase** (app `SlugBase`) for operator editing; Phase automatically syncs to **GitHub Actions environments** (`ci`, `staging`, `production`) for CI and deploy. Deploy pipelines push GHA secrets to Fly.io and Cloudflare Workers via `sync-secrets.sh`. See [`.env.example`](../.env.example) for the machine-readable key list (names only, no values).
+Complete reference for every configuration key SlugBase reads from the environment. Values are managed in **Phase** (app `SlugBase`) for operator editing; Phase automatically syncs to **GitHub Actions environments** (`ci`, `staging`, `production`) for CI and deploy. Cloud runtime env is configured in **Coolify** (operators mirror Phase values). See [`.env.example`](../.env.example) for the machine-readable key list (names only, no values).
 
 Product model: [slugbase-mvp-spec.md §15](slugbase-mvp-spec.md). Backend validation: [`packages/backend/src/config/env.schema.ts`](../packages/backend/src/config/env.schema.ts).
 
@@ -22,11 +22,11 @@ Product model: [slugbase-mvp-spec.md §15](slugbase-mvp-spec.md). Backend valida
 | Phase environment | GHA environment | Purpose |
 |---|---|---|
 | `Development` | _(local only — `phase run`)_ | Local development |
-| `Staging` | `staging` | Staging deploy + Fly/Workers runtime |
-| `Production` | `production` | Production deploy + Fly/Workers runtime |
+| `Staging` | `staging` | Staging deploy + Coolify runtime (via operator UI) |
+| `Production` | `production` | Production deploy + Coolify runtime (via operator UI) |
 | _(CI-only keys in Phase)_ | `ci` | CI-only persistent secrets (ReportPortal, etc.) |
 
-Phase syncs operator edits to GHA automatically. CI jobs and deploy workflows read `${{ secrets.* }}` from the matching GHA environment. Deploy calls `sync-secrets.sh` to push secrets to Fly.io and Cloudflare Workers.
+Phase syncs operator edits to GHA automatically. CI jobs and deploy workflows read `${{ secrets.* }}` from the matching GHA environment. Runtime secrets for Cloud apps are set in Coolify.
 
 **Local dev**
 
@@ -42,7 +42,7 @@ Every inventory table uses the same columns:
 
 | Column | Meaning |
 |---|---|
-| **Cloud** | Needed on managed Fly.io + Cloudflare Workers deployment |
+| **Cloud** | Needed on managed Coolify deployment (four container images) |
 | **CE** | Needed on CE GHCR images (`slugbase-api` and/or `slugbase-web`) |
 | **Required** | `Always` · `Cloud` · `Optional` · `Dev only` · `CI only` |
 | **Secret** | `Yes` = never commit or log; `No` = safe in client bundles |
@@ -54,7 +54,7 @@ Every inventory table uses the same columns:
 
 | Key | What it does | Cloud | CE | Required | Secret | When set | Example value |
 |---|---|---|---|---|---|---|---|
-| `SLUGBASE_EDITION` | Edition selector — `ce` (Community Edition split images) or `cloud` (managed split deploy). Drives edition-specific defaults (#479–#483); supersedes deprecated `SLUGBASE_MODE`. **Cloud staging/production:** set `cloud` in Phase → GHA (`sync-secrets` pushes to Fly API). **CE GHCR/self-host:** set `ce` on the **api** container (`Dockerfile.api` preset). | Yes | Yes (api) | Yes (production); defaults to `ce` in non-production when unset | No | Runtime / Build | `cloud` or `ce` |
+| `SLUGBASE_EDITION` | Edition selector — `ce` (Community Edition split images) or `cloud` (managed split deploy). Drives edition-specific defaults (#479–#483); supersedes deprecated `SLUGBASE_MODE`. **Cloud:** set `cloud` on Coolify app containers. **CE GHCR/self-host:** set `ce` on the **api** container (`Dockerfile.api` preset). | Yes | Yes (api) | Yes (production); defaults to `ce` in non-production when unset | No | Runtime / Build | `cloud` or `ce` |
 
 > **Preset wiring:** Backend startup applies edition presets before Zod validation. Explicit env values override unset preset keys; values that conflict with the active edition preset are rejected in production and warned in development/test.
 
@@ -64,7 +64,7 @@ Every inventory table uses the same columns:
 
 ## Quick start — Cloud
 
-Minimum keys to boot a **managed** deployment (API on Fly.io, web on Cloudflare Workers, marketing on Cloudflare Workers). See [full inventory](#full-inventory) for optional interfaces.
+Minimum keys to boot a **managed** deployment (four Coolify containers). See [full inventory](#full-inventory) for optional interfaces.
 
 ```bash
 # Generate secrets once (example — store in Phase, not in shell history)
@@ -190,8 +190,8 @@ flowchart LR
   end
   keys -->|auto sync| gha
   ciEnv -->|CI jobs| ciRunner[CI runners]
-  stgEnv -->|sync-secrets.sh| cloud
-  prodEnv -->|sync-secrets.sh| cloud
+  stgEnv -->|deploy.yml| cloud
+  prodEnv -->|deploy.yml| cloud
   keys -.->|phase run local only| localDev[Local dev]
   apiBuild --> apiContainer
   webBuild --> webContainer
@@ -200,10 +200,10 @@ flowchart LR
 
 | When set | Where | Examples |
 |---|---|---|
-| **Runtime** | Fly.io API process, CE api/web containers, Worker SSR (`process.env`) | `SESSION_SECRET`, `DATABASE_URL`, `API_BASE_URL` (web), `STRIPE_SECRET_KEY` |
+| **Runtime** | Coolify API/web/admin containers, CE api/web containers (`process.env`) | `SESSION_SECRET`, `DATABASE_URL`, `API_BASE_URL` (web), `STRIPE_SECRET_KEY` |
 | **Build** | `pnpm build` for web/marketing; Docker `ARG VITE_*` | `VITE_BILLING_ENABLED`, `PUBLIC_PLAN_PRICE_PERSONAL_MONTHLY` |
-| **Both** | Build + SSR fallback | `API_BASE_URL` (runtime Worker), `VITE_API_URL` (SSR fallback only) |
-| **CI** | GitHub Actions runner only; never shipped to production runtime | `FLY_API_TOKEN`, `CLOUDFLARE_API_TOKEN`, `SENTRY_AUTH_TOKEN`, `REPORTPORTAL_*` |
+| **Both** | Build + SSR fallback | `API_BASE_URL` (runtime web container), `VITE_API_URL` (SSR fallback only) |
+| **CI** | GitHub Actions runner only; never shipped to production runtime | `REGISTRY_*`, `COOLIFY_DEPLOY_*`, `SENTRY_AUTH_TOKEN`, `REPORTPORTAL_*` |
 
 ---
 
@@ -395,15 +395,18 @@ Optional on both shapes. Empty = no-op (no tracker, no Sentry init).
 
 ### 8. Cloud — CI and deploy
 
-Stored in Phase `Staging` / `Production` (synced to GHA `staging` / `production`). Injected into GitHub Actions deploy jobs and pushed to Fly/Workers via `sync-secrets.sh` — never client bundles unless explicitly listed above.
+Repository secrets (`REGISTRY`, `REGISTRY_USER`, `REGISTRY_TOKEN`) and GHA environment secrets (`COOLIFY_DEPLOY_*`) for image push and Coolify webhook triggers. Runtime app secrets are configured in Coolify (operators mirror Phase → GHA values).
 
 | Key | What it does | Cloud | CE | Required | Secret | When set | Example value |
 |---|---|---|---|---|---|---|---|
-| `FLY_API_TOKEN` | Fly.io deploy token for `flyctl deploy` | Yes | No | CI only | Yes | CI | `<Fly deploy token>` |
-| `CLOUDFLARE_API_TOKEN` | Cloudflare API token for `wrangler deploy` | Yes | No | CI only | Yes | CI | `<CF API token>` |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account id | Yes | No | CI only | No | CI | `<32-char hex id>` |
-| `CF_ACCESS_CLIENT_ID` | Cloudflare Access service token id (staging smoke) | Yes | No | CI only | Yes | CI | `<service token id>` |
-| `CF_ACCESS_CLIENT_SECRET` | Cloudflare Access service token secret | Yes | No | CI only | Yes | CI | `<service token secret>` |
+| `REGISTRY` | Private container registry host | Yes | No | CI only | No | CI | `berth.mdg-labs.dev` |
+| `REGISTRY_USER` | Registry login user | Yes | No | CI only | Yes | CI | `<registry user>` |
+| `REGISTRY_TOKEN` | Registry login token | Yes | No | CI only | Yes | CI | `<registry token>` |
+| `COOLIFY_DEPLOY_TOKEN` | Coolify API token with `deploy` permission | Yes | No | CI only | Yes | CI | `<bearer token>` |
+| `COOLIFY_DEPLOY_WEBHOOK_API` | Coolify deploy webhook URL for API app | Yes | No | CI only | Yes | CI | `https://…/api/v1/deploy?uuid=…` |
+| `COOLIFY_DEPLOY_WEBHOOK_WEB` | Coolify deploy webhook URL for web app | Yes | No | CI only | Yes | CI | `https://…/api/v1/deploy?uuid=…` |
+| `COOLIFY_DEPLOY_WEBHOOK_MARKETING` | Coolify deploy webhook URL for marketing app | Yes | No | CI only | Yes | CI | `https://…/api/v1/deploy?uuid=…` |
+| `COOLIFY_DEPLOY_WEBHOOK_ADMIN` | Coolify deploy webhook URL for admin app | Yes | No | CI only | Yes | CI | `https://…/api/v1/deploy?uuid=…` |
 
 ---
 
@@ -417,7 +420,7 @@ CE ships as **`slugbase-api`** (NestJS API, migrations, operator integrations) a
 |---|---|---|---|---|---|---|---|
 | `SERVE_WEB_CLIENT` | Serve web from API container (legacy combined image); split CE api must use `false` | No | Yes (api) | Optional | No | Runtime | `false` (`Dockerfile.api` preset) |
 | `WEB_CLIENT_SERVER_BUILD` | RR7 server entry path (legacy combined image only) | No | Yes (combined) | Optional | No | Runtime | `/app/packages/web/build/server/index.js` |
-| `API_BASE_URL` | Upstream API for web SSR loaders and server actions | Yes (web Worker) | Yes (web container) | Yes (web) | No | Runtime | `http://api:3000` |
+| `API_BASE_URL` | Upstream API for web SSR loaders and server actions | Yes (web container) | Yes (web container) | Yes (web) | No | Runtime | `http://api:3000` |
 | `VITE_BILLING_ENABLED` | Hide billing UI | No | Build only | Optional | No | Build | `false` |
 | `VITE_MAIL_ADMIN_UI` | Hide SMTP workspace panel (operator-managed) | No | Build only | Optional | No | Build | `false` |
 | `VITE_OIDC_ADMIN_UI` | Hide OIDC workspace panel (operator-managed) | No | Build only | Optional | No | Build | `false` |
@@ -470,10 +473,10 @@ SlugBase uses three **GitHub Actions environments** as the CI/deploy secret sour
 | GHA environment | Phase source | Used by |
 |---|---|---|
 | `ci` | CI-only keys in Phase | Parallel CI jobs (`ci.yml`) |
-| `staging` | Phase `Staging` | Staging deploy (`deploy.yml`), smoke, sync-secrets |
-| `production` | Phase `Production` | Production deploy (`main.yml` → `deploy.yml`), smoke, sync-secrets |
+| `staging` | Phase `Staging` | Staging deploy (`deploy.yml`), smoke |
+| `production` | Phase `Production` | Production deploy (`main.yml` → `deploy.yml`), smoke |
 
-Repository-level secrets are limited to what GitHub requires for its own integration (e.g. `GITHUB_TOKEN`). Application secrets live in Phase and flow through GHA environments — not in repository secrets. Deploy pipelines call `scripts/ci/sync-secrets.sh` to push GHA environment values to Fly.io and Cloudflare Workers.
+Repository secrets: `REGISTRY`, `REGISTRY_USER`, `REGISTRY_TOKEN` (image push). Application runtime secrets live in Phase → GHA environments and are mirrored into Coolify by operators. Coolify webhook secrets (`COOLIFY_DEPLOY_*`) live in GHA `staging` / `production` environments.
 
 ### Deploy idempotency (live `/version` probes)
 
