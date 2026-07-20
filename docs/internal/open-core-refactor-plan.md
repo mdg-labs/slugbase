@@ -1647,7 +1647,7 @@ Status column: orchestrator sets `[~]` at batch start, verifier sets `[x]` or `[
 | TASK-014 | `[x]` | slugbase | 013 | | `Dockerfile.api`, `Dockerfile.web`, `scripts/ci/dockerfile-excludes-admin.spec.ts` — `41cb2b3` |
 | TASK-015 | `[x]` | slugbase | 012 | | `packages/backend/src/domain-modules*.ts`, `package.json` exports — `1e2acde` |
 | TASK-016 | `[x]` | slugbase-cloud | 015 | | `packages/cloud-api/**`, `Dockerfile.api`, contact move — `e79eed7`, `01b33c4` |
-| TASK-017 | `[ ]` | slugbase-cloud + slugbase | 004,015,016 | | `packages/slugbase-billing/**`, `packages/web/**` billing API, `shared-types` contracts |
+| TASK-017 | `[~]` | slugbase-cloud + slugbase | 004,015,016 | | `packages/slugbase-billing/**`, `packages/web/**` billing API, `shared-types` contracts |
 | TASK-018 | `[ ]` | all three | 012,017 | | `env.schema.ts` per repo, `environment-variables.md`, `.env.example` |
 | TASK-019 | `[ ]` | slugbase | 018 | | `e2e/**`, `scripts/e2e.sh` (CE only) |
 | TASK-020 | `[ ]` | slugbase-cloud | 017,019,027 | **yes** | deploy runbook, Phase inventory — manual payment |
