@@ -1399,9 +1399,9 @@ TASK-028  EU sovereignty legal refresh (AGB + Datenschutz + impressum)
 - **Verify:** [x] `@slugbase/backend` test:unit 535/535; `@slugbase/slugbase-billing` 6/6; `@slugbase/cloud-api` 13/13; `@mdg-labs/commerce-core` 7/7
 
 ### TASK-019 — CE e2e
-- [ ] `e2e/playwright.config.ts` — remove `cloud` project
-- [ ] `scripts/e2e.sh` — CE only
-- **Verify:** `pnpm test:e2e --project=ce`
+- [x] `e2e/playwright.config.ts` — remove `cloud` project — `df437f6`
+- [x] `scripts/e2e.sh` — CE only — `df437f6`
+- **Verify:** [ ] `pnpm test:e2e --project=ce` — 33/37 passed, 2 failed (`tags/crud.spec.ts:95`, `workspace/switcher.spec.ts:6`) at `08132f4`
 
 ### TASK-020 — Cloud staging deploy
 
@@ -1651,7 +1651,7 @@ Status column: orchestrator sets `[~]` at batch start, verifier sets `[x]` or `[
 | TASK-016 | `[x]` | slugbase-cloud | 015 | | `packages/cloud-api/**`, `Dockerfile.api`, contact move — `e79eed7`, `01b33c4` |
 | TASK-017 | `[x]` | slugbase-cloud + slugbase | 004,015,016 | | `packages/slugbase-billing/**`, `packages/web/**` billing API, `shared-types` contracts — `436858b` + `3aee53d`, `bcf1c2b` |
 | TASK-018 | `[x]` | all three | 012,017 | | `env.schema.ts` per repo, `environment-variables.md`, `.env.example` — `6bba861`, `4a486b5`, `2be3224` |
-| TASK-019 | `[~]` | slugbase | 018 | | `e2e/**`, `scripts/e2e.sh` (CE only) |
+| TASK-019 | `[!]` | slugbase | 018 | | CE-only e2e config done; verify 2 flaky failures — `08132f4` |
 | TASK-020 | `[ ]` | slugbase-cloud | 017,019,027 | **yes** | deploy runbook, Phase inventory — manual payment |
 | TASK-021 | `[ ]` | slugbase | 019 | **yes** | `packages/{ui,shared-types}/package.json`, local npm publish |
 | TASK-022 | `[ ]` | slugbase | 021 | | `.github/workflows/publish-npm.yml` |
