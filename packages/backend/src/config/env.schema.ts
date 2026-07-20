@@ -63,16 +63,6 @@ const optionalFlagsSchema = z
     // OpenAI AI suggestions (spec §11.2, §15) - optional; no-op AI used when absent
     OPENAI_API_KEY: z.string().min(1).optional(),
     OPENAI_MODEL: z.string().min(1).default("gpt-4o-mini"),
-    // Stripe billing (spec §11.4, §15) - optional; no-op billing / full entitlements when absent
-    STRIPE_SECRET_KEY: z.string().min(1).optional(),
-    STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
-    // Config-driven Stripe price ids (spec §12.1, def §6) - not hard-coded in app logic
-    // Per-interval price IDs (spec §12.1, per-interval billing)
-    STRIPE_PRICE_PERSONAL_MONTHLY: z.string().min(1).optional(),
-    STRIPE_PRICE_PERSONAL_ANNUAL: z.string().min(1).optional(),
-    STRIPE_PRICE_TEAM_MONTHLY: z.string().min(1).optional(),
-    STRIPE_PRICE_TEAM_ANNUAL: z.string().min(1).optional(),
-    STRIPE_PRICE_SUPPORTER: z.string().min(1).optional(),
     SUPPORTER_PROMOTION_END: z.string().min(1).optional(),
     // Downgrade overflow grace (spec §12.5, def §5) - days after period end before archive
     DOWNGRADE_GRACE_PERIOD_DAYS: z.coerce.number().int().nonnegative().default(7),
@@ -90,8 +80,8 @@ const optionalFlagsSchema = z
     // Signup + email-change verification sends (spec §5.5, §18) - per user, unused tokens in window
     RATE_LIMIT_EMAIL_VERIFICATION_MAX: z.coerce.number().int().positive().default(3),
     RATE_LIMIT_EMAIL_VERIFICATION_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
-    // Cloudflare Turnstile challenge (spec §11.8, §15) - optional; no-op challenge when absent
-    TURNSTILE_SECRET_KEY: z.string().min(1).optional(),
+    // Altcha HMAC secret (spec §11.8) - optional; noop challenge when absent (TASK-027 implements provider)
+    ALTCHA_HMAC_KEY: z.string().min(32).optional(),
     // Skip challenge verification in development (spec §11.8) - defaults true when NODE_ENV !== production
     CHALLENGE_DEV_SKIP: optionalEnvBoolean(),
     // Product analytics (spec §11.6, §15) - optional; no-op used when Umami is absent
@@ -173,13 +163,6 @@ function readFlagsInput(env: NodeJS.ProcessEnv) {
     SMTP_FROM: env.SMTP_FROM,
     OPENAI_API_KEY: env.OPENAI_API_KEY,
     OPENAI_MODEL: env.OPENAI_MODEL,
-    STRIPE_SECRET_KEY: env.STRIPE_SECRET_KEY,
-    STRIPE_WEBHOOK_SECRET: env.STRIPE_WEBHOOK_SECRET,
-    STRIPE_PRICE_PERSONAL_MONTHLY: env.STRIPE_PRICE_PERSONAL_MONTHLY,
-    STRIPE_PRICE_PERSONAL_ANNUAL: env.STRIPE_PRICE_PERSONAL_ANNUAL,
-    STRIPE_PRICE_TEAM_MONTHLY: env.STRIPE_PRICE_TEAM_MONTHLY,
-    STRIPE_PRICE_TEAM_ANNUAL: env.STRIPE_PRICE_TEAM_ANNUAL,
-    STRIPE_PRICE_SUPPORTER: env.STRIPE_PRICE_SUPPORTER,
     SUPPORTER_PROMOTION_END: env.SUPPORTER_PROMOTION_END,
     DOWNGRADE_GRACE_PERIOD_DAYS: env.DOWNGRADE_GRACE_PERIOD_DAYS,
     SESSION_TTL_DAYS: env.SESSION_TTL_DAYS,
@@ -191,7 +174,7 @@ function readFlagsInput(env: NodeJS.ProcessEnv) {
     RATE_LIMIT_TOKEN_CREATION_TTL_SECONDS: env.RATE_LIMIT_TOKEN_CREATION_TTL_SECONDS,
     RATE_LIMIT_EMAIL_VERIFICATION_MAX: env.RATE_LIMIT_EMAIL_VERIFICATION_MAX,
     RATE_LIMIT_EMAIL_VERIFICATION_TTL_SECONDS: env.RATE_LIMIT_EMAIL_VERIFICATION_TTL_SECONDS,
-    TURNSTILE_SECRET_KEY: env.TURNSTILE_SECRET_KEY,
+    ALTCHA_HMAC_KEY: env.ALTCHA_HMAC_KEY,
     CHALLENGE_DEV_SKIP: env.CHALLENGE_DEV_SKIP,
     UMAMI_HOST: env.UMAMI_HOST,
     UMAMI_WEBSITE_ID: env.UMAMI_WEBSITE_ID,

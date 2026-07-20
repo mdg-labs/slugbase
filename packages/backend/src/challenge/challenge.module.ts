@@ -1,14 +1,13 @@
 import { Global, Module } from "@nestjs/common";
 
 import { ConfigModule } from "../config/config.module.js";
-import { ConfigService } from "../config/config.service.js";
 import { CHALLENGE, TURNSTILE_HTTP } from "./challenge.tokens.js";
 import { NoopChallengeService } from "./noop-challenge.service.js";
 import { TurnstileChallengeService } from "./turnstile-challenge.service.js";
 
 /**
  * Provides the CHALLENGE interface token bound to the config-selected implementation.
- * If TURNSTILE_SECRET_KEY is set → TurnstileChallengeService; otherwise → NoopChallengeService.
+ * Legacy Turnstile env (removed from CE schema) still selects TurnstileChallengeService until TASK-027 Altcha ships.
  * No deployment-mode branching - interface selection only (spec §11.8, §15).
  */
 @Global()
@@ -24,13 +23,13 @@ import { TurnstileChallengeService } from "./turnstile-challenge.service.js";
     {
       provide: CHALLENGE,
       useFactory(
-        config: ConfigService,
         turnstile: TurnstileChallengeService,
         noop: NoopChallengeService,
       ) {
-        return config.get("TURNSTILE_SECRET_KEY") ? turnstile : noop;
+        const turnstileSecret = process.env.TURNSTILE_SECRET_KEY?.trim();
+        return turnstileSecret ? turnstile : noop;
       },
-      inject: [ConfigService, TurnstileChallengeService, NoopChallengeService],
+      inject: [TurnstileChallengeService, NoopChallengeService],
     },
   ],
   exports: [CHALLENGE, TurnstileChallengeService, NoopChallengeService],

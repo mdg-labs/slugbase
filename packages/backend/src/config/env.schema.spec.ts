@@ -150,6 +150,26 @@ describe("validateEnvConfig", () => {
     expect(config.OIDC_PROVIDERS).toEqual([]);
   });
 
+  it("accepts optional ALTCHA_HMAC_KEY", () => {
+    const config = validateEnvConfig({
+      ...validTestEnv,
+      NODE_ENV: "development",
+      ALTCHA_HMAC_KEY: "a".repeat(32),
+    });
+
+    expect(config.ALTCHA_HMAC_KEY).toBe("a".repeat(32));
+  });
+
+  it("does not include removed Stripe keys on AppConfig", () => {
+    const config = validateEnvConfig({
+      ...validTestEnv,
+      NODE_ENV: "development",
+      STRIPE_SECRET_KEY: "sk_test_should_be_ignored",
+    });
+
+    expect(config).not.toHaveProperty("STRIPE_SECRET_KEY");
+  });
+
   it("parses per-provider OIDC env vars at startup", () => {
     const config = validateEnvConfig({
       ...validTestEnv,

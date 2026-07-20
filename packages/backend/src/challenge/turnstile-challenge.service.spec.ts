@@ -6,7 +6,6 @@ import { TurnstileChallengeService } from "./turnstile-challenge.service.js";
 
 function createConfig(overrides: Partial<Record<string, unknown>> = {}): ConfigService {
   const values: Record<string, unknown> = {
-    TURNSTILE_SECRET_KEY: "test-turnstile-secret",
     isProduction: true,
     CHALLENGE_DEV_SKIP: false,
     ...overrides,
@@ -19,11 +18,13 @@ function createConfig(overrides: Partial<Record<string, unknown>> = {}): ConfigS
 
 describe("TurnstileChallengeService", () => {
   it("reports challenge as available when secret is configured", () => {
+    vi.stubEnv("TURNSTILE_SECRET_KEY", "test-turnstile-secret");
     const service = new TurnstileChallengeService(createConfig(), vi.fn());
     expect(service.isAvailable()).toBe(true);
   });
 
   it("skips verification when dev-skip is enabled", async () => {
+    vi.stubEnv("TURNSTILE_SECRET_KEY", "test-turnstile-secret");
     const http = vi.fn();
     const service = new TurnstileChallengeService(
       createConfig({ isProduction: false, CHALLENGE_DEV_SKIP: undefined }),
@@ -35,6 +36,7 @@ describe("TurnstileChallengeService", () => {
   });
 
   it("verifies a token via Turnstile siteverify", async () => {
+    vi.stubEnv("TURNSTILE_SECRET_KEY", "test-turnstile-secret");
     const http = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ success: true }), { status: 200 }),
     );
@@ -53,6 +55,7 @@ describe("TurnstileChallengeService", () => {
   });
 
   it("rejects when Turnstile reports failure", async () => {
+    vi.stubEnv("TURNSTILE_SECRET_KEY", "test-turnstile-secret");
     const http = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ success: false, "error-codes": ["invalid-input-response"] }), {
         status: 200,
@@ -66,6 +69,7 @@ describe("TurnstileChallengeService", () => {
   });
 
   it("rejects missing tokens when dev-skip is disabled", async () => {
+    vi.stubEnv("TURNSTILE_SECRET_KEY", "test-turnstile-secret");
     const http = vi.fn();
     const service = new TurnstileChallengeService(createConfig(), http);
 
@@ -76,6 +80,7 @@ describe("TurnstileChallengeService", () => {
   });
 
   it("rejects when siteverify returns a non-success HTTP status", async () => {
+    vi.stubEnv("TURNSTILE_SECRET_KEY", "test-turnstile-secret");
     const http = vi.fn().mockResolvedValue(new Response("error", { status: 503 }));
     const service = new TurnstileChallengeService(createConfig(), http);
 
@@ -85,6 +90,7 @@ describe("TurnstileChallengeService", () => {
   });
 
   it("rejects when the HTTP request fails", async () => {
+    vi.stubEnv("TURNSTILE_SECRET_KEY", "test-turnstile-secret");
     const http = vi.fn().mockRejectedValue(new Error("network down"));
     const service = new TurnstileChallengeService(createConfig(), http);
 

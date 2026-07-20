@@ -35,7 +35,7 @@ export class TurnstileChallengeService implements ChallengeService {
     @Inject(ConfigService) private readonly config: ConfigService,
     @Inject(TURNSTILE_HTTP) private readonly http: TurnstileHttpExecutor,
   ) {
-    this.secretKey = config.get("TURNSTILE_SECRET_KEY");
+    this.secretKey = process.env.TURNSTILE_SECRET_KEY?.trim() || undefined;
   }
 
   isAvailable(): boolean {

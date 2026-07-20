@@ -1,8 +1,8 @@
 # Environment variables
 
-Complete reference for every configuration key SlugBase reads from the environment. Values are managed in **Phase** (app `SlugBase`) for operator editing; Phase automatically syncs to **GitHub Actions environments** (`ci`, `staging`, `production`) for CI and deploy. Cloud runtime env is configured in **Coolify** (operators mirror Phase values). See [`.env.example`](../.env.example) for the machine-readable key list (names only, no values).
+Complete reference for configuration keys across the open-core split: **slugbase** (public CE), **commerce** (private billing library), and **slugbase-cloud** (private Cloud deploy). Values are managed in **Phase** (app `SlugBase`) for operator editing; Phase automatically syncs to **GitHub Actions environments** (`ci`, `staging`, `production`) for CI and deploy. Cloud runtime env is configured in **Coolify** (operators mirror Phase values). See [`.env.example`](../.env.example) (CE), [`commerce/.env.example`](../../commerce/.env.example), and [`slugbase-cloud/.env.example`](../../slugbase-cloud/.env.example) for machine-readable key lists (names only, no values).
 
-Product model: [slugbase-mvp-spec.md §15](slugbase-mvp-spec.md). Backend validation: [`packages/backend/src/config/env.schema.ts`](../packages/backend/src/config/env.schema.ts).
+Product model: [slugbase-mvp-spec.md §15](slugbase-mvp-spec.md). CE backend validation: [`packages/backend/src/config/env.schema.ts`](../packages/backend/src/config/env.schema.ts). Commerce: [`commerce/packages/commerce-core/src/config/env.schema.ts`](../../commerce/packages/commerce-core/src/config/env.schema.ts). Cloud billing: [`slugbase-cloud/packages/slugbase-billing/src/config/env.schema.ts`](../../slugbase-cloud/packages/slugbase-billing/src/config/env.schema.ts).
 
 ---
 
@@ -42,19 +42,20 @@ Every inventory table uses the same columns:
 
 | Column | Meaning |
 |---|---|
-| **Cloud** | Needed on managed Coolify deployment (four container images) |
-| **CE** | Needed on CE GHCR images (`slugbase-api` and/or `slugbase-web`) |
+| **CE** | Needed on public CE GHCR images (`slugbase-api` / `slugbase-web`) |
+| **commerce** | Read by `@mdg-labs/commerce-core` (seller profile, VAT, invoice prefix) on Cloud deploy |
+| **slugbase-cloud** | Needed on private Cloud Coolify containers (`cloud-api`, marketing, admin) |
 | **Required** | `Always` · `Cloud` · `Optional` · `Dev only` · `CI only` |
 | **Secret** | `Yes` = never commit or log; `No` = safe in client bundles |
 | **When set** | `Runtime` (process env at start) · `Build` (Vite/Astro bake-in) · `Both` · `CI` |
 
-> **Build-time warning:** Keys prefixed `VITE_` (web app) or `PUBLIC_` (marketing site) are **inlined into client bundles at build time**. Never put true secrets there — session keys, API secrets, SMTP passwords, Stripe keys, etc. belong in unprefixed runtime keys only.
+> **Build-time warning:** Keys prefixed `VITE_` (web app) or `PUBLIC_` (marketing site) are **inlined into client bundles at build time**. Never put true secrets there — session keys, API secrets, SMTP passwords, Mollie keys, etc. belong in unprefixed runtime keys only.
 
 ### Edition selector
 
-| Key | What it does | Cloud | CE | Required | Secret | When set | Example value |
-|---|---|---|---|---|---|---|---|
-| `SLUGBASE_EDITION` | Edition selector — `ce` (Community Edition split images) or `cloud` (managed split deploy). Drives edition-specific defaults (#479–#483); supersedes deprecated `SLUGBASE_MODE`. **Cloud:** set `cloud` on Coolify app containers. **CE GHCR/self-host:** set `ce` on the **api** container (`Dockerfile.api` preset). | Yes | Yes (api) | Yes (production); defaults to `ce` in non-production when unset | No | Runtime / Build | `cloud` or `ce` |
+| Key | What it does | CE | commerce | slugbase-cloud | Required | Secret | When set | Example value |
+|---|---|---|---|---|---|---|---|---|
+| `SLUGBASE_EDITION` | Edition selector — `ce` (Community Edition split images) or `cloud` (managed split deploy). Drives edition-specific defaults (#479–#483); supersedes deprecated `SLUGBASE_MODE`. **Cloud:** set `cloud` on Coolify app containers. **CE GHCR/self-host:** set `ce` on the **api** container (`Dockerfile.api` preset). | Yes (api) | — | Yes | Yes (production); defaults to `ce` in non-production when unset | No | Runtime / Build | `cloud` or `ce` |
 
 > **Preset wiring:** Backend startup applies edition presets before Zod validation. Explicit env values override unset preset keys; values that conflict with the active edition preset are rejected in production and warned in development/test.
 
@@ -84,7 +85,7 @@ VITE_API_URL=https://api.example.com
 PUBLIC_REGISTRATION=true
 EMAIL_VERIFICATION_REQUIRED=true
 VITE_BILLING_ENABLED=true
-# + Stripe, Turnstile, deploy tokens — see Cloud tables below
+# + Mollie, Altcha, commerce seller profile, deploy tokens — see Cloud tables below
 ```
 
 ### URL wiring (Cloud)
@@ -132,7 +133,7 @@ VITE_MAIL_ADMIN_UI=false
 VITE_OIDC_ADMIN_UI=false
 VITE_AI_BYO_CREDENTIAL=false
 # Do not bake VITE_APP_BASE_URL, VITE_UMAMI_*, or VITE_SENTRY_* — set APP_BASE_URL at runtime on api
-# Leave Stripe, Turnstile, Umami, Sentry empty for no-op interfaces
+# Leave Mollie, Altcha, Umami, Sentry empty for no-op interfaces
 ```
 
 Example compose services (illustrative — pin semver tags in production):
@@ -201,7 +202,7 @@ flowchart LR
 
 | When set | Where | Examples |
 |---|---|---|
-| **Runtime** | Coolify API/web/admin containers, CE api/web containers (`process.env`) | `SESSION_SECRET`, `DATABASE_URL`, `API_BASE_URL` (web), `STRIPE_SECRET_KEY` |
+| **Runtime** | Coolify API/web/admin containers, CE api/web containers (`process.env`) | `SESSION_SECRET`, `DATABASE_URL`, `API_BASE_URL` (web), `MOLLIE_API_KEY` |
 | **Build** | `pnpm build` for web/marketing; Docker `ARG VITE_*` | `VITE_BILLING_ENABLED`, `PUBLIC_PLAN_PRICE_PERSONAL_MONTHLY` |
 | **Both** | Build + SSR fallback | `API_BASE_URL` (runtime web container), `VITE_API_URL` (SSR fallback only) |
 | **CI** | GitHub Actions runner only; never shipped to production runtime | `REGISTRY_*`, `COOLIFY_DEPLOY_*`, `SENTRY_AUTH_TOKEN`, `PANGOLIN_*` |
@@ -297,22 +298,49 @@ OIDC_google_NAME=Google
 
 ---
 
-### 4. Cloud — Stripe and billing (API runtime)
+### 4. Cloud billing — Mollie and plan amounts (`slugbase-cloud`)
 
-Required for paid entitlements on Cloud. Leave empty on CE (no-op billing grants full entitlements).
+Required for paid entitlements on Cloud. Leave empty on CE (no-op billing grants full entitlements). Mollie keys and plan amounts are validated in [`slugbase-billing` env schema](../../slugbase-cloud/packages/slugbase-billing/src/config/env.schema.ts).
 
-| Key | What it does | Cloud | CE | Required | Secret | When set | Example value |
-|---|---|---|---|---|---|---|---|
-| `STRIPE_SECRET_KEY` | Stripe API secret key | Yes | No | Cloud | Yes | Runtime | `sk_live_…` |
-| `STRIPE_WEBHOOK_SECRET` | Webhook signing secret | Yes | No | Cloud | Yes | Runtime | `whsec_…` |
-| `STRIPE_PRICE_PERSONAL_MONTHLY` | Stripe price id for Personal plan (monthly) | Yes | No | Cloud | No | Runtime | `price_…` |
-| `STRIPE_PRICE_PERSONAL_ANNUAL` | Stripe price id for Personal plan (annual) | Yes | No | Cloud | No | Runtime | `price_…` |
-| `STRIPE_PRICE_TEAM_MONTHLY` | Stripe price id for Team plan (monthly) | Yes | No | Cloud | No | Runtime | `price_…` |
-| `STRIPE_PRICE_TEAM_ANNUAL` | Stripe price id for Team plan (annual) | Yes | No | Cloud | No | Runtime | `price_…` |
-| `STRIPE_PRICE_SUPPORTER` | Stripe price id for one-time supporter purchase | Yes | No | Optional | No | Runtime | `price_…` |
-| `SUPPORTER_PROMOTION_END` | ISO-8601 end of supporter offer | Yes | No | Optional | No | Runtime | `2026-12-31T23:59:59Z` |
-| `DOWNGRADE_GRACE_PERIOD_DAYS` | Days after period end before overflow archive | Yes | Optional | Optional | No | Runtime | `7` (default) |
-| `TURNSTILE_SECRET_KEY` | Turnstile server secret (API + contact) | Yes | No | Optional | Yes | Runtime | `<Turnstile secret>` |
+| Key | What it does | CE | commerce | slugbase-cloud | Required | Secret | When set | Example value |
+|---|---|---|---|---|---|---|---|---|
+| `MOLLIE_API_KEY` | Mollie API key | — | — | Yes | Cloud | Yes | Runtime | `test_…` / `live_…` |
+| `MOLLIE_WEBHOOK_SECRET` | Mollie webhook signing secret | — | — | Yes | Cloud | Yes | Runtime | `<webhook secret>` |
+| `MOLLIE_PROFILE_ID` | Mollie website profile id | — | — | Yes | Optional | No | Runtime | `pfl_…` |
+| `BILLING_CURRENCY` | ISO currency for plan amounts | — | Yes | Yes | Optional | No | Runtime | `eur` (default) |
+| `BILLING_PLAN_PERSONAL_MONTHLY_AMOUNT` | Personal plan net amount (cents) | — | — | Yes | Cloud | No | Runtime | `499` |
+| `BILLING_PLAN_PERSONAL_ANNUAL_AMOUNT` | Personal annual net amount (cents) | — | — | Yes | Cloud | No | Runtime | `4990` |
+| `BILLING_PLAN_TEAM_MONTHLY_AMOUNT` | Team plan net amount per seat (cents) | — | — | Yes | Cloud | No | Runtime | `999` |
+| `BILLING_PLAN_TEAM_ANNUAL_AMOUNT` | Team annual net amount per seat (cents) | — | — | Yes | Cloud | No | Runtime | `9990` |
+| `BILLING_PLAN_SUPPORTER_AMOUNT` | One-time supporter net amount (cents) | — | — | Optional | No | Runtime | `2500` |
+| `SUPPORTER_PROMOTION_END` | ISO-8601 end of supporter offer | Yes | — | Yes | Optional | No | Runtime | `2026-12-31T23:59:59Z` |
+| `DOWNGRADE_GRACE_PERIOD_DAYS` | Days after period end before overflow archive | Yes | — | Yes | Optional | No | Runtime | `7` (default) |
+
+### 4b. Commerce seller profile (`commerce` + Cloud deploy runtime)
+
+Invoice seller block and VAT mode — validated in [`commerce-core` env schema](../../commerce/packages/commerce-core/src/config/env.schema.ts). Set on Cloud API runtime alongside Mollie keys.
+
+| Key | What it does | CE | commerce | slugbase-cloud | Required | Secret | When set | Example value |
+|---|---|---|---|---|---|---|---|---|
+| `BILLING_SELLER_LEGAL_NAME` | Seller legal name on invoices | — | Yes | Yes (runtime) | Cloud | No | Runtime | `MDG Labs GmbH` |
+| `BILLING_SELLER_ADDRESS_LINE1` | Seller address line 1 | — | Yes | Yes (runtime) | Cloud | No | Runtime | `Example Str. 1` |
+| `BILLING_SELLER_ADDRESS_LINE2` | Seller address line 2 | — | Yes | Optional | Optional | No | Runtime | `c/o …` |
+| `BILLING_SELLER_POSTAL_CODE` | Seller postal code | — | Yes | Yes (runtime) | Cloud | No | Runtime | `10115` |
+| `BILLING_SELLER_CITY` | Seller city | — | Yes | Yes (runtime) | Cloud | No | Runtime | `Berlin` |
+| `BILLING_SELLER_COUNTRY` | Seller country (ISO 3166-1 alpha-2) | — | Yes | Yes (runtime) | Cloud | No | Runtime | `DE` |
+| `BILLING_SELLER_VAT_ID` | Seller VAT id (when applicable) | — | Yes | Optional | Optional | No | Runtime | `DE…` |
+| `BILLING_SELLER_EMAIL` | Seller contact email on invoices | — | Yes | Optional | Optional | No | Runtime | `billing@example.com` |
+| `BILLING_VAT_MODE` | `kleinunternehmer` (default) or `standard` | — | Yes | Yes (runtime) | Optional | No | Runtime | `kleinunternehmer` |
+| `BILLING_INVOICE_PREFIX` | Invoice number prefix | — | Yes | Yes (runtime) | Optional | No | Runtime | `SB` (default) |
+
+### 4c. Bot protection — Altcha (CE optional, Cloud contact)
+
+Replaces removed `TURNSTILE_*` / `PUBLIC_TURNSTILE_SITE_KEY` (see open-core refactor plan §14.8). Full Altcha provider ships in TASK-027.
+
+| Key | What it does | CE | commerce | slugbase-cloud | Required | Secret | When set | Example value |
+|---|---|---|---|---|---|---|---|---|
+| `ALTCHA_HMAC_KEY` | Altcha server HMAC secret (API + contact) | Optional | — | Yes | Optional | Yes | Runtime | `<openssl rand -hex 32>` (min 32 chars) |
+| `CHALLENGE_DEV_SKIP` | Skip challenge verification in development | Yes | — | Yes | Dev only | No | Runtime | `true` (default non-production) |
 
 ---
 
@@ -348,8 +376,7 @@ Baked in at **`pnpm --filter @slugbase/marketing build`**. Not used by CE api/we
 | `PUBLIC_FRONTEND_ORIGIN` | App URL for sign-in / register CTAs | Yes | No | Cloud | No | Build | `https://app.example.com` |
 | `PUBLIC_FORWARDING_DOMAIN` | Forwarding domain shown in demo copy | Yes | No | Optional | No | Build | `go.example.com` |
 | `PUBLIC_API_BASE_URL` | API base URL for fetching prices from `GET /pricing/public` | Yes | No | Cloud | No | Build | `https://api.example.com` |
-| `PUBLIC_CONTACT_ENDPOINT` | `POST` target for contact form | Yes | No | Cloud | No | Build | `https://api.example.com/contact` |
-| `PUBLIC_TURNSTILE_SITE_KEY` | Turnstile site key (contact form) | Yes | No | Optional | No | Build | `<Turnstile site key>` |
+| `PUBLIC_CONTACT_ENDPOINT` | `POST` target for contact form | — | — | Yes | Cloud | No | Build | `https://api.example.com/contact` |
 | ~~`PUBLIC_PLAN_PRICE_PERSONAL_MONTHLY`~~ | **DEPRECATED** — prices fetched from `GET /pricing/public` (fallback when `PUBLIC_API_BASE_URL` unset) | — | — | — | — | — | — |
 | ~~`PUBLIC_PLAN_PRICE_PERSONAL_YEARLY`~~ | **DEPRECATED** — prices fetched from `GET /pricing/public` | — | — | — | — | — | — |
 | ~~`PUBLIC_PLAN_PRICE_TEAM_SEAT`~~ | **DEPRECATED** — prices fetched from `GET /pricing/public` | — | — | — | — | — | — |
@@ -487,7 +514,7 @@ Admin PRD §11.1. Validated in [`packages/admin/src/config/env.schema.ts`](../pa
 
 **Migrate-only (CI):** `DATABASE_URL_UNPOOLED` when set, else `DATABASE_URL` — same pattern as product API.
 
-**Not used on admin:** `SESSION_SECRET`, `ENCRYPTION_KEY`, `STRIPE_*`, OIDC secrets, `FRONTEND_ORIGIN`, `APP_BASE_URL`.
+**Not used on admin:** `SESSION_SECRET`, `ENCRYPTION_KEY`, `MOLLIE_*`, OIDC secrets, `FRONTEND_ORIGIN`, `APP_BASE_URL`.
 
 ---
 
