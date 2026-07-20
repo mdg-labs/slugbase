@@ -5,14 +5,14 @@
       "path": "."
     },
     {
+      "path": "../slugbase-cloud"
+    },
+    {
       "name": "slugbase-docs",
       "path": "../slugbase-docs"
     },
     {
       "path": "../commerce"
-    },
-    {
-      "path": "../slugbase-cloud"
     }
   ]
 }
