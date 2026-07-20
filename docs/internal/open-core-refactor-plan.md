@@ -1377,9 +1377,9 @@ TASK-028  EU sovereignty legal refresh (AGB + Datenschutz + impressum)
 - **Verify:** CE `pnpm --filter @slugbase/backend test:unit` green
 
 ### TASK-016 — cloud-api package
-- [ ] Create `slugbase-cloud/packages/cloud-api` (`@slugbase/cloud-api`) with `CloudAppModule`
-- [ ] Move `contact/**` from CE backend into `cloud-api/src/contact/` (if not already removed in TASK-012)
-- [ ] Dockerfile.api in slugbase-cloud builds cloud-api
+- [x] Create `slugbase-cloud/packages/cloud-api` (`@slugbase/cloud-api`) with `CloudAppModule`
+- [x] Move `contact/**` from CE backend into `cloud-api/src/contact/` (if not already removed in TASK-012)
+- [x] Dockerfile.api in slugbase-cloud builds cloud-api
 - **Verify:** `pnpm --filter @slugbase/cloud-api build` (from slugbase-cloud with sibling slugbase)
 
 ### TASK-017 — slugbase-billing + Mollie port
@@ -1646,7 +1646,7 @@ Status column: orchestrator sets `[~]` at batch start, verifier sets `[x]` or `[
 | TASK-013 | `[x]` | slugbase | 012 | | `turbo.json`, `.github/workflows/ci.yml`, `scripts/lib/package-version-policy.mjs` — `3c5346c` |
 | TASK-014 | `[x]` | slugbase | 013 | | `Dockerfile.api`, `Dockerfile.web`, `scripts/ci/dockerfile-excludes-admin.spec.ts` — `41cb2b3` |
 | TASK-015 | `[x]` | slugbase | 012 | | `packages/backend/src/domain-modules*.ts`, `package.json` exports — `1e2acde` |
-| TASK-016 | `[~]` | slugbase-cloud | 015 | | `packages/cloud-api/**`, `Dockerfile.api`, contact move |
+| TASK-016 | `[x]` | slugbase-cloud | 015 | | `packages/cloud-api/**`, `Dockerfile.api`, contact move — `e79eed7`, `01b33c4` |
 | TASK-017 | `[ ]` | slugbase-cloud + slugbase | 004,015,016 | | `packages/slugbase-billing/**`, `packages/web/**` billing API, `shared-types` contracts |
 | TASK-018 | `[ ]` | all three | 012,017 | | `env.schema.ts` per repo, `environment-variables.md`, `.env.example` |
 | TASK-019 | `[ ]` | slugbase | 018 | | `e2e/**`, `scripts/e2e.sh` (CE only) |
