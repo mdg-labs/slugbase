@@ -137,23 +137,27 @@ test.describe("Tags CRUD", () => {
     await page.goto("/bookmarks");
     await page.waitForSelector('[data-testid="bookmark-list-page"]');
 
+    // Wait for seeded bookmarks and toolbar tags to finish loading.
+    const toolbar = page.locator('[data-testid="bookmark-list-toolbar"]');
+    await expect(toolbar).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('[data-testid^="bookmark-card-"]').first()).toBeVisible({
+      timeout: 10000,
+    });
+
     // The bookmarks page toolbar should have a tags filter chip
-    const tagsFilter = page.locator('[data-testid="bookmark-tags-filter"]');
-    await expect(tagsFilter).toBeVisible({ timeout: 5000 });
+    const tagsFilter = toolbar.locator('[data-testid="bookmark-tags-filter"]');
+    await expect(tagsFilter).toBeVisible({ timeout: 10000 });
 
     // ── Phase 4: Filter by tag via the tags filter chip ─────────
-    // Open the tags filter chip dropdown
     await tagsFilter.click();
-    // Scope to this chip's menu (avoids strict-mode clashes with other menus)
-    await tagsFilter
-      .locator("..")
-      .getByRole("menuitem", { name: `#${tagName}` })
-      .first()
-      .click();
+    await expect(tagsFilter).toHaveAttribute("aria-expanded", "true");
 
-    await page.waitForTimeout(500);
-    // After filtering, the toolbar should still be visible and
-    // the filter indicator should show active state
-    await expect(page.locator('[data-testid="bookmark-list-toolbar"]')).toBeVisible();
+    const tagMenuItem = toolbar.getByRole("menuitem", { name: `#${tagName}` });
+    await expect(tagMenuItem).toBeVisible({ timeout: 10000 });
+    await tagMenuItem.click();
+
+    // After filtering, the chip should reflect the active filter.
+    await expect(tagsFilter).toHaveAttribute("aria-expanded", "false");
+    await expect(tagsFilter).toBeVisible();
   });
 });

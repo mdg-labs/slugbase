@@ -42,24 +42,20 @@ test.describe("Workspace switcher", () => {
     // Submit the create form
     const submitBtn = page.locator('[data-testid="workspace-switcher-panel"]').getByRole('button', { name: /create workspace/i });
 
-    // Wait for the POST /workspaces to succeed before the page navigates away,
-    // otherwise page.goto('/') below would abort the in-flight API call.
+    // Wait for workspace creation and the navigate(0) reload it triggers.
+    // Do not call page.goto here — that races with the reload and causes ERR_ABORTED.
     await Promise.all([
       page.waitForResponse(
         (resp) =>
           resp.url().includes("/workspaces") &&
           resp.request().method() === "POST" &&
           resp.status() === 201,
-        { timeout: 30000 }
+        { timeout: 30000 },
       ),
       submitBtn.click(),
     ]);
-
-    // The page reloads after workspace creation (navigate(0))
-    // Wait for the page to fully reload by waiting for sidebar to be visible
-    // and the switcher overlay to be gone
-    await page.goto('/');
-    await page.waitForSelector('[data-testid="sidebar-nav"]');
+    await page.waitForSelector('[data-testid="sidebar-nav"]', { timeout: 30000 });
+    await expect(page.locator('[data-testid="workspace-switcher-panel"]')).toHaveCount(0);
 
     // ── Phase 4: Open workspace switcher and switch ──────────────
     await page.click('[aria-label*="workspace"]');
@@ -72,10 +68,20 @@ test.describe("Workspace switcher", () => {
     const createdItem = itemsAfterCreate.filter({ hasText: secondWorkspaceName });
     await expect(createdItem).toHaveCount(1);
     await expect(createdItem).not.toBeDisabled();
-    await createdItem.click();
 
-    // The page reloads after workspace switch (navigate(0))
-    await page.waitForSelector('[data-testid="sidebar-nav"]');
+    // Wait for workspace activation and the navigate(0) reload it triggers.
+    await Promise.all([
+      page.waitForResponse(
+        (resp) =>
+          resp.url().includes("/activate") &&
+          resp.request().method() === "POST" &&
+          resp.ok(),
+        { timeout: 30000 },
+      ),
+      createdItem.click(),
+    ]);
+    await page.waitForSelector('[data-testid="sidebar-nav"]', { timeout: 30000 });
+    await expect(page.locator('[data-testid="workspace-switcher-panel"]')).toHaveCount(0);
 
     // ── Phase 5: Verify active workspace reflected ───────────────
     // The workspace switcher trigger shows the active workspace name
