@@ -34,8 +34,12 @@ export const BILLING_MODULE = Symbol("BILLING_MODULE");
 /**
  * Builds the NestJS domain module list with a swappable billing implementation.
  * CE uses the default {@link BillingModule}; cloud-api passes SlugbaseBillingModule (TASK-016/017).
+ * Cloud-api may pass a custom {@link ChallengeModule} with Altcha (TASK-027).
  */
-export function createDomainModules(billingModule: Type = BillingModule): Type[] {
+export function createDomainModules(
+  billingModule: Type = BillingModule,
+  challengeModule: Type = ChallengeModule,
+): Type[] {
   return [
     AccountsModule,
     AdminModule,
@@ -45,7 +49,7 @@ export function createDomainModules(billingModule: Type = BillingModule): Type[]
     AuthModule,
     billingModule,
     BookmarksModule,
-    ChallengeModule,
+    challengeModule,
     CryptoModule,
     DbModule,
     EntitlementsModule,

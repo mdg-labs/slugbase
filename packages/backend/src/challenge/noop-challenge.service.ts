@@ -5,7 +5,7 @@ import { isChallengeDevSkipEnabled } from "./challenge-dev-skip.js";
 import type { ChallengeService, ChallengeVerifyRequest } from "./challenge.interface.js";
 
 /**
- * No-op challenge implementation - used when TURNSTILE_SECRET_KEY is not configured.
+ * No-op challenge implementation — used when ALTCHA_HMAC_KEY is not configured.
  * Verification always passes (challenge disabled); dev-skip is still reported for callers.
  * Self-hosted default (spec §11.8).
  */

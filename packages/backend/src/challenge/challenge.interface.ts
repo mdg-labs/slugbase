@@ -3,11 +3,11 @@
  *
  * The application depends only on this contract; implementations are selected
  * by configuration at module init. The no-op default allows self-hosted installs
- * to run without Turnstile - verification passes when challenge is disabled.
+ * to run without Altcha - verification passes when challenge is disabled.
  */
 
 export interface ChallengeVerifyRequest {
-  /** Client-side challenge token (e.g. Turnstile response). */
+  /** Client-side challenge token (e.g. Altcha payload). */
   token: string;
   /** Optional client IP forwarded to the provider for risk scoring. */
   remoteIp?: string;
@@ -15,7 +15,7 @@ export interface ChallengeVerifyRequest {
 
 export interface ChallengeService {
   /**
-   * Returns true when a challenge provider is configured (e.g. Turnstile secret present).
+   * Returns true when a challenge provider is configured (e.g. Altcha HMAC key present).
    * When false, challenge verification is disabled for this deployment.
    */
   isAvailable(): boolean;
