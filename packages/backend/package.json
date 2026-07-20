@@ -11,6 +11,10 @@
     "./domain-modules": {
       "types": "./dist/domain-modules.registry.d.ts",
       "default": "./dist/domain-modules.registry.js"
+    },
+    "./*.js": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
     }
   },
   "scripts": {
