@@ -60,9 +60,6 @@ phase secrets list --env Staging
       │ RATE_LIMIT_LOGIN_MAX 💬                 │ [REDACTED]                  │
       │ RATE_LIMIT_LOGIN_TTL_SECONDS            │ [REDACTED]                  │
       │ RATE_LIMIT_TOKEN_CREATION_TTL_SECONDS   │ [REDACTED]                  │
-      │ REPORTPORTAL_API_KEY                    │ [REDACTED]                  │
-      │ REPORTPORTAL_PROJECT                    │ [REDACTED]                  │
-      │ REPORTPORTAL_URL                        │ [REDACTED]                  │
       │ SENTRY_AUTH_TOKEN                       │ [REDACTED]                  │
       │ SENTRY_ENABLE_CONSOLE_LOGGING           │ [REDACTED]                  │
       │ SENTRY_ENVIRONMENT                      │ [REDACTED]                  │
@@ -237,10 +234,7 @@ flyctl secrets list --app slugbase-staging-api
  SENTRY_PROFILING_SAMPLE_RATE              │ ca15bcab176f2b6c │ Deployed 
  SENTRY_REPLAY_SAMPLE_RATE                 │ 566c22eee301b0a8 │ Deployed 
  SENTRY_TRACES_SAMPLE_RATE                 │ ca15bcab176f2b6c │ Deployed 
- VITE_SENTRY_PROJECT                       │ 10c0a4069e7dce45 │ Deployed 
- REPORTPORTAL_API_KEY                      │ 48fdde48ca43b73a │ Deployed 
- REPORTPORTAL_PROJECT                      │ 2ba76aaa5c2ba83c │ Deployed 
- REPORTPORTAL_URL                          │ 3c13dba2c7eea8f4 │ Deployed 
+ VITE_SENTRY_PROJECT                       │ 10c0a4069e7dce45 │ Deployed
 ```
 
 **Count:** 107 secret names (includes legacy keys not in current sync manifest).
@@ -445,18 +439,6 @@ npx wrangler@4 secret list --name slugbase-staging-web
   },
   {
     "name": "RATE_LIMIT_TOKEN_CREATION_TTL_SECONDS",
-    "type": "secret_text"
-  },
-  {
-    "name": "REPORTPORTAL_API_KEY",
-    "type": "secret_text"
-  },
-  {
-    "name": "REPORTPORTAL_PROJECT",
-    "type": "secret_text"
-  },
-  {
-    "name": "REPORTPORTAL_URL",
     "type": "secret_text"
   },
   {
@@ -811,7 +793,6 @@ npx wrangler@4 secret list --name slugbase-staging-marketing
 - `DATABASE_URL` — migrate job in `deploy.yml` (not Fly runtime duplicate concern; same key)
 - `DATABASE_URL_UNPOOLED` — optional; migrate / drizzle when set
 - All `VITE_*` / `PUBLIC_*` build keys in Phase — **not** in sync manifest; must be passed in deploy build steps if needed at build time
-- `REPORTPORTAL_*` — belong in Phase → GHA `ci` environment, not staging runtime
 
 Canonical manifest: `scripts/sync-secrets-manifest.ts` (validated in CI by `scripts/validate-sync-secrets-manifest.ts`).
 

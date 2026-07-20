@@ -65,7 +65,7 @@ _added: 2026-06-02_
 
 **Entry points:** `pr.yml` (PRs + version-check), `staging.yml` (CI → selective deploy + GHCR `:dev`), `main.yml` (CI → production deploy + draft release), `release.yml` (production on release published).
 
-**Reusable workflows:** `ci.yml` (parallel lint/typecheck/unit/build/integration/audit/reportportal-summary; GHA `ci` env; Turborepo cache in setup action); `deploy.yml` (live `/version` probe gate via `resolve-deploy-plan.mjs` → sync-secrets → migrate ∥ sentry → selective api/web/marketing/admin → smoke); `sync-secrets.yml` (GHA → Fly + CF); `prepare-release.yml` (draft GitHub Release after api/web prod deploy).
+**Reusable workflows:** `ci.yml` (parallel lint/typecheck/unit/build/integration/audit; GHA `ci` env; Turborepo cache in setup action); `deploy.yml` (live `/version` probe gate via `resolve-deploy-plan.mjs` → sync-secrets → migrate ∥ sentry → selective api/web/marketing/admin → smoke); `sync-secrets.yml` (GHA → Fly + CF); `prepare-release.yml` (draft GitHub Release after api/web prod deploy).
 
 **Versioning:** Manual `package.json` bumps per deployable (`pnpm bump:versions` locally); pre-push hook enforces bumps before push to `staging`/`main`. Shared libs stay `0.0.0` — consumer bumps required. Production deploy skips surfaces with package semver &lt; `1.0.0`.
 
@@ -175,11 +175,6 @@ _added: 2026-06-10_
 
 `e2e.yml` mirrors `scripts/e2e.sh`: API/container start with explicit test env only (`SLUGBASE_E2E_MODE`, hardcoded session/encryption keys, localhost URLs, `PUBLIC_REGISTRATION=true`). **Hosted** also runs `pnpm --filter @slugbase/backend db:migrate` before API start (hosted API skips bootstrap migrations when `SERVE_WEB_CLIENT=false`). Playwright steps use pinned `DATABASE_URL` + e2e base URLs so GHA staging secrets do not reach tests. CI Playwright uses `scripts/e2e-ci-playwright.sh` (process substitution + summary parse) — `pnpm | tee` could exit 0 while the log shows `N failed`.
 _added: 2026-06-13_ | _updated: 2026-06-20_
-
-## ReportPortal test reporting (#366 epic, 2026-06-13)
-
-Unit, integration, and e2e tests publish launches to self-hosted ReportPortal when `REPORTPORTAL_URL`, `REPORTPORTAL_PROJECT`, and `REPORTPORTAL_API_KEY` are set (CI via GHA `ci` environment). Wiring: `scripts/reportportal-vitest.ts`, `scripts/reportportal-playwright.ts`, `scripts/reportportal-ci-summary.sh` (CI job summary + PR comments from `reportportal_launch_url=` stdout). Reporters no-op locally when env is incomplete. Allure + gh-pages test reports removed in #371.
-_added: 2026-06-13_
 
 ## Orchestrator — host environment & parallelism (2026-06-23)
 

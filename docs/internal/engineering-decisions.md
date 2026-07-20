@@ -130,7 +130,7 @@ pnpm audit --audit-level=high
 | `Development` | _(local only)_ | Local dev via `phase run` |
 | `Staging` | `staging` | Staging deploy + runtime secrets |
 | `Production` | `production` | Production deploy + runtime secrets |
-| _(CI-only keys in Phase)_ | `ci` | CI-only secrets (ReportPortal, etc.) |
+| _(CI-only keys in Phase)_ | `ci` | CI-only secrets |
 
 Phase automatically syncs operator edits to the matching GHA environments. Coolify applications receive runtime env from the Coolify UI (operators mirror Phase → GHA values). Never put true secrets in `VITE_*` or `PUBLIC_*` keys (client bundles).
 

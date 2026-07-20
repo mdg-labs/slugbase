@@ -36,9 +36,6 @@
   "devDependencies": {
     "@eslint/js": "^9.28.0",
     "@playwright/test": "^1.60.0",
-    "@reportportal/agent-js-playwright": "5.2.3",
-    "@reportportal/agent-js-vitest": "5.2.3",
-    "@reportportal/client-javascript": "5.5.11",
     "@vitest/runner": "4.1.6",
     "@vscode/ripgrep": "^1.0.10",
     "eslint": "^9.28.0",
@@ -54,7 +51,6 @@
     "overrides": {
       "esbuild@<0.28.1": ">=0.28.1",
       "yaml@>=2.0.0 <2.8.3": ">=2.8.3",
-      "uuid@<11.1.1": ">=11.1.1",
       "vitest": "4.1.6",
       "vitest>vite": "8.0.16",
       "ws@>=8.0.0 <8.21.0": ">=8.21.0",

@@ -133,7 +133,7 @@ Today only **staging** is live. Production probes will bootstrap (`V_live = 0.0.
 | Location | Contents |
 |---|---|
 | `scripts/ci/` | `resolve-deploy-plan.mjs`, `probe-version.mjs`, `create-draft-release.mjs`, `derive-sentry-release.mjs`, platform bash (`deploy-fly.sh`, `sync-secrets.sh`, smoke, GHCR, migrate, …) |
-| `scripts/` | Local dev, e2e, i18n, validation (`with-ci-env.sh`, reportportal, …) |
+| `scripts/` | Local dev, e2e, i18n, validation (`with-ci-env.sh`, …) |
 | `.github/workflows/` | YAML + composite actions only (`deploy-plan.yml` shared plan; `deploy.yml` migrate/deploy/smoke) |
 | `.github/scripts/` | **Delete** after migration |
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run Playwright e2e in CI with a tee'd log and a reliable non-zero exit on failures.
 #
-# GHA uses `pnpm … | tee log` for ReportPortal log capture. In practice Playwright
+# GHA may pipe test output through tee for log capture. In practice Playwright
 # can print "N failed" in the list summary while the piped pipeline still exits 0
 # (see run 27464021161). Process substitution avoids the pipe; we also parse the
 # final Playwright summary line as a backstop.

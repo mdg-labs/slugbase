@@ -1,10 +1,6 @@
 import { defineConfig, devices, type ReporterDescription } from '@playwright/test';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import {
-  detectPlaywrightEdition,
-  reportPortalPlaywrightReporter,
-} from "../scripts/reportportal-playwright.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -43,13 +39,6 @@ const reporters: ReporterDescription[] = [['list']];
 // report per mode for the end-of-run summary table.
 if (process.env.E2E_JSON_REPORT_PATH) {
   reporters.push(['json', { outputFile: process.env.E2E_JSON_REPORT_PATH }]);
-}
-
-// ReportPortal: one launch per Playwright project run (edition from --project).
-// e2e.sh invokes cloud and ce separately; no-ops when REPORTPORTAL_* unset.
-const edition = detectPlaywrightEdition();
-if (edition) {
-  reporters.push(...reportPortalPlaywrightReporter(edition));
 }
 
 export default defineConfig({

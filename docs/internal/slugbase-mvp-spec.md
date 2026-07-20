@@ -747,7 +747,7 @@ Reusable workflows (`workflow_call` only — never triggered directly):
 
 ### 22.3 CI checks (reusable `ci.yml`)
 
-Run on every PR and push before any deployment gate. Jobs run **in parallel** (with `build`, `integration`, and `audit` gated on `typecheck` success). All CI jobs use the GitHub Actions **`ci` environment** for CI-only secrets (e.g. ReportPortal).
+Run on every PR and push before any deployment gate. Jobs run **in parallel** (with `build`, `integration`, and `audit` gated on `typecheck` success). All CI jobs use the GitHub Actions **`ci` environment** for CI-only secrets.
 
 | Job | Steps (summary) |
 |---|---|
@@ -757,7 +757,6 @@ Run on every PR and push before any deployment gate. Jobs run **in parallel** (w
 | **Build** | setup → `pnpm build` → validate sync-secrets / workflow-secrets policy |
 | **Integration** | setup → build deps → integration tests per package (matrix) |
 | **Audit** | setup → `pnpm audit --audit-level=high` |
-| **ReportPortal summary** | aggregate launch links (no API key in env) |
 
 The shared **setup composite action** (`.github/actions/setup`) installs pnpm + Node from `.nvmrc`, runs `pnpm install --frozen-lockfile`, and caches **Turborepo** outputs (`.turbo` keyed on `pnpm-lock.yaml`). It does **not** fetch runtime secrets.
 
@@ -852,7 +851,7 @@ CE ships as **two** GHCR images — not a single combined image:
 | `Development` | _(local only — `phase run`)_ | Local development |
 | `Staging` | `staging` | Staging deploy + runtime secrets on Fly/Workers |
 | `Production` | `production` | Production deploy + runtime secrets |
-| _(CI-only keys stored in Phase)_ | `ci` | CI-only persistent secrets (ReportPortal, etc.) |
+| _(CI-only keys stored in Phase)_ | `ci` | CI-only persistent secrets |
 
 #### Secret flow
 

@@ -24,7 +24,7 @@ Product model: [slugbase-mvp-spec.md §15](slugbase-mvp-spec.md). Backend valida
 | `Development` | _(local only — `phase run`)_ | Local development |
 | `Staging` | `staging` | Staging deploy + Coolify runtime (via operator UI) |
 | `Production` | `production` | Production deploy + Coolify runtime (via operator UI) |
-| _(CI-only keys in Phase)_ | `ci` | CI-only persistent secrets (ReportPortal, etc.) |
+| _(CI-only keys in Phase)_ | `ci` | CI-only persistent secrets |
 
 Phase syncs operator edits to GHA automatically. CI jobs and deploy workflows read `${{ secrets.* }}` from the matching GHA environment. Runtime secrets for Cloud apps are set in Coolify.
 
@@ -34,7 +34,7 @@ Phase syncs operator edits to GHA automatically. CI jobs and deploy workflows re
 phase run -- pnpm dev   # injects Phase Development env — full setup in #475
 ```
 
-**CI** uses the GHA `ci` environment for CI-only keys (e.g. ReportPortal). Deploy uses `staging` or `production` GHA environments. No Phase CLI in workflows.
+**CI** uses the GHA `ci` environment for CI-only keys. Deploy uses `staging` or `production` GHA environments. No Phase CLI in workflows.
 
 ### Table legend
 
@@ -203,7 +203,7 @@ flowchart LR
 | **Runtime** | Coolify API/web/admin containers, CE api/web containers (`process.env`) | `SESSION_SECRET`, `DATABASE_URL`, `API_BASE_URL` (web), `STRIPE_SECRET_KEY` |
 | **Build** | `pnpm build` for web/marketing; Docker `ARG VITE_*` | `VITE_BILLING_ENABLED`, `PUBLIC_PLAN_PRICE_PERSONAL_MONTHLY` |
 | **Both** | Build + SSR fallback | `API_BASE_URL` (runtime web container), `VITE_API_URL` (SSR fallback only) |
-| **CI** | GitHub Actions runner only; never shipped to production runtime | `REGISTRY_*`, `COOLIFY_DEPLOY_*`, `SENTRY_AUTH_TOKEN`, `REPORTPORTAL_*` |
+| **CI** | GitHub Actions runner only; never shipped to production runtime | `REGISTRY_*`, `COOLIFY_DEPLOY_*`, `SENTRY_AUTH_TOKEN` |
 
 ---
 
@@ -431,38 +431,6 @@ CE ships as **`slugbase-api`** (NestJS API, migrations, operator integrations) a
 | `VITE_UMAMI_WEBSITE_ID` | Client analytics site id | No | Optional | Optional | No | Build | Empty (default) |
 
 All other `VITE_*` pricing keys: deprecated — prices now fetched from `GET /pricing/public` when `API_BASE_URL` is configured. Legacy env vars are still accepted as fallback on CE when the API is unreachable.
-
----
-
-### 10. Test reporting — ReportPortal
-
-SlugBase publishes unit, integration, and e2e test results to a self-hosted **ReportPortal** instance. Keys are **CI-only** — stored in Phase (synced to GHA `ci` environment), injected on GitHub Actions runners. Vitest and Playwright reporters no-op when `REPORTPORTAL_*` is unset (local dev default).
-
-**Canonical CI target**
-
-| Setting | Value |
-|---|---|
-| Instance URL | `https://reportportal.mdg-labs.dev` |
-| API endpoint | `https://reportportal.mdg-labs.dev/api/v2` (derived by agents — do not put `/api/v2` in `REPORTPORTAL_URL`) |
-| Project | `slugbase` |
-
-| Key | What it does | Cloud | CE | Required | Secret | When set | Example value |
-|---|---|---|---|---|---|---|---|
-| `REPORTPORTAL_URL` | ReportPortal instance base URL (no `/api/v2` suffix) | Yes | No | CI only | No | CI | `https://reportportal.mdg-labs.dev` |
-| `REPORTPORTAL_PROJECT` | ReportPortal project name | Yes | No | CI only | No | CI | `slugbase` |
-| `REPORTPORTAL_API_KEY` | User API key for launch upload | Yes | No | CI only | Yes | CI | `<ReportPortal user API key>` |
-
-**Phase / GHA `ci` (operator — CI)**
-
-Set `REPORTPORTAL_URL`, `REPORTPORTAL_PROJECT`, and `REPORTPORTAL_API_KEY` in Phase (they sync to the GHA `ci` environment). Generate the API key in ReportPortal under **Profile → API Keys** for a user with access to project `slugbase`. Never commit or log the key.
-
-For local development with ReportPortal uploads, set the same keys in Phase `Development` and run via `phase run` (see #475).
-
-Agent wiring (`@reportportal/agent-js-vitest`, `@reportportal/agent-js-playwright`) lands in #368–#370. See [ReportPortal JavaScript agents](https://reportportal.io/docs/log-data-in-reportportal/test-framework-integration/JavaScript/).
-
-**CI launch grouping:** GitHub Actions starts one shared launch per layer (`SlugBase · Unit · CI #<run>` / `SlugBase · Integration · CI #<run>`) and sets ephemeral `RP_LAUNCH_ID` on the runner before Turbo fan-out. Package reporters attach to that launch (attribute `package` still identifies the workspace package). Not stored in Phase.
-
-**CI summary links:** Launch UUIDs are uploaded as a workflow artifact; the separate `CI · ReportPortal summary` job (no `REPORTPORTAL_API_KEY` in env) writes HTML links to the job summary and PR comment. This avoids GitHub secret masking corrupting UUID substrings in markdown hrefs.
 
 ---
 
