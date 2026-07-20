@@ -85,24 +85,36 @@ Copy into **every orchestrator execution and verifier** prompt. **Not** for dire
 ```text
 SCOPED CI GATE — ORCHESTRATOR SUB-AGENTS ONLY (commit + verify; NOT pre-push):
 - Derive --filter from WRITE SCOPE (execution) or committed paths (verifier)
-- Path → filter mapping:
+- Path → filter mapping (slugbase — CE):
     packages/backend/       → @slugbase/backend
     packages/web/           → @slugbase/web
-    packages/marketing/     → @slugbase/marketing
     packages/ui/            → @slugbase/ui
     packages/shared-types/  → @slugbase/shared-types
-    packages/db-admin/      → @slugbase/db-admin
-    packages/admin/         → @slugbase/admin
     packages/email-templates/ → @slugbase/email-templates
+- Path → filter mapping (commerce — shared billing):
+    commerce/packages/commerce-core/   → @mdg-labs/commerce-core
+    commerce/packages/commerce-mollie/ → @mdg-labs/commerce-mollie
+- Path → filter mapping (slugbase-cloud — Cloud ops):
+    slugbase-cloud/packages/cloud-api/        → @slugbase/cloud-api
+    slugbase-cloud/packages/slugbase-billing/ → @slugbase/slugbase-billing
+    slugbase-cloud/packages/admin/            → @slugbase/admin...
+    slugbase-cloud/packages/marketing/        → @slugbase/marketing
+    slugbase-cloud/packages/db-admin/         → @slugbase/db-admin
+- slugbase-cloud jobs require sibling ../slugbase on staging (pnpm-workspace.yaml)
+- commerce is self-contained (no slugbase checkout)
+- docs/**, *.md, .cursor/** in any repo → CI gate skipped (targeted validation only)
 - Filter suffix rules:
-    App/package-only change → --filter @slugbase/<pkg>
+    App/package-only change → --filter @slugbase/<pkg> or @mdg-labs/<pkg>
     Contract package (shared-types, ui) → --filter @slugbase/<pkg>...  (downstream consumers)
     Multiple packages in one task → repeat per package or union filters
-- Commands (all via bash scripts/with-ci-env.sh):
+- Commands (slugbase + slugbase-cloud — via bash scripts/with-ci-env.sh):
     bash scripts/with-ci-env.sh pnpm turbo run lint typecheck test:unit build --filter=@slugbase/<pkg>
     # integration only when that package defines test:integration and task warrants it:
     bash scripts/with-ci-env.sh pnpm turbo run test:integration --filter=@slugbase/backend
-- Root-level extras (not turbo-filtered):
+- Commands (commerce — no with-ci-env required):
+    pnpm --filter @mdg-labs/commerce-core turbo run lint typecheck test:unit build
+    pnpm --filter @mdg-labs/commerce-mollie turbo run lint typecheck test:unit build
+- Root-level extras (slugbase, not turbo-filtered):
     Locale JSON touched → pnpm i18n:validate (+ pnpm i18n:codegen if en key set changed)
     Marketing blog content → pnpm blog:validate
 - Use bash scripts/with-ci-env.sh phase run -- … when env required. Integration: NO Phase wrapper.
@@ -110,7 +122,7 @@ SCOPED CI GATE — ORCHESTRATOR SUB-AGENTS ONLY (commit + verify; NOT pre-push):
     Full workspace gate (pnpm lint / typecheck / test:unit / build without --filter)
 - Full gate runs ONLY when prompt includes PUSH PREP block or user explicitly requested push
 - Direct/interactive agents (user says commit and push without orchestrator): skip this block; full gate once before push only
-- Reference: .cursor/rules/06-local-ci-before-commit.mdc
+- Reference: .cursor/rules/06-local-ci-before-commit.mdc; open-core §19.4 in docs/internal/open-core-refactor-plan.md
 ```
 
 ---

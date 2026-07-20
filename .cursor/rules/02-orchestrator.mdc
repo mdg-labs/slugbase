@@ -16,10 +16,28 @@ In that case, follow `.cursor/skills/orchestrator/SKILL.md`. Do not improvise.
 
 ## Use the roadmap directly when
 
-- You're implementing a single task and the user already pointed at a Task ID (e.g. `P1-01`)
+- You're implementing a single task and the user already pointed at a Task ID (e.g. `P1-01` or `TASK-024`)
 - You're checking dependencies or what's next
 
-Open `docs/internal/slugbase-development-roadmap.md`, search the Task ID, read the row (Doc Ref + acceptance criteria + Tests).
+Open `docs/internal/slugbase-development-roadmap.md` (P*-* tasks) or `docs/internal/open-core-refactor-plan.md` (`TASK-NNN` open-core split), search the Task ID, read the row (Doc Ref + acceptance criteria + Tests).
+
+## Multi-repo scoped CI — package filter map
+
+For **open-core** tasks spanning `slugbase`, `slugbase-cloud`, and `commerce`, derive `--filter` from touched paths. Full block: `.cursor/skills/orchestrator/prompt-templates.md` (§19.4). Summary:
+
+| Path prefix | Repo | pnpm filter |
+|---|---|---|
+| `packages/backend/` … `packages/email-templates/` | slugbase | `@slugbase/<pkg>` (existing rules in `06-local-ci-before-commit.mdc`) |
+| `commerce/packages/commerce-core/` | commerce | `@mdg-labs/commerce-core` |
+| `commerce/packages/commerce-mollie/` | commerce | `@mdg-labs/commerce-mollie` |
+| `slugbase-cloud/packages/cloud-api/` | slugbase-cloud | `@slugbase/cloud-api` |
+| `slugbase-cloud/packages/slugbase-billing/` | slugbase-cloud | `@slugbase/slugbase-billing` |
+| `slugbase-cloud/packages/admin/` | slugbase-cloud | `@slugbase/admin...` |
+| `slugbase-cloud/packages/marketing/` | slugbase-cloud | `@slugbase/marketing` |
+| `slugbase-cloud/packages/db-admin/` | slugbase-cloud | `@slugbase/db-admin` |
+| `docs/**`, `*.md`, `.cursor/**` | any | CI gate **skipped** — targeted validation only |
+
+**slugbase-cloud** CI requires sibling checkout `../slugbase` on `staging`. **commerce** is self-contained.
 
 ## Task lifecycle (plan-file mode)
 

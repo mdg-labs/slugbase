@@ -11,12 +11,15 @@ The main agent in this chat is a **dispatcher only**. It reads the **roadmap** a
 
 | Item | Value |
 |---|---|
-| Repo | `/home/michael/projects/slugbase` |
-| Integration branch | `staging` (all verified work lands here) |
+| Primary repo | `/home/mdguggenbichler/projects/slugbase` |
+| Sibling repos | `/home/mdguggenbichler/projects/slugbase-cloud` · `/home/mdguggenbichler/projects/commerce` · `/home/mdguggenbichler/projects/slugbase-docs` |
+| Workspace file | `slugbase.code-workspace` (multi-root) |
+| Integration branch | `staging` in **each** repo (all verified work lands here) |
 | Production branch | `main` — **protected on GitHub**; no development; **never push** from agents |
 | Task branch (Lane P) | `orchestrator/<TASK-ID>` (isolated; merged after verify PASS) |
 | Worktree (Lane P) | Sibling dir `../slugbase-wt-<TASK-ID>` or subagent-managed |
-| Plan file | `docs/internal/slugbase-development-roadmap.md` |
+| Plan file (roadmap) | `docs/internal/slugbase-development-roadmap.md` |
+| Plan file (open-core) | `docs/internal/open-core-refactor-plan.md` (`TASK-NNN` tasks) |
 | Task board (Linear) | SlugBase team (`SB-N`) — see [linear-board.md](linear-board.md) |
 | Spec docs | `docs/internal/slugbase-*.md` — see [doc-index.md](doc-index.md) |
 | Workspace memory | `.cursor/skills/workspace-notes.md` |
@@ -24,7 +27,7 @@ The main agent in this chat is a **dispatcher only**. It reads the **roadmap** a
 | Prompt templates | [prompt-templates.md](prompt-templates.md) |
 | Slack session-end | [slack-session-end.md](slack-session-end.md) |
 
-**Single-repo model.** Session memory and implementation commits live in `slugbase`. Lane S commits directly on **`staging`**; Lane P commits on task branches first, then integration merges to **`staging`**. **`main` is off-limits** for development and pushes.
+**Multi-repo open-core model.** Session memory and implementation commits live primarily in `slugbase`; cloud/billing tasks may commit to `slugbase-cloud` and `commerce` (one commit per repo per task). Lane S commits directly on **`staging`**; Lane P commits on task branches first, then integration merges to **`staging`**. **`main` is off-limits** for development and pushes.
 
 ---
 

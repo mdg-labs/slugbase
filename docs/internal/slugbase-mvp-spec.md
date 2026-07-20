@@ -4,7 +4,7 @@
 **Author:** Derived from a full scan of the existing `slugbase` (self-hosted core), `slugbase-cloud` (SaaS layer), and the customer-facing and internal documentation, then re-shaped to the new unified architecture and narrowed to a v1-launchable scope.
 **Scope of this document:** A complete, prose-only specification for rebuilding SlugBase from scratch as one codebase that launches both Cloud and CE. It defines the product, the feature set, the multi-tenant model, the deployment story, the authentication and AI capabilities, billing and plan enforcement, and the interface contracts for everything that depends on the outside world. It contains no code, no schemas, and no implementation snippets. It is the single source a development roadmap is derived from.
 
-This document treats a fixed set of architectural decisions as given (single repository, separate static marketing site, in-repo docs, multi-tenant from day one, everything external behind an interface, pnpm workspace), and a set of now-settled product/architecture decisions (recorded compactly in the final "Resolved Decisions" log). Decisions are integrated into the body so the spec reads as settled.
+This document treats a fixed set of architectural decisions as given (three-repository open-core layout, separate static marketing site, multi-tenant from day one, everything external behind an interface, pnpm workspaces), and a set of now-settled product/architecture decisions (recorded compactly in the final "Resolved Decisions" log). Decisions are integrated into the body so the spec reads as settled.
 
 ---
 
@@ -62,23 +62,43 @@ This rebuild targets a **v1-launchable scope**, not a full-parity reconstruction
 
 These are the constraints this spec is written against, stated up front so the rest of the document can assume them.
 
-### 2.1 Single repository
+### 2.1 Three-repository open-core model
 
-Cloud and CE live in one repository. There is no separate "cloud delta" repo, no vendored core tarball, and no build-time copy of the core into a second project. The previous model — where `slugbase-cloud` consumed `@mdguggenbichler/slugbase-core` as a published package and layered SaaS behavior on top — is discarded. All application logic, all tenancy logic, all billing logic, and all admin logic live together.
+SlugBase ships as an **open-core** split across three repositories. CE and Cloud share the same multi-tenant application code paths; Cloud extends CE via optional NestJS modules and private npm packages — not runtime edition branches in product logic.
 
-### 2.2 pnpm workspace
+| Repository | Visibility | Role |
+|---|---|---|
+| [`mdg-labs/slugbase`](https://github.com/mdg-labs/slugbase) | Public (AGPL-3.0) | CE: `backend`, `web`, `ui`, `shared-types`, `email-templates` |
+| [`mdg-labs/slugbase-cloud`](https://github.com/mdg-labs/slugbase-cloud) | Private | Cloud ops: `admin`, `db-admin`, `marketing`, `cloud-api`, `slugbase-billing`, deploy workflows |
+| [`mdg-labs/commerce`](https://github.com/mdg-labs/commerce) | Private | Shared MDG Labs billing primitives (`@mdg-labs/commerce-core`, `@mdg-labs/commerce-mollie`) |
 
-The repository is a **pnpm workspace** (a pnpm monorepo). Internal packages (for example: a shared UI library, a shared types/contracts package, the backend application, the web client, the marketing site, the docs) are workspace members. Package management, installs, and scripts assume pnpm throughout. No npm or yarn lockfiles.
+**CE** is the public `slugbase` repo with noop billing (full entitlements). **Cloud** is the private `slugbase-cloud` repo consuming published `@slugbase/*` packages and `@mdg-labs/commerce-*` from GitHub Packages. Full architecture and migration notes: `docs/internal/open-core-refactor-plan.md`.
 
-### 2.3 Marketing site is a separate static site within the repo
+### 2.2 pnpm workspaces
 
-The public marketing surface (landing page, pricing, contact, legal/terms/privacy/imprint, and similar non-application pages) is a **separate static site** that lives inside the same repository as its own workspace package. It is **separately built and deployed**, independent of the application runtime. The site is built with **Astro** (a static, zero-JS-by-default site generator) and deployed to **Cloudflare Workers** (decisions #28, #40); what is fixed is that it is a static site, in the same repo, built and deployed separately from the application. The application itself contains no marketing pages; the only product-marketing-adjacent surface allowed inside the application is what is strictly needed for sign-in context (for example, a side panel on the login screen), and even that is data-driven, not a marketing page. The marketing site's **contact form** calls a small public endpoint on the application (see Sections 11.1 and 11.8) and is protected by the challenge (bot-protection) interface.
+Each repository is its own **pnpm workspace** (monorepo). Package management, installs, and scripts assume pnpm throughout. No npm or yarn lockfiles.
+
+**Public `slugbase` (CE):**
+
+```
+packages/backend · web · ui · shared-types · email-templates
+```
+
+**Private `slugbase-cloud`:** cloud-only packages (`admin`, `db-admin`, `marketing`, `cloud-api`, `slugbase-billing`). Local dev and CI vendor-select CE packages from a sibling `../slugbase` checkout (see `slugbase-cloud/pnpm-workspace.yaml`).
+
+**Private `commerce`:** `@mdg-labs/commerce-core` and `@mdg-labs/commerce-mollie` — self-contained; no slugbase checkout required.
+
+Published `@slugbase/shared-types` and `@slugbase/ui` on npmjs are consumed by `slugbase-cloud` at pinned semver (or `workspace:` links in local dev).
+
+### 2.3 Marketing site is a separate static site
+
+The public marketing surface (landing page, pricing, contact, legal/terms/privacy/imprint, and similar non-application pages) is a **separate static site** built with **Astro** (zero-JS-by-default) as its own workspace package in **`slugbase-cloud`** (`packages/marketing`). It is **separately built and deployed** from the signed-in application — Coolify nginx container on Cloud (§14.7). The application itself contains no marketing pages; the only product-marketing-adjacent surface allowed inside the application is what is strictly needed for sign-in context (for example, a side panel on the login screen), and even that is data-driven, not a marketing page. The marketing site's **contact form** calls a small public endpoint on the Cloud API (`cloud-api`; see Sections 11.1 and 11.8) and is protected by the challenge (bot-protection) interface.
 
 ### 2.4 Documentation
 
-**Engineering documentation** (spec, roadmap, design prototypes, agent rules) lives in this monorepo under `docs/internal/`.
+**Engineering documentation** (spec, roadmap, design prototypes, agent rules) lives in the public `slugbase` repo under `docs/internal/`. Cloud-operator docs (legal drafts, staging secrets inventory, EU sovereignty assessment) live in **`slugbase-cloud/docs/internal/`**.
 
-**Customer and operator documentation** (Documentation.AI MDX, published at docs.slugbase.app) lives in the separate repository [`mdg-labs/slugbase-docs`](https://github.com/mdg-labs/slugbase-docs). Open `slugbase.code-workspace` in Cursor for both repos.
+**Customer and operator documentation** (Documentation.AI MDX, published at docs.slugbase.app) lives in the separate repository [`mdg-labs/slugbase-docs`](https://github.com/mdg-labs/slugbase-docs). Open `slugbase.code-workspace` in Cursor for all workspace roots (`slugbase`, `slugbase-cloud`, `commerce`, `slugbase-docs`).
 
 The governing editorial principle is unchanged: **if a reader would need to be a SlugBase developer to understand a page, it does not belong in customer docs.**
 
@@ -606,17 +626,19 @@ The stack below is fixed for v1 (recorded compactly as decisions #37–#50 in §
 
 ### 19.2 Packages
 
-As a pnpm workspace in a single repository:
+See §2.1–§2.2 for the three-repo layout. **CE packages** (public `slugbase`):
 
-- **`packages/backend`** — the NestJS API: tenancy, auth/sessions, domain logic, entitlements, and all external-interface implementations (§11).
+- **`packages/backend`** — the NestJS API: tenancy, auth/sessions, domain logic, entitlements, and CE external-interface implementations (noop billing on CE; §11).
 - **`packages/web`** — the React Router v7 signed-in web application. *(Canonical web-package name; `web-client` is not used.)*
-- **`packages/marketing`** — the Astro static marketing site, independently built and deployed (§2.3).
 - **`packages/shared-types`** — cross-cutting Zod/ts-rest contracts, the external-interface contracts, and the generated API/OpenAPI types, consumed by both backend and web.
 - **`packages/ui`** — the shared component library and the design tokens (§23.1).
-- **Customer docs** — separate repository [`mdg-labs/slugbase-docs`](https://github.com/mdg-labs/slugbase-docs) (Documentation.AI MDX; published at docs.slugbase.app). Engineering docs remain in this monorepo under **`docs/internal/`**.
-- *(Fast-Follow)* **`packages/admin`** — standalone operator portal for hosted Cloud only (§10.2, admin PRD); not part of the CE image.
+- **`packages/email-templates`** — transactional email templates consumed by the backend.
 
-All members live in one repo, use pnpm, and the marketing site and the application are separately buildable.
+**Cloud-only packages** (private `slugbase-cloud`): `packages/marketing` (Astro static site, §2.3), `packages/admin`, `packages/db-admin`, `packages/cloud-api`, `packages/slugbase-billing` (Mollie billing adapter implementing `BillingService`).
+
+**Shared billing** (private `commerce`): `@mdg-labs/commerce-core`, `@mdg-labs/commerce-mollie`.
+
+**Customer docs** — separate repository [`mdg-labs/slugbase-docs`](https://github.com/mdg-labs/slugbase-docs) (Documentation.AI MDX; published at docs.slugbase.app). Engineering docs remain in public `slugbase` under **`docs/internal/`**.
 
 ---
 

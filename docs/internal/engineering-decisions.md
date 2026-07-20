@@ -32,25 +32,36 @@ This doc exists so roadmap tasks and sub-agents have concrete, runnable answers 
 
 ---
 
-## 2. Package layout (decision #50)
+## 2. Package layout (decision #50 — open-core three-repo)
 
-pnpm workspace, single repo:
+Three **pnpm workspaces** (spec §2.1–§2.2; plan: `docs/internal/open-core-refactor-plan.md`):
+
+| Repo | Packages | Registry |
+|---|---|---|
+| **`slugbase`** (public AGPL CE) | `backend`, `web`, `ui`, `shared-types`, `email-templates` | `@slugbase/*` on npmjs (`shared-types`, `ui`) |
+| **`slugbase-cloud`** (private) | `admin`, `db-admin`, `marketing`, `cloud-api`, `slugbase-billing` | Container images on private registry |
+| **`commerce`** (private) | `commerce-core`, `commerce-mollie` | `@mdg-labs/commerce-*` on GitHub Packages |
+
+**Public CE layout (`slugbase/packages/`):**
 
 ```
-packages/
-  backend/        # NestJS API: tenancy, auth/sessions, domain, entitlements, ALL interface impls
-  web/            # React Router v7 signed-in app (canonical name — never "web-client")
-  marketing/      # Astro static marketing site (separately built/deployed)
-  shared-types/   # Zod + ts-rest contracts, interface contracts, generated OpenAPI types
-  ui/             # shared components + design tokens (bridged from colors_and_type.css)
+backend/          # NestJS API: tenancy, auth/sessions, domain, entitlements, CE interface impls (noop billing)
+web/              # React Router v7 signed-in app (canonical name — never "web-client")
+shared-types/     # Zod + ts-rest contracts, interface contracts, generated OpenAPI types
+ui/               # shared components + design tokens (bridged from colors_and_type.css)
+email-templates/  # transactional email templates
 docs/internal/    # engineering spec + prototypes (this file)
 ```
 
-Customer/operator docs: separate repo [`mdg-labs/slugbase-docs`](https://github.com/mdg-labs/slugbase-docs) (Documentation.AI MDX). Open via `slugbase.code-workspace`.
+**Cloud-only** (`slugbase-cloud/packages/`): `marketing` (Astro), `admin`, `db-admin`, `cloud-api`, `slugbase-billing` (Mollie `BillingService` adapter). Local dev vendors CE packages from sibling `../slugbase`.
+
+**Shared billing** (`commerce/packages/`): invoice ledger, tax, seller profile, Mollie client — product-agnostic MDG Labs primitives.
+
+Customer docs: separate repo [`mdg-labs/slugbase-docs`](https://github.com/mdg-labs/slugbase-docs) (Documentation.AI MDX). Open via `slugbase.code-workspace` (multi-root: `slugbase`, `slugbase-cloud`, `commerce`, `slugbase-docs`).
 
 - **No app package may depend on another app package.** Both `backend` and `web` depend on `shared-types` (and `web`/`marketing` on `ui`); never `web → backend`.
-- The external-interface **contracts** live in `shared-types`; their **implementations** live in `backend`.
-- Commit scopes for these packages: `backend`, `web`, `marketing`, `ui`, `shared`, `db` (rule `01-git-workflow`).
+- The external-interface **contracts** live in `shared-types`; CE **implementations** live in `backend`; Cloud billing impl lives in `slugbase-billing` + `commerce-*`.
+- Commit scopes for CE packages: `backend`, `web`, `ui`, `shared`, `db` (rule `01-git-workflow`). Cloud scopes: `admin`, `marketing`, `billing`, `infra`, `ci`.
 
 ---
 
