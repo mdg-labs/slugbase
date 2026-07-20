@@ -1441,17 +1441,20 @@ TASK-028  EU sovereignty legal refresh (AGB + Datenschutz + impressum)
 - **Verify:** links resolve; orchestrator filter table lists `@mdg-labs/commerce-core`
 
 ### TASK-027 — Replace Turnstile with Altcha
-- [ ] **Primary:** implement Altcha in `slugbase-cloud/packages/cloud-api` (contact is the only `CHALLENGE` consumer today)
-- [ ] Add `altcha` / `altcha-lib` npm dep to cloud-api (+ marketing widget in slugbase-cloud)
-- [ ] Create `cloud-api/src/challenge/altcha-challenge.service.ts` (+ spec); wire `ChallengeModule` in cloud-api only
-- [ ] **CE slugbase:** delete `turnstile-challenge.service.ts` + spec; remove `TURNSTILE_HTTP` token; either remove `ChallengeModule` from CE `domain-modules` entirely **or** keep noop-only stub for future registration challenge (no Turnstile factory)
-- [ ] Register `ALTCHA_HMAC_KEY` in Phase (cloud), `.env.example`, env schema in **cloud-api**, `environment-variables.md`
-- [ ] Cloud-api: `POST /challenge/altcha` or use Altcha self-hosted challenge generation per library docs
-- [ ] Marketing: replace Turnstile mount in `contact/_ContactPage.astro` + `contact-form.client.ts` with Altcha widget
-- [ ] Update `contact-config.ts` — remove `turnstileSiteKey`
-- [ ] Remove `PUBLIC_TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` from Phase staging inventory
-- [ ] Move/update `contact.e2e-spec.ts` to slugbase-cloud; marketing contact tests
-- **Verify:** `rg -i 'turnstile|TURNSTILE' packages/` → 0 across slugbase + slugbase-cloud; cloud-api unit tests green
+
+**Status:** `[x]` verified 2026-07-20 (`43c2027` + `6ccf33f` + `0a0c0a6`)
+
+- [x] **Primary:** implement Altcha in `slugbase-cloud/packages/cloud-api` (contact is the only `CHALLENGE` consumer today) — `6ccf33f`
+- [x] Add `altcha` / `altcha-lib` npm dep to cloud-api (+ marketing widget in slugbase-cloud)
+- [x] Create `cloud-api/src/challenge/altcha-challenge.service.ts` (+ spec); wire `ChallengeModule` in cloud-api only
+- [x] **CE slugbase:** delete `turnstile-challenge.service.ts` + spec; remove `TURNSTILE_HTTP` token; noop-only `ChallengeModule` stub — `43c2027`
+- [x] Register `ALTCHA_HMAC_KEY` in Phase Development, `.env.example`, env schema via `parseCloudApiEnv`, `environment-variables.md`
+- [x] Cloud-api: `GET /challenge/altcha` challenge payload endpoint
+- [x] Marketing: replace Turnstile mount in `contact/_ContactPage.astro` + `contact-form.client.ts` with Altcha widget
+- [x] Update `contact-config.ts` — remove `turnstileSiteKey`; `deriveAltchaChallengeUrl`
+- [x] Remove `PUBLIC_TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` from Phase staging inventory doc — `0a0c0a6`
+- [x] Move/update contact e2e to slugbase-cloud `e2e/specs/marketing/contact-form.spec.ts` (+ Altcha widget/submit tests) — `0a0c0a6`
+- **Verify:** [x] `rg -i 'turnstile|TURNSTILE' packages/` → 0; `@slugbase/cloud-api` test:unit 24/24; `@slugbase/backend` test:unit 528/528; Phase Development `ALTCHA_HMAC_KEY` set; `cloud-staging-secrets-inventory.md` lists `ALTCHA_HMAC_KEY`
 
 **Altcha implementation notes:**
 - Server: verify PoW locally with HMAC secret — **no outbound HTTP** to Cloudflare or third parties
@@ -1659,7 +1662,7 @@ Status column: orchestrator sets `[~]` at batch start, verifier sets `[x]` or `[
 | TASK-024 | `[ ]` | slugbase + cloud + commerce | 023 | | spec, engineering-decisions, READMEs, `.cursor/rules/**` |
 | TASK-025 | `[ ]` | slugbase | all | **yes** | optional `git filter-repo` |
 | TASK-026 | `[ ]` | slugbase-cloud | 020 | | `scripts/lib/package-version-policy.mjs`, `.githooks/**` |
-| TASK-027 | `[ ]` | slugbase + slugbase-cloud | 016 | | Altcha in cloud-api + marketing; delete Turnstile in slugbase |
+| TASK-027 | `[x]` | slugbase + slugbase-cloud | 016 | | Altcha in cloud-api + marketing; delete Turnstile in slugbase — `43c2027` + `6ccf33f` + `0a0c0a6` |
 | TASK-028 | `[ ]` | slugbase-cloud | 017,027,020 | | `docs/internal/legal/**`, `eu-data-sovereignty-assessment.md`, marketing legal tests |
 
 **Acceptance criteria** for each row: §18 task definition bullets + **Verify** block.
