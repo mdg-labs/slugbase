@@ -412,6 +412,8 @@ Repository secrets (`REGISTRY`, `REGISTRY_USER`, `REGISTRY_TOKEN`, `PANGOLIN_*`)
 | `COOLIFY_DEPLOY_WEBHOOK_MARKETING` | Coolify deploy webhook URL for marketing app | Yes | No | CI only | Yes | CI | `https://…/api/v1/deploy?uuid=…` |
 | `COOLIFY_DEPLOY_WEBHOOK_ADMIN` | Coolify deploy webhook URL for admin app | Yes | No | CI only | Yes | CI | `https://…/api/v1/deploy?uuid=…` |
 
+**Cloud image paths** (private registry, not Phase keys): `{REGISTRY}/slugbase-cloud/{api|web|marketing|admin}:{version}` — resolved by [`scripts/ci/cloud-registry-image.sh`](../scripts/ci/cloud-registry-image.sh). Example: `berth.mdg-labs.dev/slugbase-cloud/api:1.2.3` (staging also pushes `:dev`). CE GHCR images are unchanged (`ghcr.io/mdg-labs/slugbase-api`, `slugbase-web`).
+
 ---
 
 ### 9. CE — runtime and image build

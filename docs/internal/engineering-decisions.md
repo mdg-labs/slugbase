@@ -161,7 +161,7 @@ Every UI string is a catalog key `<scope>.<context>.<descriptor>`; en + de requi
 | Admin | Coolify container (`slugbase-admin` image) | Admin portal |
 | Database | Operator PostgreSQL | Coolify-managed or external |
 
-- **Registry:** CI pushes `{REGISTRY}/slugbase-{service}:{version}`; staging also tags `:dev`.
+- **Registry:** CI pushes `{REGISTRY}/slugbase-cloud/{api|web|marketing|admin}:{version}` via [`scripts/ci/cloud-registry-image.sh`](../scripts/ci/cloud-registry-image.sh); staging also tags `:dev`.
 - **Coolify deploy:** per-service webhook URLs + `COOLIFY_DEPLOY_TOKEN` (Bearer) in GHA `staging` / `production`.
 - **CE:** split GHCR images — `ghcr.io/mdg-labs/slugbase-api` + `slugbase-web`; unchanged.
 - **CI/CD:** `ci.yml`, `deploy-plan.yml`, `deploy.yml`, `build-and-push-cloud-image.yml`; live `/version` probe gate; production on `push` → `main`; CE `:latest` on `release: published` only.

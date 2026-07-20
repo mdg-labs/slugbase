@@ -83,7 +83,7 @@ jobs:
             exit 1
           fi
 
-          image="${REGISTRY}/slugbase-${SERVICE}"
+          image="$(bash scripts/ci/cloud-registry-image.sh "$SERVICE")"
           args=(--target "$SERVICE" "$image" "$primary")
           if [[ "$PUSH_DEV" == "true" ]]; then
             args+=(--dev)

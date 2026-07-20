@@ -496,7 +496,7 @@ The Cloud service runs as **four container images** (API, web, marketing, admin)
 | **Admin portal** | Coolify (`slugbase-admin` image) | Standalone admin app (Fast-Follow) |
 | **Database (Cloud)** | PostgreSQL (operator-hosted) | `DATABASE_URL` in Phase → GHA for CI migrations; runtime config in Coolify |
 
-**CI deploy flow:** GitHub Actions builds images with `SLUGBASE_EDITION=cloud`, pushes to `{REGISTRY}/slugbase-{service}:{version}` (staging also tags `:dev`), then triggers per-service **Coolify deploy webhooks** with Bearer auth (`COOLIFY_DEPLOY_TOKEN`).
+**CI deploy flow:** GitHub Actions builds images with `SLUGBASE_EDITION=cloud`, pushes to `{REGISTRY}/slugbase-cloud/{api|web|marketing|admin}:{version}` (staging also tags `:dev`), then triggers per-service **Coolify deploy webhooks** with Bearer auth (`COOLIFY_DEPLOY_TOKEN`).
 
 **CE is unaffected:** CE operators continue to run split GHCR images (§14.2, §22.8) on their own infrastructure.
 

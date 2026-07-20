@@ -34,7 +34,7 @@ A bookmark manager with built-in URL shortening and keyboard-driven launcher —
 | Container registry | **berth.mdg-labs.dev** (private) | CI builds and pushes; Coolify pulls |
 | Database | **PostgreSQL** (operator-hosted) | Coolify-managed or external; `DATABASE_URL` for CI migrations |
 
-**Image naming:** `{REGISTRY}/slugbase-{api|web|marketing|admin}:{version}` with `:dev` alias on staging.
+**Image naming:** `{REGISTRY}/slugbase-cloud/{api|web|marketing|admin}:{version}` with `:dev` alias on staging (see `scripts/ci/cloud-registry-image.sh`).
 
 CE: **split GHCR images** (`slugbase-api` + `slugbase-web`) on operator infrastructure — spec §14.2, §22.8.
 

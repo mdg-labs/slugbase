@@ -335,7 +335,8 @@ jobs:
           DOCKER_BUILDKIT: "1"
           REGISTRY: ${{ secrets.REGISTRY }}
         run: |
-          args=(--target api "${REGISTRY}/slugbase-api" "${{ steps.tag.outputs.version }}")
+          image="$(bash scripts/ci/cloud-registry-image.sh api)"
+          args=(--target api "$image" "${{ steps.tag.outputs.version }}")
           if [ "${{ inputs.environment }}" = "staging" ]; then
             args+=(--dev)
           fi
@@ -405,7 +406,8 @@ jobs:
           DOCKER_BUILDKIT: "1"
           REGISTRY: ${{ secrets.REGISTRY }}
         run: |
-          args=(--target web "${REGISTRY}/slugbase-web" "${{ steps.tag.outputs.version }}")
+          image="$(bash scripts/ci/cloud-registry-image.sh web)"
+          args=(--target web "$image" "${{ steps.tag.outputs.version }}")
           if [ "${{ inputs.environment }}" = "staging" ]; then
             args+=(--dev)
           fi
@@ -465,7 +467,8 @@ jobs:
           PUBLIC_MARKETING_ORIGIN: ${{ env.MARKETING_ORIGIN }}
           MARKETING_ORIGIN: ${{ env.MARKETING_ORIGIN }}
         run: |
-          args=(--target marketing "${REGISTRY}/slugbase-marketing" "${{ steps.tag.outputs.version }}")
+          image="$(bash scripts/ci/cloud-registry-image.sh marketing)"
+          args=(--target marketing "$image" "${{ steps.tag.outputs.version }}")
           if [ "${{ inputs.environment }}" = "staging" ]; then
             args+=(--dev)
           fi
@@ -512,7 +515,8 @@ jobs:
           DOCKER_BUILDKIT: "1"
           REGISTRY: ${{ secrets.REGISTRY }}
         run: |
-          args=(--target admin "${REGISTRY}/slugbase-admin" "${{ steps.tag.outputs.version }}")
+          image="$(bash scripts/ci/cloud-registry-image.sh admin)"
+          args=(--target admin "$image" "${{ steps.tag.outputs.version }}")
           if [ "${{ inputs.environment }}" = "staging" ]; then
             args+=(--dev)
           fi

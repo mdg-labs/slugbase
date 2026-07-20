@@ -12,6 +12,8 @@ EDITION="cloud"
 usage() {
   cat <<'EOF' >&2
 Usage: build-push-registry.sh --target api|web|marketing|admin <registry-image> <tag> [--dev] [--latest | --no-latest]
+
+Cloud registry images use scripts/ci/cloud-registry-image.sh (e.g. berth.mdg-labs.dev/slugbase-cloud/api).
 EOF
   exit 1
 }
