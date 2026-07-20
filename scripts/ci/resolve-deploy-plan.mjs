@@ -23,10 +23,7 @@ import {
  * @typedef {object} DeployPlan
  * @property {boolean} deploy_api
  * @property {boolean} deploy_web
- * @property {boolean} deploy_marketing
- * @property {boolean} deploy_admin
  * @property {boolean} run_migrate
- * @property {boolean} run_migrate_admin
  * @property {boolean} push_ghcr_api
  * @property {boolean} push_ghcr_web
  * @property {boolean} deployed_api
@@ -60,20 +57,6 @@ export const SURFACES = [
     deployFlag: "deploy_web",
     relatedFlags: ["push_ghcr_web"],
   },
-  {
-    id: "marketing",
-    packageName: "@slugbase/marketing",
-    pkgDir: "packages/marketing",
-    deployFlag: "deploy_marketing",
-    relatedFlags: [],
-  },
-  {
-    id: "admin",
-    packageName: "@slugbase/admin",
-    pkgDir: "packages/admin",
-    deployFlag: "deploy_admin",
-    relatedFlags: ["run_migrate_admin"],
-  },
 ];
 
 /**
@@ -83,10 +66,7 @@ export function createEmptyPlan() {
   return {
     deploy_api: false,
     deploy_web: false,
-    deploy_marketing: false,
-    deploy_admin: false,
     run_migrate: false,
-    run_migrate_admin: false,
     push_ghcr_api: false,
     push_ghcr_web: false,
     deployed_api: false,
@@ -217,10 +197,7 @@ export function formatGithubOutputs(plan) {
   return {
     deploy_api: String(plan.deploy_api),
     deploy_web: String(plan.deploy_web),
-    deploy_marketing: String(plan.deploy_marketing),
-    deploy_admin: String(plan.deploy_admin),
     run_migrate: String(plan.run_migrate),
-    run_migrate_admin: String(plan.run_migrate_admin),
     push_ghcr_api: String(plan.push_ghcr_api),
     push_ghcr_web: String(plan.push_ghcr_web),
     deployed_api: String(plan.deployed_api),

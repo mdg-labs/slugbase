@@ -1,7 +1,7 @@
 name: Main
 
-# Push to main — CI, production deploy, bump-scoped draft release (spec §22.4, §22.6–22.7).
-# Live /version probes run once via deploy-plan.yml; deploy.yml uses caller_plan (spec §22.7).
+# Push to main — CE CI and bump-scoped draft release (spec §22.4, §22.6–22.7).
+# Cloud production deploy lives in slugbase-cloud (open-core split TASK-007).
 
 on:
   push:
@@ -23,40 +23,6 @@ jobs:
       contents: read
       pull-requests: write
     uses: ./.github/workflows/ci.yml
-    secrets: inherit
-
-  plan:
-    name: Production · Deploy plan
-    needs: [ci]
-    if: needs.ci.result == 'success'
-    permissions:
-      contents: read
-    uses: ./.github/workflows/deploy-plan.yml
-    with:
-      environment: production
-      should_deploy: "true"
-    secrets: inherit
-
-  deploy-production:
-    name: Deploy production
-    needs: [plan]
-    if: needs.plan.result == 'success'
-    permissions:
-      actions: write
-      contents: read
-    uses: ./.github/workflows/deploy.yml
-    with:
-      environment: production
-      caller_plan: "true"
-      deploy_api: ${{ needs.plan.outputs.deploy_api }}
-      deploy_web: ${{ needs.plan.outputs.deploy_web }}
-      deploy_marketing: ${{ needs.plan.outputs.deploy_marketing }}
-      deploy_admin: ${{ needs.plan.outputs.deploy_admin }}
-      run_migrate: ${{ needs.plan.outputs.run_migrate }}
-      run_migrate_admin: ${{ needs.plan.outputs.run_migrate_admin }}
-      push_ghcr_api: ${{ needs.plan.outputs.push_ghcr_api }}
-      push_ghcr_web: ${{ needs.plan.outputs.push_ghcr_web }}
-      skip_reasons: ${{ needs.plan.outputs.skip_reasons }}
     secrets: inherit
 
   prepare-release:

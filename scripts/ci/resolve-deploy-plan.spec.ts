@@ -14,8 +14,6 @@ describe("resolveDeployPlan", () => {
   const packageVersions = {
     "@slugbase/backend": "1.0.1",
     "@slugbase/web": "1.0.1",
-    "@slugbase/marketing": "1.0.1",
-    "@slugbase/admin": "1.0.1",
   };
 
   it("deploys when intended version is greater than live", async () => {
@@ -31,8 +29,6 @@ describe("resolveDeployPlan", () => {
       origins: {
         api: "https://api.example.test",
         web: "https://web.example.test",
-        marketing: "https://marketing.example.test",
-        admin: "https://admin.example.test",
       },
       fetchFn,
     });
@@ -42,8 +38,6 @@ describe("resolveDeployPlan", () => {
     expect(plan.run_migrate).toBe(true);
     expect(plan.push_ghcr_api).toBe(true);
     expect(plan.push_ghcr_web).toBe(true);
-    expect(plan.deploy_marketing).toBe(true);
-    expect(plan.deploy_admin).toBe(true);
     expect(skipReasons).toHaveLength(0);
   });
 
@@ -88,22 +82,6 @@ describe("resolveDeployPlan", () => {
     expect(semverGt("1.0.1", "1.0.0")).toBe(true);
   });
 
-  it("bootstraps unreachable live to 0.0.0 and deploys staging marketing", async () => {
-    const fetchFn = vi.fn().mockRejectedValue(new Error("ECONNREFUSED"));
-
-    const { plan } = await resolveDeployPlan({
-      environment: "staging",
-      deployMode: "auto",
-      packageVersions: { "@slugbase/marketing": "0.2.0" },
-      origins: { marketing: "https://marketing.example.test" },
-      fetchFn,
-      maxAttempts: 1,
-      initialDelayMs: 1,
-    });
-
-    expect(plan.deploy_marketing).toBe(true);
-  });
-
   it("manual mode skips live compare", async () => {
     const fetchFn = vi.fn();
 
@@ -128,17 +106,15 @@ describe("resolveDeployPlan", () => {
     const { plan, skipReasons } = await resolveDeployPlan({
       environment: "production",
       deployMode: "auto",
-      packageVersions: { "@slugbase/marketing": "0.9.9" },
+      packageVersions: { "@slugbase/web": "0.9.9" },
       origins: {
         api: "https://api.example.test",
         web: "https://web.example.test",
-        marketing: "https://marketing.example.test",
-        admin: "https://admin.example.test",
       },
       fetchFn,
     });
 
-    expect(plan.deploy_marketing).toBe(false);
+    expect(plan.deploy_web).toBe(false);
     expect(
       skipReasons.some((reason) => reason.includes(PRODUCTION_MIN_VERSION)),
     ).toBe(true);

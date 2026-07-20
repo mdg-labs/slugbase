@@ -154,7 +154,8 @@ if $DO_API && $DO_MARKETING; then
 fi
 
 if $DO_ADMIN; then
-  bash "${SCRIPT_DIR}/smoke-admin-health.sh"
+  echo "smoke-staging-health: admin smoke moved to slugbase-cloud" >&2
+  exit 1
 fi
 
 echo "Staging smoke passed"

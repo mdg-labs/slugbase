@@ -1,7 +1,6 @@
 name: Deploy Plan
 
-# Live /version probe deploy plan — shared by staging.yml (once per push) and callable standalone.
-# workflow_call only (spec §22).
+# Live /version probe deploy plan for CE GHCR publish — api + web only (spec §22).
 
 on:
   workflow_call:
@@ -37,18 +36,9 @@ on:
       deploy_web:
         description: Whether to deploy web
         value: ${{ jobs.plan.outputs.deploy_web }}
-      deploy_marketing:
-        description: Whether to deploy marketing
-        value: ${{ jobs.plan.outputs.deploy_marketing }}
-      deploy_admin:
-        description: Whether to deploy admin
-        value: ${{ jobs.plan.outputs.deploy_admin }}
       run_migrate:
         description: Whether to run API DB migrations
         value: ${{ jobs.plan.outputs.run_migrate }}
-      run_migrate_admin:
-        description: Whether to run admin DB migrations
-        value: ${{ jobs.plan.outputs.run_migrate_admin }}
       push_ghcr_api:
         description: Whether to push API GHCR image
         value: ${{ jobs.plan.outputs.push_ghcr_api }}
@@ -76,10 +66,7 @@ jobs:
     outputs:
       deploy_api: ${{ steps.plan.outputs.deploy_api }}
       deploy_web: ${{ steps.plan.outputs.deploy_web }}
-      deploy_marketing: ${{ steps.plan.outputs.deploy_marketing }}
-      deploy_admin: ${{ steps.plan.outputs.deploy_admin }}
       run_migrate: ${{ steps.plan.outputs.run_migrate }}
-      run_migrate_admin: ${{ steps.plan.outputs.run_migrate_admin }}
       push_ghcr_api: ${{ steps.plan.outputs.push_ghcr_api }}
       push_ghcr_web: ${{ steps.plan.outputs.push_ghcr_web }}
       deployed_api: ${{ steps.plan.outputs.deployed_api }}
@@ -96,8 +83,6 @@ jobs:
           ENVIRONMENT: ${{ inputs.environment }}
           APP_BASE_URL: ${{ vars.APP_BASE_URL }}
           FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
-          MARKETING_ORIGIN: ${{ vars.MARKETING_ORIGIN }}
-          ADMIN_URL: ${{ secrets.ADMIN_URL }}
         run: node scripts/ci/deploy-probe-origins.mjs --write-github-env
 
       - name: Resolve deploy plan
@@ -113,8 +98,6 @@ jobs:
         env:
           DEPLOY_API: ${{ steps.plan.outputs.deploy_api }}
           DEPLOY_WEB: ${{ steps.plan.outputs.deploy_web }}
-          DEPLOY_MARKETING: ${{ steps.plan.outputs.deploy_marketing }}
-          DEPLOY_ADMIN: ${{ steps.plan.outputs.deploy_admin }}
           SKIP_REASONS: ${{ steps.plan.outputs.skip_reasons }}
         run: |
           {
@@ -124,8 +107,6 @@ jobs:
             echo "|---|---|"
             echo "| API | ${DEPLOY_API} |"
             echo "| Web | ${DEPLOY_WEB} |"
-            echo "| Marketing | ${DEPLOY_MARKETING} |"
-            echo "| Admin | ${DEPLOY_ADMIN} |"
             if [ -n "${SKIP_REASONS}" ]; then
               echo ""
               echo "### Skipped surfaces"

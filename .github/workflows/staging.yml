@@ -1,7 +1,7 @@
 name: Staging
 
-# Push to staging — CI gate, then live-version deploy plan + deploy + GHCR dev images (spec §22.4–22.5).
-# Manual dispatch: use `gh workflow run staging.yml --ref <git_ref>` so CI runs on the chosen ref.
+# Push to staging — CE CI gate, live-version GHCR plan, and dev image publish (spec §22.4–22.5).
+# Cloud deploy workflows live in slugbase-cloud (open-core split TASK-007).
 
 on:
   push:
@@ -21,14 +21,12 @@ on:
           - manual
         default: auto
       services:
-        description: Surfaces when deploy_mode=manual (all deploys every surface today)
+        description: Surfaces when deploy_mode=manual
         type: choice
         options:
           - all
           - api
           - web
-          - marketing
-          - admin
         default: all
 
 permissions:
@@ -94,31 +92,6 @@ jobs:
       deploy_mode: ${{ needs.resolve-deploy-ref.outputs.deploy_mode }}
       force_full_deploy: ${{ needs.resolve-deploy-ref.outputs.deploy_mode == 'manual' && 'true' || 'false' }}
       should_deploy: "true"
-    secrets: inherit
-
-  deploy:
-    name: Deploy staging
-    needs: [plan, resolve-deploy-ref]
-    if: needs.plan.result == 'success'
-    permissions:
-      actions: write
-      contents: read
-    uses: ./.github/workflows/deploy.yml
-    with:
-      environment: staging
-      ref: ${{ needs.resolve-deploy-ref.outputs.checkout_ref }}
-      deploy_mode: ${{ needs.resolve-deploy-ref.outputs.deploy_mode }}
-      force_full_deploy: ${{ needs.resolve-deploy-ref.outputs.deploy_mode == 'manual' && 'true' || 'false' }}
-      caller_plan: "true"
-      deploy_api: ${{ needs.plan.outputs.deploy_api }}
-      deploy_web: ${{ needs.plan.outputs.deploy_web }}
-      deploy_marketing: ${{ needs.plan.outputs.deploy_marketing }}
-      deploy_admin: ${{ needs.plan.outputs.deploy_admin }}
-      run_migrate: ${{ needs.plan.outputs.run_migrate }}
-      run_migrate_admin: ${{ needs.plan.outputs.run_migrate_admin }}
-      push_ghcr_api: ${{ needs.plan.outputs.push_ghcr_api }}
-      push_ghcr_web: ${{ needs.plan.outputs.push_ghcr_web }}
-      skip_reasons: ${{ needs.plan.outputs.skip_reasons }}
     secrets: inherit
 
   push-ghcr-api:
