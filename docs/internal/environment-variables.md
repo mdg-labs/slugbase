@@ -450,7 +450,7 @@ SlugBase uses three **GitHub Actions environments** as the CI/deploy secret sour
 | `staging` | Phase `Staging` | Staging deploy (`deploy.yml`), smoke |
 | `production` | Phase `Production` | Production deploy (`main.yml` → `deploy.yml`), smoke |
 
-Repository secrets: `REGISTRY`, `REGISTRY_USER`, `REGISTRY_TOKEN` (image push); `PANGOLIN_ENDPOINT`, `PANGOLIN_MACHINE_ID`, `PANGOLIN_MACHINE_SECRET` (cloud DB migrations via self-hosted runner). Application runtime secrets live in Phase → GHA environments and are mirrored into Coolify by operators. Coolify webhook secrets (`COOLIFY_DEPLOY_*`) and `DATABASE_URL` / `DATABASE_URL_UNPOOLED` live in GHA `staging` / `production` environments.
+Repository secrets: `REGISTRY`, `REGISTRY_USER`, `REGISTRY_TOKEN` (image push); `PANGOLIN_ENDPOINT`, `PANGOLIN_MACHINE_ID`, `PANGOLIN_MACHINE_SECRET` (cloud DB migrations via Pangolin on `ubuntu-latest`). Application runtime secrets live in Phase → GHA environments and are mirrored into Coolify by operators. Coolify webhook secrets (`COOLIFY_DEPLOY_*`) and `DATABASE_URL` / `DATABASE_URL_UNPOOLED` live in GHA `staging` / `production` environments.
 
 ### Deploy idempotency (live `/version` probes)
 

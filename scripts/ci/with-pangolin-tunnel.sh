@@ -1,15 +1,10 @@
 #!/usr/bin/env bash
 # Open a Pangolin machine-client tunnel, wait for Postgres connectivity, then run a command.
 #
+# Intended for GitHub-hosted runners (`ubuntu-latest`). Downloads Pangolin CLI to
+# $RUNNER_TEMP and runs it via sudo (WireGuard/TUN needs elevated privileges).
+#
 # Requires: PANGOLIN_MACHINE_ID, PANGOLIN_MACHINE_SECRET, PANGOLIN_ENDPOINT, DATABASE_URL
-#
-# Self-hosted runner prerequisite (one-time per host):
-#   - /usr/local/sbin/pangolin-migrate-ci installed
-#   - NOPASSWD sudoers for each runner user on that binary
-#
-# Pangolin is a host-level singleton (root via sudo). Prior failed/cancelled jobs can leave
-# a stale daemon that blocks `up` with "a client is already running" without registering the
-# machine client in the Pangolin UI — always `down` before `up`.
 #
 # Usage: with-pangolin-tunnel.sh <command> [args...]
 set -euo pipefail
@@ -26,23 +21,38 @@ if [[ $# -lt 1 ]]; then
   exit 1
 fi
 
-PANGOLIN_BIN="${PANGOLIN_BIN:-/usr/local/sbin/pangolin-migrate-ci}"
 PANGOLIN_PUBLIC_IP="${PANGOLIN_PUBLIC_IP:-159.195.45.249}"
 PANGOLIN_STARTED_BY_SCRIPT=0
 
-require_runner_setup() {
-  if [[ ! -x "$PANGOLIN_BIN" ]]; then
-    echo "Pangolin CLI not found at ${PANGOLIN_BIN}." >&2
-    echo "Install on each self-hosted runner host, then grant NOPASSWD sudo for this path." >&2
+ensure_sudo() {
+  if ! sudo -n true 2>/dev/null; then
+    echo "Passwordless sudo is required to run Pangolin on GitHub-hosted runners." >&2
     exit 1
+  fi
+}
+
+ensure_pangolin_bin() {
+  if [[ -n "${PANGOLIN_BIN:-}" && -x "$PANGOLIN_BIN" ]]; then
+    return 0
   fi
 
-  if ! sudo -n "$PANGOLIN_BIN" --help >/dev/null 2>&1; then
-    echo "Passwordless sudo is not configured for ${PANGOLIN_BIN} (user: $(whoami))." >&2
-    echo "Add a sudoers drop-in on the runner host, e.g.:" >&2
-    echo "  $(whoami) ALL=(root) NOPASSWD: ${PANGOLIN_BIN}" >&2
-    exit 1
+  local install_dir="${PANGOLIN_INSTALL_DIR:-${RUNNER_TEMP:-/tmp}/pangolin-ci}"
+  PANGOLIN_BIN="${install_dir}/pangolin"
+  if [[ ! -x "$PANGOLIN_BIN" ]]; then
+    echo "Installing Pangolin CLI to ${PANGOLIN_BIN}..."
+    mkdir -p "$install_dir"
+    curl -fsSL https://static.pangolin.net/get-cli.sh | bash -s -- --path="$PANGOLIN_BIN"
   fi
+}
+
+ensure_network_tools() {
+  if command -v dig >/dev/null 2>&1 && command -v nc >/dev/null 2>&1; then
+    return 0
+  fi
+
+  echo "Installing dnsutils and netcat for Pangolin connectivity checks..."
+  sudo apt-get update -qq
+  sudo apt-get install -y -qq dnsutils netcat-openbsd
 }
 
 pangolin_cmd() {
@@ -113,7 +123,9 @@ start_pangolin_up() {
   return 1
 }
 
-require_runner_setup
+ensure_sudo
+ensure_pangolin_bin
+ensure_network_tools
 trap pangolin_down EXIT
 
 echo "Stopping any stale Pangolin client on this host..."

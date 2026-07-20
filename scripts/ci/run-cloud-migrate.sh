@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Cloud pre-deploy migrations — Pangolin tunnel + Drizzle (product and/or admin).
 #
+# Runs on GitHub-hosted runners (`ubuntu-latest`). Pangolin CLI is auto-installed by
+# `with-pangolin-tunnel.sh` when not present on the runner.
+#
 # Requires (repo secrets): PANGOLIN_MACHINE_ID, PANGOLIN_MACHINE_SECRET, PANGOLIN_ENDPOINT
 # Requires (GHA environment): DATABASE_URL; DATABASE_URL_UNPOOLED optional for admin migrate
 # Requires (plan outputs): RUN_MIGRATE and/or RUN_MIGRATE_ADMIN set to "true"

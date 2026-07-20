@@ -790,7 +790,7 @@ npx wrangler@4 secret list --name slugbase-staging-marketing
 - `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` — API Sentry release + web Vite plugin source maps (`deploy.yml`, `sentry-release.sh`, `vite.config.ts`)
 - `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` — staging smoke (`deploy.yml` smoke job)
 - `API_BASE_URL` — also used by deploy-web / deploy-marketing build env (not only wrangler runtime)
-- `DATABASE_URL` / `DATABASE_URL_UNPOOLED` — cloud migrate job in `deploy.yml` (GHA `staging` / `production` environments; reached via Pangolin tunnel on self-hosted runner)
+- `DATABASE_URL` / `DATABASE_URL_UNPOOLED` — cloud migrate job in `deploy.yml` (GHA `staging` / `production` environments; reached via Pangolin tunnel on `ubuntu-latest`)
 - `PANGOLIN_ENDPOINT`, `PANGOLIN_MACHINE_ID`, `PANGOLIN_MACHINE_SECRET` — repo-level GHA secrets for Pangolin machine client (`scripts/ci/run-cloud-migrate.sh`); not in Phase
 - All `VITE_*` / `PUBLIC_*` build keys in Phase — **not** in sync manifest; must be passed in deploy build steps if needed at build time
 
@@ -861,7 +861,7 @@ Smoke uses GHA **vars**: `APP_BASE_URL`, `FRONTEND_ORIGIN`, `MARKETING_ORIGIN`.
 | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` | `wrangler deploy` |
 | `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` | Staging smoke through Cloudflare Access |
 | `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` | Sentry releases / source maps |
-| `DATABASE_URL` / `DATABASE_URL_UNPOOLED` | `run-cloud-migrate.sh` in deploy pipeline (via Pangolin on self-hosted runner) |
+| `DATABASE_URL` / `DATABASE_URL_UNPOOLED` | `run-cloud-migrate.sh` in deploy pipeline (via Pangolin on `ubuntu-latest`) |
 | `PANGOLIN_ENDPOINT` / `PANGOLIN_MACHINE_ID` / `PANGOLIN_MACHINE_SECRET` | Pangolin machine client for cloud DB migrations (repo-level GHA secrets) |
 
 ### 5.7 URL wiring
