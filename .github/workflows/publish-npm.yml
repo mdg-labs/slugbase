@@ -1,0 +1,97 @@
+name: Publish npm
+
+# Publishes @slugbase/ui and @slugbase/shared-types to npmjs via OIDC trusted publishing.
+#
+# First publish per package is manual (TASK-021): npm Trusted Publisher settings only
+# appear after at least one version exists on the registry. Use local `npm publish` or a
+# one-time granular token for bootstrap, then configure Trusted Publisher on npmjs.
+#
+# Tag format (push to origin):
+#   ui-v<semver>           → packages/ui            (@slugbase/ui)
+#   shared-types-v<semver> → packages/shared-types  (@slugbase/shared-types)
+#
+# npmjs → package → Settings → Trusted publishing → GitHub Actions:
+#   Owner: mdg-labs · Repository: slugbase · Workflow: publish-npm.yml · Environment: npm
+
+on:
+  push:
+    tags:
+      - "ui-v*"
+      - "shared-types-v*"
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish-npm-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish npm package
+    runs-on: ubuntu-latest
+    environment: npm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+
+      - name: Resolve package from tag
+        id: pkg
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+
+          case "$TAG" in
+            ui-v*)
+              echo "package_dir=packages/ui" >> "$GITHUB_OUTPUT"
+              echo "package_name=@slugbase/ui" >> "$GITHUB_OUTPUT"
+              echo "tag_version=${TAG#ui-v}" >> "$GITHUB_OUTPUT"
+              ;;
+            shared-types-v*)
+              echo "package_dir=packages/shared-types" >> "$GITHUB_OUTPUT"
+              echo "package_name=@slugbase/shared-types" >> "$GITHUB_OUTPUT"
+              echo "tag_version=${TAG#shared-types-v}" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "::error::Unsupported tag: $TAG (expected ui-v* or shared-types-v*)"
+              exit 1
+              ;;
+          esac
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup
+        with:
+          skip-checkout: "true"
+
+      - name: Setup Node.js registry
+        uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
+        with:
+          node-version-file: .nvmrc
+          registry-url: https://registry.npmjs.org
+          scope: "@slugbase"
+
+      - name: Validate release tag
+        env:
+          PACKAGE_DIR: ${{ steps.pkg.outputs.package_dir }}
+          TAG_VERSION: ${{ steps.pkg.outputs.tag_version }}
+        run: |
+          PACKAGE_VERSION=$(node -p "require('./${PACKAGE_DIR}/package.json').version")
+
+          if [ "${TAG_VERSION}" != "${PACKAGE_VERSION}" ]; then
+            echo "::error::Tag version (${TAG_VERSION}) does not match ${PACKAGE_DIR}/package.json (${PACKAGE_VERSION})"
+            exit 1
+          fi
+
+      - name: Build and test package
+        env:
+          PACKAGE_NAME: ${{ steps.pkg.outputs.package_name }}
+        run: |
+          pnpm --filter "${PACKAGE_NAME}" run build
+          pnpm --filter "${PACKAGE_NAME}" run test:unit
+
+      - name: Upgrade npm for trusted publishing
+        run: npm install -g npm@latest
+
+      - name: Publish to npm
+        working-directory: ${{ steps.pkg.outputs.package_dir }}
+        run: npm publish --access public --provenance
