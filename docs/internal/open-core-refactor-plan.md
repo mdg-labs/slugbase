@@ -1644,7 +1644,7 @@ Status column: orchestrator sets `[~]` at batch start, verifier sets `[x]` or `[
 | TASK-011 | `[x]` | slugbase | 006 | | `pnpm-workspace.yaml`, `turbo.json`, `package.json`, lockfile |
 | TASK-012 | `[x]` | slugbase | 011 | | `packages/backend/src/billing/**`, stripe deletion, `domain-modules.ts` — `1ff8cc6` |
 | TASK-013 | `[x]` | slugbase | 012 | | `turbo.json`, `.github/workflows/ci.yml`, `scripts/lib/package-version-policy.mjs` — `3c5346c` |
-| TASK-014 | `[ ]` | slugbase | 013 | | `Dockerfile.api`, `Dockerfile.web`, `scripts/ci/dockerfile-excludes-admin.spec.ts` |
+| TASK-014 | `[~]` | slugbase | 013 | | `Dockerfile.api`, `Dockerfile.web`, `scripts/ci/dockerfile-excludes-admin.spec.ts` |
 | TASK-015 | `[ ]` | slugbase | 012 | | `packages/backend/src/domain-modules*.ts`, `package.json` exports |
 | TASK-016 | `[ ]` | slugbase-cloud | 015 | | `packages/cloud-api/**`, `Dockerfile.api`, contact move |
 | TASK-017 | `[ ]` | slugbase-cloud + slugbase | 004,015,016 | | `packages/slugbase-billing/**`, `packages/web/**` billing API, `shared-types` contracts |
