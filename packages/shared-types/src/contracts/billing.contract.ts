@@ -3,7 +3,7 @@
  *
  * The application depends only on this contract; implementations are selected
  * by configuration at module init. The no-op default grants full entitlements
- * on self-hosted installs - checkout, portal, and payment flows are unavailable.
+ * on self-hosted installs - checkout and payment flows are unavailable.
  * Application logic checks entitlements, never the billing provider directly.
  */
 
@@ -26,16 +26,17 @@ export interface BillingCheckoutRequest {
   workspaceId: string;
   plan: Exclude<BillingPlan, "free">;
   mode: BillingCheckoutMode;
-  /** Config-driven Stripe price id (spec §12.1 - not hard-coded in app logic). */
+  /** Config-driven price id (legacy Stripe) or synthetic Mollie key (spec §12.1). */
   priceId: string;
+  billingInterval?: BillingInterval;
   successUrl: string;
   cancelUrl: string;
   customerEmail?: string;
-  /** Existing Stripe customer id when the workspace is already linked. */
+  /** Existing billing customer id when the workspace is already linked. */
   externalCustomerId?: string | null;
   /**
    * Seat quantity for Team recurring checkout (spec §12.2).
-   * Ignored for Personal and one-time purchases; always 1 at the Stripe line item.
+   * Ignored for Personal and one-time purchases.
    */
   seatQuantity?: number;
 }
@@ -43,16 +44,6 @@ export interface BillingCheckoutRequest {
 export interface BillingCheckoutSession {
   checkoutUrl: string;
   sessionId: string;
-}
-
-export interface BillingPortalRequest {
-  workspaceId: string;
-  returnUrl: string;
-  externalCustomerId: string;
-}
-
-export interface BillingPortalSession {
-  portalUrl: string;
 }
 
 export interface BillingSubscriptionLookup {
@@ -65,7 +56,7 @@ export interface BillingSubscriptionState {
   workspaceId: string;
   plan: BillingPlan;
   status: BillingSubscriptionStatus;
-  /** Billing interval for the current subscription; null for free/permanent-permanent plans. */
+  /** Billing interval for the current subscription; null for free/permanent plans. */
   billingInterval: BillingInterval | null;
   externalCustomerId: string | null;
   externalSubscriptionId: string | null;
@@ -81,11 +72,46 @@ export interface BillingSubscriptionState {
 
 export interface BillingSeatQuantityRequest {
   workspaceId: string;
+  externalCustomerId: string;
   externalSubscriptionId: string;
   /** Total seats (included base + purchased extras). */
   totalSeats: number;
   /** Current workspace member count - seat floor enforcement (spec §12.2). */
   currentMemberCount: number;
+}
+
+export interface BillingCancelRequest {
+  workspaceId: string;
+  externalCustomerId: string;
+  externalSubscriptionId: string;
+}
+
+export interface BillingReactivateRequest {
+  workspaceId: string;
+  plan: Exclude<BillingPlan, "free">;
+  billingInterval?: BillingInterval;
+  successUrl: string;
+  cancelUrl: string;
+  customerEmail?: string;
+  externalCustomerId: string | null;
+  externalSubscriptionId: string | null;
+  seatQuantity?: number;
+}
+
+export interface BillingChangePlanRequest {
+  workspaceId: string;
+  targetPlan: Exclude<BillingPlan, "free">;
+  billingInterval: BillingInterval;
+  externalCustomerId: string;
+  externalSubscriptionId: string;
+  currentMemberCount: number;
+  seatQuantity?: number;
+}
+
+export interface BillingPaymentMethodUpdateRequest {
+  workspaceId: string;
+  externalCustomerId: string;
+  returnUrl: string;
 }
 
 export interface BillingAsyncEvent {
@@ -140,7 +166,7 @@ export interface BillingInvoiceListResult {
 
 export interface BillingService {
   /**
-   * Returns true when an external billing provider is configured (hosted Stripe).
+   * Returns true when an external billing provider is configured.
    * Self-host no-op reports false - full entitlements apply via the entitlements engine.
    */
   isAvailable(): boolean;
@@ -155,12 +181,6 @@ export interface BillingService {
   createCheckoutSession(request: BillingCheckoutRequest): Promise<BillingCheckoutSession>;
 
   /**
-   * Opens a self-service billing portal session.
-   * Throws {@link BillingUnavailableError} when billing is not configured.
-   */
-  createPortalSession(request: BillingPortalRequest): Promise<BillingPortalSession>;
-
-  /**
    * Returns the current subscription/plan state for a workspace.
    * No-op returns unrestricted state with plan gating disabled.
    */
@@ -172,6 +192,34 @@ export interface BillingService {
    * Throws {@link BillingUnavailableError} when billing is not configured.
    */
   updateSeatQuantity(request: BillingSeatQuantityRequest): Promise<BillingSubscriptionState>;
+
+  /**
+   * Cancels a subscription at period end (Mollie cloud).
+   * Throws {@link BillingUnavailableError} when billing is not configured.
+   */
+  cancelSubscription(request: BillingCancelRequest): Promise<BillingSubscriptionState>;
+
+  /**
+   * Reactivates a cancelled subscription or starts a new checkout when required.
+   * Throws {@link BillingUnavailableError} when billing is not configured.
+   */
+  reactivateSubscription(
+    request: BillingReactivateRequest,
+  ): Promise<BillingSubscriptionState | BillingCheckoutSession>;
+
+  /**
+   * Changes plan tier on an active subscription (Mollie cloud).
+   * Throws {@link BillingUnavailableError} when billing is not configured.
+   */
+  changePlan(request: BillingChangePlanRequest): Promise<BillingSubscriptionState>;
+
+  /**
+   * Starts a hosted flow to update the stored payment method.
+   * Throws {@link BillingUnavailableError} when billing is not configured.
+   */
+  createPaymentMethodUpdateSession(
+    request: BillingPaymentMethodUpdateRequest,
+  ): Promise<BillingCheckoutSession>;
 
   /**
    * Processes an asynchronous billing event idempotently.

@@ -11,7 +11,7 @@ interface BillingHistorySectionProps {
   workspace: BillingWorkspaceSummary;
   canManage: boolean;
   busy: boolean;
-  onOpenPortal: () => void;
+  onUpdatePaymentMethod: () => void;
 }
 
 function formatInvoiceDate(value: string, locale: string): string {
@@ -39,7 +39,7 @@ export function BillingHistorySection({
   workspace,
   canManage,
   busy,
-  onOpenPortal,
+  onUpdatePaymentMethod,
 }: BillingHistorySectionProps) {
   const { t } = useTranslation();
   const locale = useAppLocale();
@@ -94,7 +94,7 @@ export function BillingHistorySection({
         </p>
         {hasBillingHistory ? (
           <p className="mt-sp-5 text-[length:var(--text-body)] text-fg-muted">
-            {t("settings.billing.history_payment_managed")}
+            {t("settings.billing.history_payment_update")}
           </p>
         ) : (
           <p className="mt-sp-5 text-[length:var(--text-body)] text-fg-subtle">
@@ -197,19 +197,19 @@ export function BillingHistorySection({
       <div className="flex flex-wrap items-center gap-sp-5 rounded-lg border border-[color:var(--border-subtle)] bg-raised p-sp-6">
         <div className="min-w-0 flex-1">
           <h3 className="m-0 text-[length:var(--text-body)] font-medium text-fg">
-            {t("settings.billing.portal_heading")}
+            {t("settings.billing.payment_method_heading")}
           </h3>
           <p className="mt-sp-2 text-[length:var(--text-small)] text-fg-subtle">
-            {t("settings.billing.portal_body")}
+            {t("settings.billing.payment_method_body")}
           </p>
         </div>
         <Button
           variant="secondary"
           disabled={!canManage || busy || !workspace.billingCustomerId}
-          onClick={onOpenPortal}
+          onClick={onUpdatePaymentMethod}
           type="button"
         >
-          {t("settings.billing.portal_open_action")}
+          {t("settings.billing.payment_method_action")}
         </Button>
       </div>
     </div>

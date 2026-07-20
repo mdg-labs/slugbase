@@ -29,21 +29,35 @@ export const BillingCheckoutSessionSchema = z
   })
   .strict();
 
-export const BillingPortalBodySchema = z
-  .object({
-    returnUrl: z.string().url(),
-  })
-  .strict();
-
-export const BillingPortalSessionSchema = z
-  .object({
-    portalUrl: z.string().url(),
-  })
-  .strict();
-
 export const BillingUpdateSeatsBodySchema = z
   .object({
     totalSeats: z.number().int().positive(),
+  })
+  .strict();
+
+export const BillingCancelBodySchema = z.object({}).strict();
+
+export const BillingReactivateBodySchema = z
+  .object({
+    plan: BillingCheckoutPlanSchema,
+    billingInterval: BillingIntervalSchema.default("monthly"),
+    seatQuantity: z.number().int().positive().optional(),
+    successUrl: z.string().url(),
+    cancelUrl: z.string().url(),
+  })
+  .strict();
+
+export const BillingChangePlanBodySchema = z
+  .object({
+    targetPlan: BillingCheckoutPlanSchema,
+    billingInterval: BillingIntervalSchema.default("monthly"),
+    seatQuantity: z.number().int().positive().optional(),
+  })
+  .strict();
+
+export const BillingPaymentMethodBodySchema = z
+  .object({
+    returnUrl: z.string().url(),
   })
   .strict();
 
@@ -88,19 +102,7 @@ export const billingContract = c.router({
       400: z.object({ message: z.string() }).strict(),
       403: z.object({ message: z.string() }).strict(),
     },
-    summary: "Start a Stripe checkout session for a plan purchase or change",
-  },
-  openPortal: {
-    method: "POST",
-    path: "/workspaces/:workspaceId/billing/portal",
-    pathParams: z.object({ workspaceId: z.string() }),
-    body: BillingPortalBodySchema,
-    responses: {
-      200: BillingPortalSessionSchema,
-      400: z.object({ message: z.string() }).strict(),
-      403: z.object({ message: z.string() }).strict(),
-    },
-    summary: "Open the Stripe self-service billing portal",
+    summary: "Start a Mollie checkout session for a plan purchase or change",
   },
   updateSeats: {
     method: "PATCH",
@@ -113,6 +115,54 @@ export const billingContract = c.router({
       403: z.object({ message: z.string() }).strict(),
     },
     summary: "Adjust Team seat quantity (not below current member count)",
+  },
+  cancelSubscription: {
+    method: "POST",
+    path: "/workspaces/:workspaceId/billing/cancel",
+    pathParams: z.object({ workspaceId: z.string() }),
+    body: BillingCancelBodySchema,
+    responses: {
+      200: WorkspaceSchema,
+      400: z.object({ message: z.string() }).strict(),
+      403: z.object({ message: z.string() }).strict(),
+    },
+    summary: "Cancel subscription at period end",
+  },
+  reactivateSubscription: {
+    method: "POST",
+    path: "/workspaces/:workspaceId/billing/reactivate",
+    pathParams: z.object({ workspaceId: z.string() }),
+    body: BillingReactivateBodySchema,
+    responses: {
+      200: z.union([WorkspaceSchema, BillingCheckoutSessionSchema]),
+      400: z.object({ message: z.string() }).strict(),
+      403: z.object({ message: z.string() }).strict(),
+    },
+    summary: "Reactivate a cancelled subscription or start a new checkout",
+  },
+  changePlan: {
+    method: "POST",
+    path: "/workspaces/:workspaceId/billing/change-plan",
+    pathParams: z.object({ workspaceId: z.string() }),
+    body: BillingChangePlanBodySchema,
+    responses: {
+      200: WorkspaceSchema,
+      400: z.object({ message: z.string() }).strict(),
+      403: z.object({ message: z.string() }).strict(),
+    },
+    summary: "Change subscription plan tier",
+  },
+  updatePaymentMethod: {
+    method: "POST",
+    path: "/workspaces/:workspaceId/billing/payment-method",
+    pathParams: z.object({ workspaceId: z.string() }),
+    body: BillingPaymentMethodBodySchema,
+    responses: {
+      200: BillingCheckoutSessionSchema,
+      400: z.object({ message: z.string() }).strict(),
+      403: z.object({ message: z.string() }).strict(),
+    },
+    summary: "Start a hosted payment-method update session",
   },
   listInvoices: {
     method: "GET",
@@ -128,18 +178,20 @@ export const billingContract = c.router({
     },
     summary: "List invoices for the workspace billing customer",
   },
-  stripeWebhook: {
+  mollieWebhook: {
     method: "POST",
-    path: "/billing/webhooks/stripe",
+    path: "/billing/webhooks/mollie",
     body: c.type<{ raw: unknown }>(),
     responses: {
       200: z.object({ received: z.literal(true) }).strict(),
       400: z.object({ message: z.string() }).strict(),
     },
-    summary: "Stripe billing webhook receiver (hosted only)",
+    summary: "Mollie billing webhook receiver (hosted only)",
   },
 });
 
 export type BillingCheckoutBody = z.infer<typeof BillingCheckoutBodySchema>;
-export type BillingPortalBody = z.infer<typeof BillingPortalBodySchema>;
 export type BillingUpdateSeatsBody = z.infer<typeof BillingUpdateSeatsBodySchema>;
+export type BillingReactivateBody = z.infer<typeof BillingReactivateBodySchema>;
+export type BillingChangePlanBody = z.infer<typeof BillingChangePlanBodySchema>;
+export type BillingPaymentMethodBody = z.infer<typeof BillingPaymentMethodBodySchema>;

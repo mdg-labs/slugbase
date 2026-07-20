@@ -7,8 +7,11 @@ import { useAppToast } from "../../../../components/feedback/AppToastProvider.js
 import { useAppLocale } from "../../../../i18n/use-app-locale.js";
 
 import {
-  openBillingPortal,
+  cancelSubscription,
+  changePlan,
+  reactivateSubscription,
   startCheckout,
+  updatePaymentMethod,
   updateSeatQuantity,
 } from "../billing-api.js";
 import { extractCurrencyPrefix } from "../billing-plan-table.js";
@@ -136,9 +139,6 @@ export function BillingSettingsPage({ initialData }: BillingSettingsPageProps) {
 
   const handlePlanSelect = async (plan: BillingPlanId) => {
     if (plan === "free") {
-      if (workspace.billingCustomerId) {
-        await handleOpenPortal();
-      }
       return;
     }
     if (plan === "personal") {
@@ -148,11 +148,64 @@ export function BillingSettingsPage({ initialData }: BillingSettingsPageProps) {
     beginTeamCheckout();
   };
 
-  const handleOpenPortal = async () => {
+  const handleCancelSubscription = async () => {
     setBusy(true);
     try {
-      const { portalUrl } = await openBillingPortal(workspace.id, initialData.returnUrl);
-      redirectExternal(portalUrl);
+      const updated = await cancelSubscription(workspace.id);
+      setWorkspace(updated);
+      showToast("settings.billing.toast_subscription_cancelled");
+    } catch (err) {
+      showError(err instanceof Error ? err.message : t("settings.billing.error_generic"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleReactivateSubscription = async () => {
+    setBusy(true);
+    try {
+      const plan = displayPlan === "team" ? "team" : "personal";
+      const result = await reactivateSubscription(workspace.id, {
+        plan,
+        billingInterval: workspace.billingInterval ?? selectedInterval,
+        successUrl: initialData.returnUrl,
+        cancelUrl: initialData.returnUrl,
+        ...(plan === "team" ? { seatQuantity: workspace.planSeats ?? TEAM_MIN_SEATS } : {}),
+      });
+      if ("checkoutUrl" in result) {
+        redirectExternal(result.checkoutUrl);
+        return;
+      }
+      setWorkspace(result);
+      showToast("settings.billing.toast_subscription_reactivated");
+    } catch (err) {
+      showError(err instanceof Error ? err.message : t("settings.billing.error_generic"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDowngradeToPersonal = async () => {
+    setBusy(true);
+    try {
+      const updated = await changePlan(workspace.id, {
+        targetPlan: "personal",
+        billingInterval: workspace.billingInterval ?? selectedInterval,
+      });
+      setWorkspace(updated);
+      showToast("settings.billing.toast_plan_changed");
+    } catch (err) {
+      showError(err instanceof Error ? err.message : t("settings.billing.error_generic"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleUpdatePaymentMethod = async () => {
+    setBusy(true);
+    try {
+      const { checkoutUrl } = await updatePaymentMethod(workspace.id, initialData.returnUrl);
+      redirectExternal(checkoutUrl);
     } catch (err) {
       showError(err instanceof Error ? err.message : t("settings.billing.error_generic"));
     } finally {
@@ -382,7 +435,7 @@ export function BillingSettingsPage({ initialData }: BillingSettingsPageProps) {
                 <Button
                   disabled={!canManage || busy}
                   onClick={() => {
-                    void handleOpenPortal();
+                    void handleReactivateSubscription();
                   }}
                   type="button"
                 >
@@ -426,7 +479,7 @@ export function BillingSettingsPage({ initialData }: BillingSettingsPageProps) {
                   variant="ghost"
                   disabled={!canManage || busy}
                   onClick={() => {
-                    void handleOpenPortal();
+                    void handleDowngradeToPersonal();
                   }}
                   type="button"
                 >
@@ -440,7 +493,7 @@ export function BillingSettingsPage({ initialData }: BillingSettingsPageProps) {
                   freeCap={cap}
                   busy={busy}
                   onConfirmCancel={() => {
-                    void handleOpenPortal();
+                    void handleCancelSubscription();
                   }}
                   onKeep={() => {
                     showToast("settings.billing.toast_subscription_kept");
@@ -532,8 +585,8 @@ export function BillingSettingsPage({ initialData }: BillingSettingsPageProps) {
           workspace={workspace}
           canManage={canManage}
           busy={busy}
-          onOpenPortal={() => {
-            void handleOpenPortal();
+          onUpdatePaymentMethod={() => {
+            void handleUpdatePaymentMethod();
           }}
         />
       ) : null}

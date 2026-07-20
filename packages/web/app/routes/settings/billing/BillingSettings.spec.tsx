@@ -31,16 +31,16 @@ vi.mock("react-router", async () => {
 });
 
 const checkoutMock = vi.fn();
-const portalMock = vi.fn();
+const cancelMock = vi.fn();
 
 vi.mock("./billing-api.js", () => ({
   startCheckout: (params: unknown): Promise<{ checkoutUrl: string }> =>
     checkoutMock(params) as Promise<{ checkoutUrl: string }>,
-  openBillingPortal: (
-    workspaceId: string,
-    returnUrl: string,
-  ): Promise<{ portalUrl: string }> =>
-    portalMock(workspaceId, returnUrl) as Promise<{ portalUrl: string }>,
+  cancelSubscription: (workspaceId: string): Promise<unknown> =>
+    cancelMock(workspaceId) as Promise<unknown>,
+  reactivateSubscription: vi.fn(),
+  changePlan: vi.fn(),
+  updatePaymentMethod: vi.fn(),
   updateSeatQuantity: vi.fn(),
   loadBillingSettingsData: vi.fn(),
 }));
@@ -48,7 +48,7 @@ vi.mock("./billing-api.js", () => ({
 afterEach(() => {
   cleanup();
   checkoutMock.mockReset();
-  portalMock.mockReset();
+  cancelMock.mockReset();
 });
 
 const baseData: BillingSettingsData = {
@@ -188,9 +188,12 @@ describe("BillingSettingsPage", () => {
     assignSpy.mockRestore();
   });
 
-  it("opens billing portal for cancel confirmation", async () => {
-    portalMock.mockResolvedValue({ portalUrl: "https://portal.test/session" });
-    const assignSpy = vi.spyOn(window.location, "assign").mockImplementation(() => {});
+  it("cancels subscription in-app", async () => {
+    cancelMock.mockResolvedValue({
+      ...baseData.workspace,
+      plan: "personal",
+      billingStatus: "cancelled",
+    });
 
     const view = render(
       billingPage({
@@ -199,6 +202,7 @@ describe("BillingSettingsPage", () => {
           ...baseData.workspace,
           plan: "personal",
           billingCustomerId: "cus_123",
+          billingSubscriptionId: "sub_123",
           billingStatus: "active",
           billingPeriodEnd: "2026-07-01T00:00:00.000Z",
         },
@@ -210,10 +214,8 @@ describe("BillingSettingsPage", () => {
     fireEvent.click(view.getByRole("button", { name: "Confirm cancellation" }));
 
     await waitFor(() => {
-      expect(portalMock).toHaveBeenCalledWith("ws-1", baseData.returnUrl);
+      expect(cancelMock).toHaveBeenCalledWith("ws-1");
     });
-
-    assignSpy.mockRestore();
   });
 
   it("shows unavailable gate when billing is disabled", () => {

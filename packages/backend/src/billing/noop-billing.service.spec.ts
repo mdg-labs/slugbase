@@ -42,13 +42,13 @@ describe("NoopBillingService", () => {
     ).rejects.toBeInstanceOf(BillingUnavailableError);
   });
 
-  it("rejects portal with BillingUnavailableError", async () => {
+  it("rejects cancel with BillingUnavailableError", async () => {
     const service = new NoopBillingService();
     await expect(
-      service.createPortalSession({
+      service.cancelSubscription({
         workspaceId: "ws-1",
-        returnUrl: "https://app.example/settings/billing",
         externalCustomerId: "cus_test",
+        externalSubscriptionId: "sub_test",
       }),
     ).rejects.toBeInstanceOf(BillingUnavailableError);
   });

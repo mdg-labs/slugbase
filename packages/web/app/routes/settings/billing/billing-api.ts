@@ -123,11 +123,67 @@ export async function startCheckout(params: StartCheckoutParams): Promise<{ chec
   return { checkoutUrl: body.checkoutUrl };
 }
 
-export async function openBillingPortal(
+export async function cancelSubscription(workspaceId: string): Promise<BillingWorkspaceSummary> {
+  const res = await apiFetch(`/workspaces/${workspaceId}/billing/cancel`, {
+    method: "POST",
+    csrf: true,
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) {
+    throw new Error(await parseApiErrorMessage(res));
+  }
+  return mapWorkspaceSummary((await res.json()) as ApiWorkspace);
+}
+
+export async function reactivateSubscription(
+  workspaceId: string,
+  params: {
+    plan: Exclude<BillingPlanId, "free">;
+    billingInterval?: "monthly" | "annual";
+    seatQuantity?: number;
+    successUrl: string;
+    cancelUrl: string;
+  },
+): Promise<BillingWorkspaceSummary | { checkoutUrl: string }> {
+  const res = await apiFetch(`/workspaces/${workspaceId}/billing/reactivate`, {
+    method: "POST",
+    csrf: true,
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    throw new Error(await parseApiErrorMessage(res));
+  }
+  const body = (await res.json()) as ApiWorkspace | { checkoutUrl: string };
+  if ("checkoutUrl" in body) {
+    return { checkoutUrl: body.checkoutUrl };
+  }
+  return mapWorkspaceSummary(body);
+}
+
+export async function changePlan(
+  workspaceId: string,
+  params: {
+    targetPlan: Exclude<BillingPlanId, "free">;
+    billingInterval?: "monthly" | "annual";
+    seatQuantity?: number;
+  },
+): Promise<BillingWorkspaceSummary> {
+  const res = await apiFetch(`/workspaces/${workspaceId}/billing/change-plan`, {
+    method: "POST",
+    csrf: true,
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    throw new Error(await parseApiErrorMessage(res));
+  }
+  return mapWorkspaceSummary((await res.json()) as ApiWorkspace);
+}
+
+export async function updatePaymentMethod(
   workspaceId: string,
   returnUrl: string,
-): Promise<{ portalUrl: string }> {
-  const res = await apiFetch(`/workspaces/${workspaceId}/billing/portal`, {
+): Promise<{ checkoutUrl: string }> {
+  const res = await apiFetch(`/workspaces/${workspaceId}/billing/payment-method`, {
     method: "POST",
     csrf: true,
     body: JSON.stringify({ returnUrl }),
@@ -135,8 +191,8 @@ export async function openBillingPortal(
   if (!res.ok) {
     throw new Error(await parseApiErrorMessage(res));
   }
-  const body = (await res.json()) as { portalUrl: string };
-  return { portalUrl: body.portalUrl };
+  const body = (await res.json()) as { checkoutUrl: string };
+  return { checkoutUrl: body.checkoutUrl };
 }
 
 export async function updateSeatQuantity(
@@ -151,20 +207,7 @@ export async function updateSeatQuantity(
   if (!res.ok) {
     throw new Error(await parseApiErrorMessage(res));
   }
-  const body = (await res.json()) as ApiWorkspace;
-  return {
-    id: body.id,
-    name: body.name,
-    plan: body.plan,
-    planSeats: body.planSeats,
-    planArchived: body.planArchived,
-    billingCustomerId: body.billingCustomerId,
-    billingSubscriptionId: body.billingSubscriptionId,
-    billingStatus: body.billingStatus,
-    billingPeriodEnd: body.billingPeriodEnd,
-    permanentPersonal: body.permanentPersonal,
-    billingInterval: body.billingInterval,
-  };
+  return mapWorkspaceSummary((await res.json()) as ApiWorkspace);
 }
 
 export async function fetchBillingInvoices(
@@ -186,4 +229,20 @@ export async function fetchBillingInvoices(
     throw new Error(await parseApiErrorMessage(res));
   }
   return (await res.json()) as BillingInvoiceList;
+}
+
+function mapWorkspaceSummary(body: ApiWorkspace): BillingWorkspaceSummary {
+  return {
+    id: body.id,
+    name: body.name,
+    plan: body.plan,
+    planSeats: body.planSeats,
+    planArchived: body.planArchived,
+    billingCustomerId: body.billingCustomerId,
+    billingSubscriptionId: body.billingSubscriptionId,
+    billingStatus: body.billingStatus,
+    billingPeriodEnd: body.billingPeriodEnd,
+    permanentPersonal: body.permanentPersonal,
+    billingInterval: body.billingInterval,
+  };
 }

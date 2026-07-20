@@ -16,9 +16,12 @@ function createMockBilling(): BillingService {
     isAvailable: vi.fn().mockReturnValue(true),
     isPlanGatingEnabled: vi.fn().mockReturnValue(true),
     createCheckoutSession: vi.fn(),
-    createPortalSession: vi.fn(),
     getSubscriptionState: vi.fn(),
     updateSeatQuantity: vi.fn(),
+    cancelSubscription: vi.fn(),
+    reactivateSubscription: vi.fn(),
+    changePlan: vi.fn(),
+    createPaymentMethodUpdateSession: vi.fn(),
     handleAsyncEvent: vi.fn().mockResolvedValue({ processed: true, stateUpdated: false }),
     listInvoices: vi.fn().mockResolvedValue({
       items: [],

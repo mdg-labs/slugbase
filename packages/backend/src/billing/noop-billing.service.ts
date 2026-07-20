@@ -7,8 +7,10 @@ import {
   type BillingEventResult,
   type BillingInvoiceListRequest,
   type BillingInvoiceListResult,
-  type BillingPortalRequest,
-  type BillingPortalSession,
+  type BillingCancelRequest,
+  type BillingChangePlanRequest,
+  type BillingPaymentMethodUpdateRequest,
+  type BillingReactivateRequest,
   type BillingSeatQuantityRequest,
   type BillingService,
   type BillingSubscriptionLookup,
@@ -36,10 +38,6 @@ export class NoopBillingService implements BillingService {
     return Promise.reject(new BillingUnavailableError());
   }
 
-  createPortalSession(_request: BillingPortalRequest): Promise<BillingPortalSession> {
-    return Promise.reject(new BillingUnavailableError());
-  }
-
   getSubscriptionState(lookup: BillingSubscriptionLookup): Promise<BillingSubscriptionState> {
     return Promise.resolve({
       workspaceId: lookup.workspaceId,
@@ -57,6 +55,26 @@ export class NoopBillingService implements BillingService {
   }
 
   updateSeatQuantity(_request: BillingSeatQuantityRequest): Promise<BillingSubscriptionState> {
+    return Promise.reject(new BillingUnavailableError());
+  }
+
+  cancelSubscription(_request: BillingCancelRequest): Promise<BillingSubscriptionState> {
+    return Promise.reject(new BillingUnavailableError());
+  }
+
+  reactivateSubscription(
+    _request: BillingReactivateRequest,
+  ): Promise<BillingSubscriptionState | BillingCheckoutSession> {
+    return Promise.reject(new BillingUnavailableError());
+  }
+
+  changePlan(_request: BillingChangePlanRequest): Promise<BillingSubscriptionState> {
+    return Promise.reject(new BillingUnavailableError());
+  }
+
+  createPaymentMethodUpdateSession(
+    _request: BillingPaymentMethodUpdateRequest,
+  ): Promise<BillingCheckoutSession> {
     return Promise.reject(new BillingUnavailableError());
   }
 

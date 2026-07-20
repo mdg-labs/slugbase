@@ -128,6 +128,7 @@ export class BillingApplicationService {
       plan: input.plan,
       mode: input.mode,
       priceId,
+      billingInterval: input.billingInterval,
       successUrl: input.successUrl,
       cancelUrl: input.cancelUrl,
       customerEmail: account.email,
@@ -147,7 +148,7 @@ export class BillingApplicationService {
     if (workspace.plan !== "team") {
       throw new BadRequestException("Seat updates apply only to Team workspaces");
     }
-    if (!workspace.billingSubscriptionId) {
+    if (!workspace.billingSubscriptionId || !workspace.billingCustomerId) {
       throw new BadRequestException("No active Team subscription");
     }
 
@@ -162,6 +163,7 @@ export class BillingApplicationService {
     try {
       const state = await this.billing.updateSeatQuantity({
         workspaceId: input.workspaceId,
+        externalCustomerId: workspace.billingCustomerId,
         externalSubscriptionId: workspace.billingSubscriptionId,
         totalSeats: input.totalSeats,
         currentMemberCount: members.length,
