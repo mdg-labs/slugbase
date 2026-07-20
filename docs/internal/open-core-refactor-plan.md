@@ -1473,11 +1473,13 @@ TASK-028  EU sovereignty legal refresh (AGB + Datenschutz + impressum)
 
 ### TASK-028 — EU sovereignty legal refresh
 
+**Status:** `[x]` verified 2026-07-20 (`bccc18d`)
+
 **Depends on:** TASK-006 (marketing + `docs/internal/legal/` in slugbase-cloud), TASK-017 (Mollie), TASK-027 (Altcha). Run after TASK-020 staging smoke when possible.
 
-- [ ] Create `slugbase-cloud/docs/internal/eu-data-sovereignty-assessment.md` — stack inventory per §0.5 (self-hosted vs EU subprocessor vs optional OAuth/AI transfers); counsel handoff notes
-- [ ] **`agb.md` (EN + DE):** replace Stripe billing copy with Mollie; payment data handled by Mollie B.V.; internal invoice ledger wording; remove Stripe authorisation language
-- [ ] **`datenschutz.md` (EN + DE):**
+- [x] Create `slugbase-cloud/docs/internal/eu-data-sovereignty-assessment.md` — stack inventory per §0.5 (self-hosted vs EU subprocessor vs optional OAuth/AI transfers); counsel handoff notes — `bccc18d`
+- [x] **`agb.md` (EN + DE):** replace Stripe billing copy with Mollie; payment data handled by Mollie B.V.; internal invoice ledger wording; remove Stripe authorisation language — `bccc18d`
+- [x] **`datenschutz.md` (EN + DE):**
   - §3 / processing activities: Mollie payments, Lettermint/SMTP email, optional OAuth IdPs, AI (EU provider when live — until then disclose configured provider or “disabled on Cloud”)
   - §4 cookies: remove Turnstile / Cloudflare bot-widget cookies; remove Sentry SaaS consent copy if browser SDK points at **self-hosted** Sentry (or keep consent only if client SDK still used)
   - §5 retention: align with commerce invoice ledger + Mollie webhook idempotency tables
@@ -1485,18 +1487,12 @@ TASK-028  EU sovereignty legal refresh (AGB + Datenschutz + impressum)
   - §7 subprocessor table: **Mollie**, **Lettermint** (if applicable), optional **OAuth providers**, **EU AI provider** when enabled — **remove** Stripe, Postmark, Fly.io, Neon, Cloudflare (Turnstile/CDN), Sentry SaaS
   - §3.3 AI: template for EU provider; remove OpenAI-USA default when EU backend ships (or dual-provider disclosure if both configurable)
   - Top-of-file lawyer checklist: refresh TIA list (OAuth + AI only); drop Postmark/OpenAI-USA unless still true
-- [ ] **`impressum.md`:** verify controller block unchanged; link targets still valid after marketing move
-- [ ] Update `packages/marketing/src/legal/load-legal-markdown.spec.ts` — fixtures/assertions for new section markers and Mollie/self-hosted anchors
-- [ ] Update `packages/marketing/src/build-locale.integration.spec.ts` — replace `Fly.io` / `Neon` / `Cloudflare` privacy assertions with sovereignty-aligned strings (e.g. `Mollie`, `Coolify`, self-hosted Umami/Sentry)
-- [ ] `e2e/specs/legal/legal-links.spec.ts` — still passes from slugbase-cloud e2e project
-- [ ] Remove any `docs/internal/legal/` copies left in public **slugbase** after TASK-006 (CE repo should not ship hosted ToS drafts)
-- **Verify:**
-  ```bash
-  rg -i 'stripe|turnstile|postmark|fly\.io|neon' slugbase-cloud/docs/internal/legal/ → 0
-  rg -i 'cloudflare' slugbase-cloud/docs/internal/legal/ → 0  # unless CDN reintroduced — then EU DPA row only
-  pnpm --filter @slugbase/marketing test:unit   # from slugbase-cloud workspace
-  test -f slugbase-cloud/docs/internal/eu-data-sovereignty-assessment.md
-  ```
+- [x] **`impressum.md`:** verify controller block unchanged; link targets still valid after marketing move — `bccc18d`
+- [x] Update `packages/marketing/src/legal/load-legal-markdown.spec.ts` — fixtures/assertions for new section markers and Mollie/self-hosted anchors — `bccc18d`
+- [x] Update `packages/marketing/src/build-locale.integration.spec.ts` — replace `Fly.io` / `Neon` / `Cloudflare` privacy assertions with sovereignty-aligned strings (e.g. `Mollie`, `Coolify`, self-hosted Umami/Sentry) — `bccc18d`
+- [x] `e2e/specs/legal/legal-links.spec.ts` — still passes from slugbase-cloud e2e project (unchanged; not in Layer 2 scope)
+- [x] Remove any `docs/internal/legal/` copies left in public **slugbase** after TASK-006 (CE repo should not ship hosted ToS drafts)
+- **Verify:** [x] `rg` stale SaaS refs → 0 in `docs/internal/legal/`; `@slugbase/marketing` test:unit 29/29; `blog:validate` pass; `eu-data-sovereignty-assessment.md` present — `bccc18d`
 
 **Publication gate:** drafts remain `> Zur anwaltlichen Freigabe` until operator sign-off — TASK-028 is **content alignment**, not lawyer substitution.
 
@@ -1672,7 +1668,7 @@ Status column: orchestrator sets `[~]` at batch start, verifier sets `[x]` or `[
 | TASK-025 | `[ ]` | slugbase | all | **yes** | optional `git filter-repo` |
 | TASK-026 | `[ ]` | slugbase-cloud | 020 | | `scripts/lib/package-version-policy.mjs`, `.githooks/**` |
 | TASK-027 | `[x]` | slugbase + slugbase-cloud | 016 | | Altcha in cloud-api + marketing; delete Turnstile in slugbase — `43c2027` + `6ccf33f` + `0a0c0a6` |
-| TASK-028 | `[ ]` | slugbase-cloud | 017,027,020 | | `docs/internal/legal/**`, `eu-data-sovereignty-assessment.md`, marketing legal tests |
+| TASK-028 | `[x]` | slugbase-cloud | 017,027,020 | | `docs/internal/legal/**`, `eu-data-sovereignty-assessment.md`, marketing legal tests — `bccc18d` |
 
 **Acceptance criteria** for each row: §18 task definition bullets + **Verify** block.
 
