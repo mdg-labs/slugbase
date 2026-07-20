@@ -1434,14 +1434,17 @@ TASK-028  EU sovereignty legal refresh (AGB + Datenschutz + impressum)
 - **Verify:** [x] `rg 'Elastic' LICENSE README.md` → no matches; AGPL `LICENSE`; `TRADEMARK.md`; `package.json` `AGPL-3.0-only`; README badge + license section
 
 ### TASK-024 — Docs & Cursor rules
-- [ ] Update spec §2.2, engineering-decisions, `environment-variables.md`
-- [ ] `commerce/README.md`, `slugbase-cloud/README.md`
-- [ ] `.cursor/rules/00-project.mdc` — three-repo open-core model
-- [ ] `.cursor/rules/02-orchestrator.mdc` — package filter map includes commerce + slugbase-cloud paths
-- [ ] `.cursor/skills/orchestrator/prompt-templates.md` — add §19.4 multi-repo CI filter table; fix workspace path in `SKILL.md`
-- [ ] `slugbase-docs` — split CE self-host vs Cloud operator docs (separate PR)
-- [ ] Cross-link `eu-data-sovereignty-assessment.md` from slugbase-cloud README (content in TASK-028)
-- **Verify:** links resolve; orchestrator filter table lists `@mdg-labs/commerce-core`
+
+**Status:** `[x]` verified 2026-07-20 (`ec09466` + `49a61e9` + `1e47d1b`); slugbase-docs PR deferred
+
+- [x] Update spec §2.2, engineering-decisions, `environment-variables.md`
+- [x] `commerce/README.md`, `slugbase-cloud/README.md`
+- [x] `.cursor/rules/00-project.mdc` — three-repo open-core model
+- [x] `.cursor/rules/02-orchestrator.mdc` — package filter map includes commerce + slugbase-cloud paths
+- [x] `.cursor/skills/orchestrator/prompt-templates.md` — add §19.4 multi-repo CI filter table; fix workspace path in `SKILL.md`
+- [ ] `slugbase-docs` — split CE self-host vs Cloud operator docs (separate PR — deferred)
+- [x] Cross-link `eu-data-sovereignty-assessment.md` from slugbase-cloud README (content in TASK-028)
+- **Verify:** [x] orchestrator filter table lists `@mdg-labs/commerce-core`; cross-repo README/spec links resolve (eu-data file content → TASK-028)
 
 ### TASK-027 — Replace Turnstile with Altcha
 
@@ -1662,7 +1665,7 @@ Status column: orchestrator sets `[~]` at batch start, verifier sets `[x]` or `[
 | TASK-021 | `[ ]` | slugbase | 019 | **yes** | `packages/{ui,shared-types}/package.json`, local npm publish |
 | TASK-022 | `[ ]` | slugbase | 021 | | `.github/workflows/publish-npm.yml` |
 | TASK-023 | `[x]` | slugbase | 019 | | `LICENSE`, `TRADEMARK.md`, `README.md` — `66e9034` |
-| TASK-024 | `[ ]` | slugbase + cloud + commerce | 023 | | spec, engineering-decisions, READMEs, `.cursor/rules/**` |
+| TASK-024 | `[x]` | slugbase + cloud + commerce | 023 | | spec, engineering-decisions, READMEs, `.cursor/rules/**` — `ec09466` + `49a61e9` + `1e47d1b` |
 | TASK-025 | `[ ]` | slugbase | all | **yes** | optional `git filter-repo` |
 | TASK-026 | `[ ]` | slugbase-cloud | 020 | | `scripts/lib/package-version-policy.mjs`, `.githooks/**` |
 | TASK-027 | `[x]` | slugbase + slugbase-cloud | 016 | | Altcha in cloud-api + marketing; delete Turnstile in slugbase — `43c2027` + `6ccf33f` + `0a0c0a6` |
