@@ -1293,9 +1293,9 @@ TASK-028  EU sovereignty legal refresh (AGB + Datenschutz + impressum)
 - **Verify:** `pnpm --filter @mdg-labs/commerce-mollie test:unit`
 
 ### TASK-004 — Publish commerce to GitHub Packages
-- [ ] Add `.npmrc`, publish workflow
-- [ ] Tag `commerce-v0.1.0` push
-- **Verify:** Package visible at `https://github.com/mdg-labs/commerce/packages`
+- [x] Add `.npmrc`, publish workflow (`60cc3c7`)
+- [x] Tag `commerce-v0.1.0` push — **operator follow-up:** push `60cc3c7` to `origin`, then `git tag commerce-v0.1.0 && git push origin commerce-v0.1.0` (or `workflow_dispatch`)
+- **Verify:** Package visible at `https://github.com/mdg-labs/commerce/packages` — operator follow-up after tag push
 
 ### TASK-005 — Scaffold slugbase-cloud
 - [ ] **Bootstrap repo:** `slugbase-cloud` has remote but **no commits** — create `staging` branch; first commit is this scaffold.
@@ -1629,7 +1629,7 @@ Status column: orchestrator sets `[~]` at batch start, verifier sets `[x]` or `[
 | TASK-001 | `[x]` | commerce | 000 | | `commerce/**` (scaffold root + empty packages) |
 | TASK-002 | `[x]` | commerce | 001 | | `commerce/packages/commerce-core/**` |
 | TASK-003 | `[x]` | commerce | 002 | | `commerce/packages/commerce-mollie/**` |
-| TASK-004 | `[ ]` | commerce | 003 | | `commerce/.github/**`, `commerce/.npmrc`, publish workflow |
+| TASK-004 | `[x]` | commerce | 003 | **yes** | `commerce/.github/**`, `commerce/.npmrc`, publish workflow — operator: tag `commerce-v0.1.0` + push for GH Packages |
 | TASK-005 | `[ ]` | slugbase-cloud | 000 | | `slugbase-cloud/**` (scaffold) |
 | TASK-006 | `[ ]` | slugbase + slugbase-cloud | 005 | | `git mv` packages + `docs/internal/legal` (§14.4) |
 | TASK-007 | `[ ]` | slugbase + slugbase-cloud | 006 | | workflows, `scripts/ci/cloud-*`, Dockerfiles (§14.5) |
