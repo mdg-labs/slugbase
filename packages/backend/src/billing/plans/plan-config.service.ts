@@ -13,7 +13,7 @@ export interface PlanPriceConfig {
 
 /**
  * Config-driven plan pricing and seat defaults (spec §12.1, def §6).
- * Amounts live in Stripe / marketing - app logic references price ids only.
+ * CE has no payment provider — price IDs are always null until cloud billing is wired.
  */
 @Injectable()
 export class PlanConfigService {
@@ -34,16 +34,16 @@ export class PlanConfigService {
 
   getPriceConfig(): PlanPriceConfig {
     return {
-      personalMonthlyPriceId: this.config.get("STRIPE_PRICE_PERSONAL_MONTHLY") ?? null,
-      personalAnnualPriceId: this.config.get("STRIPE_PRICE_PERSONAL_ANNUAL") ?? null,
-      teamMonthlyPriceId: this.config.get("STRIPE_PRICE_TEAM_MONTHLY") ?? null,
-      teamAnnualPriceId: this.config.get("STRIPE_PRICE_TEAM_ANNUAL") ?? null,
-      supporterOneTimePriceId: this.config.get("STRIPE_PRICE_SUPPORTER") ?? null,
+      personalMonthlyPriceId: null,
+      personalAnnualPriceId: null,
+      teamMonthlyPriceId: null,
+      teamAnnualPriceId: null,
+      supporterOneTimePriceId: null,
     };
   }
 
   /**
-   * Returns the Stripe price id for a checkout request, or null when not configured.
+   * Returns the checkout price id for a plan request, or null when not configured.
    * Default interval is 'monthly' when not specified.
    */
   resolveCheckoutPriceId(

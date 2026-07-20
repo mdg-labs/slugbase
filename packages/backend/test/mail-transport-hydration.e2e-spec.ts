@@ -21,7 +21,6 @@ describe("SMTP env-only transport (integration)", () => {
 
     applyTestEnv({
       DATABASE_URL: testDatabase.databaseUrl,
-      STRIPE_SECRET_KEY: "sk_test_mail_hydration",
     });
     delete process.env.SMTP_HOST;
     delete process.env.SMTP_PORT;

@@ -49,7 +49,6 @@ describe("Invitations (integration)", () => {
 
     applyTestEnv({
       DATABASE_URL: testDatabase.databaseUrl,
-      STRIPE_SECRET_KEY: "sk_test_hosted_plan_gating",
     });
 
     const moduleRef = await Test.createTestingModule({
@@ -192,27 +191,27 @@ describe("Invitations (integration)", () => {
   // AC5: Entitlement gate - free plan workspace returns 403
   // ---------------------------------------------------------------------------
 
-  describe("POST /workspaces/:id/invitations - free plan → 403", () => {
-    it("returns 403 when workspace is on free plan", async () => {
+  describe("POST /workspaces/:id/invitations - free plan on CE", () => {
+    it("creates an invitation on free plan when billing is no-op", async () => {
       const res = await request(server())
         .post(`/workspaces/${freeWorkspaceId}/invitations`)
         .set("Cookie", `${ownerSessionCookie}; ${ownerCsrfCookie}`)
         .set("x-csrf-token", ownerCsrfToken)
-        .send({ email: "blocked@example.com", role: "MEMBER" });
+        .send({ email: "free-plan-invite@example.com", role: "MEMBER" });
 
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(201);
     });
   });
 
-  describe("POST /workspaces/:id/invitations - personal plan → 403", () => {
-    it("returns 403 when workspace is on personal plan", async () => {
+  describe("POST /workspaces/:id/invitations - personal plan on CE", () => {
+    it("creates an invitation on personal plan when billing is no-op", async () => {
       const res = await request(server())
         .post(`/workspaces/${personalWorkspaceId}/invitations`)
         .set("Cookie", `${ownerSessionCookie}; ${ownerCsrfCookie}`)
         .set("x-csrf-token", ownerCsrfToken)
-        .send({ email: "blocked-personal@example.com", role: "MEMBER" });
+        .send({ email: "personal-plan-invite@example.com", role: "MEMBER" });
 
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(201);
     });
   });
 
@@ -367,7 +366,7 @@ describe("Invitations (integration)", () => {
       expect(newMetadata.status).toBe(200);
     });
 
-    it("returns 403 when active workspace is on free plan", async () => {
+    it("returns invitation link when active workspace is on free plan (CE noop)", async () => {
       const { plaintext } = await createKnownInvitation(
         "free-link@example.com",
         "MEMBER",
@@ -386,7 +385,9 @@ describe("Invitations (integration)", () => {
         .set("Cookie", `${freeAuth.sessionCookie}; ${freeAuth.csrfCookie}`)
         .set("x-csrf-token", freeAuth.csrfToken);
 
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(200);
+      const body = res.body as { acceptUrl: string };
+      expect(body.acceptUrl).toContain("/invitations/");
     });
   });
 

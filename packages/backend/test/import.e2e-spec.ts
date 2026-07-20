@@ -33,7 +33,6 @@ describe("Import (integration)", () => {
     cleanup = testDatabase.cleanup;
     applyTestEnv({
       DATABASE_URL: testDatabase.databaseUrl,
-      STRIPE_SECRET_KEY: "sk_test_hosted_plan_gating",
     });
 
     const moduleRef = await Test.createTestingModule({
@@ -195,7 +194,7 @@ describe("Import (integration)", () => {
     });
   });
 
-  describe("Free bookmark cap enforcement on import", () => {
+    describe("CE noop billing - import cap not enforced", () => {
     let capWorkspace: Awaited<ReturnType<WorkspacesService["getWorkspace"]>>;
 
     beforeAll(async () => {
@@ -212,7 +211,7 @@ describe("Import (integration)", () => {
       }
     });
 
-    it("imports only until the Free cap is reached", async () => {
+    it("imports all bookmarks when plan gating is disabled", async () => {
       const result = await importService.importJson(capWorkspace, ownerUserId, [
         { title: "Cap One", url: "https://cap.example.com/1" },
         { title: "Cap Two", url: "https://cap.example.com/2" },
@@ -222,17 +221,17 @@ describe("Import (integration)", () => {
 
       expect(result).toEqual({
         total: 4,
-        successCount: 2,
-        failureCount: 2,
+        successCount: 4,
+        failureCount: 0,
         skippedSlugCount: 0,
-        capLimitedCount: 2,
+        capLimitedCount: 0,
       });
 
       const list = await bookmarksService.listBookmarks(capWorkspace, ownerUserId, {
         scope: "mine",
         pageSize: 100,
       });
-      expect(list.total).toBe(FREE_BOOKMARK_CAP);
+      expect(list.total).toBe(FREE_BOOKMARK_CAP + 2);
     });
   });
 });

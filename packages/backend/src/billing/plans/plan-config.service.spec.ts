@@ -11,65 +11,23 @@ function createPlanConfig(overrides: Record<string, string | number | undefined>
 }
 
 describe("PlanConfigService", () => {
-  it("reads per-interval Stripe price ids", () => {
-    const service = createPlanConfig({
-      STRIPE_PRICE_PERSONAL_MONTHLY: "price_personal_monthly",
-      STRIPE_PRICE_PERSONAL_ANNUAL: "price_personal_annual",
-      STRIPE_PRICE_TEAM_MONTHLY: "price_team_monthly",
-      STRIPE_PRICE_TEAM_ANNUAL: "price_team_annual",
-      STRIPE_PRICE_SUPPORTER: "price_supporter",
-    });
+  it("returns null price ids on CE", () => {
+    const service = createPlanConfig();
 
     expect(service.getPriceConfig()).toEqual({
-      personalMonthlyPriceId: "price_personal_monthly",
-      personalAnnualPriceId: "price_personal_annual",
-      teamMonthlyPriceId: "price_team_monthly",
-      teamAnnualPriceId: "price_team_annual",
-      supporterOneTimePriceId: "price_supporter",
+      personalMonthlyPriceId: null,
+      personalAnnualPriceId: null,
+      teamMonthlyPriceId: null,
+      teamAnnualPriceId: null,
+      supporterOneTimePriceId: null,
     });
   });
 
-  it("resolveCheckoutPriceId defaults to monthly interval", () => {
-    const service = createPlanConfig({
-      STRIPE_PRICE_PERSONAL_MONTHLY: "price_personal_monthly",
-      STRIPE_PRICE_PERSONAL_ANNUAL: "price_personal_annual",
-      STRIPE_PRICE_TEAM_MONTHLY: "price_team_monthly",
-      STRIPE_PRICE_TEAM_ANNUAL: "price_team_annual",
-      STRIPE_PRICE_SUPPORTER: "price_supporter",
-    });
-
-    expect(service.resolveCheckoutPriceId("personal", "recurring")).toBe("price_personal_monthly");
-    expect(service.resolveCheckoutPriceId("team", "recurring")).toBe("price_team_monthly");
-  });
-
-  it("resolveCheckoutPriceId resolves monthly prices", () => {
-    const service = createPlanConfig({
-      STRIPE_PRICE_PERSONAL_MONTHLY: "price_personal_monthly",
-      STRIPE_PRICE_TEAM_MONTHLY: "price_team_monthly",
-      STRIPE_PRICE_SUPPORTER: "price_supporter",
-    });
-
-    expect(service.resolveCheckoutPriceId("personal", "recurring", "monthly")).toBe("price_personal_monthly");
-    expect(service.resolveCheckoutPriceId("team", "recurring", "monthly")).toBe("price_team_monthly");
-    expect(service.resolveCheckoutPriceId("personal", "one_time", "monthly")).toBe("price_supporter");
-  });
-
-  it("resolveCheckoutPriceId resolves annual prices", () => {
-    const service = createPlanConfig({
-      STRIPE_PRICE_PERSONAL_ANNUAL: "price_personal_annual",
-      STRIPE_PRICE_TEAM_ANNUAL: "price_team_annual",
-      STRIPE_PRICE_SUPPORTER: "price_supporter",
-    });
-
-    expect(service.resolveCheckoutPriceId("personal", "recurring", "annual")).toBe("price_personal_annual");
-    expect(service.resolveCheckoutPriceId("team", "recurring", "annual")).toBe("price_team_annual");
-    expect(service.resolveCheckoutPriceId("personal", "one_time", "annual")).toBe("price_supporter");
-  });
-
-  it("resolveCheckoutPriceId returns null when price is not configured", () => {
-    const service = createPlanConfig({});
+  it("resolveCheckoutPriceId returns null when prices are not configured", () => {
+    const service = createPlanConfig();
     expect(service.resolveCheckoutPriceId("personal", "recurring")).toBeNull();
     expect(service.resolveCheckoutPriceId("team", "recurring", "annual")).toBeNull();
+    expect(service.resolveCheckoutPriceId("personal", "one_time")).toBeNull();
   });
 
   it("treats supporter promotion as active when end date is unset", () => {

@@ -16,9 +16,9 @@ import {
 } from "@slugbase/shared-types";
 
 /**
- * No-op billing implementation - used when STRIPE_SECRET_KEY is not configured.
- * Grants full/unlimited entitlements via planGatingEnabled=false (spec §11.4–§11.5).
- * Checkout, portal, and seat adjustments are unavailable.
+ * No-op billing implementation for CE self-host (spec §11.4–§11.5).
+ * Grants full/unlimited entitlements via planGatingEnabled=false.
+ * Checkout and seat adjustments are unavailable.
  */
 @Injectable()
 export class NoopBillingService implements BillingService {

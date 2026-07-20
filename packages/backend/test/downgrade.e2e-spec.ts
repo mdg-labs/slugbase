@@ -1,12 +1,11 @@
 import "reflect-metadata";
 
-import { ForbiddenException, type INestApplication } from "@nestjs/common";
+import { type INestApplication } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { AppModule } from "../src/app.module.js";
 import { AccountsService } from "../src/accounts/accounts.service.js";
-import { BillingApplicationService } from "../src/billing/billing-application.service.js";
 import { DowngradeService } from "../src/billing/downgrade/downgrade.service.js";
 import { BookmarksService } from "../src/bookmarks/bookmarks.service.js";
 import { BookmarkRepository } from "../src/bookmarks/bookmark.repository.js";
@@ -20,27 +19,9 @@ import { createTestDatabase } from "./test-database.js";
 
 const PERIOD_END = new Date("2026-06-01T00:00:00.000Z");
 
-function personalSubscriptionPayload(workspaceId: string) {
-  return {
-    id: "evt_downgrade_reupgrade",
-    type: "customer.subscription.updated",
-    data: {
-      object: {
-        id: "sub_personal_downgrade",
-        object: "subscription",
-        status: "active",
-        current_period_end: Math.floor(PERIOD_END.getTime() / 1000) + 86_400 * 30,
-        customer: "cus_downgrade",
-        metadata: { workspace_id: workspaceId, plan: "personal" },
-      },
-    },
-  };
-}
-
 describe("Downgrade overflow (integration)", () => {
   let app: INestApplication | undefined;
   let cleanup: () => Promise<void> = async () => {};
-  let billingApp: BillingApplicationService;
   let downgradeService: DowngradeService;
   let bookmarksService: BookmarksService;
   let bookmarkRepo: BookmarkRepository;
@@ -60,8 +41,6 @@ describe("Downgrade overflow (integration)", () => {
     cleanup = testDatabase.cleanup;
     applyTestEnv({
       DATABASE_URL: testDatabase.databaseUrl,
-      STRIPE_SECRET_KEY: "sk_test_downgrade_integration",
-      STRIPE_WEBHOOK_SECRET: "whsec_test_downgrade_integration",
       DOWNGRADE_GRACE_PERIOD_DAYS: "7",
     });
 
@@ -72,7 +51,6 @@ describe("Downgrade overflow (integration)", () => {
     app = moduleRef.createNestApplication();
     await app.init();
 
-    billingApp = moduleRef.get(BillingApplicationService);
     downgradeService = moduleRef.get(DowngradeService);
     bookmarksService = moduleRef.get(BookmarksService);
     workspacesService = moduleRef.get(WorkspacesService);
@@ -97,10 +75,11 @@ describe("Downgrade overflow (integration)", () => {
     workspaceId = ws.id;
     workspace = ws;
 
-    await billingApp.applyBillingEvent({
-      eventId: "evt_downgrade_upgrade_personal",
-      payload: personalSubscriptionPayload(workspaceId),
-    });
+    await workspacesService.updateWorkspace(
+      workspaceId,
+      { plan: "personal", billingStatus: "active" },
+      ownerUserId,
+    );
     workspace = await workspacesService.getWorkspace(workspaceId);
     expect(workspace.plan).toBe("personal");
 
@@ -177,7 +156,7 @@ describe("Downgrade overflow (integration)", () => {
     );
   });
 
-  it("excludes plan-archived bookmarks from list, search, slug resolution, and creation cap", async () => {
+  it("excludes plan-archived bookmarks from list, search, and slug resolution", async () => {
     workspace = await workspacesService.getWorkspace(workspaceId);
 
     const list = await bookmarksService.listBookmarks(workspace, ownerUserId, {
@@ -198,21 +177,18 @@ describe("Downgrade overflow (integration)", () => {
     await expect(
       goService.resolveSlug(workspace, ownerUserId, "downgrade-archived-slug"),
     ).rejects.toThrow(/No forwarding bookmark found/);
-
-    await expect(
-      bookmarksService.createBookmark(workspace, ownerUserId, {
-        title: "Blocked At Cap",
-        url: "https://blocked.example.com",
-      }),
-    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it("restores archived bookmarks on re-upgrade up to the new cap", async () => {
-    await billingApp.applyBillingEvent({
-      eventId: "evt_downgrade_reupgrade_once",
-      payload: personalSubscriptionPayload(workspaceId),
-    });
-    workspace = await workspacesService.getWorkspace(workspaceId);
+    const previous = await workspacesService.getWorkspace(workspaceId);
+    await workspacesService.updateWorkspace(
+      workspaceId,
+      { plan: "personal", billingStatus: "active" },
+      ownerUserId,
+    );
+    const current = await workspacesService.getWorkspace(workspaceId);
+    await downgradeService.handlePlanTransition(previous, current);
+    workspace = current;
     expect(workspace.plan).toBe("personal");
 
     const activeCount = await bookmarkRepo.countActiveInWorkspace(workspaceId);

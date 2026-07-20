@@ -6,7 +6,6 @@ const testEnvKeys = [
   "APP_BASE_URL",
   "FRONTEND_ORIGIN",
   "SERVE_WEB_CLIENT",
-  "STRIPE_SECRET_KEY",
   "OPENAI_API_KEY",
   "OPENAPI_INTERACTIVE_DOCS",
 ] as const;

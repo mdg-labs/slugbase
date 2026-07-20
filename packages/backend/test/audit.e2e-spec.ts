@@ -30,10 +30,6 @@ interface AuditEventsResponse {
   pageSize: number;
 }
 
-interface ErrorResponse {
-  message: string;
-}
-
 describe("Audit log (integration)", () => {
   let app: INestApplication | undefined;
   let cleanup: () => Promise<void> = async () => {};
@@ -55,7 +51,6 @@ describe("Audit log (integration)", () => {
     cleanup = testDatabase.cleanup;
     applyTestEnv({
       DATABASE_URL: testDatabase.databaseUrl,
-      STRIPE_SECRET_KEY: "sk_test_hosted_plan_gating",
     });
 
     const moduleRef = await Test.createTestingModule({
@@ -218,10 +213,9 @@ describe("Audit log (integration)", () => {
   });
 
   describe("entitlement and role gating", () => {
-    it("refuses audit log access on non-Team plans", async () => {
-      await expect(
-        auditService.listEvents(freeWorkspace, ownerUserId, {}),
-      ).rejects.toThrow(ForbiddenException);
+    it("allows audit log access on free plan when billing is no-op", async () => {
+      const result = await auditService.listEvents(freeWorkspace, ownerUserId, {});
+      expect(Array.isArray(result.items)).toBe(true);
     });
 
     it("refuses audit log access for non-admin members on Team plan", async () => {
@@ -230,7 +224,7 @@ describe("Audit log (integration)", () => {
       ).rejects.toThrow(ForbiddenException);
     });
 
-    it("returns 403 from HTTP endpoint when plan lacks audit-log entitlement", async () => {
+    it("returns audit events over HTTP on free plan when billing is no-op", async () => {
       const sessions = app?.get(SessionService);
       if (!sessions) throw new Error("SessionService unavailable");
 
@@ -260,10 +254,10 @@ describe("Audit log (integration)", () => {
         .get("/audit/events")
         .set("Cookie", [`${SESSION_COOKIE}=${cookieValue}`, csrfCookie])
         .set("x-csrf-token", csrfBody.csrfToken)
-        .expect(403);
+        .expect(200);
 
-      const body = response.body as ErrorResponse;
-      expect(body.message).toContain("audit-log");
+      const body = response.body as AuditEventsResponse;
+      expect(Array.isArray(body.items)).toBe(true);
     });
 
     it("returns audit events over HTTP for Team plan admins", async () => {

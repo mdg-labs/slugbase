@@ -1,9 +1,7 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Get,
-  Headers,
   HttpCode,
   Inject,
   Param,
@@ -13,10 +11,8 @@ import {
   Req,
   UseGuards,
 } from "@nestjs/common";
-import type { RawBodyRequest } from "@nestjs/common";
 import type { Request } from "express";
 
-import { SkipCsrf } from "../auth/csrf/skip-csrf.decorator.js";
 import { SESSION_USER_ID_KEY, SessionGuard } from "../sessions/session.guard.js";
 import type { WorkspaceRecord } from "../workspaces/workspace.types.js";
 import { BillingApplicationService } from "./billing-application.service.js";
@@ -28,10 +24,6 @@ interface CheckoutBody {
   seatQuantity?: number;
   successUrl: string;
   cancelUrl: string;
-}
-
-interface PortalBody {
-  returnUrl: string;
 }
 
 interface UpdateSeatsBody {
@@ -63,22 +55,6 @@ export class BillingController {
       seatQuantity: body.seatQuantity,
       successUrl: body.successUrl,
       cancelUrl: body.cancelUrl,
-    });
-  }
-
-  @Post("workspaces/:workspaceId/billing/portal")
-  @HttpCode(200)
-  @UseGuards(SessionGuard)
-  async openPortal(
-    @Param("workspaceId") workspaceId: string,
-    @Body() body: PortalBody,
-    @Req() req: Request & Record<string, unknown>,
-  ): Promise<{ portalUrl: string }> {
-    const userId = req[SESSION_USER_ID_KEY] as string;
-    return this.billingApp.openPortal({
-      workspaceId,
-      requesterId: userId,
-      returnUrl: body.returnUrl,
     });
   }
 
@@ -123,22 +99,5 @@ export class BillingController {
           ? parsedPageSize
           : undefined,
     });
-  }
-
-  @Post("billing/webhooks/stripe")
-  @HttpCode(200)
-  @SkipCsrf()
-  async handleStripeWebhook(
-    @Req() req: RawBodyRequest<Request>,
-    @Headers("stripe-signature") signature: string | undefined,
-  ): Promise<{ received: true }> {
-    if (!signature) {
-      throw new BadRequestException("Missing stripe-signature header");
-    }
-    const rawBody = req.rawBody;
-    if (!rawBody) {
-      throw new BadRequestException("Missing raw request body for webhook verification");
-    }
-    return this.billingApp.processWebhookEvent(rawBody, signature);
   }
 }

@@ -7,7 +7,6 @@ import { AuthModule } from "./auth/auth.module.js";
 import { BillingModule } from "./billing/billing.module.js";
 import { BookmarksModule } from "./bookmarks/bookmarks.module.js";
 import { ChallengeModule } from "./challenge/challenge.module.js";
-import { ContactModule } from "./contact/contact.module.js";
 import { CryptoModule } from "./crypto/crypto.module.js";
 import { DbModule } from "./db/db.module.js";
 import { EntitlementsModule } from "./entitlements/entitlements.module.js";
@@ -38,7 +37,6 @@ export const domainModules = [
   BillingModule,
   BookmarksModule,
   ChallengeModule,
-  ContactModule,
   CryptoModule,
   DbModule,
   EntitlementsModule,

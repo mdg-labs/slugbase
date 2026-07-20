@@ -26,7 +26,6 @@ describe("SMTP env transport (integration)", () => {
 
     applyTestEnv({
       DATABASE_URL: testDatabase.databaseUrl,
-      STRIPE_SECRET_KEY: "sk_test_mail_env_smtp",
       SMTP_HOST: "smtp.env.test",
       SMTP_PORT: "587",
       SMTP_SECURE: "false",

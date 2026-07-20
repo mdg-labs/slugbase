@@ -35,7 +35,6 @@ describe("Bookmarks (integration)", () => {
     cleanup = testDatabase.cleanup;
     applyTestEnv({
       DATABASE_URL: testDatabase.databaseUrl,
-      STRIPE_SECRET_KEY: "sk_test_hosted_plan_gating",
     });
 
     const moduleRef = await Test.createTestingModule({
@@ -451,7 +450,7 @@ describe("Bookmarks (integration)", () => {
     });
   });
 
-  describe("Free bookmark cap enforcement", () => {
+  describe("CE noop billing - bookmark cap not enforced", () => {
     let capOwnerUserId: string;
     let freeCapWorkspace: Awaited<ReturnType<WorkspacesService["getWorkspace"]>>;
     let personalCapWorkspace: Awaited<ReturnType<WorkspacesService["getWorkspace"]>>;
@@ -493,13 +492,16 @@ describe("Bookmarks (integration)", () => {
       }
     });
 
-    it("blocks the 51st bookmark on a free workspace at cap", async () => {
-      await expect(
-        bookmarksService.createBookmark(freeCapWorkspace, capOwnerUserId, {
+    it("allows creating beyond the Free cap on a free workspace", async () => {
+      const bookmark = await bookmarksService.createBookmark(
+        freeCapWorkspace,
+        capOwnerUserId,
+        {
           title: "Over cap",
           url: "https://free-cap.example.com/over",
-        }),
-      ).rejects.toThrow(`Free plan limit of ${String(FREE_BOOKMARK_CAP)} bookmarks`);
+        },
+      );
+      expect(bookmark.id).toBeTruthy();
     });
 
     it("allows creating beyond the Free cap on a personal workspace", async () => {

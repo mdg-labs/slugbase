@@ -31,7 +31,6 @@ describe("Mail transport status HTTP (integration)", () => {
 
       applyTestEnv({
         DATABASE_URL: testDatabase.databaseUrl,
-        STRIPE_SECRET_KEY: "sk_test_mail_status_unconfigured",
       });
       delete process.env.SMTP_HOST;
       delete process.env.SMTP_PORT;
@@ -126,7 +125,6 @@ describe("Mail transport status HTTP (integration)", () => {
 
       applyTestEnv({
         DATABASE_URL: testDatabase.databaseUrl,
-        STRIPE_SECRET_KEY: "sk_test_mail_status_configured",
         SMTP_HOST: "smtp.status.test",
         SMTP_PORT: "587",
         SMTP_SECURE: "false",
