@@ -718,9 +718,9 @@ Deploy automation lives under **`scripts/ci/`** (plan probes, platform deploy, s
 
 ### 22.1 Runners and concurrency
 
-**GitHub-hosted runners** (`ubuntu-latest`) are used throughout. Each job runs in a fresh ephemeral VM — no self-hosted runner disk cleanup.
+**GitHub-hosted runners** (`ubuntu-latest`) are used for CI, deploy, and smoke. **Cloud DB migrations** run on a **self-hosted runner** with the Pangolin machine client (`scripts/ci/with-pangolin-tunnel.sh` → `run-cloud-migrate.sh`) because Cloud Postgres is not reachable from GitHub-hosted egress. The self-hosted host must have `/usr/local/sbin/pangolin-migrate-ci` and passwordless `sudo` for that binary.
 
-Concurrency: in-progress runs are cancelled for PR and `staging`/`main` push triggers. **`release.yml`** (CE GHCR publish) uses `cancel-in-progress: false`.
+Concurrency: in-progress runs are cancelled for PR and `staging`/`main` push triggers. **`release.yml`** (CE GHCR publish) uses `cancel-in-progress: false`. Cloud migrate jobs use `cloud-db-migrate-{staging|production}` with `cancel-in-progress: false` (Pangolin is a host-level singleton).
 
 ### 22.2 Workflow entry points
 
@@ -792,7 +792,7 @@ ci → deploy-plan(production) → deploy(production, caller_plan)
 **`deploy.yml` chain** (each step gated by plan outputs):
 
 1. **sync-secrets** — push GHA secrets for services in `sync_services` via `scripts/ci/sync-secrets.sh`
-2. **migrate** / **migrate-admin** (when flagged; parallel with Sentry release derivation for deployed API/web surfaces) — Drizzle migrations via `scripts/ci/run-migrate.sh`
+2. **migrate-databases** (when `run_migrate` and/or `run_migrate_admin` flagged; parallel with Sentry release derivation for deployed API/web surfaces) — Drizzle migrations via `scripts/ci/run-cloud-migrate.sh` through Pangolin on a self-hosted runner
 3. **parallel deploys** — API to Fly.io `fra`; web, marketing, and admin to their platforms; only for flagged surfaces
 4. **smoke** — per deployed surface: `GET /health` and `GET /version` on all four surfaces
 

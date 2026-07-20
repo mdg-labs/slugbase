@@ -790,8 +790,8 @@ npx wrangler@4 secret list --name slugbase-staging-marketing
 - `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` — API Sentry release + web Vite plugin source maps (`deploy.yml`, `sentry-release.sh`, `vite.config.ts`)
 - `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` — staging smoke (`deploy.yml` smoke job)
 - `API_BASE_URL` — also used by deploy-web / deploy-marketing build env (not only wrangler runtime)
-- `DATABASE_URL` — migrate job in `deploy.yml` (not Fly runtime duplicate concern; same key)
-- `DATABASE_URL_UNPOOLED` — optional; migrate / drizzle when set
+- `DATABASE_URL` / `DATABASE_URL_UNPOOLED` — cloud migrate job in `deploy.yml` (GHA `staging` / `production` environments; reached via Pangolin tunnel on self-hosted runner)
+- `PANGOLIN_ENDPOINT`, `PANGOLIN_MACHINE_ID`, `PANGOLIN_MACHINE_SECRET` — repo-level GHA secrets for Pangolin machine client (`scripts/ci/run-cloud-migrate.sh`); not in Phase
 - All `VITE_*` / `PUBLIC_*` build keys in Phase — **not** in sync manifest; must be passed in deploy build steps if needed at build time
 
 Canonical manifest: `scripts/sync-secrets-manifest.ts` (validated in CI by `scripts/validate-sync-secrets-manifest.ts`).
@@ -861,16 +861,20 @@ Smoke uses GHA **vars**: `APP_BASE_URL`, `FRONTEND_ORIGIN`, `MARKETING_ORIGIN`.
 | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` | `wrangler deploy` |
 | `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` | Staging smoke through Cloudflare Access |
 | `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` | Sentry releases / source maps |
-| `DATABASE_URL` / `DATABASE_URL_UNPOOLED` | `run-migrate.sh` in deploy pipeline |
+| `DATABASE_URL` / `DATABASE_URL_UNPOOLED` | `run-cloud-migrate.sh` in deploy pipeline (via Pangolin on self-hosted runner) |
+| `PANGOLIN_ENDPOINT` / `PANGOLIN_MACHINE_ID` / `PANGOLIN_MACHINE_SECRET` | Pangolin machine client for cloud DB migrations (repo-level GHA secrets) |
 
-### 5.7 URL wiring (staging example)
+### 5.7 URL wiring
 
-| Surface | Key |
-|---|---|
-| API | `APP_BASE_URL` → `https://staging-api.slugbase.app` |
-| Web | `FRONTEND_ORIGIN` → `https://staging-cloud.slugbase.app` |
-| Web SSR | `API_BASE_URL` → `https://staging-api.slugbase.app` |
-| Marketing | `MARKETING_ORIGIN` → `https://staging.slugbase.app` |
+Canonical hostnames for deploy plan probes and smoke are defined in [`scripts/ci/deploy-probe-origins.mjs`](../../scripts/ci/deploy-probe-origins.mjs). GHA environment `vars` / `secrets` override these when set.
+
+| Surface | Key | Staging | Production |
+|---|---|---|---|
+| API | `APP_BASE_URL` | `https://staging-api.slugbase.app` | `https://api.slugbase.app` |
+| Web | `FRONTEND_ORIGIN` | `https://staging-cloud.slugbase.app` | `https://cloud.slugbase.app` |
+| Web SSR | `API_BASE_URL` | `https://staging-api.slugbase.app` | `https://api.slugbase.app` |
+| Marketing | `MARKETING_ORIGIN` | `https://staging.slugbase.app` | `https://slugbase.app` |
+| Admin | `ADMIN_URL` | `https://staging-admin.slugbase.app` | `https://admin.slugbase.app` |
 
 See `docs/internal/environment-variables.md` for the full reference.
 

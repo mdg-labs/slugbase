@@ -5,6 +5,10 @@
 import { appendFileSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import {
+  resolveDeployProbeOrigins,
+  toDeployPlanOrigins,
+} from "./deploy-probe-origins.mjs";
+import {
   BOOTSTRAP_VERSION,
   probeLiveVersion,
   semverGt,
@@ -273,12 +277,18 @@ export async function main() {
   const repoRoot = process.cwd();
   const packageVersions = readPackageVersions(repoRoot);
 
-  const origins = {
-    api: process.env.APP_BASE_URL,
-    web: process.env.FRONTEND_ORIGIN,
-    marketing: process.env.MARKETING_ORIGIN,
-    admin: process.env.ADMIN_URL,
-  };
+  const probeOrigins = resolveDeployProbeOrigins(environment, {
+    APP_BASE_URL: process.env.APP_BASE_URL,
+    FRONTEND_ORIGIN: process.env.FRONTEND_ORIGIN,
+    MARKETING_ORIGIN: process.env.MARKETING_ORIGIN,
+    ADMIN_URL: process.env.ADMIN_URL,
+  });
+
+  for (const [key, value] of Object.entries(probeOrigins)) {
+    process.stderr.write(`resolve-deploy-plan: ${key}=${value}\n`);
+  }
+
+  const origins = toDeployPlanOrigins(probeOrigins);
 
   const { plan, skipReasons, log } = await resolveDeployPlan({
     environment,

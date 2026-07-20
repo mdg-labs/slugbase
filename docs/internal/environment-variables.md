@@ -89,17 +89,18 @@ VITE_BILLING_ENABLED=true
 
 ### URL wiring (Cloud)
 
-Three public surfaces must agree on origins:
+Three public surfaces must agree on origins. **Deploy plan probes and smoke** resolve these from [`scripts/ci/deploy-probe-origins.mjs`](../scripts/ci/deploy-probe-origins.mjs) when GHA `vars` / `secrets` are unset; Phase and Coolify runtime config should match the same hostnames.
 
-| Surface | Key | Example (staging) |
-|---|---|---|
-| Fly.io API | `APP_BASE_URL` | `https://staging-api.slugbase.app` |
-| Cloudflare Web Worker | `FRONTEND_ORIGIN` | `https://staging-cloud.slugbase.app` |
-| Web Worker SSR (server loaders) | `API_BASE_URL` | `https://staging-api.slugbase.app` |
-| Web client build | `VITE_API_URL` | `https://staging-api.slugbase.app` |
-| Marketing site CTAs | `PUBLIC_FRONTEND_ORIGIN` | `https://staging-cloud.slugbase.app` |
-| Marketing deploy smoke | `MARKETING_ORIGIN` | `https://staging.slugbase.app` |
-| Marketing contact form | `PUBLIC_CONTACT_ENDPOINT` | `https://staging-api.slugbase.app/contact` |
+| Surface | Key | Staging | Production |
+|---|---|---|---|
+| API | `APP_BASE_URL` | `https://staging-api.slugbase.app` | `https://api.slugbase.app` |
+| Web app | `FRONTEND_ORIGIN` | `https://staging-cloud.slugbase.app` | `https://cloud.slugbase.app` |
+| Web SSR (server loaders) | `API_BASE_URL` | `https://staging-api.slugbase.app` | `https://api.slugbase.app` |
+| Web client build | `VITE_API_URL` | `https://staging-api.slugbase.app` | `https://api.slugbase.app` |
+| Marketing site CTAs | `PUBLIC_FRONTEND_ORIGIN` | `https://staging-cloud.slugbase.app` | `https://cloud.slugbase.app` |
+| Marketing deploy smoke | `MARKETING_ORIGIN` | `https://staging.slugbase.app` | `https://slugbase.app` |
+| Admin portal (smoke, invites) | `ADMIN_URL` | `https://staging-admin.slugbase.app` | `https://admin.slugbase.app` |
+| Marketing contact form | `PUBLIC_CONTACT_ENDPOINT` | `https://staging-api.slugbase.app/contact` | `https://api.slugbase.app/contact` |
 
 Typical Cloud flags: `PUBLIC_REGISTRATION=true`, `EMAIL_VERIFICATION_REQUIRED=true`, `VITE_BILLING_ENABLED=true`, `VITE_MAIL_ADMIN_UI=false`, `VITE_OIDC_ADMIN_UI=false`, `VITE_AI_BYO_CREDENTIAL=false`.
 
@@ -203,7 +204,7 @@ flowchart LR
 | **Runtime** | Coolify API/web/admin containers, CE api/web containers (`process.env`) | `SESSION_SECRET`, `DATABASE_URL`, `API_BASE_URL` (web), `STRIPE_SECRET_KEY` |
 | **Build** | `pnpm build` for web/marketing; Docker `ARG VITE_*` | `VITE_BILLING_ENABLED`, `PUBLIC_PLAN_PRICE_PERSONAL_MONTHLY` |
 | **Both** | Build + SSR fallback | `API_BASE_URL` (runtime web container), `VITE_API_URL` (SSR fallback only) |
-| **CI** | GitHub Actions runner only; never shipped to production runtime | `REGISTRY_*`, `COOLIFY_DEPLOY_*`, `SENTRY_AUTH_TOKEN` |
+| **CI** | GitHub Actions runner only; never shipped to production runtime | `REGISTRY_*`, `COOLIFY_DEPLOY_*`, `SENTRY_AUTH_TOKEN`, `PANGOLIN_*` |
 
 ---
 
@@ -395,10 +396,13 @@ Optional on both shapes. Empty = no-op (no tracker, no Sentry init).
 
 ### 8. Cloud — CI and deploy
 
-Repository secrets (`REGISTRY`, `REGISTRY_USER`, `REGISTRY_TOKEN`) and GHA environment secrets (`COOLIFY_DEPLOY_*`) for image push and Coolify webhook triggers. Runtime app secrets are configured in Coolify (operators mirror Phase → GHA values).
+Repository secrets (`REGISTRY`, `REGISTRY_USER`, `REGISTRY_TOKEN`, `PANGOLIN_*`) and GHA environment secrets (`COOLIFY_DEPLOY_*`, `DATABASE_URL`) for image push, Coolify webhook triggers, and cloud DB migrations. Runtime app secrets are configured in Coolify (operators mirror Phase → GHA values).
 
 | Key | What it does | Cloud | CE | Required | Secret | When set | Example value |
 |---|---|---|---|---|---|---|---|
+| `PANGOLIN_ENDPOINT` | Pangolin control-plane URL for machine-client tunnel (cloud migrate job) | Yes | No | CI only | Yes | CI (repo secret) | `https://…` |
+| `PANGOLIN_MACHINE_ID` | Pangolin machine client id (cloud migrate job) | Yes | No | CI only | Yes | CI (repo secret) | `<machine id>` |
+| `PANGOLIN_MACHINE_SECRET` | Pangolin machine client secret (cloud migrate job) | Yes | No | CI only | Yes | CI (repo secret) | `<machine secret>` |
 | `REGISTRY` | Private container registry host | Yes | No | CI only | No | CI | `berth.mdg-labs.dev` |
 | `REGISTRY_USER` | Registry login user | Yes | No | CI only | Yes | CI | `<registry user>` |
 | `REGISTRY_TOKEN` | Registry login token | Yes | No | CI only | Yes | CI | `<registry token>` |
@@ -444,7 +448,7 @@ SlugBase uses three **GitHub Actions environments** as the CI/deploy secret sour
 | `staging` | Phase `Staging` | Staging deploy (`deploy.yml`), smoke |
 | `production` | Phase `Production` | Production deploy (`main.yml` → `deploy.yml`), smoke |
 
-Repository secrets: `REGISTRY`, `REGISTRY_USER`, `REGISTRY_TOKEN` (image push). Application runtime secrets live in Phase → GHA environments and are mirrored into Coolify by operators. Coolify webhook secrets (`COOLIFY_DEPLOY_*`) live in GHA `staging` / `production` environments.
+Repository secrets: `REGISTRY`, `REGISTRY_USER`, `REGISTRY_TOKEN` (image push); `PANGOLIN_ENDPOINT`, `PANGOLIN_MACHINE_ID`, `PANGOLIN_MACHINE_SECRET` (cloud DB migrations via self-hosted runner). Application runtime secrets live in Phase → GHA environments and are mirrored into Coolify by operators. Coolify webhook secrets (`COOLIFY_DEPLOY_*`) and `DATABASE_URL` / `DATABASE_URL_UNPOOLED` live in GHA `staging` / `production` environments.
 
 ### Deploy idempotency (live `/version` probes)
 
