@@ -1,29 +1,10 @@
-import type { Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/auth.js';
-import { isCloudE2eProject } from '../../helpers/deployment-project.js';
 import { e2eResourceSuffix } from '../../helpers/e2e-resource-id.js';
 
 const apiUrl = () =>
   process.env.E2E_BASE_URL_API
   ?? process.env.E2E_BASE_URL_CE
   ?? 'http://localhost:4001';
-
-/** On Cloud, team plan avoids free bookmark-cap collisions from parallel entitlements tests. */
-async function ensureTeamPlanForBookmarkCreate(
-  page: Page,
-  sessionCookie: string,
-  csrfToken: string,
-): Promise<void> {
-  const res = await page.request.patch(`${apiUrl()}/workspaces/active`, {
-    headers: {
-      Cookie: sessionCookie,
-      'x-csrf-token': csrfToken,
-      'Content-Type': 'application/json',
-    },
-    data: { plan: 'team' },
-  });
-  expect(res.ok(), `Plan upgrade failed: ${res.status()}`).toBeTruthy();
-}
 
 test.describe('Command palette go mode', () => {
   test('⌘K → go <slug> resolves or opens disambiguation', async ({
@@ -35,10 +16,6 @@ test.describe('Command palette go mode', () => {
     const SLUG = `e2e-gotest-${e2eResourceSuffix(testInfo)}`;
     const BOOKMARK_TITLE = 'Go Mode E2E Test';
     const BOOKMARK_URL = 'https://example.com/e2e-go-test';
-
-    if (isCloudE2eProject(testInfo)) {
-      await ensureTeamPlanForBookmarkCreate(page, sessionCookie, csrfToken);
-    }
 
     // Create a bookmark with slug + forwarding enabled so it appears in go mode
     const createRes = await page.request.post(`${apiUrl()}/bookmarks`, {
@@ -92,10 +69,6 @@ test.describe('Command palette go mode', () => {
 
     // Create a bookmark with a distinct slug
     const fullSlug = `e2e-enter-${e2eResourceSuffix(testInfo)}`;
-
-    if (isCloudE2eProject(testInfo)) {
-      await ensureTeamPlanForBookmarkCreate(page, sessionCookie, csrfToken);
-    }
 
     const createRes = await page.request.post(`${apiUrl()}/bookmarks`, {
       headers: { Cookie: sessionCookie, 'x-csrf-token': csrfToken },

@@ -1,30 +1,13 @@
 import { test, expect } from "../../fixtures/auth.js";
-import { isCloudE2eProject } from "../../helpers/deployment-project.js";
 import { e2eResourceSuffix } from "../../helpers/e2e-resource-id.js";
 import { loginAsWorker } from "../../helpers/worker-login.js";
 
 test.describe("Workspace switcher", () => {
   test("create second workspace → switch via WorkspaceSwitcherPanel → sidebar and bookmark list reflect active workspace", async ({
     page,
-    sessionCookie,
-    csrfToken,
   }, testInfo) => {
     // ── Phase 1: Login ──────────────────────────────────────────
     await loginAsWorker(page, testInfo.workerIndex);
-
-    // Hosted only: team plan unlocks multi-workspace creation; self-host has no plan gate.
-    if (isCloudE2eProject(testInfo)) {
-      const apiUrl = process.env.E2E_BASE_URL_API ?? process.env.E2E_BASE_URL_CE ?? 'http://localhost:4001';
-      const planRes = await page.request.patch(`${apiUrl}/workspaces/active`, {
-        headers: {
-          Cookie: sessionCookie,
-          "x-csrf-token": csrfToken,
-          "Content-Type": "application/json",
-        },
-        data: { plan: "team" },
-      });
-      expect(planRes.ok(), `Plan upgrade failed: ${planRes.status()}`).toBeTruthy();
-    }
 
     // Mark onboarding as done so the overlay doesn't interfere
     await page.evaluate(() => {

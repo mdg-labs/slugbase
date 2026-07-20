@@ -6,7 +6,6 @@ import { expect } from '@playwright/test';
 
 import { getWorkerCredentials } from './auth.js';
 import { loginWorkerApi, resolveE2eApiUrl, type ApiSession } from '../helpers/api-login.js';
-import { setActiveWorkspacePlan } from '../helpers/workspace-plan.js';
 
 const WORKER_COUNT = 8;
 const DISAMBIGUATION_SLUG = 'mail';
@@ -137,21 +136,11 @@ export async function setupSharedSlugDisambiguation(
   page: Page,
   userAWorkerIndex: number,
   userASession: Pick<ApiSession, 'sessionCookie' | 'csrfToken'>,
-  opts: { cloud: boolean },
 ): Promise<SharedSlugDisambiguationSetup> {
   const userBWorkerIndex = (userAWorkerIndex + 1) % WORKER_COUNT;
   const userBSession = await loginWorkerApi(userBWorkerIndex);
   const userAEmail = getWorkerCredentials(userAWorkerIndex).email;
   const apiUrl = resolveE2eApiUrl();
-
-  if (opts.cloud) {
-    await setActiveWorkspacePlan(
-      page,
-      userBSession.sessionCookie,
-      userBSession.csrfToken,
-      'team',
-    );
-  }
 
   const workspaceRes = await page.request.get(`${apiUrl}/workspaces/active`, {
     headers: { Cookie: userBSession.sessionCookie },
@@ -220,73 +209,6 @@ export async function setupSharedSlugDisambiguation(
     userBTargetUrl,
     userATitle,
     userBTitle,
-  };
-}
-
-export interface TeamSharingWorkspaceSetup {
-  workspaceId: string;
-  ownerSession: ApiSession;
-  memberSession: Pick<ApiSession, 'sessionCookie' | 'csrfToken' | 'email'>;
-  ownerWorkerIndex: number;
-  memberWorkerIndex: number;
-  ownerUserId: string;
-  memberUserId: string;
-  memberName: string;
-  memberEmail: string;
-  ownerName: string;
-}
-
-/**
- * Team-plan workspace with owner (worker N+1) and member (worker N).
- * Member is added to owner's workspace and activates it for cross-user sharing UI.
- */
-export async function setupTeamSharingWorkspace(
-  page: Page,
-  memberWorkerIndex: number,
-  memberSession: Pick<ApiSession, 'sessionCookie' | 'csrfToken'>,
-  opts: { cloud: boolean },
-): Promise<TeamSharingWorkspaceSetup> {
-  const ownerWorkerIndex = (memberWorkerIndex + 1) % WORKER_COUNT;
-  const ownerSession = await loginWorkerApi(ownerWorkerIndex);
-  const memberCred = getWorkerCredentials(memberWorkerIndex);
-  const ownerCred = getWorkerCredentials(ownerWorkerIndex);
-  const apiUrl = resolveE2eApiUrl();
-
-  if (opts.cloud) {
-    await setActiveWorkspacePlan(
-      page,
-      ownerSession.sessionCookie,
-      ownerSession.csrfToken,
-      'team',
-    );
-  }
-
-  const workspaceRes = await page.request.get(`${apiUrl}/workspaces/active`, {
-    headers: { Cookie: ownerSession.sessionCookie },
-  });
-  expect(workspaceRes.ok(), `Active workspace fetch failed: ${workspaceRes.status()}`).toBeTruthy();
-  const workspace = (await workspaceRes.json()) as { id: string };
-
-  const memberUserId = await lookupUserId(memberCred.email);
-  const ownerUserId = await lookupUserId(ownerCred.email);
-  await addWorkspaceMember(workspace.id, memberUserId);
-
-  const activateRes = await page.request.post(`${apiUrl}/workspaces/${workspace.id}/activate`, {
-    headers: apiHeaders(memberSession),
-  });
-  expect(activateRes.ok(), `Workspace activate failed: ${activateRes.status()}`).toBeTruthy();
-
-  return {
-    workspaceId: workspace.id,
-    ownerSession,
-    memberSession: { ...memberSession, email: memberCred.email },
-    ownerWorkerIndex,
-    memberWorkerIndex,
-    ownerUserId,
-    memberUserId,
-    memberName: memberCred.name,
-    memberEmail: memberCred.email,
-    ownerName: ownerCred.name,
   };
 }
 

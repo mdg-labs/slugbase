@@ -34,12 +34,7 @@ function resolveApiUrl(_page: Page): string {
   const envCe = process.env.E2E_BASE_URL_CE;
   if (envCe) return envCe;
 
-  const origin = new URL(_page.url()).origin;
-  const project = _page.context()['_project']?.['name'];
-  if (project === 'cloud') {
-    return origin.replace(/:4002$/, ':4001');
-  }
-  return origin;
+  return new URL(_page.url()).origin;
 }
 
 /**

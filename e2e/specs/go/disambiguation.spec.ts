@@ -1,6 +1,5 @@
 import { test, expect } from "../../fixtures/auth.js";
 import { setupSharedSlugDisambiguation } from "../../fixtures/sharing-setup.js";
-import { isCloudE2eProject } from "../../helpers/deployment-project.js";
 
 test.describe("Go disambiguation", () => {
   test("two bookmarks with same slug shows disambiguation page, user picks candidate", async ({
@@ -12,7 +11,6 @@ test.describe("Go disambiguation", () => {
       page,
       testInfo.workerIndex,
       { sessionCookie, csrfToken },
-      { cloud: isCloudE2eProject(testInfo) },
     );
 
     await page.goto(`/go/${setup.slug}`);
@@ -43,7 +41,6 @@ test.describe("Go disambiguation", () => {
       page,
       testInfo.workerIndex,
       { sessionCookie, csrfToken },
-      { cloud: isCloudE2eProject(testInfo) },
     );
 
     await page.goto(`/go/${setup.slug}`);
