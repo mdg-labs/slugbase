@@ -539,7 +539,7 @@ Product 2 in parallel → **scaffold `commerce` first**, then split slugbase.
 ### Phase 0 — Stabilize slugbase ✅
 - [x] Mollie WIP stashed (`stash@{0}`)
 - [x] `commerce` + `slugbase-cloud` repos created
-- [ ] This plan committed to `slugbase/docs/internal/`
+- [x] This plan committed to `slugbase/docs/internal/`
 
 ### Phase 1 — Scaffold `commerce` (week 1) **← start here**
 - [ ] pnpm workspace + `turbo.json` + proprietary `LICENSE`
@@ -1625,7 +1625,7 @@ Status column: orchestrator sets `[~]` at batch start, verifier sets `[x]` or `[
 
 | Task | Status | Repo(s) | Deps | Operator? | WRITE SCOPE (summary) |
 |------|--------|---------|------|-----------|------------------------|
-| TASK-000 | `[~]` | slugbase | — | | `docs/internal/open-core-refactor-plan.md`, `docs/internal/REFACTOR-IN-PROGRESS.md` |
+| TASK-000 | `[x]` | slugbase | — | | `docs/internal/open-core-refactor-plan.md`, `docs/internal/REFACTOR-IN-PROGRESS.md` |
 | TASK-001 | `[ ]` | commerce | 000 | | `commerce/**` (scaffold root + empty packages) |
 | TASK-002 | `[ ]` | commerce | 001 | | `commerce/packages/commerce-core/**` |
 | TASK-003 | `[ ]` | commerce | 002 | | `commerce/packages/commerce-mollie/**` |
