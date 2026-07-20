@@ -1305,10 +1305,10 @@ TASK-028  EU sovereignty legal refresh (AGB + Datenschutz + impressum)
 - **Verify:** `pnpm install` from slugbase-cloud with slugbase sibling present
 
 ### TASK-006 — Move operator packages
-- [ ] `git mv` admin, db-admin, marketing per §14.4
-- [ ] `git mv docs/internal/legal` → `slugbase-cloud/docs/internal/legal` (marketing `load-legal-markdown.ts` walks up to `docs/internal/legal/drafts`)
-- [ ] Fix internal imports (paths unchanged inside packages)
-- [ ] **Two commits (same task):** (1) `slugbase-cloud` — add moved packages + legal tree; (2) `slugbase` — deletions + any path fixes. Same conventional subject scope per repo; body links same Linear leaf.
+- [x] `git mv` admin, db-admin, marketing per §14.4
+- [x] `git mv docs/internal/legal` → `slugbase-cloud/docs/internal/legal` (marketing `load-legal-markdown.ts` walks up to `docs/internal/legal/drafts`)
+- [x] Fix internal imports (paths unchanged inside packages)
+- [x] **Two commits (same task):** (1) `slugbase-cloud` — add moved packages + legal tree; (2) `slugbase` — deletions + any path fixes. Same conventional subject scope per repo; body links same Linear leaf.
 - **Verify:** `test ! -d slugbase/packages/admin && test -d slugbase-cloud/packages/admin`
 
 ### TASK-007 — Move cloud infra
