@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://github.com/mdg-labs/slugbase/actions/workflows/pr.yml"><img src="https://github.com/mdg-labs/slugbase/actions/workflows/pr.yml/badge.svg" alt="CI" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Elastic--2.0-blue" alt="License: Elastic-2.0" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue" alt="License: AGPL-3.0" /></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D22.12-brightgreen" alt="Node >=22.12" /></a>
   <a href="https://github.com/mdg-labs/slugbase/pkgs/container/slugbase-api"><img src="https://img.shields.io/badge/ghcr.io-slugbase--api-blue" alt="CE API image" /></a>
   <a href="https://github.com/mdg-labs/slugbase/pkgs/container/slugbase-web"><img src="https://img.shields.io/badge/ghcr.io-slugbase--web-blue" alt="CE web image" /></a>
@@ -83,6 +83,8 @@ This monorepo contains the SlugBase application (API, web client, marketing site
 
 ## License
 
-SlugBase is licensed under the [Elastic License 2.0](LICENSE) (ELv2). You may use, copy, distribute, and prepare derivative works of the software, subject to ELv2 limitations — notably, you may **not** offer the software to third parties as a hosted or managed service that exposes a substantial set of its features.
+SlugBase Community Edition is licensed under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0). You may use, copy, distribute, modify, and prepare derivative works of the software under the AGPL terms — including self-hosting for yourself or others, provided you comply with the license (notably, network use requires making corresponding source available).
 
-Full terms: [LICENSE](LICENSE) · [Elastic License 2.0](https://www.elastic.co/licensing/elastic-license)
+The SlugBase name, logo, and **SlugBase Cloud** are trademarks of MDG Labs — see [TRADEMARK.md](TRADEMARK.md).
+
+Full terms: [LICENSE](LICENSE) · [TRADEMARK.md](TRADEMARK.md)
