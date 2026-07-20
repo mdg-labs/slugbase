@@ -1421,9 +1421,12 @@ TASK-028  EU sovereignty legal refresh (AGB + Datenschutz + impressum)
 - **Verify:** `npm view @slugbase/shared-types version`
 
 ### TASK-022 — npm trusted publishing
-- [ ] Configure Trusted Publisher on npmjs for each package
-- [ ] Add `slugbase/.github/workflows/publish-npm.yml` with `id-token: write`
-- **Verify:** dry-run workflow on tag
+
+**Status:** `[x]` verified 2026-07-20 (`a92e0a6`)
+
+- [ ] Configure Trusted Publisher on npmjs for each package (operator — post TASK-021 bootstrap)
+- [x] Add `slugbase/.github/workflows/publish-npm.yml` with `id-token: write`
+- **Verify:** [x] workflow: `id-token: write`, tag triggers (`ui-v*`, `shared-types-v*`), valid YAML; dry-run on tag → operator after TASK-021
 
 ### TASK-023 — AGPL
 
@@ -1663,7 +1666,7 @@ Status column: orchestrator sets `[~]` at batch start, verifier sets `[x]` or `[
 | TASK-019 | `[x]` | slugbase | 018 | | CE e2e green — 35 passed, 0 failed, 2 skipped — `719ada0` |
 | TASK-020 | `[ ]` | slugbase-cloud | 017,019,027 | **yes** | deploy runbook, Phase inventory — manual payment |
 | TASK-021 | `[ ]` | slugbase | 019 | **yes** | `packages/{ui,shared-types}/package.json`, local npm publish |
-| TASK-022 | `[ ]` | slugbase | 021 | | `.github/workflows/publish-npm.yml` |
+| TASK-022 | `[x]` | slugbase | 021 | | `.github/workflows/publish-npm.yml` — `a92e0a6` |
 | TASK-023 | `[x]` | slugbase | 019 | | `LICENSE`, `TRADEMARK.md`, `README.md` — `66e9034` |
 | TASK-024 | `[x]` | slugbase + cloud + commerce | 023 | | spec, engineering-decisions, READMEs, `.cursor/rules/**` — `ec09466` + `49a61e9` + `1e47d1b` |
 | TASK-025 | `[ ]` | slugbase | all | **yes** | optional `git filter-repo` |
