@@ -125,7 +125,7 @@ A workspace has a name (1–64 characters), a generated colour and monogram, an 
 | View the audit log (subject to `audit.log`) | ✓ | ✓ | — |
 | Workspace settings (name, AI toggle) | ✓ | ✓ | — |
 | Billing: checkout, plan changes, seats, cancel and resume, payment method (Cloud) | ✓ | — | — |
-| Billing: read plan state, invoices and credit notes (Cloud) | ✓ | ✓ | — |
+| Billing: read plan state, invoices and cancellation invoices (Cloud) | ✓ | ✓ | — |
 | Promote to owner, transfer ownership, demote an owner | ✓ | — | — |
 | Delete the workspace | ✓ | — | — |
 
