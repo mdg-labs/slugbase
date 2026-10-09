@@ -69,7 +69,12 @@ Numbers are stable: Q1–Q19 come from docs 00–01, Q20–Q39 from 02–03, Q40
 | Q111 | A change to the documentation on `main` requests a rebuild of the site through a generic `repository_dispatch` (`docs-published`); the target repository is a variable, and the workflow does nothing without it | Decided (maintainer) |
 | Q112 | Cloud decision | Cloud — recorded in the Cloud documentation |
 | Q113 | Cloud decision | Cloud — recorded in the Cloud documentation |
+| Q114 | Cloud decision | Cloud — recorded in the Cloud documentation |
+| Q115 | Cloud decision | Cloud — recorded in the Cloud documentation |
+| Q116 | Cloud decision | Cloud — recorded in the Cloud documentation |
 | Q117 | Payment methods are a Cloud concern | Cloud — recorded in the Cloud documentation |
+| Q118 | Cloud decision | Cloud — recorded in the Cloud documentation |
+| Q119 | Cloud decision | Cloud — recorded in the Cloud documentation |
 
 ### External services
 
