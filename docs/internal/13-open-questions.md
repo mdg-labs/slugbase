@@ -67,6 +67,8 @@ Numbers are stable: Q1–Q19 come from docs 00–01, Q20–Q39 from 02–03, Q40
 | Q2 | User documentation lives in this repository (`docs/user/`, `docs/self-hosting/`, `docs/releases/`), written with `/customer-docs` and published at `slugbase.app/docs` by the one SlugBase site; no separate docs repository, no `docs.slugbase.app` | Decided (changed 2026-10-09) |
 | Q89 | Deleted on 2026-10-08 (maintainer decision), without a deprecation period | Decided (maintainer) |
 | Q111 | A change to the documentation on `main` requests a rebuild of the site through a generic `repository_dispatch` (`docs-published`); the target repository is a variable, and the workflow does nothing without it | Decided (maintainer) |
+| Q112 | Cloud decision | Cloud — recorded in the Cloud documentation |
+| Q113 | Cloud decision | Cloud — recorded in the Cloud documentation |
 
 ### External services
 

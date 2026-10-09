@@ -189,6 +189,7 @@ These are accepted on purpose and are **not findings**, as is anything the opera
 11. (Cloud) Cloud — see the Cloud threat model.
 12. (Cloud) Cloud — see the Cloud threat model.
 13. **An allowlisted AI endpoint may sit on a private address.** An operator who runs a self-hosted model lists its exact host in the allowlist of Q90; the server then connects to that private address for AI suggestion requests only. The operator chose it (2.10), no member input reaches the allowlist, and DNS pinning, size and time caps still apply to it; a redirect away from the allowlisted host is validated like any other hop.
+14. (Cloud) Cloud — see the Cloud threat model.
 
 ---
 
