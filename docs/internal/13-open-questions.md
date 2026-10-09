@@ -272,7 +272,7 @@ Recorded in the Cloud documentation.
 **Status:** Decided (default) · **Due:** before the CE repository accepts its first outside pull request (Phase 1) · **Affects:** doc 09 §5.2 (`signoff`), doc 12 §4 R6, `CONTRIBUTING.md`, `.githooks/`
 
 **Decision: DCO sign-off (`Signed-off-by:` via a `prepare-commit-msg` hook, `signoff.mode: hook`) plus a short contributor licence agreement (CLA Assistant) granting MDG Labs the right to also license contributions under other terms; no outside code is merged until it is in place.**
-Unlike Hoserva (DCO, no CLA), SlugBase Cloud runs CE code inside a proprietary service. MDG Labs can do that with its own code, but an outside contribution licensed only under AGPL-3.0 would oblige the Cloud composition to be offered under AGPL too. A CLA (or relicensing grant) keeps the open-core model legally clean; DCO alone does not. Alternative: accept issues and discussion only, no outside code, until the question matters.
+Unlike a project that takes contributions under a DCO alone, SlugBase Cloud runs CE code inside a proprietary service. MDG Labs can do that with its own code, but an outside contribution licensed only under AGPL-3.0 would oblige the Cloud composition to be offered under AGPL too. A CLA (or relicensing grant) keeps the open-core model legally clean; DCO alone does not. Alternative: accept issues and discussion only, no outside code, until the question matters.
 
 ### Q1 — Contribution terms for the public CE repository
 **Status:** Merged → Q80 · **Affects:** —
@@ -315,7 +315,7 @@ User docs keep their own review bar through the contract check and the `area:doc
 **Decision: deleted on 2026-10-08, without a deprecation period** (maintainer, when the old repositories were removed). Nobody was known to run the old CE images; the new CE publishes fresh images (Q12).
 
 ### Q111 — Docs changes request a rebuild of the site
-**Status:** Decided (maintainer) · **Due:** Phase 6 · **Affects:** doc 09 §3.5, §4, §5.6, Q2, Cloud doc 07 §4.4, Cloud doc 11
+**Status:** Decided (maintainer) · **Due:** Phase 6 · **Affects:** doc 09 §3.5, §4, §5.6, Q2, Cloud doc 07 §4.6, Cloud doc 11
 
 **Decision: when documentation changes on `main` of this repository, a workflow here asks the site repository to rebuild and deploy the site. It sends a GitHub `repository_dispatch` of type `docs-published` carrying the pushed commit. The target repository is configuration, not code: the workflow names no private repository and no host (doc 09 §4), and does nothing where the configuration is absent.** The full behaviour is the "docs-published hook" in doc 09 §3.5.
 Without this, a documentation fix would reach the site only with the next site change or a manual rebuild. The request makes publishing a consequence of merging, with no human step and no code in this repository that knows what receives it. Forks and self-hosters have no target configured, so for them it is a no-op. The receiving side validates the commit and treats the docs as untrusted build input; what it does after that is recorded in the Cloud documentation.

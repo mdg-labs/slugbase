@@ -90,8 +90,10 @@ and `apps/slugbase` wires it.
 - Identifiers are generated in the application (UUIDv7, Q91), never by a database function.
 - Documentation under `docs/user/`, `docs/self-hosting/` and `docs/releases/` follows the docs contract (doc 09 §3.5):
   frontmatter `title`, `description` and `edition` (`ce`, `cloud` or `both`), optional `since` and `order`; MDX with no
-  `import`/`export` and no JSX beyond the allow-listed components (callout, tabs, steps, edition badge, screenshot);
-  links relative or to `/docs/...`; images next to the page; no scripts, iframes or third-party embeds; English only.
+  `import`/`export`, no JavaScript expressions, no raw HTML and no JSX beyond the allow-listed components (callout, tabs,
+  steps, edition badge, screenshot); no route under the reserved first segments `cloud`, `self-hosting` and `releases`,
+  and no two pages with one route; links relative or to `/docs/...`; images next to the page; no scripts, iframes or
+  third-party embeds; English only.
   `pnpm docs:check` passes.
 - Flag v1 non-goals (doc 00 §4) and ask before building one.
 

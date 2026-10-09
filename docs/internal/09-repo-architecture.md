@@ -6,7 +6,7 @@
 
 ## 1. Why three repositories, and not one
 
-Hoserva is one monorepo because one developer ships one artefact (its doc 12 §1). SlugBase has a constraint Hoserva doesn't: **part of the product must be public and part must never be** (D2). That decides the split; everything else follows Hoserva's reasoning *inside* each repository.
+A monorepo suits a product where one developer ships one artefact. SlugBase has a constraint such a product does not: **part of the product must be public and part must never be** (D2). That decides the split; everything else follows the monorepo reasoning *inside* each repository.
 
 | Repository | Visibility | Owns | Why separate |
 |---|---|---|---|
@@ -156,7 +156,8 @@ The documentation content is in this repository (Q2). The site that publishes it
 **The docs contract.** `docs:check` fails a change that breaks any of the following:
 
 - **Format.** Markdown or MDX files with frontmatter. The fields are `title`, `description` and `edition` (`ce`, `cloud` or `both`); `since` (a version) and `order` are optional. `edition` and `since` tell the reader which edition and from which version a feature is available; the site renders them as edition callouts and badges.
-- **MDX is restricted,** because the content is built by the CI of whoever publishes the site. A file may not contain `import` or `export` statements or arbitrary JSX. The only components allowed are an allow-list: callout, tabs, steps, edition badge and screenshot.
+- **MDX is restricted,** because the content is built by the CI of whoever publishes the site. A file may not contain `import` or `export` statements, JavaScript expressions, raw HTML or arbitrary JSX. The only components allowed are an allow-list: callout, tabs, steps, edition badge and screenshot.
+- **Routes.** The first path segments `cloud`, `self-hosting` and `releases` are reserved for the other content roots of the site, so a page under `docs/user/` may not start with one of them, and two pages may not produce the same route. The site build enforces the same rules and fails on a violation.
 - **Links** are relative, or to `/docs/...`.
 - **Assets.** Images live next to the page that shows them. There are no scripts, iframes or third-party embeds.
 - **Language.** English only for now.
@@ -166,9 +167,9 @@ The documentation content is in this repository (Q2). The site that publishes it
 
 - **Triggers.** A push to `main` that touches `docs/user/**`, `docs/self-hosting/**` or `docs/releases/**`, and `workflow_dispatch`.
 - **Action.** It sends a GitHub `repository_dispatch` of type `docs-published` with `client_payload.sha` set to the commit it runs on (for a push, the pushed commit). Nothing else is in the payload.
-- **Configuration.** The target repository is the repository variable `DOCS_SITE_REPOSITORY` (owner/name). The credential is the secret `DOCS_SITE_DISPATCH_TOKEN`, a fine-grained token limited to dispatching on that one repository. The token and the variable are set by the maintainer only (D24).
+- **Configuration.** The target repository is the repository variable `DOCS_SITE_REPOSITORY` (owner/name). The credential is the secret `DOCS_SITE_DISPATCH_TOKEN`, a fine-grained token limited to that one repository. GitHub gives a token that can send a `repository_dispatch` the write permission on that repository's contents, so the token is not limited to dispatching; the limit is the single repository, and the token is stored only as this secret. The token and the variable are set by the maintainer only (D24).
 - **No-op rules.** The workflow does nothing when the variable or the secret is unset, or when the repository it runs in is not the upstream CE repository. Forks and self-hosters therefore never send anything.
-- **The receiving side** is recorded in the Cloud documentation (Cloud doc 07 §4.4, Cloud doc 11). What CE relies on is that it treats the payload as untrusted data: it accepts only a 40-character hexadecimal `sha` that is reachable from CE `main`, fetches only the three docs paths at that commit, never executes or interpolates the payload into a shell, and falls back to the docs of its pinned CE submodule when the fetch fails, so this repository's availability never blocks a deploy. A daily scheduled rebuild on that side is the safety net for a missed dispatch.
+- **The receiving side** is recorded in the Cloud documentation (Cloud doc 07 §4.6, Cloud doc 11). What CE relies on is that it treats the payload as untrusted data: it accepts only a 40-character hexadecimal `sha` that is reachable from CE `main`, fetches only the three docs paths at that commit, never executes or interpolates the payload into a shell, and falls back to the docs of its pinned CE submodule when the fetch fails, so this repository's availability never blocks a deploy. A daily scheduled rebuild on that side is the safety net for a missed dispatch.
 
 ---
 
