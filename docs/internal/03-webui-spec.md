@@ -12,7 +12,7 @@ TanStack Router file routes (D13). `$param` segments are resolved client-side; t
 
 ```
 Home (dashboard)                 /
-Bookmarks                        /bookmarks                  ?folder&tags&pinned&scope&q&sort&view&page&size
+Bookmarks                        /bookmarks                  ?folderId&tag&pinned&hasSlug&forwarding&scope&q&sort&view&size
   └ Archived                     /bookmarks/archived         (only when the workspace has archived bookmarks)
 Folders                          /folders                    ?scope&sort&q
 Tags                             /tags                       ?tag&sort&q
@@ -38,13 +38,14 @@ Instance admin (CE)              /admin                      (instance admins on
   └ Settings & status            /admin/settings
 Go (SPA fallbacks)               /go/$slug                   disambiguation, not found (doc 02 §6.3)
 Auth                             /login, /login/mfa, /register, /verify-email, /forgot-password,
-                                 /reset-password, /invite/$token, /setup, /no-workspace
+                                 /reset-password, /invite/$token, /setup, /no-workspace,
+                                 /email-change/confirm, /email-change/cancel   (emailed links; token in the URL fragment)
 Errors                           /403, /404 (catch-all), /500 (error boundary), offline state
 ```
 
 **Sidebar items**: Home, Bookmarks, Folders, Tags, Forwarding — five items, plus a **Folders** section listing the member's folders (and folders shared with them) as quick filters, and **Settings** at the bottom. Instance admins also see **Admin**. Anything more turns the sidebar into a menu nobody reads.
 
-**Overlays that have no route** (they open over the current page and keep it): command palette, bookmark modal, share dialog, workspace switcher, create-workspace dialog, import wizard, keyboard-shortcut sheet. Overlays that must be linkable use a search param instead of a route (`?bookmark=<id>` opens the edit modal; `?new=1&url=…` opens the create modal prefilled — used by the OpenSearch "add" flow and by future extensions).
+**Overlays that have no route** (they open over the current page and keep it): command palette, bookmark modal, share dialog, workspace switcher, create-workspace dialog, import wizard, keyboard-shortcut sheet. Overlays that must be linkable use a search param instead of a route (`?bookmark=<id>` opens the edit modal; `?new=1&url=…&slug=…` opens the create modal prefilled — used by the not-found page of `/go`, the palette's no-result hint and future extensions). Filters, sort, view and size live in the URL search params of the list; the list has no page parameter because pagination is keyset-based ("load more", doc 02 §5.7).
 
 ---
 
@@ -91,7 +92,7 @@ Shown above page content; dismissible only when the condition clears:
 
 ### Rules
 
-- **coss first, coss only.** No second component library and no hand-rolled version of something coss provides. What coss doesn't cover is limited to: TanStack Table (used through coss Table particles), a QR code renderer (`qrcode`, for TOTP), and the favicon `<img>` — each wrapped once in `@slugbase/ui`.
+- **coss first, coss only.** No second component library and no hand-rolled version of something coss provides. What coss doesn't cover is limited to: TanStack Table (used through coss Table particles) and the favicon `<img>` — each wrapped once in `@slugbase/ui`.
 - **Shared patterns are built once** in `@slugbase/ui/patterns` (table below); pages use the pattern, never re-adapt the particle. The Cloud web extensions and the operator console use the same patterns.
 - **Behaviour picks the primitive** (coss segmented-control rule): one value from a set is a RadioGroup, navigation is links, a clearable multi-filter is a ToggleGroup or a multiple Combobox, switching content panels is Tabs.
 - **The palette is coss Command** (`p-command-1`), not `cmdk`.
@@ -117,8 +118,11 @@ The prototype's design tokens (`colors_and_type.css`) are mapped onto coss's the
 | `--ring` | `#7782f7` | `#5b66e8` | focus ring |
 | `--border`, `--input` | `rgba(255,255,255,.10)` | `rgba(16,18,32,.11)` | `--border` |
 | `--success` / `--warning` / `--destructive` | `#45c98a` / `#e6b24e` / `#f0686b` | `#1f9d68` / `#b8861f` / `#d6494d` | semantic |
+| `--success-text` / `--warning-text` / `--destructive-text` | same as the fills (`#45c98a` / `#e6b24e` / `#f0686b`) | `#17724b` / `#8a6100` / `#b4282d` | AA text variants |
 | `--info` | `#56b6e6` | `#2b8fc4` | prototype folder blue |
 | `--radius` | `6px` (sm 4, lg 8, xl 12) | same | `--r-*` |
+
+**Semantic colours as text.** The light-theme fills of `--success`, `--warning` and `--destructive` measure 3.45, 3.25 and 4.27 against white, below the 4.5 : 1 that body text needs. The fills keep the values above and are used for icons, dots, borders and badge backgrounds; any text set in a semantic colour (status labels, inline error messages, validation text) uses the `*-text` variant, which measures at least 4.9 : 1 on every light surface. In the dark theme the fills already pass and the variants equal them. A unit test parses the theme CSS and checks every text and background pair for both themes (doc 08).
 
 Type scale follows the prototype's dense tool scale: body 13 px / 18 px, small 12 px, micro 11 px uppercase labels with wide tracking, H1 22 px, H2 18 px, mono 12.5 px. Motion: 110 / 170 / 230 ms with the prototype's easing; all motion respects `prefers-reduced-motion`. A member-chosen **accent** (Q36) swaps `--primary` and `--ring` among six presets; periwinkle is the default.
 
@@ -136,13 +140,13 @@ Type scale follows the prototype's dense tool scale: body 13 px / 18 px, small 1
 | `inline-note` | Alert, info | `p-alert-4` | Explanations on the page |
 | `confirm` | AlertDialog | `p-alert-dialog-1` | Deletes, removals, revocations |
 | `typed-confirm` | AlertDialog + Field + Input, confirm enabled on exact match | `p-alert-dialog-1`, `p-field-4` | Delete workspace, delete account, transfer ownership |
-| `data-table` | Table + TanStack Table in a CardFrame; card rows on mobile | `p-table-8` (sort, paginate), `p-table-7` (selection), `p-table-6` | Bookmarks table, members, tokens, audit, admin lists |
+| `data-table` | Table + TanStack Table in a CardFrame; card rows on mobile | `p-table-8` (sort), `p-table-7` (selection), `p-table-6` | Bookmarks table, members, tokens, audit, admin lists |
 | `card-grid` | Card list in a responsive grid; selection via Checkbox | `p-card-1`, `p-checkbox-1` | Bookmarks grid |
 | `table-filters` | InputGroup search, Group with filter Combobox, removable Badges | `p-input-group-20`, `p-group-22`, `p-badge-20` | Filter bar above lists |
 | `bulk-bar` | Toolbar shown on selection with count Badge | `p-toolbar-1`, `p-badge-13` | Bulk actions on bookmarks |
 | `row-actions` | Menu from an icon Button; Drawer on mobile | `p-menu-1`, `p-button-13`, `p-drawer-13` | Per-row/card actions |
 | `context-actions` | ContextMenu with icons | `p-context-menu-6` | Right-click on bookmark rows/cards (same items as `row-actions`) |
-| `pager` | Pagination with page-size Select | `p-pagination-3` | Every paginated list |
+| `load-more` | Count line ("Showing 48 of 1,234", "10,000+" above the cap) with a loading Button and a page-size Select | `p-button-18`, `p-select-15` | Every list with keyset pagination (bookmarks, folders, tags, audit) |
 | `empty-state` | Empty | `p-empty-1` | Every list with nothing in it |
 | `loading` | Skeleton; Button `loading` prop | `p-skeleton-1`, `p-button-18` | Page loads; scoped waits |
 | `feedback-toast` | toastManager / anchoredToastManager | `p-toast-2`, `p-toast-4` (undo), `p-toast-5` (promise), `p-toast-7` (after copy), `p-toast-10` (dedup) | Short actions; undo for unpin/remove-from-folder |
@@ -207,13 +211,13 @@ Email, password, "Remember me", "Forgot password?", OIDC provider buttons (when 
 
 ### 1.3 `/register`, `/verify-email`
 
-Registration (only when open): name, email, password; Cloud adds terms acceptance through slot `auth.register.footer`. Success → "Check your email" with resend (rate-limited, countdown). `/verify-email?token=` verifies and signs in; an expired token offers resend. Registration closed → a card "Registration is closed — ask an admin for an invitation."
+Registration (only when open): name, email, password; Cloud adds terms acceptance through slot `auth.register.footer`. Success → "Check your email" with resend (rate-limited, countdown). `/verify-email#token=…` (the token travels in the URL fragment, so it never reaches server logs or `Referer`) verifies and signs in; an expired token offers resend. Registration closed → a card "Registration is closed — ask an admin for an invitation."
 
 **Components:** authentication card; `form`, `secret-input`; `banner` for expired links; resend Button with `loading`.
 
 ### 1.4 `/forgot-password`, `/reset-password`
 
-Request: email → always "If an account exists for that address, we sent a link." Without mail configured: "Ask your instance admin to send you a reset link" (CE). Reset: new password with strength → signed in, all other sessions revoked (stated).
+Request: email → always "If an account exists for that address, we sent a link." Without mail configured: "Ask your instance admin to send you a reset link" (CE). Reset (`/reset-password#token=…`, token in the fragment): new password with strength → signed in, all other sessions revoked (stated); an account with MFA continues at `/login/mfa`.
 
 **Components:** authentication card; `form`; `secret-input`; `inline-note`.
 
@@ -229,6 +233,12 @@ For accounts with no membership: create a workspace (where allowed) or "Waiting 
 
 **Components:** `empty-state`; `form-overlay` for create.
 
+### 1.7 `/email-change/confirm`, `/email-change/cancel` — Email-change links
+
+The two pages the emailed links open (doc 02 §2.6). Each reads its token from the URL fragment, calls its operation once and shows a result card: *confirm* (sent to the new address) switches the email and says so, *cancel* (the "this wasn't me" link sent to the old address) cancels the pending change and states that every session was signed out. A used, expired or unknown token shows one generic explanation with a link to `/login`; no copy ever says whether an address is taken.
+
+**Components:** authentication card; `banner` for the failure state; `empty-state` for success.
+
 ---
 
 ## 2. `/` — Home (dashboard)
@@ -238,9 +248,9 @@ One screen on desktop, no scrolling needed for the first three rows.
 - **Row 0 — slot `dashboard.top`** (Cloud: limit and archive notices; nothing on CE).
 - **Row 1 — counts and search**: four `metric-tile`s (Bookmarks, Folders, Tags, Shared with you — the last only with `sharing.*`), and a large search field that opens the palette.
 - **Row 2 — Quick access**: up to 8 most-used slugs as compact tiles (favicon, slug in mono, title), click forwards via `/go`, hover shows the destination.
-- **Row 3 — Pinned**: up to 12 pinned bookmarks as compact cards; "View all →" to `/bookmarks?pinned=1`.
+- **Row 3 — Pinned**: up to 12 pinned bookmarks as compact cards; "View all →" to `/bookmarks?pinned=true`.
 - **Row 4 — Most used tags** (tag chips with counts, link to filtered list) and **Sharing** (shared with you / by you counts with links).
-- **Getting started** (until dismissed or complete): checklist with five items (doc 02 §9.3), each with its action (New bookmark, Import, Forwarding setup, New folder). "Dismiss" hides it; Preferences can restore it.
+- **Getting started** (until dismissed or complete): checklist with five items (doc 02 §9.3), each with its action (New bookmark, Import, Forwarding setup, New folder). Adding a bookmark, giving one a slug and creating a folder complete from real state; the browser setup item is ticked by "Mark as done" on the Forwarding page and the import item by a completed import. "Dismiss" hides the card, a fully complete checklist collapses to a one-line "All set", and Preferences can restore it.
 
 **Components:** `metric-tile`s; search field as `kbd-button` styled as an input (`p-input-group-11`); quick access tiles as Card links (`p-card-1`) with `slug-chip`; pinned as `card-grid` (compact variant); tag chips as Badge with count (`p-badge-15`) links; checklist in a Card with Checkbox items (`p-checkbox-3`, read-only, state-driven) and Progress (`p-progress-2`); `empty-state` when the workspace has no bookmarks yet (replaces rows 2–4).
 
@@ -251,10 +261,10 @@ One screen on desktop, no scrolling needed for the first three rows.
 ### 3.1 Toolbar
 
 - **Filters**: folder (Combobox, single), tags (Combobox multiple with chips, AND), scope (`segmented-choice`: All / Mine / Shared with me / Shared by me — scope options other than All/Mine only with `sharing.*`), toggles "Pinned", "Has slug", "Forwarding on" (ToggleGroup, multiple), text query.
-- **Sort** (Select): Recently added, Alphabetical, Most used, Recently accessed.
+- **Sort** (Select): Recently added, Oldest first, Alphabetical A–Z, Alphabetical Z–A, Most used, Recently accessed.
 - **View** (`segmented-choice`): Grid / Table (`V` toggles).
 - **Active filter chips** with "Clear filters".
-- All state lives in the URL search params (TanStack Router validated search schema), so every view is linkable and back/forward works.
+- All state lives in the URL search params (TanStack Router validated search schema), so every view is linkable and back/forward works. There is no page parameter: the list loads further results with a "Load more" button under the last row (keyset pagination, doc 02 §5.7), and a page-size Select (24 / 48 / 96) sets how many each load adds.
 
 ### 3.2 Grid view
 
@@ -262,17 +272,17 @@ Cards: favicon (or monogram), title (2 lines), host in mono, `slug-chip` (or "No
 
 ### 3.3 Table view
 
-Columns: select, favicon+title, slug, host, folders, tags, opens, last opened, added, actions. Sortable by the sort fields. Column visibility is a per-account preference.
+Columns: select, favicon+title, slug, host, folders, tags, opens, last opened, added, actions. Sortable by the sort fields. Per-account column visibility is not part of v1 (the account has no field for it, §16).
 
 ### 3.4 Selection and bulk
 
-Selecting shows the `bulk-bar`: count, "Select all <n> matching" (doc 02 §5.7), Add to folder, Remove from folder, Add tags (with preview popover of the merged set), Remove tags, Pin / Unpin, Share (gated), Export selection, Delete. Mixed selections with shared bookmarks disable own-only actions with a Tooltip explaining why.
+Selecting shows the `bulk-bar`: count, "Select all <n> matching" (doc 02 §5.7; at most the select-all cap, and the bar says when the filter matches more), Add to folder, Move to folder, Remove from folder, Add tags (with preview popover of the merged set), Remove tags, Pin / Unpin, Share (gated, with the resulting audience previewed), Export selection (SlugBase JSON or Netscape HTML), Delete. The result toast states how many were changed and how many were skipped. Mixed selections with shared bookmarks disable own-only actions with a Tooltip explaining why.
 
 ### 3.5 States
 
-Loading: skeleton cards/rows matching the view. Empty (no bookmarks at all): teaching `empty-state` with New bookmark and Import from browser. Empty (filters match nothing): "No bookmarks match these filters" with Clear filters. Error: `banner` with retry.
+Loading: skeleton cards/rows matching the view. Below the list, the count line reads "Showing 48 of 1,234" ("of 10,000+" for very large filtered sets) with the Load more button. Empty (no bookmarks at all): teaching `empty-state` with New bookmark and Import from browser. Empty (filters match nothing): "No bookmarks match these filters" with Clear filters. Error: `banner` with retry.
 
-**Components:** `table-filters` (`p-input-group-20`, folder Combobox `p-combobox-7`, tags `multi-pick` `p-combobox-19`), scope `segmented-choice` (`p-radio-group-7`), ToggleGroup (`p-toggle-group-8`), sort Select (`p-select-15`), view `segmented-choice` with icons (`p-radio-group-7`), filter chips (`p-badge-20`); grid `card-grid`, table `data-table` (`p-table-8`, selection `p-table-7`); `bulk-bar`; `row-actions`, `context-actions`; `pager`; `loading`; `empty-state`; `feedback-toast` with undo.
+**Components:** `table-filters` (`p-input-group-20`, folder Combobox `p-combobox-7`, tags `multi-pick` `p-combobox-19`), scope `segmented-choice` (`p-radio-group-7`), ToggleGroup (`p-toggle-group-8`), sort Select (`p-select-15`), view `segmented-choice` with icons (`p-radio-group-7`), filter chips (`p-badge-20`); grid `card-grid`, table `data-table` (`p-table-8`, selection `p-table-7`); `bulk-bar`; `row-actions`, `context-actions`; `load-more`; `loading`; `empty-state`; `feedback-toast` with undo.
 
 ### 3.6 `/bookmarks/archived`
 
@@ -314,7 +324,7 @@ Opened from a bookmark or folder (own only, gated by `sharing.*`). Header names 
 
 ## 6. `/folders` — Folders
 
-Scope `section-nav`: Mine / Shared with me. Sort: Name, Bookmarks, Recently updated. Folder rows/cards: icon and colour, name, bookmark count, sharing label (Private / Shared with … / Shared with you by …), row actions: Open in Bookmarks, Rename, Change icon & colour, Share settings, Delete (`confirm` stating "The 9 bookmarks stay; only the folder goes."). "New folder" opens a small `form-overlay` (name, icon `picker`, colour `segmented-choice` of the 8 folder tokens). Empty state explains folders.
+Scope `section-nav`: Mine / Shared with me. Sort: Name, Bookmarks, Recently updated. Folder rows/cards: icon and colour, name, bookmark count, sharing label (Private / Shared with … / Shared with you by …), row actions: Open in Bookmarks, Rename, Change icon & colour, Share settings, Delete (`confirm` stating "The 9 bookmarks stay; only the folder goes."). "New folder" opens a small `form-overlay` (name, icon `picker`, colour `segmented-choice` of the 8 folder tokens, stored as a number from 1 to 8). Empty state explains folders.
 
 **Components:** `section-nav` (`p-navigation-1`); sort Select (`p-select-15`); `data-table` (`p-table-6` card-style) with `row-actions`; `form-overlay`; icon `picker` (`p-combobox-10`); colour `segmented-choice` (`p-radio-group-8`); `status-badge` for sharing; `confirm`; `empty-state`.
 
@@ -332,8 +342,8 @@ Two panes on desktop: left, tag list with counts and a relative-size bar (distri
 
 The home of the slug feature:
 
-- **Set up your browser** — the search-engine template `https://<origin>/go/%s` and keyword `go` as `copy-value`s, per-browser instructions in Tabs (Chrome, Firefox, Safari, Edge), a "Test it" link (`/go/` + a slug the member owns, or a sample), and the OpenSearch one-click add where supported.
-- **Your slugs** — `data-table` of own bookmarks with a slug: slug, destination host, forwarding on/off (inline Switch), opens, last opened; search; row actions Edit, Copy address, Turn off forwarding.
+- **Set up your browser** — the search-engine template `https://<origin>/go/%s` and keyword `go` as `copy-value`s, per-browser instructions in Tabs (Chrome, Firefox, Safari, Edge), a "Test it" link (`/go/` + a slug the member owns, or a sample), the OpenSearch one-click add where supported (served at `/opensearch.xml`, doc 02 §6.5), and a "Mark as done" control that ticks the browser setup item of the Getting started checklist.
+- **Your slugs** — `data-table` of own bookmarks with a slug: slug, destination host, forwarding on/off (inline Switch, rolled back with a toast on failure), opens, last opened; search; row actions Edit, Copy address, Turn off forwarding.
 - **Remembered choices** — go preferences (slug → bookmark, owner), with Remove.
 
 **Components:** Card sections; `copy-value`; Tabs with icons (`p-tabs-6`); `data-table` (`p-table-8`) with inline Switch (`p-switch-1`); `row-actions`; `empty-state` for each section.
@@ -358,7 +368,8 @@ Opened by `⌘K`/`Ctrl K` (and `/` on list pages), or the top-bar trigger. Input
 Rendered by the SPA only when the server cannot forward directly (doc 02 §6.2–6.3).
 
 - **Disambiguation**: "`go/mail` matches 3 bookmarks" — candidate cards (title, destination host, owner, how shared), "Always use this for `mail`" Checkbox, choosing forwards. Link "Manage remembered choices →" to `/forwarding`.
-- **Not found**: "No bookmark has the slug `mail` in <workspace>." Actions: "Create a bookmark with this slug" (opens the modal prefilled with the slug), and, when the slug exists in other workspaces of the member, "Found in: <Workspace B> — switch and continue" (Q26).
+- **Not found**: "No bookmark has the slug `mail` in <workspace>." Actions: "Create a bookmark with this slug" (opens `/bookmarks?new=1&slug=<slug>`, the modal prefilled with the slug), and, when the slug exists in other workspaces of the member, "Found in: <Workspace B> — switch and continue" (Q26).
+- A path or query after the slug is not a different address: it shows the not-found page (doc 02 §6.2 step 5).
 - Minimal chrome (no sidebar) so it loads fast; respects theme.
 
 **Components:** Card list (`p-card-1`) as RadioGroup-like buttons (`p-radio-group-4`); Checkbox (`p-checkbox-3`); `empty-state` for not found; Button links (`p-button-17`).
@@ -371,23 +382,23 @@ Layout: `settings-nav` on the left (groups **Account** and **Workspace**, plus s
 
 ### 11.1 `/settings/account` — Profile
 
-Name, email (change flow with "Pending verification" `status-badge`, resend, cancel change), language (Select: English / Deutsch), avatar preview (initials, Q37). Danger zone: **Delete account** (`typed-confirm`; lists blocking workspaces with links per doc 02 §2.10).
+Name, email (change flow with "Pending verification" `status-badge`, resend, cancel change), language (Select: English / Deutsch), avatar preview (initials, Q37). The email row opens the change flow (new address and the shared re-authentication prompt); while a change is pending it shows the "Pending verification" badge with Resend and Cancel, and the confirm and cancel links land on the pages of §1.7. Danger zone: **Delete account** (`typed-confirm` after re-authentication; lists the workspaces that will be deleted with the account and, when a deletion veto refuses, the blocking workspaces with links per doc 02 §2.10).
 
 **Components:** Card sections (`p-card-1`), `form`, Select (`p-select-22`), `status-badge`, `danger-zone`, `typed-confirm`.
 
 ### 11.2 `/settings/account/security`
 
 - **Password**: change (current + new with strength); for OIDC-only accounts "Add a password".
-- **Two-factor authentication**: state (`status-badge`), enrol `wizard` (QR + text key → verify code → `shown-once` backup codes), regenerate backup codes (`totp` then `shown-once`), disable (`totp` + password, `confirm`).
-- **Sessions**: `data-table` (device/browser, approximate location, created, last seen, "This device" badge), Revoke, "Sign out everywhere else" (`confirm`).
+- **Two-factor authentication**: state (`status-badge`), enrol `wizard` (re-authentication → the server's SVG QR code shown as an image (an `<img>` with a data URL, never injected as markup) + text key → verify code → `shown-once` backup codes), regenerate backup codes (`totp` then `shown-once`), disable (`totp` + password, `confirm`).
+- **Sessions**: `data-table` (device/browser, IP prefix, created, last seen, "This device" badge), Revoke, "Sign out everywhere else" (`confirm`). No location is shown: only the coarse stored IP prefix is known (doc 02 §2.4).
 - **Linked sign-in methods**: OIDC providers linked/unlinked (`confirm`), with the rule that one method must remain.
-- **Sign-in alerts**: `setting-switch` "Email me when a new device signs in".
+- **Sign-in alerts**: `setting-switch` "Email me when a new device signs in" (default on; the rule for a new device is in doc 02 §12).
 
-**Components:** `form`, `secret-input` (`p-input-group-25`); `wizard` (`p-card-6`) with QR in a Card and `copy-value` key; `totp`; `shown-once`; `data-table` (`p-table-7`); `confirm`; `setting-switch` (`p-switch-3`).
+**Components:** `form`, `secret-input` (`p-input-group-25`); `wizard` (`p-card-6`) with the QR image in a Card and `copy-value` key; `totp`; `shown-once`; `data-table` (`p-table-7`); `confirm`; `setting-switch` (`p-switch-3`).
 
 ### 11.3 `/settings/account/tokens` — API tokens
 
-Token list: name, workspace, scope (`status-badge`), prefix in mono, created, last used, expires, Revoke. "New token" `form-overlay`: name, workspace (Select of own memberships), scope (`segmented-choice`: Read / Read & write, Q16), expiry (Select). Result: `shown-once` with the token and a curl example. Limit reached (10) explained inline.
+Token list: name, workspace, scope (`status-badge`), prefix in mono, created, last used, expires, Revoke. "New token" `form-overlay` (asks for re-authentication first): name, workspace (Select of own memberships, the active workspace preselected), scope (`segmented-choice`: Read / Read & write, Q16), expiry (Select: 30, 90 or 365 days or none, default 90, Q47). Result: `shown-once` with the token and a curl example that uses the deployment origin and the placeholder `<your API token>`; the token is dropped from the client cache when the card closes. The 10-token limit is explained inline from the field error.
 
 **Components:** `data-table` (`p-table-7`); `form-overlay`; Select (`p-select-22`); `segmented-choice` (`p-radio-group-8`); `shown-once`; `copy-value`; `confirm` for revoke; `empty-state` ("No tokens yet. Create one to authenticate scripts or integrations.").
 
@@ -399,14 +410,14 @@ Theme (`segmented-choice`: System / Dark / Light, Q35), accent (six swatches, Q3
 
 ### 11.5 `/settings/account/data` — Import & export
 
-- **Import** `wizard`: choose file (`file-drop`: Netscape HTML or SlugBase JSON) → preview (counts of bookmarks, folders, tags detected; options "Skip duplicates", target: this workspace) → run (Progress, then result summary with created/skipped/slugs dropped and a downloadable report) (Q30).
-- **Export**: `choice-cards` — SlugBase JSON (lossless, recommended) or Netscape HTML (for browsers, lossy) (Q29); "Include bookmarks shared with me" Checkbox; Download.
+- **Import** `wizard`: choose file (`file-drop`: Netscape HTML or SlugBase JSON, up to 5 MiB) → preview (a dry run reports the counts of bookmarks, folders and tags detected; options "Skip duplicates", target: this workspace) → run (Progress while the request runs, then result summary with created/skipped/slugs dropped and a downloadable JSON report; an import that hits the bookmark limit imports up to it and lists the rest as skipped) (Q30). A completed import ticks the Getting started item.
+- **Export**: `choice-cards` — SlugBase JSON (lossless, recommended) or Netscape HTML (for browsers, lossy) (Q29); "Include bookmarks shared with me" Checkbox (only with `sharing.*`); Download. Exporting a selection is done from the bulk bar (§3.4); the palette has Import and Export commands that open this page.
 
 **Components:** `wizard`, `file-drop` (`p-input-5`), Checkbox (`p-checkbox-3`), Progress (`p-progress-2`), `grouped-results` as Accordion (`p-accordion-3`) for skipped reasons, `choice-cards` (`p-radio-group-4`), `feedback-toast` (`p-toast-5`).
 
 ### 11.6 `/settings/workspace` — General
 
-Name (admins), workspace monogram preview, plan summary through slot. Members see the name read-only and **Leave workspace** (`danger-zone` → `choice-cards` for what happens to their content per doc 02 §3.6, then `confirm`). Owners: **Delete workspace** (`typed-confirm`, offers export first).
+Name (admins), workspace monogram preview, plan summary through slot. Members see the name read-only and **Leave workspace** (`danger-zone` → `choice-cards` for what happens to their content per doc 02 §3.6, then `confirm`). Owners: **Delete workspace** (`typed-confirm` after re-authentication, offers export first; if a deletion veto of the composition refuses, its explanation is shown in the dialog). After the request is accepted the member leaves the workspace like a removed member (re-derived workspace or `/no-workspace`).
 
 **Components:** `form`, `danger-zone`, `choice-cards`, `typed-confirm`, `slot`.
 
@@ -414,7 +425,7 @@ Name (admins), workspace monogram preview, plan summary through slot. Members se
 
 - **Members** `data-table`: avatar, name, email, role (inline Select for admins; owners can promote to owner), teams (badges), joined, last active, `row-actions` (Change role, Manage teams, Transfer ownership — owners, Remove).
 - **Invite** `form-overlay`: emails (several, comma or Enter), role (`choice-cards`: Admin / Member with descriptions), teams (`multi-pick`). Gated by `members.invite`; seat summary via slot `settings.workspace.members.seats` ("4 of 5 seats used — Manage seats →").
-- **Pending invitations**: email, role, invited by, expires, Resend / Revoke; without mail (CE) a "Copy invitation link" action.
+- **Pending invitations**: email, role, invited by, expires (expired ones are marked and can be resent), Resend / Revoke; a "Copy invitation link" action (which issues a new link and ends the old one) is offered when mail is not configured. Inviting an email that is already pending resends it; inviting a current member says so.
 - **Remove member**: `choice-cards` (transfer content to … / delete content) with recipient `picker`, then `confirm` (doc 02 §3.6).
 - **Transfer ownership**: `typed-confirm` on the recipient's name, option "Stay as admin".
 
@@ -428,9 +439,9 @@ Team list (name, description, member `avatar-stack`, count) with Create, Edit (n
 
 ### 11.9 `/settings/workspace/audit` — Audit log
 
-`data-table` newest first: time (relative with absolute in Tooltip), actor (avatar + name, or "deleted account"), action (localised label + `status-badge` category), target. Filters: actor (Combobox), action category (Combobox multiple), date range (date picker with presets). Row opens a `side-panel` with the event metadata. Gated by `audit.log`.
+`data-table` newest first: time (relative with absolute in Tooltip), actor (avatar + name, or "deleted account"), action (localised label + `status-badge` category), target. Filters (kept in the URL): actor (Combobox), action category (Combobox multiple), date range (date picker with presets); "Load more" instead of page numbers. Every action has a localised label. Row opens a `side-panel` with the event metadata. Gated by `audit.log`.
 
-**Components:** `data-table` (`p-table-8`), `table-filters` (`p-group-22`), date picker with presets (`p-date-picker-4`), `side-panel` (`p-sheet-1`), Tooltip (`p-tooltip-1`), `entitlement-gate`, `pager`.
+**Components:** `data-table` (`p-table-8`), `table-filters` (`p-group-22`), date picker with presets (`p-date-picker-4`), `side-panel` (`p-sheet-1`), Tooltip (`p-tooltip-1`), `entitlement-gate`, `load-more`.
 
 ### 11.10 `/settings/workspace/ai` — AI suggestions
 
@@ -506,11 +517,16 @@ The shortcut sheet is a Dialog listing these with Kbd, in the current language.
 
 ## 16. Page priority for implementation
 
-| Tier | Pages | Phase (doc 12) |
-|---|---|---|
-| **1 — A usable single-user product** | `/setup`, `/login`, `/login/mfa`, `/`, `/bookmarks`, bookmark modal, `/folders`, `/tags`, `/forwarding`, `/go/$slug`, palette, `/settings/account`, `/settings/account/security`, `/settings/account/preferences`, `/settings/account/data`, error pages | 1 |
-| **2 — Multi-user and CE-complete** | `/invite/$token`, `/register`, `/verify-email`, `/forgot-password`, `/reset-password`, `/no-workspace`, `/settings/workspace/*` (general, members, teams, audit, AI), share dialog, `/settings/account/tokens`, `/admin/*` | 2 |
-| **3 — Cloud** | Cloud extension routes and slot fillers (billing, plan, seats, upgrade prompts, `/bookmarks/archived`), terms acceptance on registration | 3 |
-| **4 — Polish** | AI suggestion chips, per-account table column choice, OpenSearch one-click add, accent presets, shortcut sheet completeness | 4 |
+Pages are built in the phases of doc 12, each page with the epic that owns its data.
 
-Tier 1 is a product the maintainer can live in daily on CE. Tier 2 makes CE releasable to other operators. Tier 3 is what Cloud needs on top; Tier 4 is the finish.
+| Phase (doc 12) | Pages |
+|---|---|
+| **1 — Foundation** | App shell, extension slots, `/403`, `/404`, `/500`, offline state |
+| **2 — Accounts, workspaces, tenancy** | `/setup`, `/login`, `/login/mfa`, `/register`, `/verify-email`, `/forgot-password`, `/reset-password`, `/invite/$token`, `/no-workspace`, `/email-change/*`, the workspace switcher, `/settings/account`, `/settings/account/security`, `/settings/account/tokens`, `/settings/account/preferences` (including accent presets), `/settings/workspace` and `/settings/workspace/members`, `/admin/*` |
+| **3 — The core product** | `/`, `/bookmarks`, the bookmark modal, `/folders`, `/tags`, `/forwarding` (including OpenSearch), `/go/$slug`, the command palette, the shortcut sheet |
+| **4 — Collaboration, administration, AI, import/export** | Share dialog and shared scopes, `/settings/workspace/teams`, `/settings/workspace/audit`, `/settings/workspace/ai`, AI suggestion chips, `/settings/account/data` |
+| **5 — Cloud (planned in the Cloud roadmap)** | Cloud extension routes and slot fillers (billing, plan, seats, upgrade prompts, `/bookmarks/archived`), terms acceptance on registration |
+
+The per-account choice of table columns (§3.3) has no account field yet and is not scheduled for v1.
+
+Phase 3 completes a product the maintainer can live in daily on CE as one person. Phase 4 makes CE feature-complete for teams and releasable to other operators; Phase 5 is what Cloud needs on top.

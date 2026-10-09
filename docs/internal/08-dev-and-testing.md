@@ -73,7 +73,7 @@ pnpm dev                 # turbo: server (watch), worker (watch), web (Vite)
 | Tier | What | Runs against | Where |
 |---|---|---|---|
 | **T1 Unit** | Pure logic: domain services with in-memory ports, entitlement engine, slug grammar, parsers, authorization policies, React components | Nothing external | Every package, `*.test.ts(x)` colocated |
-| **T2 Integration** | Repositories, RLS, migrations, the HTTP chain end to end in-process, worker jobs, adapters against local fakes | Real Postgres 18 (per-test database) | `packages/db`, `packages/server`, `packages/adapters`; the Cloud modules in the Cloud repository |
+| **T2 Integration** | Repositories, RLS, migrations, the HTTP chain end to end in-process, worker jobs, adapters against local fakes | Real PostgreSQL (per-test database): 18 locally, 17 and 18 in CI (Q3) | `packages/db`, `packages/server`, `packages/adapters`; the Cloud modules in the Cloud repository |
 | **T3 Contract** | OpenAPI drift, API Extractor reports, client generation, i18n catalogs, forbidden terms | Generated artefacts vs committed ones | `pnpm contracts:check`, `pnpm i18n:check`, `pnpm lint` |
 | **T4 E2E** | User journeys in a browser against the built image | Docker: image + Postgres + Mailpit (+ fakes of Cloud's external services in the Cloud repository) | `e2e/` in each repo |
 | **T5 Non-functional** | Accessibility, load/latency budgets, migration timing on large data | Built app; seeded large dataset | Scheduled CI and before promotions (§5.3, §5.4) |
@@ -86,7 +86,7 @@ T1–T3 are in `pnpm gate`. T4 runs in CI on every push to `dev` and on promotio
 
 ### 3.1 Unit tests and in-memory ports
 
-Every port (doc 01 §6) ships an in-memory implementation in `@slugbase/testing` — `InMemoryMail` (captures messages), `FakeAi` (deterministic suggestions), `FakeIdentity` (a scripted OIDC provider), `FakeEgress` (scripted responses keyed by URL, including redirects to private addresses and oversized bodies), `FixedClock`, `SequenceIds`. Domain services are tested against these with no database. Unit tests must run in well under a minute for the whole repo; a test that needs Postgres is an integration test.
+Every port (doc 01 §6) ships an in-memory implementation in `@slugbase/testing` — `InMemoryMail` (captures messages), `FakeAi` (deterministic suggestions), `FakeIdentity` (a scripted OIDC provider), `FakeEgress` (scripted responses keyed by URL, including redirects to private addresses and oversized bodies), `FixedClock`, `SequenceIds`. Identifiers are generated in the application, not by a database function (Q91), so `SequenceIds` stands in for the generator and no test depends on a PostgreSQL-version-specific id function. Domain services are tested against these with no database. Unit tests must run in well under a minute for the whole repo; a test that needs Postgres is an integration test.
 
 React components are tested with Testing Library and `vitest-axe` for component-level accessibility. The data layer in the web app is tested against **MSW handlers generated from `openapi.json`** (§7), so a contract change breaks the web tests in the same commit.
 
@@ -119,7 +119,7 @@ Within-workspace sharing rules (owner-only mutation, read via direct share, team
 - **Expand/contract check**: a migration that drops or renames a column is rejected unless its file header names the expand migration and release it pairs with (doc 05).
 - **The `migrate` command** (D25): two `migrate` processes started at once against the same database apply the chain exactly once (the advisory lock); `lock_timeout` makes a migration blocked by a held table lock fail fast instead of queueing; a failed migration leaves the version table unchanged and exits non-zero.
 - **The two call sites** (D25):
-  - **CE migrate-on-start:** the image entrypoint migrates, then serves. A second replica waits on the lock and starts without re-applying.
+  - **CE migrate-on-start:** the image entrypoint runs `migrate` with `DATABASE_MIGRATE_URL`, and only then starts the server with that URL removed from its environment (a failure exits non-zero before anything serves). A second replica waits on the lock and starts without re-applying. The in-process variant (`slugbase serve --with-worker`, Q11, where no entrypoint step exists) migrates inside the process and serves `/health` and `/ready` first, with `/ready` answering `503` until the database is at the expected migration level.
   - **`MIGRATE_ON_START=false`** (a managed deployment that runs `migrate` as a separate step, as Cloud does): the server never runs migrations and refuses `/ready` until the database is at the migration level the build expects.
 
 ### 3.5 Security-focused integration suites
@@ -127,14 +127,14 @@ Within-workspace sharing rules (owner-only mutation, read via direct share, team
 | Suite | Asserts |
 |---|---|
 | `http/cross-site` | Cookie-authenticated mutations without a matching `Origin`, with `Sec-Fetch-Site: cross-site`, or with a non-JSON content type are refused; bearer requests ignore cookies (T5) |
-| `http/headers` | CSP, HSTS, COOP, Referrer-Policy per route; `no-store` on `/api` and `/go` |
+| `http/headers` | CSP, HSTS, COOP, Referrer-Policy per route; `no-store` on `/api` and `/go`, except an operation that declares its own cache lifetime (`GET /api/config`, 60 s) |
 | `auth/enumeration` | Login, reset, registration and invitation endpoints return identical status, body shape and timing class for known and unknown emails (T8) |
 | `auth/sessions` | Rotation on login, MFA and privilege change; revocation takes effect on the next request; hashes only at rest (T4) |
 | `auth/rate-limits` | Limits hold per IP and per account; `X-Forwarded-For` beyond the trusted hops is ignored (T9) |
 | `egress/ssrf` | Private, loopback, link-local, CGNAT, metadata, IPv6-mapped and DNS-rebinding targets are refused, including after redirects; size and time caps hold (T6) — against a local DNS stub and HTTP servers, never the internet |
 | `go/resolution` | Only accessible, forwarding-enabled bookmarks resolve; non-http(s) destinations are never stored or redirected; disambiguation and remembered choices (T12) |
 | `import/hostile` | Oversized, deeply nested, malformed and script-laden JSON/Netscape files are rejected or neutralised (T13) |
-| `machine` routes | An event with a missing, wrong or stale signature changes nothing; duplicate deliveries apply once; an older event never overwrites newer state. Cloud's billing-event suite extends this in the Cloud repository (T10) |
+| `machine` routes | An event with a missing, wrong or stale signature changes nothing; duplicate deliveries apply once; an older event never overwrites newer state; no session or token principal is derived. Machine routes are not behind the rate-limit port (the signature check is their control, doc 04 §7). Cloud's billing-event suite extends this in the Cloud repository (T10) |
 
 ---
 
@@ -188,12 +188,15 @@ Workflows in this repository use a portable shape where it costs nothing: every 
 
 | Workflow | Trigger | Jobs |
 |---|---|---|
-| `ci.yml` | push to any branch, PRs | `lint` · `typecheck` · `unit` · `contracts` (T3) · `integration` (Postgres service) · `build` (incl. `docker build` of the image, not pushed) · `audit` (`pnpm audit --audit-level=high` + OSV scan) — all parallel after a shared install with Turbo cache |
-| `e2e.yml` | push to `dev`, PRs to `main` | Build image → Playwright (CE journeys) |
+| `ci.yml` | push to any branch, PRs | `lint` · `typecheck` · `unit` · `contracts` (T3) · `integration` (Postgres service, a matrix over PostgreSQL 17 and 18, Q3) · `build` (incl. `docker build` of the image, not pushed) · `audit` (`pnpm audit --audit-level=high` + OSV scan) — all parallel after a shared install with Turbo cache |
+| `e2e.yml` | push to `dev`, PRs to `main` | Build image → Playwright (CE journeys) against PostgreSQL 17 and 18 |
 | `codeql.yml` | push to `dev`/`main`, weekly | CodeQL JavaScript/TypeScript |
-| `release.yml` | push to `main` with a bumped `apps/slugbase` version | Build, SBOM + provenance, push `slugbase/slugbase:<version>` (registry per Q12), draft GitHub Release |
+| `release.yml` — build | push to `main` with a bumped `apps/slugbase` version | Build from the commit CI tested; SBOM (SPDX) + provenance; cosign keyless signature (GitHub OIDC identity of this workflow on `main`, Q17); push `:<version>` (and `:<major>.<minor>` for a version without a pre-release suffix) to the public registry named in Q12; create a **draft** GitHub Release. `:latest` is not touched |
+| `release.yml` — publish | the GitHub Release is published | Re-verify the signature of the digest, then point `:latest` and `:<major>.<minor>` at it. A pre-release (for example `1.0.0-rc.1`) never moves either. A version tag that already exists is refused |
 | `nightly.yml` | schedule | T5: performance budgets, migration timing, full browser matrix |
 | `issue-status.yml` | issue/label events | Vendored by `setup`; drives `status:*` and auto-assign |
+
+`release.yml` runs only on a push to `main` or a published release, never for a pull request from a fork, and holds no secret beyond the workflow token and the permission to push the image and write the signature (doc 10 T16). The digest that is signed is the digest that is pushed and later tagged. `scripts/verify-image.sh <tag>` runs `cosign verify` and `cosign verify-attestation` against that identity so operators can check an image; it fails on an unsigned image and on one signed by another workflow. When each of these starts is in Q92: the release candidate of Phase 4 carries SBOM and provenance; signing and the public package come in Phase 6.
 
 ### 6.3 Workflows — Cloud
 

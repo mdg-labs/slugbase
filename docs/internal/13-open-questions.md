@@ -4,7 +4,7 @@ Every question raised while writing docs 00–12 is **decided** (2026-10-08). A 
 
 **Some questions concern only SlugBase Cloud** (its infrastructure, billing, prices and legal texts). They are recorded in the Cloud documentation. Their numbers stay here, in the index and as one-line stubs, so every citation still resolves. Where a question has a general half and a Cloud half, this document keeps the general half.
 
-Numbers are stable: Q1–Q19 come from docs 00–01, Q20–Q39 from 02–03, Q40–Q59 from 04–05, Q60–Q79 from 06, 07 and 11, Q80–Q99 from 08–10 and 12. Unused numbers stay free; numbers are never reused.
+Numbers are stable: Q1–Q19 come from docs 00–01, Q20–Q39 from 02–03, Q40–Q59 from 04–05, Q60–Q79 from 06, 07 and 11, Q80–Q99 from 08–10 and 12. Q90 and above record gaps found while the detailed plan was derived from the docs, each adopted as the recommended default. Unused numbers stay free; numbers are never reused.
 
 ### Status legend
 
@@ -73,6 +73,7 @@ Numbers are stable: Q1–Q19 come from docs 00–01, Q20–Q39 from 02–03, Q40
 | Q8 | AI suggestions through the OpenAI-compatible adapter; the provider is configuration | Decided (maintainer) |
 | Q9 | One generic SMTP adapter for every deployment | Decided (maintainer) |
 | Q66 | Errors through `ErrorReportPort`; internal `/metrics` endpoint; no metrics stack required | Settled → D27 (maintainer) |
+| Q90 | An AI endpoint on a private address is refused unless the operator lists its exact host in an allowlist for the AI endpoint | Decided (default) |
 
 ### Infrastructure and operations
 
@@ -96,6 +97,7 @@ Numbers are stable: Q1–Q19 come from docs 00–01, Q20–Q39 from 02–03, Q40
 | Q12 | Built in the public CE repository's CI on GitHub-hosted runners and published to `ghcr.io/mdg-labs/slugbase` (public) | Decided (default) |
 | Q17 | Build SBOM (SPDX) and SLSA provenance attestations with BuildKit for every image | Decided (default) |
 | Q18 | None | Decided (default) |
+| Q92 | Release signing and registry timing: SBOM and provenance from the first release candidate, cosign signing and the public package in Phase 6, `:latest` only from a published release | Decided (default) |
 | Q56 | CE takes two URLs — `DATABASE_URL` (`slugbase_app`) and `DATABASE_MIGRATE_URL` (`slugbase_migrator`) — and the published compose file provisions… | Decided (default) |
 
 ### Stack and process
@@ -107,6 +109,8 @@ Numbers are stable: Q1–Q19 come from docs 00–01, Q20–Q39 from 02–03, Q40
 | Q51 | Declarative SQL files under `packages/db/src/sql/` (policies, grants, `SECURITY DEFINER` functions, triggers), emitted into the generated… | Decided (default) · confirmed by the first code in Phase 1 |
 | Q52 | CI rejects destructive or table-rewriting steps unless the PR carries `migration:contract` and the dropped object was unused in the previous release | Decided (default) |
 | Q85 | Ladle | Decided (default) |
+| Q91 | Identifiers (UUIDv7) are generated in the application, not by a database function | Decided (default) |
+| Q93 | Generic extension points for composed deployments, listed in one place in doc 01 | Decided (default) |
 
 ### Security
 
@@ -123,6 +127,14 @@ Numbers are stable: Q1–Q19 come from docs 00–01, Q20–Q39 from 02–03, Q40
 | Q31 | An invitation token proves control of the email, so an account created through it is verified at once, even when `EMAIL_VERIFICATION_REQUIRED=true` | Decided (default) |
 | Q32 | Automatic linking to an existing account only when the provider asserts `email_verified=true` for a matching email | Decided (default) |
 | Q44 | The instance-admin routes are mounted on both editions | Decided (default) |
+| Q94 | Workspace creation by ordinary accounts is off by default, read from the composition root; the instance setting overrides it | Decided (default) |
+| Q100 | Cloud decision | Cloud — recorded in the Cloud documentation |
+| Q101 | Cloud decision | Cloud — recorded in the Cloud documentation |
+| Q102 | Cloud decision | Cloud — recorded in the Cloud documentation |
+| Q103 | Cloud decision | Cloud — recorded in the Cloud documentation |
+| Q104 | Cloud decision | Cloud — recorded in the Cloud documentation |
+| Q105 | Cloud decision | Cloud — recorded in the Cloud documentation |
+| Q106 | Cloud decision | Cloud — recorded in the Cloud documentation |
 
 ### Product behaviour
 
@@ -226,7 +238,7 @@ Recorded in the Cloud documentation.
 ### Q69 — Machine routes and the Origin check
 **Status:** Decided (default) · **Affects:** doc 01 §4 step 5, Cloud doc 06 §4.3, doc 10
 
-**Decision: routes may declare `audience: 'machine'` at registration; such a route never reads the session cookie or a bearer token, is rate-limited, and the declaration is listed in the threat model's entry points.** CE registers no machine route. A composition may register one for a server-to-server callback that authenticates by signature, such as a billing service's signed event endpoint; Cloud's is recorded in the Cloud documentation.
+**Decision: routes may declare `audience: 'machine'` at registration; such a route never reads the session cookie or a bearer token, is not behind the rate-limit port (its signature check, and the deployment's edge rules, are its control; doc 04 §7), and the declaration is listed in the threat model's entry points.** CE registers no machine route. A composition may register one for a server-to-server callback that authenticates by signature, such as a billing service's signed event endpoint; Cloud's is recorded in the Cloud documentation.
 Doc 01 has "no exemption list"; a server-to-server callback can't carry our Origin. Making the exemption a typed property of an unauthenticated route keeps it explicit, reviewable and impossible to combine with ambient credentials.
 
 ### Q70 — Scope of the archive selection rule
@@ -294,7 +306,7 @@ User docs have a different review bar and cadence than code; one site for both e
 ### Q8 — AI suggestion provider
 **Status:** Decided (maintainer) · **Due:** Phase 4 (AI feature) · **Affects:** doc 01 §6, Cloud doc 11 (subprocessors), D17
 
-**Decision: AI suggestions go through the OpenAI-compatible adapter (small model, no training on inputs). The provider is configuration: an EU provider or a self-hosted model.** AI stays off until a provider is configured. Cloud's provider, and when it is switched on, is recorded in the Cloud documentation.
+**Decision: AI suggestions go through the OpenAI-compatible adapter (small model, no training on inputs). The provider is configuration: an EU provider or a self-hosted model.** AI stays off until a provider is configured. A self-hosted model on a private address is allowed only through the operator allowlist of Q90. Cloud's provider, and when it is switched on, is recorded in the Cloud documentation.
 
 ### Q9 — Transactional mail relay
 **Status:** Decided (maintainer) · **Due:** Phase 2 (verification mails) · **Affects:** doc 01 §6, Cloud doc 07, Cloud doc 11
@@ -307,6 +319,12 @@ Keeping one SMTP interface for both editions means CE operators use the same ada
 
 **Decision: errors are reported through `ErrorReportPort` to an error tracker that speaks the Sentry SDK protocol (optional on CE). Container and host metrics and logs come from the deployment platform; an uptime monitor checks `/health`. No Prometheus or Grafana is required; the app keeps its internal `/metrics` endpoint, unscraped at launch.**
 Cloud's backends are recorded in the Cloud documentation.
+
+### Q90 — An AI endpoint on a private address
+**Status:** Decided (default) · **Due:** Phase 4 (AI feature) · **Affects:** doc 01 §6 (`EgressPort`, `AiSuggestPort`), doc 10 T6 and §5, doc 08 §3.5 (`egress/ssrf`), Q8
+
+**Decision: an AI endpoint on a private, loopback or link-local address is refused unless the operator lists its exact host in an allowlist that applies to the AI endpoint only.** The AI settings are `AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL` and `AI_PROVIDER_NAME`; the allowlist is one more operator setting next to them. An entry matches a single host, never a network range, and member input can neither add nor widen it. The allowlisted host is otherwise treated like any other target: the egress adapter resolves DNS itself and pins the validated address, redirects are re-validated hop by hop (a redirect away from the host is refused unless it is public), and the size and time caps apply. Metadata, favicon and OIDC discovery fetches have no allowlist. The `egress/ssrf` suite keeps every case and gains one: an allowlisted private host works for AI requests and for nothing else.
+Q8 allows a self-hosted model, which usually listens on a private address, while T6 refuses private addresses with no exception. A public reverse proxy in front of the model would also work but moves the burden to every self-hoster; a general private-address exception is rejected because it would turn the metadata fetcher into an internal probe (T6).
 
 ---
 
@@ -334,7 +352,7 @@ Key IDs make rotation routine without a key-management service.
 **Status:** Settled → D25 (maintainer) · **Due:** Phase 1 · **Affects:** Cloud doc 07 §4.3, §5.2
 
 **Decision: CE migrates on startup; a managed deployment may run `migrate` as a separate step before rollout instead.**
-- **CE:** the server migrates on startup under a Postgres advisory lock with `lock_timeout` (Q56).
+- **CE:** the image entrypoint runs `migrate` under a Postgres advisory lock with `lock_timeout` (Q56) and only then starts the server, without the migrator URL in its environment; `/ready` stays `503` until the database is at the expected migration level. The in-process variant used by the single-container mode (Q11) migrates inside the process and serves the probes first.
 - **Managed deployment:** `MIGRATE_ON_START=false`, and the deploy runs `migrate` from the new image before anything rolls out; a failed migration stops the deploy. Cloud does this; its mechanics are recorded in the Cloud documentation.
 - **Rules for both,** because they come from rolling updates: expand/contract (D7); fast, schema-only migrations, with backfills and `CREATE INDEX CONCURRENTLY` as worker jobs; contract steps only in a later release (Q52); `lock_timeout`.
 
@@ -364,7 +382,7 @@ In-process validation with IP pinning closes DNS rebinding; a proxy adds defence
 **Status:** Decided (default) · **Due:** Phase 2 · **Affects:** doc 01 §1, doc 05, doc 07 (CE packaging)
 
 **Decision: PostgreSQL 17 and 18 supported; CI runs the integration suite against both; the compose file ships 18.**
-Many operators run a distro or managed Postgres a major behind. Nothing in the design needs 18-only features; a feature that does would raise the floor deliberately.
+Many operators run a distro or managed Postgres a major behind. Nothing in the design needs 18-only features: identifiers are generated in the application (Q91), not by an 18-only database function. A feature that does need one would raise the floor deliberately.
 
 ### Q11 — Single-container CE mode
 **Status:** Decided (default) · **Due:** Phase 6 (CE packaging) · **Affects:** doc 01 §2.1, doc 07 (CE packaging)
@@ -376,7 +394,7 @@ Some operators (NAS app stores, PaaS) only run one container. The same code path
 **Status:** Decided (default) · **Due:** Phase 6 · **Affects:** doc 01 §2.2, Cloud doc 07, doc 09
 
 **Decision: built in the public CE repository's CI on GitHub-hosted runners and published to `ghcr.io/mdg-labs/slugbase` (public); tags `:<semver>`, `:<major>.<minor>`, `:latest` only on a published release.**
-Operators expect a public registry without credentials. Cloud images never go to GHCR.
+Operators expect a public registry without credentials. Cloud images never go to GHCR. When signing starts and when the package becomes public is in Q92.
 
 ### Q17 — Image signing and provenance
 **Status:** Decided (default) · **Due:** Phase 6 (CE release) · **Affects:** doc 01 §10, Cloud doc 07, doc 09
@@ -395,6 +413,12 @@ A privacy-positioned, self-hostable product earns trust by default silence; adop
 
 **Decision: CE takes two URLs — `DATABASE_URL` (`slugbase_app`) and `DATABASE_MIGRATE_URL` (`slugbase_migrator`) — and the published compose file provisions both roles with a Postgres init script. If only `DATABASE_URL` is set and it is the database owner, the server refuses to start in production with a message explaining the two-role setup (`SLUGBASE_ALLOW_OWNER_CONNECTION=true` overrides, logged as a warning).**
 Running the app as the table owner silently disables RLS (owners bypass non-forced policies, and `FORCE` still lets the owner `ALTER` them away), so the RLS layer of D8 would not exist on such installs. The override exists for operators with managed Postgres that makes extra roles awkward.
+
+### Q92 — Release signing and registry timing
+**Status:** Decided (default) · **Due:** Phase 4 for the release candidate, Phase 6 for signing and the public package · **Affects:** doc 08 §6.2 (`release.yml`), doc 10 T16, doc 12 Phases 4 and 6, Q12, Q17
+
+**Decision: the release candidate of Phase 4 is built by `release.yml` with SBOM and provenance attached and is pushed with its pre-release tag only; `:latest` and `:<major>.<minor>` do not move. Signing with cosign (keyless, the release workflow's identity on `main`), `scripts/verify-image.sh` and the switch of the registry package to public come in Phase 6, before 1.0.0. From then on every pushed image is signed, `:<semver>` and `:<major>.<minor>` are pushed when a release is built, and `:latest` (with `:<major>.<minor>`) moves only when the GitHub Release is published, after the signature of that digest is re-verified. A pre-release never moves either tag, and an existing version tag is never overwritten.**
+The registry is the one named in Q12. Making the package public late keeps an unsigned candidate from becoming the thing operators pull; the first image documented for operators is one they can verify.
 
 ---
 
@@ -429,6 +453,18 @@ Expand/contract is what makes rolling deploys with several replicas safe; agents
 
 **Decision: Ladle.**
 Vite-native, fast, small; enough for documenting coss components, SlugBase particles and page compositions with the a11y check. Storybook is the alternative if visual-regression tooling that needs it (Chromatic-style) is wanted later.
+
+### Q91 — Identifiers are generated in the application
+**Status:** Decided (default) · **Due:** Phase 1 · **Affects:** doc 01 (identifier generation), doc 05 §1 (conventions), doc 08 §3.1 (`SequenceIds`), Q3
+
+**Decision: primary keys are UUIDv7 values generated in the application and passed on insert; no column default calls a database id function.** The tables keep `uuid` primary keys. Tests replace the generator with `SequenceIds` (doc 08 §3.1).
+PostgreSQL 18 has a built-in `uuidv7()`, but Q3 supports 17 and CI runs 17 and 18. Generating in the application keeps one behaviour on both versions, keeps keys time-ordered for index locality, and makes ids available before the insert (for audit events and domain events in the same transaction).
+
+### Q93 — Extension points for composed deployments
+**Status:** Decided (default) · **Due:** Phase 2 (each point lands with the flow it guards) · **Affects:** doc 01 (the section "Extension points for composed deployments"), doc 09 §3.1, D3
+
+**Decision: CE defines the seams a composition needs as generic, named extension points, listed in one section of doc 01, each with its name, signature, the moment it runs and a default that does nothing.** There are five: a seat check when an invitation is accepted; a veto before a workspace or an account is deleted; an archive operation a composition can call (archiving bookmarks when an entitlement shrinks); a source for the browser error-reporting DSN; and a registration hook (sign-up policy). None names a deployment or a product; a composition that registers nothing gets CE behaviour.
+A composition that needs behaviour CE does not offer must not fork CE code (D3, kill criterion in doc 12): the missing seam is designed in CE first. Writing the five down before the first flow that needs them keeps those flows from hard-coding an assumption.
 
 ---
 
@@ -495,10 +531,16 @@ Asking an invited person to verify an address they have just proven is pure fric
 Linking on unverified email is a classic account-takeover path: an attacker registers the victim's email at a permissive provider. Off-by-default auto-create keeps CE instances admin-curated.
 
 ### Q44 — `/instance/*` on Cloud
-**Status:** Decided (default) · **Due:** Phase 1 · **Affects:** doc 04 §10.10, Cloud doc 07 §6
+**Status:** Decided (default) · **Due:** Phase 2 · **Affects:** doc 04 §10.10, Cloud doc 07 §6
 
 **Decision: the instance-admin routes are mounted on both editions. A deployment that must never have an instance admin turns `POST /setup` off by config (`SETUP_ENABLED=false`) and its composition root refuses to set `is_instance_admin`.** Cloud does both; its details are recorded in the Cloud documentation.
 Mounting them conditionally would be an edition branch (D4). Risk to watch: on a fresh deployment of that kind, `POST /setup` must be closed by config before the domain is public.
+
+### Q94 — Who may create workspaces
+**Status:** Decided (default) · **Due:** Phase 2 · **Affects:** doc 02 §3.2 and §11.3 (`allow_workspace_creation`), doc 01 §7.1, D4
+
+**Decision: ordinary accounts may create workspaces only when `allow_workspace_creation` is on. The default is read from the composition root: off on CE, on for a managed deployment that composes CE with its own defaults. The instance setting, once an instance admin sets it, overrides the default.** There is no edition flag (D4): the difference is a default supplied by the composition.
+A self-hosted instance is usually one team that should not grow workspaces by accident; a public sign-up service needs every account to have somewhere to work.
 
 ---
 

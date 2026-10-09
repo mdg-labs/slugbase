@@ -29,7 +29,7 @@ Phases 2–4 run CE-first: each CE capability is picked up by Cloud through a pi
 
 **Starts before any feature code**, the same discipline as Hoserva's Phase 1 foundation: the test harness, the contracts pipeline and the security chain exist before the first product operation, so every later item lands into them.
 
-**Scope (CE, `mdg-labs/slugbase`):** new public repository (the first implementation's repository is retired first, §3); `LICENSE` (AGPL-3.0), `SECURITY.md` (contact `support@slugbase.app` plus private vulnerability reporting, Q86), `CONTRIBUTING.md` with DCO sign-off and the CLA (CLA Assistant check on pull requests; no outside code merged before it, Q80), `TRADEMARK.md`; workflow vendored (full profile), `workflow.json` and `CLAUDE.md` per doc 09 §5; docs moved in (doc 09 §7) with `docs/internal/10-threat-model.md`; labels; CI (doc 08 §6.2); the package skeleton with boundary lint; `contracts` → OpenAPI generation and drift check; API Extractor reports; `db` with roles, `withTenant`, the RLS policy lint and the template-database test harness; the cross-tenant matrix runner (empty, but wired to the contract); `server` with the full middleware chain, config schema, `/health` `/ready` `/version`, graceful shutdown, `server|worker|migrate` commands; pg-boss wiring; the egress adapter with its SSRF suite; secret box; rate-limit adapter; `web` shell with coss ui installed into `@slugbase/ui`, tokens from the V1 prototype, TanStack Router, i18n, the slot system, error pages; MSW mock generation; `apps/slugbase` image; `compose.dev.yml`.
+**Scope (CE, `mdg-labs/slugbase`):** new public repository (the first implementation's repository is retired first, §3); `LICENSE` (AGPL-3.0), `SECURITY.md` (contact `support@slugbase.app` plus private vulnerability reporting, Q86), `CONTRIBUTING.md` with DCO sign-off and the CLA (CLA Assistant check on pull requests; no outside code merged before it, Q80), `TRADEMARK.md`; workflow vendored (full profile), `workflow.json` and `CLAUDE.md` per doc 09 §5; docs moved in (doc 09 §7) with `docs/internal/10-threat-model.md`; labels; CI (doc 08 §6.2); the package skeleton with boundary lint; `contracts` → OpenAPI generation and drift check; API Extractor reports; `db` with roles, `withTenant`, the RLS policy lint and the template-database test harness; the cross-tenant matrix runner (empty, but wired to the contract); `server` with the full middleware chain, config schema, `/health` `/ready` `/version`, graceful shutdown, `server|worker|migrate` commands; pg-boss wiring; the egress adapter with its SSRF suite; secret box; rate-limit adapter; `web` shell with coss ui installed into `@slugbase/ui`, tokens from the V1 prototype, TanStack Router, i18n, the slot system, error pages; MSW mock generation; `apps/slugbase` image; `compose.dev.yml` and the published `compose.yml`.
 
 The Cloud part of Phase 1 (the composition root built on CE's seams, its image and deployment) is planned in the Cloud roadmap.
 
@@ -57,21 +57,21 @@ Bookmarks (modal create/edit, hard delete), folders, member-private tags, pinnin
 
 ### Phase 4 — Collaboration, administration, AI, import/export
 
-Teams, sharing of bookmarks and folders (direct, team, folder-transitive), "shared with me / by me" scopes, the audit log UI, AI suggestions behind the AI port (OpenAI-compatible adapter, operator-configured, per-workspace toggle, per-member opt-out), lossless JSON export and import, Netscape HTML import, the CE backup documentation (export + `pg_dump`).
+Teams, sharing of bookmarks and folders (direct, team, folder-transitive), "shared with me / by me" scopes, the audit log UI, AI suggestions behind the AI port (OpenAI-compatible adapter, operator-configured, per-workspace toggle, per-member opt-out; a private-address endpoint only through the operator allowlist of Q90), lossless JSON export and import, Netscape HTML import, the CE backup documentation (export + `pg_dump`, in `docs/self-hosting/`, doc 09 §7).
 
 **Epics:** *Teams and sharing* · *Audit log* · *AI suggestions* · *Import and export* · *CE operations docs*.
 
-**Definition of done:** the v1 scope of doc 00 §4 is complete for CE; export → import into a fresh workspace round-trips byte-equivalent content (e2e); CE `1.0.0-rc.1` image published.
+**Definition of done:** the v1 scope of doc 00 §4 is complete for CE; export → import into a fresh workspace round-trips byte-equivalent content (e2e); CE `1.0.0-rc.1` image published (SBOM and provenance attached, `:latest` untouched; signing and the public package follow in Phase 6, Q92).
 
 ### Phase 5 — Cloud-only — planned in the Cloud roadmap
 
 ### Phase 6 — Launch hardening and launch
 
-The CE part: full `/security-audit` against doc 10, with every Critical/High fixed through advisories; dependency and image scanning clean; performance budgets on production-sized data; the CE operations docs; end-user docs at docs.slugbase.app (`/customer-docs`); CE `1.0.0` release and public announcement. The Cloud part of launch hardening is planned in the Cloud roadmap.
+The CE part: full `/security-audit` against doc 10, with every Critical/High fixed through advisories; dependency and image scanning clean; performance budgets on production-sized data; the CE operations docs; end-user docs at docs.slugbase.app (`/customer-docs`); CE `1.0.0` release and public announcement: the image signed with cosign and its package public, `:latest` moved only by the published release (Q92); the operator documentation in `docs/self-hosting/` and the release notes in `docs/releases/` (doc 09 §7). The Cloud part of launch hardening is planned in the Cloud roadmap.
 
 **Epics:** *Security audit and fixes* · *Load and performance* · *CE operations docs* · *User documentation* · *CE 1.0.0 release*.
 
-**Definition of done:** CE 1.0.0 image published.
+**Definition of done:** CE 1.0.0 image published, signed and verifiable with `scripts/verify-image.sh`.
 
 ### Phase 7 — Cloud-only — planned in the Cloud roadmap
 

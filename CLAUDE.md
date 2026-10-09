@@ -12,13 +12,13 @@ A keyboard-driven bookmark manager where every link can get a short, private slu
 SlugBase is a keyboard-driven bookmark manager where any bookmark can carry a private slug that forwards through
 `/go/<slug>`, with a ⌘K command palette. This repository is the public Community Edition (AGPL-3.0) and every
 package SlugBase Cloud builds on. TypeScript strict on Node 24, pnpm + Turborepo; Hono API with Zod contracts and a
-generated OpenAPI 3.1 document; PostgreSQL 18 only, Drizzle with generated migrations and row-level security;
+generated OpenAPI 3.1 document; PostgreSQL 17 and 18, Drizzle with generated migrations and row-level security;
 pg-boss jobs; React 19 + Vite SPA with TanStack Router/Query and coss ui (Base UI + Tailwind v4); EN + DE.
 Cloud (the private Cloud repository) composes these packages from a pinned submodule.
 
 ### Design docs
 
-`docs/internal/` 00–13. Decisions D1–D29 are settled (doc 00 §5); every Qn in doc 13 was decided on 2026-10-08, by the
+`docs/internal/` 00–13. Decisions D1–D29 are settled (doc 00 §5); every Qn in doc 13 is decided, by the
 maintainer or by adopting its recommended default. Precedence on conflict: 00 decision log > 01 architecture > 02 product spec > 03 web UI spec >
 04/05 > the rest. Cite as `doc 02 §8`, `D8`, `Q5`. Threat model: `docs/internal/10-threat-model.md` (doc 10). Docs 06, 07 and 11 live in the private Cloud repository; they are referenced here only by number.
 
@@ -52,7 +52,7 @@ maintainer or by adopting its recommended default. Precedence on conflict: 00 de
 - **Worker:** `packages/server/src/worker/` (job and schedule registration).
 - **Web:** `packages/web/src/create-web-app.tsx`, routes under `packages/web/src/routes/`.
 - **Composition (CE):** `apps/slugbase/src/main.ts`, `apps/slugbase/src/web.tsx`.
-- **Release surfaces:** the `slugbase/slugbase` image built by `.github/workflows/release.yml`.
+- **Release surfaces:** the CE image built and signed by `.github/workflows/release.yml` and published to the public registry named in Q12.
 
 A capability is reachable when an operation in `openapi.json` or a route in `packages/web/src/routes/` uses it,
 and `apps/slugbase` wires it.
@@ -84,8 +84,10 @@ and `apps/slugbase` wires it.
 - TypeScript strict, no `any`, no `console.*` (use the logger), no `@ts-ignore` without an issue link.
 - A new environment variable lands in the env schema, `.env.example` (name only, no value) and doc 07's key inventory
   (its CE self-host section for CE keys) in the same commit (D24). Booleans parse with `envBoolean()`.
-- `migrate` is the only code path that applies migrations; CE calls it on startup under the advisory lock with
-  `lock_timeout`, and migrations stay fast and schema-only (backfills and concurrent index builds are worker jobs) (D25).
+- `migrate` is the only code path that applies migrations; the CE image entrypoint runs it before the server starts, under
+  the advisory lock with `lock_timeout`, and migrations stay fast and schema-only (backfills and concurrent index builds
+  are worker jobs) (D25).
+- Identifiers are generated in the application (UUIDv7, Q91), never by a database function.
 - Flag v1 non-goals (doc 00 §4) and ask before building one.
 
 ### Risk review
