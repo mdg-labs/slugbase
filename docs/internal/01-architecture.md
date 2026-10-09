@@ -31,7 +31,7 @@
 
 ### Why TypeScript and not Go
 
-Go (as in Hoserva) would give a single static binary and lower memory per process. It was declined for SlugBase because:
+Go would give a single static binary and lower memory per process. It was declined for SlugBase because:
 
 - **The billing service SlugBase Cloud integrates with is TypeScript too** (D29). One stack across both lets agents change both sides of the billing integration in one idiom.
 - **The workload is I/O-bound.** SlugBase's hot paths are indexed lookups (`/go`, lists, search). Node handles them at thousands of requests per second per core-bound process; CPU is not the scaling limit — Postgres is (§9).
@@ -263,6 +263,40 @@ Billing data does not live in SlugBase's database; it stays in the billing servi
 
 What Cloud may depend on, and therefore what CE must keep stable or version: the `createServer`/`createWebApp` signatures, the port interfaces, the module interface including the hooks of §13, the domain event catalog, the web slot names, the exported repositories and authorization helpers, and the `public` schema. Each lives in an explicitly exported entry point; anything not exported is not a contract.
 
+### 7.5 The entitlement catalog
+
+Entitlement keys are a closed, typed catalog in `@slugbase/core` (`entitlements/catalog.ts`). Adding a key is a contract change (§7.4). CE owns the catalog, the evaluation and the enforcement points; a composition supplies only the values, through `EntitlementSource` (§6). Which values a plan carries is not part of this document: plan values belong to the composition that sells plans (for Cloud, its own documentation).
+
+| Key | Scope | Type | CE value | Gates |
+|---|---|---|---|---|
+| `bookmarks.max` | workspace | number or `unlimited` | `unlimited` | Creating a bookmark, importing, restoring from the archive |
+| `ai.suggestions` | workspace | boolean | `true` (still needs a configured `AiSuggestPort` and the workspace toggle) | The AI suggestion endpoint and UI |
+| `sharing.members` | workspace | boolean | `true` | Sharing a bookmark or folder with an individual member |
+| `sharing.teams` | workspace | boolean | `true` | Sharing with teams; teams as sharing targets |
+| `members.invite` | workspace | boolean | `true` | Creating invitations and accepting them |
+| `teams.manage` | workspace | boolean | `true` | Teams administration (create, edit, membership) |
+| `audit.log` | workspace | boolean | `true` | Reading the audit log (audit events are always written; only reading is gated) |
+| `seats.max` | workspace | number or `unlimited` | `unlimited` | The member ceiling (accepted invitations count, pending ones do not) |
+| `workspaces.ownMax` | **account** | number or `unlimited` | `unlimited` | Creating a workspace (counts the workspaces the account owns) |
+
+These are not entitlements on any edition: personal API tokens, folders, tags, slugs, `/go`, the command palette, import and export, MFA and OIDC sign-in. `workspaces.ownMax` is scoped to the account so that creating many workspaces cannot multiply a per-workspace limit. An account that is only a member of other workspaces is not affected by it. A composition's source takes the maximum of `workspaces.ownMax` over all workspaces the account owns.
+
+**Evaluation.** `EntitlementService.for(workspaceId)` returns an immutable `EntitlementSet`, memoised per request. Every workspace row carries `entitlement_version`; any change to plan, archive state or an override increments it in the same transaction as the change, and the per-process cache is keyed by `(workspace_id, entitlement_version)` (§8.3). `GET /entitlements` (doc 04) returns the active workspace's set plus usage counters (`bookmarks.used`, `seats.used`, `workspaces.owned`) for the meters and gates in the UI. The UI hides or disables gated features and offers upgrades through the `entitlement.upgradeAction` slot, which renders nothing on CE. The API enforces independently of the UI.
+
+**Enforcement points.** Each check runs on the server, inside the transaction of the operation where it says so. Errors are problem documents (doc 04 §3).
+
+| Operation | Check | Failure |
+|---|---|---|
+| Create bookmark, import, restore from archive | `bookmarks.used + n <= bookmarks.max`, using the row-locked `bookmark_count` of the workspace (doc 05 §2.2), never `count(*)` | `422 bookmark_limit_reached` with `limit` and `used`; an import adds up to the limit and reports how many were skipped |
+| Create workspace | `workspaces.owned < workspaces.ownMax` | `422 workspace_limit_reached` |
+| AI suggestion | `ai.suggestions`, a configured port, the workspace toggle and the member not opted out | `403 entitlement_required`, or `503 ai_unavailable` |
+| Share with a member or a team | `sharing.members` or `sharing.teams` | `403 entitlement_required` |
+| Create or accept an invitation | `members.invite` on both; `seats.used < seats.max` on acceptance, inside the acceptance transaction through the seat check (§13.1) | `403 entitlement_required`; `422 seat_limit_reached` |
+| Teams administration | `teams.manage` | `403 entitlement_required` |
+| Read the audit log | `audit.log` | `403 entitlement_required` |
+
+**The archive rule.** A composition may archive bookmarks above `bookmarks.max` through the archive operation of §13.3 and restore them later. Which bookmarks it archives is the composition's rule. Archived bookmarks do not count in `bookmarks.used`.
+
 ---
 
 ## 8. Background work and shared state
@@ -399,7 +433,7 @@ Doc 10 is the threat model; this is the shape that implements it.
 
 ### 13.1 Seat check
 
-Runs inside the invitation-accept transaction, after the workspace row is locked and before the membership is inserted. The hook returns the seat limit (`null` means unlimited); CE counts the workspace's members under the lock and refuses with `422 seat_limit_reached` when the count already equals the limit, leaving the invitation pending and usable. Two people accepting the last free seat therefore never both succeed. Sending, resending and listing invitations never call the hook, and a pending invitation holds no seat. A registered hook replaces the value that the entitlement engine would supply; `member.joined` is emitted after a successful accept, so a module can recount.
+Runs inside the invitation-accept transaction, after the workspace row is locked and before the membership is inserted. The hook returns the seat limit (`null` means unlimited); CE counts the workspace's members under the lock and refuses with `422 seat_limit_reached` when the count already equals the limit, leaving the invitation pending and usable. Two people accepting the last free seat therefore never both succeed. Sending, resending and listing invitations never call the hook, and a pending invitation holds no seat. A registered hook replaces the value that the entitlement engine would supply, so a composition whose source already supplies `seats.max` needs the hook only when its limit differs from that entitlement; `member.joined` is emitted after a successful accept, so a module can recount.
 
 ### 13.2 Deletion veto
 
@@ -407,7 +441,7 @@ Runs before anything changes: before `DELETE /workspace` marks the workspace `de
 
 ### 13.3 Archive operation
 
-CE exports two core services that set and clear `plan_archived_at` (doc 02 §5.6) for the given bookmarks of one workspace: `archiveBookmarks` and `restoreBookmarks`. They run in a tenant transaction the caller already holds, are idempotent, ignore ids that do not belong to the workspace, are registered as named, audited system operations, write one audit event with the count (never titles or URLs), and bump nothing else. They do not choose *which* bookmarks to archive: that rule belongs to the caller. Archived bookmarks leave lists, counts, search, the palette, the dashboard and slug resolution, stay exportable (flagged) and can be deleted by their owner. CE itself never calls either service.
+CE exports two core services that set and clear `plan_archived_at` (doc 02 §5.6) for the given bookmarks of one workspace: `archiveBookmarks` and `restoreBookmarks`. They run in a tenant transaction the caller already holds, are idempotent, ignore ids that do not belong to the workspace, are registered as named, audited system operations, write one audit event with the count (never titles or URLs). In the same transaction they adjust the workspace's `bookmark_count` (doc 05 §2.2) by the number of rows whose state changed and increment its `entitlement_version` (§7.5). They change nothing else. They do not choose *which* bookmarks to archive: that rule belongs to the caller. Archived bookmarks leave lists, counts, search, the palette, the dashboard and slug resolution, stay exportable (flagged) and can be deleted by their owner. CE itself never calls either service.
 
 ### 13.4 Client error-report source
 

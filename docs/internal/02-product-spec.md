@@ -105,7 +105,7 @@ Self-service from Account settings, with typed confirmation of the email and a f
 
 ### 3.1 Workspace
 
-A workspace has a name (1–64 characters), a generated colour and monogram, a plan/entitlement state (doc 06), a billing linkage (Cloud, possibly empty) and timestamps. It owns all bookmarks, folders, tags, teams, slugs, go preferences, settings, invitations and audit events in it. There is no URL identifier for a workspace in v1 (old §23.4-6); the active workspace is carried by the session (doc 01 §5).
+A workspace has a name (1–64 characters), a generated colour and monogram, an entitlement state (doc 01 §7.5) and timestamps; it has no billing columns, and Cloud keeps a billing projection of its own. It owns all bookmarks, folders, tags, teams, slugs, go preferences, settings, invitations and audit events in it. There is no URL identifier for a workspace in v1 (old §23.4-6); the active workspace is carried by the session (doc 01 §5).
 
 ### 3.2 Creating workspaces
 
@@ -193,6 +193,8 @@ Creation and editing happen **only in the bookmark modal** — there is no bookm
 When the URL field loses focus (or on paste) and the URL is valid, the modal requests metadata (§5.4) and, if available, AI suggestions (§14); suggestions never overwrite a field the user has edited.
 
 **Duplicates** (Q27): if the owner already has a bookmark with the same canonical URL in this workspace, the modal shows a warning with a link to edit the existing one; saving a duplicate is allowed.
+
+Creating, deleting, importing, archiving and restoring bookmarks keep the workspace's `bookmark_count` (doc 05 §2.2) equal to the number of bookmarks that are not plan-archived, in the same transaction, and the creation check of the bookmark limit reads that counter (doc 01 §7.5).
 
 ### 5.3 Delete
 
@@ -299,7 +301,7 @@ Per member, per workspace: a mapping slug → bookmark. Listed and removable on 
 | Bookmark | a member, or a team | read the bookmark; resolve its slug |
 | Folder | a member, or a team | read the folder and every bookmark in it, now and later; resolve their slugs |
 
-Sharing requires `sharing.*` (doc 06); without it the share UI is hidden and the API refuses. Sharing is **read-only** in v1 (Q22). Sharing never crosses a workspace.
+Sharing requires `sharing.*` (doc 01 §7.5); without it the share UI is hidden and the API refuses. Sharing is **read-only** in v1 (Q22). Sharing never crosses a workspace.
 
 ### 8.2 Access matrix
 
@@ -353,7 +355,7 @@ The post-sign-in landing page:
 - **Most used tags**: top 12 own tags by bookmark count.
 - **Sharing**: counts shared with you / by you, linking to the scoped lists (shown only with `sharing.*`).
 - **Getting started** checklist, dismissible and restorable from Preferences: add a bookmark, give one a slug, set up the browser search engine, create a folder, import from the browser. Adding a bookmark, giving one a slug and creating a folder complete themselves from real state; setting up the browser search engine is marked by the member ("Mark as done" on the Forwarding page) and import by a completed import. The marks and the dismissal are stored as the account's onboarding state.
-- **Entitlement surfaces** (Cloud): usage against `bookmarks.max` and upgrade prompts, rendered through the entitlement slot (doc 01 §7.2, doc 06) — never by checking an edition.
+- **Entitlement surfaces** (Cloud): usage against `bookmarks.max` and upgrade prompts, rendered through the entitlement slot (doc 01 §7.2 and §7.5) — never by checking an edition.
 
 ---
 
@@ -392,7 +394,7 @@ List all accounts (name, email, verified, MFA, last sign-in, workspace count). A
 
 ## 12. Notifications by email
 
-The only notifications in v1 are transactional emails (no notification centre, doc 00 §4): signup verification, email change confirmation and notice, password reset, password changed, MFA enabled/disabled/reset, new sign-in from a new device (optional per account, default on; a sign-in counts as a new device when no live session of the account shares both the user-agent family and the stored IP prefix; it is never sent for the account's first session or a pending-MFA session, and shows the time, browser family and coarse network prefix, never a full address), invitation, ownership transferred to you, account disabled (CE), and the Cloud billing emails (doc 06). Every email is rendered in the recipient's language, has a plain-text part, contains no tracking pixels, and links only to the deployment origin.
+The only notifications in v1 are transactional emails (no notification centre, doc 00 §4): signup verification, email change confirmation and notice, password reset, password changed, MFA enabled/disabled/reset, new sign-in from a new device (optional per account, default on; a sign-in counts as a new device when no live session of the account shares both the user-agent family and the stored IP prefix; it is never sent for the account's first session or a pending-MFA session, and shows the time, browser family and coarse network prefix, never a full address), invitation, ownership transferred to you, account disabled (CE), and, in a composition that sells plans, the billing emails that composition adds. Every email is rendered in the recipient's language, has a plain-text part, contains no tracking pixels, and links only to the deployment origin.
 
 ---
 

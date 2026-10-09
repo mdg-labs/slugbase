@@ -163,7 +163,7 @@ Every error is an RFC 9457 problem document:
 | 422 | `url_not_allowed` | URL scheme not `http`/`https`, or host fails egress policy for a fetch |
 | 429 | `rate_limited` | With `Retry-After` and `RateLimit-*` headers (§7) |
 | 502 | `upstream_failed` | Metadata/AI/billing provider failed; the operation is retryable |
-| 503 | `unavailable` | Not ready (migrations pending, DB unreachable), the rate-limit store failed, or the port is unconfigured (`mail_unavailable`, `ai_unavailable` as `code`) |
+| 503 | `unavailable` | Not ready (migrations pending, DB unreachable), the rate-limit store failed, or the port is unconfigured (`mail_unavailable`, `ai_unavailable` and, for the CE billing adapter, `billing_unavailable` as `code`) |
 | 500 | `internal` | Everything else; logged with the request ID, reported through the error port |
 
 Field codes inside `errors[]` of a `422 validation_failed` or a `403 forbidden`:
