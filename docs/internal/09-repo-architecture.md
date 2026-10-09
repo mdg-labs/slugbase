@@ -33,6 +33,7 @@ slugbase/
 ├── TRADEMARK.md · SECURITY.md · CONTRIBUTING.md
 ├── package.json · pnpm-workspace.yaml · pnpm-lock.yaml · turbo.json · tsconfig.base.json
 ├── compose.dev.yml               local Postgres (+ Mailpit) for development and tests (doc 08 §1)
+├── compose.yml                   the published self-hosting stack: postgres, slugbase, slugbase-worker (doc 01 §2.1)
 ├── .nvmrc                        24
 │
 ├── .claude/                      vendored MDG Labs workflow (§5) + repo-owned workflow.json, rules, known-escapes.md
@@ -41,12 +42,15 @@ slugbase/
 │   ├── ISSUE_TEMPLATE/           from mdg-labs/skills templates/github (§5.5)
 │   └── actionlint.yaml
 ├── docs/
-│   ├── internal/                 these design docs (§7)
-│   └── threat-model.md           → doc 10, the path workflow.json threatModel names
+│   ├── internal/                 these design docs, including the threat model at 10-threat-model.md,
+│   │                             the path workflow.json `threatModel` names (§7)
+│   ├── self-hosting/             operator documentation: install, environment, reverse proxy, mail, OIDC,
+│   │                             backup and restore, upgrade, operations, security (§7)
+│   └── releases/                 release notes per version, the source of the draft GitHub Release (§7)
 │
 ├── packages/
-│   ├── contracts/                @slugbase/contracts — Zod schemas per operation, the OpenAPI generator,
-│   │                             generated openapi.json (committed) and generated TS client types (committed)
+│   ├── contracts/                @slugbase/contracts — Zod schemas per operation in src/operations/, the OpenAPI
+│   │                             generator, and generated/ with openapi.json and the TS client types (both committed)
 │   ├── core/                     @slugbase/core — domain services, port interfaces, entitlement engine,
 │   │                             authorization policies, domain events catalog; no I/O imports allowed
 │   ├── db/                       @slugbase/db — Drizzle schema, generated migrations, RLS policy SQL, roles,
@@ -57,8 +61,8 @@ slugbase/
 │   │                             Altcha, sentry-protocol errors, egress, secret box, pg rate limit,
 │   │                             no-op billing, full entitlements
 │   ├── email/                    @slugbase/email — React Email templates, EN/DE
-│   ├── ui/                       @slugbase/ui — coss ui components vendored with the shadcn CLI (D13),
-│   │                             SlugBase tokens and particles; components.json with the @coss registry
+│   ├── ui/                       @slugbase/ui — coss ui components vendored with the shadcn CLI (D13) into
+│   │                             src/components/ui/, SlugBase tokens and particles; components.json with the @coss registry
 │   ├── web/                      @slugbase/web — the SPA as a library: createWebApp({ extensions }),
 │   │                             routes, slots, i18n catalogs
 │   └── testing/                  @slugbase/testing — Postgres test harness, factories, two-workspace fixtures,
@@ -66,7 +70,8 @@ slugbase/
 │
 ├── apps/
 │   └── slugbase/                 the CE composition root: server main (CE adapters, no extra modules),
-│                                 web entry (no extensions), Dockerfile → image slugbase/slugbase
+│                                 web entry (no extensions), the embedded web build and build-info file that
+│                                 /version reads, Dockerfile and entrypoint → the CE image (name per Q12)
 │
 └── e2e/                          Playwright against the CE image (doc 08 §5)
 ```
@@ -78,12 +83,13 @@ Package boundaries are enforced by `eslint-plugin-boundaries` (or dependency-cru
 | `contracts` | `zod` | anything in the repo |
 | `core` | `contracts` | `db`, `server`, `adapters`, any I/O module (`node:net`, `node:http`, `fetch`, drivers) |
 | `db` | `core`, `contracts` | `server`, `adapters` |
-| `adapters` | `core`, `contracts` | `server`, `db` internals |
+| `adapters` | `core`, `contracts`, the public entry of `db` | `server`, `db` internals |
 | `server` | `core`, `db`, `contracts` | `adapters` (adapters are injected by the app) |
 | `web` | `contracts`, `ui` | `core`, `db`, `server` |
+| `ui`, `email` | no workspace package | every workspace package (widening needs an edit here) |
 | `apps/*` | everything | — |
 
-`fetch`, `node:http(s)` and `undici` are importable only inside `adapters/src/egress/` (doc 01 §10); the raw database handle only inside `db` (doc 01 §5.3).
+`fetch`, `node:http(s)` and `undici` are importable only inside `adapters/src/egress/` (doc 01 §10); the raw database handle only inside `db` (doc 01 §5.3); `@slugbase/testing` only from test files, `test/` folders and `apps/*` development tooling.
 
 ### 2.2 The private Cloud repository
 
@@ -109,12 +115,14 @@ Exactly the contracts listed in doc 01 §7.4, each exported from a named entry p
 | The `public` schema (tables, columns, enums Cloud references by foreign key) | `@slugbase/db` schema |
 | The HTTP API | `@slugbase/contracts` → `openapi.json` |
 
+The generic extension points a composition can use beyond these contracts (hooks with default no-op behaviour) are listed in one place in doc 01, under "Extension points for composed deployments".
+
 Every exported entry point has an **API Extractor report** (`packages/*/etc/*.api.md`) committed in CE. CI regenerates the reports and fails when they differ from the committed ones, so **a contract change is always visible in the diff** — the author has to commit the new report on purpose. Deep imports (`@slugbase/server/src/...`) are blocked by each package's `exports` map and by a lint rule in Cloud.
 
 ### 3.2 Pinning and bumping
 
 - `ce/` is a submodule. Cloud's **`dev`** may pin any CE commit reachable from CE `dev`; Cloud's **`main`** must pin a commit reachable from CE **`main`**. Cloud's CI enforces both, so production Cloud never runs unreviewed CE code.
-- **Bumping is an item.** A bump is a tracked issue in the private Cloud repository ("Bump CE to `<short-sha>`: <what Cloud gains>"), implemented by `/orchestrate` like any other: update the submodule, regenerate the Cloud lockfile, fix any contract fallout, pass the gate. One bump per CE promotion is the rhythm; bumping to a CE `dev` commit is allowed when a Cloud item needs an unreleased CE change.
+- **A bump is a pull request in the private Cloud repository,** opened or updated by a scheduled workflow there (CE never calls it): it moves the submodule pin, regenerates the Cloud lockfile and passes the gate; contract fallout is fixed in the same pull request or filed as an item. One bump per CE promotion is the rhythm; bumping to a CE `dev` commit is allowed when a Cloud item needs an unreleased CE change.
 - **Cloud never edits `ce/`.** The submodule is read-only from Cloud — a change CE needs is an item in `mdg-labs/slugbase` (the follow-up-item rule, §3.3). A lint rule and a CI check (`git -C ce status --porcelain` empty, pin unchanged except in bump commits) enforce it.
 
 ### 3.3 The follow-up-item rule
@@ -204,7 +212,7 @@ Then, per repository: fill `.claude/workflow.json` (§5.2) and the `## Agent wor
   "models": { "verifier": "opus", "refiner": "auto" },
   "ci": { "branchPrefix": "ci/", "watchTimeout": 5400 },
   "threatModel": "docs/internal/10-threat-model.md",
-  "securityAudit": { "exclude": ["packages/contracts/generated/**", "packages/db/migrations/**", "packages/ui/src/components/coss/**"] },
+  "securityAudit": { "exclude": ["packages/contracts/generated/**", "packages/db/migrations/**", "packages/ui/src/components/ui/**"] },
   "riskPaths": [
     "packages/db/**",
     "packages/server/src/http/**",
@@ -254,6 +262,8 @@ Then, per repository: fill `.claude/workflow.json` (§5.2) and the `## Agent wor
 }
 ```
 
+The vendored coss components live in `packages/ui/src/components/ui/` (doc 03); that one path is excluded from `securityAudit` here and from the review path filters in `.coderabbit.yaml`, so exactly one path is excluded everywhere.
+
 The private Cloud repository has its own `workflow.json`, recorded in the Cloud documentation (Cloud doc 09 §5.2). It reads its threat model, doc 10, from the pinned CE submodule.
 
 CE uses a DCO hook **plus a CLA** (Q80, decided): `CONTRIBUTING.md` explains both, a CLA Assistant check runs on every pull request, and no outside code is merged until the contributor has signed.
@@ -272,13 +282,13 @@ The fixed headings the vendored skills read, filled from these docs. This is the
 SlugBase is a keyboard-driven bookmark manager where any bookmark can carry a private slug that forwards through
 `/go/<slug>`, with a ⌘K command palette. This repository is the public Community Edition (AGPL-3.0) and every
 package SlugBase Cloud builds on. TypeScript strict on Node 24, pnpm + Turborepo; Hono API with Zod contracts and a
-generated OpenAPI 3.1 document; PostgreSQL 18 only, Drizzle with generated migrations and row-level security;
+generated OpenAPI 3.1 document; PostgreSQL 17 and 18, Drizzle with generated migrations and row-level security;
 pg-boss jobs; React 19 + Vite SPA with TanStack Router/Query and coss ui (Base UI + Tailwind v4); EN + DE.
 Cloud (the private Cloud repository) composes these packages from a pinned submodule.
 
 ### Design docs
 
-`docs/internal/` 00–13. Decisions D1–D29 are settled (doc 00 §5); every Qn in doc 13 was decided on 2026-10-08, by the
+`docs/internal/` 00–13. Decisions D1–D29 are settled (doc 00 §5); every Qn in doc 13 is decided, by the
 maintainer or by adopting its recommended default. Precedence on conflict: 00 decision log > 01 architecture > 02 product spec > 03 web UI spec >
 04/05 > the rest. Cite as `doc 02 §8`, `D8`, `Q5`. Threat model: `docs/internal/10-threat-model.md` (doc 10). Docs 06, 07 and 11 live in the private Cloud repository; they are referenced here only by number.
 
@@ -312,7 +322,7 @@ maintainer or by adopting its recommended default. Precedence on conflict: 00 de
 - **Worker:** `packages/server/src/worker/` (job and schedule registration).
 - **Web:** `packages/web/src/create-web-app.tsx`, routes under `packages/web/src/routes/`.
 - **Composition (CE):** `apps/slugbase/src/main.ts`, `apps/slugbase/src/web.tsx`.
-- **Release surfaces:** the `slugbase/slugbase` image built by `.github/workflows/release.yml`.
+- **Release surfaces:** the CE image built and signed by `.github/workflows/release.yml` and published to the public registry named in Q12.
 
 A capability is reachable when an operation in `openapi.json` or a route in `packages/web/src/routes/` uses it,
 and `apps/slugbase` wires it.
@@ -344,8 +354,10 @@ and `apps/slugbase` wires it.
 - TypeScript strict, no `any`, no `console.*` (use the logger), no `@ts-ignore` without an issue link.
 - A new environment variable lands in the env schema, `.env.example` (name only, no value) and doc 07's key inventory
   (its CE self-host section for CE keys) in the same commit (D24). Booleans parse with `envBoolean()`.
-- `migrate` is the only code path that applies migrations; CE calls it on startup under the advisory lock with
-  `lock_timeout`, and migrations stay fast and schema-only (backfills and concurrent index builds are worker jobs) (D25).
+- `migrate` is the only code path that applies migrations; the CE image entrypoint runs it before the server starts, under
+  the advisory lock with `lock_timeout`, and migrations stay fast and schema-only (backfills and concurrent index builds
+  are worker jobs) (D25).
+- Identifiers are generated in the application (UUIDv7, Q91), never by a database function.
 - Flag v1 non-goals (doc 00 §4) and ask before building one.
 
 ### Risk review
@@ -437,7 +449,15 @@ GitHub issue (status:ready, area:*, Fixes target) ──► /orchestrate ──�
 | 00, 01, 02, 03, 04, 05, 08, 09, 12, 13 | `mdg-labs/slugbase` `docs/internal/` | Public. Strip any line naming Cloud infrastructure first (a review step in the repo-bootstrap epic); doc 09's Cloud parts are Cloud doc 09 |
 | 10 | `mdg-labs/slugbase` `docs/internal/10-threat-model.md` | Public; the `threatModel` path |
 | 06 | Split: entitlement engine → `slugbase`; the billing integration → the private Cloud repository | |
-| 07 | The private Cloud repository; its CE self-host section → `slugbase` `docs/internal/` | |
+| 07 | The private Cloud repository; its CE self-host section → `slugbase` `docs/self-hosting/` (operator documentation, below) | |
 | 11 | The private Cloud repository | |
+
+**Documentation that is not a design doc** has fixed homes, so no item invents one:
+
+| Kind | Home | Files |
+|---|---|---|
+| Operator documentation for self-hosting CE | `mdg-labs/slugbase` `docs/self-hosting/` | `install.md`, `environment.md` (generated from the env schemas, checked for drift), `reverse-proxy.md`, `mail.md`, `oidc.md`, `backup-restore.md`, `upgrade.md`, `operations.md`, `security.md`. The backup and restore guide of Phase 4 is the first version of `backup-restore.md`; settings added in Phases 3 and 4 are documented in `environment.md` from the start |
+| Release notes | `mdg-labs/slugbase` `docs/releases/<version>.md` | The source of the draft GitHub Release that `release.yml` creates |
+| End-user documentation | The separate public docs repository of Q2, written with `/customer-docs` | Its content root and build check are set by that repository's docs configuration; the CE repository holds only the `/customer-docs` configuration under `.claude/customer-docs/` |
 
 Since 2026-10-08 the docs live in their repositories: this repository's `docs/internal/` holds docs 00–05, 08–10, 12, 13 and the design prototype; the private Cloud repository holds docs 06, 07, 11, the Cloud parts of this doc (Cloud doc 09) and the Cloud carry-over. Nothing is duplicated.

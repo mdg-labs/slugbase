@@ -25,7 +25,7 @@
   "models": { "verifier": "opus", "refiner": "auto" },
   "ci": { "branchPrefix": "ci/", "watchTimeout": 5400 },
   "threatModel": "docs/internal/10-threat-model.md",
-  "securityAudit": { "exclude": ["packages/contracts/generated/**", "packages/db/migrations/**", "packages/ui/src/components/coss/**", "docs/internal/design-prototype/**"] },
+  "securityAudit": { "exclude": ["packages/contracts/generated/**", "packages/db/migrations/**", "packages/ui/src/components/ui/**", "docs/internal/design-prototype/**"] },
   "riskPaths": [
     "packages/db/**",
     "packages/server/src/http/**",

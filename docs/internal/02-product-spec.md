@@ -10,7 +10,7 @@ Vocabulary is doc 00 §3 and is binding in code, API, database and copy. Decisio
 
 1. **CE and Cloud behave identically** except where this document names configuration (`PUBLIC_REGISTRATION`, `EMAIL_VERIFICATION_REQUIRED`, configured adapters) or an entitlement. No behaviour depends on an edition flag (D4).
 2. **Every capability is an API operation** (D12). The UI has no private behaviour; anything the UI can do, an API token can do, within that token's scope.
-3. **Non-enumerating by default.** Any flow that could reveal whether an email address has an account (login failure, password reset, registration, resend verification, invitation accept) answers identically for both cases and takes comparable time.
+3. **Non-enumerating by default.** Any flow that could reveal whether an email address has an account (login failure, password reset, registration, resend verification, email change, invitation inspect and accept) answers identically for both cases and takes comparable time.
 4. **Destructive actions are explicit.** Deletes are hard (no trash in v1, doc 00 §4); every destructive action states its consequence and requires confirmation (doc 03 shared patterns). The only non-destructive "hidden" state is plan-archive (§5.6).
 5. **Private by default.** A new bookmark, folder, tag and slug is visible to its owner only. Sharing is an explicit act (§8).
 6. **Degrade, don't fail.** With an optional adapter missing (mail, AI, OIDC), the dependent feature is unavailable and says so; nothing else breaks (D22).
@@ -21,7 +21,7 @@ Vocabulary is doc 00 §3 and is binding in code, API, database and copy. Decisio
 
 ### 2.1 Account
 
-An **account** is a global identity, unique by email (compared case-insensitively after Unicode NFKC normalisation; stored as entered, matched lower-cased). It has: display name, email, email-verified flag, optional password credential (absent for OIDC-only accounts), preferred language (`en` / `de`), theme (`system` / `dark` / `light`, Q35), accent (Q36), default bookmark view (`grid` / `table`), single-key-shortcuts flag (Q38), AI opt-out flag, MFA state, instance-admin flag (CE), created/updated timestamps. Accounts exist independently of workspaces; membership is separate (§3).
+An **account** is a global identity, unique by email (trimmed, compared case-insensitively after Unicode NFKC normalisation; stored as entered, matched lower-cased). It has: display name (1–100 characters), email, email-verified flag, optional password credential (absent for OIDC-only accounts), preferred language (`en` / `de`), theme (`system` / `dark` / `light`, Q35), accent (Q36), default bookmark view (`grid` / `table`), single-key-shortcuts flag (Q38, default on), sign-in alerts flag (§12, default on), AI opt-out flag, analytics consent (unset, granted or denied, with the time of the choice), onboarding state (§9.3), MFA state, instance-admin flag (CE), created/updated timestamps. Accounts exist independently of workspaces; membership is separate (§3).
 
 Avatars are initials on a colour derived from the account ID — no uploads in v1 (Q37).
 
@@ -29,43 +29,43 @@ Avatars are initials on a colour derived from the account ID — no uploads in v
 
 | Path | When available | Result |
 |---|---|---|
-| **First-run setup** | Only while the deployment has zero accounts | Creates the first account (instance admin on CE, §11), its first workspace (owner), and signs in. The endpoint is permanently closed once any account exists. On Cloud the composition root never exposes setup — the first account is created through registration and promoted by the operator console |
-| **Invitation** | A workspace admin invited the email (§3.4) | Accepting creates the account if needed (email is proven by the token, so it is verified) and adds the membership |
-| **Public registration** | `PUBLIC_REGISTRATION=true` (CE default `false`, Cloud default `true`) | Creates an unverified account; with `EMAIL_VERIFICATION_REQUIRED=true` (Cloud default) it cannot sign in until verified. On verification it gets a personal workspace named "<display name>'s workspace", subject to `workspaces.ownMax` |
+| **First-run setup** | Only while the deployment has zero accounts | Creates the first account (instance admin on CE, §11), its first workspace (owner), and signs in. The endpoint is permanently closed once any account exists, and a deployment that must never have an instance admin turns it off with `SETUP_ENABLED=false` (Q44). On Cloud the composition root never exposes setup — the first account is created through registration and promoted by the operator console |
+| **Invitation** | A workspace admin invited the email (§3.4) | Accepting creates the account if needed (email is proven by the token, so it is verified) and adds the membership. No personal workspace is created for an account made this way |
+| **Public registration** | `PUBLIC_REGISTRATION=true` (CE default `false`, Cloud default `true`) | Creates an unverified account; with `EMAIL_VERIFICATION_REQUIRED=true` (Cloud default) it cannot sign in until verified. The account gets a personal workspace named "<display name>'s workspace" on verification, or at registration when verification is not required (there is no verification step to wait for). At `workspaces.ownMax` no workspace is created and registration or verification still succeeds; the account sees the no-workspace state. A composition may refuse an account before it is created (the registration policy, doc 01 §13.5) |
 | **OIDC first login** | A provider with auto-create enabled (§2.8) | Creates a verified account from provider claims; then as registration (personal workspace) or, on CE with registration off, no workspace — the account sees "ask an admin to invite you" until invited |
 
-Setup is protected by possession of the deployment: the setup screen shows only when there are no accounts, and on CE the operator can additionally require a one-time setup token printed to the server log at first start (`SETUP_TOKEN_REQUIRED`, default `true` on CE) so a freshly exposed instance cannot be claimed by a stranger.
+Setup is protected by possession of the deployment: the setup screen shows only when there are no accounts, and on CE the operator can additionally require a one-time setup token printed to the server log at first start (`SETUP_TOKEN_REQUIRED`, default `true` on CE; only the token's hash is stored) so a freshly exposed instance cannot be claimed by a stranger.
 
 ### 2.3 Sign-in
 
-- **Password**: email + password. Wrong email and wrong password produce the same error and comparable latency (a dummy argon2id verification runs for unknown emails). Rate-limited per IP and per email (§15).
-- **MFA step**: if the account has TOTP enrolled, a successful password check yields a short-lived (5 min) pending-MFA session that can only call the MFA endpoints; a TOTP code or one backup code completes sign-in. A code already used for the current 30 s step is rejected (replay protection). Five failed codes end the pending session.
+- **Password**: email + password. Wrong email, wrong password and a disabled account (§11.2) produce the same generic error and comparable latency (a dummy argon2id verification runs for unknown emails). Rate-limited per IP and per email (§16).
+- **MFA step**: if the account has TOTP enrolled, a successful password check yields a short-lived (5 min) pending-MFA session that can only complete the MFA step or sign out; a TOTP code or one backup code completes sign-in. A code already used for the current 30 s step is rejected (replay protection). Five failed codes end the pending session.
 - **OIDC**: §2.8. A successful OIDC sign-in never asks for SlugBase TOTP (the provider is trusted for that factor).
-- **"Remember me"** chooses the 90-day sliding session instead of the 30-day one (§15).
+- **"Remember me"** chooses the 90-day sliding session instead of the 30-day one (§16).
 - **Session rotation**: a new session token is issued on sign-in, on MFA completion, on password change, on enabling/disabling MFA and on instance-admin promotion; the previous token is deleted.
 - **Unverified accounts** (when verification is required) are told to verify and offered a resend; they get no session.
 
 ### 2.4 Sessions
 
-Server-side, as D10 and doc 01 §10 define. The account's **Sessions** list shows each session's created time, last-seen time, approximate location derived from IP **only at display time and never stored** (stored: the first two IPv4 octets / IPv6 /48 and the user-agent family), and lets the member revoke any one or "sign out everywhere else". Password change and MFA reset revoke all other sessions automatically.
+Server-side, as D10 and doc 01 §10 define. The account's **Sessions** list shows each session's created time, last-seen time, the user-agent family and the stored coarse IP prefix (the first two IPv4 octets or the IPv6 /48; the full address is never stored and no location is derived from it), and lets the member revoke any one or "sign out everywhere else". Password change and MFA reset revoke all other sessions automatically.
 
 ### 2.5 Passwords
 
 - Minimum length 12, maximum 256; no composition rules; a strength meter in the UI (zxcvbn-style score, client-side only). Breached-password rejection per Q15.
-- **Reset**: request by email → always answers "if an account exists, we sent a link" → single-use token (hashed, 1 h) → set a new password → all sessions revoked → signed in fresh. Available only when mail is configured; otherwise the screen tells the user to ask their instance admin (CE, §11.3) or support (Cloud).
+- **Reset**: request by email → always answers "if an account exists, we sent a link" → single-use token (hashed, 1 h; carried in the link's URL fragment so it reaches neither server logs nor `Referer`) → set a new password → all sessions revoked → a fresh session is created. For an account with MFA that session is a pending-MFA session, so a compromised mailbox cannot skip the second factor. Available only when mail is configured; otherwise the screen tells the user to ask their instance admin (CE, §11.3) or support (Cloud).
 - **Change**: requires the current password (or a fresh re-authentication for OIDC-only accounts adding a password).
-- **OIDC-only accounts** may add a password; an account may remove its password only while it has at least one linked OIDC identity.
+- **OIDC-only accounts** may add a password after a fresh re-authentication through their provider. There is no operation to remove a password in v1; if one is added, it is allowed only while the account has at least one linked OIDC identity.
 
 ### 2.6 Email verification and change of email
 
-Two distinct flows, both with hashed single-use tokens (1 h):
+Two distinct flows, both with hashed single-use tokens, carried in the URL fragment of the emailed link (signup verification 24 h, email change 1 h, Q48); issuing a new token invalidates older unused ones of the same purpose:
 
 - **Signup verification**: sent on registration; resend rate-limited; verifying completes registration (§2.2).
-- **Change of email**: the new address receives a confirmation link; the old address receives a notice with a "this wasn't me" link that cancels the change and revokes all sessions. The email switches only when confirmed. A pending change can be cancelled. Changing to an address that already has an account fails at confirmation time with a generic message.
+- **Change of email**: requires a fresh re-authentication. The new address receives a confirmation link; the old address receives a notice with a "this wasn't me" link, a second single-use token of its own, that cancels the change and revokes all sessions. The email switches only when confirmed. A pending change can be cancelled. Asking for the current address, or for an address that already has an account, answers like any other request and sends nothing to the other account; a confirmation that finds the address taken fails with the same generic message as an invalid token. Both links open pages of the SPA (doc 03 §1.7).
 
 ### 2.7 Multi-factor authentication (TOTP)
 
-- **Enrol**: generate a secret (stored through `SecretBoxPort`), show QR (`otpauth://` with issuer `TOTP_ISSUER`, default "SlugBase" plus the deployment host) and the text key; activation requires a valid code. Activation shows **10 backup codes once** (shown-once pattern, doc 03), stored hashed.
+- **Enrol**: generate a secret (stored through `SecretBoxPort`), show a QR code (the server returns it as SVG, with the `otpauth://` URI, issuer `TOTP_ISSUER`, default "SlugBase" plus the deployment host) and the text key; activation requires a valid code. A code is a 6-digit RFC 6238 code with a 30-second step; one step of clock skew either side is accepted. Activation rotates the session and shows **10 backup codes once** (shown-once pattern, doc 03), stored hashed.
 - **Regenerate backup codes**: requires a current TOTP code; invalidates the old set; shown once.
 - **Disable**: requires a current TOTP code or a backup code plus the password (or OIDC re-auth).
 - **Recovery** when a member has lost both: on CE an instance admin can reset MFA for an account (audited, notifies the account by email); on Cloud the operator console does it after a documented support identity check. Neither path reveals or copies the secret.
@@ -75,7 +75,7 @@ Two distinct flows, both with hashed single-use tokens (1 h):
 
 Providers are configured only by the operator through `OIDC_<SLUG>_*` environment variables (`CLIENT_ID`, `CLIENT_SECRET`, `ISSUER_URL`, optional `NAME`, `SCOPES`, `ENABLED`, `AUTO_CREATE`, `ALLOWED_DOMAINS`). Workspace admins cannot add providers. Behaviour (Q32):
 
-- Authorization-code flow with PKCE, `state` and `nonce`, through `IdentityPort`; the handshake state lives in a short-lived server-side record bound to a pre-auth cookie.
+- Authorization-code flow with PKCE, `state` and `nonce`, through `IdentityPort`; the handshake state lives in a short-lived server-side record bound to a pre-auth cookie. The start of the flow carries an **intent**: sign-in (the default), *link* (a signed-in account adds the identity), *reauth* (the provider proves the member for a sensitive action; it satisfies re-authentication for an account without a password) or *invitation* (the identity accepts a given invitation, §3.4).
 - **Linking**: a provider identity (`issuer`, `sub`) links to an account (a) explicitly, from Account settings while signed in, or (b) automatically on first login **only** when the provider asserts `email_verified=true` and the email matches an existing account. Linking by unverified email never happens.
 - **Auto-create**: per provider, off by default; when on, `ALLOWED_DOMAINS` (optional) restricts which email domains may be created.
 - The sign-in page lists enabled providers as buttons; with none configured, it shows only email + password.
@@ -83,10 +83,10 @@ Providers are configured only by the operator through `OIDC_<SLUG>_*` environmen
 
 ### 2.9 Personal API tokens
 
-- Created from Account settings with a name and a target **workspace** (one of the member's workspaces) and a scope: `read` or `read-write` (Q16); expiry 30, 90 or 365 days or none, **defaulting to 90 days** in the dialog; unused tokens are not auto-revoked (Q47).
-- Format `slb_` + 32 random bytes (base62); stored as a SHA-256 hash with a 6-character display prefix; shown once.
-- Last-used time and IP prefix are recorded. Max 10 active tokens per account. Revocable individually.
-- A token request runs as the account in the bound workspace with the account's current role there; losing membership makes the token inert (it is revoked automatically). API tokens skip MFA by design (doc 10 §5) and can never call: token management, password/email/MFA changes, session management, instance-admin operations, account deletion, billing checkout.
+- Created from Account settings after a fresh re-authentication, with a name and a target **workspace** (one of the member's workspaces, the active one by default) and a scope: `read` or `read-write` (Q16); expiry 30, 90 or 365 days or none, **defaulting to 90 days** in the dialog; unused tokens are not auto-revoked (Q47).
+- Format `slb_` + 32 random bytes encoded in base62 (43 characters); stored as a SHA-256 hash with a 6-character display prefix; shown once.
+- Last-used time and coarse IP prefix (as for sessions, §2.4) are recorded, at most once a minute. Max 10 active tokens per account; the 11th is refused with a field error. Names are unique per account. Revocable individually.
+- A token request runs as the account in the bound workspace with the account's current role there; losing membership makes the token inert (it is revoked automatically). When a request carries a bearer token, cookies are ignored entirely. API tokens skip MFA by design (doc 10 §5) and can never call: token management, password/email/MFA changes, session management, instance-admin operations, account deletion, billing checkout.
 - Tokens are **not** an entitlement; every account has them on every plan (old §23.4-4).
 
 ### 2.10 Account deletion
@@ -94,7 +94,7 @@ Providers are configured only by the operator through `OIDC_<SLUG>_*` environmen
 Self-service from Account settings, with typed confirmation of the email and a fresh password or OIDC re-auth (Q24):
 
 - Blocked while the account is the **only owner** of any workspace that has other members — ownership must be transferred first (§3.3).
-- Blocked on Cloud while the account is the billing owner of a workspace with an active paid subscription (doc 06).
+- Refused while a deletion veto of the composition applies (doc 01 §13.2); on Cloud that is an account that is the billing owner of a workspace with an active paid subscription (doc 06).
 - Workspaces where the account is the sole member are deleted with it (listed in the confirmation).
 - In other workspaces, the memberships end and the account's **bookmarks and folders stay** with the workspace as ownerless "Former member" content. Workspace admins can reassign or delete them (Q54, decided by the maintainer; doc 05 §7.1). Its tags, tag associations, slug preferences and AI cache are deleted. The leaving rule in §3.6 (transfer or delete, chosen at removal) applies when a member is removed or leaves; it does not apply to account deletion.
 - All sessions, tokens, identities and MFA data are deleted. Audit events keep the `actor_label` but lose the account reference (`actor_account_id` set to NULL, doc 05 §7.1); no email is retained.
@@ -109,8 +109,9 @@ A workspace has a name (1–64 characters), a generated colour and monogram, a p
 
 ### 3.2 Creating workspaces
 
-- **CE**: an instance admin creates workspaces from the admin area (§11) and may also let ordinary accounts create their own via an instance setting (`allow_workspace_creation`, default off).
-- **Cloud**: any verified account can create a workspace from the workspace switcher, subject to `workspaces.ownMax` (Free: one owned workspace). The creator becomes owner. Hitting the limit shows the upgrade path (doc 06), not an error.
+- An instance admin creates workspaces from the admin area (§11) on any deployment.
+- Whether *ordinary* accounts may create their own workspaces is the instance setting `allow_workspace_creation`. Its default is supplied by the composition root, never by an edition flag (D4, Q94): off in the CE composition, on in the Cloud composition. Once an instance admin sets it, the stored value overrides the default on the very next request.
+- Where creation is allowed, any verified account can create a workspace from the workspace switcher, subject to `workspaces.ownMax` (Cloud Free: one owned workspace). The creator becomes owner. Hitting the limit shows the upgrade path (doc 06), not an error; the workspace list reports whether the account can create one, so the UI hides or replaces the action.
 
 ### 3.3 Roles
 
@@ -123,7 +124,8 @@ A workspace has a name (1–64 characters), a generated colour and monogram, a p
 | Manage teams (subject to `teams.manage`) | ✓ | ✓ | — |
 | View the audit log (subject to `audit.log`) | ✓ | ✓ | — |
 | Workspace settings (name, AI toggle) | ✓ | ✓ | — |
-| Billing: plan and seat changes, billing documents (Cloud) | ✓ | — | — |
+| Billing: checkout, plan changes, seats, cancel and resume, payment method (Cloud) | ✓ | — | — |
+| Billing: read plan state, invoices and credit notes (Cloud) | ✓ | ✓ | — |
 | Promote to owner, transfer ownership, demote an owner | ✓ | — | — |
 | Delete the workspace | ✓ | — | — |
 
@@ -131,17 +133,17 @@ A workspace always has at least one owner; the last owner cannot leave, be remov
 
 ### 3.4 Invitations
 
-- An admin invites by email with a role (admin or member) and optional teams. On Cloud the invitation requires `members.invite`; a seat is **consumed on acceptance, not on send** (doc 06). The invite list shows pending invitations with resend and revoke.
-- The invitation email carries a single-use token (hashed, 7 days). Accepting:
+- An admin invites by email with a role (admin or member only; an invitation can never grant owner, and an owner is made by promotion, §3.3, or by an instance admin creating a workspace, §11.1) and optional teams. On Cloud the invitation requires `members.invite`; a seat is **consumed on acceptance, not on send** (doc 06, doc 01 §13.1). The invite list shows pending invitations with resend and revoke. Inviting an email that already has a pending invitation resends it: a new token and expiry, the old link stops working, one email.
+- The invitation email carries a single-use token (hashed, 7 days) in a link to `/invite/<token>`, written in the invitee's language when known and the inviter's otherwise. Accepting requires the signed-in account's *verified* email to equal the invited email, and:
   - if the recipient is signed in as the invited email → membership added;
   - if signed in as a different account → told the invitation is for another address, with "sign out and continue";
-  - if no account exists → a short sign-up (name, password, or an OIDC provider) with the email fixed and pre-verified (Q31);
+  - if no account exists → a short sign-up (name, password, or an OIDC provider that asserts exactly the invited email as verified) with the email fixed and pre-verified (Q31); a sign-up for an email that has an account is refused and the person signs in instead;
   - if an account exists but is not signed in → sign in, then accept.
-- Accepting adds the membership and makes that workspace active. Inviting an email that is already a member is a no-op with a clear message. Invitations require mail; without mail configured the admin sees a copyable invitation link instead (CE only — the link is the same token).
+- Accepting adds the membership with exactly the invited role and any invited teams still in the workspace, and makes that workspace active. Inviting an email that is already a member is a no-op with a clear message. Invitations require mail; without mail configured the admin sees a copyable invitation link instead (CE only — the link is the same token).
 
 ### 3.5 Switching
 
-The workspace switcher lists the account's workspaces. Switching is an explicit operation that verifies membership and updates the session's active workspace; the SPA then reloads its data. If the active workspace becomes inaccessible (removed, deleted), the next request re-derives the active workspace to the most recently used remaining one, or to "no workspace" (a screen offering to create one where allowed, or to wait for an invitation).
+The workspace switcher lists the account's workspaces. Switching is an explicit operation that verifies membership and updates the session's active workspace; the SPA then reloads its data. If the active workspace becomes inaccessible (removed, deleted), the next request re-derives the active workspace to the member's most recently active remaining membership (each membership records when its member was last active in the workspace, at most once a minute), or to "no workspace" (a screen offering to create one where allowed, or to wait for an invitation).
 
 ### 3.6 Leaving and removal
 
@@ -156,7 +158,7 @@ Users who want their content elsewhere export it first (§13).
 
 ### 3.7 Deleting a workspace
 
-Owner only. Typed confirmation of the workspace name. On Cloud, blocked while a paid subscription is active (doc 06). Deletion removes every row of the workspace (bookmarks, folders, tags, teams, shares, invitations, preferences, settings, audit events, AI cache) in one transaction, revokes bound API tokens, and moves every session that had it active to "no active workspace". It is irreversible; the confirmation says so and offers export first.
+Owner only, after a fresh re-authentication and typed confirmation of the workspace name. A deletion veto of the composition may refuse it (doc 01 §13.2; on Cloud, while a paid subscription is active, doc 06). Deleting marks the workspace as deleting, which hides it at once from every query and the switcher, revokes bound API tokens and moves every session that had it active to "no active workspace"; the request is answered as accepted and a background job then removes every row of the workspace (bookmarks, folders, tags, teams, shares, invitations, preferences, settings, audit events, caches) in batches (Q55). It is irreversible; the confirmation says so and offers export first.
 
 ---
 
@@ -194,13 +196,13 @@ When the URL field loses focus (or on paste) and the URL is valid, the modal req
 
 ### 5.3 Delete
 
-Hard delete with confirmation (single) or a count-stating confirmation (bulk). Deletes the bookmark's folder and tag associations, shares and go preferences pointing to it. Its slug becomes free immediately.
+Hard delete with confirmation (single) or a count-stating confirmation (bulk). Deletes the bookmark's folder and tag associations, shares and go preferences pointing to it. Its slug becomes free immediately. Deleting a bookmark that is already gone answers not found: a hard delete keeps no tombstone, so a repeated delete is not idempotent.
 
 ### 5.4 Metadata and favicons
 
-- On create or URL change, a `bookmark.fetchMetadata` job (doc 01 §8.1) fetches the page through `EgressPort`: title (`og:title` → `<title>`), description (`og:description` → `meta description`), site name, canonical URL, language. Only the first 512 KiB of HTML is read; non-HTML content types are not parsed. The modal also calls a synchronous metadata endpoint with a 3 s budget so prefill can happen while the modal is open.
-- Results are cached per canonical URL for 7 days, shared across workspaces **only** as the fetched public page metadata (never anything user-entered).
-- Favicons are fetched per host through `EgressPort` (`/favicon.ico`, then `<link rel=icon>`), size-capped (64 KiB), re-encoded to PNG at 32 and 64 px, stored, and served from our own origin (doc 01 §8.1). Hosts with no favicon get the monogram fallback. The browser never contacts the bookmarked site to render a list.
+- On create or URL change, a `bookmark.fetchMetadata` job (doc 01 §8.1) fetches the page through `EgressPort`: title (`og:title` → `<title>`), description (`og:description` → `meta description`), site name, canonical URL, language. Only the first 512 KiB of HTML is read; non-HTML content types are not parsed. The modal also calls a synchronous metadata endpoint with a 3 s budget so prefill can happen while the modal is open; a URL egress refuses is rejected as not allowed, and a fetch that fails or returns something other than HTML is reported as an upstream failure that the modal ignores.
+- Results (title, description, site name, canonical link and language, or a `failed` / `blocked` outcome) are cached per workspace and canonical URL for 7 days; the cache is never shared across workspaces (tenant isolation, doc 10 §5) and holds only fetched public page metadata, never anything user-entered.
+- Favicons are fetched per host through `EgressPort` (`/favicon.ico`, then `<link rel=icon>`), size-capped (64 KiB), re-encoded to PNG at 32 and 64 px, stored once per deployment, and served from our own origin (doc 01 §8.1); SVG icons are refused. A host is only fetched on behalf of a member who can read a bookmark on it. Hosts with no favicon get the monogram fallback. The browser never contacts the bookmarked site to render a list.
 - A bookmark whose metadata fetch failed shows no error to the user; the fields simply stay as entered.
 
 ### 5.5 Usage tracking
@@ -209,21 +211,21 @@ Opening a bookmark (from a list, the dashboard, the palette, or `/go`) increment
 
 ### 5.6 Plan-archived bookmarks
 
-Set only by downgrade-overflow handling (doc 06). An archived bookmark is excluded from lists, counts, search, the palette, the dashboard and slug resolution, but is preserved completely and listed on a dedicated "Archived" view with the reason and the upgrade path. Members can delete archived bookmarks (to make room) and export them; they cannot edit or un-archive them directly. On re-upgrade they are restored automatically (doc 06).
+Set only by downgrade-overflow handling (doc 06) through the archive operation CE exports for a composition (doc 01 §13.3). An archived bookmark is excluded from lists, counts, search, the palette, the dashboard and slug resolution, but is preserved completely and listed on a dedicated "Archived" view with the reason and the upgrade path. Members can delete archived bookmarks (to make room) and export them; they cannot edit or un-archive them directly. On re-upgrade they are restored automatically (doc 06).
 
 ### 5.7 Lists, filtering, sorting
 
 The bookmarks list supports, all reflected in the URL search params (doc 03):
 
-- **Filters**: folder (one), tags (any of several, combined with AND), pinned only, scope (`all`, `mine`, `shared-with-me`, `shared-by-me`), has slug, forwarding on, free-text query (title, URL, slug, description).
-- **Sorts**: recently added (default), alphabetical, most used, recently accessed.
-- **Pagination**: page sizes 24 / 48 / 96 (grid default 24, table default 48), keyset-based under the hood, presented as pages with a total count.
+- **Filters**: folder (one), tags (any of several, combined with AND), pinned only, scope (`all`, `mine`, `shared-with-me`, `shared-by-me`), has slug, forwarding on, free-text query (title, host, slug, description; the path of the URL is not searched).
+- **Sorts**: recently added (default), oldest first, alphabetical (A–Z or Z–A), most used, recently accessed (never-opened last).
+- **Pagination**: keyset-based with "load more" — there are no page numbers and no jumping to a page (Q42). Page sizes 24 / 48 / 96 (grid default 24, table default 48, at most 100 via the API). The count line reads "Showing 48 of 1,234"; the total is exact up to 10 000 and shown as "10,000+" above.
 - **Views**: card grid and table; the choice is remembered per account.
-- **Select all across pages**: a companion operation returns the IDs matching the current filters (capped at 5 000) for bulk actions.
+- **Select all across pages**: a companion operation returns the IDs matching the current filters, capped at 5 000 (configurable), for bulk actions; when a filter matches more, the bar says so and selects the capped set.
 
 ### 5.8 Bulk actions
 
-On a selection of **own** bookmarks: delete, add to folder, remove from folder, add tags (with a preview of the resulting tag set), remove tags, pin/unpin, share (subject to `sharing.*`), export selection. Selections containing bookmarks shared with the member allow only "open all" and export of the readable fields; the bar says which actions were limited and why. Bulk operations are atomic per request and report counts.
+On a selection of **own** bookmarks: delete, add to folder, move to folder (replaces the folder membership), remove from folder, add tags (with a preview of the resulting tag set), remove tags, pin/unpin, share (subject to `sharing.*`, with a preview of the resulting audience), export selection (JSON or HTML, §13.2). Selections containing bookmarks shared with the member allow only "open all" and export of the readable fields; the bar says which actions were limited and why. Bulk operations are atomic per request and report how many rows were affected and how many skipped, with a reason per skipped row (a row that is not the member's own is reported as not found) and never a title or URL. A bulk delete is recorded as one audit event with the count.
 
 ---
 
@@ -239,20 +241,20 @@ On a selection of **own** bookmarks: delete, add to folder, remove from folder, 
 
 ### 6.2 Resolution
 
-`GET /go/<slug>[/<rest>]`:
+`GET /go/<slug>`:
 
-1. **Authentication required.** Without a session the browser is sent to sign-in and returned to the same `/go` URL afterwards (the return target is validated to be a same-origin `/go/` path). API tokens cannot use `/go` (it is a browser navigation).
+1. **Authentication required.** Without a session the browser is sent to sign-in (to the MFA step while a pending-MFA session exists) and returned to the same `/go` URL afterwards; the return target is accepted only as a same-origin path of the form `/go/<valid slug>`, anything else lands on the default page. API tokens cannot use `/go` (it is a browser navigation) and are refused.
 2. **Candidates**: bookmarks in the **active workspace** with this slug, forwarding on and not plan-archived, that the member can read (§8): their own, and those shared with them directly, through a team, or through a shared folder.
 3. **Choice** (Q25):
    1. a remembered **go preference** for this slug whose bookmark is still a candidate → that bookmark;
    2. the member's **own** bookmark with this slug, if any → that bookmark;
    3. exactly one shared candidate → that bookmark;
    4. several shared candidates → the **disambiguation** page (§6.3);
-   5. none → the **not-found** page, which offers to create a bookmark with this slug and, if the slug resolves in another of the member's workspaces, lists those workspaces to switch to and continue (Q26).
+   5. none → the **not-found** page, which offers to create a bookmark with this slug and, if the slug resolves in another of the member's workspaces (at most 20 are named, only workspaces where the member can access a forwarding-enabled, non-archived bookmark with that slug), lists those workspaces to switch to and continue (Q26). Nothing is forwarded across workspaces automatically.
 4. **Forward**: `302` to the destination with `Referrer-Policy: no-referrer` and `Cache-Control: no-store`; usage is recorded asynchronously (§5.5).
-5. **Path passthrough**: `/go/<slug>/<rest>` appends `<rest>` (and the query string) to the destination URL path, so `go gh/mdg-labs/slugbase` works for a `gh` → `https://github.com` bookmark. The joined URL is re-validated as `http(s)`.
+5. **Nothing after the slug**: a path or a query string after the slug (`/go/gh/mdg-labs/slugbase`, `/go/mail?x=1`) is a not-found, never appended to or forwarded to the destination (Q43). A per-bookmark "append path" template is a post-v1 candidate.
 
-The destination is whatever the bookmark owner saved; SlugBase does not interstitial or scan destinations in v1 (doc 10 §5).
+The destination is whatever the bookmark owner saved, as long as its scheme is `http` or `https` (re-checked on every forward); SlugBase does not interstitial or scan destinations in v1 (doc 10 §5). When the server cannot forward directly it serves the SPA shell: with status `200` for the disambiguation page and `404` for the not-found page, both `no-store` with `Referrer-Policy: no-referrer`.
 
 ### 6.3 Disambiguation
 
@@ -260,12 +262,12 @@ Lists each candidate with title, destination host, owner (for shared ones) and h
 
 ### 6.4 Go preferences
 
-Per member, per workspace: a mapping slug → bookmark. Listed and removable on the Forwarding page (Q20). A preference whose bookmark is deleted or no longer readable is removed automatically.
+Per member, per workspace: a mapping slug → bookmark. Listed and removable on the Forwarding page (Q20). A preference is removed automatically when its bookmark is deleted, when its slug changed or forwarding was turned off, and, in the same change, when the member loses read access to it through every route (§8.3); a member who still has another route keeps the choice.
 
 ### 6.5 Browser and palette integration
 
 - **Browser search engine**: the Forwarding page and the onboarding checklist explain how to register `https://<origin>/go/%s` with a keyword (`go`) in Chrome, Firefox, Safari and Edge, with copy buttons and a "Test it" link. Typing `go mail` in the address bar then forwards.
-- **OpenSearch**: the app serves an OpenSearch description so browsers that support it can offer adding SlugBase with one click.
+- **OpenSearch**: the app serves an OpenSearch description at `/opensearch.xml`, unauthenticated, built only from the configured origin and the product name (never from the request's `Host` or forwarded headers), so browsers that support it can offer adding SlugBase with one click.
 - **Palette `go` mode** (§9.2).
 
 ---
@@ -274,7 +276,7 @@ Per member, per workspace: a mapping slug → bookmark. Listed and removable on 
 
 ### 7.1 Folders
 
-- Owned by a member, in a workspace. Name 1–64 characters, unique per owner (case-insensitive); optional lucide icon from a curated set and a colour from the token palette (Q21). Flat — no nesting in v1 (Q33).
+- Owned by a member, in a workspace. Name 1–64 characters, unique per owner (case-insensitive); optional lucide icon from a curated set (about 60 names) and a colour, one of the eight folder tokens (Q21). Flat — no nesting in v1 (Q33).
 - A bookmark can be in many folders; only the bookmark's owner can file it, and only into their own folders.
 - Operations: create, rename, change icon/colour, delete (bookmarks stay; only the associations go), share (§8). No folder limit on any plan (old §23.4-3).
 - The folders page lists folders with scope (mine / shared with me), bookmark count, sharing summary; sort by name, count, recently updated.
@@ -328,7 +330,7 @@ Workspace admins have **no implicit read** of other members' private content —
 
 ### 9.1 Search
 
-A server search operation matches the query across the member's readable bookmarks (title, URL, host, slug, description), their own folders and own tags, returning at most 8 bookmarks, 4 folders and 4 tags by default, ranked: exact slug match → slug prefix → title/description full-text (language-aware) → trigram similarity on title and host. Debounced in the UI (150 ms). Plan-archived bookmarks never match.
+A server search operation matches the query across the member's readable bookmarks (title, host, slug, description), their own folders and own tags, returning at most 8 bookmarks, 4 folders and 4 tags by default, ranked: exact slug match → slug prefix → title/description full-text → trigram similarity on title and host. Full-text uses one `simple`-configuration vector without stemming, and trigrams give prefix and typo tolerance (Q49); queries shorter than three characters fall back to slug and title prefix matching, and query syntax characters are treated as plain text. Debounced in the UI (150 ms). Plan-archived bookmarks never match.
 
 ### 9.2 Command palette
 
@@ -336,7 +338,7 @@ Opened with `⌘K` / `Ctrl K` from anywhere in the app (and `/` on list pages).
 
 - **Empty**: recent and pinned bookmarks, navigation (Home, Bookmarks, Folders, Tags, Forwarding, Settings), actions (New bookmark, New folder, Import, Export, Switch workspace, Toggle theme, Sign out).
 - **Query**: grouped results — Bookmarks, Folders, Tags, Commands — from §9.1 plus command names.
-- **`go` mode**: a query starting with `go ` (or a pasted `/go/<slug>` or full `/go` URL) lists matching slugs as the member types (own first, then shared) and Enter resolves exactly as `/go` does (§6.2), including disambiguation inline. Any path after the slug passes through.
+- **`go` mode**: a query starting with `go ` (or a pasted `/go/<slug>` or full `/go` URL) lists matching slugs as the member types (own first, then shared) and Enter resolves exactly as `/go` does (§6.2), including disambiguation inline and the not-found hint. A path after the slug is not passed through: it resolves as no match, as on the server (Q43). Only a pasted `/go` URL of this deployment's own origin enters the mode.
 - **Modifiers**: Enter opens; `⌘/Ctrl Enter` opens in a new tab; `⌥/Alt Enter` opens the bookmark modal for editing (own bookmarks).
 - Fully keyboard-operable; screen-reader announced result counts.
 
@@ -350,7 +352,7 @@ The post-sign-in landing page:
 - **Pinned**: own pinned bookmarks (up to 12, link to the filtered list).
 - **Most used tags**: top 12 own tags by bookmark count.
 - **Sharing**: counts shared with you / by you, linking to the scoped lists (shown only with `sharing.*`).
-- **Getting started** checklist, dismissible and restorable from Preferences: add a bookmark, give one a slug, set up the browser search engine, create a folder, import from the browser. Items complete themselves from real state.
+- **Getting started** checklist, dismissible and restorable from Preferences: add a bookmark, give one a slug, set up the browser search engine, create a folder, import from the browser. Adding a bookmark, giving one a slug and creating a folder complete themselves from real state; setting up the browser search engine is marked by the member ("Mark as done" on the Forwarding page) and import by a completed import. The marks and the dismissal are stored as the account's onboarding state.
 - **Entitlement surfaces** (Cloud): usage against `bookmarks.max` and upgrade prompts, rendered through the entitlement slot (doc 01 §7.2, doc 06) — never by checking an edition.
 
 ---
@@ -360,37 +362,37 @@ The post-sign-in landing page:
 Available to admins and owners in **Settings → Workspace** (doc 03):
 
 - **General**: name; delete workspace (owner).
-- **Members**: list with role, teams, joined date, last active; invite; change role; remove (with the §3.6 content choice); transfer ownership; pending invitations with resend/revoke; seat usage (Cloud, via slot).
+- **Members**: list with role, teams, joined date, last active (the member's most recent request in this workspace); invite; change role; remove (with the §3.6 content choice); transfer ownership; pending invitations with resend/revoke; seat usage (Cloud, via slot).
 - **Teams**: create, rename, describe, delete; manage team members.
-- **Audit log** (subject to `audit.log`): read-only, newest first, filters by actor, action and date range, paginated. Recorded actions: sign-ins are **not** workspace audit events (they are account security events, shown under Account → Security); workspace events are membership changes, role changes, invitations, team changes, share grants/revocations, bulk deletes, imports, exports, settings changes, workspace deletion request, billing changes (Cloud). Each event: time, actor, action, target type and ID, a small metadata object (never secrets or content beyond names). Retention per doc 05.
-- **AI suggestions**: an enable toggle for the workspace (default on when the AI adapter is configured and `ai.suggestions` is granted). No credentials or models in the workspace UI — those are operator configuration (D22).
+- **Audit log** (subject to `audit.log`): read-only, with filters by actor, action and date range. Recorded actions (each exactly once, from one catalog of dotted action names grouped into categories): sign-ins and token events are **not** workspace audit events (they are account security events, shown under Account → Security); workspace events are workspace creation and renaming, membership changes (added, removed, left, role changed, ownership transferred), invitations (created, resent, link created, revoked, accepted), team changes, share grants and revocations (single and bulk), bulk bookmark deletes, imports, exports, settings changes (including the AI toggle), an instance admin adding themselves as a member (§11.1), workspace deletion request, billing changes (Cloud). Each event: time, actor (the label at the time; the account reference is removed when the account is deleted), action, target type and ID, a small metadata object validated per action (never secrets, email text, or URLs and titles beyond names). Newest first, with "load more" pagination (Q42). Retention is `AUDIT_RETENTION_DAYS` (default 365, `0` keeps events forever, Q53).
+- **AI suggestions**: an enable toggle for the workspace (default on when the AI adapter is configured and `ai.suggestions` is granted); a change is an audited settings change. No credentials or models in the workspace UI — those are operator configuration (D22).
 - **No SMTP or OIDC panels** in the workspace UI on either edition: they are operator configuration. The CE instance admin sees their *status* in the admin area (§11).
 
 ---
 
 ## 11. CE instance administration
 
-The instance admin is an account flag (D4 carry-over, doc 00 §3); the first account from setup has it. It is used inside the same app at `/admin` (doc 03) and requires MFA (§2.7). It shows only to accounts with the flag; the API enforces the flag on every operation.
+The instance admin is an account flag (D4 carry-over, doc 00 §3); the first account from setup has it. It is used inside the same app at `/admin` (doc 03) and requires MFA (§2.7). It shows only to accounts with the flag; the API enforces the flag on every operation, refuses API tokens and pending-MFA sessions, and requires a fresh re-authentication for destructive or privilege-changing actions. The operations are mounted on every deployment and refuse everyone when no account holds the flag (Q44). Every action is written to a deployment-level audit stream that workspace members cannot read.
 
 ### 11.1 Workspaces
 
-List all workspaces (name, owners, member count, bookmark count, created). Create a workspace and invite its first owner (or make an existing account its owner). Delete a workspace (typed confirmation). The instance admin does **not** get content access to workspaces they are not a member of; adding themselves as a member is an explicit, audited action visible to that workspace's owners.
+List all workspaces (name, owners, member count, bookmark count, created; never content). Create a workspace and invite its first owner (or make an existing account its owner); the owner invitation is the one case where an invitation carries the owner role, and it can only be created here, never through the public invitation operation. Delete a workspace (typed confirmation and re-authentication; the same marking and background deletion as §3.7). The instance admin does **not** get content access to workspaces they are not a member of; "Add me as member" is an explicit action that needs re-authentication, adds the admin with the member role, is refused for a workspace being deleted, and is written to the workspace's own audit log (visible to its owners) as well as to the instance stream.
 
 ### 11.2 Accounts
 
-List all accounts (name, email, verified, MFA, last sign-in, workspace count). Actions: resend verification, mark verified, reset MFA (§2.7), send a password-reset link (or show a copyable one when mail is not configured), disable/enable an account (disabled accounts cannot sign in; sessions revoked), delete an account (same rules as §2.10, with ownership resolution forced first), promote/demote instance admin (at least one instance admin must remain).
+List all accounts (name, email, verified, MFA, last sign-in, workspace count). Actions: resend verification, mark verified, reset MFA (§2.7), send a password-reset link (or show a copyable one when mail is not configured; the link is never returned when it was mailed), disable/enable an account (a disabled account sees the generic sign-in error, its sessions are revoked and its API tokens stop working; the account is emailed), delete an account (same rules as §2.10, with ownership resolution forced first), promote/demote instance admin (at least one instance admin must remain; granting or clearing the flag ends the target's sessions).
 
 ### 11.3 Instance settings and status
 
-- Settings stored in the database: `allow_workspace_creation`, instance display name, the sign-in page notice text.
-- Read-only status of operator configuration: public registration, email verification requirement, mail adapter configured (with a "send test email" action), AI adapter configured, OIDC providers detected, error reporting configured, version and migration level, background job health (queue depth, failed jobs).
+- Settings stored in the database (one row of typed values): `allow_workspace_creation` (overrides the composition default, §3.2), the instance display name, and the sign-in page notice text (plain text, at most 500 characters, rendered as text only and shown on the sign-in page).
+- Read-only status of operator configuration: public registration, email verification requirement, mail adapter configured (with a "send test email" action that answers that mail is unavailable when no adapter is configured), AI adapter configured, OIDC providers detected, error reporting configured, version and migration level, background job health (queue depth, failed jobs).
 - No credential is ever displayed or edited here — environment variables only.
 
 ---
 
 ## 12. Notifications by email
 
-The only notifications in v1 are transactional emails (no notification centre, doc 00 §4): signup verification, email change confirmation and notice, password reset, password changed, MFA enabled/disabled/reset, new sign-in from a new device (optional per account, default on), invitation, ownership transferred to you, account disabled (CE), and the Cloud billing emails (doc 06). Every email is rendered in the recipient's language, has a plain-text part, contains no tracking pixels, and links only to the deployment origin.
+The only notifications in v1 are transactional emails (no notification centre, doc 00 §4): signup verification, email change confirmation and notice, password reset, password changed, MFA enabled/disabled/reset, new sign-in from a new device (optional per account, default on; a sign-in counts as a new device when no live session of the account shares both the user-agent family and the stored IP prefix; it is never sent for the account's first session or a pending-MFA session, and shows the time, browser family and coarse network prefix, never a full address), invitation, ownership transferred to you, account disabled (CE), and the Cloud billing emails (doc 06). Every email is rendered in the recipient's language, has a plain-text part, contains no tracking pixels, and links only to the deployment origin.
 
 ---
 
@@ -399,33 +401,34 @@ The only notifications in v1 are transactional emails (no notification centre, d
 ### 13.1 Import
 
 - **Formats**: SlugBase JSON (§13.3), and Netscape bookmark HTML as exported by Chrome, Firefox, Safari and Edge (max 5 MiB). Browser folders become SlugBase folders by their leaf name (path flattening, Q33); `TAGS` attributes (Firefox) become tags.
-- **Limits**: max 5 000 bookmarks per import; subject to `bookmarks.max` — an import that would exceed it imports up to the limit and reports the rest as skipped with the reason.
+- **Limits**: max 5 000 bookmarks per import; subject to `bookmarks.max` — an import that would exceed it imports up to the limit and reports the rest as skipped with the reason (there is no all-or-nothing failure).
 - **Conflicts** (Q30): folders and tags are matched by name (case-insensitive) or created; a slug that conflicts with an existing own slug, or is invalid, is dropped from that bookmark (the bookmark is still imported) and reported; duplicates by canonical URL are imported unless "skip duplicates" is checked (default checked).
-- Imports run as a job with progress; the result reports created, skipped (with reasons), slugs dropped, folders and tags created. An import is recorded in the audit log.
+- An import is **synchronous**: one request answers with the full result (created, skipped with reasons, failed, slugs dropped, folders and tags created). It runs in one transaction in batches, accepts an idempotency key, and is recorded in the audit log with counts only. A **dry run** returns the same result without writing anything; the import wizard uses it for its preview. Hostile input (oversized or deeply nested files, `javascript:` and `data:` URLs, control characters, prototype-pollution keys, script-laden titles) is rejected or neutralised, never executed, and nothing outside the member's workspace is touched. The Netscape upload is the only multipart route.
 
 ### 13.2 Export
 
-- **SlugBase JSON** — lossless for the member's own content: every own bookmark (including plan-archived ones, flagged), with all fields from §5.1 except usage, plus folder associations (by name, with icon and colour), tags (by name), slug, forwarding and pinned state, and the member's go preferences (by slug and bookmark reference). Optionally includes readable shared bookmarks as a separate, flagged list (read-only fields only). Export → import into an empty workspace reproduces the member's bookmarks, folders, tags, slugs, forwarding and pinned state exactly (a round-trip test enforces this, doc 08).
-- **Netscape HTML** — for re-import into browsers; lossy (slugs and forwarding are written as `SHORTCUTURL`, tags as `TAGS`) (Q29).
-- Export is generated on demand and streamed; it is not stored on the server.
+- **SlugBase JSON** — lossless for the member's own content: every own bookmark (including plan-archived ones, flagged), with all fields from §5.1 except usage, plus folder associations (by name, with icon and colour), tags (by name), slug, forwarding and pinned state, and the member's go preferences (by slug and bookmark reference). Optionally (`includeShared`) includes readable shared bookmarks as a separate, flagged list (read-only fields only: URL, title, description, slug and owner name; never the owner's tags, folders or other recipients), which an import ignores so a re-import never copies other members' bookmarks. Export → import into an empty workspace reproduces the member's bookmarks, folders, tags, slugs, forwarding and pinned state exactly (a round-trip test enforces this, doc 08).
+- **Netscape HTML** — for re-import into browsers; lossy (slugs and forwarding are written as `SHORTCUTURL`, tags as `TAGS`; a bookmark in several folders appears under each, one without a folder at the top level; every title, URL and name is escaped) (Q29).
+- **Selection**: both formats can be limited to selected bookmarks (up to 100 ids) or to everything matching the current list filters, with own bookmarks exported in full and shared ones in readable fields only; ids the member cannot read are ignored without disclosing them.
+- Export is generated on demand and streamed; it is not stored on the server, and each export is recorded in the audit log with counts only.
 
 ### 13.3 JSON format
 
-A versioned document: `{ "format": "slugbase-export", "version": 1, "exportedAt", "workspace": { "name" }, "folders": [...], "tags": [...], "bookmarks": [...], "goPreferences": [...], "shared": [...] }`. Doc 04 publishes its JSON Schema; future versions stay importable by later releases.
+A versioned document: `{ "format": "slugbase-export", "version": 1, "exportedAt", "workspace": { "name" }, "folders": [...], "tags": [...], "bookmarks": [...], "goPreferences": [...], "shared": [...] }`. A JSON Schema for the format is generated from the same Zod definition as the API contract and committed beside the OpenAPI document (`packages/contracts/generated/`); future versions stay importable by later releases, and a file with a newer `version` than the server supports is refused with an explanation.
 
 ### 13.4 CE backup story
 
-Per-member export (above) plus the operator's database backup (`pg_dump` / volume snapshot, doc 07 §7). The export's losslessness is a hard requirement because it is the user-facing half of that story.
+Per-member export (above) plus the operator's database backup (`pg_dump` / volume snapshot), described in the CE backup and restore guide (`docs/self-hosting/backup-restore.md`, the CE part of doc 07 §7), which also says that the encryption and session secrets must be backed up separately from the dump. The export's losslessness is a hard requirement because it is the user-facing half of that story.
 
 ---
 
 ## 14. AI suggestions
 
 - **What**: given a URL (and the fetched metadata), suggest a title, a slug candidate, up to 5 tags (preferring the member's existing tags), and a confidence score per field, in a chosen output language (the member's UI language by default).
-- **Availability**: the AI adapter is configured (Q8) **and** the workspace has `ai.suggestions` **and** the workspace toggle is on (§10) **and** the member has not opted out. Otherwise the modal shows no AI affordance (not a disabled one), except on Cloud where the entitlement slot may show an upgrade hint.
+- **Availability**: the AI adapter is configured (Q8: `AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL`, `AI_PROVIDER_NAME`; an endpoint on a private address works only when the operator allowlists its exact host, Q90) **and** the workspace has `ai.suggestions` **and** the workspace toggle is on (§10) **and** the member has not opted out. Otherwise the modal shows no AI affordance (not a disabled one), except on Cloud where the entitlement slot may show an upgrade hint.
 - **Where**: the bookmark modal only. A "Suggest" action fills empty fields and offers suggestions for edited fields as chips the member can accept. Suggested slugs are checked for grammar and the member's existing slugs before being shown.
-- **Privacy**: only the URL, the fetched public metadata and the member's tag names are sent to the provider — never other bookmarks, never workspace names. The UI states which provider processes the request (operator-configured name). Results are cached per (workspace, account, canonical URL, language) for 30 days. Accepted/ignored fields are counted per workspace for product analytics (no content).
-- **Failure**: a timeout (5 s) or provider error silently leaves the fields as they are, with a small "suggestions unavailable" note.
+- **Privacy**: only the URL, the fetched public metadata and the member's tag names are sent to the provider — never other bookmarks, never workspace names. The UI states which provider processes the request (operator-configured name). Results are cached per (workspace, account, canonical URL, language) for 30 days and never served to another workspace or member. When the member saves, the client names which fields (title, slug, tags) came from a suggestion; those are counted per workspace (no content) and the rest are not.
+- **Failure**: a timeout (5 s) or provider error silently leaves the fields as they are, with a small "suggestions unavailable" note; a failure is never cached. The request is answered in-line (there is no background job), and the model's answer is treated as data: validated against the field limits, cut to at most five tags, never executed.
 
 ---
 
@@ -433,8 +436,8 @@ Per-member export (above) plus the operator's database backup (`pg_dump` / volum
 
 - English and German for every UI string, email, error message and the marketing site (D19). Language resolution: the signed-in account's preference → the `Accept-Language` header → English.
 - Dates, numbers and plurals via `Intl` and ICU plural rules; relative times ("2 h ago") in the active language.
-- API error responses carry a stable machine `code` and an English `detail`; the SPA renders localised text from the code (doc 04 §3).
-- Search uses language-aware stemming for titles and descriptions (German and English configurations) plus language-neutral matching for slugs and hosts (doc 05).
+- API error responses carry a stable machine `code` and an **English** `detail` for every caller, signed in or not; the SPA renders localised text from the code (doc 04 §3). Emails and the UI are localised; problem details are not.
+- Search is language-neutral: one `simple` full-text vector without stemming plus trigram matching, so mixed English and German titles and product names match as typed (Q49, doc 05).
 
 ---
 
@@ -460,6 +463,10 @@ Starting values. **Config** values are environment or instance settings (doc 07 
 | Password length | 12–256 | config (min) | §2.5 |
 | Signup verification / password reset / email-change token TTL | 24 h / 1 h / 1 h | config | §2.5, §2.6 (Q48) |
 | Invitation TTL | 7 days | config | §3.4 |
+| Re-authentication window | 10 min | fixed | doc 04 §4.4 |
+| Audit retention | 365 days (`0` keeps events forever) | config | §10 |
+| Idempotency key retention | 24 h | fixed | doc 04 §6.3 |
+| List total shown exactly up to | 10 000 | fixed | §5.7 |
 | MFA backup codes | 10, single-use | fixed | §2.7 |
 | API tokens per account | 10 | config | §2.9 |
 | API token prefix | `slb_` | fixed | §2.9 |
@@ -469,19 +476,24 @@ Starting values. **Config** values are environment or instance settings (doc 07 
 
 ### Rate limits
 
-Per IP and, where an account is known, per account; `429` with `Retry-After`. Enforced through `RateLimitPort` (doc 01 §8.2).
+Token buckets through `RateLimitPort` (doc 01 §8.2); each operation names its bucket in its contract. Keys combine the bucket with the client IP (as resolved through trusted proxies) and, where an account or a target is known, that account or target; whichever bucket empties first wins. A denied request is `429` with `Retry-After`; responses on limited routes carry the `RateLimit-Policy` and `RateLimit` headers. All values are configuration (`RATE_LIMIT_<BUCKET>_*`); these are the defaults, and doc 04 §7 is the single list and shows the same values.
 
-| Operation | Limit |
-|---|---|
-| Sign-in (password) | 10 / min per IP; 20 / hour per email |
-| MFA code | 5 per pending session; 30 / hour per account |
-| Registration | 5 / hour per IP |
-| Password reset request | 5 / hour per IP; 3 / hour per email |
-| Verification / email-change resend | 3 / hour per account |
-| Invitation accept / setup | 10 / hour per IP |
-| API token creation | 20 / hour per account |
-| Metadata fetch (sync) | 60 / min per account |
-| AI suggestions | 30 / min per account |
-| `/go` resolution | 600 / min per account |
-| General API (cookie or token) | 1 200 / min per principal |
-| Marketing-site forms (Cloud) | 5 / hour per IP (doc 11) |
+| Bucket | Applies to | Per IP | Per account or target |
+|---|---|---|---|
+| `login` | Password sign-in and the start and callback of OIDC sign-in | 10 / min | 20 / hour per **email** (counted for unknown emails too) |
+| `mfa` | MFA code, TOTP re-authentication and MFA enrolment confirmation | 10 / min | 5 failures per pending session (then it ends); 30 / hour per account |
+| `register` | Registration | 5 / hour | — |
+| `reset` | Password-reset request, verification resend, email-change request, invitation resend | 5 / hour | 3 / hour per target email |
+| `token_redeem` | Redeeming an emailed or invitation token (verify email, reset password, confirm or cancel an email change, inspect and accept an invitation) | 10 / hour | — |
+| `token_create` | API token creation | — | 20 / hour per account |
+| `setup` | First-run setup | 10 / hour | — |
+| `go` | `/go` resolution, choosing a candidate, slug suggestions and recording an open | 600 / min | 300 / min per account |
+| `fetch` | Synchronous metadata fetch, favicon cache misses | 120 / min | 60 / min per account |
+| `ai` | AI suggestions | — | 60 / hour per account; 600 / hour per workspace |
+| `bulk` | Bulk bookmark actions, import and export | — | 20 / hour per account |
+| `read` | Every other authenticated read | 1 200 / min | 1 200 / min per account |
+| `write` | Every other authenticated mutation | 300 / min | 120 / min per account |
+| `public` | `GET /api/config`, setup status, `/opensearch.xml` and the public reads modules declare | 300 / min | — |
+| Marketing-site forms (Cloud) | Form endpoints a Cloud module serves | 5 / hour | — (doc 11) |
+
+The probes (`/health`, `/ready`, `/version`) and `audience: 'machine'` routes are not limited by this port; a machine route is protected by its signature check and the deployment's edge rules (doc 01 §4 step 6). If the limiter's storage fails, credential endpoints answer `503` rather than going unthrottled.

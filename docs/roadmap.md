@@ -3124,8 +3124,7 @@ D19.
 **Acceptance criteria**
 - [ ] `PATCH /me` accepts `displayName` (1–100 characters) and `locale` (`en` or `de`), rejects unknown fields with
   `422 validation_failed`, and returns the updated account
-- [ ] Problem `detail` text for a signed-in request is localised by the account's `locale`, falling back to
-  `Accept-Language` and then English (doc 02 §15)
+- [ ] Problem `detail` text is English for every principal; the SPA localises messages from `code` (doc 02 §15, E1.4.4)
 - [ ] `/settings/account` renders inside the settings layout (`settings-nav`), with name, the email shown read-only
   (its change flow belongs to E2.5), a language Select (English, Deutsch) and an avatar preview built from the
   initials on a colour derived from the account id (no uploads)
@@ -3629,8 +3628,8 @@ maintainer: false
 
 **Acceptance criteria**
 - [ ] The card shows a status badge (on or off) read from `GET /me`
-- [ ] The enrol `wizard` asks for re-authentication through the shared prompt, shows the QR code (rendered once
-  through the `qrcode` wrapper in `@slugbase/ui`) with the text key in `copy-value`, verifies a code, then shows the
+- [ ] The enrol `wizard` asks for re-authentication through the shared prompt, shows the QR code (the SVG the enrolment
+  response returns, rendered once as an image) with the text key in `copy-value`, verifies a code, then shows the
   backup codes in `shown-once` whose "Done" stays disabled until acknowledged
 - [ ] Regenerating codes asks for a code (`totp`) and shows the new set in `shown-once`; disabling asks for a code and
   the password behind a `confirm`
@@ -6795,7 +6794,7 @@ actions and optimistic pinning.
 **Design references** doc 03 §3.1, §3.2, §3.5, Cross-cutting rules; doc 02 §5.7; doc 04 §6.1; Q42, Q39; D13.
 
 **Acceptance criteria**
-- [ ] the route validates its search schema (`pinned`, `slug`, `forwarding`, `scope`, `sort`, `view`, `size`) with TanStack Router; every state is
+- [ ] the route validates its search schema (`pinned`, `hasSlug`, `forwarding`, `scope`, `sort`, `view`, `size`) with TanStack Router; every state is
       linkable and back and forward work; the page-number parameter of doc 03 is replaced by "load more" because keyset pagination has no random
       access (Q42), and the page-size choice 24, 48 or 96 maps to `limit`
 - [ ] cards show favicon placeholder (monogram), title over two lines, host in mono, "No slug" until E3.3, pin indicator, usage ("142 opens · 2 h
@@ -9594,7 +9593,7 @@ maintainer: false
 **Design references** doc 02 §13.4; doc 05 §3.1, §5.3, §6; Q13, Q56, Q76; D24, D25.
 
 **Acceptance criteria**
-- [ ] the guide at `docs/operations/backup-and-restore.md` explains the two halves: per-member JSON export (what it contains and omits: usage counts,
+- [ ] the guide at `docs/self-hosting/backup-restore.md` explains the two halves: per-member JSON export (what it contains and omits: usage counts,
       other members' content) and the operator's database backup with `pg_dump` and a volume snapshot, and says when to use which
 - [ ] it states that the database is the only state (the image stores no files) and that `ENCRYPTION_KEY` (with `ENCRYPTION_KEY_ID`) and
       `SESSION_SECRET` must be backed up separately from the dump, because MFA secrets in the dump are unreadable without the encryption key
@@ -9609,7 +9608,7 @@ maintainer: false
 
 **Out of scope** The scripted drill (E4.5.2), the full configuration reference (Phase 6).
 
-**Scope** `docs/operations/`, `README.md` · ~200 changed lines · Expected files: 2
+**Scope** `docs/self-hosting/`, `README.md` · ~200 changed lines · Expected files: 2
 
 ### Add a scripted backup and restore drill
 
@@ -9658,7 +9657,7 @@ know the rate limits and caps.
 **Design references** doc 02 §14, §16; doc 04 §7; doc 13 Q8, Q53; D22, D24.
 
 **Acceptance criteria**
-- [ ] `docs/operations/configuration-phase-3-4.md` documents `AI_BASE_URL`, `AI_API_KEY` (named only, never an example value), `AI_MODEL`,
+- [ ] `docs/self-hosting/environment.md` documents `AI_BASE_URL`, `AI_API_KEY` (named only, never an example value), `AI_MODEL`,
       `AI_PROVIDER_NAME` and the egress rule decided in E4.3.1, `AUDIT_RETENTION_DAYS`, the `RATE_LIMIT_<BUCKET>_*` knobs for the `go`, `fetch`, `ai`
       and `bulk` buckets with their defaults, and the product constants of doc 02 §16 that are configuration (page sizes, select-all cap, import caps,
       metadata and AI cache lifetimes)
@@ -9670,7 +9669,7 @@ know the rate limits and caps.
 
 **Out of scope** The complete configuration reference and install guide (Phase 6 operations docs).
 
-**Scope** `docs/operations/`, `scripts/` · ~250 changed lines · Expected files: 3
+**Scope** `docs/self-hosting/`, `scripts/` · ~250 changed lines · Expected files: 3
 
 ### Publish the CE 1.0.0-rc.1 image
 
@@ -11467,8 +11466,8 @@ maintainer: true
 
 **Acceptance criteria**
 - [ ] the package is public and linked to this repository; the maintainer records the date
-- [ ] `docker pull` of the release candidate tag works on a machine with no registry credentials, and `verify-image.sh`
-  (E6.5.1) passes on it
+- [ ] `docker pull` of a release candidate built after E6.5.1 (signed, with provenance) works on a machine with no registry
+  credentials, and `verify-image.sh` passes on it
 - [ ] the maintainer records that no Cloud image is published to this registry
 
 **Out of scope** publishing 1.0.0 (E6.5.11).
@@ -11498,7 +11497,7 @@ checks the draft GitHub Release and publishes it.
 - [ ] `release.yml` produced `:1.0.0` and `:1.0` with SBOM, provenance and a valid signature; the maintainer records the
   digest and the output of `verify-image.sh`
 - [ ] the maintainer published the GitHub Release with the notes (E6.5.9), and `:latest` now points at the 1.0.0 digest
-- [ ] the maintainer pulled `slugbase/slugbase:1.0.0` anonymously, ran the documented compose file and reached
+- [ ] the maintainer pulled the 1.0.0 image from the registry named in Q12 anonymously, ran the documented compose file and reached
   `/ready`; the recorded `/version` output shows 1.0.0
 - [ ] the maintainer records that the Cloud roadmap's CE pin for 1.0.0 may proceed (no content from private
   repositories)
