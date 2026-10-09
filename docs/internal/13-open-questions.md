@@ -135,6 +135,10 @@ Numbers are stable: Q1–Q19 come from docs 00–01, Q20–Q39 from 02–03, Q40
 | Q104 | Cloud decision | Cloud — recorded in the Cloud documentation |
 | Q105 | Cloud decision | Cloud — recorded in the Cloud documentation |
 | Q106 | Cloud decision | Cloud — recorded in the Cloud documentation |
+| Q107 | Cloud decision | Cloud — recorded in the Cloud documentation |
+| Q108 | Cloud decision | Cloud — recorded in the Cloud documentation |
+| Q109 | Cloud decision | Cloud — recorded in the Cloud documentation |
+| Q110 | Cloud decision | Cloud — recorded in the Cloud documentation |
 
 ### Product behaviour
 
