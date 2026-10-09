@@ -61,7 +61,7 @@ def gh(method: str, path: str, payload: dict | None = None) -> object:
     args = ["gh", "api", "--method", method, path]
     if payload is not None:
         args += ["--input", "-"]
-    for attempt in range(5):
+    for attempt in range(14):
         proc = subprocess.run(
             args, input=json.dumps(payload) if payload is not None else None,
             capture_output=True, text=True, cwd=ROOT,
@@ -69,8 +69,10 @@ def gh(method: str, path: str, payload: dict | None = None) -> object:
         if proc.returncode == 0:
             return json.loads(proc.stdout) if proc.stdout.strip() else None
         err = proc.stderr + proc.stdout
-        if re.search(r"rate limit|secondary|HTTP 403|HTTP 429|abuse", err, re.I) and attempt < 4:
-            time.sleep(30 * (attempt + 1))
+        if re.search(r"rate limit|secondary|HTTP 403|HTTP 429|abuse|HTTP 5\d\d", err, re.I) and attempt < 13:
+            wait = min(60 * 2 ** min(attempt, 4), 600)  # 1, 2, 4, 8, 10, 10, ... minutes
+            print(f"  GitHub asked us to slow down; waiting {wait}s (attempt {attempt + 1})", flush=True)
+            time.sleep(wait)
             continue
         raise GhError(f"{method} {path}\n{err.strip()}")
     raise GhError(f"{method} {path}: gave up after retries")
@@ -404,8 +406,12 @@ def main() -> int:
         for title in missing_ms:
             milestones[title] = gh("POST", f"repos/{REPO}/milestones", {"title": title})["number"]  # type: ignore[index]
 
+        def status_of(e: Entity) -> str:
+            ready = e.kind == "item" and e.ready and not args.no_ready and not (MAINTAINER and MAINTAINER in e.labels)
+            return "status:ready" if ready else "status:new"
+
         def create(e: Entity) -> dict:
-            labels = sorted(set(e.labels) | ({"epic"} if e.kind == "epic" else set()))
+            labels = sorted(set(e.labels) | {status_of(e)} | ({"epic"} if e.kind == "epic" else set()))
             issue = gh("POST", f"repos/{REPO}/issues", {
                 "title": e.title, "body": render_body(e), "labels": labels,
                 "milestone": milestones[milestone_of(e)],
@@ -441,10 +447,29 @@ def main() -> int:
                     linked += 1
                     time.sleep(0.6)
 
-        if not args.no_ready:
-            for it in sel_items:
-                if it.ready and not (MAINTAINER and MAINTAINER in it.labels):
-                    subprocess.run([str(ROOT / ".claude/scripts/issue-status.sh"), str(existing[it.ident]["number"]), "ready"], check=True, cwd=ROOT)
+        # Verify before reporting success (and before deleting the roadmap).
+        problems_after: list[str] = []
+        for e in (*sel_epics, *sel_items):
+            if e.ident not in existing:
+                problems_after.append(f"{e.ident}: no issue")
+        for it in sel_items:
+            n = existing[it.ident]["number"]
+            parent = existing[epic_of[it.ident].ident]["number"]
+            got = gh("GET", f"repos/{REPO}/issues/{n}").get("parent_issue_url") or ""  # type: ignore[union-attr]
+            if not got.endswith(f"/{parent}"):
+                problems_after.append(f"{it.ident}: #{n} is not a sub-issue of #{parent}")
+            have = {d["number"] for d in gh_list(f"repos/{REPO}/issues/{n}/dependencies/blocked_by")}
+            for dep in it.depends:
+                t = existing.get(dep)
+                if t and t["number"] not in have:
+                    problems_after.append(f"{it.ident}: #{n} is not blocked by {dep} (#{t['number']})")
+                elif not t and full_run:
+                    problems_after.append(f"{it.ident}: dependency {dep} has no issue")
+        if problems_after:
+            print("\nVerification failed — the roadmap is kept:")
+            for p_ in problems_after:
+                print(f"  ✗ {p_}")
+            return 2
     except GhError as exc:
         print(f"\nStopped: {exc}\nRe-run to continue; filed issues are recognised by their roadmap marker.", file=sys.stderr)
         return 2
