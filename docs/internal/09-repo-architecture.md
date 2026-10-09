@@ -16,7 +16,7 @@ Hoserva is one monorepo because one developer ships one artefact (its doc 12 §1
 
 **Inside each repository the monorepo arguments hold unchanged**: backend, contracts and UI change in one commit; one gate gives one verification signal; one `CLAUDE.md` holds the rules; refactors are mechanical. The cost of the split is concentrated in one place — the CE ↔ Cloud seam — and §3 makes that seam explicit, versioned and checked, instead of the symlinked sibling checkout that broke the first implementation (doc 00 §2).
 
-**Kept separate:** end-user documentation stays in `mdg-labs/slugbase-docs` (public), written with the `customer-docs` skill (§5.6).
+**Kept here, published elsewhere:** the documentation content (end users, operators, release notes) lives in this repository, written with the `customer-docs` skill (§5.6) and held to the docs contract (§3.5). There is no separate docs repository (Q2). The one site that publishes it, `slugbase.app/docs`, is built in the private Cloud repository (§4), which asks for a rebuild when the documentation changes (the hook of §3.5, Q111).
 
 ---
 
@@ -36,7 +36,8 @@ slugbase/
 ├── compose.yml                   the published self-hosting stack: postgres, slugbase, slugbase-worker (doc 01 §2.1)
 ├── .nvmrc                        24
 │
-├── .claude/                      vendored MDG Labs workflow (§5) + repo-owned workflow.json, rules, known-escapes.md
+├── .claude/                      vendored MDG Labs workflow (§5) + repo-owned workflow.json, rules, known-escapes.md,
+│                                 and customer-docs/docs-config.md (content root docs/user, build check pnpm docs:check)
 ├── .github/
 │   ├── workflows/                ci.yml, e2e.yml, release.yml, codeql.yml, issue-status.yml (doc 08 §6)
 │   ├── ISSUE_TEMPLATE/           from mdg-labs/skills templates/github (§5.5)
@@ -44,9 +45,12 @@ slugbase/
 ├── docs/
 │   ├── internal/                 these design docs, including the threat model at 10-threat-model.md,
 │   │                             the path workflow.json `threatModel` names (§7)
+│   ├── user/                     end-user documentation, written with /customer-docs (§3.5, §7); published
+│   │                             at slugbase.app/docs by the site
 │   ├── self-hosting/             operator documentation: install, environment, reverse proxy, mail, OIDC,
 │   │                             backup and restore, upgrade, operations, security (§7)
-│   └── releases/                 release notes per version, the source of the draft GitHub Release (§7)
+│   └── releases/                 release notes per version, `<version>.md`, the source of the draft GitHub
+│                                 Release (§7)
 │
 ├── packages/
 │   ├── contracts/                @slugbase/contracts — Zod schemas per operation in src/operations/, the OpenAPI
@@ -135,6 +139,37 @@ Every exported entry point has an **API Extractor report** (`packages/*/etc/*.ap
 
 CE owns `public`; Cloud owns its own schemas (doc 01 §7.3). The billing service has its own database, so no billing-service schema exists in SlugBase. Cloud tables may reference `public` by foreign key; `public` never references anything else. A CE migration that drops or renames a column referenced from a Cloud schema is a contract change (§3.3) and follows expand/contract across two promotions (doc 05).
 
+### 3.5 The documentation contract and the docs-published hook
+
+The documentation content is in this repository (Q2). The site that publishes it is built in the private Cloud repository, which merges these files with its own Cloud-only pages. Both sides rely on the two things below, stated once here.
+
+**Where the content lives.**
+
+| Root | Content |
+|---|---|
+| `docs/user/` | End-user documentation, written with `/customer-docs` |
+| `docs/self-hosting/` | Operator documentation (§7) |
+| `docs/releases/<version>.md` | Release notes (§7) |
+
+`/customer-docs` is configured in `.claude/customer-docs/docs-config.md` with content root `docs/user` and the build check `pnpm docs:check`, which is the same command as `docs.build` in `.claude/workflow.json`. CE's CI runs `docs:check` on every change under these roots.
+
+**The docs contract.** `docs:check` fails a change that breaks any of the following:
+
+- **Format.** Markdown or MDX files with frontmatter. The fields are `title`, `description` and `edition` (`ce`, `cloud` or `both`); `since` (a version) and `order` are optional. `edition` and `since` tell the reader which edition and from which version a feature is available; the site renders them as edition callouts and badges.
+- **MDX is restricted,** because the content is built by the CI of whoever publishes the site. A file may not contain `import` or `export` statements or arbitrary JSX. The only components allowed are an allow-list: callout, tabs, steps, edition badge and screenshot.
+- **Links** are relative, or to `/docs/...`.
+- **Assets.** Images live next to the page that shows them. There are no scripts, iframes or third-party embeds.
+- **Language.** English only for now.
+- **Help links from the app.** The app links to the documentation through a stable `/docs/<route>` structure and a configurable docs base URL whose default is `https://slugbase.app/docs` (`DOCS_BASE_URL`, doc 01 §11; doc 03 sidebar footer).
+
+**The docs-published hook (Q111).** The workflow `.github/workflows/docs-published.yml` asks the site repository to rebuild when documentation changes. It is generic: it names no private repository and no host (§4); the target comes from configuration.
+
+- **Triggers.** A push to `main` that touches `docs/user/**`, `docs/self-hosting/**` or `docs/releases/**`, and `workflow_dispatch`.
+- **Action.** It sends a GitHub `repository_dispatch` of type `docs-published` with `client_payload.sha` set to the commit it runs on (for a push, the pushed commit). Nothing else is in the payload.
+- **Configuration.** The target repository is the repository variable `DOCS_SITE_REPOSITORY` (owner/name). The credential is the secret `DOCS_SITE_DISPATCH_TOKEN`, a fine-grained token limited to dispatching on that one repository. The token and the variable are set by the maintainer only (D24).
+- **No-op rules.** The workflow does nothing when the variable or the secret is unset, or when the repository it runs in is not the upstream CE repository. Forks and self-hosters therefore never send anything.
+- **The receiving side** is recorded in the Cloud documentation (Cloud doc 07 §4.4, Cloud doc 11). What CE relies on is that it treats the payload as untrusted data: it accepts only a 40-character hexadecimal `sha` that is reachable from CE `main`, fetches only the three docs paths at that commit, never executes or interpolates the payload into a shell, and falls back to the docs of its pinned CE submodule when the fetch fails, so this repository's availability never blocks a deploy. A daily scheduled rebuild on that side is the safety net for a missed dispatch.
+
 ---
 
 ## 4. What never appears in the public repository
@@ -150,11 +185,11 @@ The CE repository is public from its first commit, and `CLAUDE.md` restates this
 **What is welcome.** The line is drawn at how Cloud is run and built, not at whether it exists. CE promotes SlugBase Cloud as the managed alternative to self-hosting, in the README, the user docs and the product itself:
 
 - the name *SlugBase Cloud*, that it is managed and EU-hosted, and that it is built from this code;
-- its public hostnames: `slugbase.app` (website, pricing, signup), `app.slugbase.app` and `docs.slugbase.app`;
+- its public hostnames: `slugbase.app` (website, pricing, signup, and the documentation at `slugbase.app/docs`) and `app.slugbase.app`; there is no `docs.slugbase.app` (Q2);
 - the plan names (Free, Personal, Team, the Supporter offer) and what each entitles, since the entitlement engine is CE's;
 - links to the pricing page and signup. Prices themselves are linked, never written into this repository, so they have one source and cannot go stale here.
 
-The marketing site itself (`slugbase.app`) is built and deployed from the private Cloud repository, because it carries the legal pages, prices read from the billing service and Cloud's contact and analytics modules. It links to this repository for self-hosting.
+The site itself (`slugbase.app`: marketing pages at `/`, documentation at `/docs`) is built and deployed from the private Cloud repository, because it carries the legal pages, prices read from the billing service and Cloud's contact and analytics modules. It takes the documentation content from this repository (§3.5), so the content is public from its first commit and follows these rules like any other file here. It links to this repository for self-hosting.
 
 ---
 
@@ -305,7 +340,7 @@ maintainer or by adopting its recommended default. Precedence on conflict: 00 de
 | `area:ui` | `packages/ui/` |
 | `area:email` | `packages/email/` |
 | `area:ci` | `.github/`, `apps/slugbase/`, `scripts/`, `compose*.yml`, `e2e/` |
-| `area:docs` | `docs/` |
+| `area:docs` | `docs/internal/`, `docs/user/`, `docs/self-hosting/`, `docs/releases/` |
 
 ### Always-shared files
 
@@ -358,6 +393,11 @@ and `apps/slugbase` wires it.
   the advisory lock with `lock_timeout`, and migrations stay fast and schema-only (backfills and concurrent index builds
   are worker jobs) (D25).
 - Identifiers are generated in the application (UUIDv7, Q91), never by a database function.
+- Documentation under `docs/user/`, `docs/self-hosting/` and `docs/releases/` follows the docs contract (doc 09 §3.5):
+  frontmatter `title`, `description` and `edition` (`ce`, `cloud` or `both`), optional `since` and `order`; MDX with no
+  `import`/`export` and no JSX beyond the allow-listed components (callout, tabs, steps, edition badge, screenshot);
+  links relative or to `/docs/...`; images next to the page; no scripts, iframes or third-party embeds; English only.
+  `pnpm docs:check` passes.
 - Flag v1 non-goals (doc 00 §4) and ask before building one.
 
 ### Risk review
@@ -421,7 +461,7 @@ docker compose -f compose.dev.yml ps --status running postgres
 4. **`dev` → `main`.** `/dev-diff` sizes the promotion; `/open-pr` opens the promotion PR; `/cr-review` works one CodeRabbit round; the maintainer merges. Cloud deploys are driven from `main` and `dev` pushes (Cloud doc 07 §4).
 5. **Security.** `/security-audit` runs against doc 10 before each production promotion (D23) and whenever a safety-critical epic completes; Critical/High findings go to private advisories, fixed with `/orchestrate --advisory`.
 6. **Docs stay true.** A change that alters a documented behaviour edits the doc in the same commit; a default (Qn) that survives implementation is promoted to a decision (Dn) by a `docs` item.
-7. **End-user docs.** `/customer-docs` maintains `mdg-labs/slugbase-docs` from shipped behaviour.
+7. **End-user docs.** `/customer-docs` maintains `docs/user/` in this repository from shipped behaviour (Q2). A merge to `main` that changes a docs root triggers the docs-published hook (§3.5, Q111), and the site rebuilds.
 
 ---
 
@@ -458,6 +498,8 @@ GitHub issue (status:ready, area:*, Fixes target) ──► /orchestrate ──�
 |---|---|---|
 | Operator documentation for self-hosting CE | `mdg-labs/slugbase` `docs/self-hosting/` | `install.md`, `environment.md` (generated from the env schemas, checked for drift), `reverse-proxy.md`, `mail.md`, `oidc.md`, `backup-restore.md`, `upgrade.md`, `operations.md`, `security.md`. The backup and restore guide of Phase 4 is the first version of `backup-restore.md`; settings added in Phases 3 and 4 are documented in `environment.md` from the start |
 | Release notes | `mdg-labs/slugbase` `docs/releases/<version>.md` | The source of the draft GitHub Release that `release.yml` creates |
-| End-user documentation | The separate public docs repository of Q2, written with `/customer-docs` | Its content root and build check are set by that repository's docs configuration; the CE repository holds only the `/customer-docs` configuration under `.claude/customer-docs/` |
+| End-user documentation | `mdg-labs/slugbase` `docs/user/`, written with `/customer-docs` (Q2) | The content root and the build check (`pnpm docs:check`) are set in `.claude/customer-docs/docs-config.md`. The files follow the docs contract (§3.5). Cloud-only pages are not here: they live in the private Cloud repository next to the site |
+
+The three documentation roots are published together on the site at `slugbase.app/docs` (§3.5); a change to them requests the rebuild through the docs-published hook (Q111).
 
 Since 2026-10-08 the docs live in their repositories: this repository's `docs/internal/` holds docs 00–05, 08–10, 12, 13 and the design prototype; the private Cloud repository holds docs 06, 07, 11, the Cloud parts of this doc (Cloud doc 09) and the Cloud carry-over. Nothing is duplicated.

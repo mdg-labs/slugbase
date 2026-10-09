@@ -25,6 +25,7 @@
   "models": { "verifier": "opus", "refiner": "auto" },
   "ci": { "branchPrefix": "ci/", "watchTimeout": 5400 },
   "threatModel": "docs/internal/10-threat-model.md",
+  "docs": { "paths": ["docs/user/**", "docs/self-hosting/**", "docs/releases/**"], "guide": ".claude/skills/customer-docs/style-guide.md", "build": "pnpm docs:check" },
   "securityAudit": { "exclude": ["packages/contracts/generated/**", "packages/db/migrations/**", "packages/ui/src/components/ui/**", "docs/internal/design-prototype/**"] },
   "riskPaths": [
     "packages/db/**",
@@ -53,7 +54,7 @@
       { "name": "area:ui", "color": "c5def5", "description": "coss ui components and tokens — packages/ui" },
       { "name": "area:email", "color": "fef2c0", "description": "Email templates — packages/email" },
       { "name": "area:ci", "color": "e99695", "description": "CI, images, release — .github, apps/slugbase, scripts" },
-      { "name": "area:docs", "color": "0075ca", "description": "docs/ — design docs and threat model" }
+      { "name": "area:docs", "color": "0075ca", "description": "docs/ — design docs and threat model, end-user docs (docs/user), operator docs (docs/self-hosting) and release notes (docs/releases)" }
     ],
     "risk": { "name": "safety-critical", "color": "b60205", "description": "Tenancy, auth, sessions, egress, secrets or migrations: Opus verifier, never bundled" },
     "maintainerOnly": { "name": "maintainer-only", "color": "5d4037", "description": "Needs the maintainer: legal, money, DNS, registry or production access" }

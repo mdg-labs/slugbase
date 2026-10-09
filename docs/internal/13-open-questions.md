@@ -4,7 +4,7 @@ Every question raised while writing docs 00–12 is **decided** (2026-10-08). A 
 
 **Some questions concern only SlugBase Cloud** (its infrastructure, billing, prices and legal texts). They are recorded in the Cloud documentation. Their numbers stay here, in the index and as one-line stubs, so every citation still resolves. Where a question has a general half and a Cloud half, this document keeps the general half.
 
-Numbers are stable: Q1–Q19 come from docs 00–01, Q20–Q39 from 02–03, Q40–Q59 from 04–05, Q60–Q79 from 06, 07 and 11, Q80–Q99 from 08–10 and 12. Q90 and above record gaps found while the detailed plan was derived from the docs, each adopted as the recommended default. Unused numbers stay free; numbers are never reused.
+Numbers are stable: Q1–Q19 come from docs 00–01, Q20–Q39 from 02–03, Q40–Q59 from 04–05, Q60–Q79 from 06, 07 and 11, Q80–Q99 from 08–10 and 12. Q90 and above record gaps found while the detailed plan was derived from the docs, each adopted as the recommended default. Q111 and above are decisions taken after 2026-10-08. Unused numbers stay free; numbers are never reused.
 
 ### Status legend
 
@@ -12,6 +12,7 @@ Numbers are stable: Q1–Q19 come from docs 00–01, Q20–Q39 from 02–03, Q40
 |---|---|
 | **Decided (maintainer)** | The maintainer answered; the docs follow that answer. |
 | **Decided (default)** | The recommended default was adopted unchanged. |
+| **Decided (changed YYYY-MM-DD)** | A decided entry whose decision the maintainer replaced on that date. It is edited in place and keeps its number. |
 | **Cloud — recorded in the Cloud documentation** | The question concerns only SlugBase Cloud; its decision is kept there. |
 | **Settled → Dn** | Also promoted to the decision log in doc 00 §5. |
 | **Merged → Qn** | Folded into another entry; kept only so its number resolves. |
@@ -63,8 +64,9 @@ Numbers are stable: Q1–Q19 come from docs 00–01, Q20–Q39 from 02–03, Q40
 | Q81 | A git submodule `ce/` pinned to a CE commit, built from source inside the Cloud pnpm workspace | Decided (default) |
 | Q83 | GitHub Discussions on `mdg-labs/slugbase` for questions | Decided (default) |
 | Q86 | Private vulnerability reporting or `support@slugbase.app`; 3 days / 30 days / +7 days | Decided (maintainer) |
-| Q2 | A separate public repository `mdg-labs/slugbase-docs`, built with the `/customer-docs` skill, published at `docs.slugbase.app` | Decided (default) |
+| Q2 | User documentation lives in this repository (`docs/user/`, `docs/self-hosting/`, `docs/releases/`), written with `/customer-docs` and published at `slugbase.app/docs` by the one SlugBase site; no separate docs repository, no `docs.slugbase.app` | Decided (changed 2026-10-09) |
 | Q89 | Deleted on 2026-10-08 (maintainer decision), without a deprecation period | Decided (maintainer) |
+| Q111 | A change to the documentation on `main` requests a rebuild of the site through a generic `repository_dispatch` (`docs-published`); the target repository is a variable, and the workflow does nothing without it | Decided (maintainer) |
 
 ### External services
 
@@ -293,15 +295,28 @@ Keeps the issue tracker the plan (D21) instead of a support inbox; Discussions a
 **Decision: reports go through GitHub private vulnerability reporting or `support@slugbase.app` (named in `SECURITY.md` and `/.well-known/security.txt`). Acknowledge within 3 working days, fix-target 30 days for Critical/High, publish the advisory 7 days after a patched CE image is available, credit reporters on request.**
 
 ### Q2 — Where user-facing documentation lives
-**Status:** Decided (default) · **Due:** Phase 6 · **Affects:** doc 09 §2, doc 11
+**Status:** Decided (changed 2026-10-09) · **Due:** Phase 6 · **Affects:** doc 01 §11, doc 03 (help links), doc 09 §1, §2.1, §3.5, §4, §5.6, §7, doc 12 Phase 6, Cloud doc 11
 
-**Decision: a separate public repository `mdg-labs/slugbase-docs`, built with the `/customer-docs` skill, published at `docs.slugbase.app`; it documents CE and Cloud on one site with edition callouts.**
-User docs have a different review bar and cadence than code; one site for both editions mirrors "one product" (D4). The old Documentation.AI content is not carried over; pages are rewritten against the new UI.
+**Decision: the documentation content lives in this repository, and one site publishes it. End-user documentation is in `docs/user/`, operator (self-hosting) documentation in `docs/self-hosting/`, release notes in `docs/releases/<version>.md`. It is written with the `/customer-docs` skill (content root `docs/user`; build check `pnpm docs:check`, the same command as `docs.build` in `.claude/workflow.json`), checked by the docs contract (doc 09 §3.5) and published at `https://slugbase.app/docs`. `slugbase.app` is one site: the marketing pages at `/`, the documentation at `/docs` (`/de/…` for German marketing and legal pages). There is no `docs.slugbase.app` (at most a redirect to `https://slugbase.app/docs`) and no separate docs repository.**
+- **One site, one image.** The site is Next.js with Fumadocs, built as a static export into a hardened nginx image, and replaces the Astro site of the earlier plan. It is built and deployed from the private Cloud repository, which carries the parts that cannot be public (doc 09 §4) and merges this repository's docs with the Cloud-only pages into one documentation source. Edition callouts are driven by the `edition` frontmatter field.
+- **Current release only.** Docs are not versioned: they describe the current release. The `since` field and the edition badge say which version and edition a feature belongs to. Versioned docs may be adopted later.
+- **Language and search.** Docs are English first. The marketing and legal pages stay EN + DE. Search is Fumadocs' static client-side search; no third-party script is loaded, so the content security policy is unchanged.
+- **Cloud-only pages** (plans and billing, Cloud sign-up, data location, Cloud support) live in the private Cloud repository next to the site, not here.
+- **A docs change reaches the site** through the rebuild request of Q111.
+- **Open technical points** for a spike in the site repository: EN/DE routing under a static export (no middleware), and the static search together with i18n.
+
+User docs keep their own review bar through the contract check and the `area:docs` label, but sit in the repository that changes the behaviour they describe, so one commit can change the code and its documentation (doc 09 §5.6 step 6). One site for both editions mirrors "one product" (D4). The earlier decision of 2026-10-08, a separate docs repository, is dropped: that repository was never created in the rebuilt layout, so nothing is migrated. The old Documentation.AI content is not carried over; pages are rewritten against the new UI.
 
 ### Q89 — Old CE images on GHCR
 **Status:** Decided (maintainer) · **Affects:** doc 12 §3.2
 
 **Decision: deleted on 2026-10-08, without a deprecation period** (maintainer, when the old repositories were removed). Nobody was known to run the old CE images; the new CE publishes fresh images (Q12).
+
+### Q111 — Docs changes request a rebuild of the site
+**Status:** Decided (maintainer) · **Due:** Phase 6 · **Affects:** doc 09 §3.5, §4, §5.6, Q2, Cloud doc 07 §4.4, Cloud doc 11
+
+**Decision: when documentation changes on `main` of this repository, a workflow here asks the site repository to rebuild and deploy the site. It sends a GitHub `repository_dispatch` of type `docs-published` carrying the pushed commit. The target repository is configuration, not code: the workflow names no private repository and no host (doc 09 §4), and does nothing where the configuration is absent.** The full behaviour is the "docs-published hook" in doc 09 §3.5.
+Without this, a documentation fix would reach the site only with the next site change or a manual rebuild. The request makes publishing a consequence of merging, with no human step and no code in this repository that knows what receives it. Forks and self-hosters have no target configured, so for them it is a no-op. The receiving side validates the commit and treats the docs as untrusted build input; what it does after that is recorded in the Cloud documentation.
 
 ---
 

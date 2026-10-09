@@ -67,7 +67,7 @@ Teams, sharing of bookmarks and folders (direct, team, folder-transitive), "shar
 
 ### Phase 6 — Launch hardening and launch
 
-The CE part: full `/security-audit` against doc 10, with every Critical/High fixed through advisories; dependency and image scanning clean; performance budgets on production-sized data; the CE operations docs; end-user docs at docs.slugbase.app (`/customer-docs`); CE `1.0.0` release and public announcement: the image signed with cosign and its package public, `:latest` moved only by the published release (Q92); the operator documentation in `docs/self-hosting/` and the release notes in `docs/releases/` (doc 09 §7). The Cloud part of launch hardening is planned in the Cloud roadmap.
+The CE part: full `/security-audit` against doc 10, with every Critical/High fixed through advisories; dependency and image scanning clean; performance budgets on production-sized data; the CE operations docs; end-user docs in `docs/user/`, written with `/customer-docs`, held to the docs contract (doc 09 §3.5) and published at `slugbase.app/docs` by the site, which is rebuilt through the docs-published hook (Q2, Q111); CE `1.0.0` release and public announcement: the image signed with cosign and its package public, `:latest` moved only by the published release (Q92); the operator documentation in `docs/self-hosting/` and the release notes in `docs/releases/` (doc 09 §7). The Cloud part of launch hardening is planned in the Cloud roadmap.
 
 **Epics:** *Security audit and fixes* · *Load and performance* · *CE operations docs* · *User documentation* · *CE 1.0.0 release*.
 

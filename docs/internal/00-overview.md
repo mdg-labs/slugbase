@@ -182,7 +182,7 @@ Decisions already settled, with rationale. Reopening any of these needs a new re
 
 ## 6. Naming and positioning
 
-**Name:** SlugBase — settled. Domain `slugbase.app`. Product hostnames: `slugbase.app` (marketing), `app.slugbase.app` (Cloud application, Q4), `docs.slugbase.app` (user docs, Q2).
+**Name:** SlugBase — settled. Domain `slugbase.app`. Product hostnames: `slugbase.app` (marketing at `/`, user documentation at `/docs`, Q2), `app.slugbase.app` (Cloud application, Q4). There is no `docs.slugbase.app`.
 
 **Positioning:** described by what it does — *bookmarks with private short links and a keyboard launcher* — and by two properties: **self-hostable** (CE, AGPL-3.0) and **EU-hosted** (Cloud). No "X alternative" framing, no claims about competitors that aren't sourced facts.
 

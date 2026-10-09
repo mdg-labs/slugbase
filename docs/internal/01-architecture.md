@@ -23,7 +23,7 @@
 | Web app | React 19 + Vite SPA, TanStack Router + TanStack Query (D13) | Static assets, typed routes and search params (filters live in the URL), cache-first data fetching |
 | UI system | coss ui (Base UI + Tailwind CSS v4), vendored in `@slugbase/ui`; `lucide-react`; `cmdk`-equivalent coss Command for the palette (D13) | One accessible component vocabulary; copy-and-own |
 | i18n | `i18next` + `react-i18next`; ICU plural rules; EN + DE catalogs (D19) | Mature, typed keys via generated declarations |
-| Marketing site (Cloud) | Astro, static, zero-JS by default; served by nginx (doc 11) | Fast, cacheable, no runtime |
+| Website and documentation (Cloud) | Next.js with Fumadocs, built as a static export; marketing at `/`, documentation at `/docs`, content from `docs/` (Q2); served by nginx (doc 11) | One site and one image; fast, cacheable, no runtime |
 | Operator console (Cloud) | Hono + Vite/React SPA on `@slugbase/ui`, separate service and origin (doc 07 §6) | Never part of the customer app or the CE image |
 | Tests | Vitest (unit + integration against a real Postgres), Playwright (e2e) | Doc 08 |
 | Logs / telemetry | `pino` JSON logs; OpenTelemetry traces and metrics, Sentry-protocol error reporting behind the error port | Vendor-neutral; Cloud's backends are self-hosted and lightweight at launch (D27) |
@@ -353,6 +353,7 @@ Doc 10 is the threat model; this is the shape that implements it.
   | `ENCRYPTION_KEY_PREVIOUS` | Earlier keys as `id:key` pairs, used only to decrypt until the re-encryption sweep ends | empty |
   | `TRUSTED_PROXY_HOPS` | Proxy hops trusted for `X-Forwarded-For` | `0` |
   | `API_DOCS_ENABLED` | Serve `/api/docs` and the OpenAPI document | `true` |
+  | `DOCS_BASE_URL` | Base URL the app's help links point to; links are `<base>/<route>` with the stable `/docs/<route>` routes of doc 09 §3.5 | `https://slugbase.app/docs` |
   | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURITY`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | The SMTP adapter; unset selects the log-only adapter, a partial set refuses to start | unset |
   | `ERROR_REPORT_DSN` | Sentry-protocol error reporting; unset selects the no-op adapter | unset |
   | `METRICS_PORT` | Internal listener for `/metrics` (§12) | unset |
@@ -361,7 +362,7 @@ Doc 10 is the threat model; this is the shape that implements it.
   Further keys belong to the feature that needs them and are named in its section of doc 02 (`PUBLIC_REGISTRATION`, `EMAIL_VERIFICATION_REQUIRED`, `SETUP_ENABLED`, `SETUP_TOKEN_REQUIRED`, `TOTP_ISSUER`, `OIDC_<SLUG>_*`, `AI_*`, `AUDIT_RETENTION_DAYS`). Booleans parse with an explicit `envBoolean()` (`"false"` is false). Unknown `SLUGBASE_*` keys produce a startup warning.
 - **Production refuses to start** when `SESSION_SECRET`/`ENCRYPTION_KEY` are missing or short (the encryption key must decode to 32 bytes), `APP_ORIGIN` is not HTTPS, a value equals a development default from `.env.example`, or a configured adapter's required keys are missing. The message names the key and never prints a value.
 - **No edition flag** (D4). Cloud's composition root sets Cloud defaults (public registration on, email verification required, ordinary accounts may create workspaces) by passing them in; CE's sets CE defaults (registration off, workspace creation off). Both are overridable by env or, for `allow_workspace_creation`, by the instance setting (Q94).
-- Client-side configuration is **not** built into the SPA bundle: the SPA fetches `/api/config` (public, `Cache-Control: public, max-age=60`, the one API response that is not `no-store`) for the origin, enabled sign-in methods, locale defaults and entitlement-free feature flags. The first version carries only `apiVersion`, `origin`, `product`, `locales`, `defaultLocale` and `features.mail` / `features.ai` (whether a port is configured, never an entitlement); every other field (sign-in methods, setup state, instance display name and notice, legal links, analytics consent) is added, additively (doc 04 §2.2), by the feature that can populate it. One SPA build therefore runs on any CE host — operators never rebuild the frontend.
+- Client-side configuration is **not** built into the SPA bundle: the SPA fetches `/api/config` (public, `Cache-Control: public, max-age=60`, the one API response that is not `no-store`) for the origin, enabled sign-in methods, locale defaults and entitlement-free feature flags. The first version carries only `apiVersion`, `origin`, `product`, `locales`, `defaultLocale` and `features.mail` / `features.ai` (whether a port is configured, never an entitlement); every other field (`docsBaseUrl`, from `DOCS_BASE_URL`, sign-in methods, setup state, instance display name and notice, legal links, analytics consent) is added, additively (doc 04 §2.2), by the feature that can populate it. One SPA build therefore runs on any CE host — operators never rebuild the frontend.
 
 ---
 

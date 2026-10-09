@@ -35,7 +35,7 @@ maintainer or by adopting its recommended default. Precedence on conflict: 00 de
 | `area:ui` | `packages/ui/` |
 | `area:email` | `packages/email/` |
 | `area:ci` | `.github/`, `apps/slugbase/`, `scripts/`, `compose*.yml`, `e2e/` |
-| `area:docs` | `docs/` |
+| `area:docs` | `docs/internal/`, `docs/user/`, `docs/self-hosting/`, `docs/releases/` |
 
 ### Always-shared files
 
@@ -88,6 +88,11 @@ and `apps/slugbase` wires it.
   the advisory lock with `lock_timeout`, and migrations stay fast and schema-only (backfills and concurrent index builds
   are worker jobs) (D25).
 - Identifiers are generated in the application (UUIDv7, Q91), never by a database function.
+- Documentation under `docs/user/`, `docs/self-hosting/` and `docs/releases/` follows the docs contract (doc 09 §3.5):
+  frontmatter `title`, `description` and `edition` (`ce`, `cloud` or `both`), optional `since` and `order`; MDX with no
+  `import`/`export` and no JSX beyond the allow-listed components (callout, tabs, steps, edition badge, screenshot);
+  links relative or to `/docs/...`; images next to the page; no scripts, iframes or third-party embeds; English only.
+  `pnpm docs:check` passes.
 - Flag v1 non-goals (doc 00 §4) and ask before building one.
 
 ### Risk review

@@ -95,7 +95,7 @@ The operator owns the deployment. Two shapes, one ceiling:
 
 ### 2.11 Compromised dependency, CI step or build input
 
-- **Capability:** an npm package, GitHub Action, base image or build script that executes attacker-chosen code during install, build, test or at runtime; a malicious pull request to the public CE repository.
+- **Capability:** an npm package, GitHub Action, base image or build script that executes attacker-chosen code during install, build, test or at runtime; a malicious pull request to the public CE repository; documentation content (`docs/user/**`, `docs/self-hosting/**`, `docs/releases/**`) that a site build consumes is untrusted build input: MDX is limited to an allow-list of components with no `import`/`export`, checked by `pnpm docs:check`, and a deployment that builds from it keeps the build job free of deployment secrets (doc 09 §3.5).
 - **Trusted with:** what its step was given.
 - **Must never reach:** deployment secrets from a pull-request workflow (fork PRs never get secrets, `pull_request_target` is not used); the registry push credentials outside the release/deploy jobs; a published image that differs from what CI built from the reviewed commit (T16); the production database from CI (a managed deployment that runs `migrate` as a separate CI step confines it to that gated step; Cloud — see the Cloud threat model, T21).
 

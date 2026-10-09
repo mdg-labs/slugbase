@@ -318,7 +318,7 @@ Unauthenticated, cacheable for 60 s (`Cache-Control: public, max-age=60`; the pe
 }
 ```
 
-The document starts small and grows additively (§2.2): `apiVersion`, `origin`, `product`, `locales`, `defaultLocale` and `features.mail` / `features.ai` exist from the first server; `signIn`, `setupRequired`, `instance`, `legal`, `features.billing` and `features.analyticsConsentRequired` are added by the features that can populate them. `signIn.oidc` lists only enabled providers that answered discovery, never a secret or a provider URL. `instance.displayName` and `instance.signInNotice` are the instance settings of §10.10; the notice is plain text and the sign-in page renders it as text only.
+The document starts small and grows additively (§2.2): `apiVersion`, `origin`, `product`, `locales`, `defaultLocale`, `docsBaseUrl` (the configured documentation base URL, default `https://slugbase.app/docs`, from `DOCS_BASE_URL`) and `features.mail` / `features.ai` exist from the first server; `signIn`, `setupRequired`, `instance`, `legal`, `features.billing` and `features.analyticsConsentRequired` are added by the features that can populate them. `signIn.oidc` lists only enabled providers that answered discovery, never a secret or a provider URL. `instance.displayName` and `instance.signInNotice` are the instance settings of §10.10; the notice is plain text and the sign-in page renders it as text only.
 
 `features` reports **whether a port is configured**, never entitlements (those need a workspace — `GET /entitlements`). `billing: true` only means a non-no-op billing adapter is composed; the SPA uses it to decide whether to load the Cloud extension routes' data, not to branch product behaviour (D4).
 
