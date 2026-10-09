@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and help
+    url: https://github.com/mdg-labs/slugbase/discussions
+    about: Ask questions and get help with self-hosting in GitHub Discussions.
+  - name: Report a security vulnerability
+    url: https://github.com/mdg-labs/slugbase/security/advisories/new
+    about: Please report vulnerabilities privately, never as a public issue (see SECURITY.md).

@@ -1,0 +1,9 @@
+#!/usr/bin/env sh
+# Adds a DCO Signed-off-by trailer for the committer (CONTRIBUTING.md).
+# Enable once per clone: git config core.hooksPath .githooks
+set -eu
+msg_file="$1"
+source="${2:-}"
+case "$source" in merge|squash) exit 0 ;; esac
+ident="$(git var GIT_COMMITTER_IDENT | sed 's/ [0-9]* [-+][0-9]*$//')"
+git interpret-trailers --in-place --if-exists doNothing --trailer "Signed-off-by: $ident" "$msg_file"

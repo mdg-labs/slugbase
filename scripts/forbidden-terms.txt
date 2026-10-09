@@ -1,0 +1,19 @@
+# Patterns that must never appear in this public repository (doc 09 §4).
+# Extended regular expressions, matched case-insensitively unless the line
+# starts with "(?c)", which makes it case-sensitive. Keep this list generic:
+# never add a server, host or resource name here, since this file is public too.
+coolify
+pangolin
+(?c)\bNewt\b
+berth\.
+mollie
+commerce
+mdg-labs/slugbase-cloud
+bugsink
+beszel
+kleinunternehmer
+ustg
+€ ?[0-9]
+[0-9] ?€
+staging\.slugbase\.app
+[a-z0-9-]+\.mdg-labs\.dev

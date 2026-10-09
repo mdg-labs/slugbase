@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git commit:*)",
+      "Bash(git push origin dev)",
+      "Bash(.claude/scripts/gh-rest.sh:*)",
+      "Bash(.claude/scripts/issue-status.sh:*)",
+      "Bash(.claude/scripts/epic-status.sh:*)",
+      "Bash(.claude/scripts/issue-readiness.sh:*)",
+      "Bash(.claude/scripts/security-history.sh:*)",
+      "Bash(.claude/skills/dev-diff/dev-diff.sh:*)",
+      "Bash(pnpm gate)",
+      "Bash(pnpm install --frozen-lockfile)",
+      "Bash(pnpm turbo run:*)",
+      "Bash(pnpm i18n:check)",
+      "Bash(actionlint:*)",
+      "Bash(shellcheck:*)"
+    ],
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git push --force-with-lease:*)",
+      "Bash(git add -A:*)",
+      "Bash(git add --all:*)",
+      "Bash(git add .)"
+    ]
+  }
+}

@@ -1,0 +1,76 @@
+{
+  "$schema": "./workflow.schema.json",
+  "repo": "mdg-labs/slugbase",
+  "maintainer": "mdguggenbichler",
+  "githubRunner": "ubuntu-latest",
+  "tracker": { "type": "github" },
+  "branches": { "integration": "dev", "production": "main" },
+  "landing": "dev-cherry-pick",
+  "promotionBudget": 100,
+  "gate": "if [ -f package.json ]; then pnpm gate; fi",
+  "checks": [
+    { "paths": ["packages/contracts/**"], "run": "pnpm turbo run lint typecheck test:unit build --filter=@slugbase/contracts... && pnpm contracts:check", "requires": ["node", "pnpm"] },
+    { "paths": ["packages/core/**"], "run": "pnpm turbo run lint typecheck test:unit --filter=@slugbase/core...", "requires": ["node", "pnpm"] },
+    { "paths": ["packages/db/**"], "run": "pnpm turbo run lint typecheck test:unit --filter=@slugbase/db... && pnpm db:check && pnpm test:integration --filter=@slugbase/db...", "requires": ["node", "pnpm", "docker"] },
+    { "paths": ["packages/server/**", "packages/adapters/**"], "run": "pnpm turbo run lint typecheck test:unit --filter=@slugbase/server... --filter=@slugbase/adapters... && pnpm test:integration --filter=@slugbase/server", "requires": ["node", "pnpm", "docker"] },
+    { "paths": ["packages/web/**", "packages/ui/**"], "run": "pnpm turbo run lint typecheck test:unit build --filter=@slugbase/web... --filter=@slugbase/ui... && pnpm i18n:check", "requires": ["node", "pnpm"] },
+    { "paths": ["packages/email/**"], "run": "pnpm turbo run lint typecheck test:unit --filter=@slugbase/email... && pnpm i18n:check", "requires": ["node", "pnpm"] },
+    { "paths": ["apps/slugbase/**", "Dockerfile*"], "run": "pnpm turbo run build --filter=slugbase && docker build -f apps/slugbase/Dockerfile -t slugbase:check .", "requires": ["node", "pnpm", "docker"] },
+    { "paths": ["package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "turbo.json", "tsconfig*.json"], "run": "pnpm gate", "requires": ["node", "pnpm", "docker"] },
+    { "paths": [".github/workflows/**"], "run": "actionlint", "requires": ["actionlint"] },
+    { "paths": ["**/*.sh", ".githooks/*"], "run": "shellcheck <changed shell files>", "requires": ["shellcheck"] }
+  ],
+  "bootstrap": "if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile; fi",
+  "signoff": { "mode": "hook", "hooksPath": ".githooks" },
+  "models": { "verifier": "opus", "refiner": "auto" },
+  "ci": { "branchPrefix": "ci/", "watchTimeout": 5400 },
+  "threatModel": "docs/internal/10-threat-model.md",
+  "securityAudit": { "exclude": ["packages/contracts/generated/**", "packages/db/migrations/**", "packages/ui/src/components/coss/**", "docs/internal/design-prototype/**"] },
+  "riskPaths": [
+    "packages/db/**",
+    "packages/server/src/http/**",
+    "packages/server/src/auth/**",
+    "packages/core/src/auth/**",
+    "packages/core/src/entitlements/**",
+    "packages/core/src/sharing/**",
+    "packages/core/src/go/**",
+    "packages/adapters/src/egress/**",
+    "packages/adapters/src/secret-box/**",
+    "packages/adapters/src/identity/**",
+    "packages/contracts/**",
+    "packages/server/src/migrate/**",
+    "apps/slugbase/Dockerfile",
+    "apps/slugbase/docker-entrypoint.sh"
+  ],
+  "labels": {
+    "areas": [
+      { "name": "area:contracts", "color": "006b75", "description": "API contracts and OpenAPI — packages/contracts" },
+      { "name": "area:core", "color": "1d76db", "description": "Domain services, ports, entitlements — packages/core" },
+      { "name": "area:db", "color": "0e8a16", "description": "Schema, migrations, RLS, repositories — packages/db" },
+      { "name": "area:server", "color": "0052cc", "description": "HTTP server, middleware, routes, worker — packages/server" },
+      { "name": "area:adapters", "color": "5319e7", "description": "CE adapters — packages/adapters" },
+      { "name": "area:web", "color": "d876e3", "description": "Web app — packages/web" },
+      { "name": "area:ui", "color": "c5def5", "description": "coss ui components and tokens — packages/ui" },
+      { "name": "area:email", "color": "fef2c0", "description": "Email templates — packages/email" },
+      { "name": "area:ci", "color": "e99695", "description": "CI, images, release — .github, apps/slugbase, scripts" },
+      { "name": "area:docs", "color": "0075ca", "description": "docs/ — design docs and threat model" }
+    ],
+    "risk": { "name": "safety-critical", "color": "b60205", "description": "Tenancy, auth, sessions, egress, secrets or migrations: Opus verifier, never bundled" },
+    "maintainerOnly": { "name": "maintainer-only", "color": "5d4037", "description": "Needs the maintainer: legal, money, DNS, registry or production access" }
+  },
+  "readiness": {
+    "stale": [
+      { "pattern": "NestJS|@nestjs", "reason": "the old backend framework; the server is Hono (D12)" },
+      { "pattern": "React Router (v7|framework)|entry\\.server", "reason": "the old SSR web app; the app is a Vite SPA (D13)" },
+      { "pattern": "vendor/slugbase|link-slugbase-workspace|sibling checkout", "reason": "the old symlink seam; Cloud uses a pinned submodule (D3)" },
+      { "pattern": "Fly\\.io|Cloudflare|Neon|Turnstile", "reason": "retired hosting and bot protection; bot protection is Altcha (D16, D17)" },
+      { "pattern": "Stripe", "reason": "retired payment provider; billing sits behind BillingPort (D18, D29)" },
+      { "pattern": "SQLite|better-sqlite3", "reason": "PostgreSQL only (D6)" },
+      { "pattern": "ELv2|source[- ]available", "reason": "CE is AGPL-3.0 (D20)" },
+      { "pattern": "\\bstaging\\b branch|origin/staging|push to staging", "reason": "the integration branch is dev; staging is only a deployment environment", "exempt": "environment" },
+      { "pattern": "SLUGBASE_EDITION|SLUGBASE_MODE|isCloud", "reason": "no edition flags (D4)" },
+      { "pattern": "Radix|cmdk|ts-rest|Phasical|\\.cursor/", "reason": "retired UI stack, contract tool or agent harness" },
+      { "pattern": "\\bPhase\\b (app|secrets|CLI|run)", "reason": "Phase is not used; configuration comes from environment variables (D24)" }
+    ]
+  }
+}

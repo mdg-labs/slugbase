@@ -1,0 +1,52 @@
+name: CLA
+
+# Asks outside contributors to sign CLA.md (CONTRIBUTING.md) and records the
+# signature on the unprotected `cla-signatures` branch. Runs on
+# pull_request_target in the base repository's context; it never checks out
+# or executes pull request code, so the write token stays safe.
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_target:
+    types: [opened, closed, synchronize]
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+  statuses: write
+
+concurrency:
+  group: cla-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  cla:
+    name: CLA
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'pull_request_target' ||
+      (github.event.issue.pull_request &&
+        (github.event.comment.body == 'recheck' ||
+         github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA'))
+    steps:
+      - name: CLA Assistant Lite
+        uses: contributor-assistant/github-action@ca4a40a7d1004f18d9960b404b97e5f30a505a08 # v2.6.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          path-to-signatures: signatures/v1/cla.json
+          path-to-document: https://github.com/mdg-labs/slugbase/blob/HEAD/CLA.md
+          branch: cla-signatures
+          allowlist: mdguggenbichler,dependabot[bot],renovate[bot],github-actions[bot]
+          create-file-commit-message: "chore: start the CLA signature record"
+          signed-commit-message: "chore: record the CLA signature of $contributorName ($owner/$repo#$pullRequestNo)"
+          custom-notsigned-prcomment: >-
+            Thank you for contributing to SlugBase! Before we can merge this pull request,
+            we need you to sign our [Contributor License Agreement](https://github.com/mdg-labs/slugbase/blob/HEAD/CLA.md).
+            It lets MDG Labs use your contribution in SlugBase under the AGPL and in the hosted SlugBase Cloud,
+            while you keep your copyright. To sign, post the following comment on this pull request:
+          custom-pr-sign-comment: I have read the CLA Document and I hereby sign the CLA
+          custom-allsigned-prcomment: All contributors have signed the CLA. Thank you!
+          lock-pullrequest-aftermerge: true
