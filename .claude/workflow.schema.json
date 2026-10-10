@@ -97,7 +97,7 @@
       ]
     },
     "promotionBudget": {
-      "description": "Cap on reviewable files in the integration \u2192 production diff (CodeRabbit's limit is 100); null disables the budget.",
+      "description": "Cap on reviewable files in the integration \u2192 production diff (CodeRabbit's Essentials limit is 150 files per PR, counted after path_filters); null disables the budget.",
       "type": [
         "integer",
         "null"

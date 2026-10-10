@@ -6,7 +6,7 @@
   "tracker": { "type": "github" },
   "branches": { "integration": "dev", "production": "main" },
   "landing": "dev-cherry-pick",
-  "promotionBudget": 100,
+  "promotionBudget": 150,
   "gate": "if [ -f package.json ]; then pnpm gate; fi",
   "checks": [
     { "paths": ["packages/contracts/**"], "run": "pnpm turbo run lint typecheck test:unit build --filter=@slugbase/contracts... && pnpm contracts:check", "requires": ["node", "pnpm"] },

@@ -351,9 +351,9 @@ at most `limits.lanes` at once (default 3); units within a lane run serially.
 ### Promotion-diff budget — a hard rule
 
 Only when `promotionBudget` is set. **The `INT → PROD` reviewable diff never
-grows past the cap.** CodeRabbit reviews at most 100 files per pull request,
-counted after `.coderabbit.yaml`'s `path_filters`. `INT` only reaches `PROD`
-through one promotion PR (`open-pr`, then `cr-review`). A diff past the cap
+grows past the cap.** CodeRabbit (Essentials plan) reviews at most 150 files
+per pull request, counted after `.coderabbit.yaml`'s `path_filters`. `INT`
+only reaches `PROD` through one promotion PR (`open-pr`, then `cr-review`). A diff past the cap
 forces a split promotion, and that leaves the two branches with duplicate
 history. Items landing in another repository (step 1a) are not counted.
 

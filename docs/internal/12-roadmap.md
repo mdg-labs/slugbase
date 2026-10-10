@@ -94,7 +94,7 @@ Custom forwarding domains; public share pages; browser extension; subdomain tena
 | Phase 6 | Phase 4 (CE part); the Cloud launch gates are in the Cloud roadmap | — |
 | Phase 7 | Cloud-only — planned in the Cloud roadmap | — |
 
-Promotions `dev → main` happen at least at the end of every phase, and more often when `/dev-diff` approaches the 100-file promotion budget.
+Promotions `dev → main` happen at least at the end of every phase, and more often when `/dev-diff` approaches the 150-file promotion budget (CodeRabbit Essentials' per-PR file limit).
 
 ---
 
