@@ -12,7 +12,13 @@ mdg-labs/slugbase-cloud
 bugsink
 beszel
 kleinunternehmer
-ustg
+# Short term: anchored so it cannot match inside a base64 hash (lockfile integrity).
+# Path segments around it (up to 20 chars each) are allowed; a padded hash cannot end on a boundary.
+(^|[^[:alnum:]+/=])(/|[[:alnum:]._-]{1,20}/)*ustg(/[[:alnum:]._-]{0,20})*($|[^[:alnum:]+/=])
+# Same term fused with a case change or a digit, as in camelCase, PascalCase, i18n keys and section numbers
+# (case-sensitive, so ordinary words stay clear); the token is capped at about 50 characters, which keeps padded
+# sha512 hashes out. An unpadded sha384 hash split by "/" into short pieces can match this line, rarely.
+(?c)(^|[^[:alnum:]+/=])(/|[[:alnum:]._-]{1,20}/)*[[:alnum:]]{0,22}([[:digit:][:upper:]]ustg|[[:digit:][:lower:]](Ustg|USTG|UStG)|(ustg|Ustg|UStG)[[:digit:][:upper:]]|USTG([[:digit:][:lower:]]|[[:upper:]][[:lower:]]))[[:alnum:]]{0,22}(/[[:alnum:]._-]{0,20})*($|[^[:alnum:]+/=])
 € ?[0-9]
 [0-9] ?€
 £ ?[0-9]

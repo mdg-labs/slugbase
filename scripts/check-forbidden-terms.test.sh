@@ -164,6 +164,78 @@ seed "$repo" pnpm-lock.yaml "${integrity[@]}"
 check "$repo"
 expect_pass "currency codes inside base64 integrity hashes pass"
 
+# A short list term must not match by chance inside a base64 run, as in an
+# integrity hash of a lockfile, but must still match as a word, a hostname label,
+# kebab-case, snake_case and a path segment. The term is built here.
+short="us""tg"
+short_upper="US""TG"
+short_mixed="US""tG"
+short_integrity=()
+for t in "$short" "$short_upper" "Us""Tg" "$short_mixed"; do
+  short_integrity+=(
+    "  resolution: {integrity: sha512-${pad}Q${t}${pad}${pad}==}"
+    "  resolution: {integrity: sha512-${pad}+${t}9${pad}${pad}==}"
+    "  resolution: {integrity: sha512-${pad}/${t}5${pad}${pad}==}"
+    "  resolution: {integrity: sha512-${pad}7${t}/${pad}${pad}==}"
+    "  resolution: {integrity: sha512-${pad}/${t}/${pad}${pad}==}"
+    "  resolution: {integrity: sha512-${pad}${pad}8${t}=}"
+    "  resolution: {integrity: sha512-${t}5${pad}${pad}==}"
+    "  resolution: {integrity: sha512-${pad}${pad}${pad}${t}==}"
+    "  resolution: {integrity: sha512-${pad}${pad}${pad}/${t}==}"
+    "  resolution: {integrity: sha512-${t}/${pad}${pad}==}"
+    "  resolution: {integrity: sha512-${pad}/${t}+${pad}${pad}==}"
+    "${pad}${pad}${pad}=${t}5"
+  )
+done
+repo="$(new_repo short-integrity)"
+seed "$repo" pnpm-lock.yaml "${short_integrity[@]}"
+check "$repo"
+expect_pass "a short term inside base64 integrity hashes passes"
+
+short_forms=(
+  "$short" "$short_upper" "Us""tg" "the ${short} line" "(${short})" "${short}: note" "${short}, ${short}."
+  "${short}.example.org" "api.${short}.example.org" "https://${short}.example.org/x"
+  "my-${short}" "${short}-thing" "my_${short}" "${short}_thing" "a-${short}-b" "a_${short}_b"
+  "${short}/" "/${short}" "/${short}/" "src/${short}/index.ts" "src/${short}.md" "a/b/c/${short}"
+  "../${short}/x" "./${short}" '~'"/${short}/x" "https://example.org/${short}" "https://example.org/a/${short}/b"
+  "my-dir/${short}/v2.1/x" "my_dir/${short}/x" "${short}/a/b/c" "x.y/${short}"
+  "pkg:${short}" "@scope/${short}" "see ${short}/docs"
+)
+repo="$(new_repo short-forms)"
+seed "$repo" notes.md "${short_forms[@]}"
+check "$repo"
+for i in "${!short_forms[@]}"; do
+  expect_hit "short term form #$((i + 1))" "notes.md:$((i + 1))"
+done
+
+# The term fused with a case change or a digit, as in camelCase, PascalCase,
+# file names, i18n keys and section numbers, is reported as well, in each of
+# its casings including the mixed-case spelling the law itself uses. Ordinary
+# identifiers that only share some of its letters must pass.
+short_cap="Us""tg"
+short_fused=(
+  "${short}Notice" "is${short_cap}Exempt" "deployTo${short_cap}" "${short_cap}Badge" "${short_cap}Notice.tsx"
+  "components/${short_cap}Badge.tsx" "import { ${short_cap}Badge } from './${short_cap}Badge'"
+  "\"${short}Notice\": \"x\"" "\"billing.${short}19\": \"x\"" "${short}19" "${short}2" "19${short}" "§19${short_upper}" "§19${short}"
+  "billing.${short}19" "see ${short_upper}19" "is${short_upper}" "${short_upper}Badge" "${short_upper}s" "${short_cap}2Badge"
+  "§19${short_mixed}" "§19${short_mixed}-Hinweis" "billing.${short_mixed}19" "${short_mixed}19" "is${short_mixed}Exempt"
+  "exemptBy${short_mixed}" "${short_mixed}Badge" "${short_mixed}Notice.tsx" "\"${short_mixed}Notice\": \"x\"" "19${short_mixed}"
+  "components/${short_mixed}Badge.tsx" "see ${short_mixed}19 here" "src/${short_mixed}Notice/index.ts"
+  "const ${short}Rate = 1" "get${short_cap}Rate()" "src/${short}Notice/index.ts" "a/b/${short_cap}Badge.tsx"
+)
+repo="$(new_repo short-fused)"
+seed "$repo" notes.md "${short_fused[@]}"
+check "$repo"
+for i in "${!short_fused[@]}"; do
+  expect_hit "fused short term form #$((i + 1))" "notes.md:$((i + 1))"
+done
+
+short_words=("mustGet" "trustGateway" "adjustGroup" "justGo" "MUSTGO" "ADJUSTGO")
+repo="$(new_repo short-words)"
+seed "$repo" words.md "${short_words[@]}"
+check "$repo"
+expect_pass "ordinary identifiers that share letters with the term pass"
+
 if ((failures > 0)); then
   printf '%d check(s) failed\n' "$failures" >&2
   exit 1
