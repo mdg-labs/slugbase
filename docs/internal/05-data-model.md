@@ -370,7 +370,7 @@ SELECT set_config('app.account_id',   $1, true),
 
 ### 3.3 System operations
 
-The complete list of operations that cross the tenant or account boundary. Each is a `SECURITY DEFINER` function owned by `slugbase_system` with `SET search_path = pg_catalog, public`, a narrow signature, no dynamic SQL, `EXECUTE` revoked from `PUBLIC` and granted to `slugbase_app`, and an audit or log line where noted. Every function is listed in the reviewed registry `packages/db/src/system/registry.ts`; `pnpm db:check` fails for a `SECURITY DEFINER` function that is not registered and for a registry entry without a function. Adding one is a risk-flagged change (doc 10).
+The complete list of operations that cross the tenant or account boundary. Each is a `SECURITY DEFINER` function owned by `slugbase_system` with `SET search_path = pg_catalog, public, pg_temp` (`pg_temp` last, so the session's temporary schema, which PostgreSQL otherwise searches first for table and type names, cannot shadow an unqualified name), a narrow signature, no dynamic SQL, `EXECUTE` revoked from `PUBLIC` and granted to `slugbase_app`, and an audit or log line where noted. Every function is listed in the reviewed registry `packages/db/src/system/registry.ts`; `pnpm db:check` fails for a `SECURITY DEFINER` function that is not registered and for a registry entry without a function. Adding one is a risk-flagged change (doc 10).
 
 | Function | Why it must cross the boundary | Returns / does |
 |---|---|---|

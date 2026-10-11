@@ -163,7 +163,7 @@ describe("runChecks", () => {
   it("registers every rule once, under its own id", () => {
     const ids = checkRules.map((rule) => rule.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids).toEqual(["rls-forced", "app-owns-nothing", "migration-checksums", "schema-drift", "custom-sql-hash"]);
+    expect(ids).toEqual(["rls-forced", "app-owns-nothing", "migration-checksums", "schema-drift", "custom-sql-hash", "system-operations"]);
   });
 
   it("reports a pass only when every rule found nothing", () => {
