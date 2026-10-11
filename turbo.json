@@ -24,6 +24,11 @@
       "dependsOn": ["^build"],
       "outputs": ["coverage/**"]
     },
+    "@slugbase/contracts#test:unit": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/docs/internal/04-api.md", "$TURBO_ROOT$/package.json"],
+      "outputs": ["coverage/**"]
+    },
     "test:integration": {
       "dependsOn": ["^build"],
       "outputs": [],

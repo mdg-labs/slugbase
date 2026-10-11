@@ -20,7 +20,8 @@
     "db:check": "turbo run db:check",
     "i18n:check": "turbo run i18n:check",
     "audit": "pnpm audit --audit-level=high",
-    "gate": "pnpm lint && turbo run typecheck test:unit build && pnpm contracts:check && pnpm db:check && pnpm test:integration && pnpm i18n:check && pnpm audit --audit-level=high"
+    "gate": "pnpm lint && turbo run typecheck test:unit build && pnpm contracts:check && pnpm db:check && pnpm test:integration && pnpm i18n:check && pnpm audit --audit-level=high",
+    "api:gen": "pnpm --filter @slugbase/contracts api:gen"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

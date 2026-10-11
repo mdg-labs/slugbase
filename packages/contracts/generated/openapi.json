@@ -1,0 +1,326 @@
+{
+  "components": {
+    "schemas": {
+      "HealthStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "const": "ok",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "Problem": {
+        "additionalProperties": {},
+        "properties": {
+          "code": {
+            "description": "Stable machine identifier",
+            "enum": [
+              "bad_request",
+              "unauthenticated",
+              "mfa_required",
+              "reauth_required",
+              "forbidden",
+              "registration_refused",
+              "cross_site_request",
+              "token_scope",
+              "entitlement_required",
+              "email_unverified",
+              "registration_closed",
+              "setup_completed",
+              "not_found",
+              "slug_not_found",
+              "slug_taken",
+              "name_taken",
+              "email_taken",
+              "already_member",
+              "last_owner",
+              "idempotency_conflict",
+              "billing_active",
+              "token_expired",
+              "precondition_failed",
+              "payload_too_large",
+              "unsupported_media_type",
+              "validation_failed",
+              "bookmark_limit_reached",
+              "seat_limit_reached",
+              "workspace_limit_reached",
+              "weak_password",
+              "invalid_code",
+              "url_not_allowed",
+              "rate_limited",
+              "internal",
+              "upstream_failed",
+              "unavailable",
+              "mail_unavailable",
+              "ai_unavailable",
+              "billing_unavailable"
+            ],
+            "type": "string",
+            "x-extensible-enum": true
+          },
+          "detail": {
+            "description": "English explanation; may contain user-supplied values",
+            "type": "string"
+          },
+          "errors": {
+            "description": "Per-field errors",
+            "items": {
+              "$ref": "#/components/schemas/ProblemFieldError"
+            },
+            "type": "array"
+          },
+          "requestId": {
+            "description": "Echo of the X-Request-Id response header",
+            "type": "string"
+          },
+          "status": {
+            "description": "HTTP status of the response",
+            "maximum": 599,
+            "minimum": 100,
+            "type": "integer"
+          },
+          "title": {
+            "description": "Static English title for the code",
+            "type": "string"
+          },
+          "type": {
+            "description": "URL form of the code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code",
+          "detail",
+          "requestId"
+        ],
+        "type": "object"
+      },
+      "ProblemFieldError": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "description": "Field-level code, such as too_short or slug_taken",
+            "type": "string"
+          },
+          "path": {
+            "description": "Location of the field in the request body",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "code"
+        ],
+        "type": "object"
+      },
+      "ReadyStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "database": {
+            "description": "Whether the database answers",
+            "enum": [
+              "ok",
+              "unreachable"
+            ],
+            "type": "string"
+          },
+          "migrations": {
+            "additionalProperties": false,
+            "properties": {
+              "applied": {
+                "anyOf": [
+                  {
+                    "maximum": 9007199254740991,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Migrations applied to the database; null while it is unreachable"
+              },
+              "expected": {
+                "description": "Migrations the build ships",
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "expected",
+              "applied"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "database",
+          "migrations"
+        ],
+        "type": "object"
+      },
+      "VersionInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "builtAt": {
+            "description": "Build time, RFC 3339 UTC",
+            "type": "string"
+          },
+          "commit": {
+            "description": "Source revision of the build",
+            "type": "string"
+          },
+          "name": {
+            "description": "Product name",
+            "type": "string"
+          },
+          "version": {
+            "description": "Release version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "version",
+          "commit",
+          "builtAt"
+        ],
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "license": {
+      "identifier": "AGPL-3.0-only",
+      "name": "AGPL-3.0-only"
+    },
+    "title": "SlugBase API",
+    "version": "1"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "getHealth",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthStatus"
+                }
+              }
+            },
+            "description": "The process is alive"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          }
+        },
+        "summary": "Process liveness",
+        "tags": [
+          "meta"
+        ],
+        "x-slugbase-auth": "anonymous",
+        "x-slugbase-rate": "none"
+      }
+    },
+    "/ready": {
+      "get": {
+        "operationId": "getReady",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadyStatus"
+                }
+              }
+            },
+            "description": "The database is reachable and migrations are at the build's level"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadyStatus"
+                }
+              }
+            },
+            "description": "The database is unreachable or migrations are pending"
+          }
+        },
+        "summary": "Readiness of the database and migrations",
+        "tags": [
+          "meta"
+        ],
+        "x-slugbase-auth": "anonymous",
+        "x-slugbase-rate": "none"
+      }
+    },
+    "/version": {
+      "get": {
+        "operationId": "getVersion",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionInfo"
+                }
+              }
+            },
+            "description": "Build information and nothing else"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          }
+        },
+        "summary": "Build information",
+        "tags": [
+          "meta"
+        ],
+        "x-slugbase-auth": "anonymous",
+        "x-slugbase-rate": "none"
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "meta"
+    }
+  ]
+}
