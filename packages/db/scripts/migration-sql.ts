@@ -1,4 +1,13 @@
 import { createHash } from "node:crypto";
+import {
+  isNonTransactional,
+  NON_TRANSACTIONAL_MARKER,
+  splitStatements,
+  STATEMENT_BREAKPOINT,
+} from "../src/migrate.ts";
+
+// The format itself is defined where it is applied, in src/migrate.ts.
+export { isNonTransactional, NON_TRANSACTIONAL_MARKER, splitStatements, STATEMENT_BREAKPOINT };
 
 // Pure helpers of the migration generator (generate-migration.ts). They hold no
 // state and touch no file, so the unit tests drive them with SQL text.
@@ -15,8 +24,6 @@ import { createHash } from "node:crypto";
 //   - The statements that come from `src/sql/` start with CUSTOM_SQL_MARKER and
 //     the hash of those files, then one `-- src/sql/<file>` line per file.
 
-export const STATEMENT_BREAKPOINT = "--> statement-breakpoint";
-export const NON_TRANSACTIONAL_MARKER = "-- slugbase:non-transactional";
 export const CUSTOM_SQL_MARKER = "-- slugbase:custom-sql";
 
 export interface SqlFile {
@@ -38,13 +45,6 @@ const CREATE_INDEX = new RegExp(
   "i",
 );
 const LEADING_COMMENTS = /^(?:[ \t]*--[^\n]*\n|\s*\n)+/;
-
-export function splitStatements(sql: string): string[] {
-  return sql
-    .split(STATEMENT_BREAKPOINT)
-    .map((statement) => statement.trim())
-    .filter((statement) => statement !== "");
-}
 
 export function joinStatements(statements: readonly string[]): string {
   return statements.length === 0 ? "" : `${statements.join(`\n${STATEMENT_BREAKPOINT}\n`)}\n`;
@@ -141,9 +141,4 @@ export function customSqlStatements(files: readonly SqlFile[]): string[] {
 
 export function nonTransactional(statements: readonly string[]): string {
   return `${NON_TRANSACTIONAL_MARKER}\n${joinStatements(statements)}`;
-}
-
-/** Whether a migration file must be applied outside a transaction. */
-export function isNonTransactional(sql: string): boolean {
-  return sql.split("\n", 1)[0]?.trimEnd() === NON_TRANSACTIONAL_MARKER;
 }

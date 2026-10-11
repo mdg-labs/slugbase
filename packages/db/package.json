@@ -12,7 +12,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "migrations"
   ],
   "scripts": {
     "lint": "eslint --max-warnings=0 .",
@@ -21,6 +22,7 @@
     "test:integration": "vitest run --project integration",
     "build": "tsc -p tsconfig.build.json",
     "db:generate": "node scripts/generate-migration.ts",
+    "db:migrate": "node scripts/migrate.ts",
     "contracts:check": "node ../../tooling/api-report/api-report.ts check --package ."
   },
   "dependencies": {

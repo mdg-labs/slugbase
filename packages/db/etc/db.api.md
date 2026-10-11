@@ -4,6 +4,56 @@
 
 ```ts
 
+// @public
+export const CE_CHAIN: MigrationChain;
+
+// @public
+export function migrate(options: MigrateOptions): Promise<MigrateResult>;
+
+// @public (undocumented)
+export interface MigrateOptions {
+    chains?: readonly MigrationChain[];
+    url: string;
+}
+
+// @public (undocumented)
+export interface MigrateResult {
+    applied: {
+        chain: string;
+        tag: string;
+    }[];
+}
+
+// @public
+export interface MigrationChain {
+    bookkeepingTable: string;
+    folder: string;
+    name: string;
+}
+
+// @public
+export class MigrationError extends Error {
+    constructor(message: string, code?: string);
+    // (undocumented)
+    readonly code: string | undefined;
+}
+
+// @public (undocumented)
+export interface MigrationLevel {
+    applied: number;
+    expected: number;
+    unknownApplied: number;
+}
+
+// @public
+export function migrationLevel(options: MigrationLevelOptions): Promise<MigrationLevel>;
+
+// @public (undocumented)
+export interface MigrationLevelOptions {
+    chains?: readonly MigrationChain[];
+    url: string;
+}
+
 // (No @packageDocumentation comment for this package)
 
 ```

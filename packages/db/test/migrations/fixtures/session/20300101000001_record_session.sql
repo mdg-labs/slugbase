@@ -1,0 +1,1 @@
+CREATE TABLE session_probe AS SELECT current_setting('lock_timeout') AS lock_timeout, current_setting('statement_timeout') AS statement_timeout, current_user::text AS role_in_use, session_user::text AS login_role;
