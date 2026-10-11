@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import { checkRules, formatReport, runChecks, type RuleResult } from "../src/check/index.ts";
+import { checkRules, contractMarkerFromEnv, formatReport, runChecks, type RuleResult } from "../src/check/index.ts";
 import { withTestDatabase } from "../src/testing.ts";
 import { hashSqlFiles } from "./migration-sql.ts";
 
@@ -35,16 +35,17 @@ async function main(): Promise<number> {
     process.stderr.write(`db:check: ${error instanceof Error ? error.message : String(error)}\n`);
     return 2;
   }
+  const contractMarker = contractMarkerFromEnv(process.env);
   let results: RuleResult[];
   try {
     results = await withTestDatabase((database) =>
-      runChecks(checkRules, { packageDir, sql: database.app, hashSqlFiles }),
+      runChecks(checkRules, { packageDir, sql: database.app, hashSqlFiles, contractMarker }),
     );
   } catch (error) {
     process.stderr.write(
       `db:check: the freshly migrated database could not be built or dropped: ${error instanceof Error ? error.message : "unknown error"}\n`,
     );
-    results = await runChecks(checkRules, { packageDir, sql: undefined, hashSqlFiles });
+    results = await runChecks(checkRules, { packageDir, sql: undefined, hashSqlFiles, contractMarker });
   }
   const { passed, lines } = formatReport(results);
   process.stdout.write(`${lines.join("\n")}\n`);

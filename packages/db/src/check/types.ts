@@ -21,6 +21,11 @@ export interface CheckContext {
   sql: postgres.Sql | undefined;
   /** Hash of the `src/sql/` files, as the generator records it (scripts/migration-sql.ts). */
   hashSqlFiles: (files: readonly { name: string; content: string }[]) => string;
+  /**
+   * Whether the run carries the contract marker, which CI sets for a pull request labelled
+   * `migration:contract` (see ./expand-contract.ts). Absent means not set.
+   */
+  contractMarker?: boolean;
 }
 
 export interface CheckRule {
