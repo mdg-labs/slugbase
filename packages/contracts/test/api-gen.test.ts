@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { SUBPROCESS_TIMEOUT_MS } from "./subprocess.ts";
 
 const packageDir = new URL("..", import.meta.url).pathname;
 const script = join(packageDir, "scripts/api-gen.ts");
@@ -36,7 +37,7 @@ describe("pnpm api:gen", () => {
     expect(root.scripts["api:gen"]).toBe("pnpm --filter @slugbase/contracts api:gen");
   });
 
-  it("writes the committed document and client types", () => {
+  it("writes the committed document and client types", { timeout: SUBPROCESS_TIMEOUT_MS }, () => {
     const out = scratch();
     const result = apiGen(["--out-dir", out]);
     expect(result.status).toBe(0);
@@ -45,7 +46,7 @@ describe("pnpm api:gen", () => {
     }
   });
 
-  it("is deterministic", () => {
+  it("is deterministic", { timeout: SUBPROCESS_TIMEOUT_MS }, () => {
     const first = scratch();
     const second = scratch();
     expect(apiGen(["--out-dir", first]).status).toBe(0);
@@ -53,7 +54,7 @@ describe("pnpm api:gen", () => {
     expect(readFileSync(join(first, "schema.d.ts"), "utf8")).toBe(readFileSync(join(second, "schema.d.ts"), "utf8"));
   });
 
-  it("fails, names the operation and writes nothing when an operation has no policy", () => {
+  it("fails, names the operation and writes nothing when an operation has no policy", { timeout: SUBPROCESS_TIMEOUT_MS }, () => {
     const out = scratch();
     const result = apiGen(["--operations", join(packageDir, "test/fixtures/no-policy.fixture.ts"), "--out-dir", out]);
     expect(result.status).not.toBe(0);

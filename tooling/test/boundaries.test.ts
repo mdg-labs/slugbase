@@ -4,7 +4,7 @@ import { pathToFileURL } from "node:url";
 import { ESLint, type Linter } from "eslint";
 import tseslint from "typescript-eslint";
 import { describe, expect, it } from "vitest";
-import { ROOT } from "./run.ts";
+import { ROOT, SUBPROCESS_TIMEOUT_MS } from "./run.ts";
 
 const IMPORT = "slugbase/import-boundaries";
 const RAW_IO = "slugbase/no-raw-io";
@@ -332,7 +332,7 @@ describe("unsanitised HTML (T14)", () => {
     await passes("tooling/fixture.ts", `/* eslint ${HTML}: "off" */\nexport {};\n`);
   });
 
-  it("rejects inline configuration through the repository config", async () => {
+  it("rejects inline configuration through the repository config", { timeout: SUBPROCESS_TIMEOUT_MS }, async () => {
     expect(await ruleIds("packages/ui/src/index.ts", `/* eslint ${HTML}: 0 */\ndocument.body.innerHTML = '';\nexport {};\n`, repoEslint)).toContain(HTML);
   });
 
@@ -341,7 +341,7 @@ describe("unsanitised HTML (T14)", () => {
   });
 });
 
-describe("the repository config", () => {
+describe("the repository config", { timeout: SUBPROCESS_TIMEOUT_MS }, () => {
   it("applies the rules through eslint.config.js", async () => {
     const real = (file: string, code: string): Promise<string[]> => ruleIds(file, code, repoEslint);
     expect(await real("packages/server/src/index.ts", 'import "undici";\nexport {};\n')).toContain(IMPORT);
@@ -352,7 +352,7 @@ describe("the repository config", () => {
   });
 });
 
-describe("CLAUDE.md sweeps", () => {
+describe("CLAUDE.md sweeps", { timeout: SUBPROCESS_TIMEOUT_MS }, () => {
   function sweep(patterns: string[], glob: string): string[] {
     const result = spawnSync("git", ["grep", "-l", ...patterns.flatMap((p) => ["-e", p]), "--", glob], {
       cwd: ROOT,

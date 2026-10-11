@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
-import { ROOT, run } from "./run.ts";
+import { ROOT, run, SUBPROCESS_TIMEOUT_MS } from "./run.ts";
 
 interface LintResult {
   filePath: string;
@@ -115,7 +115,7 @@ function scan(catalog: string): { status: number | null; stdout: string; stderr:
   return { status: result.status, stdout: result.stdout, stderr: result.stderr };
 }
 
-describe("catalog scan", () => {
+describe("catalog scan", { timeout: SUBPROCESS_TIMEOUT_MS }, () => {
   it("passes a clean catalog", () => {
     const result = scan("clean");
     expect(result.status).toBe(0);

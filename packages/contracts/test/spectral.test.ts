@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { lintOpenApi } from "../scripts/lint-openapi.ts";
 import { ruleset } from "../spectral/slugbase.ruleset.ts";
+import { SUBPROCESS_TIMEOUT_MS } from "./subprocess.ts";
 
 const packageDir = new URL("..", import.meta.url).pathname;
 const fixtures = join(packageDir, "test/fixtures/spectral");
@@ -213,7 +214,7 @@ describe("the SlugBase Spectral ruleset", () => {
   });
 });
 
-describe("pnpm contracts:check and the Spectral ruleset", () => {
+describe("pnpm contracts:check and the Spectral ruleset", { timeout: SUBPROCESS_TIMEOUT_MS }, () => {
   function runCheck(generated: string) {
     return spawnSync(process.execPath, [check, "--generated", generated], { cwd: packageDir, encoding: "utf8" });
   }

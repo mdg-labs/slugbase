@@ -3,6 +3,7 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "n
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { SUBPROCESS_TIMEOUT_MS } from "./subprocess.ts";
 
 const packageDir = new URL("..", import.meta.url).pathname;
 const apiGen = join(packageDir, "scripts/api-gen.ts");
@@ -56,12 +57,12 @@ describe("pnpm contracts:check", () => {
     expect(root.scripts["contracts:check"]).toBe("turbo run contracts:check");
   });
 
-  it("passes on the committed generated files", () => {
+  it("passes on the committed generated files", { timeout: SUBPROCESS_TIMEOUT_MS }, () => {
     const result = spawnSync(process.execPath, [check], { cwd: packageDir, encoding: "utf8" });
     expect(result.status, result.stderr).toBe(0);
   });
 
-  it("fails after a schema changes without regenerating, and passes once regenerated", () => {
+  it("fails after a schema changes without regenerating, and passes once regenerated", { timeout: SUBPROCESS_TIMEOUT_MS }, () => {
     const generated = scratch();
     generate(before, generated);
     expect(runCheck(before, generated).status).toBe(0);
@@ -76,7 +77,7 @@ describe("pnpm contracts:check", () => {
     expect(runCheck(after, generated).status).toBe(0);
   });
 
-  it("names only the file that drifted when the other still matches", () => {
+  it("names only the file that drifted when the other still matches", { timeout: SUBPROCESS_TIMEOUT_MS }, () => {
     const generated = scratch();
     generate(before, generated);
     const typesFile = join(generated, "schema.d.ts");
@@ -87,7 +88,7 @@ describe("pnpm contracts:check", () => {
     expect(result.stderr).not.toContain("openapi.json");
   });
 
-  it("fails when a committed file is missing", () => {
+  it("fails when a committed file is missing", { timeout: SUBPROCESS_TIMEOUT_MS }, () => {
     const generated = scratch();
     generate(before, generated);
     rmSync(join(generated, "schema.d.ts"));
@@ -97,7 +98,7 @@ describe("pnpm contracts:check", () => {
     expect(result.stderr).toContain("pnpm api:gen");
   });
 
-  it("fails when the generator fails, and leaves the committed files untouched", () => {
+  it("fails when the generator fails, and leaves the committed files untouched", { timeout: SUBPROCESS_TIMEOUT_MS }, () => {
     const generated = scratch();
     generate(before, generated);
     const committed = snapshot(generated);
@@ -107,7 +108,7 @@ describe("pnpm contracts:check", () => {
     expect(snapshot(generated)).toEqual(committed);
   });
 
-  it("never overwrites the committed files and cleans up its temporary directory", () => {
+  it("never overwrites the committed files and cleans up its temporary directory", { timeout: SUBPROCESS_TIMEOUT_MS }, () => {
     const generated = scratch();
     generate(before, generated);
     const committed = snapshot(generated);

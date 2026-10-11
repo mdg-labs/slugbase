@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { ROOT, run } from "./run.ts";
+import { ROOT, run, SUBPROCESS_TIMEOUT_MS } from "./run.ts";
 
 interface JsonReport {
   numFailedTests: number;
@@ -29,7 +29,7 @@ function vitestRun(fixture: string, project: "unit" | "integration"): { report: 
   return { report, files: report.testResults.map((r) => r.name.slice(cwd.length + 1)).sort() };
 }
 
-describe("shared vitest base", () => {
+describe("shared vitest base", { timeout: SUBPROCESS_TIMEOUT_MS }, () => {
   it("runs only *.test.ts and *.test.tsx in the unit project", () => {
     const { files } = vitestRun("vitest-split", "unit");
     expect(files).toEqual(["alpha.test.ts", "beta.test.tsx"]);
