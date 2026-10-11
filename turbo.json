@@ -1,9 +1,15 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "agentGuidance": false,
+  "globalDependencies": ["eslint.config.js", "vitest.shared.ts", "tsconfig.base.json"],
   "tasks": {
     "lint": {
       "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "@slugbase/tooling#lint": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/scripts/**"],
       "outputs": []
     },
     "typecheck": {
