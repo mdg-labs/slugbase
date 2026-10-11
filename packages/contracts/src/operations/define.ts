@@ -80,7 +80,7 @@ export function emptyResponse(description: string): EmptyResponse {
   return { kind: "empty", description };
 }
 
-type AtLeastOne<T> = { [K in keyof T]-?: Required<Pick<T, K>> & Partial<Omit<T, K>> }[keyof T];
+export type AtLeastOne<T> = { [K in keyof T]-?: Required<Pick<T, K>> & Partial<Omit<T, K>> }[keyof T];
 
 /**
  * Client-error statuses are problem documents, and at least one must be declared.
