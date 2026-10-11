@@ -40,7 +40,8 @@
     },
     "contracts:check": {
       "dependsOn": ["^build"],
-      "outputs": []
+      "outputs": [],
+      "cache": false
     },
     "db:check": {
       "dependsOn": ["^build"],

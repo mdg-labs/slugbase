@@ -36,19 +36,30 @@ describe("pnpm api:gen", () => {
     expect(root.scripts["api:gen"]).toBe("pnpm --filter @slugbase/contracts api:gen");
   });
 
-  it("writes the committed document", () => {
-    const out = join(scratch(), "openapi.json");
-    const result = apiGen(["--out", out]);
+  it("writes the committed document and client types", () => {
+    const out = scratch();
+    const result = apiGen(["--out-dir", out]);
     expect(result.status).toBe(0);
-    expect(readFileSync(out, "utf8")).toBe(readFileSync(join(packageDir, "generated/openapi.json"), "utf8"));
+    for (const name of ["openapi.json", "schema.d.ts"]) {
+      expect(readFileSync(join(out, name), "utf8"), name).toBe(readFileSync(join(packageDir, "generated", name), "utf8"));
+    }
+  });
+
+  it("is deterministic", () => {
+    const first = scratch();
+    const second = scratch();
+    expect(apiGen(["--out-dir", first]).status).toBe(0);
+    expect(apiGen(["--out-dir", second]).status).toBe(0);
+    expect(readFileSync(join(first, "schema.d.ts"), "utf8")).toBe(readFileSync(join(second, "schema.d.ts"), "utf8"));
   });
 
   it("fails, names the operation and writes nothing when an operation has no policy", () => {
-    const out = join(scratch(), "openapi.json");
-    const result = apiGen(["--operations", join(packageDir, "test/fixtures/no-policy.fixture.ts"), "--out", out]);
+    const out = scratch();
+    const result = apiGen(["--operations", join(packageDir, "test/fixtures/no-policy.fixture.ts"), "--out-dir", out]);
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain("createBookmarkWithoutPolicy");
     expect(result.stderr).toContain("x-slugbase-auth");
-    expect(existsSync(out)).toBe(false);
+    expect(existsSync(join(out, "openapi.json"))).toBe(false);
+    expect(existsSync(join(out, "schema.d.ts"))).toBe(false);
   });
 });
