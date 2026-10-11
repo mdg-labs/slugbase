@@ -89,4 +89,20 @@ export const vocabularyRules = {
   },
 };
 
-export default [ignores, ...javascriptRules, ...typescriptRules, projectRules, vocabularyRules];
+// Package boundaries and import bans (doc 09 section 2.1, doc 01 sections 5.3
+// and 10): which package may import which, the I/O and database-driver bans,
+// the testing-package restriction and unsanitised HTML. The rules decide by the
+// path of the linted file, so one block serves the whole repository. A disable
+// comment for no-unsafe-html is accepted only with an issue link; the
+// suppression processor of the vocabulary block enforces that.
+export const boundaryRules = {
+  files: [...TS_FILES, ...JS_FILES],
+  plugins: { slugbase: vocabularyPlugin },
+  rules: {
+    "slugbase/import-boundaries": "error",
+    "slugbase/no-raw-io": "error",
+    "slugbase/no-unsafe-html": "error",
+  },
+};
+
+export default [ignores, ...javascriptRules, ...typescriptRules, projectRules, vocabularyRules, boundaryRules];
