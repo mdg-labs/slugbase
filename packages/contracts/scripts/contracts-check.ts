@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
+import { lintOpenApi } from "./lint-openapi.ts";
 
 interface Options {
   operations: string;
@@ -59,13 +60,48 @@ function driftedFiles(options: Options): string[] {
   }
 }
 
+/** Describes how the committed generated files drifted, or returns undefined when they match. */
+function driftFailure(options: Options): string | undefined {
+  const drifted = driftedFiles(options);
+  if (drifted.length === 0) {
+    return undefined;
+  }
+  const lines = drifted.map((file) => `  ${file}`).join("\n");
+  return `generated files differ from the contracts in src/:\n${lines}\nRun \`pnpm api:gen\` and commit the result.`;
+}
+
+/** Describes the findings of the SlugBase Spectral ruleset on the committed document, or returns undefined when there are none. */
+async function lintFailure(options: Options): Promise<string | undefined> {
+  const findings = await lintOpenApi(join(options.generated, "openapi.json"));
+  if (findings.length === 0) {
+    return undefined;
+  }
+  return `the OpenAPI document breaks the SlugBase ruleset (${String(findings.length)} finding(s)):\n${findings.map((finding) => `  ${finding}`).join("\n")}`;
+}
+
+/** Every check runs even when an earlier one fails, so one run reports everything that is wrong. */
+async function failures(options: Options): Promise<string[]> {
+  const checks = [() => driftFailure(options), () => lintFailure(options)];
+  const failed: string[] = [];
+  for (const check of checks) {
+    try {
+      const failure = await check();
+      if (failure !== undefined) {
+        failed.push(failure);
+      }
+    } catch (error: unknown) {
+      failed.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+  return failed;
+}
+
 try {
-  const drifted = driftedFiles(parseArgs(process.argv.slice(2)));
-  if (drifted.length > 0) {
-    const lines = drifted.map((file) => `  ${file}`).join("\n");
-    process.stderr.write(
-      `contracts:check failed: generated files differ from the contracts in src/:\n${lines}\nRun \`pnpm api:gen\` and commit the result.\n`,
-    );
+  const failed = await failures(parseArgs(process.argv.slice(2)));
+  for (const failure of failed) {
+    process.stderr.write(`contracts:check failed: ${failure}\n`);
+  }
+  if (failed.length > 0) {
     process.exitCode = 1;
   }
 } catch (error: unknown) {

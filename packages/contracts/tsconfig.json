@@ -12,6 +12,7 @@
     "vitest.config.ts",
     "src",
     "scripts",
+    "spectral",
     "test"
   ]
 }

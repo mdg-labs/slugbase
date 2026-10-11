@@ -25,6 +25,9 @@
   },
   "devDependencies": {
     "@slugbase/testing": "workspace:*",
+    "@stoplight/spectral-core": "^1.24.0",
+    "@stoplight/spectral-functions": "^1.11.0",
+    "@stoplight/spectral-parsers": "^1.0.5",
     "openapi-typescript": "^7.13.0"
   },
   "dependencies": {
