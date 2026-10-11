@@ -15,5 +15,13 @@ kleinunternehmer
 ustg
 € ?[0-9]
 [0-9] ?€
+£ ?[0-9]
+[0-9] ?£
+(^|[^[:alnum:]+/=])[0-9][0-9.,]* ?(usd|eur|gbp)($|[^[:alnum:]+/=]|([/+][[:alpha:]]{1,12})+($|[^[:alnum:]+/=]))
+(^|[^[:alnum:]+/=])(usd|eur|gbp) ?[0-9][0-9.,]*($|[^[:alnum:]+/=]|([/+][[:alpha:]]{1,12})+($|[^[:alnum:]+/=]))
+\$ ?[0-9]+[.,][0-9]
+\$[0-9]{3,}
+\$ ?[0-9]+ ?(/ ?| per | a | an | each )(mo|month|yr|year|user|seat|member)s?\b
+\$ ?[0-9]+ ?(monthly|yearly|annually)\b
 staging\.slugbase\.app
 [a-z0-9-]+\.mdg-labs\.dev
