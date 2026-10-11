@@ -30,7 +30,7 @@ A monorepo suits a product where one developer ships one artefact. SlugBase has 
 slugbase/
 ├── CLAUDE.md                     agent instructions (§5.3)
 ├── LICENSE                       AGPL-3.0 (D20)
-├── TRADEMARK.md · SECURITY.md · CONTRIBUTING.md
+├── SECURITY.md · CONTRIBUTING.md
 ├── package.json · pnpm-workspace.yaml · pnpm-lock.yaml · turbo.json · tsconfig.base.json
 ├── compose.dev.yml               local Postgres (+ Mailpit) for development and tests (doc 08 §1)
 ├── compose.yml                   the published self-hosting stack: postgres, slugbase, slugbase-worker (doc 01 §2.1)

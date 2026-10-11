@@ -19,4 +19,4 @@ Both run the same code from this repository; Cloud adds hosting and billing, not
 
 ## Licence
 
-[AGPL-3.0](LICENSE). "SlugBase" is a trademark of MDG Labs.
+[AGPL-3.0](LICENSE).
