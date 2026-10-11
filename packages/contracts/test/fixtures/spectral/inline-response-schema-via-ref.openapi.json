@@ -1,0 +1,99 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Spectral fixture",
+    "version": "1"
+  },
+  "tags": [
+    {
+      "name": "things"
+    }
+  ],
+  "paths": {
+    "/things": {
+      "get": {
+        "operationId": "listThings",
+        "tags": [
+          "things"
+        ],
+        "summary": "List things",
+        "x-slugbase-auth": "member",
+        "x-slugbase-rate": "read",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Things"
+          },
+          "400": {
+            "description": "Malformed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Thing": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "ThingList": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Thing"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "Problem": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ]
+      }
+    },
+    "responses": {
+      "Things": {
+        "description": "The things",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "items": {
+                  "type": "array"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

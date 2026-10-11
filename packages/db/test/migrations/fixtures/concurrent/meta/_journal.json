@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1893456000000,
+      "tag": "20300101000001_add_concurrent_probe",
+      "breakpoints": true
+    }
+  ]
+}

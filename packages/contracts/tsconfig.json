@@ -11,6 +11,8 @@
     "../../vitest.shared.ts",
     "vitest.config.ts",
     "src",
+    "scripts",
+    "spectral",
     "test"
   ]
 }

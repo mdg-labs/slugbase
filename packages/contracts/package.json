@@ -12,16 +12,23 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "generated/schema.d.ts"
   ],
   "scripts": {
     "lint": "eslint --max-warnings=0 .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test:unit": "vitest run --project unit",
-    "build": "tsc -p tsconfig.build.json"
+    "build": "tsc -p tsconfig.build.json",
+    "api:gen": "node scripts/api-gen.ts",
+    "contracts:check": "node scripts/contracts-check.ts"
   },
   "devDependencies": {
-    "@slugbase/testing": "workspace:*"
+    "@slugbase/testing": "workspace:*",
+    "@stoplight/spectral-core": "^1.24.0",
+    "@stoplight/spectral-functions": "^1.11.0",
+    "@stoplight/spectral-parsers": "^1.0.5",
+    "openapi-typescript": "^7.13.0"
   },
   "dependencies": {
     "zod": "^4.6.5"

@@ -381,7 +381,8 @@ Key IDs make rotation routine without a key-management service.
 **Decision: CE migrates on startup; a managed deployment may run `migrate` as a separate step before rollout instead.**
 - **CE:** the image entrypoint runs `migrate` under a Postgres advisory lock with `lock_timeout` (Q56) and only then starts the server, without the migrator URL in its environment; `/ready` stays `503` until the database is at the expected migration level. The in-process variant used by the single-container mode (Q11) migrates inside the process and serves the probes first.
 - **Managed deployment:** `MIGRATE_ON_START=false`, and the deploy runs `migrate` from the new image before anything rolls out; a failed migration stops the deploy. Cloud does this; its mechanics are recorded in the Cloud documentation.
-- **Rules for both,** because they come from rolling updates: expand/contract (D7); fast, schema-only migrations, with backfills and `CREATE INDEX CONCURRENTLY` as worker jobs; contract steps only in a later release (Q52); `lock_timeout`.
+- **Rules for both,** because they come from rolling updates: expand/contract (D7); fast, schema-only migrations, with backfills as worker jobs and a concurrent index build on an existing table as a non-transactional migration step that `migrate` applies under the advisory lock, bounded by `statement_timeout` (doc 05 §5.2, §5.3); contract steps only in a later release (Q52); `lock_timeout`.
+- **Resolved 2026-10-11:** this entry and doc 05 §5.2 disagreed on where `CREATE INDEX CONCURRENTLY` runs; the conflict was resolved in favour of doc 05 (maintainer).
 
 ### Q78 — (Cloud) Cloud image promotion
 Recorded in the Cloud documentation.

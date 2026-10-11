@@ -71,20 +71,49 @@ jobs:
           turbo-cache-key: unit
       - run: pnpm test:unit
 
+  # The breaking-change check compares /api/v1 with the document at the latest
+  # release tag reachable from main (doc 04 §1.1), so the checkout fetches the
+  # full history and every tag and branch; the script fails on a shallow clone.
   contracts:
     name: contracts
     runs-on: ubuntu-latest
     timeout-minutes: 15
     container: node:24-bookworm
+    env:
+      OASDIFF_VERSION: v1.33.0
+      OASDIFF_SHA256_AMD64: 43a4e328e2d13ba1552d760aa68d2485c75c5621f309f6ff64ae895188345247
+      OASDIFF_SHA256_ARM64: 4ae3c362d6074d919aada2dea82d0ee84366591600384455d0bdc658ddf8f7ae
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: ./.github/actions/setup
         with:
           turbo-cache-key: contracts
       - run: pnpm contracts:check
       - run: pnpm i18n:check
+      - name: Install oasdiff
+        run: |
+          set -euo pipefail
+          case "$(uname -m)" in
+            x86_64) arch=amd64; sha="$OASDIFF_SHA256_AMD64" ;;
+            aarch64) arch=arm64; sha="$OASDIFF_SHA256_ARM64" ;;
+            *) echo "unsupported architecture: $(uname -m)" >&2; exit 1 ;;
+          esac
+          dir="$RUNNER_TEMP/oasdiff"
+          archive="$RUNNER_TEMP/oasdiff.tar.gz"
+          mkdir -p "$dir"
+          curl -fsSL --retry 3 -o "$archive" \
+            "https://github.com/oasdiff/oasdiff/releases/download/${OASDIFF_VERSION}/oasdiff_${OASDIFF_VERSION#v}_linux_${arch}.tar.gz"
+          echo "${sha}  ${archive}" | sha256sum --check --strict -
+          tar -xzf "$archive" -C "$dir" oasdiff
+          "$dir/oasdiff" --version
+          echo "$dir" >> "$GITHUB_PATH"
+      - name: Test the breaking-change check
+        run: bash scripts/check-openapi-breaking.test.sh
+      - name: Check /api/v1 for breaking changes
+        run: bash scripts/check-openapi-breaking.sh
 
   integration:
     name: integration (PostgreSQL ${{ matrix.postgres }})
@@ -116,6 +145,10 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           turbo-cache-key: integration-${{ matrix.postgres }}
+      - name: Install the PostgreSQL client
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends postgresql-client
       - run: pnpm db:check
       - run: pnpm test:integration
 

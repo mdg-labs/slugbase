@@ -1,0 +1,123 @@
+import type { z } from "zod";
+
+export const HTTP_METHODS = ["get", "post", "put", "patch", "delete"] as const;
+export type HttpMethod = (typeof HTTP_METHODS)[number];
+
+/** x-slugbase-auth: who may call the operation (doc 04 section 1.2). */
+export const AUTH_POLICIES = ["anonymous", "account", "member", "admin", "owner", "instanceAdmin", "machine"] as const;
+export type AuthPolicy = (typeof AUTH_POLICIES)[number];
+
+/** x-slugbase-rate: the bucket of doc 04 section 7, or `none` for probes and machine routes. */
+export const RATE_BUCKETS = [
+  "login",
+  "mfa",
+  "register",
+  "reset",
+  "token_redeem",
+  "token_create",
+  "setup",
+  "go",
+  "read",
+  "write",
+  "bulk",
+  "fetch",
+  "ai",
+  "public",
+  "none",
+] as const;
+export type RateBucket = (typeof RATE_BUCKETS)[number];
+
+/** x-slugbase-scope: the API-token scope an operation needs. An operation without one is not token-callable. */
+export const TOKEN_SCOPES = ["read", "write"] as const;
+export type TokenScope = (typeof TOKEN_SCOPES)[number];
+
+/** audience: operations outside the browser session model (doc 01 section 4 step 5). */
+export const AUDIENCES = ["machine", "marketing-form"] as const;
+export type Audience = (typeof AUDIENCES)[number];
+
+export type ProblemResponseStatus = 400 | 401 | 403 | 404 | 409 | 410 | 412 | 413 | 415 | 422 | 429;
+export type OtherResponseStatus = 200 | 201 | 202 | 204 | 302 | 500 | 502 | 503;
+
+/** A documented response header. Headers are always sent, so the generator marks them required. */
+export interface ResponseHeader {
+  readonly description: string;
+  readonly schema: z.ZodType;
+}
+
+export interface JsonResponse {
+  readonly kind: "json";
+  readonly description: string;
+  readonly schema: z.ZodType;
+  readonly headers?: Readonly<Record<string, ResponseHeader>>;
+}
+
+export interface JsonResponseOptions {
+  readonly headers?: Readonly<Record<string, ResponseHeader>>;
+}
+
+export interface ProblemResponse {
+  readonly kind: "problem";
+  readonly description: string;
+}
+
+export interface EmptyResponse {
+  readonly kind: "empty";
+  readonly description: string;
+}
+
+/** A response with a JSON body described by a Zod schema, and optionally the headers it documents. */
+export function jsonResponse(description: string, schema: z.ZodType, options: JsonResponseOptions = {}): JsonResponse {
+  return options.headers === undefined ? { kind: "json", description, schema } : { kind: "json", description, schema, headers: options.headers };
+}
+
+/** An `application/problem+json` response carrying the shared Problem schema. */
+export function problemResponse(description: string): ProblemResponse {
+  return { kind: "problem", description };
+}
+
+/** A response without a body. */
+export function emptyResponse(description: string): EmptyResponse {
+  return { kind: "empty", description };
+}
+
+export type AtLeastOne<T> = { [K in keyof T]-?: Required<Pick<T, K>> & Partial<Omit<T, K>> }[keyof T];
+
+/**
+ * Client-error statuses are problem documents, and at least one must be declared.
+ * Other statuses carry any response kind.
+ */
+export type OperationResponses = { [S in OtherResponseStatus]?: JsonResponse | EmptyResponse | ProblemResponse } & AtLeastOne<{
+  [S in ProblemResponseStatus]: ProblemResponse;
+}>;
+
+export interface OperationRequest {
+  readonly params?: z.ZodObject;
+  readonly query?: z.ZodObject;
+  /** Object bodies must be strict: unknown fields are a 422 (doc 04 section 2.3). */
+  readonly body?: z.ZodType;
+}
+
+export interface OperationDefinition {
+  readonly method: HttpMethod;
+  /** The path as served, for example `/health` or `/api/v1/bookmarks/{id}`. */
+  readonly path: string;
+  readonly operationId: string;
+  readonly tag: string;
+  readonly summary?: string;
+  readonly auth: AuthPolicy;
+  readonly rate: RateBucket;
+  readonly scope?: TokenScope;
+  readonly entitlement?: string;
+  readonly audience?: Audience;
+  readonly request?: OperationRequest;
+  readonly responses: OperationResponses;
+}
+
+/**
+ * Declares an operation together with its policy. The authorization, rate-limit
+ * and token-scope stages read the policy fields from the generated document
+ * (doc 04 section 1.2); leaving one out is a compile error.
+ */
+export function defineOperation(definition: OperationDefinition): OperationDefinition {
+  return definition;
+}

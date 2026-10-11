@@ -12,19 +12,27 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "migrations"
   ],
   "scripts": {
     "lint": "eslint --max-warnings=0 .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test:unit": "vitest run --project unit",
-    "build": "tsc -p tsconfig.build.json"
+    "test:integration": "vitest run --project integration",
+    "build": "tsc -p tsconfig.build.json",
+    "db:generate": "node scripts/generate-migration.ts",
+    "db:migrate": "node scripts/migrate.ts",
+    "contracts:check": "node ../../tooling/api-report/api-report.ts check --package ."
   },
   "dependencies": {
+    "@slugbase/contracts": "workspace:*",
     "@slugbase/core": "workspace:*",
-    "@slugbase/contracts": "workspace:*"
+    "drizzle-orm": "0.45.4",
+    "postgres": "^3.4.9"
   },
   "devDependencies": {
-    "@slugbase/testing": "workspace:*"
+    "@slugbase/testing": "workspace:*",
+    "drizzle-kit": "0.31.11"
   }
 }

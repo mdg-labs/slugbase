@@ -1,5 +1,6 @@
 import { basename } from "node:path";
 import type { AST, ESLint, Linter, Rule } from "eslint";
+import { boundaryRules, hasIssueLink, UNSAFE_HTML_RULE, unsafeHtmlConfigComments } from "../boundaries/eslint-plugin.ts";
 import { findTerm, loadTerms, type ForbiddenTerm } from "./terms.ts";
 
 export const FORBIDDEN_RULE = "slugbase/no-forbidden-vocabulary";
@@ -96,41 +97,74 @@ const requireDisableReason: Rule.RuleModule = {
 
 // ESLint hands a processor's postprocess every report, the suppressed ones
 // included, each marked with the directives that suppress it and their
-// justifications. A report of either vocabulary rule suppressed by a directive
-// with no justification is turned back into an error, whatever rules the
-// directive names.
+// justifications. A report of a guarded rule suppressed by a directive whose
+// justification does not satisfy the rule's condition is turned back into an
+// error, whatever rules the directive names. The vocabulary rules need a
+// reason; the unsafe-HTML rule needs an issue link.
+const GUARDED_SUPPRESSIONS: ReadonlyMap<string, { accepts: (justification: string) => boolean; hint: string }> =
+  new Map([
+    [FORBIDDEN_RULE, { accepts: (text) => text.trim() !== "", hint: "has no reason after \" -- \"" }],
+    [REASON_RULE, { accepts: (text) => text.trim() !== "", hint: "" }],
+    [UNSAFE_HTML_RULE, { accepts: hasIssueLink, hint: "has no issue link (such as #123) after \" -- \"" }],
+  ]);
+
+// An inline configuration comment can turn a rule off before it runs, so the
+// processor reads the text itself for the unsafe-HTML rule and reports every
+// such comment that lacks an issue link.
+const sources = new Map<string, string>();
+
 const requireJustifiedSuppression: Linter.Processor = {
   meta: { name: "slugbase-vocabulary-suppression" },
   supportsAutofix: true,
-  preprocess: (text) => [text],
-  postprocess: (messageLists) =>
-    messageLists.flat().map((message): Linter.LintMessage => {
-      // The processor type lists plain messages; ESLint passes suppressed ones
-      // too, with their suppressions attached.
-      const { suppressions, ...active } = message as Partial<Linter.SuppressedLintMessage> & Linter.LintMessage;
-      const unjustified =
-        (message.ruleId === FORBIDDEN_RULE || message.ruleId === REASON_RULE) &&
-        (suppressions ?? []).some(
-          (suppression) => suppression.kind === "directive" && suppression.justification.trim() === "",
-        );
-      if (!unjustified) {
-        return message;
-      }
-      return {
-        ...active,
-        message:
-          message.ruleId === FORBIDDEN_RULE
-            ? `${message.message} The disable directive covering it has no reason after " -- ".`
-            : message.message,
-      };
-    }),
+  preprocess: (text, filename) => {
+    sources.set(filename, text);
+    return [text];
+  },
+  postprocess: (messageLists, filename) => {
+    const text = sources.get(filename);
+    sources.delete(filename);
+    const inlineConfig = unsafeHtmlConfigComments(text ?? "", filename).map(
+      ({ line, column }): Linter.LintMessage => ({
+        ruleId: UNSAFE_HTML_RULE,
+        severity: 2,
+        line,
+        column,
+        message: `Inline configuration of ${UNSAFE_HTML_RULE} is accepted only with an issue link (such as #123) after " -- ".`,
+      }),
+    );
+    return [...inlineConfig, ...guardSuppressions(messageLists)];
+  },
 };
 
+function guardSuppressions(messageLists: Linter.LintMessage[][]): Linter.LintMessage[] {
+  return messageLists.flat().map((message): Linter.LintMessage => {
+    // The processor type lists plain messages; ESLint passes suppressed ones
+    // too, with their suppressions attached.
+    const { suppressions, ...active } = message as Partial<Linter.SuppressedLintMessage> & Linter.LintMessage;
+    const guard = message.ruleId === null ? undefined : GUARDED_SUPPRESSIONS.get(message.ruleId);
+    const unjustified =
+      guard !== undefined &&
+      (suppressions ?? []).some(
+        (suppression) => suppression.kind === "directive" && !guard.accepts(suppression.justification),
+      );
+    if (guard === undefined || !unjustified) {
+      return message;
+    }
+    return {
+      ...active,
+      message: guard.hint === "" ? message.message : `${message.message} The disable directive covering it ${guard.hint}.`,
+    };
+  });
+}
+
+// The one `slugbase` plugin: the vocabulary rules and the boundary rules share
+// its suppression processor, because a file takes a single processor.
 export const vocabularyPlugin: ESLint.Plugin = {
   meta: { name: "slugbase-vocabulary" },
   processors: { vocabulary: requireJustifiedSuppression },
   rules: {
     "no-forbidden-vocabulary": noForbiddenVocabulary,
     "vocabulary-disable-reason": requireDisableReason,
+    ...boundaryRules,
   },
 };

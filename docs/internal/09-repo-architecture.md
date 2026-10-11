@@ -30,7 +30,7 @@ A monorepo suits a product where one developer ships one artefact. SlugBase has 
 slugbase/
 ├── CLAUDE.md                     agent instructions (§5.3)
 ├── LICENSE                       AGPL-3.0 (D20)
-├── TRADEMARK.md · SECURITY.md · CONTRIBUTING.md
+├── SECURITY.md · CONTRIBUTING.md
 ├── package.json · pnpm-workspace.yaml · pnpm-lock.yaml · turbo.json · tsconfig.base.json
 ├── compose.dev.yml               local Postgres (+ Mailpit) for development and tests (doc 08 §1)
 ├── compose.yml                   the published self-hosting stack: postgres, slugbase, slugbase-worker (doc 01 §2.1)
@@ -391,8 +391,9 @@ and `apps/slugbase` wires it.
 - A new environment variable lands in the env schema, `.env.example` (name only, no value) and doc 07's key inventory
   (its CE self-host section for CE keys) in the same commit (D24). Booleans parse with `envBoolean()`.
 - `migrate` is the only code path that applies migrations; the CE image entrypoint runs it before the server starts, under
-  the advisory lock with `lock_timeout`, and migrations stay fast and schema-only (backfills and concurrent index builds
-  are worker jobs) (D25).
+  the advisory lock with `lock_timeout`, and migrations stay fast and schema-only (backfills are worker jobs; a
+  concurrent index build on an existing table is a non-transactional migration step that `migrate` applies under the
+  advisory lock with `lock_timeout` off and `statement_timeout` as its bound, doc 05 §5.2) (D25).
 - Identifiers are generated in the application (UUIDv7, Q91), never by a database function.
 - Documentation under `docs/user/`, `docs/self-hosting/` and `docs/releases/` follows the docs contract (doc 09 §3.5):
   frontmatter `title`, `description` and `edition` (`ce`, `cloud` or `both`), optional `since` and `order`; MDX with no

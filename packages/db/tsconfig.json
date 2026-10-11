@@ -10,6 +10,8 @@
   "include": [
     "../../vitest.shared.ts",
     "vitest.config.ts",
+    "drizzle.config.ts",
+    "scripts",
     "src",
     "test"
   ]
