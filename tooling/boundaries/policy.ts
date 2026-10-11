@@ -5,9 +5,12 @@ import { posix, relative, resolve, sep } from "node:path";
 export const ROOT = resolve(import.meta.dirname, "../..");
 
 // The boundary table of doc 09 section 2.1: the workspace packages each
-// package may import. `testing` is not in the table; it is a development
-// package whose use is limited by TESTING_MESSAGE below. Widening a row needs
-// an edit to doc 09 first.
+// package may import. The `testing` row is the development package: it may
+// import every other package, because it holds the harness code that wraps
+// them. Who may import `testing` is a separate rule, not a row: the testing
+// check in checkWorkspaceImport limits @slugbase/testing, and TESTING_ENTRIES
+// lists the subpaths of other packages (such as @slugbase/db/testing) that
+// follow it. Widening a row needs an edit to doc 09 first.
 export const WORKSPACE_ALLOWED: Readonly<Record<string, readonly string[]>> = {
   contracts: [],
   core: ["contracts"],
