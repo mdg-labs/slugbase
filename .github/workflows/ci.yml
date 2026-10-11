@@ -1,0 +1,167 @@
+name: CI
+
+# The jobs of doc 08 §6.2 run in parallel, each inside node:24-bookworm with
+# the same setup, so the file can move to other runners unchanged (doc 08
+# §6.1). No job references a secret, and the workflow never runs on
+# pull_request_target, so a run for a fork pull request holds nothing but a
+# read-only token (doc 10 T16). Job names are required by branch protection;
+# rename one only together with that rule.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# A step in a container job defaults to sh, which is dash in node:24-bookworm
+# and rejects `set -o pipefail`; every step runs under bash instead.
+defaults:
+  run:
+    shell: bash
+
+env:
+  TURBO_TELEMETRY_DISABLED: "1"
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container: node:24-bookworm
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-key: lint
+      - run: pnpm lint
+
+  typecheck:
+    name: typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container: node:24-bookworm
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-key: typecheck
+      - run: pnpm typecheck
+
+  unit:
+    name: unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container: node:24-bookworm
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-key: unit
+      - run: pnpm test:unit
+
+  contracts:
+    name: contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container: node:24-bookworm
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-key: contracts
+      - run: pnpm contracts:check
+      - run: pnpm i18n:check
+
+  integration:
+    name: integration (PostgreSQL ${{ matrix.postgres }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container: node:24-bookworm
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: [17, 18]
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres }}
+        env:
+          POSTGRES_USER: slugbase_ci
+          POSTGRES_PASSWORD: slugbase_ci
+          POSTGRES_DB: postgres
+        options: >-
+          --health-cmd "pg_isready -U slugbase_ci -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      SLUGBASE_TEST_PG_URL: postgres://slugbase_ci:slugbase_ci@postgres:5432/postgres
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-key: integration-${{ matrix.postgres }}
+      - run: pnpm db:check
+      - run: pnpm test:integration
+
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container: node:24-bookworm
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-key: build
+      - run: pnpm build
+
+  audit:
+    name: audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container: node:24-bookworm
+    env:
+      OSV_SCANNER_VERSION: v2.6.0
+      OSV_SCANNER_SHA256_AMD64: ca69b3d3cd08f889a49dc0a383122f71cc528b83803671df5fd874d97485b108
+      OSV_SCANNER_SHA256_ARM64: 2c71403eb443d05891c4f268c3ad771cf4f16e5443463fd7851ef8f454d3c7e4
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-key: audit
+      - run: pnpm audit --audit-level=high
+      - name: OSV scan of pnpm-lock.yaml
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          case "$(uname -m)" in
+            x86_64) arch=amd64; sha="$OSV_SCANNER_SHA256_AMD64" ;;
+            aarch64) arch=arm64; sha="$OSV_SCANNER_SHA256_ARM64" ;;
+            *) echo "unsupported architecture: $(uname -m)" >&2; exit 1 ;;
+          esac
+          bin="$RUNNER_TEMP/osv-scanner"
+          curl -fsSL --retry 3 -o "$bin" \
+            "https://github.com/google/osv-scanner/releases/download/${OSV_SCANNER_VERSION}/osv-scanner_linux_${arch}"
+          echo "${sha}  ${bin}" | sha256sum --check --strict -
+          chmod +x "$bin"
+          "$bin" scan source --lockfile pnpm-lock.yaml
