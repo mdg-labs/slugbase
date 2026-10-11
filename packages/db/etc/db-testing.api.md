@@ -5,9 +5,16 @@
 ```ts
 
 import postgres from 'postgres';
+import type { SQL } from 'drizzle-orm';
 
 // @public
 export function createTestDatabase(options?: TestDatabaseOptions): Promise<TestDatabase>;
+
+// @public
+export interface Database {
+    close(): Promise<void>;
+    withTenant<T>(context: TenantContext, fn: (tx: TenantTx) => Promise<T>): Promise<T>;
+}
 
 // @public
 export function dropTestTemplate(name: string, options?: Pick<TestDatabaseOptions, "serverUrl">): Promise<void>;
@@ -43,6 +50,44 @@ export interface PruneTestTemplatesResult {
     }[];
 }
 
+// @public
+export interface RepositoryInput {
+    set?: Record<string, unknown>;
+    values?: Record<string, unknown>;
+    where?: SQL;
+}
+
+// @public (undocumented)
+export interface RepositoryMethodEntry {
+    // (undocumented)
+    readonly access: "read" | "write";
+    invoke(tx: TenantTx, input?: RepositoryInput): Promise<readonly unknown[]>;
+    invokeRlsOnly(tx: TenantTx, input?: RepositoryInput): Promise<readonly unknown[]>;
+    // (undocumented)
+    readonly method: ScopedMethod;
+    readonly repository: string;
+    readonly table: string;
+}
+
+// @public (undocumented)
+export type ScopedMethod = "select" | "insert" | "update" | "delete";
+
+// @public
+export interface TenantContext {
+    accountId: string;
+    requestId: string;
+    workspaceId?: string;
+}
+
+// @public
+export interface TenantTx {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly requestId: string;
+    readonly workspaceId: string | undefined;
+}
+
 // @public (undocumented)
 export interface TestDatabase {
     readonly app: TestSql;
@@ -54,6 +99,7 @@ export interface TestDatabase {
         readonly name: string;
         readonly built: boolean;
     };
+    readonly tenant: Pick<Database, "withTenant">;
 }
 
 // @public (undocumented)
@@ -61,6 +107,9 @@ export interface TestDatabaseOptions {
     chains?: readonly MigrationChain[];
     serverUrl?: string;
 }
+
+// @public
+export function testRepositoryMethods(repository: string, table: string): RepositoryMethodEntry[];
 
 // @public
 export type TestSql = postgres.Sql;

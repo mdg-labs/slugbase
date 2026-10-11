@@ -27,10 +27,13 @@ export interface RepositoryMethodEntry {
   /** Runs the method as the repository does, workspace predicate included, and returns the rows it read or wrote. */
   invoke(tx: TenantTx, input?: RepositoryInput): Promise<readonly unknown[]>;
   /**
-   * Runs the same method with the workspace predicate left out, so that only
+   * Runs the same method with the application layer left out, so that only
    * row-level security stands between the transaction and another workspace's
-   * rows: the RLS-only mode of the matrix (T1, doc 08 section 3.3). Inserts
-   * are still stamped with the workspace.
+   * rows: the RLS-only mode of the matrix (T1, doc 08 section 3.3). A read,
+   * update or delete has no workspace predicate; an insert is not stamped and
+   * an insert or update that names another workspace is not refused with
+   * `foreign_workspace`: the statement reaches the database as passed, so the
+   * policy is what refuses it (SQLSTATE 42501).
    */
   invokeRlsOnly(tx: TenantTx, input?: RepositoryInput): Promise<readonly unknown[]>;
 }

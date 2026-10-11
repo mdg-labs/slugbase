@@ -6,7 +6,7 @@
 
 import { Database } from '@slugbase/db';
 import { RepositoryMethodEntry } from '@slugbase/db';
-import type { TestDatabase } from '@slugbase/db/testing';
+import { TestDatabase } from '@slugbase/db/testing';
 
 // @public
 export interface ApiCall {
@@ -195,7 +195,6 @@ export interface Probe {
     readonly sample: RepositorySample;
     // (undocumented)
     readonly table: string;
-    readonly tenant: Pick<Database, "withTenant">;
 }
 
 // @public (undocumented)

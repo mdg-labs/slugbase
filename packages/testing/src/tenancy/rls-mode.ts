@@ -12,10 +12,13 @@ import type { MatrixFailure } from "./report.js";
 
 // RLS-only mode of the cross-tenant matrix (doc 08 section 3.3, doc 01 section
 // 5.5, T1): every method of the scoped-repository registry runs through its
-// build without the workspace predicate, inside withTenant(A), so that only
-// row-level security stands between the transaction and workspace B. A read
+// RLS-only build, inside withTenant(A), so that only row-level security stands
+// between the transaction and workspace B. That build has no workspace
+// predicate and neither stamps a write nor refuses one that names another
+// workspace, so the runner names the workspace in every write itself: A in the
+// attempt that stays in A, B in the attempt that must not get through. A read
 // must return no row of B; a write must touch no row of B, and one that names B
-// may instead be refused.
+// may instead be refused by row-level security.
 //
 // What counts as a refusal is narrow. The attempt that stays in workspace A must
 // complete, so a method that never ran proves nothing. Of the attempts that name
@@ -40,7 +43,11 @@ export interface RlsOnlyReport {
   readonly attempts: number;
   /** Attempts naming B that row-level security refused (SQLSTATE 42501). */
   readonly rlsRefusals: number;
-  /** Attempts naming B that the repository refused before reaching the database; not evidence for RLS. */
+  /**
+   * Attempts naming B that the repository refused before reaching the database;
+   * not evidence for RLS. The RLS-only build of the registry makes no such
+   * refusal, so an entry here means a method that kept an application guard.
+   */
   readonly applicationRefusals: readonly string[];
   readonly failures: readonly MatrixFailure[];
 }
@@ -143,7 +150,7 @@ export async function runRlsOnlyMatrix(options: RlsOnlyOptions): Promise<RlsOnly
       }
       const columns = entry.method === "insert" ? sample.values : sample.set;
       const key = entry.method === "insert" ? "values" : "set";
-      inputs.push({ label: "in workspace A", input: { [key]: { ...columns } }, mayBeRefused: false });
+      inputs.push({ label: "in workspace A", input: { [key]: { ...columns, workspaceId: fixture.a.id } }, mayBeRefused: false });
       inputs.push({
         label: "naming workspace B",
         input: { [key]: { ...columns, workspaceId: fixture.b.id } },
@@ -152,6 +159,7 @@ export async function runRlsOnlyMatrix(options: RlsOnlyOptions): Promise<RlsOnly
     }
 
     for (const { label, input, mayBeRefused } of inputs) {
+      const namesB = mayBeRefused;
       attempts += 1;
       let outcome: Outcome;
       try {
@@ -167,6 +175,10 @@ export async function runRlsOnlyMatrix(options: RlsOnlyOptions): Promise<RlsOnly
           applicationRefusals.push(subject);
         }
         continue;
+      }
+      if (entry.method === "update" && namesB && outcome.rows.length === 0) {
+        // No row came into the statement, so row-level security never saw the move to B: nothing was proven.
+        failures.push(failure(subject, "write_not_exercised", `${label}: the update touched no row, so no row was checked against workspace B`));
       }
       for (const row of outcome.rows) {
         const workspaceId = workspaceOf(row);

@@ -56,7 +56,7 @@ describe("the matrix over the committed contract and the repository registry", (
 
   it("RLS-only mode passes over the scoped-repository registry as it stands", async () => {
     const methods = listRepositoryMethods();
-    const report = await runRlsOnlyMatrix({ tenant: scoped.tenant, fixture: scoped.fixture, methods });
+    const report = await runRlsOnlyMatrix({ tenant: database().tenant, fixture: scoped.fixture, methods });
     expect(report.methods).toBe(methods.length);
     assertMatrixPassed(report);
   });
@@ -65,7 +65,7 @@ describe("the matrix over the committed contract and the repository registry", (
 describe("RLS-only mode", () => {
   it("passes for a table with a workspace policy: every read and write stays in workspace A", async () => {
     const report = await runRlsOnlyMatrix({
-      tenant: scoped.tenant,
+      tenant: database().tenant,
       fixture: scoped.fixture,
       methods: scoped.methods,
       samples: { [scoped.repository]: scoped.sample },
@@ -79,7 +79,7 @@ describe("RLS-only mode", () => {
   it("leaves the rows of A and B as it found them", async () => {
     const before = await Promise.all([scoped.fixture.checksum(PROBE_WORKSPACE_A), scoped.fixture.checksum(PROBE_WORKSPACE_B)]);
     await runRlsOnlyMatrix({
-      tenant: scoped.tenant,
+      tenant: database().tenant,
       fixture: scoped.fixture,
       methods: scoped.methods,
       samples: { [scoped.repository]: scoped.sample },
@@ -90,7 +90,7 @@ describe("RLS-only mode", () => {
 
   it("fails for a table whose policy is USING (true)", async () => {
     const report = await runRlsOnlyMatrix({
-      tenant: permissive.tenant,
+      tenant: database().tenant,
       fixture: permissive.fixture,
       methods: permissive.methods,
       samples: { [permissive.repository]: permissive.sample },
@@ -100,25 +100,70 @@ describe("RLS-only mode", () => {
     // An update and a delete without the workspace predicate reach the rows of B.
     expect(byMethod.get("matrix_probe_open.update")).toBe("wrote_foreign_row");
     expect(byMethod.get("matrix_probe_open.delete")).toBe("wrote_foreign_row");
-    // An insert is stamped with the workspace of the transaction and one naming
-    // B is refused before it reaches the database, as in the registry's build,
-    // so a USING (true) policy is not visible through an insert.
-    expect(byMethod.has("matrix_probe_open.insert")).toBe(false);
+    // The RLS-only build neither stamps nor refuses an insert naming B: it reaches
+    // the table, and the USING (true) WITH CHECK (true) policy lets it in.
+    expect(byMethod.get("matrix_probe_open.insert")).toBe("wrote_foreign_row");
     expect(() => {
       assertMatrixPassed(report);
     }).toThrow(/rls-only.*matrix_probe_open\.select/s);
   });
 
-  it("reports a write naming B that the repository refuses as an application refusal, not as RLS evidence", async () => {
+  it("fails a USING (true) WITH CHECK (true) table on the insert naming B alone: the write reaches the table unchanged", async () => {
     const report = await runRlsOnlyMatrix({
-      tenant: scoped.tenant,
+      tenant: database().tenant,
+      fixture: permissive.fixture,
+      methods: permissive.methods.filter((entry) => entry.method === "insert"),
+      samples: { [permissive.repository]: permissive.sample },
+    });
+    expect(report.rlsRefusals).toBe(0);
+    expect(report.applicationRefusals).toEqual([]);
+    expect(report.failures).toHaveLength(1);
+    expect(report.failures[0]).toMatchObject({ kind: "wrote_foreign_row" });
+    expect(report.failures[0]?.detail).toMatch(/^naming workspace B/);
+  });
+
+  it("reports the refusals of a table with a workspace policy as RLS evidence: the RLS-only build makes none of its own", async () => {
+    const report = await runRlsOnlyMatrix({
+      tenant: database().tenant,
       fixture: scoped.fixture,
       methods: scoped.methods,
       samples: { [scoped.repository]: scoped.sample },
     });
     expect(report.failures).toEqual([]);
+    // the insert and the update naming B, each refused by row-level security
+    expect(report.rlsRefusals).toBe(2);
+    expect(report.applicationRefusals).toEqual([]);
+  });
+
+  it("reports a method that refuses a write naming B with the foreign_workspace code as an application refusal, not as RLS evidence", async () => {
+    const insert = methodOf(scoped, "insert");
+    const entry: RepositoryMethodEntry = {
+      ...insert,
+      invokeRlsOnly: (tx, input) =>
+        input?.values?.["workspaceId"] === PROBE_WORKSPACE_B
+          ? Promise.reject(new TenantContextError("foreign_workspace", "refused"))
+          : insert.invokeRlsOnly(tx, input),
+    };
+    const report = await runRlsOnlyMatrix({
+      tenant: database().tenant,
+      fixture: scoped.fixture,
+      methods: [entry],
+      samples: { [scoped.repository]: scoped.sample },
+    });
+    expect(report.failures).toEqual([]);
     expect(report.rlsRefusals).toBe(0);
-    expect(report.applicationRefusals).toEqual(["matrix_probe.insert (matrix_probe)", "matrix_probe.update (matrix_probe)"]);
+    expect(report.applicationRefusals).toEqual(["matrix_probe.insert (matrix_probe)"]);
+  });
+
+  it("fails an update naming B that touches no row: row-level security was not exercised", async () => {
+    const entry: RepositoryMethodEntry = { ...methodOf(scoped, "update"), invokeRlsOnly: () => Promise.resolve([]) };
+    const report = await runRlsOnlyMatrix({
+      tenant: database().tenant,
+      fixture: scoped.fixture,
+      methods: [entry],
+      samples: { [scoped.repository]: scoped.sample },
+    });
+    expect(report.failures.map((failure) => failure.kind)).toEqual(["write_not_exercised"]);
   });
 
   /** A real row-level-security refusal (SQLSTATE 42501): a row of B written under the transaction of A. */
@@ -153,10 +198,10 @@ describe("RLS-only mode", () => {
     const refused = await rowLevelSecurityRefusal(scoped);
     const entry: RepositoryMethodEntry = {
       ...insert,
-      invokeRlsOnly: (tx, input) => (input?.values?.["workspaceId"] === undefined ? insert.invokeRlsOnly(tx, input) : Promise.reject(refused)),
+      invokeRlsOnly: (tx, input) => (input?.values?.["workspaceId"] === PROBE_WORKSPACE_B ? Promise.reject(refused) : insert.invokeRlsOnly(tx, input)),
     };
     const report = await runRlsOnlyMatrix({
-      tenant: scoped.tenant,
+      tenant: database().tenant,
       fixture: scoped.fixture,
       methods: [entry],
       samples: { [scoped.repository]: scoped.sample },
@@ -171,7 +216,7 @@ describe("RLS-only mode", () => {
     const refused = await rowLevelSecurityRefusal(scoped);
     const entry: RepositoryMethodEntry = { ...insert, invokeRlsOnly: () => Promise.reject(refused) };
     const report = await runRlsOnlyMatrix({
-      tenant: scoped.tenant,
+      tenant: database().tenant,
       fixture: scoped.fixture,
       methods: [entry],
       samples: { [scoped.repository]: scoped.sample },
@@ -187,10 +232,10 @@ describe("RLS-only mode", () => {
     const rejected = Object.assign(new Error("duplicate key value violates unique constraint"), { code: "23505" });
     const entry: RepositoryMethodEntry = {
       ...insert,
-      invokeRlsOnly: (tx, input) => (input?.values?.["workspaceId"] === undefined ? insert.invokeRlsOnly(tx, input) : Promise.reject(rejected)),
+      invokeRlsOnly: (tx, input) => (input?.values?.["workspaceId"] === PROBE_WORKSPACE_B ? Promise.reject(rejected) : insert.invokeRlsOnly(tx, input)),
     };
     const report = await runRlsOnlyMatrix({
-      tenant: scoped.tenant,
+      tenant: database().tenant,
       fixture: scoped.fixture,
       methods: [entry],
       samples: { [scoped.repository]: scoped.sample },
@@ -204,7 +249,7 @@ describe("RLS-only mode", () => {
 
   it("fails an insert the database rejects for another reason, on a USING (true) table", async () => {
     const report = await runRlsOnlyMatrix({
-      tenant: permissive.tenant,
+      tenant: database().tenant,
       fixture: permissive.fixture,
       methods: permissive.methods.filter((entry) => entry.method === "insert"),
       samples: { [permissive.repository]: { ...permissive.sample, values: { id: "not-a-uuid", label: "matrix-probe-rejected" } } },
@@ -223,7 +268,7 @@ describe("RLS-only mode", () => {
         invokeRlsOnly: () => Promise.reject(new TenantContextError("not_a_tenant_transaction", "not a tenant transaction")),
       };
       const report = await runRlsOnlyMatrix({
-        tenant: scoped.tenant,
+        tenant: database().tenant,
         fixture: scoped.fixture,
         methods: [entry],
         samples: { [scoped.repository]: scoped.sample },
@@ -239,12 +284,12 @@ describe("RLS-only mode", () => {
       ...methodOf(scoped, "select"),
       invokeRlsOnly: () => Promise.reject(new TenantContextError("foreign_workspace", "refused")),
     };
-    const report = await runRlsOnlyMatrix({ tenant: scoped.tenant, fixture: scoped.fixture, methods: [entry] });
+    const report = await runRlsOnlyMatrix({ tenant: database().tenant, fixture: scoped.fixture, methods: [entry] });
     expect(report.failures.map((failure) => failure.kind)).toEqual(["unexpected_error"]);
   });
 
   it("fails a write method whose repository has no sample row", async () => {
-    const report = await runRlsOnlyMatrix({ tenant: scoped.tenant, fixture: scoped.fixture, methods: scoped.methods, samples: {} });
+    const report = await runRlsOnlyMatrix({ tenant: database().tenant, fixture: scoped.fixture, methods: scoped.methods, samples: {} });
     expect(report.failures.map((failure) => failure.kind)).toEqual(["unmapped_repository", "unmapped_repository"]);
     expect(report.failures[0]?.subject).toContain("matrix_probe.insert");
   });
@@ -258,7 +303,7 @@ describe("RLS-only mode", () => {
       ...select,
       invokeRlsOnly: () => Promise.reject(new Error("connection lost")),
     };
-    const report = await runRlsOnlyMatrix({ tenant: scoped.tenant, fixture: scoped.fixture, methods: [broken] });
+    const report = await runRlsOnlyMatrix({ tenant: database().tenant, fixture: scoped.fixture, methods: [broken] });
     expect(report.failures).toHaveLength(1);
     expect(report.failures[0]).toMatchObject({ kind: "unexpected_error" });
   });
@@ -280,7 +325,7 @@ describe("RLS-only mode", () => {
         return [];
       },
     };
-    const report = await runRlsOnlyMatrix({ tenant: victim.tenant, fixture: victim.fixture, methods: [sneaky] });
+    const report = await runRlsOnlyMatrix({ tenant: database().tenant, fixture: victim.fixture, methods: [sneaky] });
     expect(report.failures.map((failure) => failure.kind)).toEqual(["workspace_changed"]);
   });
 });
@@ -322,7 +367,7 @@ describe("API mode over the probe table", () => {
     if (select === undefined) {
       throw new Error("the probe has no methods");
     }
-    const rows = await probe.tenant.withTenant(
+    const rows = await database().tenant.withTenant(
       { accountId: call.principal.accountId, workspaceId: probe.fixture.a.id, requestId: "api-mode" },
       (tx) => select.invoke(tx),
     );

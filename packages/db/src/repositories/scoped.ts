@@ -20,7 +20,15 @@ import {
 // The scoped-repository helper of doc 01 section 5.3: the first of the two
 // layers that keep a workspace's rows apart (row-level security is the second).
 // Reads, updates and deletes carry the workspace predicate, and an insert is
-// stamped with the workspace of the transaction.
+// stamped with the workspace of the transaction; an insert or update that names
+// another workspace is refused before it reaches the database.
+//
+// The same module builds the methods a second way for the cross-tenant matrix
+// (doc 08 section 3.3, doc 01 section 5.5): with the application layer left
+// out altogether, so that row-level security is the only thing between the
+// transaction and another workspace. That build has no workspace predicate, no
+// stamp and no `foreign_workspace` refusal: what the caller passes reaches the
+// database unchanged.
 
 /** A table every row of which belongs to one workspace (doc 05 section 1). */
 export type WorkspaceTable = PgTable & { workspaceId: PgColumn };
@@ -84,12 +92,18 @@ function assertWorkspaceColumn(name: string, table: PgTable): void {
   }
 }
 
-function build<T extends WorkspaceTable>(table: T, tx: TenantTx, workspacePredicate: boolean): ScopedRepository<T> {
+/**
+ * `applicationLayer: true` is the repository as the product uses it. `false` is
+ * the RLS-only build: no workspace predicate on a read, update or delete, and
+ * no stamp or `foreign_workspace` refusal on an insert or update, so that only
+ * row-level security can refuse a statement naming another workspace.
+ */
+function build<T extends WorkspaceTable>(table: T, tx: TenantTx, applicationLayer: boolean): ScopedRepository<T> {
   type Row = InferSelectModel<T>;
   // The generic table type is erased for the query builder, whose own types do not follow it through.
   const pgTable: PgTable = table;
   const scope = (where: SQL | undefined): SQL | undefined => {
-    if (!workspacePredicate) {
+    if (!applicationLayer) {
       return where;
     }
     // The caller predicate is parenthesised: a raw top-level OR would otherwise bind looser than the workspace predicate.
@@ -103,13 +117,14 @@ function build<T extends WorkspaceTable>(table: T, tx: TenantTx, workspacePredic
       return (await handle.select().from(pgTable).where(predicate)) as Row[];
     },
     async insert(values) {
-      const workspaceId = requireWorkspace(tx);
-      checkForeignWorkspace(values.workspaceId, workspaceId);
+      let written: Record<string, unknown> = { ...values };
+      if (applicationLayer) {
+        const workspaceId = requireWorkspace(tx);
+        checkForeignWorkspace(values.workspaceId, workspaceId);
+        written = { ...values, workspaceId };
+      }
       const handle = tenantHandle(tx);
-      const rows = (await handle
-        .insert(pgTable)
-        .values({ ...values, workspaceId } as Record<string, unknown>)
-        .returning()) as Row[];
+      const rows = (await handle.insert(pgTable).values(written).returning()) as Row[];
       const row = rows[0];
       if (row === undefined) {
         throw new Error("an insert returned no row");
@@ -117,9 +132,11 @@ function build<T extends WorkspaceTable>(table: T, tx: TenantTx, workspacePredic
       return row;
     },
     async update(set, where) {
-      const workspaceId = requireWorkspace(tx);
-      checkForeignWorkspace(set.workspaceId, workspaceId);
-      const columns = Object.fromEntries(Object.entries(set).filter(([column]) => column !== "workspaceId"));
+      let columns: Record<string, unknown> = { ...set };
+      if (applicationLayer) {
+        checkForeignWorkspace(set.workspaceId, requireWorkspace(tx));
+        columns = Object.fromEntries(Object.entries(set).filter(([column]) => column !== "workspaceId"));
+      }
       const predicate = scope(where);
       const handle = tenantHandle(tx);
       return (await handle.update(pgTable).set(columns).where(predicate).returning()) as Row[];
@@ -144,9 +161,9 @@ async function run(
   method: ScopedMethod,
   tx: TenantTx,
   input: RepositoryInput,
-  workspacePredicate: boolean,
+  applicationLayer: boolean,
 ): Promise<readonly unknown[]> {
-  const repository = build(table, tx, workspacePredicate);
+  const repository = build(table, tx, applicationLayer);
   switch (method) {
     case "select":
       return repository.select(input.where);
@@ -160,16 +177,16 @@ async function run(
 }
 
 /**
- * Defines a scoped repository over a table with a `workspace_id` column and
- * enters its four methods in the registry the matrix runner iterates.
+ * The four methods of a scoped repository over `table` in the shape the
+ * registry holds, built by the code `defineScopedRepository` uses and not
+ * entered in the registry. For `@slugbase/db/testing`, which hands a suite the
+ * methods of a repository over a test table without adding them to the
+ * process-wide registry.
  */
-export function defineScopedRepository<T extends WorkspaceTable>(
-  name: string,
-  table: T,
-): ScopedRepositoryDefinition<T> {
+export function scopedRepositoryMethods(name: string, table: WorkspaceTable): RepositoryMethodEntry[] {
   assertWorkspaceColumn(name, table);
   const tableName = getTableName(table);
-  const entries: RepositoryMethodEntry[] = (Object.keys(ACCESS) as ScopedMethod[]).map((method) => ({
+  return (Object.keys(ACCESS) as ScopedMethod[]).map((method) => ({
     repository: name,
     table: tableName,
     method,
@@ -177,6 +194,16 @@ export function defineScopedRepository<T extends WorkspaceTable>(
     invoke: (tx, input = {}) => run(table, method, tx, input, true),
     invokeRlsOnly: (tx, input = {}) => run(table, method, tx, input, false),
   }));
-  registerRepositoryMethods(name, entries);
+}
+
+/**
+ * Defines a scoped repository over a table with a `workspace_id` column and
+ * enters its four methods in the registry the matrix runner iterates.
+ */
+export function defineScopedRepository<T extends WorkspaceTable>(
+  name: string,
+  table: T,
+): ScopedRepositoryDefinition<T> {
+  registerRepositoryMethods(name, scopedRepositoryMethods(name, table));
   return { name, table, bind: (tx) => build(table, tx, true) };
 }

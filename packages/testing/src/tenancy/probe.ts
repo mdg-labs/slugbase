@@ -1,29 +1,19 @@
-import { TenantContextError, type Database, type RepositoryMethodEntry, type TenantTx } from "@slugbase/db";
-import type { TestDatabase, TestSql } from "@slugbase/db/testing";
+import type { RepositoryMethodEntry } from "@slugbase/db";
+import { testRepositoryMethods, type TestDatabase } from "@slugbase/db/testing";
 import type { FixtureIdentifier, FixturePrincipal, PrincipalRole, TenantFixture, WorkspaceFixture } from "./fixture.js";
 import type { RepositorySample } from "./mapping.js";
 
 // The probe implementation of the fixture over one test-only table, created by
 // the table owner in a test database and not part of the shipped migrations.
-// Its two policies show that the matrix can fail: `workspace` is the policy
-// shape of doc 05 section 3.2, `permissive` is `USING (true)`.
+// Its policies show that the matrix can fail: `workspace` is the policy shape
+// of doc 05 section 3.2; `permissive` is `USING (true) WITH CHECK (true)`.
 //
-// The probe cannot build a scoped repository, because that needs the query
-// builder, which only packages/db may import. It therefore carries its own
-// registry entries and tenant database over raw SQL: the entries run in the
-// transaction the probe's withTenant opened and set the same transaction-local
-// settings, so row-level security sees what it sees in the product.
-//
-// The entries mirror the build of defineScopedRepository: reads and deletes
-// leave the workspace predicate out in RLS-only mode; an insert or update that names a
-// workspace other than the one of the transaction is refused with the
-// `foreign_workspace` code before any statement runs, and one that does not is
-// stamped with the workspace of the transaction. So a workspace written to a
-// row never reaches the database from here, and what the permissive policy
-// shows is what a read, an update or a delete without the predicate reaches.
-
-// The client of a transaction the probe opened.
-type ProbeSql = Pick<TestSql, "unsafe">;
+// The probe holds no query code of its own. The methods over the table are a
+// scoped repository built by `@slugbase/db/testing` (the code
+// `defineScopedRepository` uses, not entered in the registry), and the suite
+// runs them in the transaction of `TestDatabase.tenant`, the production
+// `withTenant` bound to the test database, so the matrix tests that and not an
+// imitation of it.
 
 export type ProbePolicy = "workspace" | "permissive";
 
@@ -38,9 +28,7 @@ export interface ProbeOptions {
 export interface Probe {
   readonly table: string;
   readonly fixture: TenantFixture;
-  /** `withTenant` over the probe's transaction. */
-  readonly tenant: Pick<Database, "withTenant">;
-  /** The four methods of a repository over the table, in the shape of the scoped-repository registry. */
+  /** The four methods of a scoped repository over the table, in the shape of the scoped-repository registry. */
   readonly methods: readonly RepositoryMethodEntry[];
   /** The sample row the matrix writes to the table. */
   readonly sample: RepositorySample;
@@ -134,116 +122,6 @@ async function seed(database: TestDatabase, table: string, side: "a" | "b", work
   }
 }
 
-function tenantDatabase(database: TestDatabase, transactions: WeakMap<TenantTx, ProbeSql>): Pick<Database, "withTenant"> {
-  return {
-    async withTenant<T>(
-      context: { accountId: string; workspaceId?: string; requestId: string },
-      fn: (tx: TenantTx) => Promise<T>,
-    ): Promise<T> {
-      const tx: TenantTx = Object.freeze({
-        accountId: context.accountId,
-        workspaceId: context.workspaceId,
-        requestId: context.requestId,
-      });
-      let result: { value: T } | undefined;
-      await database.app.begin(async (sql) => {
-        await sql`SELECT
-          set_config('app.account_id', ${context.accountId}, true),
-          set_config('app.workspace_id', ${context.workspaceId ?? ""}, true),
-          set_config('app.request_id', ${context.requestId}, true)`;
-        transactions.set(tx, sql);
-        result = { value: await fn(tx) };
-      });
-      if (result === undefined) {
-        throw new Error("the probe transaction produced no result");
-      }
-      return result.value;
-    },
-  };
-}
-
-const COLUMNS = `id, workspace_id AS "workspaceId", label`;
-
-function methodsOver(table: string, repository: string, transactions: WeakMap<TenantTx, ProbeSql>): RepositoryMethodEntry[] {
-  const handle = (tx: TenantTx): ProbeSql => {
-    const sql = transactions.get(tx);
-    if (sql === undefined) {
-      throw new Error("the value is not a transaction opened by the probe's withTenant");
-    }
-    return sql;
-  };
-  const workspaceOf = (tx: TenantTx): string => {
-    if (tx.workspaceId === undefined) {
-      throw new Error("a scoped repository needs a tenant transaction opened with a workspace");
-    }
-    return tx.workspaceId;
-  };
-  const refuseForeignWorkspace = (supplied: unknown, workspaceId: string): void => {
-    if (supplied === undefined) {
-      return;
-    }
-    if (typeof supplied !== "string" || supplied.toLowerCase() !== workspaceId) {
-      throw new TenantContextError(
-        "foreign_workspace",
-        "a row of a scoped repository cannot name a workspace other than the one of the transaction",
-      );
-    }
-  };
-  const text = (value: unknown, column: string): string => {
-    if (typeof value !== "string") {
-      throw new Error(`the probe needs a text value for ${column}`);
-    }
-    return value;
-  };
-
-  const entry = (
-    method: RepositoryMethodEntry["method"],
-    run: (tx: TenantTx, input: Parameters<RepositoryMethodEntry["invoke"]>[1], scoped: boolean) => Promise<readonly unknown[]>,
-  ): RepositoryMethodEntry => ({
-    repository,
-    table,
-    method,
-    access: method === "select" ? "read" : "write",
-    invoke: (tx, input) => run(tx, input, true),
-    invokeRlsOnly: (tx, input) => run(tx, input, false),
-  });
-
-  return [
-    entry("select", (tx, _input, scoped) =>
-      scoped
-        ? handle(tx).unsafe(`SELECT ${COLUMNS} FROM ${table} WHERE workspace_id = $1`, [workspaceOf(tx)])
-        : handle(tx).unsafe(`SELECT ${COLUMNS} FROM ${table}`),
-    ),
-    entry("insert", (tx, input) => {
-      const values = input?.values ?? {};
-      const workspaceId = workspaceOf(tx);
-      refuseForeignWorkspace(values["workspaceId"], workspaceId);
-      return handle(tx).unsafe(
-        `INSERT INTO ${table} (id, workspace_id, label) VALUES ($1, $2, $3) RETURNING ${COLUMNS}`,
-        [text(values["id"], "id"), workspaceId, text(values["label"], "label")],
-      );
-    }),
-    entry("update", (tx, input, scoped) => {
-      const set = input?.set ?? {};
-      const label = text(set["label"], "label");
-      const workspaceId = workspaceOf(tx);
-      refuseForeignWorkspace(set["workspaceId"], workspaceId);
-      if (scoped) {
-        return handle(tx).unsafe(`UPDATE ${table} SET label = $1 WHERE workspace_id = $2 RETURNING ${COLUMNS}`, [
-          label,
-          workspaceId,
-        ]);
-      }
-      return handle(tx).unsafe(`UPDATE ${table} SET label = $1 RETURNING ${COLUMNS}`, [label]);
-    }),
-    entry("delete", (tx, _input, scoped) =>
-      scoped
-        ? handle(tx).unsafe(`DELETE FROM ${table} WHERE workspace_id = $1 RETURNING ${COLUMNS}`, [workspaceOf(tx)])
-        : handle(tx).unsafe(`DELETE FROM ${table} RETURNING ${COLUMNS}`),
-    ),
-  ];
-}
-
 /**
  * Creates the probe table in `database`, seeds one shared and one unshared row
  * in each of two workspaces, and returns the fixture over it.
@@ -275,13 +153,5 @@ export async function createProbe(database: TestDatabase, options: ProbeOptions 
       return sum;
     },
   };
-  const transactions = new WeakMap<TenantTx, ProbeSql>();
-  return {
-    table,
-    repository,
-    fixture,
-    tenant: tenantDatabase(database, transactions),
-    methods: methodsOver(table, repository, transactions),
-    sample: PROBE_SAMPLE,
-  };
+  return { table, repository, fixture, methods: testRepositoryMethods(repository, table), sample: PROBE_SAMPLE };
 }

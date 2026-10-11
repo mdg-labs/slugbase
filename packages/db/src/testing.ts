@@ -4,8 +4,12 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { pgTable, text, uuid } from "drizzle-orm/pg-core";
 import postgres from "postgres";
 import { CE_CHAIN, migrate, type MigrationChain } from "./migrate.ts";
+import { scopedRepositoryMethods } from "./repositories/scoped.ts";
+import type { RepositoryMethodEntry } from "./repositories/registry.ts";
+import { bindTenantDatabase, type Database } from "./tenant.ts";
 
 // The database lifecycle of the integration tests (doc 08 section 3.2). It is
 // the one place outside the product code that holds a raw database handle, so
@@ -21,6 +25,9 @@ import { CE_CHAIN, migrate, type MigrationChain } from "./migrate.ts";
 // CREATE and DROP DATABASE, never for data.
 
 export type { MigrationChain } from "./migrate.ts";
+// The types `TestDatabase.tenant` and `testRepositoryMethods` are declared with.
+export type { Database, TenantContext, TenantTx } from "./tenant.ts";
+export type { RepositoryInput, RepositoryMethodEntry, ScopedMethod } from "./repositories/registry.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -84,6 +91,12 @@ export interface TestDatabase {
   readonly app: TestSql;
   /** A pool as `slugbase_owner`, for fixtures that create objects or insert what the app role may not. */
   readonly owner: TestSql;
+  /**
+   * `withTenant` on the `app` pool: the one `createDatabase` builds on a pool of
+   * its own, so a suite runs the production tenant transaction against this
+   * database. The pool is closed by `drop()`.
+   */
+  readonly tenant: Pick<Database, "withTenant">;
   /** Ends both pools and drops the database. Safe to call more than once. */
   drop(): Promise<void>;
 }
@@ -401,7 +414,7 @@ export async function createTestDatabase(options: TestDatabaseOptions = {}): Pro
       })();
       return dropped;
     };
-    return { name, template: { name: templateName, built }, app, owner, drop };
+    return { name, template: { name: templateName, built }, app, owner, tenant: bindTenantDatabase(app), drop };
   } catch (error) {
     try {
       await Promise.all(pools.map((pool) => pool.end({ timeout: 5 })));
@@ -417,6 +430,30 @@ export async function createTestDatabase(options: TestDatabaseOptions = {}): Pro
     }
     throw error;
   }
+}
+
+const PROBE_TABLE_NAME = /^[a-z_][a-z0-9_]*$/;
+
+/**
+ * The four methods of a scoped repository named `repository` over a test table
+ * `table` with the columns `id uuid`, `workspace_id uuid NOT NULL` and
+ * `label text NOT NULL`, which the suite creates (as the owner, with row-level
+ * security as it wants to test it). They come from the code
+ * `defineScopedRepository` builds its methods with, run in the transaction of
+ * `TestDatabase.tenant`, and are not entered in the registry of
+ * `listRepositoryMethods`, so a suite passes exactly the methods it means to to
+ * the cross-tenant matrix.
+ */
+export function testRepositoryMethods(repository: string, table: string): RepositoryMethodEntry[] {
+  if (!PROBE_TABLE_NAME.test(table)) {
+    throw new Error("a test repository table must be a lower-case SQL identifier");
+  }
+  const columns = {
+    id: uuid("id").primaryKey(),
+    workspaceId: uuid("workspace_id").notNull(),
+    label: text("label").notNull(),
+  };
+  return scopedRepositoryMethods(repository, pgTable(table, columns));
 }
 
 /** Runs `work` with a fresh test database and drops it afterwards, also when `work` throws. */
