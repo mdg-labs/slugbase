@@ -70,6 +70,8 @@ describe("egress ban (T6)", () => {
   it.each([
     ["require", 'const lib = require("undici");\nvoid lib;\n'],
     ["dynamic import", 'const lib = await import("node:http");\nvoid lib;\n'],
+    ["require of a static template", "const lib = require(`undici`);\nvoid lib;\n"],
+    ["dynamic import of a static template", "const lib = await import(`node:http`);\nvoid lib;\n"],
     ["re-export", 'export * from "node:https";\n'],
     ["named re-export", 'export { request } from "undici";\n'],
     ["import equals", 'import lib = require("undici");\nvoid lib;\n'],

@@ -84,6 +84,20 @@ interface ModuleNode extends SourceNode {
   source?: { type: string; value?: unknown } | null;
 }
 
+// A module specifier known without evaluating anything: a string literal, or a
+// template literal with no substitutions.
+function staticSpecifier(node: {
+  type: string;
+  value?: unknown;
+  expressions?: unknown[];
+  quasis?: { value: { cooked?: string | null } }[];
+}): unknown {
+  if (node.type === "Literal") {
+    return node.value;
+  }
+  return node.type === "TemplateLiteral" && node.expressions?.length === 0 ? node.quasis?.[0]?.value.cooked : undefined;
+}
+
 const importBoundaries: Rule.RuleModule = {
   meta: { type: "problem", schema: [], messages: { banned: "{{ text }}" } },
   create(context) {
@@ -116,19 +130,16 @@ const importBoundaries: Rule.RuleModule = {
         check(node, node.source.value);
       },
       ImportExpression: (node) => {
-        const { source } = node;
-        if (source.type === "Literal") {
-          check(node, source.value);
-        }
+        check(node, staticSpecifier(node.source));
       },
       CallExpression: (node) => {
         const [first] = node.arguments;
         if (
           node.callee.type === "Identifier" &&
           node.callee.name === "require" &&
-          first?.type === "Literal"
+          first !== undefined
         ) {
-          check(node, first.value);
+          check(node, staticSpecifier(first));
         }
       },
       // `import x = require("m")` and `import("m")` in a type position.
