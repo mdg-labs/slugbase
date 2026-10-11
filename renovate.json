@@ -1,0 +1,80 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:best-practices",
+    ":semanticCommitTypeAll(chore)"
+  ],
+  "baseBranchPatterns": [
+    "dev"
+  ],
+  "labels": [
+    "dependencies"
+  ],
+  "rangeStrategy": "pin",
+  "pinDigests": true,
+  "separateMultipleMajor": true,
+  "automerge": false,
+  "enabledManagers": [
+    "npm",
+    "github-actions",
+    "dockerfile",
+    "docker-compose"
+  ],
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": [
+      "before 6am on monday"
+    ]
+  },
+  "vulnerabilityAlerts": {
+    "labels": [
+      "dependencies"
+    ],
+    "automerge": false
+  },
+  "packageRules": [
+    {
+      "description": "Minor and patch npm updates arrive as one reviewable batch",
+      "matchManagers": [
+        "npm"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "groupName": "npm minor and patch",
+      "groupSlug": "npm-minor-patch"
+    },
+    {
+      "description": "Minor and patch GitHub Actions updates arrive as one reviewable batch",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest",
+        "pin",
+        "pinDigest"
+      ],
+      "groupName": "github-actions minor and patch",
+      "groupSlug": "github-actions-minor-patch"
+    },
+    {
+      "description": "Minor and patch Docker base image updates arrive as one reviewable batch",
+      "matchManagers": [
+        "dockerfile",
+        "docker-compose"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "digest",
+        "pin",
+        "pinDigest"
+      ],
+      "groupName": "docker minor and patch",
+      "groupSlug": "docker-minor-patch"
+    }
+  ]
+}
