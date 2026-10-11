@@ -80,7 +80,7 @@ Settled (D6). It is also the feature that makes the security model work: row-lev
                       ▼
      deployment platform — reverse proxy
         ├── slugbase.app            → marketing   (static)
-        ├── app.slugbase.app        → server ×N   (/api/*, /go/*, SPA assets)
+        ├── cloud.slugbase.app      → server ×N   (/api/*, /go/*, SPA assets)
         ├── operator console        → console     (own origin, access-restricted)
         └── worker ×1..N            (no ingress)
                       │
@@ -107,7 +107,7 @@ The SPA, the API and `/go` share one origin per deployment (D11). Consequences, 
 
 - No CORS configuration exists for the application; the server rejects cross-origin state-changing requests outright (§4, step 5). Forms on the marketing site do not call the app origin from the browser: the marketing site proxies their endpoints same-origin to the Cloud server over the internal network (Q41), so no CORS header is ever emitted anywhere.
 - The session cookie is `__Host-slugbase_session` — host-only, `Path=/`, `Secure`, `HttpOnly`, `SameSite=Lax`. A `__Host-` cookie cannot be set or overwritten by a sibling subdomain.
-- The browser search-engine template is `https://app.slugbase.app/go/%s` (Cloud) or `https://<operator-host>/go/%s` (CE). `SameSite=Lax` cookies are sent on these top-level navigations, so `/go` works from the address bar.
+- The browser search-engine template is `https://cloud.slugbase.app/go/%s` (Cloud) or `https://<operator-host>/go/%s` (CE). `SameSite=Lax` cookies are sent on these top-level navigations, so `/go` works from the address bar.
 - The marketing site and the operator console are **different origins** and never receive the session cookie.
 
 ---

@@ -186,7 +186,7 @@ The CE repository is public from its first commit, and `CLAUDE.md` restates this
 **What is welcome.** The line is drawn at how Cloud is run and built, not at whether it exists. CE promotes SlugBase Cloud as the managed alternative to self-hosting, in the README, the user docs and the product itself:
 
 - the name *SlugBase Cloud*, that it is managed and EU-hosted, and that it is built from this code;
-- its public hostnames: `slugbase.app` (website, pricing, signup, and the documentation at `slugbase.app/docs`) and `app.slugbase.app`; there is no `docs.slugbase.app` (Q2);
+- its public hostnames: `slugbase.app` (website, pricing, signup, and the documentation at `slugbase.app/docs`) and `cloud.slugbase.app`; there is no `docs.slugbase.app` (Q2);
 - the plan names (Free, Personal, Team, the Supporter offer) and what each entitles, since the entitlement engine is CE's;
 - links to the pricing page and signup. Prices themselves are linked, never written into this repository, so they have one source and cannot go stale here.
 

@@ -307,7 +307,7 @@ Unauthenticated, cacheable for 60 s (`Cache-Control: public, max-age=60`; the pe
 ```json
 {
   "apiVersion": "v1",
-  "origin": "https://app.slugbase.app",
+  "origin": "https://cloud.slugbase.app",
   "product": { "name": "SlugBase", "version": "1.4.2" },
   "signIn": { "password": true, "registration": true, "oidc": [ { "slug": "google", "name": "Google" } ] },
   "setupRequired": false,

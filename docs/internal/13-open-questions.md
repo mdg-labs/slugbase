@@ -28,7 +28,7 @@ Numbers are stable: Q1–Q19 come from docs 00–01, Q20–Q39 from 02–03, Q40
 
 | Q | Decision | Status |
 |---|---|---|
-| Q4 | `app.slugbase.app` for the Cloud application, `slugbase.app` for the website | Decided (default) |
+| Q4 | `cloud.slugbase.app` for the Cloud application, `slugbase.app` for the website | Decided (default) |
 | Q64 | Cloud plans and prices | Cloud — recorded in the Cloud documentation |
 | Q87 | Cloud pre-launch call to action | Cloud — recorded in the Cloud documentation |
 | Q72 | Cloud legal texts | Cloud — recorded in the Cloud documentation |
@@ -194,8 +194,8 @@ Numbers are stable: Q1–Q19 come from docs 00–01, Q20–Q39 from 02–03, Q40
 ### Q4 — Cloud application hostname
 **Status:** Decided (default) · **Due:** Phase 0 (DNS) · **Affects:** doc 00 §6, doc 01 §2.2, Cloud doc 07, Cloud doc 11
 
-**Decision: `app.slugbase.app` for the Cloud application (SPA + API + `/go`); `slugbase.app` for the website.** Non-public environments are recorded in the Cloud documentation.
-A host named after the edition (`cloud.`) reads as an edition name, not an app; `app.` is the convention users recognise. The browser search-engine URL is `https://app.slugbase.app/go/%s`. Changing it after launch breaks every user's search-engine entry, so it is fixed before the first public DNS record.
+**Decision: `cloud.slugbase.app` for the Cloud application (SPA + API + `/go`); `slugbase.app` for the website.** Non-public environments are recorded in the Cloud documentation.
+The host names the hosted service after the product (SlugBase Cloud). The Cloud application was first planned at `app.`; only the hostname changed, and the one-origin rule (D11), the routes and the cookie behaviour are as before. The browser search-engine URL is `https://cloud.slugbase.app/go/%s`. Changing it after launch breaks every user's search-engine entry, so it is fixed before the first public DNS record.
 
 ### Q64 — (Cloud) Cloud plans and prices
 Recorded in the Cloud documentation.
