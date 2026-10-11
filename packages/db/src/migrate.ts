@@ -1,5 +1,3 @@
-/// <reference types="node" />
-// tsconfig.build.json lists no types, so the Node globals this file uses come from here.
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";

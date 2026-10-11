@@ -1,8 +1,8 @@
-export { CE_CHAIN, MigrationError, migrate, migrationLevel } from "./migrate.js";
+export { CE_CHAIN, MigrationError, migrate, migrationLevel } from "./migrate.ts";
 export type {
   MigrateOptions,
   MigrateResult,
   MigrationChain,
   MigrationLevel,
   MigrationLevelOptions,
-} from "./migrate.js";
+} from "./migrate.ts";
