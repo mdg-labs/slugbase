@@ -1,0 +1,35 @@
+{
+  "name": "@slugbase/testing",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Test harness, factories and fixtures",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./db": {
+      "types": "./dist/db.d.ts",
+      "import": "./dist/db.js"
+    },
+    "./msw": {
+      "types": "./dist/msw.d.ts",
+      "import": "./dist/msw.js"
+    },
+    "./tenancy": {
+      "types": "./dist/tenancy.d.ts",
+      "import": "./dist/tenancy.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "lint": "eslint --max-warnings=0 .",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:unit": "vitest run --project unit",
+    "build": "tsc -p tsconfig.build.json"
+  }
+}

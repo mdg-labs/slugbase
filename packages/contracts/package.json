@@ -1,0 +1,29 @@
+{
+  "name": "@slugbase/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Zod schemas, operations and the generated OpenAPI document",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "lint": "eslint --max-warnings=0 .",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:unit": "vitest run --project unit",
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "devDependencies": {
+    "@slugbase/testing": "workspace:*"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  }
+}
