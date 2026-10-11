@@ -6,3 +6,21 @@ export type {
   MigrationLevel,
   MigrationLevelOptions,
 } from "./migrate.ts";
+export { TenantContextError, createDatabase } from "./tenant.ts";
+export type {
+  Database,
+  DatabaseOptions,
+  TenantContext,
+  TenantContextErrorCode,
+  TenantTx,
+} from "./tenant.ts";
+export { defineScopedRepository } from "./repositories/scoped.ts";
+export type {
+  InsertValues,
+  ScopedRepository,
+  ScopedRepositoryDefinition,
+  UpdateValues,
+  WorkspaceTable,
+} from "./repositories/scoped.ts";
+export { listRepositoryMethods } from "./repositories/registry.ts";
+export type { RepositoryInput, RepositoryMethodEntry, ScopedMethod } from "./repositories/registry.ts";

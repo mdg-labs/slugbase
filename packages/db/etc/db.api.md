@@ -4,8 +4,40 @@
 
 ```ts
 
+import { InferInsertModel } from 'drizzle-orm';
+import { InferSelectModel } from 'drizzle-orm';
+import type { PgColumn } from 'drizzle-orm/pg-core';
+import type { PgTable } from 'drizzle-orm/pg-core';
+import { SQL } from 'drizzle-orm';
+
 // @public
 export const CE_CHAIN: MigrationChain;
+
+// @public
+export function createDatabase(options: DatabaseOptions): Database;
+
+// @public
+export interface Database {
+    close(): Promise<void>;
+    withTenant<T>(context: TenantContext, fn: (tx: TenantTx) => Promise<T>): Promise<T>;
+}
+
+// @public (undocumented)
+export interface DatabaseOptions {
+    poolSize?: number;
+    url: string;
+}
+
+// @public
+export function defineScopedRepository<T extends WorkspaceTable>(name: string, table: T): ScopedRepositoryDefinition<T>;
+
+// @public (undocumented)
+export type InsertValues<T extends WorkspaceTable> = Omit<InferInsertModel<T>, "workspaceId"> & {
+    workspaceId?: string;
+};
+
+// @public
+export function listRepositoryMethods(): readonly RepositoryMethodEntry[];
 
 // @public
 export function migrate(options: MigrateOptions): Promise<MigrateResult>;
@@ -53,6 +85,81 @@ export interface MigrationLevelOptions {
     chains?: readonly MigrationChain[];
     url: string;
 }
+
+// @public
+export interface RepositoryInput {
+    set?: Record<string, unknown>;
+    values?: Record<string, unknown>;
+    where?: SQL;
+}
+
+// @public (undocumented)
+export interface RepositoryMethodEntry {
+    // (undocumented)
+    readonly access: "read" | "write";
+    invoke(tx: TenantTx, input?: RepositoryInput): Promise<readonly unknown[]>;
+    invokeRlsOnly(tx: TenantTx, input?: RepositoryInput): Promise<readonly unknown[]>;
+    // (undocumented)
+    readonly method: ScopedMethod;
+    readonly repository: string;
+    readonly table: string;
+}
+
+// @public (undocumented)
+export type ScopedMethod = "select" | "insert" | "update" | "delete";
+
+// @public (undocumented)
+export interface ScopedRepository<T extends WorkspaceTable> {
+    delete(where?: SQL): Promise<InferSelectModel<T>[]>;
+    insert(values: InsertValues<T>): Promise<InferSelectModel<T>>;
+    select(where?: SQL): Promise<InferSelectModel<T>[]>;
+    update(set: UpdateValues<T>, where?: SQL): Promise<InferSelectModel<T>[]>;
+}
+
+// @public (undocumented)
+export interface ScopedRepositoryDefinition<T extends WorkspaceTable> {
+    bind(tx: TenantTx): ScopedRepository<T>;
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly table: T;
+}
+
+// @public
+export interface TenantContext {
+    accountId: string;
+    requestId: string;
+    workspaceId?: string;
+}
+
+// @public
+export class TenantContextError extends Error {
+    constructor(code: TenantContextErrorCode, message: string);
+    // (undocumented)
+    readonly code: TenantContextErrorCode;
+}
+
+// @public (undocumented)
+export type TenantContextErrorCode = "invalid_account_id" | "invalid_workspace_id" | "invalid_request_id" | "nested_context_mismatch" | "workspace_required" | "foreign_workspace" | "not_a_tenant_transaction" | "transaction_closed";
+
+// @public
+export interface TenantTx {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly requestId: string;
+    readonly workspaceId: string | undefined;
+}
+
+// @public (undocumented)
+export type UpdateValues<T extends WorkspaceTable> = Partial<Omit<InferInsertModel<T>, "workspaceId">> & {
+    workspaceId?: string;
+};
+
+// @public
+export type WorkspaceTable = PgTable & {
+    workspaceId: PgColumn;
+};
 
 // (No @packageDocumentation comment for this package)
 
