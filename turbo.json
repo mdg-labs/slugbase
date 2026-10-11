@@ -1,0 +1,38 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "agentGuidance": false,
+  "tasks": {
+    "lint": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "typecheck": {
+      "dependsOn": ["^build"],
+      "outputs": ["*.tsbuildinfo", ".tsbuildinfo/**"]
+    },
+    "test:unit": {
+      "dependsOn": ["^build"],
+      "outputs": ["coverage/**"]
+    },
+    "test:integration": {
+      "dependsOn": ["^build"],
+      "outputs": [],
+      "cache": false
+    },
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"]
+    },
+    "contracts:check": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "db:check": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "i18n:check": {
+      "outputs": []
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "slugbase-workspace",
+  "private": true,
+  "description": "SlugBase Community Edition workspace root",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "packageManager": "pnpm@10.34.6",
+  "engines": {
+    "node": ">=24.0.0 <25.0.0"
+  },
+  "scripts": {
+    "preinstall": "node scripts/check-node.mjs",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test:unit": "turbo run test:unit",
+    "test:integration": "turbo run test:integration",
+    "contracts:check": "turbo run contracts:check",
+    "db:check": "turbo run db:check",
+    "i18n:check": "turbo run i18n:check",
+    "audit": "pnpm audit --audit-level=high",
+    "gate": "turbo run lint typecheck test:unit build && pnpm contracts:check && pnpm db:check && pnpm test:integration && pnpm i18n:check && pnpm audit --audit-level=high"
+  },
+  "devDependencies": {
+    "turbo": "^2.11.7"
+  }
+}
