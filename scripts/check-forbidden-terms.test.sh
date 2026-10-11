@@ -105,7 +105,7 @@ expect_error "a directory outside a git repository fails"
 d='$'
 pound="£"
 forms=(
-  "${d}11.11" "${d} 11.11" "${d}1,111" "${d}111"
+  "${d}11.11" "${d} 11.11" "${d}1,111" "${d}111" "${d} 111" "costs ${d} 2500"
   "${d}1/month" "${d}1 / mo" "${d}1/user" "${d}1 per year" "${d}1 a month" "${d}1 each seat"
   "${d}1 monthly" "${d}1 yearly"
   "${pound}11.11" "${pound} 11.11" "11.11${pound}" "11.11 ${pound}"
