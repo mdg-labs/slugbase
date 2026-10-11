@@ -100,6 +100,14 @@ React components are tested with Testing Library and `vitest-axe` for component-
 
 The harness needs `SLUGBASE_TEST_PG_URL` (a superuser URL); it defaults to the `compose.dev.yml` Postgres. In CI it points at a service container (§6). Because databases are per file and named randomly, any number of scratch clones can run `pnpm gate` against the same Postgres concurrently.
 
+Every changed migration, custom SQL file or `roles.sql` leaves one more template behind, and the harness never drops one on its own: scratch clones at different hashes run at the same time. `pnpm --filter @slugbase/db test:prune-templates` drops the `slugbase_tpl_*` templates that nothing uses (template names as arguments limit it to those). It never lists or touches a database outside the `slugbase_tpl_<hash>` names, and it keeps the template of the current hash and any template that is:
+
+- being built or dropped (the per-template build lock, which the prune only tries and never waits for);
+- cloned from, or about to be: Postgres records no link from `test_<random>` to its template, so every process holds a per-template *use* lock, shared, from before it looks for the template until its test database is dropped, and the prune only tries the exclusive one;
+- connected to (and the `DROP DATABASE` has no `FORCE`, so a connection that opens late makes it fail and leaves the template marked).
+
+A process that wants a template the prune has just dropped builds it again.
+
 ### 3.3 The cross-tenant matrix (D8, doc 01 §5.5)
 
 The single most important test in the codebase. It lives in `packages/testing/src/tenancy/` and runs in two modes:

@@ -37,6 +37,14 @@ const MIGRATOR_PASSWORD = "slugbase_migrator_dev_only";
 // test database holds it shared for its lifetime.
 const CLUSTER_LOCK_KEY = 7_354_190_025;
 
+// Per template, two session advisory locks: the build lock, held exclusively
+// while the template is built or dropped, and the use lock, held shared by every
+// process from before it looks for the template until its test database is
+// gone. Postgres records no link from a clone to its template, so the use lock
+// is what makes "a database is cloned from this template" observable to the prune.
+const buildLockLabel = (template: string): string => `slugbase.test-template.${template}`;
+const useLockLabel = (template: string): string => `slugbase.test-template-use.${template}`;
+
 const TEMPLATE_NAME = /^slugbase_tpl_[0-9a-f]{32}$/;
 const TEST_NAME = /^test_[0-9a-f]{16}$/;
 
@@ -254,12 +262,13 @@ async function dropDatabase(admin: TestSql, name: string): Promise<void> {
   await admin.unsafe(`DROP DATABASE IF EXISTS ${quote(name)} WITH (FORCE)`);
 }
 
-// One build per template name in this process; the advisory lock does the same
-// across processes and checkouts.
+// One build in flight per template name in this process; the advisory lock does
+// the same across processes and checkouts. An entry lives only while its build
+// runs: a later prune may have dropped the template, so each use looks again.
 const builds = new Map<string, Promise<boolean>>();
 
 async function buildTemplate(server: Server, name: string, chains: readonly MigrationChain[]): Promise<boolean> {
-  return withAdvisoryLock(server, `slugbase.test-template.${name}`, async (admin) => {
+  return withAdvisoryLock(server, buildLockLabel(name), async (admin) => {
     const state = await admin<{ template: boolean }[]>`SELECT datistemplate AS template FROM pg_database WHERE datname = ${name}`;
     if (state[0]?.template === true) {
       return false;
@@ -290,9 +299,8 @@ async function ensureTemplate(server: Server, name: string, chains: readonly Mig
   builds.set(key, build);
   try {
     return await build;
-  } catch (error) {
+  } finally {
     builds.delete(key);
-    throw error;
   }
 }
 
@@ -340,6 +348,14 @@ async function releaseSession(server: Server, session: Session): Promise<void> {
   await session.admin.end({ timeout: 5 });
 }
 
+async function endTemplateUse(server: Server, session: Session, template: string): Promise<void> {
+  try {
+    await session.admin`SELECT pg_advisory_unlock_shared(hashtext(${useLockLabel(template)}))`;
+  } finally {
+    await releaseSession(server, session);
+  }
+}
+
 /**
  * Creates the database of one test file: `test_<random>`, cloned from the
  * template of the migration hash, which is built first if no run has built it.
@@ -355,7 +371,10 @@ export async function createTestDatabase(options: TestDatabaseOptions = {}): Pro
   assertTestName(name);
   const pools: TestSql[] = [];
   let created = false;
+  let usingTemplate = false;
   try {
+    await session.admin`SELECT pg_advisory_lock_shared(hashtext(${useLockLabel(templateName)}))`;
+    usingTemplate = true;
     const built = await ensureTemplate(server, templateName, chains);
     await session.admin.unsafe(`CREATE DATABASE ${quote(name)} TEMPLATE ${quote(templateName)}`);
     created = true;
@@ -377,7 +396,7 @@ export async function createTestDatabase(options: TestDatabaseOptions = {}): Pro
           await Promise.all(pools.map((pool) => pool.end({ timeout: 5 })));
           await session.admin.unsafe(`DROP DATABASE IF EXISTS ${quote(name)} WITH (FORCE)`);
         } finally {
-          await releaseSession(server, session);
+          await endTemplateUse(server, session, templateName);
         }
       })();
       return dropped;
@@ -390,7 +409,11 @@ export async function createTestDatabase(options: TestDatabaseOptions = {}): Pro
         await session.admin.unsafe(`DROP DATABASE IF EXISTS ${quote(name)} WITH (FORCE)`);
       }
     } finally {
-      await releaseSession(server, session);
+      if (usingTemplate) {
+        await endTemplateUse(server, session, templateName);
+      } else {
+        await releaseSession(server, session);
+      }
     }
     throw error;
   }
@@ -418,5 +441,121 @@ export async function dropTestTemplate(name: string, options: Pick<TestDatabaseO
   assertTemplateName(name);
   const server = resolveServer(options.serverUrl);
   builds.delete(`${server.key}/${name}`);
-  await withAdvisoryLock(server, `slugbase.test-template.${name}`, (admin) => dropDatabase(admin, name));
+  await withAdvisoryLock(server, buildLockLabel(name), (admin) => dropDatabase(admin, name));
+}
+
+/**
+ * Why a template was kept: it is the current one or one named in `keep`
+ * (`"current"`); a process is building or dropping it (`"building"`); a test
+ * database cloned from it exists or a process is about to clone it (`"in use"`);
+ * a session is connected to it (`"connected"`).
+ */
+export type PruneSkipReason = "current" | "building" | "in use" | "connected";
+
+export interface PruneTestTemplatesOptions {
+  /** Superuser URL of the server, as for `createTestDatabase`. */
+  serverUrl?: string;
+  /** Templates to leave alone. Defaults to the template of the current migration hash. */
+  keep?: readonly string[];
+  /** Consider only these databases. Names that are not `slugbase_tpl_` followed by 32 hex digits are ignored. Defaults to every template. */
+  names?: readonly string[];
+}
+
+export interface PruneTestTemplatesResult {
+  dropped: string[];
+  skipped: { name: string; reason: PruneSkipReason }[];
+}
+
+/**
+ * Drops the `slugbase_tpl_*` templates that nothing is using: not the current
+ * one, not one whose build or use lock another process holds, not one with a
+ * connection. A template that fails any of these is reported, never dropped.
+ * Databases outside the `slugbase_tpl_` names are never listed or touched.
+ */
+export async function pruneTestTemplates(options: PruneTestTemplatesOptions = {}): Promise<PruneTestTemplatesResult> {
+  const server = resolveServer(options.serverUrl);
+  const keep = new Set(options.keep ?? [testTemplateName()]);
+  const only = options.names === undefined ? undefined : new Set(options.names);
+  const result: PruneTestTemplatesResult = { dropped: [], skipped: [] };
+  const admin = openAdmin(server);
+  try {
+    const rows = await admin<{ name: string }[]>`SELECT datname AS name FROM pg_database WHERE datname LIKE 'slugbase\_tpl\_%' ORDER BY datname`;
+    for (const { name } of rows) {
+      if (!TEMPLATE_NAME.test(name) || (only !== undefined && !only.has(name))) {
+        continue;
+      }
+      if (keep.has(name)) {
+        result.skipped.push({ name, reason: "current" });
+        continue;
+      }
+      const reason = await pruneTemplate(admin, name);
+      if (reason === undefined) {
+        result.dropped.push(name);
+      } else {
+        result.skipped.push({ name, reason });
+      }
+    }
+  } finally {
+    await admin.end({ timeout: 5 });
+  }
+  return result;
+}
+
+// Both locks are taken without waiting. A process that asks for the use lock
+// while this holds it waits, then finds the template gone and builds it again.
+async function pruneTemplate(admin: TestSql, name: string): Promise<PruneSkipReason | undefined> {
+  const useLocked = await tryLock(admin, useLockLabel(name));
+  if (!useLocked) {
+    return "in use";
+  }
+  try {
+    if (!(await tryLock(admin, buildLockLabel(name)))) {
+      return "building";
+    }
+    try {
+      return await dropUnusedTemplate(admin, name);
+    } finally {
+      await admin`SELECT pg_advisory_unlock(hashtext(${buildLockLabel(name)}))`;
+    }
+  } finally {
+    await admin`SELECT pg_advisory_unlock(hashtext(${useLockLabel(name)}))`;
+  }
+}
+
+async function tryLock(admin: TestSql, label: string): Promise<boolean> {
+  const rows = await admin<{ locked: boolean }[]>`SELECT pg_try_advisory_lock(hashtext(${label})) AS locked`;
+  return rows[0]?.locked === true;
+}
+
+const OBJECT_IN_USE = "55006";
+
+// The drop has no FORCE: a connection that opens after the check makes it
+// fail, and the template is marked again as it was.
+async function dropUnusedTemplate(admin: TestSql, name: string): Promise<PruneSkipReason | undefined> {
+  const state = await admin<{ template: boolean; connections: number }[]>`
+    SELECT d.datistemplate AS template,
+           (SELECT count(*)::int FROM pg_stat_activity a WHERE a.datname = d.datname) AS connections
+    FROM pg_database d WHERE d.datname = ${name}`;
+  const row = state[0];
+  if (row === undefined) {
+    return undefined;
+  }
+  if (row.connections > 0) {
+    return "connected";
+  }
+  if (row.template) {
+    await admin.unsafe(`ALTER DATABASE ${quote(name)} WITH IS_TEMPLATE false`);
+  }
+  try {
+    await admin.unsafe(`DROP DATABASE IF EXISTS ${quote(name)}`);
+  } catch (error) {
+    if (row.template) {
+      await admin.unsafe(`ALTER DATABASE ${quote(name)} WITH IS_TEMPLATE true`);
+    }
+    if (typeof error === "object" && error !== null && "code" in error && error.code === OBJECT_IN_USE) {
+      return "connected";
+    }
+    throw error;
+  }
+  return undefined;
 }

@@ -19,6 +19,30 @@ export interface MigrationChain {
     name: string;
 }
 
+// @public
+export type PruneSkipReason = "current" | "building" | "in use" | "connected";
+
+// @public
+export function pruneTestTemplates(options?: PruneTestTemplatesOptions): Promise<PruneTestTemplatesResult>;
+
+// @public (undocumented)
+export interface PruneTestTemplatesOptions {
+    keep?: readonly string[];
+    names?: readonly string[];
+    serverUrl?: string;
+}
+
+// @public (undocumented)
+export interface PruneTestTemplatesResult {
+    // (undocumented)
+    dropped: string[];
+    // (undocumented)
+    skipped: {
+        name: string;
+        reason: PruneSkipReason;
+    }[];
+}
+
 // @public (undocumented)
 export interface TestDatabase {
     readonly app: TestSql;
