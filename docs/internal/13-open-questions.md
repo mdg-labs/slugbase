@@ -195,7 +195,7 @@ Numbers are stable: Q1–Q19 come from docs 00–01, Q20–Q39 from 02–03, Q40
 **Status:** Decided (default) · **Due:** Phase 0 (DNS) · **Affects:** doc 00 §6, doc 01 §2.2, Cloud doc 07, Cloud doc 11
 
 **Decision: `app.slugbase.app` for the Cloud application (SPA + API + `/go`); `slugbase.app` for the website.** Non-public environments are recorded in the Cloud documentation.
-`cloud.slugbase.app` (the old forwarding host) reads as an edition name, not an app; `app.` is the convention users recognise. The browser search-engine URL is `https://app.slugbase.app/go/%s`. Changing it after launch breaks every user's search-engine entry, so it is fixed before the first public DNS record.
+A host named after the edition (`cloud.`) reads as an edition name, not an app; `app.` is the convention users recognise. The browser search-engine URL is `https://app.slugbase.app/go/%s`. Changing it after launch breaks every user's search-engine entry, so it is fixed before the first public DNS record.
 
 ### Q64 — (Cloud) Cloud plans and prices
 Recorded in the Cloud documentation.

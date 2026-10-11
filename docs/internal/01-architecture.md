@@ -406,7 +406,7 @@ Doc 10 is the threat model; this is the shape that implements it.
 - **Metrics**: OpenTelemetry metrics, exposed in Prometheus format on an internal listener (`METRICS_PORT`, never on the public one) — request rate/latency per route, `/go` resolution outcomes, job queue depth and age, pool saturation, rate-limit rejections. At launch nothing scrapes it (D27): host health comes from the deployment platform's host and container metrics, database load from `pg_stat_statements`; a metrics stack is added when a measurement needs it.
 - **Traces**: OpenTelemetry, sampled; database spans without bound parameters.
 - **Errors**: `ErrorReportPort` (a self-hosted error tracker in Cloud); PII scrubbing before send; client-side reporting consent-gated (doc 11).
-- **Uptime**: an external uptime monitor checks `/health` of every public host each minute and alerts via Discord (Cloud doc 07 §11).
+- **Uptime**: an external uptime monitor checks `/health` of every public host each minute and alerts the operator (Cloud doc 07 §11).
 - **Health**: `/health` (liveness, never touches the database), `/ready` (DB + migration level: expected against applied; a database ahead of the build logs a warning and stays ready), `/version` (exactly `{ name, version, commit, builtAt }`, read from a build-info file written at build time, with a development fallback) — the deploy pipeline gates on `/version` (doc 07 §4). The probes are unauthenticated, not rate-limited and `no-store`.
 
 ---

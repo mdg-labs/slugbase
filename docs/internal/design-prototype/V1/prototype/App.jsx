@@ -24,7 +24,7 @@ function UpsellModal({ plan, onClose }) {
             custom forwarding domains, and shared workspaces.
           </p>
           <div style={{ display: "flex", gap: 10, marginTop: 22 }}>
-            <button className="btn btn--primary" style={{ flex: 1 }}><Icon name="zap" size={15} />Upgrade to Pro — $6/mo</button>
+            <button className="btn btn--primary" style={{ flex: 1 }}><Icon name="zap" size={15} />Upgrade to Pro</button>
             <button className="btn btn--secondary" onClick={onClose}>Maybe later</button>
           </div>
         </div>
