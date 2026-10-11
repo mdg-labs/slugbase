@@ -26,7 +26,26 @@
     },
     "@slugbase/contracts#test:unit": {
       "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/docs/internal/04-api.md", "$TURBO_ROOT$/package.json"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/docs/internal/04-api.md",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/api-extractor.base.json",
+        "$TURBO_ROOT$/tooling/api-report/**"
+      ],
+      "outputs": ["coverage/**"]
+    },
+    "@slugbase/tooling#test:unit": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/turbo.json",
+        "$TURBO_ROOT$/api-extractor.base.json",
+        "$TURBO_ROOT$/packages/*/package.json",
+        "$TURBO_ROOT$/packages/*/api-extractor.json",
+        "$TURBO_ROOT$/packages/*/etc/**"
+      ],
       "outputs": ["coverage/**"]
     },
     "test:integration": {
@@ -39,7 +58,7 @@
       "outputs": ["dist/**"]
     },
     "contracts:check": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^build", "build"],
       "outputs": [],
       "cache": false
     },

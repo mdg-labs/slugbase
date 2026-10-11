@@ -2,9 +2,10 @@ import { spawnSync } from "node:child_process";
 import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { lintOpenApi } from "../scripts/lint-openapi.ts";
 import { ruleset } from "../spectral/slugbase.ruleset.ts";
+import { createReportPackage } from "./report-package.ts";
 import { SUBPROCESS_TIMEOUT_MS } from "./subprocess.ts";
 
 const packageDir = new URL("..", import.meta.url).pathname;
@@ -215,8 +216,21 @@ describe("the SlugBase Spectral ruleset", () => {
 });
 
 describe("pnpm contracts:check and the Spectral ruleset", { timeout: SUBPROCESS_TIMEOUT_MS }, () => {
+  let reportPackage = "";
+
+  beforeAll(() => {
+    reportPackage = createReportPackage();
+  }, SUBPROCESS_TIMEOUT_MS);
+
+  afterAll(() => {
+    rmSync(reportPackage, { recursive: true, force: true });
+  });
+
   function runCheck(generated: string) {
-    return spawnSync(process.execPath, [check, "--generated", generated], { cwd: packageDir, encoding: "utf8" });
+    return spawnSync(process.execPath, [check, "--generated", generated, "--package", reportPackage], {
+      cwd: packageDir,
+      encoding: "utf8",
+    });
   }
 
   function generatedWith(document: string): string {

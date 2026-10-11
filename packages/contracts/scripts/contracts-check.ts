@@ -7,20 +7,25 @@ import { lintOpenApi } from "./lint-openapi.ts";
 interface Options {
   operations: string;
   generated: string;
+  package: string;
 }
 
 function parseArgs(argv: readonly string[]): Options {
   const options: Options = {
     operations: resolve(import.meta.dirname, "../src/operations/index.ts"),
     generated: resolve(import.meta.dirname, "../generated"),
+    package: resolve(import.meta.dirname, ".."),
   };
+  const flags = { "--operations": "operations", "--generated": "generated", "--package": "package" } as const;
   for (let i = 0; i < argv.length; i += 2) {
     const flag = argv[i];
     const value = argv[i + 1];
-    if ((flag !== "--operations" && flag !== "--generated") || value === undefined) {
-      throw new Error("usage: contracts-check.ts [--operations <module exporting operations>] [--generated <directory>]");
+    if (flag === undefined || !(flag in flags) || value === undefined) {
+      throw new Error(
+        "usage: contracts-check.ts [--operations <module exporting operations>] [--generated <directory>] [--package <directory>]",
+      );
     }
-    options[flag === "--operations" ? "operations" : "generated"] = resolve(value);
+    options[flags[flag as keyof typeof flags]] = resolve(value);
   }
   return options;
 }
@@ -79,9 +84,22 @@ async function lintFailure(options: Options): Promise<string | undefined> {
   return `the OpenAPI document breaks the SlugBase ruleset (${String(findings.length)} finding(s)):\n${findings.map((finding) => `  ${finding}`).join("\n")}`;
 }
 
+/** Describes how the package's API Extractor reports differ from its exported API, or returns undefined when they match. */
+function apiReportFailure(options: Options): string | undefined {
+  const runner = resolve(import.meta.dirname, "../../../tooling/api-report/api-report.ts");
+  const report = spawnSync(process.execPath, [runner, "check", "--package", options.package], { encoding: "utf8" });
+  if (report.error !== undefined) {
+    throw report.error;
+  }
+  if (report.status === 0) {
+    return undefined;
+  }
+  return report.stderr.trim() || `the API report check exited with status ${String(report.status)}`;
+}
+
 /** Every check runs even when an earlier one fails, so one run reports everything that is wrong. */
 async function failures(options: Options): Promise<string[]> {
-  const checks = [() => driftFailure(options), () => lintFailure(options)];
+  const checks = [() => driftFailure(options), () => lintFailure(options), () => apiReportFailure(options)];
   const failed: string[] = [];
   for (const check of checks) {
     try {

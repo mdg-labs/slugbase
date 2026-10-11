@@ -13,6 +13,7 @@
     "../vitest.shared.ts",
     "vitest.config.ts",
     "test",
+    "api-report",
     "boundaries",
     "vocabulary"
   ]

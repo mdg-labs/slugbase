@@ -2,7 +2,8 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { createReportPackage, runApiReport } from "./report-package.ts";
 import { SUBPROCESS_TIMEOUT_MS } from "./subprocess.ts";
 
 const packageDir = new URL("..", import.meta.url).pathname;
@@ -12,6 +13,7 @@ const before = join(packageDir, "test/fixtures/drift-before.fixture.ts");
 const after = join(packageDir, "test/fixtures/drift-after.fixture.ts");
 const noPolicy = join(packageDir, "test/fixtures/no-policy.fixture.ts");
 const directories: string[] = [];
+let reportPackage = "";
 
 function scratch(): string {
   const dir = mkdtempSync(join(tmpdir(), "contracts-check-"));
@@ -27,8 +29,8 @@ function generate(operations: string, outDir: string): void {
   expect(result.status, result.stderr).toBe(0);
 }
 
-function runCheck(operations: string, generated: string, tmp: string = tmpdir()) {
-  return spawnSync(process.execPath, [check, "--operations", operations, "--generated", generated], {
+function runCheck(operations: string, generated: string, tmp: string = tmpdir(), pkg: string = reportPackage) {
+  return spawnSync(process.execPath, [check, "--operations", operations, "--generated", generated, "--package", pkg], {
     cwd: packageDir,
     encoding: "utf8",
     env: { ...process.env, TMPDIR: tmp },
@@ -38,6 +40,14 @@ function runCheck(operations: string, generated: string, tmp: string = tmpdir())
 function snapshot(dir: string): Record<string, string> {
   return Object.fromEntries(readdirSync(dir).map((name) => [name, readFileSync(join(dir, name), "utf8")]));
 }
+
+beforeAll(() => {
+  reportPackage = createReportPackage();
+}, SUBPROCESS_TIMEOUT_MS);
+
+afterAll(() => {
+  rmSync(reportPackage, { recursive: true, force: true });
+});
 
 afterEach(() => {
   for (const dir of directories.splice(0)) {
@@ -54,12 +64,35 @@ describe("pnpm contracts:check", () => {
     const root = JSON.parse(readFileSync(join(packageDir, "../../package.json"), "utf8")) as {
       scripts: Record<string, string>;
     };
-    expect(root.scripts["contracts:check"]).toBe("turbo run contracts:check");
+    expect(root.scripts["contracts:check"]).toBe("turbo run contracts:check --continue");
   });
 
   it("passes on the committed generated files", { timeout: SUBPROCESS_TIMEOUT_MS }, () => {
-    const result = spawnSync(process.execPath, [check], { cwd: packageDir, encoding: "utf8" });
+    const result = spawnSync(process.execPath, [check, "--package", reportPackage], { cwd: packageDir, encoding: "utf8" });
     expect(result.status, result.stderr).toBe(0);
+  });
+
+  it("fails when the exported API of the package differs from its committed report, and passes once the report is regenerated", { timeout: SUBPROCESS_TIMEOUT_MS }, () => {
+    const generated = scratch();
+    generate(before, generated);
+    const declarations = join(reportPackage, "dist/index.d.ts");
+    const original = readFileSync(declarations, "utf8");
+    try {
+      writeFileSync(declarations, `${original}export declare function added(): string;\n`);
+      const drifted = runCheck(before, generated);
+      expect(drifted.status).toBe(1);
+      expect(drifted.stderr).toContain("contracts:check failed");
+      expect(drifted.stderr).toContain("@fixture/reports");
+      expect(drifted.stderr).toContain("etc/reports.api.md differs");
+      expect(drifted.stderr).toContain("pnpm api:extract");
+      expect(drifted.stderr).toContain("Cloud follow-up");
+
+      expect(runApiReport("extract", reportPackage).status).toBe(0);
+      expect(runCheck(before, generated).status).toBe(0);
+    } finally {
+      writeFileSync(declarations, original);
+      expect(runApiReport("extract", reportPackage).status).toBe(0);
+    }
   });
 
   it("fails after a schema changes without regenerating, and passes once regenerated", { timeout: SUBPROCESS_TIMEOUT_MS }, () => {
