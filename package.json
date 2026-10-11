@@ -11,7 +11,8 @@
   "scripts": {
     "preinstall": "node scripts/check-node.mjs",
     "build": "turbo run build",
-    "lint": "turbo run lint",
+    "lint": "turbo run lint && pnpm lint:forbidden-terms",
+    "lint:forbidden-terms": "bash scripts/check-forbidden-terms.test.sh && bash scripts/check-forbidden-terms.sh",
     "typecheck": "turbo run typecheck",
     "test:unit": "turbo run test:unit",
     "test:integration": "turbo run test:integration",
@@ -19,7 +20,7 @@
     "db:check": "turbo run db:check",
     "i18n:check": "turbo run i18n:check",
     "audit": "pnpm audit --audit-level=high",
-    "gate": "turbo run lint typecheck test:unit build && pnpm contracts:check && pnpm db:check && pnpm test:integration && pnpm i18n:check && pnpm audit --audit-level=high"
+    "gate": "pnpm lint && turbo run typecheck test:unit build && pnpm contracts:check && pnpm db:check && pnpm test:integration && pnpm i18n:check && pnpm audit --audit-level=high"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
