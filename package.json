@@ -21,6 +21,7 @@
     "i18n:check": "turbo run i18n:check",
     "audit": "pnpm audit --audit-level=high",
     "gate": "pnpm lint && turbo run typecheck test:unit build && pnpm contracts:check && pnpm db:check && pnpm test:integration && pnpm i18n:check && pnpm audit --audit-level=high",
+    "db:generate": "pnpm --filter @slugbase/db db:generate",
     "api:gen": "pnpm --filter @slugbase/contracts api:gen",
     "api:extract": "turbo run build && node tooling/api-report/api-report.ts extract",
     "dev:services": "docker compose -f compose.dev.yml up -d --wait",
@@ -37,5 +38,10 @@
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.71.1",
     "vitest": "^5.0.3"
+  },
+  "pnpm": {
+    "overrides": {
+      "@esbuild-kit/core-utils>esbuild": "^0.25.0"
+    }
   }
 }

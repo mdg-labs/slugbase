@@ -1,0 +1,4 @@
+{
+  "sha256": "b40602036811265b9c1a889ff611ed7001a6e3d471e50d96d1c895fbf27d73f6",
+  "migration": "20261011134302_add_extensions_and_tenant_functions"
+}
