@@ -1,0 +1,13 @@
+# Accepted osv-scanner findings. Each entry ignores one advisory by id, until a
+# date after which the `audit` job fails on it again.
+
+[[IgnoredVulns]]
+id = "GHSA-hp3w-g68c-fv3c"
+ignoreUntil = 2027-01-09
+reason = """\
+sprintf-js 1.0.3 reaches the lockfile through @microsoft/api-extractor, \
+@rushstack/ts-command-line and argparse 1.x. Every sprintf-js release is \
+affected and no patched version exists; the latest @rushstack/ts-command-line \
+still depends on argparse 1.x. It runs only inside API Extractor's \
+command-line parsing at build time, on arguments the repository's own scripts \
+pass; no request, user content or other untrusted input reaches it."""
