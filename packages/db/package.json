@@ -18,12 +18,14 @@
     "lint": "eslint --max-warnings=0 .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test:unit": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
     "build": "tsc -p tsconfig.build.json",
     "contracts:check": "node ../../tooling/api-report/api-report.ts check --package ."
   },
   "dependencies": {
+    "@slugbase/contracts": "workspace:*",
     "@slugbase/core": "workspace:*",
-    "@slugbase/contracts": "workspace:*"
+    "postgres": "^3.4.9"
   },
   "devDependencies": {
     "@slugbase/testing": "workspace:*"

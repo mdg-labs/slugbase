@@ -16,10 +16,18 @@ services:
       POSTGRES_USER: slugbase
       POSTGRES_PASSWORD: slugbase
       POSTGRES_DB: slugbase_dev
+      # Passwords of the application roles that roles.sql creates on first
+      # start. Development-only values, which the configuration schema is to
+      # refuse in production (E1.4.1).
+      PROVISION_APP_PASSWORD: slugbase_app_dev_only
+      PROVISION_MIGRATOR_PASSWORD: slugbase_migrator_dev_only
     ports:
       - "127.0.0.1:54329:54329"
     volumes:
       - postgres-data:/var/lib/postgresql
+      # Runs once, when the data volume is empty. To provision again from
+      # scratch: docker compose -f compose.dev.yml down -v, then pnpm dev:services.
+      - ./packages/db/provision/roles.sql:/docker-entrypoint-initdb.d/10-roles.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -p 54329 -U slugbase -d slugbase_dev"]
       interval: 2s

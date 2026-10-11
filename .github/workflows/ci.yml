@@ -145,6 +145,10 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           turbo-cache-key: integration-${{ matrix.postgres }}
+      - name: Install the PostgreSQL client
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends postgresql-client
       - run: pnpm db:check
       - run: pnpm test:integration
 

@@ -50,6 +50,7 @@
     },
     "test:integration": {
       "dependsOn": ["^build"],
+      "passThroughEnv": ["SLUGBASE_TEST_PG_URL"],
       "outputs": [],
       "cache": false
     },
