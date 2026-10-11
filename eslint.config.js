@@ -1,6 +1,7 @@
 import js from "@eslint/js";
 import globals from "globals";
 import tseslint from "typescript-eslint";
+import { vocabularyPlugin } from "./tooling/vocabulary/eslint-plugin.ts";
 
 const TS_FILES = ["**/*.{ts,tsx,mts,cts}"];
 const JS_FILES = ["**/*.{js,mjs,cjs}"];
@@ -76,4 +77,16 @@ export const projectRules = {
   },
 };
 
-export default [ignores, ...javascriptRules, ...typescriptRules, projectRules];
+// Product vocabulary (doc 00 section 3): the forbidden words and their
+// canonical terms live in tooling/vocabulary/forbidden-words.json.
+export const vocabularyRules = {
+  files: [...TS_FILES, ...JS_FILES],
+  plugins: { slugbase: vocabularyPlugin },
+  processor: "slugbase/vocabulary",
+  rules: {
+    "slugbase/no-forbidden-vocabulary": "error",
+    "slugbase/vocabulary-disable-reason": "error",
+  },
+};
+
+export default [ignores, ...javascriptRules, ...typescriptRules, projectRules, vocabularyRules];

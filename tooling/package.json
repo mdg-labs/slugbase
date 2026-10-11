@@ -1,13 +1,14 @@
 {
   "name": "@slugbase/tooling",
   "private": true,
-  "description": "Tests for the shared lint and test configuration at the repository root",
+  "description": "Tests for the shared lint and test configuration at the repository root, and the product-vocabulary checks",
   "license": "AGPL-3.0-only",
   "type": "module",
   "scripts": {
     "lint": "eslint --max-warnings=0 . ../eslint.config.js ../vitest.shared.ts ../scripts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test:unit": "vitest run --project unit",
-    "test:integration": "vitest run --project integration"
+    "test:integration": "vitest run --project integration",
+    "i18n:check": "node vocabulary/check-catalogs.ts"
   }
 }

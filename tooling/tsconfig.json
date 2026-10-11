@@ -12,6 +12,7 @@
   "include": [
     "../vitest.shared.ts",
     "vitest.config.ts",
-    "test"
+    "test",
+    "vocabulary"
   ]
 }
