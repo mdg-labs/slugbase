@@ -1,0 +1,5 @@
+# actionlint configuration (doc 09 §2.1). Every workflow runs on a GitHub-hosted
+# runner, so no self-hosted runner label is declared and an unknown label is
+# reported as an error.
+self-hosted-runner:
+  labels: []

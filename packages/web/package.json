@@ -1,0 +1,30 @@
+{
+  "name": "@slugbase/web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The web app as a library",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "lint": "eslint --max-warnings=0 .",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:unit": "vitest run --project unit",
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "@slugbase/contracts": "workspace:*",
+    "@slugbase/ui": "workspace:*"
+  },
+  "devDependencies": {
+    "@slugbase/testing": "workspace:*"
+  }
+}

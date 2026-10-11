@@ -390,11 +390,11 @@ def main() -> int:
         if missing_labels:
             print(f"Labels missing: {', '.join(missing_labels)} — run .claude/scripts/bootstrap-labels.sh first.")
             return 1
-        if full_run:
+        if full_run and not args.keep:
             rel = args.roadmap.resolve().relative_to(ROOT)
             dirty = subprocess.run(["git", "status", "--porcelain", "--", str(rel)], capture_output=True, text=True, cwd=ROOT).stdout.strip()
             tracked = subprocess.run(["git", "ls-files", "--error-unmatch", str(rel)], capture_output=True, cwd=ROOT).returncode == 0
-            if not args.keep and (dirty or not tracked):
+            if dirty or not tracked:
                 print(f"{rel} must be committed and unmodified before --apply, because the script deletes it afterwards.")
                 return 1
         if len(todo) > 10 and not args.yes:

@@ -163,7 +163,7 @@ Every error is an RFC 9457 problem document:
 | 422 | `url_not_allowed` | URL scheme not `http`/`https`, or host fails egress policy for a fetch |
 | 429 | `rate_limited` | With `Retry-After` and `RateLimit-*` headers (§7) |
 | 502 | `upstream_failed` | Metadata/AI/billing provider failed; the operation is retryable |
-| 503 | `unavailable` | Not ready (migrations pending, DB unreachable), the rate-limit store failed, or the port is unconfigured (`mail_unavailable`, `ai_unavailable` as `code`) |
+| 503 | `unavailable` | Not ready (migrations pending, DB unreachable), the rate-limit store failed, or the port is unconfigured (`mail_unavailable`, `ai_unavailable` and, for the CE billing adapter, `billing_unavailable` as `code`) |
 | 500 | `internal` | Everything else; logged with the request ID, reported through the error port |
 
 Field codes inside `errors[]` of a `422 validation_failed` or a `403 forbidden`:
@@ -307,7 +307,7 @@ Unauthenticated, cacheable for 60 s (`Cache-Control: public, max-age=60`; the pe
 ```json
 {
   "apiVersion": "v1",
-  "origin": "https://app.slugbase.app",
+  "origin": "https://cloud.slugbase.app",
   "product": { "name": "SlugBase", "version": "1.4.2" },
   "signIn": { "password": true, "registration": true, "oidc": [ { "slug": "google", "name": "Google" } ] },
   "setupRequired": false,
@@ -318,7 +318,7 @@ Unauthenticated, cacheable for 60 s (`Cache-Control: public, max-age=60`; the pe
 }
 ```
 
-The document starts small and grows additively (§2.2): `apiVersion`, `origin`, `product`, `locales`, `defaultLocale` and `features.mail` / `features.ai` exist from the first server; `signIn`, `setupRequired`, `instance`, `legal`, `features.billing` and `features.analyticsConsentRequired` are added by the features that can populate them. `signIn.oidc` lists only enabled providers that answered discovery, never a secret or a provider URL. `instance.displayName` and `instance.signInNotice` are the instance settings of §10.10; the notice is plain text and the sign-in page renders it as text only.
+The document starts small and grows additively (§2.2): `apiVersion`, `origin`, `product`, `locales`, `defaultLocale` and `features.mail` / `features.ai` exist from the first server; `docsBaseUrl` (the configured documentation base URL, default `https://slugbase.app/docs`, from `DOCS_BASE_URL`), `signIn`, `setupRequired`, `instance`, `legal`, `features.billing` and `features.analyticsConsentRequired` are added by the features that can populate them (doc 01 §11), `docsBaseUrl` by the help links of doc 03. `signIn.oidc` lists only enabled providers that answered discovery, never a secret or a provider URL. `instance.displayName` and `instance.signInNotice` are the instance settings of §10.10; the notice is plain text and the sign-in page renders it as text only.
 
 `features` reports **whether a port is configured**, never entitlements (those need a workspace — `GET /entitlements`). `billing: true` only means a non-no-op billing adapter is composed; the SPA uses it to decide whether to load the Cloud extension routes' data, not to branch product behaviour (D4).
 

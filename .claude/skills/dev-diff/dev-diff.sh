@@ -4,7 +4,7 @@
 # the next promotion PR will carry. Read-only w.r.t. the integration branch:
 # never touches its ref. Branch names and the file cap come from
 # .claude/workflow.json (branches.integration / .production, promotionBudget);
-# they default to dev, main and 100.
+# they default to dev, main and 150 (CodeRabbit Essentials' per-PR file limit).
 #
 # With --list, prints only the paths CodeRabbit would review, one per line, on
 # stdout; every other line (errors, notices) goes to stderr.
@@ -15,7 +15,7 @@ HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$HERE/../../scripts/workflow-config.sh"
 INT=$(wf_get .branches.integration); INT=${INT:-dev}
 PROD=$(wf_get .branches.production); PROD=${PROD:-main}
-CAP=$(wf_get .promotionBudget); CAP=${CAP:-100}
+CAP=$(wf_get .promotionBudget); CAP=${CAP:-150}
 
 list_only=0
 case "${1-}" in

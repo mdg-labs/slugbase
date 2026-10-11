@@ -95,7 +95,7 @@ The operator owns the deployment. Two shapes, one ceiling:
 
 ### 2.11 Compromised dependency, CI step or build input
 
-- **Capability:** an npm package, GitHub Action, base image or build script that executes attacker-chosen code during install, build, test or at runtime; a malicious pull request to the public CE repository.
+- **Capability:** an npm package, GitHub Action, base image or build script that executes attacker-chosen code during install, build, test or at runtime; a malicious pull request to the public CE repository; documentation content (`docs/user/**`, `docs/self-hosting/**`, `docs/releases/**`) that a site build consumes is untrusted build input: MDX is limited to an allow-list of components with no `import`/`export`, checked by `pnpm docs:check`, and a deployment that builds from it keeps the build job free of deployment secrets (doc 09 §3.5).
 - **Trusted with:** what its step was given.
 - **Must never reach:** deployment secrets from a pull-request workflow (fork PRs never get secrets, `pull_request_target` is not used); the registry push credentials outside the release/deploy jobs; a published image that differs from what CI built from the reviewed commit (T16); the production database from CI (a managed deployment that runs `migrate` as a separate CI step confines it to that gated step; Cloud — see the Cloud threat model, T21).
 
@@ -189,6 +189,7 @@ These are accepted on purpose and are **not findings**, as is anything the opera
 11. (Cloud) Cloud — see the Cloud threat model.
 12. (Cloud) Cloud — see the Cloud threat model.
 13. **An allowlisted AI endpoint may sit on a private address.** An operator who runs a self-hosted model lists its exact host in the allowlist of Q90; the server then connects to that private address for AI suggestion requests only. The operator chose it (2.10), no member input reaches the allowlist, and DNS pinning, size and time caps still apply to it; a redirect away from the allowlisted host is validated like any other hop.
+14. (Cloud) Cloud — see the Cloud threat model.
 
 ---
 

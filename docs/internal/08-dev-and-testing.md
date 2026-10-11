@@ -188,9 +188,11 @@ Workflows in this repository use a portable shape where it costs nothing: every 
 
 | Workflow | Trigger | Jobs |
 |---|---|---|
-| `ci.yml` | push to any branch, PRs | `lint` · `typecheck` · `unit` · `contracts` (T3) · `integration` (Postgres service, a matrix over PostgreSQL 17 and 18, Q3) · `build` (incl. `docker build` of the image, not pushed) · `audit` (`pnpm audit --audit-level=high` + OSV scan) — all parallel after a shared install with Turbo cache |
+| `ci.yml` | push to any branch, PRs | `lint` · `typecheck` · `unit` · `contracts` (T3) · `docs` (`pnpm docs:check` on a change under the docs roots, doc 09 §3.5) · `integration` (Postgres service, a matrix over PostgreSQL 17 and 18, Q3) · `build` (incl. `docker build` of the image, not pushed) · `audit` (`pnpm audit --audit-level=high` + OSV scan) — all parallel after a shared install with Turbo cache |
 | `e2e.yml` | push to `dev`, PRs to `main` | Build image → Playwright (CE journeys) against PostgreSQL 17 and 18 |
 | `codeql.yml` | push to `dev`/`main`, weekly | CodeQL JavaScript/TypeScript |
+| `forbidden-terms.yml` | push, PRs | `scripts/check-forbidden-terms.sh` against the generic patterns of `scripts/forbidden-terms.txt` (doc 09 §4), until the lint step takes it over |
+| `docs-published.yml` | push to `main` touching `docs/user/**`, `docs/self-hosting/**` or `docs/releases/**`, and `workflow_dispatch` | The generic docs-published request to the site repository named by configuration; a no-op without it (doc 09 §3.5, Q111) |
 | `release.yml` — build | push to `main` with a bumped `apps/slugbase` version | Build from the commit CI tested; SBOM (SPDX) + provenance; cosign keyless signature (GitHub OIDC identity of this workflow on `main`, Q17); push `:<version>` (and `:<major>.<minor>` for a version without a pre-release suffix) to the public registry named in Q12; create a **draft** GitHub Release. `:latest` is not touched |
 | `release.yml` — publish | the GitHub Release is published | Re-verify the signature of the digest, then point `:latest` and `:<major>.<minor>` at it. A pre-release (for example `1.0.0-rc.1`) never moves either. A version tag that already exists is refused |
 | `nightly.yml` | schedule | T5: performance budgets, migration timing, full browser matrix |
@@ -209,11 +211,11 @@ Workflows in this repository use a portable shape where it costs nothing: every 
 - **CE**: `turbo run lint typecheck test:unit build` → `pnpm contracts:check` → `pnpm db:check` → `pnpm test:integration` → `pnpm i18n:check` → `pnpm audit --audit-level=high`.
 - **Cloud**: the CE pin check, then the same sequence over the Cloud workspace, plus its own checks (Cloud documentation).
 
-Per-path `checks` (the faster subset an executor runs before each commit) are listed in doc 09 §5.2. e2e is **not** in the gate — it needs a built image and a minute or two of browser time; it runs in CI and before promotions, and an executor runs the relevant spec only when an item's acceptance criteria name an e2e journey.
+The documentation contract check `pnpm docs:check` (doc 09 §3.5) is a per-path check for changes under `docs/user/`, `docs/self-hosting/` and `docs/releases/`, and runs as the `docs` job of `ci.yml`; it is not part of `pnpm gate`. Per-path `checks` (the faster subset an executor runs before each commit) are listed in doc 09 §5.2. e2e is **not** in the gate — it needs a built image and a minute or two of browser time; it runs in CI and before promotions, and an executor runs the relevant spec only when an item's acceptance criteria name an e2e journey.
 
 ### 6.5 Merge and promotion gate
 
-`dev` takes cherry-picked commits from `/orchestrate` only after the verifier has re-run the gate; CI on `dev` re-runs it plus e2e. The `dev → main` promotion PR needs green CI, green e2e, one CodeRabbit round (`/cr-review`), a clean `/security-audit` for the changed security units (D23) and the maintainer's merge. `main` is protected: no direct pushes, no force pushes, linear history.
+`dev` takes cherry-picked commits from `/orchestrate` only after the verifier has re-run the gate; CI on `dev` re-runs it plus e2e. The `dev → main` promotion PR needs green CI, green e2e, one CodeRabbit round (`/cr-review`), a clean `/security-audit` for the changed security units (D23) and the maintainer's merge. `main` is protected: no direct pushes and no force pushes. The promotion PR is merged with a merge commit, so the tree on `main` is the tree that was reviewed on `dev` (Cloud doc 13 Q78 relies on that identity). Linear history is therefore not required on `main`.
 
 ---
 

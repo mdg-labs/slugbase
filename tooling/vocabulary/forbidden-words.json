@@ -1,0 +1,8 @@
+{
+  "$comment": "Words the product vocabulary rules out (doc 00 section 3). One entry per word; a new row of the vocabulary table is one added line here. Matching is case-insensitive substring matching.",
+  "terms": [
+    { "word": "organization", "canonical": "workspace" },
+    { "word": "collection", "canonical": "folder" },
+    { "word": "favorite", "canonical": "pinning" }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "agentGuidance": false,
+  "globalDependencies": ["eslint.config.js", "tooling/vocabulary/**", "vitest.shared.ts", "tsconfig.base.json"],
+  "tasks": {
+    "lint": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "@slugbase/tooling#lint": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/scripts/**"],
+      "outputs": []
+    },
+    "@slugbase/tooling#i18n:check": {
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/*/src/i18n/**"],
+      "outputs": []
+    },
+    "typecheck": {
+      "dependsOn": ["^build"],
+      "outputs": ["*.tsbuildinfo", ".tsbuildinfo/**"]
+    },
+    "test:unit": {
+      "dependsOn": ["^build"],
+      "outputs": ["coverage/**"]
+    },
+    "test:integration": {
+      "dependsOn": ["^build"],
+      "outputs": [],
+      "cache": false
+    },
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"]
+    },
+    "contracts:check": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "db:check": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "i18n:check": {
+      "outputs": []
+    }
+  }
+}

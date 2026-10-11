@@ -1,7 +1,7 @@
 {
   "source": "mdg-labs/skills",
   "ref": "main",
-  "commit": "14f33a14723304ba5a680048aa1099da4d10bbd8",
+  "commit": "bba39b1048b030fbde8e22760bbc30d53174495c",
   "profile": "full",
   "exclude": [
     "rules/mdg-github-actions.md"
@@ -35,9 +35,9 @@
     ".claude/skills/customer-docs/page-doc-template.md": "2bc392ed1997d7b420e8833a21f111cdb0e91ddf4e73e2e8e6b2255bb49c4cee",
     ".claude/skills/customer-docs/style-guide.md": "2593506b8c199ca65d2398f6596dd1f517dbc29e0679414c891175f1c76b03bc",
     ".claude/skills/dev-diff/SKILL.md": "2056ad28579194f2e94cd5b9c60b3ce3bf40729dd9692dc92d7f0f9c07f5ccfd",
-    ".claude/skills/dev-diff/dev-diff.sh": "503c7a7801690f8d09bd6afd6ad891704b8bc277c2cd7c04bff5231bdaf1337b",
+    ".claude/skills/dev-diff/dev-diff.sh": "10a6d238b785be31ec72f27be5c424d5b0aa56716fc3f75c24230a655a709cc3",
     ".claude/skills/open-pr/SKILL.md": "d5aff23e96a9ace28c37cb7c9b238846fa9d35c089fd902b154475c597cac149",
-    ".claude/skills/orchestrate/SKILL.md": "e26c32bccec90634871ff95d32d9d57c8bdb5d1c4eadb1147161eba8e5fb9be6",
+    ".claude/skills/orchestrate/SKILL.md": "a6e312006f9963f1757ef15e789b2c0c8fe044beb84438c60e7997fabed91d72",
     ".claude/skills/orchestrate/templates/TOKENS.md": "be9184cb83ac0e0e93f69958d0ce7787ce5874ff0a9cfc0618a1603adeddaa5e",
     ".claude/skills/orchestrate/templates/execution-report.md": "bb5b9b31c6312ebfe8e2d2f78bc50ca5cd255ff5097084553e6b7f2ff9e0b9cf",
     ".claude/skills/orchestrate/templates/executor-prompt.md": "264e052853aa20648544a5dadd74c82e8dc21124e37e660f00bc96f9063ea477",
@@ -57,6 +57,6 @@
     ".claude/trackers/README.md": "0aff445ac3fe6e53d541a382b14646958f4bc70688e4d0cb2d5ab1b4079a9eb3",
     ".claude/trackers/github.md": "536f3a7c0813237eb04b45161d99283dbe1424951340f8be9786c6f4612c0f3c",
     ".claude/trackers/kaneo.md": "e3440d0905e16e71ba00e263c6a64afafff13d7dc3daf145b0f4773430768779",
-    ".claude/workflow.schema.json": "08882e9ff986faa0d59df1621a7ee89c1eac97b39a5118e183fa42476e17102d"
+    ".claude/workflow.schema.json": "f5eb965f969e1a227a3fce8601bb9a6922f4069a572be6db0d9f9c9ae8f10434"
   }
 }

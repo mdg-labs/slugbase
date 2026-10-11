@@ -12,8 +12,23 @@ mdg-labs/slugbase-cloud
 bugsink
 beszel
 kleinunternehmer
-ustg
+# Short term: anchored so it cannot match inside a base64 hash (lockfile integrity).
+# Path segments around it are allowed. The match must end on a character outside base64, so it can never
+# end inside a padded hash, whatever its length.
+(^|[^[:alnum:]+/=])(/|[[:alnum:]._-]+/)*ustg(/[[:alnum:]._-]*)*($|[^[:alnum:]+/=])
+# Same term fused with a case change or a digit, as in camelCase, PascalCase, i18n keys and section numbers
+# (case-sensitive, so ordinary words stay clear), with the same anchoring as above. An unpadded base64 hash
+# (sha384) can match this line, rarely; the lockfile holds only padded sha512 hashes.
+(?c)(^|[^[:alnum:]+/=])(/|[[:alnum:]._-]+/)*[[:alnum:]]*([[:digit:][:upper:]]ustg|[[:digit:][:lower:]](Ustg|USTG|UStG)|(ustg|Ustg|UStG)[[:digit:][:upper:]]|USTG([[:digit:][:lower:]]|[[:upper:]][[:lower:]]))[[:alnum:]]*(/[[:alnum:]._-]*)*($|[^[:alnum:]+/=])
 € ?[0-9]
 [0-9] ?€
+£ ?[0-9]
+[0-9] ?£
+(^|[^[:alnum:]+/=])[0-9][0-9.,]* ?(usd|eur|gbp)($|[^[:alnum:]+/=]|([/+][[:alpha:]]{1,12})+($|[^[:alnum:]+/=]))
+(^|[^[:alnum:]+/=])(usd|eur|gbp) ?[0-9][0-9.,]*($|[^[:alnum:]+/=]|([/+][[:alpha:]]{1,12})+($|[^[:alnum:]+/=]))
+\$ ?[0-9]+[.,][0-9]
+\$ ?[0-9]{3,}
+\$ ?[0-9]+ ?(/ ?| per | a | an | each )(mo|month|yr|year|user|seat|member)s?\b
+\$ ?[0-9]+ ?(monthly|yearly|annually)\b
 staging\.slugbase\.app
 [a-z0-9-]+\.mdg-labs\.dev

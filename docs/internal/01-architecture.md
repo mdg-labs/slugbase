@@ -23,7 +23,7 @@
 | Web app | React 19 + Vite SPA, TanStack Router + TanStack Query (D13) | Static assets, typed routes and search params (filters live in the URL), cache-first data fetching |
 | UI system | coss ui (Base UI + Tailwind CSS v4), vendored in `@slugbase/ui`; `lucide-react`; `cmdk`-equivalent coss Command for the palette (D13) | One accessible component vocabulary; copy-and-own |
 | i18n | `i18next` + `react-i18next`; ICU plural rules; EN + DE catalogs (D19) | Mature, typed keys via generated declarations |
-| Marketing site (Cloud) | Astro, static, zero-JS by default; served by nginx (doc 11) | Fast, cacheable, no runtime |
+| Website and documentation (Cloud) | Next.js with Fumadocs, built as a static export; marketing at `/`, documentation at `/docs`, content from `docs/` (Q2); served by nginx (doc 11) | One site and one image; fast, cacheable, no runtime |
 | Operator console (Cloud) | Hono + Vite/React SPA on `@slugbase/ui`, separate service and origin (doc 07 §6) | Never part of the customer app or the CE image |
 | Tests | Vitest (unit + integration against a real Postgres), Playwright (e2e) | Doc 08 |
 | Logs / telemetry | `pino` JSON logs; OpenTelemetry traces and metrics, Sentry-protocol error reporting behind the error port | Vendor-neutral; Cloud's backends are self-hosted and lightweight at launch (D27) |
@@ -31,7 +31,7 @@
 
 ### Why TypeScript and not Go
 
-Go (as in Hoserva) would give a single static binary and lower memory per process. It was declined for SlugBase because:
+Go would give a single static binary and lower memory per process. It was declined for SlugBase because:
 
 - **The billing service SlugBase Cloud integrates with is TypeScript too** (D29). One stack across both lets agents change both sides of the billing integration in one idiom.
 - **The workload is I/O-bound.** SlugBase's hot paths are indexed lookups (`/go`, lists, search). Node handles them at thousands of requests per second per core-bound process; CPU is not the scaling limit — Postgres is (§9).
@@ -80,7 +80,7 @@ Settled (D6). It is also the feature that makes the security model work: row-lev
                       ▼
      deployment platform — reverse proxy
         ├── slugbase.app            → marketing   (static)
-        ├── app.slugbase.app        → server ×N   (/api/*, /go/*, SPA assets)
+        ├── cloud.slugbase.app      → server ×N   (/api/*, /go/*, SPA assets)
         ├── operator console        → console     (own origin, access-restricted)
         └── worker ×1..N            (no ingress)
                       │
@@ -107,7 +107,7 @@ The SPA, the API and `/go` share one origin per deployment (D11). Consequences, 
 
 - No CORS configuration exists for the application; the server rejects cross-origin state-changing requests outright (§4, step 5). Forms on the marketing site do not call the app origin from the browser: the marketing site proxies their endpoints same-origin to the Cloud server over the internal network (Q41), so no CORS header is ever emitted anywhere.
 - The session cookie is `__Host-slugbase_session` — host-only, `Path=/`, `Secure`, `HttpOnly`, `SameSite=Lax`. A `__Host-` cookie cannot be set or overwritten by a sibling subdomain.
-- The browser search-engine template is `https://app.slugbase.app/go/%s` (Cloud) or `https://<operator-host>/go/%s` (CE). `SameSite=Lax` cookies are sent on these top-level navigations, so `/go` works from the address bar.
+- The browser search-engine template is `https://cloud.slugbase.app/go/%s` (Cloud) or `https://<operator-host>/go/%s` (CE). `SameSite=Lax` cookies are sent on these top-level navigations, so `/go` works from the address bar.
 - The marketing site and the operator console are **different origins** and never receive the session cookie.
 
 ---
@@ -263,6 +263,40 @@ Billing data does not live in SlugBase's database; it stays in the billing servi
 
 What Cloud may depend on, and therefore what CE must keep stable or version: the `createServer`/`createWebApp` signatures, the port interfaces, the module interface including the hooks of §13, the domain event catalog, the web slot names, the exported repositories and authorization helpers, and the `public` schema. Each lives in an explicitly exported entry point; anything not exported is not a contract.
 
+### 7.5 The entitlement catalog
+
+Entitlement keys are a closed, typed catalog in `@slugbase/core` (`entitlements/catalog.ts`). Adding a key is a contract change (§7.4). CE owns the catalog, the evaluation and the enforcement points; a composition supplies only the values, through `EntitlementSource` (§6). Which values a plan carries is not part of this document: plan values belong to the composition that sells plans (for Cloud, its own documentation).
+
+| Key | Scope | Type | CE value | Gates |
+|---|---|---|---|---|
+| `bookmarks.max` | workspace | number or `unlimited` | `unlimited` | Creating a bookmark, importing, restoring from the archive |
+| `ai.suggestions` | workspace | boolean | `true` (still needs a configured `AiSuggestPort` and the workspace toggle) | The AI suggestion endpoint and UI |
+| `sharing.members` | workspace | boolean | `true` | Sharing a bookmark or folder with an individual member |
+| `sharing.teams` | workspace | boolean | `true` | Sharing with teams; teams as sharing targets |
+| `members.invite` | workspace | boolean | `true` | Creating invitations and accepting them |
+| `teams.manage` | workspace | boolean | `true` | Teams administration (create, edit, membership) |
+| `audit.log` | workspace | boolean | `true` | Reading the audit log (audit events are always written; only reading is gated) |
+| `seats.max` | workspace | number or `unlimited` | `unlimited` | The member ceiling (accepted invitations count, pending ones do not) |
+| `workspaces.ownMax` | **account** | number or `unlimited` | `unlimited` | Creating a workspace (counts the workspaces the account owns) |
+
+These are not entitlements on any edition: personal API tokens, folders, tags, slugs, `/go`, the command palette, import and export, MFA and OIDC sign-in. `workspaces.ownMax` is scoped to the account so that creating many workspaces cannot multiply a per-workspace limit. An account that is only a member of other workspaces is not affected by it. A composition's source takes the maximum of `workspaces.ownMax` over all workspaces the account owns.
+
+**Evaluation.** `EntitlementService.for(workspaceId)` returns an immutable `EntitlementSet`, memoised per request. Every workspace row carries `entitlement_version`; any change to plan, archive state or an override increments it in the same transaction as the change, and the per-process cache is keyed by `(workspace_id, entitlement_version)` (§8.3). Account-scoped keys (`workspaces.ownMax`) are not part of that set and never enter that cache: they are evaluated for the acting account from the source on each request that needs them, so two accounts sharing a workspace never see each other's value, and a change to any owned workspace counts at once. `GET /entitlements` (doc 04) returns the active workspace's set plus usage counters (`bookmarks.used`, `seats.used`, `workspaces.owned`) for the meters and gates in the UI. The UI hides or disables gated features and offers upgrades through the `entitlement.upgradeAction` slot, which renders nothing on CE. The API enforces independently of the UI.
+
+**Enforcement points.** Each check runs on the server, inside the transaction of the operation where it says so. Errors are problem documents (doc 04 §3).
+
+| Operation | Check | Failure |
+|---|---|---|
+| Create bookmark, import, restore from archive | `bookmarks.used + n <= bookmarks.max`, using the row-locked `bookmark_count` of the workspace (doc 05 §2.2), never `count(*)` | `422 bookmark_limit_reached` with `limit` and `used`; an import adds up to the limit and reports how many were skipped |
+| Create workspace | `workspaces.owned < workspaces.ownMax` | `422 workspace_limit_reached` |
+| AI suggestion | `ai.suggestions`, a configured port, the workspace toggle and the member not opted out | `403 entitlement_required`, or `503 ai_unavailable` |
+| Share with a member or a team | `sharing.members` or `sharing.teams` | `403 entitlement_required` |
+| Create or accept an invitation | `members.invite` on both; `seats.used < seats.max` on acceptance, inside the acceptance transaction through the seat check (§13.1) | `403 entitlement_required`; `422 seat_limit_reached` |
+| Teams administration | `teams.manage` | `403 entitlement_required` |
+| Read the audit log | `audit.log` | `403 entitlement_required` |
+
+**The archive rule.** A composition may archive bookmarks above `bookmarks.max` through the archive operation of §13.3 and restore them later. Which bookmarks it archives is the composition's rule. Archived bookmarks do not count in `bookmarks.used`.
+
 ---
 
 ## 8. Background work and shared state
@@ -288,7 +322,7 @@ Token buckets in an `UNLOGGED` Postgres table, updated with a single `INSERT …
 ### 8.3 Caching
 
 - **SPA assets**: content-hashed, `immutable`, cached at the CDN and in the browser.
-- **Entitlements**: per-request memoised; per-process cache keyed by `(workspace_id, entitlement_version)` with the version bumped on any plan change, so staleness is impossible rather than short.
+- **Entitlements**: per-request memoised; per-process cache keyed by `(workspace_id, entitlement_version)` with the version bumped on any plan change, so staleness is impossible rather than short. Account-scoped keys are evaluated per request and not cached across requests (§7.5).
 - **Nothing else at v1.** The hot paths are indexed single-row lookups; a cache in front of them would add invalidation bugs without measurable benefit until well past the first scaling step (§9).
 
 ---
@@ -353,6 +387,7 @@ Doc 10 is the threat model; this is the shape that implements it.
   | `ENCRYPTION_KEY_PREVIOUS` | Earlier keys as `id:key` pairs, used only to decrypt until the re-encryption sweep ends | empty |
   | `TRUSTED_PROXY_HOPS` | Proxy hops trusted for `X-Forwarded-For` | `0` |
   | `API_DOCS_ENABLED` | Serve `/api/docs` and the OpenAPI document | `true` |
+  | `DOCS_BASE_URL` | Base URL the app's help links point to; links are `<base>/<route>` with the stable `/docs/<route>` routes of doc 09 §3.5 | `https://slugbase.app/docs` |
   | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURITY`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | The SMTP adapter; unset selects the log-only adapter, a partial set refuses to start | unset |
   | `ERROR_REPORT_DSN` | Sentry-protocol error reporting; unset selects the no-op adapter | unset |
   | `METRICS_PORT` | Internal listener for `/metrics` (§12) | unset |
@@ -361,7 +396,7 @@ Doc 10 is the threat model; this is the shape that implements it.
   Further keys belong to the feature that needs them and are named in its section of doc 02 (`PUBLIC_REGISTRATION`, `EMAIL_VERIFICATION_REQUIRED`, `SETUP_ENABLED`, `SETUP_TOKEN_REQUIRED`, `TOTP_ISSUER`, `OIDC_<SLUG>_*`, `AI_*`, `AUDIT_RETENTION_DAYS`). Booleans parse with an explicit `envBoolean()` (`"false"` is false). Unknown `SLUGBASE_*` keys produce a startup warning.
 - **Production refuses to start** when `SESSION_SECRET`/`ENCRYPTION_KEY` are missing or short (the encryption key must decode to 32 bytes), `APP_ORIGIN` is not HTTPS, a value equals a development default from `.env.example`, or a configured adapter's required keys are missing. The message names the key and never prints a value.
 - **No edition flag** (D4). Cloud's composition root sets Cloud defaults (public registration on, email verification required, ordinary accounts may create workspaces) by passing them in; CE's sets CE defaults (registration off, workspace creation off). Both are overridable by env or, for `allow_workspace_creation`, by the instance setting (Q94).
-- Client-side configuration is **not** built into the SPA bundle: the SPA fetches `/api/config` (public, `Cache-Control: public, max-age=60`, the one API response that is not `no-store`) for the origin, enabled sign-in methods, locale defaults and entitlement-free feature flags. The first version carries only `apiVersion`, `origin`, `product`, `locales`, `defaultLocale` and `features.mail` / `features.ai` (whether a port is configured, never an entitlement); every other field (sign-in methods, setup state, instance display name and notice, legal links, analytics consent) is added, additively (doc 04 §2.2), by the feature that can populate it. One SPA build therefore runs on any CE host — operators never rebuild the frontend.
+- Client-side configuration is **not** built into the SPA bundle: the SPA fetches `/api/config` (public, `Cache-Control: public, max-age=60`, the one API response that is not `no-store`) for the origin, enabled sign-in methods, locale defaults and entitlement-free feature flags. The first version carries only `apiVersion`, `origin`, `product`, `locales`, `defaultLocale` and `features.mail` / `features.ai` (whether a port is configured, never an entitlement); every other field (`docsBaseUrl`, from `DOCS_BASE_URL`, sign-in methods, setup state, instance display name and notice, legal links, analytics consent) is added, additively (doc 04 §2.2), by the feature that can populate it. One SPA build therefore runs on any CE host — operators never rebuild the frontend.
 
 ---
 
@@ -371,7 +406,7 @@ Doc 10 is the threat model; this is the shape that implements it.
 - **Metrics**: OpenTelemetry metrics, exposed in Prometheus format on an internal listener (`METRICS_PORT`, never on the public one) — request rate/latency per route, `/go` resolution outcomes, job queue depth and age, pool saturation, rate-limit rejections. At launch nothing scrapes it (D27): host health comes from the deployment platform's host and container metrics, database load from `pg_stat_statements`; a metrics stack is added when a measurement needs it.
 - **Traces**: OpenTelemetry, sampled; database spans without bound parameters.
 - **Errors**: `ErrorReportPort` (a self-hosted error tracker in Cloud); PII scrubbing before send; client-side reporting consent-gated (doc 11).
-- **Uptime**: an external uptime monitor checks `/health` of every public host each minute and alerts via Discord (Cloud doc 07 §11).
+- **Uptime**: an external uptime monitor checks `/health` of every public host each minute and alerts the operator (Cloud doc 07 §11).
 - **Health**: `/health` (liveness, never touches the database), `/ready` (DB + migration level: expected against applied; a database ahead of the build logs a warning and stays ready), `/version` (exactly `{ name, version, commit, builtAt }`, read from a build-info file written at build time, with a development fallback) — the deploy pipeline gates on `/version` (doc 07 §4). The probes are unauthenticated, not rate-limited and `no-store`.
 
 ---
@@ -398,7 +433,7 @@ Doc 10 is the threat model; this is the shape that implements it.
 
 ### 13.1 Seat check
 
-Runs inside the invitation-accept transaction, after the workspace row is locked and before the membership is inserted. The hook returns the seat limit (`null` means unlimited); CE counts the workspace's members under the lock and refuses with `422 seat_limit_reached` when the count already equals the limit, leaving the invitation pending and usable. Two people accepting the last free seat therefore never both succeed. Sending, resending and listing invitations never call the hook, and a pending invitation holds no seat. A registered hook replaces the value that the entitlement engine would supply; `member.joined` is emitted after a successful accept, so a module can recount.
+Runs inside the invitation-accept transaction, after the workspace row is locked and before the membership is inserted. The hook returns the seat limit (`null` means unlimited); CE counts the workspace's members under the lock and refuses with `422 seat_limit_reached` when the count already equals the limit, leaving the invitation pending and usable. Two people accepting the last free seat therefore never both succeed. Sending, resending and listing invitations never call the hook, and a pending invitation holds no seat. A registered hook replaces the value that the entitlement engine would supply, so a composition whose source already supplies `seats.max` needs the hook only when its limit differs from that entitlement; `member.joined` is emitted after a successful accept, so a module can recount.
 
 ### 13.2 Deletion veto
 
@@ -406,7 +441,7 @@ Runs before anything changes: before `DELETE /workspace` marks the workspace `de
 
 ### 13.3 Archive operation
 
-CE exports two core services that set and clear `plan_archived_at` (doc 02 §5.6) for the given bookmarks of one workspace: `archiveBookmarks` and `restoreBookmarks`. They run in a tenant transaction the caller already holds, are idempotent, ignore ids that do not belong to the workspace, are registered as named, audited system operations, write one audit event with the count (never titles or URLs), and bump nothing else. They do not choose *which* bookmarks to archive: that rule belongs to the caller. Archived bookmarks leave lists, counts, search, the palette, the dashboard and slug resolution, stay exportable (flagged) and can be deleted by their owner. CE itself never calls either service.
+CE exports two core services that set and clear `plan_archived_at` (doc 02 §5.6) for the given bookmarks of one workspace: `archiveBookmarks` and `restoreBookmarks`. They run in a tenant transaction the caller already holds, are idempotent, ignore ids that do not belong to the workspace, are registered as named, audited system operations, write one audit event with the count (never titles or URLs). In the same transaction they adjust the workspace's `bookmark_count` (doc 05 §2.2) by the number of rows whose state changed and increment its `entitlement_version` (§7.5). They change nothing else. They do not choose *which* bookmarks to archive: that rule belongs to the caller. Archived bookmarks leave lists, counts, search, the palette, the dashboard and slug resolution, stay exportable (flagged) and can be deleted by their owner. CE itself never calls either service.
 
 ### 13.4 Client error-report source
 

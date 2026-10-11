@@ -1,0 +1,27 @@
+{
+  "name": "slugbase",
+  "version": "0.0.0",
+  "private": true,
+  "description": "SlugBase Community Edition composition root",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "lint": "eslint --max-warnings=0 .",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:unit": "vitest run --project unit",
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "@slugbase/adapters": "workspace:*",
+    "@slugbase/contracts": "workspace:*",
+    "@slugbase/core": "workspace:*",
+    "@slugbase/db": "workspace:*",
+    "@slugbase/email": "workspace:*",
+    "@slugbase/server": "workspace:*",
+    "@slugbase/ui": "workspace:*",
+    "@slugbase/web": "workspace:*"
+  },
+  "devDependencies": {
+    "@slugbase/testing": "workspace:*"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "name": "@slugbase/server",
+  "version": "0.0.0",
+  "private": true,
+  "description": "HTTP server, middleware chain, routes and worker runtime",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "lint": "eslint --max-warnings=0 .",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:unit": "vitest run --project unit",
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "@slugbase/core": "workspace:*",
+    "@slugbase/db": "workspace:*",
+    "@slugbase/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@slugbase/testing": "workspace:*"
+  }
+}

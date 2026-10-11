@@ -1,0 +1,36 @@
+{
+  "name": "slugbase-workspace",
+  "private": true,
+  "description": "SlugBase Community Edition workspace root",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "packageManager": "pnpm@10.34.6",
+  "engines": {
+    "node": ">=24.0.0 <25.0.0"
+  },
+  "scripts": {
+    "preinstall": "node scripts/check-node.mjs",
+    "build": "turbo run build",
+    "lint": "turbo run lint && pnpm lint:forbidden-terms",
+    "lint:forbidden-terms": "bash scripts/check-forbidden-terms.test.sh && bash scripts/check-forbidden-terms.sh",
+    "typecheck": "turbo run typecheck",
+    "test:unit": "turbo run test:unit",
+    "test:integration": "turbo run test:integration",
+    "contracts:check": "turbo run contracts:check",
+    "db:check": "turbo run db:check",
+    "i18n:check": "turbo run i18n:check",
+    "audit": "pnpm audit --audit-level=high",
+    "gate": "pnpm lint && turbo run typecheck test:unit build && pnpm contracts:check && pnpm db:check && pnpm test:integration && pnpm i18n:check && pnpm audit --audit-level=high"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.19.2",
+    "eslint": "^10.12.0",
+    "globals": "^17.13.0",
+    "jsdom": "^30.1.2",
+    "turbo": "^2.11.7",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.71.1",
+    "vitest": "^5.0.3"
+  }
+}

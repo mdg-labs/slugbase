@@ -156,13 +156,14 @@ Issuing a new token of a purpose invalidates (deletes) older unused ones for the
 | `name` | text NOT NULL | 1–64 chars |
 | `created_by` | uuid → accounts ON DELETE SET NULL | |
 | `entitlement_version` | integer NOT NULL DEFAULT 1 | Bumped on any plan/entitlement change (cache key, doc 01 §8.3) |
+| `bookmark_count` | integer NOT NULL DEFAULT 0 | Number of the workspace's bookmarks that are not plan-archived. Maintained in the same transaction as every bookmark create, delete, import, archive and restore; the entitlement check reads it under the workspace row lock instead of counting rows (doc 01 §7.5) |
 | `deleting_at` | timestamptz | Set when deletion is requested (§7.2); the workspace is then hidden from every product query, the switcher and `GET /workspaces` |
 | `version` | integer NOT NULL DEFAULT 1 | |
 | `created_at`, `updated_at` | timestamptz | |
 
 Policy: `USING ((id = app_workspace_id() OR id IN (SELECT app_member_workspace_ids())) AND deleting_at IS NULL)` for `SELECT`; `id = app_workspace_id()` for `UPDATE`/`DELETE`, so the deletion job can finish. `app_member_workspace_ids()` is a `SECURITY DEFINER` set-returning function owned by `slugbase_system` that returns the calling account's workspace IDs from `workspace_members`, leaving out workspaces being deleted (avoids recursive policy evaluation). Insert happens through `sys_create_workspace` (§3), which also inserts the owner membership atomically.
 
-No billing columns: in Cloud, billing state lives in the `cloud` schema (§2.12, Cloud doc 06); CE has none (D18).
+No billing columns: in Cloud, billing state lives in the `cloud` schema (§2.12, Cloud doc 06); CE has none (D18). `entitlement_version` and `bookmark_count` are generic and exist on every edition.
 
 **`workspace_members`** — RLS: T, plus the account's own rows
 
