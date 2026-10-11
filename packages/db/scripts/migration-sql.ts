@@ -19,7 +19,7 @@ export { isNonTransactional, NON_TRANSACTIONAL_MARKER, splitStatements, STATEMEN
 //     several of them.
 //   - A file whose first line is NON_TRANSACTIONAL_MARKER must be applied
 //     outside a transaction, one statement at a time. The generator writes
-//     only `CREATE INDEX CONCURRENTLY` statements into such a file.
+//     only a single `CREATE INDEX CONCURRENTLY` statement into such a file.
 //   - Every other file is applied in one transaction.
 //   - The statements that come from `src/sql/` start with CUSTOM_SQL_MARKER and
 //     the hash of those files, then one `-- src/sql/<file>` line per file.
@@ -34,7 +34,7 @@ export interface SqlFile {
 export interface SplitIndexes {
   /** Statements that stay in the transactional migration. */
   transactional: string[];
-  /** `CREATE INDEX CONCURRENTLY` statements for the non-transactional migration. */
+  /** `CREATE INDEX CONCURRENTLY` statements, each for a non-transactional migration of its own. */
   concurrent: string[];
 }
 

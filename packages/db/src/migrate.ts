@@ -16,8 +16,8 @@ import postgres from "postgres";
 //     A statement ends in `;`, and a custom-SQL statement may hold several.
 //   - A file whose first line is NON_TRANSACTIONAL_MARKER is applied outside a
 //     transaction, one statement at a time, with `lock_timeout` off. The
-//     generator writes only `CREATE INDEX CONCURRENTLY` statements into such a
-//     file, each with a name, and the engine refuses any other statement in one.
+//     generator writes a single named `CREATE INDEX CONCURRENTLY` into such a
+//     file; the engine accepts several and refuses any other statement in one.
 //   - Every other file is applied in one transaction, together with its
 //     bookkeeping row.
 
@@ -100,6 +100,7 @@ const LOCK_TIMEOUT = "5s";
 const STATEMENT_TIMEOUT = "15min";
 const STATEMENT_TIMEOUT_MS = 15 * 60 * 1000;
 const LOCK_POLL_INTERVAL_MS = 500;
+const CLIENT_CONNECTION_CHECK_INTERVAL = "1s";
 
 const BOOKKEEPING_SCHEMA = "drizzle";
 const OWNER_ROLE = "slugbase_owner";
@@ -465,11 +466,11 @@ async function applyChain(sql: postgres.Sql, pid: number, loaded: LoadedChain): 
 /**
  * Applies the CE chain and then the additional chains, one migration at a time,
  * under the advisory lock `hashtext('slugbase.migrate')` held for the whole run,
- * with `lock_timeout` and `statement_timeout` set for the session (a
- * non-transactional step runs with `lock_timeout` off) and DDL done as
- * `slugbase_owner`. A second concurrent call polls `pg_try_advisory_lock`, so
- * it holds no snapshot a concurrent index build would wait on, and finds
- * nothing left to do. The lock lives in the session: it is released when the
+ * with `lock_timeout`, `statement_timeout` and `client_connection_check_interval`
+ * set for the session (a non-transactional step runs with `lock_timeout` off)
+ * and DDL done as `slugbase_owner`. A second concurrent call polls
+ * `pg_try_advisory_lock`, so it holds no snapshot a concurrent index build
+ * would wait on, and finds nothing left to do. The lock lives in the session: it is released when the
  * run ends, on success or failure, because the connection is closed.
  */
 export async function migrate(options: MigrateOptions): Promise<MigrateResult> {
@@ -488,6 +489,9 @@ export async function migrate(options: MigrateOptions): Promise<MigrateResult> {
       throw new MigrationError("the database did not report its backend process");
     }
     await sql.unsafe(`SET statement_timeout = '${STATEMENT_TIMEOUT}'`);
+    // A build whose client closed its connection is cancelled, leaving an INVALID
+    // index, rather than finished and never recorded.
+    await sql.unsafe(`SET client_connection_check_interval = '${CLIENT_CONNECTION_CHECK_INTERVAL}'`);
     // The lock is polled, outside any transaction, rather than waited for in a
     // statement: a waiting statement holds a snapshot, which the concurrent
     // index build of the running migration would wait for while the waiter

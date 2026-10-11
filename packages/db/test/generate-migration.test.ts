@@ -42,6 +42,14 @@ export const things = pgTable("things", { id: uuid().primaryKey(), name: text(),
 ]);
 `;
 
+const THINGS_WITH_TWO_NEW_INDEXES_SCHEMA = `import { index, pgTable, text, uuid } from "drizzle-orm/pg-core";
+export const things = pgTable("things", { id: uuid().primaryKey(), name: text(), kind: text() }, (t) => [
+  index("things_name_idx").on(t.name),
+  index("things_kind_idx").on(t.kind),
+  index("things_kind_name_idx").on(t.kind, t.name),
+]);
+`;
+
 const scratch: string[] = [];
 
 afterAll(() => {
@@ -268,6 +276,90 @@ describe("pnpm db:generate", () => {
     expect(isNonTransactional(indexSql)).toBe(true);
     expect(copy.generate().stdout).toContain("up to date");
   }, RUN_TIMEOUT_MS * 4);
+
+  it("writes each of several new indexes on an existing table as a non-transactional migration of its own", () => {
+    copy.schema(THINGS_SCHEMA);
+    expect(copy.generate("--name", "add_things").status).toBe(0);
+    copy.schema(THINGS_WITH_TWO_NEW_INDEXES_SCHEMA);
+    const result = copy.generate("--name", "index_things_lookup");
+    expect(result.status).toBe(0);
+
+    const entries = copy.journal().entries;
+    expect(entries.map((entry) => entry.tag.slice(15))).toEqual([
+      "add_extensions_and_tenant_functions",
+      "add_things",
+      "index_things_lookup",
+      "index_things_lookup_2",
+    ]);
+    expect(entries.map((entry) => entry.when)).toEqual([...entries.map((entry) => entry.when)].sort((a, b) => a - b));
+    const [, , first, second] = entries;
+    // Added entries are a millisecond apart, so they stay within milliseconds of drizzle-kit's timestamp.
+    expect((second?.when ?? 0) - (first?.when ?? 0)).toBe(1);
+    expect(new Set(entries.map((entry) => entry.tag)).size).toBe(entries.length);
+
+    const migrations = copy.migrations();
+    expect(migrations.get(`${first?.tag ?? ""}.sql`)).toBe(
+      '-- slugbase:non-transactional\nCREATE INDEX CONCURRENTLY "things_kind_idx" ON "things" USING btree ("kind");\n',
+    );
+    expect(migrations.get(`${second?.tag ?? ""}.sql`)).toBe(
+      '-- slugbase:non-transactional\nCREATE INDEX CONCURRENTLY "things_kind_name_idx" ON "things" USING btree ("kind","name");\n',
+    );
+    expect(result.stdout).toContain(`wrote ${first?.tag ?? ""}.sql (non-transactional)`);
+    expect(result.stdout).toContain(`wrote ${second?.tag ?? ""}.sql (non-transactional)`);
+    expect(copy.generate().stdout).toContain("up to date");
+  }, RUN_TIMEOUT_MS * 3);
+
+  it("splits a column and two indexes on an existing table into one transactional and two non-transactional migrations", () => {
+    copy.schema(THINGS_SCHEMA);
+    expect(copy.generate("--name", "add_things").status).toBe(0);
+    copy.schema(THINGS_WITH_NOTE_SCHEMA);
+    const result = copy.generate("--name", "add_note");
+    expect(result.status).toBe(0);
+
+    const entries = copy.journal().entries;
+    expect(entries.map((entry) => entry.tag.slice(15))).toEqual([
+      "add_extensions_and_tenant_functions",
+      "add_things",
+      "add_note",
+      "index_note",
+      "index_note_2",
+    ]);
+    const [, , column, first, second] = entries;
+    expect(first?.when).toBeGreaterThan(column?.when ?? Number.POSITIVE_INFINITY);
+    expect(second?.when).toBeGreaterThan(first?.when ?? Number.POSITIVE_INFINITY);
+
+    const migrations = copy.migrations();
+    const columnSql = migrations.get(`${column?.tag ?? ""}.sql`) ?? "";
+    expect(columnSql).toBe('ALTER TABLE "things" ADD COLUMN "note" text;\n');
+    expect(isNonTransactional(columnSql)).toBe(false);
+    expect(migrations.get(`${first?.tag ?? ""}.sql`)).toBe(
+      '-- slugbase:non-transactional\nCREATE INDEX CONCURRENTLY "things_kind_idx" ON "things" USING btree ("kind");\n',
+    );
+    expect(migrations.get(`${second?.tag ?? ""}.sql`)).toBe(
+      '-- slugbase:non-transactional\nCREATE INDEX CONCURRENTLY "things_note_idx" ON "things" USING btree ("note");\n',
+    );
+    expect(copy.generate().stdout).toContain("up to date");
+  }, RUN_TIMEOUT_MS * 3);
+
+  it("restores the migrations folder when drizzle-kit dates its migration no later than the last journal entry", () => {
+    const journalFile = copy.path("migrations", "meta", "_journal.json");
+    const journal = JSON.parse(readFileSync(journalFile, "utf8")) as Journal;
+    const last = journal.entries.at(-1);
+    if (last === undefined) {
+      throw new Error("the committed journal is empty");
+    }
+    last.when = Date.now() + 3_600_000;
+    writeFileSync(journalFile, JSON.stringify(journal, null, 2));
+    copy.schema(THINGS_SCHEMA);
+    const before = copy.migrations();
+
+    const result = copy.generate("--name", "add_things");
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("migrate would refuse the journal");
+    expect(result.stderr).toContain("restored");
+    expect(copy.migrations()).toEqual(before);
+  }, RUN_TIMEOUT_MS);
 
   it("restores the migrations folder when drizzle-kit has written files but the run cannot finish", () => {
     copy.schema(THINGS_SCHEMA);

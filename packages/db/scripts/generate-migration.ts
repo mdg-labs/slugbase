@@ -14,10 +14,10 @@ import {
 // `pnpm db:generate` (doc 05 section 5.1): runs drizzle-kit against the Drizzle
 // schema, appends the declarative SQL of src/sql/ as a custom step when it
 // changed since the last migration, and rewrites index creation on existing
-// tables to CONCURRENTLY in a migration of its own. It never connects to a
-// database and never touches a migration that already exists: all it writes
-// are new files and the new tail of the journal. When any step fails, the
-// migrations folder is put back as it was.
+// tables to CONCURRENTLY, each build in a migration of its own. It never
+// connects to a database and never touches a migration that already exists: all
+// it writes are new files and the new tail of the journal. When any step fails,
+// the migrations folder is put back as it was.
 
 const USAGE = "usage: generate-migration.ts [--name <add_|index_|drop_><thing>] [--package <directory>]";
 const NAME_PATTERN = /^(?:add|index|drop)_[a-z0-9]+(?:_[a-z0-9]+)*$/;
@@ -203,6 +203,13 @@ function newEntries(before: Journal, after: Journal): JournalEntry[] {
   if (!kept || added.length > 1) {
     throw new Error("drizzle-kit changed the journal in a way the generator does not expect");
   }
+  const last = before.entries.at(-1);
+  const [first] = added;
+  if (last !== undefined && first !== undefined && first.when <= last.when) {
+    throw new Error(
+      `drizzle-kit dated ${first.tag} at ${String(first.when)}, not after ${last.tag} at ${String(last.when)}: migrate would refuse the journal. Run it again once the clock has passed that time`,
+    );
+  }
   return added;
 }
 
@@ -231,25 +238,31 @@ function generate(packageDir: string, name: string | undefined): string[] {
     const file = join(migrationsDir, `${generated.tag}.sql`);
     const { transactional, concurrent } = rewriteIndexesConcurrently(readFileSync(file, "utf8"), tables);
     const head = [...transactional, ...custom];
-    messages.push(`wrote ${generated.tag}.sql`);
+    const [firstBuild] = concurrent;
+    const holdsBuild = head.length === 0 && firstBuild !== undefined;
+    messages.push(`wrote ${generated.tag}.sql${holdsBuild ? " (non-transactional)" : ""}`);
     if (concurrent.length > 0 || custom.length > 0) {
-      writeFileSync(file, head.length === 0 ? nonTransactional(concurrent) : joinStatements(head));
+      writeFileSync(file, holdsBuild ? nonTransactional([firstBuild]) : joinStatements(head));
     }
     if (custom.length > 0) {
       customTag = generated.tag;
     }
-    if (concurrent.length > 0 && head.length > 0) {
+    // One migration per build: a build that fails leaves at most its own INVALID index,
+    // which migrate drops and rebuilds, where a finished build before it would stay valid
+    // and make every retry of a shared file fail on its name.
+    const base = `index_${name.replace(/^(?:add|index|drop)_/, "")}`;
+    let previous = generated;
+    for (const [position, build] of concurrent.entries()) {
+      if (position === 0 && holdsBuild) {
+        continue;
+      }
       const journal = readJournal(metaDir);
-      const tag = nextTag(generated.tag, `index_${name.replace(/^(?:add|index|drop)_/, "")}`);
-      writeFileSync(join(migrationsDir, `${tag}.sql`), nonTransactional(concurrent));
-      writeJournal(metaDir, {
-        ...journal,
-        entries: [
-          ...journal.entries,
-          { ...generated, idx: journal.entries.length, when: generated.when + 1000, tag },
-        ],
-      });
+      const tag = nextTag(previous.tag, position === 0 ? base : `${base}_${String(position + 1)}`);
+      const entry = { ...generated, idx: journal.entries.length, when: previous.when + 1, tag };
+      writeFileSync(join(migrationsDir, `${tag}.sql`), nonTransactional([build]));
+      writeJournal(metaDir, { ...journal, entries: [...journal.entries, entry] });
       messages.push(`wrote ${tag}.sql (non-transactional)`);
+      previous = entry;
     }
   } else if (customChanged) {
     runDrizzleKit(packageDir, ["generate", "--custom", "--name", name ?? DEFAULT_CUSTOM_NAME]);

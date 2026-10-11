@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -410,6 +410,67 @@ describe("a non-transactional step (doc 05 section 5.2)", () => {
     ]);
     expect(await recordedRows(owner, "migrations_snapshot")).toBe(2);
     expect(await migrateLockIsFree(owner)).toBe(true);
+  }, 60_000);
+
+  it("cancels a build whose migrate client was killed, so the next run rebuilds the index instead of finding it", async () => {
+    const { name, owner } = await createDatabase();
+    const release = await holdSnapshot(name);
+    const folder = join(FIXTURES, "snapshot");
+    const child = spawn(
+      process.execPath,
+      [
+        "--input-type=module",
+        "-e",
+        `import { migrate } from ${JSON.stringify(new URL("../../src/migrate.ts", import.meta.url).href)};
+await migrate({
+  url: process.env.MIGRATE_URL,
+  chains: [{ name: "snapshot", folder: process.env.MIGRATE_FOLDER, bookkeepingTable: "migrations_snapshot" }],
+});`,
+      ],
+      {
+        env: { PATH: process.env.PATH ?? "", MIGRATE_URL: migratorUrl(name), MIGRATE_FOLDER: folder },
+        stdio: "ignore",
+      },
+    );
+    let released = false;
+    try {
+      await waitForBlockedIndexBuild(name);
+      const builds = await admin<{ pid: number }[]>`
+        SELECT pid FROM pg_stat_activity
+        WHERE datname = ${name} AND query ILIKE '%INDEX CONCURRENTLY%' AND pid <> pg_backend_pid()`;
+      const backend = builds[0]?.pid;
+      expect(backend).toBeDefined();
+
+      expect(child.kill("SIGKILL")).toBe(true);
+      // Still waiting for the older snapshot: only the client check can end the build now.
+      let alive = true;
+      for (let attempt = 0; attempt < 100 && alive; attempt++) {
+        const rows = await admin<{ n: number }[]>`SELECT count(*)::int AS n FROM pg_stat_activity WHERE pid = ${backend ?? 0}`;
+        alive = (rows[0]?.n ?? 0) > 0;
+        if (alive) {
+          await sleep(100);
+        }
+      }
+      await release();
+      released = true;
+      expect(alive).toBe(false);
+    } finally {
+      child.kill("SIGKILL");
+      if (!released) {
+        await release();
+      }
+    }
+
+    expect((await indexes(owner, ["snapshot_target_a_idx"])).filter((index) => index.valid)).toEqual([]);
+    expect(await recordedRows(owner, "migrations_snapshot")).toBe(1);
+
+    const result = await migrate({ url: migratorUrl(name), chains: [fixture("snapshot")] });
+
+    expect(result.applied).toHaveLength(1);
+    expect(await indexes(owner, ["snapshot_target_a_idx"])).toEqual([
+      { name: "snapshot_target_a_idx", valid: true, unique: false },
+    ]);
+    expect(await recordedRows(owner, "migrations_snapshot")).toBe(2);
   }, 60_000);
 
   it("gives lock_timeout back to the migrations after it", async () => {
