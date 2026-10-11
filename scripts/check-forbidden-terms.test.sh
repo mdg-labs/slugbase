@@ -200,6 +200,7 @@ short_forms=(
   "../${short}/x" "./${short}" '~'"/${short}/x" "https://example.org/${short}" "https://example.org/a/${short}/b"
   "my-dir/${short}/v2.1/x" "my_dir/${short}/x" "${short}/a/b/c" "x.y/${short}"
   "pkg:${short}" "@scope/${short}" "see ${short}/docs"
+  "src/${short}/verylongmanifestbasenamewithnopunctuation.yaml" "averyveryverylongdirectorynamewithoutbreaks/${short}"
 )
 repo="$(new_repo short-forms)"
 seed "$repo" notes.md "${short_forms[@]}"
@@ -222,6 +223,8 @@ short_fused=(
   "exemptBy${short_mixed}" "${short_mixed}Badge" "${short_mixed}Notice.tsx" "\"${short_mixed}Notice\": \"x\"" "19${short_mixed}"
   "components/${short_mixed}Badge.tsx" "see ${short_mixed}19 here" "src/${short_mixed}Notice/index.ts"
   "const ${short}Rate = 1" "get${short_cap}Rate()" "src/${short}Notice/index.ts" "a/b/${short_cap}Badge.tsx"
+  "customerSubscriptionDocument${short_cap}Notice" "${short_cap}NoticeForCustomersWithAVeryLongSuffix"
+  "averyveryverylongdirectorynamewithoutbreaks/${short_cap}Badge.tsx"
 )
 repo="$(new_repo short-fused)"
 seed "$repo" notes.md "${short_fused[@]}"

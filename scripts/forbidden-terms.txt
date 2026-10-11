@@ -13,12 +13,13 @@ bugsink
 beszel
 kleinunternehmer
 # Short term: anchored so it cannot match inside a base64 hash (lockfile integrity).
-# Path segments around it (up to 20 chars each) are allowed; a padded hash cannot end on a boundary.
-(^|[^[:alnum:]+/=])(/|[[:alnum:]._-]{1,20}/)*ustg(/[[:alnum:]._-]{0,20})*($|[^[:alnum:]+/=])
+# Path segments around it are allowed. The match must end on a character outside base64, so it can never
+# end inside a padded hash, whatever its length.
+(^|[^[:alnum:]+/=])(/|[[:alnum:]._-]+/)*ustg(/[[:alnum:]._-]*)*($|[^[:alnum:]+/=])
 # Same term fused with a case change or a digit, as in camelCase, PascalCase, i18n keys and section numbers
-# (case-sensitive, so ordinary words stay clear); the token is capped at about 50 characters, which keeps padded
-# sha512 hashes out. An unpadded sha384 hash split by "/" into short pieces can match this line, rarely.
-(?c)(^|[^[:alnum:]+/=])(/|[[:alnum:]._-]{1,20}/)*[[:alnum:]]{0,22}([[:digit:][:upper:]]ustg|[[:digit:][:lower:]](Ustg|USTG|UStG)|(ustg|Ustg|UStG)[[:digit:][:upper:]]|USTG([[:digit:][:lower:]]|[[:upper:]][[:lower:]]))[[:alnum:]]{0,22}(/[[:alnum:]._-]{0,20})*($|[^[:alnum:]+/=])
+# (case-sensitive, so ordinary words stay clear), with the same anchoring as above. An unpadded base64 hash
+# (sha384) can match this line, rarely; the lockfile holds only padded sha512 hashes.
+(?c)(^|[^[:alnum:]+/=])(/|[[:alnum:]._-]+/)*[[:alnum:]]*([[:digit:][:upper:]]ustg|[[:digit:][:lower:]](Ustg|USTG|UStG)|(ustg|Ustg|UStG)[[:digit:][:upper:]]|USTG([[:digit:][:lower:]]|[[:upper:]][[:lower:]]))[[:alnum:]]*(/[[:alnum:]._-]*)*($|[^[:alnum:]+/=])
 € ?[0-9]
 [0-9] ?€
 £ ?[0-9]
