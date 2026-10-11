@@ -9,6 +9,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js"
     }
   },
   "files": [
@@ -32,7 +36,6 @@
     "postgres": "^3.4.9"
   },
   "devDependencies": {
-    "@slugbase/testing": "workspace:*",
     "drizzle-kit": "0.31.11"
   }
 }

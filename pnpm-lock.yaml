@@ -136,9 +136,6 @@ importers:
         specifier: ^3.4.9
         version: 3.4.9
     devDependencies:
-      '@slugbase/testing':
-        specifier: workspace:*
-        version: link:../testing
       drizzle-kit:
         specifier: 0.31.11
         version: 0.31.11
@@ -165,7 +162,11 @@ importers:
         specifier: workspace:*
         version: link:../testing
 
-  packages/testing: {}
+  packages/testing:
+    dependencies:
+      '@slugbase/db':
+        specifier: workspace:*
+        version: link:../db
 
   packages/ui:
     devDependencies:

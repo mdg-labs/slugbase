@@ -9,7 +9,7 @@ interface Manifest {
 const ENTRY_POINTS: Record<string, string[]> = {
   contracts: ["."],
   core: ["."],
-  db: ["."],
+  db: [".", "./testing"],
   server: ["."],
   adapters: ["."],
   email: ["."],
