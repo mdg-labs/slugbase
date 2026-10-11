@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import postgres from "postgres";
 
@@ -14,8 +15,9 @@ import postgres from "postgres";
 //   - A file is a list of statements separated by STATEMENT_BREAKPOINT lines.
 //     A statement ends in `;`, and a custom-SQL statement may hold several.
 //   - A file whose first line is NON_TRANSACTIONAL_MARKER is applied outside a
-//     transaction, one statement at a time. The generator writes only
-//     `CREATE INDEX CONCURRENTLY` statements into such a file.
+//     transaction, one statement at a time, with `lock_timeout` off. The
+//     generator writes only `CREATE INDEX CONCURRENTLY` statements into such a
+//     file, each with a name, and the engine refuses any other statement in one.
 //   - Every other file is applied in one transaction, together with its
 //     bookkeeping row.
 
@@ -96,6 +98,8 @@ export class MigrationError extends Error {
 
 const LOCK_TIMEOUT = "5s";
 const STATEMENT_TIMEOUT = "15min";
+const STATEMENT_TIMEOUT_MS = 15 * 60 * 1000;
+const LOCK_POLL_INTERVAL_MS = 500;
 
 const BOOKKEEPING_SCHEMA = "drizzle";
 const OWNER_ROLE = "slugbase_owner";
@@ -167,7 +171,7 @@ function sanitize(error: unknown, connection: ConnectionSecrets, context?: strin
 }
 
 function quoteIdentifier(name: string): string {
-  return `"${name}"`;
+  return `"${name.replaceAll('"', '""')}"`;
 }
 
 function bookkeepingName(chain: MigrationChain): string {
@@ -319,12 +323,62 @@ class StepFailure extends Error {
   }
 }
 
+const SESSION_REPLACED =
+  "the database connection was replaced during the run, so the advisory lock and the session settings are gone";
+
 async function assertSession(sql: Pick<postgres.Sql, "unsafe">, pid: number): Promise<void> {
   const rows = await sql.unsafe<{ pid: number }[]>("SELECT pg_backend_pid() AS pid");
   if (rows[0]?.pid !== pid) {
-    throw new MigrationError(
-      "the database connection was replaced during the run, so the advisory lock and the session settings are gone",
-    );
+    throw new MigrationError(SESSION_REPLACED);
+  }
+}
+
+const SQL_IDENTIFIER = String.raw`(?:"(?:[^"]|"")+"|[A-Za-z_][A-Za-z0-9_$]*)`;
+const CREATE_INDEX_CONCURRENTLY = new RegExp(
+  String.raw`^CREATE\s+(?:UNIQUE\s+)?INDEX\s+CONCURRENTLY\s+(?:IF\s+NOT\s+EXISTS\s+)?` +
+    String.raw`(?!ON\s)(${SQL_IDENTIFIER})\s+ON\s+(?:ONLY\s+)?(${SQL_IDENTIFIER})(?:\s*\.\s*(${SQL_IDENTIFIER}))?`,
+  "i",
+);
+const LEADING_COMMENTS = /^(?:[ \t]*--[^\n]*\n|\s*\n)+/;
+
+interface IndexBuild {
+  statement: string;
+  /** The index name as the server stores it. */
+  index: string;
+  /** The table as written in the statement, quoted as needed, with its schema when given. */
+  table: string;
+}
+
+function unquoteIdentifier(identifier: string): string {
+  return identifier.startsWith('"') ? identifier.slice(1, -1).replaceAll('""', '"') : identifier.toLowerCase();
+}
+
+function parseIndexBuild(statement: string): IndexBuild | undefined {
+  const body = statement.slice(LEADING_COMMENTS.exec(statement)?.[0].length ?? 0);
+  const match = CREATE_INDEX_CONCURRENTLY.exec(body);
+  const index = match?.[1];
+  const first = match?.[2];
+  if (index === undefined || first === undefined) {
+    return undefined;
+  }
+  const second = match?.[3];
+  return { statement, index: unquoteIdentifier(index), table: second === undefined ? first : `${first}.${second}` };
+}
+
+// A failed concurrent build leaves its index INVALID under its name, and the
+// next build of that name would fail with "already exists". A valid index of
+// that name is never touched.
+async function dropInvalidIndex(sql: postgres.Sql, build: IndexBuild): Promise<void> {
+  const rows = await sql.unsafe<{ schema: string; name: string }[]>(
+    `SELECT n.nspname AS schema, c.relname AS name
+       FROM pg_index i
+       JOIN pg_class c ON c.oid = i.indexrelid
+       JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE i.indrelid = to_regclass($1) AND c.relname = $2::name AND NOT i.indisvalid`,
+    [build.table, build.index],
+  );
+  for (const row of rows) {
+    await sql.unsafe(`DROP INDEX CONCURRENTLY ${quoteIdentifier(row.schema)}.${quoteIdentifier(row.name)}`);
   }
 }
 
@@ -332,13 +386,34 @@ async function applyMigration(sql: postgres.Sql, pid: number, chain: MigrationCh
   const record = `INSERT INTO ${bookkeepingName(chain)} (hash, created_at) VALUES ($1, $2::bigint)`;
   const values = [migration.hash, String(migration.when)];
   if (migration.nonTransactional) {
+    // Every statement is checked before the first one runs, so a step that
+    // cannot be applied as a whole leaves nothing behind.
+    const builds = migration.statements.map((statement) => {
+      const build = parseIndexBuild(statement);
+      if (build === undefined) {
+        throw new MigrationError(
+          "a non-transactional migration may hold only named CREATE INDEX CONCURRENTLY statements",
+        );
+      }
+      return build;
+    });
+    // A concurrent build waits for every older transaction in the database, on
+    // any table, and that wait counts against lock_timeout. It queues no
+    // application traffic, so only statement_timeout bounds it.
+    await assertSession(sql, pid);
+    await sql.unsafe("SET lock_timeout = 0");
     // Not atomic with its bookkeeping row: when a statement fails part-way, the
     // statements before it stay and nothing is recorded, so a re-run fails on
-    // the first of them ("already exists") instead of recording the step.
-    for (const statement of migration.statements) {
+    // the first of them ("already exists") instead of recording the step. The
+    // one exception is the INVALID index a failed build leaves, which the
+    // re-run drops and builds again.
+    for (const build of builds) {
       await assertSession(sql, pid);
-      await sql.unsafe(statement);
+      await dropInvalidIndex(sql, build);
+      await assertSession(sql, pid);
+      await sql.unsafe(build.statement);
     }
+    await sql.unsafe(`SET lock_timeout = '${LOCK_TIMEOUT}'`);
     await assertSession(sql, pid);
     await sql.unsafe(record, values);
     return;
@@ -389,9 +464,11 @@ async function applyChain(sql: postgres.Sql, pid: number, loaded: LoadedChain): 
 
 /**
  * Applies the CE chain and then the additional chains, one migration at a time,
- * under `pg_advisory_lock(hashtext('slugbase.migrate'))` held for the whole run,
- * with `lock_timeout` and `statement_timeout` set for the session and DDL done
- * as `slugbase_owner`. A second concurrent call waits for the lock and finds
+ * under the advisory lock `hashtext('slugbase.migrate')` held for the whole run,
+ * with `lock_timeout` and `statement_timeout` set for the session (a
+ * non-transactional step runs with `lock_timeout` off) and DDL done as
+ * `slugbase_owner`. A second concurrent call polls `pg_try_advisory_lock`, so
+ * it holds no snapshot a concurrent index build would wait on, and finds
  * nothing left to do. The lock lives in the session: it is released when the
  * run ends, on success or failure, because the connection is closed.
  */
@@ -405,15 +482,31 @@ export async function migrate(options: MigrateOptions): Promise<MigrateResult> {
   }
   const sql = connect(connection, "slugbase-migrate");
   try {
-    // Waiting for the lock is bounded by statement_timeout, not by lock_timeout,
-    // which applies to a migration waiting for a table lock.
-    await sql.unsafe(`SET statement_timeout = '${STATEMENT_TIMEOUT}'`);
-    await sql.unsafe("SET lock_timeout = 0");
-    await sql`SELECT pg_advisory_lock(hashtext('slugbase.migrate'))`;
     const pidRows = await sql<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
     const pid = pidRows[0]?.pid;
     if (pid === undefined) {
       throw new MigrationError("the database did not report its backend process");
+    }
+    await sql.unsafe(`SET statement_timeout = '${STATEMENT_TIMEOUT}'`);
+    // The lock is polled, outside any transaction, rather than waited for in a
+    // statement: a waiting statement holds a snapshot, which the concurrent
+    // index build of the running migration would wait for while the waiter
+    // waits for that migration. Every poll checks the backend, so a connection
+    // replaced between polls never takes the lock without the session settings.
+    const deadline = Date.now() + STATEMENT_TIMEOUT_MS;
+    for (;;) {
+      const lock = await sql<{ locked: boolean; pid: number }[]>`
+        SELECT pg_try_advisory_lock(hashtext('slugbase.migrate')) AS locked, pg_backend_pid() AS pid`;
+      if (lock[0]?.pid !== pid) {
+        throw new MigrationError(SESSION_REPLACED);
+      }
+      if (lock[0].locked) {
+        break;
+      }
+      if (Date.now() >= deadline) {
+        throw new MigrationError("the migration lock was not obtained in time: another migrate is still running");
+      }
+      await sleep(LOCK_POLL_INTERVAL_MS);
     }
     await sql.unsafe(`SET lock_timeout = '${LOCK_TIMEOUT}'`);
     await sql.unsafe(`SET ROLE ${OWNER_ROLE}`);

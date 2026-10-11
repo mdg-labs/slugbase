@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
@@ -139,6 +140,47 @@ function journalLength(folder: string): number {
 
 const CE_MIGRATIONS = journalLength(CE_CHAIN.folder);
 
+// A transaction that has run a query holds a snapshot, and a concurrent index
+// build waits for it. Returns the call that ends the transaction.
+async function holdSnapshot(database: string): Promise<() => Promise<void>> {
+  const holder = superuser(database);
+  let held!: () => void;
+  let release!: () => void;
+  const isHeld = new Promise<void>((resolve) => (held = resolve));
+  const mayRelease = new Promise<void>((resolve) => (release = resolve));
+  const holding = holder.begin("isolation level repeatable read", async (tx) => {
+    await tx.unsafe("SELECT count(*) FROM pg_class");
+    held();
+    await mayRelease;
+  });
+  await Promise.race([isHeld, holding]);
+  return async () => {
+    release();
+    await holding;
+  };
+}
+
+async function waitForBlockedIndexBuild(database: string): Promise<void> {
+  for (let attempt = 0; attempt < 300; attempt++) {
+    const rows = await admin<{ n: number }[]>`
+      SELECT count(*)::int AS n FROM pg_stat_activity
+      WHERE datname = ${database} AND wait_event_type = 'Lock' AND query ILIKE '%INDEX CONCURRENTLY%'
+        AND pid <> pg_backend_pid()`;
+    if ((rows[0]?.n ?? 0) > 0) {
+      return;
+    }
+    await sleep(100);
+  }
+  throw new Error("no concurrent index build is waiting");
+}
+
+async function indexes(owner: postgres.Sql, names: string[]): Promise<{ name: string; valid: boolean; unique: boolean }[]> {
+  return owner<{ name: string; valid: boolean; unique: boolean }[]>`
+    SELECT c.relname AS name, i.indisvalid AS valid, i.indisunique AS unique
+    FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
+    WHERE c.relname IN ${owner(names)} ORDER BY c.relname`;
+}
+
 beforeAll(async () => {
   admin = track(connectAs(decodeURIComponent(server.username), decodeURIComponent(server.password), server.pathname.slice(1)));
   await admin`SELECT pg_advisory_lock(${CLUSTER_LOCK_KEY})`;
@@ -220,6 +262,33 @@ describe("the session of a run", () => {
     const { name, owner } = await createDatabase();
     await migrate({ url: migratorUrl(name) });
     expect(await migrateLockIsFree(owner)).toBe(true);
+  }, 60_000);
+
+  it("fails when its connection is replaced while it waits for the lock", async () => {
+    const { name } = await createDatabase();
+    const holder = superuser(name);
+    await holder`SELECT pg_advisory_lock(hashtext('slugbase.migrate'))`;
+    const run = rejection(migrate({ url: migratorUrl(name) }));
+    run.catch(() => undefined);
+    try {
+      let terminated = 0;
+      for (let attempt = 0; attempt < 100 && terminated === 0; attempt++) {
+        const rows = await admin<{ n: number }[]>`
+          SELECT count(pg_terminate_backend(pid))::int AS n FROM pg_stat_activity
+          WHERE datname = ${name} AND application_name = 'slugbase-migrate' AND state = 'idle'`;
+        terminated = rows[0]?.n ?? 0;
+        if (terminated === 0) {
+          await sleep(100);
+        }
+      }
+      expect(terminated).toBe(1);
+    } finally {
+      await holder`SELECT pg_advisory_unlock(hashtext('slugbase.migrate'))`;
+    }
+
+    const error = await run;
+
+    expect(error.message).toContain("connection was replaced");
   }, 60_000);
 });
 
@@ -314,6 +383,107 @@ describe("lock_timeout (doc 05 section 5.2)", () => {
     expect(await migrateLockIsFree(owner)).toBe(true);
 
     expect((await migrate({ url: migratorUrl(name), chains })).applied).toHaveLength(1);
+  }, 60_000);
+});
+
+describe("a non-transactional step (doc 05 section 5.2)", () => {
+  // The older snapshot is held for longer than the 5 s lock_timeout of every
+  // other migration, once the build is waiting for it.
+  const SNAPSHOT_HOLD_MS = 6_500;
+
+  it("builds its index while another connection holds an older snapshot for longer than lock_timeout", async () => {
+    const { name, owner } = await createDatabase();
+    const release = await holdSnapshot(name);
+    const run = migrate({ url: migratorUrl(name), chains: [fixture("snapshot")] });
+    run.catch(() => undefined);
+    try {
+      await waitForBlockedIndexBuild(name);
+      await sleep(SNAPSHOT_HOLD_MS);
+    } finally {
+      await release();
+    }
+
+    expect((await run).applied).toHaveLength(CE_MIGRATIONS + 2);
+
+    expect(await indexes(owner, ["snapshot_target_a_idx"])).toEqual([
+      { name: "snapshot_target_a_idx", valid: true, unique: false },
+    ]);
+    expect(await recordedRows(owner, "migrations_snapshot")).toBe(2);
+    expect(await migrateLockIsFree(owner)).toBe(true);
+  }, 60_000);
+
+  it("gives lock_timeout back to the migrations after it", async () => {
+    const { name, owner } = await createDatabase();
+    await migrate({ url: migratorUrl(name), chains: [fixture("restored")] });
+    const probe = await owner`SELECT lock_timeout FROM restored_probe`;
+    expect(probe[0]).toEqual({ lock_timeout: "5s" });
+    expect(await recordedRows(owner, "migrations_restored")).toBe(3);
+  }, 60_000);
+
+  it("drops the INVALID index a failed build left and builds it again", async () => {
+    const { name, owner } = await createDatabase();
+    await owner.unsafe("CREATE TABLE invalid_target (a integer)");
+    await owner.unsafe("ALTER TABLE invalid_target OWNER TO slugbase_owner");
+    await owner.unsafe("INSERT INTO invalid_target VALUES (1), (1)");
+    for (const statement of [
+      "CREATE UNIQUE INDEX CONCURRENTLY invalid_a_idx ON invalid_target (a)",
+      'CREATE UNIQUE INDEX CONCURRENTLY "invalid_Mixed_idx" ON invalid_target (a)',
+    ]) {
+      await expect(owner.unsafe(statement)).rejects.toMatchObject({ code: "23505" });
+    }
+    const names = ["invalid_Mixed_idx", "invalid_a_idx"];
+    expect(await indexes(owner, names)).toEqual([
+      { name: "invalid_Mixed_idx", valid: false, unique: true },
+      { name: "invalid_a_idx", valid: false, unique: true },
+    ]);
+    await owner.unsafe("DELETE FROM invalid_target");
+
+    const result = await migrate({ url: migratorUrl(name), chains: [fixture("invalid")] });
+
+    expect(result.applied).toHaveLength(CE_MIGRATIONS + 1);
+    expect(await indexes(owner, names)).toEqual([
+      { name: "invalid_Mixed_idx", valid: true, unique: false },
+      { name: "invalid_a_idx", valid: true, unique: true },
+    ]);
+    expect(await recordedRows(owner, "migrations_invalid")).toBe(1);
+  }, 60_000);
+
+  it("refuses a statement that is not a named concurrent index build before running any of the step", async () => {
+    const { name, owner } = await createDatabase();
+    await owner.unsafe("CREATE TABLE unparsable_target (a integer)");
+    await owner.unsafe("ALTER TABLE unparsable_target OWNER TO slugbase_owner");
+
+    const error = await rejection(migrate({ url: migratorUrl(name), chains: [fixture("unparsable")] }));
+
+    expect(error.message).toContain("20300101000001_index_unparsable_target");
+    expect(error.message).toContain("only named CREATE INDEX CONCURRENTLY statements");
+    expect(await indexes(owner, ["unparsable_a_idx"])).toEqual([]);
+    expect(await recordedRows(owner, "migrations_unparsable")).toBe(0);
+    expect(await migrateLockIsFree(owner)).toBe(true);
+  }, 60_000);
+
+  it("lets several replicas wait for the lock while it builds, without a deadlock", async () => {
+    const { name, owner } = await createDatabase();
+    const chains = [fixture("snapshot")];
+    const release = await holdSnapshot(name);
+    const runs = Promise.all([1, 2, 3].map(() => migrate({ url: migratorUrl(name), chains })));
+    runs.catch(() => undefined);
+    try {
+      await waitForBlockedIndexBuild(name);
+      // Longer than deadlock_timeout, so a waiter that held a snapshot would be found out.
+      await sleep(3_000);
+    } finally {
+      await release();
+    }
+
+    const tags = (await runs).flatMap((run) => run.applied.map(({ chain, tag }) => `${chain}:${tag}`));
+
+    expect(tags).toHaveLength(CE_MIGRATIONS + 2);
+    expect(new Set(tags).size).toBe(tags.length);
+    expect(await recordedRows(owner, "migrations_snapshot")).toBe(2);
+    expect(await indexes(owner, ["snapshot_target_a_idx"])).toEqual([
+      { name: "snapshot_target_a_idx", valid: true, unique: false },
+    ]);
   }, 60_000);
 });
 
