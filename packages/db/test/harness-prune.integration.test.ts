@@ -77,6 +77,9 @@ describe("pruning stale templates", () => {
   }, HOOK_TIMEOUT_MS);
 
   it("never touches a database outside the slugbase_tpl_ and test_ names", async () => {
+    // The development database exists on a developer's server and not on the
+    // CI service, so the test asserts it is left as it was found.
+    const devBefore = await exists("slugbase_dev");
     const stale = await fakeTemplate();
     const decoy = `other_${randomBytes(8).toString("hex")}`;
     await admin.unsafe(`CREATE DATABASE ${decoy}`);
@@ -87,9 +90,10 @@ describe("pruning stale templates", () => {
     const result = await pruneTestTemplates({ serverUrl, names: [stale, decoy, lookalike, "slugbase_dev"], keep: [] });
     expect(result.dropped).toEqual([stale]);
     expect(result.skipped).toEqual([]);
-    for (const name of [decoy, lookalike, "slugbase_dev"]) {
+    for (const name of [decoy, lookalike]) {
       expect(await exists(name)).toBe(true);
     }
+    expect(await exists("slugbase_dev")).toBe(devBefore);
   });
 
   it("skips a template whose build lock another process holds", async () => {
