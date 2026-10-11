@@ -398,9 +398,11 @@ async function applyMigration(sql: postgres.Sql, pid: number, chain: MigrationCh
       }
       return build;
     });
-    // A concurrent build waits for every older transaction in the database, on
-    // any table, and that wait counts against lock_timeout. It queues no
-    // application traffic, so only statement_timeout bounds it.
+    // A concurrent build waits for transactions that could write to its table
+    // and, after its second scan, for every transaction in the database whose
+    // snapshot predates that scan, whatever table it reads; that wait counts
+    // against lock_timeout. It queues no application traffic, so only
+    // statement_timeout bounds it.
     await assertSession(sql, pid);
     await sql.unsafe("SET lock_timeout = 0");
     // Not atomic with its bookkeeping row: when a statement fails part-way, the
