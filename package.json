@@ -22,7 +22,9 @@
     "audit": "pnpm audit --audit-level=high",
     "gate": "pnpm lint && turbo run typecheck test:unit build && pnpm contracts:check && pnpm db:check && pnpm test:integration && pnpm i18n:check && pnpm audit --audit-level=high",
     "api:gen": "pnpm --filter @slugbase/contracts api:gen",
-    "api:extract": "turbo run build && node tooling/api-report/api-report.ts extract"
+    "api:extract": "turbo run build && node tooling/api-report/api-report.ts extract",
+    "dev:services": "docker compose -f compose.dev.yml up -d --wait",
+    "dev:services:down": "docker compose -f compose.dev.yml down"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

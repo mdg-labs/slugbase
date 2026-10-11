@@ -1,0 +1,42 @@
+# Shared development services (doc 08 §1.2). Every checkout and scratch clone on
+# the machine uses this one stack, so the project name is fixed and does not
+# depend on the directory the file is run from.
+#   pnpm dev:services        start and wait until healthy
+#   pnpm dev:services:down   stop (the data volume is kept)
+# Development defaults only: nothing here is a secret.
+name: slugbase-dev
+
+services:
+  postgres:
+    image: postgres:18
+    # Postgres listens on the published port inside the container too, so the
+    # default Postgres port is not mapped anywhere.
+    command: ["postgres", "-c", "port=54329"]
+    environment:
+      POSTGRES_USER: slugbase
+      POSTGRES_PASSWORD: slugbase
+      POSTGRES_DB: slugbase_dev
+    ports:
+      - "127.0.0.1:54329:54329"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -p 54329 -U slugbase -d slugbase_dev"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  postgres-data:
