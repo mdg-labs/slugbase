@@ -1,0 +1,13 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+#
+# Paths CodeRabbit does not review: generated, vendored or hash-locked files.
+# /dev-diff reads the "!" entries below to count the files a promotion PR
+# carries against the review cap. Migrations and packages/*/etc/*.api.md stay
+# reviewed.
+reviews:
+  path_filters:
+    - "!pnpm-lock.yaml"
+    - "!packages/contracts/generated/**"
+    - "!packages/ui/src/components/ui/**"
+    - "!docs/internal/design-prototype/**"
+    - "!.claude/**"
