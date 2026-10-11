@@ -101,6 +101,13 @@ const STATEMENT_TIMEOUT = "15min";
 const STATEMENT_TIMEOUT_MS = 15 * 60 * 1000;
 const LOCK_POLL_INTERVAL_MS = 500;
 const CLIENT_CONNECTION_CHECK_INTERVAL = "1s";
+// A client host that vanishes without closing its connection sends no FIN or
+// RST, so the server learns of it only from keepalive probes. With these
+// values it does after 60 s + 10 s * 6 = 2 min, a small fraction of the
+// statement timeout.
+const TCP_KEEPALIVES_IDLE_SECONDS = 60;
+const TCP_KEEPALIVES_INTERVAL_SECONDS = 10;
+const TCP_KEEPALIVES_COUNT = 6;
 
 const BOOKKEEPING_SCHEMA = "drizzle";
 const OWNER_ROLE = "slugbase_owner";
@@ -468,8 +475,8 @@ async function applyChain(sql: postgres.Sql, pid: number, loaded: LoadedChain): 
 /**
  * Applies the CE chain and then the additional chains, one migration at a time,
  * under the advisory lock `hashtext('slugbase.migrate')` held for the whole run,
- * with `lock_timeout`, `statement_timeout` and `client_connection_check_interval`
- * set for the session (a non-transactional step runs with `lock_timeout` off)
+ * with `lock_timeout`, `statement_timeout`, `client_connection_check_interval`
+ * and the `tcp_keepalives_*` settings set for the session (a non-transactional step runs with `lock_timeout` off)
  * and DDL done as `slugbase_owner`. A second concurrent call polls
  * `pg_try_advisory_lock`, so it holds no snapshot a concurrent index build
  * would wait on, and finds nothing left to do. The lock lives in the session: it is released when the
@@ -494,6 +501,11 @@ export async function migrate(options: MigrateOptions): Promise<MigrateResult> {
     // A build whose client closed its connection is cancelled, leaving an INVALID
     // index, rather than finished and never recorded.
     await sql.unsafe(`SET client_connection_check_interval = '${CLIENT_CONNECTION_CHECK_INTERVAL}'`);
+    // The connection check only sees a connection the kernel reports closed;
+    // the keepalives make the kernel report a vanished peer as closed.
+    await sql.unsafe(`SET tcp_keepalives_idle = ${String(TCP_KEEPALIVES_IDLE_SECONDS)}`);
+    await sql.unsafe(`SET tcp_keepalives_interval = ${String(TCP_KEEPALIVES_INTERVAL_SECONDS)}`);
+    await sql.unsafe(`SET tcp_keepalives_count = ${String(TCP_KEEPALIVES_COUNT)}`);
     // The lock is polled, outside any transaction, rather than waited for in a
     // statement: a waiting statement holds a snapshot, which the concurrent
     // index build of the running migration would wait for while the waiter
