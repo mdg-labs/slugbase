@@ -93,7 +93,7 @@ Package boundaries are enforced by `eslint-plugin-boundaries` (or dependency-cru
 | `ui`, `email` | no workspace package | every workspace package (widening needs an edit here) |
 | `apps/*` | everything | — |
 
-`fetch`, `node:http(s)` and `undici` are importable only inside `adapters/src/egress/` (doc 01 §10); the raw database handle only inside `db` (doc 01 §5.3); `@slugbase/testing` only from test files, `test/` folders and `apps/*` development tooling.
+`fetch`, `node:http(s)` and `undici` are importable only inside `adapters/src/egress/` (doc 01 §10); the raw database handle only inside `db` (doc 01 §5.3); `@slugbase/testing` and `@slugbase/db/testing` only from test files, `test/` folders and `apps/*` development tooling (and `@slugbase/db/testing` from `packages/testing`, which wraps it).
 
 ### 2.2 The private Cloud repository
 

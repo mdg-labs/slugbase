@@ -21,6 +21,10 @@ export const WORKSPACE_ALLOWED: Readonly<Record<string, readonly string[]>> = {
 };
 
 const TESTING = "testing";
+// Subpath entries of other packages that hold test harness code. They carry the
+// raw database handle and the superuser connection, so they follow the same
+// rule as @slugbase/testing, and packages/testing itself wraps them.
+const TESTING_ENTRIES = new Set(["db/testing"]);
 const EGRESS_DIR = "packages/adapters/src/egress/";
 const DB_DIR = "packages/db/";
 
@@ -116,6 +120,10 @@ function exportedEntries(pkg: string): ReadonlySet<string> | undefined {
   return entries;
 }
 
+function isTestingPackage(loc: Location): boolean {
+  return loc.area === "package" && loc.name === TESTING;
+}
+
 function checkWorkspaceImport(loc: Location, specifier: string): string | undefined {
   const [, target = "", ...rest] = specifier.split("/");
   const entry = rest.length === 0 ? "." : `./${rest.join("/")}`;
@@ -125,6 +133,8 @@ function checkWorkspaceImport(loc: Location, specifier: string): string | undefi
     if (!isTestingContext(loc)) {
       return `${importer} must not import @slugbase/testing: it is importable only from test files, test/ folders and apps/* development tooling (doc 09 section 2.1).`;
     }
+  } else if (TESTING_ENTRIES.has(`${target}/${rest.join("/")}`) && !isTestingContext(loc) && !isTestingPackage(loc)) {
+    return `${importer} must not import ${specifier}: it is importable only from test files, test/ folders, apps/* development tooling and packages/testing (doc 09 section 2.1, T1).`;
   } else if (loc.area === "package") {
     const allowed = WORKSPACE_ALLOWED[loc.name];
     if (allowed === undefined) {
