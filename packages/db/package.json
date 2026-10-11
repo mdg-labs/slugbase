@@ -27,6 +27,8 @@
     "build": "tsc -p tsconfig.build.json",
     "db:generate": "node scripts/generate-migration.ts",
     "db:migrate": "node scripts/migrate.ts",
+    "db:check": "node scripts/db-check.ts",
+    "db:record-checksums": "node scripts/record-migration-checksums.ts",
     "test:prune-templates": "node scripts/prune-templates.ts",
     "contracts:check": "node ../../tooling/api-report/api-report.ts check --package ."
   },
