@@ -38,10 +38,21 @@ export type Audience = (typeof AUDIENCES)[number];
 export type ProblemResponseStatus = 400 | 401 | 403 | 404 | 409 | 410 | 412 | 413 | 415 | 422 | 429;
 export type OtherResponseStatus = 200 | 201 | 202 | 204 | 302 | 500 | 502 | 503;
 
+/** A documented response header. Headers are always sent, so the generator marks them required. */
+export interface ResponseHeader {
+  readonly description: string;
+  readonly schema: z.ZodType;
+}
+
 export interface JsonResponse {
   readonly kind: "json";
   readonly description: string;
   readonly schema: z.ZodType;
+  readonly headers?: Readonly<Record<string, ResponseHeader>>;
+}
+
+export interface JsonResponseOptions {
+  readonly headers?: Readonly<Record<string, ResponseHeader>>;
 }
 
 export interface ProblemResponse {
@@ -54,9 +65,9 @@ export interface EmptyResponse {
   readonly description: string;
 }
 
-/** A response with a JSON body described by a Zod schema. */
-export function jsonResponse(description: string, schema: z.ZodType): JsonResponse {
-  return { kind: "json", description, schema };
+/** A response with a JSON body described by a Zod schema, and optionally the headers it documents. */
+export function jsonResponse(description: string, schema: z.ZodType, options: JsonResponseOptions = {}): JsonResponse {
+  return options.headers === undefined ? { kind: "json", description, schema } : { kind: "json", description, schema, headers: options.headers };
 }
 
 /** An `application/problem+json` response carrying the shared Problem schema. */

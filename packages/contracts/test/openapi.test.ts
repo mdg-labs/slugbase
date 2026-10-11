@@ -189,4 +189,33 @@ describe("declaration checks", () => {
     const body = z.strictObject({ labels: z.record(z.string(), z.string()) });
     expect(() => buildOpenApiDocument([defineOperation({ ...base, request: { body } })])).not.toThrow();
   });
+
+  it("publishes a documented response header", () => {
+    const Etag = z.string().describe("Entity tag");
+    const op: OperationDefinition = {
+      ...base,
+      responses: {
+        201: jsonResponse("created", Pong, { headers: { ETag: { description: "Entity tag", schema: Etag } } }),
+        422: problemResponse("invalid"),
+      },
+    };
+    const built = buildOpenApiDocument([op]);
+    const entry = (built["paths"] as Record<string, Record<string, Obj>>)["/api/v1/things"]?.["post"];
+    const created = (entry?.["responses"] as Record<string, Obj>)["201"];
+    expect(created?.["headers"]).toEqual({
+      ETag: { description: "Entity tag", required: true, schema: { type: "string", description: "Entity tag" } },
+    });
+  });
+
+  it("rejects a malformed response header", () => {
+    const bad = {
+      ...base,
+      responses: {
+        201: { kind: "json", description: "created", schema: Pong, headers: { "Bad Name": { description: "x" } } },
+        422: problemResponse("invalid"),
+      },
+    };
+    const problems = problemsOf([bad]);
+    expect(problems.join("\n")).toContain("response 201 header Bad Name");
+  });
 });

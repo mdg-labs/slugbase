@@ -1,6 +1,84 @@
 {
   "components": {
     "schemas": {
+      "ApiConfig": {
+        "additionalProperties": false,
+        "properties": {
+          "apiVersion": {
+            "const": "v1",
+            "description": "The API version the server speaks",
+            "type": "string"
+          },
+          "defaultLocale": {
+            "description": "Locale used when the visitor has no preference",
+            "type": "string"
+          },
+          "docsBaseUrl": {
+            "description": "Base URL the help links point to; a link is the base followed by the documentation route",
+            "format": "uri",
+            "type": "string"
+          },
+          "features": {
+            "additionalProperties": false,
+            "properties": {
+              "ai": {
+                "description": "Whether an AI port is configured",
+                "type": "boolean"
+              },
+              "mail": {
+                "description": "Whether a mail port is configured",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "mail",
+              "ai"
+            ],
+            "type": "object"
+          },
+          "locales": {
+            "description": "Locales the interface is available in",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "origin": {
+            "description": "The origin the server is reached at, scheme and host without a path",
+            "format": "uri",
+            "type": "string"
+          },
+          "product": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "description": "Product name",
+                "type": "string"
+              },
+              "version": {
+                "description": "Release version",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "version"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "apiVersion",
+          "origin",
+          "product",
+          "locales",
+          "defaultLocale",
+          "docsBaseUrl",
+          "features"
+        ],
+        "type": "object"
+      },
       "HealthStatus": {
         "additionalProperties": false,
         "properties": {
@@ -11,6 +89,31 @@
         },
         "required": [
           "status"
+        ],
+        "type": "object"
+      },
+      "OpenApiDocument": {
+        "additionalProperties": {},
+        "properties": {
+          "info": {
+            "additionalProperties": {},
+            "properties": {},
+            "type": "object"
+          },
+          "openapi": {
+            "description": "The OpenAPI version of the document",
+            "type": "string"
+          },
+          "paths": {
+            "additionalProperties": {},
+            "properties": {},
+            "type": "object"
+          }
+        },
+        "required": [
+          "openapi",
+          "info",
+          "paths"
         ],
         "type": "object"
       },
@@ -208,6 +311,92 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/config": {
+      "get": {
+        "operationId": "getApiConfig",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiConfig"
+                }
+              }
+            },
+            "description": "The configuration the web app needs before sign-in",
+            "headers": {
+              "Cache-Control": {
+                "description": "Cacheable for 60 seconds; other API responses are no-store",
+                "required": true,
+                "schema": {
+                  "const": "public, max-age=60",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          }
+        },
+        "summary": "Bootstrap configuration for the web app",
+        "tags": [
+          "meta"
+        ],
+        "x-slugbase-auth": "anonymous",
+        "x-slugbase-rate": "public"
+      }
+    },
+    "/api/v1/openapi.json": {
+      "get": {
+        "operationId": "getOpenApiDocument",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenApiDocument"
+                }
+              }
+            },
+            "description": "The committed OpenAPI 3.1 document, byte for byte"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The reference documents are disabled on this server"
+          }
+        },
+        "summary": "The OpenAPI document of this API",
+        "tags": [
+          "meta"
+        ],
+        "x-slugbase-auth": "anonymous",
+        "x-slugbase-rate": "public"
+      }
+    },
     "/health": {
       "get": {
         "operationId": "getHealth",

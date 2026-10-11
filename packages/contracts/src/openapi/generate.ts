@@ -279,6 +279,21 @@ function checkDeclaration(raw: unknown, index: number, seenIds: Set<string>, see
       if (kind === "json" && !(isRecord(response) && response["schema"] instanceof z.ZodType)) {
         need(`response ${status} needs a Zod schema`);
       }
+      const headers = isRecord(response) ? response["headers"] : undefined;
+      if (headers !== undefined) {
+        if (kind !== "json" || !isRecord(headers)) {
+          need(`response ${status} headers must be an object on a jsonResponse`);
+        } else {
+          for (const [name, header] of Object.entries(headers)) {
+            if (!/^[A-Za-z0-9-]+$/.test(name)) {
+              need(`response ${status} header ${name} is not a valid header name`);
+            }
+            if (!isRecord(header) || typeof header["description"] !== "string" || !(header["schema"] instanceof z.ZodType)) {
+              need(`response ${status} header ${name} needs a description and a Zod schema`);
+            }
+          }
+        }
+      }
       if (code < 400) {
         hasSuccess = true;
       }
@@ -348,10 +363,22 @@ function buildOperation(op: OperationDefinition, converter: Converter): JsonObje
   for (const [status, response] of Object.entries(op.responses)) {
     if (response.kind === "json") {
       const schema = converter.convert(response.schema, "output");
-      responses[status] = {
+      const built: JsonObject = {
         description: response.description,
         content: { "application/json": { schema: schema ?? {} } },
       };
+      if (response.headers !== undefined) {
+        const headers: JsonObject = {};
+        for (const [name, header] of Object.entries(response.headers)) {
+          headers[name] = {
+            description: header.description,
+            required: true,
+            schema: converter.convert(header.schema, "output") ?? {},
+          };
+        }
+        built["headers"] = headers;
+      }
+      responses[status] = built;
     } else if (response.kind === "problem") {
       responses[status] = {
         description: response.description,
