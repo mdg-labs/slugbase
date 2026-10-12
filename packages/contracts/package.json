@@ -24,7 +24,6 @@
     "contracts:check": "node scripts/contracts-check.ts"
   },
   "devDependencies": {
-    "@slugbase/testing": "workspace:*",
     "@stoplight/spectral-core": "^1.24.0",
     "@stoplight/spectral-functions": "^1.11.0",
     "@stoplight/spectral-parsers": "^1.0.5",

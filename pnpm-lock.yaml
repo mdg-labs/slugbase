@@ -95,9 +95,6 @@ importers:
         specifier: ^4.6.5
         version: 4.6.5
     devDependencies:
-      '@slugbase/testing':
-        specifier: workspace:*
-        version: link:../testing
       '@stoplight/spectral-core':
         specifier: ^1.24.0
         version: 1.24.0
@@ -116,10 +113,6 @@ importers:
       '@slugbase/contracts':
         specifier: workspace:*
         version: link:../contracts
-    devDependencies:
-      '@slugbase/testing':
-        specifier: workspace:*
-        version: link:../testing
 
   packages/db:
     dependencies:
