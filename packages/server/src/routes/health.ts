@@ -56,11 +56,23 @@ export function probeRoutes(options: ProbeOptions): readonly RouteBinding[] {
 
   const health = route(getHealth).handle(() => ({ status: 200, body: { status: "ok" } }));
 
+  // At most one readiness read is in flight per process, and concurrent probes share
+  // it. /ready is public and not rate-limited, and each read opens its own
+  // connection that outlives a timed-out answer, so unshared reads would let one
+  // client exhaust the database's connections.
+  let inFlight: ReturnType<typeof migrationLevel> | undefined;
+  const readLevel = (): ReturnType<typeof migrationLevel> => {
+    inFlight ??= migrationLevel({ url: databaseUrl, chains: chains() }).finally(() => {
+      inFlight = undefined;
+    });
+    return inFlight;
+  };
+
   const ready = route(getReady).handle(async (_request, context) => {
     const requestLogger = context.get("logger") ?? logger;
     let level: Awaited<ReturnType<typeof migrationLevel>>;
     try {
-      level = await withinTimeout(migrationLevel({ url: databaseUrl, chains: chains() }), READY_TIMEOUT_MS);
+      level = await withinTimeout(readLevel(), READY_TIMEOUT_MS);
     } catch (error) {
       requestLogger.warn("The readiness check could not read the database", describeError(error));
       return {
