@@ -19,7 +19,7 @@ export type Operation =
   | { kind: "rename-table"; table: TableName; to: TableName }
   | { kind: "set-schema"; table: TableName; to: TableName }
   | { kind: "rename-column"; table: TableName; column: string; to: string }
-  | { kind: "add-column"; table: TableName; column: string; type: ColumnType; notNullWithoutDefault: boolean; rewritesTable: boolean }
+  | { kind: "add-column"; table: TableName; column: string; type: ColumnType; notNullWithoutDefault: boolean; rewritesTable: boolean; suppliesValue: boolean }
   | { kind: "alter-column-type"; table: TableName; column: string }
   | { kind: "set-not-null"; table: TableName; column: string }
   | { kind: "drop-default"; table: TableName; column: string }
@@ -27,7 +27,10 @@ export type Operation =
   | { kind: "add-validated-constraint"; table: TableName }
   | { kind: "add-primary-key-using-index"; table: TableName }
   | { kind: "revoke"; tables: TableName[] | undefined }
-  | { kind: "declares-type"; name: TableName; ownConstraints: boolean; base: ColumnType }
+  // volatileDefault: whether the default the type states is not a constant or a stable call; undefined when it states none, and a domain then takes its base's.
+  | { kind: "declares-type"; name: TableName; ownConstraints: boolean; base: ColumnType; volatileDefault: boolean | undefined }
+  // ALTER DOMAIN ... SET DEFAULT or DROP DEFAULT: the default the domain has from now on (false when it has none).
+  | { kind: "sets-default"; name: TableName; volatileDefault: boolean }
   | { kind: "retypes"; names: TableName[] }
   | { kind: "data-change"; statement: string }
   | { kind: "safe" }
@@ -377,6 +380,26 @@ function hasDomainConstraint(tokens: readonly Token[]): boolean {
   return false;
 }
 
+/**
+ * Whether the default a domain definition states, from its base type on, is not a constant or a call the
+ * rule accepts as stable; undefined when the definition has no DEFAULT outside parentheses. An explicit
+ * DEFAULT NULL is a default, so it replaces the one of a base domain. A CHECK expression in the same
+ * definition is scanned too, which only matters for a domain that has a constraint anyway.
+ */
+function domainDefault(tokens: readonly Token[]): boolean | undefined {
+  let depth = 0;
+  for (const [index, token] of tokens.entries()) {
+    if (token.kind === "punct" && token.text === "(") {
+      depth += 1;
+    } else if (token.kind === "punct" && token.text === ")") {
+      depth -= 1;
+    } else if (depth === 0 && token.kind === "word" && token.text === "default") {
+      return firstUnknownCall(tokens.slice(index + 1)) !== undefined;
+    }
+  }
+  return undefined;
+}
+
 /** The operations of one statement. */
 export function analyseStatement(statement: string): AnalysedStatement {
   const text = statement;
@@ -611,7 +634,7 @@ function create(cursor: Cursor): Operation[] {
   if (cursor.take("type")) {
     const name = cursor.tableName();
     return name !== undefined && cursor.take("as", "enum") && cursor.skipParenthesised() && cursor.done()
-      ? [{ kind: "declares-type", name, ownConstraints: false, base: { kind: "builtin" } }]
+      ? [{ kind: "declares-type", name, ownConstraints: false, base: { kind: "builtin" }, volatileDefault: false }]
       : unknown("CREATE TYPE other than an enum");
   }
   // A domain is not safe to create in a new migration, but the rule still needs to know it, with its
@@ -623,7 +646,13 @@ function create(cursor: Cursor): Operation[] {
       ? unknown("a CREATE form this check does not read")
       : [
           ...unknown("a CREATE form this check does not read", true),
-          { kind: "declares-type", name, ownConstraints: hasDomainConstraint(cursor.tokens.slice(cursor.position)), base: readType(cursor.tokens, cursor.position) },
+          {
+            kind: "declares-type",
+            name,
+            ownConstraints: hasDomainConstraint(cursor.tokens.slice(cursor.position)),
+            base: readType(cursor.tokens, cursor.position),
+            volatileDefault: domainDefault(cursor.tokens.slice(cursor.position)),
+          },
         ];
   }
   return unknown("a CREATE form this check does not read");
@@ -730,7 +759,7 @@ function alter(cursor: Cursor): Operation[] {
 }
 
 // ALTER DOMAIN actions that add no constraint and rename nothing.
-const DOMAIN_ACTIONS_KEEPING_CONSTRAINTS = [["owner", "to"], ["rename", "constraint"], ["drop", "constraint"], ["drop", "not", "null"], ["set", "default"], ["drop", "default"]];
+const DOMAIN_ACTIONS_KEEPING_CONSTRAINTS = [["owner", "to"], ["rename", "constraint"], ["drop", "constraint"], ["drop", "not", "null"]];
 
 /**
  * ALTER DOMAIN and ALTER TYPE are not safe to run in a new migration, and they can change what a
@@ -756,6 +785,10 @@ function alterType(cursor: Cursor, domain: boolean): Operation[] {
       names.push({ schema, name: name.name });
     }
     retypes = true;
+  } else if (domain && cursor.take("set", "default")) {
+    return [...unknown("an ALTER form this check does not read", true), { kind: "sets-default", name, volatileDefault: firstUnknownCall(cursor.tokens.slice(cursor.position)) !== undefined }];
+  } else if (domain && cursor.take("drop", "default")) {
+    return [...unknown("an ALTER form this check does not read", true), { kind: "sets-default", name, volatileDefault: false }];
   } else if (domain && DOMAIN_ACTIONS_KEEPING_CONSTRAINTS.some((words) => words.every((word, offset) => cursor.isWord(word, offset)))) {
     retypes = false;
   }
@@ -1066,7 +1099,7 @@ function alterAction(table: TableName, action: Cursor): Operation[] {
     }
     const type = readType(action.tokens, action.position);
     const definition = readDefinition(action);
-    const operations: Operation[] = [{ kind: "add-column", table, column, type, notNullWithoutDefault: definition.notNull && !definition.supplies, rewritesTable: definition.rewritesTable }];
+    const operations: Operation[] = [{ kind: "add-column", table, column, type, notNullWithoutDefault: definition.notNull && !definition.supplies, rewritesTable: definition.rewritesTable, suppliesValue: definition.supplies }];
     // A column constraint builds an index or checks every existing row, as the table constraint does.
     if (definition.unique || definition.primaryKey) {
       operations.push({ kind: "create-index", table, concurrently: false });
@@ -1188,7 +1221,8 @@ function isVirtualGenerated(definition: Cursor, offset: number): boolean {
  * What the rest of an ADD COLUMN definition says at its top level (words inside
  * parentheses, such as a type's arguments or a CHECK expression, do not count):
  * NOT NULL, a column constraint that builds an index or is checked against the
- * rows, whether it supplies a value (DEFAULT, a generated value, identity or a serial type),
+ * rows, whether it supplies a value (DEFAULT <expression>, a generated value, identity or a serial type;
+ * the DEFAULT of COMPRESSION DEFAULT and STORAGE DEFAULT is no value),
  * and whether it rewrites the table: a serial type, an identity column and a generated column
  * that is not marked VIRTUAL write every existing row (PostgreSQL 17 has stored generated
  * columns only, so a GENERATED form this reader does not recognise counts as rewriting),
@@ -1222,7 +1256,10 @@ function readDefinition(definition: Cursor): {
       if (token.text === "not" && definition.isWord("null", offset + 1)) {
         found.notNull = true;
       } else if (token.text === "default") {
-        found.supplies = true;
+        // COMPRESSION DEFAULT and STORAGE DEFAULT name a method, not a value for the column.
+        if (offset === 0 || !(definition.isWord("compression", offset - 1) || definition.isWord("storage", offset - 1))) {
+          found.supplies = true;
+        }
       } else if (token.text === "generated") {
         found.supplies = true;
         if (!isVirtualGenerated(definition, offset)) {

@@ -85,6 +85,10 @@ describe("what is rejected in a migration added since the latest release tag", (
     ["renaming a table", 'ALTER TABLE "bookmarks" RENAME TO "links";', "renames table bookmarks to links"],
     ["moving a table to another schema", 'ALTER TABLE "bookmarks" SET SCHEMA archive;', "moves table bookmarks to archive.bookmarks"],
     ["adding a NOT NULL column without a default", 'ALTER TABLE "bookmarks" ADD COLUMN "slug" text NOT NULL;', "adds column bookmarks.slug as NOT NULL without a default"],
+    ["adding a NOT NULL column with COMPRESSION default before NOT NULL", 'ALTER TABLE "bookmarks" ADD COLUMN "b" text COMPRESSION default NOT NULL;', "adds column bookmarks.b as NOT NULL without a default"],
+    ["adding a NOT NULL column with COMPRESSION default after NOT NULL", 'ALTER TABLE "bookmarks" ADD COLUMN "b" text NOT NULL COMPRESSION default;', "adds column bookmarks.b as NOT NULL without a default"],
+    ["adding a NOT NULL column with STORAGE default before NOT NULL", 'ALTER TABLE "bookmarks" ADD COLUMN "b" text STORAGE default NOT NULL;', "adds column bookmarks.b as NOT NULL without a default"],
+    ["adding a NOT NULL column with STORAGE default after NOT NULL", 'ALTER TABLE "bookmarks" ADD COLUMN "b" text NOT NULL STORAGE default;', "adds column bookmarks.b as NOT NULL without a default"],
     ["adding a NOT NULL column in lower case without COLUMN", 'alter table bookmarks add slug varchar(10) not null;', "adds column bookmarks.slug as NOT NULL without a default"],
     ["adding a NOT NULL serial column", 'ALTER TABLE "bookmarks" ADD COLUMN "n" bigserial NOT NULL;', REWRITES],
     ["adding a serial column", 'ALTER TABLE "bookmarks" ADD COLUMN "n" serial;', REWRITES],
@@ -556,6 +560,158 @@ describe("a column of a domain type on a table of the release", () => {
     ]);
     repository.migration(THIRD, 'ALTER TABLE "notes" ADD COLUMN "a" d;');
     expect(await inspect(repository, true)).toEqual([]);
+  });
+});
+
+// PostgreSQL 18, checked in rolled-back transactions on the development database by comparing the
+// table's relfilenode before and after the ADD COLUMN: a column of a domain whose default is volatile
+// (random()) and that has no default of its own rewrites the table, because each existing row gets
+// its own value. A domain with a constant or stable (now()) default, none, or a dropped default does
+// not, nor does a column with a default of its own (DEFAULT NULL included), nor an array of the domain.
+// A domain over a domain takes the default of its base when it is created (typdefault is copied), so
+// a later ALTER DOMAIN of the base leaves it as it was; its own DEFAULT, NULL included, replaces it,
+// and DROP DEFAULT removes it.
+const VOLATILE = "whose default is not a constant or a stable call";
+const VOLATILE_DOMAIN = "CREATE DOMAIN d AS float8 DEFAULT random();";
+const ADD_D = 'ALTER TABLE "bookmarks" ADD COLUMN "a" d;';
+
+describe("a column of a domain with a default that is not provably constant or stable, on a table of the release", () => {
+  it("rejects the failure scenario: a volatile default from CREATE DOMAIN in a contract migration, then added unmarked", async () => {
+    const findings = await afterContract(VOLATILE_DOMAIN, ADD_D);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.object).toBe(`migrations/${THIRD}.sql`);
+    expect(findings[0]?.message).toContain("adds column bookmarks.a of type d");
+    expect(findings[0]?.message).toContain(VOLATILE);
+    expect(findings[0]?.message).toContain(REWRITES);
+    expect(findings[0]?.message).toContain("has no contract header");
+  });
+
+  it("rejects the variant: a volatile default from ALTER DOMAIN ... SET DEFAULT", async () => {
+    const findings = await afterContract("CREATE DOMAIN d AS float8;\nALTER DOMAIN d SET DEFAULT random();", ADD_D);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("adds column bookmarks.a of type d");
+    expect(findings[0]?.message).toContain(VOLATILE);
+    expect(findings[0]?.message).toContain(REWRITES);
+  });
+
+  it.each([
+    ["COMPRESSION default", 'ALTER TABLE "bookmarks" ADD COLUMN "a" d COMPRESSION default;'],
+    ["COMPRESSION default before NOT NULL", 'ALTER TABLE "bookmarks" ADD COLUMN "a" d COMPRESSION default NOT NULL;'],
+    ["COMPRESSION default after NOT NULL", 'ALTER TABLE "bookmarks" ADD COLUMN "a" d NOT NULL COMPRESSION default;'],
+    ["STORAGE default", 'ALTER TABLE "bookmarks" ADD COLUMN "a" d STORAGE default;'],
+    ["STORAGE default before NOT NULL", 'ALTER TABLE "bookmarks" ADD COLUMN "a" d STORAGE default NOT NULL;'],
+    ["STORAGE default after NOT NULL", 'ALTER TABLE "bookmarks" ADD COLUMN "a" d NOT NULL STORAGE default;'],
+  ])("rejects a volatile default under %s, which is no default of the column", async (_name, sql) => {
+    const findings = await afterContract(VOLATILE_DOMAIN, sql);
+    expect(findings.length).toBeGreaterThan(0);
+    expect(findings.some(({ message }) => message.includes(VOLATILE) && message.includes(REWRITES))).toBe(true);
+  });
+
+  it.each([
+    ["a default that calls a function the rule does not know", "CREATE DOMAIN d AS uuid DEFAULT gen_random_uuid();", ADD_D],
+    ["a default that calls a sequence function", "CREATE DOMAIN d AS bigint DEFAULT nextval('s');", ADD_D],
+    ["a default that calls clock_timestamp", "CREATE DOMAIN d AS timestamptz DEFAULT clock_timestamp();", ADD_D],
+    ["a default that calls random() in an expression", "CREATE DOMAIN d AS float8 DEFAULT (1 + random()) * 2;", ADD_D],
+    ["a default that calls random() under a schema", "CREATE DOMAIN d AS float8 DEFAULT pg_catalog.random();", ADD_D],
+    ["a volatile default after another clause", 'CREATE DOMAIN d AS float8 COLLATE "C" DEFAULT random();', ADD_D],
+    ["a volatile default, nullable, without COLUMN", VOLATILE_DOMAIN, "alter table bookmarks add a d;"],
+    ["a volatile default, in a multi-action ALTER", VOLATILE_DOMAIN, 'ALTER TABLE "bookmarks" ADD COLUMN "x" text, ADD COLUMN "a" d;'],
+    ["a volatile default named by its schema", VOLATILE_DOMAIN, 'ALTER TABLE "bookmarks" ADD COLUMN "a" "public"."d";'],
+    ["a volatile default set after a constant one", "CREATE DOMAIN d AS float8 DEFAULT 1;\nALTER DOMAIN d SET DEFAULT random();", ADD_D],
+    ["a domain over a domain with a volatile default", `${VOLATILE_DOMAIN}\nCREATE DOMAIN e AS d;`, 'ALTER TABLE "bookmarks" ADD COLUMN "a" e;'],
+    ["a domain over a domain over a domain with a volatile default", `${VOLATILE_DOMAIN}\nCREATE DOMAIN e AS d;\nCREATE DOMAIN f AS e;`, 'ALTER TABLE "bookmarks" ADD COLUMN "a" f;'],
+    ["a domain over a domain whose volatile default was dropped from the base later", `${VOLATILE_DOMAIN}\nCREATE DOMAIN e AS d;\nALTER DOMAIN d DROP DEFAULT;`, 'ALTER TABLE "bookmarks" ADD COLUMN "a" e;'],
+    ["a domain over a domain given a volatile default later", "CREATE DOMAIN d AS float8;\nCREATE DOMAIN e AS d;\nALTER DOMAIN e SET DEFAULT random();", 'ALTER TABLE "bookmarks" ADD COLUMN "a" e;'],
+  ])("rejects %s", async (_name, declaration, sql) => {
+    const findings = await afterContract(declaration, sql);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.object).toBe(`migrations/${THIRD}.sql`);
+    expect(findings[0]?.message).toContain(VOLATILE);
+    expect(findings[0]?.message).toContain(REWRITES);
+    expect(findings[0]?.message).toContain("has no contract header");
+  });
+
+  it("rejects a volatile default that an earlier release created", async () => {
+    const repository = new GitPackage();
+    repositories.push(repository);
+    repository.migration(FIRST, `${VOLATILE_DOMAIN}\nCREATE TABLE "bookmarks" ("id" uuid PRIMARY KEY);\n`, [{ name: "bookmarks", columns: ["id"] }]);
+    repository.commit("first release");
+    repository.tag("v1.0.0");
+    repository.migration(SECOND, ADD_D, [{ name: "bookmarks", columns: ["id", "a"] }]);
+    const findings = await inspect(repository);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain(VOLATILE);
+  });
+
+  it("rejects a volatile default set by ALTER DOMAIN in a migration of the release", async () => {
+    const repository = new GitPackage();
+    repositories.push(repository);
+    repository.migration(FIRST, 'CREATE DOMAIN d AS float8;\nCREATE TABLE "bookmarks" ("id" uuid PRIMARY KEY);\n', [{ name: "bookmarks", columns: ["id"] }]);
+    repository.migration(SECOND, "ALTER DOMAIN d SET DEFAULT random();");
+    repository.commit("first release");
+    repository.tag("v1.0.0");
+    repository.migration(THIRD, ADD_D, [{ name: "bookmarks", columns: ["id", "a"] }]);
+    const findings = await inspect(repository);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain(VOLATILE);
+  });
+
+  it("accepts it in a contract migration with the header and the marker, and names the marker when only the header is there", async () => {
+    const repository = released();
+    repository.migration(SECOND, `${CONTRACT}${VOLATILE_DOMAIN}`, [{ name: "bookmarks", columns: BOOKMARKS }]);
+    repository.migration(THIRD, `${CONTRACT}${ADD_D}`);
+    expect(await inspect(repository, true)).toEqual([]);
+    const findings = await inspect(repository);
+    expect(findings.length).toBeGreaterThan(0);
+    expect(findings.every(({ message }) => message.includes(MARKER_HINT))).toBe(true);
+    expect(findings.some(({ message }) => message.includes(VOLATILE))).toBe(true);
+  });
+
+  it.each([
+    ["a constant default", "CREATE DOMAIN d AS float8 DEFAULT 5;", ADD_D],
+    ["a constant default expression", "CREATE DOMAIN d AS text DEFAULT 'a' || 'b';", ADD_D],
+    ["a default of the stable now()", "CREATE DOMAIN d AS timestamptz DEFAULT now();", ADD_D],
+    ["a default of a stable current_setting call", "CREATE DOMAIN d AS text DEFAULT current_setting('app.x', true);", ADD_D],
+    ["a NULL default", "CREATE DOMAIN d AS float8 DEFAULT NULL;", ADD_D],
+    ["no default", "CREATE DOMAIN d AS float8;", ADD_D],
+    ["a volatile default that DROP DEFAULT removed", `${VOLATILE_DOMAIN}\nALTER DOMAIN d DROP DEFAULT;`, ADD_D],
+    ["a volatile default that SET DEFAULT replaced by a constant", `${VOLATILE_DOMAIN}\nALTER DOMAIN d SET DEFAULT 1;`, ADD_D],
+    ["a volatile default that SET DEFAULT NULL removed", `${VOLATILE_DOMAIN}\nALTER DOMAIN d SET DEFAULT NULL;`, ADD_D],
+    ["a volatile default under a column default of its own", VOLATILE_DOMAIN, 'ALTER TABLE "bookmarks" ADD COLUMN "a" d DEFAULT 1;'],
+    ["a volatile default under a column default of NULL", VOLATILE_DOMAIN, 'ALTER TABLE "bookmarks" ADD COLUMN "a" d DEFAULT NULL;'],
+    ["a volatile default under a NOT NULL column with a default of its own", VOLATILE_DOMAIN, 'ALTER TABLE "bookmarks" ADD COLUMN "a" d NOT NULL DEFAULT 1;'],
+    ["a volatile default under a column default of its own beside COMPRESSION default", VOLATILE_DOMAIN, 'ALTER TABLE "bookmarks" ADD COLUMN "a" d COMPRESSION default DEFAULT 1;'],
+    ["a volatile default under a column default of its own beside STORAGE default", VOLATILE_DOMAIN, 'ALTER TABLE "bookmarks" ADD COLUMN "a" d DEFAULT 1 STORAGE default;'],
+    ["an array of a domain with a volatile default", VOLATILE_DOMAIN, 'ALTER TABLE "bookmarks" ADD COLUMN "a" d[];'],
+    ["a domain over a domain with a volatile default, given a constant default of its own", `${VOLATILE_DOMAIN}\nCREATE DOMAIN e AS d DEFAULT 3;`, 'ALTER TABLE "bookmarks" ADD COLUMN "a" e;'],
+    ["a domain over a domain with a volatile default, given a NULL default of its own", `${VOLATILE_DOMAIN}\nCREATE DOMAIN e AS d DEFAULT NULL;`, 'ALTER TABLE "bookmarks" ADD COLUMN "a" e;'],
+    ["a domain over a domain with a volatile default, whose default was dropped", `${VOLATILE_DOMAIN}\nCREATE DOMAIN e AS d;\nALTER DOMAIN e DROP DEFAULT;`, 'ALTER TABLE "bookmarks" ADD COLUMN "a" e;'],
+    ["a domain over a domain whose base was given a volatile default after its creation", "CREATE DOMAIN d AS float8 DEFAULT 1;\nCREATE DOMAIN e AS d;\nALTER DOMAIN d SET DEFAULT random();", 'ALTER TABLE "bookmarks" ADD COLUMN "a" e;'],
+    ["a domain over a domain with a constant default", "CREATE DOMAIN d AS float8 DEFAULT 1;\nCREATE DOMAIN e AS d;", 'ALTER TABLE "bookmarks" ADD COLUMN "a" e;'],
+  ])("accepts %s", async (_name, declaration, sql) => {
+    expect(await afterContract(declaration, sql)).toEqual([]);
+  });
+
+  it("accepts a volatile default on a table the release does not hold", async () => {
+    const repository = released();
+    repository.migration(SECOND, `${CONTRACT}${VOLATILE_DOMAIN}\nCREATE TABLE "notes" ("id" uuid PRIMARY KEY);`, [
+      { name: "bookmarks", columns: BOOKMARKS },
+      { name: "notes", columns: ["id"] },
+    ]);
+    repository.migration(THIRD, 'ALTER TABLE "notes" ADD COLUMN "a" d;');
+    expect(await inspect(repository, true)).toEqual([]);
+  });
+
+  it("rejects a domain with a constant default after a migration this check cannot read", async () => {
+    const FOURTH = "20260401000000_add_more";
+    const repository = released();
+    repository.migration(SECOND, `${CONTRACT}CREATE DOMAIN d AS float8 DEFAULT 1;`, [{ name: "bookmarks", columns: BOOKMARKS }]);
+    repository.migration(THIRD, `${CONTRACT}DO $$ BEGIN ALTER DOMAIN d SET DEFAULT random(); END $$;`);
+    repository.migration(FOURTH, ADD_D);
+    const findings = await inspect(repository, true);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.object).toBe(`migrations/${FOURTH}.sql`);
+    expect(findings[0]?.message).toContain("adds column bookmarks.a of type d");
   });
 });
 

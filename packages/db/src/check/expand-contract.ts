@@ -18,7 +18,12 @@ import type { CheckRule, ContractMarker, Finding } from "./types.ts";
 //     unless VIRTUAL follows); a nullable column or one with a constant or
 //     stable DEFAULT, such as now(), does not rewrite and is accepted, unless
 //     its type is a domain with a CHECK or NOT NULL constraint, which validates
-//     every existing row (also with a DEFAULT). The domains come from every
+//     every existing row (also with a DEFAULT), or a domain whose default is not
+//     a constant or a call accepted as stable (random(), say), which gives each
+//     existing row its own value, unless the column states a default of its own.
+//     A domain over a domain takes the default of its base when it is created,
+//     and its own DEFAULT (NULL included) or a later SET/DROP DEFAULT replaces
+//     it. The domains come from every
 //     CREATE DOMAIN of the migration chain, the migrations of the release
 //     included; a built-in type, an array type, an enum and a domain without
 //     constraints are accepted, and so is no other type: a name this check
@@ -27,9 +32,9 @@ import type { CheckRule, ContractMarker, Finding } from "./types.ts";
 //     a migration this check cannot read, or a statement it cannot place (a DO
 //     block, say), shipped or added, marked or not, the types declared before
 //     it count as unproven too (the citext type excepted), since it may have
-//     given a domain a constraint or replaced an enum with one. A CREATE DOMAIN,
-//     an ALTER TYPE that renames or moves nothing, and an ALTER DOMAIN action
-//     that adds no constraint are read and do not count,
+//     given a domain a constraint or a default, or replaced an enum with one. A
+//     CREATE DOMAIN, an ALTER TYPE that renames or moves nothing, and an ALTER
+//     DOMAIN action that adds no constraint are read and do not count,
 //   - changing the type of a column of such a table (any change: whether it
 //     rewrites the table depends on the old and the new type, which a lint of
 //     the file cannot tell),
@@ -138,12 +143,20 @@ function describe(table: TableName): string {
   return table.schema === "public" ? table.name : key(table);
 }
 
+interface TypeState {
+  constraints: boolean;
+  volatileDefault: boolean;
+}
+
+const UNPROVEN: TypeState = { constraints: true, volatileDefault: true };
+
 /** The tables and columns of the release, which the added migrations change as they go. */
 class Released {
   private readonly tables = new Map<string, Set<string>>();
-  // The types the migration chain declares: true when the type is, or may be, a domain with constraints.
+  // The types the migration chain declares: constraints is true when the type is, or may be, a domain with
+  // constraints, and volatileDefault when it has, or may have, a default that is not a constant or a stable call.
   // citext is the type of the extension this package installs (doc 05 section 1), which is no domain.
-  private readonly types = new Map<string, boolean>([[CITEXT, false]]);
+  private readonly types = new Map<string, TypeState>([[CITEXT, { constraints: false, volatileDefault: false }]]);
 
   readonly tag: string | undefined;
 
@@ -172,7 +185,7 @@ class Released {
   taint(): void {
     for (const name of this.types.keys()) {
       if (name !== CITEXT) {
-        this.types.set(name, true);
+        this.types.set(name, UNPROVEN);
       }
     }
   }
@@ -180,10 +193,18 @@ class Released {
   /** Takes the type a migration declares or changes into the model. */
   track(operation: Operation): void {
     if (operation.kind === "declares-type") {
-      this.types.set(key(operation.name), operation.ownConstraints || !this.constraintFree(operation.base));
+      this.types.set(key(operation.name), {
+        constraints: operation.ownConstraints || !this.constraintFree(operation.base),
+        volatileDefault: operation.volatileDefault ?? this.volatileDefaultOf(operation.base),
+      });
+    } else if (operation.kind === "sets-default") {
+      const state = this.types.get(key(operation.name));
+      if (state !== undefined) {
+        this.types.set(key(operation.name), { ...state, volatileDefault: operation.volatileDefault });
+      }
     } else if (operation.kind === "retypes") {
       for (const name of operation.names) {
-        this.types.set(key(name), true);
+        this.types.set(key(name), UNPROVEN);
       }
     } else if (operation.kind === "unknown" && operation.keepsTypes !== true) {
       this.taint();
@@ -198,7 +219,19 @@ class Released {
       case "unreadable":
         return false;
       case "named":
-        return this.types.get(key(type.name)) === false;
+        return this.types.get(key(type.name))?.constraints === false;
+    }
+  }
+
+  /** Whether the default a domain over the type takes from it is, or may be, one that is not a constant or a stable call. */
+  private volatileDefaultOf(type: ColumnType): boolean {
+    switch (type.kind) {
+      case "builtin":
+        return false;
+      case "unreadable":
+        return true;
+      case "named":
+        return this.types.get(key(type.name))?.volatileDefault !== false;
     }
   }
 
@@ -261,6 +294,8 @@ class Released {
         if (!this.constraintFree(operation.type)) {
           const type = operation.type.kind === "named" ? `type ${describe(operation.type.name)}` : "a type this check cannot read";
           problems.push(`adds column ${describe(operation.table)}.${operation.column} of ${type}, which is a domain with constraints or a type this check cannot show to be free of them, to a table that exists at ${at}: the addition validates every row of the table under an ACCESS EXCLUSIVE lock`);
+        } else if (!operation.suppliesValue && operation.type.kind === "named" && this.volatileDefaultOf(operation.type)) {
+          problems.push(`adds column ${describe(operation.table)}.${operation.column} of type ${describe(operation.type.name)}, a domain whose default is not a constant or a stable call, to a table that exists at ${at}: the addition rewrites the table under an ACCESS EXCLUSIVE lock, since each existing row takes the value of the default`);
         }
         return problems;
       }
@@ -299,6 +334,7 @@ class Released {
       case "unknown":
         return [(`has a statement this check cannot place (${operation.reason}), so it cannot show that the statement keeps the previous release working`)];
       case "declares-type":
+      case "sets-default":
       case "retypes":
       case "data-change":
       case "safe":
