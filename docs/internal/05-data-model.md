@@ -315,7 +315,7 @@ Index `(workspace_id, created_at DESC, id DESC)`, `(workspace_id, actor_account_
 
 **`idempotency_keys`** — RLS: A. `account_id`, `key uuid`, `operation text`, `request_hash bytea`, `status` (`in_progress` / `done`), `response_status`, `response_body jsonb`, `created_at`, `expires_at` (24 h). PK `(account_id, key)`.
 
-**`rate_limit_buckets`** — `UNLOGGED`, RLS: S. `key text PK` (bucket + IP/principal hash), `tokens real`, `updated_at timestamptz`. Lost on crash or failover by design — limits reset, nothing else breaks (doc 10 §5).
+**`rate_limit_buckets`** — `UNLOGGED` (defined in `packages/db/src/sql/`, because the Drizzle schema cannot express it), RLS: S. `key text PK` (bucket + IP/principal hash), `tokens real`, `updated_at timestamptz`. Lost on crash or failover by design — limits reset, nothing else breaks (doc 10 §5).
 
 **`pgboss.*`** — owned by pg-boss. Job payloads carry IDs, never secrets or full documents; the worker re-reads current state.
 
@@ -346,13 +346,13 @@ accounts ─┬─< account_identities
 
 | Role | Login | Owns | Can |
 |---|---|---|---|
-| `slugbase_owner` | No | Every object in `public` (and `cloud`, `console` in Cloud) | Everything; never used by a running process |
+| `slugbase_owner` | No | Every object in `public` (and `cloud`, `console` in Cloud) | Everything; never used by a running process. A member of `slugbase_system` (`INHERIT`, `SET`), so a migration can hand a function to it |
 | `slugbase_migrator` | Yes | — (member of `slugbase_owner`) | DDL; used only by `migrate` (the image entrypoint runs it before the server starts, §5.3). A managed deployment that runs `migrate` as a separate deploy step uses it only there, so its URL never reaches the running containers (Cloud: D25, Cloud doc 07 §5.5) |
 | `slugbase_app` | Yes | Nothing | `SELECT/INSERT/UPDATE/DELETE` on tenant tables (minus the column and table exclusions below), `USAGE` on `pgboss`, `EXECUTE` on §3.3 functions; **`NOBYPASSRLS`**, no `TRUNCATE`, no DDL, no `REFERENCES`, `CREATE` revoked on every schema |
 | `slugbase_system` | No | The §3.3 functions | `BYPASSRLS`; exists only as the owner of `SECURITY DEFINER` functions, so cross-tenant access happens only inside their reviewed bodies |
 | `slugbase_console_ro` (Cloud) | Yes | — | `SELECT` on the `console_mirror` views only (allowlisted columns: IDs, counts, timestamps, plan state; no emails beyond what the console PRD allows, no URLs, no titles) — Cloud doc 07 §6 |
 
-Server and worker both connect as `slugbase_app` (worker pool distinct, same role). In CE, the compose file provisions `slugbase_app` and `slugbase_migrator` through a Postgres init script (`packages/db/provision/roles.sql`, idempotent, passwords supplied as variables) and passes two URLs (`DATABASE_URL`, `DATABASE_MIGRATE_URL`). With only `DATABASE_URL` set and that role owning the database, the server refuses to start in production; `SLUGBASE_ALLOW_OWNER_CONNECTION=true` overrides it, with a warning (Q56).
+`slugbase_owner` is a member of `slugbase_system` (`WITH INHERIT TRUE, SET TRUE`): a migration creates a §3.3 function as the owner and runs `ALTER FUNCTION … OWNER TO slugbase_system`, granting `CREATE` on the schema to `slugbase_system` only for the length of that statement block. `slugbase_system` holds no privilege the owner lacks, and `BYPASSRLS` is a role attribute that membership does not pass on, so the owner does not bypass row-level security. An existing install and a managed provisioning need the same grant. Server and worker both connect as `slugbase_app` (worker pool distinct, same role). In CE, the compose file provisions `slugbase_app` and `slugbase_migrator` through a Postgres init script (`packages/db/provision/roles.sql`, idempotent, passwords supplied as variables) and passes two URLs (`DATABASE_URL`, `DATABASE_MIGRATE_URL`). With only `DATABASE_URL` set and that role owning the database, the server refuses to start in production; `SLUGBASE_ALLOW_OWNER_CONNECTION=true` overrides it, with a warning (Q56).
 
 Exclusions for `slugbase_app`: no column `SELECT` on `accounts.password_hash`, `mfa_*`; no table access to `sessions`, `oidc_login_states`, `mfa_backup_codes`, `credential_tokens`, `favicons`, `rate_limit_buckets`, `instance_state` except through functions; `SELECT` only on `instance_settings`; `INSERT`/`SELECT` only on `audit_events`; no `INSERT` on `workspace_invitations.instance_issued`.
 
@@ -370,7 +370,7 @@ SELECT set_config('app.account_id',   $1, true),
 
 ### 3.3 System operations
 
-The complete list of operations that cross the tenant or account boundary. Each is a `SECURITY DEFINER` function owned by `slugbase_system` with `SET search_path = pg_catalog, public, pg_temp` (`pg_temp` last, so the session's temporary schema, which PostgreSQL otherwise searches first for table and type names, cannot shadow an unqualified name), a narrow signature, no dynamic SQL, `EXECUTE` revoked from `PUBLIC` and granted to `slugbase_app`, and an audit or log line where noted. Every function is listed in the reviewed registry `packages/db/src/system/registry.ts`; `pnpm db:check` fails for a `SECURITY DEFINER` function that is not registered and for a registry entry without a function. Adding one is a risk-flagged change (doc 10).
+The complete list of operations that cross the tenant or account boundary. Each is a `SECURITY DEFINER` function owned by `slugbase_system` with `SET search_path = pg_catalog, public, pg_temp` (`pg_temp` last, so the session's temporary schema, which PostgreSQL otherwise searches first for table and type names, cannot shadow an unqualified name), a narrow signature, no dynamic SQL, `EXECUTE` revoked from `PUBLIC` and granted to `slugbase_app`, and an audit or log line where noted. Every function is listed in the reviewed registry `packages/db/src/system/registry.ts`; `pnpm db:check` fails for a `SECURITY DEFINER` function that is not registered and for a registry entry without a function. Adding one is a risk-flagged change (doc 10). A migration creates the function as `slugbase_owner` and hands it to `slugbase_system` as §3.1 describes.
 
 | Function | Why it must cross the boundary | Returns / does |
 |---|---|---|

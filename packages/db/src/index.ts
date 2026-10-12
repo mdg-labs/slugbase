@@ -26,3 +26,5 @@ export type {
 } from "./repositories/scoped.ts";
 export { listRepositoryMethods } from "./repositories/registry.ts";
 export type { RepositoryInput, RepositoryMethodEntry, ScopedMethod } from "./repositories/registry.ts";
+export { createRateLimitStore } from "./system/rate-limit.ts";
+export type { RateLimitStore, RateLimitStoreOptions, RateLimitTake, RateLimitTaken } from "./system/rate-limit.ts";

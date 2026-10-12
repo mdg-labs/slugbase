@@ -273,6 +273,19 @@ describe("apps/slugbase main", () => {
     expect(output).not.toContain(previous);
   });
 
+  it("builds the rate limiter before it serves, without connecting to the database to do so", async () => {
+    // `standalone` names a database host that does not exist: a limiter that connected at start-up could not.
+    const { status, output } = await runServer(standalone);
+    expect(status, output).toBe(0);
+    const messages = output
+      .split("\n")
+      .filter((line) => line.startsWith("{"))
+      .map((line) => (JSON.parse(line) as Record<string, unknown>)["msg"]);
+    const ready = messages.indexOf("Rate limiter ready");
+    expect(ready).toBeGreaterThanOrEqual(0);
+    expect(ready).toBeLessThan(messages.indexOf("Listening"));
+  });
+
   it("refuses to start with a previous key that is not 32 bytes, naming the key and never the value", () => {
     const short = Buffer.alloc(16, 4).toString("base64");
     const { status, output } = start({ ...valid, ENCRYPTION_KEY_PREVIOUS: `k0:${short}` });

@@ -39,6 +39,9 @@ export interface ConnectionRoleOptions {
 export function createDatabase(options: DatabaseOptions): Database;
 
 // @public
+export function createRateLimitStore(options: RateLimitStoreOptions): RateLimitStore;
+
+// @public
 export interface Database {
     close(): Promise<void>;
     withTenant<T>(context: TenantContext, fn: (tx: TenantTx) => Promise<T>): Promise<T>;
@@ -106,6 +109,38 @@ export function migrationLevel(options: MigrationLevelOptions): Promise<Migratio
 export interface MigrationLevelOptions {
     chains?: readonly MigrationChain[];
     url: string;
+}
+
+// @public (undocumented)
+export interface RateLimitStore {
+    close(): Promise<void>;
+    take(request: RateLimitTake): Promise<RateLimitTaken>;
+}
+
+// @public (undocumented)
+export interface RateLimitStoreOptions {
+    poolSize?: number;
+    url: string;
+}
+
+// @public
+export interface RateLimitTake {
+    // (undocumented)
+    readonly capacity: number;
+    // (undocumented)
+    readonly cost: number;
+    // (undocumented)
+    readonly key: string;
+    // (undocumented)
+    readonly refillPerSecond: number;
+}
+
+// @public (undocumented)
+export interface RateLimitTaken {
+    // (undocumented)
+    readonly allowed: boolean;
+    readonly remaining: number;
+    readonly retryAfterSeconds: number;
 }
 
 // @public

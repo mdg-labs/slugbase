@@ -1,4 +1,4 @@
 {
-  "sha256": "4d556ef68306128c265a076db077474fcc26fc069d677bf9b168340cd69fa803",
-  "migration": "20261012103429_add_sql_definitions"
+  "sha256": "378d6e6e918462acce01a926cb28d837968f2ccd9444e2905714b872ae46a458",
+  "migration": "20261012224854_add_rate_limit_buckets"
 }

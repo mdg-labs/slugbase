@@ -8,7 +8,17 @@ import { EgressPort } from '@slugbase/core';
 import { EgressRequest } from '@slugbase/core';
 import { EgressResponse } from '@slugbase/core';
 import type { ErrorReportPort } from '@slugbase/core';
+import type { RateLimitPort } from '@slugbase/core';
+import type { RateLimitStore } from '@slugbase/db';
 import type { SecretBoxPort } from '@slugbase/core';
+
+// @public
+export interface BucketLimit {
+    // (undocumented)
+    readonly capacity: number;
+    // (undocumented)
+    readonly refillPerSecond: number;
+}
 
 // @public (undocumented)
 export interface CreateEgressOptions {
@@ -20,6 +30,15 @@ export interface CreateEgressOptions {
         readonly ca?: string | Buffer;
         readonly dnsServers?: readonly string[];
     };
+}
+
+// @public
+export function createRateLimiter(options: CreateRateLimiterOptions): RateLimitPort;
+
+// @public (undocumented)
+export interface CreateRateLimiterOptions {
+    readonly limits: (bucket: string) => BucketLimit | undefined;
+    readonly store: Pick<RateLimitStore, "take">;
 }
 
 // @public
@@ -55,6 +74,16 @@ export class HttpEgress implements EgressPort {
     // (undocumented)
     request(request: EgressRequest): Promise<EgressResponse>;
 }
+
+// @public
+export class RateLimitError extends Error {
+    constructor(reason: RateLimitErrorReason);
+    // (undocumented)
+    readonly reason: RateLimitErrorReason;
+}
+
+// @public
+export type RateLimitErrorReason = "unknown_bucket" | "invalid_request" | "invalid_store_answer";
 
 // @public
 export class SecretBoxError extends Error {

@@ -88,8 +88,12 @@ WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'slugbase_system')
 ALTER ROLE slugbase_system NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION BYPASSRLS;
 
 -- Memberships: the migrator is a member of slugbase_owner, without inheriting
--- its privileges: it acts as the owner only through an explicit SET ROLE.
--- Nothing else is a member of anything.
+-- its privileges: it acts as the owner only through an explicit SET ROLE. The
+-- owner is a member of slugbase_system, inheriting it, so that a migration can
+-- hand a SECURITY DEFINER function to slugbase_system (ALTER FUNCTION ... OWNER
+-- TO) and replace it later; slugbase_system holds no privilege the owner lacks,
+-- and BYPASSRLS is an attribute of a role that membership does not pass on.
+-- No other role is a member of anything, and these two memberships are the only ones.
 DO $$
 DECLARE
   m record;
@@ -99,7 +103,10 @@ BEGIN
            pg_get_userbyid(am.member) AS member,
            pg_get_userbyid(am.grantor) AS grantor
     FROM pg_auth_members am
-    WHERE pg_get_userbyid(am.member) IN ('slugbase_owner', 'slugbase_app', 'slugbase_system')
+    WHERE pg_get_userbyid(am.member) IN ('slugbase_app', 'slugbase_system')
+       OR (pg_get_userbyid(am.member) = 'slugbase_owner'
+           AND (pg_get_userbyid(am.roleid) <> 'slugbase_system'
+                OR NOT am.inherit_option OR NOT am.set_option OR am.admin_option))
        OR (pg_get_userbyid(am.member) = 'slugbase_migrator'
            AND (pg_get_userbyid(am.roleid) <> 'slugbase_owner'
                 OR am.inherit_option OR NOT am.set_option OR am.admin_option))
@@ -108,6 +115,7 @@ BEGIN
   END LOOP;
 END $$;
 GRANT slugbase_owner TO slugbase_migrator WITH INHERIT FALSE, SET TRUE;
+GRANT slugbase_system TO slugbase_owner WITH INHERIT TRUE, SET TRUE;
 
 -- The current database: the login roles may connect, only the owner may create
 -- schemas.
