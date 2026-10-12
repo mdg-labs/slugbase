@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import "@slugbase/adapters";
 import "@slugbase/contracts";
 import { unconfigured } from "@slugbase/core";
-import "@slugbase/db";
+import { type MigrationChain } from "@slugbase/db";
 import "@slugbase/email";
 import {
   ConfigError,
@@ -14,7 +14,9 @@ import {
   isProcessType,
   loadBuildInfo,
   loadConfig,
+  runMigrations,
   type Logger,
+  type MigrateConfig,
   type ServerConfig,
   type WorkerConfig,
 } from "@slugbase/server";
@@ -67,7 +69,10 @@ const BUILD_INFO_FILE = new URL("../build-info.json", import.meta.url);
 const WEB_ROOT = fileURLToPath(new URL("../web", import.meta.url));
 
 // CE composes the unconfigured defaults of every port and no extra modules or
-// migration sets; a configured adapter replaces its default here.
+// migration sets; a configured adapter replaces its default here. The migration
+// sets are the ones `migrate` and the server's migrate-on-start both apply.
+const MIGRATIONS: readonly MigrationChain[] = [];
+
 async function runServer(config: ServerConfig): Promise<void> {
   const logger = createLogger({ level: config.LOG_LEVEL });
   const serveWeb = existsSync(WEB_ROOT);
@@ -78,12 +83,23 @@ async function runServer(config: ServerConfig): Promise<void> {
     config,
     adapters: unconfigured(),
     modules: [],
-    migrations: [],
+    migrations: MIGRATIONS,
     logger,
     buildInfo: loadBuildInfo(BUILD_INFO_FILE),
     ...(serveWeb ? { webRoot: WEB_ROOT } : {}),
   });
   exitOnSignal(await server.start(), logger);
+}
+
+// `migrate` applies the CE chain, installs the pg-boss schema and applies the
+// migration sets, as the migrator role (doc 05 section 5.3). Nothing to do is a
+// success. A failure names neither the connection string nor the password.
+async function runMigrate(config: MigrateConfig): Promise<void> {
+  const logger = createLogger({ level: config.LOG_LEVEL });
+  const { applied } = await runMigrations({ url: config.DATABASE_MIGRATE_URL, chains: MIGRATIONS });
+  logger.info(applied.length === 0 ? "The database is up to date" : "The database is migrated", {
+    applied: applied.length,
+  });
 }
 
 // The worker registers the jobs and schedules of the same modules (doc 01
@@ -110,6 +126,7 @@ async function start(): Promise<void> {
 
   let serverConfig: ServerConfig | undefined;
   let workerConfig: WorkerConfig | undefined;
+  let migrateConfig: MigrateConfig | undefined;
   let warnings: readonly string[];
   try {
     if (command === "server") {
@@ -121,7 +138,9 @@ async function start(): Promise<void> {
       workerConfig = loaded.config;
       warnings = loaded.warnings;
     } else {
-      warnings = loadConfig(command, process.env).warnings;
+      const loaded = loadConfig("migrate", process.env);
+      migrateConfig = loaded.config;
+      warnings = loaded.warnings;
     }
   } catch (error) {
     if (error instanceof ConfigError) {
@@ -141,6 +160,8 @@ async function start(): Promise<void> {
       await runServer(serverConfig);
     } else if (workerConfig !== undefined) {
       await runWorker(workerConfig);
+    } else if (migrateConfig !== undefined) {
+      await runMigrate(migrateConfig);
     }
   } catch (error) {
     log("error", error instanceof Error ? error.message : `The ${command} failed to start`, {

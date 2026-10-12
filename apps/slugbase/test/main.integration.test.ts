@@ -1,9 +1,7 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { createRequire } from "node:module";
 import { connect, createServer } from "node:net";
 import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 import { createTestDatabase, type TestDatabase } from "@slugbase/testing/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -22,19 +20,8 @@ const valid = {
   ENCRYPTION_KEY_ID: "k1",
 };
 
-interface PgBossModule {
-  getConstructionPlans(schema: string, options: { createSchema: boolean }): string;
-}
-
-// The app does not depend on pg-boss; the server package does. Until `migrate`
-// installs the pg-boss schema, the test installs it the way `migrate` will.
-async function loadPgBoss(): Promise<PgBossModule> {
-  const fromServer = createRequire(resolve(APP, "../../packages/server/package.json"));
-  return (await import(pathToFileURL(fromServer.resolve("pg-boss")).href)) as PgBossModule;
-}
-
-function databaseUrl(database: TestDatabase): string {
-  const { options } = database.app;
+function databaseUrl(database: TestDatabase, pool: "app" | "owner" = "app"): string {
+  const { options } = database[pool];
   const url = new URL("postgres://localhost");
   url.hostname = String(options.host[0]);
   url.port = String(options.port[0]);
@@ -42,6 +29,47 @@ function databaseUrl(database: TestDatabase): string {
   url.password = String(options.pass);
   url.pathname = `/${options.database}`;
   return url.href;
+}
+
+const SERVER = new URL(process.env["SLUGBASE_TEST_PG_URL"] ?? "postgres://slugbase:slugbase@127.0.0.1:54329/slugbase_dev");
+const SUPERUSER = { username: decodeURIComponent(SERVER.username), password: decodeURIComponent(SERVER.password) };
+
+// The harness clones a database from its template, and a clone has none of the template's privileges
+// on the database itself, so slugbase_owner, which `migrate` creates its bookkeeping schema as, cannot
+// create anything in it. This gives the clone the grant roles.sql gives a provisioned database.
+function allowMigrations(database: TestDatabase): void {
+  const result = spawnSync("psql", ["-X", "-v", "ON_ERROR_STOP=1", "-c", `GRANT CREATE ON DATABASE ${database.name} TO slugbase_owner`], {
+    encoding: "utf8",
+    env: {
+      PATH: process.env["PATH"] ?? "",
+      PGHOST: SERVER.hostname,
+      PGPORT: SERVER.port === "" ? "5432" : SERVER.port,
+      PGDATABASE: database.name,
+      PGUSER: SUPERUSER.username,
+      PGPASSWORD: SUPERUSER.password,
+    },
+  });
+  if (result.error !== undefined || result.status !== 0) {
+    throw new Error(`provisioning the test database with psql failed (psql must be on the PATH): ${result.stderr}`);
+  }
+}
+
+// The migrate command, as a process, against the database.
+function runMigrate(database: TestDatabase, env: Record<string, string> = {}) {
+  const result = spawnSync(process.execPath, ["src/main.ts", "migrate"], {
+    cwd: APP,
+    env: {
+      PATH: process.env["PATH"] ?? "",
+      ...valid,
+      NODE_ENV: "test",
+      DATABASE_URL: databaseUrl(database),
+      DATABASE_MIGRATE_URL: databaseUrl(database, "owner"),
+      ...env,
+    },
+    encoding: "utf8",
+    timeout: 60_000,
+  });
+  return { status: result.status, output: `${result.stdout}${result.stderr}` };
 }
 
 interface WorkerRun {
@@ -129,6 +157,7 @@ describe("apps/slugbase main worker", () => {
 
   beforeAll(async () => {
     database = await createTestDatabase();
+    allowMigrations(database);
   }, 300_000);
 
   afterAll(async () => {
@@ -144,15 +173,9 @@ describe("apps/slugbase main worker", () => {
     expect(output).not.toContain("slugbase_app_dev_only");
   }, 60_000);
 
-  it("starts pg-boss as slugbase_app, registers itself and exits 0 on SIGTERM", async () => {
-    const pgBoss = await loadPgBoss();
-    // The plans carry their own BEGIN and COMMIT, which need one session.
-    const session = await database.owner.reserve();
-    try {
-      await session.unsafe(pgBoss.getConstructionPlans("pgboss", { createSchema: false }));
-    } finally {
-      session.release();
-    }
+  it("starts pg-boss as slugbase_app once `migrate` installed it, registers itself and exits 0 on SIGTERM", async () => {
+    const migrated = runMigrate(database);
+    expect(migrated.status, migrated.output).toBe(0);
 
     const { status, output, instances } = await runWorker(database);
     expect(status, output).toBe(0);
@@ -171,5 +194,180 @@ describe("apps/slugbase main worker", () => {
     expect(observed).toMatch(/^HTTP\/1\.1 200 /);
     expect(observed).toContain("# TYPE slugbase_db_tenant_transactions_in_flight gauge");
     expect(output).toContain("Metrics listening");
+  }, 60_000);
+});
+
+interface ServerRun {
+  status: number | null;
+  output: string;
+  /** The answer to GET /ready, when the server got as far as listening. */
+  ready: string;
+}
+
+// Starts the server command and waits until it listens or exits. A listening
+// server is asked for /ready, sent SIGTERM and waited for.
+async function runServer(env: Record<string, string>): Promise<ServerRun> {
+  const port = await freePort();
+  const child = spawn(process.execPath, ["src/main.ts", "server"], {
+    cwd: APP,
+    env: { PATH: process.env["PATH"] ?? "", ...valid, PORT: String(port), ...env },
+  });
+  let output = "";
+  const exited = new Promise<number | null>((resolveExit) => {
+    child.on("close", (code) => {
+      resolveExit(code);
+    });
+  });
+  const listening = new Promise<boolean>((resolveListening) => {
+    const watch = (chunk: Buffer): void => {
+      output += chunk.toString("utf8");
+      if (output.includes('"Listening"')) {
+        resolveListening(true);
+      }
+    };
+    child.stdout.on("data", watch);
+    child.stderr.on("data", watch);
+    void exited.then(() => {
+      resolveListening(false);
+    });
+  });
+  const timer = setTimeout(() => child.kill("SIGKILL"), 30_000);
+  try {
+    let ready = "";
+    if (await listening) {
+      // Listening comes first, and the server answers /ready 503 until its migration is done.
+      for (const deadline = Date.now() + 20_000; Date.now() < deadline; ) {
+        ready = await get(port, "/ready");
+        if (ready.startsWith("HTTP/1.1 200 ")) {
+          break;
+        }
+        await new Promise((resolveWait) => setTimeout(resolveWait, 200));
+      }
+    }
+    child.kill("SIGTERM");
+    return { status: await exited, output, ready };
+  } finally {
+    clearTimeout(timer);
+    child.kill("SIGKILL");
+  }
+}
+
+describe("apps/slugbase main migrate", () => {
+  let database: TestDatabase;
+
+  beforeAll(async () => {
+    database = await createTestDatabase();
+    allowMigrations(database);
+  }, 300_000);
+
+  afterAll(async () => {
+    await database.drop();
+  }, 300_000);
+
+  it("applies the chain, installs the pg-boss schema and exits 0, and exits 0 again with nothing to do", async () => {
+    const first = runMigrate(database);
+    expect(first.status, first.output).toBe(0);
+    expect(first.output).toContain("The database is migrated");
+    const installed = await database.app<{ version: string }[]>`SELECT version FROM pgboss.version`;
+    expect(installed).toHaveLength(1);
+
+    const second = runMigrate(database);
+    expect(second.status, second.output).toBe(0);
+    expect(second.output).toContain("The database is up to date");
+  }, 60_000);
+
+  it("exits non-zero with a message that holds no connection string when the migrator cannot log in", () => {
+    const url = new URL(databaseUrl(database, "owner"));
+    url.password = "wrong-qx80";
+    const { status, output } = runMigrate(database, { DATABASE_MIGRATE_URL: url.href });
+    expect(status).toBe(1);
+    expect(output).toContain('"level":"error"');
+    expect(output).not.toContain("wrong-qx80");
+    expect(output).not.toContain(url.href);
+  }, 60_000);
+});
+
+describe("apps/slugbase main server with MIGRATE_ON_START", () => {
+  let database: TestDatabase;
+
+  beforeAll(async () => {
+    database = await createTestDatabase();
+    allowMigrations(database);
+  }, 300_000);
+
+  afterAll(async () => {
+    await database.drop();
+  }, 300_000);
+
+  it("migrates before it serves, installs the pg-boss schema, becomes ready and exits 0 on SIGTERM", async () => {
+    const before = await database.owner<{ present: boolean }[]>`SELECT to_regclass('pgboss.version') IS NOT NULL AS present`;
+    expect(before[0]?.present).toBe(false);
+
+    const { status, output, ready } = await runServer({
+      NODE_ENV: "test",
+      DATABASE_URL: databaseUrl(database),
+      DATABASE_MIGRATE_URL: databaseUrl(database, "owner"),
+    });
+    expect(status, output).toBe(0);
+    expect(ready).toMatch(/^HTTP\/1\.1 200 /);
+    expect(output).toContain("The database is migrated");
+    const after = await database.owner<{ present: boolean }[]>`SELECT to_regclass('pgboss.version') IS NOT NULL AS present`;
+    expect(after[0]?.present).toBe(true);
+  }, 60_000);
+
+  it("never migrates with MIGRATE_ON_START=false, so the pg-boss schema stays uninstalled", async () => {
+    const other = await createTestDatabase();
+    try {
+      const { status, output } = await runServer({
+        NODE_ENV: "test",
+        DATABASE_URL: databaseUrl(other),
+        MIGRATE_ON_START: "false",
+        DATABASE_MIGRATE_URL: "",
+      });
+      expect(status, output).toBe(0);
+      expect(output).not.toContain("Migrating the database");
+      const present = await other.owner<{ present: boolean }[]>`SELECT to_regclass('pgboss.version') IS NOT NULL AS present`;
+      expect(present[0]?.present).toBe(false);
+    } finally {
+      await other.drop();
+    }
+  }, 60_000);
+});
+
+describe("apps/slugbase main server as a role that is not held by row-level security", () => {
+  let database: TestDatabase;
+
+  beforeAll(async () => {
+    database = await createTestDatabase();
+  }, 300_000);
+
+  afterAll(async () => {
+    await database.drop();
+  }, 300_000);
+
+  // The superuser of the test cluster stands for the owner of the tables.
+  const production = (extra: Record<string, string> = {}): Record<string, string> => {
+    const url = new URL(databaseUrl(database));
+    url.username = SUPERUSER.username;
+    url.password = SUPERUSER.password;
+    return { DATABASE_URL: url.href, MIGRATE_ON_START: "false", DATABASE_MIGRATE_URL: "", ...extra };
+  };
+
+  it("refuses to start in production, explaining the two-role setup", async () => {
+    const { status, output } = await runServer(production());
+    expect(status, output).toBe(1);
+    expect(output).not.toContain('"Listening"');
+    expect(output).toContain("slugbase_app");
+    expect(output).toContain("slugbase_migrator");
+    expect(output).toContain("SLUGBASE_ALLOW_OWNER_CONNECTION");
+    expect(output).not.toMatch(/postgres(ql)?:\/\//);
+  }, 60_000);
+
+  it("starts with SLUGBASE_ALLOW_OWNER_CONNECTION=true and logs the warning", async () => {
+    const { status, output } = await runServer(production({ SLUGBASE_ALLOW_OWNER_CONNECTION: "true" }));
+    expect(status, output).toBe(0);
+    expect(output).toContain('"Listening"');
+    expect(output).toContain('"level":"warn"');
+    expect(output).toContain("SLUGBASE_ALLOW_OWNER_CONNECTION is set");
   }, 60_000);
 });

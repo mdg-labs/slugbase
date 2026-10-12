@@ -13,6 +13,28 @@ import { SQL } from 'drizzle-orm';
 // @public
 export const CE_CHAIN: MigrationChain;
 
+// @public (undocumented)
+export interface ConnectionRole {
+    ownsDatabase: boolean;
+    role: string;
+    superuser: boolean;
+}
+
+// @public
+export function connectionRole(options: ConnectionRoleOptions): Promise<ConnectionRole>;
+
+// @public
+export class ConnectionRoleError extends Error {
+    constructor(message: string, code?: string);
+    // (undocumented)
+    readonly code: string | undefined;
+}
+
+// @public (undocumented)
+export interface ConnectionRoleOptions {
+    url: string;
+}
+
 // @public
 export function createDatabase(options: DatabaseOptions): Database;
 

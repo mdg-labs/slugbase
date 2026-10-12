@@ -23,6 +23,8 @@ export interface ProbeOptions {
   /** The migration sets this build ships after the CE chain; read when a probe is served, once the composition is complete. */
   readonly chains: () => readonly MigrationChain[];
   readonly logger: Logger;
+  /** Whether the server is still running its own migration; `/ready` is `503` until it finishes. */
+  readonly migrating: () => boolean;
 }
 
 function journalLength(chain: MigrationChain): number {
@@ -52,7 +54,7 @@ async function withinTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
 }
 
 export function probeRoutes(options: ProbeOptions): readonly RouteBinding[] {
-  const { buildInfo, databaseUrl, chains, logger } = options;
+  const { buildInfo, databaseUrl, chains, logger, migrating } = options;
 
   const health = route(getHealth).handle(() => ({ status: 200, body: { status: "ok" } }));
 
@@ -84,7 +86,7 @@ export function probeRoutes(options: ProbeOptions): readonly RouteBinding[] {
       requestLogger.warn("The database has migrations this build does not ship", { unknownApplied: level.unknownApplied });
     }
     return {
-      status: level.applied >= level.expected ? 200 : 503,
+      status: !migrating() && level.applied >= level.expected ? 200 : 503,
       body: { database: "ok", migrations: { expected: level.expected, applied: level.applied } },
     };
   });

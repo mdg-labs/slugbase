@@ -32,8 +32,10 @@ export function recordingLogger(): Logger & { readonly entries: RecordedLog[]; r
   return { entries, requests, info: record("info"), warn: record("warn"), error: record("error") };
 }
 
+// A server under test does not migrate when it starts unless the test asks for it: the databases of most
+// tests are fakes, and the migration of the real one has tests of its own.
 export function serverConfig(overrides: Record<string, string | undefined> = {}) {
-  return loadConfig("server", productionEnv(overrides)).config;
+  return loadConfig("server", productionEnv({ MIGRATE_ON_START: "false", ...overrides })).config;
 }
 
 export function adapters(): Adapters {

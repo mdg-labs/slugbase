@@ -10,6 +10,7 @@ import type { Context } from 'hono';
 import { Database } from '@slugbase/db';
 import { EmptyResponse } from '@slugbase/contracts';
 import { JsonResponse } from '@slugbase/contracts';
+import { MigrateResult } from '@slugbase/db';
 import { MigrationChain } from '@slugbase/db';
 import { OperationDefinition } from '@slugbase/contracts';
 import { Problem } from '@slugbase/contracts';
@@ -524,6 +525,12 @@ DATABASE_MIGRATE_URL: z.ZodString;
 }>];
 
 // @public (undocumented)
+export interface MigrationRunOptions {
+    readonly chains?: readonly MigrationChain[];
+    readonly url: string;
+}
+
+// @public (undocumented)
 export const MIN_SESSION_SECRET_LENGTH = 32;
 
 // @public
@@ -708,6 +715,9 @@ export type RouteRequest<Op extends OperationDefinition> = RequestPart<Op, "para
 
 // @public
 export type RouteResult<Op extends OperationDefinition> = ResponseResult<Op["responses"]>;
+
+// @public
+export function runMigrations(options: MigrationRunOptions): Promise<MigrateResult>;
 
 // @public (undocumented)
 export interface RunningServer {

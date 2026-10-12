@@ -66,8 +66,10 @@ describe("the package entry point", () => {
     expect(Object.keys(entry).sort()).toEqual(
       [
         "CE_CHAIN",
+        "ConnectionRoleError",
         "MigrationError",
         "TenantContextError",
+        "connectionRole",
         "createDatabase",
         "defineScopedRepository",
         "listRepositoryMethods",

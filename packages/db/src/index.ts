@@ -1,3 +1,5 @@
+export { ConnectionRoleError, connectionRole } from "./connection-role.ts";
+export type { ConnectionRole, ConnectionRoleOptions } from "./connection-role.ts";
 export { CE_CHAIN, MigrationError, migrate, migrationLevel } from "./migrate.ts";
 export type {
   MigrateOptions,
