@@ -10,7 +10,7 @@ import {
 } from "../src/create-server.ts";
 import { HookResult } from "../src/hooks/index.ts";
 import { defineJob, defineSchedule } from "../src/worker/index.ts";
-import { adapters, fakeDatabase, operation, recordingLogger, serverConfig } from "./support.ts";
+import { adapters, fakeDatabase, operation, recordingLogger, serverConfig, documentFor, documentOf } from "./support.ts";
 
 const noPayload = z.object({});
 
@@ -25,6 +25,7 @@ function compose(modules: readonly ServerModule[] = [], overrides: { adapters?: 
     config: serverConfig(),
     adapters: overrides.adapters ?? adapters(),
     modules,
+    openApiDocument: documentOf(modules),
     migrations: [],
     logger,
     database,
@@ -94,6 +95,7 @@ describe("createServer", () => {
       config: serverConfig(),
       adapters: ports,
       modules: [module],
+      openApiDocument: documentFor([]),
       migrations: [],
       logger,
       database,
@@ -128,6 +130,7 @@ describe("createServer", () => {
       config: serverConfig(),
       adapters: adapters(),
       modules: [module],
+      openApiDocument: documentOf([module]),
       migrations: [given],
       logger: recordingLogger(),
       database: fakeDatabase(),
@@ -209,6 +212,7 @@ describe("createServer", () => {
           config: serverConfig(),
           adapters: adapters(),
           modules,
+          openApiDocument: documentOf(modules),
           migrations: [],
           logger: recordingLogger(),
           database,
@@ -249,6 +253,7 @@ describe("the hooks of modules", () => {
       config: serverConfig(),
       adapters: adapters(),
       modules: [probe, ...modules],
+      openApiDocument: documentOf([probe, ...modules]),
       migrations: [],
       logger: recordingLogger(),
       database: fakeDatabase(),

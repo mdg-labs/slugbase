@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { CompositionError, createServer, type RouteBinding, type ServerModule } from "../../src/create-server.ts";
 import { sanitiseOrigin } from "../../src/http/cross-site.ts";
-import { adapters, fakeDatabase, recordingLogger, serverConfig } from "../support.ts";
+import { adapters, fakeDatabase, recordingLogger, serverConfig, documentOf } from "../support.ts";
 
 // The http/cross-site suite (doc 08 section 3.5): stage 5 of the chain, exercised
 // through the mutation routes a test module registers.
@@ -76,7 +76,15 @@ function setup(challenge: { ok: boolean } = { ok: true }) {
       },
     },
   };
-  const server = createServer({ config: serverConfig(), adapters: port, modules: [module], migrations: [], logger, database: fakeDatabase() });
+  const server = createServer({
+    config: serverConfig(),
+    adapters: port,
+    modules: [module],
+    openApiDocument: documentOf([module]),
+    migrations: [],
+    logger,
+    database: fakeDatabase(),
+  });
   return { server, seen, solutions, logger };
 }
 
@@ -420,6 +428,7 @@ describe("the audience declaration of a route", () => {
         config: serverConfig(),
         adapters: adapters(),
         modules: [{ name: "declared", register: () => ({ routes: [binding] }) }],
+        openApiDocument: documentOf([{ name: "declared", register: () => ({ routes: [binding] }) }]),
         migrations: [],
         logger: recordingLogger(),
         database: fakeDatabase(),

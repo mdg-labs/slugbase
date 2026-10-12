@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { z } from "zod";
 import {
   defineOperation,
@@ -24,6 +24,13 @@ const complete = {
 describe("defineOperation types", () => {
   it("accepts a declaration with its whole policy and returns it unchanged", () => {
     expect(defineOperation(complete)).toBe(complete);
+  });
+
+  it("keeps the literal declaration, so a handler is typed from the operation's schemas", () => {
+    const declared = defineOperation({ ...complete, operationId: "getPong", auth: "member", responses: { 200: jsonResponse("ok", Pong), 404: problemResponse("missing") } });
+    expectTypeOf(declared.operationId).toEqualTypeOf<"getPong">();
+    expectTypeOf(declared.auth).toEqualTypeOf<"member">();
+    expectTypeOf(declared.responses[200].schema).toEqualTypeOf(Pong);
   });
 
   it("accepts the optional scope, entitlement and audience", () => {

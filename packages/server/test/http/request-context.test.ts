@@ -13,7 +13,7 @@ import {
 } from "../../src/http/chain.ts";
 import { createLogger } from "../../src/http/logger.ts";
 import { requestIdFrom } from "../../src/http/request-context.ts";
-import { adapters, fakeDatabase, hookDispatcher, operation, serverConfig } from "../support.ts";
+import { adapters, fakeDatabase, hookDispatcher, operation, serverConfig, documentOf } from "../support.ts";
 
 const exporter = new InMemorySpanExporter();
 
@@ -89,6 +89,7 @@ function compose(overrides: { hops?: number; logger?: Logger; modules?: readonly
     config: serverConfig({ TRUSTED_PROXY_HOPS: String(overrides.hops ?? 0) }),
     adapters: adapters(),
     modules: overrides.modules ?? [whoami],
+    openApiDocument: documentOf(overrides.modules ?? [whoami]),
     migrations: [],
     logger: overrides.logger ?? createLogger({ level: "info", destination: output }),
     database: fakeDatabase(),

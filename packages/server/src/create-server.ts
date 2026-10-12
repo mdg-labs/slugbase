@@ -13,10 +13,13 @@ import {
 } from "./http/chain.ts";
 import { createHookDispatcher, invalidHookRefusals, invalidHooks, type HookRefusals, type HookRegistration, type ServerHooks } from "./hooks/index.ts";
 import { createMetrics, startMetricsListener, type MetricsListener } from "./metrics/index.ts";
+import { loadCommittedDocument } from "./routes/committed-document.ts";
+import { checkRegistrations, type ContractDocument } from "./routes/register.ts";
 import type { JobDefinition, ScheduleDefinition } from "./worker/job.ts";
 
-export type { ChainContext, ChainEnv, MatchedRoute, RouteBinding, RouteHandler, StageName } from "./http/chain.ts";
+export type { ChainContext, ChainEnv, MatchedRoute, RouteBinding, RouteHandler, StageName, ValidatedInput } from "./http/chain.ts";
 export { CHAIN_STAGES } from "./http/chain.ts";
+export type { ContractDocument } from "./routes/register.ts";
 
 /** The structured logger the server, its modules and the core code share. */
 export interface Logger {
@@ -69,6 +72,12 @@ export interface CreateServerOptions {
   readonly logger: Logger;
   /** How long one hook may take to answer before it counts as failed; by default two seconds. */
   readonly hookTimeoutMs?: number;
+  /**
+   * The OpenAPI document every route is registered against: an operation must be
+   * in it, with the policy it declares. By default the document committed with
+   * `@slugbase/contracts`; a composition that adds operations passes the merged one.
+   */
+  readonly openApiDocument?: ContractDocument;
   /** The tenant database; by default a pool on `DATABASE_URL`, opened on first use. The server closes it on shutdown. */
   readonly database?: Database;
   /** How long a shutdown lets in-flight requests finish before cutting them (doc 01 section 3 rule 2). */
@@ -115,6 +124,9 @@ export type CompositionErrorCode =
   | "module_failed"
   | "duplicate_route"
   | "invalid_route"
+  | "missing_policy"
+  | "undocumented_operation"
+  | "policy_mismatch"
   | "duplicate_job"
   | "unknown_job"
   | "duplicate_schedule"
@@ -312,6 +324,8 @@ export function createServer(options: CreateServerOptions): Server {
   const { config, logger } = options;
   assertAdapters(options.adapters);
 
+  const openApiDocument = options.openApiDocument ?? loadCommittedDocument();
+
   const metrics = createMetrics();
   const database = options.database ?? createDatabase({ url: config.DATABASE_URL, poolSize: DEFAULT_SERVER_POOL_SIZE });
   if (options.database === undefined) {
@@ -328,6 +342,10 @@ export function createServer(options: CreateServerOptions): Server {
   let composition: Composition;
   try {
     composition = compose(options.modules, context, options.migrations);
+    const unregistrable = checkRegistrations(composition.routes, openApiDocument);
+    if (unregistrable !== undefined) {
+      throw new CompositionError(unregistrable.code, unregistrable.message);
+    }
   } catch (error) {
     void database.close();
     throw error;

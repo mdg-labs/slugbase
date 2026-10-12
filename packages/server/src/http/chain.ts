@@ -9,6 +9,7 @@ import { createCrossSiteProtection } from "./cross-site.ts";
 import { createSecurityHeaders } from "./headers.ts";
 import { failRequest, notFoundProblem, responseStage, type ResponseValidation } from "./problem.ts";
 import { createRequestContext } from "./request-context.ts";
+import { validation } from "./validation.ts";
 
 // The middleware chain of doc 01 section 4. The order is part of the security
 // model (doc 10 section 3): it is fixed here, one stage at a time, and neither a
@@ -52,6 +53,17 @@ export interface MatchedRoute {
   readonly marketingOrigin?: string;
 }
 
+/**
+ * What the validation stage parsed with the operation's schemas. A part the
+ * operation does not declare is absent; a handler receives these values, never
+ * the raw ones.
+ */
+export interface ValidatedInput {
+  readonly params?: unknown;
+  readonly query?: unknown;
+  readonly body?: unknown;
+}
+
 /** The variables the stages share through the request context. */
 export interface ChainEnv {
   Variables: {
@@ -72,6 +84,8 @@ export interface ChainEnv {
     hooks?: HookDispatcher;
     /** The route of the request, resolved before the first stage; absent when no operation matches. */
     route?: MatchedRoute;
+    /** Set by the validation stage for a matched route. */
+    input?: ValidatedInput;
   };
 }
 
@@ -226,6 +240,7 @@ export function installChain(
     "security-headers": securityHeaders.stage,
     "body-limits": bodyLimits,
     "cross-site-protection": createCrossSiteProtection({ appOrigin, challenge, logger }),
+    validation,
   };
   const requestStages = REQUEST_STAGES.map((name) => ({
     name,

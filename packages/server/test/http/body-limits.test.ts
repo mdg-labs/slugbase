@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { createServer, type ServerModule } from "../../src/create-server.ts";
 import { DEFAULT_MAX_BODY_BYTES } from "../../src/http/body-limits.ts";
-import { adapters, fakeDatabase, recordingLogger, serverConfig } from "../support.ts";
+import { adapters, fakeDatabase, recordingLogger, serverConfig, documentOf } from "../support.ts";
 
 // Stage 3 of the chain (doc 01 section 4), exercised through test routes a test
 // module registers: no product mutation exists yet.
@@ -57,6 +57,7 @@ function server() {
     config: serverConfig(),
     adapters: adapters(),
     modules: [testRoutes],
+    openApiDocument: documentOf([testRoutes]),
     migrations: [],
     logger: recordingLogger(),
     database: fakeDatabase(),
@@ -178,7 +179,8 @@ describe("the body-limits stage", () => {
 
   it("leaves a missing body to the validation stage", async () => {
     const response = await server().fetch(request("/api/v1/json", { method: "POST", headers: JSON_HEADERS }));
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({ code: "validation_failed", errors: [{ path: "", code: "invalid_type" }] });
   });
 
   it("passes well-formed JSON on, and the handler still reads the body", async () => {

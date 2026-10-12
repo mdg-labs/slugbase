@@ -115,7 +115,7 @@ export interface ComponentTypes {
 }
 
 // @public
-export function defineOperation(definition: OperationDefinition): OperationDefinition;
+export function defineOperation<const D extends OperationDefinition>(definition: D): D;
 
 // @public (undocumented)
 export interface EmptyResponse {
@@ -129,19 +129,129 @@ export interface EmptyResponse {
 export function emptyResponse(description: string): EmptyResponse;
 
 // @public (undocumented)
-export const getApiConfig: OperationDefinition;
+export const getApiConfig: {
+    readonly method: "get";
+    readonly path: "/api/config";
+    readonly operationId: "getApiConfig";
+    readonly tag: "meta";
+    readonly summary: "Bootstrap configuration for the web app";
+    readonly auth: "anonymous";
+    readonly rate: "public";
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        apiVersion: z.ZodLiteral<"v1">;
+        origin: z.ZodURL;
+        product: z.ZodObject<{
+        name: z.ZodString;
+        version: z.ZodString;
+        }, z.core.$strict>;
+        locales: z.ZodArray<z.ZodString>;
+        defaultLocale: z.ZodString;
+        docsBaseUrl: z.ZodURL;
+        features: z.ZodObject<{
+        mail: z.ZodBoolean;
+        ai: z.ZodBoolean;
+        }, z.core.$strict>;
+        }, z.core.$strict>, {
+        "Cache-Control": {
+        description: string;
+        schema: z.ZodLiteral<"public, max-age=60">;
+        };
+        }>;
+        readonly 400: ProblemResponse;
+    };
+};
 
 // @public (undocumented)
-export const getHealth: OperationDefinition;
+export const getHealth: {
+    readonly method: "get";
+    readonly path: "/health";
+    readonly operationId: "getHealth";
+    readonly tag: "meta";
+    readonly summary: "Process liveness";
+    readonly auth: "anonymous";
+    readonly rate: "none";
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        status: z.ZodLiteral<"ok">;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+    };
+};
 
 // @public (undocumented)
-export const getOpenApiDocument: OperationDefinition;
+export const getOpenApiDocument: {
+    readonly method: "get";
+    readonly path: "/api/v1/openapi.json";
+    readonly operationId: "getOpenApiDocument";
+    readonly tag: "meta";
+    readonly summary: "The OpenAPI document of this API";
+    readonly auth: "anonymous";
+    readonly rate: "public";
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        openapi: z.ZodString;
+        info: z.ZodObject<{}, z.core.$loose>;
+        paths: z.ZodObject<{}, z.core.$loose>;
+        }, z.core.$loose>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 404: ProblemResponse;
+    };
+};
 
 // @public (undocumented)
-export const getReady: OperationDefinition;
+export const getReady: {
+    readonly method: "get";
+    readonly path: "/ready";
+    readonly operationId: "getReady";
+    readonly tag: "meta";
+    readonly summary: "Readiness of the database and migrations";
+    readonly auth: "anonymous";
+    readonly rate: "none";
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        database: z.ZodEnum<{
+        ok: "ok";
+        unreachable: "unreachable";
+        }>;
+        migrations: z.ZodObject<{
+        expected: z.ZodNumber;
+        applied: z.ZodNullable<z.ZodNumber>;
+        }, z.core.$strict>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 503: JsonResponse<z.ZodObject<{
+        database: z.ZodEnum<{
+        ok: "ok";
+        unreachable: "unreachable";
+        }>;
+        migrations: z.ZodObject<{
+        expected: z.ZodNumber;
+        applied: z.ZodNullable<z.ZodNumber>;
+        }, z.core.$strict>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+    };
+};
 
 // @public (undocumented)
-export const getVersion: OperationDefinition;
+export const getVersion: {
+    readonly method: "get";
+    readonly path: "/version";
+    readonly operationId: "getVersion";
+    readonly tag: "meta";
+    readonly summary: "Build information";
+    readonly auth: "anonymous";
+    readonly rate: "none";
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        name: z.ZodString;
+        version: z.ZodString;
+        commit: z.ZodString;
+        builtAt: z.ZodString;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+    };
+};
 
 // @public (undocumented)
 export const HealthStatusSchema: z.ZodObject<{
@@ -154,25 +264,25 @@ export const HTTP_METHODS: readonly ["get", "post", "put", "patch", "delete"];
 // @public (undocumented)
 export type HttpMethod = (typeof HTTP_METHODS)[number];
 
-// @public (undocumented)
-export interface JsonResponse {
+// @public
+export interface JsonResponse<S extends z.ZodType = z.ZodType, H extends ResponseHeaders = ResponseHeaders> {
     // (undocumented)
     readonly description: string;
     // (undocumented)
-    readonly headers?: Readonly<Record<string, ResponseHeader>>;
+    readonly headers?: H;
     // (undocumented)
     readonly kind: "json";
     // (undocumented)
-    readonly schema: z.ZodType;
+    readonly schema: S;
 }
 
 // @public
-export function jsonResponse(description: string, schema: z.ZodType, options?: JsonResponseOptions): JsonResponse;
+export function jsonResponse<S extends z.ZodType, H extends ResponseHeaders = ResponseHeaders>(description: string, schema: S, options?: JsonResponseOptions<H>): JsonResponse<S, H>;
 
 // @public (undocumented)
-export interface JsonResponseOptions {
+export interface JsonResponseOptions<H extends ResponseHeaders = ResponseHeaders> {
     // (undocumented)
-    readonly headers?: Readonly<Record<string, ResponseHeader>>;
+    readonly headers?: H;
 }
 
 // @public
@@ -756,6 +866,9 @@ export interface ResponseHeader {
     // (undocumented)
     readonly schema: z.ZodType;
 }
+
+// @public (undocumented)
+export type ResponseHeaders = Readonly<Record<string, ResponseHeader>>;
 
 // @public
 export const TOKEN_SCOPES: readonly ["read", "write"];

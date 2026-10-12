@@ -13,7 +13,7 @@ import { z } from "zod";
 import { ProblemError } from "../../src/index.ts";
 import { createServer, type RouteBinding, type ServerModule } from "../../src/create-server.ts";
 import { describeError, mapError, problemDocument } from "../../src/http/problem.ts";
-import { fakeDatabase, recordingLogger, serverConfig } from "../support.ts";
+import { fakeDatabase, recordingLogger, serverConfig, documentOf } from "../support.ts";
 
 interface Captured {
   readonly error: unknown;
@@ -63,6 +63,7 @@ function serve(
     config: serverConfig(options.env === undefined ? {} : { NODE_ENV: options.env }),
     adapters: { ...unconfigured(), errors: options.port ?? errors.port },
     modules: [module],
+    openApiDocument: documentOf([module]),
     migrations: [],
     logger,
     database: fakeDatabase(),
@@ -281,6 +282,7 @@ describe("the server's problem responses", () => {
       config: serverConfig(),
       adapters: unconfigured(),
       modules: [{ name: "w", register: () => ({ routes: [{ operation: widget, handler: () => Promise.reject(new Error("x")) }] }) }],
+      openApiDocument: documentOf([{ name: "w", register: () => ({ routes: [{ operation: widget, handler: () => Promise.reject(new Error("x")) }] }) }]),
       migrations: [],
       logger,
       database: fakeDatabase(),

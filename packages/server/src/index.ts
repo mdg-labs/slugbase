@@ -23,11 +23,23 @@ export type {
 export { createLogger } from "./http/logger.ts";
 export type { LogDestination, LoggerOptions } from "./http/logger.ts";
 export { ProblemError } from "./http/problem.ts";
+export { route } from "./routes/register.ts";
+export type {
+  RouteHandle,
+  RouteImplementation,
+  RouteOptions,
+  RouteRequest,
+  RouteResult,
+  RequestPart,
+  ResponseHeadersOf,
+  ResponseResult,
+} from "./routes/register.ts";
 export type { ProblemErrorOptions, ProblemFieldError } from "./http/problem.ts";
 export type {
   ChainContext,
   ChainEnv,
   CompositionErrorCode,
+  ContractDocument,
   CreateServerOptions,
   Logger,
   MatchedRoute,
@@ -40,5 +52,6 @@ export type {
   ServerModule,
   StageName,
   StartOptions,
+  ValidatedInput,
 } from "./create-server.ts";
 export * from "./worker/index.ts";

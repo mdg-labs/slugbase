@@ -8,8 +8,10 @@ import type { Adapters } from '@slugbase/core';
 import type { ClientErrorReportRequest } from '@slugbase/core';
 import type { Context } from 'hono';
 import { Database } from '@slugbase/db';
+import { EmptyResponse } from '@slugbase/contracts';
+import { JsonResponse } from '@slugbase/contracts';
 import { MigrationChain } from '@slugbase/db';
-import type { OperationDefinition } from '@slugbase/contracts';
+import { OperationDefinition } from '@slugbase/contracts';
 import { Problem } from '@slugbase/contracts';
 import { ProblemCode } from '@slugbase/contracts';
 import { z } from 'zod';
@@ -34,6 +36,7 @@ export interface ChainEnv {
         workspaceId?: string;
         hooks?: HookDispatcher;
         route?: MatchedRoute;
+        input?: ValidatedInput;
     };
 }
 
@@ -48,7 +51,7 @@ export class CompositionError extends Error {
 }
 
 // @public (undocumented)
-export type CompositionErrorCode = "missing_adapter" | "invalid_module" | "duplicate_module" | "invalid_hook" | "module_failed" | "duplicate_route" | "invalid_route" | "duplicate_job" | "unknown_job" | "duplicate_schedule" | "invalid_schedule";
+export type CompositionErrorCode = "missing_adapter" | "invalid_module" | "duplicate_module" | "invalid_hook" | "module_failed" | "duplicate_route" | "invalid_route" | "missing_policy" | "undocumented_operation" | "policy_mismatch" | "duplicate_job" | "unknown_job" | "duplicate_schedule" | "invalid_schedule";
 
 // @public (undocumented)
 export interface ConfigByProcess {
@@ -76,6 +79,12 @@ export interface ConfigIssue {
 }
 
 // @public
+export interface ContractDocument {
+    // (undocumented)
+    readonly paths: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
+}
+
+// @public
 export function createLogger(input: LoggerOptions): Logger;
 
 // @public
@@ -94,6 +103,7 @@ export interface CreateServerOptions {
     readonly migrations: readonly MigrationChain[];
     // (undocumented)
     readonly modules: readonly ServerModule[];
+    readonly openApiDocument?: ContractDocument;
     readonly shutdownTimeoutMs?: number;
 }
 
@@ -552,6 +562,13 @@ export interface RegistrationPolicyInput {
 export type RegistrationRefusalCode = typeof REGISTRATION_REFUSAL_CODE;
 
 // @public
+export type RequestPart<Op extends OperationDefinition, K extends "params" | "query" | "body"> = Op["request"] extends {
+    readonly [P in K]: infer S extends z.ZodType;
+} ? {
+    readonly [P in K]: z.output<S>;
+} : unknown;
+
+// @public
 export function requireAllOrNone(keys: readonly string[], values: Readonly<Record<string, unknown>>, context: RefineContext): void;
 
 // @public (undocumented)
@@ -567,12 +584,38 @@ export interface ResolvedRetryPolicy {
 }
 
 // @public
+export type ResponseHeadersOf<H> = keyof H extends never ? {
+    readonly headers?: Readonly<Record<string, string>>;
+} : string extends keyof H ? {
+    readonly headers?: Readonly<Record<string, string>>;
+} : {
+    readonly headers: {
+        readonly [K in keyof H & string]: string;
+    };
+};
+
+// @public
+export type ResponseResult<R> = {
+    [S in keyof R & number]: R[S] extends JsonResponse<infer Schema, infer H> ? {
+        readonly status: S;
+        readonly body: z.input<Schema>;
+    } & ResponseHeadersOf<H> : R[S] extends EmptyResponse ? {
+        readonly status: S;
+        readonly body?: never;
+        readonly headers?: Readonly<Record<string, string>>;
+    } : never;
+}[keyof R & number];
+
+// @public
 export interface RetryPolicy {
     readonly backoff?: boolean;
     readonly delaySeconds?: number;
     readonly limit?: number;
     readonly maxDelaySeconds?: number;
 }
+
+// @public
+export function route<Op extends OperationDefinition>(operation: Op): RouteHandle<Op>;
 
 // @public
 export interface RouteBinding {
@@ -585,7 +628,25 @@ export interface RouteBinding {
 }
 
 // @public
+export interface RouteHandle<Op extends OperationDefinition> {
+    // (undocumented)
+    handle(implementation: RouteImplementation<Op>, options?: RouteOptions): RouteBinding;
+}
+
+// @public
 export type RouteHandler = (context: ChainContext, route: MatchedRoute) => Response | Promise<Response>;
+
+// @public (undocumented)
+export type RouteImplementation<Op extends OperationDefinition> = (request: RouteRequest<Op>, context: ChainContext) => RouteResult<Op> | Promise<RouteResult<Op>>;
+
+// @public (undocumented)
+export type RouteOptions = Pick<RouteBinding, "acceptsMultipart" | "marketingOrigin">;
+
+// @public
+export type RouteRequest<Op extends OperationDefinition> = RequestPart<Op, "params"> & RequestPart<Op, "query"> & RequestPart<Op, "body">;
+
+// @public
+export type RouteResult<Op extends OperationDefinition> = ResponseResult<Op["responses"]>;
 
 // @public (undocumented)
 export interface RunningServer {
@@ -773,6 +834,16 @@ export type StageName = (typeof CHAIN_STAGES)[number];
 export interface StartOptions {
     readonly metricsPort?: number;
     readonly port?: number;
+}
+
+// @public
+export interface ValidatedInput {
+    // (undocumented)
+    readonly body?: unknown;
+    // (undocumented)
+    readonly params?: unknown;
+    // (undocumented)
+    readonly query?: unknown;
 }
 
 // @public (undocumented)

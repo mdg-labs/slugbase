@@ -1,7 +1,7 @@
 import { connect, type Socket } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 import { createServer, type RunningServer, type ServerModule } from "../src/create-server.ts";
-import { adapters, fakeDatabase, operation, recordingLogger, serverConfig } from "./support.ts";
+import { adapters, fakeDatabase, operation, recordingLogger, serverConfig, documentOf } from "./support.ts";
 
 // The listener over real sockets (doc 01 section 3 rule 2). The client is a raw
 // socket: the repository allows no HTTP client outside the egress adapter.
@@ -109,6 +109,7 @@ async function start(shutdownTimeoutMs: number, modules: ServerModule[]) {
     config: serverConfig(),
     adapters: adapters(),
     modules,
+    openApiDocument: documentOf(modules),
     migrations: [],
     logger,
     database,
@@ -220,6 +221,7 @@ describe("the listener", () => {
       config: serverConfig(),
       adapters: adapters(),
       modules: [],
+      openApiDocument: documentOf([]),
       migrations: [],
       logger: recordingLogger(),
       database: fakeDatabase(),

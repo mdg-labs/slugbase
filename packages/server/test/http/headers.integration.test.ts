@@ -2,7 +2,7 @@ import { connect } from "node:net";
 import { getApiConfig, getHealth, getReady } from "@slugbase/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { createServer, type RunningServer, type ServerModule } from "../../src/create-server.ts";
-import { adapters, fakeDatabase, operation, recordingLogger, serverConfig } from "../support.ts";
+import { adapters, fakeDatabase, operation, recordingLogger, serverConfig, documentOf } from "../support.ts";
 import { expectSecurityHeaders } from "./headers-support.ts";
 
 // The security headers over a real socket (doc 01 section 4 step 2, doc 08
@@ -108,6 +108,7 @@ async function listen(env: Record<string, string | undefined> = {}): Promise<num
     config: serverConfig(env),
     adapters: adapters(),
     modules: [routes],
+    openApiDocument: documentOf([routes]),
     migrations: [],
     logger: recordingLogger(),
     database: fakeDatabase(),

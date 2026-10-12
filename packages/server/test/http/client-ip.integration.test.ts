@@ -1,7 +1,7 @@
 import { connect } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 import { createServer, type RunningServer, type ServerModule } from "../../src/create-server.ts";
-import { adapters, fakeDatabase, operation, recordingLogger, serverConfig } from "../support.ts";
+import { adapters, fakeDatabase, operation, recordingLogger, serverConfig, documentOf } from "../support.ts";
 
 // The client IP and the request ID over a real socket (doc 10 T9): the address
 // the handler sees comes from the connection, or from the trusted
@@ -47,6 +47,7 @@ async function listen(hops: number): Promise<number> {
     config: serverConfig({ TRUSTED_PROXY_HOPS: String(hops) }),
     adapters: adapters(),
     modules: [whoami],
+    openApiDocument: documentOf([whoami]),
     migrations: [],
     logger: recordingLogger(),
     database: fakeDatabase(),

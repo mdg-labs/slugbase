@@ -77,6 +77,9 @@ const MAPPED_DETAILS = {
   ai_unavailable: "AI suggestions are not available on this instance.",
 } as const satisfies Partial<Record<ProblemCode, string>>;
 
+/** The `detail` of a `validation_failed` problem; the fields are in `errors[]`. */
+export const VALIDATION_FAILED_DETAIL = MAPPED_DETAILS.validation_failed;
+
 export type ProblemFieldError = NonNullable<Problem["errors"]>[number];
 
 export interface ProblemErrorOptions {
@@ -125,7 +128,8 @@ function fieldPath(path: readonly PropertyKey[]): string {
   return path.map((segment) => String(segment)).join(".");
 }
 
-function fieldErrors(error: z.core.$ZodError): ProblemFieldError[] {
+/** The `errors[]` of a failed parse: where each issue is and its code, never the value that failed. */
+export function fieldErrors(error: z.core.$ZodError): ProblemFieldError[] {
   return error.issues.flatMap((issue): ProblemFieldError[] => {
     if (issue.code === "unrecognized_keys") {
       return issue.keys.map((key) => ({ path: fieldPath([...issue.path, key]), code: issue.code }));
@@ -140,7 +144,7 @@ export function mapError(error: unknown): MappedProblem {
     return mapped(error.code, error.detail, error.errors);
   }
   if (error instanceof z.core.$ZodError) {
-    return mapped("validation_failed", MAPPED_DETAILS.validation_failed, fieldErrors(error));
+    return mapped("validation_failed", VALIDATION_FAILED_DETAIL, fieldErrors(error));
   }
   if (error instanceof PortUnavailable) {
     const code = error.code;
