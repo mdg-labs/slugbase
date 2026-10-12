@@ -1,5 +1,5 @@
 import { connect } from "node:net";
-import { getApiConfig } from "@slugbase/contracts";
+import type { Adapters } from "@slugbase/core";
 import { useTestDatabase } from "@slugbase/testing/db";
 import { afterEach, describe, expect, it } from "vitest";
 import { createServer, type RunningServer, type ServerModule } from "../../src/create-server.ts";
@@ -24,16 +24,6 @@ function appUrl(): string {
   url.pathname = `/${options.database}`;
   return url.href;
 }
-
-const API_CONFIG = {
-  apiVersion: "v1",
-  origin: "https://bookmarks.example.com",
-  product: { name: "SlugBase", version: "0.0.0" },
-  locales: ["en", "de"],
-  defaultLocale: "en",
-  docsBaseUrl: "https://slugbase.app/docs",
-  features: { mail: false, ai: false },
-};
 
 const routes: ServerModule = {
   name: "headers-fixture",
@@ -67,15 +57,6 @@ const routes: ServerModule = {
       {
         operation: operation("get", "/api/v1/mismatch", "mismatch"),
         handler: () => Response.json({}, { status: 201 }),
-      },
-      {
-        operation: getApiConfig,
-        handler: (context) => {
-          if (context.req.header("x-test-mode") === "fail") {
-            throw new Error("config failed");
-          }
-          return Response.json(API_CONFIG);
-        },
       },
     ],
   }),
@@ -113,10 +94,10 @@ afterEach(async () => {
   await Promise.all(running.splice(0).map((server) => server.shutdown()));
 });
 
-async function listen(env: Record<string, string | undefined> = {}): Promise<number> {
+async function listen(env: Record<string, string | undefined> = {}, ports: Adapters = adapters()): Promise<number> {
   const server = createServer({
     config: serverConfig({ NODE_ENV: "test", DATABASE_URL: appUrl(), ...env }),
-    adapters: adapters(),
+    adapters: ports,
     modules: [routes],
     openApiDocument: documentOf([routes]),
     migrations: [],
@@ -166,8 +147,21 @@ describe("the cache policy an operation declares", () => {
   });
 
   it("does not make an error answer of that operation cacheable", async () => {
-    const port = await listen();
-    const failed = await get(port, "/api/config", { "X-Test-Mode": "fail" });
+    // The port reports itself available when the server is composed and fails when the config is built.
+    const reads = { count: 0 };
+    const failing = Object.create(adapters().mail, {
+      available: {
+        get: (): boolean => {
+          reads.count += 1;
+          if (reads.count > 1) {
+            throw new Error("config failed");
+          }
+          return false;
+        },
+      },
+    }) as Adapters["mail"];
+    const port = await listen({}, { ...adapters(), mail: failing });
+    const failed = await get(port, "/api/config");
     expect(failed.status).toBe(500);
     expectSecurityHeaders(failed.headers, { https: true });
     expect(failed.headers.get("cache-control")).toBe(NO_STORE);

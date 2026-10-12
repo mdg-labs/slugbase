@@ -10,13 +10,20 @@ import {
   RouteTable,
   installChain,
   type ChainEnv,
+  type ChainContext,
   type RouteBinding,
+  type StageImplementations,
   type StageName,
 } from "./http/chain.ts";
 import { createHookDispatcher, invalidHookRefusals, invalidHooks, type HookRefusals, type HookRegistration, type ServerHooks } from "./hooks/index.ts";
+import { responseStage } from "./http/problem.ts";
+import { validation } from "./http/validation.ts";
 import { createMetrics, startMetricsListener, type MetricsListener } from "./metrics/index.ts";
 import { loadCommittedDocument } from "./routes/committed-document.ts";
 import { probeRoutes } from "./routes/health.ts";
+import { apiConfigRoute } from "./routes/meta/config.ts";
+import { apiDocs } from "./routes/meta/docs.ts";
+import { isOpenApiDocument, openApiRoute } from "./routes/meta/openapi.ts";
 import { checkRegistrations, type ContractDocument } from "./routes/register.ts";
 import type { JobDefinition, ScheduleDefinition } from "./worker/job.ts";
 
@@ -333,6 +340,9 @@ export function compose(
   return { routes, jobs, schedules, migrations: chains, authenticators, hooks };
 }
 
+/** Answers a request no operation matches, or leaves it to the next handler by returning undefined. */
+type Unrouted = (context: ChainContext) => Response | Promise<Response | undefined> | undefined;
+
 function canCutConnections(server: ServerType): server is ServerType & { closeAllConnections(): void; closeIdleConnections(): void } {
   return "closeAllConnections" in server && "closeIdleConnections" in server;
 }
@@ -349,28 +359,32 @@ export function createServer(options: CreateServerOptions): Server {
   const committedDocument = loadCommittedDocument();
   const openApiDocument = options.openApiDocument ?? committedDocument;
 
+  const adapters = Object.freeze({ ...options.adapters });
+
+  // What the server serves itself, built before the pool is opened because reading its files can fail.
+  // The probes read the migration sets of the finished composition, which the probes themselves are part of.
+  let migrationSets: readonly MigrationChain[] = options.migrations;
+  const buildInfo = options.buildInfo ?? DEVELOPMENT_BUILD_INFO;
+  const builtInRoutes = [
+    ...probeRoutes({ buildInfo, databaseUrl: config.DATABASE_URL, chains: () => migrationSets, logger }),
+    apiConfigRoute({ config, buildInfo, adapters }),
+    openApiRoute({ enabled: config.API_DOCS_ENABLED, document: options.openApiDocument }),
+  ];
+  const builtIn: ServerModule = { name: "@slugbase/server", register: () => ({ routes: builtInRoutes }) };
+  // Requests no operation matches: the paths served as files rather than as operations.
+  const unrouted: readonly Unrouted[] = config.API_DOCS_ENABLED ? [apiDocs()] : [];
+
   const metrics = createMetrics();
   const database = options.database ?? createDatabase({ url: config.DATABASE_URL, poolSize: DEFAULT_SERVER_POOL_SIZE });
   if (options.database === undefined) {
     metrics.setPoolSize(DEFAULT_SERVER_POOL_SIZE);
   }
-  const adapters = Object.freeze({ ...options.adapters });
   const context: ModuleContext = Object.freeze({
     config,
     logger,
     adapters,
     withTenant: metrics.instrumentTenant(database.withTenant.bind(database)),
   });
-
-  // The probes read the migration sets of the finished composition, which the probes themselves are part of.
-  let migrationSets: readonly MigrationChain[] = options.migrations;
-  const builtInRoutes = probeRoutes({
-    buildInfo: options.buildInfo ?? DEVELOPMENT_BUILD_INFO,
-    databaseUrl: config.DATABASE_URL,
-    chains: () => migrationSets,
-    logger,
-  });
-  const builtIn: ServerModule = { name: "@slugbase/server", register: () => ({ routes: builtInRoutes }) };
 
   let composition: Composition;
   try {
@@ -393,6 +407,28 @@ export function createServer(options: CreateServerOptions): Server {
     throw error;
   }
 
+  const responseValidation = config.NODE_ENV === "production" ? "strip" : "throw";
+  const validateResponse = responseStage(responseValidation);
+  const chainStages: StageImplementations = {
+    // An unmatched request has nothing to validate or authorize, so the stage that
+    // precedes the handler is where a file is answered: every earlier stage has run,
+    // and the response stages still see the answer.
+    validation: async (context, next) => {
+      if (context.get("route") === undefined) {
+        for (const serve of unrouted) {
+          const response = await serve(context);
+          if (response !== undefined) {
+            return response;
+          }
+        }
+      }
+      return validation(context, next);
+    },
+    // The committed document is sent as stored; checking it must not re-serialise it.
+    response: (context) =>
+      isOpenApiDocument(context.get("route")?.operation.operationId, context.res.status) ? undefined : validateResponse(context),
+  };
+
   const app = new Hono<ChainEnv>();
   const stages = installChain(app, {
     logger,
@@ -410,9 +446,9 @@ export function createServer(options: CreateServerOptions): Server {
     authenticators: composition.authenticators,
     tenantResolver: adapters.tenantResolver,
     withTenant: context.withTenant,
-    responseValidation: config.NODE_ENV === "production" ? "strip" : "throw",
+    responseValidation,
     metrics,
-  });
+  }, chainStages);
   const shutdownTimeoutMs = options.shutdownTimeoutMs ?? DEFAULT_SHUTDOWN_TIMEOUT_MS;
 
   return {
