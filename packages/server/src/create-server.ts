@@ -25,6 +25,7 @@ import { apiConfigRoute } from "./routes/meta/config.ts";
 import { apiDocs } from "./routes/meta/docs.ts";
 import { isOpenApiDocument, openApiRoute } from "./routes/meta/openapi.ts";
 import { checkRegistrations, type ContractDocument } from "./routes/register.ts";
+import { WebRootError, serveWebRoot } from "./routes/static.ts";
 import type { JobDefinition, ScheduleDefinition } from "./worker/job.ts";
 
 export type { ChainContext, ChainEnv, MatchedRoute, RouteBinding, RouteHandler, StageName, ValidatedInput } from "./http/chain.ts";
@@ -104,6 +105,12 @@ export interface CreateServerOptions {
   readonly openApiDocument?: ContractDocument;
   /** What `GET /version` reports; by default a development run. The composition root reads it from the build-info file with `loadBuildInfo`. */
   readonly buildInfo?: BuildInfo;
+  /**
+   * The directory of the built web app, passed in by the composition root. It is served as
+   * files, with `index.html` for a browser navigation to a path the app owns; without it the
+   * server serves no app. A directory that does not exist or has no `index.html` refuses the start.
+   */
+  readonly webRoot?: string;
   /** The tenant database; by default a pool on `DATABASE_URL`, opened on first use. The server closes it on shutdown. */
   readonly database?: Database;
   /** How long a shutdown lets in-flight requests finish before cutting them (doc 01 section 3 rule 2). */
@@ -150,6 +157,7 @@ export type CompositionErrorCode =
   | "module_failed"
   | "duplicate_route"
   | "invalid_route"
+  | "invalid_web_root"
   | "missing_policy"
   | "undocumented_operation"
   | "policy_mismatch"
@@ -372,7 +380,7 @@ export function createServer(options: CreateServerOptions): Server {
   ];
   const builtIn: ServerModule = { name: "@slugbase/server", register: () => ({ routes: builtInRoutes }) };
   // Requests no operation matches: the paths served as files rather than as operations.
-  const unrouted: readonly Unrouted[] = config.API_DOCS_ENABLED ? [apiDocs()] : [];
+  const docs: readonly Unrouted[] = config.API_DOCS_ENABLED ? [apiDocs()] : [];
 
   const metrics = createMetrics();
   const database = options.database ?? createDatabase({ url: config.DATABASE_URL, poolSize: DEFAULT_SERVER_POOL_SIZE });
@@ -387,7 +395,15 @@ export function createServer(options: CreateServerOptions): Server {
   });
 
   let composition: Composition;
+  let webFiles: Unrouted | undefined;
   try {
+    if (options.webRoot !== undefined) {
+      try {
+        webFiles = serveWebRoot(options.webRoot);
+      } catch (error) {
+        throw error instanceof WebRootError ? new CompositionError("invalid_web_root", error.message) : error;
+      }
+    }
     composition = compose([builtIn, ...options.modules], context, options.migrations);
     migrationSets = composition.migrations;
     // The built-in routes are checked against the document committed with the contracts, whatever
@@ -407,6 +423,8 @@ export function createServer(options: CreateServerOptions): Server {
     throw error;
   }
 
+  // The reference first, so the app never answers for it.
+  const unrouted: readonly Unrouted[] = webFiles === undefined ? docs : [...docs, webFiles];
   const responseValidation = config.NODE_ENV === "production" ? "strip" : "throw";
   const validateResponse = responseStage(responseValidation);
   const chainStages: StageImplementations = {

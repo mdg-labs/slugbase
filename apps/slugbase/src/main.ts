@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import "@slugbase/adapters";
 import "@slugbase/contracts";
 import { unconfigured } from "@slugbase/core";
@@ -59,10 +61,19 @@ function exitOnSignal(running: { shutdown(): Promise<void> }, logger: Logger): v
 // The image build writes the file next to src/ and dist/; a checkout without it is a development run.
 const BUILD_INFO_FILE = new URL("../build-info.json", import.meta.url);
 
+// The image build puts the built web app next to src/ and dist/ too. A checkout
+// without a web build serves the API only; a directory that is there but broken
+// refuses the start.
+const WEB_ROOT = fileURLToPath(new URL("../web", import.meta.url));
+
 // CE composes the unconfigured defaults of every port and no extra modules or
 // migration sets; a configured adapter replaces its default here.
 async function runServer(config: ServerConfig): Promise<void> {
   const logger = createLogger({ level: config.LOG_LEVEL });
+  const serveWeb = existsSync(WEB_ROOT);
+  if (!serveWeb) {
+    logger.warn("There is no web build; only the API is served", { webRoot: WEB_ROOT });
+  }
   const server = createServer({
     config,
     adapters: unconfigured(),
@@ -70,6 +81,7 @@ async function runServer(config: ServerConfig): Promise<void> {
     migrations: [],
     logger,
     buildInfo: loadBuildInfo(BUILD_INFO_FILE),
+    ...(serveWeb ? { webRoot: WEB_ROOT } : {}),
   });
   exitOnSignal(await server.start(), logger);
 }

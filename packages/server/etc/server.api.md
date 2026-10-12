@@ -79,7 +79,7 @@ export class CompositionError extends Error {
 }
 
 // @public (undocumented)
-export type CompositionErrorCode = "missing_adapter" | "invalid_module" | "duplicate_module" | "invalid_hook" | "module_failed" | "duplicate_route" | "invalid_route" | "missing_policy" | "undocumented_operation" | "policy_mismatch" | "duplicate_job" | "unknown_job" | "duplicate_schedule" | "invalid_schedule";
+export type CompositionErrorCode = "missing_adapter" | "invalid_module" | "duplicate_module" | "invalid_hook" | "module_failed" | "duplicate_route" | "invalid_route" | "invalid_web_root" | "missing_policy" | "undocumented_operation" | "policy_mismatch" | "duplicate_job" | "unknown_job" | "duplicate_schedule" | "invalid_schedule";
 
 // @public (undocumented)
 export interface ConfigByProcess {
@@ -142,6 +142,7 @@ export interface CreateServerOptions {
     readonly modules: readonly ServerModule[];
     readonly openApiDocument?: ContractDocument;
     readonly shutdownTimeoutMs?: number;
+    readonly webRoot?: string;
 }
 
 // @public
