@@ -19,13 +19,15 @@ export type Operation =
   | { kind: "rename-table"; table: TableName; to: TableName }
   | { kind: "set-schema"; table: TableName; to: TableName }
   | { kind: "rename-column"; table: TableName; column: string; to: string }
-  | { kind: "add-column"; table: TableName; column: string; notNullWithoutDefault: boolean }
+  | { kind: "add-column"; table: TableName; column: string; notNullWithoutDefault: boolean; rewritesTable: boolean }
   | { kind: "alter-column-type"; table: TableName; column: string }
   | { kind: "set-not-null"; table: TableName; column: string }
   | { kind: "drop-default"; table: TableName; column: string }
   | { kind: "create-index"; table: TableName; concurrently: boolean }
   | { kind: "add-validated-constraint"; table: TableName }
   | { kind: "add-primary-key-using-index"; table: TableName }
+  | { kind: "revoke"; tables: TableName[] | undefined }
+  | { kind: "data-change"; statement: string }
   | { kind: "safe" }
   | { kind: "unknown"; reason: string };
 
@@ -305,17 +307,94 @@ export function analyseStatement(statement: string): AnalysedStatement {
     operations = drop(cursor);
   } else if (verb?.kind === "word" && verb.text === "create") {
     operations = create(cursor);
-  } else if (verb?.kind === "word" && (verb.text === "grant" || verb.text === "revoke" || verb.text === "comment")) {
-    operations = [{ kind: "safe" }];
+  } else if (verb?.kind === "word" && verb.text === "grant") {
+    operations = grant(cursor);
+  } else if (verb?.kind === "word" && verb.text === "revoke") {
+    operations = revoke(cursor);
+  } else if (verb?.kind === "word" && verb.text === "comment") {
+    operations = comment(cursor);
   } else {
     const shown = verb === undefined ? "nothing" : verb.text;
     operations = unknown(`starts with ${shown}, which this check does not read`);
+  }
+  if (operations.some((operation) => operation.kind === "unknown")) {
+    const statementKind = dataChangeOf(tokens);
+    if (statementKind !== undefined) {
+      return { text, operations: [{ kind: "data-change", statement: statementKind }] };
+    }
   }
   const call = firstUnknownCall(tokens);
   if (call !== undefined && !operations.some((operation) => operation.kind === "unknown")) {
     operations = [...operations, ...unknown(`calls ${call}, which this check does not know to be safe`)];
   }
   return { text, operations };
+}
+
+/**
+ * The data-changing statement a statement is or holds where the reader can see it: its own
+ * verb (INSERT, UPDATE, DELETE, TRUNCATE, MERGE, COPY ... FROM), or one of INSERT INTO,
+ * DELETE FROM, MERGE INTO and UPDATE <table> SET nested in it (a CTE, a CREATE TABLE ... AS
+ * query, the query of a COPY). A statement inside a string body (DO, a function) is not seen.
+ */
+function dataChangeOf(tokens: readonly Token[]): string | undefined {
+  const verb = tokens[0];
+  if (verb?.kind === "word") {
+    if (verb.text === "insert" || verb.text === "update" || verb.text === "delete" || verb.text === "truncate" || verb.text === "merge") {
+      return verb.text.toUpperCase();
+    }
+    if (verb.text === "copy" && copiesFrom(tokens)) {
+      return "COPY";
+    }
+  }
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token?.kind !== "word") {
+      continue;
+    }
+    const next = tokens[index + 1];
+    if (
+      (token.text === "insert" && isWord(next, "into")) ||
+      (token.text === "delete" && isWord(next, "from")) ||
+      (token.text === "merge" && isWord(next, "into")) ||
+      (token.text === "update" && !isWord(tokens[index - 1], "on") && updatesTable(tokens, index + 1))
+    ) {
+      return token.text.toUpperCase();
+    }
+  }
+  return undefined;
+}
+
+/** Whether a COPY statement has a FROM outside parentheses: `COPY t FROM`, not `COPY (query) TO`. */
+function copiesFrom(tokens: readonly Token[]): boolean {
+  let depth = 0;
+  for (const token of tokens) {
+    if (token.kind === "punct" && token.text === "(") {
+      depth += 1;
+    } else if (token.kind === "punct" && token.text === ")") {
+      depth -= 1;
+    } else if (depth === 0 && token.kind === "word" && token.text === "from") {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Whether the tokens from `start` read `[ONLY] name[.name] [*] [[AS] alias] SET`, the head of an UPDATE. */
+function updatesTable(tokens: readonly Token[], start: number): boolean {
+  const cursor = new Cursor(tokens);
+  cursor.position = start;
+  cursor.take("only");
+  if (isWord(cursor.peek(), "set") || cursor.tableName() === undefined) {
+    return false;
+  }
+  if (cursor.isPunct("*")) {
+    cursor.position += 1;
+  }
+  cursor.take("as");
+  if (!cursor.isWord("set")) {
+    cursor.identifier();
+  }
+  return cursor.isWord("set");
 }
 
 function unknown(reason: string): Operation[] {
@@ -534,9 +613,255 @@ function alter(cursor: Cursor): Operation[] {
   if (cursor.take("policy")) {
     return [{ kind: "safe" }];
   }
+  if (cursor.take("default", "privileges")) {
+    return alterDefaultPrivileges(cursor);
+  }
   // ALTER VIEW and ALTER INDEX accept a table's name too (checked against PostgreSQL 18), so
   // none of the object kinds is read as touching only its own kind.
   return unknown("an ALTER form this check does not read");
+}
+
+const DEFAULT_PRIVILEGE_OBJECTS = new Set(["tables", "sequences", "functions", "routines", "types", "schemas"]);
+const PRIVILEGES = new Set(["select", "insert", "update", "delete", "truncate", "references", "trigger", "maintain", "usage", "execute", "create", "set"]);
+
+/** Reads `item {, item}` with `read`; false when an item cannot be read, which includes a dangling comma. */
+function commaSeparated(cursor: Cursor, read: () => boolean): boolean {
+  if (!read()) {
+    return false;
+  }
+  while (cursor.isPunct(",")) {
+    cursor.position += 1;
+    if (!read()) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** One plain name: a word or a quoted identifier, not schema-qualified. */
+function plainName(cursor: Cursor): boolean {
+  return cursor.identifier() !== undefined && !cursor.isPunct(".");
+}
+
+/**
+ * ALTER DEFAULT PRIVILEGES [FOR {ROLE | USER} roles] [IN SCHEMA schemas]
+ * GRANT privileges ON {TABLES | SEQUENCES | FUNCTIONS | ROUTINES | TYPES | SCHEMAS} TO roles [WITH GRANT OPTION].
+ * It sets the privileges of objects created later and touches no object a running replica uses.
+ * It is read by its whole shape: a REVOKE, a missing or repeated clause, a name or privilege
+ * it cannot place, or any text after the statement leaves it unknown.
+ */
+function alterDefaultPrivileges(cursor: Cursor): Operation[] {
+  const unread = unknown("ALTER DEFAULT PRIVILEGES in a form this check does not read");
+  let forRole = false;
+  let inSchema = false;
+  for (;;) {
+    if (!forRole && cursor.take("for")) {
+      if ((!cursor.take("role") && !cursor.take("user")) || !commaSeparated(cursor, () => plainName(cursor))) {
+        return unread;
+      }
+      forRole = true;
+    } else if (!inSchema && cursor.take("in")) {
+      if (!cursor.take("schema") || !commaSeparated(cursor, () => plainName(cursor))) {
+        return unread;
+      }
+      inSchema = true;
+    } else {
+      break;
+    }
+  }
+  if (!cursor.take("grant")) {
+    return unread;
+  }
+  if (cursor.take("all")) {
+    cursor.take("privileges");
+  } else {
+    const privilege = (): boolean => {
+      const token = cursor.peek();
+      if (token?.kind !== "word" || !PRIVILEGES.has(token.text)) {
+        return false;
+      }
+      cursor.position += 1;
+      return true;
+    };
+    if (!commaSeparated(cursor, privilege)) {
+      return unread;
+    }
+  }
+  const object = cursor.take("on") ? cursor.peek() : undefined;
+  if (object?.kind !== "word" || !DEFAULT_PRIVILEGE_OBJECTS.has(object.text)) {
+    return unread;
+  }
+  cursor.position += 1;
+  if (!cursor.take("to") || !commaSeparated(cursor, () => plainName(cursor))) {
+    return unread;
+  }
+  cursor.take("with", "grant", "option");
+  return cursor.done() ? [{ kind: "safe" }] : unread;
+}
+
+const GRANT_PRIVILEGES = new Set([...PRIVILEGES, "connect", "temporary", "temp"]);
+const SCHEMA_OBJECTS = new Set(["tables", "sequences", "functions", "procedures", "routines"]);
+
+/** Reads `name {, name}` as table-like names, each `name` or `schema.name`. */
+function tableNames(cursor: Cursor): TableName[] | undefined {
+  const names: TableName[] = [];
+  const ok = commaSeparated(cursor, () => {
+    const name = cursor.tableName();
+    if (name === undefined || cursor.isPunct(".")) {
+      return false;
+    }
+    names.push(name);
+    return true;
+  });
+  return ok ? names : undefined;
+}
+
+/** One privilege, or ALL [PRIVILEGES], with the optional column list of a table privilege. */
+function privilegeItem(cursor: Cursor, allowed: ReadonlySet<string>): boolean {
+  if (cursor.take("all")) {
+    cursor.take("privileges");
+  } else {
+    const token = cursor.peek();
+    if (token?.kind !== "word" || !allowed.has(token.text)) {
+      return false;
+    }
+    cursor.position += 1;
+  }
+  if (cursor.isPunct("(")) {
+    cursor.position += 1;
+    if (!commaSeparated(cursor, () => plainName(cursor)) || !cursor.isPunct(")")) {
+      return false;
+    }
+    cursor.position += 1;
+  }
+  return true;
+}
+
+/**
+ * The object of a GRANT or REVOKE after `ON`: a list of tables (`TABLE` optional), or a list of
+ * sequences, schemas or databases, or `ALL {TABLES | SEQUENCES | FUNCTIONS | PROCEDURES | ROUTINES}
+ * IN SCHEMA schemas`. `tables` names the tables a list holds, and is undefined for the other
+ * objects. The whole object is undefined when it is not one of these forms; a function or procedure
+ * with an argument list, a language and the like are not read.
+ */
+function privilegeObject(cursor: Cursor): { tables: TableName[] | undefined } | undefined {
+  if (cursor.take("all")) {
+    const kind = cursor.peek();
+    if (kind?.kind !== "word" || !SCHEMA_OBJECTS.has(kind.text)) {
+      return undefined;
+    }
+    cursor.position += 1;
+    return cursor.take("in", "schema") && commaSeparated(cursor, () => plainName(cursor)) ? { tables: undefined } : undefined;
+  }
+  if (cursor.take("sequence") || cursor.take("schema") || cursor.take("database")) {
+    return commaSeparated(cursor, () => cursor.tableName() !== undefined && !cursor.isPunct(".")) ? { tables: undefined } : undefined;
+  }
+  cursor.take("table");
+  const tables = tableNames(cursor);
+  return tables === undefined ? undefined : { tables };
+}
+
+/** `privileges ON object` of a GRANT or REVOKE; undefined when it is not read to the end of the object. */
+function privilegesOn(cursor: Cursor): { tables: TableName[] | undefined } | undefined {
+  if (!commaSeparated(cursor, () => privilegeItem(cursor, GRANT_PRIVILEGES)) || !cursor.take("on")) {
+    return undefined;
+  }
+  return privilegeObject(cursor);
+}
+
+/**
+ * GRANT privileges ON object TO roles [WITH GRANT OPTION]. A grant only adds access, so a running
+ * replica loses nothing by it. It is read by its whole shape: a role membership, an object it
+ * does not read, or any text after the statement leaves it unknown.
+ */
+function grant(cursor: Cursor): Operation[] {
+  const unread = unknown("GRANT in a form this check does not read");
+  if (privilegesOn(cursor) === undefined || !cursor.take("to") || !commaSeparated(cursor, () => plainName(cursor))) {
+    return unread;
+  }
+  cursor.take("with", "grant", "option");
+  return cursor.done() ? [{ kind: "safe" }] : unread;
+}
+
+/**
+ * REVOKE [GRANT OPTION FOR] privileges ON object FROM roles [CASCADE | RESTRICT]. A revocation
+ * takes access from a role the previous release may still use, so it is a step of its own for the
+ * rule to place. It is read by its whole shape, as GRANT is.
+ */
+function revoke(cursor: Cursor): Operation[] {
+  cursor.take("grant", "option", "for");
+  const object = privilegesOn(cursor);
+  if (object === undefined || !cursor.take("from") || !commaSeparated(cursor, () => plainName(cursor))) {
+    return unknown("REVOKE in a form this check does not read");
+  }
+  if (!cursor.take("cascade")) {
+    cursor.take("restrict");
+  }
+  return cursor.done() ? [{ kind: "revoke", tables: object.tables }] : unknown("REVOKE with text after the roles this check does not read");
+}
+
+const COMMENT_OBJECTS: readonly (readonly [words: readonly string[], nameParts: number])[] = [
+  [["table"], 2],
+  [["column"], 3],
+  [["index"], 2],
+  [["schema"], 1],
+  [["sequence"], 2],
+  [["view"], 2],
+  [["materialized", "view"], 2],
+  [["type"], 2],
+  [["extension"], 1],
+];
+
+/** Reads `name {. name}` of at most `most` parts. */
+function dottedName(cursor: Cursor, most: number): boolean {
+  for (let parts = 1; ; parts += 1) {
+    if (cursor.identifier() === undefined) {
+      return false;
+    }
+    if (!cursor.isPunct(".")) {
+      return true;
+    }
+    if (parts === most) {
+      return false;
+    }
+    cursor.position += 1;
+  }
+}
+
+/**
+ * COMMENT ON object-kind name IS 'text' | NULL, and COMMENT ON {POLICY | CONSTRAINT} name ON table IS ...
+ * A comment changes no object a replica uses. It is read by its whole shape: an object kind it does not
+ * read (a function takes an argument list), a text that is not one string literal or NULL, or any text
+ * after it leaves it unknown.
+ */
+function comment(cursor: Cursor): Operation[] {
+  const unread = unknown("COMMENT in a form this check does not read");
+  if (!cursor.take("on")) {
+    return unread;
+  }
+  if (cursor.take("policy") || cursor.take("constraint")) {
+    if (!plainName(cursor) || !cursor.take("on") || !dottedName(cursor, 2)) {
+      return unread;
+    }
+  } else {
+    const kind = COMMENT_OBJECTS.find(([words]) => cursor.take(...words));
+    if (kind === undefined || !dottedName(cursor, kind[1])) {
+      return unread;
+    }
+  }
+  if (!cursor.take("is")) {
+    return unread;
+  }
+  // E'...' reaches the reader as the word `e` followed by the string.
+  if (cursor.isWord("e") && cursor.peek(1)?.kind === "string") {
+    cursor.position += 1;
+  }
+  if (cursor.peek()?.kind === "string") {
+    cursor.position += 1;
+  } else if (!cursor.take("null")) {
+    return unread;
+  }
+  return cursor.done() ? [{ kind: "safe" }] : unread;
 }
 
 function alterTable(cursor: Cursor): Operation[] {
@@ -597,7 +922,7 @@ function alterAction(table: TableName, action: Cursor): Operation[] {
       return unknown("ADD COLUMN without a name");
     }
     const definition = readDefinition(action);
-    const operations: Operation[] = [{ kind: "add-column", table, column, notNullWithoutDefault: definition.notNull && !definition.supplies }];
+    const operations: Operation[] = [{ kind: "add-column", table, column, notNullWithoutDefault: definition.notNull && !definition.supplies, rewritesTable: definition.rewritesTable }];
     // A column constraint builds an index or checks every existing row, as the table constraint does.
     if (definition.unique || definition.primaryKey) {
       operations.push({ kind: "create-index", table, concurrently: false });
@@ -696,25 +1021,52 @@ function startsWithNull(expression: Cursor): boolean {
   return expression.peek(offset) === undefined || (expression.isPunct(":", offset) && expression.isPunct(":", offset + 1));
 }
 
+/** Whether the `GENERATED` word at the offset starts `GENERATED ALWAYS AS (expression) VIRTUAL`. */
+function isVirtualGenerated(definition: Cursor, offset: number): boolean {
+  if (!definition.isWord("always", offset + 1) || !definition.isWord("as", offset + 2) || !definition.isPunct("(", offset + 3)) {
+    return false;
+  }
+  let depth = 0;
+  for (let at = offset + 3; definition.peek(at) !== undefined; at += 1) {
+    if (definition.isPunct("(", at)) {
+      depth += 1;
+    } else if (definition.isPunct(")", at)) {
+      depth -= 1;
+      if (depth === 0) {
+        return definition.isWord("virtual", at + 1);
+      }
+    }
+  }
+  return false;
+}
+
 /**
  * What the rest of an ADD COLUMN definition says at its top level (words inside
  * parentheses, such as a type's arguments or a CHECK expression, do not count):
  * NOT NULL, a column constraint that builds an index or is checked against the
- * rows, and whether it supplies a value (DEFAULT, a generated value, identity or a serial type).
+ * rows, whether it supplies a value (DEFAULT, a generated value, identity or a serial type),
+ * and whether it rewrites the table: a serial type, an identity column and a generated column
+ * that is not marked VIRTUAL write every existing row (PostgreSQL 17 has stored generated
+ * columns only, so a GENERATED form this reader does not recognise counts as rewriting),
+ * while a nullable column or a constant or stable DEFAULT is recorded in the catalog alone
+ * unless the column's type is a domain with constraints (not yet checked).
  */
 function readDefinition(definition: Cursor): {
   notNull: boolean;
   supplies: boolean;
+  rewritesTable: boolean;
   unique: boolean;
   primaryKey: boolean;
   check: boolean;
   references: boolean;
 } {
   let depth = 0;
-  const found = { notNull: false, supplies: false, unique: false, primaryKey: false, check: false, references: false };
+  const found = { notNull: false, supplies: false, rewritesTable: false, unique: false, primaryKey: false, check: false, references: false };
   const type = definition.peek();
-  if (type?.kind === "word" && SERIAL_TYPES.has(type.text)) {
+  // PostgreSQL matches the serial name after removing quotes, so "serial" is the serial type; the match is case-exact for a quoted name.
+  if ((type?.kind === "word" || type?.kind === "ident") && SERIAL_TYPES.has(type.text)) {
     found.supplies = true;
+    found.rewritesTable = true;
   }
   for (let offset = 0; definition.peek(offset) !== undefined; offset += 1) {
     const token = definition.peek(offset);
@@ -725,8 +1077,13 @@ function readDefinition(definition: Cursor): {
     } else if (depth === 0 && token?.kind === "word") {
       if (token.text === "not" && definition.isWord("null", offset + 1)) {
         found.notNull = true;
-      } else if (token.text === "default" || token.text === "generated") {
+      } else if (token.text === "default") {
         found.supplies = true;
+      } else if (token.text === "generated") {
+        found.supplies = true;
+        if (!isVirtualGenerated(definition, offset)) {
+          found.rewritesTable = true;
+        }
       } else if (token.text === "unique") {
         found.unique = true;
       } else if (token.text === "primary" && definition.isWord("key", offset + 1)) {

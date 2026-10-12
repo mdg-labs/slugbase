@@ -9,6 +9,7 @@
     "lint": "eslint --max-warnings=0 .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test:unit": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
     "build": "tsc -p tsconfig.build.json"
   },
   "dependencies": {

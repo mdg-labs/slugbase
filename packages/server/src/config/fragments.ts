@@ -119,3 +119,11 @@ export const httpFragment = envFragment({
     DOCS_BASE_URL: baseUrl().default(DEFAULT_DOCS_BASE_URL),
   },
 });
+
+/**
+ * The internal listener for `/metrics` (doc 01 section 12), for the server and
+ * the worker. Unset means there is none: nothing exposes metrics by default (D27).
+ */
+export const metricsFragment = envFragment({
+  shape: { METRICS_PORT: optional(envInteger({ min: 1, max: 65535 })) },
+});

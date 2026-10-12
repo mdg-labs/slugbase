@@ -1,7 +1,7 @@
 {
   "source": "mdg-labs/skills",
   "ref": "main",
-  "commit": "bba39b1048b030fbde8e22760bbc30d53174495c",
+  "commit": "c3cf2d8cb8f5a7796aba4888d310ff9cf44c3604",
   "profile": "full",
   "exclude": [
     "rules/mdg-github-actions.md"
@@ -12,7 +12,7 @@
     ".claude/agents/security-reviewer.md": "142e34bbe3c07ce070cfe9623ac27f671461a2f790efd57921a69763a87d6ef4",
     ".claude/agents/security-verifier.md": "a99b50a72829f31602da4312c8977f3e0199225dd1d3f04c143f349862bd63ee",
     ".claude/agents/task-executor.md": "0ed7731240bb9800cf3544157d41b3d826e87b273803daf46a86e428f86900eb",
-    ".claude/agents/task-verifier.md": "094365671982dd62cbf5fed23114005d445862b743345b7e1d3c61bb92bc1a09",
+    ".claude/agents/task-verifier.md": "0d355e59859687113943a3f9b28d65b6968997fefa68fd52206b2486b76c40b9",
     ".claude/rules/mdg-git.md": "448d1d5ecff07c8978a47bba317ba0981546030affc9a73cd6a05d891e9d1924",
     ".claude/rules/mdg-security.md": "feea87c28ba6b7db0e46ba12c396db653d1c5e6024925e1918024f4b76638bc0",
     ".claude/scripts/audit-report.sh": "ae9fa9ebc4cfb48a8476193d29caf12b546290e37666dbfdb727d0a255fe0239",
@@ -26,7 +26,7 @@
     ".claude/scripts/notify-discord.sh": "90de81d9da5c0dd3b7d541183630f8cc877d400130c4666e68c52e385a72ee48",
     ".claude/scripts/security-history.sh": "b75d20ac0a10dea59bcf26f7c5b4baeaccd8251bd8a61861744b16bed8edbdba",
     ".claude/scripts/workflow-config.sh": "eb9a808e9f2160bc14ae07227007094ae78b8abbb73a30dd91ff64a425c7d3f1",
-    ".claude/skills/cr-review/SKILL.md": "54b7c208a3a89a5d20542d4ace3c15a1aa403a1ef25eaeaecf55573e5c9d50f0",
+    ".claude/skills/cr-review/SKILL.md": "c3d20b80e65446f645fe1190388bfa5f31c2f9465c0e7b81773fb9ff4f2138e7",
     ".claude/skills/cr-review/templates/finding-dispatch.md": "250990fc710beb134b6a49f1591b39d752facfb00d47c5c145ab7953107a0048",
     ".claude/skills/customer-docs/SKILL.md": "7cb537ac035de1ed72fa33fb72fb20622b18e88f09f032c32aa387928e7c474f",
     ".claude/skills/customer-docs/docs-config-template.md": "611d628e223100d26e7b3ae90ca423918d1251985c127f76c4e256c7262e3ea7",
@@ -35,9 +35,9 @@
     ".claude/skills/customer-docs/page-doc-template.md": "2bc392ed1997d7b420e8833a21f111cdb0e91ddf4e73e2e8e6b2255bb49c4cee",
     ".claude/skills/customer-docs/style-guide.md": "2593506b8c199ca65d2398f6596dd1f517dbc29e0679414c891175f1c76b03bc",
     ".claude/skills/dev-diff/SKILL.md": "2056ad28579194f2e94cd5b9c60b3ce3bf40729dd9692dc92d7f0f9c07f5ccfd",
-    ".claude/skills/dev-diff/dev-diff.sh": "10a6d238b785be31ec72f27be5c424d5b0aa56716fc3f75c24230a655a709cc3",
-    ".claude/skills/open-pr/SKILL.md": "d5aff23e96a9ace28c37cb7c9b238846fa9d35c089fd902b154475c597cac149",
-    ".claude/skills/orchestrate/SKILL.md": "a6e312006f9963f1757ef15e789b2c0c8fe044beb84438c60e7997fabed91d72",
+    ".claude/skills/dev-diff/dev-diff.sh": "596f0341d3ad2a71d251527e51c5eb48d54c52e3734627384fff2aa063d332da",
+    ".claude/skills/open-pr/SKILL.md": "d9dcbfde7fb7b3e5fd696ff214ea86250907b40d31cd37b57391b2b2d3b3d3bd",
+    ".claude/skills/orchestrate/SKILL.md": "fccf046cf16156c6d492d561d632a977e2735742cb138cc0efbe0a8fb8d39bb1",
     ".claude/skills/orchestrate/templates/TOKENS.md": "be9184cb83ac0e0e93f69958d0ce7787ce5874ff0a9cfc0618a1603adeddaa5e",
     ".claude/skills/orchestrate/templates/execution-report.md": "bb5b9b31c6312ebfe8e2d2f78bc50ca5cd255ff5097084553e6b7f2ff9e0b9cf",
     ".claude/skills/orchestrate/templates/executor-prompt.md": "264e052853aa20648544a5dadd74c82e8dc21124e37e660f00bc96f9063ea477",
@@ -57,6 +57,6 @@
     ".claude/trackers/README.md": "0aff445ac3fe6e53d541a382b14646958f4bc70688e4d0cb2d5ab1b4079a9eb3",
     ".claude/trackers/github.md": "536f3a7c0813237eb04b45161d99283dbe1424951340f8be9786c6f4612c0f3c",
     ".claude/trackers/kaneo.md": "e3440d0905e16e71ba00e263c6a64afafff13d7dc3daf145b0f4773430768779",
-    ".claude/workflow.schema.json": "f5eb965f969e1a227a3fce8601bb9a6922f4069a572be6db0d9f9c9ae8f10434"
+    ".claude/workflow.schema.json": "dd5ae96ebcb31e7afecf7cec0106da0ce13ec5f4e2dcd667c1efcfb70975bac0"
   }
 }

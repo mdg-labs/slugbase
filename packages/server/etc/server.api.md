@@ -4,10 +4,82 @@
 
 ```ts
 
+import type { Adapters } from '@slugbase/core';
+import type { ClientErrorReportRequest } from '@slugbase/core';
+import type { Context } from 'hono';
+import { Database } from '@slugbase/db';
+import { EmptyResponse } from '@slugbase/contracts';
+import { JsonResponse } from '@slugbase/contracts';
+import { MigrationChain } from '@slugbase/db';
+import { OperationDefinition } from '@slugbase/contracts';
+import { Problem } from '@slugbase/contracts';
+import { ProblemCode } from '@slugbase/contracts';
+import type { TenantPrincipal } from '@slugbase/core';
+import type { TenantTx } from '@slugbase/db';
+import { VersionInfoSchema } from '@slugbase/contracts';
+import type { WorkspaceRole } from '@slugbase/core';
 import { z } from 'zod';
 
 // @public
+export interface ApiTokenPrincipal extends Extract<TenantPrincipal, {
+    readonly kind: "api-token";
+}> {
+    // (undocumented)
+    readonly scope: "read" | "read-write";
+}
+
+// @public
+export function assertIdempotent<Payload extends JobPayload>(check: IdempotencyCheck<Payload>): Promise<void>;
+
+// @public
+export type Authenticator = BearerAuthenticator | CookieAuthenticator;
+
+// @public
+export interface BearerAuthenticator {
+    // (undocumented)
+    authenticate(authorization: string): Promise<ApiTokenPrincipal | undefined>;
+    // (undocumented)
+    readonly credential: "bearer";
+}
+
+// @public
+export type BuildInfo = z.output<typeof VersionInfoSchema>;
+
+// @public
+export const CHAIN_STAGES: readonly ["request-context", "security-headers", "body-limits", "authentication", "cross-site-protection", "rate-limiting", "tenant-resolution", "validation", "authorization", "handler", "response", "audit-telemetry"];
+
+// @public (undocumented)
+export type ChainContext = Context<ChainEnv>;
+
+// @public
+export interface ChainEnv {
+    // (undocumented)
+    Variables: {
+        requestId?: string;
+        clientIp?: string;
+        logger?: Logger;
+        principalType?: "anonymous" | "session" | "api-token";
+        principal?: Principal;
+        workspaceId?: string;
+        tenant?: RequestTenant;
+        hooks?: HookDispatcher;
+        route?: MatchedRoute;
+        input?: ValidatedInput;
+    };
+}
+
+// @public
 export function composeEnvSchema<const Fragments extends readonly EnvFragment[]>(fragments: Fragments): EnvSchema<MergedShape<Fragments>>;
+
+// @public
+export class CompositionError extends Error {
+    constructor(code: CompositionErrorCode, message: string);
+    // (undocumented)
+    readonly code: CompositionErrorCode;
+}
+
+// @public (undocumented)
+export type CompositionErrorCode = "missing_adapter" | "invalid_module" | "duplicate_module" | "invalid_hook" | "module_failed" | "duplicate_route" | "invalid_route" | "invalid_web_root" | "missing_policy" | "undocumented_operation" | "policy_mismatch" | "duplicate_job" | "unknown_job" | "duplicate_schedule" | "invalid_schedule";
 
 // @public (undocumented)
 export interface ConfigByProcess {
@@ -35,6 +107,64 @@ export interface ConfigIssue {
 }
 
 // @public
+export interface ContractDocument {
+    // (undocumented)
+    readonly paths: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
+}
+
+// @public
+export interface CookieAuthenticator {
+    // (undocumented)
+    authenticate(cookie: string): Promise<SessionPrincipal | undefined>;
+    // (undocumented)
+    readonly credential: "cookie";
+}
+
+// @public
+export function createLogger(input: LoggerOptions): Logger;
+
+// @public
+export function createServer(options: CreateServerOptions): Server;
+
+// @public (undocumented)
+export interface CreateServerOptions {
+    // (undocumented)
+    readonly adapters: Adapters;
+    readonly buildInfo?: BuildInfo;
+    // (undocumented)
+    readonly config: ServerConfig;
+    readonly database?: Database;
+    readonly hookTimeoutMs?: number;
+    // (undocumented)
+    readonly logger: Logger;
+    readonly migrations: readonly MigrationChain[];
+    // (undocumented)
+    readonly modules: readonly ServerModule[];
+    readonly openApiDocument?: ContractDocument;
+    readonly shutdownTimeoutMs?: number;
+    readonly webRoot?: string;
+}
+
+// @public
+export function createWorker(options: CreateWorkerOptions): Worker;
+
+// @public (undocumented)
+export interface CreateWorkerOptions {
+    // (undocumented)
+    readonly adapters: Adapters;
+    // (undocumented)
+    readonly config: WorkerConfig;
+    readonly database?: Database;
+    // (undocumented)
+    readonly logger: Logger;
+    // (undocumented)
+    readonly modules: readonly ServerModule[];
+    readonly pollingIntervalSeconds?: number;
+    readonly poolSize?: number;
+    readonly shutdownTimeoutMs?: number;
+}
+
+// @public
 export const databaseFragment: EnvFragment<    {
 DATABASE_URL: z.ZodString;
 SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
@@ -45,6 +175,51 @@ export function declaredKeys(): readonly string[];
 
 // @public (undocumented)
 export const DEFAULT_DOCS_BASE_URL = "https://slugbase.app/docs";
+
+// @public (undocumented)
+export const DEFAULT_HOOK_TIMEOUT_MS = 2000;
+
+// @public (undocumented)
+export const DEFAULT_RETRY_POLICY: ResolvedRetryPolicy;
+
+// @public (undocumented)
+export const DEFAULT_WORKER_POOL_SIZE = 5;
+
+// @public
+export function defineJob<const Shape extends z.ZodRawShape>(options: DefineJobOptions<Shape>): JobDefinition<z.infer<z.ZodObject<Shape>> & JobPayload>;
+
+// @public (undocumented)
+export interface DefineJobOptions<Shape extends z.ZodRawShape> {
+    readonly handle: (payload: z.infer<z.ZodObject<Shape>>, context: ModuleContext) => Promise<void>;
+    readonly name: string;
+    readonly payload: z.ZodObject<Shape>;
+    // (undocumented)
+    readonly retry?: RetryPolicy;
+}
+
+// @public
+export function defineSchedule(options: ScheduleDefinition): ScheduleDefinition;
+
+// @public
+export const DELETION_REFUSAL_CODES: readonly ["billing_active"];
+
+// @public (undocumented)
+export type DeletionGuardInput = {
+    readonly kind: "workspace";
+    readonly workspaceId: string;
+    readonly accountId: string;
+    readonly requestedBy: "member" | "instanceAdmin";
+} | {
+    readonly kind: "account";
+    readonly accountId: string;
+    readonly requestedBy: "member" | "instanceAdmin";
+};
+
+// @public (undocumented)
+export type DeletionRefusalCode = (typeof DELETION_REFUSAL_CODES)[number];
+
+// @public
+export const DEVELOPMENT_BUILD_INFO: BuildInfo;
 
 // @public
 export function envBoolean(): z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>;
@@ -108,6 +283,8 @@ export const envSchemas: {
     TRUSTED_PROXY_HOPS: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
     API_DOCS_ENABLED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
     DOCS_BASE_URL: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>>;
+    } & {
+    METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
     }>;
     readonly worker: EnvSchema<    {
     NODE_ENV: z.ZodEnum<{
@@ -133,6 +310,8 @@ export const envSchemas: {
     } & {
     DATABASE_URL: z.ZodString;
     SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+    } & {
+    METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
     }>;
     readonly migrate: EnvSchema<    {
     NODE_ENV: z.ZodEnum<{
@@ -154,6 +333,40 @@ export const envSchemas: {
     }>;
 };
 
+// @public (undocumented)
+export const HOOK_NAMES: readonly ["seatCheck", "deletionGuard", "registrationPolicy"];
+
+// @public
+export interface HookDispatcher {
+    clientErrorReportDsn(request: ClientErrorReportRequest): Promise<string | null>;
+    deletionGuard(input: DeletionGuardInput): Promise<HookResult<DeletionRefusalCode>>;
+    registrationPolicy(input: RegistrationPolicyInput): Promise<HookResult<RegistrationRefusalCode>>;
+    seatLimit(input: SeatCheckInput, entitlementLimit: number | null): Promise<number | null>;
+}
+
+// @public (undocumented)
+export type HookName = keyof ServerHooks;
+
+// @public
+export interface HookRefusals {
+    // (undocumented)
+    readonly deletionGuard?: readonly DeletionRefusalCode[];
+}
+
+// @public
+export type HookResult<Code extends string = string> = {
+    readonly outcome: "allow";
+} | {
+    readonly outcome: "refuse";
+    readonly code: Code;
+};
+
+// @public
+export const HookResult: {
+    readonly allow: () => HookResult<never>;
+    readonly refuse: <const Code extends string>(code: Code) => HookResult<Code>;
+};
+
 // @public
 export const httpFragment: EnvFragment<    {
 PORT: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
@@ -163,10 +376,45 @@ DOCS_BASE_URL: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<string, string
 }>;
 
 // @public (undocumented)
+export interface IdempotencyCheck<Payload extends JobPayload> {
+    // (undocumented)
+    readonly context: ModuleContext;
+    // (undocumented)
+    readonly job: JobDefinition<Payload>;
+    // (undocumented)
+    readonly payload: Payload;
+    readonly state: () => Promise<unknown>;
+}
+
+// @public (undocumented)
 export type IntersectUnion<Union> = (Union extends unknown ? (value: Union) => void : never) extends (value: infer Both) => void ? Both : never;
 
 // @public (undocumented)
 export function isProcessType(value: string): value is ProcessType;
+
+// @public
+export interface JobDefinition<Payload extends JobPayload = JobPayload> {
+    handle(payload: unknown, context: ModuleContext): Promise<void>;
+    // (undocumented)
+    readonly name: string;
+    parse(payload: unknown): Payload;
+    // (undocumented)
+    readonly retry: ResolvedRetryPolicy;
+}
+
+// @public (undocumented)
+export class JobDefinitionError extends Error {
+    constructor(message: string);
+}
+
+// @public (undocumented)
+export type JobPayload = Readonly<Record<string, JobScalar>>;
+
+// @public
+export type JobScalar = string | number | boolean | null | undefined;
+
+// @public
+export function loadBuildInfo(file: URL | string): BuildInfo;
 
 // @public
 export function loadConfig<Type extends ProcessType>(type: Type, env: EnvironmentVariables): LoadedConfig<ConfigByProcess[Type]>;
@@ -186,8 +434,46 @@ export interface LoadOptions {
 // @public (undocumented)
 export const LOG_LEVELS: readonly ["fatal", "error", "warn", "info", "debug", "trace", "silent"];
 
+// @public
+export interface LogDestination {
+    // (undocumented)
+    write(line: string): void;
+}
+
+// @public
+export interface Logger {
+    // (undocumented)
+    error(message: string, fields?: Readonly<Record<string, unknown>>): void;
+    // (undocumented)
+    info(message: string, fields?: Readonly<Record<string, unknown>>): void;
+    // (undocumented)
+    warn(message: string, fields?: Readonly<Record<string, unknown>>): void;
+}
+
+// @public (undocumented)
+export interface LoggerOptions {
+    readonly destination?: LogDestination;
+    readonly level: string;
+}
+
+// @public (undocumented)
+export interface MatchedRoute {
+    readonly acceptsMultipart?: boolean;
+    // (undocumented)
+    readonly handler: RouteHandler;
+    readonly marketingOrigin?: string;
+    // (undocumented)
+    readonly operation: OperationDefinition;
+    readonly params: Readonly<Record<string, string>>;
+}
+
 // @public (undocumented)
 export type MergedShape<Fragments extends readonly EnvFragment[]> = IntersectUnion<Fragments[number]["shape"]> extends infer Shape extends z.ZodRawShape ? Shape : never;
+
+// @public
+export const metricsFragment: EnvFragment<    {
+METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
+}>;
 
 // @public (undocumented)
 export type MigrateConfig = z.infer<typeof migrateEnvSchema.object>;
@@ -240,13 +526,59 @@ DATABASE_MIGRATE_URL: z.ZodString;
 // @public (undocumented)
 export const MIN_SESSION_SECRET_LENGTH = 32;
 
+// @public
+export interface ModuleContext {
+    // (undocumented)
+    readonly adapters: Readonly<Adapters>;
+    readonly config: WorkerConfig;
+    // (undocumented)
+    readonly logger: Logger;
+    readonly withTenant: Database["withTenant"];
+}
+
+// @public (undocumented)
+export interface ModuleContribution {
+    readonly authenticators?: readonly Authenticator[];
+    readonly jobs?: readonly JobDefinition[];
+    readonly migrations?: readonly MigrationChain[];
+    readonly routes?: readonly RouteBinding[];
+    readonly schedules?: readonly ScheduleDefinition[];
+}
+
 // @public (undocumented)
 export const NODE_ENVS: readonly ["development", "test", "production"];
+
+// @public
+export class NotIdempotentError extends Error {
+    constructor(job: string);
+}
 
 // @public
 export const originFragment: EnvFragment<    {
 APP_ORIGIN: z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>;
 }>;
+
+// @public
+export type Principal = SessionPrincipal | ApiTokenPrincipal;
+
+// @public
+export class ProblemError extends Error {
+    constructor(code: ProblemCode, detail: string, options?: ProblemErrorOptions);
+    // (undocumented)
+    readonly code: ProblemCode;
+    // (undocumented)
+    readonly detail: string;
+    // (undocumented)
+    readonly errors: readonly ProblemFieldError[] | undefined;
+}
+
+// @public (undocumented)
+export interface ProblemErrorOptions {
+    readonly errors?: readonly ProblemFieldError[];
+}
+
+// @public (undocumented)
+export type ProblemFieldError = NonNullable<Problem["errors"]>[number];
 
 // @public (undocumented)
 export const PROCESS_TYPES: readonly ["server", "worker", "migrate"];
@@ -261,7 +593,136 @@ export interface RefineContext {
 }
 
 // @public
+export const REGISTRATION_REFUSAL_CODE: "registration_refused";
+
+// @public
+export type RegistrationPath = "self-registration" | "invitation" | "oidc";
+
+// @public (undocumented)
+export interface RegistrationPolicyInput {
+    // (undocumented)
+    readonly email: string;
+    // (undocumented)
+    readonly path: RegistrationPath;
+}
+
+// @public (undocumented)
+export type RegistrationRefusalCode = typeof REGISTRATION_REFUSAL_CODE;
+
+// @public
+export type RequestPart<Op extends OperationDefinition, K extends "params" | "query" | "body"> = Op["request"] extends {
+    readonly [P in K]: infer S extends z.ZodType;
+} ? {
+    readonly [P in K]: z.output<S>;
+} : unknown;
+
+// @public
+export interface RequestTenant {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly memberId: string;
+    // (undocumented)
+    readonly role: WorkspaceRole;
+    withTenant<T>(fn: (tx: TenantTx) => Promise<T>): Promise<T>;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public
 export function requireAllOrNone(keys: readonly string[], values: Readonly<Record<string, unknown>>, context: RefineContext): void;
+
+// @public (undocumented)
+export interface ResolvedRetryPolicy {
+    // (undocumented)
+    readonly backoff: boolean;
+    // (undocumented)
+    readonly delaySeconds: number;
+    // (undocumented)
+    readonly limit: number;
+    // (undocumented)
+    readonly maxDelaySeconds: number | undefined;
+}
+
+// @public
+export type ResponseHeadersOf<H> = keyof H extends never ? {
+    readonly headers?: Readonly<Record<string, string>>;
+} : string extends keyof H ? {
+    readonly headers?: Readonly<Record<string, string>>;
+} : {
+    readonly headers: {
+        readonly [K in keyof H & string]: string;
+    };
+};
+
+// @public
+export type ResponseResult<R> = {
+    [S in keyof R & number]: R[S] extends JsonResponse<infer Schema, infer H> ? {
+        readonly status: S;
+        readonly body: z.input<Schema>;
+    } & ResponseHeadersOf<H> : R[S] extends EmptyResponse ? {
+        readonly status: S;
+        readonly body?: never;
+        readonly headers?: Readonly<Record<string, string>>;
+    } : never;
+}[keyof R & number];
+
+// @public
+export interface RetryPolicy {
+    readonly backoff?: boolean;
+    readonly delaySeconds?: number;
+    readonly limit?: number;
+    readonly maxDelaySeconds?: number;
+}
+
+// @public
+export function route<Op extends OperationDefinition>(operation: Op): RouteHandle<Op>;
+
+// @public
+export interface RouteBinding {
+    readonly acceptsMultipart?: boolean;
+    // (undocumented)
+    readonly handler: RouteHandler;
+    readonly marketingOrigin?: string;
+    // (undocumented)
+    readonly operation: OperationDefinition;
+}
+
+// @public
+export interface RouteHandle<Op extends OperationDefinition> {
+    // (undocumented)
+    handle(implementation: RouteImplementation<Op>, options?: RouteOptions): RouteBinding;
+}
+
+// @public
+export type RouteHandler = (context: ChainContext, route: MatchedRoute) => Response | Promise<Response>;
+
+// @public (undocumented)
+export type RouteImplementation<Op extends OperationDefinition> = (request: RouteRequest<Op>, context: ChainContext) => RouteResult<Op> | Promise<RouteResult<Op>>;
+
+// @public (undocumented)
+export type RouteOptions = Pick<RouteBinding, "acceptsMultipart" | "marketingOrigin">;
+
+// @public
+export type RouteRequest<Op extends OperationDefinition> = RequestPart<Op, "params"> & RequestPart<Op, "query"> & RequestPart<Op, "body">;
+
+// @public
+export type RouteResult<Op extends OperationDefinition> = ResponseResult<Op["responses"]>;
+
+// @public (undocumented)
+export interface RunningServer {
+    readonly metricsPort?: number;
+    // (undocumented)
+    readonly port: number;
+    shutdown(): Promise<void>;
+}
+
+// @public (undocumented)
+export interface RunningWorker {
+    enqueue<Payload extends JobPayload>(job: JobDefinition<Payload>, payload: Payload): Promise<string | null>;
+    readonly metricsPort?: number;
+    shutdown(): Promise<void>;
+}
 
 // @public
 export const runtimeFragment: EnvFragment<    {
@@ -282,11 +743,49 @@ silent: "silent";
 }>;
 
 // @public
+export interface ScheduleDefinition {
+    // (undocumented)
+    readonly cron: string;
+    // (undocumented)
+    readonly job: string;
+    // (undocumented)
+    readonly name: string;
+    readonly payload?: JobPayload;
+}
+
+// @public (undocumented)
+export interface SeatCheckAnswer {
+    readonly seatLimit: number | null;
+}
+
+// @public (undocumented)
+export interface SeatCheckInput {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly invitationId: string;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public
 export const secretsFragment: EnvFragment<    {
 SESSION_SECRET: z.ZodString;
 ENCRYPTION_KEY: z.ZodString;
 ENCRYPTION_KEY_ID: z.ZodString;
 }>;
+
+// @public (undocumented)
+export interface Server {
+    fetch(request: Request): Promise<Response>;
+    // (undocumented)
+    readonly jobs: readonly JobDefinition[];
+    readonly migrations: readonly MigrationChain[];
+    // (undocumented)
+    readonly schedules: readonly ScheduleDefinition[];
+    readonly stages: readonly StageName[];
+    start(options?: StartOptions): Promise<RunningServer>;
+}
 
 // @public (undocumented)
 export type ServerConfig = z.infer<typeof serverEnvSchema.object>;
@@ -324,6 +823,8 @@ PORT: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
 TRUSTED_PROXY_HOPS: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
 API_DOCS_ENABLED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
 DOCS_BASE_URL: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>>;
+} & {
+METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
 }>;
 
 // @public
@@ -359,7 +860,16 @@ PORT: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
 TRUSTED_PROXY_HOPS: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
 API_DOCS_ENABLED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
 DOCS_BASE_URL: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>>;
+}>, EnvFragment<    {
+METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
 }>];
+
+// @public
+export interface ServerHooks {
+    readonly deletionGuard?: (input: DeletionGuardInput) => HookResult<DeletionRefusalCode> | Promise<HookResult<DeletionRefusalCode>>;
+    readonly registrationPolicy?: (input: RegistrationPolicyInput) => HookResult | Promise<HookResult>;
+    readonly seatCheck?: (input: SeatCheckInput) => SeatCheckAnswer | Promise<SeatCheckAnswer>;
+}
 
 // @public
 export const serverMigrationFragment: EnvFragment<    {
@@ -367,8 +877,54 @@ MIGRATE_ON_START: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, st
 DATABASE_MIGRATE_URL: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
 }>;
 
+// @public
+export interface ServerModule {
+    readonly hookRefusals?: HookRefusals;
+    // (undocumented)
+    readonly hooks?: ServerHooks;
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    register(context: ModuleContext): ModuleContribution;
+}
+
+// @public
+export interface SessionPrincipal extends Extract<TenantPrincipal, {
+    readonly kind: "session";
+}> {
+    readonly instanceAdmin: boolean;
+}
+
+// @public (undocumented)
+export type StageName = (typeof CHAIN_STAGES)[number];
+
+// @public (undocumented)
+export interface StartOptions {
+    readonly metricsPort?: number;
+    readonly port?: number;
+}
+
+// @public
+export interface ValidatedInput {
+    // (undocumented)
+    readonly body?: unknown;
+    // (undocumented)
+    readonly params?: unknown;
+    // (undocumented)
+    readonly query?: unknown;
+}
+
 // @public (undocumented)
 export function validateEnvironment<Shape extends z.ZodRawShape>(schema: EnvSchema<Shape>, env: EnvironmentVariables, options?: LoadOptions): LoadedConfig<z.infer<z.ZodObject<Shape>>>;
+
+// @public (undocumented)
+export interface Worker {
+    // (undocumented)
+    readonly jobs: readonly JobDefinition[];
+    // (undocumented)
+    readonly schedules: readonly ScheduleDefinition[];
+    start(options?: WorkerStartOptions): Promise<RunningWorker>;
+}
 
 // @public (undocumented)
 export type WorkerConfig = z.infer<typeof workerEnvSchema.object>;
@@ -398,6 +954,8 @@ ENCRYPTION_KEY_ID: z.ZodString;
 } & {
 DATABASE_URL: z.ZodString;
 SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+} & {
+METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
 }>;
 
 // @public
@@ -425,7 +983,14 @@ ENCRYPTION_KEY_ID: z.ZodString;
 }>, EnvFragment<    {
 DATABASE_URL: z.ZodString;
 SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+}>, EnvFragment<    {
+METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
 }>];
+
+// @public (undocumented)
+export interface WorkerStartOptions {
+    readonly metricsPort?: number;
+}
 
 // (No @packageDocumentation comment for this package)
 

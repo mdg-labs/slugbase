@@ -49,6 +49,8 @@ describe(".env.example", () => {
 
   it("holds the schema defaults for the keys that have one", () => {
     const { config } = loadConfig("server", Object.fromEntries(example));
+    expect(example.get("METRICS_PORT")).toBe("");
+    expect(config.METRICS_PORT).toBeUndefined();
     expect(config).toMatchObject({
       PORT: Number(example.get("PORT")),
       TRUSTED_PROXY_HOPS: Number(example.get("TRUSTED_PROXY_HOPS")),

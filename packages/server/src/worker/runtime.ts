@@ -1,0 +1,213 @@
+import type { Adapters } from "@slugbase/core";
+import { createDatabase, type Database } from "@slugbase/db";
+import { PgBoss } from "pg-boss";
+import type { WorkerConfig } from "../config/index.ts";
+import {
+  assertAdapters,
+  compose,
+  type Composition,
+  type Logger,
+  type ModuleContext,
+  type ServerModule,
+} from "../create-server.ts";
+import { createMetrics, startMetricsListener, type MetricsListener, type QueueSnapshot } from "../metrics/index.ts";
+import type { JobDefinition, JobPayload, ScheduleDefinition } from "./job.ts";
+
+export const DEFAULT_WORKER_POOL_SIZE = 5;
+
+const DEFAULT_SHUTDOWN_TIMEOUT_MS = 25_000;
+
+/**
+ * How long pg-boss keeps a finished job, completed or failed, before its
+ * maintenance deletes it (doc 05 section 6). It is one setting per queue, so a
+ * failed job is kept as long as a completed one.
+ */
+export const FINISHED_JOB_RETENTION_SECONDS = 30 * 24 * 60 * 60;
+const BOSS_SCHEMA = "pgboss";
+const APPLICATION_NAME = "slugbase-worker";
+
+export interface CreateWorkerOptions {
+  readonly config: WorkerConfig;
+  readonly adapters: Adapters;
+  readonly modules: readonly ServerModule[];
+  readonly logger: Logger;
+  /** Connections of the pg-boss pool and, separately, of the tenant pool the handlers use; default 5. */
+  readonly poolSize?: number;
+  /** The tenant database the handlers use; by default a pool on `DATABASE_URL`, closed on shutdown. */
+  readonly database?: Database;
+  /** How long a shutdown lets active jobs finish before it releases them (doc 01 section 3 rule 2). */
+  readonly shutdownTimeoutMs?: number;
+  /** How often an idle consumer asks for work, in seconds (at least 0.5); pg-boss's default is 2. */
+  readonly pollingIntervalSeconds?: number;
+}
+
+export interface WorkerStartOptions {
+  /** Overrides `METRICS_PORT`, which also turns the metrics listener on; 0 picks a free port. */
+  readonly metricsPort?: number;
+}
+
+export interface RunningWorker {
+  /** The port of the internal metrics listener; absent when `METRICS_PORT` is unset. */
+  readonly metricsPort?: number;
+  /** Puts a job on its queue. The payload is validated against the job's schema before anything is written. */
+  enqueue<Payload extends JobPayload>(job: JobDefinition<Payload>, payload: Payload): Promise<string | null>;
+  /**
+   * Stops fetching, lets active jobs finish within the deadline, releases the
+   * ones still running (they run again under their retry policy) and closes
+   * the pools. Calling it again returns the same shutdown.
+   */
+  shutdown(): Promise<void>;
+}
+
+export interface Worker {
+  readonly jobs: readonly JobDefinition[];
+  readonly schedules: readonly ScheduleDefinition[];
+  /**
+   * Starts pg-boss, registers every job's queue and consumer and every
+   * schedule, and opens the internal `/metrics` listener when `METRICS_PORT` is set.
+   */
+  start(options?: WorkerStartOptions): Promise<RunningWorker>;
+}
+
+function errorFields(error: unknown): Record<string, unknown> {
+  return {
+    error: error instanceof Error ? error.name : typeof error,
+    code: (error as { code?: unknown } | null)?.code,
+  };
+}
+
+/**
+ * The worker process (doc 01 section 3): pg-boss as `slugbase_app` with the
+ * modules' jobs as consumers and their schedules as pg-boss schedules. It never
+ * installs or migrates the pg-boss schema; `migrate` does (doc 05 section 5.5).
+ * It fails before connecting when a port has no adapter or the modules conflict.
+ */
+export function createWorker(options: CreateWorkerOptions): Worker {
+  const { config, logger } = options;
+  assertAdapters(options.adapters);
+  const poolSize = options.poolSize ?? DEFAULT_WORKER_POOL_SIZE;
+  const shutdownTimeoutMs = options.shutdownTimeoutMs ?? DEFAULT_SHUTDOWN_TIMEOUT_MS;
+
+  const metrics = createMetrics();
+  const database = options.database ?? createDatabase({ url: config.DATABASE_URL, poolSize });
+  if (options.database === undefined) {
+    metrics.setPoolSize(poolSize);
+  }
+  const context: ModuleContext = Object.freeze({
+    config,
+    logger,
+    adapters: Object.freeze({ ...options.adapters }),
+    withTenant: metrics.instrumentTenant(database.withTenant.bind(database)),
+  });
+
+  let composition: Composition;
+  try {
+    composition = compose(options.modules, context, []);
+  } catch (error) {
+    void database.close();
+    throw error;
+  }
+
+  return {
+    jobs: composition.jobs,
+    schedules: composition.schedules,
+
+    async start(startOptions = {}) {
+      const boss = new PgBoss({
+        connectionString: config.DATABASE_URL,
+        schema: BOSS_SCHEMA,
+        max: poolSize,
+        application_name: APPLICATION_NAME,
+        migrate: false,
+        createSchema: false,
+        reindex: false,
+      });
+      boss.on("error", (error) => {
+        logger.error("pg-boss reported an error", errorFields(error));
+      });
+      boss.on("warning", (warning) => {
+        logger.warn("pg-boss reported a warning", { message: warning.message });
+      });
+
+      let metricsListener: MetricsListener | undefined;
+      let stopped: Promise<void> | undefined;
+      const stop = async (): Promise<void> => {
+        try {
+          await metricsListener?.close();
+          await boss.stop({ graceful: true, close: true, timeout: shutdownTimeoutMs });
+        } finally {
+          await database.close();
+        }
+      };
+      const shutdown = (): Promise<void> => (stopped ??= stop());
+
+      try {
+        await boss.start();
+        for (const job of composition.jobs) {
+          const queue = {
+            retryLimit: job.retry.limit,
+            retryDelay: job.retry.delaySeconds,
+            retryBackoff: job.retry.backoff,
+            deleteAfterSeconds: FINISHED_JOB_RETENTION_SECONDS,
+            ...(job.retry.maxDelaySeconds === undefined ? {} : { retryDelayMax: job.retry.maxDelaySeconds }),
+          };
+          await boss.createQueue(job.name, queue);
+          // createQueue leaves an existing queue alone, so a changed policy is applied here.
+          await boss.updateQueue(job.name, queue);
+          await boss.work<JobPayload>(
+            job.name,
+            { batchSize: 1, ...(options.pollingIntervalSeconds === undefined ? {} : { pollingIntervalSeconds: options.pollingIntervalSeconds }) },
+            async ([pending]) => {
+              if (pending === undefined) {
+                return;
+              }
+              try {
+                await job.handle(pending.data, context);
+              } catch (error) {
+                logger.error("Job failed", { job: job.name, id: pending.id, attempt: pending.retryCount + 1, ...errorFields(error) });
+                throw error;
+              }
+            },
+          );
+        }
+        for (const schedule of composition.schedules) {
+          await boss.schedule(schedule.job, schedule.cron, schedule.payload ?? {}, { key: schedule.name });
+        }
+
+        metrics.observeJobQueues(async () => {
+          const snapshots = await Promise.all(
+            composition.jobs.map(async (job): Promise<QueueSnapshot | undefined> => {
+              const stats = (await boss.getQueueStats(job.name, { force: true })).at(0);
+              return stats === undefined
+                ? undefined
+                : {
+                    queue: job.name,
+                    deferred: stats.deferredCount,
+                    ready: stats.readyCount,
+                    active: stats.activeCount,
+                    oldestReadySeconds: stats.readyOldestSeconds,
+                  };
+            }),
+          );
+          return snapshots.filter((snapshot) => snapshot !== undefined);
+        });
+        const metricsRequested = startOptions.metricsPort ?? config.METRICS_PORT;
+        if (metricsRequested !== undefined) {
+          metricsListener = await startMetricsListener({ metrics, port: metricsRequested, logger });
+        }
+      } catch (error) {
+        await shutdown().catch((cleanup: unknown) => {
+          logger.error("Cleanup after a failed start failed", errorFields(cleanup));
+        });
+        throw error;
+      }
+
+      logger.info("Worker started", { jobs: composition.jobs.length, schedules: composition.schedules.length });
+      return {
+        ...(metricsListener === undefined ? {} : { metricsPort: metricsListener.port }),
+        enqueue: async (job, payload) => boss.send(job.name, job.parse(payload)),
+        shutdown,
+      };
+    },
+  };
+}

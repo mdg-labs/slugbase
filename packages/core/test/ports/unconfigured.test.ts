@@ -14,6 +14,7 @@ const PORTS: Record<
   identity: { methods: ["begin", "complete", "listProviders"], behaviour: "rejects", code: "unavailable" },
   analytics: { methods: ["track"], behaviour: "no-op", code: "unavailable" },
   errors: { methods: ["capture"], behaviour: "no-op", code: "unavailable" },
+  clientErrorReport: { methods: ["dsn"], behaviour: "no-op", code: "unavailable" },
   challenge: { methods: ["verify"], behaviour: "disabled", code: "unavailable" },
   egress: { methods: ["request"], behaviour: "rejects", code: "unavailable" },
   rateLimit: { methods: ["consume"], behaviour: "rejects", code: "unavailable" },
@@ -79,6 +80,11 @@ describe("unconfigured()", () => {
     const { analytics, errors } = unconfigured();
     await expect(analytics.track({ name: "x", consent: true })).resolves.toBeUndefined();
     await expect(errors.capture(new Error("x"))).resolves.toBeUndefined();
+  });
+
+  it("answers no client error-report DSN, without failing", async () => {
+    const { clientErrorReport } = unconfigured();
+    await expect(clientErrorReport.dsn({ accountId: "a", workspaceId: undefined })).resolves.toBeNull();
   });
 
   it("disables the challenge: it requires no solution and passes every one", async () => {

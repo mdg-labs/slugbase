@@ -196,7 +196,7 @@ function checkDeclaration(raw: unknown, index: number, seenIds: Set<string>, see
     problems.push(`${label}: ${message}`);
   };
 
-  const { operationId, method, path, tag, auth, rate, scope, entitlement, audience, request, responses } = raw;
+  const { operationId, method, path, tag, auth, rate, scope, entitlement, audience, request, maxBodyBytes, responses } = raw;
 
   if (typeof operationId !== "string" || !/^[a-z][A-Za-z0-9]*$/.test(operationId)) {
     need("operationId is required and must be camelCase");
@@ -234,6 +234,9 @@ function checkDeclaration(raw: unknown, index: number, seenIds: Set<string>, see
   }
   if (audience !== undefined && !includes(AUDIENCES, audience)) {
     need(`audience must be one of ${AUDIENCES.join(", ")} when present`);
+  }
+  if (maxBodyBytes !== undefined && (typeof maxBodyBytes !== "number" || !Number.isSafeInteger(maxBodyBytes) || maxBodyBytes < 1)) {
+    need("maxBodyBytes must be a positive integer number of bytes when present");
   }
 
   if (request !== undefined && !isRecord(request)) {

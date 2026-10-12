@@ -275,7 +275,7 @@
             "sonnet",
             "auto"
           ],
-          "description": "auto: sonnet, escalated to opus for risk, advisory and large-diff units. Default opus."
+          "description": "auto: sonnet, escalated to opus for risk-flagged and large-diff units. Advisory units are verified on opus under every setting. Default auto."
         },
         "refiner": {
           "enum": [
@@ -335,7 +335,7 @@
         "lines": {
           "type": "integer",
           "minimum": 1,
-          "description": "Changed lines (generated code excluded) above which the verifier is Opus under models.verifier auto, and the report names the item. Default 1000."
+          "description": "Changed lines (generated code excluded) above which the verifier is Opus under models.verifier auto, and the report names the item. Default 2000."
         }
       }
     },

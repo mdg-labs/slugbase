@@ -18,16 +18,24 @@
     "lint": "eslint --max-warnings=0 .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test:unit": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
     "build": "tsc -p tsconfig.build.json",
     "contracts:check": "node ../../tooling/api-report/api-report.ts check --package ."
   },
   "dependencies": {
+    "@hono/node-server": "^2.1.4",
+    "@opentelemetry/api": "^1.9.1",
+    "@scalar/api-reference": "^1.73.1",
     "@slugbase/contracts": "workspace:*",
     "@slugbase/core": "workspace:*",
     "@slugbase/db": "workspace:*",
+    "hono": "^4.13.13",
+    "pg-boss": "^12.37.1",
+    "pino": "^10.4.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@opentelemetry/sdk-trace-base": "^2.12.0",
     "@slugbase/testing": "workspace:*",
     "eslint": "^10.12.0",
     "typescript-eslint": "^8.71.1"

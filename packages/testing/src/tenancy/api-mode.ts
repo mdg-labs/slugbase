@@ -49,7 +49,7 @@ export interface ApiResponse {
   readonly body?: unknown;
 }
 
-/** Sends a call as its principal. E1.4.16 wires it to an in-process server. */
+/** Sends a call as its principal. The contract tests of `@slugbase/server` give it a request function that talks to an in-process `createServer`, so the matrix runs over the real chain. */
 export type RequestFunction = (call: ApiCall) => Promise<ApiResponse>;
 
 export interface ApiMatrixOptions {

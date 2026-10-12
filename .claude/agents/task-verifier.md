@@ -1,7 +1,7 @@
 ---
 name: task-verifier
 description: The single verification pass per attempt — reviews each committed diff a task-executor left in its scratch workspace against its own tracked item, runs whatever checks apply, posts a verdict comment per item, and hands off PASS/FAIL to the orchestrator. Dispatched by the orchestrate skill (and cr-review's delegated path), not for direct invocation.
-model: opus
+model: sonnet
 effort: high
 color: blue
 disallowedTools: Agent, Edit, Write, NotebookEdit

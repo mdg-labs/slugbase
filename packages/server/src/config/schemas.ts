@@ -3,6 +3,7 @@ import { composeEnvSchema } from "./fragment.ts";
 import {
   databaseFragment,
   httpFragment,
+  metricsFragment,
   migrateFragment,
   originFragment,
   runtimeFragment,
@@ -26,10 +27,17 @@ export const serverFragments = [
   databaseFragment,
   serverMigrationFragment,
   httpFragment,
+  metricsFragment,
 ] as const;
 
 /** The worker never receives the migrator URL (doc 01 section 2.1). */
-export const workerFragments = [runtimeFragment, originFragment, secretsFragment, databaseFragment] as const;
+export const workerFragments = [
+  runtimeFragment,
+  originFragment,
+  secretsFragment,
+  databaseFragment,
+  metricsFragment,
+] as const;
 
 export const migrateFragments = [runtimeFragment, migrateFragment] as const;
 

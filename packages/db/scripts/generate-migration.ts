@@ -7,6 +7,7 @@ import {
   joinStatements,
   nonTransactional,
   rewriteIndexesConcurrently,
+  STATEMENT_BREAKPOINT,
   tablesOfSnapshot,
   type SqlFile,
 } from "./migration-sql.ts";
@@ -18,8 +19,16 @@ import {
 // connects to a database and never touches a migration that already exists: all
 // it writes are new files and the new tail of the journal. When any step fails,
 // the migrations folder is put back as it was.
+//
+// With `--contract expand=<migration tag> release=<version>` the migration it
+// writes carries, in its leading comment block, the contract header that the
+// expand/contract check of `pnpm db:check` reads (doc 05 section 5.2), so the
+// checksum recorded for the file covers it from the start. Only a file that can
+// hold a destructive step gets it, not a file of one index build. Giving the
+// option when no such file is written is an error.
 
-const USAGE = "usage: generate-migration.ts [--name <add_|index_|drop_><thing>] [--package <directory>]";
+const USAGE =
+  "usage: generate-migration.ts [--name <add_|index_|drop_><thing>] [--contract expand=<migration tag> release=<version>] [--package <directory>]";
 const NAME_PATTERN = /^(?:add|index|drop)_[a-z0-9]+(?:_[a-z0-9]+)*$/;
 const DEFAULT_CUSTOM_NAME = "add_sql_definitions";
 const UNNAMED = "unnamed_schema_change";
@@ -28,6 +37,28 @@ const TAG_PATTERN = /^(\d{14})_(.+)$/;
 const CHECK_OK = "Everything's fine";
 const NO_CHANGES = "No schema changes, nothing to migrate";
 const RECORD_FILE = "_custom-sql.json";
+const CONTRACT_HEADER_PREFIX = "-- slugbase:contract";
+const RELEASE_PATTERN = /^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
+
+interface Contract {
+  expand: string;
+  release: string;
+}
+
+function contractHeader({ expand, release }: Contract): string {
+  return `${CONTRACT_HEADER_PREFIX} expand=${expand} release=${release}`;
+}
+
+/** The file with the header at the end of its leading comment block, where the check reads it. */
+function withContractHeader(content: string, contract: Contract): string {
+  const lines = content.split("\n");
+  let at = 0;
+  while (at < lines.length && (lines[at] ?? "").startsWith("--") && !(lines[at] ?? "").startsWith(STATEMENT_BREAKPOINT)) {
+    at += 1;
+  }
+  lines.splice(at, 0, contractHeader(contract));
+  return lines.join("\n");
+}
 
 interface JournalEntry {
   idx: number;
@@ -213,7 +244,7 @@ function newEntries(before: Journal, after: Journal): JournalEntry[] {
   return added;
 }
 
-function generate(packageDir: string, name: string | undefined): string[] {
+function generate(packageDir: string, name: string | undefined, contract: Contract | undefined): string[] {
   const migrationsDir = join(packageDir, "migrations");
   const metaDir = join(migrationsDir, "meta");
   const sqlFiles = readSqlFiles(join(packageDir, "src", "sql"));
@@ -222,7 +253,12 @@ function generate(packageDir: string, name: string | undefined): string[] {
   const tables = existingTables(metaDir);
   const journalBefore = readJournal(metaDir);
   const messages: string[] = [];
+  const contractFiles: string[] = [];
   let customTag: string | undefined;
+
+  if (contract !== undefined && !journalBefore.entries.some(({ tag }) => tag === contract.expand)) {
+    throw new Error(`--contract names ${contract.expand}, which is not a migration of the journal`);
+  }
 
   if (existsSync(metaDir)) {
     runDrizzleKit(packageDir, ["check"], CHECK_OK);
@@ -246,6 +282,9 @@ function generate(packageDir: string, name: string | undefined): string[] {
     }
     if (custom.length > 0) {
       customTag = generated.tag;
+    }
+    if (!holdsBuild) {
+      contractFiles.push(file);
     }
     // One migration per build: a build that fails leaves at most its own INVALID index,
     // which migrate drops and rebuilds, where a finished build before it would stay valid
@@ -271,10 +310,19 @@ function generate(packageDir: string, name: string | undefined): string[] {
       throw new Error("drizzle-kit did not create the custom migration");
     }
     writeFileSync(join(migrationsDir, `${created.tag}.sql`), joinStatements(custom));
+    contractFiles.push(join(migrationsDir, `${created.tag}.sql`));
     customTag = created.tag;
     messages.push(`wrote ${created.tag}.sql`);
   }
 
+  if (contract !== undefined) {
+    if (contractFiles.length === 0) {
+      throw new Error("--contract was given, but this run writes no migration that can hold a contract step");
+    }
+    for (const file of contractFiles) {
+      writeFileSync(file, withContractHeader(readFileSync(file, "utf8"), contract));
+    }
+  }
   if (customTag !== undefined) {
     writeFileSync(join(metaDir, RECORD_FILE), `${JSON.stringify({ sha256: hash, migration: customTag }, null, 2)}\n`);
     messages.push(`src/sql changed: emitted in ${customTag}`);
@@ -284,9 +332,27 @@ function generate(packageDir: string, name: string | undefined): string[] {
   return messages.length === 0 ? ["migrations are up to date"] : messages;
 }
 
-function parseArguments(argv: readonly string[]): { packageDir: string; name: string | undefined } {
+interface Arguments {
+  packageDir: string;
+  name: string | undefined;
+  contract: Contract | undefined;
+}
+
+function parseContract(expand: string | undefined, release: string | undefined): Contract {
+  const expandTag = expand?.startsWith("expand=") === true ? expand.slice("expand=".length) : "";
+  const version = release?.startsWith("release=") === true ? release.slice("release=".length) : "";
+  if (!TAG_PATTERN.test(expandTag) || !RELEASE_PATTERN.test(version)) {
+    throw new Error(
+      `--contract takes expand=<migration tag> and release=<version> (a release tag such as 1.2.0, v1.2.0 or 1.2.0-rc.1). ${USAGE}`,
+    );
+  }
+  return { expand: expandTag, release: version };
+}
+
+function parseArguments(argv: readonly string[]): Arguments {
   let packageDir = resolve(import.meta.dirname, "..");
   let name: string | undefined;
+  let contract: Contract | undefined;
   const rest = argv.filter((argument) => argument !== "--");
   for (let index = 0; index < rest.length; index += 1) {
     const argument = rest[index] ?? "";
@@ -297,6 +363,9 @@ function parseArguments(argv: readonly string[]): { packageDir: string; name: st
     } else if (argument === "--package" && value !== undefined) {
       packageDir = resolve(value);
       index += 1;
+    } else if (argument === "--contract" && contract === undefined) {
+      contract = parseContract(value, rest[index + 2]);
+      index += 2;
     } else {
       throw new Error(USAGE);
     }
@@ -304,14 +373,15 @@ function parseArguments(argv: readonly string[]): { packageDir: string; name: st
   if (name !== undefined && !NAME_PATTERN.test(name)) {
     throw new Error(`migration name "${name}" must be add_, index_ or drop_ followed by lower-case words`);
   }
-  return { packageDir, name };
+  return { packageDir, name, contract };
 }
 
 function main(): number {
   let packageDir: string;
   let name: string | undefined;
+  let contract: Contract | undefined;
   try {
-    ({ packageDir, name } = parseArguments(process.argv.slice(2)));
+    ({ packageDir, name, contract } = parseArguments(process.argv.slice(2)));
   } catch (error) {
     process.stderr.write(`db:generate: ${error instanceof Error ? error.message : String(error)}\n`);
     return 2;
@@ -319,7 +389,7 @@ function main(): number {
   const migrationsDir = join(packageDir, "migrations");
   const before = captureTree(migrationsDir);
   try {
-    process.stdout.write(`${generate(packageDir, name).map((line) => `db:generate: ${line}`).join("\n")}\n`);
+    process.stdout.write(`${generate(packageDir, name, contract).map((line) => `db:generate: ${line}`).join("\n")}\n`);
     return 0;
   } catch (error) {
     restoreTree(migrationsDir, before);

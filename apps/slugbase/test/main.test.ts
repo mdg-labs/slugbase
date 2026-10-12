@@ -1,5 +1,6 @@
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
+import { connect, createServer } from "node:net";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -32,15 +33,175 @@ function start(env: Record<string, string>, ...args: string[]) {
   return { status: result.status, output: `${result.stdout}${result.stderr}` };
 }
 
+function freePort(): Promise<number> {
+  return new Promise((resolvePort, reject) => {
+    const probe = createServer();
+    probe.once("error", reject);
+    probe.listen(0, "127.0.0.1", () => {
+      const address = probe.address();
+      probe.close(() => {
+        resolvePort(typeof address === "object" && address !== null ? address.port : 0);
+      });
+    });
+  });
+}
+
+function get(port: number, path: string): Promise<string> {
+  return new Promise((resolveBody) => {
+    const chunks: Buffer[] = [];
+    const socket = connect({ port, host: "127.0.0.1" });
+    socket.on("data", (chunk: Buffer) => chunks.push(chunk));
+    socket.on("close", () => {
+      resolveBody(Buffer.concat(chunks).toString("utf8"));
+    });
+    socket.on("error", () => undefined);
+    socket.write(`GET ${path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n`);
+  });
+}
+
+interface RunningProcess {
+  status: number | null;
+  output: string;
+  response: string;
+}
+
+// Starts the server command, waits until it listens, asks it for a path, sends
+// SIGTERM and waits for the exit.
+async function runServer(env: Record<string, string>, ...args: string[]): Promise<RunningProcess> {
+  const port = await freePort();
+  const child = spawn(process.execPath, ["src/main.ts", ...args], {
+    cwd: APP,
+    env: { PATH: process.env["PATH"] ?? "", PORT: String(port), ...env },
+  });
+  let output = "";
+  const exited = new Promise<number | null>((resolveExit) => {
+    child.on("close", (code) => {
+      resolveExit(code);
+    });
+  });
+  const listening = new Promise<boolean>((resolveListening) => {
+    const watch = (chunk: Buffer): void => {
+      output += chunk.toString("utf8");
+      if (output.includes('"Listening"')) {
+        resolveListening(true);
+      }
+    };
+    child.stdout.on("data", watch);
+    child.stderr.on("data", watch);
+    void exited.then(() => {
+      resolveListening(false);
+    });
+  });
+  const timer = setTimeout(() => child.kill("SIGKILL"), 30_000);
+  try {
+    const response = (await listening) ? await get(port, "/no-such-path") : "";
+    child.kill("SIGTERM");
+    return { status: await exited, output, response };
+  } finally {
+    clearTimeout(timer);
+    child.kill("SIGKILL");
+  }
+}
+
 describe("apps/slugbase main", () => {
-  it("starts the server with a valid production environment", () => {
-    const { status, output } = start(valid);
+  it("starts the server, answers through the middleware chain and exits 0 on SIGTERM", async () => {
+    const { status, output, response } = await runServer(valid);
     expect(status, output).toBe(0);
     expect(output).toContain("Configuration loaded");
+    expect(output).toContain("Shutdown complete");
+    expect(response).toMatch(/^HTTP\/1\.1 404 /);
+    expect(response).toContain('"code":"not_found"');
   });
 
-  it.each(["server", "worker", "migrate"])("accepts the %s command", (command) => {
-    expect(start(valid, command).status).toBe(0);
+  it("answers with an X-Request-Id and writes one pino line per request without the raw path", async () => {
+    const { status, output, response } = await runServer(valid);
+    expect(status, output).toBe(0);
+    const requestId = /^x-request-id: (\S+)$/im.exec(response)?.[1];
+    expect(requestId).toBeDefined();
+    const lines = output
+      .split("\n")
+      .filter((line) => line.startsWith("{"))
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    const requests = lines.filter((line) => line["msg"] === "Request completed");
+    expect(requests).toHaveLength(1);
+    expect(requests[0]).toMatchObject({ level: "info", requestId, route: "unmatched", status: 404, method: "GET" });
+    expect(output).not.toContain("no-such-path");
+  });
+
+  it("starts the server for the server command", async () => {
+    const { status, output } = await runServer(valid, "server");
+    expect(status, output).toBe(0);
+    expect(output).toContain('"Listening"');
+  });
+
+  it("serves /metrics on METRICS_PORT only, and the public port answers 404 not_found for it", async () => {
+    const metricsPort = await freePort();
+    const publicPort = await freePort();
+    const child = spawn(process.execPath, ["src/main.ts", "server"], {
+      cwd: APP,
+      env: { PATH: process.env["PATH"] ?? "", ...valid, PORT: String(publicPort), METRICS_PORT: String(metricsPort) },
+    });
+    let output = "";
+    const exited = new Promise<number | null>((resolveExit) => {
+      child.on("close", (code) => {
+        resolveExit(code);
+      });
+    });
+    const listening = new Promise<boolean>((resolveListening) => {
+      const watch = (chunk: Buffer): void => {
+        output += chunk.toString("utf8");
+        if (output.includes('"Metrics listening"')) {
+          resolveListening(true);
+        }
+      };
+      child.stdout.on("data", watch);
+      child.stderr.on("data", watch);
+      void exited.then(() => {
+        resolveListening(false);
+      });
+    });
+    const timer = setTimeout(() => child.kill("SIGKILL"), 30_000);
+    try {
+      expect(await listening, output).toBe(true);
+      const scraped = await get(metricsPort, "/metrics");
+      const publicAnswer = await get(publicPort, "/metrics");
+      child.kill("SIGTERM");
+      expect(await exited, output).toBe(0);
+      expect(scraped).toMatch(/^HTTP\/1\.1 200 /);
+      expect(scraped).toContain("# TYPE slugbase_http_requests_total counter");
+      expect(publicAnswer).toMatch(/^HTTP\/1\.1 404 /);
+      expect(publicAnswer).toContain('"code":"not_found"');
+      expect(publicAnswer).not.toContain("slugbase_http_requests_total");
+    } finally {
+      clearTimeout(timer);
+      child.kill("SIGKILL");
+    }
+  });
+
+  it("accepts the migrate command", () => {
+    expect(start(valid, "migrate").status).toBe(0);
+  });
+
+  it("exits non-zero when the port is taken", async () => {
+    const holder = createServer();
+    const port = await new Promise<number>((resolvePort) => {
+      holder.listen(0, "127.0.0.1", () => {
+        const address = holder.address();
+        resolvePort(typeof address === "object" && address !== null ? address.port : 0);
+      });
+    });
+    try {
+      const result = spawnSync(process.execPath, ["src/main.ts", "server"], {
+        cwd: APP,
+        env: { PATH: process.env["PATH"] ?? "", ...valid, PORT: String(port) },
+        encoding: "utf8",
+        timeout: 30_000,
+      });
+      expect(result.status, result.stderr).toBe(1);
+      expect(result.stderr).toContain("EADDRINUSE");
+    } finally {
+      holder.close();
+    }
   });
 
   it("exits non-zero naming the key and never the value when SESSION_SECRET is weak", () => {
@@ -73,11 +234,13 @@ describe("apps/slugbase main", () => {
   it("validates the schema of the command it runs", () => {
     const migrateOnly = { NODE_ENV: valid.NODE_ENV, DATABASE_MIGRATE_URL: valid.DATABASE_MIGRATE_URL };
     expect(start(migrateOnly, "migrate").status).toBe(0);
-    expect(start(migrateOnly, "worker").status).toBe(1);
+    const worker = start(migrateOnly, "worker");
+    expect(worker.status).toBe(1);
+    expect(worker.output).toContain("DATABASE_URL");
   });
 
-  it("warns once about unknown SLUGBASE_* keys, naming keys only", () => {
-    const { status, output } = start({ ...valid, SLUGBASE_NOT_A_KEY: "value-qx72" });
+  it("warns once about unknown SLUGBASE_* keys, naming keys only", async () => {
+    const { status, output } = await runServer({ ...valid, SLUGBASE_NOT_A_KEY: "value-qx72" });
     expect(status).toBe(0);
     expect(output).toContain("SLUGBASE_NOT_A_KEY");
     expect(output).not.toContain("value-qx72");

@@ -8,6 +8,7 @@ export {
   NODE_ENVS,
   databaseFragment,
   httpFragment,
+  metricsFragment,
   migrateFragment,
   originFragment,
   runtimeFragment,

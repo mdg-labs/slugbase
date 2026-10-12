@@ -44,15 +44,18 @@ export interface ResponseHeader {
   readonly schema: z.ZodType;
 }
 
-export interface JsonResponse {
+export type ResponseHeaders = Readonly<Record<string, ResponseHeader>>;
+
+/** The schema and the headers stay in the type, so a handler is typed from what its operation declares. */
+export interface JsonResponse<S extends z.ZodType = z.ZodType, H extends ResponseHeaders = ResponseHeaders> {
   readonly kind: "json";
   readonly description: string;
-  readonly schema: z.ZodType;
-  readonly headers?: Readonly<Record<string, ResponseHeader>>;
+  readonly schema: S;
+  readonly headers?: H;
 }
 
-export interface JsonResponseOptions {
-  readonly headers?: Readonly<Record<string, ResponseHeader>>;
+export interface JsonResponseOptions<H extends ResponseHeaders = ResponseHeaders> {
+  readonly headers?: H;
 }
 
 export interface ProblemResponse {
@@ -66,7 +69,11 @@ export interface EmptyResponse {
 }
 
 /** A response with a JSON body described by a Zod schema, and optionally the headers it documents. */
-export function jsonResponse(description: string, schema: z.ZodType, options: JsonResponseOptions = {}): JsonResponse {
+export function jsonResponse<S extends z.ZodType, H extends ResponseHeaders = ResponseHeaders>(
+  description: string,
+  schema: S,
+  options: JsonResponseOptions<H> = {},
+): JsonResponse<S, H> {
   return options.headers === undefined ? { kind: "json", description, schema } : { kind: "json", description, schema, headers: options.headers };
 }
 
@@ -110,6 +117,12 @@ export interface OperationDefinition {
   readonly entitlement?: string;
   readonly audience?: Audience;
   readonly request?: OperationRequest;
+  /**
+   * The largest request body the body-limits stage accepts, in bytes. Absent,
+   * the stage's default applies (doc 01 section 4 step 3). Server-side policy:
+   * it is not part of the generated OpenAPI document.
+   */
+  readonly maxBodyBytes?: number;
   readonly responses: OperationResponses;
 }
 
@@ -118,6 +131,6 @@ export interface OperationDefinition {
  * and token-scope stages read the policy fields from the generated document
  * (doc 04 section 1.2); leaving one out is a compile error.
  */
-export function defineOperation(definition: OperationDefinition): OperationDefinition {
+export function defineOperation<const D extends OperationDefinition>(definition: D): D {
   return definition;
 }

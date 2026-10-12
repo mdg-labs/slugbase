@@ -2,6 +2,7 @@ export type { Adapters } from "./adapters.ts";
 export type { AiSuggestPort, AiSuggestRequest, AiSuggestion } from "./ai-suggest.ts";
 export type { AnalyticsEvent, AnalyticsPort } from "./analytics.ts";
 export type { ChallengePort, ChallengeVerdict } from "./challenge.ts";
+export type { ClientErrorReportPort, ClientErrorReportRequest } from "./client-error-report.ts";
 export type { EgressPort, EgressRequest, EgressResponse } from "./egress.ts";
 export type { ErrorReportContext, ErrorReportPort } from "./error-report.ts";
 export type {
