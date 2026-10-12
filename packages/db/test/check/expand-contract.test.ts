@@ -180,8 +180,6 @@ describe("what is rejected in a migration added since the latest release tag", (
     ["an extension dropped with its columns", "DROP EXTENSION citext CASCADE;", "cannot place"],
     ["a table action it does not read", "ALTER TABLE bookmarks ALTER COLUMN title SET STORAGE external;", "cannot place"],
     ["a policy that calls a function", "CREATE POLICY p ON bookmarks USING (helper(id));", "calls helper()"],
-    ["a function in a language other than sql", "CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ BEGIN PERFORM 1; END $$;", "cannot place"],
-    ["a plpgsql function whose body reads like a SELECT", "CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ SELECT 1 $$;", "cannot place"],
     ["a table action it does not read, with no column", "ALTER TABLE bookmarks SET LOGGED;", "cannot place"],
     ["a table action over a whole tablespace", "ALTER TABLE ALL IN TABLESPACE ts SET TABLESPACE other;", "cannot place"],
     ["a name spelled with Unicode escapes", 'ALTER TABLE U&"b\\006Fokmarks" DROP COLUMN title;', "cannot place"],
@@ -196,12 +194,10 @@ describe("what is rejected in a migration added since the latest release tag", (
     ["a function body that alters a table, then a call", "CREATE FUNCTION f() RETURNS void LANGUAGE sql AS $$ ALTER TABLE bookmarks DROP COLUMN title $$;\nSELECT f();"],
     ["a plpgsql function that alters a table, then a call", "CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ BEGIN ALTER TABLE bookmarks DROP COLUMN title; END $$;\nSELECT f();"],
     ["a SQL function body that calls another function, then a call", "CREATE FUNCTION f() RETURNS int LANGUAGE sql AS $$ SELECT g() $$;\nSELECT f();"],
-  ])("rejects both the helper function and its call: %s", async (_name, sql) => {
+  ])("rejects the call of the helper function, whatever its body: %s", async (_name, sql) => {
     const findings = await added(sql);
-    expect(findings).toHaveLength(2);
-    for (const finding of findings) {
-      expect(finding.message).toContain("cannot place");
-    }
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("cannot place");
   });
 
   it("rejects the inline CHECK of an added column, not a NOT NULL column", async () => {
@@ -987,15 +983,12 @@ describe("data-changing statements", () => {
     expect(findings[0]?.message).toContain("cannot place");
   });
 
-  it("stays unknown for a plpgsql function and for a SQL function with a data-changing body", async () => {
+  it("does not analyse the body of a function, which runs only when the function is called", async () => {
     for (const sql of [
       "CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ BEGIN DELETE FROM bookmarks; END $$;",
       "CREATE FUNCTION f() RETURNS void LANGUAGE sql AS $$ DELETE FROM bookmarks $$;",
     ]) {
-      const findings = await added(sql);
-      expect(findings).toHaveLength(1);
-      expect(findings[0]?.message).toContain("cannot place");
-      expect(findings[0]?.message).not.toContain("changes data");
+      expect(await added(sql)).toEqual([]);
     }
   });
 
@@ -1191,7 +1184,7 @@ describe("the statement reader", () => {
         "COMMENT ON TABLE t IS 'x';",
       ].join("\n"),
     ).flatMap((statement) => statement.operations.map((operation) => operation.kind));
-    expect(kinds).toEqual(Array.from({ length: 7 }, () => "safe"));
+    expect(kinds).toEqual(["safe", "declares-function", "safe", "safe", "safe", "safe", "safe"]);
   });
 
   it("places no operation of ALTER TABLE without an action or a name", () => {

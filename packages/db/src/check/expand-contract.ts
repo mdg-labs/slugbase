@@ -1,4 +1,4 @@
-import { analyseSql, setsSessionTimeout, type ColumnType, type Operation, type TableName } from "./migration-statements.ts";
+import { analyseSql, identifierForm, mentionOfAny, setsSessionTimeout, SYSTEM_ROLE, TENANT_FUNCTIONS, type AnalysedStatement, type ColumnType, type FunctionIdentity, type Operation, type TableName } from "./migration-statements.ts";
 import { readJournal, readMigration } from "./migration-files.ts";
 import { readReleaseState, releaseTags, type ReleaseState } from "./release-history.ts";
 import type { CheckRule, ContractMarker, Finding } from "./types.ts";
@@ -57,15 +57,62 @@ import type { CheckRule, ContractMarker, Finding } from "./types.ts";
 //     it uses. Only a REVOKE on tables the release does not hold passes. The
 //     release state holds tables only, so a view or sequence of the release
 //     named as a bare table, or an object only custom SQL creates, is not seen,
+//   - replacing a function the chain declares (CREATE OR REPLACE FUNCTION) with a
+//     different return type, or where an earlier statement this check could not
+//     read may have created it, so that it cannot show the signature and return
+//     type stay as they were (DROP FUNCTION is a form it does not read at all),
 //   - any statement this check does not positively read as one of the forms it
 //     lists as safe (CREATE TABLE of a column list and nothing after it,
-//     CREATE INDEX/POLICY/EXTENSION/SEQUENCE/SCHEMA, an enum CREATE TYPE, a
-//     LANGUAGE sql CREATE FUNCTION of one SELECT of
-//     built-ins, ALTER TABLE actions, DROP INDEX/POLICY, GRANT and COMMENT of a
-//     whole shape),
+//     CREATE INDEX/POLICY/EXTENSION/SEQUENCE/SCHEMA, an enum CREATE TYPE, the
+//     system-function forms below, ALTER TABLE actions, DROP INDEX/POLICY, GRANT
+//     and COMMENT of a whole shape),
 //     or that calls a function outside a short list of built-ins and the
 //     tenant context functions. Everything else (DO, CALL, COPY, SELECT, SET,
 //     other ALTER/DROP/CREATE forms, ...) could hold any of the above.
+//
+// The system-function forms of doc 05 section 3.3 are the statements that add a
+// system operation, and an unmarked migration may use them:
+//
+//   - CREATE FUNCTION, or CREATE OR REPLACE FUNCTION of a function with the
+//     signature and return type the chain declares, or of one it does not declare
+//     (where it has read every earlier statement), in any language and with or
+//     without SECURITY DEFINER. The body is a string that runs only when the
+//     function is called, so it is not analysed as migration statements; the
+//     system-operations rule reads the function in the database. A migration can
+//     call a function the chain declares in a default, a policy, an index
+//     expression or predicate, and also without a parenthesis (field-selection
+//     notation: "(t).f" is "f(t)" for a row type t), and its body would then run
+//     in the migration. So a statement that mentions the name of such a function
+//     as a word or a quoted identifier is rejected (also a column named like
+//     it); only the statements that declare, hand over or grant on it name it.
+//     Names are compared on the text as written, as PostgreSQL compares them:
+//     only the letters A to Z folded to lower case (no Unicode case mapping), a
+//     quoted name read as the unquoted one, and both cut to 63 bytes at a
+//     character boundary, qualified or not. A CREATE FUNCTION whose name, quoted
+//     or not, has a character outside printable ASCII is not read, so every name
+//     the check holds is ASCII; nor is one whose name is
+//     longer than 63 bytes, which PostgreSQL stores under a shorter name. Nor is one that can be called with a single argument of a type that
+//     is not a built-in (a first input argument of such a type whose later input
+//     arguments all have a default, or a VARIADIC one), since field-selection
+//     notation can call it. Names are held to more: a function named like
+//     a built-in this check lets a migration call, or like a word it reads as
+//     grammar before a "(", is not read, and a tenant context function stays one
+//     LANGUAGE sql SELECT of built-ins, since every policy relies on it,
+//   - ALTER FUNCTION f(args) OWNER TO slugbase_system, for a function the same
+//     file creates; any other action or owner is not read,
+//   - REVOKE ALL ON FUNCTION f(args) FROM PUBLIC, for a function the same file
+//     creates, and GRANT EXECUTE ON FUNCTION f(args) TO slugbase_app; any other
+//     privilege, role or form is not read,
+//   - GRANT CREATE ON SCHEMA s TO slugbase_system together with the REVOKE CREATE
+//     ON SCHEMA s FROM slugbase_system that takes it back in the same file, with
+//     nothing but the two function statements above (CREATE FUNCTION and ALTER
+//     FUNCTION ... OWNER TO) between them. A schema CREATE grant to another role
+//     or in another shape, or one that the file does not revoke, is rejected.
+//
+// A function is identified by its schema, its name and the types of its input
+// arguments as written (names, modes and defaults left out), so a signature
+// spelled differently in two statements is not recognised as one function and
+// the later statement is rejected rather than guessed at.
 //
 // Those are accepted only in the contract half of an expand/contract pair, and
 // only with both of:
@@ -138,6 +185,12 @@ export function contractMarkerFromEnv(env: Readonly<Record<string, string | unde
 }
 
 const key = (table: TableName): string => `${table.schema}.${table.name}`;
+const functionKey = ({ name, args }: FunctionIdentity): string => `${key(name)}(${args})`;
+const functionLabel = ({ name, args }: FunctionIdentity): string => `${describe(name)}(${args})`;
+
+// While a file holds CREATE on a schema for slugbase_system, only the statements that create a function and
+// hand it over run; a statement this check cannot place or a data change is reported on its own.
+const FUNCTION_STATEMENTS = new Set<Operation["kind"]>(["declares-function", "alters-function-owner", "revokes-schema-create", "unknown", "data-change"]);
 
 function describe(table: TableName): string {
   return table.schema === "public" ? table.name : key(table);
@@ -157,6 +210,17 @@ class Released {
   // constraints, and volatileDefault when it has, or may have, a default that is not a constant or a stable call.
   // citext is the type of the extension this package installs (doc 05 section 1), which is no domain.
   private readonly types = new Map<string, TypeState>([[CITEXT, { constraints: false, volatileDefault: false }]]);
+
+  // The return type of each function the migration chain declares, by name and input argument types. functionsKnown
+  // is false after a migration or statement this check cannot read, which may have created or replaced a function.
+  private readonly functions = new Map<string, string>();
+  private functionsKnown = true;
+  // The lower-case names of the functions the chain declares, whose body runs when a statement calls one.
+  private readonly functionNames = new Set<string>();
+  // What the migration being read has done: the functions it declares, and the schemas it has granted CREATE on to
+  // slugbase_system and not yet revoked.
+  private declared = new Set<string>();
+  private creatable = new Set<string>();
 
   readonly tag: string | undefined;
 
@@ -180,9 +244,10 @@ class Released {
    * may have given any domain a constraint, renamed or moved a type, or replaced an enum with a domain:
    * no type declared before it stays one this check can show to be free of constraints. The type of the
    * extension this package installs is the exception, and a type a later migration declares is read as
-   * it is declared.
+   * it is declared. The same holds for the functions: one may have been created or replaced.
    */
   taint(): void {
+    this.functionsKnown = false;
     for (const name of this.types.keys()) {
       if (name !== CITEXT) {
         this.types.set(name, UNPROVEN);
@@ -190,9 +255,26 @@ class Released {
     }
   }
 
-  /** Takes the type a migration declares or changes into the model. */
+  /** Starts reading a migration added since the release. */
+  startFile(): void {
+    this.declared = new Set();
+    this.creatable = new Set();
+  }
+
+  /** What is still open when the migration ends: CREATE on a schema that was granted to slugbase_system and not revoked. */
+  endFile(): string[] {
+    return [...this.creatable].map((schema) => `grants CREATE on schema ${schema} to ${SYSTEM_ROLE} and does not revoke it in the same file: the role would keep the right to create objects in the schema`);
+  }
+
+  /** Takes the type or function a migration declares or changes into the model. */
   track(operation: Operation): void {
-    if (operation.kind === "declares-type") {
+    if (operation.kind === "declares-function") {
+      this.functions.set(functionKey(operation.fn), operation.returns);
+      const name = operation.fn.name.name.toLowerCase();
+      if (!TENANT_FUNCTIONS.has(name)) {
+        this.functionNames.add(identifierForm(operation.fn.name.name));
+      }
+    } else if (operation.kind === "declares-type") {
       this.types.set(key(operation.name), {
         constraints: operation.ownConstraints || !this.constraintFree(operation.base),
         volatileDefault: operation.volatileDefault ?? this.volatileDefaultOf(operation.base),
@@ -235,9 +317,33 @@ class Released {
     }
   }
 
+  /**
+   * The problem of a statement that mentions a function the chain declares, which may call it and run its
+   * body in the migration (also without a parenthesis: `(t).f` is `f(t)`), so any word of that name counts,
+   * also a column or table named like it. A statement that declares, hands over or grants on a function
+   * names it without calling it, and one the reader cannot place is reported by the reader already.
+   */
+  callProblem(statement: AnalysedStatement): string[] {
+    const names = statement.operations.some((operation) => operation.kind === "declares-function" || operation.kind === "alters-function-owner" || operation.kind === "revokes-function-public" || operation.kind === "grants-function-execute" || operation.kind === "unknown")
+      ? new Set<string>()
+      : this.functionNames;
+    const mention = mentionOfAny(statement.text, names);
+    return mention === undefined ? [] : [`mentions ${mention}, a function the migration chain declares: a call of it, written in any form, would run its body in the migration (D25: migrations stay schema-only), and this check does not tell a call from another use of the name`];
+  }
+
   apply(operation: Operation): string[] {
-    const at = this.tag ?? "the latest release";
+    const open = [...this.creatable];
+    const before = operation.kind === "declares-function" ? this.functions.get(functionKey(operation.fn)) : undefined;
     this.track(operation);
+    const problems = this.place(operation, before);
+    return open.length > 0 && !FUNCTION_STATEMENTS.has(operation.kind)
+      ? [`runs a statement between GRANT CREATE ON SCHEMA ${open.join(", ")} and its REVOKE that is not a CREATE FUNCTION or an ALTER FUNCTION ... OWNER TO ${SYSTEM_ROLE}: while ${SYSTEM_ROLE} holds CREATE on the schema, a migration runs function statements only`, ...problems]
+      : problems;
+  }
+
+  /** The problems of one operation; `before` is the return type the chain declared for the function it declares. */
+  private place(operation: Operation, before: string | undefined): string[] {
+    const at = this.tag ?? "the latest release";
     switch (operation.kind) {
       case "drop-table": {
         if (!this.hasTable(operation.table)) {
@@ -323,6 +429,35 @@ class Released {
         return this.hasTable(operation.table)
           ? [(`attaches an index as the primary key of table ${describe(operation.table)}, which exists at ${at}: that sets its columns NOT NULL if they are not already, which the previous release may still write NULL to, and can scan the table under an ACCESS EXCLUSIVE lock`)]
           : [];
+      case "declares-function": {
+        this.declared.add(functionKey(operation.fn));
+        if (!operation.replace) {
+          return [];
+        }
+        if (before !== undefined) {
+          return before === operation.returns
+            ? []
+            : [`replaces function ${functionLabel(operation.fn)} and changes its return type from ${before || "none"} to ${operation.returns || "none"}: the function exists at ${at}, and the previous release still calls it`];
+        }
+        return this.functionsKnown
+          ? []
+          : [`replaces function ${functionLabel(operation.fn)}, which this check cannot show is not a function of ${at}: it could not read every earlier statement, so it cannot show the signature and return type stay as they were`];
+      }
+      case "alters-function-owner":
+        return this.declared.has(functionKey(operation.fn))
+          ? []
+          : [`changes the owner of function ${functionLabel(operation.fn)}, which this migration does not create: only a function it creates is handed to ${SYSTEM_ROLE}`];
+      case "revokes-function-public":
+        return this.declared.has(functionKey(operation.fn))
+          ? []
+          : [`revokes privileges on function ${functionLabel(operation.fn)} from PUBLIC, and this migration does not create it: a running replica may lose the access it uses`];
+      case "grants-schema-create":
+        this.creatable.add(operation.schema);
+        return [];
+      case "revokes-schema-create":
+        return this.creatable.delete(operation.schema)
+          ? []
+          : [`revokes CREATE on schema ${operation.schema} from ${SYSTEM_ROLE} without granting it in the same file: this check cannot show the release at ${at} does not use it`];
       case "revoke": {
         if (operation.tables === undefined) {
           return [`revokes privileges on a schema, sequence, database or every object of a kind, which this check cannot show the release at ${at} does not use: a running replica may lose access to it`];
@@ -333,6 +468,7 @@ class Released {
       }
       case "unknown":
         return [(`has a statement this check cannot place (${operation.reason}), so it cannot show that the statement keeps the previous release working`)];
+      case "grants-function-execute":
       case "declares-type":
       case "sets-default":
       case "retypes":
@@ -444,6 +580,7 @@ export const expandContractRule: CheckRule = {
         throw new Error(`migration file ${tag}.sql listed in the journal cannot be read`);
       }
       const problems: string[] = [];
+      released.startFile();
       try {
         const timeout = setsSessionTimeout(content);
         if (timeout !== undefined) {
@@ -454,6 +591,7 @@ export const expandContractRule: CheckRule = {
           });
         }
         for (const statement of analyseSql(content)) {
+          problems.push(...released.callProblem(statement));
           for (const operation of statement.operations) {
             if (operation.kind === "data-change") {
               findings.push({ rule: ID, object, message: dataChangeMessage(operation.statement, statement.text) });
@@ -461,6 +599,7 @@ export const expandContractRule: CheckRule = {
             problems.push(...released.apply(operation));
           }
         }
+        problems.push(...released.endFile());
       } catch (error) {
         released.taint();
         problems.push(
