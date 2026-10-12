@@ -1,9 +1,7 @@
-import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { useTestDatabase, type MigrationChain, type TestDatabase, type TestSql } from "@slugbase/testing/db";
-import { beforeAll } from "vitest";
 
 /** The connection URL of a pool of the test harness, with its login role and password. */
 export function urlOf(pool: TestSql): string {
@@ -57,41 +55,7 @@ export function scratchChains(): ScratchChains {
   };
 }
 
-const TEST_DATABASE = /^test_[0-9a-f]{16}$/;
-
-/**
- * The harness clones a database from its template, and a clone has none of the template's
- * privileges on the database itself: `slugbase_owner`, which `migrate` creates the bookkeeping
- * schema as, cannot create anything in it. This gives the clone the grant `roles.sql` gives a
- * provisioned database, so `migrate` runs against it the way it does in a deployment.
- */
-function grantCreateToOwner(database: TestDatabase): void {
-  if (!TEST_DATABASE.test(database.name)) {
-    throw new Error("only a database of the test harness is provisioned here");
-  }
-  const server = new URL(process.env["SLUGBASE_TEST_PG_URL"] ?? "postgres://slugbase:slugbase@127.0.0.1:54329/slugbase_dev");
-  const login = clusterSuperuser();
-  const result = spawnSync("psql", ["-X", "-v", "ON_ERROR_STOP=1", "-c", `GRANT CREATE ON DATABASE ${database.name} TO slugbase_owner`], {
-    encoding: "utf8",
-    env: {
-      PATH: process.env["PATH"] ?? "",
-      PGHOST: server.hostname,
-      PGPORT: server.port === "" ? "5432" : server.port,
-      PGDATABASE: database.name,
-      PGUSER: login.username,
-      PGPASSWORD: login.password,
-    },
-  });
-  if (result.error !== undefined || result.status !== 0) {
-    throw new Error(`provisioning the test database with psql failed (psql must be on the PATH): ${result.stderr}`);
-  }
-}
-
-/** A test database `migrate` can run against: see `grantCreateToOwner`. */
+/** A test database `migrate` can run against: the harness gives `slugbase_owner` the database-level grants `roles.sql` does. */
 export function useMigratableDatabase(): () => TestDatabase {
-  const database = useTestDatabase();
-  beforeAll(() => {
-    grantCreateToOwner(database());
-  });
-  return database;
+  return useTestDatabase();
 }

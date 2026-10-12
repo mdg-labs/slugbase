@@ -52,6 +52,39 @@ describe("the database of a test file", () => {
   });
 });
 
+describe("the database-level privileges", () => {
+  async function acl(sql: TestDatabase["app"], name: string): Promise<string[]> {
+    const rows = await sql<{ acl: string[] | null }[]>`
+      SELECT array(SELECT a::text FROM unnest(datacl) AS a ORDER BY 1) AS acl FROM pg_database WHERE datname = ${name}`;
+    return rows[0]?.acl ?? [];
+  }
+
+  it("are those roles.sql gave the template, which a clone does not copy", async () => {
+    const template = await acl(db.app, db.template.name);
+    expect(template.length).toBeGreaterThan(0);
+    expect(await acl(db.app, db.name)).toEqual(template);
+  });
+
+  it("let only slugbase_owner create schemas", async () => {
+    const rows = await db.app<{ role: string; connect: boolean; create: boolean }[]>`
+      SELECT r AS role,
+             has_database_privilege(r, current_database(), 'CONNECT') AS connect,
+             has_database_privilege(r, current_database(), 'CREATE') AS create
+      FROM unnest(ARRAY['slugbase_owner', 'slugbase_app', 'slugbase_migrator', 'slugbase_system']) AS r ORDER BY r`;
+    expect(rows).toEqual([
+      { role: "slugbase_app", connect: true, create: false },
+      { role: "slugbase_migrator", connect: true, create: false },
+      { role: "slugbase_owner", connect: true, create: true },
+      { role: "slugbase_system", connect: true, create: false },
+    ]);
+  });
+
+  it("let the owner create a schema, as migrate does", async () => {
+    await db.owner`CREATE SCHEMA harness_grant_probe`;
+    await db.owner`DROP SCHEMA harness_grant_probe`;
+  });
+});
+
 describe("the pool as slugbase_app", () => {
   it("connects as slugbase_app, which is neither a superuser nor exempt from row-level security", async () => {
     const rows = await db.app<{ user: string; super: boolean; bypass: boolean }[]>`
