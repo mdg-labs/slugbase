@@ -68,7 +68,7 @@ Settled (D6). It is also the feature that makes the security model work: row-lev
                     PostgreSQL 18
 ```
 
-- `docker compose up` on the published `compose.yml` brings up `slugbase` (server), `slugbase-worker` (same image, `worker` command) and `postgres` (`compose.dev.yml` is the development stack, doc 08 §1). A single-container mode (`slugbase serve --with-worker`) runs the worker loop inside the server process for the smallest installs (Q11).
+- `docker compose up` on the published `compose.yml` brings up `slugbase` (server), `slugbase-worker` (same image, `worker` command) and `postgres` (`compose.dev.yml` is the development stack, doc 08 §1). A single-container mode (`slugbase server --with-worker`) runs the worker loop inside the server process for the smallest installs (Q11).
 - Migrations run on startup in CE, and a CE operator never runs a separate migration step (D25): the image entrypoint runs `migrate` with the migrator credentials (a Postgres advisory lock, a `lock_timeout`), and only after it succeeds starts the server with the migrator URL removed from its environment, so a compromised server process holds no credentials that can change the schema. The worker never receives the migrator URL. `/ready` stays `503` until the database is at the migration level the build expects. The in-process variant (`MIGRATE_ON_START=true` without the entrypoint, used by the single-container mode) migrates inside the server process, answers the probes first and returns `503 unavailable` for every other route until the migration has finished (Q76).
 - No other service is required. Mail, AI, OIDC and error reporting are optional adapters configured through environment variables (§6).
 

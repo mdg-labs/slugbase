@@ -103,7 +103,7 @@ Numbers are stable: Q1–Q19 come from docs 00–01, Q20–Q39 from 02–03, Q40
 | Q | Decision | Status |
 |---|---|---|
 | Q3 | PostgreSQL 17 and 18 supported | Decided (default) |
-| Q11 | Support `slugbase serve --with-worker` (worker loop in the server process) for the smallest installs | Decided (default) |
+| Q11 | Support `slugbase server --with-worker` (worker loop in the server process) for the smallest installs | Decided (default) |
 | Q12 | Built in the public CE repository's CI on GitHub-hosted runners and published to `ghcr.io/mdg-labs/slugbase` (public) | Decided (default) |
 | Q17 | Build SBOM (SPDX) and SLSA provenance attestations with BuildKit for every image | Decided (default) |
 | Q18 | None | Decided (default) |
@@ -415,7 +415,7 @@ Many operators run a distro or managed Postgres a major behind. Nothing in the d
 ### Q11 — Single-container CE mode
 **Status:** Decided (default) · **Due:** Phase 6 (CE packaging) · **Affects:** doc 01 §2.1, doc 07 (CE packaging)
 
-**Decision: support `slugbase serve --with-worker` (worker loop in the server process) for the smallest installs; the documented compose file still runs two containers from one image.**
+**Decision: support `slugbase server --with-worker` (worker loop in the server process) for the smallest installs; the documented compose file still runs two containers from one image.**
 Some operators (NAS app stores, PaaS) only run one container. The same code paths run either way; only the process boundary differs.
 
 ### Q12 — Where the CE image is published
