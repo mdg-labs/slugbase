@@ -13,10 +13,19 @@ import type { CheckRule, Finding } from "./types.ts";
 //   - changing the type of a column of such a table (any change: whether it
 //     rewrites the table depends on the old and the new type, which a lint of
 //     the file cannot tell),
-//   - setting a column of such a table NOT NULL, or dropping its default
-//     (DROP DEFAULT, or SET DEFAULT NULL, which removes it): the previous
-//     release can still write rows that rely on either,
-//   - creating an index on such a table without CONCURRENTLY,
+//   - setting a column of such a table NOT NULL (SET NOT NULL, or a NOT NULL
+//     table constraint), or dropping its default (DROP DEFAULT, or SET DEFAULT
+//     NULL, which removes it): the previous release can still write rows that
+//     rely on either,
+//   - creating an index on such a table without CONCURRENTLY, which includes
+//     adding a PRIMARY KEY, UNIQUE or EXCLUDE constraint, also as the inline
+//     constraint of an added column; only UNIQUE USING INDEX attaches an index
+//     safely, PRIMARY KEY USING INDEX is rejected because it sets the index's
+//     columns NOT NULL where they are not already,
+//   - adding a CHECK or FOREIGN KEY constraint to such a table without NOT VALID
+//     (it is validated with VALIDATE CONSTRAINT in a later step), which includes
+//     an inline CHECK on an added column and an inline REFERENCES on an added
+//     column that has a default,
 //   - any statement this check does not positively read as one of the forms it
 //     lists as safe (CREATE TABLE of a column list and nothing after it,
 //     CREATE INDEX/POLICY/EXTENSION/SEQUENCE/SCHEMA, an enum CREATE TYPE, a
@@ -154,6 +163,14 @@ class Released {
       case "create-index":
         return !operation.concurrently && this.hasTable(operation.table)
           ? [(`creates an index on table ${describe(operation.table)}, which exists at ${at}, without CONCURRENTLY`)]
+          : [];
+      case "add-validated-constraint":
+        return this.hasTable(operation.table)
+          ? [(`adds a CHECK or FOREIGN KEY constraint without NOT VALID to table ${describe(operation.table)}, which exists at ${at}: validating it scans the table under its lock, so the release adds it NOT VALID and validates it with VALIDATE CONSTRAINT in a later step`)]
+          : [];
+      case "add-primary-key-using-index":
+        return this.hasTable(operation.table)
+          ? [(`attaches an index as the primary key of table ${describe(operation.table)}, which exists at ${at}: that sets its columns NOT NULL if they are not already, which the previous release may still write NULL to, and can scan the table under an ACCESS EXCLUSIVE lock`)]
           : [];
       case "unknown":
         return [(`has a statement this check cannot place (${operation.reason}), so it cannot show that the statement keeps the previous release working`)];

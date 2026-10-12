@@ -95,6 +95,35 @@ describe("what is rejected in a migration added since the latest release tag", (
     ["setting the default of a column to a parenthesised NULL", 'ALTER TABLE bookmarks ALTER COLUMN title SET DEFAULT (NULL);', "drops the default of column bookmarks.title"],
     ["setting the default of a column to a cast NULL", 'ALTER TABLE bookmarks ALTER COLUMN title SET DEFAULT NULL::text;', "drops the default of column bookmarks.title"],
     ["setting the default of a column to a deeply parenthesised, cast NULL", 'alter table bookmarks alter title set default (((null)))::varchar(10);', "drops the default of column bookmarks.title"],
+    ["adding a named UNIQUE constraint", 'ALTER TABLE "bookmarks" ADD CONSTRAINT u UNIQUE (title);', "without CONCURRENTLY"],
+    ["adding a UNIQUE constraint without a name in lower case", 'alter table bookmarks add unique (title);', "without CONCURRENTLY"],
+    ["adding a UNIQUE constraint that treats NULLs as equal", 'ALTER TABLE "bookmarks" ADD CONSTRAINT "u" UNIQUE NULLS NOT DISTINCT ("title");', "without CONCURRENTLY"],
+    ["adding a PRIMARY KEY", 'ALTER TABLE "bookmarks" ADD PRIMARY KEY (id);', "without CONCURRENTLY"],
+    ["adding a named PRIMARY KEY in lower case", 'alter table only public.bookmarks add constraint pk primary key (id);', "without CONCURRENTLY"],
+    ["adding an EXCLUDE constraint", 'ALTER TABLE "bookmarks" ADD CONSTRAINT x EXCLUDE USING gist (title WITH =);', "without CONCURRENTLY"],
+    ["adding an EXCLUDE constraint in lower case", 'alter table bookmarks add exclude using gist (title with =);', "without CONCURRENTLY"],
+    ["adding a UNIQUE constraint beside another action", 'ALTER TABLE "bookmarks" ADD COLUMN "x" text, ADD CONSTRAINT u UNIQUE (x);', "without CONCURRENTLY"],
+    ["adding a CHECK constraint that is validated", 'ALTER TABLE "bookmarks" ADD CONSTRAINT c CHECK (title <> \'\');', "adds a CHECK or FOREIGN KEY constraint without NOT VALID to table bookmarks"],
+    ["adding a CHECK constraint without a name in lower case", 'alter table bookmarks add check (title is not null);', "adds a CHECK or FOREIGN KEY constraint without NOT VALID to table bookmarks"],
+    ["adding a CHECK constraint whose expression mentions NOT VALID", 'ALTER TABLE "bookmarks" ADD CONSTRAINT c CHECK (title IS NOT DISTINCT FROM \'not valid\');', "adds a CHECK or FOREIGN KEY constraint without NOT VALID to table bookmarks"],
+    ["adding a FOREIGN KEY that is validated", 'ALTER TABLE "bookmarks" ADD CONSTRAINT "f" FOREIGN KEY ("id") REFERENCES "public"."notes"("id") ON DELETE cascade ON UPDATE no action;', "adds a CHECK or FOREIGN KEY constraint without NOT VALID to table bookmarks"],
+    ["adding a FOREIGN KEY in lower case", 'alter table bookmarks add foreign key (id) references notes (id);', "adds a CHECK or FOREIGN KEY constraint without NOT VALID to table bookmarks"],
+    ["adding a constraint with nothing after its name", 'ALTER TABLE "bookmarks" ADD CONSTRAINT c;', "cannot place"],
+    ["adding a constraint without a name", 'ALTER TABLE "bookmarks" ADD CONSTRAINT;', "cannot place"],
+    ["adding a LIKE clause", 'ALTER TABLE "bookmarks" ADD LIKE other;', "cannot place"],
+    ["adding a NOT NULL table constraint", 'ALTER TABLE "bookmarks" ADD NOT NULL title;', "sets column bookmarks.title NOT NULL"],
+    ["adding a NOT NULL table constraint NOT VALID in lower case", 'alter table bookmarks add not null title not valid;', "sets column bookmarks.title NOT NULL"],
+    ["adding a named NOT NULL table constraint on a quoted column", 'ALTER TABLE "bookmarks" ADD CONSTRAINT nn NOT NULL "title";', "sets column bookmarks.title NOT NULL"],
+    ["adding a NOT NULL table constraint without a column", 'ALTER TABLE "bookmarks" ADD NOT NULL;', "cannot place"],
+    ["adding a PRIMARY KEY from an existing index", 'ALTER TABLE "bookmarks" ADD CONSTRAINT p PRIMARY KEY USING INDEX ix;', "attaches an index as the primary key of table bookmarks"],
+    ["adding a PRIMARY KEY from an existing index in lower case without a name", 'alter table bookmarks add primary key using index "ix";', "attaches an index as the primary key of table bookmarks"],
+    ["adding a column with an inline UNIQUE", 'ALTER TABLE "bookmarks" ADD COLUMN "slug" text UNIQUE;', "without CONCURRENTLY"],
+    ["adding a column with a named inline UNIQUE and no COLUMN keyword", 'alter table bookmarks add "slug" text constraint s unique;', "without CONCURRENTLY"],
+    ["adding a column IF NOT EXISTS with an inline UNIQUE", 'ALTER TABLE "bookmarks" ADD COLUMN IF NOT EXISTS u text UNIQUE;', "without CONCURRENTLY"],
+    ["adding a column with an inline PRIMARY KEY", 'ALTER TABLE "bookmarks" ADD COLUMN pid uuid PRIMARY KEY;', "without CONCURRENTLY"],
+    ["adding a column with an inline CHECK that mentions NOT NULL", 'ALTER TABLE "bookmarks" ADD COLUMN "n" text CHECK (n IS NOT NULL);', "adds a CHECK or FOREIGN KEY constraint without NOT VALID to table bookmarks"],
+    ["adding a column with a named inline CHECK in lower case", 'alter table bookmarks add column n int constraint c check (n > 0);', "adds a CHECK or FOREIGN KEY constraint without NOT VALID to table bookmarks"],
+    ["adding a column with an inline REFERENCES and a default", "ALTER TABLE \"bookmarks\" ADD COLUMN \"p\" uuid DEFAULT '00000000-0000-0000-0000-000000000000' REFERENCES \"workspaces\"(\"id\");", "adds a CHECK or FOREIGN KEY constraint without NOT VALID to table bookmarks"],
     ["creating an index without CONCURRENTLY", 'CREATE INDEX "bookmarks_title_idx" ON "bookmarks" USING btree ("title");', "without CONCURRENTLY"],
     ["creating a unique index without CONCURRENTLY", 'CREATE UNIQUE INDEX IF NOT EXISTS ix ON ONLY public.bookmarks (title);', "without CONCURRENTLY"],
     ["a statement that cannot be placed", "DO $$ BEGIN EXECUTE 'ALTER TABLE bookmarks DROP COLUMN title'; END $$;", "cannot place"],
@@ -143,6 +172,12 @@ describe("what is rejected in a migration added since the latest release tag", (
     }
   });
 
+  it("rejects the inline CHECK of an added column, not a NOT NULL column", async () => {
+    const findings = await added('ALTER TABLE "bookmarks" ADD COLUMN "n" text CHECK (n IS NOT NULL);');
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).not.toContain("NOT NULL without a default");
+  });
+
   it("rejects each rejected statement of one file", async () => {
     const findings = await added(
       'ALTER TABLE "bookmarks" DROP COLUMN "title";\n--> statement-breakpoint\nALTER TABLE "bookmarks" RENAME COLUMN "legacy_title" TO "old";',
@@ -177,8 +212,15 @@ describe("what is accepted without a contract", () => {
     ["adding a nullable column", 'ALTER TABLE "bookmarks" ADD COLUMN "slug" text;'],
     ["adding a NOT NULL column with a default", 'ALTER TABLE "bookmarks" ADD COLUMN "slug" text DEFAULT \'\' NOT NULL;'],
     ["adding a NOT NULL serial column", 'ALTER TABLE "bookmarks" ADD COLUMN "n" bigserial NOT NULL;'],
-    ["adding a column whose CHECK mentions NOT NULL", 'ALTER TABLE "bookmarks" ADD COLUMN "n" text CHECK (n IS NOT NULL);'],
+    ["adding a column whose default and type arguments read like constraints", "ALTER TABLE \"bookmarks\" ADD COLUMN \"t\" varchar(10) DEFAULT 'primary key references check unique';"],
+    ["adding a column with an inline REFERENCES and no default", 'ALTER TABLE "bookmarks" ADD COLUMN "p" uuid REFERENCES "workspaces"("id");'],
     ["adding a constraint", 'ALTER TABLE "bookmarks" ADD CONSTRAINT "t" CHECK (title IS NOT NULL) NOT VALID;'],
+    ["adding a CHECK constraint NOT VALID in lower case without a name", 'alter table bookmarks add check (title is not null) not valid;'],
+    ["adding a FOREIGN KEY NOT VALID", 'ALTER TABLE "bookmarks" ADD CONSTRAINT "f" FOREIGN KEY ("id") REFERENCES "public"."notes"("id") ON DELETE cascade NOT VALID;'],
+    ["adding a FOREIGN KEY NOT VALID in lower case", 'alter table bookmarks add foreign key (id) references notes (id) not valid;'],
+    ["adding a UNIQUE constraint from an existing index", 'ALTER TABLE "bookmarks" ADD CONSTRAINT u UNIQUE USING INDEX ix;'],
+    ["adding a UNIQUE constraint from an existing index in lower case without a name", 'alter table bookmarks add unique using index "ix";'],
+    ["validating a constraint", 'ALTER TABLE "bookmarks" VALIDATE CONSTRAINT "t";'],
     ["dropping a constraint", 'ALTER TABLE "bookmarks" DROP CONSTRAINT "t";'],
     ["dropping NOT NULL from a column", 'ALTER TABLE "bookmarks" ALTER COLUMN "title" DROP NOT NULL;'],
     ["setting the default of a column", 'alter table bookmarks alter title set default \'\';'],
@@ -205,6 +247,39 @@ describe("what is accepted without a contract", () => {
     expect(
       await added('-- slugbase:non-transactional\nCREATE INDEX CONCURRENTLY "bookmarks_title_idx" ON "bookmarks" USING btree ("title");\n'),
     ).toEqual([]);
+  });
+
+  it("accepts the constraints drizzle-kit writes after the CREATE TABLE of the same migration", async () => {
+    expect(
+      await added(
+        'CREATE TABLE "notes" ("id" uuid PRIMARY KEY, "bookmark_id" uuid NOT NULL);\n--> statement-breakpoint\nALTER TABLE "notes" ADD CONSTRAINT "notes_bookmark_fk" FOREIGN KEY ("bookmark_id") REFERENCES "public"."bookmarks"("id") ON DELETE cascade ON UPDATE no action;\n--> statement-breakpoint\nALTER TABLE "notes" ADD CONSTRAINT "notes_bookmark_key" UNIQUE("bookmark_id");',
+      ),
+    ).toEqual([]);
+  });
+
+  it("accepts constraints that build an index or validate on a table created in the same release", async () => {
+    const repository = released();
+    repository.migration(SECOND, 'CREATE TABLE "notes" ("id" uuid, "body" text);', [
+      { name: "bookmarks", columns: BOOKMARKS },
+      { name: "notes", columns: ["id", "body"] },
+    ]);
+    repository.migration(
+      THIRD,
+      [
+        'ALTER TABLE "notes" ADD PRIMARY KEY (id);',
+        'ALTER TABLE "notes" ADD CONSTRAINT u UNIQUE (body);',
+        'ALTER TABLE "notes" ADD CONSTRAINT x EXCLUDE USING gist (body WITH =);',
+        'ALTER TABLE "notes" ADD CONSTRAINT c CHECK (body <> \'\');',
+        'ALTER TABLE "notes" ADD CONSTRAINT f FOREIGN KEY (id) REFERENCES bookmarks (id);',
+        'ALTER TABLE "notes" ADD NOT NULL body;',
+        'ALTER TABLE "notes" ADD PRIMARY KEY USING INDEX ix;',
+        'ALTER TABLE "notes" ADD COLUMN "slug" text UNIQUE;',
+        'ALTER TABLE "notes" ADD COLUMN "pid" uuid PRIMARY KEY;',
+        'ALTER TABLE "notes" ADD COLUMN "n" text CHECK (n IS NOT NULL);',
+        "ALTER TABLE \"notes\" ADD COLUMN \"p\" uuid DEFAULT '00000000-0000-0000-0000-000000000000' REFERENCES \"bookmarks\"(\"id\");",
+      ].join("\n"),
+    );
+    expect(await inspect(repository)).toEqual([]);
   });
 
   it("accepts a NOT NULL column and an index on a table created in the same release", async () => {

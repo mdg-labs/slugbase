@@ -24,6 +24,8 @@ export type Operation =
   | { kind: "set-not-null"; table: TableName; column: string }
   | { kind: "drop-default"; table: TableName; column: string }
   | { kind: "create-index"; table: TableName; concurrently: boolean }
+  | { kind: "add-validated-constraint"; table: TableName }
+  | { kind: "add-primary-key-using-index"; table: TableName }
   | { kind: "safe" }
   | { kind: "unknown"; reason: string };
 
@@ -65,7 +67,8 @@ const SAFE_CALLS = new Set([
   "varchar", "char", "character", "numeric", "decimal", "bit", "varbit", "time", "timetz", "timestamp", "timestamptz", "interval",
 ]);
 const SAFE_SCHEMAS = new Set(["public", "pg_catalog"]);
-const NOT_A_COLUMN = new Set(["constraint", "primary", "unique", "check", "foreign", "exclude", "like"]);
+const NOT_A_COLUMN = new Set(["constraint", "primary", "unique", "check", "foreign", "exclude", "like", "not"]);
+const TABLE_CONSTRAINTS = new Set(["primary", "unique", "check", "foreign", "exclude", "not"]);
 const SERIAL_TYPES = new Set(["serial", "smallserial", "bigserial", "serial2", "serial4", "serial8"]);
 
 /** Splits a file at its top-level semicolons and removes the comments. Throws on text it cannot scan to the end. */
@@ -586,14 +589,23 @@ function alterAction(table: TableName, action: Cursor): Operation[] {
     const explicit = action.take("column");
     const first = action.peek();
     if (!explicit && first?.kind === "word" && NOT_A_COLUMN.has(first.text)) {
-      return [{ kind: "safe" }];
+      return addConstraint(table, action);
     }
     action.take("if", "not", "exists");
     const column = action.identifier();
     if (column === undefined) {
       return unknown("ADD COLUMN without a name");
     }
-    return [{ kind: "add-column", table, column, notNullWithoutDefault: notNullWithoutDefault(action) }];
+    const definition = readDefinition(action);
+    const operations: Operation[] = [{ kind: "add-column", table, column, notNullWithoutDefault: definition.notNull && !definition.supplies }];
+    // A column constraint builds an index or checks every existing row, as the table constraint does.
+    if (definition.unique || definition.primaryKey) {
+      operations.push({ kind: "create-index", table, concurrently: false });
+    }
+    if (definition.check || (definition.references && definition.supplies)) {
+      operations.push({ kind: "add-validated-constraint", table });
+    }
+    return operations;
   }
   if (action.take("alter")) {
     action.take("column");
@@ -625,6 +637,49 @@ function alterAction(table: TableName, action: Cursor): Operation[] {
   return unknown("an ALTER TABLE action this check does not read");
 }
 
+/**
+ * `ADD [CONSTRAINT name] <constraint>`. PRIMARY KEY, UNIQUE and EXCLUDE build an index
+ * unless UNIQUE attaches one (`USING INDEX`); attaching a primary key index also sets
+ * its columns NOT NULL where they are not. CHECK and FOREIGN KEY scan the table unless
+ * they are `NOT VALID`. NOT NULL (PostgreSQL 18) is read as setting the column NOT NULL
+ * whatever follows: PostgreSQL 17 accepts NOT VALID for CHECK and FOREIGN KEY only, and
+ * 18 also for NOT NULL, which still enforces the constraint on new writes. Anything else
+ * stays unread.
+ */
+function addConstraint(table: TableName, action: Cursor): Operation[] {
+  if (action.take("constraint") && action.identifier() === undefined) {
+    return unknown("ADD CONSTRAINT without a name");
+  }
+  const first = action.peek();
+  const kind = first?.kind === "word" && TABLE_CONSTRAINTS.has(first.text) ? first.text : undefined;
+  if (kind === undefined) {
+    return unknown("ADD CONSTRAINT other than PRIMARY KEY, UNIQUE, EXCLUDE, CHECK, FOREIGN KEY or NOT NULL");
+  }
+  action.position += 1;
+  if (kind === "not") {
+    const column = action.take("null") ? action.identifier() : undefined;
+    return column === undefined ? unknown("ADD NOT NULL without a column name") : [{ kind: "set-not-null", table, column }];
+  }
+  if (kind === "primary" || kind === "unique") {
+    if (kind === "primary" && !action.take("key")) {
+      return unknown("ADD PRIMARY without KEY");
+    }
+    if (action.isWord("using") && action.isWord("index", 1)) {
+      return kind === "primary" ? [{ kind: "add-primary-key-using-index", table }] : [{ kind: "safe" }];
+    }
+    return [{ kind: "create-index", table, concurrently: false }];
+  }
+  if (kind === "exclude") {
+    return [{ kind: "create-index", table, concurrently: false }];
+  }
+  if (kind === "foreign" && !action.take("key")) {
+    return unknown("ADD FOREIGN without KEY");
+  }
+  const last = action.tokens.at(-1);
+  const beforeLast = action.tokens.at(-2);
+  return isWord(beforeLast, "not") && isWord(last, "valid") ? [{ kind: "safe" }] : [{ kind: "add-validated-constraint", table }];
+}
+
 /** Whether the expression next is `NULL`, parenthesised to any depth or cast (`NULL::text`), and nothing else. */
 function startsWithNull(expression: Cursor): boolean {
   let offset = 0;
@@ -641,14 +696,25 @@ function startsWithNull(expression: Cursor): boolean {
   return expression.peek(offset) === undefined || (expression.isPunct(":", offset) && expression.isPunct(":", offset + 1));
 }
 
-/** The rest of an ADD COLUMN definition: NOT NULL at its top level and no DEFAULT, generated value, identity or serial type. */
-function notNullWithoutDefault(definition: Cursor): boolean {
+/**
+ * What the rest of an ADD COLUMN definition says at its top level (words inside
+ * parentheses, such as a type's arguments or a CHECK expression, do not count):
+ * NOT NULL, a column constraint that builds an index or is checked against the
+ * rows, and whether it supplies a value (DEFAULT, a generated value, identity or a serial type).
+ */
+function readDefinition(definition: Cursor): {
+  notNull: boolean;
+  supplies: boolean;
+  unique: boolean;
+  primaryKey: boolean;
+  check: boolean;
+  references: boolean;
+} {
   let depth = 0;
-  let notNull = false;
-  let supplies = false;
+  const found = { notNull: false, supplies: false, unique: false, primaryKey: false, check: false, references: false };
   const type = definition.peek();
   if (type?.kind === "word" && SERIAL_TYPES.has(type.text)) {
-    supplies = true;
+    found.supplies = true;
   }
   for (let offset = 0; definition.peek(offset) !== undefined; offset += 1) {
     const token = definition.peek(offset);
@@ -658,13 +724,21 @@ function notNullWithoutDefault(definition: Cursor): boolean {
       depth -= 1;
     } else if (depth === 0 && token?.kind === "word") {
       if (token.text === "not" && definition.isWord("null", offset + 1)) {
-        notNull = true;
+        found.notNull = true;
       } else if (token.text === "default" || token.text === "generated") {
-        supplies = true;
+        found.supplies = true;
+      } else if (token.text === "unique") {
+        found.unique = true;
+      } else if (token.text === "primary" && definition.isWord("key", offset + 1)) {
+        found.primaryKey = true;
+      } else if (token.text === "check") {
+        found.check = true;
+      } else if (token.text === "references") {
+        found.references = true;
       }
     }
   }
-  return notNull && !supplies;
+  return found;
 }
 
 /** Splits a migration file into statements and reads each. Throws when the file cannot be scanned. */
