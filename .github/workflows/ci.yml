@@ -10,7 +10,11 @@ name: CI
 on:
   push:
     branches: ["**"]
+  # labeled and unlabeled are listed because the integration job reads the
+  # maintainer-applied `migration:contract` label from the pull request (Q52);
+  # adding or removing it must re-run the check with or without the marker.
   pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
 
 permissions:
   contents: read
