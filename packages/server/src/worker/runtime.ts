@@ -10,6 +10,7 @@ import {
   type ModuleContext,
   type ServerModule,
 } from "../create-server.ts";
+import { createMetrics, startMetricsListener, type MetricsListener, type QueueSnapshot } from "../metrics/index.ts";
 import type { JobDefinition, JobPayload, ScheduleDefinition } from "./job.ts";
 
 export const DEFAULT_WORKER_POOL_SIZE = 5;
@@ -33,7 +34,14 @@ export interface CreateWorkerOptions {
   readonly pollingIntervalSeconds?: number;
 }
 
+export interface WorkerStartOptions {
+  /** Overrides `METRICS_PORT`, which also turns the metrics listener on; 0 picks a free port. */
+  readonly metricsPort?: number;
+}
+
 export interface RunningWorker {
+  /** The port of the internal metrics listener; absent when `METRICS_PORT` is unset. */
+  readonly metricsPort?: number;
   /** Puts a job on its queue. The payload is validated against the job's schema before anything is written. */
   enqueue<Payload extends JobPayload>(job: JobDefinition<Payload>, payload: Payload): Promise<string | null>;
   /**
@@ -47,8 +55,11 @@ export interface RunningWorker {
 export interface Worker {
   readonly jobs: readonly JobDefinition[];
   readonly schedules: readonly ScheduleDefinition[];
-  /** Starts pg-boss, registers every job's queue and consumer and every schedule. */
-  start(): Promise<RunningWorker>;
+  /**
+   * Starts pg-boss, registers every job's queue and consumer and every
+   * schedule, and opens the internal `/metrics` listener when `METRICS_PORT` is set.
+   */
+  start(options?: WorkerStartOptions): Promise<RunningWorker>;
 }
 
 function errorFields(error: unknown): Record<string, unknown> {
@@ -70,12 +81,16 @@ export function createWorker(options: CreateWorkerOptions): Worker {
   const poolSize = options.poolSize ?? DEFAULT_WORKER_POOL_SIZE;
   const shutdownTimeoutMs = options.shutdownTimeoutMs ?? DEFAULT_SHUTDOWN_TIMEOUT_MS;
 
+  const metrics = createMetrics();
   const database = options.database ?? createDatabase({ url: config.DATABASE_URL, poolSize });
+  if (options.database === undefined) {
+    metrics.setPoolSize(poolSize);
+  }
   const context: ModuleContext = Object.freeze({
     config,
     logger,
     adapters: Object.freeze({ ...options.adapters }),
-    withTenant: database.withTenant.bind(database),
+    withTenant: metrics.instrumentTenant(database.withTenant.bind(database)),
   });
 
   let composition: Composition;
@@ -90,7 +105,7 @@ export function createWorker(options: CreateWorkerOptions): Worker {
     jobs: composition.jobs,
     schedules: composition.schedules,
 
-    async start() {
+    async start(startOptions = {}) {
       const boss = new PgBoss({
         connectionString: config.DATABASE_URL,
         schema: BOSS_SCHEMA,
@@ -107,9 +122,11 @@ export function createWorker(options: CreateWorkerOptions): Worker {
         logger.warn("pg-boss reported a warning", { message: warning.message });
       });
 
+      let metricsListener: MetricsListener | undefined;
       let stopped: Promise<void> | undefined;
       const stop = async (): Promise<void> => {
         try {
+          await metricsListener?.close();
           await boss.stop({ graceful: true, close: true, timeout: shutdownTimeoutMs });
         } finally {
           await database.close();
@@ -148,6 +165,28 @@ export function createWorker(options: CreateWorkerOptions): Worker {
         for (const schedule of composition.schedules) {
           await boss.schedule(schedule.job, schedule.cron, schedule.payload ?? {}, { key: schedule.name });
         }
+
+        metrics.observeJobQueues(async () => {
+          const snapshots = await Promise.all(
+            composition.jobs.map(async (job): Promise<QueueSnapshot | undefined> => {
+              const stats = (await boss.getQueueStats(job.name, { force: true })).at(0);
+              return stats === undefined
+                ? undefined
+                : {
+                    queue: job.name,
+                    deferred: stats.deferredCount,
+                    ready: stats.readyCount,
+                    active: stats.activeCount,
+                    oldestReadySeconds: stats.readyOldestSeconds,
+                  };
+            }),
+          );
+          return snapshots.filter((snapshot) => snapshot !== undefined);
+        });
+        const metricsRequested = startOptions.metricsPort ?? config.METRICS_PORT;
+        if (metricsRequested !== undefined) {
+          metricsListener = await startMetricsListener({ metrics, port: metricsRequested, logger });
+        }
       } catch (error) {
         await shutdown().catch((cleanup: unknown) => {
           logger.error("Cleanup after a failed start failed", errorFields(cleanup));
@@ -157,6 +196,7 @@ export function createWorker(options: CreateWorkerOptions): Worker {
 
       logger.info("Worker started", { jobs: composition.jobs.length, schedules: composition.schedules.length });
       return {
+        ...(metricsListener === undefined ? {} : { metricsPort: metricsListener.port }),
         enqueue: async (job, payload) => boss.send(job.name, job.parse(payload)),
         shutdown,
       };

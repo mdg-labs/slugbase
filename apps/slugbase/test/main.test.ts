@@ -134,6 +134,50 @@ describe("apps/slugbase main", () => {
     expect(output).toContain('"Listening"');
   });
 
+  it("serves /metrics on METRICS_PORT only, and the public port answers 404 not_found for it", async () => {
+    const metricsPort = await freePort();
+    const publicPort = await freePort();
+    const child = spawn(process.execPath, ["src/main.ts", "server"], {
+      cwd: APP,
+      env: { PATH: process.env["PATH"] ?? "", ...valid, PORT: String(publicPort), METRICS_PORT: String(metricsPort) },
+    });
+    let output = "";
+    const exited = new Promise<number | null>((resolveExit) => {
+      child.on("close", (code) => {
+        resolveExit(code);
+      });
+    });
+    const listening = new Promise<boolean>((resolveListening) => {
+      const watch = (chunk: Buffer): void => {
+        output += chunk.toString("utf8");
+        if (output.includes('"Metrics listening"')) {
+          resolveListening(true);
+        }
+      };
+      child.stdout.on("data", watch);
+      child.stderr.on("data", watch);
+      void exited.then(() => {
+        resolveListening(false);
+      });
+    });
+    const timer = setTimeout(() => child.kill("SIGKILL"), 30_000);
+    try {
+      expect(await listening, output).toBe(true);
+      const scraped = await get(metricsPort, "/metrics");
+      const publicAnswer = await get(publicPort, "/metrics");
+      child.kill("SIGTERM");
+      expect(await exited, output).toBe(0);
+      expect(scraped).toMatch(/^HTTP\/1\.1 200 /);
+      expect(scraped).toContain("# TYPE slugbase_http_requests_total counter");
+      expect(publicAnswer).toMatch(/^HTTP\/1\.1 404 /);
+      expect(publicAnswer).toContain('"code":"not_found"');
+      expect(publicAnswer).not.toContain("slugbase_http_requests_total");
+    } finally {
+      clearTimeout(timer);
+      child.kill("SIGKILL");
+    }
+  });
+
   it("accepts the migrate command", () => {
     expect(start(valid, "migrate").status).toBe(0);
   });

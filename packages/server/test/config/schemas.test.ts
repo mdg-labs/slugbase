@@ -64,6 +64,23 @@ describe("process schemas", () => {
     });
   });
 
+  it("has no metrics listener unless METRICS_PORT is set, on the server and on the worker", () => {
+    for (const type of ["server", "worker"] as const) {
+      expect(loadConfig(type, development).config.METRICS_PORT).toBeUndefined();
+      expect(loadConfig(type, { ...development, METRICS_PORT: "" }).config.METRICS_PORT).toBeUndefined();
+      expect(loadConfig(type, { ...development, METRICS_PORT: "9464" }).config.METRICS_PORT).toBe(9464);
+    }
+    expect(Object.keys(loadConfig("migrate", { NODE_ENV: "production", DATABASE_MIGRATE_URL: productionEnv().DATABASE_MIGRATE_URL }).config)).not.toContain(
+      "METRICS_PORT",
+    );
+  });
+
+  it.each(["0", "65536", "9464.5", "-1", "metrics"])("names METRICS_PORT for the malformed value %j", (value) => {
+    for (const type of ["server", "worker"] as const) {
+      expect(failure(() => loadConfig(type, { ...development, METRICS_PORT: value })).issues.map((issue) => issue.key)).toEqual(["METRICS_PORT"]);
+    }
+  });
+
   it("normalises APP_ORIGIN to an origin", () => {
     expect(loadConfig("server", { ...development, APP_ORIGIN: "https://Bookmarks.Example.com:443/" }).config.APP_ORIGIN).toBe(
       "https://bookmarks.example.com",

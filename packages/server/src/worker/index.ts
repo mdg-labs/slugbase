@@ -11,4 +11,4 @@ export type {
 export { NotIdempotentError, assertIdempotent } from "./idempotency.ts";
 export type { IdempotencyCheck } from "./idempotency.ts";
 export { DEFAULT_WORKER_POOL_SIZE, createWorker } from "./runtime.ts";
-export type { CreateWorkerOptions, RunningWorker, Worker } from "./runtime.ts";
+export type { CreateWorkerOptions, RunningWorker, Worker, WorkerStartOptions } from "./runtime.ts";

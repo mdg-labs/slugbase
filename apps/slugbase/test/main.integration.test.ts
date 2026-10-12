@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { createRequire } from "node:module";
+import { connect, createServer } from "node:net";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createTestDatabase, type TestDatabase } from "@slugbase/testing/db";
@@ -47,14 +48,45 @@ interface WorkerRun {
   status: number | null;
   output: string;
   instances: number;
+  /** What `whenStarted` returned. */
+  observed?: string;
+}
+
+function freePort(): Promise<number> {
+  return new Promise((resolvePort, reject) => {
+    const probe = createServer();
+    probe.once("error", reject);
+    probe.listen(0, "127.0.0.1", () => {
+      const address = probe.address();
+      probe.close(() => {
+        resolvePort(typeof address === "object" && address !== null ? address.port : 0);
+      });
+    });
+  });
+}
+
+function get(port: number, path: string): Promise<string> {
+  return new Promise((resolveBody) => {
+    const chunks: Buffer[] = [];
+    const socket = connect({ port, host: "127.0.0.1" });
+    socket.on("data", (chunk: Buffer) => chunks.push(chunk));
+    socket.on("close", () => {
+      resolveBody(Buffer.concat(chunks).toString("utf8"));
+    });
+    socket.on("error", () => undefined);
+    socket.write(`GET ${path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n`);
+  });
 }
 
 // Starts the worker command, waits until it reports that it started, counts the
 // pg-boss instances registered in the database, sends SIGTERM and waits for the exit.
-async function runWorker(database: TestDatabase): Promise<WorkerRun> {
+async function runWorker(
+  database: TestDatabase,
+  options: { env?: Record<string, string>; whenStarted?: () => Promise<string> } = {},
+): Promise<WorkerRun> {
   const child = spawn(process.execPath, ["src/main.ts", "worker"], {
     cwd: APP,
-    env: { PATH: process.env["PATH"] ?? "", ...valid, NODE_ENV: "test", DATABASE_URL: databaseUrl(database) },
+    env: { PATH: process.env["PATH"] ?? "", ...valid, NODE_ENV: "test", DATABASE_URL: databaseUrl(database), ...options.env },
   });
   let output = "";
   const exited = new Promise<number | null>((resolveExit) => {
@@ -78,12 +110,14 @@ async function runWorker(database: TestDatabase): Promise<WorkerRun> {
   const timer = setTimeout(() => child.kill("SIGKILL"), 30_000);
   try {
     let instances = 0;
+    let observed: string | undefined;
     if (await started) {
+      observed = await options.whenStarted?.();
       const rows = await database.app<{ count: string }[]>`SELECT count(*) FROM pgboss.instance`;
       instances = Number(rows[0]?.count);
     }
     child.kill("SIGTERM");
-    return { status: await exited, output, instances };
+    return { status: await exited, output, instances, ...(observed === undefined ? {} : { observed }) };
   } finally {
     clearTimeout(timer);
     child.kill("SIGKILL");
@@ -125,5 +159,17 @@ describe("apps/slugbase main worker", () => {
     expect(output).toContain("Worker started");
     expect(output).toContain("Shutdown complete");
     expect(instances).toBeGreaterThan(0);
+  }, 60_000);
+
+  it("serves /metrics on the internal port while the worker runs and stops with it", async () => {
+    const metricsPort = await freePort();
+    const { status, output, observed } = await runWorker(database, {
+      env: { METRICS_PORT: String(metricsPort) },
+      whenStarted: () => get(metricsPort, "/metrics"),
+    });
+    expect(status, output).toBe(0);
+    expect(observed).toMatch(/^HTTP\/1\.1 200 /);
+    expect(observed).toContain("# TYPE slugbase_db_tenant_transactions_in_flight gauge");
+    expect(output).toContain("Metrics listening");
   }, 60_000);
 });

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { SpanKind, SpanStatusCode, trace, type Span } from "@opentelemetry/api";
 import type { Logger } from "../create-server.ts";
+import { UNMATCHED_ROUTE, type Metrics } from "../metrics/index.ts";
 import type { ChainContext, RequestStage } from "./chain.ts";
 import { childLogger } from "./logger.ts";
 import { clientIpOf } from "./trusted-proxy.ts";
@@ -33,8 +34,6 @@ function methodOf(method: string): string {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const UNMATCHED_ROUTE = "unmatched";
-
 interface RequestScope {
   readonly startedAt: number;
   readonly span: Span;
@@ -65,6 +64,8 @@ export interface RequestContextOptions {
   readonly logger: Logger;
   /** `TRUSTED_PROXY_HOPS`. */
   readonly trustedProxyHops: number;
+  /** Counts each finished request under its route template; absent, nothing is counted. */
+  readonly metrics?: Pick<Metrics, "recordRequest">;
 }
 
 export interface RequestContext {
@@ -77,7 +78,7 @@ export interface RequestContext {
   finish(context: ChainContext): void;
 }
 
-export function createRequestContext({ logger, trustedProxyHops }: RequestContextOptions): RequestContext {
+export function createRequestContext({ logger, trustedProxyHops, metrics }: RequestContextOptions): RequestContext {
   const tracer = trace.getTracer("@slugbase/server");
   const scopes = new WeakMap<ChainContext, RequestScope>();
 
@@ -133,6 +134,12 @@ export function createRequestContext({ logger, trustedProxyHops }: RequestContex
       const status = context.res.status;
       const route = context.get("route")?.operation.path;
       const workspaceId = context.get("workspaceId");
+      metrics?.recordRequest({
+        method,
+        route: route ?? UNMATCHED_ROUTE,
+        status,
+        durationSeconds: (performance.now() - startedAt) / 1000,
+      });
       span.setAttribute("http.response.status_code", status);
       if (status >= 500) {
         span.setStatus({ code: SpanStatusCode.ERROR });

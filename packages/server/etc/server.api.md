@@ -208,6 +208,8 @@ export const envSchemas: {
     TRUSTED_PROXY_HOPS: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
     API_DOCS_ENABLED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
     DOCS_BASE_URL: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>>;
+    } & {
+    METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
     }>;
     readonly worker: EnvSchema<    {
     NODE_ENV: z.ZodEnum<{
@@ -233,6 +235,8 @@ export const envSchemas: {
     } & {
     DATABASE_URL: z.ZodString;
     SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+    } & {
+    METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
     }>;
     readonly migrate: EnvSchema<    {
     NODE_ENV: z.ZodEnum<{
@@ -351,6 +355,11 @@ export interface MatchedRoute {
 
 // @public (undocumented)
 export type MergedShape<Fragments extends readonly EnvFragment[]> = IntersectUnion<Fragments[number]["shape"]> extends infer Shape extends z.ZodRawShape ? Shape : never;
+
+// @public
+export const metricsFragment: EnvFragment<    {
+METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
+}>;
 
 // @public (undocumented)
 export type MigrateConfig = z.infer<typeof migrateEnvSchema.object>;
@@ -501,6 +510,7 @@ export type RouteHandler = (context: ChainContext, route: MatchedRoute) => Respo
 
 // @public (undocumented)
 export interface RunningServer {
+    readonly metricsPort?: number;
     // (undocumented)
     readonly port: number;
     shutdown(): Promise<void>;
@@ -509,6 +519,7 @@ export interface RunningServer {
 // @public (undocumented)
 export interface RunningWorker {
     enqueue<Payload extends JobPayload>(job: JobDefinition<Payload>, payload: Payload): Promise<string | null>;
+    readonly metricsPort?: number;
     shutdown(): Promise<void>;
 }
 
@@ -596,6 +607,8 @@ PORT: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
 TRUSTED_PROXY_HOPS: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
 API_DOCS_ENABLED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
 DOCS_BASE_URL: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>>;
+} & {
+METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
 }>;
 
 // @public
@@ -631,6 +644,8 @@ PORT: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
 TRUSTED_PROXY_HOPS: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
 API_DOCS_ENABLED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
 DOCS_BASE_URL: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>>;
+}>, EnvFragment<    {
+METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
 }>];
 
 // @public
@@ -652,6 +667,7 @@ export type StageName = (typeof CHAIN_STAGES)[number];
 
 // @public (undocumented)
 export interface StartOptions {
+    readonly metricsPort?: number;
     readonly port?: number;
 }
 
@@ -664,7 +680,7 @@ export interface Worker {
     readonly jobs: readonly JobDefinition[];
     // (undocumented)
     readonly schedules: readonly ScheduleDefinition[];
-    start(): Promise<RunningWorker>;
+    start(options?: WorkerStartOptions): Promise<RunningWorker>;
 }
 
 // @public (undocumented)
@@ -695,6 +711,8 @@ ENCRYPTION_KEY_ID: z.ZodString;
 } & {
 DATABASE_URL: z.ZodString;
 SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+} & {
+METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
 }>;
 
 // @public
@@ -722,7 +740,14 @@ ENCRYPTION_KEY_ID: z.ZodString;
 }>, EnvFragment<    {
 DATABASE_URL: z.ZodString;
 SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+}>, EnvFragment<    {
+METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
 }>];
+
+// @public (undocumented)
+export interface WorkerStartOptions {
+    readonly metricsPort?: number;
+}
 
 // (No @packageDocumentation comment for this package)
 

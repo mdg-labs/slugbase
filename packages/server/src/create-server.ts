@@ -11,6 +11,7 @@ import {
   type RouteBinding,
   type StageName,
 } from "./http/chain.ts";
+import { createMetrics, startMetricsListener, type MetricsListener } from "./metrics/index.ts";
 import type { JobDefinition, ScheduleDefinition } from "./worker/job.ts";
 
 export type { ChainContext, ChainEnv, MatchedRoute, RouteBinding, RouteHandler, StageName } from "./http/chain.ts";
@@ -70,10 +71,14 @@ export interface CreateServerOptions {
 export interface StartOptions {
   /** Overrides `PORT`; 0 picks a free port. */
   readonly port?: number;
+  /** Overrides `METRICS_PORT`, which also turns the metrics listener on; 0 picks a free port. */
+  readonly metricsPort?: number;
 }
 
 export interface RunningServer {
   readonly port: number;
+  /** The port of the internal metrics listener; absent when `METRICS_PORT` is unset. */
+  readonly metricsPort?: number;
   /**
    * Stops accepting connections, lets in-flight requests finish within the
    * deadline, cuts the rest and closes the database pool. Calling it again
@@ -91,7 +96,7 @@ export interface Server {
   readonly schedules: readonly ScheduleDefinition[];
   /** Serves one request through the chain. */
   fetch(request: Request): Promise<Response>;
-  /** Listens on `PORT`. */
+  /** Listens on `PORT`, and on `METRICS_PORT` for the internal `/metrics` listener when it is set. */
   start(options?: StartOptions): Promise<RunningServer>;
 }
 
@@ -134,6 +139,8 @@ const ADAPTER_PORTS: Record<keyof Adapters, true> = {
 const REQUIRED_ADAPTERS = Object.keys(ADAPTER_PORTS) as (keyof Adapters)[];
 
 const DEFAULT_SHUTDOWN_TIMEOUT_MS = 25_000;
+
+const DEFAULT_SERVER_POOL_SIZE = 10;
 
 export function assertAdapters(adapters: Adapters): void {
   const missing = REQUIRED_ADAPTERS.filter((port) => {
@@ -245,13 +252,17 @@ export function createServer(options: CreateServerOptions): Server {
   const { config, logger } = options;
   assertAdapters(options.adapters);
 
-  const database = options.database ?? createDatabase({ url: config.DATABASE_URL });
+  const metrics = createMetrics();
+  const database = options.database ?? createDatabase({ url: config.DATABASE_URL, poolSize: DEFAULT_SERVER_POOL_SIZE });
+  if (options.database === undefined) {
+    metrics.setPoolSize(DEFAULT_SERVER_POOL_SIZE);
+  }
   const adapters = Object.freeze({ ...options.adapters });
   const context: ModuleContext = Object.freeze({
     config,
     logger,
     adapters,
-    withTenant: database.withTenant.bind(database),
+    withTenant: metrics.instrumentTenant(database.withTenant.bind(database)),
   });
 
   let composition: Composition;
@@ -269,6 +280,7 @@ export function createServer(options: CreateServerOptions): Server {
     trustedProxyHops: config.TRUSTED_PROXY_HOPS,
     errors: adapters.errors,
     responseValidation: config.NODE_ENV === "production" ? "strip" : "throw",
+    metrics,
   });
   const shutdownTimeoutMs = options.shutdownTimeoutMs ?? DEFAULT_SHUTDOWN_TIMEOUT_MS;
 
@@ -298,6 +310,10 @@ export function createServer(options: CreateServerOptions): Server {
       }
 
       const requested = startOptions.port ?? config.PORT;
+      const metricsRequested = startOptions.metricsPort ?? config.METRICS_PORT;
+      if (metricsRequested !== undefined && metricsRequested !== 0 && metricsRequested === requested) {
+        throw new Error("METRICS_PORT must differ from PORT: /metrics is never served on the public listener");
+      }
       const port = await new Promise<number>((resolve, reject) => {
         listener.once("error", reject);
         listener.listen(requested, () => {
@@ -308,9 +324,11 @@ export function createServer(options: CreateServerOptions): Server {
       });
       logger.info("Listening", { port });
 
+      let metricsListener: MetricsListener | undefined;
       let shutdown: Promise<void> | undefined;
       const stop = async (): Promise<void> => {
         draining = true;
+        await metricsListener?.close();
         const closed = new Promise<void>((resolve) => {
           listener.close(() => {
             resolve();
@@ -330,8 +348,18 @@ export function createServer(options: CreateServerOptions): Server {
         await database.close();
       };
 
+      if (metricsRequested !== undefined) {
+        try {
+          metricsListener = await startMetricsListener({ metrics, port: metricsRequested, logger });
+        } catch (error) {
+          await (shutdown ??= stop());
+          throw error;
+        }
+      }
+
       return {
         port,
+        ...(metricsListener === undefined ? {} : { metricsPort: metricsListener.port }),
         shutdown: () => (shutdown ??= stop()),
       };
     },

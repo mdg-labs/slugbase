@@ -2,6 +2,7 @@ import type { OperationDefinition } from "@slugbase/contracts";
 import type { ErrorReportPort } from "@slugbase/core";
 import type { Context, Hono, MiddlewareHandler } from "hono";
 import type { Logger } from "../create-server.ts";
+import type { Metrics } from "../metrics/index.ts";
 import { failRequest, notFoundProblem, responseStage, type ResponseValidation } from "./problem.ts";
 import { createRequestContext } from "./request-context.ts";
 
@@ -88,6 +89,8 @@ export interface ChainDependencies {
   readonly errors: ErrorReportPort;
   /** How stage 11 treats a response that differs from its declared schema. */
   readonly responseValidation: ResponseValidation;
+  /** Counts every request under its route template (doc 01 section 12). */
+  readonly metrics?: Pick<Metrics, "recordRequest">;
 }
 
 interface CompiledRoute {
@@ -178,8 +181,8 @@ export function installChain(
   dependencies: ChainDependencies,
   stages: StageImplementations = {},
 ): readonly StageName[] {
-  const { logger, routes, trustedProxyHops, errors, responseValidation } = dependencies;
-  const requestContext = createRequestContext({ logger, trustedProxyHops });
+  const { logger, routes, trustedProxyHops, errors, responseValidation, metrics } = dependencies;
+  const requestContext = createRequestContext({ logger, trustedProxyHops, ...(metrics === undefined ? {} : { metrics }) });
 
   const requestStages = REQUEST_STAGES.map((name) => ({
     name,
