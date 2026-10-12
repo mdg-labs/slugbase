@@ -10,6 +10,15 @@ import type { CheckRule, Finding } from "./types.ts";
 //   - dropping or renaming a table or column that exists at that tag (also
 //     moving a table to another schema, or dropping a schema that holds one),
 //   - adding a NOT NULL column without a default to a table that exists at it,
+//   - adding a column that rewrites such a table under an ACCESS EXCLUSIVE lock,
+//     which writes every existing row: a serial type (serial, smallserial,
+//     bigserial, serial2/4/8), an identity column (GENERATED ALWAYS|BY DEFAULT
+//     AS IDENTITY) or a generated column that is not marked VIRTUAL (PostgreSQL
+//     17 has stored ones only, so GENERATED ALWAYS AS (...) counts as stored
+//     unless VIRTUAL follows); a nullable column or one with a constant or
+//     stable DEFAULT, such as now(), does not rewrite and is accepted, unless
+//     its type is a domain with constraints (a domain-typed column is not yet
+//     checked),
 //   - changing the type of a column of such a table (any change: whether it
 //     rewrites the table depends on the old and the new type, which a lint of
 //     the file cannot tell),
@@ -144,10 +153,19 @@ class Released {
         columns.add(operation.to);
         return [(`renames column ${describe(operation.table)}.${operation.column} to ${operation.to}, and it exists under its old name at ${at}`)];
       }
-      case "add-column":
-        return operation.notNullWithoutDefault && this.hasTable(operation.table)
-          ? [(`adds column ${describe(operation.table)}.${operation.column} as NOT NULL without a default to a table that exists at ${at}: the previous release does not write it`)]
-          : [];
+      case "add-column": {
+        if (!this.hasTable(operation.table)) {
+          return [];
+        }
+        const problems: string[] = [];
+        if (operation.notNullWithoutDefault) {
+          problems.push(`adds column ${describe(operation.table)}.${operation.column} as NOT NULL without a default to a table that exists at ${at}: the previous release does not write it`);
+        }
+        if (operation.rewritesTable) {
+          problems.push(`adds column ${describe(operation.table)}.${operation.column} as a serial, identity or generated column to a table that exists at ${at}: the addition rewrites the table under an ACCESS EXCLUSIVE lock`);
+        }
+        return problems;
+      }
       case "alter-column-type":
         return this.hasTable(operation.table)
           ? [(`changes the type of column ${describe(operation.table)}.${operation.column} of a table that exists at ${at}: that can rewrite the table under an ACCESS EXCLUSIVE lock`)]

@@ -19,7 +19,7 @@ export type Operation =
   | { kind: "rename-table"; table: TableName; to: TableName }
   | { kind: "set-schema"; table: TableName; to: TableName }
   | { kind: "rename-column"; table: TableName; column: string; to: string }
-  | { kind: "add-column"; table: TableName; column: string; notNullWithoutDefault: boolean }
+  | { kind: "add-column"; table: TableName; column: string; notNullWithoutDefault: boolean; rewritesTable: boolean }
   | { kind: "alter-column-type"; table: TableName; column: string }
   | { kind: "set-not-null"; table: TableName; column: string }
   | { kind: "drop-default"; table: TableName; column: string }
@@ -597,7 +597,7 @@ function alterAction(table: TableName, action: Cursor): Operation[] {
       return unknown("ADD COLUMN without a name");
     }
     const definition = readDefinition(action);
-    const operations: Operation[] = [{ kind: "add-column", table, column, notNullWithoutDefault: definition.notNull && !definition.supplies }];
+    const operations: Operation[] = [{ kind: "add-column", table, column, notNullWithoutDefault: definition.notNull && !definition.supplies, rewritesTable: definition.rewritesTable }];
     // A column constraint builds an index or checks every existing row, as the table constraint does.
     if (definition.unique || definition.primaryKey) {
       operations.push({ kind: "create-index", table, concurrently: false });
@@ -696,25 +696,52 @@ function startsWithNull(expression: Cursor): boolean {
   return expression.peek(offset) === undefined || (expression.isPunct(":", offset) && expression.isPunct(":", offset + 1));
 }
 
+/** Whether the `GENERATED` word at the offset starts `GENERATED ALWAYS AS (expression) VIRTUAL`. */
+function isVirtualGenerated(definition: Cursor, offset: number): boolean {
+  if (!definition.isWord("always", offset + 1) || !definition.isWord("as", offset + 2) || !definition.isPunct("(", offset + 3)) {
+    return false;
+  }
+  let depth = 0;
+  for (let at = offset + 3; definition.peek(at) !== undefined; at += 1) {
+    if (definition.isPunct("(", at)) {
+      depth += 1;
+    } else if (definition.isPunct(")", at)) {
+      depth -= 1;
+      if (depth === 0) {
+        return definition.isWord("virtual", at + 1);
+      }
+    }
+  }
+  return false;
+}
+
 /**
  * What the rest of an ADD COLUMN definition says at its top level (words inside
  * parentheses, such as a type's arguments or a CHECK expression, do not count):
  * NOT NULL, a column constraint that builds an index or is checked against the
- * rows, and whether it supplies a value (DEFAULT, a generated value, identity or a serial type).
+ * rows, whether it supplies a value (DEFAULT, a generated value, identity or a serial type),
+ * and whether it rewrites the table: a serial type, an identity column and a generated column
+ * that is not marked VIRTUAL write every existing row (PostgreSQL 17 has stored generated
+ * columns only, so a GENERATED form this reader does not recognise counts as rewriting),
+ * while a nullable column or a constant or stable DEFAULT is recorded in the catalog alone
+ * unless the column's type is a domain with constraints (not yet checked).
  */
 function readDefinition(definition: Cursor): {
   notNull: boolean;
   supplies: boolean;
+  rewritesTable: boolean;
   unique: boolean;
   primaryKey: boolean;
   check: boolean;
   references: boolean;
 } {
   let depth = 0;
-  const found = { notNull: false, supplies: false, unique: false, primaryKey: false, check: false, references: false };
+  const found = { notNull: false, supplies: false, rewritesTable: false, unique: false, primaryKey: false, check: false, references: false };
   const type = definition.peek();
-  if (type?.kind === "word" && SERIAL_TYPES.has(type.text)) {
+  // PostgreSQL matches the serial name after removing quotes, so "serial" is the serial type; the match is case-exact for a quoted name.
+  if ((type?.kind === "word" || type?.kind === "ident") && SERIAL_TYPES.has(type.text)) {
     found.supplies = true;
+    found.rewritesTable = true;
   }
   for (let offset = 0; definition.peek(offset) !== undefined; offset += 1) {
     const token = definition.peek(offset);
@@ -725,8 +752,13 @@ function readDefinition(definition: Cursor): {
     } else if (depth === 0 && token?.kind === "word") {
       if (token.text === "not" && definition.isWord("null", offset + 1)) {
         found.notNull = true;
-      } else if (token.text === "default" || token.text === "generated") {
+      } else if (token.text === "default") {
         found.supplies = true;
+      } else if (token.text === "generated") {
+        found.supplies = true;
+        if (!isVirtualGenerated(definition, offset)) {
+          found.rewritesTable = true;
+        }
       } else if (token.text === "unique") {
         found.unique = true;
       } else if (token.text === "primary" && definition.isWord("key", offset + 1)) {
