@@ -4,6 +4,283 @@
 
 ```ts
 
+import { Database } from '@slugbase/db';
+import { RepositoryMethodEntry } from '@slugbase/db';
+import { TestDatabase } from '@slugbase/db/testing';
+
+// @public
+export interface ApiCall {
+    readonly body: unknown;
+    // (undocumented)
+    readonly operation: ClassifiedOperation;
+    // (undocumented)
+    readonly principal: FixturePrincipal;
+    readonly query: Readonly<Record<string, string | readonly string[]>>;
+    readonly targets: Readonly<Record<string, string>>;
+    readonly url: string;
+}
+
+// @public (undocumented)
+export interface ApiMatrixOptions {
+    readonly document: unknown;
+    // (undocumented)
+    readonly fixture: TenantFixture;
+    readonly mapping?: PathParameterMapping;
+    // (undocumented)
+    readonly request: RequestFunction;
+}
+
+// @public (undocumented)
+export interface ApiMatrixReport {
+    readonly attempts: number;
+    // (undocumented)
+    readonly classified: ClassificationSummary;
+    // (undocumented)
+    readonly failures: readonly MatrixFailure[];
+}
+
+// @public (undocumented)
+export interface ApiResponse {
+    // (undocumented)
+    readonly body?: unknown;
+    // (undocumented)
+    readonly status: number;
+}
+
+// @public
+export function assertMatrixPassed(report: {
+    readonly failures: readonly MatrixFailure[];
+}): void;
+
+// @public (undocumented)
+export interface Classification {
+    // (undocumented)
+    readonly operations: readonly ClassifiedOperation[];
+    readonly problems: readonly {
+        readonly subject: string;
+        readonly detail: string;
+    }[];
+    // (undocumented)
+    readonly summary: ClassificationSummary;
+}
+
+// @public (undocumented)
+export interface ClassificationSummary {
+    // (undocumented)
+    readonly byKind: Readonly<Record<OperationKind, number>>;
+    // (undocumented)
+    readonly total: number;
+}
+
+// @public (undocumented)
+export interface ClassifiedOperation {
+    readonly inputs: readonly IdentifierInput[];
+    // (undocumented)
+    readonly kind: OperationKind;
+    // (undocumented)
+    readonly method: string;
+    // (undocumented)
+    readonly operationId: string;
+    readonly path: string;
+    readonly pathParameters: readonly string[];
+    // (undocumented)
+    readonly policy: string;
+    readonly unwalkable: readonly string[];
+}
+
+// @public
+export function classifyOperations(document: unknown): Classification;
+
+// @public
+export function createProbe(database: TestDatabase, options?: ProbeOptions): Promise<Probe>;
+
+// @public (undocumented)
+export function describeOperation(operation: Pick<ClassifiedOperation, "operationId" | "method" | "path">): string;
+
+// @public (undocumented)
+export interface FixtureIdentifier {
+    readonly id: string;
+    // (undocumented)
+    readonly kind: IdentifierKind;
+    readonly visibility?: "shared" | "unshared";
+}
+
+// @public (undocumented)
+export interface FixturePrincipal {
+    // (undocumented)
+    readonly accountId: string;
+    readonly credentials: string;
+    // (undocumented)
+    readonly role: PrincipalRole;
+}
+
+// @public (undocumented)
+export function formatFailures(failures: readonly MatrixFailure[]): string;
+
+// @public
+export const IDENTIFIER_KINDS: readonly ["workspace", "member", "team", "bookmark", "folder", "tag", "slug", "invitation", "token"];
+
+// @public
+export interface IdentifierInput {
+    // (undocumented)
+    readonly location: InputLocation;
+    readonly name: string;
+    readonly segments: readonly string[];
+}
+
+// @public (undocumented)
+export type IdentifierKind = (typeof IDENTIFIER_KINDS)[number];
+
+// @public (undocumented)
+export function identifiersOf(workspace: WorkspaceFixture, kind: IdentifierKind): readonly FixtureIdentifier[];
+
+// @public
+export type InputLocation = "query" | "body";
+
+// @public (undocumented)
+export function kindOfParameter(mapping: PathParameterMapping, operationId: string, parameter: string): IdentifierKind | undefined;
+
+// @public
+export function loadOpenApiDocument(): unknown;
+
+// @public (undocumented)
+export interface MatrixFailure {
+    // (undocumented)
+    readonly detail: string;
+    // (undocumented)
+    readonly kind: string;
+    // (undocumented)
+    readonly mode: MatrixMode;
+    readonly subject: string;
+}
+
+// @public (undocumented)
+export class MatrixFailureError extends Error {
+    constructor(failures: readonly MatrixFailure[]);
+    // (undocumented)
+    readonly failures: readonly MatrixFailure[];
+}
+
+// @public (undocumented)
+export type MatrixMode = "api" | "rls-only";
+
+// @public
+export function namesOf(workspace: WorkspaceFixture): readonly string[];
+
+// @public (undocumented)
+export const OPERATION_KINDS: readonly ["tenant-scoped", "account-level", "anonymous", "process"];
+
+// @public (undocumented)
+export type OperationKind = (typeof OPERATION_KINDS)[number];
+
+// @public (undocumented)
+export const PATH_PARAMETER_MAPPING: PathParameterMapping;
+
+// @public
+export type PathParameterMapping = Readonly<Record<string, IdentifierKind>>;
+
+// @public (undocumented)
+export type PrincipalRole = "owner" | "admin" | "member";
+
+// @public (undocumented)
+export function principalsOf(workspace: WorkspaceFixture): readonly FixturePrincipal[];
+
+// @public (undocumented)
+export interface Probe {
+    // (undocumented)
+    readonly fixture: TenantFixture;
+    readonly methods: readonly RepositoryMethodEntry[];
+    // (undocumented)
+    readonly repository: string;
+    readonly sample: RepositorySample;
+    // (undocumented)
+    readonly table: string;
+}
+
+// @public (undocumented)
+export const PROBE_SAMPLE: RepositorySample;
+
+// @public (undocumented)
+export const PROBE_WORKSPACE_A = "0192f3a0-1111-7000-8000-00000000a001";
+
+// @public (undocumented)
+export const PROBE_WORKSPACE_B = "0192f3a0-1111-7000-8000-00000000b001";
+
+// @public (undocumented)
+export interface ProbeOptions {
+    // (undocumented)
+    readonly policy?: ProbePolicy;
+    readonly repository?: string;
+    readonly table?: string;
+}
+
+// @public (undocumented)
+export type ProbePolicy = "workspace" | "permissive";
+
+// @public (undocumented)
+export const REPOSITORY_SAMPLES: RepositorySamples;
+
+// @public
+export interface RepositorySample {
+    readonly set: Readonly<Record<string, unknown>>;
+    readonly values: Readonly<Record<string, unknown>>;
+}
+
+// @public
+export type RepositorySamples = Readonly<Record<string, RepositorySample>>;
+
+// @public
+export type RequestFunction = (call: ApiCall) => Promise<ApiResponse>;
+
+// @public (undocumented)
+export interface RlsOnlyOptions {
+    // (undocumented)
+    readonly fixture: TenantFixture;
+    readonly methods?: readonly RepositoryMethodEntry[];
+    // (undocumented)
+    readonly samples?: RepositorySamples;
+    readonly tenant: Pick<Database, "withTenant">;
+}
+
+// @public (undocumented)
+export interface RlsOnlyReport {
+    readonly applicationRefusals: readonly string[];
+    readonly attempts: number;
+    // (undocumented)
+    readonly failures: readonly MatrixFailure[];
+    readonly methods: number;
+    readonly rlsRefusals: number;
+}
+
+// @public (undocumented)
+export function runApiMatrix(options: ApiMatrixOptions): Promise<ApiMatrixReport>;
+
+// @public (undocumented)
+export function runRlsOnlyMatrix(options: RlsOnlyOptions): Promise<RlsOnlyReport>;
+
+// @public (undocumented)
+export interface TenantFixture {
+    // (undocumented)
+    readonly a: WorkspaceFixture;
+    // (undocumented)
+    readonly b: WorkspaceFixture;
+    checksum(workspaceId: string): Promise<string>;
+}
+
+// @public (undocumented)
+export interface WorkspaceFixture {
+    // (undocumented)
+    readonly admin: FixturePrincipal;
+    // (undocumented)
+    readonly id: string;
+    readonly identifiers: readonly FixtureIdentifier[];
+    readonly markers: readonly string[];
+    // (undocumented)
+    readonly member: FixturePrincipal;
+    // (undocumented)
+    readonly owner: FixturePrincipal;
+}
+
 // (No @packageDocumentation comment for this package)
 
 ```

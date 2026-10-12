@@ -273,6 +273,40 @@ describe("@slugbase/testing", () => {
   });
 });
 
+describe("@slugbase/db/testing (T1)", () => {
+  const HARNESS = 'import "@slugbase/db/testing";\n';
+
+  it.each([
+    "packages/server/src/fixture.ts",
+    "packages/adapters/src/fixture.ts",
+    "packages/adapters/src/egress/fixture.ts",
+    "packages/web/src/components/fixture.tsx",
+    "apps/slugbase/src/fixture.ts",
+  ])("fails in production code: %s", async (file) => {
+    await failsWith(file, HARNESS, IMPORT);
+  });
+
+  it("names the testing rule in the message", async () => {
+    const [result] = await eslint.lintText(HARNESS, { filePath: resolve(ROOT, "packages/server/src/fixture.ts") });
+    expect(result?.messages.map((m) => m.message).join("\n")).toContain("@slugbase/db/testing");
+  });
+
+  it.each([
+    "packages/server/src/fixture.test.ts",
+    "packages/adapters/src/deep/fixture.spec.ts",
+    "packages/server/test/helpers/fixture.ts",
+    "apps/slugbase/test/fixture.ts",
+    "apps/slugbase/scripts/fixture.ts",
+    "packages/testing/src/fixture.ts",
+  ])("passes in test code, app tooling and the testing package: %s", async (file) => {
+    await passes(file, HARNESS);
+  });
+
+  it("still allows the public entry of db in production code", async () => {
+    await passes("packages/server/src/fixture.ts", 'import "@slugbase/db";\n');
+  });
+});
+
 describe("unsanitised HTML (T14)", () => {
   const DANGEROUS = 'export const View = () => <div dangerouslySetInnerHTML={{ __html: "x" }} />;\n';
 

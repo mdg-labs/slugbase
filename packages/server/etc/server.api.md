@@ -4,6 +4,429 @@
 
 ```ts
 
+import { z } from 'zod';
+
+// @public
+export function composeEnvSchema<const Fragments extends readonly EnvFragment[]>(fragments: Fragments): EnvSchema<MergedShape<Fragments>>;
+
+// @public (undocumented)
+export interface ConfigByProcess {
+    // (undocumented)
+    migrate: MigrateConfig;
+    // (undocumented)
+    server: ServerConfig;
+    // (undocumented)
+    worker: WorkerConfig;
+}
+
+// @public
+export class ConfigError extends Error {
+    constructor(issues: readonly ConfigIssue[]);
+    // (undocumented)
+    readonly issues: readonly ConfigIssue[];
+}
+
+// @public
+export interface ConfigIssue {
+    // (undocumented)
+    readonly key: string;
+    // (undocumented)
+    readonly message: string;
+}
+
+// @public
+export const databaseFragment: EnvFragment<    {
+DATABASE_URL: z.ZodString;
+SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+}>;
+
+// @public
+export function declaredKeys(): readonly string[];
+
+// @public (undocumented)
+export const DEFAULT_DOCS_BASE_URL = "https://slugbase.app/docs";
+
+// @public
+export function envBoolean(): z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>;
+
+// @public
+export interface EnvFragment<Shape extends z.ZodRawShape = z.ZodRawShape> {
+    readonly developmentDefaults?: Readonly<Record<string, string>>;
+    refine?(values: z.infer<z.ZodObject<Shape>>, context: RefineContext): void;
+    // (undocumented)
+    readonly shape: Shape;
+}
+
+// @public (undocumented)
+export function envFragment<Shape extends z.ZodRawShape>(fragment: EnvFragment<Shape>): EnvFragment<Shape>;
+
+// @public (undocumented)
+export type EnvironmentVariables = Readonly<Record<string, string | undefined>>;
+
+// @public (undocumented)
+export interface EnvSchema<Shape extends z.ZodRawShape = z.ZodRawShape> {
+    // (undocumented)
+    readonly developmentDefaults: Readonly<Record<string, string>>;
+    readonly keys: readonly string[];
+    // (undocumented)
+    readonly object: z.ZodObject<Shape>;
+    // (undocumented)
+    readonly refinements: readonly ((values: Readonly<Record<string, unknown>>, context: RefineContext) => void)[];
+}
+
+// @public (undocumented)
+export const envSchemas: {
+    readonly server: EnvSchema<    {
+    NODE_ENV: z.ZodEnum<{
+    development: "development";
+    test: "test";
+    production: "production";
+    }>;
+    LOG_LEVEL: z.ZodDefault<z.ZodEnum<{
+    error: "error";
+    fatal: "fatal";
+    warn: "warn";
+    info: "info";
+    debug: "debug";
+    trace: "trace";
+    silent: "silent";
+    }>>;
+    } & {
+    APP_ORIGIN: z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>;
+    } & {
+    SESSION_SECRET: z.ZodString;
+    ENCRYPTION_KEY: z.ZodString;
+    ENCRYPTION_KEY_ID: z.ZodString;
+    } & {
+    DATABASE_URL: z.ZodString;
+    SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+    } & {
+    MIGRATE_ON_START: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+    DATABASE_MIGRATE_URL: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+    } & {
+    PORT: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
+    TRUSTED_PROXY_HOPS: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
+    API_DOCS_ENABLED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+    DOCS_BASE_URL: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>>;
+    }>;
+    readonly worker: EnvSchema<    {
+    NODE_ENV: z.ZodEnum<{
+    development: "development";
+    test: "test";
+    production: "production";
+    }>;
+    LOG_LEVEL: z.ZodDefault<z.ZodEnum<{
+    error: "error";
+    fatal: "fatal";
+    warn: "warn";
+    info: "info";
+    debug: "debug";
+    trace: "trace";
+    silent: "silent";
+    }>>;
+    } & {
+    APP_ORIGIN: z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>;
+    } & {
+    SESSION_SECRET: z.ZodString;
+    ENCRYPTION_KEY: z.ZodString;
+    ENCRYPTION_KEY_ID: z.ZodString;
+    } & {
+    DATABASE_URL: z.ZodString;
+    SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+    }>;
+    readonly migrate: EnvSchema<    {
+    NODE_ENV: z.ZodEnum<{
+    development: "development";
+    test: "test";
+    production: "production";
+    }>;
+    LOG_LEVEL: z.ZodDefault<z.ZodEnum<{
+    error: "error";
+    fatal: "fatal";
+    warn: "warn";
+    info: "info";
+    debug: "debug";
+    trace: "trace";
+    silent: "silent";
+    }>>;
+    } & {
+    DATABASE_MIGRATE_URL: z.ZodString;
+    }>;
+};
+
+// @public
+export const httpFragment: EnvFragment<    {
+PORT: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
+TRUSTED_PROXY_HOPS: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
+API_DOCS_ENABLED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+DOCS_BASE_URL: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>>;
+}>;
+
+// @public (undocumented)
+export type IntersectUnion<Union> = (Union extends unknown ? (value: Union) => void : never) extends (value: infer Both) => void ? Both : never;
+
+// @public (undocumented)
+export function isProcessType(value: string): value is ProcessType;
+
+// @public
+export function loadConfig<Type extends ProcessType>(type: Type, env: EnvironmentVariables): LoadedConfig<ConfigByProcess[Type]>;
+
+// @public (undocumented)
+export interface LoadedConfig<Config> {
+    // (undocumented)
+    readonly config: Config;
+    readonly warnings: readonly string[];
+}
+
+// @public (undocumented)
+export interface LoadOptions {
+    readonly extraKeys?: readonly string[];
+}
+
+// @public (undocumented)
+export const LOG_LEVELS: readonly ["fatal", "error", "warn", "info", "debug", "trace", "silent"];
+
+// @public (undocumented)
+export type MergedShape<Fragments extends readonly EnvFragment[]> = IntersectUnion<Fragments[number]["shape"]> extends infer Shape extends z.ZodRawShape ? Shape : never;
+
+// @public (undocumented)
+export type MigrateConfig = z.infer<typeof migrateEnvSchema.object>;
+
+// @public (undocumented)
+export const migrateEnvSchema: EnvSchema<    {
+NODE_ENV: z.ZodEnum<{
+development: "development";
+test: "test";
+production: "production";
+}>;
+LOG_LEVEL: z.ZodDefault<z.ZodEnum<{
+error: "error";
+fatal: "fatal";
+warn: "warn";
+info: "info";
+debug: "debug";
+trace: "trace";
+silent: "silent";
+}>>;
+} & {
+DATABASE_MIGRATE_URL: z.ZodString;
+}>;
+
+// @public
+export const migrateFragment: EnvFragment<    {
+DATABASE_MIGRATE_URL: z.ZodString;
+}>;
+
+// @public (undocumented)
+export const migrateFragments: readonly [EnvFragment<    {
+NODE_ENV: z.ZodEnum<{
+development: "development";
+test: "test";
+production: "production";
+}>;
+LOG_LEVEL: z.ZodDefault<z.ZodEnum<{
+error: "error";
+fatal: "fatal";
+warn: "warn";
+info: "info";
+debug: "debug";
+trace: "trace";
+silent: "silent";
+}>>;
+}>, EnvFragment<    {
+DATABASE_MIGRATE_URL: z.ZodString;
+}>];
+
+// @public (undocumented)
+export const MIN_SESSION_SECRET_LENGTH = 32;
+
+// @public (undocumented)
+export const NODE_ENVS: readonly ["development", "test", "production"];
+
+// @public
+export const originFragment: EnvFragment<    {
+APP_ORIGIN: z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>;
+}>;
+
+// @public (undocumented)
+export const PROCESS_TYPES: readonly ["server", "worker", "migrate"];
+
+// @public (undocumented)
+export type ProcessType = (typeof PROCESS_TYPES)[number];
+
+// @public
+export interface RefineContext {
+    issue(key: string, message: string): void;
+    readonly production: boolean;
+}
+
+// @public
+export function requireAllOrNone(keys: readonly string[], values: Readonly<Record<string, unknown>>, context: RefineContext): void;
+
+// @public
+export const runtimeFragment: EnvFragment<    {
+NODE_ENV: z.ZodEnum<{
+development: "development";
+test: "test";
+production: "production";
+}>;
+LOG_LEVEL: z.ZodDefault<z.ZodEnum<{
+error: "error";
+fatal: "fatal";
+warn: "warn";
+info: "info";
+debug: "debug";
+trace: "trace";
+silent: "silent";
+}>>;
+}>;
+
+// @public
+export const secretsFragment: EnvFragment<    {
+SESSION_SECRET: z.ZodString;
+ENCRYPTION_KEY: z.ZodString;
+ENCRYPTION_KEY_ID: z.ZodString;
+}>;
+
+// @public (undocumented)
+export type ServerConfig = z.infer<typeof serverEnvSchema.object>;
+
+// @public (undocumented)
+export const serverEnvSchema: EnvSchema<    {
+NODE_ENV: z.ZodEnum<{
+development: "development";
+test: "test";
+production: "production";
+}>;
+LOG_LEVEL: z.ZodDefault<z.ZodEnum<{
+error: "error";
+fatal: "fatal";
+warn: "warn";
+info: "info";
+debug: "debug";
+trace: "trace";
+silent: "silent";
+}>>;
+} & {
+APP_ORIGIN: z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>;
+} & {
+SESSION_SECRET: z.ZodString;
+ENCRYPTION_KEY: z.ZodString;
+ENCRYPTION_KEY_ID: z.ZodString;
+} & {
+DATABASE_URL: z.ZodString;
+SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+} & {
+MIGRATE_ON_START: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+DATABASE_MIGRATE_URL: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+} & {
+PORT: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
+TRUSTED_PROXY_HOPS: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
+API_DOCS_ENABLED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+DOCS_BASE_URL: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>>;
+}>;
+
+// @public
+export const serverFragments: readonly [EnvFragment<    {
+NODE_ENV: z.ZodEnum<{
+development: "development";
+test: "test";
+production: "production";
+}>;
+LOG_LEVEL: z.ZodDefault<z.ZodEnum<{
+error: "error";
+fatal: "fatal";
+warn: "warn";
+info: "info";
+debug: "debug";
+trace: "trace";
+silent: "silent";
+}>>;
+}>, EnvFragment<    {
+APP_ORIGIN: z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>;
+}>, EnvFragment<    {
+SESSION_SECRET: z.ZodString;
+ENCRYPTION_KEY: z.ZodString;
+ENCRYPTION_KEY_ID: z.ZodString;
+}>, EnvFragment<    {
+DATABASE_URL: z.ZodString;
+SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+}>, EnvFragment<    {
+MIGRATE_ON_START: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+DATABASE_MIGRATE_URL: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+}>, EnvFragment<    {
+PORT: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
+TRUSTED_PROXY_HOPS: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
+API_DOCS_ENABLED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+DOCS_BASE_URL: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>>;
+}>];
+
+// @public
+export const serverMigrationFragment: EnvFragment<    {
+MIGRATE_ON_START: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+DATABASE_MIGRATE_URL: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+}>;
+
+// @public (undocumented)
+export function validateEnvironment<Shape extends z.ZodRawShape>(schema: EnvSchema<Shape>, env: EnvironmentVariables, options?: LoadOptions): LoadedConfig<z.infer<z.ZodObject<Shape>>>;
+
+// @public (undocumented)
+export type WorkerConfig = z.infer<typeof workerEnvSchema.object>;
+
+// @public (undocumented)
+export const workerEnvSchema: EnvSchema<    {
+NODE_ENV: z.ZodEnum<{
+development: "development";
+test: "test";
+production: "production";
+}>;
+LOG_LEVEL: z.ZodDefault<z.ZodEnum<{
+error: "error";
+fatal: "fatal";
+warn: "warn";
+info: "info";
+debug: "debug";
+trace: "trace";
+silent: "silent";
+}>>;
+} & {
+APP_ORIGIN: z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>;
+} & {
+SESSION_SECRET: z.ZodString;
+ENCRYPTION_KEY: z.ZodString;
+ENCRYPTION_KEY_ID: z.ZodString;
+} & {
+DATABASE_URL: z.ZodString;
+SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+}>;
+
+// @public
+export const workerFragments: readonly [EnvFragment<    {
+NODE_ENV: z.ZodEnum<{
+development: "development";
+test: "test";
+production: "production";
+}>;
+LOG_LEVEL: z.ZodDefault<z.ZodEnum<{
+error: "error";
+fatal: "fatal";
+warn: "warn";
+info: "info";
+debug: "debug";
+trace: "trace";
+silent: "silent";
+}>>;
+}>, EnvFragment<    {
+APP_ORIGIN: z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>;
+}>, EnvFragment<    {
+SESSION_SECRET: z.ZodString;
+ENCRYPTION_KEY: z.ZodString;
+ENCRYPTION_KEY_ID: z.ZodString;
+}>, EnvFragment<    {
+DATABASE_URL: z.ZodString;
+SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+}>];
+
 // (No @packageDocumentation comment for this package)
 
 ```

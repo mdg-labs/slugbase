@@ -4,6 +4,34 @@
 
 ```ts
 
+import { createTestDatabase } from '@slugbase/db/testing';
+import { dropTestTemplate } from '@slugbase/db/testing';
+import { MigrationChain } from '@slugbase/db/testing';
+import { TestDatabase } from '@slugbase/db/testing';
+import { TestDatabaseOptions } from '@slugbase/db/testing';
+import { TestSql } from '@slugbase/db/testing';
+import { testTemplateName } from '@slugbase/db/testing';
+import { withTestDatabase } from '@slugbase/db/testing';
+
+export { createTestDatabase }
+
+export { dropTestTemplate }
+
+export { MigrationChain }
+
+export { TestDatabase }
+
+export { TestDatabaseOptions }
+
+export { TestSql }
+
+export { testTemplateName }
+
+// @public
+export function useTestDatabase(options?: TestDatabaseOptions): () => TestDatabase;
+
+export { withTestDatabase }
+
 // (No @packageDocumentation comment for this package)
 
 ```

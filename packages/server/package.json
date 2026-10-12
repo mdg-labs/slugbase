@@ -22,11 +22,14 @@
     "contracts:check": "node ../../tooling/api-report/api-report.ts check --package ."
   },
   "dependencies": {
+    "@slugbase/contracts": "workspace:*",
     "@slugbase/core": "workspace:*",
     "@slugbase/db": "workspace:*",
-    "@slugbase/contracts": "workspace:*"
+    "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@slugbase/testing": "workspace:*"
+    "@slugbase/testing": "workspace:*",
+    "eslint": "^10.12.0",
+    "typescript-eslint": "^8.71.1"
   }
 }

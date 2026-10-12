@@ -224,17 +224,24 @@ describe("several replicas starting at once (D25)", () => {
 });
 
 describe("the session of a run", () => {
-  it("sets the timeouts, does its DDL as slugbase_owner and applies a second chain after the CE chain", async () => {
+  it("sets the timeouts and keepalives, does its DDL as slugbase_owner and applies a second chain after the CE chain", async () => {
     const { name, owner } = await createDatabase();
 
     const result = await migrate({ url: migratorUrl(name), chains: [fixture("session")] });
 
     const chains = result.applied.map(({ chain }) => chain);
     expect(chains).toEqual([...Array<string>(CE_MIGRATIONS).fill("core"), "session", "session"]);
-    const probe = await owner`SELECT lock_timeout, statement_timeout, role_in_use, login_role FROM session_probe`;
+    const probe = await owner`
+      SELECT lock_timeout, statement_timeout, client_connection_check_interval,
+        tcp_keepalives_idle, tcp_keepalives_interval, tcp_keepalives_count, role_in_use, login_role
+      FROM session_probe`;
     expect(probe[0]).toEqual({
       lock_timeout: "5s",
       statement_timeout: "15min",
+      client_connection_check_interval: "1s",
+      tcp_keepalives_idle: "60",
+      tcp_keepalives_interval: "10",
+      tcp_keepalives_count: "6",
       role_in_use: "slugbase_owner",
       login_role: "slugbase_migrator",
     });

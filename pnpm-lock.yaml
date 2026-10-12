@@ -136,9 +136,6 @@ importers:
         specifier: ^3.4.9
         version: 3.4.9
     devDependencies:
-      '@slugbase/testing':
-        specifier: workspace:*
-        version: link:../testing
       drizzle-kit:
         specifier: 0.31.11
         version: 0.31.11
@@ -160,12 +157,25 @@ importers:
       '@slugbase/db':
         specifier: workspace:*
         version: link:../db
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
     devDependencies:
       '@slugbase/testing':
         specifier: workspace:*
         version: link:../testing
+      eslint:
+        specifier: ^10.12.0
+        version: 10.12.0
+      typescript-eslint:
+        specifier: ^8.71.1
+        version: 8.71.1(eslint@10.12.0)(typescript@6.0.3)
 
-  packages/testing: {}
+  packages/testing:
+    dependencies:
+      '@slugbase/db':
+        specifier: workspace:*
+        version: link:../db
 
   packages/ui:
     devDependencies:

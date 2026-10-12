@@ -58,6 +58,18 @@
       "dependsOn": ["^build"],
       "outputs": ["dist/**"]
     },
+    "@slugbase/contracts#build": {
+      "dependsOn": [],
+      "outputs": ["dist/**"]
+    },
+    "@slugbase/core#build": {
+      "dependsOn": ["@slugbase/contracts#build"],
+      "outputs": ["dist/**"]
+    },
+    "@slugbase/db#build": {
+      "dependsOn": ["@slugbase/contracts#build", "@slugbase/core#build"],
+      "outputs": ["dist/**"]
+    },
     "contracts:check": {
       "dependsOn": ["^build", "build"],
       "outputs": [],
@@ -65,7 +77,9 @@
     },
     "db:check": {
       "dependsOn": ["^build"],
-      "outputs": []
+      "passThroughEnv": ["SLUGBASE_TEST_PG_URL", "SLUGBASE_DB_CHECK_CONTRACT"],
+      "outputs": [],
+      "cache": false
     },
     "i18n:check": {
       "outputs": []

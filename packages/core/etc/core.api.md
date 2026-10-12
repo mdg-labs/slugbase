@@ -4,6 +4,308 @@
 
 ```ts
 
+import type { ProblemCode } from '@slugbase/contracts';
+
+// @public
+export interface Adapters {
+    // (undocumented)
+    readonly ai: AiSuggestPort;
+    // (undocumented)
+    readonly analytics: AnalyticsPort;
+    // (undocumented)
+    readonly challenge: ChallengePort;
+    // (undocumented)
+    readonly egress: EgressPort;
+    // (undocumented)
+    readonly errors: ErrorReportPort;
+    // (undocumented)
+    readonly identity: IdentityPort;
+    // (undocumented)
+    readonly mail: MailPort;
+    // (undocumented)
+    readonly rateLimit: RateLimitPort;
+    // (undocumented)
+    readonly secretBox: SecretBoxPort;
+    // (undocumented)
+    readonly tenantResolver: TenantResolver;
+}
+
+// @public (undocumented)
+export interface AiSuggestion {
+    // (undocumented)
+    readonly confidence: number;
+    // (undocumented)
+    readonly slug: string;
+    // (undocumented)
+    readonly tags: readonly string[];
+    // (undocumented)
+    readonly title: string;
+}
+
+// @public
+export interface AiSuggestPort extends Port {
+    // (undocumented)
+    suggest(request: AiSuggestRequest): Promise<AiSuggestion>;
+}
+
+// @public (undocumented)
+export interface AiSuggestRequest {
+    // (undocumented)
+    readonly language: string;
+    // (undocumented)
+    readonly metadata?: {
+        readonly title?: string;
+        readonly description?: string;
+    };
+    // (undocumented)
+    readonly url: string;
+}
+
+// @public (undocumented)
+export interface AnalyticsEvent {
+    readonly consent: boolean;
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly properties?: Readonly<Record<string, string | number | boolean>>;
+}
+
+// @public
+export interface AnalyticsPort extends Port {
+    // (undocumented)
+    track(event: AnalyticsEvent): Promise<void>;
+}
+
+// @public
+export interface ChallengePort extends Port {
+    // (undocumented)
+    verify(solution: string | undefined): Promise<ChallengeVerdict>;
+}
+
+// @public (undocumented)
+export interface ChallengeVerdict {
+    // (undocumented)
+    readonly ok: boolean;
+}
+
+// @public
+export interface EgressPort extends Port {
+    // (undocumented)
+    request(request: EgressRequest): Promise<EgressResponse>;
+}
+
+// @public (undocumented)
+export interface EgressRequest {
+    // (undocumented)
+    readonly acceptContentTypes?: readonly string[];
+    // (undocumented)
+    readonly headers?: Readonly<Record<string, string>>;
+    // (undocumented)
+    readonly maxBytes?: number;
+    // (undocumented)
+    readonly method?: "GET" | "HEAD";
+    // (undocumented)
+    readonly timeoutMs?: number;
+    // (undocumented)
+    readonly url: string;
+}
+
+// @public (undocumented)
+export interface EgressResponse {
+    // (undocumented)
+    readonly body: Uint8Array;
+    // (undocumented)
+    readonly contentType: string | undefined;
+    // (undocumented)
+    readonly status: number;
+    readonly url: string;
+}
+
+// @public (undocumented)
+export interface ErrorReportContext {
+    // (undocumented)
+    readonly requestId?: string;
+    // (undocumented)
+    readonly route?: string;
+}
+
+// @public
+export interface ErrorReportPort extends Port {
+    // (undocumented)
+    capture(error: unknown, context?: ErrorReportContext): Promise<void>;
+}
+
+// @public (undocumented)
+export interface IdentityBeginRequest {
+    // (undocumented)
+    readonly codeChallenge: string;
+    // (undocumented)
+    readonly nonce: string;
+    // (undocumented)
+    readonly providerId: string;
+    // (undocumented)
+    readonly redirectUri: string;
+    // (undocumented)
+    readonly state: string;
+}
+
+// @public
+export interface IdentityClaims {
+    // (undocumented)
+    readonly displayName?: string;
+    // (undocumented)
+    readonly email: string;
+    // (undocumented)
+    readonly emailVerified: boolean;
+    // (undocumented)
+    readonly providerId: string;
+    // (undocumented)
+    readonly subject: string;
+}
+
+// @public (undocumented)
+export interface IdentityCompleteRequest {
+    // (undocumented)
+    readonly code: string;
+    // (undocumented)
+    readonly codeVerifier: string;
+    // (undocumented)
+    readonly nonce: string;
+    // (undocumented)
+    readonly providerId: string;
+    // (undocumented)
+    readonly redirectUri: string;
+}
+
+// @public
+export interface IdentityPort extends Port {
+    // (undocumented)
+    begin(request: IdentityBeginRequest): Promise<{
+        readonly authorizationUrl: string;
+    }>;
+    // (undocumented)
+    complete(request: IdentityCompleteRequest): Promise<IdentityClaims>;
+    // (undocumented)
+    listProviders(): Promise<readonly IdentityProviderInfo[]>;
+}
+
+// @public (undocumented)
+export interface IdentityProviderInfo {
+    // (undocumented)
+    readonly displayName: string;
+    // (undocumented)
+    readonly id: string;
+}
+
+// @public
+export interface MailMessage {
+    // (undocumented)
+    readonly data: Readonly<Record<string, string | number | boolean>>;
+    // (undocumented)
+    readonly locale: string;
+    // (undocumented)
+    readonly template: string;
+    // (undocumented)
+    readonly to: string;
+}
+
+// @public
+export interface MailPort extends Port {
+    // (undocumented)
+    send(message: MailMessage): Promise<void>;
+}
+
+// @public
+export interface Port {
+    readonly available: boolean;
+}
+
+// @public
+export class PortUnavailable extends Error {
+    constructor(port: keyof Adapters, code: PortUnavailableCode);
+    // (undocumented)
+    readonly code: PortUnavailableCode;
+    // (undocumented)
+    readonly port: keyof Adapters;
+}
+
+// @public
+export type PortUnavailableCode = Extract<ProblemCode, "unavailable" | "mail_unavailable" | "ai_unavailable">;
+
+// @public (undocumented)
+export interface RateLimitDecision {
+    // (undocumented)
+    readonly allowed: boolean;
+    // (undocumented)
+    readonly limit: number;
+    // (undocumented)
+    readonly remaining: number;
+    // (undocumented)
+    readonly retryAfterSeconds: number;
+}
+
+// @public
+export interface RateLimitPort extends Port {
+    // (undocumented)
+    consume(request: RateLimitRequest): Promise<RateLimitDecision>;
+}
+
+// @public (undocumented)
+export interface RateLimitRequest {
+    readonly bucket: string;
+    // (undocumented)
+    readonly cost?: number;
+    readonly key: string;
+}
+
+// @public (undocumented)
+export interface SealedSecret {
+    // (undocumented)
+    readonly ciphertext: Uint8Array;
+    readonly keyId: string;
+}
+
+// @public
+export interface SecretBoxPort extends Port {
+    // (undocumented)
+    open(sealed: SealedSecret): Promise<Uint8Array>;
+    // (undocumented)
+    seal(plaintext: Uint8Array): Promise<SealedSecret>;
+}
+
+// @public
+export type TenantPrincipal = {
+    readonly kind: "session";
+    readonly accountId: string;
+    readonly activeWorkspaceId: string | undefined;
+} | {
+    readonly kind: "api-token";
+    readonly accountId: string;
+    readonly workspaceId: string;
+};
+
+// @public (undocumented)
+export interface TenantResolution {
+    // (undocumented)
+    readonly memberId: string;
+    // (undocumented)
+    readonly role: WorkspaceRole;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public
+export interface TenantResolver extends Port {
+    // (undocumented)
+    resolve(principal: TenantPrincipal): Promise<TenantResolution | undefined>;
+}
+
+// @public
+export function unconfigured(): Adapters;
+
+// @public (undocumented)
+export type WorkspaceRole = "owner" | "admin" | "member";
+
 // (No @packageDocumentation comment for this package)
 
 ```

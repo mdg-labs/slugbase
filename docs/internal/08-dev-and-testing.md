@@ -100,6 +100,14 @@ React components are tested with Testing Library and `vitest-axe` for component-
 
 The harness needs `SLUGBASE_TEST_PG_URL` (a superuser URL); it defaults to the `compose.dev.yml` Postgres. In CI it points at a service container (§6). Because databases are per file and named randomly, any number of scratch clones can run `pnpm gate` against the same Postgres concurrently.
 
+Every changed migration, custom SQL file or `roles.sql` leaves one more template behind, and the harness never drops one on its own: scratch clones at different hashes run at the same time. `pnpm --filter @slugbase/db test:prune-templates` drops the `slugbase_tpl_*` templates that nothing uses (template names as arguments limit it to those). It never lists or touches a database outside the `slugbase_tpl_<hash>` names, and it keeps the template of the current hash and any template that is:
+
+- being built or dropped (the per-template build lock, which the prune only tries and never waits for);
+- cloned from, or about to be: Postgres records no link from `test_<random>` to its template, so every process holds a per-template *use* lock, shared, from before it looks for the template until its test database is dropped, and the prune only tries the exclusive one;
+- connected to (and the `DROP DATABASE` has no `FORCE`, so a connection that opens late makes it fail and leaves the template marked).
+
+A process that wants a template the prune has just dropped builds it again.
+
 ### 3.3 The cross-tenant matrix (D8, doc 01 §5.5)
 
 The single most important test in the codebase. It lives in `packages/testing/src/tenancy/` and runs in two modes:
@@ -115,7 +123,7 @@ Within-workspace sharing rules (owner-only mutation, read via direct share, team
 
 - **Fresh apply**: the template build (§3.2) applies the whole chain to an empty database on every run.
 - **Upgrade with data**: `packages/db/test/migrations/` keeps a **fixture snapshot per released schema version** (a `pg_dump` of the seeded instance at that version, compressed, committed when a version is released). The test restores each snapshot, applies every later migration, then runs a read-back suite (row counts, invariants such as "every bookmark's slug is unique per owner", RLS still forced on every tenant table). A migration that loses or corrupts data fails here.
-- **Policy lint** (`pnpm db:check`): every table with a `workspace_id` column has RLS enabled **and forced** and at least one policy; `slugbase_app` owns no table; no migration file changed after its first commit (checksums in `migrations/meta/`); drizzle-kit reports no pending diff between schema and migrations.
+- **Policy lint** (`pnpm db:check`): every table with a `workspace_id` column has RLS enabled **and forced** and at least one policy; `slugbase_app` owns no table; no migration file changed after its first commit (each migration's SHA-256 is recorded in `packages/db/src/check/migration-checksums.json`; `pnpm db:record-checksums` adds the entry of a new migration after `pnpm db:generate`, and an existing entry is never rewritten); drizzle-kit reports no pending diff between schema and migrations.
 - **Expand/contract check**: a migration that drops or renames a column is rejected unless its file header names the expand migration and release it pairs with (doc 05).
 - **The `migrate` command** (D25): two `migrate` processes started at once against the same database apply the chain exactly once (the advisory lock); `lock_timeout` makes a migration blocked by a held table lock fail fast instead of queueing; a failed migration leaves the version table unchanged and exits non-zero.
 - **The two call sites** (D25):

@@ -1,0 +1,577 @@
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, describe, expect, it } from "vitest";
+import { hashSqlFiles } from "../../scripts/migration-sql.ts";
+import { checkRules, contractMarkerFromEnv, runChecks } from "../../src/check/index.ts";
+import { expandContractRule } from "../../src/check/expand-contract.ts";
+import { analyseSql, setsSessionTimeout } from "../../src/check/migration-statements.ts";
+import type { Finding } from "../../src/check/types.ts";
+import { FIRST, GitPackage, releasedRepository, SECOND } from "./git-package.ts";
+
+// The expand/contract rule (doc 05 section 5.2, Q52) against temporary git
+// repositories with release tags. `pnpm db:check` itself, with the marker
+// taken from the environment, is driven in expand-contract.integration.test.ts.
+
+const THIRD = "20260301000000_drop_legacy_title";
+const BOOKMARKS = ["id", "title", "legacy_title"];
+const MARKER_HINT = "contract marker is not set";
+
+const repositories: GitPackage[] = [];
+const scratch: string[] = [];
+
+afterAll(() => {
+  for (const repository of repositories) {
+    repository.remove();
+  }
+  for (const directory of scratch) {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+function released(tag = "v1.0.0"): GitPackage {
+  const repository = releasedRepository(tag);
+  repositories.push(repository);
+  return repository;
+}
+
+function inspect(repository: GitPackage, contractMarker?: boolean): Promise<readonly Finding[]> {
+  return Promise.resolve(
+    expandContractRule.run({
+      packageDir: repository.dir,
+      sql: undefined,
+      hashSqlFiles,
+      ...(contractMarker === undefined ? {} : { contractMarker }),
+    }),
+  );
+}
+
+/** Adds one migration after the release and returns what the rule says about it. */
+async function added(sql: string, options: { marker?: boolean; tables?: { name: string; columns: string[] }[] } = {}): Promise<readonly Finding[]> {
+  const repository = released();
+  repository.migration(SECOND, sql, options.tables ?? [{ name: "bookmarks", columns: BOOKMARKS }]);
+  return inspect(repository, options.marker);
+}
+
+describe("the failure scenario of a rolling deploy", () => {
+  it("rejects dropping a column the previous release reads, naming the column, the migration and the release", async () => {
+    const findings = await added('ALTER TABLE "bookmarks" DROP COLUMN "legacy_title";');
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.rule).toBe("expand-contract");
+    expect(findings[0]?.object).toBe(`migrations/${SECOND}.sql`);
+    expect(findings[0]?.message).toContain("drops column bookmarks.legacy_title, which exists at v1.0.0");
+    expect(findings[0]?.message).toContain("the previous release still reads it");
+  });
+
+  it("is part of the rules that pnpm db:check runs", () => {
+    expect(checkRules).toContain(expandContractRule);
+  });
+});
+
+describe("what is rejected in a migration added since the latest release tag", () => {
+  it.each([
+    ["dropping a column", 'ALTER TABLE "bookmarks" DROP COLUMN "title";', "drops column bookmarks.title"],
+    ["dropping a column without the COLUMN keyword", 'ALTER TABLE bookmarks DROP title;', "drops column bookmarks.title"],
+    ["dropping a column in a multi-action ALTER", 'ALTER TABLE "bookmarks" ADD COLUMN "x" text, DROP COLUMN "title";', "drops column bookmarks.title"],
+    ["dropping a column of a schema-qualified table", 'ALTER TABLE ONLY "public"."bookmarks" DROP COLUMN IF EXISTS "title" CASCADE;', "drops column bookmarks.title"],
+    ["dropping a table", 'DROP TABLE "bookmarks" CASCADE;', "drops table bookmarks"],
+    ["dropping a table in a list", 'DROP TABLE IF EXISTS "other", "bookmarks";', "drops table bookmarks"],
+    ["dropping the schema of a table", "DROP SCHEMA public CASCADE;", "drops schema public"],
+    ["renaming a column", 'ALTER TABLE "bookmarks" RENAME COLUMN "title" TO "name";', "renames column bookmarks.title to name"],
+    ["renaming a table", 'ALTER TABLE "bookmarks" RENAME TO "links";', "renames table bookmarks to links"],
+    ["moving a table to another schema", 'ALTER TABLE "bookmarks" SET SCHEMA archive;', "moves table bookmarks to archive.bookmarks"],
+    ["adding a NOT NULL column without a default", 'ALTER TABLE "bookmarks" ADD COLUMN "slug" text NOT NULL;', "adds column bookmarks.slug as NOT NULL without a default"],
+    ["adding a NOT NULL column in lower case without COLUMN", 'alter table bookmarks add slug varchar(10) not null;', "adds column bookmarks.slug as NOT NULL without a default"],
+    ["changing a column type", 'ALTER TABLE "bookmarks" ALTER COLUMN "title" SET DATA TYPE integer USING title::integer;', "changes the type of column bookmarks.title"],
+    ["changing a column type without SET DATA", 'ALTER TABLE "bookmarks" ALTER "title" TYPE varchar(10);', "changes the type of column bookmarks.title"],
+    ["setting a column NOT NULL", 'ALTER TABLE "bookmarks" ALTER COLUMN "title" SET NOT NULL;', "sets column bookmarks.title NOT NULL"],
+    ["setting a column NOT NULL in lower case without COLUMN", 'alter table bookmarks alter title set not null;', "sets column bookmarks.title NOT NULL"],
+    ["setting a column NOT NULL beside the ADD COLUMN of an unreleased column", 'ALTER TABLE "bookmarks" ADD COLUMN "slug" text, ALTER COLUMN "slug" SET NOT NULL;', "sets column bookmarks.slug NOT NULL"],
+    ["dropping the default of a column", 'ALTER TABLE "bookmarks" ALTER COLUMN "title" DROP DEFAULT;', "drops the default of column bookmarks.title"],
+    ["dropping the default of a column in lower case without COLUMN", 'alter table bookmarks alter title drop default;', "drops the default of column bookmarks.title"],
+    ["setting the default of a column to NULL", 'ALTER TABLE "bookmarks" ALTER COLUMN "title" SET DEFAULT NULL;', "drops the default of column bookmarks.title"],
+    ["setting the default of a column to NULL in lower case", 'alter table bookmarks alter title set default null;', "drops the default of column bookmarks.title"],
+    ["setting the default of a column to a parenthesised NULL", 'ALTER TABLE bookmarks ALTER COLUMN title SET DEFAULT (NULL);', "drops the default of column bookmarks.title"],
+    ["setting the default of a column to a cast NULL", 'ALTER TABLE bookmarks ALTER COLUMN title SET DEFAULT NULL::text;', "drops the default of column bookmarks.title"],
+    ["setting the default of a column to a deeply parenthesised, cast NULL", 'alter table bookmarks alter title set default (((null)))::varchar(10);', "drops the default of column bookmarks.title"],
+    ["adding a named UNIQUE constraint", 'ALTER TABLE "bookmarks" ADD CONSTRAINT u UNIQUE (title);', "without CONCURRENTLY"],
+    ["adding a UNIQUE constraint without a name in lower case", 'alter table bookmarks add unique (title);', "without CONCURRENTLY"],
+    ["adding a UNIQUE constraint that treats NULLs as equal", 'ALTER TABLE "bookmarks" ADD CONSTRAINT "u" UNIQUE NULLS NOT DISTINCT ("title");', "without CONCURRENTLY"],
+    ["adding a PRIMARY KEY", 'ALTER TABLE "bookmarks" ADD PRIMARY KEY (id);', "without CONCURRENTLY"],
+    ["adding a named PRIMARY KEY in lower case", 'alter table only public.bookmarks add constraint pk primary key (id);', "without CONCURRENTLY"],
+    ["adding an EXCLUDE constraint", 'ALTER TABLE "bookmarks" ADD CONSTRAINT x EXCLUDE USING gist (title WITH =);', "without CONCURRENTLY"],
+    ["adding an EXCLUDE constraint in lower case", 'alter table bookmarks add exclude using gist (title with =);', "without CONCURRENTLY"],
+    ["adding a UNIQUE constraint beside another action", 'ALTER TABLE "bookmarks" ADD COLUMN "x" text, ADD CONSTRAINT u UNIQUE (x);', "without CONCURRENTLY"],
+    ["adding a CHECK constraint that is validated", 'ALTER TABLE "bookmarks" ADD CONSTRAINT c CHECK (title <> \'\');', "adds a CHECK or FOREIGN KEY constraint without NOT VALID to table bookmarks"],
+    ["adding a CHECK constraint without a name in lower case", 'alter table bookmarks add check (title is not null);', "adds a CHECK or FOREIGN KEY constraint without NOT VALID to table bookmarks"],
+    ["adding a CHECK constraint whose expression mentions NOT VALID", 'ALTER TABLE "bookmarks" ADD CONSTRAINT c CHECK (title IS NOT DISTINCT FROM \'not valid\');', "adds a CHECK or FOREIGN KEY constraint without NOT VALID to table bookmarks"],
+    ["adding a FOREIGN KEY that is validated", 'ALTER TABLE "bookmarks" ADD CONSTRAINT "f" FOREIGN KEY ("id") REFERENCES "public"."notes"("id") ON DELETE cascade ON UPDATE no action;', "adds a CHECK or FOREIGN KEY constraint without NOT VALID to table bookmarks"],
+    ["adding a FOREIGN KEY in lower case", 'alter table bookmarks add foreign key (id) references notes (id);', "adds a CHECK or FOREIGN KEY constraint without NOT VALID to table bookmarks"],
+    ["adding a constraint with nothing after its name", 'ALTER TABLE "bookmarks" ADD CONSTRAINT c;', "cannot place"],
+    ["adding a constraint without a name", 'ALTER TABLE "bookmarks" ADD CONSTRAINT;', "cannot place"],
+    ["adding a LIKE clause", 'ALTER TABLE "bookmarks" ADD LIKE other;', "cannot place"],
+    ["adding a NOT NULL table constraint", 'ALTER TABLE "bookmarks" ADD NOT NULL title;', "sets column bookmarks.title NOT NULL"],
+    ["adding a NOT NULL table constraint NOT VALID in lower case", 'alter table bookmarks add not null title not valid;', "sets column bookmarks.title NOT NULL"],
+    ["adding a named NOT NULL table constraint on a quoted column", 'ALTER TABLE "bookmarks" ADD CONSTRAINT nn NOT NULL "title";', "sets column bookmarks.title NOT NULL"],
+    ["adding a NOT NULL table constraint without a column", 'ALTER TABLE "bookmarks" ADD NOT NULL;', "cannot place"],
+    ["adding a PRIMARY KEY from an existing index", 'ALTER TABLE "bookmarks" ADD CONSTRAINT p PRIMARY KEY USING INDEX ix;', "attaches an index as the primary key of table bookmarks"],
+    ["adding a PRIMARY KEY from an existing index in lower case without a name", 'alter table bookmarks add primary key using index "ix";', "attaches an index as the primary key of table bookmarks"],
+    ["adding a column with an inline UNIQUE", 'ALTER TABLE "bookmarks" ADD COLUMN "slug" text UNIQUE;', "without CONCURRENTLY"],
+    ["adding a column with a named inline UNIQUE and no COLUMN keyword", 'alter table bookmarks add "slug" text constraint s unique;', "without CONCURRENTLY"],
+    ["adding a column IF NOT EXISTS with an inline UNIQUE", 'ALTER TABLE "bookmarks" ADD COLUMN IF NOT EXISTS u text UNIQUE;', "without CONCURRENTLY"],
+    ["adding a column with an inline PRIMARY KEY", 'ALTER TABLE "bookmarks" ADD COLUMN pid uuid PRIMARY KEY;', "without CONCURRENTLY"],
+    ["adding a column with an inline CHECK that mentions NOT NULL", 'ALTER TABLE "bookmarks" ADD COLUMN "n" text CHECK (n IS NOT NULL);', "adds a CHECK or FOREIGN KEY constraint without NOT VALID to table bookmarks"],
+    ["adding a column with a named inline CHECK in lower case", 'alter table bookmarks add column n int constraint c check (n > 0);', "adds a CHECK or FOREIGN KEY constraint without NOT VALID to table bookmarks"],
+    ["adding a column with an inline REFERENCES and a default", "ALTER TABLE \"bookmarks\" ADD COLUMN \"p\" uuid DEFAULT '00000000-0000-0000-0000-000000000000' REFERENCES \"workspaces\"(\"id\");", "adds a CHECK or FOREIGN KEY constraint without NOT VALID to table bookmarks"],
+    ["creating an index without CONCURRENTLY", 'CREATE INDEX "bookmarks_title_idx" ON "bookmarks" USING btree ("title");', "without CONCURRENTLY"],
+    ["creating a unique index without CONCURRENTLY", 'CREATE UNIQUE INDEX IF NOT EXISTS ix ON ONLY public.bookmarks (title);', "without CONCURRENTLY"],
+    ["a statement that cannot be placed", "DO $$ BEGIN EXECUTE 'ALTER TABLE bookmarks DROP COLUMN title'; END $$;", "cannot place"],
+    ["a statement hidden behind a lone carriage return", '-- note\rALTER TABLE "bookmarks" DROP COLUMN "title";', "drops column bookmarks.title"],
+    ["a column renamed through ALTER VIEW", "ALTER VIEW bookmarks RENAME COLUMN title TO name;", "cannot place"],
+    ["a table renamed through ALTER INDEX", "ALTER INDEX bookmarks RENAME TO links;", "cannot place"],
+    ["a type dropped with its columns", "DROP TYPE kind CASCADE;", "cannot place"],
+    ["a SELECT", "SELECT 1;", "cannot place"],
+    ["a SELECT of a function", "SELECT public.f();", "cannot place"],
+    ["a session setting", "SET search_path = archive;", "cannot place"],
+    ["an INSERT", "INSERT INTO bookmarks (id) VALUES (1);", "cannot place"],
+    ["a table created from a query", "CREATE TABLE notes AS SELECT 1;", "cannot place"],
+    ["a table with a column list created from a query", "CREATE TABLE gone (id) AS SELECT id FROM bookmarks;", "cannot place"],
+    ["a table with a column list created from a DELETE in a CTE", "CREATE TABLE gone (id) AS WITH d AS (DELETE FROM bookmarks RETURNING id) SELECT id FROM d;", "cannot place"],
+    ["a table with a column list created from an UPDATE in a CTE", "CREATE TABLE gone (id) AS WITH u AS (UPDATE bookmarks SET title = NULL RETURNING id) SELECT id FROM u;", "cannot place"],
+    ["a table with a column list created by EXECUTE", "CREATE TABLE gone (id) AS EXECUTE prepared;", "cannot place"],
+    ["a table with a clause after its column list", "CREATE TABLE notes (id uuid) INHERITS (bookmarks);", "cannot place"],
+    ["a table with an unclosed column list", "CREATE TABLE notes (id uuid;", "cannot place"],
+    ["an enum type with text after its values", "CREATE TYPE kind AS ENUM ('a') AS SELECT 1;", "cannot place"],
+    ["a view", "CREATE VIEW v AS SELECT 1;", "cannot place"],
+    ["a trigger", "CREATE TRIGGER t BEFORE INSERT ON bookmarks EXECUTE FUNCTION f();", "cannot place"],
+    ["an extension dropped with its columns", "DROP EXTENSION citext CASCADE;", "cannot place"],
+    ["a table action it does not read", "ALTER TABLE bookmarks ALTER COLUMN title SET STORAGE external;", "cannot place"],
+    ["a policy that calls a function", "CREATE POLICY p ON bookmarks USING (helper(id));", "calls helper()"],
+    ["a function in a language other than sql", "CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ BEGIN PERFORM 1; END $$;", "cannot place"],
+    ["a plpgsql function whose body reads like a SELECT", "CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ SELECT 1 $$;", "cannot place"],
+    ["a table action it does not read, with no column", "ALTER TABLE bookmarks SET LOGGED;", "cannot place"],
+    ["a table action over a whole tablespace", "ALTER TABLE ALL IN TABLESPACE ts SET TABLESPACE other;", "cannot place"],
+    ["a name spelled with Unicode escapes", 'ALTER TABLE U&"b\\006Fokmarks" DROP COLUMN title;', "cannot place"],
+  ])("rejects %s", async (_name, sql, expected) => {
+    const findings = await added(sql);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain(expected);
+    expect(findings[0]?.message).toContain("it is not accepted");
+  });
+
+  it.each([
+    ["a function body that alters a table, then a call", "CREATE FUNCTION f() RETURNS void LANGUAGE sql AS $$ ALTER TABLE bookmarks DROP COLUMN title $$;\nSELECT f();"],
+    ["a plpgsql function that alters a table, then a call", "CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ BEGIN ALTER TABLE bookmarks DROP COLUMN title; END $$;\nSELECT f();"],
+    ["a SQL function body that calls another function, then a call", "CREATE FUNCTION f() RETURNS int LANGUAGE sql AS $$ SELECT g() $$;\nSELECT f();"],
+  ])("rejects both the helper function and its call: %s", async (_name, sql) => {
+    const findings = await added(sql);
+    expect(findings).toHaveLength(2);
+    for (const finding of findings) {
+      expect(finding.message).toContain("cannot place");
+    }
+  });
+
+  it("rejects the inline CHECK of an added column, not a NOT NULL column", async () => {
+    const findings = await added('ALTER TABLE "bookmarks" ADD COLUMN "n" text CHECK (n IS NOT NULL);');
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).not.toContain("NOT NULL without a default");
+  });
+
+  it("rejects each rejected statement of one file", async () => {
+    const findings = await added(
+      'ALTER TABLE "bookmarks" DROP COLUMN "title";\n--> statement-breakpoint\nALTER TABLE "bookmarks" RENAME COLUMN "legacy_title" TO "old";',
+    );
+    expect(findings.map((finding) => finding.message.split(",")[0])).toEqual([
+      "drops column bookmarks.title",
+      "renames column bookmarks.legacy_title to old",
+    ].map((start) => expect.stringContaining(start) as string));
+  });
+
+  it("follows a table through a rename in the same release", async () => {
+    const findings = await added(
+      'ALTER TABLE "bookmarks" RENAME TO "links";\n--> statement-breakpoint\nALTER TABLE "links" DROP COLUMN "title";',
+      { marker: true },
+    );
+    expect(findings.map((finding) => finding.message)).toEqual([
+      expect.stringContaining("renames table bookmarks to links"),
+      expect.stringContaining("drops column links.title"),
+    ]);
+  });
+
+  it("reads a migration that the journal lists after another added one against the state the first leaves", async () => {
+    const repository = released();
+    repository.migration(SECOND, 'ALTER TABLE "bookmarks" ADD COLUMN "extra" text;', [{ name: "bookmarks", columns: [...BOOKMARKS, "extra"] }]);
+    repository.migration(THIRD, 'ALTER TABLE "bookmarks" DROP COLUMN "extra";', [{ name: "bookmarks", columns: BOOKMARKS }]);
+    expect(await inspect(repository)).toEqual([]);
+  });
+});
+
+describe("what is accepted without a contract", () => {
+  it.each([
+    ["adding a nullable column", 'ALTER TABLE "bookmarks" ADD COLUMN "slug" text;'],
+    ["adding a NOT NULL column with a default", 'ALTER TABLE "bookmarks" ADD COLUMN "slug" text DEFAULT \'\' NOT NULL;'],
+    ["adding a NOT NULL serial column", 'ALTER TABLE "bookmarks" ADD COLUMN "n" bigserial NOT NULL;'],
+    ["adding a column whose default and type arguments read like constraints", "ALTER TABLE \"bookmarks\" ADD COLUMN \"t\" varchar(10) DEFAULT 'primary key references check unique';"],
+    ["adding a column with an inline REFERENCES and no default", 'ALTER TABLE "bookmarks" ADD COLUMN "p" uuid REFERENCES "workspaces"("id");'],
+    ["adding a constraint", 'ALTER TABLE "bookmarks" ADD CONSTRAINT "t" CHECK (title IS NOT NULL) NOT VALID;'],
+    ["adding a CHECK constraint NOT VALID in lower case without a name", 'alter table bookmarks add check (title is not null) not valid;'],
+    ["adding a FOREIGN KEY NOT VALID", 'ALTER TABLE "bookmarks" ADD CONSTRAINT "f" FOREIGN KEY ("id") REFERENCES "public"."notes"("id") ON DELETE cascade NOT VALID;'],
+    ["adding a FOREIGN KEY NOT VALID in lower case", 'alter table bookmarks add foreign key (id) references notes (id) not valid;'],
+    ["adding a UNIQUE constraint from an existing index", 'ALTER TABLE "bookmarks" ADD CONSTRAINT u UNIQUE USING INDEX ix;'],
+    ["adding a UNIQUE constraint from an existing index in lower case without a name", 'alter table bookmarks add unique using index "ix";'],
+    ["validating a constraint", 'ALTER TABLE "bookmarks" VALIDATE CONSTRAINT "t";'],
+    ["dropping a constraint", 'ALTER TABLE "bookmarks" DROP CONSTRAINT "t";'],
+    ["dropping NOT NULL from a column", 'ALTER TABLE "bookmarks" ALTER COLUMN "title" DROP NOT NULL;'],
+    ["setting the default of a column", 'alter table bookmarks alter title set default \'\';'],
+    ["setting the default of a column to a string that reads null", 'ALTER TABLE "bookmarks" ALTER COLUMN "title" SET DEFAULT \'null\'::text;'],
+    ["creating a table", 'CREATE TABLE "notes" ("id" uuid PRIMARY KEY, "body" text NOT NULL);'],
+    ["dropping a table that is not in the release", 'DROP TABLE "drafts";'],
+    ["dropping a column that is not in the release", 'ALTER TABLE "bookmarks" DROP COLUMN "scratch";'],
+    ["dropping a column of a table in another schema", 'ALTER TABLE "archive"."bookmarks" DROP COLUMN "title";'],
+    ["dropping an index", 'DROP INDEX "bookmarks_title_idx";'],
+    ["creating an index of a table the release does not hold", 'CREATE INDEX ix ON "notes" ("body");'],
+    ["a statement in a comment or a string", "-- ALTER TABLE bookmarks DROP COLUMN title;\n/* DROP TABLE bookmarks; */\nCOMMENT ON TABLE bookmarks IS 'ALTER TABLE bookmarks DROP COLUMN title';"],
+    ["a statement inside nested block comments", "/* a /* b */ ALTER TABLE bookmarks DROP COLUMN title; */\nCOMMENT ON TABLE bookmarks IS 'x';"],
+    ["a statement in an escape string that holds a quote", "COMMENT ON TABLE bookmarks IS E'it\\'s; ALTER TABLE bookmarks DROP COLUMN title; --';"],
+    ["a statement in a dollar-quoted string with a tag", "COMMENT ON TABLE bookmarks IS $a$ x; ALTER TABLE bookmarks DROP COLUMN title; $$ y $a$;"],
+    ["an enum, a table with built-in defaults and a policy on the tenant context", "CREATE TYPE \"public\".\"kind\" AS ENUM('a', 'b');\nCREATE TABLE \"notes\" (\"id\" uuid PRIMARY KEY, \"at\" timestamp (3) with time zone DEFAULT now() NOT NULL, \"t\" varchar(10), CONSTRAINT \"fk\" FOREIGN KEY (\"id\") REFERENCES \"public\".\"bookmarks\"(\"id\"));\nCREATE POLICY p ON notes USING (id = (select public.app_workspace_id()));"],
+    ["a SQL function of one SELECT of built-ins", "CREATE OR REPLACE FUNCTION public.f() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT nullif(current_setting('app.workspace_id', true), '')::uuid $$;"],
+    ["a function body that mentions a drop", "CREATE OR REPLACE FUNCTION f() RETURNS int LANGUAGE sql AS $$ SELECT 1 -- DROP TABLE bookmarks;\n$$;"],
+    ["policies and grants", 'ALTER TABLE "bookmarks" ENABLE ROW LEVEL SECURITY;\nCREATE POLICY p ON bookmarks USING (true);\nGRANT SELECT ON bookmarks TO slugbase_app;'],
+  ])("accepts %s", async (_name, sql) => {
+    expect(await added(sql)).toEqual([]);
+  });
+
+  it("accepts an index of the release built CONCURRENTLY in a non-transactional file", async () => {
+    expect(
+      await added('-- slugbase:non-transactional\nCREATE INDEX CONCURRENTLY "bookmarks_title_idx" ON "bookmarks" USING btree ("title");\n'),
+    ).toEqual([]);
+  });
+
+  it("accepts the constraints drizzle-kit writes after the CREATE TABLE of the same migration", async () => {
+    expect(
+      await added(
+        'CREATE TABLE "notes" ("id" uuid PRIMARY KEY, "bookmark_id" uuid NOT NULL);\n--> statement-breakpoint\nALTER TABLE "notes" ADD CONSTRAINT "notes_bookmark_fk" FOREIGN KEY ("bookmark_id") REFERENCES "public"."bookmarks"("id") ON DELETE cascade ON UPDATE no action;\n--> statement-breakpoint\nALTER TABLE "notes" ADD CONSTRAINT "notes_bookmark_key" UNIQUE("bookmark_id");',
+      ),
+    ).toEqual([]);
+  });
+
+  it("accepts constraints that build an index or validate on a table created in the same release", async () => {
+    const repository = released();
+    repository.migration(SECOND, 'CREATE TABLE "notes" ("id" uuid, "body" text);', [
+      { name: "bookmarks", columns: BOOKMARKS },
+      { name: "notes", columns: ["id", "body"] },
+    ]);
+    repository.migration(
+      THIRD,
+      [
+        'ALTER TABLE "notes" ADD PRIMARY KEY (id);',
+        'ALTER TABLE "notes" ADD CONSTRAINT u UNIQUE (body);',
+        'ALTER TABLE "notes" ADD CONSTRAINT x EXCLUDE USING gist (body WITH =);',
+        'ALTER TABLE "notes" ADD CONSTRAINT c CHECK (body <> \'\');',
+        'ALTER TABLE "notes" ADD CONSTRAINT f FOREIGN KEY (id) REFERENCES bookmarks (id);',
+        'ALTER TABLE "notes" ADD NOT NULL body;',
+        'ALTER TABLE "notes" ADD PRIMARY KEY USING INDEX ix;',
+        'ALTER TABLE "notes" ADD COLUMN "slug" text UNIQUE;',
+        'ALTER TABLE "notes" ADD COLUMN "pid" uuid PRIMARY KEY;',
+        'ALTER TABLE "notes" ADD COLUMN "n" text CHECK (n IS NOT NULL);',
+        "ALTER TABLE \"notes\" ADD COLUMN \"p\" uuid DEFAULT '00000000-0000-0000-0000-000000000000' REFERENCES \"bookmarks\"(\"id\");",
+      ].join("\n"),
+    );
+    expect(await inspect(repository)).toEqual([]);
+  });
+
+  it("accepts a NOT NULL column and an index on a table created in the same release", async () => {
+    const repository = released();
+    repository.migration(SECOND, 'CREATE TABLE "notes" ("id" uuid PRIMARY KEY);', [
+      { name: "bookmarks", columns: BOOKMARKS },
+      { name: "notes", columns: ["id"] },
+    ]);
+    repository.migration(
+      THIRD,
+      'ALTER TABLE "notes" ADD COLUMN "body" text NOT NULL;\nCREATE INDEX ix ON "notes" ("body");\nALTER TABLE "notes" ALTER COLUMN "body" SET DATA TYPE varchar(20);\nALTER TABLE "notes" ALTER COLUMN "body" SET NOT NULL;\nALTER TABLE "notes" ALTER COLUMN "body" DROP DEFAULT;\nALTER TABLE "notes" ALTER COLUMN "body" SET DEFAULT NULL;\nALTER TABLE "notes" DROP COLUMN "body";',
+    );
+    expect(await inspect(repository)).toEqual([]);
+  });
+});
+
+describe("the release the objects are measured against", () => {
+  it("uses the highest release tag, ignoring tags that are not releases and older releases", async () => {
+    const repository = released("v1.0.0");
+    repository.migration(SECOND, 'CREATE TABLE "notes" ("id" uuid PRIMARY KEY, "body" text);', [
+      { name: "bookmarks", columns: BOOKMARKS },
+      { name: "notes", columns: ["id", "body"] },
+    ]);
+    repository.commit("second release");
+    repository.tag("v1.0.1-rc.1");
+    repository.tag("v1.0.1");
+    repository.tag("v0.9.0");
+    repository.tag("nightly");
+    repository.tag("v2");
+    repository.migration(THIRD, 'ALTER TABLE "notes" DROP COLUMN "body";', undefined);
+    const findings = await inspect(repository);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("drops column notes.body, which exists at v1.0.1");
+  });
+
+  it("orders pre-releases below their release and by their identifiers", async () => {
+    const repository = released("v1.0.0-rc.2");
+    repository.tag("v1.0.0-rc.10");
+    repository.tag("v1.0.0-beta.1");
+    repository.migration(SECOND, 'ALTER TABLE "bookmarks" DROP COLUMN "title";');
+    const findings = await inspect(repository);
+    expect(findings[0]?.message).toContain("exists at v1.0.0-rc.10");
+  });
+
+  it("accepts an unprefixed release tag", async () => {
+    const repository = released("1.2.3");
+    repository.migration(SECOND, 'DROP TABLE "bookmarks";');
+    expect((await inspect(repository))[0]?.message).toContain("exists at 1.2.3");
+  });
+
+  it("counts every object as unreleased in a full clone without a release tag", async () => {
+    const repository = new GitPackage();
+    repositories.push(repository);
+    repository.migration(FIRST, 'CREATE TABLE "bookmarks" ("id" uuid PRIMARY KEY, "title" text);', [{ name: "bookmarks", columns: ["id", "title"] }]);
+    repository.commit("only commit");
+    repository.tag("nightly");
+    repository.migration(SECOND, 'ALTER TABLE "bookmarks" DROP COLUMN "title";\nDROP TABLE "bookmarks";\nCREATE INDEX ix ON "bookmarks" ("id");', []);
+    expect(await inspect(repository)).toEqual([]);
+  });
+
+  it("still reads the migrations of a repository with no tag for statements it cannot place", async () => {
+    const repository = new GitPackage();
+    repositories.push(repository);
+    repository.migration(FIRST, "DO $$ BEGIN PERFORM 1; END $$;", []);
+    repository.commit("only commit");
+    expect(await inspect(repository)).toHaveLength(1);
+  });
+
+  it("does not look at a migration the release already holds", async () => {
+    const repository = new GitPackage();
+    repositories.push(repository);
+    repository.migration(FIRST, 'DO $$ BEGIN PERFORM 1; END $$;', []);
+    repository.commit("release");
+    repository.tag("v1.0.0");
+    expect(await inspect(repository)).toEqual([]);
+  });
+});
+
+describe("when git cannot say whether a release tag exists", () => {
+  it("fails in a shallow clone, whatever the migrations hold", async () => {
+    const repository = released();
+    const parent = mkdtempSync(join(tmpdir(), "slugbase-db-check-shallow-"));
+    scratch.push(parent);
+    const clone = join(parent, "clone");
+    execFileSync("git", ["clone", "--quiet", "--depth", "1", "--no-tags", `file://${repository.root}`, clone], { stdio: "ignore" });
+    expect(execFileSync("git", ["-C", clone, "rev-parse", "--is-shallow-repository"], { encoding: "utf8" }).trim()).toBe("true");
+    await expect(
+      Promise.resolve(expandContractRule.run({ packageDir: join(clone, "packages", "db"), sql: undefined, hashSqlFiles })),
+    ).rejects.toThrow("shallow clone");
+    const results = await runChecks([expandContractRule], { packageDir: join(clone, "packages", "db"), sql: undefined, hashSqlFiles });
+    expect(results[0]?.findings[0]?.message).toContain("the rule could not run: shallow clone");
+  });
+
+  it("fails outside a git work tree", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "slugbase-db-check-nogit-"));
+    scratch.push(directory);
+    const repository = released();
+    const results = await runChecks([expandContractRule], { packageDir: join(directory), sql: undefined, hashSqlFiles });
+    expect(results[0]?.findings[0]?.message).toContain("the rule could not run");
+    expect(repository.dir).not.toBe(directory);
+  });
+
+  it("fails when the release tag has no readable journal", async () => {
+    const repository = released();
+    repository.git("rm", "--quiet", "-r", "--cached", "packages");
+    repository.git("commit", "--quiet", "-m", "remove");
+    repository.git("tag", "-f", "v1.1.0");
+    const results = await runChecks([expandContractRule], { packageDir: repository.dir, sql: undefined, hashSqlFiles });
+    expect(results[0]?.findings[0]?.message).toContain("the rule could not run");
+  });
+});
+
+describe("the marked contract half of an expand/contract pair", () => {
+  /** v1.0.0 holds bookmarks.legacy_title, v1.1.0 adds the migration that replaces it. */
+  function pair(header: string, sql = 'ALTER TABLE "bookmarks" DROP COLUMN "legacy_title";\n'): GitPackage {
+    const repository = released("v1.0.0");
+    repository.migration(SECOND, 'ALTER TABLE "bookmarks" ADD COLUMN "name" text;', [{ name: "bookmarks", columns: [...BOOKMARKS, "name"] }]);
+    repository.commit("expand");
+    repository.tag("v1.1.0");
+    repository.migration(THIRD, `${header}${sql}`, [{ name: "bookmarks", columns: ["id", "title", "name"] }]);
+    return repository;
+  }
+  const HEADER = `-- slugbase:contract expand=${SECOND} release=1.1.0\n`;
+
+  it("accepts the drop with the header and the marker", async () => {
+    expect(await inspect(pair(HEADER), true)).toEqual([]);
+  });
+
+  it("accepts the release written with its v and a header after other comments", async () => {
+    const header = `-- A note first.\n\n-- slugbase:contract expand=${SECOND} release=v1.1.0\n`;
+    expect(await inspect(pair(header), true)).toEqual([]);
+  });
+
+  it("rejects the drop with the header alone", async () => {
+    const findings = await inspect(pair(HEADER));
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain(MARKER_HINT);
+    expect(findings[0]?.message).toContain("SLUGBASE_DB_CHECK_CONTRACT=true");
+  });
+
+  it("rejects the drop with the marker alone", async () => {
+    const findings = await inspect(pair(""), true);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("has no contract header");
+    expect(findings[0]?.message).not.toContain(MARKER_HINT);
+  });
+
+  it("rejects the drop with neither", async () => {
+    const findings = await inspect(pair(""));
+    expect(findings[0]?.message).toContain("has no contract header");
+    expect(findings[0]?.message).toContain(MARKER_HINT);
+  });
+
+  it.each([
+    ["a malformed header", `-- slugbase:contract expand=${SECOND}\n`, "malformed contract header"],
+    ["two headers", `-- slugbase:contract expand=${SECOND} release=1.1.0\n-- slugbase:contract expand=${SECOND} release=1.0.0\n`, "malformed contract header"],
+    ["an expand migration the journal does not list", "-- slugbase:contract expand=20260101000001_nothing release=1.1.0\n", "not a migration of the journal"],
+    ["a release that is not a tag", `-- slugbase:contract expand=${SECOND} release=9.9.9\n`, "release 9.9.9, which is not a release tag"],
+    ["an expand migration that is not part of the named release", `-- slugbase:contract expand=${SECOND} release=1.0.0\n`, `${SECOND} is not part of that release`],
+    ["a header after the first statement", `COMMENT ON TABLE bookmarks IS 'x';\n${HEADER}`, "has no contract header"],
+    ["a header after a statement behind a lone carriage return", `-- note\rCOMMENT ON TABLE bookmarks IS 'x';\n${HEADER}`, "has no contract header"],
+  ])("rejects %s even with the marker", async (_name, header, expected) => {
+    const findings = await inspect(pair(header), true);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain(expected);
+  });
+
+  it("rejects a contract that is paired with itself", async () => {
+    const findings = await inspect(pair(`-- slugbase:contract expand=${THIRD} release=1.1.0\n`), true);
+    expect(findings[0]?.message).toContain(`${THIRD} is not part of that release`);
+  });
+
+  it("does not accept a timeout set in the file, with the header and the marker", async () => {
+    const findings = await inspect(pair(HEADER, "SET lock_timeout = 0;\nALTER TABLE bookmarks DROP COLUMN legacy_title;\n"), true);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("sets lock_timeout");
+  });
+
+  it("accepts a statement it cannot place only in the marked pair", async () => {
+    const sql = "DO $$ BEGIN PERFORM 1; END $$;\n";
+    expect(await inspect(pair(HEADER, sql))).toHaveLength(1);
+    expect(await inspect(pair(HEADER, sql), true)).toEqual([]);
+  });
+});
+
+describe("the session timeouts", () => {
+  it.each([
+    ["SET lock_timeout = '5s';", "lock_timeout"],
+    ["SET LOCAL statement_timeout TO 0;", "statement_timeout"],
+    ["SELECT set_config('lock_timeout', '0', true);", "lock_timeout"],
+    ["ALTER ROLE slugbase_app SET Statement_Timeout = 1;", "statement_timeout"],
+    ["-- note\rSET lock_timeout = 0;", "lock_timeout"],
+  ])("rejects a file that sets them: %s", async (sql, name) => {
+    const findings = (await added(sql)).filter((finding) => finding.message.startsWith("sets "));
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain(`sets ${name}`);
+    expect(findings[0]?.message).toContain("`migrate` sets lock_timeout and statement_timeout");
+  });
+
+  it("does not take a comment for a setting", async () => {
+    expect(await added("-- migrate sets lock_timeout\nCOMMENT ON TABLE bookmarks IS 'x';")).toEqual([]);
+  });
+});
+
+describe("the contract marker", () => {
+  it("is set by the exact value true and nothing else", () => {
+    expect(contractMarkerFromEnv({ SLUGBASE_DB_CHECK_CONTRACT: "true" })).toBe(true);
+    for (const value of ["false", "", "1", "TRUE", "yes", " true", undefined]) {
+      expect(contractMarkerFromEnv({ SLUGBASE_DB_CHECK_CONTRACT: value }), String(value)).toBe(false);
+    }
+    expect(contractMarkerFromEnv({})).toBe(false);
+  });
+});
+
+describe("the statement reader", () => {
+  it("splits at top-level semicolons only and drops comments", () => {
+    const statements = analyseSql("SELECT 'a;b'; -- x;\nSELECT $$c;d$$, \"e;f\"; /* g; /* h; */ i; */ SELECT 1");
+    expect(statements.map((statement) => statement.text)).toEqual(["SELECT 'a;b'", 'SELECT $$c;d$$, "e;f"', "SELECT 1"]);
+  });
+
+  it("reads quoted names with their case", () => {
+    const [statement] = analyseSql('ALTER TABLE "Mixed"."Table" DROP COLUMN "Col";');
+    expect(statement?.operations).toEqual([{ kind: "drop-column", table: { schema: "Mixed", name: "Table" }, column: "Col" }]);
+  });
+
+  it("refuses text it cannot scan to the end", () => {
+    expect(() => analyseSql("SELECT 'open")).toThrow("not closed");
+    expect(() => analyseSql("SELECT $$open")).toThrow("not closed");
+    expect(() => analyseSql("/* open")).toThrow("not closed");
+    expect(() => analyseSql("CREATE FUNCTION f() RETURNS int BEGIN ATOMIC SELECT 1; END;")).toThrow("BEGIN ATOMIC");
+    expect(() => setsSessionTimeout('SELECT "open')).toThrow("not closed");
+  });
+
+  it("ends a line comment at a lone carriage return, as PostgreSQL does", () => {
+    expect(analyseSql("-- note\rALTER TABLE bookmarks DROP COLUMN title;").map((statement) => statement.text)).toEqual([
+      "ALTER TABLE bookmarks DROP COLUMN title",
+    ]);
+    expect(analyseSql("-- note\r\nCOMMENT ON TABLE t IS 'x';").map((statement) => statement.text)).toEqual(["COMMENT ON TABLE t IS 'x'"]);
+  });
+
+  it("closes a nested block comment only at its outermost end", () => {
+    const statements = analyseSql("/* a /* b */ c */ ALTER TABLE bookmarks DROP COLUMN title; /* d /* e */ ALTER TABLE bookmarks DROP COLUMN id; */");
+    expect(statements.map((statement) => statement.text)).toEqual(["ALTER TABLE bookmarks DROP COLUMN title"]);
+  });
+
+  it("ends a standard string at its quote, whatever the backslash before it", () => {
+    const statements = analyseSql("COMMENT ON TABLE bk IS 'a\\'; ALTER TABLE bk DROP COLUMN t3; --';");
+    expect(statements.map((statement) => statement.text)).toEqual(["COMMENT ON TABLE bk IS 'a\\'", "ALTER TABLE bk DROP COLUMN t3"]);
+    expect(statements[1]?.operations[0]?.kind).toBe("drop-column");
+  });
+
+  it("keeps an escape string, which a backslash can quote in, whole", () => {
+    const statements = analyseSql("COMMENT ON TABLE bk IS E'it\\'s; DROP TABLE bk;';");
+    expect(statements).toHaveLength(1);
+    expect(statements[0]?.operations).toEqual([{ kind: "safe" }]);
+  });
+
+  it("closes a dollar-quoted string only at its own tag", () => {
+    const statements = analyseSql("COMMENT ON TABLE bk IS $a$ x; DROP TABLE bk; $$ y $a$;");
+    expect(statements).toHaveLength(1);
+    expect(statements[0]?.operations).toEqual([{ kind: "safe" }]);
+  });
+
+  it("does not read names or text spelled with Unicode escapes", () => {
+    expect(analyseSql('ALTER TABLE U&"b\\006Fokmarks" DROP COLUMN title;')[0]?.operations[0]?.kind).toBe("unknown");
+    expect(analyseSql("COMMENT ON TABLE bk IS U&'\\0027';")[0]?.operations[0]?.kind).toBe("unknown");
+    expect(analyseSql('COMMENT ON TABLE U&"b\\006Fokmarks" IS \'x\';')[0]?.operations[0]?.kind).toBe("unknown");
+  });
+
+  it("treats only PostgreSQL whitespace as whitespace", () => {
+    expect(analyseSql("ALTER TABLE bookmarks \u00a0DROP COLUMN title;")[0]?.operations[0]?.kind).toBe("unknown");
+  });
+
+  it("reads the forms of the shipped migration and of drizzle-kit as safe", () => {
+    const kinds = analyseSql(
+      [
+        "CREATE EXTENSION IF NOT EXISTS citext;",
+        "CREATE OR REPLACE FUNCTION public.app_account_id() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT nullif(current_setting('app.account_id', true), '')::uuid $$;",
+        'ALTER TABLE "t" ENABLE ROW LEVEL SECURITY;',
+        'ALTER TABLE "t" FORCE ROW LEVEL SECURITY;',
+        'CREATE POLICY "p" ON "t" AS PERMISSIVE FOR ALL TO "slugbase_app" USING (true);',
+        'GRANT SELECT ON "t" TO slugbase_app;',
+        "COMMENT ON TABLE t IS 'x';",
+      ].join("\n"),
+    ).flatMap((statement) => statement.operations.map((operation) => operation.kind));
+    expect(kinds).toEqual(Array.from({ length: 7 }, () => "safe"));
+  });
+
+  it("places no operation of ALTER TABLE without an action or a name", () => {
+    expect(analyseSql("ALTER TABLE bookmarks")[0]?.operations[0]?.kind).toBe("unknown");
+    expect(analyseSql("ALTER TABLE")[0]?.operations[0]?.kind).toBe("unknown");
+    expect(analyseSql("BEGIN")[0]?.operations[0]?.kind).toBe("unknown");
+    expect(analyseSql("COPY t FROM stdin")[0]?.operations[0]?.kind).toBe("unknown");
+  });
+});

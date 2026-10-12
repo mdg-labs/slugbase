@@ -1,0 +1,5 @@
+{
+  "migrations": {
+    "20261011134302_add_extensions_and_tenant_functions": "e6faf169aaa55b2cabd311b10d81ea08c8e09aa8d91448f99e2bb833668f070a"
+  }
+}

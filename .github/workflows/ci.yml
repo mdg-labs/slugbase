@@ -10,7 +10,11 @@ name: CI
 on:
   push:
     branches: ["**"]
+  # labeled and unlabeled are listed because the integration job reads the
+  # maintainer-applied `migration:contract` label from the pull request (Q52);
+  # adding or removing it must re-run the check with or without the marker.
   pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
 
 permissions:
   contents: read
@@ -139,9 +143,13 @@ jobs:
     env:
       SLUGBASE_TEST_PG_URL: postgres://slugbase_ci:slugbase_ci@postgres:5432/postgres
     steps:
+      # The expand/contract check of `pnpm db:check` compares the migrations with
+      # the latest release tag, so the checkout fetches the full history and
+      # every tag; the check fails on a shallow clone.
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: ./.github/actions/setup
         with:
           turbo-cache-key: integration-${{ matrix.postgres }}
@@ -149,7 +157,13 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends postgresql-client
+      # The contract marker is set only for a pull request that carries the
+      # maintainer-applied `migration:contract` label (Q52); the check also needs
+      # the contract header in the migration file. It is a flag of this check,
+      # not a product environment variable.
       - run: pnpm db:check
+        env:
+          SLUGBASE_DB_CHECK_CONTRACT: ${{ contains(github.event.pull_request.labels.*.name, 'migration:contract') }}
       - run: pnpm test:integration
 
   build:

@@ -15,6 +15,9 @@ existing line by adding its PR number.
 - **regex guard** — a pattern keeps false positives out with length caps instead of anchoring, so a long but realistic input carrying the term passes — PR 354
 - **regex guard** — sibling patterns for one thing disagree on an optional detail (one allows a space, the next does not), so the variant slips through — PR 354
 - **AST guard** — a lint rule inspects only one syntax form of a value (a string `Literal`) and misses an equivalent form (a static template literal), so the banned construct passes — PR 365
+- **safe by keyword** — a fail-closed lint marks a statement family safe from its leading keywords without reading the rest, or its safe list holds a form the design doc places in a later phase, so unsafe members of the family pass — PR 381
+- **label-gated check** — a CI step reads a pull request's labels, but the workflow trigger omits the `labeled`/`unlabeled` events, so adding or removing the label never re-runs it — PR 381
+- **floating image** — a rig meant for repeatable measurement pulls a floating tag (`latest`), so a re-run can measure a different build than the recorded baseline — PR 381
 
 ## Design docs
 

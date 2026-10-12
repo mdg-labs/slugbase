@@ -13,10 +13,17 @@ const manifest = JSON.parse(
 describe("@slugbase/db", () => {
   it("exposes only its declared entry points", () => {
     expect(manifest.name).toBe("@slugbase/db");
-    expect(Object.keys(manifest.exports)).toEqual(["."]);
+    expect(Object.keys(manifest.exports)).toEqual([".", "./testing"]);
   });
 
   it("loads src/index.ts", async () => {
     await expect(import("../src/index.ts")).resolves.toBeTypeOf("object");
+  });
+
+  it("keeps the test harness out of the main entry point", async () => {
+    const main = await import("../src/index.ts");
+    const harness = await import("../src/testing.ts");
+    const shared = Object.keys(harness).filter((name) => name in main);
+    expect(shared).toEqual([]);
   });
 });
