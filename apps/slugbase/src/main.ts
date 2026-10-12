@@ -35,29 +35,78 @@ function log(level: Level, message: string, fields: Readonly<Record<string, unkn
 
 const SHUTDOWN_SIGNALS = ["SIGTERM", "SIGINT"] as const;
 
-// Stops the process once on the first signal: `shutdown` lets in-flight work
-// finish within its deadline and closes the pools.
-function exitOnSignal(running: { shutdown(): Promise<void> }, logger: Logger): void {
-  let stopping = false;
+interface SignalTrap {
+  /** The first shutdown signal received so far. */
+  received(): NodeJS.Signals | undefined;
+  /** Calls `listener` with the first shutdown signal, once, if it has not been received yet. */
+  notify(listener: (signal: NodeJS.Signals) => void): void;
+}
+
+// The server and the worker trap the shutdown signals before anything else
+// runs, even before the configuration is loaded: until a handler is installed a
+// signal takes the default action, which kills the process with pg-boss, the
+// pools and a running migration left as they were. `migrate` does not trap
+// them; a signal still ends it.
+function trapShutdownSignals(): SignalTrap {
+  let first: NodeJS.Signals | undefined;
+  let listener: ((signal: NodeJS.Signals) => void) | undefined;
   for (const signal of SHUTDOWN_SIGNALS) {
     process.once(signal, () => {
-      if (stopping) {
+      if (first !== undefined) {
         return;
       }
-      stopping = true;
-      logger.info("Shutting down", { signal });
-      running.shutdown().then(
-        () => {
-          logger.info("Shutdown complete");
-          process.exit(0);
-        },
-        (error: unknown) => {
-          logger.error("Shutdown failed", { error: error instanceof Error ? error.name : typeof error });
-          process.exit(1);
-        },
-      );
+      first = signal;
+      listener?.(signal);
     });
   }
+  return {
+    received: () => first,
+    notify: (next) => {
+      listener = next;
+    },
+  };
+}
+
+// Starts `startUp` and stops the process on the first trapped signal: `shutdown`
+// lets in-flight work finish within its deadline and closes the pools. A signal
+// during start-up waits for it to settle and then shuts down what it brought up;
+// a start-up that fails still throws to the caller, which exits non-zero.
+async function runUntilSignal(
+  trap: SignalTrap,
+  startUp: () => Promise<{ shutdown(): Promise<void> }>,
+  logger: Logger,
+): Promise<void> {
+  const started: { running?: { shutdown(): Promise<void> } } = {};
+  let stopping = false;
+
+  const stop = (): void => {
+    if (started.running === undefined || trap.received() === undefined || stopping) {
+      return;
+    }
+    stopping = true;
+    started.running.shutdown().then(
+      () => {
+        logger.info("Shutdown complete");
+        process.exit(0);
+      },
+      (error: unknown) => {
+        logger.error("Shutdown failed", { error: error instanceof Error ? error.name : typeof error });
+        process.exit(1);
+      },
+    );
+  };
+  const onSignal = (signal: NodeJS.Signals): void => {
+    logger.info("Shutting down", { signal });
+    stop();
+  };
+
+  trap.notify(onSignal);
+  const early = trap.received();
+  if (early !== undefined) {
+    onSignal(early);
+  }
+  started.running = await startUp();
+  stop();
 }
 
 // The image build writes the file next to src/ and dist/; a checkout without it is a development run.
@@ -73,7 +122,7 @@ const WEB_ROOT = fileURLToPath(new URL("../web", import.meta.url));
 // sets are the ones `migrate` and the server's migrate-on-start both apply.
 const MIGRATIONS: readonly MigrationChain[] = [];
 
-async function runServer(config: ServerConfig): Promise<void> {
+async function runServer(config: ServerConfig, trap: SignalTrap): Promise<void> {
   const logger = createLogger({ level: config.LOG_LEVEL });
   const serveWeb = existsSync(WEB_ROOT);
   if (!serveWeb) {
@@ -88,7 +137,7 @@ async function runServer(config: ServerConfig): Promise<void> {
     buildInfo: loadBuildInfo(BUILD_INFO_FILE),
     ...(serveWeb ? { webRoot: WEB_ROOT } : {}),
   });
-  exitOnSignal(await server.start(), logger);
+  await runUntilSignal(trap, () => server.start(), logger);
 }
 
 // `migrate` applies the CE chain, installs the pg-boss schema and applies the
@@ -105,7 +154,7 @@ async function runMigrate(config: MigrateConfig): Promise<void> {
 // The worker registers the jobs and schedules of the same modules (doc 01
 // section 3); CE has none yet. It never migrates: `migrate` installs the
 // pg-boss schema before it starts.
-async function runWorker(config: WorkerConfig): Promise<void> {
+async function runWorker(config: WorkerConfig, trap: SignalTrap): Promise<void> {
   const logger = createLogger({ level: config.LOG_LEVEL });
   const worker = createWorker({
     config,
@@ -113,7 +162,7 @@ async function runWorker(config: WorkerConfig): Promise<void> {
     modules: [],
     logger,
   });
-  exitOnSignal(await worker.start(), logger);
+  await runUntilSignal(trap, () => worker.start(), logger);
 }
 
 async function start(): Promise<void> {
@@ -124,6 +173,7 @@ async function start(): Promise<void> {
     return;
   }
 
+  const trap = command === "migrate" ? undefined : trapShutdownSignals();
   let serverConfig: ServerConfig | undefined;
   let workerConfig: WorkerConfig | undefined;
   let migrateConfig: MigrateConfig | undefined;
@@ -156,10 +206,10 @@ async function start(): Promise<void> {
   log("info", "Configuration loaded", { process: command });
 
   try {
-    if (serverConfig !== undefined) {
-      await runServer(serverConfig);
-    } else if (workerConfig !== undefined) {
-      await runWorker(workerConfig);
+    if (serverConfig !== undefined && trap !== undefined) {
+      await runServer(serverConfig, trap);
+    } else if (workerConfig !== undefined && trap !== undefined) {
+      await runWorker(workerConfig, trap);
     } else if (migrateConfig !== undefined) {
       await runMigrate(migrateConfig);
     }
