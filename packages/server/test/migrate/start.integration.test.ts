@@ -173,7 +173,7 @@ describe("an application role that is not held by row-level security", () => {
     expect(message).toContain("slugbase_app");
     expect(message).toContain("slugbase_migrator");
     expect(message).toContain("SLUGBASE_ALLOW_OWNER_CONNECTION");
-    expect(message).not.toMatch(/postgres(ql)?:\/\//);
+    expect(message).not.toMatch(/postgre(s|sql):\/\//);
     expect(logger.entries.map((entry) => entry.message)).not.toContain("Listening");
   });
 
@@ -184,7 +184,7 @@ describe("an application role that is not held by row-level security", () => {
     expect(warnings).toHaveLength(1);
     expect(warnings[0]?.message).toContain("SLUGBASE_ALLOW_OWNER_CONNECTION");
     expect(warnings[0]?.fields).toMatchObject({ superuser: true });
-    expect(JSON.stringify(warnings)).not.toMatch(/postgres(ql)?:\/\//);
+    expect(JSON.stringify(warnings)).not.toMatch(/postgre(s|sql):\/\//);
   });
 
   it("is not checked outside production", async () => {
@@ -205,6 +205,6 @@ describe("an application role that is not held by row-level security", () => {
       (error: unknown) => error,
     );
     expect(failure).toBeInstanceOf(Error);
-    expect((failure as Error).message).not.toMatch(/postgres(ql)?:\/\//);
+    expect((failure as Error).message).not.toMatch(/postgre(s|sql):\/\//);
   });
 });
