@@ -150,11 +150,8 @@ describe("what is rejected in a migration added since the latest release tag", (
     ["a SELECT", "SELECT 1;", "cannot place"],
     ["a SELECT of a function", "SELECT public.f();", "cannot place"],
     ["a session setting", "SET search_path = archive;", "cannot place"],
-    ["an INSERT", "INSERT INTO bookmarks (id) VALUES (1);", "cannot place"],
     ["a table created from a query", "CREATE TABLE notes AS SELECT 1;", "cannot place"],
     ["a table with a column list created from a query", "CREATE TABLE gone (id) AS SELECT id FROM bookmarks;", "cannot place"],
-    ["a table with a column list created from a DELETE in a CTE", "CREATE TABLE gone (id) AS WITH d AS (DELETE FROM bookmarks RETURNING id) SELECT id FROM d;", "cannot place"],
-    ["a table with a column list created from an UPDATE in a CTE", "CREATE TABLE gone (id) AS WITH u AS (UPDATE bookmarks SET title = NULL RETURNING id) SELECT id FROM u;", "cannot place"],
     ["a table with a column list created by EXECUTE", "CREATE TABLE gone (id) AS EXECUTE prepared;", "cannot place"],
     ["a table with a clause after its column list", "CREATE TABLE notes (id uuid) INHERITS (bookmarks);", "cannot place"],
     ["a table with an unclosed column list", "CREATE TABLE notes (id uuid;", "cannot place"],
@@ -511,6 +508,124 @@ describe("the marked contract half of an expand/contract pair", () => {
   });
 });
 
+describe("data-changing statements", () => {
+  const DATA_HINT = "worker job";
+  const STATEMENTS: [string, string, string][] = [
+    ["an UPDATE that backfills a column of a table of the release", "UPDATE bookmarks SET title = lower(title);", "UPDATE"],
+    ["an UPDATE in lower case with a schema-qualified table", "update public.bookmarks set title = 'x' where id = 1;", "UPDATE"],
+    ["an UPDATE with ONLY and an alias", "UPDATE ONLY bookmarks AS b SET title = 'x';", "UPDATE"],
+    ["a DELETE", "DELETE FROM bookmarks WHERE id = 1;", "DELETE"],
+    ["a DELETE of every row", "delete from only bookmarks;", "DELETE"],
+    ["a TRUNCATE", "TRUNCATE bookmarks;", "TRUNCATE"],
+    ["a TRUNCATE TABLE with CASCADE", "TRUNCATE TABLE ONLY bookmarks, notes RESTART IDENTITY CASCADE;", "TRUNCATE"],
+    ["an INSERT with values", "INSERT INTO bookmarks (id) VALUES (1);", "INSERT"],
+    ["an INSERT ... SELECT", "INSERT INTO archive (id) SELECT id FROM bookmarks;", "INSERT"],
+    ["an INSERT ... ON CONFLICT", "insert into bookmarks (id) values (1) on conflict do nothing;", "INSERT"],
+    ["a MERGE", "MERGE INTO bookmarks b USING notes n ON b.id = n.id WHEN MATCHED THEN DELETE;", "MERGE"],
+    ["a COPY ... FROM", "COPY bookmarks (id) FROM stdin;", "COPY"],
+    ["a COPY ... FROM PROGRAM", "COPY bookmarks FROM PROGRAM 'cat x' WITH (FORMAT csv);", "COPY"],
+    ["an UPDATE in a leading CTE", "WITH u AS (UPDATE bookmarks SET title = NULL RETURNING id) SELECT id FROM u;", "UPDATE"],
+    ["a DELETE in a leading CTE", "WITH d AS (DELETE FROM bookmarks RETURNING id) SELECT count(*) FROM d;", "DELETE"],
+    ["an INSERT in a leading CTE", "WITH s AS (SELECT id FROM bookmarks) INSERT INTO archive SELECT id FROM s;", "INSERT"],
+    ["a DELETE in a CTE of a CREATE TABLE ... AS", "CREATE TABLE gone (id) AS WITH d AS (DELETE FROM bookmarks RETURNING id) SELECT id FROM d;", "DELETE"],
+    ["an UPDATE in a CTE of a CREATE TABLE ... AS", "CREATE TABLE gone (id) AS WITH u AS (UPDATE bookmarks SET title = NULL RETURNING id) SELECT id FROM u;", "UPDATE"],
+    ["a DELETE in the query of a COPY ... TO", "COPY (DELETE FROM bookmarks RETURNING id) TO stdout;", "DELETE"],
+  ];
+
+  it.each(STATEMENTS)("rejects %s, naming the file and the statement and pointing to a worker job", async (_name, sql, statement) => {
+    const findings = await added(sql);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.object).toBe(`migrations/${SECOND}.sql`);
+    expect(findings[0]?.message).toContain(`changes data with ${statement}`);
+    expect(findings[0]?.message).toContain(sql.replace(/;$/, ""));
+    expect(findings[0]?.message).toContain(DATA_HINT);
+    expect(findings[0]?.message).not.toContain("cannot place");
+  });
+
+  it("rejects the statement on a table created in the same migration, with no exception", async () => {
+    const findings = await added('CREATE TABLE "kinds" ("id" uuid PRIMARY KEY);\nINSERT INTO "kinds" ("id") VALUES (\'a\');');
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("changes data with INSERT");
+  });
+
+  it("rejects the backfill of a column that the same migration adds, beside the schema change", async () => {
+    const findings = await added('ALTER TABLE "bookmarks" ADD COLUMN "name" text;\nUPDATE "bookmarks" SET "name" = "title";');
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("changes data with UPDATE");
+  });
+
+  it("reports each data statement of a file", async () => {
+    const findings = await added("UPDATE bookmarks SET title = 'x';\n--> statement-breakpoint\nDELETE FROM bookmarks;\n--> statement-breakpoint\nTRUNCATE bookmarks;");
+    expect(findings.map((finding) => /changes data with (\w+)/.exec(finding.message)?.[1])).toEqual(["UPDATE", "DELETE", "TRUNCATE"]);
+  });
+
+  it("rejects it in a migration that no release holds, in a full clone without a release tag", async () => {
+    const repository = new GitPackage();
+    repositories.push(repository);
+    repository.migration(FIRST, "DELETE FROM bookmarks;", []);
+    repository.commit("only commit");
+    const findings = await inspect(repository);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("changes data with DELETE");
+  });
+
+  it("does not take a column, a lock clause or a foreign key action for a data statement", async () => {
+    const sql = [
+      'ALTER TABLE "notes" ADD CONSTRAINT "f" FOREIGN KEY ("id") REFERENCES "bookmarks"("id") ON DELETE SET NULL ON UPDATE SET NULL NOT VALID;',
+      'CREATE TABLE "logs" ("update" text, "delete" text, "insert" text, "copy" text);',
+      "CREATE TRIGGER t BEFORE INSERT OR UPDATE OR DELETE ON bookmarks EXECUTE FUNCTION f();",
+    ].join("\n");
+    const findings = await added(sql);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("cannot place");
+    expect(findings[0]?.message).not.toContain("changes data");
+  });
+
+  it("stays unknown for a data statement inside a DO block, which the reader cannot see", async () => {
+    const findings = await added("DO $$ BEGIN DELETE FROM bookmarks; END $$;");
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("cannot place");
+  });
+
+  it("stays unknown for a plpgsql function and for a SQL function with a data-changing body", async () => {
+    for (const sql of [
+      "CREATE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ BEGIN DELETE FROM bookmarks; END $$;",
+      "CREATE FUNCTION f() RETURNS void LANGUAGE sql AS $$ DELETE FROM bookmarks $$;",
+    ]) {
+      const findings = await added(sql);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]?.message).toContain("cannot place");
+      expect(findings[0]?.message).not.toContain("changes data");
+    }
+  });
+
+  describe("in the marked contract half of an expand/contract pair", () => {
+    function pair(sql: string): GitPackage {
+      const repository = released("v1.0.0");
+      repository.migration(SECOND, 'ALTER TABLE "bookmarks" ADD COLUMN "name" text;', [{ name: "bookmarks", columns: [...BOOKMARKS, "name"] }]);
+      repository.commit("expand");
+      repository.tag("v1.1.0");
+      repository.migration(THIRD, `-- slugbase:contract expand=${SECOND} release=1.1.0\n${sql}`, [{ name: "bookmarks", columns: ["id", "title", "name"] }]);
+      return repository;
+    }
+
+    it.each(STATEMENTS)("rejects %s with the header and the marker", async (_name, sql, statement) => {
+      const findings = await inspect(pair(sql), true);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]?.object).toBe(`migrations/${THIRD}.sql`);
+      expect(findings[0]?.message).toContain(`changes data with ${statement}`);
+      expect(findings[0]?.message).toContain(DATA_HINT);
+    });
+
+    it("still accepts the contract drop beside nothing else, and rejects the data statement next to it", async () => {
+      const sql = 'ALTER TABLE "bookmarks" DROP COLUMN "legacy_title";\nUPDATE "bookmarks" SET "name" = "title";';
+      const findings = await inspect(pair(sql), true);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]?.message).toContain("changes data with UPDATE");
+    });
+  });
+});
+
 describe("the session timeouts", () => {
   it.each([
     ["SET lock_timeout = '5s';", "lock_timeout"],
@@ -618,6 +733,6 @@ describe("the statement reader", () => {
     expect(analyseSql("ALTER TABLE bookmarks")[0]?.operations[0]?.kind).toBe("unknown");
     expect(analyseSql("ALTER TABLE")[0]?.operations[0]?.kind).toBe("unknown");
     expect(analyseSql("BEGIN")[0]?.operations[0]?.kind).toBe("unknown");
-    expect(analyseSql("COPY t FROM stdin")[0]?.operations[0]?.kind).toBe("unknown");
+    expect(analyseSql("COPY t TO stdout")[0]?.operations[0]?.kind).toBe("unknown");
   });
 });

@@ -26,6 +26,7 @@ export type Operation =
   | { kind: "create-index"; table: TableName; concurrently: boolean }
   | { kind: "add-validated-constraint"; table: TableName }
   | { kind: "add-primary-key-using-index"; table: TableName }
+  | { kind: "data-change"; statement: string }
   | { kind: "safe" }
   | { kind: "unknown"; reason: string };
 
@@ -311,11 +312,84 @@ export function analyseStatement(statement: string): AnalysedStatement {
     const shown = verb === undefined ? "nothing" : verb.text;
     operations = unknown(`starts with ${shown}, which this check does not read`);
   }
+  if (operations.some((operation) => operation.kind === "unknown")) {
+    const statementKind = dataChangeOf(tokens);
+    if (statementKind !== undefined) {
+      return { text, operations: [{ kind: "data-change", statement: statementKind }] };
+    }
+  }
   const call = firstUnknownCall(tokens);
   if (call !== undefined && !operations.some((operation) => operation.kind === "unknown")) {
     operations = [...operations, ...unknown(`calls ${call}, which this check does not know to be safe`)];
   }
   return { text, operations };
+}
+
+/**
+ * The data-changing statement a statement is or holds where the reader can see it: its own
+ * verb (INSERT, UPDATE, DELETE, TRUNCATE, MERGE, COPY ... FROM), or one of INSERT INTO,
+ * DELETE FROM, MERGE INTO and UPDATE <table> SET nested in it (a CTE, a CREATE TABLE ... AS
+ * query, the query of a COPY). A statement inside a string body (DO, a function) is not seen.
+ */
+function dataChangeOf(tokens: readonly Token[]): string | undefined {
+  const verb = tokens[0];
+  if (verb?.kind === "word") {
+    if (verb.text === "insert" || verb.text === "update" || verb.text === "delete" || verb.text === "truncate" || verb.text === "merge") {
+      return verb.text.toUpperCase();
+    }
+    if (verb.text === "copy" && copiesFrom(tokens)) {
+      return "COPY";
+    }
+  }
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token?.kind !== "word") {
+      continue;
+    }
+    const next = tokens[index + 1];
+    if (
+      (token.text === "insert" && isWord(next, "into")) ||
+      (token.text === "delete" && isWord(next, "from")) ||
+      (token.text === "merge" && isWord(next, "into")) ||
+      (token.text === "update" && !isWord(tokens[index - 1], "on") && updatesTable(tokens, index + 1))
+    ) {
+      return token.text.toUpperCase();
+    }
+  }
+  return undefined;
+}
+
+/** Whether a COPY statement has a FROM outside parentheses: `COPY t FROM`, not `COPY (query) TO`. */
+function copiesFrom(tokens: readonly Token[]): boolean {
+  let depth = 0;
+  for (const token of tokens) {
+    if (token.kind === "punct" && token.text === "(") {
+      depth += 1;
+    } else if (token.kind === "punct" && token.text === ")") {
+      depth -= 1;
+    } else if (depth === 0 && token.kind === "word" && token.text === "from") {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Whether the tokens from `start` read `[ONLY] name[.name] [*] [[AS] alias] SET`, the head of an UPDATE. */
+function updatesTable(tokens: readonly Token[], start: number): boolean {
+  const cursor = new Cursor(tokens);
+  cursor.position = start;
+  cursor.take("only");
+  if (isWord(cursor.peek(), "set") || cursor.tableName() === undefined) {
+    return false;
+  }
+  if (cursor.isPunct("*")) {
+    cursor.position += 1;
+  }
+  cursor.take("as");
+  if (!cursor.isWord("set")) {
+    cursor.identifier();
+  }
+  return cursor.isWord("set");
 }
 
 function unknown(reason: string): Operation[] {

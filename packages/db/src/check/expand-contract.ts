@@ -42,8 +42,7 @@ import type { CheckRule, Finding } from "./types.ts";
 //     built-ins, ALTER TABLE actions, DROP INDEX/POLICY, GRANT/REVOKE/COMMENT),
 //     or that calls a function outside a short list of built-ins and the
 //     tenant context functions. Everything else (DO, CALL, COPY, SELECT, SET,
-//     INSERT/UPDATE/DELETE, other ALTER/DROP/CREATE forms, ...) could hold any
-//     of the above.
+//     other ALTER/DROP/CREATE forms, ...) could hold any of the above.
 //
 // Those are accepted only in the contract half of an expand/contract pair, and
 // only with both of:
@@ -64,6 +63,14 @@ import type { CheckRule, Finding } from "./types.ts";
 // is rejected whatever its header says: `migrate` sets both for its session
 // (5 s and 15 min, and lock_timeout off for a CONCURRENTLY step), and a
 // migration changes neither.
+//
+// A data-changing statement is rejected the same way, whatever the header and
+// the marker say, and without an exception for a table the migration creates
+// (D25: migrations stay fast and schema-only; a backfill is a worker job).
+// Those are INSERT (also INSERT ... SELECT), UPDATE, DELETE, TRUNCATE, MERGE and
+// COPY ... FROM, as the statement itself or where the reader can see it nested
+// (a CTE, the query of a CREATE TABLE ... AS or of a COPY). One inside a string
+// body (DO, a function) is not seen and stays a statement it cannot place.
 //
 // The tables and columns "at the tag" come from the snapshot of the tag's last
 // migration, so objects that only custom SQL creates (functions, policies) are
@@ -192,10 +199,20 @@ class Released {
           : [];
       case "unknown":
         return [(`has a statement this check cannot place (${operation.reason}), so it cannot show that the statement keeps the previous release working`)];
+      case "data-change":
       case "safe":
         return [];
     }
   }
+}
+
+const SHOWN_STATEMENT_LENGTH = 120;
+
+/** The finding for a data-changing statement, which the contract header and marker never license. */
+function dataChangeMessage(statement: string, text: string): string {
+  const flat = text.replace(/\s+/g, " ");
+  const shown = flat.length > SHOWN_STATEMENT_LENGTH ? `${flat.slice(0, SHOWN_STATEMENT_LENGTH)}...` : flat;
+  return `changes data with ${statement} (${shown}): migrations stay schema-only (D25, doc 05 section 5.2), so a backfill or a data fix is a worker job, and neither the contract header nor the contract marker licenses it`;
 }
 
 /** The `-- slugbase:contract` lines in the leading comment block of a file. */
@@ -277,6 +294,9 @@ export const expandContractRule: CheckRule = {
         }
         for (const statement of analyseSql(content)) {
           for (const operation of statement.operations) {
+            if (operation.kind === "data-change") {
+              findings.push({ rule: ID, object, message: dataChangeMessage(operation.statement, statement.text) });
+            }
             problems.push(...released.apply(operation));
           }
         }
