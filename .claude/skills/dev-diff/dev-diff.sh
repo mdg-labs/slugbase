@@ -121,8 +121,10 @@ for p in (cfg.get('reviews') or {}).get('path_filters') or []:
         cat "$error_file" >&2
         exit 1
     fi
+    # glob magic: CodeRabbit's patterns are globs where "**/" also matches
+    # no directory at all; a plain ":!**/x/**" would miss a top-level x/.
     while IFS= read -r pattern; do
-        [[ -n "$pattern" ]] && exclude_specs+=(":!$pattern")
+        [[ -n "$pattern" ]] && exclude_specs+=(":(glob,exclude)$pattern")
     done <<<"$patterns_output"
 fi
 

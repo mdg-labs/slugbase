@@ -98,9 +98,10 @@ per unit.
      That is the thing to fix first.
 5. **Check the review budget,** when `promotionBudget` is set. Run
    `.claude/skills/dev-diff/dev-diff.sh`. If `FILES REVIEWABLE BY CODERABBIT`
-   is above the cap, say so plainly before going on: CodeRabbit will not
-   review the whole PR. The maintainer decides whether to file it anyway; an
-   accepted one-off oversized PR is reviewed with `/code-review` instead.
+   is above the cap, stop: don't create or update the PR. The cap is hard.
+   CodeRabbit is the only PR reviewer and will not review the whole PR, and
+   there is no other review path. Report the count and the cap; the
+   maintainer brings `INT` back under it before promoting.
 6. **Look for an existing open promotion PR** with
    `.claude/scripts/gh-rest.sh pr-list --base PROD --head INT --state open --jq '.[] | {number,title,url}'`.
    If one exists, go through steps 7 and 8 as usual, then in step 9

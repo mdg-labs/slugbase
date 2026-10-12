@@ -378,7 +378,8 @@ Other lanes land in between, so an earlier check is never still valid.
      count.**
    - If the unit has committed, its files are
      `git -C <workspace> diff --name-only origin/INT..HEAD -- . <excludes>`,
-     with one `':!<pattern>'` per `!`-prefixed `path_filters` entry.
+     with one `':(glob,exclude)<pattern>'` per `!`-prefixed `path_filters`
+     entry.
    - If it has not committed yet, use its estimate (item 3).
 3. **Estimate high, never low.** For an item not yet committed, `E` is the
    **larger** of:
@@ -414,9 +415,8 @@ Other lanes land in between, so an earlier check is never still valid.
 - **|R| is already at the threshold when the run starts:** dispatch nothing,
   and tell the maintainer to promote first (`/open-pr` if this repo has it,
   otherwise the `INT` → `PROD` pull request).
-- The one exception is the maintainer explicitly accepting a one-off
-  oversized promotion **for a named item**. That promotion is then reviewed
-  with `/code-review` instead of CodeRabbit. Ask; never assume it.
+- There is no exception. CodeRabbit is the only PR reviewer, so a promotion
+  past the cap could not be reviewed at all.
 
 Print the plan before dispatching: waves, bundles and why, lanes and why,
 risk-flagged items, and the budget line. If T has more than
@@ -620,14 +620,15 @@ Agent({
 
 **Model choice** (`models.verifier`):
 
-- `opus` (the default): always Opus.
+- `auto` (the default): Opus when any item is risk-flagged or its diff is
+  large; otherwise Sonnet.
+- `opus`: always Opus.
 - `sonnet`: always Sonnet.
-- `auto`: Opus when any item is risk-flagged, the unit is an advisory, or
-  its diff is large; otherwise Sonnet.
+- **An advisory unit's verifier is Opus** under every setting.
 - **Large diff:** measure the unit's changed lines without generated code or
   lockfiles:
   `git -C <workspace> diff --numstat origin/<base>..HEAD -- . <excludes> | awk '{s+=$1+$2} END {print s}'`.
-  Above `largeDiff.lines` (default 1000), the diff is large. Name every such
+  Above `largeDiff.lines` (default 2000), the diff is large. Name every such
   item in the report, and any item that landed far above its estimate.
 
 **Acceptance only a real GitHub Actions run can show** covers a changed
@@ -971,8 +972,7 @@ Then give the user the step-12 report as your final message.
 - **The promotion diff never passes the cap** when a budget is set. The check
   runs before every dispatch and every landing. At 90% of the cap, items not
   yet dispatched are dropped, last in wave order first. Estimates err high.
-  There is no "proceed anyway" without the maintainer's explicit one-off
-  acceptance for a named item.
+  There is no "proceed anyway" and no one-off exception.
 - **Landing follows `landing`.**
   - **dev-cherry-pick:** commits land on local `INT` and are pushed at once,
     except a commit held back by a fresh blocker or sitting above the
