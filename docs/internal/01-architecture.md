@@ -229,7 +229,7 @@ CE exports one factory:
 ```ts
 createServer({
   config,               // validated env
-  adapters: { mail, ai, identity, billing, entitlements, analytics, errors, challenge, egress, rateLimit, secretBox },
+  adapters: { mail, ai, identity, analytics, errors, clientErrorReport, challenge, egress, rateLimit, secretBox, tenantResolver },  // clientErrorReport: §13.4
   modules: [ ... ],     // additional route/service/job modules, and the hooks of §13
   migrations: [ ... ],  // additional migration sets, applied after CE's (§7.3)
   webRoot,              // directory of the built SPA assets, passed in by the composition root
