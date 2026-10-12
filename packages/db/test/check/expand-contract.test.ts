@@ -85,6 +85,16 @@ describe("what is rejected in a migration added since the latest release tag", (
     ["adding a NOT NULL column in lower case without COLUMN", 'alter table bookmarks add slug varchar(10) not null;', "adds column bookmarks.slug as NOT NULL without a default"],
     ["changing a column type", 'ALTER TABLE "bookmarks" ALTER COLUMN "title" SET DATA TYPE integer USING title::integer;', "changes the type of column bookmarks.title"],
     ["changing a column type without SET DATA", 'ALTER TABLE "bookmarks" ALTER "title" TYPE varchar(10);', "changes the type of column bookmarks.title"],
+    ["setting a column NOT NULL", 'ALTER TABLE "bookmarks" ALTER COLUMN "title" SET NOT NULL;', "sets column bookmarks.title NOT NULL"],
+    ["setting a column NOT NULL in lower case without COLUMN", 'alter table bookmarks alter title set not null;', "sets column bookmarks.title NOT NULL"],
+    ["setting a column NOT NULL beside the ADD COLUMN of an unreleased column", 'ALTER TABLE "bookmarks" ADD COLUMN "slug" text, ALTER COLUMN "slug" SET NOT NULL;', "sets column bookmarks.slug NOT NULL"],
+    ["dropping the default of a column", 'ALTER TABLE "bookmarks" ALTER COLUMN "title" DROP DEFAULT;', "drops the default of column bookmarks.title"],
+    ["dropping the default of a column in lower case without COLUMN", 'alter table bookmarks alter title drop default;', "drops the default of column bookmarks.title"],
+    ["setting the default of a column to NULL", 'ALTER TABLE "bookmarks" ALTER COLUMN "title" SET DEFAULT NULL;', "drops the default of column bookmarks.title"],
+    ["setting the default of a column to NULL in lower case", 'alter table bookmarks alter title set default null;', "drops the default of column bookmarks.title"],
+    ["setting the default of a column to a parenthesised NULL", 'ALTER TABLE bookmarks ALTER COLUMN title SET DEFAULT (NULL);', "drops the default of column bookmarks.title"],
+    ["setting the default of a column to a cast NULL", 'ALTER TABLE bookmarks ALTER COLUMN title SET DEFAULT NULL::text;', "drops the default of column bookmarks.title"],
+    ["setting the default of a column to a deeply parenthesised, cast NULL", 'alter table bookmarks alter title set default (((null)))::varchar(10);', "drops the default of column bookmarks.title"],
     ["creating an index without CONCURRENTLY", 'CREATE INDEX "bookmarks_title_idx" ON "bookmarks" USING btree ("title");', "without CONCURRENTLY"],
     ["creating a unique index without CONCURRENTLY", 'CREATE UNIQUE INDEX IF NOT EXISTS ix ON ONLY public.bookmarks (title);', "without CONCURRENTLY"],
     ["a statement that cannot be placed", "DO $$ BEGIN EXECUTE 'ALTER TABLE bookmarks DROP COLUMN title'; END $$;", "cannot place"],
@@ -170,6 +180,9 @@ describe("what is accepted without a contract", () => {
     ["adding a column whose CHECK mentions NOT NULL", 'ALTER TABLE "bookmarks" ADD COLUMN "n" text CHECK (n IS NOT NULL);'],
     ["adding a constraint", 'ALTER TABLE "bookmarks" ADD CONSTRAINT "t" CHECK (title IS NOT NULL) NOT VALID;'],
     ["dropping a constraint", 'ALTER TABLE "bookmarks" DROP CONSTRAINT "t";'],
+    ["dropping NOT NULL from a column", 'ALTER TABLE "bookmarks" ALTER COLUMN "title" DROP NOT NULL;'],
+    ["setting the default of a column", 'alter table bookmarks alter title set default \'\';'],
+    ["setting the default of a column to a string that reads null", 'ALTER TABLE "bookmarks" ALTER COLUMN "title" SET DEFAULT \'null\'::text;'],
     ["creating a table", 'CREATE TABLE "notes" ("id" uuid PRIMARY KEY, "body" text NOT NULL);'],
     ["dropping a table that is not in the release", 'DROP TABLE "drafts";'],
     ["dropping a column that is not in the release", 'ALTER TABLE "bookmarks" DROP COLUMN "scratch";'],
@@ -202,7 +215,7 @@ describe("what is accepted without a contract", () => {
     ]);
     repository.migration(
       THIRD,
-      'ALTER TABLE "notes" ADD COLUMN "body" text NOT NULL;\nCREATE INDEX ix ON "notes" ("body");\nALTER TABLE "notes" ALTER COLUMN "body" SET DATA TYPE varchar(20);\nALTER TABLE "notes" DROP COLUMN "body";',
+      'ALTER TABLE "notes" ADD COLUMN "body" text NOT NULL;\nCREATE INDEX ix ON "notes" ("body");\nALTER TABLE "notes" ALTER COLUMN "body" SET DATA TYPE varchar(20);\nALTER TABLE "notes" ALTER COLUMN "body" SET NOT NULL;\nALTER TABLE "notes" ALTER COLUMN "body" DROP DEFAULT;\nALTER TABLE "notes" ALTER COLUMN "body" SET DEFAULT NULL;\nALTER TABLE "notes" DROP COLUMN "body";',
     );
     expect(await inspect(repository)).toEqual([]);
   });

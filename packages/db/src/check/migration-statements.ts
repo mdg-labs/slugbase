@@ -21,6 +21,8 @@ export type Operation =
   | { kind: "rename-column"; table: TableName; column: string; to: string }
   | { kind: "add-column"; table: TableName; column: string; notNullWithoutDefault: boolean }
   | { kind: "alter-column-type"; table: TableName; column: string }
+  | { kind: "set-not-null"; table: TableName; column: string }
+  | { kind: "drop-default"; table: TableName; column: string }
   | { kind: "create-index"; table: TableName; concurrently: boolean }
   | { kind: "safe" }
   | { kind: "unknown"; reason: string };
@@ -602,14 +604,41 @@ function alterAction(table: TableName, action: Cursor): Operation[] {
     if (action.isWord("type") || action.take("set", "data")) {
       return [{ kind: "alter-column-type", table, column }];
     }
-    const settings = [["set", "not", "null"], ["drop", "not", "null"], ["set", "default"], ["drop", "default"]];
-    return settings.some((words) => action.take(...words)) ? [{ kind: "safe" }] : unknown("an ALTER COLUMN form this check does not read");
+    // The previous release can write a row without the column or with NULL in it, and
+    // can insert rows that rely on its default; SET NOT NULL can also scan the table.
+    if (action.take("set", "not", "null")) {
+      return [{ kind: "set-not-null", table, column }];
+    }
+    if (action.take("drop", "default")) {
+      return [{ kind: "drop-default", table, column }];
+    }
+    if (action.take("set", "default")) {
+      // A NULL default is not stored: PostgreSQL removes the default, as DROP DEFAULT does.
+      return startsWithNull(action) ? [{ kind: "drop-default", table, column }] : [{ kind: "safe" }];
+    }
+    return action.take("drop", "not", "null") ? [{ kind: "safe" }] : unknown("an ALTER COLUMN form this check does not read");
   }
   const rowLevelSecurity = [["enable", "row", "level", "security"], ["disable", "row", "level", "security"], ["force", "row", "level", "security"], ["no", "force", "row", "level", "security"]];
   if (rowLevelSecurity.some((words) => action.take(...words)) || action.take("owner", "to") || action.take("validate", "constraint")) {
     return [{ kind: "safe" }];
   }
   return unknown("an ALTER TABLE action this check does not read");
+}
+
+/** Whether the expression next is `NULL`, parenthesised to any depth or cast (`NULL::text`), and nothing else. */
+function startsWithNull(expression: Cursor): boolean {
+  let offset = 0;
+  while (expression.isPunct("(", offset)) {
+    offset += 1;
+  }
+  if (!expression.isWord("null", offset)) {
+    return false;
+  }
+  offset += 1;
+  while (expression.isPunct(")", offset)) {
+    offset += 1;
+  }
+  return expression.peek(offset) === undefined || (expression.isPunct(":", offset) && expression.isPunct(":", offset + 1));
 }
 
 /** The rest of an ADD COLUMN definition: NOT NULL at its top level and no DEFAULT, generated value, identity or serial type. */

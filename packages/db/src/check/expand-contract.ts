@@ -13,6 +13,9 @@ import type { CheckRule, Finding } from "./types.ts";
 //   - changing the type of a column of such a table (any change: whether it
 //     rewrites the table depends on the old and the new type, which a lint of
 //     the file cannot tell),
+//   - setting a column of such a table NOT NULL, or dropping its default
+//     (DROP DEFAULT, or SET DEFAULT NULL, which removes it): the previous
+//     release can still write rows that rely on either,
 //   - creating an index on such a table without CONCURRENTLY,
 //   - any statement this check does not positively read as one of the forms it
 //     lists as safe (CREATE TABLE of a column list and nothing after it,
@@ -139,6 +142,14 @@ class Released {
       case "alter-column-type":
         return this.hasTable(operation.table)
           ? [(`changes the type of column ${describe(operation.table)}.${operation.column} of a table that exists at ${at}: that can rewrite the table under an ACCESS EXCLUSIVE lock`)]
+          : [];
+      case "set-not-null":
+        return this.hasTable(operation.table)
+          ? [(`sets column ${describe(operation.table)}.${operation.column} NOT NULL on a table that exists at ${at}: the previous release can write rows without it, and the change can scan the table under an ACCESS EXCLUSIVE lock (unless a validated CHECK constraint proves it holds no NULL)`)]
+          : [];
+      case "drop-default":
+        return this.hasTable(operation.table)
+          ? [(`drops the default of column ${describe(operation.table)}.${operation.column} of a table that exists at ${at}: the previous release can insert rows that rely on it`)]
           : [];
       case "create-index":
         return !operation.concurrently && this.hasTable(operation.table)
