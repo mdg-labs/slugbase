@@ -10,6 +10,7 @@ import {
   type ModuleContext,
   type ServerModule,
 } from "../create-server.ts";
+import { assertApplicationRole } from "../migrate/role-guard.ts";
 import { createMetrics, startMetricsListener, type MetricsListener, type QueueSnapshot } from "../metrics/index.ts";
 import type { JobDefinition, JobPayload, ScheduleDefinition } from "./job.ts";
 
@@ -63,8 +64,10 @@ export interface Worker {
   readonly jobs: readonly JobDefinition[];
   readonly schedules: readonly ScheduleDefinition[];
   /**
-   * Starts pg-boss, registers every job's queue and consumer and every
-   * schedule, and opens the internal `/metrics` listener when `METRICS_PORT` is set.
+   * In production it first refuses a `DATABASE_URL` role that is a superuser or owns the database
+   * (Q56), unless `SLUGBASE_ALLOW_OWNER_CONNECTION` allows it with a warning. It then starts
+   * pg-boss, registers every job's queue and consumer and every schedule, and opens the
+   * internal `/metrics` listener when `METRICS_PORT` is set.
    */
   start(options?: WorkerStartOptions): Promise<RunningWorker>;
 }
@@ -113,6 +116,21 @@ export function createWorker(options: CreateWorkerOptions): Worker {
     schedules: composition.schedules,
 
     async start(startOptions = {}) {
+      // pg-boss always connects with DATABASE_URL, so that role is checked whether or not a tenant pool
+      // was passed in (the server skips the check in that case). The role of a passed-in pool is the
+      // composer's responsibility.
+      if (config.NODE_ENV === "production") {
+        try {
+          await assertApplicationRole({
+            url: config.DATABASE_URL,
+            allowOwnerConnection: config.SLUGBASE_ALLOW_OWNER_CONNECTION,
+            logger,
+          });
+        } catch (error) {
+          await database.close();
+          throw error;
+        }
+      }
       const boss = new PgBoss({
         connectionString: config.DATABASE_URL,
         schema: BOSS_SCHEMA,

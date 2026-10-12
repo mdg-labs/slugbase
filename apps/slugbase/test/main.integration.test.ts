@@ -184,6 +184,40 @@ describe("apps/slugbase main worker", () => {
     expect(instances).toBeGreaterThan(0);
   }, 60_000);
 
+  // The superuser of the test cluster stands for the owner of the tables: row-level security does not apply to it.
+  function superuserUrl(): string {
+    const url = new URL(databaseUrl(database));
+    url.username = SUPERUSER.username;
+    url.password = SUPERUSER.password;
+    return url.href;
+  }
+
+  it("refuses to start in production as a role that row-level security does not hold, naming no connection string (Q56)", async () => {
+    const migrated = runMigrate(database);
+    expect(migrated.status, migrated.output).toBe(0);
+
+    const { status, output, instances } = await runWorker(database, { env: { NODE_ENV: "production", DATABASE_URL: superuserUrl() } });
+    expect(status).toBe(1);
+    expect(instances).toBe(0);
+    expect(output).not.toContain('"Worker started"');
+    expect(output).toContain("is a superuser");
+    expect(output).toContain("slugbase_migrator");
+    expect(output).toContain("SLUGBASE_ALLOW_OWNER_CONNECTION");
+    expect(output).not.toMatch(/postgresql?:\/\/[^\s"]*@/);
+  }, 60_000);
+
+  it("starts in production as that role with SLUGBASE_ALLOW_OWNER_CONNECTION=true, and warns", async () => {
+    const { status, output, instances } = await runWorker(database, {
+      env: { NODE_ENV: "production", DATABASE_URL: superuserUrl(), SLUGBASE_ALLOW_OWNER_CONNECTION: "true" },
+    });
+    expect(status, output).toBe(0);
+    expect(output).toContain("Worker started");
+    expect(output).toContain('"level":"warn"');
+    expect(output).toContain("SLUGBASE_ALLOW_OWNER_CONNECTION is set");
+    expect(output).not.toMatch(/postgresql?:\/\/[^\s"]*@/);
+    expect(instances).toBeGreaterThan(0);
+  }, 60_000);
+
   it("serves /metrics on the internal port while the worker runs and stops with it", async () => {
     const metricsPort = await freePort();
     const { status, output, observed } = await runWorker(database, {
@@ -369,5 +403,6 @@ describe("apps/slugbase main server as a role that is not held by row-level secu
     expect(output).toContain('"Listening"');
     expect(output).toContain('"level":"warn"');
     expect(output).toContain("SLUGBASE_ALLOW_OWNER_CONNECTION is set");
+    expect(output).not.toMatch(/postgresql?:\/\/[^\s"]*@/);
   }, 60_000);
 });
