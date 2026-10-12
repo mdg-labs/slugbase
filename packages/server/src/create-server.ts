@@ -269,6 +269,7 @@ export function createServer(options: CreateServerOptions): Server {
   const stages = installChain(app, {
     logger,
     routes: new RouteTable(composition.routes),
+    trustedProxyHops: config.TRUSTED_PROXY_HOPS,
     errors: adapters.errors,
     responseValidation: config.NODE_ENV === "production" ? "strip" : "throw",
   });

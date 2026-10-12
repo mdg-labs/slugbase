@@ -24,6 +24,10 @@ export interface ChainEnv {
     // (undocumented)
     Variables: {
         requestId?: string;
+        clientIp?: string;
+        logger?: Logger;
+        principalType?: "anonymous" | "session" | "api-token";
+        workspaceId?: string;
         route?: MatchedRoute;
     };
 }
@@ -65,6 +69,9 @@ export interface ConfigIssue {
     // (undocumented)
     readonly message: string;
 }
+
+// @public
+export function createLogger(input: LoggerOptions): Logger;
 
 // @public
 export function createServer(options: CreateServerOptions): Server;
@@ -237,6 +244,12 @@ export interface LoadOptions {
 export const LOG_LEVELS: readonly ["fatal", "error", "warn", "info", "debug", "trace", "silent"];
 
 // @public
+export interface LogDestination {
+    // (undocumented)
+    write(line: string): void;
+}
+
+// @public
 export interface Logger {
     // (undocumented)
     error(message: string, fields?: Readonly<Record<string, unknown>>): void;
@@ -244,6 +257,12 @@ export interface Logger {
     info(message: string, fields?: Readonly<Record<string, unknown>>): void;
     // (undocumented)
     warn(message: string, fields?: Readonly<Record<string, unknown>>): void;
+}
+
+// @public (undocumented)
+export interface LoggerOptions {
+    readonly destination?: LogDestination;
+    readonly level: string;
 }
 
 // @public (undocumented)

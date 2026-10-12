@@ -35,7 +35,7 @@ function build(bindings: readonly RouteBinding[], stages: StageImplementations =
   const logger = recordingLogger();
   const installed = installChain(
     app,
-    { logger, routes: new RouteTable(bindings), errors: unconfigured().errors, responseValidation: "throw" },
+    { logger, routes: new RouteTable(bindings), trustedProxyHops: 0, errors: unconfigured().errors, responseValidation: "throw" },
     stages,
   );
   return { app, logger, installed };

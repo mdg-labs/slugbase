@@ -113,6 +113,21 @@ describe("apps/slugbase main", () => {
     expect(response).toContain('"code":"not_found"');
   });
 
+  it("answers with an X-Request-Id and writes one pino line per request without the raw path", async () => {
+    const { status, output, response } = await runServer(valid);
+    expect(status, output).toBe(0);
+    const requestId = /^x-request-id: (\S+)$/im.exec(response)?.[1];
+    expect(requestId).toBeDefined();
+    const lines = output
+      .split("\n")
+      .filter((line) => line.startsWith("{"))
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    const requests = lines.filter((line) => line["msg"] === "Request completed");
+    expect(requests).toHaveLength(1);
+    expect(requests[0]).toMatchObject({ level: "info", requestId, route: "unmatched", status: 404, method: "GET" });
+    expect(output).not.toContain("no-such-path");
+  });
+
   it("starts the server for the server command", async () => {
     const { status, output } = await runServer(valid, "server");
     expect(status, output).toBe(0);

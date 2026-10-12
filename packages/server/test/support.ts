@@ -12,14 +12,22 @@ export interface RecordedLog {
   readonly fields: Readonly<Record<string, unknown>>;
 }
 
-export function recordingLogger(): Logger & { readonly entries: RecordedLog[] } {
+/** The message of the line the request-context stage writes once per request. */
+export const REQUEST_LINE = "Request completed";
+
+/**
+ * Records what is logged. `entries` holds every line except the per-request
+ * line, which a test of another stage does not look at; that one is in `requests`.
+ */
+export function recordingLogger(): Logger & { readonly entries: RecordedLog[]; readonly requests: RecordedLog[] } {
   const entries: RecordedLog[] = [];
+  const requests: RecordedLog[] = [];
   const record =
     (level: RecordedLog["level"]) =>
     (message: string, fields: Readonly<Record<string, unknown>> = {}): void => {
-      entries.push({ level, message, fields });
+      (message === REQUEST_LINE ? requests : entries).push({ level, message, fields });
     };
-  return { entries, info: record("info"), warn: record("warn"), error: record("error") };
+  return { entries, requests, info: record("info"), warn: record("warn"), error: record("error") };
 }
 
 export function serverConfig(overrides: Record<string, string | undefined> = {}) {

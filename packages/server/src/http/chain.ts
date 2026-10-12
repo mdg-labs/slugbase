@@ -3,6 +3,7 @@ import type { ErrorReportPort } from "@slugbase/core";
 import type { Context, Hono, MiddlewareHandler } from "hono";
 import type { Logger } from "../create-server.ts";
 import { failRequest, notFoundProblem, responseStage, type ResponseValidation } from "./problem.ts";
+import { createRequestContext } from "./request-context.ts";
 
 // The middleware chain of doc 01 section 4. The order is part of the security
 // model (doc 10 section 3): it is fixed here, one stage at a time, and neither a
@@ -45,8 +46,16 @@ export interface MatchedRoute {
 /** The variables the stages share through the request context. */
 export interface ChainEnv {
   Variables: {
-    /** Set by the request-context stage. */
+    /** Set by the request-context stage: the caller's `X-Request-Id` when it is safe, else generated. */
     requestId?: string;
+    /** Set by the request-context stage: the client address across the trusted proxy hops; undefined without a socket. */
+    clientIp?: string;
+    /** Set by the request-context stage: the request's logger, every line carrying the request ID. */
+    logger?: Logger;
+    /** Set by the authentication stage; the request log reads `anonymous` while it is unset. */
+    principalType?: "anonymous" | "session" | "api-token";
+    /** Set by the tenant-resolution stage: the active workspace's internal UUID. */
+    workspaceId?: string;
     /** The route of the request, resolved before the first stage; absent when no operation matches. */
     route?: MatchedRoute;
   };
@@ -73,6 +82,8 @@ export type StageImplementations = { readonly [Name in RequestStageName]?: Reque
 export interface ChainDependencies {
   readonly logger: Logger;
   readonly routes: RouteTable;
+  /** `TRUSTED_PROXY_HOPS`: how many `X-Forwarded-For` entries from the right a trusted proxy wrote. */
+  readonly trustedProxyHops: number;
   /** Receives every unexpected failure (stage 11). */
   readonly errors: ErrorReportPort;
   /** How stage 11 treats a response that differs from its declared schema. */
@@ -167,9 +178,13 @@ export function installChain(
   dependencies: ChainDependencies,
   stages: StageImplementations = {},
 ): readonly StageName[] {
-  const { logger, routes, errors, responseValidation } = dependencies;
+  const { logger, routes, trustedProxyHops, errors, responseValidation } = dependencies;
+  const requestContext = createRequestContext({ logger, trustedProxyHops });
 
-  const requestStages = REQUEST_STAGES.map((name) => ({ name, run: stages[name] ?? passThrough }));
+  const requestStages = REQUEST_STAGES.map((name) => ({
+    name,
+    run: stages[name] ?? (name === "request-context" ? requestContext.stage : passThrough),
+  }));
   const handler = {
     name: "handler" as const,
     run: (context: ChainContext): Response | Promise<Response> => {
@@ -222,6 +237,7 @@ export function installChain(
         fail(context, error);
       }
     }
+    requestContext.finish(context);
     return context.res;
   });
 

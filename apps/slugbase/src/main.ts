@@ -6,16 +6,18 @@ import "@slugbase/email";
 import {
   ConfigError,
   PROCESS_TYPES,
+  createLogger,
   createServer,
   isProcessType,
   loadConfig,
-  type Logger,
   type ServerConfig,
 } from "@slugbase/server";
 
 // The process type is the command of the one image (doc 01 section 3): the
 // configuration of that type is validated before anything else starts, and an
-// invalid environment exits non-zero naming the keys, never their values.
+// invalid environment exits non-zero naming the keys, never their values. Until
+// the configuration is valid there is no log level, so those lines are written
+// by hand; the running server logs through pino at `LOG_LEVEL`.
 
 type Level = "info" | "warn" | "error";
 
@@ -23,23 +25,12 @@ function log(level: Level, message: string, fields: Readonly<Record<string, unkn
   process.stderr.write(`${JSON.stringify({ level, msg: message, ...fields })}\n`);
 }
 
-const logger: Logger = {
-  info: (message, fields) => {
-    log("info", message, fields);
-  },
-  warn: (message, fields) => {
-    log("warn", message, fields);
-  },
-  error: (message, fields) => {
-    log("error", message, fields);
-  },
-};
-
 const SHUTDOWN_SIGNALS = ["SIGTERM", "SIGINT"] as const;
 
 // CE composes the unconfigured defaults of every port and no extra modules or
 // migration sets; a configured adapter replaces its default here.
 async function runServer(config: ServerConfig): Promise<void> {
+  const logger = createLogger({ level: config.LOG_LEVEL });
   const server = createServer({
     config,
     adapters: unconfigured(),
