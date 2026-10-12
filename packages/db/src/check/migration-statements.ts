@@ -608,9 +608,90 @@ function alter(cursor: Cursor): Operation[] {
   if (cursor.take("policy")) {
     return [{ kind: "safe" }];
   }
+  if (cursor.take("default", "privileges")) {
+    return alterDefaultPrivileges(cursor);
+  }
   // ALTER VIEW and ALTER INDEX accept a table's name too (checked against PostgreSQL 18), so
   // none of the object kinds is read as touching only its own kind.
   return unknown("an ALTER form this check does not read");
+}
+
+const DEFAULT_PRIVILEGE_OBJECTS = new Set(["tables", "sequences", "functions", "routines", "types", "schemas"]);
+const PRIVILEGES = new Set(["select", "insert", "update", "delete", "truncate", "references", "trigger", "maintain", "usage", "execute", "create", "set"]);
+
+/** Reads `item {, item}` with `read`; false when an item cannot be read, which includes a dangling comma. */
+function commaSeparated(cursor: Cursor, read: () => boolean): boolean {
+  if (!read()) {
+    return false;
+  }
+  while (cursor.isPunct(",")) {
+    cursor.position += 1;
+    if (!read()) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** One plain name: a word or a quoted identifier, not schema-qualified. */
+function plainName(cursor: Cursor): boolean {
+  return cursor.identifier() !== undefined && !cursor.isPunct(".");
+}
+
+/**
+ * ALTER DEFAULT PRIVILEGES [FOR {ROLE | USER} roles] [IN SCHEMA schemas]
+ * GRANT privileges ON {TABLES | SEQUENCES | FUNCTIONS | ROUTINES | TYPES | SCHEMAS} TO roles [WITH GRANT OPTION].
+ * It sets the privileges of objects created later and touches no object a running replica uses.
+ * It is read by its whole shape: a REVOKE, a missing or repeated clause, a name or privilege
+ * it cannot place, or any text after the statement leaves it unknown.
+ */
+function alterDefaultPrivileges(cursor: Cursor): Operation[] {
+  const unread = unknown("ALTER DEFAULT PRIVILEGES in a form this check does not read");
+  let forRole = false;
+  let inSchema = false;
+  for (;;) {
+    if (!forRole && cursor.take("for")) {
+      if ((!cursor.take("role") && !cursor.take("user")) || !commaSeparated(cursor, () => plainName(cursor))) {
+        return unread;
+      }
+      forRole = true;
+    } else if (!inSchema && cursor.take("in")) {
+      if (!cursor.take("schema") || !commaSeparated(cursor, () => plainName(cursor))) {
+        return unread;
+      }
+      inSchema = true;
+    } else {
+      break;
+    }
+  }
+  if (!cursor.take("grant")) {
+    return unread;
+  }
+  if (cursor.take("all")) {
+    cursor.take("privileges");
+  } else {
+    const privilege = (): boolean => {
+      const token = cursor.peek();
+      if (token?.kind !== "word" || !PRIVILEGES.has(token.text)) {
+        return false;
+      }
+      cursor.position += 1;
+      return true;
+    };
+    if (!commaSeparated(cursor, privilege)) {
+      return unread;
+    }
+  }
+  const object = cursor.take("on") ? cursor.peek() : undefined;
+  if (object?.kind !== "word" || !DEFAULT_PRIVILEGE_OBJECTS.has(object.text)) {
+    return unread;
+  }
+  cursor.position += 1;
+  if (!cursor.take("to") || !commaSeparated(cursor, () => plainName(cursor))) {
+    return unread;
+  }
+  cursor.take("with", "grant", "option");
+  return cursor.done() ? [{ kind: "safe" }] : unread;
 }
 
 function alterTable(cursor: Cursor): Operation[] {

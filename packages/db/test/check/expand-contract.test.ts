@@ -148,6 +148,9 @@ describe("what is rejected in a migration added since the latest release tag", (
     ["a statement hidden behind a lone carriage return", '-- note\rALTER TABLE "bookmarks" DROP COLUMN "title";', "drops column bookmarks.title"],
     ["a column renamed through ALTER VIEW", "ALTER VIEW bookmarks RENAME COLUMN title TO name;", "cannot place"],
     ["a table renamed through ALTER INDEX", "ALTER INDEX bookmarks RENAME TO links;", "cannot place"],
+    ["default privileges revoked", "ALTER DEFAULT PRIVILEGES IN SCHEMA pgboss REVOKE SELECT ON TABLES FROM slugbase_app;", "cannot place"],
+    ["default privileges without a GRANT clause", "ALTER DEFAULT PRIVILEGES FOR ROLE slugbase_owner IN SCHEMA pgboss;", "cannot place"],
+    ["default privileges granted with text the reader does not read", "ALTER DEFAULT PRIVILEGES GRANT SELECT ON TABLES TO slugbase_app CASCADE;", "cannot place"],
     ["a type dropped with its columns", "DROP TYPE kind CASCADE;", "cannot place"],
     ["a SELECT", "SELECT 1;", "cannot place"],
     ["a SELECT of a function", "SELECT public.f();", "cannot place"],
@@ -257,6 +260,7 @@ describe("what is accepted without a contract", () => {
     ["an enum, a table with built-in defaults and a policy on the tenant context", "CREATE TYPE \"public\".\"kind\" AS ENUM('a', 'b');\nCREATE TABLE \"notes\" (\"id\" uuid PRIMARY KEY, \"at\" timestamp (3) with time zone DEFAULT now() NOT NULL, \"t\" varchar(10), CONSTRAINT \"fk\" FOREIGN KEY (\"id\") REFERENCES \"public\".\"bookmarks\"(\"id\"));\nCREATE POLICY p ON notes USING (id = (select public.app_workspace_id()));"],
     ["a SQL function of one SELECT of built-ins", "CREATE OR REPLACE FUNCTION public.f() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT nullif(current_setting('app.workspace_id', true), '')::uuid $$;"],
     ["a function body that mentions a drop", "CREATE OR REPLACE FUNCTION f() RETURNS int LANGUAGE sql AS $$ SELECT 1 -- DROP TABLE bookmarks;\n$$;"],
+    ["default privileges granted to a role", "ALTER DEFAULT PRIVILEGES FOR ROLE slugbase_owner IN SCHEMA pgboss GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO slugbase_app;"],
     ["policies and grants", 'ALTER TABLE "bookmarks" ENABLE ROW LEVEL SECURITY;\nCREATE POLICY p ON bookmarks USING (true);\nGRANT SELECT ON bookmarks TO slugbase_app;'],
   ])("accepts %s", async (_name, sql) => {
     expect(await added(sql)).toEqual([]);
