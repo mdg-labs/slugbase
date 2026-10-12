@@ -4,8 +4,21 @@
 
 ```ts
 
+import { EgressPort } from '@slugbase/core';
+import { EgressRequest } from '@slugbase/core';
+import { EgressResponse } from '@slugbase/core';
 import type { ErrorReportPort } from '@slugbase/core';
 import type { SecretBoxPort } from '@slugbase/core';
+
+// @public (undocumented)
+export interface CreateEgressOptions {
+    readonly nodeEnv: string;
+    readonly resolve?: EgressResolver;
+    readonly testOnly?: {
+        readonly allowNonPublicAddresses?: boolean;
+        readonly ca?: string | Buffer;
+    };
+}
 
 // @public
 export function createSecretBox(options: CreateSecretBoxOptions): SecretBoxPort;
@@ -27,6 +40,18 @@ export interface CreateSentryErrorReportOptions {
     readonly flushTimeoutMs?: number;
     // (undocumented)
     readonly release?: string;
+}
+
+// @public
+export type EgressResolver = (hostname: string) => Promise<readonly string[]>;
+
+// @public
+export class HttpEgress implements EgressPort {
+    constructor(options: CreateEgressOptions);
+    // (undocumented)
+    readonly available = true;
+    // (undocumented)
+    request(request: EgressRequest): Promise<EgressResponse>;
 }
 
 // @public

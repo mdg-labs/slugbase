@@ -5,6 +5,78 @@
 ```ts
 
 // @public
+export class FakeEgress {
+    constructor(routes?: Readonly<Record<string, FakeEgressRoute>>);
+    // (undocumented)
+    readonly available = true;
+    // (undocumented)
+    request(request: FakeEgressRequest): Promise<FakeEgressResponse>;
+    readonly requests: FakeEgressRequest[];
+    script(url: string, route: FakeEgressRoute): this;
+}
+
+// @public
+export class FakeEgressError extends Error {
+    constructor(code: FakeEgressErrorCode);
+    // (undocumented)
+    readonly code: FakeEgressErrorCode;
+}
+
+// @public (undocumented)
+export type FakeEgressErrorCode = "egress_failed" | "egress_blocked" | "egress_timeout" | "egress_too_large";
+
+// @public (undocumented)
+export interface FakeEgressRequest {
+    // (undocumented)
+    readonly body?: Uint8Array;
+    // (undocumented)
+    readonly headers?: Readonly<Record<string, string>>;
+    // (undocumented)
+    readonly maxBytes: number;
+    // (undocumented)
+    readonly method?: "GET" | "HEAD" | "POST";
+    // (undocumented)
+    readonly timeoutMs: number;
+    // (undocumented)
+    readonly url: string;
+}
+
+// @public (undocumented)
+export interface FakeEgressResponse {
+    // (undocumented)
+    readonly body: Uint8Array;
+    // (undocumented)
+    readonly contentType: string | undefined;
+    // (undocumented)
+    readonly status: number;
+    // (undocumented)
+    readonly url: string;
+}
+
+// @public
+export type FakeEgressRoute = {
+    readonly kind?: "response";
+    readonly status?: number;
+    readonly contentType?: string;
+    readonly body?: Uint8Array;
+}
+/**
+* A redirect, answered as the port answers it today: the 3xx response is returned and the target is not
+* followed (`to` is the target the real server would name).
+*/
+| {
+    readonly kind: "redirect";
+    readonly to: string;
+    readonly status?: 301 | 302 | 303 | 307 | 308;
+}
+/** A destination the real port refuses (a private address, a bad scheme): the request fails with a blocked error. */
+| {
+    readonly kind: "blocked";
+} | {
+    readonly kind: "timeout";
+};
+
+// @public
 export class FixedClock {
     constructor(start?: Date | number);
     advance(milliseconds: number): void;

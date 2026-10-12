@@ -195,6 +195,9 @@ importers:
 
   packages/testing:
     dependencies:
+      '@slugbase/core':
+        specifier: workspace:*
+        version: link:../core
       '@slugbase/db':
         specifier: workspace:*
         version: link:../db

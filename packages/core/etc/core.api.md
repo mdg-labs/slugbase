@@ -104,23 +104,53 @@ export interface ClientErrorReportRequest {
 }
 
 // @public
+export const EGRESS_MAX_REQUEST_BODY_BYTES = 1048576;
+
+// @public
+export class EgressBlocked extends EgressError {
+    constructor();
+}
+
+// @public (undocumented)
+export interface EgressBodylessRequest extends EgressRequestBase {
+    // (undocumented)
+    readonly body?: undefined;
+    // (undocumented)
+    readonly method?: "GET" | "HEAD";
+}
+
+// @public
+export class EgressError extends Error {
+    constructor(code?: EgressErrorCode, message?: string);
+    // (undocumented)
+    readonly code: EgressErrorCode;
+}
+
+// @public (undocumented)
+export type EgressErrorCode = "egress_failed" | "egress_blocked" | "egress_timeout" | "egress_too_large";
+
+// @public
 export interface EgressPort extends Port {
     // (undocumented)
     request(request: EgressRequest): Promise<EgressResponse>;
 }
 
 // @public (undocumented)
-export interface EgressRequest {
+export interface EgressPostRequest extends EgressRequestBase {
+    readonly body: Uint8Array;
     // (undocumented)
-    readonly acceptContentTypes?: readonly string[];
+    readonly method: "POST";
+}
+
+// @public (undocumented)
+export type EgressRequest = EgressBodylessRequest | EgressPostRequest;
+
+// @public (undocumented)
+export interface EgressRequestBase {
     // (undocumented)
     readonly headers?: Readonly<Record<string, string>>;
-    // (undocumented)
-    readonly maxBytes?: number;
-    // (undocumented)
-    readonly method?: "GET" | "HEAD";
-    // (undocumented)
-    readonly timeoutMs?: number;
+    readonly maxBytes: number;
+    readonly timeoutMs: number;
     // (undocumented)
     readonly url: string;
 }
@@ -134,6 +164,16 @@ export interface EgressResponse {
     // (undocumented)
     readonly status: number;
     readonly url: string;
+}
+
+// @public
+export class EgressTimeout extends EgressError {
+    constructor();
+}
+
+// @public
+export class EgressTooLarge extends EgressError {
+    constructor();
 }
 
 // @public (undocumented)

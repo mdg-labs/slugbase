@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { createSecretBox, createSentryErrorReport } from "@slugbase/adapters";
+import { HttpEgress, createSecretBox, createSentryErrorReport } from "@slugbase/adapters";
 import "@slugbase/contracts";
 import { unconfigured, type Adapters } from "@slugbase/core";
 import { type MigrationChain } from "@slugbase/db";
@@ -126,7 +126,8 @@ const MIGRATIONS: readonly MigrationChain[] = [];
 // alike: `ENCRYPTION_KEY` seals, the previous keys only open. A key the box
 // refuses stops the process before it serves or works. Error reporting is the
 // Sentry-protocol adapter when the operator set `ERROR_REPORT_DSN`, and the
-// no-op default (errors are logged only) when not.
+// no-op default (errors are logged only) when not. Egress is always on (doc 01
+// section 6): the adapter that resolves, validates and pins every outbound request.
 export function composeAdapters(config: ServerConfig | WorkerConfig, logger: Logger): Adapters {
   const secretBox = createSecretBox({
     current: { keyId: config.ENCRYPTION_KEY_ID, key: Buffer.from(config.ENCRYPTION_KEY, "base64") },
@@ -142,7 +143,7 @@ export function composeAdapters(config: ServerConfig | WorkerConfig, logger: Log
       ? defaults.errors
       : createSentryErrorReport({ dsn: config.ERROR_REPORT_DSN, environment: config.NODE_ENV });
   logger.info(errors.available ? "Error reporting ready" : "Error reporting is off; errors are only logged");
-  return { ...defaults, secretBox, errors };
+  return { ...defaults, secretBox, errors, egress: new HttpEgress({ nodeEnv: config.NODE_ENV }) };
 }
 
 async function runServer(config: ServerConfig, trap: SignalTrap): Promise<void> {
