@@ -428,7 +428,7 @@ describe("response validation", () => {
     expect(problem.requestId).toBe(response.headers.get("x-request-id"));
     expect(problem.requestId).not.toBe("mine");
     expect(response.headers.get("content-length")).not.toBe(String(rejected.length));
-    expect(response.headers.get("cache-control")).toBeNull();
+    expect(response.headers.get("cache-control")).toBe("no-store");
     expect(response.headers.get("etag")).toBeNull();
     expect(response.headers.get("set-cookie")).toBeNull();
   });

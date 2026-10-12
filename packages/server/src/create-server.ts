@@ -278,6 +278,7 @@ export function createServer(options: CreateServerOptions): Server {
     logger,
     routes: new RouteTable(composition.routes),
     trustedProxyHops: config.TRUSTED_PROXY_HOPS,
+    appOrigin: config.APP_ORIGIN,
     errors: adapters.errors,
     responseValidation: config.NODE_ENV === "production" ? "strip" : "throw",
     metrics,

@@ -157,6 +157,7 @@ describe("the client IP across the trusted hops", () => {
       logger: createLogger({ level: "silent", destination: sink() }),
       routes: new RouteTable([binding]),
       trustedProxyHops: hops,
+      appOrigin: "https://bookmarks.example.com",
       errors: unconfigured().errors,
       responseValidation: "throw",
     });
@@ -291,6 +292,7 @@ describe("the request log line", () => {
             { operation: operation("get", "/api/v1/whoami", "whoami"), handler: () => Response.json({}) },
           ]),
           trustedProxyHops: 0,
+          appOrigin: "https://bookmarks.example.com",
           errors: unconfigured().errors,
           responseValidation: "throw",
         },

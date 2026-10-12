@@ -3,6 +3,7 @@ import type { ErrorReportPort } from "@slugbase/core";
 import type { Context, Hono, MiddlewareHandler } from "hono";
 import type { Logger } from "../create-server.ts";
 import type { Metrics } from "../metrics/index.ts";
+import { createSecurityHeaders } from "./headers.ts";
 import { failRequest, notFoundProblem, responseStage, type ResponseValidation } from "./problem.ts";
 import { createRequestContext } from "./request-context.ts";
 
@@ -85,6 +86,8 @@ export interface ChainDependencies {
   readonly routes: RouteTable;
   /** `TRUSTED_PROXY_HOPS`: how many `X-Forwarded-For` entries from the right a trusted proxy wrote. */
   readonly trustedProxyHops: number;
+  /** `APP_ORIGIN`: an `https` origin turns on `Strict-Transport-Security`. */
+  readonly appOrigin: string;
   /** Receives every unexpected failure (stage 11). */
   readonly errors: ErrorReportPort;
   /** How stage 11 treats a response that differs from its declared schema. */
@@ -181,12 +184,15 @@ export function installChain(
   dependencies: ChainDependencies,
   stages: StageImplementations = {},
 ): readonly StageName[] {
-  const { logger, routes, trustedProxyHops, errors, responseValidation, metrics } = dependencies;
+  const { logger, routes, trustedProxyHops, appOrigin, errors, responseValidation, metrics } = dependencies;
   const requestContext = createRequestContext({ logger, trustedProxyHops, ...(metrics === undefined ? {} : { metrics }) });
+  const securityHeaders = createSecurityHeaders({ appOrigin });
 
   const requestStages = REQUEST_STAGES.map((name) => ({
     name,
-    run: stages[name] ?? (name === "request-context" ? requestContext.stage : passThrough),
+    run:
+      stages[name] ??
+      (name === "request-context" ? requestContext.stage : name === "security-headers" ? securityHeaders.stage : passThrough),
   }));
   const handler = {
     name: "handler" as const,
@@ -204,6 +210,8 @@ export function installChain(
     const problem = failRequest(context, error, { logger, errors });
     context.res = undefined;
     context.res = problem;
+    // The replacement carries nothing of the response it replaces, so the security headers go on again.
+    securityHeaders.apply(context);
   };
 
   app.all("*", async (context) => {
