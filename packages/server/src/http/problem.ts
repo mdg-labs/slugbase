@@ -217,9 +217,9 @@ export function failRequest(context: ChainContext, error: unknown, reporting: Pr
   if (problem.unexpected) {
     const { logger, errors } = reporting;
     logger.error("Request failed", { ...describeError(error), requestId });
-    const operationId = context.get("route")?.operation.operationId;
+    const operation = context.get("route")?.operation;
     void Promise.resolve()
-      .then(() => errors.capture(error, { requestId, ...(operationId === undefined ? {} : { route: operationId }) }))
+      .then(() => errors.capture(error, { requestId, ...(operation === undefined ? {} : { route: `${operation.method.toUpperCase()} ${operation.path}` }) }))
       .catch((reportError: unknown) => {
         logger.warn("Error report failed", { ...describeError(reportError), requestId });
       });

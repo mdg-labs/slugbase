@@ -7,6 +7,7 @@ export {
   MIN_SESSION_SECRET_LENGTH,
   NODE_ENVS,
   databaseFragment,
+  errorReportFragment,
   httpFragment,
   metricsFragment,
   migrateFragment,

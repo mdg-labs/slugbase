@@ -22,8 +22,9 @@
     "contracts:check": "node ../../tooling/api-report/api-report.ts check --package ."
   },
   "dependencies": {
-    "@slugbase/core": "workspace:*",
+    "@sentry/node-core": "^10.75.2",
     "@slugbase/contracts": "workspace:*",
+    "@slugbase/core": "workspace:*",
     "@slugbase/db": "workspace:*"
   },
   "devDependencies": {

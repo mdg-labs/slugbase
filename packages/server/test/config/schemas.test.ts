@@ -81,6 +81,32 @@ describe("process schemas", () => {
     }
   });
 
+  it("selects no error reporting unless ERROR_REPORT_DSN is set, on the server and on the worker", () => {
+    const dsn = "https://seedpublickey@errors.example.com/7";
+    for (const type of ["server", "worker"] as const) {
+      expect(loadConfig(type, development).config.ERROR_REPORT_DSN).toBeUndefined();
+      expect(loadConfig(type, { ...development, ERROR_REPORT_DSN: "" }).config.ERROR_REPORT_DSN).toBeUndefined();
+      expect(loadConfig(type, { ...development, ERROR_REPORT_DSN: dsn }).config.ERROR_REPORT_DSN).toBe(dsn);
+      expect(loadConfig(type, { ...productionEnv(), ERROR_REPORT_DSN: dsn }).config.ERROR_REPORT_DSN).toBe(dsn);
+    }
+    expect(Object.keys(loadConfig("migrate", { NODE_ENV: "production", DATABASE_MIGRATE_URL: productionEnv().DATABASE_MIGRATE_URL }).config)).not.toContain(
+      "ERROR_REPORT_DSN",
+    );
+  });
+
+  it.each([
+    "errors.example.com/1",
+    "ftp://key@errors.example.com/1",
+    "https://errors.example.com/1",
+    "https://key@errors.example.com/project",
+    "https://key@errors.example.com/",
+    "https://key@errors.example.com/1?x=1",
+  ])("names ERROR_REPORT_DSN for the malformed value %j", (value) => {
+    for (const type of ["server", "worker"] as const) {
+      expect(failure(() => loadConfig(type, { ...development, ERROR_REPORT_DSN: value })).issues.map((issue) => issue.key)).toEqual(["ERROR_REPORT_DSN"]);
+    }
+  });
+
   it("normalises APP_ORIGIN to an origin", () => {
     expect(loadConfig("server", { ...development, APP_ORIGIN: "https://Bookmarks.Example.com:443/" }).config.APP_ORIGIN).toBe(
       "https://bookmarks.example.com",

@@ -258,7 +258,7 @@ describe("the server's problem responses", () => {
     ]);
     await Promise.resolve();
     expect(errors.captured).toEqual([
-      { error: failure, context: { requestId: body.requestId, route: "getWidget" } },
+      { error: failure, context: { requestId: body.requestId, route: "GET /api/v1/widgets/{id}" } },
     ]);
   });
 

@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { createSecretBox } from "@slugbase/adapters";
+import { createSecretBox, createSentryErrorReport } from "@slugbase/adapters";
 import "@slugbase/contracts";
 import { unconfigured, type Adapters } from "@slugbase/core";
 import { type MigrationChain } from "@slugbase/db";
@@ -124,8 +124,10 @@ const MIGRATIONS: readonly MigrationChain[] = [];
 
 // The secret box is built from the environment by the server and the worker
 // alike: `ENCRYPTION_KEY` seals, the previous keys only open. A key the box
-// refuses stops the process before it serves or works.
-function composeAdapters(config: ServerConfig | WorkerConfig, logger: Logger): Adapters {
+// refuses stops the process before it serves or works. Error reporting is the
+// Sentry-protocol adapter when the operator set `ERROR_REPORT_DSN`, and the
+// no-op default (errors are logged only) when not.
+export function composeAdapters(config: ServerConfig | WorkerConfig, logger: Logger): Adapters {
   const secretBox = createSecretBox({
     current: { keyId: config.ENCRYPTION_KEY_ID, key: Buffer.from(config.ENCRYPTION_KEY, "base64") },
     previous: config.ENCRYPTION_KEY_PREVIOUS.map(({ keyId, key }) => ({ keyId, key: Buffer.from(key, "base64") })),
@@ -134,7 +136,13 @@ function composeAdapters(config: ServerConfig | WorkerConfig, logger: Logger): A
     keyId: config.ENCRYPTION_KEY_ID,
     previousKeys: config.ENCRYPTION_KEY_PREVIOUS.length,
   });
-  return { ...unconfigured(), secretBox };
+  const defaults = unconfigured();
+  const errors =
+    config.ERROR_REPORT_DSN === undefined
+      ? defaults.errors
+      : createSentryErrorReport({ dsn: config.ERROR_REPORT_DSN, environment: config.NODE_ENV });
+  logger.info(errors.available ? "Error reporting ready" : "Error reporting is off; errors are only logged");
+  return { ...defaults, secretBox, errors };
 }
 
 async function runServer(config: ServerConfig, trap: SignalTrap): Promise<void> {
@@ -236,4 +244,7 @@ async function start(): Promise<void> {
   }
 }
 
-await start();
+// Importing the module, as the tests of the composition do, composes nothing and starts nothing.
+if (import.meta.main) {
+  await start();
+}

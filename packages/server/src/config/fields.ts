@@ -71,6 +71,28 @@ export function baseUrl() {
     .transform((value) => value.replace(/\/+$/, ""));
 }
 
+/**
+ * A Sentry-protocol DSN: an http or https URL with a public key before the host and a numeric project id as the
+ * last path segment. The value is the operator's, so it is kept as it is.
+ */
+export function sentryDsn() {
+  return z.string().refine(
+    (value) => {
+      const url = parseUrl(value);
+      return (
+        url !== undefined &&
+        (url.protocol === "http:" || url.protocol === "https:") &&
+        url.hostname !== "" &&
+        url.username !== "" &&
+        /^(?:\/[^/]+)*\/\d+$/.test(url.pathname) &&
+        url.search === "" &&
+        url.hash === ""
+      );
+    },
+    { error: "must be a Sentry DSN such as https://<public key>@errors.example.com/1" },
+  );
+}
+
 function isBase64Of(value: string, bytes: number): boolean {
   if (!/^[A-Za-z0-9+/_-]+={0,2}$/.test(value)) {
     return false;

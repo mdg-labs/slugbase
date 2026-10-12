@@ -32,6 +32,7 @@ const REFUSED: readonly { key: string; value: string }[] = [
   { key: "SLUGBASE_ALLOW_OWNER_CONNECTION", value: "maybe-qx55" },
   { key: "DOCS_BASE_URL", value: "ftp://qx56.example.com/docs" },
   { key: "NODE_ENV", value: "prod-qx57" },
+  { key: "ERROR_REPORT_DSN", value: "https://qx64-key@errors.example.com/not-a-project" },
 ];
 
 // The message, the stack, the cause and every own property, however they are rendered.

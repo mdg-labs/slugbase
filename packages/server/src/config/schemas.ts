@@ -2,6 +2,7 @@ import type { z } from "zod";
 import { composeEnvSchema } from "./fragment.ts";
 import {
   databaseFragment,
+  errorReportFragment,
   httpFragment,
   metricsFragment,
   migrateFragment,
@@ -28,6 +29,7 @@ export const serverFragments = [
   serverMigrationFragment,
   httpFragment,
   metricsFragment,
+  errorReportFragment,
 ] as const;
 
 /** The worker never receives the migrator URL (doc 01 section 2.1). */
@@ -37,6 +39,7 @@ export const workerFragments = [
   secretsFragment,
   databaseFragment,
   metricsFragment,
+  errorReportFragment,
 ] as const;
 
 export const migrateFragments = [runtimeFragment, migrateFragment] as const;

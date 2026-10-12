@@ -4,6 +4,7 @@
 
 ```ts
 
+import type { ErrorReportPort } from '@slugbase/core';
 import type { SecretBoxPort } from '@slugbase/core';
 
 // @public
@@ -13,6 +14,19 @@ export function createSecretBox(options: CreateSecretBoxOptions): SecretBoxPort;
 export interface CreateSecretBoxOptions {
     readonly current: SecretBoxKey;
     readonly previous?: readonly SecretBoxKey[];
+}
+
+// @public
+export function createSentryErrorReport(options: CreateSentryErrorReportOptions): ErrorReportPort;
+
+// @public (undocumented)
+export interface CreateSentryErrorReportOptions {
+    readonly dsn: string;
+    // (undocumented)
+    readonly environment?: string;
+    readonly flushTimeoutMs?: number;
+    // (undocumented)
+    readonly release?: string;
 }
 
 // @public

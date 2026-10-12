@@ -9,7 +9,7 @@ import {
   DEVELOPMENT_SESSION_SECRET,
 } from "./development-defaults.ts";
 import { envBoolean } from "./env-boolean.ts";
-import { KEY_ID_PATTERN, base64Key, baseUrl, envInteger, optional, originUrl, postgresUrl, previousKeys } from "./fields.ts";
+import { KEY_ID_PATTERN, base64Key, baseUrl, envInteger, optional, originUrl, postgresUrl, previousKeys, sentryDsn } from "./fields.ts";
 import { envFragment, type RefineContext } from "./fragment.ts";
 
 export const NODE_ENVS = ["development", "test", "production"] as const;
@@ -134,4 +134,12 @@ export const httpFragment = envFragment({
  */
 export const metricsFragment = envFragment({
   shape: { METRICS_PORT: optional(envInteger({ min: 1, max: 65535 })) },
+});
+
+/**
+ * The error-report destination (doc 01 sections 6 and 11), for the server and the worker. Unset
+ * selects the no-op adapter, which reports nothing beyond the log.
+ */
+export const errorReportFragment = envFragment({
+  shape: { ERROR_REPORT_DSN: optional(sentryDsn()) },
 });

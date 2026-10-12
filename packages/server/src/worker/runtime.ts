@@ -103,6 +103,15 @@ export function createWorker(options: CreateWorkerOptions): Worker {
     withTenant: metrics.instrumentTenant(database.withTenant.bind(database)),
   });
 
+  // Every failed attempt is reported under the job's name; a failing reporter never changes the job's outcome.
+  const reportFailure = async (error: unknown, jobName: string): Promise<void> => {
+    try {
+      await options.adapters.errors.capture(error, { route: jobName });
+    } catch (reportError) {
+      logger.warn("Error report failed", { job: jobName, ...errorFields(reportError) });
+    }
+  };
+
   let composition: Composition;
   try {
     composition = compose(options.modules, context, []);
@@ -183,6 +192,7 @@ export function createWorker(options: CreateWorkerOptions): Worker {
                 await job.handle(pending.data, context);
               } catch (error) {
                 logger.error("Job failed", { job: job.name, id: pending.id, attempt: pending.retryCount + 1, ...errorFields(error) });
+                await reportFailure(error, job.name);
                 throw error;
               }
             },
