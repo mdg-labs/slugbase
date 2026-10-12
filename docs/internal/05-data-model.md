@@ -503,7 +503,7 @@ Adding an enum value is expand-only; removing one is a contract migration after 
 | `url_metadata`, `favicons`, `ai_suggestions` past `expires_at` | 0 | Deleted (refetched on demand) |
 | `ai_suggestion_usage` | 90 days | Deleted |
 | `audit_events` | 1 year (CE: `AUDIT_RETENTION_DAYS`, default 365; `0` = keep forever) | Deleted (Q53) |
-| pg-boss completed/failed jobs | 7 / 30 days | pg-boss maintenance |
+| pg-boss completed and failed jobs | 30 days (one `deleteAfterSeconds` per queue, which pg-boss applies to both states; payloads carry IDs only, §2.10) | pg-boss maintenance |
 | Plan-archived bookmarks | Indefinitely while the workspace exists | Restored on re-upgrade (doc 06 §5) |
 | `cloud` tables (Cloud) | As Cloud doc 06 sets | — |
 

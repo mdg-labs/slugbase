@@ -232,6 +232,29 @@ describe("two workers on one database", () => {
   });
 });
 
+describe("finished job retention", () => {
+  const THIRTY_DAYS_SECONDS = 2_592_000;
+
+  async function deleteAfterSeconds(queue: string): Promise<number[]> {
+    const rows = await database().app<{ deletion_seconds: number }[]>`SELECT deletion_seconds FROM pgboss.queue WHERE name = ${queue}`;
+    return rows.map((row) => row.deletion_seconds);
+  }
+
+  it("creates a queue that keeps finished jobs for 30 days, and moves an existing one to it", async () => {
+    const job = defineJob({ name: "test.retention", payload, handle: () => Promise.resolve() });
+
+    const first = await startWorker([moduleOf("a", [job])]);
+    expect(await deleteAfterSeconds("test.retention")).toEqual([THIRTY_DAYS_SECONDS]);
+
+    await first.running.shutdown();
+    await database().owner.unsafe(`UPDATE pgboss.queue SET deletion_seconds = 604800 WHERE name = 'test.retention'`);
+    expect(await deleteAfterSeconds("test.retention")).toEqual([604800]);
+
+    await startWorker([moduleOf("a", [job])]);
+    expect(await deleteAfterSeconds("test.retention")).toEqual([THIRTY_DAYS_SECONDS]);
+  }, 60_000);
+});
+
 describe("shutdown", () => {
   it("lets an active job finish, then closes the pool", async () => {
     let release: () => void = () => undefined;

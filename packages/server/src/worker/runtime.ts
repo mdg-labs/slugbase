@@ -16,6 +16,13 @@ import type { JobDefinition, JobPayload, ScheduleDefinition } from "./job.ts";
 export const DEFAULT_WORKER_POOL_SIZE = 5;
 
 const DEFAULT_SHUTDOWN_TIMEOUT_MS = 25_000;
+
+/**
+ * How long pg-boss keeps a finished job, completed or failed, before its
+ * maintenance deletes it (doc 05 section 6). It is one setting per queue, so a
+ * failed job is kept as long as a completed one.
+ */
+export const FINISHED_JOB_RETENTION_SECONDS = 30 * 24 * 60 * 60;
 const BOSS_SCHEMA = "pgboss";
 const APPLICATION_NAME = "slugbase-worker";
 
@@ -141,6 +148,7 @@ export function createWorker(options: CreateWorkerOptions): Worker {
             retryLimit: job.retry.limit,
             retryDelay: job.retry.delaySeconds,
             retryBackoff: job.retry.backoff,
+            deleteAfterSeconds: FINISHED_JOB_RETENTION_SECONDS,
             ...(job.retry.maxDelaySeconds === undefined ? {} : { retryDelayMax: job.retry.maxDelaySeconds }),
           };
           await boss.createQueue(job.name, queue);
