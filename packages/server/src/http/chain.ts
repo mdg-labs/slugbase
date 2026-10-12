@@ -1,7 +1,8 @@
-import { randomUUID } from "node:crypto";
 import type { OperationDefinition } from "@slugbase/contracts";
+import type { ErrorReportPort } from "@slugbase/core";
 import type { Context, Hono, MiddlewareHandler } from "hono";
 import type { Logger } from "../create-server.ts";
+import { failRequest, notFoundProblem, responseStage, type ResponseValidation } from "./problem.ts";
 
 // The middleware chain of doc 01 section 4. The order is part of the security
 // model (doc 10 section 3): it is fixed here, one stage at a time, and neither a
@@ -72,6 +73,10 @@ export type StageImplementations = { readonly [Name in RequestStageName]?: Reque
 export interface ChainDependencies {
   readonly logger: Logger;
   readonly routes: RouteTable;
+  /** Receives every unexpected failure (stage 11). */
+  readonly errors: ErrorReportPort;
+  /** How stage 11 treats a response that differs from its declared schema. */
+  readonly responseValidation: ResponseValidation;
 }
 
 interface CompiledRoute {
@@ -153,49 +158,6 @@ function matchSegments(
 const passThrough: RequestStage = (_context, next) => next();
 const passThroughResponse: ResponseStage = () => undefined;
 
-interface ProblemTitle {
-  readonly code: "not_found" | "internal";
-  readonly status: 404 | 500;
-  readonly title: string;
-  readonly detail: string;
-}
-
-const NOT_FOUND: ProblemTitle = {
-  code: "not_found",
-  status: 404,
-  title: "Not found",
-  detail: "No such resource.",
-};
-
-const INTERNAL: ProblemTitle = {
-  code: "internal",
-  status: 500,
-  title: "Internal error",
-  detail: "The request could not be completed.",
-};
-
-function problem(context: ChainContext, problemTitle: ProblemTitle): Response {
-  return new Response(
-    JSON.stringify({
-      type: `https://slugbase.app/problems/${problemTitle.code}`,
-      title: problemTitle.title,
-      status: problemTitle.status,
-      code: problemTitle.code,
-      detail: problemTitle.detail,
-      requestId: context.get("requestId") ?? randomUUID(),
-    }),
-    { status: problemTitle.status, headers: { "content-type": "application/problem+json" } },
-  );
-}
-
-function describeError(error: unknown): Record<string, unknown> {
-  if (!(error instanceof Error)) {
-    return { errorType: typeof error };
-  }
-  const code = (error as { code?: unknown }).code;
-  return { errorName: error.name, ...(typeof code === "string" ? { errorCode: code } : {}) };
-}
-
 /**
  * Installs the chain on `app` and returns the stage names in the order they run.
  * A stage without an entry in `stages` is a pass-through.
@@ -205,34 +167,28 @@ export function installChain(
   dependencies: ChainDependencies,
   stages: StageImplementations = {},
 ): readonly StageName[] {
-  const { logger, routes } = dependencies;
+  const { logger, routes, errors, responseValidation } = dependencies;
 
   const requestStages = REQUEST_STAGES.map((name) => ({ name, run: stages[name] ?? passThrough }));
   const handler = {
     name: "handler" as const,
     run: (context: ChainContext): Response | Promise<Response> => {
       const route = context.get("route");
-      return route === undefined ? problem(context, NOT_FOUND) : route.handler(context, route);
+      return route === undefined ? notFoundProblem(context) : route.handler(context, route);
     },
   };
   const responseStages = RESPONSE_STAGES.map((name) => ({
     name,
-    run: stages[name] ?? passThroughResponse,
+    run: stages[name] ?? (name === "response" ? responseStage(responseValidation) : passThroughResponse),
   }));
 
   const fail = (context: ChainContext, error: unknown): void => {
-    context.error = error instanceof Error ? error : new Error("a non-error value was thrown");
-    logger.error("Request failed", { ...describeError(error), requestId: context.get("requestId") });
-    context.res = problem(context, INTERNAL);
+    const problem = failRequest(context, error, { logger, errors });
+    context.res = undefined;
+    context.res = problem;
   };
 
   app.all("*", async (context) => {
-    const url = new URL(context.req.url);
-    const route = routes.match(context.req.method, url.pathname);
-    if (route !== undefined) {
-      context.set("route", route);
-    }
-
     let reached = -1;
     const dispatch = async (index: number): Promise<void> => {
       if (index <= reached) {
@@ -251,6 +207,10 @@ export function installChain(
     };
 
     try {
+      const route = routes.match(context.req.method, new URL(context.req.url).pathname);
+      if (route !== undefined) {
+        context.set("route", route);
+      }
       await dispatch(0);
     } catch (error) {
       fail(context, error);

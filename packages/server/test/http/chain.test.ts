@@ -1,3 +1,4 @@
+import { unconfigured } from "@slugbase/core";
 import { Hono } from "hono";
 import { describe, expect, it } from "vitest";
 import {
@@ -32,7 +33,11 @@ const DOCUMENTED_ORDER: readonly StageName[] = [
 function build(bindings: readonly RouteBinding[], stages: StageImplementations = {}) {
   const app = new Hono<ChainEnv>();
   const logger = recordingLogger();
-  const installed = installChain(app, { logger, routes: new RouteTable(bindings) }, stages);
+  const installed = installChain(
+    app,
+    { logger, routes: new RouteTable(bindings), errors: unconfigured().errors, responseValidation: "throw" },
+    stages,
+  );
   return { app, logger, installed };
 }
 

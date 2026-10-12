@@ -9,6 +9,8 @@ import type { Context } from 'hono';
 import { Database } from '@slugbase/db';
 import { MigrationChain } from '@slugbase/db';
 import type { OperationDefinition } from '@slugbase/contracts';
+import { Problem } from '@slugbase/contracts';
+import { ProblemCode } from '@slugbase/contracts';
 import { z } from 'zod';
 
 // @public
@@ -353,6 +355,25 @@ export const NODE_ENVS: readonly ["development", "test", "production"];
 export const originFragment: EnvFragment<    {
 APP_ORIGIN: z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>;
 }>;
+
+// @public
+export class ProblemError extends Error {
+    constructor(code: ProblemCode, detail: string, options?: ProblemErrorOptions);
+    // (undocumented)
+    readonly code: ProblemCode;
+    // (undocumented)
+    readonly detail: string;
+    // (undocumented)
+    readonly errors: readonly ProblemFieldError[] | undefined;
+}
+
+// @public (undocumented)
+export interface ProblemErrorOptions {
+    readonly errors?: readonly ProblemFieldError[];
+}
+
+// @public (undocumented)
+export type ProblemFieldError = NonNullable<Problem["errors"]>[number];
 
 // @public (undocumented)
 export const PROCESS_TYPES: readonly ["server", "worker", "migrate"];

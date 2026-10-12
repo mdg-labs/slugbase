@@ -266,7 +266,12 @@ export function createServer(options: CreateServerOptions): Server {
   }
 
   const app = new Hono<ChainEnv>();
-  const stages = installChain(app, { logger, routes: new RouteTable(composition.routes) });
+  const stages = installChain(app, {
+    logger,
+    routes: new RouteTable(composition.routes),
+    errors: adapters.errors,
+    responseValidation: config.NODE_ENV === "production" ? "strip" : "throw",
+  });
   const shutdownTimeoutMs = options.shutdownTimeoutMs ?? DEFAULT_SHUTDOWN_TIMEOUT_MS;
 
   return {

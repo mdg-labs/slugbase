@@ -55,7 +55,7 @@ export function operation(method: "get" | "post", path: string, operationId: str
     auth: "anonymous",
     rate: "none",
     responses: {
-      200: jsonResponse("ok", z.strictObject({})),
+      200: jsonResponse("ok", z.record(z.string(), z.unknown())),
       404: problemResponse("not found"),
     },
   });
