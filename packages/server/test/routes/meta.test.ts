@@ -110,8 +110,10 @@ describe("GET /api/docs", () => {
 
   it("holds no inline script or style and names no other origin", async () => {
     const html = await (await get(start(), "/api/docs")).text();
-    const scripts = [...html.matchAll(/<script\b([^>]*)>([^<]*)<\/script>/g)];
+    // Case-insensitive, and the body may hold `<`, so no script tag escapes the match.
+    const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script[^>]*>/gi)];
     expect(scripts.length).toBeGreaterThan(0);
+    expect(scripts).toHaveLength(html.match(/<script\b/gi)?.length ?? 0);
     for (const [, attributes = "", body = ""] of scripts) {
       // A script is a file of this origin, or a data block the browser never runs.
       const isFile = /\ssrc="\/api\/docs\/[^"]+"/.test(attributes) && body === "";
