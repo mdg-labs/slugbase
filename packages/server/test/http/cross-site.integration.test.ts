@@ -20,7 +20,7 @@ function operationOf(method: "post" | "delete", path: string, operationId: strin
     path,
     operationId,
     tag: "test",
-    auth: audience === "machine" ? "machine" : "member",
+    auth: audience === "machine" ? "machine" : "anonymous",
     rate: "none",
     ...(audience === undefined ? {} : { audience }),
     responses: { 200: jsonResponse("ok", z.record(z.string(), z.unknown())), 400: problemResponse("bad request") },

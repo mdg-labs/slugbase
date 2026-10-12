@@ -1,14 +1,18 @@
 import type { OperationDefinition } from "@slugbase/contracts";
-import type { ChallengePort, ErrorReportPort } from "@slugbase/core";
+import type { ChallengePort, ErrorReportPort, TenantResolver } from "@slugbase/core";
+import type { Database } from "@slugbase/db";
 import type { Context, Hono, MiddlewareHandler } from "hono";
 import type { Logger } from "../create-server.ts";
 import type { HookDispatcher } from "../hooks/index.ts";
 import type { Metrics } from "../metrics/index.ts";
+import { createAuthentication, type Authenticator, type Principal } from "./authenticate.ts";
+import { createAuthorization, type EntitlementCheck } from "./authorize.ts";
 import { bodyLimits } from "./body-limits.ts";
 import { createCrossSiteProtection } from "./cross-site.ts";
 import { createSecurityHeaders } from "./headers.ts";
 import { failRequest, notFoundProblem, responseStage, type ResponseValidation } from "./problem.ts";
 import { createRequestContext } from "./request-context.ts";
+import { createTenantResolution, type RequestTenant } from "./tenant.ts";
 import { validation } from "./validation.ts";
 
 // The middleware chain of doc 01 section 4. The order is part of the security
@@ -75,8 +79,12 @@ export interface ChainEnv {
     logger?: Logger;
     /** Set by the authentication stage; the request log reads `anonymous` while it is unset. */
     principalType?: "anonymous" | "session" | "api-token";
+    /** Set by the authentication stage when an authenticator accepted the request's credential; absent for an anonymous request. */
+    principal?: Principal;
     /** Set by the tenant-resolution stage: the active workspace's internal UUID. */
     workspaceId?: string;
+    /** Set by the tenant-resolution stage when the resolver found a workspace for the principal. */
+    tenant?: RequestTenant;
     /**
      * Set when the handler stage starts, after authentication, tenant resolution
      * and authorization: no earlier stage can consult a hook (doc 01 section 13).
@@ -128,6 +136,14 @@ export interface ChainDependencies {
   readonly challenge: ChallengePort;
   /** Receives every unexpected failure (stage 11). */
   readonly errors: ErrorReportPort;
+  /** Resolves credentials into principals (stage 4); without one every request is anonymous. */
+  readonly authenticators?: readonly Authenticator[];
+  /** Derives the active workspace, member and role of a principal (stage 7). */
+  readonly tenantResolver: TenantResolver;
+  /** The tenant transaction the handler's `tenant.withTenant` opens (stage 7). */
+  readonly withTenant: Database["withTenant"];
+  /** Decides the entitlement an operation declares (stage 9); by default every entitlement is refused. */
+  readonly entitlements?: EntitlementCheck;
   /** The hooks modules registered, consulted by the handlers of the core flows. */
   readonly hooks: HookDispatcher;
   /** How stage 11 treats a response that differs from its declared schema. */
@@ -231,7 +247,21 @@ export function installChain(
   dependencies: ChainDependencies,
   stages: StageImplementations = {},
 ): readonly StageName[] {
-  const { logger, routes, trustedProxyHops, appOrigin, challenge, errors, hooks, responseValidation, metrics } = dependencies;
+  const {
+    logger,
+    routes,
+    trustedProxyHops,
+    appOrigin,
+    challenge,
+    errors,
+    hooks,
+    responseValidation,
+    metrics,
+    authenticators = [],
+    tenantResolver,
+    withTenant,
+    entitlements,
+  } = dependencies;
   const requestContext = createRequestContext({ logger, trustedProxyHops, ...(metrics === undefined ? {} : { metrics }) });
   const securityHeaders = createSecurityHeaders({ appOrigin });
 
@@ -239,8 +269,11 @@ export function installChain(
     "request-context": requestContext.stage,
     "security-headers": securityHeaders.stage,
     "body-limits": bodyLimits,
+    authentication: createAuthentication({ authenticators }),
     "cross-site-protection": createCrossSiteProtection({ appOrigin, challenge, logger }),
+    "tenant-resolution": createTenantResolution({ resolver: tenantResolver, withTenant }),
     validation,
+    authorization: createAuthorization(entitlements === undefined ? {} : { entitlements }),
   };
   const requestStages = REQUEST_STAGES.map((name) => ({
     name,

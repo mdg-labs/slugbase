@@ -2,6 +2,7 @@ import { unconfigured, type Adapters } from "@slugbase/core";
 import type { Database } from "@slugbase/db";
 import { defineOperation, jsonResponse, problemResponse, type OperationDefinition } from "@slugbase/contracts";
 import { z } from "zod";
+import type { ChainDependencies } from "../src/http/chain.ts";
 import { loadConfig } from "../src/config/index.ts";
 import { createHookDispatcher, type HookDispatcher, type HookRegistration } from "../src/hooks/index.ts";
 import type { ContractDocument, Logger, ModuleContext, ServerModule } from "../src/create-server.ts";
@@ -58,6 +59,12 @@ export function fakeDatabase(): FakeDatabase {
       return Promise.resolve();
     },
   };
+}
+
+/** The tenant dependencies of the chain for a test that does not exercise tenancy: nothing is resolved, and no transaction is opened. */
+export function tenantDependencies(): Pick<ChainDependencies, "tenantResolver" | "withTenant"> {
+  const database = fakeDatabase();
+  return { tenantResolver: adapters().tenantResolver, withTenant: database.withTenant.bind(database) };
 }
 
 export function operation(method: "get" | "post", path: string, operationId: string): OperationDefinition {

@@ -4,6 +4,7 @@ import type { Adapters } from "@slugbase/core";
 import { createDatabase, type Database, type MigrationChain } from "@slugbase/db";
 import { Hono } from "hono";
 import type { ServerConfig, WorkerConfig } from "./config/index.ts";
+import type { Authenticator } from "./http/authenticate.ts";
 import {
   RouteTable,
   installChain,
@@ -18,6 +19,15 @@ import { checkRegistrations, type ContractDocument } from "./routes/register.ts"
 import type { JobDefinition, ScheduleDefinition } from "./worker/job.ts";
 
 export type { ChainContext, ChainEnv, MatchedRoute, RouteBinding, RouteHandler, StageName, ValidatedInput } from "./http/chain.ts";
+export type {
+  ApiTokenPrincipal,
+  Authenticator,
+  BearerAuthenticator,
+  CookieAuthenticator,
+  Principal,
+  SessionPrincipal,
+} from "./http/authenticate.ts";
+export type { RequestTenant } from "./http/tenant.ts";
 export { CHAIN_STAGES } from "./http/chain.ts";
 export type { ContractDocument } from "./routes/register.ts";
 
@@ -47,6 +57,11 @@ export interface ModuleContribution {
   readonly schedules?: readonly ScheduleDefinition[];
   /** Migration sets applied after the CE chain (doc 01 section 7.3). */
   readonly migrations?: readonly MigrationChain[];
+  /**
+   * Resolvers of the session cookie and of the API token for stage 4. They add
+   * credentials to the chain; they cannot change where authentication runs.
+   */
+  readonly authenticators?: readonly Authenticator[];
 }
 
 /**
@@ -182,6 +197,7 @@ export interface Composition {
   readonly jobs: readonly JobDefinition[];
   readonly schedules: readonly ScheduleDefinition[];
   readonly migrations: readonly MigrationChain[];
+  readonly authenticators: readonly Authenticator[];
   /** The hooks of the modules, in the order the modules were composed. */
   readonly hooks: readonly HookRegistration[];
 }
@@ -227,6 +243,7 @@ export function compose(
   const jobs: JobDefinition[] = [];
   const schedules: ScheduleDefinition[] = [];
   const chains: MigrationChain[] = [...migrations];
+  const authenticators: Authenticator[] = [];
   const hooks: HookRegistration[] = [];
 
   for (const module of modules) {
@@ -265,6 +282,7 @@ export function compose(
     jobs.push(...(contribution.jobs ?? []));
     schedules.push(...(contribution.schedules ?? []));
     chains.push(...(contribution.migrations ?? []));
+    authenticators.push(...(contribution.authenticators ?? []));
   }
 
   for (const binding of routes) {
@@ -308,7 +326,7 @@ export function compose(
     }
   }
 
-  return { routes, jobs, schedules, migrations: chains, hooks };
+  return { routes, jobs, schedules, migrations: chains, authenticators, hooks };
 }
 
 function canCutConnections(server: ServerType): server is ServerType & { closeAllConnections(): void; closeIdleConnections(): void } {
@@ -365,6 +383,9 @@ export function createServer(options: CreateServerOptions): Server {
     appOrigin: config.APP_ORIGIN,
     challenge: adapters.challenge,
     errors: adapters.errors,
+    authenticators: composition.authenticators,
+    tenantResolver: adapters.tenantResolver,
+    withTenant: context.withTenant,
     responseValidation: config.NODE_ENV === "production" ? "strip" : "throw",
     metrics,
   });

@@ -14,10 +14,32 @@ import { MigrationChain } from '@slugbase/db';
 import { OperationDefinition } from '@slugbase/contracts';
 import { Problem } from '@slugbase/contracts';
 import { ProblemCode } from '@slugbase/contracts';
+import type { TenantPrincipal } from '@slugbase/core';
+import type { TenantTx } from '@slugbase/db';
+import type { WorkspaceRole } from '@slugbase/core';
 import { z } from 'zod';
 
 // @public
+export interface ApiTokenPrincipal extends Extract<TenantPrincipal, {
+    readonly kind: "api-token";
+}> {
+    // (undocumented)
+    readonly scope: "read" | "read-write";
+}
+
+// @public
 export function assertIdempotent<Payload extends JobPayload>(check: IdempotencyCheck<Payload>): Promise<void>;
+
+// @public
+export type Authenticator = BearerAuthenticator | CookieAuthenticator;
+
+// @public
+export interface BearerAuthenticator {
+    // (undocumented)
+    authenticate(authorization: string): Promise<ApiTokenPrincipal | undefined>;
+    // (undocumented)
+    readonly credential: "bearer";
+}
 
 // @public
 export const CHAIN_STAGES: readonly ["request-context", "security-headers", "body-limits", "authentication", "cross-site-protection", "rate-limiting", "tenant-resolution", "validation", "authorization", "handler", "response", "audit-telemetry"];
@@ -33,7 +55,9 @@ export interface ChainEnv {
         clientIp?: string;
         logger?: Logger;
         principalType?: "anonymous" | "session" | "api-token";
+        principal?: Principal;
         workspaceId?: string;
+        tenant?: RequestTenant;
         hooks?: HookDispatcher;
         route?: MatchedRoute;
         input?: ValidatedInput;
@@ -82,6 +106,14 @@ export interface ConfigIssue {
 export interface ContractDocument {
     // (undocumented)
     readonly paths: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
+}
+
+// @public
+export interface CookieAuthenticator {
+    // (undocumented)
+    authenticate(cookie: string): Promise<SessionPrincipal | undefined>;
+    // (undocumented)
+    readonly credential: "cookie";
 }
 
 // @public
@@ -494,6 +526,7 @@ export interface ModuleContext {
 
 // @public (undocumented)
 export interface ModuleContribution {
+    readonly authenticators?: readonly Authenticator[];
     readonly jobs?: readonly JobDefinition[];
     readonly migrations?: readonly MigrationChain[];
     readonly routes?: readonly RouteBinding[];
@@ -512,6 +545,9 @@ export class NotIdempotentError extends Error {
 export const originFragment: EnvFragment<    {
 APP_ORIGIN: z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>;
 }>;
+
+// @public
+export type Principal = SessionPrincipal | ApiTokenPrincipal;
 
 // @public
 export class ProblemError extends Error {
@@ -567,6 +603,19 @@ export type RequestPart<Op extends OperationDefinition, K extends "params" | "qu
 } ? {
     readonly [P in K]: z.output<S>;
 } : unknown;
+
+// @public
+export interface RequestTenant {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly memberId: string;
+    // (undocumented)
+    readonly role: WorkspaceRole;
+    withTenant<T>(fn: (tx: TenantTx) => Promise<T>): Promise<T>;
+    // (undocumented)
+    readonly workspaceId: string;
+}
 
 // @public
 export function requireAllOrNone(keys: readonly string[], values: Readonly<Record<string, unknown>>, context: RefineContext): void;
@@ -825,6 +874,13 @@ export interface ServerModule {
     readonly name: string;
     // (undocumented)
     register(context: ModuleContext): ModuleContribution;
+}
+
+// @public
+export interface SessionPrincipal extends Extract<TenantPrincipal, {
+    readonly kind: "session";
+}> {
+    readonly instanceAdmin: boolean;
 }
 
 // @public (undocumented)
