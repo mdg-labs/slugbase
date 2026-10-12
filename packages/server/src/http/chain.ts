@@ -4,6 +4,7 @@ import type { Context, Hono, MiddlewareHandler } from "hono";
 import type { Logger } from "../create-server.ts";
 import type { HookDispatcher } from "../hooks/index.ts";
 import type { Metrics } from "../metrics/index.ts";
+import { bodyLimits } from "./body-limits.ts";
 import { createSecurityHeaders } from "./headers.ts";
 import { failRequest, notFoundProblem, responseStage, type ResponseValidation } from "./problem.ts";
 import { createRequestContext } from "./request-context.ts";
@@ -196,11 +197,14 @@ export function installChain(
   const requestContext = createRequestContext({ logger, trustedProxyHops, ...(metrics === undefined ? {} : { metrics }) });
   const securityHeaders = createSecurityHeaders({ appOrigin });
 
+  const implemented: StageImplementations = {
+    "request-context": requestContext.stage,
+    "security-headers": securityHeaders.stage,
+    "body-limits": bodyLimits,
+  };
   const requestStages = REQUEST_STAGES.map((name) => ({
     name,
-    run:
-      stages[name] ??
-      (name === "request-context" ? requestContext.stage : name === "security-headers" ? securityHeaders.stage : passThrough),
+    run: stages[name] ?? implemented[name] ?? passThrough,
   }));
   const handler = {
     name: "handler" as const,

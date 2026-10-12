@@ -190,6 +190,7 @@ export interface OperationDefinition {
     readonly auth: AuthPolicy;
     // (undocumented)
     readonly entitlement?: string;
+    readonly maxBodyBytes?: number;
     // (undocumented)
     readonly method: HttpMethod;
     // (undocumented)

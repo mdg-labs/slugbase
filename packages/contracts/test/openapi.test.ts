@@ -125,6 +125,18 @@ describe("generated document", () => {
 });
 
 describe("declaration checks", () => {
+  it("accepts a positive integer maxBodyBytes and leaves it out of the document", () => {
+    const built = buildOpenApiDocument([defineOperation({ ...base, maxBodyBytes: 5 * 1024 * 1024 })]);
+    expect(JSON.stringify(built)).not.toContain("5242880");
+  });
+
+  it("refuses a maxBodyBytes that is not a positive integer", () => {
+    for (const value of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, "5"]) {
+      const problems = problemsOf([{ ...base, maxBodyBytes: value }]);
+      expect(problems.join("\n")).toContain("maxBodyBytes must be a positive integer");
+    }
+  });
+
   it("names the operation that has no policy", () => {
     const rest = omit(base, "auth", "rate");
     const problems = problemsOf([rest]);

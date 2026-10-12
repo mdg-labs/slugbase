@@ -110,6 +110,12 @@ export interface OperationDefinition {
   readonly entitlement?: string;
   readonly audience?: Audience;
   readonly request?: OperationRequest;
+  /**
+   * The largest request body the body-limits stage accepts, in bytes. Absent,
+   * the stage's default applies (doc 01 section 4 step 3). Server-side policy:
+   * it is not part of the generated OpenAPI document.
+   */
+  readonly maxBodyBytes?: number;
   readonly responses: OperationResponses;
 }
 
