@@ -13,18 +13,19 @@ export interface MigrationRunOptions {
 
 /**
  * The migration of doc 05 section 5.5, which the `migrate` command and the
- * server's `MIGRATE_ON_START` both run: the CE chain, then the pg-boss schema,
- * then the additional chains. It stops at the first failure and leaves what
- * the steps before it recorded. Every failure is a `MigrationError` that names
- * neither the connection string nor the password.
+ * server's `MIGRATE_ON_START` both run: the CE chain, then the pg-boss schema
+ * (installed, or upgraded to the version this build runs), then the additional
+ * chains. It stops at the first failure and leaves what the steps before it
+ * recorded. Every failure is a `MigrationError` that names neither the
+ * connection string nor the password.
  */
 export async function runMigrations(options: MigrationRunOptions): Promise<MigrateResult> {
   const { url, chains = [] } = options;
   const applied: MigrateResult["applied"] = [];
   applied.push(...(await migrate({ url })).applied);
-  const installed = await installPgBoss(url);
-  if (installed !== undefined) {
-    applied.push({ chain: PGBOSS_SCHEMA, tag: `schema_${String(installed)}` });
+  const version = await installPgBoss(url);
+  if (version !== undefined) {
+    applied.push({ chain: PGBOSS_SCHEMA, tag: `schema_${String(version)}` });
   }
   if (chains.length > 0) {
     applied.push(...(await migrate({ url, chains })).applied);

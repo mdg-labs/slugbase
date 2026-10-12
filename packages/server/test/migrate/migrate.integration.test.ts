@@ -69,15 +69,15 @@ describe("runMigrations", () => {
     expect(await rows(`SELECT to_regclass('public.broken_ok') IS NOT NULL AS present`)).toEqual([{ present: true }]);
   });
 
-  it("refuses a pg-boss schema at another version, and names no password", async () => {
-    await database().owner.unsafe(`UPDATE ${PGBOSS_SCHEMA}.version SET version = 1`);
+  it("refuses a pg-boss schema newer than the build, and names no password", async () => {
+    await database().owner.unsafe(`UPDATE ${PGBOSS_SCHEMA}.version SET version = 1000000`);
     const url = migratorUrl();
     const failure = await runMigrations({ url }).then(
       () => undefined,
       (error: unknown) => error,
     );
     expect(failure).toBeInstanceOf(MigrationError);
-    expect((failure as MigrationError).message).toMatch(/pg-boss schema is at version 1/);
+    expect((failure as MigrationError).message).toMatch(/pg-boss schema is at version 1000000, which is newer than version \d+/);
     expect((failure as MigrationError).message).not.toContain(String(database().owner.options.pass));
   });
 

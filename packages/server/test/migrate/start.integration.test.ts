@@ -1,7 +1,10 @@
 import { connect } from "node:net";
+import { createRequire } from "node:module";
 import { MigrationError } from "@slugbase/db";
+import { getRollbackPlans } from "pg-boss";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { createServer, type RunningServer } from "../../src/create-server.ts";
+import { runMigrations } from "../../src/migrate/index.ts";
 import { adapters, fakeDatabase, recordingLogger, serverConfig } from "../support.ts";
 import { clusterSuperuser, scratchChains, urlFor, urlOf, useMigratableDatabase } from "./support.ts";
 
@@ -99,6 +102,28 @@ describe("MIGRATE_ON_START=true", () => {
     expect((await ask(server, "/ready")).status).toBe(200);
     expect(logger.entries.filter((entry) => entry.message === "The database is migrated").map((entry) => entry.fields)).toEqual([
       { applied: 0 },
+    ]);
+  });
+
+  it("upgrades a pg-boss schema one version behind the build before serving", async () => {
+    const current = (createRequire(import.meta.url)("pg-boss/package.json") as { pgboss: { schema: number } }).pgboss.schema;
+    await runMigrations({ url: urlOf(database().owner) });
+    const connection = await database().owner.reserve();
+    try {
+      await connection.unsafe(getRollbackPlans("pgboss", current)).simple();
+    } finally {
+      connection.release();
+    }
+    const behind = await database().owner<{ version: number }[]>`SELECT version::int AS version FROM pgboss.version`;
+    expect(behind).toEqual([{ version: current - 1 }]);
+
+    const { server, logger } = composition({ MIGRATE_ON_START: "true" });
+    running.push(await server.start({ port: 0 }));
+    expect((await ask(server, "/ready")).status).toBe(200);
+    const upgraded = await database().owner<{ version: number }[]>`SELECT version::int AS version FROM pgboss.version`;
+    expect(upgraded).toEqual([{ version: current }]);
+    expect(logger.entries.filter((entry) => entry.message === "The database is migrated").map((entry) => entry.fields)).toEqual([
+      { applied: 1 },
     ]);
   });
 

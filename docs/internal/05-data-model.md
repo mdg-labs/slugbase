@@ -28,10 +28,10 @@ PostgreSQL is the only database (D6): 17 and 18 are supported (Q3), 18 is the ve
 | Schema | Owner of the migration history | Contents |
 |---|---|---|
 | `public` | CE (`mdg-labs/slugbase`) | Everything in §2 |
-| `pgboss` | pg-boss (managed by the library at `migrate` time) | Job queue |
+| `pgboss` | pg-boss (installed and upgraded by `migrate` with the library's own plans, §5.5) | Job queue |
 | `cloud` | The private Cloud repository | Cloud-only records (§2.12, Cloud doc 06) |
 | `console` | The private Cloud repository (operator console) | Operator accounts, sessions, audit, daily snapshots (Cloud doc 07 §6) |
-| `drizzle` | each chain | Migration bookkeeping, one table per chain: `drizzle.migrations_core`, `…_cloud`, `…_console` |
+| `drizzle` | each chain | Migration bookkeeping, one table per chain: `drizzle.migrations_core`, `…_cloud`, `…_console`; and `drizzle.pgboss_pending_builds`, the record of the pg-boss index builds an upgrade still owes (§5.5; owner-only) |
 
 Billing data does **not** live in SlugBase's database: customers, payments and billing documents stay in the external billing service (D29). The `cloud` schema holds only the billing state the Cloud entitlement source needs.
 
@@ -478,12 +478,13 @@ Adding an enum value is expand-only; removing one is a contract migration after 
 | Order | Chain | Bookkeeping | May reference |
 |---|---|---|---|
 | 1 | CE `public` | `drizzle.migrations_core` | itself |
-| 2 | pg-boss | its own | — |
+| 2 | pg-boss | its own version table; `drizzle.pgboss_pending_builds` while an upgrade's index builds are still owed (owner-only, no grant to `slugbase_app`) | — |
 | 3 | Cloud `cloud` | `drizzle.migrations_cloud` | `public` |
 | 4 | Cloud `console` | `drizzle.migrations_console` | `public` (views only) |
 
 - **FK direction is one-way:** Cloud tables may reference `public` tables (e.g. a `cloud` table keyed by `workspace_id → public.workspaces ON DELETE CASCADE`); `public` never references `cloud` or `console`. Billing data has no foreign keys into SlugBase at all: it lives in the external billing service and is linked only by the workspace id (D29). CE therefore builds, migrates and runs with no knowledge of them.
 - A CE contract migration that drops or changes a column Cloud references, or that Cloud's `console_mirror` views read, is a **cross-repo contract change**: the CE item names it, and the Cloud follow-up lands before the CE contract step is released (doc 09 §3).
+- **The pg-boss chain** is run by `migrate` as `slugbase_owner`, under the `migrate` advisory lock: it installs the schema when the database has none, upgrades an older one to the version this build runs with pg-boss's own migration plan, and refuses a newer one (or one older than pg-boss can upgrade from). The plan's transaction runs as one statement; the concurrent index builds it appends run one at a time outside a transaction, with `lock_timeout` off and `statement_timeout` as their bound (§5.2). pg-boss stamps the new version before those builds, so they are first recorded in `drizzle.pgboss_pending_builds`, which `slugbase_app` has no grant on; a later `migrate` run under the lock finishes what the record still owes. The worker never installs or upgrades the schema.
 - Cloud's `migrate` applies CE's chain from the submodule-pinned CE commit, so Cloud never runs an unreleased CE migration by accident.
 
 ---
