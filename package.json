@@ -43,7 +43,8 @@
   },
   "pnpm": {
     "overrides": {
-      "@esbuild-kit/core-utils>esbuild": "^0.25.0"
+      "@esbuild-kit/core-utils>esbuild": "^0.25.0",
+      "@ai-sdk/provider-utils": "^4.0.33"
     }
   }
 }
