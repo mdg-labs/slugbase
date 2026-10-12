@@ -1,4 +1,4 @@
-import { lookup } from "node:dns/promises";
+import { lookup, Resolver } from "node:dns/promises";
 import { request as httpRequest, type IncomingMessage, type OutgoingHttpHeaders } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { pipeline, Writable, type Readable } from "node:stream";
@@ -34,6 +34,11 @@ export interface CreateEgressOptions {
     readonly allowAddresses?: readonly string[];
     /** Certificate authority to trust, for a local HTTPS server. */
     readonly ca?: string | Buffer;
+    /**
+     * Resolves through these DNS servers (`address` or `address:port`), asking for A and AAAA records,
+     * instead of the system resolver, so a test can serve the answers. Not combined with `resolve`.
+     */
+    readonly dnsServers?: readonly string[];
   };
 }
 
@@ -83,6 +88,29 @@ type Hop =
 
 function systemResolver(hostname: string): Promise<readonly string[]> {
   return lookup(hostname, { all: true, verbatim: true }).then((answers) => answers.map(({ address }) => address));
+}
+
+// The records of a name that has none are an empty answer; every other failure is the resolver's.
+function recordsOrNone(query: Promise<string[]>): Promise<string[]> {
+  return query.catch((error: unknown) => {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENODATA" || code === "ENOTFOUND") {
+      return [];
+    }
+    throw error;
+  });
+}
+
+function serverResolver(servers: readonly string[]): EgressResolver {
+  const resolver = new Resolver({ timeout: 1_000, tries: 1 });
+  resolver.setServers([...servers]);
+  return async (hostname) => {
+    const [v4, v6] = await Promise.all([
+      recordsOrNone(resolver.resolve4(hostname)),
+      recordsOrNone(resolver.resolve6(hostname)),
+    ]);
+    return [...v4, ...v6];
+  };
 }
 
 function parseTarget(text: string): Target {
@@ -210,7 +238,11 @@ export class HttpEgress implements EgressPort {
     if (options.testOnly !== undefined && options.nodeEnv === "production") {
       throw new Error("The egress test allowances cannot be used when NODE_ENV is production");
     }
-    this.#resolve = options.resolve ?? systemResolver;
+    const dnsServers = options.testOnly?.dnsServers;
+    if (dnsServers !== undefined && options.resolve !== undefined) {
+      throw new Error("The egress adapter takes a resolver or DNS servers, not both");
+    }
+    this.#resolve = options.resolve ?? (dnsServers === undefined ? systemResolver : serverResolver(dnsServers));
     this.#allowNonPublic = options.testOnly?.allowNonPublicAddresses === true;
     this.#allowedAddresses = new Set(
       (options.testOnly?.allowAddresses ?? []).map((text) => {

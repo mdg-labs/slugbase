@@ -448,6 +448,19 @@ describe("CLAUDE.md sweeps", { timeout: SUBPROCESS_TIMEOUT_MS }, () => {
     expect(offenders).toEqual([]);
   });
 
+  // The list CLAUDE.md gives the security audit. It matches the text `fetch(` too, so outside the
+  // egress adapter and the test files it may name only files whose syntax holds no outbound request.
+  it("sweep-raw-fetch names only the egress adapter, test files and files with no outbound request", () => {
+    const listed = sweep(["fetch(", "node:http", "undici"], "packages/**/*.ts");
+    expect(listed).toContain("packages/adapters/src/egress/egress.ts");
+    const isTest = (file: string): boolean => /(^|\/)test\//.test(file) || /\.test\.tsx?$/.test(file);
+    const others = listed.filter((file) => !file.startsWith("packages/adapters/src/egress/") && !isTest(file));
+    const offenders = others.flatMap((file) =>
+      findRawOutbound(readFileSync(resolve(ROOT, file), "utf8"), file).map((found) => `${file} ${found}`),
+    );
+    expect(offenders).toEqual([]);
+  });
+
   it("sweep-raw-db lists nothing outside packages/db", () => {
     const files = sweep(["drizzle(", "postgres("], "packages/**/*.ts");
     expect(files.filter((file) => !file.startsWith("packages/db/"))).toEqual([]);

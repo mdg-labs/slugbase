@@ -18,6 +18,7 @@ export interface CreateEgressOptions {
         readonly allowNonPublicAddresses?: boolean;
         readonly allowAddresses?: readonly string[];
         readonly ca?: string | Buffer;
+        readonly dnsServers?: readonly string[];
     };
 }
 

@@ -46,7 +46,13 @@ function parseRequest(buffer: Buffer, servername: string | undefined): ReceivedR
   return { method, target, headers, body: buffer.subarray(bodyStart, bodyStart + length), servername };
 }
 
-export async function startLocalServer(handler: Handler, tls?: TlsOptions): Promise<LocalServer> {
+export interface Listen {
+  readonly host: string;
+  /** 0 picks a free port. */
+  readonly port: number;
+}
+
+export async function startLocalServer(handler: Handler, tls?: TlsOptions, listen: Listen = { host: "127.0.0.1", port: 0 }): Promise<LocalServer> {
   const requests: ReceivedRequest[] = [];
   const sockets = new Set<Socket>();
   let connections = 0;
@@ -72,7 +78,10 @@ export async function startLocalServer(handler: Handler, tls?: TlsOptions): Prom
   };
 
   const server: Server = tls === undefined ? createTcpServer(onConnection) : createTlsServer(tls, onConnection);
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(listen.port, listen.host, resolve);
+  });
   const address = server.address();
   const port = typeof address === "object" && address !== null ? address.port : 0;
   return {
