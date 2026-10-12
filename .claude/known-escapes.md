@@ -14,7 +14,8 @@ existing line by adding its PR number.
 
 - **regex guard** — a pattern keeps false positives out with length caps instead of anchoring, so a long but realistic input carrying the term passes — PR 354
 - **regex guard** — sibling patterns for one thing disagree on an optional detail (one allows a space, the next does not), so the variant slips through — PR 354
-- **AST guard** — a lint rule inspects only one syntax form of a value (a string `Literal`) and misses an equivalent form (a static template literal), so the banned construct passes — PR 365
+- **AST guard** — a lint rule inspects only one syntax form of a value (a string `Literal`) and misses an equivalent form (a static template literal), so the banned construct passes (calls of a function matched, but an alias or a value handed on missed) — PR 365, 397
+- **regex guard** — an HTML-matching pattern in a check is case-sensitive or excludes characters a real tag body can hold, so the tag it guards against escapes the match — PR 397
 - **safe by keyword** — a fail-closed lint marks a statement family safe from its leading keywords without reading the rest, or its safe list holds a form the design doc places in a later phase, so unsafe members of the family pass — PR 381
 - **label-gated check** — a CI step reads a pull request's labels, but the workflow trigger omits the `labeled`/`unlabeled` events, so adding or removing the label never re-runs it — PR 381
 - **floating image** — a rig meant for repeatable measurement pulls a floating tag (`latest`), so a re-run can measure a different build than the recorded baseline — PR 381
@@ -27,6 +28,12 @@ existing line by adding its PR number.
 
 ## Database sessions and migrations
 
+- **per-request resource** — a public, unthrottled endpoint opens a database connection per request whose work outlives the request's timeout, so concurrent requests exhaust the database's connections — PR 397
+
 - **timeout scope** — a session-wide timeout meant for one kind of wait also covers a statement whose normal work is that wait (`lock_timeout` on `CREATE INDEX CONCURRENTLY`), so a routine wait fails and leaves a half-state no re-run recovers from — PR 365
 - **lock wait snapshot** — waiting for a lock inside a statement holds a snapshot that the lock holder's own work waits for, so the two deadlock — PR 365
 - **non-atomic group** — several durable steps share one unit that is recorded only when all succeed, so a part-failure leaves finished steps that make every retry fail — PR 365
+
+## Tests
+
+- **vacuous wait** — a test waits for a later event (a late answer, a timer) but asserts nothing after it, so it passes whatever that event does — PR 397
