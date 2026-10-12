@@ -44,7 +44,9 @@
         "$TURBO_ROOT$/api-extractor.base.json",
         "$TURBO_ROOT$/packages/*/package.json",
         "$TURBO_ROOT$/packages/*/api-extractor.json",
-        "$TURBO_ROOT$/packages/*/etc/**"
+        "$TURBO_ROOT$/packages/*/etc/**",
+        "$TURBO_ROOT$/packages/**/*.ts",
+        "$TURBO_ROOT$/packages/**/*.tsx"
       ],
       "outputs": ["coverage/**"]
     },
