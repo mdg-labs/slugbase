@@ -114,6 +114,10 @@ importers:
       '@slugbase/contracts':
         specifier: workspace:*
         version: link:../contracts
+    devDependencies:
+      '@slugbase/testing-ports':
+        specifier: workspace:*
+        version: link:../testing-ports
 
   packages/db:
     dependencies:
@@ -191,6 +195,11 @@ importers:
       '@slugbase/db':
         specifier: workspace:*
         version: link:../db
+      '@slugbase/testing-ports':
+        specifier: workspace:*
+        version: link:../testing-ports
+
+  packages/testing-ports: {}
 
   packages/ui:
     devDependencies:

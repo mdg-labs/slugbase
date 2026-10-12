@@ -23,5 +23,8 @@
   },
   "dependencies": {
     "@slugbase/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@slugbase/testing-ports": "workspace:*"
   }
 }

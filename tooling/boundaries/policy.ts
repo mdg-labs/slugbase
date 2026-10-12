@@ -7,8 +7,10 @@ export const ROOT = resolve(import.meta.dirname, "../..");
 // The boundary table of doc 09 section 2.1: the workspace packages each
 // package may import. The `testing` row is the development package: it may
 // import every other package, because it holds the harness code that wraps
-// them. Who may import `testing` is a separate rule, not a row: the testing
-// check in checkWorkspaceImport limits @slugbase/testing, and TESTING_ENTRIES
+// them. `testing-ports` holds the in-memory ports and imports no workspace
+// package, so @slugbase/core can take it as a development dependency without a
+// package cycle. Who may import `testing` or `testing-ports` is a separate rule,
+// not a row: the testing check in checkWorkspaceImport limits both, and TESTING_ENTRIES
 // lists the subpaths of other packages (such as @slugbase/db/testing) that
 // follow it. Widening a row needs an edit to doc 09 first.
 export const WORKSPACE_ALLOWED: Readonly<Record<string, readonly string[]>> = {
@@ -20,10 +22,12 @@ export const WORKSPACE_ALLOWED: Readonly<Record<string, readonly string[]>> = {
   web: ["contracts", "ui"],
   ui: [],
   email: [],
-  testing: ["contracts", "core", "db", "adapters", "server", "web", "ui", "email"],
+  testing: ["contracts", "core", "db", "adapters", "server", "web", "ui", "email", "testing-ports"],
+  "testing-ports": [],
 };
 
 const TESTING = "testing";
+const TESTING_PACKAGES = new Set([TESTING, "testing-ports"]);
 // Subpath entries of other packages that hold test harness code. They carry the
 // raw database handle and the superuser connection, so they follow the same
 // rule as @slugbase/testing, and packages/testing itself wraps them.
@@ -132,9 +136,10 @@ function checkWorkspaceImport(loc: Location, specifier: string): string | undefi
   const entry = rest.length === 0 ? "." : `./${rest.join("/")}`;
   const importer = `@slugbase/${loc.name}`;
 
-  if (target === TESTING) {
-    if (!isTestingContext(loc)) {
-      return `${importer} must not import @slugbase/testing: it is importable only from test files, test/ folders and apps/* development tooling (doc 09 section 2.1).`;
+  if (TESTING_PACKAGES.has(target)) {
+    // packages/testing re-exports testing-ports from its src/.
+    if (!isTestingContext(loc) && !(target !== TESTING && isTestingPackage(loc))) {
+      return `${importer} must not import @slugbase/${target}: it is importable only from test files, test/ folders and apps/* development tooling${target === TESTING ? "" : " (and packages/testing, which re-exports it)"} (doc 09 section 2.1).`;
     }
   } else if (TESTING_ENTRIES.has(`${target}/${rest.join("/")}`) && !isTestingContext(loc) && !isTestingPackage(loc)) {
     return `${importer} must not import ${specifier}: it is importable only from test files, test/ folders, apps/* development tooling and packages/testing (doc 09 section 2.1, T1).`;

@@ -275,6 +275,33 @@ describe("@slugbase/testing", () => {
   });
 });
 
+describe("@slugbase/testing-ports", () => {
+  it.each([
+    "packages/server/src/fixture.ts",
+    "packages/core/src/fixture.ts",
+    "apps/slugbase/src/fixture.ts",
+  ])("fails in production code: %s", async (file) => {
+    await failsWith(file, 'import "@slugbase/testing-ports";\n', IMPORT);
+  });
+
+  it.each([
+    "packages/core/test/fixture.test.ts",
+    "packages/core/test/helpers/fixture.ts",
+    "apps/slugbase/test/fixture.ts",
+    "packages/testing/src/fixture.ts",
+  ])("passes in test code, app tooling and the testing package: %s", async (file) => {
+    await passes(file, 'import "@slugbase/testing-ports";\n');
+  });
+
+  it("imports no workspace package", async () => {
+    await failsWith("packages/testing-ports/src/fixture.ts", 'import "@slugbase/core";\n', IMPORT);
+  });
+
+  it("keeps the testing package's src from importing @slugbase/testing itself", async () => {
+    await failsWith("packages/testing/src/fixture.ts", 'import "@slugbase/testing";\n', IMPORT);
+  });
+});
+
 describe("@slugbase/db/testing (T1)", () => {
   const HARNESS = 'import "@slugbase/db/testing";\n';
 
