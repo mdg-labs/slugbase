@@ -1,9 +1,11 @@
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { ESLint, type Linter } from "eslint";
 import tseslint from "typescript-eslint";
 import { describe, expect, it } from "vitest";
+import { findRawOutbound } from "../boundaries/raw-outbound.ts";
 import { ROOT, SUBPROCESS_TIMEOUT_MS } from "./run.ts";
 
 const IMPORT = "slugbase/import-boundaries";
@@ -401,9 +403,22 @@ describe("CLAUDE.md sweeps", { timeout: SUBPROCESS_TIMEOUT_MS }, () => {
     return result.stdout.split("\n").filter((line) => line !== "");
   }
 
-  it("sweep-raw-fetch lists nothing outside packages/adapters/src/egress/", () => {
-    const files = sweep(["fetch(", "node:http", "undici"], "packages/**/*.ts");
-    expect(files.filter((file) => !file.startsWith("packages/adapters/src/egress/"))).toEqual([]);
+  // CLAUDE.md lists the files a plain text search finds, for the security audit.
+  // The test reads each tracked file's syntax instead, so it fails on an outbound
+  // request and not on a `fetch` method that serves requests in-process.
+  it("sweep-raw-fetch finds no outbound request outside packages/adapters/src/egress/", () => {
+    const listed = spawnSync("git", ["ls-files", "--", "packages/**/*.ts"], { cwd: ROOT, encoding: "utf8" });
+    if (listed.status !== 0) {
+      throw new Error(`git ls-files failed: ${listed.stderr}`);
+    }
+    const files = listed.stdout
+      .split("\n")
+      .filter((file) => file !== "" && !file.startsWith("packages/adapters/src/egress/"));
+    expect(files.length).toBeGreaterThan(0);
+    const offenders = files.flatMap((file) =>
+      findRawOutbound(readFileSync(resolve(ROOT, file), "utf8"), file).map((found) => `${file} ${found}`),
+    );
+    expect(offenders).toEqual([]);
   });
 
   it("sweep-raw-db lists nothing outside packages/db", () => {
@@ -413,5 +428,46 @@ describe("CLAUDE.md sweeps", { timeout: SUBPROCESS_TIMEOUT_MS }, () => {
 
   it("sweep-html lists nothing", () => {
     expect(sweep(["dangerouslySetInnerHTML", "innerHTML"], "packages/**/*.tsx")).toEqual([]);
+  });
+});
+
+describe("raw outbound matcher (T6)", () => {
+  it.each([
+    ["a bare call", 'void fetch("https://example.com");\n'],
+    ["globalThis", 'void globalThis.fetch("https://example.com");\n'],
+    ["window", 'void window.fetch("https://example.com");\n'],
+    ["self", 'void self.fetch("https://example.com");\n'],
+    ["global", 'void global.fetch("https://example.com");\n'],
+    ["a string key", 'void globalThis["fetch"]("https://example.com");\n'],
+    ["an asserted object", 'void (globalThis as typeof globalThis).fetch("https://example.com");\n'],
+    ["an optional call", 'void globalThis.fetch?.("https://example.com");\n'],
+    ["a call inside a class", 'class A {\n  run() {\n    return fetch("https://example.com");\n  }\n}\n'],
+    ["a call beside a fetch method", 'class A {\n  fetch(request: Request) {\n    return globalThis.fetch(request);\n  }\n}\n'],
+    ...["node:http", "node:https", "http", "https", "undici"].flatMap((spec) => [
+      [`import of ${spec}`, `import { request } from "${spec}";\nvoid request;\n`],
+      [`namespace import of ${spec}`, `import * as lib from "${spec}";\nvoid lib;\n`],
+      [`side-effect import of ${spec}`, `import "${spec}";\n`],
+      [`type import of ${spec}`, `import type { Agent } from "${spec}";\nexport type A = Agent;\n`],
+      [`re-export of ${spec}`, `export * from "${spec}";\n`],
+      [`dynamic import of ${spec}`, `const lib = await import("${spec}");\nvoid lib;\n`],
+      [`require of ${spec}`, `const lib = require("${spec}");\nvoid lib;\n`],
+      [`import equals of ${spec}`, `import lib = require("${spec}");\nvoid lib;\n`],
+    ]),
+  ])("flags %s", (_name, code) => {
+    expect(findRawOutbound(code)).not.toEqual([]);
+  });
+
+  it.each([
+    ["a member call on an app", "export function run(app: { fetch(r: Request): Promise<Response> }, r: Request) {\n  return app.fetch(r);\n}\n"],
+    ["a member call on a server", "declare const server: { fetch(r: Request): Promise<Response> };\nvoid server.fetch(new Request('http://localhost/'));\n"],
+    ["an awaited member call", "declare const app: { fetch(r: Request, env: object): Promise<Response> };\nexport const go = async (r: Request) => await app.fetch(r, {});\n"],
+    ["a method signature", "export interface Server {\n  fetch(request: Request): Promise<Response>;\n}\n"],
+    ["a method declaration", "export class Server {\n  fetch(request: Request): Promise<Response> {\n    return Promise.resolve(new Response());\n  }\n}\n"],
+    ["an object method", "export const server = {\n  fetch(request: Request) {\n    return Promise.resolve(new Response());\n  },\n};\n"],
+    ["a property", "export const server = { fetch: async (request: Request) => new Response() };\n"],
+    ["the word in a comment and a string", '// fetch(url) and import "undici"\nexport const text = "fetch( node:http undici";\n'],
+    ["a non-HTTP module", 'import { createHash } from "node:crypto";\nvoid createHash;\n'],
+  ])("does not flag %s", (_name, code) => {
+    expect(findRawOutbound(code)).toEqual([]);
   });
 });
