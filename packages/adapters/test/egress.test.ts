@@ -1,7 +1,9 @@
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { brotliCompressSync, deflateSync, gzipSync } from "node:zlib";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   EGRESS_MAX_REQUEST_BODY_BYTES,
@@ -221,15 +223,388 @@ describe("connecting to the validated address", () => {
     expect(response).toMatchObject({ status: 200, contentType: "image/png" });
     expect(response.body).toHaveLength(0);
   });
+});
 
-  it("returns a redirect as a response and does not follow it", async () => {
+const redirect =
+  (location: string, status = 302): Handler =>
+  (_request, socket) => {
+    respond(socket, status, { location });
+  };
+
+// Hosts resolve to loopback and loopback is let through; every other address is still checked.
+const loopbackOnly = (resolve: (hostname: string) => Promise<readonly string[]>) =>
+  new HttpEgress({ nodeEnv: "test", resolve, testOnly: { allowAddresses: ["127.0.0.1"] } });
+
+describe("following redirects", () => {
+  it("refuses a 302 to the metadata address at the second hop and attempts no connection to it (T6)", async () => {
+    const connect = vi.spyOn(Socket.prototype, "connect");
+    const origin = await serve(redirect("http://169.254.169.254/latest/meta-data/"));
+    const dns = scripted(["127.0.0.1"]);
+    const error = await rejection(loopbackOnly(dns.resolve), get(`http://evil.example.test:${String(origin.port)}/favicon.ico`));
+    expect(error).toBeInstanceOf(EgressBlocked);
+    expect(origin.requests).toHaveLength(1);
+    expect(dns.calls).toEqual(["evil.example.test"]);
+    const attempted = JSON.stringify(connect.mock.calls);
+    expect(attempted).toContain(String(origin.port));
+    expect(attempted).not.toContain("169.254.169.254");
+    connect.mockRestore();
+  });
+
+  it("resolves each hop afresh and refuses a host name that now answers with a private address", async () => {
     const target = await serve(ok);
-    const server = await serve((_request, socket) => {
-      respond(socket, 302, { location: `http://127.0.0.1:${String(target.port)}/` });
-    });
-    const response = await open(scripted(["127.0.0.1"]).resolve).request(get(`http://redir.example.test:${String(server.port)}/`));
-    expect(response.status).toBe(302);
+    const origin = await serve(redirect(`http://rebound.example.test:${String(target.port)}/`));
+    const dns = scripted(["127.0.0.1"], ["10.0.0.5"]);
+    const error = await rejection(loopbackOnly(dns.resolve), get(`http://first.example.test:${String(origin.port)}/`));
+    expect(error).toBeInstanceOf(EgressBlocked);
+    expect(dns.calls).toEqual(["first.example.test", "rebound.example.test"]);
     expect(target.connections()).toBe(0);
+  });
+
+  it("resolves the same host name again for a hop back to it", async () => {
+    const origin = await serve((request, socket) => {
+      if (request.target === "/start") {
+        respond(socket, 301, { location: "/next" });
+      } else {
+        respond(socket, 200, { "content-type": "text/plain" }, "arrived");
+      }
+    });
+    const dns = scripted(["127.0.0.1"], ["127.0.0.1"]);
+    const response = await loopbackOnly(dns.resolve).request(get(`http://same.example.test:${String(origin.port)}/start`));
+    expect(new TextDecoder().decode(response.body)).toBe("arrived");
+    expect(dns.calls).toEqual(["same.example.test", "same.example.test"]);
+    expect(response.url).toBe(`http://same.example.test:${String(origin.port)}/next`);
+  });
+
+  it("follows a redirect to another host and connects to the address validated for that host", async () => {
+    const target = await serve(ok);
+    const origin = await serve(redirect(`http://other.example.test:${String(target.port)}/page`, 308));
+    const dns = scripted(["127.0.0.1"], ["127.0.0.1"]);
+    const response = await loopbackOnly(dns.resolve).request(get(`http://one.example.test:${String(origin.port)}/`));
+    expect(response).toMatchObject({ status: 200, url: `http://other.example.test:${String(target.port)}/page` });
+    expect(target.requests[0]?.headers["host"]).toBe(`other.example.test:${String(target.port)}`);
+    expect(dns.calls).toEqual(["one.example.test", "other.example.test"]);
+  });
+
+  it.each([
+    ["ftp", "ftp://example.test/file"],
+    ["file", "file:///etc/passwd"],
+    ["javascript", "javascript:alert(1)"],
+    ["gopher", "gopher://example.test/"],
+    ["a URL with credentials", "http://user:secret@example.test/"],
+    ["a loopback literal", "http://127.0.0.2:1/"],
+    ["a mapped loopback literal", "http://[::ffff:127.0.0.2]/"],
+    ["a loopback in decimal notation", "http://2130706434/"],
+  ])("refuses a redirect to %s", async (_name, location) => {
+    const origin = await serve(redirect(location));
+    const dns = scripted(["127.0.0.1"], ["8.8.8.8"]);
+    const error = await rejection(
+      new HttpEgress({ nodeEnv: "test", resolve: dns.resolve, testOnly: { allowAddresses: ["127.0.0.1"] } }),
+      get(`http://origin.example.test:${String(origin.port)}/`),
+    );
+    expect(error).toBeInstanceOf(EgressBlocked);
+    expect(dns.calls).toEqual(["origin.example.test"]);
+  });
+
+  it("refuses a redirect to a loop, to itself and to the first URL", async () => {
+    const origin = await serve((request, socket) => {
+      const next = { "/a": "/b", "/b": "/a#again", "/self": "/self" }[request.target] ?? "/";
+      respond(socket, 302, { location: next });
+    });
+    const dns = scripted(["127.0.0.1"]);
+    for (const path of ["/a", "/self"]) {
+      const error = await rejection(loopbackOnly(dns.resolve), get(`http://loop.example.test:${String(origin.port)}${path}`));
+      expect(error).toBeInstanceOf(EgressError);
+      expect(error).not.toBeInstanceOf(EgressBlocked);
+      expect((error as EgressError).code).toBe("egress_failed");
+    }
+    expect(origin.requests.map((request) => request.target)).toEqual(["/a", "/b", "/self"]);
+  });
+
+  it("follows five redirects and refuses a sixth", async () => {
+    const chain = (length: number): Handler => (request, socket) => {
+      const index = Number(request.target.slice(1));
+      if (index < length) {
+        respond(socket, 302, { location: `/${String(index + 1)}` });
+      } else {
+        respond(socket, 200, { "content-type": "text/plain" }, "end");
+      }
+    };
+    const dns = scripted(["127.0.0.1"]);
+    const five = await serve(chain(5));
+    const response = await loopbackOnly(dns.resolve).request(get(`http://chain.example.test:${String(five.port)}/0`));
+    expect(response.url).toBe(`http://chain.example.test:${String(five.port)}/5`);
+    const six = await serve(chain(6));
+    const error = await rejection(loopbackOnly(dns.resolve), get(`http://chain.example.test:${String(six.port)}/0`));
+    expect(error).toBeInstanceOf(EgressError);
+    expect((error as EgressError).code).toBe("egress_failed");
+    expect(six.requests).toHaveLength(6);
+  });
+
+  it("resolves a relative Location against the URL that answered", async () => {
+    const origin = await serve((request, socket) => {
+      const next: Record<string, string> = { "/dir/start?q=1": "next", "/dir/next": "/abs?x=2", "/abs?x=2": "../up#frag" };
+      const location = next[request.target];
+      if (location === undefined) {
+        respond(socket, 200, { "content-type": "text/plain" }, request.target);
+      } else {
+        respond(socket, 302, { location });
+      }
+    });
+    const dns = scripted(["127.0.0.1"]);
+    const response = await loopbackOnly(dns.resolve).request(get(`http://rel.example.test:${String(origin.port)}/dir/start?q=1`));
+    expect(origin.requests.map((request) => request.target)).toEqual(["/dir/start?q=1", "/dir/next", "/abs?x=2", "/up"]);
+    expect(response.url).toBe(`http://rel.example.test:${String(origin.port)}/up#frag`);
+  });
+
+  it("does not read the body of a redirect", async () => {
+    const origin = await serve((request, socket) => {
+      if (request.target === "/") {
+        socket.write("HTTP/1.1 302 Found\r\nlocation: /done\r\ncontent-length: 1000000\r\n\r\npartial");
+      } else {
+        respond(socket, 200, { "content-type": "text/plain" }, "done");
+      }
+    });
+    const response = await loopbackOnly(scripted(["127.0.0.1"]).resolve).request(
+      get(`http://body.example.test:${String(origin.port)}/`, { maxBytes: 10 }),
+    );
+    expect(new TextDecoder().decode(response.body)).toBe("done");
+  });
+
+  it("returns a redirect without a Location as the response", async () => {
+    const origin = await serve((_request, socket) => {
+      respond(socket, 302, { "content-type": "text/plain" }, "no place to go");
+    });
+    const response = await loopbackOnly(scripted(["127.0.0.1"]).resolve).request(get(`http://nowhere.example.test:${String(origin.port)}/`));
+    expect(response.status).toBe(302);
+  });
+
+  it("changes POST to GET without a body for 301, 302 and 303 and keeps both for 307 and 308", async () => {
+    const seen: { method: string; body: string; type: string | undefined }[] = [];
+    const origin = await serve((request, socket) => {
+      if (/^\/3\d\d$/.test(request.target)) {
+        respond(socket, Number(request.target.slice(1)), { location: "/final" });
+        return;
+      }
+      seen.push({ method: request.method, body: request.body.toString(), type: request.headers["content-type"] });
+      respond(socket, 200, {}, "");
+    });
+    const dns = scripted(["127.0.0.1"]);
+    for (const status of [301, 302, 303, 307, 308]) {
+      await loopbackOnly(dns.resolve).request({
+        url: `http://post.example.test:${String(origin.port)}/${String(status)}`,
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: new TextEncoder().encode("{}"),
+        timeoutMs: 2_000,
+        maxBytes: 100,
+      });
+    }
+    expect(seen).toEqual([
+      { method: "GET", body: "", type: undefined },
+      { method: "GET", body: "", type: undefined },
+      { method: "GET", body: "", type: undefined },
+      { method: "POST", body: "{}", type: "application/json" },
+      { method: "POST", body: "{}", type: "application/json" },
+    ]);
+  });
+
+  it("keeps credentials on a redirect within the origin and drops them on one to another origin", async () => {
+    const other = await serve(ok);
+    const origin = await serve((request, socket) => {
+      if (request.target === "/same") {
+        respond(socket, 302, { location: "/landing" });
+      } else if (request.target === "/cross") {
+        respond(socket, 302, { location: `http://other.example.test:${String(other.port)}/landing` });
+      } else {
+        respond(socket, 200, {}, "");
+      }
+    });
+    const dns = scripted(["127.0.0.1"]);
+    const headers = { authorization: "Bearer <your API token>", cookie: "a=b", "x-extra": "1" };
+    await loopbackOnly(dns.resolve).request(get(`http://origin.example.test:${String(origin.port)}/same`, { headers }));
+    await loopbackOnly(dns.resolve).request(get(`http://origin.example.test:${String(origin.port)}/cross`, { headers }));
+    const landed = origin.requests.find((request) => request.target === "/landing");
+    expect(landed?.headers["authorization"]).toBe("Bearer <your API token>");
+    expect(other.requests[0]?.headers["authorization"]).toBeUndefined();
+    expect(other.requests[0]?.headers["cookie"]).toBeUndefined();
+    expect(other.requests[0]?.headers["x-extra"]).toBe("1");
+  });
+
+  it("spends one time budget across the hops", async () => {
+    const origin = await serve((request, socket) => {
+      const index = Number(request.target.slice(1));
+      setTimeout(() => {
+        respond(socket, 302, { location: `/${String(index + 1)}` });
+      }, 100);
+    });
+    const started = Date.now();
+    const error = await rejection(
+      loopbackOnly(scripted(["127.0.0.1"]).resolve),
+      get(`http://slowhops.example.test:${String(origin.port)}/0`, { timeoutMs: 350 }),
+    );
+    expect(error).toBeInstanceOf(EgressTimeout);
+    expect(Date.now() - started).toBeLessThan(1_500);
+    expect(origin.requests.length).toBeGreaterThan(1);
+    expect(origin.requests.length).toBeLessThan(5);
+  });
+});
+
+describe("the content-type allowlist", () => {
+  const typed = (type: string | undefined, body = "payload"): Handler => (_request, socket) => {
+    respond(socket, 200, type === undefined ? {} : { "content-type": type }, body);
+  };
+  const accepting = (...types: string[]) => ({ acceptContentTypes: types });
+
+  it("accepts a listed type whatever its case and parameters", async () => {
+    const origin = await serve(typed("Image/PNG; charset=binary"));
+    const response = await loopbackOnly(scripted(["127.0.0.1"]).resolve).request(
+      get(`http://ct.example.test:${String(origin.port)}/`, accepting("image/x-icon", "IMAGE/png")),
+    );
+    expect(response.status).toBe(200);
+  });
+
+  it.each([
+    ["an unlisted type", "text/html"],
+    ["a type that only starts like a listed one", "image/png2"],
+    ["no type", undefined],
+  ])("refuses %s after the headers, before the body is read", async (_name, type) => {
+    const origin = await serve((_request, socket) => {
+      // The headers promise a body that is never sent: the request ends only if it is refused on the headers.
+      socket.write(`HTTP/1.1 200 OK\r\n${type === undefined ? "" : `content-type: ${type}\r\n`}content-length: 1000\r\n\r\n`);
+    });
+    const started = Date.now();
+    const error = await rejection(
+      loopbackOnly(scripted(["127.0.0.1"]).resolve),
+      get(`http://ct.example.test:${String(origin.port)}/`, { ...accepting("image/png"), timeoutMs: 5_000 }),
+    );
+    expect(error).toBeInstanceOf(EgressError);
+    expect(error).not.toBeInstanceOf(EgressTimeout);
+    expect((error as EgressError).code).toBe("egress_failed");
+    expect(Date.now() - started).toBeLessThan(2_000);
+  });
+
+  it("refuses every response when the list is empty and checks nothing when there is none", async () => {
+    const origin = await serve(typed("text/html"));
+    const dns = scripted(["127.0.0.1"]);
+    expect(await rejection(loopbackOnly(dns.resolve), get(`http://ct.example.test:${String(origin.port)}/`, accepting()))).toBeInstanceOf(EgressError);
+    expect((await loopbackOnly(dns.resolve).request(get(`http://ct.example.test:${String(origin.port)}/`))).status).toBe(200);
+  });
+
+  it("checks the type of the response after the redirects, not of the redirect", async () => {
+    const png = await serve(typed("image/png"));
+    const html = await serve(typed("text/html"));
+    const redirecting = (target: LocalServer): Handler => (_request, socket) => {
+      respond(socket, 302, { location: `http://t.example.test:${String(target.port)}/`, "content-type": "text/html" });
+    };
+    const dns = scripted(["127.0.0.1"]);
+    const toPng = await serve(redirecting(png));
+    const toHtml = await serve(redirecting(html));
+    expect((await loopbackOnly(dns.resolve).request(get(`http://r.example.test:${String(toPng.port)}/`, accepting("image/png")))).status).toBe(200);
+    expect(await rejection(loopbackOnly(dns.resolve), get(`http://r.example.test:${String(toHtml.port)}/`, accepting("image/png")))).toBeInstanceOf(
+      EgressError,
+    );
+  });
+
+  it("applies to a HEAD response", async () => {
+    const origin = await serve((_request, socket) => {
+      socket.end("HTTP/1.1 200 OK\r\ncontent-type: text/html\r\ncontent-length: 5\r\n\r\n");
+    });
+    const error = await rejection(
+      loopbackOnly(scripted(["127.0.0.1"]).resolve),
+      get(`http://ct.example.test:${String(origin.port)}/`, { method: "HEAD", ...accepting("image/png") }),
+    );
+    expect(error).toBeInstanceOf(EgressError);
+  });
+});
+
+describe("the size cap on the decoded body", () => {
+  const encoded = (encoding: string, body: Buffer): Handler => (_request, socket) => {
+    respond(socket, 200, { "content-encoding": encoding, "content-type": "text/plain" }, body);
+  };
+  const zeros = Buffer.alloc(8 * 1024 * 1024);
+  const bombs: [string, () => Buffer][] = [
+    ["gzip", () => gzipSync(zeros)],
+    ["deflate", () => deflateSync(zeros)],
+    ["br", () => brotliCompressSync(zeros)],
+  ];
+
+  it.each(bombs)("cuts a %s bomb at the cap although its encoded size is small", async (encoding, compress) => {
+    const payload = compress();
+    expect(payload.length).toBeLessThan(100_000);
+    const origin = await serve(encoded(encoding, payload));
+    const error = await rejection(
+      loopbackOnly(scripted(["127.0.0.1"]).resolve),
+      get(`http://bomb.example.test:${String(origin.port)}/`, { maxBytes: 10_000 }),
+    );
+    expect(error).toBeInstanceOf(EgressTooLarge);
+  });
+
+  it.each(bombs)("returns a %s body decoded when it fits the cap", async (encoding) => {
+    const compress = { gzip: gzipSync, deflate: deflateSync, br: brotliCompressSync }[encoding as "gzip"];
+    const origin = await serve(encoded(encoding, compress(Buffer.from("x".repeat(5_000)))));
+    const response = await loopbackOnly(scripted(["127.0.0.1"]).resolve).request(
+      get(`http://ok.example.test:${String(origin.port)}/`, { maxBytes: 5_000 }),
+    );
+    expect(new TextDecoder().decode(response.body)).toBe("x".repeat(5_000));
+    expect(origin.requests[0]?.headers["accept-encoding"]).toBe("gzip, deflate, br");
+  });
+
+  it("cuts a body that is encoded twice at the cap", async () => {
+    const origin = await serve(encoded("gzip, gzip", gzipSync(gzipSync(zeros))));
+    const error = await rejection(
+      loopbackOnly(scripted(["127.0.0.1"]).resolve),
+      get(`http://bomb.example.test:${String(origin.port)}/`, { maxBytes: 10_000 }),
+    );
+    expect(error).toBeInstanceOf(EgressTooLarge);
+  });
+
+  it("does not let the caller choose the encodings it accepts", async () => {
+    const origin = await serve(ok);
+    await loopbackOnly(scripted(["127.0.0.1"]).resolve).request(
+      get(`http://enc.example.test:${String(origin.port)}/`, { headers: { "Accept-Encoding": "zstd" } }),
+    );
+    expect(origin.requests[0]?.headers["accept-encoding"]).toBe("gzip, deflate, br");
+  });
+
+  it("refuses an encoding it cannot decode and an encoded body that is not valid", async () => {
+    const dns = scripted(["127.0.0.1"]);
+    const unknown = await serve(encoded("zstd", Buffer.from("not decodable")));
+    const broken = await serve(encoded("gzip", Buffer.from("not gzip data")));
+    const many = await serve(encoded("gzip, gzip, gzip, gzip", gzipSync(Buffer.from("x"))));
+    for (const server of [unknown, broken, many]) {
+      const error = await rejection(loopbackOnly(dns.resolve), get(`http://bad.example.test:${String(server.port)}/`));
+      expect(error).toBeInstanceOf(EgressError);
+      expect(error).not.toBeInstanceOf(EgressTooLarge);
+    }
+  });
+
+  it("accepts an identity encoding and an empty encoded body", async () => {
+    const dns = scripted(["127.0.0.1"]);
+    const identity = await serve(encoded("identity", Buffer.from("plain")));
+    const empty = await serve(encoded("gzip", Buffer.alloc(0)));
+    expect(new TextDecoder().decode((await loopbackOnly(dns.resolve).request(get(`http://a.example.test:${String(identity.port)}/`))).body)).toBe("plain");
+    expect((await loopbackOnly(dns.resolve).request(get(`http://b.example.test:${String(empty.port)}/`))).body).toHaveLength(0);
+  });
+
+  it("times out an encoded body that trickles in", async () => {
+    const payload = gzipSync(Buffer.from("x".repeat(2_000)));
+    const origin = await serve((_request, socket) => {
+      socket.write(`HTTP/1.1 200 OK\r\ncontent-encoding: gzip\r\ncontent-length: ${String(payload.length)}\r\n\r\n`);
+      let sent = 0;
+      const timer = setInterval(() => {
+        if (socket.destroyed || sent >= payload.length - 1) {
+          clearInterval(timer);
+          return;
+        }
+        socket.write(payload.subarray(sent, sent + 1));
+        sent += 1;
+      }, 20);
+    });
+    const error = await rejection(
+      loopbackOnly(scripted(["127.0.0.1"]).resolve),
+      get(`http://trickle.example.test:${String(origin.port)}/`, { timeoutMs: 250 }),
+    );
+    expect(error).toBeInstanceOf(EgressTimeout);
   });
 });
 

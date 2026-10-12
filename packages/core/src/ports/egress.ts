@@ -6,10 +6,16 @@ export const EGRESS_MAX_REQUEST_BODY_BYTES = 1_048_576;
 export interface EgressRequestBase {
   readonly url: string;
   readonly headers?: Readonly<Record<string, string>>;
-  /** The time budget for the whole request: resolving, connecting, sending and reading the response. */
+  /** The time budget for the whole request: every redirect hop included, from resolving to the last byte read. */
   readonly timeoutMs: number;
-  /** The most response bytes the port reads; a longer response is refused and the stream aborted. */
+  /** The most bytes of the decoded response body the port reads; a longer body is refused and the stream aborted. */
   readonly maxBytes: number;
+  /**
+   * The media types the final response may have, compared without parameters and ignoring case. A response with any
+   * other type, or none, is refused with an `EgressError` once its headers arrive and before its body is read.
+   * Without the list the type is not checked.
+   */
+  readonly acceptContentTypes?: readonly string[];
 }
 
 export interface EgressBodylessRequest extends EgressRequestBase {
@@ -26,10 +32,11 @@ export interface EgressPostRequest extends EgressRequestBase {
 export type EgressRequest = EgressBodylessRequest | EgressPostRequest;
 
 export interface EgressResponse {
-  /** The URL the response came from. */
+  /** The URL the response came from: the last one, when redirects were followed. */
   readonly url: string;
   readonly status: number;
   readonly contentType: string | undefined;
+  /** The decoded body: a `gzip`, `deflate` or `br` content encoding is undone. */
   readonly body: Uint8Array;
 }
 
@@ -76,9 +83,13 @@ export class EgressTooLarge extends EgressError {
 
 /**
  * All server-initiated HTTP: resolves the host, validates the address, pins the
- * resolved IP and enforces timeouts and size caps (doc 01 section 6). Failures
- * are `EgressError`s. Re-validating redirects and the content-type allowlist
- * are not part of the port yet.
+ * resolved IP and enforces timeouts and size caps (doc 01 section 6). Redirects
+ * (301, 302, 303, 307, 308) are followed, at most five per request; every hop
+ * passes the same validation as the first request, accepts only `http` and
+ * `https` targets and shares the one time budget. A redirect loop, a longer
+ * chain and a response outside `acceptContentTypes` fail with an `EgressError`;
+ * a hop to an address or scheme the port refuses fails with `EgressBlocked`.
+ * Failures are `EgressError`s.
  */
 export interface EgressPort extends Port {
   request(request: EgressRequest): Promise<EgressResponse>;

@@ -147,6 +147,7 @@ export type EgressRequest = EgressBodylessRequest | EgressPostRequest;
 
 // @public (undocumented)
 export interface EgressRequestBase {
+    readonly acceptContentTypes?: readonly string[];
     // (undocumented)
     readonly headers?: Readonly<Record<string, string>>;
     readonly maxBytes: number;
@@ -157,7 +158,6 @@ export interface EgressRequestBase {
 
 // @public (undocumented)
 export interface EgressResponse {
-    // (undocumented)
     readonly body: Uint8Array;
     // (undocumented)
     readonly contentType: string | undefined;

@@ -16,6 +16,7 @@ export interface CreateEgressOptions {
     readonly resolve?: EgressResolver;
     readonly testOnly?: {
         readonly allowNonPublicAddresses?: boolean;
+        readonly allowAddresses?: readonly string[];
         readonly ca?: string | Buffer;
     };
 }

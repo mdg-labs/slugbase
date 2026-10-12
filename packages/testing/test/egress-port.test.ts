@@ -30,4 +30,27 @@ describe("FakeEgress against EgressPort", () => {
     const port: EgressPort = new FakeEgress({ "https://example.test/": { status: 204 } });
     await expect(port.request({ url: "https://example.test/", timeoutMs: 1_000, maxBytes: 10 })).resolves.toMatchObject({ status: 204 });
   });
+
+  it("follows redirects and refuses the ones the port refuses, as errors of the port's classes", async () => {
+    const port: EgressPort = new FakeEgress({
+      "https://example.test/old": { kind: "redirect", to: "/new" },
+      "https://example.test/new": { contentType: "image/png" },
+      "https://example.test/loop": { kind: "redirect", to: "/loop" },
+      "https://evil.test/": { kind: "redirect", to: "http://169.254.169.254/latest/meta-data/" },
+    });
+    const limits = { timeoutMs: 1_000, maxBytes: 10 };
+    await expect(port.request({ url: "https://example.test/old", acceptContentTypes: ["image/png"], ...limits })).resolves.toMatchObject({
+      url: "https://example.test/new",
+    });
+    const rejected = (url: string, extra: { acceptContentTypes?: readonly string[] } = {}): Promise<unknown> =>
+      port.request({ url, ...extra, ...limits }).then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+    const plain = new EgressError();
+    const blocked = new EgressBlocked();
+    expect(await rejected("https://evil.test/")).toMatchObject({ code: blocked.code, name: blocked.name, message: blocked.message });
+    expect(await rejected("https://example.test/loop")).toMatchObject({ code: plain.code, name: plain.name, message: plain.message });
+    expect(await rejected("https://example.test/new", { acceptContentTypes: ["text/html"] })).toMatchObject({ code: plain.code });
+  });
 });

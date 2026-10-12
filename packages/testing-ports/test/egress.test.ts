@@ -26,26 +26,124 @@ describe("FakeEgress", () => {
     await expect(new FakeEgress().request({ url: "https://nowhere.test/", ...limits })).rejects.toThrow("no route");
   });
 
-  it("returns a redirect as its 3xx response without following it", async () => {
+  it("follows a redirect and answers from its target", async () => {
     const egress = new FakeEgress({
-      "https://example.test/old": { kind: "redirect", to: "https://example.test/new" },
-      "https://example.test/new": { body: bytes("moved") },
+      "https://example.test/old": { kind: "redirect", to: "https://other.test/new" },
+      "https://other.test/new": { body: bytes("moved"), contentType: "text/plain" },
     });
     const response = await egress.request({ url: "https://example.test/old", ...limits });
-    expect(response).toMatchObject({ url: "https://example.test/old", status: 302, contentType: undefined });
-    expect(response.body).toHaveLength(0);
+    expect(response).toMatchObject({ url: "https://other.test/new", status: 200, contentType: "text/plain" });
+    expect(text(response.body)).toBe("moved");
     expect(egress.requests.map((request) => request.url)).toEqual(["https://example.test/old"]);
-    const permanent = new FakeEgress({ "https://example.test/": { kind: "redirect", to: "https://example.test/x", status: 308 } });
-    expect((await permanent.request({ url: "https://example.test/", ...limits })).status).toBe(308);
+    expect(egress.fetched).toEqual(["https://example.test/old", "https://other.test/new"]);
   });
 
-  it("answers a redirect to a private address as a response, leaving the hop to the caller", async () => {
+  it("resolves a relative redirect against the URL that answered", async () => {
+    const egress = new FakeEgress({
+      "https://example.test/a/b": { kind: "redirect", to: "c" },
+      "https://example.test/a/c": { kind: "redirect", to: "/d?x=1" },
+      "https://example.test/d?x=1": { kind: "redirect", to: "//cdn.test/e" },
+      "https://cdn.test/e": { body: bytes("done") },
+    });
+    const response = await egress.request({ url: "https://example.test/a/b", ...limits });
+    expect(response.url).toBe("https://cdn.test/e");
+    expect(egress.fetched).toHaveLength(4);
+  });
+
+  it("refuses a redirect to a private address without looking it up", async () => {
     const egress = new FakeEgress({
       "https://evil.test/favicon.ico": { kind: "redirect", to: "http://169.254.169.254/latest/meta-data/" },
+      "http://169.254.169.254/latest/meta-data/": { body: bytes("secret") },
     });
-    const response = await egress.request({ url: "https://evil.test/favicon.ico", ...limits });
-    expect(response.status).toBe(302);
-    expect(egress.requests).toHaveLength(1);
+    await expect(egress.request({ url: "https://evil.test/favicon.ico", ...limits })).rejects.toMatchObject({
+      code: "egress_blocked",
+      name: "EgressBlocked",
+    });
+    expect(egress.fetched).toEqual(["https://evil.test/favicon.ico"]);
+  });
+
+  it.each([
+    ["the loopback address", "http://127.0.0.1/"],
+    ["a loopback address in decimal notation", "http://2130706433/"],
+    ["a private address", "http://10.1.2.3/"],
+    ["a CGNAT address", "http://100.64.0.1/"],
+    ["the IPv6 loopback address", "http://[::1]/"],
+    ["an IPv4-mapped loopback address", "http://[::ffff:127.0.0.1]/"],
+    ["a unique-local address", "http://[fd00::1]/"],
+    ["a documentation address", "http://[2001:db8::1]/"],
+    ["a 6to4 address embedding a private one", "http://[2002:a00:1::]/"],
+  ])("refuses a request and a redirect to %s", async (_name, target) => {
+    const egress = new FakeEgress({ [target]: {}, "https://evil.test/": { kind: "redirect", to: target } });
+    await expect(egress.request({ url: target, ...limits })).rejects.toMatchObject({ code: "egress_blocked" });
+    await expect(egress.request({ url: "https://evil.test/", ...limits })).rejects.toMatchObject({ code: "egress_blocked" });
+    expect(egress.fetched).toEqual(["https://evil.test/"]);
+  });
+
+  it.each(["8.8.8.8", "[2606:4700:4700::1111]", "[2002:808:808::]", "[::ffff:8.8.8.8]"])("accepts the public address %s", async (host) => {
+    const egress = new FakeEgress({ [`http://${host}/`]: { body: bytes("ok") } });
+    expect(text((await egress.request({ url: `http://${host}/`, ...limits })).body)).toBe("ok");
+  });
+
+  it.each([
+    "ftp://example.test/file",
+    "file:///etc/passwd",
+    "javascript:alert(1)",
+    "http://user:secret@example.test/",
+    "http://",
+  ])("refuses a redirect to %j", async (target) => {
+    const egress = new FakeEgress({ "https://evil.test/": { kind: "redirect", to: target } });
+    await expect(egress.request({ url: "https://evil.test/", ...limits })).rejects.toMatchObject({ code: "egress_blocked" });
+  });
+
+  it("refuses a first URL the port refuses", async () => {
+    const egress = new FakeEgress({ "ftp://example.test/file": {} });
+    await expect(egress.request({ url: "ftp://example.test/file", ...limits })).rejects.toMatchObject({ code: "egress_blocked" });
+  });
+
+  it("refuses a redirect loop, including one back to the first URL and one that differs only by fragment", async () => {
+    const egress = new FakeEgress({
+      "https://example.test/a": { kind: "redirect", to: "https://example.test/b" },
+      "https://example.test/b": { kind: "redirect", to: "https://example.test/a#again" },
+      "https://example.test/self": { kind: "redirect", to: "/self" },
+    });
+    await expect(egress.request({ url: "https://example.test/a", ...limits })).rejects.toMatchObject({ code: "egress_failed" });
+    await expect(egress.request({ url: "https://example.test/self", ...limits })).rejects.toMatchObject({ code: "egress_failed" });
+  });
+
+  it("follows five redirects and refuses a sixth", async () => {
+    const chain = (length: number): FakeEgress => {
+      const egress = new FakeEgress({ [`https://example.test/${String(length)}`]: { body: bytes("end") } });
+      for (let index = 0; index < length; index += 1) {
+        egress.script(`https://example.test/${String(index)}`, { kind: "redirect", to: `/${String(index + 1)}` });
+      }
+      return egress;
+    };
+    expect((await chain(5).request({ url: "https://example.test/0", ...limits })).url).toBe("https://example.test/5");
+    await expect(chain(6).request({ url: "https://example.test/0", ...limits })).rejects.toMatchObject({ code: "egress_failed" });
+  });
+
+  it("applies the content-type allowlist to the final response, ignoring parameters and case", async () => {
+    const egress = new FakeEgress({
+      "https://example.test/redirect": { kind: "redirect", to: "/icon" },
+      "https://example.test/icon": { contentType: "Image/PNG; charset=binary", body: bytes("png") },
+      "https://example.test/page": { contentType: "text/html", body: bytes("<p>") },
+      "https://example.test/untyped": { body: bytes("?") },
+    });
+    const accept = { acceptContentTypes: ["image/png", "image/x-icon"] };
+    expect((await egress.request({ url: "https://example.test/redirect", ...limits, ...accept })).status).toBe(200);
+    await expect(egress.request({ url: "https://example.test/page", ...limits, ...accept })).rejects.toMatchObject({ code: "egress_failed" });
+    await expect(egress.request({ url: "https://example.test/untyped", ...limits, ...accept })).rejects.toMatchObject({ code: "egress_failed" });
+    await expect(egress.request({ url: "https://example.test/page", ...limits, acceptContentTypes: [] })).rejects.toMatchObject({
+      code: "egress_failed",
+    });
+    expect((await egress.request({ url: "https://example.test/page", ...limits })).status).toBe(200);
+  });
+
+  it("checks the content type before the size", async () => {
+    const egress = new FakeEgress({ "https://example.test/": { contentType: "text/html", body: new Uint8Array(1_000) } });
+    await expect(egress.request({ url: "https://example.test/", ...limits, acceptContentTypes: ["image/png"] })).rejects.toMatchObject({
+      code: "egress_failed",
+    });
   });
 
   it("refuses a destination scripted as blocked", async () => {

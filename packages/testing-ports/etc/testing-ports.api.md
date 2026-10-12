@@ -9,6 +9,7 @@ export class FakeEgress {
     constructor(routes?: Readonly<Record<string, FakeEgressRoute>>);
     // (undocumented)
     readonly available = true;
+    readonly fetched: string[];
     // (undocumented)
     request(request: FakeEgressRequest): Promise<FakeEgressResponse>;
     readonly requests: FakeEgressRequest[];
@@ -27,6 +28,8 @@ export type FakeEgressErrorCode = "egress_failed" | "egress_blocked" | "egress_t
 
 // @public (undocumented)
 export interface FakeEgressRequest {
+    // (undocumented)
+    readonly acceptContentTypes?: readonly string[];
     // (undocumented)
     readonly body?: Uint8Array;
     // (undocumented)
@@ -61,13 +64,12 @@ export type FakeEgressRoute = {
     readonly body?: Uint8Array;
 }
 /**
-* A redirect, answered as the port answers it today: the 3xx response is returned and the target is not
-* followed (`to` is the target the real server would name).
+* A redirect the port follows: `to` is the `Location` the real server would name, absolute or relative to the
+* URL that answered. Each hop is validated like the first request.
 */
 | {
     readonly kind: "redirect";
     readonly to: string;
-    readonly status?: 301 | 302 | 303 | 307 | 308;
 }
 /** A destination the real port refuses (a private address, a bad scheme): the request fails with a blocked error. */
 | {
