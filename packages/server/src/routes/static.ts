@@ -7,10 +7,14 @@ import type { ChainContext } from "../http/chain.ts";
 // section 2.1, doc 10 T14): content-hashed assets that never change, index.html
 // that is always revalidated, and index.html for a browser navigation to a path
 // the app owns. Every request path reaches a file through `readInside`, the one
-// place that turns a path into a file: the request path is decoded once, a dot
-// segment, an encoded separator or a second layer of encoding refuses the
-// request, and the file that is opened is the real path of the candidate, which
-// must lie inside the real web root, so a symlink cannot lead out of it.
+// place that turns a path into a file: the request path is decoded once, and
+// a dot segment, a backslash or a NUL (literal or encoded), a second layer of
+// encoding (an encoded `.`, `/`, `\` or NUL left after that decode), a path
+// under `/api/` or `/go/` and a malformed encoding refuse the request. A single
+// encoded `/` is not refused: it decodes to a separator, so `/assets%2fapp.js`
+// names `assets/app.js`. The file that is opened is the real path of the
+// candidate, which must lie inside the real web root, so a symlink cannot lead
+// out of it.
 
 const CACHE_IMMUTABLE = "public, max-age=31536000, immutable";
 const CACHE_REVALIDATE = "no-cache";
@@ -58,7 +62,7 @@ function isUnder(path: string, prefix: string): boolean {
 
 /**
  * The path below the web root a request names, or a decline: a malformed or
- * double-encoded path, one with a dot segment, a separator or a NUL once
+ * double-encoded path, one with a dot segment, a backslash or a NUL once
  * decoded, and anything under `/api/` or `/go/`, which are never the app.
  */
 function targetOf(pathname: string): Target {
