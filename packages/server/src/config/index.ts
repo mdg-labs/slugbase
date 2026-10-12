@@ -1,6 +1,6 @@
-export { envBoolean } from "./env-boolean.js";
-export { composeEnvSchema, envFragment, requireAllOrNone } from "./fragment.js";
-export type { ConfigIssue, EnvFragment, EnvSchema, IntersectUnion, MergedShape, RefineContext } from "./fragment.js";
+export { envBoolean } from "./env-boolean.ts";
+export { composeEnvSchema, envFragment, requireAllOrNone } from "./fragment.ts";
+export type { ConfigIssue, EnvFragment, EnvSchema, IntersectUnion, MergedShape, RefineContext } from "./fragment.ts";
 export {
   DEFAULT_DOCS_BASE_URL,
   LOG_LEVELS,
@@ -13,9 +13,9 @@ export {
   runtimeFragment,
   secretsFragment,
   serverMigrationFragment,
-} from "./fragments.js";
-export { ConfigError, loadConfig, validateEnvironment } from "./load.js";
-export type { EnvironmentVariables, LoadOptions, LoadedConfig } from "./load.js";
+} from "./fragments.ts";
+export { ConfigError, loadConfig, validateEnvironment } from "./load.ts";
+export type { EnvironmentVariables, LoadOptions, LoadedConfig } from "./load.ts";
 export {
   PROCESS_TYPES,
   declaredKeys,
@@ -27,5 +27,5 @@ export {
   serverFragments,
   workerEnvSchema,
   workerFragments,
-} from "./schemas.js";
-export type { ConfigByProcess, MigrateConfig, ProcessType, ServerConfig, WorkerConfig } from "./schemas.js";
+} from "./schemas.ts";
+export type { ConfigByProcess, MigrateConfig, ProcessType, ServerConfig, WorkerConfig } from "./schemas.ts";

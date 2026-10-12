@@ -1,4 +1,3 @@
-/// <reference types="node" />
 import { z } from "zod";
 
 // Field builders. Every message names what is wrong and never the value: the

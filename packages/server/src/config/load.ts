@@ -1,6 +1,6 @@
 import type { z } from "zod";
-import type { ConfigIssue, EnvSchema, RefineContext } from "./fragment.js";
-import { declaredKeys, envSchemas, type ConfigByProcess, type ProcessType } from "./schemas.js";
+import type { ConfigIssue, EnvSchema, RefineContext } from "./fragment.ts";
+import { declaredKeys, envSchemas, type ConfigByProcess, type ProcessType } from "./schemas.ts";
 
 export type EnvironmentVariables = Readonly<Record<string, string | undefined>>;
 

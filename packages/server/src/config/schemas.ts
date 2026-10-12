@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import { composeEnvSchema } from "./fragment.js";
+import { composeEnvSchema } from "./fragment.ts";
 import {
   databaseFragment,
   httpFragment,
@@ -8,7 +8,7 @@ import {
   runtimeFragment,
   secretsFragment,
   serverMigrationFragment,
-} from "./fragments.js";
+} from "./fragments.ts";
 
 export const PROCESS_TYPES = ["server", "worker", "migrate"] as const;
 

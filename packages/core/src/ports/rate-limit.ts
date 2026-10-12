@@ -1,4 +1,4 @@
-import type { Port } from "./port.js";
+import type { Port } from "./port.ts";
 
 export interface RateLimitRequest {
   /** The bucket the operation names in its contract. */

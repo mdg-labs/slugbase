@@ -1,4 +1,4 @@
-import type { Port } from "./port.js";
+import type { Port } from "./port.ts";
 
 export interface ErrorReportContext {
   readonly requestId?: string;

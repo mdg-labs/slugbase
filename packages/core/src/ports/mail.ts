@@ -1,4 +1,4 @@
-import type { Port } from "./port.js";
+import type { Port } from "./port.ts";
 
 /** A typed transactional message: the template names the message, the data fills it. */
 export interface MailMessage {

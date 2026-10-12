@@ -1,5 +1,5 @@
 import type { ProblemCode } from "@slugbase/contracts";
-import type { Adapters } from "./adapters.js";
+import type { Adapters } from "./adapters.ts";
 
 /** What every port reports: whether an adapter is configured behind it (D22). */
 export interface Port {

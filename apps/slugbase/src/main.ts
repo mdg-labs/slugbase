@@ -1,4 +1,3 @@
-/// <reference types="node" />
 import "@slugbase/adapters";
 import "@slugbase/contracts";
 import "@slugbase/core";

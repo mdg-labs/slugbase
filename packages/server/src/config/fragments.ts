@@ -7,10 +7,10 @@ import {
   DEVELOPMENT_ENCRYPTION_KEY,
   DEVELOPMENT_ENCRYPTION_KEY_ID,
   DEVELOPMENT_SESSION_SECRET,
-} from "./development-defaults.js";
-import { envBoolean } from "./env-boolean.js";
-import { base64Key, baseUrl, envInteger, optional, originUrl, postgresUrl } from "./fields.js";
-import { envFragment, type RefineContext } from "./fragment.js";
+} from "./development-defaults.ts";
+import { envBoolean } from "./env-boolean.ts";
+import { base64Key, baseUrl, envInteger, optional, originUrl, postgresUrl } from "./fields.ts";
+import { envFragment, type RefineContext } from "./fragment.ts";
 
 export const NODE_ENVS = ["development", "test", "production"] as const;
 export const LOG_LEVELS = ["fatal", "error", "warn", "info", "debug", "trace", "silent"] as const;

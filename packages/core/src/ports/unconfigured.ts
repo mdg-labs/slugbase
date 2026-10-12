@@ -1,5 +1,5 @@
-import type { Adapters } from "./adapters.js";
-import { PortUnavailable, type PortUnavailableCode } from "./port.js";
+import type { Adapters } from "./adapters.ts";
+import { PortUnavailable, type PortUnavailableCode } from "./port.ts";
 
 function unavailable(port: keyof Adapters, code: PortUnavailableCode = "unavailable"): () => Promise<never> {
   return () => Promise.reject(new PortUnavailable(port, code));

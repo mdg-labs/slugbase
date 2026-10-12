@@ -1,13 +1,13 @@
-import type { AiSuggestPort } from "./ai-suggest.js";
-import type { AnalyticsPort } from "./analytics.js";
-import type { ChallengePort } from "./challenge.js";
-import type { EgressPort } from "./egress.js";
-import type { ErrorReportPort } from "./error-report.js";
-import type { IdentityPort } from "./identity.js";
-import type { MailPort } from "./mail.js";
-import type { RateLimitPort } from "./rate-limit.js";
-import type { SecretBoxPort } from "./secret-box.js";
-import type { TenantResolver } from "./tenant-resolver.js";
+import type { AiSuggestPort } from "./ai-suggest.ts";
+import type { AnalyticsPort } from "./analytics.ts";
+import type { ChallengePort } from "./challenge.ts";
+import type { EgressPort } from "./egress.ts";
+import type { ErrorReportPort } from "./error-report.ts";
+import type { IdentityPort } from "./identity.ts";
+import type { MailPort } from "./mail.ts";
+import type { RateLimitPort } from "./rate-limit.ts";
+import type { SecretBoxPort } from "./secret-box.ts";
+import type { TenantResolver } from "./tenant-resolver.ts";
 
 /**
  * The adapter selected for each port: the `adapters` argument of `createServer`
