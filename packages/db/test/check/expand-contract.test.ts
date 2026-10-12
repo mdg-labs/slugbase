@@ -7,7 +7,7 @@ import { hashSqlFiles } from "../../scripts/migration-sql.ts";
 import { checkRules, contractMarkerFromEnv, runChecks } from "../../src/check/index.ts";
 import { expandContractRule } from "../../src/check/expand-contract.ts";
 import { analyseSql, setsSessionTimeout } from "../../src/check/migration-statements.ts";
-import type { Finding } from "../../src/check/types.ts";
+import type { ContractMarker, Finding } from "../../src/check/types.ts";
 import { FIRST, GitPackage, releasedRepository, SECOND } from "./git-package.ts";
 
 // The expand/contract rule (doc 05 section 5.2, Q52) against temporary git
@@ -37,7 +37,9 @@ function released(tag = "v1.0.0"): GitPackage {
   return repository;
 }
 
-function inspect(repository: GitPackage, contractMarker?: boolean): Promise<readonly Finding[]> {
+/** `true` is the marker of a labelled pull request, `pending` that of a push. */
+function inspect(repository: GitPackage, marker?: boolean | "pending"): Promise<readonly Finding[]> {
+  const contractMarker: ContractMarker | undefined = marker === true ? "set" : marker === "pending" ? "pending" : marker === false ? "unset" : undefined;
   return Promise.resolve(
     expandContractRule.run({
       packageDir: repository.dir,
@@ -49,7 +51,7 @@ function inspect(repository: GitPackage, contractMarker?: boolean): Promise<read
 }
 
 /** Adds one migration after the release and returns what the rule says about it. */
-async function added(sql: string, options: { marker?: boolean; tables?: { name: string; columns: string[] }[] } = {}): Promise<readonly Finding[]> {
+async function added(sql: string, options: { marker?: boolean | "pending"; tables?: { name: string; columns: string[] }[] } = {}): Promise<readonly Finding[]> {
   const repository = released();
   repository.migration(SECOND, sql, options.tables ?? [{ name: "bookmarks", columns: BOOKMARKS }]);
   return inspect(repository, options.marker);
@@ -426,18 +428,18 @@ describe("when git cannot say whether a release tag exists", () => {
   });
 });
 
-describe("the marked contract half of an expand/contract pair", () => {
-  /** v1.0.0 holds bookmarks.legacy_title, v1.1.0 adds the migration that replaces it. */
-  function pair(header: string, sql = 'ALTER TABLE "bookmarks" DROP COLUMN "legacy_title";\n'): GitPackage {
-    const repository = released("v1.0.0");
-    repository.migration(SECOND, 'ALTER TABLE "bookmarks" ADD COLUMN "name" text;', [{ name: "bookmarks", columns: [...BOOKMARKS, "name"] }]);
-    repository.commit("expand");
-    repository.tag("v1.1.0");
-    repository.migration(THIRD, `${header}${sql}`, [{ name: "bookmarks", columns: ["id", "title", "name"] }]);
-    return repository;
-  }
-  const HEADER = `-- slugbase:contract expand=${SECOND} release=1.1.0\n`;
+/** v1.0.0 holds bookmarks.legacy_title, v1.1.0 adds the migration that replaces it. */
+function pair(header: string, sql = 'ALTER TABLE "bookmarks" DROP COLUMN "legacy_title";\n'): GitPackage {
+  const repository = released("v1.0.0");
+  repository.migration(SECOND, 'ALTER TABLE "bookmarks" ADD COLUMN "name" text;', [{ name: "bookmarks", columns: [...BOOKMARKS, "name"] }]);
+  repository.commit("expand");
+  repository.tag("v1.1.0");
+  repository.migration(THIRD, `${header}${sql}`, [{ name: "bookmarks", columns: ["id", "title", "name"] }]);
+  return repository;
+}
+const HEADER = `-- slugbase:contract expand=${SECOND} release=1.1.0\n`;
 
+describe("the marked contract half of an expand/contract pair", () => {
   it("accepts the drop with the header and the marker", async () => {
     expect(await inspect(pair(HEADER), true)).toEqual([]);
   });
@@ -646,12 +648,77 @@ describe("the session timeouts", () => {
 });
 
 describe("the contract marker", () => {
-  it("is set by the exact value true and nothing else", () => {
-    expect(contractMarkerFromEnv({ SLUGBASE_DB_CHECK_CONTRACT: "true" })).toBe(true);
-    for (const value of ["false", "", "1", "TRUE", "yes", " true", undefined]) {
-      expect(contractMarkerFromEnv({ SLUGBASE_DB_CHECK_CONTRACT: value }), String(value)).toBe(false);
+  it("reads true, false, pending and an absent variable, and nothing else", () => {
+    expect(contractMarkerFromEnv({ SLUGBASE_DB_CHECK_CONTRACT: "true" })).toBe("set");
+    expect(contractMarkerFromEnv({ SLUGBASE_DB_CHECK_CONTRACT: "false" })).toBe("unset");
+    expect(contractMarkerFromEnv({ SLUGBASE_DB_CHECK_CONTRACT: "pending" })).toBe("pending");
+    expect(contractMarkerFromEnv({})).toBe("unset");
+    expect(contractMarkerFromEnv({ SLUGBASE_DB_CHECK_CONTRACT: undefined })).toBe("unset");
+  });
+
+  it("refuses any other value instead of reading it as unset", () => {
+    for (const value of ["", "1", "TRUE", "True", "yes", " true", "true ", "Pending", "awaiting"]) {
+      expect(() => contractMarkerFromEnv({ SLUGBASE_DB_CHECK_CONTRACT: value }), JSON.stringify(value)).toThrow(
+        "must be true, false or pending",
+      );
     }
-    expect(contractMarkerFromEnv({})).toBe(false);
+  });
+});
+
+describe("a push run, where the label cannot be read", () => {
+  const failing = (findings: readonly Finding[]): Finding[] => findings.filter((finding) => finding.awaiting !== true);
+
+  it("reports a step with a valid header as awaiting the label, not as a failure", async () => {
+    const findings = await inspect(pair(HEADER), "pending");
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.awaiting).toBe(true);
+    expect(findings[0]?.message).toContain("drops column bookmarks.legacy_title");
+    expect(findings[0]?.message).toContain("awaits the migration:contract label");
+    expect(failing(findings)).toEqual([]);
+  });
+
+  it("reports every problem of the step, not only the first", async () => {
+    const sql = 'ALTER TABLE "bookmarks" DROP COLUMN "legacy_title";\nALTER TABLE "bookmarks" ADD COLUMN "n" bigserial;\n';
+    const findings = await inspect(pair(HEADER, sql), "pending");
+    expect(findings).toHaveLength(2);
+    expect(findings.every((finding) => finding.awaiting === true)).toBe(true);
+  });
+
+  it("fails a destructive step with no header", async () => {
+    const findings = await inspect(pair(""), "pending");
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.awaiting).toBeUndefined();
+    expect(findings[0]?.message).toContain("has no contract header");
+  });
+
+  it.each([
+    ["a malformed header", `-- slugbase:contract expand=${SECOND}\n`, "malformed contract header"],
+    ["two headers", `-- slugbase:contract expand=${SECOND} release=1.1.0\n-- slugbase:contract expand=${SECOND} release=1.0.0\n`, "malformed contract header"],
+    ["an expand migration the journal does not list", "-- slugbase:contract expand=20260101000001_nothing release=1.1.0\n", "not a migration of the journal"],
+    ["a release that is not a tag", `-- slugbase:contract expand=${SECOND} release=9.9.9\n`, "which is not a release tag"],
+    ["an expand migration that is not part of the named release", `-- slugbase:contract expand=${SECOND} release=1.0.0\n`, `${SECOND} is not part of that release`],
+    ["a header after the first statement", `COMMENT ON TABLE bookmarks IS 'x';\n${HEADER}`, "has no contract header"],
+  ])("fails %s", async (_name, header, expected) => {
+    const findings = await inspect(pair(header), "pending");
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.awaiting).toBeUndefined();
+    expect(findings[0]?.message).toContain(expected);
+  });
+
+  it("does not let a valid header license a data change or a session timeout", async () => {
+    const data = await inspect(pair(HEADER, 'ALTER TABLE "bookmarks" DROP COLUMN "legacy_title";\nUPDATE bookmarks SET title = \'x\';\n'), "pending");
+    expect(failing(data)).toHaveLength(1);
+    expect(failing(data)[0]?.message).toContain("changes data with");
+    const timeout = await inspect(pair(HEADER, "SET lock_timeout = 0;\nALTER TABLE bookmarks DROP COLUMN legacy_title;\n"), "pending");
+    expect(failing(timeout)).toHaveLength(1);
+    expect(failing(timeout)[0]?.message).toContain("sets lock_timeout");
+  });
+
+  it("still names the marker as missing when the run carries none", async () => {
+    const findings = await inspect(pair(HEADER), false);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.awaiting).toBeUndefined();
+    expect(findings[0]?.message).toContain(MARKER_HINT);
   });
 });
 

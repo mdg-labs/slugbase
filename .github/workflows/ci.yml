@@ -157,13 +157,18 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends postgresql-client
-      # The contract marker is set only for a pull request that carries the
-      # maintainer-applied `migration:contract` label (Q52); the check also needs
-      # the contract header in the migration file. It is a flag of this check,
-      # not a product environment variable.
+      # SLUGBASE_DB_CHECK_CONTRACT is a flag of this check, not a product
+      # environment variable. A pull request run sets it to true when the pull
+      # request carries the maintainer-applied `migration:contract` label (Q52)
+      # and to false when it does not. A push has no pull request and so no label
+      # (this repository lands on dev by cherry-pick), so a push run sets it to
+      # pending: a destructive migration step with a valid contract header is then
+      # reported as awaiting the label and does not fail, while one with no header
+      # or an invalid one fails on every event. The pull request that promotes dev
+      # to main is the run that checks the label.
       - run: pnpm db:check
         env:
-          SLUGBASE_DB_CHECK_CONTRACT: ${{ contains(github.event.pull_request.labels.*.name, 'migration:contract') }}
+          SLUGBASE_DB_CHECK_CONTRACT: ${{ github.event_name == 'push' && 'pending' || contains(github.event.pull_request.labels.*.name, 'migration:contract') }}
       - run: pnpm test:integration
 
   build:

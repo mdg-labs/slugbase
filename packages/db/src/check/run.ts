@@ -24,24 +24,44 @@ export async function runChecks(rules: readonly CheckRule[], context: CheckConte
   return results;
 }
 
-/** The lines `pnpm db:check` prints, and whether it passed. */
+/**
+ * The lines `pnpm db:check` prints, and whether it passed. A finding that only awaits the
+ * `migration:contract` label is shown as AWAIT and does not fail the run, but the summary then
+ * does not say the rule passed.
+ */
 export function formatReport(results: readonly RuleResult[]): { passed: boolean; lines: string[] } {
   const lines: string[] = [];
   let failed = 0;
+  let awaiting = 0;
   for (const result of results) {
     if (result.findings.length === 0) {
       lines.push(`db:check: ok    ${result.rule}`);
       continue;
     }
-    failed += 1;
+    let failing = false;
     for (const finding of result.findings) {
-      lines.push(`db:check: FAIL  ${finding.rule}: ${finding.object}: ${finding.message}`);
+      if (finding.awaiting === true) {
+        lines.push(`db:check: AWAIT ${finding.rule}: ${finding.object}: ${finding.message}`);
+      } else {
+        failing = true;
+        lines.push(`db:check: FAIL  ${finding.rule}: ${finding.object}: ${finding.message}`);
+      }
+    }
+    if (failing) {
+      failed += 1;
+    } else {
+      awaiting += 1;
     }
   }
-  lines.push(
-    failed === 0
-      ? `db:check: ${String(results.length)} rule(s) passed`
-      : `db:check: ${String(failed)} of ${String(results.length)} rule(s) failed`,
-  );
+  const total = String(results.length);
+  if (failed > 0) {
+    lines.push(`db:check: ${String(failed)} of ${total} rule(s) failed`);
+  } else if (awaiting > 0) {
+    lines.push(
+      `db:check: ${String(results.length - awaiting)} of ${total} rule(s) passed, ${String(awaiting)} awaiting the migration:contract label: not accepted until the run of a pull request that carries it passes`,
+    );
+  } else {
+    lines.push(`db:check: ${total} rule(s) passed`);
+  }
   return { passed: failed === 0, lines };
 }

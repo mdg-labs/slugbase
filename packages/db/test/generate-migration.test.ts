@@ -50,6 +50,12 @@ export const things = pgTable("things", { id: uuid().primaryKey(), name: text(),
 ]);
 `;
 
+const THINGS_WITHOUT_KIND_SCHEMA = `import { index, pgTable, text, uuid } from "drizzle-orm/pg-core";
+export const things = pgTable("things", { id: uuid().primaryKey(), name: text() }, (t) => [
+  index("things_name_idx").on(t.name),
+]);
+`;
+
 const scratch: string[] = [];
 
 afterAll(() => {
@@ -396,5 +402,93 @@ describe("pnpm db:generate", () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("holds no .sql file");
     expect(copy.migrations()).toEqual(before);
+  });
+
+  describe("--contract", () => {
+    const RELEASE = "1.2.0";
+
+    /** A copy holding the add_things migration, whose tag is the expand migration of a contract step. */
+    function withThings(): string {
+      copy.schema(THINGS_WITH_KIND_INDEX_SCHEMA);
+      expect(copy.generate("--name", "add_things").status).toBe(0);
+      return copy.journal().entries.at(-1)?.tag ?? "";
+    }
+
+    const leadingComment = (content: string): string[] => {
+      const lines = content.split("\n");
+      return lines.slice(0, lines.findIndex((line) => !line.startsWith("--")));
+    };
+
+    it("writes the header at the top of the migration of a drop, which the recorded checksum then covers", () => {
+      const expand = withThings();
+      copy.schema(THINGS_WITHOUT_KIND_SCHEMA);
+      const result = copy.generate("--name", "drop_kind", "--contract", `expand=${expand}`, `release=${RELEASE}`);
+      expect(result.stderr).toBe("");
+      expect(result.status).toBe(0);
+
+      const entries = copy.journal().entries;
+      const migration = copy.migrations().get(`${entries.at(-1)?.tag ?? ""}.sql`) ?? "";
+      expect(migration.startsWith(`-- slugbase:contract expand=${expand} release=${RELEASE}\n`)).toBe(true);
+      expect(migration).toContain('DROP COLUMN "kind"');
+      expect(copy.generate().stdout).toContain("up to date");
+    }, RUN_TIMEOUT_MS * 3);
+
+    it("keeps the header in the leading comment block of a file that starts with the custom SQL step", () => {
+      const expand = withThings();
+      const sqlFile = copy.path("src", "sql", "020-tenant-context.sql");
+      writeFileSync(sqlFile, `${readFileSync(sqlFile, "utf8")}\nCOMMENT ON FUNCTION public.app_account_id() IS 'account of the request';\n`);
+      const result = copy.generate("--contract", `expand=${expand}`, `release=v${RELEASE}`);
+      expect(result.status).toBe(0);
+
+      const migration = copy.migrations().get(`${copy.journal().entries.at(-1)?.tag ?? ""}.sql`) ?? "";
+      expect(migration.startsWith("-- slugbase:custom-sql sha256=")).toBe(true);
+      expect(leadingComment(migration)).toContain(`-- slugbase:contract expand=${expand} release=v${RELEASE}`);
+      expect(migration.indexOf("-- slugbase:contract")).toBeLessThan(migration.indexOf("CREATE EXTENSION"));
+      expect(copy.generate().stdout).toContain("up to date");
+    }, RUN_TIMEOUT_MS * 3);
+
+    it("rejects a run that writes only an index build, and writes nothing", () => {
+      const expand = withThings();
+      copy.schema(THINGS_WITH_TWO_NEW_INDEXES_SCHEMA);
+      const before = copy.migrations();
+      const result = copy.generate("--name", "index_things_kind_name", "--contract", `expand=${expand}`, `release=${RELEASE}`);
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain("no migration that can hold a contract step");
+      expect(copy.migrations()).toEqual(before);
+    }, RUN_TIMEOUT_MS * 3);
+
+    it("rejects a run that has nothing to write", () => {
+      const expand = copy.journal().entries[0]?.tag ?? "";
+      const before = copy.migrations();
+      const result = copy.generate("--contract", `expand=${expand}`, `release=${RELEASE}`);
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain("no migration that can hold a contract step");
+      expect(copy.migrations()).toEqual(before);
+    }, RUN_TIMEOUT_MS);
+
+    it("rejects an expand migration the journal does not list, and writes nothing", () => {
+      copy.schema(THINGS_SCHEMA);
+      const before = copy.migrations();
+      const result = copy.generate("--name", "add_things", "--contract", "expand=20260101000001_nothing", `release=${RELEASE}`);
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain("not a migration of the journal");
+      expect(copy.migrations()).toEqual(before);
+    }, RUN_TIMEOUT_MS);
+
+    it.each([
+      ["no values", []],
+      ["no release", ["expand=20260101000001_x"]],
+      ["the values swapped", [`release=${RELEASE}`, "expand=20260101000001_x"]],
+      ["an expand without a timestamp", ["expand=add_things", `release=${RELEASE}`]],
+      ["a release that is not a version", ["expand=20260101000001_x", "release=latest"]],
+      ["a release with two parts", ["expand=20260101000001_x", "release=1.2"]],
+      ["a header line smuggled into the release", ["expand=20260101000001_x", "release=1.2.0\n-- other"]],
+    ])("rejects %s before it touches anything", (_name, values) => {
+      const before = copy.migrations();
+      const result = copy.generate("--contract", ...values);
+      expect(result.status).toBe(2);
+      expect(result.stderr).toContain("--contract takes expand=");
+      expect(copy.migrations()).toEqual(before);
+    });
   });
 });

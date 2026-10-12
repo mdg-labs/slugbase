@@ -37,7 +37,7 @@ function pair(header: string): GitPackage {
   return repository;
 }
 
-function dbCheck(repository: GitPackage, marker: string | undefined): { stdout: string; status: number | null } {
+function dbCheck(repository: GitPackage, marker: string | undefined): { stdout: string; stderr: string; status: number | null } {
   const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith("GIT_")));
   delete env["SLUGBASE_DB_CHECK_CONTRACT"];
   const result = spawnSync(process.execPath, [SCRIPT, "--package", repository.dir], {
@@ -45,7 +45,7 @@ function dbCheck(repository: GitPackage, marker: string | undefined): { stdout: 
     timeout: TIMEOUT_MS,
     env: marker === undefined ? env : { ...env, SLUGBASE_DB_CHECK_CONTRACT: marker },
   });
-  return { stdout: result.stdout, status: result.status };
+  return { stdout: result.stdout, stderr: result.stderr, status: result.status };
 }
 
 const verdict = (stdout: string): string[] => stdout.split("\n").filter((line) => line.includes("expand-contract"));
@@ -69,5 +69,36 @@ describe("pnpm db:check and the contract migration", () => {
   it("passes the rule with the header and SLUGBASE_DB_CHECK_CONTRACT=true", () => {
     const { stdout } = dbCheck(pair(HEADER), "true");
     expect(verdict(stdout)).toEqual(["db:check: ok    expand-contract"]);
+  }, TIMEOUT_MS);
+
+  it("reports a header-marked drop as awaiting the label on a push run, not as a failure", () => {
+    const { stdout } = dbCheck(pair(HEADER), "pending");
+    expect(verdict(stdout)).toEqual([
+      expect.stringContaining("AWAIT expand-contract: migrations/20260301000000_drop_legacy_title.sql: drops column bookmarks.legacy_title"),
+    ]);
+    expect(stdout).not.toContain("FAIL  expand-contract");
+  }, TIMEOUT_MS);
+
+  it("still fails an unmarked drop on a push run, and exits 1", () => {
+    const { stdout, status } = dbCheck(pair(""), "pending");
+    expect(verdict(stdout)).toEqual([expect.stringContaining("FAIL  expand-contract: migrations/20260301000000_drop_legacy_title.sql: drops column")]);
+    expect(verdict(stdout)[0]).toContain("has no contract header");
+    expect(status).toBe(1);
+  }, TIMEOUT_MS);
+
+  it("still fails a drop with a malformed header on a push run", () => {
+    const { stdout, status } = dbCheck(pair(`-- slugbase:contract expand=${SECOND}\n`), "pending");
+    expect(verdict(stdout)).toEqual([expect.stringContaining("FAIL  expand-contract")]);
+    expect(verdict(stdout)[0]).toContain("malformed contract header");
+    expect(status).toBe(1);
+  }, TIMEOUT_MS);
+
+  it("exits 2 on a marker value it does not know, before it checks anything", () => {
+    for (const marker of ["1", "TRUE", "", "pendng"]) {
+      const { stdout, stderr, status } = dbCheck(pair(HEADER), marker);
+      expect(status, marker).toBe(2);
+      expect(stderr, marker).toContain("must be true, false or pending");
+      expect(stdout, marker).toBe("");
+    }
   }, TIMEOUT_MS);
 });

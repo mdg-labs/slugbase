@@ -1,7 +1,7 @@
 import { analyseSql, setsSessionTimeout, type Operation, type TableName } from "./migration-statements.ts";
 import { readJournal, readMigration } from "./migration-files.ts";
 import { readReleaseState, releaseTags, type ReleaseState } from "./release-history.ts";
-import type { CheckRule, Finding } from "./types.ts";
+import type { CheckRule, ContractMarker, Finding } from "./types.ts";
 
 // Doc 05 section 5.2 and Q52: several replicas run during a rolling deploy, so a
 // migration must work for the code before it and after it. Every migration
@@ -59,10 +59,18 @@ import type { CheckRule, Finding } from "./types.ts";
 //     only and is not a product environment variable (D24), like
 //     SLUGBASE_TEST_PG_URL.
 //
-// Either alone is rejected. A file that sets lock_timeout or statement_timeout
-// is rejected whatever its header says: `migrate` sets both for its session
-// (5 s and 15 min, and lock_timeout off for a CONCURRENTLY step), and a
-// migration changes neither.
+// Either alone is rejected. The variable takes `true`, `false` or `pending`, and
+// any other value is an error, so a typo never reads as a pass. `pending` is
+// what CI sets on a push: a push has no pull request and so no label, and a
+// contract migration lands on `dev` by cherry-pick. A step with a valid header
+// is then reported as awaiting the label (an AWAIT line, which does not fail the
+// run), while a step with no header or an invalid one fails as it does without
+// the marker. The pull request that promotes `dev` to `main` is checked with the
+// label, and only that run accepts the step.
+//
+// A file that sets lock_timeout or statement_timeout is rejected whatever its
+// header says: `migrate` sets both for its session (5 s and 15 min, and
+// lock_timeout off for a CONCURRENTLY step), and a migration changes neither.
 //
 // A data-changing statement is rejected the same way, whatever the header and
 // the marker say, and without an exception for a table the migration creates
@@ -82,11 +90,27 @@ const ID = "expand-contract";
 const MARKER_VARIABLE = "SLUGBASE_DB_CHECK_CONTRACT";
 const HEADER_PREFIX = "-- slugbase:contract";
 const HEADER = /^-- slugbase:contract expand=(\S+) release=(\S+)\s*$/;
+const MARKER_HINT = `${MARKER_VARIABLE}=true, which CI sets for a pull request labelled migration:contract`;
 const HEADER_SYNTAX = `${HEADER_PREFIX} expand=<migration tag> release=<version>`;
 
-/** Whether the environment carries the contract marker. Only the exact value `true` does. */
-export function contractMarkerFromEnv(env: Readonly<Record<string, string | undefined>>): boolean {
-  return env[MARKER_VARIABLE] === "true";
+/**
+ * The contract marker of an environment: `true` is `set`, `false` or no variable is `unset`, and
+ * `pending` is `pending`. Any other value, the empty string included, is an error: a check that
+ * cannot tell what it was asked to do must not pass.
+ */
+export function contractMarkerFromEnv(env: Readonly<Record<string, string | undefined>>): ContractMarker {
+  const value = env[MARKER_VARIABLE];
+  switch (value) {
+    case undefined:
+    case "false":
+      return "unset";
+    case "true":
+      return "set";
+    case "pending":
+      return "pending";
+    default:
+      throw new Error(`${MARKER_VARIABLE} must be true, false or pending, not "${value}"`);
+  }
 }
 
 const key = (table: TableName): string => `${table.schema}.${table.name}`;
@@ -309,20 +333,25 @@ export const expandContractRule: CheckRule = {
         continue;
       }
       const header = headerProblem(packageDir, content, tags, journalTags);
-      const marked = contractMarker === true;
-      let needs: string | undefined;
-      if (header !== undefined && !marked) {
-        needs = `it is not accepted: it ${header}, and the contract marker is not set (${MARKER_VARIABLE}=true, which CI sets for a pull request labelled migration:contract)`;
-      } else if (header !== undefined) {
-        needs = `it is not accepted: it ${header}`;
-      } else if (!marked) {
-        needs = `it is not accepted: the contract marker is not set (${MARKER_VARIABLE}=true, which CI sets for a pull request labelled migration:contract)`;
-      }
-      if (needs === undefined) {
-        continue;
-      }
-      for (const found of problems) {
-        findings.push({ rule: ID, object, message: `${found}; ${needs}` });
+      const marker = contractMarker ?? "unset";
+      if (header !== undefined) {
+        const missing = marker === "unset" ? `, and the contract marker is not set (${MARKER_HINT})` : "";
+        for (const found of problems) {
+          findings.push({ rule: ID, object, message: `${found}; it is not accepted: it ${header}${missing}` });
+        }
+      } else if (marker === "unset") {
+        for (const found of problems) {
+          findings.push({ rule: ID, object, message: `${found}; it is not accepted: the contract marker is not set (${MARKER_HINT})` });
+        }
+      } else if (marker === "pending") {
+        for (const found of problems) {
+          findings.push({
+            rule: ID,
+            object,
+            message: `${found}; its contract header is valid, so it awaits the migration:contract label: this run has no pull request to read the label from, and only the run of a pull request that carries it accepts the step`,
+            awaiting: true,
+          });
+        }
       }
     }
     return findings;
