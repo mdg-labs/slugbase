@@ -145,9 +145,10 @@ describe("the seat check", () => {
 
   it("is not rescued by a late answer after the timeout", async () => {
     const late = module("late", { seatCheck: () => new Promise((resolve) => setTimeout(() => { resolve({ seatLimit: 9 }); }, 60)) });
-    const { hooks } = dispatcher([late]);
-    await failure(hooks.seatLimit(seat, null));
+    const { hooks, logger } = dispatcher([late]);
+    expect((await failure(hooks.seatLimit(seat, null))).code).toBe("unavailable");
     await new Promise((resolve) => setTimeout(resolve, 80));
+    expect(logger.entries).toHaveLength(1);
   });
 });
 
