@@ -443,6 +443,12 @@ describe("raw outbound matcher (T6)", () => {
     ["an optional call", 'void globalThis.fetch?.("https://example.com");\n'],
     ["a call inside a class", 'class A {\n  run() {\n    return fetch("https://example.com");\n  }\n}\n'],
     ["a call beside a fetch method", 'class A {\n  fetch(request: Request) {\n    return globalThis.fetch(request);\n  }\n}\n'],
+    ["an alias that is called", 'const send = fetch;\nvoid send("https://example.com");\n'],
+    ["an alias of a member", "const send = globalThis.fetch;\nvoid send;\n"],
+    ["an alias by string key", 'const send = window["fetch"];\nvoid send;\n'],
+    ["an asserted alias", "const send = fetch as typeof globalThis.fetch;\nvoid send;\n"],
+    ["a client handed fetch", "declare function client(options: object): void;\nclient({ fetch });\n"],
+    ["a client handed fetch as an argument", "declare function client(send: unknown): void;\nclient(fetch);\n"],
     ...["node:http", "node:https", "http", "https", "undici"].flatMap((spec) => [
       [`import of ${spec}`, `import { request } from "${spec}";\nvoid request;\n`],
       [`namespace import of ${spec}`, `import * as lib from "${spec}";\nvoid lib;\n`],
@@ -467,6 +473,8 @@ describe("raw outbound matcher (T6)", () => {
     ["a property", "export const server = { fetch: async (request: Request) => new Response() };\n"],
     ["the word in a comment and a string", '// fetch(url) and import "undici"\nexport const text = "fetch( node:http undici";\n'],
     ["a non-HTTP module", 'import { createHash } from "node:crypto";\nvoid createHash;\n'],
+    ["the type of fetch", "export type Send = typeof fetch;\nexport type Member = typeof globalThis.fetch;\n"],
+    ["a destructured member of another object", "declare const options: { fetch: () => void };\nconst { fetch: send } = options;\nvoid send;\n"],
   ])("does not flag %s", (_name, code) => {
     expect(findRawOutbound(code)).toEqual([]);
   });
