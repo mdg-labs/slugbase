@@ -170,6 +170,7 @@ describe("the walker against a server that does not enforce the policy", () => {
       body: { label: "x" },
       foreign: { path: { rowId: "0192f3a0-2222-7000-8000-00000000b021" }, body: { label: "x" } },
     },
+    getProbeAdminRow: { path: { rowId: "0192f3a0-2222-7000-8000-00000000a021" }, foreign: { path: { rowId: "0192f3a0-2222-7000-8000-00000000b021" } } },
     getProbeSettings: {},
     getProbeOwnership: {},
     getProbeInstance: {},
@@ -184,7 +185,7 @@ describe("the walker against a server that does not enforce the policy", () => {
     if (pathname.endsWith("/check")) {
       return Response.json({ id: row.id, matches: true });
     }
-    if (pathname.includes("probe-rows")) {
+    if (pathname.includes("probe-rows") || pathname.includes("probe-admin-rows")) {
       return Response.json(row);
     }
     if (pathname.endsWith("probe-me")) {
@@ -202,11 +203,11 @@ describe("the walker against a server that does not enforce the policy", () => {
     expect(failed).toEqual(new Set(["without credentials", "too-low role", "read-only token", "without the entitlement", "resource of workspace B", "valid request"]));
     const unexpected = (scenario: string): number =>
       report.failures.filter((failure) => failure.kind === "unexpected_status" && failure.subject.endsWith(`, ${scenario}`)).length;
-    expect(unexpected("without credentials")).toBe(7);
-    expect(unexpected("too-low role")).toBe(6);
+    expect(unexpected("without credentials")).toBe(8);
+    expect(unexpected("too-low role")).toBe(7);
     expect(unexpected("read-only token")).toBe(1);
     expect(unexpected("without the entitlement")).toBe(1);
-    expect(unexpected("resource of workspace B")).toBe(2);
+    expect(unexpected("resource of workspace B")).toBe(3);
     // the premium operation answers 200 where its fixture expects the refusal
     expect(unexpected("valid request")).toBe(1);
   });
