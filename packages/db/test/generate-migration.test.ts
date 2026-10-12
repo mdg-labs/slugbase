@@ -125,9 +125,15 @@ class Copy {
 }
 
 let copy: Copy;
+// The migrations the package ships; a test counts the ones it generates from here.
+let shipped: number;
+let shippedTags: string[];
 
 beforeEach(() => {
   copy = new Copy();
+  const entries = copy.journal().entries;
+  shipped = entries.length;
+  shippedTags = entries.map((entry) => entry.tag.slice(15));
 });
 
 describe("committed migrations", () => {
@@ -202,11 +208,11 @@ describe("pnpm db:generate", () => {
     expect(isNonTransactional(created)).toBe(false);
 
     const entries = copy.journal().entries;
-    expect(JSON.stringify(entries.slice(0, 1))).toBe(
+    expect(JSON.stringify(entries.slice(0, shipped))).toBe(
       JSON.stringify((JSON.parse(before.get(join("meta", "_journal.json")) ?? "") as Journal).entries),
     );
-    expect(entries).toHaveLength(2);
-    expect(entries[1]?.tag).toBe(migrationFile?.replace(/\.sql$/, ""));
+    expect(entries).toHaveLength(shipped + 1);
+    expect(entries[shipped]?.tag).toBe(migrationFile?.replace(/\.sql$/, ""));
 
     const afterSecondRun = copy.generate();
     expect(afterSecondRun.stdout).toContain("up to date");
@@ -220,7 +226,7 @@ describe("pnpm db:generate", () => {
 
     const result = copy.generate("--name", "add_things");
     expect(result.status).toBe(0);
-    const tag = copy.journal().entries[1]?.tag ?? "";
+    const tag = copy.journal().entries[shipped]?.tag ?? "";
     expect(tag).toMatch(/^\d{14}_add_things$/);
     const migration = copy.migrations().get(`${tag}.sql`) ?? "";
     expect(migration).toContain('CREATE TABLE "things"');
@@ -229,7 +235,7 @@ describe("pnpm db:generate", () => {
     expect(migration.indexOf("CREATE TABLE")).toBeLessThan(migration.indexOf("-- slugbase:custom-sql"));
     expect(migration).toContain("CREATE EXTENSION IF NOT EXISTS unaccent;");
     expect(isNonTransactional(migration)).toBe(false);
-    expect(copy.journal().entries).toHaveLength(2);
+    expect(copy.journal().entries).toHaveLength(shipped + 1);
 
     expect(copy.generate().stdout).toContain("up to date");
   }, RUN_TIMEOUT_MS * 2);
@@ -241,12 +247,12 @@ describe("pnpm db:generate", () => {
     expect(copy.generate("--name", "index_things_kind").status).toBe(0);
 
     const entries = copy.journal().entries;
-    expect(entries).toHaveLength(3);
+    expect(entries).toHaveLength(shipped + 2);
     const migrations = copy.migrations();
-    expect(migrations.get(`${entries[2]?.tag ?? ""}.sql`)).toBe(
+    expect(migrations.get(`${entries[shipped + 1]?.tag ?? ""}.sql`)).toBe(
       '-- slugbase:non-transactional\nCREATE INDEX CONCURRENTLY "things_kind_idx" ON "things" USING btree ("kind");\n',
     );
-    expect(migrations.get(`${entries[1]?.tag ?? ""}.sql`)).not.toContain("CONCURRENTLY");
+    expect(migrations.get(`${entries[shipped]?.tag ?? ""}.sql`)).not.toContain("CONCURRENTLY");
     expect(copy.generate().stdout).toContain("up to date");
   }, RUN_TIMEOUT_MS * 3);
 
@@ -261,13 +267,13 @@ describe("pnpm db:generate", () => {
 
     const entries = copy.journal().entries;
     expect(entries.map((entry) => entry.tag.slice(15))).toEqual([
-      "add_extensions_and_tenant_functions",
+      ...shippedTags,
       "add_things",
       "index_things_kind",
       "add_note",
       "index_note",
     ]);
-    const [, , , column, index] = entries;
+    const [column, index] = entries.slice(shipped + 2);
     expect(index?.when).toBeGreaterThan(column?.when ?? Number.POSITIVE_INFINITY);
     expect((index?.tag ?? "") > (column?.tag ?? "")).toBe(true);
 
@@ -292,13 +298,13 @@ describe("pnpm db:generate", () => {
 
     const entries = copy.journal().entries;
     expect(entries.map((entry) => entry.tag.slice(15))).toEqual([
-      "add_extensions_and_tenant_functions",
+      ...shippedTags,
       "add_things",
       "index_things_lookup",
       "index_things_lookup_2",
     ]);
     expect(entries.map((entry) => entry.when)).toEqual([...entries.map((entry) => entry.when)].sort((a, b) => a - b));
-    const [, , first, second] = entries;
+    const [first, second] = entries.slice(shipped + 1);
     // Added entries are a millisecond apart, so they stay within milliseconds of drizzle-kit's timestamp.
     expect((second?.when ?? 0) - (first?.when ?? 0)).toBe(1);
     expect(new Set(entries.map((entry) => entry.tag)).size).toBe(entries.length);
@@ -324,13 +330,13 @@ describe("pnpm db:generate", () => {
 
     const entries = copy.journal().entries;
     expect(entries.map((entry) => entry.tag.slice(15))).toEqual([
-      "add_extensions_and_tenant_functions",
+      ...shippedTags,
       "add_things",
       "add_note",
       "index_note",
       "index_note_2",
     ]);
-    const [, , column, first, second] = entries;
+    const [column, first, second] = entries.slice(shipped + 1);
     expect(first?.when).toBeGreaterThan(column?.when ?? Number.POSITIVE_INFINITY);
     expect(second?.when).toBeGreaterThan(first?.when ?? Number.POSITIVE_INFINITY);
 

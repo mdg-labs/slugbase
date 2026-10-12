@@ -29,6 +29,7 @@
     "@slugbase/core": "workspace:*",
     "@slugbase/db": "workspace:*",
     "hono": "^4.13.13",
+    "pg-boss": "^12.37.1",
     "pino": "^10.4.0",
     "zod": "^4.6.5"
   },

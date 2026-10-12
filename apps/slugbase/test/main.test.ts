@@ -134,8 +134,8 @@ describe("apps/slugbase main", () => {
     expect(output).toContain('"Listening"');
   });
 
-  it.each(["worker", "migrate"])("accepts the %s command", (command) => {
-    expect(start(valid, command).status).toBe(0);
+  it("accepts the migrate command", () => {
+    expect(start(valid, "migrate").status).toBe(0);
   });
 
   it("exits non-zero when the port is taken", async () => {
@@ -190,7 +190,9 @@ describe("apps/slugbase main", () => {
   it("validates the schema of the command it runs", () => {
     const migrateOnly = { NODE_ENV: valid.NODE_ENV, DATABASE_MIGRATE_URL: valid.DATABASE_MIGRATE_URL };
     expect(start(migrateOnly, "migrate").status).toBe(0);
-    expect(start(migrateOnly, "worker").status).toBe(1);
+    const worker = start(migrateOnly, "worker");
+    expect(worker.status).toBe(1);
+    expect(worker.output).toContain("DATABASE_URL");
   });
 
   it("warns once about unknown SLUGBASE_* keys, naming keys only", async () => {

@@ -8,9 +8,12 @@ import {
   PROCESS_TYPES,
   createLogger,
   createServer,
+  createWorker,
   isProcessType,
   loadConfig,
+  type Logger,
   type ServerConfig,
+  type WorkerConfig,
 } from "@slugbase/server";
 
 // The process type is the command of the one image (doc 01 section 3): the
@@ -27,19 +30,9 @@ function log(level: Level, message: string, fields: Readonly<Record<string, unkn
 
 const SHUTDOWN_SIGNALS = ["SIGTERM", "SIGINT"] as const;
 
-// CE composes the unconfigured defaults of every port and no extra modules or
-// migration sets; a configured adapter replaces its default here.
-async function runServer(config: ServerConfig): Promise<void> {
-  const logger = createLogger({ level: config.LOG_LEVEL });
-  const server = createServer({
-    config,
-    adapters: unconfigured(),
-    modules: [],
-    migrations: [],
-    logger,
-  });
-  const running = await server.start();
-
+// Stops the process once on the first signal: `shutdown` lets in-flight work
+// finish within its deadline and closes the pools.
+function exitOnSignal(running: { shutdown(): Promise<void> }, logger: Logger): void {
   let stopping = false;
   for (const signal of SHUTDOWN_SIGNALS) {
     process.once(signal, () => {
@@ -62,6 +55,34 @@ async function runServer(config: ServerConfig): Promise<void> {
   }
 }
 
+// CE composes the unconfigured defaults of every port and no extra modules or
+// migration sets; a configured adapter replaces its default here.
+async function runServer(config: ServerConfig): Promise<void> {
+  const logger = createLogger({ level: config.LOG_LEVEL });
+  const server = createServer({
+    config,
+    adapters: unconfigured(),
+    modules: [],
+    migrations: [],
+    logger,
+  });
+  exitOnSignal(await server.start(), logger);
+}
+
+// The worker registers the jobs and schedules of the same modules (doc 01
+// section 3); CE has none yet. It never migrates: `migrate` installs the
+// pg-boss schema before it starts.
+async function runWorker(config: WorkerConfig): Promise<void> {
+  const logger = createLogger({ level: config.LOG_LEVEL });
+  const worker = createWorker({
+    config,
+    adapters: unconfigured(),
+    modules: [],
+    logger,
+  });
+  exitOnSignal(await worker.start(), logger);
+}
+
 async function start(): Promise<void> {
   const command = process.argv[2] ?? "server";
   if (!isProcessType(command)) {
@@ -71,11 +92,16 @@ async function start(): Promise<void> {
   }
 
   let serverConfig: ServerConfig | undefined;
+  let workerConfig: WorkerConfig | undefined;
   let warnings: readonly string[];
   try {
     if (command === "server") {
       const loaded = loadConfig("server", process.env);
       serverConfig = loaded.config;
+      warnings = loaded.warnings;
+    } else if (command === "worker") {
+      const loaded = loadConfig("worker", process.env);
+      workerConfig = loaded.config;
       warnings = loaded.warnings;
     } else {
       warnings = loadConfig(command, process.env).warnings;
@@ -93,15 +119,17 @@ async function start(): Promise<void> {
   }
   log("info", "Configuration loaded", { process: command });
 
-  if (serverConfig !== undefined) {
-    try {
+  try {
+    if (serverConfig !== undefined) {
       await runServer(serverConfig);
-    } catch (error) {
-      log("error", error instanceof Error ? error.message : "The server failed to start", {
-        code: (error as { code?: unknown }).code,
-      });
-      process.exitCode = 1;
+    } else if (workerConfig !== undefined) {
+      await runWorker(workerConfig);
     }
+  } catch (error) {
+    log("error", error instanceof Error ? error.message : `The ${command} failed to start`, {
+      code: (error as { code?: unknown }).code,
+    });
+    process.exitCode = 1;
   }
 }
 

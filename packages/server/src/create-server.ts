@@ -3,7 +3,7 @@ import { createAdaptorServer, type ServerType } from "@hono/node-server";
 import type { Adapters } from "@slugbase/core";
 import { createDatabase, type Database, type MigrationChain } from "@slugbase/db";
 import { Hono } from "hono";
-import type { ServerConfig } from "./config/index.ts";
+import type { ServerConfig, WorkerConfig } from "./config/index.ts";
 import {
   RouteTable,
   installChain,
@@ -11,6 +11,7 @@ import {
   type RouteBinding,
   type StageName,
 } from "./http/chain.ts";
+import type { JobDefinition, ScheduleDefinition } from "./worker/job.ts";
 
 export type { ChainContext, ChainEnv, MatchedRoute, RouteBinding, RouteHandler, StageName } from "./http/chain.ts";
 export { CHAIN_STAGES } from "./http/chain.ts";
@@ -24,31 +25,21 @@ export interface Logger {
 
 /** What a module receives: the same logger, ports and tenant helper as core code (doc 01 section 7.1). */
 export interface ModuleContext {
-  readonly config: ServerConfig;
+  /** The configuration every process type has; the server's own keys are not part of it. */
+  readonly config: WorkerConfig;
   readonly logger: Logger;
   readonly adapters: Readonly<Adapters>;
   /** Every tenant query runs through it (doc 01 section 5.3). */
   readonly withTenant: Database["withTenant"];
 }
 
-/** A pg-boss job handler a module contributes to the worker. */
-export interface ModuleJob {
-  readonly name: string;
-  readonly handle: (payload: unknown, context: ModuleContext) => Promise<void>;
-}
-
-/** A pg-boss schedule: the named job runs on the cron expression, once across all workers. */
-export interface ModuleSchedule {
-  readonly name: string;
-  readonly cron: string;
-  readonly job: string;
-}
-
 export interface ModuleContribution {
   /** Operations declared in `@slugbase/contracts`, each with its handler. */
   readonly routes?: readonly RouteBinding[];
-  readonly jobs?: readonly ModuleJob[];
-  readonly schedules?: readonly ModuleSchedule[];
+  /** Jobs the worker runs, declared with `defineJob`. */
+  readonly jobs?: readonly JobDefinition[];
+  /** Schedules the worker registers, declared with `defineSchedule`. */
+  readonly schedules?: readonly ScheduleDefinition[];
   /** Migration sets applied after the CE chain (doc 01 section 7.3). */
   readonly migrations?: readonly MigrationChain[];
 }
@@ -96,8 +87,8 @@ export interface Server {
   readonly stages: readonly StageName[];
   /** Migration sets in the order they are applied after the CE chain: the argument's, then the modules'. */
   readonly migrations: readonly MigrationChain[];
-  readonly jobs: readonly ModuleJob[];
-  readonly schedules: readonly ModuleSchedule[];
+  readonly jobs: readonly JobDefinition[];
+  readonly schedules: readonly ScheduleDefinition[];
   /** Serves one request through the chain. */
   fetch(request: Request): Promise<Response>;
   /** Listens on `PORT`. */
@@ -112,7 +103,8 @@ export type CompositionErrorCode =
   | "duplicate_route"
   | "duplicate_job"
   | "unknown_job"
-  | "duplicate_schedule";
+  | "duplicate_schedule"
+  | "invalid_schedule";
 
 /** The composition is invalid; thrown by `createServer` before anything listens. */
 export class CompositionError extends Error {
@@ -143,7 +135,7 @@ const REQUIRED_ADAPTERS = Object.keys(ADAPTER_PORTS) as (keyof Adapters)[];
 
 const DEFAULT_SHUTDOWN_TIMEOUT_MS = 25_000;
 
-function assertAdapters(adapters: Adapters): void {
+export function assertAdapters(adapters: Adapters): void {
   const missing = REQUIRED_ADAPTERS.filter((port) => {
     const adapter = adapters[port] as unknown;
     return typeof adapter !== "object" || adapter === null || typeof (adapter as { available?: unknown }).available !== "boolean";
@@ -156,10 +148,10 @@ function assertAdapters(adapters: Adapters): void {
   }
 }
 
-interface Composition {
+export interface Composition {
   readonly routes: readonly RouteBinding[];
-  readonly jobs: readonly ModuleJob[];
-  readonly schedules: readonly ModuleSchedule[];
+  readonly jobs: readonly JobDefinition[];
+  readonly schedules: readonly ScheduleDefinition[];
   readonly migrations: readonly MigrationChain[];
 }
 
@@ -168,15 +160,15 @@ function shapeOf(binding: RouteBinding): string {
   return `${binding.operation.method.toUpperCase()} ${path}`;
 }
 
-function compose(
+export function compose(
   modules: readonly ServerModule[],
   context: ModuleContext,
   migrations: readonly MigrationChain[],
 ): Composition {
   const names = new Set<string>();
   const routes: RouteBinding[] = [];
-  const jobs: ModuleJob[] = [];
-  const schedules: ModuleSchedule[] = [];
+  const jobs: JobDefinition[] = [];
+  const schedules: ScheduleDefinition[] = [];
   const chains: MigrationChain[] = [...migrations];
 
   for (const module of modules) {
@@ -229,6 +221,11 @@ function compose(
     scheduleNames.add(schedule.name);
     if (!jobNames.has(schedule.job)) {
       throw new CompositionError("unknown_job", `schedule ${schedule.name} names the job ${schedule.job}, which no module registers`);
+    }
+    try {
+      jobs.find((job) => job.name === schedule.job)?.parse(schedule.payload ?? {});
+    } catch {
+      throw new CompositionError("invalid_schedule", `schedule ${schedule.name} carries a payload the job ${schedule.job} does not accept`);
     }
   }
 

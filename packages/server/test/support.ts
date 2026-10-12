@@ -3,7 +3,7 @@ import type { Database } from "@slugbase/db";
 import { defineOperation, jsonResponse, problemResponse, type OperationDefinition } from "@slugbase/contracts";
 import { z } from "zod";
 import { loadConfig } from "../src/config/index.ts";
-import type { Logger } from "../src/create-server.ts";
+import type { Logger, ModuleContext } from "../src/create-server.ts";
 import { productionEnv } from "./config/support.ts";
 
 export interface RecordedLog {
@@ -67,4 +67,9 @@ export function operation(method: "get" | "post", path: string, operationId: str
       404: problemResponse("not found"),
     },
   });
+}
+
+export function moduleContext(config: ModuleContext["config"] = serverConfig()): ModuleContext {
+  const database = fakeDatabase();
+  return { config, logger: recordingLogger(), adapters: adapters(), withTenant: database.withTenant.bind(database) };
 }

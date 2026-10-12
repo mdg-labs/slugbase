@@ -1,5 +1,6 @@
 import { unconfigured, type Adapters } from "@slugbase/core";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import {
   CHAIN_STAGES,
   CompositionError,
@@ -7,7 +8,14 @@ import {
   type ModuleContext,
   type ServerModule,
 } from "../src/create-server.ts";
+import { defineJob, defineSchedule } from "../src/worker/index.ts";
 import { adapters, fakeDatabase, operation, recordingLogger, serverConfig } from "./support.ts";
+
+const noPayload = z.object({});
+
+function job(name: string) {
+  return defineJob({ name, payload: noPayload, handle: () => Promise.resolve() });
+}
 
 function compose(modules: readonly ServerModule[] = [], overrides: { adapters?: Adapters } = {}) {
   const logger = recordingLogger();
@@ -110,8 +118,8 @@ describe("createServer", () => {
     const module: ServerModule = {
       name: "billing",
       register: () => ({
-        jobs: [{ name: "reconcile", handle: () => Promise.resolve() }],
-        schedules: [{ name: "nightly", cron: "0 3 * * *", job: "reconcile" }],
+        jobs: [job("billing.reconcile")],
+        schedules: [defineSchedule({ name: "nightly", cron: "0 3 * * *", job: "billing.reconcile" })],
         migrations: [first, second],
       }),
     };
@@ -123,7 +131,7 @@ describe("createServer", () => {
       logger: recordingLogger(),
       database: fakeDatabase(),
     });
-    expect(server.jobs.map((job) => job.name)).toEqual(["reconcile"]);
+    expect(server.jobs.map((job) => job.name)).toEqual(["billing.reconcile"]);
     expect(server.schedules.map((schedule) => schedule.name)).toEqual(["nightly"]);
     expect(server.migrations).toEqual([given, first, second]);
   });
@@ -152,19 +160,16 @@ describe("createServer", () => {
           {
             name: "jobs",
             register: () => ({
-              jobs: [
-                { name: "same", handle: () => Promise.resolve() },
-                { name: "same", handle: () => Promise.resolve() },
-              ],
+              jobs: [job("same.job"), job("same.job")],
             }),
           },
         ],
-        "same",
+        "same.job",
       ],
       [
         "unknown_job",
-        [{ name: "orphan", register: () => ({ schedules: [{ name: "s", cron: "* * * * *", job: "absent" }] }) }],
-        "absent",
+        [{ name: "orphan", register: () => ({ schedules: [defineSchedule({ name: "s", cron: "* * * * *", job: "absent.job" })] }) }],
+        "absent.job",
       ],
       [
         "duplicate_schedule",
@@ -172,15 +177,28 @@ describe("createServer", () => {
           {
             name: "twice",
             register: () => ({
-              jobs: [{ name: "j", handle: () => Promise.resolve() }],
+              jobs: [job("some.job")],
               schedules: [
-                { name: "s", cron: "* * * * *", job: "j" },
-                { name: "s", cron: "* * * * *", job: "j" },
+                defineSchedule({ name: "s", cron: "* * * * *", job: "some.job" }),
+                defineSchedule({ name: "s", cron: "* * * * *", job: "some.job" }),
               ],
             }),
           },
         ],
         "s is registered twice",
+      ],
+      [
+        "invalid_schedule",
+        [
+          {
+            name: "wrong",
+            register: () => ({
+              jobs: [job("some.job")],
+              schedules: [defineSchedule({ name: "s", cron: "* * * * *", job: "some.job", payload: { extra: "x" } })],
+            }),
+          },
+        ],
+        "some.job",
       ],
     ];
     for (const [code, modules, mention] of conflicts) {

@@ -13,8 +13,6 @@ export type {
   MatchedRoute,
   ModuleContext,
   ModuleContribution,
-  ModuleJob,
-  ModuleSchedule,
   RouteBinding,
   RouteHandler,
   RunningServer,
@@ -23,3 +21,4 @@ export type {
   StageName,
   StartOptions,
 } from "./create-server.ts";
+export * from "./worker/index.ts";

@@ -8,6 +8,13 @@
       "when": 1791726182512,
       "tag": "20261011134302_add_extensions_and_tenant_functions",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791801269244,
+      "tag": "20261012103429_add_sql_definitions",
+      "breakpoints": true
     }
   ]
 }

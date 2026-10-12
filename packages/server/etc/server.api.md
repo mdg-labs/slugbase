@@ -14,6 +14,9 @@ import { ProblemCode } from '@slugbase/contracts';
 import { z } from 'zod';
 
 // @public
+export function assertIdempotent<Payload extends JobPayload>(check: IdempotencyCheck<Payload>): Promise<void>;
+
+// @public
 export const CHAIN_STAGES: readonly ["request-context", "security-headers", "body-limits", "authentication", "cross-site-protection", "rate-limiting", "tenant-resolution", "validation", "authorization", "handler", "response", "audit-telemetry"];
 
 // @public (undocumented)
@@ -43,7 +46,7 @@ export class CompositionError extends Error {
 }
 
 // @public (undocumented)
-export type CompositionErrorCode = "missing_adapter" | "invalid_module" | "duplicate_module" | "module_failed" | "duplicate_route" | "duplicate_job" | "unknown_job" | "duplicate_schedule";
+export type CompositionErrorCode = "missing_adapter" | "invalid_module" | "duplicate_module" | "module_failed" | "duplicate_route" | "duplicate_job" | "unknown_job" | "duplicate_schedule" | "invalid_schedule";
 
 // @public (undocumented)
 export interface ConfigByProcess {
@@ -92,6 +95,25 @@ export interface CreateServerOptions {
 }
 
 // @public
+export function createWorker(options: CreateWorkerOptions): Worker;
+
+// @public (undocumented)
+export interface CreateWorkerOptions {
+    // (undocumented)
+    readonly adapters: Adapters;
+    // (undocumented)
+    readonly config: WorkerConfig;
+    readonly database?: Database;
+    // (undocumented)
+    readonly logger: Logger;
+    // (undocumented)
+    readonly modules: readonly ServerModule[];
+    readonly pollingIntervalSeconds?: number;
+    readonly poolSize?: number;
+    readonly shutdownTimeoutMs?: number;
+}
+
+// @public
 export const databaseFragment: EnvFragment<    {
 DATABASE_URL: z.ZodString;
 SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
@@ -102,6 +124,27 @@ export function declaredKeys(): readonly string[];
 
 // @public (undocumented)
 export const DEFAULT_DOCS_BASE_URL = "https://slugbase.app/docs";
+
+// @public (undocumented)
+export const DEFAULT_RETRY_POLICY: ResolvedRetryPolicy;
+
+// @public (undocumented)
+export const DEFAULT_WORKER_POOL_SIZE = 5;
+
+// @public
+export function defineJob<const Shape extends z.ZodRawShape>(options: DefineJobOptions<Shape>): JobDefinition<z.infer<z.ZodObject<Shape>> & JobPayload>;
+
+// @public (undocumented)
+export interface DefineJobOptions<Shape extends z.ZodRawShape> {
+    readonly handle: (payload: z.infer<z.ZodObject<Shape>>, context: ModuleContext) => Promise<void>;
+    readonly name: string;
+    readonly payload: z.ZodObject<Shape>;
+    // (undocumented)
+    readonly retry?: RetryPolicy;
+}
+
+// @public
+export function defineSchedule(options: ScheduleDefinition): ScheduleDefinition;
 
 // @public
 export function envBoolean(): z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>;
@@ -220,10 +263,42 @@ DOCS_BASE_URL: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<string, string
 }>;
 
 // @public (undocumented)
+export interface IdempotencyCheck<Payload extends JobPayload> {
+    // (undocumented)
+    readonly context: ModuleContext;
+    // (undocumented)
+    readonly job: JobDefinition<Payload>;
+    // (undocumented)
+    readonly payload: Payload;
+    readonly state: () => Promise<unknown>;
+}
+
+// @public (undocumented)
 export type IntersectUnion<Union> = (Union extends unknown ? (value: Union) => void : never) extends (value: infer Both) => void ? Both : never;
 
 // @public (undocumented)
 export function isProcessType(value: string): value is ProcessType;
+
+// @public
+export interface JobDefinition<Payload extends JobPayload = JobPayload> {
+    handle(payload: unknown, context: ModuleContext): Promise<void>;
+    // (undocumented)
+    readonly name: string;
+    parse(payload: unknown): Payload;
+    // (undocumented)
+    readonly retry: ResolvedRetryPolicy;
+}
+
+// @public (undocumented)
+export class JobDefinitionError extends Error {
+    constructor(message: string);
+}
+
+// @public (undocumented)
+export type JobPayload = Readonly<Record<string, JobScalar>>;
+
+// @public
+export type JobScalar = string | number | boolean | null | undefined;
 
 // @public
 export function loadConfig<Type extends ProcessType>(type: Type, env: EnvironmentVariables): LoadedConfig<ConfigByProcess[Type]>;
@@ -332,8 +407,7 @@ export const MIN_SESSION_SECRET_LENGTH = 32;
 export interface ModuleContext {
     // (undocumented)
     readonly adapters: Readonly<Adapters>;
-    // (undocumented)
-    readonly config: ServerConfig;
+    readonly config: WorkerConfig;
     // (undocumented)
     readonly logger: Logger;
     readonly withTenant: Database["withTenant"];
@@ -341,34 +415,19 @@ export interface ModuleContext {
 
 // @public (undocumented)
 export interface ModuleContribution {
-    // (undocumented)
-    readonly jobs?: readonly ModuleJob[];
+    readonly jobs?: readonly JobDefinition[];
     readonly migrations?: readonly MigrationChain[];
     readonly routes?: readonly RouteBinding[];
-    // (undocumented)
-    readonly schedules?: readonly ModuleSchedule[];
-}
-
-// @public
-export interface ModuleJob {
-    // (undocumented)
-    readonly handle: (payload: unknown, context: ModuleContext) => Promise<void>;
-    // (undocumented)
-    readonly name: string;
-}
-
-// @public
-export interface ModuleSchedule {
-    // (undocumented)
-    readonly cron: string;
-    // (undocumented)
-    readonly job: string;
-    // (undocumented)
-    readonly name: string;
+    readonly schedules?: readonly ScheduleDefinition[];
 }
 
 // @public (undocumented)
 export const NODE_ENVS: readonly ["development", "test", "production"];
+
+// @public
+export class NotIdempotentError extends Error {
+    constructor(job: string);
+}
 
 // @public
 export const originFragment: EnvFragment<    {
@@ -409,6 +468,26 @@ export interface RefineContext {
 // @public
 export function requireAllOrNone(keys: readonly string[], values: Readonly<Record<string, unknown>>, context: RefineContext): void;
 
+// @public (undocumented)
+export interface ResolvedRetryPolicy {
+    // (undocumented)
+    readonly backoff: boolean;
+    // (undocumented)
+    readonly delaySeconds: number;
+    // (undocumented)
+    readonly limit: number;
+    // (undocumented)
+    readonly maxDelaySeconds: number | undefined;
+}
+
+// @public
+export interface RetryPolicy {
+    readonly backoff?: boolean;
+    readonly delaySeconds?: number;
+    readonly limit?: number;
+    readonly maxDelaySeconds?: number;
+}
+
 // @public
 export interface RouteBinding {
     // (undocumented)
@@ -424,6 +503,12 @@ export type RouteHandler = (context: ChainContext, route: MatchedRoute) => Respo
 export interface RunningServer {
     // (undocumented)
     readonly port: number;
+    shutdown(): Promise<void>;
+}
+
+// @public (undocumented)
+export interface RunningWorker {
+    enqueue<Payload extends JobPayload>(job: JobDefinition<Payload>, payload: Payload): Promise<string | null>;
     shutdown(): Promise<void>;
 }
 
@@ -446,6 +531,17 @@ silent: "silent";
 }>;
 
 // @public
+export interface ScheduleDefinition {
+    // (undocumented)
+    readonly cron: string;
+    // (undocumented)
+    readonly job: string;
+    // (undocumented)
+    readonly name: string;
+    readonly payload?: JobPayload;
+}
+
+// @public
 export const secretsFragment: EnvFragment<    {
 SESSION_SECRET: z.ZodString;
 ENCRYPTION_KEY: z.ZodString;
@@ -456,10 +552,10 @@ ENCRYPTION_KEY_ID: z.ZodString;
 export interface Server {
     fetch(request: Request): Promise<Response>;
     // (undocumented)
-    readonly jobs: readonly ModuleJob[];
+    readonly jobs: readonly JobDefinition[];
     readonly migrations: readonly MigrationChain[];
     // (undocumented)
-    readonly schedules: readonly ModuleSchedule[];
+    readonly schedules: readonly ScheduleDefinition[];
     readonly stages: readonly StageName[];
     start(options?: StartOptions): Promise<RunningServer>;
 }
@@ -561,6 +657,15 @@ export interface StartOptions {
 
 // @public (undocumented)
 export function validateEnvironment<Shape extends z.ZodRawShape>(schema: EnvSchema<Shape>, env: EnvironmentVariables, options?: LoadOptions): LoadedConfig<z.infer<z.ZodObject<Shape>>>;
+
+// @public (undocumented)
+export interface Worker {
+    // (undocumented)
+    readonly jobs: readonly JobDefinition[];
+    // (undocumented)
+    readonly schedules: readonly ScheduleDefinition[];
+    start(): Promise<RunningWorker>;
+}
 
 // @public (undocumented)
 export type WorkerConfig = z.infer<typeof workerEnvSchema.object>;
