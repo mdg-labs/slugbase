@@ -16,6 +16,7 @@ import { Problem } from '@slugbase/contracts';
 import { ProblemCode } from '@slugbase/contracts';
 import type { TenantPrincipal } from '@slugbase/core';
 import type { TenantTx } from '@slugbase/db';
+import { VersionInfoSchema } from '@slugbase/contracts';
 import type { WorkspaceRole } from '@slugbase/core';
 import { z } from 'zod';
 
@@ -40,6 +41,9 @@ export interface BearerAuthenticator {
     // (undocumented)
     readonly credential: "bearer";
 }
+
+// @public
+export type BuildInfo = z.output<typeof VersionInfoSchema>;
 
 // @public
 export const CHAIN_STAGES: readonly ["request-context", "security-headers", "body-limits", "authentication", "cross-site-protection", "rate-limiting", "tenant-resolution", "validation", "authorization", "handler", "response", "audit-telemetry"];
@@ -126,6 +130,7 @@ export function createServer(options: CreateServerOptions): Server;
 export interface CreateServerOptions {
     // (undocumented)
     readonly adapters: Adapters;
+    readonly buildInfo?: BuildInfo;
     // (undocumented)
     readonly config: ServerConfig;
     readonly database?: Database;
@@ -211,6 +216,9 @@ export type DeletionGuardInput = {
 
 // @public (undocumented)
 export type DeletionRefusalCode = (typeof DELETION_REFUSAL_CODES)[number];
+
+// @public
+export const DEVELOPMENT_BUILD_INFO: BuildInfo;
 
 // @public
 export function envBoolean(): z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>;
@@ -403,6 +411,9 @@ export type JobPayload = Readonly<Record<string, JobScalar>>;
 
 // @public
 export type JobScalar = string | number | boolean | null | undefined;
+
+// @public
+export function loadBuildInfo(file: URL | string): BuildInfo;
 
 // @public
 export function loadConfig<Type extends ProcessType>(type: Type, env: EnvironmentVariables): LoadedConfig<ConfigByProcess[Type]>;

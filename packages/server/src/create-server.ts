@@ -3,6 +3,7 @@ import { createAdaptorServer, type ServerType } from "@hono/node-server";
 import type { Adapters } from "@slugbase/core";
 import { createDatabase, type Database, type MigrationChain } from "@slugbase/db";
 import { Hono } from "hono";
+import { DEVELOPMENT_BUILD_INFO, type BuildInfo } from "./build-info.ts";
 import type { ServerConfig, WorkerConfig } from "./config/index.ts";
 import type { Authenticator } from "./http/authenticate.ts";
 import {
@@ -15,6 +16,7 @@ import {
 import { createHookDispatcher, invalidHookRefusals, invalidHooks, type HookRefusals, type HookRegistration, type ServerHooks } from "./hooks/index.ts";
 import { createMetrics, startMetricsListener, type MetricsListener } from "./metrics/index.ts";
 import { loadCommittedDocument } from "./routes/committed-document.ts";
+import { probeRoutes } from "./routes/health.ts";
 import { checkRegistrations, type ContractDocument } from "./routes/register.ts";
 import type { JobDefinition, ScheduleDefinition } from "./worker/job.ts";
 
@@ -93,6 +95,8 @@ export interface CreateServerOptions {
    * `@slugbase/contracts`; a composition that adds operations passes the merged one.
    */
   readonly openApiDocument?: ContractDocument;
+  /** What `GET /version` reports; by default a development run. The composition root reads it from the build-info file with `loadBuildInfo`. */
+  readonly buildInfo?: BuildInfo;
   /** The tenant database; by default a pool on `DATABASE_URL`, opened on first use. The server closes it on shutdown. */
   readonly database?: Database;
   /** How long a shutdown lets in-flight requests finish before cutting them (doc 01 section 3 rule 2). */
@@ -342,7 +346,8 @@ export function createServer(options: CreateServerOptions): Server {
   const { config, logger } = options;
   assertAdapters(options.adapters);
 
-  const openApiDocument = options.openApiDocument ?? loadCommittedDocument();
+  const committedDocument = loadCommittedDocument();
+  const openApiDocument = options.openApiDocument ?? committedDocument;
 
   const metrics = createMetrics();
   const database = options.database ?? createDatabase({ url: config.DATABASE_URL, poolSize: DEFAULT_SERVER_POOL_SIZE });
@@ -357,10 +362,29 @@ export function createServer(options: CreateServerOptions): Server {
     withTenant: metrics.instrumentTenant(database.withTenant.bind(database)),
   });
 
+  // The probes read the migration sets of the finished composition, which the probes themselves are part of.
+  let migrationSets: readonly MigrationChain[] = options.migrations;
+  const builtInRoutes = probeRoutes({
+    buildInfo: options.buildInfo ?? DEVELOPMENT_BUILD_INFO,
+    databaseUrl: config.DATABASE_URL,
+    chains: () => migrationSets,
+    logger,
+  });
+  const builtIn: ServerModule = { name: "@slugbase/server", register: () => ({ routes: builtInRoutes }) };
+
   let composition: Composition;
   try {
-    composition = compose(options.modules, context, options.migrations);
-    const unregistrable = checkRegistrations(composition.routes, openApiDocument);
+    composition = compose([builtIn, ...options.modules], context, options.migrations);
+    migrationSets = composition.migrations;
+    // The built-in routes are checked against the document committed with the contracts, whatever
+    // document the modules' routes are registered against.
+    const builtInSet = new Set(builtInRoutes);
+    const unregistrable =
+      checkRegistrations(builtInRoutes, committedDocument) ??
+      checkRegistrations(
+        composition.routes.filter((binding) => !builtInSet.has(binding)),
+        openApiDocument,
+      );
     if (unregistrable !== undefined) {
       throw new CompositionError(unregistrable.code, unregistrable.message);
     }

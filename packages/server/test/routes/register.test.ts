@@ -1,7 +1,6 @@
 import {
   defineOperation,
   emptyResponse,
-  getApiConfig,
   getHealth,
   jsonResponse,
   operations,
@@ -126,21 +125,27 @@ describe("the registration check", () => {
     expect(checkRegistrations(bindings, committed)).toBeUndefined();
   });
 
-  it("serves a contract operation registered through route() on a server that names no document", async () => {
-    const server = compose([moduleOf(route(getHealth).handle(() => ({ status: 200, body: { status: "ok" } })))]);
+  it("serves the contract operations the server registers itself on a server that names no document", async () => {
+    const server = compose([]);
     const response = await server.fetch(new Request("http://localhost/health"));
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ status: "ok" });
   });
 
+  it("refuses a module that registers an operation the server registers itself", () => {
+    const error = refusal(() => compose([moduleOf(route(getHealth).handle(() => ({ status: 200, body: { status: "ok" } })))]));
+    expect(error.code).toBe("duplicate_route");
+    expect(error.message).toContain("getHealth");
+  });
+
   it("refuses an operation without a policy, naming it, whatever the document says", () => {
-    const noAuth = { ...getHealth, auth: undefined } as unknown as OperationDefinition;
-    const noRate = { ...getHealth, rate: undefined } as unknown as OperationDefinition;
-    const unknownAuth = { ...getHealth, auth: "everyone" } as unknown as OperationDefinition;
+    const noAuth = { ...createNote, auth: undefined } as unknown as OperationDefinition;
+    const noRate = { ...createNote, rate: undefined } as unknown as OperationDefinition;
+    const unknownAuth = { ...createNote, auth: "everyone" } as unknown as OperationDefinition;
     for (const operation of [noAuth, noRate, unknownAuth]) {
-      const error = refusal(() => compose([moduleOf({ operation, ...raw })]));
+      const error = refusal(() => compose([moduleOf({ operation, ...raw })], documentFor([createNote])));
       expect(error.code).toBe("missing_policy");
-      expect(error.message).toContain("getHealth");
+      expect(error.message).toContain("createNote");
     }
   });
 
@@ -161,15 +166,15 @@ describe("the registration check", () => {
 
   it("refuses an operation registered with a hand-written policy that differs from the contract", () => {
     const variants: [string, OperationDefinition][] = [
-      ["x-slugbase-auth", { ...getHealth, auth: "member" }],
-      ["x-slugbase-rate", { ...getHealth, rate: "read" }],
-      ["x-slugbase-rate", { ...getApiConfig, rate: "none" }],
-      ["x-slugbase-scope", { ...getHealth, scope: "read" }],
-      ["x-slugbase-entitlement", { ...getHealth, entitlement: "sharing.teams" }],
-      ["x-slugbase-audience", { ...getHealth, audience: "machine" }],
+      ["x-slugbase-auth", { ...createNote, auth: "owner" }],
+      ["x-slugbase-rate", { ...createNote, rate: "read" }],
+      ["x-slugbase-rate", { ...createNote, rate: "none" }],
+      ["x-slugbase-scope", { ...createNote, scope: "read" }],
+      ["x-slugbase-entitlement", { ...createNote, entitlement: "sharing.teams" }],
+      ["x-slugbase-audience", { ...createNote, audience: "machine" }],
     ];
     for (const [extension, operation] of variants) {
-      const error = refusal(() => compose([moduleOf({ operation, ...raw })]));
+      const error = refusal(() => compose([moduleOf({ operation, ...raw })], documentFor([createNote])));
       expect(error.code).toBe("policy_mismatch");
       expect(error.message).toContain(operation.operationId);
       expect(error.message).toContain(extension);
@@ -177,29 +182,32 @@ describe("the registration check", () => {
   });
 
   it("refuses a route that moves a documented operation to another path or method", () => {
-    const moved = refusal(() => compose([moduleOf({ operation: { ...getHealth, path: "/healthz" }, ...raw })]));
+    const document = documentFor([createNote]);
+    const moved = refusal(() => compose([moduleOf({ operation: { ...createNote, path: "/api/v1/moved/{id}" }, ...raw })], document));
     expect(moved.code).toBe("policy_mismatch");
-    expect(moved.message).toContain("getHealth");
-    const method = refusal(() => compose([moduleOf({ operation: { ...getHealth, method: "post" }, ...raw })]));
+    expect(moved.message).toContain("createNote");
+    const method = refusal(() => compose([moduleOf({ operation: { ...createNote, method: "put" }, ...raw })], document));
     expect(method.code).toBe("policy_mismatch");
   });
 
   it("checks the operations of every module the same way", () => {
-    const fine = moduleOf(route(getHealth).handle(() => ({ status: 200, body: { status: "ok" } })));
-    const loosened: ServerModule = { name: "cloud", register: () => ({ routes: [{ operation: { ...getApiConfig, auth: "member" }, ...raw }] }) };
-    const error = refusal(() => compose([fine, loosened]));
+    const other = { ...createNote, operationId: "updateNote", path: "/api/v1/notes/{id}/rename", auth: "member" } as const;
+    const fine = moduleOf(route(createNote).handle(() => ({ status: 204 })));
+    const loosened: ServerModule = { name: "cloud", register: () => ({ routes: [{ operation: { ...other, auth: "anonymous" }, ...raw }] }) };
+    const error = refusal(() => compose([fine, loosened], documentFor([createNote, other])));
     expect(error.code).toBe("policy_mismatch");
-    expect(error.message).toContain("getApiConfig");
+    expect(error.message).toContain("updateNote");
   });
 
   it("refuses an operation registered twice, naming it", () => {
-    const once = route(getHealth).handle(() => ({ status: 200, body: { status: "ok" } }));
-    const error = refusal(() => compose([moduleOf(once, once)]));
+    const once = route(createNote).handle(() => ({ status: 204 }));
+    const document = documentFor([createNote]);
+    const error = refusal(() => compose([moduleOf(once, once)], document));
     expect(error.code).toBe("duplicate_route");
-    expect(error.message).toContain("getHealth");
-    const split = refusal(() => compose([moduleOf(once), { name: "again", register: () => ({ routes: [once] }) }]));
+    expect(error.message).toContain("createNote");
+    const split = refusal(() => compose([moduleOf(once), { name: "again", register: () => ({ routes: [once] }) }], document));
     expect(split.code).toBe("duplicate_route");
-    expect(split.message).toContain("getHealth");
+    expect(split.message).toContain("createNote");
   });
 
   it("registers an operation the composition's own document declares", () => {
@@ -223,7 +231,8 @@ describe("the registration check", () => {
       createServer({
         config: serverConfig(),
         adapters: adapters(),
-        modules: [moduleOf({ operation: { ...getHealth, auth: "member" }, ...raw })],
+        modules: [moduleOf({ operation: { ...createNote, auth: "owner" }, ...raw })],
+        openApiDocument: documentFor([createNote]),
         migrations: [],
         logger: recordingLogger(),
         database,

@@ -1,5 +1,6 @@
 import { connect } from "node:net";
-import { getApiConfig, getHealth, getReady } from "@slugbase/contracts";
+import { getApiConfig } from "@slugbase/contracts";
+import { useTestDatabase } from "@slugbase/testing/db";
 import { afterEach, describe, expect, it } from "vitest";
 import { createServer, type RunningServer, type ServerModule } from "../../src/create-server.ts";
 import { adapters, fakeDatabase, operation, recordingLogger, serverConfig, documentOf } from "../support.ts";
@@ -9,6 +10,20 @@ import { expectSecurityHeaders } from "./headers-support.ts";
 // section 3.5): the header set of every route class, on the answer a handler
 // gives and on the answers the chain replaces it with. The client is a raw
 // socket: the repository allows no HTTP client outside the egress adapter.
+
+const database = useTestDatabase();
+
+// The URL the server reads the migration level through: the app role of the test database.
+function appUrl(): string {
+  const { options } = database().app;
+  const url = new URL("postgres://localhost");
+  url.hostname = String(options.host[0]);
+  url.port = String(options.port[0]);
+  url.username = options.user;
+  url.password = String(options.pass);
+  url.pathname = `/${options.database}`;
+  return url.href;
+}
 
 const API_CONFIG = {
   apiVersion: "v1",
@@ -62,11 +77,6 @@ const routes: ServerModule = {
           return Response.json(API_CONFIG);
         },
       },
-      { operation: getHealth, handler: () => Response.json({ status: "ok" }) },
-      {
-        operation: getReady,
-        handler: () => Response.json({ database: "ok", migrations: { expected: 1, applied: 1 } }, { status: 200 }),
-      },
     ],
   }),
 };
@@ -105,7 +115,7 @@ afterEach(async () => {
 
 async function listen(env: Record<string, string | undefined> = {}): Promise<number> {
   const server = createServer({
-    config: serverConfig(env),
+    config: serverConfig({ NODE_ENV: "test", DATABASE_URL: appUrl(), ...env }),
     adapters: adapters(),
     modules: [routes],
     openApiDocument: documentOf([routes]),

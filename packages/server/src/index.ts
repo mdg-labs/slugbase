@@ -1,3 +1,5 @@
+export { DEVELOPMENT_BUILD_INFO, loadBuildInfo } from "./build-info.ts";
+export type { BuildInfo } from "./build-info.ts";
 export * from "./config/index.ts";
 export { CHAIN_STAGES, CompositionError, createServer } from "./create-server.ts";
 export {

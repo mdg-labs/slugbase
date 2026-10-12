@@ -10,6 +10,7 @@ import {
   createServer,
   createWorker,
   isProcessType,
+  loadBuildInfo,
   loadConfig,
   type Logger,
   type ServerConfig,
@@ -55,6 +56,9 @@ function exitOnSignal(running: { shutdown(): Promise<void> }, logger: Logger): v
   }
 }
 
+// The image build writes the file next to src/ and dist/; a checkout without it is a development run.
+const BUILD_INFO_FILE = new URL("../build-info.json", import.meta.url);
+
 // CE composes the unconfigured defaults of every port and no extra modules or
 // migration sets; a configured adapter replaces its default here.
 async function runServer(config: ServerConfig): Promise<void> {
@@ -65,6 +69,7 @@ async function runServer(config: ServerConfig): Promise<void> {
     modules: [],
     migrations: [],
     logger,
+    buildInfo: loadBuildInfo(BUILD_INFO_FILE),
   });
   exitOnSignal(await server.start(), logger);
 }
