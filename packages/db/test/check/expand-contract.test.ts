@@ -151,6 +151,16 @@ describe("what is rejected in a migration added since the latest release tag", (
     ["default privileges revoked", "ALTER DEFAULT PRIVILEGES IN SCHEMA pgboss REVOKE SELECT ON TABLES FROM slugbase_app;", "cannot place"],
     ["default privileges without a GRANT clause", "ALTER DEFAULT PRIVILEGES FOR ROLE slugbase_owner IN SCHEMA pgboss;", "cannot place"],
     ["default privileges granted with text the reader does not read", "ALTER DEFAULT PRIVILEGES GRANT SELECT ON TABLES TO slugbase_app CASCADE;", "cannot place"],
+    ["revoking privileges on a table of the release", "REVOKE SELECT ON bookmarks FROM slugbase_app;", "revokes privileges on table bookmarks, which exists at v1.0.0"],
+    ["revoking privileges on a quoted, schema-qualified table of the release", 'REVOKE ALL PRIVILEGES ON TABLE "public"."bookmarks" FROM "slugbase_app" CASCADE;', "revokes privileges on table bookmarks, which exists at v1.0.0"],
+    ["revoking privileges on one table of a list", "REVOKE SELECT ON notes, bookmarks FROM slugbase_app;", "revokes privileges on table bookmarks, which exists at v1.0.0"],
+    ["revoking privileges on a column of a table of the release", "REVOKE SELECT (title) ON bookmarks FROM slugbase_app;", "revokes privileges on table bookmarks, which exists at v1.0.0"],
+    ["revoking privileges on a schema", "REVOKE USAGE ON SCHEMA public FROM slugbase_app;", "revokes privileges on a schema, sequence, database or every object of a kind"],
+    ["revoking privileges on all tables in a schema", "REVOKE SELECT ON ALL TABLES IN SCHEMA public FROM slugbase_app;", "revokes privileges on a schema, sequence, database or every object of a kind"],
+    ["a revocation with text the reader does not read", "REVOKE SELECT ON notes FROM slugbase_app GRANTED BY o;", "cannot place"],
+    ["a grant with text the reader does not read", "GRANT SELECT ON bookmarks TO slugbase_app GRANTED BY o;", "cannot place"],
+    ["a comment on a function", "COMMENT ON FUNCTION f(int) IS 'x';", "cannot place"],
+    ["a comment with text the reader does not read", "COMMENT ON TABLE bookmarks IS 'x' || 'y';", "cannot place"],
     ["a type dropped with its columns", "DROP TYPE kind CASCADE;", "cannot place"],
     ["a SELECT", "SELECT 1;", "cannot place"],
     ["a SELECT of a function", "SELECT public.f();", "cannot place"],
@@ -261,6 +271,8 @@ describe("what is accepted without a contract", () => {
     ["a SQL function of one SELECT of built-ins", "CREATE OR REPLACE FUNCTION public.f() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT nullif(current_setting('app.workspace_id', true), '')::uuid $$;"],
     ["a function body that mentions a drop", "CREATE OR REPLACE FUNCTION f() RETURNS int LANGUAGE sql AS $$ SELECT 1 -- DROP TABLE bookmarks;\n$$;"],
     ["default privileges granted to a role", "ALTER DEFAULT PRIVILEGES FOR ROLE slugbase_owner IN SCHEMA pgboss GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO slugbase_app;"],
+    ["revoking privileges on a table the release does not hold", "REVOKE ALL ON notes FROM PUBLIC;"],
+    ["comments on a table, a column and a policy", "COMMENT ON TABLE bookmarks IS 'x';\nCOMMENT ON COLUMN bookmarks.title IS NULL;\nCOMMENT ON POLICY p ON bookmarks IS 'x';"],
     ["policies and grants", 'ALTER TABLE "bookmarks" ENABLE ROW LEVEL SECURITY;\nCREATE POLICY p ON bookmarks USING (true);\nGRANT SELECT ON bookmarks TO slugbase_app;'],
   ])("accepts %s", async (_name, sql) => {
     expect(await added(sql)).toEqual([]);
@@ -455,6 +467,21 @@ describe("the marked contract half of an expand/contract pair", () => {
     expect(findings).toHaveLength(1);
     expect(findings[0]?.message).toContain(REWRITES);
     expect(findings[0]?.message).toContain(MARKER_HINT);
+  });
+
+  it("accepts a revocation on a table of the release with the header and the marker, and rejects it with the header alone", async () => {
+    const sql = "REVOKE SELECT ON bookmarks FROM slugbase_app;\n";
+    expect(await inspect(pair(HEADER, sql), true)).toEqual([]);
+    const findings = await inspect(pair(HEADER, sql));
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("revokes privileges on table bookmarks, which exists at v1.1.0");
+    expect(findings[0]?.message).toContain(MARKER_HINT);
+  });
+
+  it("rejects a revocation on a table of the release without a header, whatever the marker says", async () => {
+    const findings = await inspect(pair("", "REVOKE SELECT ON bookmarks FROM slugbase_app;\n"), true);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("has no contract header");
   });
 
   it("accepts the release written with its v and a header after other comments", async () => {

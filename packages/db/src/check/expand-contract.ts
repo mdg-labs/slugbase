@@ -35,11 +35,18 @@ import type { CheckRule, ContractMarker, Finding } from "./types.ts";
 //     (it is validated with VALIDATE CONSTRAINT in a later step), which includes
 //     an inline CHECK on an added column and an inline REFERENCES on an added
 //     column that has a default,
+//   - revoking privileges (REVOKE ... FROM) on a table that exists at that tag,
+//     or on an object that is not a named table (a schema, a sequence, a
+//     database, ALL TABLES IN SCHEMA ...): a running replica may lose the access
+//     it uses. Only a REVOKE on tables the release does not hold passes. The
+//     release state holds tables only, so a view or sequence of the release
+//     named as a bare table, or an object only custom SQL creates, is not seen,
 //   - any statement this check does not positively read as one of the forms it
 //     lists as safe (CREATE TABLE of a column list and nothing after it,
 //     CREATE INDEX/POLICY/EXTENSION/SEQUENCE/SCHEMA, an enum CREATE TYPE, a
 //     LANGUAGE sql CREATE FUNCTION of one SELECT of
-//     built-ins, ALTER TABLE actions, DROP INDEX/POLICY, GRANT/REVOKE/COMMENT),
+//     built-ins, ALTER TABLE actions, DROP INDEX/POLICY, GRANT and COMMENT of a
+//     whole shape),
 //     or that calls a function outside a short list of built-ins and the
 //     tenant context functions. Everything else (DO, CALL, COPY, SELECT, SET,
 //     other ALTER/DROP/CREATE forms, ...) could hold any of the above.
@@ -221,6 +228,14 @@ class Released {
         return this.hasTable(operation.table)
           ? [(`attaches an index as the primary key of table ${describe(operation.table)}, which exists at ${at}: that sets its columns NOT NULL if they are not already, which the previous release may still write NULL to, and can scan the table under an ACCESS EXCLUSIVE lock`)]
           : [];
+      case "revoke": {
+        if (operation.tables === undefined) {
+          return [`revokes privileges on a schema, sequence, database or every object of a kind, which this check cannot show the release at ${at} does not use: a running replica may lose access to it`];
+        }
+        return operation.tables
+          .filter((table) => this.hasTable(table))
+          .map((table) => `revokes privileges on table ${describe(table)}, which exists at ${at}: the previous release may still rely on that access during a rolling deploy`);
+      }
       case "unknown":
         return [(`has a statement this check cannot place (${operation.reason}), so it cannot show that the statement keeps the previous release working`)];
       case "data-change":

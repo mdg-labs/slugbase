@@ -26,6 +26,7 @@ export type Operation =
   | { kind: "create-index"; table: TableName; concurrently: boolean }
   | { kind: "add-validated-constraint"; table: TableName }
   | { kind: "add-primary-key-using-index"; table: TableName }
+  | { kind: "revoke"; tables: TableName[] | undefined }
   | { kind: "data-change"; statement: string }
   | { kind: "safe" }
   | { kind: "unknown"; reason: string };
@@ -306,8 +307,12 @@ export function analyseStatement(statement: string): AnalysedStatement {
     operations = drop(cursor);
   } else if (verb?.kind === "word" && verb.text === "create") {
     operations = create(cursor);
-  } else if (verb?.kind === "word" && (verb.text === "grant" || verb.text === "revoke" || verb.text === "comment")) {
-    operations = [{ kind: "safe" }];
+  } else if (verb?.kind === "word" && verb.text === "grant") {
+    operations = grant(cursor);
+  } else if (verb?.kind === "word" && verb.text === "revoke") {
+    operations = revoke(cursor);
+  } else if (verb?.kind === "word" && verb.text === "comment") {
+    operations = comment(cursor);
   } else {
     const shown = verb === undefined ? "nothing" : verb.text;
     operations = unknown(`starts with ${shown}, which this check does not read`);
@@ -691,6 +696,171 @@ function alterDefaultPrivileges(cursor: Cursor): Operation[] {
     return unread;
   }
   cursor.take("with", "grant", "option");
+  return cursor.done() ? [{ kind: "safe" }] : unread;
+}
+
+const GRANT_PRIVILEGES = new Set([...PRIVILEGES, "connect", "temporary", "temp"]);
+const SCHEMA_OBJECTS = new Set(["tables", "sequences", "functions", "procedures", "routines"]);
+
+/** Reads `name {, name}` as table-like names, each `name` or `schema.name`. */
+function tableNames(cursor: Cursor): TableName[] | undefined {
+  const names: TableName[] = [];
+  const ok = commaSeparated(cursor, () => {
+    const name = cursor.tableName();
+    if (name === undefined || cursor.isPunct(".")) {
+      return false;
+    }
+    names.push(name);
+    return true;
+  });
+  return ok ? names : undefined;
+}
+
+/** One privilege, or ALL [PRIVILEGES], with the optional column list of a table privilege. */
+function privilegeItem(cursor: Cursor, allowed: ReadonlySet<string>): boolean {
+  if (cursor.take("all")) {
+    cursor.take("privileges");
+  } else {
+    const token = cursor.peek();
+    if (token?.kind !== "word" || !allowed.has(token.text)) {
+      return false;
+    }
+    cursor.position += 1;
+  }
+  if (cursor.isPunct("(")) {
+    cursor.position += 1;
+    if (!commaSeparated(cursor, () => plainName(cursor)) || !cursor.isPunct(")")) {
+      return false;
+    }
+    cursor.position += 1;
+  }
+  return true;
+}
+
+/**
+ * The object of a GRANT or REVOKE after `ON`: a list of tables (`TABLE` optional), or a list of
+ * sequences, schemas or databases, or `ALL {TABLES | SEQUENCES | FUNCTIONS | PROCEDURES | ROUTINES}
+ * IN SCHEMA schemas`. `tables` names the tables a list holds, and is undefined for the other
+ * objects. The whole object is undefined when it is not one of these forms; a function or procedure
+ * with an argument list, a language and the like are not read.
+ */
+function privilegeObject(cursor: Cursor): { tables: TableName[] | undefined } | undefined {
+  if (cursor.take("all")) {
+    const kind = cursor.peek();
+    if (kind?.kind !== "word" || !SCHEMA_OBJECTS.has(kind.text)) {
+      return undefined;
+    }
+    cursor.position += 1;
+    return cursor.take("in", "schema") && commaSeparated(cursor, () => plainName(cursor)) ? { tables: undefined } : undefined;
+  }
+  if (cursor.take("sequence") || cursor.take("schema") || cursor.take("database")) {
+    return commaSeparated(cursor, () => cursor.tableName() !== undefined && !cursor.isPunct(".")) ? { tables: undefined } : undefined;
+  }
+  cursor.take("table");
+  const tables = tableNames(cursor);
+  return tables === undefined ? undefined : { tables };
+}
+
+/** `privileges ON object` of a GRANT or REVOKE; undefined when it is not read to the end of the object. */
+function privilegesOn(cursor: Cursor): { tables: TableName[] | undefined } | undefined {
+  if (!commaSeparated(cursor, () => privilegeItem(cursor, GRANT_PRIVILEGES)) || !cursor.take("on")) {
+    return undefined;
+  }
+  return privilegeObject(cursor);
+}
+
+/**
+ * GRANT privileges ON object TO roles [WITH GRANT OPTION]. A grant only adds access, so a running
+ * replica loses nothing by it. It is read by its whole shape: a role membership, an object it
+ * does not read, or any text after the statement leaves it unknown.
+ */
+function grant(cursor: Cursor): Operation[] {
+  const unread = unknown("GRANT in a form this check does not read");
+  if (privilegesOn(cursor) === undefined || !cursor.take("to") || !commaSeparated(cursor, () => plainName(cursor))) {
+    return unread;
+  }
+  cursor.take("with", "grant", "option");
+  return cursor.done() ? [{ kind: "safe" }] : unread;
+}
+
+/**
+ * REVOKE [GRANT OPTION FOR] privileges ON object FROM roles [CASCADE | RESTRICT]. A revocation
+ * takes access from a role the previous release may still use, so it is a step of its own for the
+ * rule to place. It is read by its whole shape, as GRANT is.
+ */
+function revoke(cursor: Cursor): Operation[] {
+  cursor.take("grant", "option", "for");
+  const object = privilegesOn(cursor);
+  if (object === undefined || !cursor.take("from") || !commaSeparated(cursor, () => plainName(cursor))) {
+    return unknown("REVOKE in a form this check does not read");
+  }
+  if (!cursor.take("cascade")) {
+    cursor.take("restrict");
+  }
+  return cursor.done() ? [{ kind: "revoke", tables: object.tables }] : unknown("REVOKE with text after the roles this check does not read");
+}
+
+const COMMENT_OBJECTS: readonly (readonly [words: readonly string[], nameParts: number])[] = [
+  [["table"], 2],
+  [["column"], 3],
+  [["index"], 2],
+  [["schema"], 1],
+  [["sequence"], 2],
+  [["view"], 2],
+  [["materialized", "view"], 2],
+  [["type"], 2],
+  [["extension"], 1],
+];
+
+/** Reads `name {. name}` of at most `most` parts. */
+function dottedName(cursor: Cursor, most: number): boolean {
+  for (let parts = 1; ; parts += 1) {
+    if (cursor.identifier() === undefined) {
+      return false;
+    }
+    if (!cursor.isPunct(".")) {
+      return true;
+    }
+    if (parts === most) {
+      return false;
+    }
+    cursor.position += 1;
+  }
+}
+
+/**
+ * COMMENT ON object-kind name IS 'text' | NULL, and COMMENT ON {POLICY | CONSTRAINT} name ON table IS ...
+ * A comment changes no object a replica uses. It is read by its whole shape: an object kind it does not
+ * read (a function takes an argument list), a text that is not one string literal or NULL, or any text
+ * after it leaves it unknown.
+ */
+function comment(cursor: Cursor): Operation[] {
+  const unread = unknown("COMMENT in a form this check does not read");
+  if (!cursor.take("on")) {
+    return unread;
+  }
+  if (cursor.take("policy") || cursor.take("constraint")) {
+    if (!plainName(cursor) || !cursor.take("on") || !dottedName(cursor, 2)) {
+      return unread;
+    }
+  } else {
+    const kind = COMMENT_OBJECTS.find(([words]) => cursor.take(...words));
+    if (kind === undefined || !dottedName(cursor, kind[1])) {
+      return unread;
+    }
+  }
+  if (!cursor.take("is")) {
+    return unread;
+  }
+  // E'...' reaches the reader as the word `e` followed by the string.
+  if (cursor.isWord("e") && cursor.peek(1)?.kind === "string") {
+    cursor.position += 1;
+  }
+  if (cursor.peek()?.kind === "string") {
+    cursor.position += 1;
+  } else if (!cursor.take("null")) {
+    return unread;
+  }
   return cursor.done() ? [{ kind: "safe" }] : unread;
 }
 
