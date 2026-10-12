@@ -26,7 +26,8 @@
     "api:gen": "pnpm --filter @slugbase/contracts api:gen",
     "api:extract": "turbo run build && node tooling/api-report/api-report.ts extract",
     "dev:services": "docker compose -f compose.dev.yml up -d --wait",
-    "dev:services:down": "docker compose -f compose.dev.yml down"
+    "dev:services:down": "docker compose -f compose.dev.yml down",
+    "dev:env": "node scripts/dev-env.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

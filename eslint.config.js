@@ -89,6 +89,78 @@ export const vocabularyRules = {
   },
 };
 
+// Configuration comes only from the environment, read once by the config module
+// and the composition root (doc 01 section 3 rule 5, section 11, D24). Anything
+// else receives validated values. The block covers library and app source;
+// tests, scripts and development tooling are outside it. packages/db keeps two
+// development-tooling exceptions: the test harness and the migration check.
+const PROCESS_ENV_MESSAGE =
+  "process.env is read only in packages/server/src/config/ and apps/slugbase/src/main.ts; take validated configuration as a parameter (doc 01 section 11, D24).";
+const PROCESS_NOT_A_REFERENCE = [
+  "MemberExpression[computed=false] > Identifier.property",
+  "MemberExpression > Identifier.object",
+  ":matches(Property, PropertyDefinition, MethodDefinition, TSPropertySignature, TSMethodSignature, TSAbstractPropertyDefinition)[computed=false] > Identifier.key",
+  "TSQualifiedName > Identifier.right",
+  ":matches(ImportSpecifier) > Identifier.imported",
+  ":matches(ExportSpecifier) > Identifier.exported",
+].join(", ");
+const PROCESS_MODULE = "/^(node:)?process$/";
+
+export const processEnvRules = {
+  files: ["packages/*/src/**/*.{ts,tsx,mts,cts,js,mjs,cjs}", "apps/*/src/**/*.{ts,tsx,mts,cts,js,mjs,cjs}"],
+  ignores: [
+    "packages/server/src/config/**",
+    "apps/slugbase/src/main.ts",
+    "packages/db/src/testing.ts",
+    "packages/db/src/check/**",
+  ],
+  rules: {
+    "no-restricted-syntax": [
+      "error",
+      // process.env, process["env"], process[`env`] and process[name]; other
+      // properties with a literal name (process.exit, process["on"]) stay allowed.
+      {
+        selector: "MemberExpression[object.name='process'][computed=false][property.name='env']",
+        message: PROCESS_ENV_MESSAGE,
+      },
+      {
+        selector:
+          "MemberExpression[object.name='process'][computed=true]:not([property.type='Literal'][property.value!='env'])",
+        message: PROCESS_ENV_MESSAGE,
+      },
+      // The global object reaches process too: globalThis.process.env.
+      {
+        selector: "MemberExpression[object.name=/^(globalThis|global)$/][property.name='process'][computed=false]",
+        message: PROCESS_ENV_MESSAGE,
+      },
+      {
+        selector:
+          "MemberExpression[object.name=/^(globalThis|global)$/][computed=true]:not([property.type='Literal'][property.value!='process'])",
+        message: PROCESS_ENV_MESSAGE,
+      },
+      // Aliasing or passing process on (const { env } = process, f(process)) hides the read.
+      // A property named process ({ process: 0 }, value.process) is not the global.
+      {
+        selector: `Identifier[name='process']:not(${PROCESS_NOT_A_REFERENCE})`,
+        message: PROCESS_ENV_MESSAGE,
+      },
+      // The module form: require("node:process"), import("node:process").
+      {
+        selector: `:matches(CallExpression[callee.name='require'], ImportExpression) > Literal[value=${PROCESS_MODULE}]`,
+        message: PROCESS_ENV_MESSAGE,
+      },
+      {
+        selector: `:matches(CallExpression[callee.name='require'], ImportExpression) > TemplateLiteral > TemplateElement[value.cooked=${PROCESS_MODULE}]`,
+        message: PROCESS_ENV_MESSAGE,
+      },
+    ],
+    "no-restricted-imports": [
+      "error",
+      { paths: ["process", "node:process"].map((name) => ({ name, message: PROCESS_ENV_MESSAGE })) },
+    ],
+  },
+};
+
 // Package boundaries and import bans (doc 09 section 2.1, doc 01 sections 5.3
 // and 10): which package may import which, the I/O and database-driver bans,
 // the testing-package restriction and unsanitised HTML. The rules decide by the
@@ -105,4 +177,4 @@ export const boundaryRules = {
   },
 };
 
-export default [ignores, ...javascriptRules, ...typescriptRules, projectRules, vocabularyRules, boundaryRules];
+export default [ignores, ...javascriptRules, ...typescriptRules, projectRules, processEnvRules, vocabularyRules, boundaryRules];
