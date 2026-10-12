@@ -19,7 +19,7 @@ export type Operation =
   | { kind: "rename-table"; table: TableName; to: TableName }
   | { kind: "set-schema"; table: TableName; to: TableName }
   | { kind: "rename-column"; table: TableName; column: string; to: string }
-  | { kind: "add-column"; table: TableName; column: string; notNullWithoutDefault: boolean; rewritesTable: boolean }
+  | { kind: "add-column"; table: TableName; column: string; type: ColumnType; notNullWithoutDefault: boolean; rewritesTable: boolean }
   | { kind: "alter-column-type"; table: TableName; column: string }
   | { kind: "set-not-null"; table: TableName; column: string }
   | { kind: "drop-default"; table: TableName; column: string }
@@ -27,9 +27,19 @@ export type Operation =
   | { kind: "add-validated-constraint"; table: TableName }
   | { kind: "add-primary-key-using-index"; table: TableName }
   | { kind: "revoke"; tables: TableName[] | undefined }
+  | { kind: "declares-type"; name: TableName; ownConstraints: boolean; base: ColumnType }
+  | { kind: "retypes"; names: TableName[] }
   | { kind: "data-change"; statement: string }
   | { kind: "safe" }
-  | { kind: "unknown"; reason: string };
+  // keepsTypes: the statement is one the reader places as unsafe to run, but it declares a type or leaves every type as it is.
+  | { kind: "unknown"; reason: string; keepsTypes?: true };
+
+/**
+ * The type of a column or the base type of a domain: `builtin` for a type of PostgreSQL's
+ * own catalog and for any array type (neither is a domain), `named` for a type the migrations
+ * may declare (a name without a schema is in `public`), `unreadable` for text this check does not read.
+ */
+export type ColumnType = { kind: "builtin" } | { kind: "named"; name: TableName } | { kind: "unreadable" };
 
 export interface AnalysedStatement {
   /** The statement with comments removed, as written otherwise. */
@@ -72,6 +82,22 @@ const SAFE_SCHEMAS = new Set(["public", "pg_catalog"]);
 const NOT_A_COLUMN = new Set(["constraint", "primary", "unique", "check", "foreign", "exclude", "like", "not"]);
 const TABLE_CONSTRAINTS = new Set(["primary", "unique", "check", "foreign", "exclude", "not"]);
 const SERIAL_TYPES = new Set(["serial", "smallserial", "bigserial", "serial2", "serial4", "serial8"]);
+// Type names that PostgreSQL's grammar reads as its own types; a quoted name is not one of them.
+const SQL_TYPE_WORDS = new Set([
+  "integer", "int", "smallint", "bigint", "real", "float", "double", "decimal", "dec", "numeric", "boolean", "char", "character",
+  "varchar", "nchar", "national", "bit", "time", "timestamp", "interval",
+]);
+// Types of pg_catalog by their catalog names, which a quoted name can spell.
+const CATALOG_TYPES = new Set([
+  ...SERIAL_TYPES, "bool", "bytea", "char", "name", "int2", "int4", "int8", "text", "oid", "json", "jsonb", "jsonpath", "xml", "float4",
+  "float8", "bpchar", "varchar", "date", "time", "timetz", "timestamp", "timestamptz", "interval", "bit", "varbit", "numeric", "money",
+  "uuid", "tsvector", "tsquery", "inet", "cidr", "macaddr", "macaddr8", "point", "line", "lseg", "box", "path", "polygon", "circle",
+  "int4range", "int8range", "numrange", "tsrange", "tstzrange", "daterange", "int4multirange", "int8multirange", "nummultirange",
+  "tsmultirange", "tstzmultirange", "datemultirange", "pg_lsn", "pg_snapshot", "txid_snapshot", "xid", "xid8", "cid", "tid", "regclass",
+  "regtype", "regproc", "regprocedure", "regoper", "regoperator", "regconfig", "regdictionary", "regnamespace", "regrole", "regcollation",
+]);
+// Words that end the data type in a column or domain definition.
+const AFTER_TYPE = new Set(["collate", "default", "constraint", "not", "null", "check", "primary", "unique", "references", "generated", "compression", "storage"]);
 
 /** Splits a file at its top-level semicolons and removes the comments. Throws on text it cannot scan to the end. */
 export function splitSql(source: string): string[] {
@@ -288,6 +314,69 @@ class Cursor {
   }
 }
 
+/** Whether the type that starts at `from` is written as an array (`t[]`, `t[3]`, `t ARRAY`). */
+function isArrayType(tokens: readonly Token[], from: number): boolean {
+  let depth = 0;
+  for (let index = from; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token?.kind === "punct" && token.text === "(") {
+      depth += 1;
+    } else if (token?.kind === "punct" && token.text === ")") {
+      depth -= 1;
+    } else if (depth === 0 && token?.kind === "punct" && token.text === "[") {
+      return true;
+    } else if (depth === 0 && token?.kind === "word") {
+      if (token.text === "array") {
+        return true;
+      }
+      if (AFTER_TYPE.has(token.text)) {
+        return false;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * The type that starts at the token `start`. PostgreSQL looks a name without a schema up in pg_catalog
+ * first, so a built-in name is the built-in type whatever the migrations declare; a name in any other
+ * schema, or one with three parts, is a type the migrations declare or this check cannot place.
+ */
+function readType(tokens: readonly Token[], start: number): ColumnType {
+  const first = tokens[start];
+  if (first === undefined || (first.kind !== "word" && first.kind !== "ident")) {
+    return { kind: "unreadable" };
+  }
+  let name: TableName = { schema: DEFAULT_SCHEMA, name: first.text };
+  let end = start + 1;
+  let builtin = CATALOG_TYPES.has(first.text) || (first.kind === "word" && SQL_TYPE_WORDS.has(first.text));
+  if (isPunct(tokens[end], ".")) {
+    const second = tokens[end + 1];
+    if ((second?.kind !== "word" && second?.kind !== "ident") || isPunct(tokens[end + 2], ".")) {
+      return { kind: "unreadable" };
+    }
+    name = { schema: first.text, name: second.text };
+    builtin = first.text === "pg_catalog" && CATALOG_TYPES.has(second.text);
+    end += 2;
+  }
+  return builtin || isArrayType(tokens, end) ? { kind: "builtin" } : { kind: "named", name };
+}
+
+/** Whether the definition of a domain, from its base type on, says CHECK or NOT NULL outside parentheses. */
+function hasDomainConstraint(tokens: readonly Token[]): boolean {
+  let depth = 0;
+  for (const [index, token] of tokens.entries()) {
+    if (token.kind === "punct" && token.text === "(") {
+      depth += 1;
+    } else if (token.kind === "punct" && token.text === ")") {
+      depth -= 1;
+    } else if (depth === 0 && token.kind === "word" && (token.text === "check" || (token.text === "not" && isWord(tokens[index + 1], "null")))) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /** The operations of one statement. */
 export function analyseStatement(statement: string): AnalysedStatement {
   const text = statement;
@@ -397,8 +486,8 @@ function updatesTable(tokens: readonly Token[], start: number): boolean {
   return cursor.isWord("set");
 }
 
-function unknown(reason: string): Operation[] {
-  return [{ kind: "unknown", reason }];
+function unknown(reason: string, keepsTypes = false): Operation[] {
+  return [keepsTypes ? { kind: "unknown", reason, keepsTypes: true } : { kind: "unknown", reason }];
 }
 
 /** The first `name(` in the tokens that is not grammar, a name followed by its column list, or a known built-in. */
@@ -520,9 +609,22 @@ function create(cursor: Cursor): Operation[] {
     return named && owner && cursor.done() ? [{ kind: "safe" }] : unknown("CREATE SCHEMA other than `CREATE SCHEMA name`");
   }
   if (cursor.take("type")) {
-    return cursor.tableName() !== undefined && cursor.take("as", "enum") && cursor.skipParenthesised() && cursor.done()
-      ? [{ kind: "safe" }]
+    const name = cursor.tableName();
+    return name !== undefined && cursor.take("as", "enum") && cursor.skipParenthesised() && cursor.done()
+      ? [{ kind: "declares-type", name, ownConstraints: false, base: { kind: "builtin" } }]
       : unknown("CREATE TYPE other than an enum");
+  }
+  // A domain is not safe to create in a new migration, but the rule still needs to know it, with its
+  // constraints, for the columns that later migrations give its type.
+  if (cursor.take("domain")) {
+    const name = cursor.tableName();
+    cursor.take("as");
+    return name === undefined
+      ? unknown("a CREATE form this check does not read")
+      : [
+          ...unknown("a CREATE form this check does not read", true),
+          { kind: "declares-type", name, ownConstraints: hasDomainConstraint(cursor.tokens.slice(cursor.position)), base: readType(cursor.tokens, cursor.position) },
+        ];
   }
   return unknown("a CREATE form this check does not read");
 }
@@ -616,9 +718,50 @@ function alter(cursor: Cursor): Operation[] {
   if (cursor.take("default", "privileges")) {
     return alterDefaultPrivileges(cursor);
   }
+  if (cursor.take("domain")) {
+    return alterType(cursor, true);
+  }
+  if (cursor.take("type")) {
+    return alterType(cursor, false);
+  }
   // ALTER VIEW and ALTER INDEX accept a table's name too (checked against PostgreSQL 18), so
   // none of the object kinds is read as touching only its own kind.
   return unknown("an ALTER form this check does not read");
+}
+
+// ALTER DOMAIN actions that add no constraint and rename nothing.
+const DOMAIN_ACTIONS_KEEPING_CONSTRAINTS = [["owner", "to"], ["rename", "constraint"], ["drop", "constraint"], ["drop", "not", "null"], ["set", "default"], ["drop", "default"]];
+
+/**
+ * ALTER DOMAIN and ALTER TYPE are not safe to run in a new migration, and they can change what a
+ * name means to the rule: a domain gains a constraint, or a type takes the name of another. Every
+ * name such an action touches stops being one this check can show to be free of constraints.
+ */
+function alterType(cursor: Cursor, domain: boolean): Operation[] {
+  const name = cursor.tableName();
+  if (name === undefined) {
+    return unknown("an ALTER form this check does not read");
+  }
+  const names = [name];
+  let retypes = domain;
+  if (cursor.take("rename", "to")) {
+    const to = cursor.identifier();
+    if (to !== undefined) {
+      names.push({ schema: name.schema, name: to });
+    }
+    retypes = true;
+  } else if (cursor.take("set", "schema")) {
+    const schema = cursor.identifier();
+    if (schema !== undefined) {
+      names.push({ schema, name: name.name });
+    }
+    retypes = true;
+  } else if (domain && DOMAIN_ACTIONS_KEEPING_CONSTRAINTS.some((words) => words.every((word, offset) => cursor.isWord(word, offset)))) {
+    retypes = false;
+  }
+  return retypes
+    ? [...unknown("an ALTER form this check does not read"), { kind: "retypes", names }]
+    : unknown("an ALTER form this check does not read", true);
 }
 
 const DEFAULT_PRIVILEGE_OBJECTS = new Set(["tables", "sequences", "functions", "routines", "types", "schemas"]);
@@ -921,8 +1064,9 @@ function alterAction(table: TableName, action: Cursor): Operation[] {
     if (column === undefined) {
       return unknown("ADD COLUMN without a name");
     }
+    const type = readType(action.tokens, action.position);
     const definition = readDefinition(action);
-    const operations: Operation[] = [{ kind: "add-column", table, column, notNullWithoutDefault: definition.notNull && !definition.supplies, rewritesTable: definition.rewritesTable }];
+    const operations: Operation[] = [{ kind: "add-column", table, column, type, notNullWithoutDefault: definition.notNull && !definition.supplies, rewritesTable: definition.rewritesTable }];
     // A column constraint builds an index or checks every existing row, as the table constraint does.
     if (definition.unique || definition.primaryKey) {
       operations.push({ kind: "create-index", table, concurrently: false });
@@ -1049,7 +1193,7 @@ function isVirtualGenerated(definition: Cursor, offset: number): boolean {
  * that is not marked VIRTUAL write every existing row (PostgreSQL 17 has stored generated
  * columns only, so a GENERATED form this reader does not recognise counts as rewriting),
  * while a nullable column or a constant or stable DEFAULT is recorded in the catalog alone
- * unless the column's type is a domain with constraints (not yet checked).
+ * unless the column's type is a domain with constraints (the type is read by `readType`).
  */
 function readDefinition(definition: Cursor): {
   notNull: boolean;

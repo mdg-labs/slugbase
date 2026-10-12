@@ -1,4 +1,4 @@
-import { analyseSql, setsSessionTimeout, type Operation, type TableName } from "./migration-statements.ts";
+import { analyseSql, setsSessionTimeout, type ColumnType, type Operation, type TableName } from "./migration-statements.ts";
 import { readJournal, readMigration } from "./migration-files.ts";
 import { readReleaseState, releaseTags, type ReleaseState } from "./release-history.ts";
 import type { CheckRule, ContractMarker, Finding } from "./types.ts";
@@ -17,8 +17,19 @@ import type { CheckRule, ContractMarker, Finding } from "./types.ts";
 //     17 has stored ones only, so GENERATED ALWAYS AS (...) counts as stored
 //     unless VIRTUAL follows); a nullable column or one with a constant or
 //     stable DEFAULT, such as now(), does not rewrite and is accepted, unless
-//     its type is a domain with constraints (a domain-typed column is not yet
-//     checked),
+//     its type is a domain with a CHECK or NOT NULL constraint, which validates
+//     every existing row (also with a DEFAULT). The domains come from every
+//     CREATE DOMAIN of the migration chain, the migrations of the release
+//     included; a built-in type, an array type, an enum and a domain without
+//     constraints are accepted, and so is no other type: a name this check
+//     cannot show to be one of those (a type of another schema, a type no
+//     migration declares, a domain an ALTER DOMAIN touched) is rejected. After
+//     a migration this check cannot read, or a statement it cannot place (a DO
+//     block, say), shipped or added, marked or not, the types declared before
+//     it count as unproven too (the citext type excepted), since it may have
+//     given a domain a constraint or replaced an enum with one. A CREATE DOMAIN,
+//     an ALTER TYPE that renames or moves nothing, and an ALTER DOMAIN action
+//     that adds no constraint are read and do not count,
 //   - changing the type of a column of such a table (any change: whether it
 //     rewrites the table depends on the old and the new type, which a lint of
 //     the file cannot tell),
@@ -94,6 +105,7 @@ import type { CheckRule, ContractMarker, Finding } from "./types.ts";
 // see release-history.ts.
 
 const ID = "expand-contract";
+const CITEXT = "public.citext";
 const MARKER_VARIABLE = "SLUGBASE_DB_CHECK_CONTRACT";
 const HEADER_PREFIX = "-- slugbase:contract";
 const HEADER = /^-- slugbase:contract expand=(\S+) release=(\S+)\s*$/;
@@ -129,6 +141,9 @@ function describe(table: TableName): string {
 /** The tables and columns of the release, which the added migrations change as they go. */
 class Released {
   private readonly tables = new Map<string, Set<string>>();
+  // The types the migration chain declares: true when the type is, or may be, a domain with constraints.
+  // citext is the type of the extension this package installs (doc 05 section 1), which is no domain.
+  private readonly types = new Map<string, boolean>([[CITEXT, false]]);
 
   readonly tag: string | undefined;
 
@@ -147,8 +162,49 @@ class Released {
     return this.tables.get(key(table))?.has(column) === true;
   }
 
+  /**
+   * A migration this check cannot read, or a statement in it that it cannot place (a DO block, say),
+   * may have given any domain a constraint, renamed or moved a type, or replaced an enum with a domain:
+   * no type declared before it stays one this check can show to be free of constraints. The type of the
+   * extension this package installs is the exception, and a type a later migration declares is read as
+   * it is declared.
+   */
+  taint(): void {
+    for (const name of this.types.keys()) {
+      if (name !== CITEXT) {
+        this.types.set(name, true);
+      }
+    }
+  }
+
+  /** Takes the type a migration declares or changes into the model. */
+  track(operation: Operation): void {
+    if (operation.kind === "declares-type") {
+      this.types.set(key(operation.name), operation.ownConstraints || !this.constraintFree(operation.base));
+    } else if (operation.kind === "retypes") {
+      for (const name of operation.names) {
+        this.types.set(key(name), true);
+      }
+    } else if (operation.kind === "unknown" && operation.keepsTypes !== true) {
+      this.taint();
+    }
+  }
+
+  /** Whether the type is one that adds no constraint to the values of its columns: not a domain with constraints, and not a name this check cannot place. */
+  private constraintFree(type: ColumnType): boolean {
+    switch (type.kind) {
+      case "builtin":
+        return true;
+      case "unreadable":
+        return false;
+      case "named":
+        return this.types.get(key(type.name)) === false;
+    }
+  }
+
   apply(operation: Operation): string[] {
     const at = this.tag ?? "the latest release";
+    this.track(operation);
     switch (operation.kind) {
       case "drop-table": {
         if (!this.hasTable(operation.table)) {
@@ -202,6 +258,10 @@ class Released {
         if (operation.rewritesTable) {
           problems.push(`adds column ${describe(operation.table)}.${operation.column} as a serial, identity or generated column to a table that exists at ${at}: the addition rewrites the table under an ACCESS EXCLUSIVE lock`);
         }
+        if (!this.constraintFree(operation.type)) {
+          const type = operation.type.kind === "named" ? `type ${describe(operation.type.name)}` : "a type this check cannot read";
+          problems.push(`adds column ${describe(operation.table)}.${operation.column} of ${type}, which is a domain with constraints or a type this check cannot show to be free of them, to a table that exists at ${at}: the addition validates every row of the table under an ACCESS EXCLUSIVE lock`);
+        }
         return problems;
       }
       case "alter-column-type":
@@ -238,6 +298,8 @@ class Released {
       }
       case "unknown":
         return [(`has a statement this check cannot place (${operation.reason}), so it cannot show that the statement keeps the previous release working`)];
+      case "declares-type":
+      case "retypes":
       case "data-change":
       case "safe":
         return [];
@@ -297,6 +359,22 @@ function headerProblem(packageDir: string, content: string, tags: readonly strin
   return undefined;
 }
 
+/**
+ * The operations of a migration the release holds, for the types it declares, or undefined when
+ * this check cannot read the file: it then cannot tell what the file did to the types.
+ */
+function declarationsOf(packageDir: string, tag: string): Operation[] | undefined {
+  const content = readMigration(packageDir, tag);
+  if (content === undefined) {
+    return undefined;
+  }
+  try {
+    return analyseSql(content).flatMap((statement) => statement.operations);
+  } catch {
+    return undefined;
+  }
+}
+
 export const expandContractRule: CheckRule = {
   id: ID,
   description:
@@ -314,6 +392,14 @@ export const expandContractRule: CheckRule = {
 
     for (const { tag } of journal) {
       if (shipped.has(tag)) {
+        const declared = declarationsOf(packageDir, tag);
+        if (declared === undefined) {
+          released.taint();
+        } else {
+          for (const operation of declared) {
+            released.track(operation);
+          }
+        }
         continue;
       }
       const object = `migrations/${tag}.sql`;
@@ -340,6 +426,7 @@ export const expandContractRule: CheckRule = {
           }
         }
       } catch (error) {
+        released.taint();
         problems.push(
           `cannot be read by this check (${error instanceof Error ? error.message : "unknown error"}), so it cannot show that the file keeps the previous release working`,
         );
