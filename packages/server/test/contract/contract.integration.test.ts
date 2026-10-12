@@ -1,0 +1,154 @@
+import { classifyOperations, createProbe, loadOpenApiDocument, runApiMatrix, type Probe } from "@slugbase/testing/tenancy";
+import { useTestDatabase } from "@slugbase/testing/db";
+import { beforeAll, describe, expect, it } from "vitest";
+import { createServer, type Server, type ServerModule } from "../../src/create-server.ts";
+import { ProblemError } from "../../src/http/problem.ts";
+import { route } from "../../src/routes/register.ts";
+import { recordingLogger, serverConfig } from "../support.ts";
+import { buildDocument, type TestDocument } from "./build-document.ts";
+import { FIXTURES } from "./fixtures.ts";
+import { matrixRequest } from "./matrix.ts";
+import { getProbeRow, probeFixtures, probeModule, probeOperations } from "./probe-module.ts";
+import { createStubWorld, type StubWorld } from "./stubs.ts";
+import { appUrl, tenantDatabase } from "./support.ts";
+import { walkContract, type PolicyHooks } from "./walker.ts";
+
+// The contract tests of doc 04 section 1.3 and the cross-tenant matrix of doc 08
+// section 3.3 in API mode, both over an in-process server (doc 10 T1, T3). The
+// first suite walks the committed document against the server as composed. The
+// others walk and run the matrix over a test module whose operations carry
+// every policy the walker's hooks act on, because the committed document holds
+// no operation that needs a principal yet.
+
+const HOOK_TIMEOUT_MS = 300_000;
+
+const database = useTestDatabase();
+let probe: Probe;
+let world: StubWorld;
+
+beforeAll(async () => {
+  probe = await createProbe(database(), { table: "contract_probe", repository: "contract_probe" });
+  world = createStubWorld(probe.fixture);
+}, HOOK_TIMEOUT_MS);
+
+function serve(modules: readonly ServerModule[], document?: TestDocument): Server {
+  return createServer({
+    config: serverConfig({ NODE_ENV: "test", DATABASE_URL: appUrl(database()) }),
+    adapters: world.adapters(),
+    modules,
+    migrations: [],
+    logger: recordingLogger(),
+    database: tenantDatabase(database()),
+    ...(document === undefined ? {} : { openApiDocument: document }),
+  });
+}
+
+const origin = serverConfig({ NODE_ENV: "test" }).APP_ORIGIN;
+const committed = loadOpenApiDocument();
+
+describe("the walker over the committed document", () => {
+  it("calls every operation of openapi.json and finds it as declared", async () => {
+    const operations = classifyOperations(committed).operations;
+    expect(Object.keys(FIXTURES).sort()).toEqual(operations.map((operation) => operation.operationId).sort());
+
+    const server = serve([]);
+    const report = await walkContract({ document: committed, send: (request) => server.fetch(request), origin, fixtures: FIXTURES, hooks: world.hooks });
+    expect(report.failures).toEqual([]);
+    expect(report.operations).toBe(operations.length);
+    expect(report.operations).toBeGreaterThan(0);
+    // Phase 1 declares only anonymous operations: one valid request each.
+    expect(report.calls).toBe(operations.length);
+  });
+});
+
+describe("the hooks over a test module", () => {
+  const document = buildDocument(probeOperations, committed);
+
+  it("run for every operation with a policy that needs a principal, and the server answers each as declared", async () => {
+    const counted: Record<keyof PolicyHooks, number> = { authorized: 0, tooLowRole: 0, readOnlyToken: 0, withoutEntitlement: 0, workspaceA: 0 };
+    const count = <K extends keyof PolicyHooks>(name: K): PolicyHooks[K] =>
+      ((operation: Parameters<PolicyHooks[K]>[0]) => {
+        counted[name] += 1;
+        return world.hooks[name](operation);
+      }) as PolicyHooks[K];
+    const hooks: PolicyHooks = {
+      authorized: count("authorized"),
+      tooLowRole: count("tooLowRole"),
+      readOnlyToken: count("readOnlyToken"),
+      withoutEntitlement: count("withoutEntitlement"),
+      workspaceA: count("workspaceA"),
+    };
+
+    const server = serve([probeModule(probe, world)], document);
+    const report = await walkContract({ document, send: (request) => server.fetch(request), origin, fixtures: probeFixtures(probe), hooks });
+    expect(report.failures).toEqual([]);
+    expect(report.operations).toBe(probeOperations.length);
+    expect(counted).toEqual({
+      authorized: 7,
+      // every policy but the account one has a role below it
+      tooLowRole: 6,
+      // the one operation with a write scope
+      readOnlyToken: 1,
+      // the one operation that declares an entitlement
+      withoutEntitlement: 1,
+      // the two operations that take the identifier of a row
+      workspaceA: 2,
+    });
+    // the valid request and the one without credentials of each operation, and one request for each run of another hook
+    expect(report.calls).toBe(7 + 7 + 6 + 1 + 1 + 2);
+  });
+});
+
+describe("the cross-tenant matrix in API mode over the server", () => {
+  const document = buildDocument(probeOperations, committed);
+  const mapping = { rowId: "bookmark" } as const;
+
+  it("passes for handlers that read inside the tenant transaction", async () => {
+    const server = serve([probeModule(probe, world)], document);
+    const report = await runApiMatrix({
+      document,
+      fixture: probe.fixture,
+      mapping,
+      request: matrixRequest({ send: (request) => server.fetch(request), origin, fixtures: probeFixtures(probe), credentialsOf: (principal) => world.credentialsOf(principal) }),
+    });
+    expect(report.failures).toEqual([]);
+    expect(report.classified.byKind["tenant-scoped"]).toBe(5);
+    // three principals of A against the two rows of B, on each of the two operations that take a row; once on the three that take none
+    expect(report.attempts).toBe(2 * 6 + 3 * 3);
+  });
+
+  it("fails an operation that loads the row by id outside the tenant transaction", async () => {
+    // The constructed Critical of doc 10 section 6: the handler looks the row up as the table owner, in every workspace.
+    const sneaky: ServerModule = {
+      name: "sneaky",
+      register: () => ({
+        authenticators: world.authenticators,
+        routes: [
+          route(getProbeRow).handle(async ({ params }) => {
+            for (const workspaceId of [probe.fixture.a.id, probe.fixture.b.id]) {
+              const rows = await database().owner.begin(async (tx) => {
+                await tx`SELECT set_config('app.workspace_id', ${workspaceId}, true)`;
+                return tx.unsafe<{ id: string; label: string }[]>(`SELECT id, label FROM ${probe.table} WHERE id = $1`, [params.rowId]);
+              });
+              const row = rows[0];
+              if (row !== undefined) {
+                return { status: 200, body: { id: row.id, label: row.label } };
+              }
+            }
+            throw new ProblemError("not_found", "No such row.");
+          }),
+        ],
+      }),
+    };
+    const only = buildDocument([getProbeRow], committed);
+    const server = serve([sneaky], only);
+    const report = await runApiMatrix({
+      document: only,
+      fixture: probe.fixture,
+      mapping,
+      request: matrixRequest({ send: (request) => server.fetch(request), origin, fixtures: probeFixtures(probe), credentialsOf: (principal) => world.credentialsOf(principal) }),
+    });
+    expect(new Set(report.failures.map((failure) => failure.kind))).toEqual(new Set(["unexpected_status", "leaked_name"]));
+    expect(report.failures.filter((failure) => failure.kind === "unexpected_status")).toHaveLength(6);
+  });
+});
