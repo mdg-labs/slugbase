@@ -38,13 +38,15 @@ const document = loadOpenApiDocument();
 const classification = classifyOperations(document);
 
 describe("the matrix over the committed contract and the repository registry", () => {
-  // No in-process server is wired yet (E1.4.16): any request the matrix makes
-  // fails it, so the first tenant-scoped operation cannot go unexercised.
-  const unwired = (call: ApiCall): Promise<ApiResponse> =>
-    Promise.reject(new Error(`no in-process server is wired for ${call.operation.operationId}`));
+  // This package-level test exercises the runner with no server. The API mode
+  // over the real middleware chain, through an in-process createServer, runs in
+  // packages/server/test/contract/ (matrixRequest). Here any request the matrix
+  // makes fails the test, so a tenant-scoped operation cannot go unexercised.
+  const noServer = (call: ApiCall): Promise<ApiResponse> =>
+    Promise.reject(new Error(`this test runs no server, yet the matrix requested ${call.operation.operationId}`));
 
   it(`API mode classifies the ${String(classification.summary.total)} operations of openapi.json and finds no tenant-scoped one in Phase 1`, async () => {
-    const report = await runApiMatrix({ document, fixture: scoped.fixture, request: unwired });
+    const report = await runApiMatrix({ document, fixture: scoped.fixture, request: noServer });
     expect(classification.problems).toEqual([]);
     expect(report.classified.total).toBe(classification.operations.length);
     expect(report.classified.total).toBeGreaterThan(0);
