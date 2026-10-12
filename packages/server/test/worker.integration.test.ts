@@ -166,19 +166,24 @@ describe("two workers on one database", () => {
         return Promise.reject(new Error("always fails"));
       },
     });
-    const { running, logger } = await startWorker([moduleOf("a", [failing])]);
-    await startWorker([moduleOf("b", [failing])]);
+    const first = await startWorker([moduleOf("a", [failing])]);
+    const second = await startWorker([moduleOf("b", [failing])]);
 
-    await running.enqueue(failing, { id: "x" });
+    await first.running.enqueue(failing, { id: "x" });
     await until(async () => (await jobRows("test.failing")).some((row) => row.state === "failed"), 60_000, "the job to fail");
 
     const [row] = await jobRows("test.failing");
     expect(row).toMatchObject({ state: "failed", retry_count: 2, retry_limit: 2, retry_delay: 1, retry_backoff: true });
+    // Either worker may take any attempt, so the failures are read from both logs.
+    const failures = [first, second].flatMap(({ logger }) => logger.entries.filter((entry) => entry.message === "Job failed"));
+    expect(failures.map((entry) => entry.fields.attempt).sort()).toEqual([1, 2, 3]);
     expect(attempts).toHaveLength(3);
+    // Only lower bounds: database latency can stretch a gap, never shorten it. The retry delay
+    // doubles per retry, so the second gap is at least twice the configured delay.
     const gaps = attempts.slice(1).map((at, index) => at - (attempts[index] ?? 0));
     expect(gaps).toHaveLength(2);
-    expect(Math.min(...gaps)).toBeGreaterThanOrEqual(900);
-    expect(logger.entries.filter((entry) => entry.message === "Job failed")).toHaveLength(3);
+    expect(gaps[0]).toBeGreaterThanOrEqual(900);
+    expect(gaps[1]).toBeGreaterThanOrEqual(1900);
   }, 90_000);
 
   it("leaves the same state when the same job is delivered twice", async () => {
