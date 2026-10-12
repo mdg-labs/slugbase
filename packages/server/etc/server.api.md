@@ -273,6 +273,7 @@ export const envSchemas: {
     SESSION_SECRET: z.ZodString;
     ENCRYPTION_KEY: z.ZodString;
     ENCRYPTION_KEY_ID: z.ZodString;
+    ENCRYPTION_KEY_PREVIOUS: z.ZodPreprocess<z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<readonly PreviousKey[], string>>>, unknown>;
     } & {
     DATABASE_URL: z.ZodString;
     SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
@@ -308,6 +309,7 @@ export const envSchemas: {
     SESSION_SECRET: z.ZodString;
     ENCRYPTION_KEY: z.ZodString;
     ENCRYPTION_KEY_ID: z.ZodString;
+    ENCRYPTION_KEY_PREVIOUS: z.ZodPreprocess<z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<readonly PreviousKey[], string>>>, unknown>;
     } & {
     DATABASE_URL: z.ZodString;
     SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
@@ -565,6 +567,13 @@ export const originFragment: EnvFragment<    {
 APP_ORIGIN: z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>;
 }>;
 
+// @public (undocumented)
+export interface PreviousKey {
+    readonly key: string;
+    // (undocumented)
+    readonly keyId: string;
+}
+
 // @public
 export type Principal = SessionPrincipal | ApiTokenPrincipal;
 
@@ -783,6 +792,7 @@ export const secretsFragment: EnvFragment<    {
 SESSION_SECRET: z.ZodString;
 ENCRYPTION_KEY: z.ZodString;
 ENCRYPTION_KEY_ID: z.ZodString;
+ENCRYPTION_KEY_PREVIOUS: z.ZodPreprocess<z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<readonly PreviousKey[], string>>>, unknown>;
 }>;
 
 // @public (undocumented)
@@ -822,6 +832,7 @@ APP_ORIGIN: z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>;
 SESSION_SECRET: z.ZodString;
 ENCRYPTION_KEY: z.ZodString;
 ENCRYPTION_KEY_ID: z.ZodString;
+ENCRYPTION_KEY_PREVIOUS: z.ZodPreprocess<z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<readonly PreviousKey[], string>>>, unknown>;
 } & {
 DATABASE_URL: z.ZodString;
 SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
@@ -859,6 +870,7 @@ APP_ORIGIN: z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>;
 SESSION_SECRET: z.ZodString;
 ENCRYPTION_KEY: z.ZodString;
 ENCRYPTION_KEY_ID: z.ZodString;
+ENCRYPTION_KEY_PREVIOUS: z.ZodPreprocess<z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<readonly PreviousKey[], string>>>, unknown>;
 }>, EnvFragment<    {
 DATABASE_URL: z.ZodString;
 SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
@@ -961,6 +973,7 @@ APP_ORIGIN: z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>;
 SESSION_SECRET: z.ZodString;
 ENCRYPTION_KEY: z.ZodString;
 ENCRYPTION_KEY_ID: z.ZodString;
+ENCRYPTION_KEY_PREVIOUS: z.ZodPreprocess<z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<readonly PreviousKey[], string>>>, unknown>;
 } & {
 DATABASE_URL: z.ZodString;
 SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
@@ -990,6 +1003,7 @@ APP_ORIGIN: z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>;
 SESSION_SECRET: z.ZodString;
 ENCRYPTION_KEY: z.ZodString;
 ENCRYPTION_KEY_ID: z.ZodString;
+ENCRYPTION_KEY_PREVIOUS: z.ZodPreprocess<z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<readonly PreviousKey[], string>>>, unknown>;
 }>, EnvFragment<    {
 DATABASE_URL: z.ZodString;
 SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;

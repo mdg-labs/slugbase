@@ -257,6 +257,31 @@ describe("apps/slugbase main", () => {
     expect(output.match(/Unknown SLUGBASE_/g)).toHaveLength(1);
   });
 
+  it("builds the secret box from the configured keys before it serves, and logs no key", async () => {
+    const previous = randomBytes(32).toString("base64");
+    const { status, output } = await runServer({ ...standalone, ENCRYPTION_KEY_PREVIOUS: `k0:${previous}` });
+    expect(status, output).toBe(0);
+    const lines = output
+      .split("\n")
+      .filter((line) => line.startsWith("{"))
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    const ready = lines.findIndex((line) => line["msg"] === "Secret box ready");
+    expect(ready).toBeGreaterThanOrEqual(0);
+    expect(lines[ready]).toMatchObject({ keyId: "k1", previousKeys: 1 });
+    expect(ready).toBeLessThan(lines.findIndex((line) => line["msg"] === "Listening"));
+    expect(output).not.toContain(ENCRYPTION_KEY);
+    expect(output).not.toContain(previous);
+  });
+
+  it("refuses to start with a previous key that is not 32 bytes, naming the key and never the value", () => {
+    const short = Buffer.alloc(16, 4).toString("base64");
+    const { status, output } = start({ ...valid, ENCRYPTION_KEY_PREVIOUS: `k0:${short}` });
+    expect(status).toBe(1);
+    expect(output).toContain("ENCRYPTION_KEY_PREVIOUS");
+    expect(output).not.toContain(short);
+    expect(output).not.toContain("Configuration loaded");
+  });
+
   it("exits non-zero for an unknown command", () => {
     const { status, output } = start(valid, "serve");
     expect(status).toBe(2);

@@ -16,6 +16,6 @@ export type { MailMessage, MailPort } from "./mail.ts";
 export { PortUnavailable } from "./port.ts";
 export type { Port, PortUnavailableCode } from "./port.ts";
 export type { RateLimitDecision, RateLimitPort, RateLimitRequest } from "./rate-limit.ts";
-export type { SealedSecret, SecretBoxPort } from "./secret-box.ts";
+export type { SealedSecret, SecretBoxOptions, SecretBoxPort } from "./secret-box.ts";
 export type { TenantPrincipal, TenantResolution, TenantResolver, WorkspaceRole } from "./tenant-resolver.ts";
 export { unconfigured } from "./unconfigured.ts";

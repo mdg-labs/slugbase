@@ -16,6 +16,7 @@ const REFUSED: readonly { key: string; value: string }[] = [
   { key: "ENCRYPTION_KEY", value: Buffer.alloc(16, 9).toString("base64") },
   { key: "ENCRYPTION_KEY", value: DEVELOPMENT_ENCRYPTION_KEY },
   { key: "ENCRYPTION_KEY_ID", value: "bad id qx43/with:chars" },
+  { key: "ENCRYPTION_KEY_PREVIOUS", value: "qx63:bad-previous-key-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" },
   { key: "APP_ORIGIN", value: "http://insecure-qx44.example.com" },
   { key: "APP_ORIGIN", value: "https://qx45.example.com/with/a/path" },
   { key: "DATABASE_URL", value: DEVELOPMENT_DATABASE_URL },

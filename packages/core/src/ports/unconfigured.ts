@@ -29,7 +29,13 @@ export function unconfigured(): Adapters {
     challenge: { available: false, verify: () => Promise.resolve({ ok: true }) },
     egress: { available: false, request: unavailable("egress") },
     rateLimit: { available: false, consume: unavailable("rateLimit") },
-    secretBox: { available: false, seal: unavailable("secretBox"), open: unavailable("secretBox") },
+    secretBox: {
+      available: false,
+      seal: unavailable("secretBox"),
+      open: unavailable("secretBox"),
+      needsRotation: unavailable("secretBox"),
+      reseal: unavailable("secretBox"),
+    },
     tenantResolver: { available: false, resolve: unavailable("tenantResolver") },
   };
 }

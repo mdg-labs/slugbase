@@ -1,8 +1,8 @@
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import "@slugbase/adapters";
+import { createSecretBox } from "@slugbase/adapters";
 import "@slugbase/contracts";
-import { unconfigured } from "@slugbase/core";
+import { unconfigured, type Adapters } from "@slugbase/core";
 import { type MigrationChain } from "@slugbase/db";
 import "@slugbase/email";
 import {
@@ -122,6 +122,21 @@ const WEB_ROOT = fileURLToPath(new URL("../web", import.meta.url));
 // sets are the ones `migrate` and the server's migrate-on-start both apply.
 const MIGRATIONS: readonly MigrationChain[] = [];
 
+// The secret box is built from the environment by the server and the worker
+// alike: `ENCRYPTION_KEY` seals, the previous keys only open. A key the box
+// refuses stops the process before it serves or works.
+function composeAdapters(config: ServerConfig | WorkerConfig, logger: Logger): Adapters {
+  const secretBox = createSecretBox({
+    current: { keyId: config.ENCRYPTION_KEY_ID, key: Buffer.from(config.ENCRYPTION_KEY, "base64") },
+    previous: config.ENCRYPTION_KEY_PREVIOUS.map(({ keyId, key }) => ({ keyId, key: Buffer.from(key, "base64") })),
+  });
+  logger.info("Secret box ready", {
+    keyId: config.ENCRYPTION_KEY_ID,
+    previousKeys: config.ENCRYPTION_KEY_PREVIOUS.length,
+  });
+  return { ...unconfigured(), secretBox };
+}
+
 async function runServer(config: ServerConfig, trap: SignalTrap): Promise<void> {
   const logger = createLogger({ level: config.LOG_LEVEL });
   const serveWeb = existsSync(WEB_ROOT);
@@ -130,7 +145,7 @@ async function runServer(config: ServerConfig, trap: SignalTrap): Promise<void> 
   }
   const server = createServer({
     config,
-    adapters: unconfigured(),
+    adapters: composeAdapters(config, logger),
     modules: [],
     migrations: MIGRATIONS,
     logger,
@@ -158,7 +173,7 @@ async function runWorker(config: WorkerConfig, trap: SignalTrap): Promise<void> 
   const logger = createLogger({ level: config.LOG_LEVEL });
   const worker = createWorker({
     config,
-    adapters: unconfigured(),
+    adapters: composeAdapters(config, logger),
     modules: [],
     logger,
   });

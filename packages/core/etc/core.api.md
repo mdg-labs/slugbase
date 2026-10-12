@@ -280,12 +280,19 @@ export interface SealedSecret {
     readonly keyId: string;
 }
 
+// @public (undocumented)
+export interface SecretBoxOptions {
+    readonly aad: Uint8Array;
+}
+
 // @public
 export interface SecretBoxPort extends Port {
+    needsRotation(keyId: string): Promise<boolean>;
     // (undocumented)
-    open(sealed: SealedSecret): Promise<Uint8Array>;
+    open(sealed: SealedSecret, options: SecretBoxOptions): Promise<Uint8Array>;
+    reseal(sealed: SealedSecret, options: SecretBoxOptions): Promise<SealedSecret>;
     // (undocumented)
-    seal(plaintext: Uint8Array): Promise<SealedSecret>;
+    seal(plaintext: Uint8Array, options: SecretBoxOptions): Promise<SealedSecret>;
 }
 
 // @public

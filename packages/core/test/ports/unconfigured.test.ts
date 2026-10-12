@@ -18,7 +18,7 @@ const PORTS: Record<
   challenge: { methods: ["verify"], behaviour: "disabled", code: "unavailable" },
   egress: { methods: ["request"], behaviour: "rejects", code: "unavailable" },
   rateLimit: { methods: ["consume"], behaviour: "rejects", code: "unavailable" },
-  secretBox: { methods: ["open", "seal"], behaviour: "rejects", code: "unavailable" },
+  secretBox: { methods: ["needsRotation", "open", "reseal", "seal"], behaviour: "rejects", code: "unavailable" },
   tenantResolver: { methods: ["resolve"], behaviour: "rejects", code: "unavailable" },
 };
 

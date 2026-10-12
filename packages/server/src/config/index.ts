@@ -15,6 +15,7 @@ export {
   secretsFragment,
   serverMigrationFragment,
 } from "./fragments.ts";
+export type { PreviousKey } from "./fields.ts";
 export { ConfigError, loadConfig, validateEnvironment } from "./load.ts";
 export type { EnvironmentVariables, LoadOptions, LoadedConfig } from "./load.ts";
 export {

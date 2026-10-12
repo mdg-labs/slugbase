@@ -4,6 +4,34 @@
 
 ```ts
 
+import type { SecretBoxPort } from '@slugbase/core';
+
+// @public
+export function createSecretBox(options: CreateSecretBoxOptions): SecretBoxPort;
+
+// @public (undocumented)
+export interface CreateSecretBoxOptions {
+    readonly current: SecretBoxKey;
+    readonly previous?: readonly SecretBoxKey[];
+}
+
+// @public
+export class SecretBoxError extends Error {
+    constructor(operation: SecretBoxOperation);
+    // (undocumented)
+    readonly operation: SecretBoxOperation;
+}
+
+// @public (undocumented)
+export interface SecretBoxKey {
+    readonly key: Uint8Array;
+    // (undocumented)
+    readonly keyId: string;
+}
+
+// @public (undocumented)
+export type SecretBoxOperation = "configure" | "seal" | "open";
+
 // (No @packageDocumentation comment for this package)
 
 ```
