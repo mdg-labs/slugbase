@@ -15,6 +15,8 @@ export interface Adapters {
     // (undocumented)
     readonly challenge: ChallengePort;
     // (undocumented)
+    readonly clientErrorReport: ClientErrorReportPort;
+    // (undocumented)
     readonly egress: EgressPort;
     // (undocumented)
     readonly errors: ErrorReportPort;
@@ -86,6 +88,19 @@ export interface ChallengePort extends Port {
 export interface ChallengeVerdict {
     // (undocumented)
     readonly ok: boolean;
+}
+
+// @public
+export interface ClientErrorReportPort extends Port {
+    // (undocumented)
+    dsn(request: ClientErrorReportRequest): Promise<string | null>;
+}
+
+// @public (undocumented)
+export interface ClientErrorReportRequest {
+    // (undocumented)
+    readonly accountId: string;
+    readonly workspaceId: string | undefined;
 }
 
 // @public

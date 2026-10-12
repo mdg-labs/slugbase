@@ -8,6 +8,7 @@ import {
   type ModuleContext,
   type ServerModule,
 } from "../src/create-server.ts";
+import { HookResult } from "../src/hooks/index.ts";
 import { defineJob, defineSchedule } from "../src/worker/index.ts";
 import { adapters, fakeDatabase, operation, recordingLogger, serverConfig } from "./support.ts";
 
@@ -217,5 +218,111 @@ describe("createServer", () => {
       expect(error.message).toContain(mention);
       expect(database.closed.count).toBe(1);
     }
+  });
+});
+
+describe("the hooks of modules", () => {
+  const seat = { workspaceId: "w1", accountId: "a1", invitationId: "i1" };
+  const registration = { email: "someone@example.com", path: "oidc" } as const;
+
+  function hookServer(modules: readonly ServerModule[], hookTimeoutMs = 25) {
+    const probe: ServerModule = {
+      name: "probe",
+      register: () => ({
+        routes: [
+          {
+            operation: operation("get", "/api/v1/probe", "probe"),
+            handler: async (context) => {
+              const hooks = context.get("hooks");
+              if (hooks === undefined) {
+                throw new Error("no hooks in the handler");
+              }
+              const limit = await hooks.seatLimit(seat, 5);
+              const registrationOutcome = await hooks.registrationPolicy(registration);
+              return Response.json({ limit, registrationOutcome });
+            },
+          },
+        ],
+      }),
+    };
+    return createServer({
+      config: serverConfig(),
+      adapters: adapters(),
+      modules: [probe, ...modules],
+      migrations: [],
+      logger: recordingLogger(),
+      database: fakeDatabase(),
+      hookTimeoutMs,
+    });
+  }
+
+  const get = (server: ReturnType<typeof hookServer>) => server.fetch(new Request("http://localhost/api/v1/probe"));
+
+  it("leaves CE behaviour unchanged with no hook registered", async () => {
+    const response = await get(hookServer([]));
+    expect(await response.json()).toEqual({ limit: 5, registrationOutcome: { outcome: "allow" } });
+  });
+
+  it("consults the hooks of every module, the lowest seat limit winning", async () => {
+    const server = hookServer([
+      { name: "a", hooks: { seatCheck: () => ({ seatLimit: 8 }) }, register: () => ({}) },
+      { name: "b", hooks: { seatCheck: () => ({ seatLimit: 2 }), registrationPolicy: () => HookResult.refuse("blocked") }, register: () => ({}) },
+    ]);
+    expect(await (await get(server)).json()).toEqual({
+      limit: 2,
+      registrationOutcome: { outcome: "refuse", code: "registration_refused" },
+    });
+  });
+
+  it("answers 503 unavailable when a module's hook hangs", async () => {
+    const server = hookServer([{ name: "slow", hooks: { seatCheck: () => new Promise(() => undefined) }, register: () => ({}) }]);
+    const response = await get(server);
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ code: "unavailable" });
+  });
+
+  it("refuses to compose a module whose hooks are not functions or are not declared by CE", () => {
+    const bad: unknown[] = [{ seatCheck: "yes" }, { archive: () => undefined }, "hooks", null];
+    for (const hooks of bad) {
+      const module = { name: "bad", hooks, register: () => ({}) } as unknown as ServerModule;
+      const database = fakeDatabase();
+      const error = failure(() =>
+        createServer({ config: serverConfig(), adapters: adapters(), modules: [module], migrations: [], logger: recordingLogger(), database }),
+      );
+      expect(error.code).toBe("invalid_hook");
+      expect(error.message).toContain("bad");
+      expect(database.closed.count).toBe(1);
+    }
+  });
+
+  it("refuses to compose a module that declares a deletion refusal outside the closed list", () => {
+    const bad: unknown[] = [{ deletionGuard: ["subscription_active"] }, { deletionGuard: "billing_active" }, { archive: [] }, null];
+    for (const hookRefusals of bad) {
+      const module = {
+        name: "bad",
+        hooks: { deletionGuard: () => HookResult.refuse("billing_active") },
+        hookRefusals,
+        register: () => ({}),
+      } as unknown as ServerModule;
+      const database = fakeDatabase();
+      const error = failure(() =>
+        createServer({ config: serverConfig(), adapters: adapters(), modules: [module], migrations: [], logger: recordingLogger(), database }),
+      );
+      expect(error.code).toBe("invalid_hook");
+      expect(error.message).toContain("bad");
+      expect(database.closed.count).toBe(1);
+    }
+  });
+
+  it("composes a module whose declared deletion refusals are on the closed list", () => {
+    const module: ServerModule = {
+      name: "billing",
+      hooks: { deletionGuard: () => HookResult.refuse("billing_active") },
+      hookRefusals: { deletionGuard: ["billing_active"] },
+      register: () => ({}),
+    };
+    expect(() =>
+      createServer({ config: serverConfig(), adapters: adapters(), modules: [module], migrations: [], logger: recordingLogger(), database: fakeDatabase() }),
+    ).not.toThrow();
   });
 });

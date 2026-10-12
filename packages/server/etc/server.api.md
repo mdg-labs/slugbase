@@ -5,6 +5,7 @@
 ```ts
 
 import type { Adapters } from '@slugbase/core';
+import type { ClientErrorReportRequest } from '@slugbase/core';
 import type { Context } from 'hono';
 import { Database } from '@slugbase/db';
 import { MigrationChain } from '@slugbase/db';
@@ -31,6 +32,7 @@ export interface ChainEnv {
         logger?: Logger;
         principalType?: "anonymous" | "session" | "api-token";
         workspaceId?: string;
+        hooks?: HookDispatcher;
         route?: MatchedRoute;
     };
 }
@@ -46,7 +48,7 @@ export class CompositionError extends Error {
 }
 
 // @public (undocumented)
-export type CompositionErrorCode = "missing_adapter" | "invalid_module" | "duplicate_module" | "module_failed" | "duplicate_route" | "duplicate_job" | "unknown_job" | "duplicate_schedule" | "invalid_schedule";
+export type CompositionErrorCode = "missing_adapter" | "invalid_module" | "duplicate_module" | "invalid_hook" | "module_failed" | "duplicate_route" | "duplicate_job" | "unknown_job" | "duplicate_schedule" | "invalid_schedule";
 
 // @public (undocumented)
 export interface ConfigByProcess {
@@ -86,6 +88,7 @@ export interface CreateServerOptions {
     // (undocumented)
     readonly config: ServerConfig;
     readonly database?: Database;
+    readonly hookTimeoutMs?: number;
     // (undocumented)
     readonly logger: Logger;
     readonly migrations: readonly MigrationChain[];
@@ -126,6 +129,9 @@ export function declaredKeys(): readonly string[];
 export const DEFAULT_DOCS_BASE_URL = "https://slugbase.app/docs";
 
 // @public (undocumented)
+export const DEFAULT_HOOK_TIMEOUT_MS = 2000;
+
+// @public (undocumented)
 export const DEFAULT_RETRY_POLICY: ResolvedRetryPolicy;
 
 // @public (undocumented)
@@ -145,6 +151,24 @@ export interface DefineJobOptions<Shape extends z.ZodRawShape> {
 
 // @public
 export function defineSchedule(options: ScheduleDefinition): ScheduleDefinition;
+
+// @public
+export const DELETION_REFUSAL_CODES: readonly ["billing_active"];
+
+// @public (undocumented)
+export type DeletionGuardInput = {
+    readonly kind: "workspace";
+    readonly workspaceId: string;
+    readonly accountId: string;
+    readonly requestedBy: "member" | "instanceAdmin";
+} | {
+    readonly kind: "account";
+    readonly accountId: string;
+    readonly requestedBy: "member" | "instanceAdmin";
+};
+
+// @public (undocumented)
+export type DeletionRefusalCode = (typeof DELETION_REFUSAL_CODES)[number];
 
 // @public
 export function envBoolean(): z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>;
@@ -256,6 +280,40 @@ export const envSchemas: {
     } & {
     DATABASE_MIGRATE_URL: z.ZodString;
     }>;
+};
+
+// @public (undocumented)
+export const HOOK_NAMES: readonly ["seatCheck", "deletionGuard", "registrationPolicy"];
+
+// @public
+export interface HookDispatcher {
+    clientErrorReportDsn(request: ClientErrorReportRequest): Promise<string | null>;
+    deletionGuard(input: DeletionGuardInput): Promise<HookResult<DeletionRefusalCode>>;
+    registrationPolicy(input: RegistrationPolicyInput): Promise<HookResult<RegistrationRefusalCode>>;
+    seatLimit(input: SeatCheckInput, entitlementLimit: number | null): Promise<number | null>;
+}
+
+// @public (undocumented)
+export type HookName = keyof ServerHooks;
+
+// @public
+export interface HookRefusals {
+    // (undocumented)
+    readonly deletionGuard?: readonly DeletionRefusalCode[];
+}
+
+// @public
+export type HookResult<Code extends string = string> = {
+    readonly outcome: "allow";
+} | {
+    readonly outcome: "refuse";
+    readonly code: Code;
+};
+
+// @public
+export const HookResult: {
+    readonly allow: () => HookResult<never>;
+    readonly refuse: <const Code extends string>(code: Code) => HookResult<Code>;
 };
 
 // @public
@@ -475,6 +533,23 @@ export interface RefineContext {
 }
 
 // @public
+export const REGISTRATION_REFUSAL_CODE: "registration_refused";
+
+// @public
+export type RegistrationPath = "self-registration" | "invitation" | "oidc";
+
+// @public (undocumented)
+export interface RegistrationPolicyInput {
+    // (undocumented)
+    readonly email: string;
+    // (undocumented)
+    readonly path: RegistrationPath;
+}
+
+// @public (undocumented)
+export type RegistrationRefusalCode = typeof REGISTRATION_REFUSAL_CODE;
+
+// @public
 export function requireAllOrNone(keys: readonly string[], values: Readonly<Record<string, unknown>>, context: RefineContext): void;
 
 // @public (undocumented)
@@ -550,6 +625,21 @@ export interface ScheduleDefinition {
     // (undocumented)
     readonly name: string;
     readonly payload?: JobPayload;
+}
+
+// @public (undocumented)
+export interface SeatCheckAnswer {
+    readonly seatLimit: number | null;
+}
+
+// @public (undocumented)
+export interface SeatCheckInput {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly invitationId: string;
+    // (undocumented)
+    readonly workspaceId: string;
 }
 
 // @public
@@ -649,6 +739,13 @@ METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransfor
 }>];
 
 // @public
+export interface ServerHooks {
+    readonly deletionGuard?: (input: DeletionGuardInput) => HookResult<DeletionRefusalCode> | Promise<HookResult<DeletionRefusalCode>>;
+    readonly registrationPolicy?: (input: RegistrationPolicyInput) => HookResult | Promise<HookResult>;
+    readonly seatCheck?: (input: SeatCheckInput) => SeatCheckAnswer | Promise<SeatCheckAnswer>;
+}
+
+// @public
 export const serverMigrationFragment: EnvFragment<    {
 MIGRATE_ON_START: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
 DATABASE_MIGRATE_URL: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
@@ -656,6 +753,9 @@ DATABASE_MIGRATE_URL: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
 
 // @public
 export interface ServerModule {
+    readonly hookRefusals?: HookRefusals;
+    // (undocumented)
+    readonly hooks?: ServerHooks;
     // (undocumented)
     readonly name: string;
     // (undocumented)

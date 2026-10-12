@@ -13,7 +13,7 @@ import {
 } from "../../src/http/chain.ts";
 import { createLogger } from "../../src/http/logger.ts";
 import { requestIdFrom } from "../../src/http/request-context.ts";
-import { adapters, fakeDatabase, operation, serverConfig } from "../support.ts";
+import { adapters, fakeDatabase, hookDispatcher, operation, serverConfig } from "../support.ts";
 
 const exporter = new InMemorySpanExporter();
 
@@ -159,6 +159,7 @@ describe("the client IP across the trusted hops", () => {
       trustedProxyHops: hops,
       appOrigin: "https://bookmarks.example.com",
       errors: unconfigured().errors,
+      hooks: hookDispatcher(),
       responseValidation: "throw",
     });
     return hono;
@@ -294,6 +295,7 @@ describe("the request log line", () => {
           trustedProxyHops: 0,
           appOrigin: "https://bookmarks.example.com",
           errors: unconfigured().errors,
+          hooks: hookDispatcher(),
           responseValidation: "throw",
         },
         stages,

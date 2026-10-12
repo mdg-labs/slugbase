@@ -11,7 +11,8 @@ import {
   type StageImplementations,
   type StageName,
 } from "../../src/http/chain.ts";
-import { operation, recordingLogger } from "../support.ts";
+import { hookDispatcher, operation, recordingLogger } from "../support.ts";
+import { HookResult } from "../../src/hooks/index.ts";
 
 // The order of doc 01 section 4, written out here so that a change to the
 // installed order has to change this list as well.
@@ -30,12 +31,12 @@ const DOCUMENTED_ORDER: readonly StageName[] = [
   "audit-telemetry",
 ];
 
-function build(bindings: readonly RouteBinding[], stages: StageImplementations = {}) {
+function build(bindings: readonly RouteBinding[], stages: StageImplementations = {}, hooks = hookDispatcher()) {
   const app = new Hono<ChainEnv>();
   const logger = recordingLogger();
   const installed = installChain(
     app,
-    { logger, routes: new RouteTable(bindings), trustedProxyHops: 0, appOrigin: "https://bookmarks.example.com", errors: unconfigured().errors, responseValidation: "throw" },
+    { logger, routes: new RouteTable(bindings), trustedProxyHops: 0, appOrigin: "https://bookmarks.example.com", errors: unconfigured().errors, hooks, responseValidation: "throw" },
     stages,
   );
   return { app, logger, installed };
@@ -227,5 +228,134 @@ describe("the middleware chain", () => {
     const response = await app.request("/api/v1/ping");
     expect(response.status).toBe(500);
     expect(trace).toEqual(["handler", "audit-telemetry"]);
+  });
+});
+
+describe("hooks in the chain", () => {
+  const seatInput = { workspaceId: "w1", accountId: "a1", invitationId: "i1" };
+
+  function withHooks(trace: string[]) {
+    const registrations = [
+      {
+        module: "probe",
+        hooks: {
+          seatCheck: () => {
+            trace.push("seatCheck");
+            return { seatLimit: 3 };
+          },
+          registrationPolicy: () => {
+            trace.push("registrationPolicy");
+            return HookResult.allow();
+          },
+        },
+      },
+    ];
+    return hookDispatcher(registrations);
+  }
+
+  const consulting = (trace: string[]): RouteBinding => ({
+    operation: operation("get", "/api/v1/ping", "ping"),
+    handler: async (context) => {
+      trace.push("handler");
+      const limit = await context.get("hooks")?.seatLimit(seatInput, null);
+      return Response.json({ limit });
+    },
+  });
+
+  it("runs a hook only after every request stage, from inside the handler", async () => {
+    const trace: string[] = [];
+    const { app } = build([consulting(trace)], recorder(trace), withHooks(trace));
+    const response = await app.request("/api/v1/ping");
+    expect(await response.json()).toEqual({ limit: 3 });
+    expect(trace).toEqual([
+      "request-context",
+      "security-headers",
+      "body-limits",
+      "authentication",
+      "cross-site-protection",
+      "rate-limiting",
+      "tenant-resolution",
+      "validation",
+      "authorization",
+      "handler",
+      "seatCheck",
+      "response",
+      "audit-telemetry",
+    ]);
+  });
+
+  it("gives no request stage a way to consult a hook", async () => {
+    const trace: string[] = [];
+    const sees = (name: string): RequestStage => async (context, next) => {
+      trace.push(`${name}:${context.get("hooks") === undefined ? "none" : "hooks"}`);
+      await next();
+    };
+    const { app } = build([consulting([])], { authentication: sees("authentication"), authorization: sees("authorization") }, withHooks(trace));
+    await app.request("/api/v1/ping");
+    expect(trace.slice(0, 2)).toEqual(["authentication:none", "authorization:none"]);
+  });
+
+  it("does not run a hook when a stage answers before the handler", async () => {
+    const trace: string[] = [];
+    const { app } = build(
+      [consulting(trace)],
+      { authorization: () => Promise.resolve(new Response("no", { status: 403 })), response: () => undefined },
+      withHooks(trace),
+    );
+    expect((await app.request("/api/v1/ping")).status).toBe(403);
+    expect(trace).toEqual([]);
+  });
+
+  it("hands a hook plain values only", async () => {
+    const received: unknown[] = [];
+    const hooks = hookDispatcher([
+      {
+        module: "probe",
+        hooks: {
+          seatCheck: (input) => {
+            received.push(input);
+            return { seatLimit: null };
+          },
+        },
+      },
+    ]);
+    const { app } = build([consulting([])], {}, hooks);
+    await app.request("/api/v1/ping");
+    expect(received).toEqual([seatInput]);
+    for (const value of Object.values(received[0] as object)) {
+      expect(typeof value).toBe("string");
+    }
+  });
+
+  it("answers 503 unavailable, with nothing written, when a hook fails", async () => {
+    const written: string[] = [];
+    const hooks = hookDispatcher([
+      {
+        module: "broken",
+        hooks: {
+          seatCheck: () => {
+            throw new Error("boom");
+          },
+        },
+      },
+    ]);
+    const { app } = build(
+      [
+        {
+          operation: operation("get", "/api/v1/ping", "ping"),
+          handler: async (context) => {
+            await context.get("hooks")?.seatLimit(seatInput, null);
+            written.push("membership");
+            return Response.json({});
+          },
+        },
+      ],
+      {},
+      hooks,
+    );
+    const response = await app.request("/api/v1/ping");
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ code: "unavailable" });
+    expect(written).toEqual([]);
   });
 });

@@ -11,6 +11,7 @@ import {
   type RouteBinding,
   type StageName,
 } from "./http/chain.ts";
+import { createHookDispatcher, invalidHookRefusals, invalidHooks, type HookRefusals, type HookRegistration, type ServerHooks } from "./hooks/index.ts";
 import { createMetrics, startMetricsListener, type MetricsListener } from "./metrics/index.ts";
 import type { JobDefinition, ScheduleDefinition } from "./worker/job.ts";
 
@@ -48,10 +49,14 @@ export interface ModuleContribution {
 /**
  * A unit of routes, jobs and migrations composed into the server. A module adds
  * to the middleware chain's routes only: it has no handle on the stages, so it
- * cannot reorder or remove one.
+ * cannot reorder or remove one. Its `hooks` take part in a decision inside a core
+ * flow (doc 01 section 13) and receive plain values only.
  */
 export interface ServerModule {
   readonly name: string;
+  readonly hooks?: ServerHooks;
+  /** The refusal codes the module's `deletionGuard` may answer with; each must be on the closed list. */
+  readonly hookRefusals?: HookRefusals;
   register(context: ModuleContext): ModuleContribution;
 }
 
@@ -62,6 +67,8 @@ export interface CreateServerOptions {
   /** Migration sets beyond the CE chain, applied in order after it. */
   readonly migrations: readonly MigrationChain[];
   readonly logger: Logger;
+  /** How long one hook may take to answer before it counts as failed; by default two seconds. */
+  readonly hookTimeoutMs?: number;
   /** The tenant database; by default a pool on `DATABASE_URL`, opened on first use. The server closes it on shutdown. */
   readonly database?: Database;
   /** How long a shutdown lets in-flight requests finish before cutting them (doc 01 section 3 rule 2). */
@@ -104,6 +111,7 @@ export type CompositionErrorCode =
   | "missing_adapter"
   | "invalid_module"
   | "duplicate_module"
+  | "invalid_hook"
   | "module_failed"
   | "duplicate_route"
   | "duplicate_job"
@@ -129,6 +137,7 @@ const ADAPTER_PORTS: Record<keyof Adapters, true> = {
   identity: true,
   analytics: true,
   errors: true,
+  clientErrorReport: true,
   challenge: true,
   egress: true,
   rateLimit: true,
@@ -160,6 +169,8 @@ export interface Composition {
   readonly jobs: readonly JobDefinition[];
   readonly schedules: readonly ScheduleDefinition[];
   readonly migrations: readonly MigrationChain[];
+  /** The hooks of the modules, in the order the modules were composed. */
+  readonly hooks: readonly HookRegistration[];
 }
 
 function shapeOf(binding: RouteBinding): string {
@@ -177,6 +188,7 @@ export function compose(
   const jobs: JobDefinition[] = [];
   const schedules: ScheduleDefinition[] = [];
   const chains: MigrationChain[] = [...migrations];
+  const hooks: HookRegistration[] = [];
 
   for (const module of modules) {
     if (typeof module.name !== "string" || module.name === "" || typeof module.register !== "function") {
@@ -186,6 +198,20 @@ export function compose(
       throw new CompositionError("duplicate_module", `module ${module.name} is composed twice`);
     }
     names.add(module.name);
+
+    if (module.hooks !== undefined) {
+      const problem = invalidHooks(module.hooks);
+      if (problem !== undefined) {
+        throw new CompositionError("invalid_hook", `module ${module.name} registers an invalid hook: ${problem}`);
+      }
+      if (module.hookRefusals !== undefined) {
+        const refusalProblem = invalidHookRefusals(module.hookRefusals);
+        if (refusalProblem !== undefined) {
+          throw new CompositionError("invalid_hook", `module ${module.name} declares an invalid refusal: ${refusalProblem}`);
+        }
+      }
+      hooks.push({ module: module.name, hooks: module.hooks, refusals: module.hookRefusals });
+    }
 
     let contribution: ModuleContribution;
     try {
@@ -236,7 +262,7 @@ export function compose(
     }
   }
 
-  return { routes, jobs, schedules, migrations: chains };
+  return { routes, jobs, schedules, migrations: chains, hooks };
 }
 
 function canCutConnections(server: ServerType): server is ServerType & { closeAllConnections(): void; closeIdleConnections(): void } {
@@ -277,6 +303,12 @@ export function createServer(options: CreateServerOptions): Server {
   const stages = installChain(app, {
     logger,
     routes: new RouteTable(composition.routes),
+    hooks: createHookDispatcher({
+      registrations: composition.hooks,
+      clientErrorReport: adapters.clientErrorReport,
+      logger,
+      ...(options.hookTimeoutMs === undefined ? {} : { timeoutMs: options.hookTimeoutMs }),
+    }),
     trustedProxyHops: config.TRUSTED_PROXY_HOPS,
     appOrigin: config.APP_ORIGIN,
     errors: adapters.errors,

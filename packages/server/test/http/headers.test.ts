@@ -12,7 +12,7 @@ import {
 } from "../../src/http/chain.ts";
 import { HEADER_RULES, declaredCachePolicy } from "../../src/http/headers.ts";
 import { problemDocument } from "../../src/http/problem.ts";
-import { operation, recordingLogger } from "../support.ts";
+import { hookDispatcher, operation, recordingLogger } from "../support.ts";
 import { directivesOf, expectSecurityHeaders } from "./headers-support.ts";
 
 function app(bindings: readonly RouteBinding[], stages: StageImplementations = {}, appOrigin = "https://bookmarks.example.com") {
@@ -25,6 +25,7 @@ function app(bindings: readonly RouteBinding[], stages: StageImplementations = {
       trustedProxyHops: 0,
       appOrigin,
       errors: unconfigured().errors,
+      hooks: hookDispatcher(),
       responseValidation: "throw",
     },
     stages,

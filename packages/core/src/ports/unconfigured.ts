@@ -10,8 +10,8 @@ function unavailable(port: keyof Adapters, code: PortUnavailableCode = "unavaila
  * `available: false`. Mail, AI, identity, egress, the secret box, the rate
  * limiter and the tenant resolver reject with `PortUnavailable` when used, so a
  * missing adapter never reads as success. Analytics and error reporting record
- * nothing, and the challenge is disabled: it requires no solution and passes
- * every one.
+ * nothing, the client error-report source answers no DSN, and the challenge is
+ * disabled: it requires no solution and passes every one.
  */
 export function unconfigured(): Adapters {
   return {
@@ -25,6 +25,7 @@ export function unconfigured(): Adapters {
     },
     analytics: { available: false, track: () => Promise.resolve() },
     errors: { available: false, capture: () => Promise.resolve() },
+    clientErrorReport: { available: false, dsn: () => Promise.resolve(null) },
     challenge: { available: false, verify: () => Promise.resolve({ ok: true }) },
     egress: { available: false, request: unavailable("egress") },
     rateLimit: { available: false, consume: unavailable("rateLimit") },

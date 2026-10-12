@@ -2,6 +2,7 @@ import type { OperationDefinition } from "@slugbase/contracts";
 import type { ErrorReportPort } from "@slugbase/core";
 import type { Context, Hono, MiddlewareHandler } from "hono";
 import type { Logger } from "../create-server.ts";
+import type { HookDispatcher } from "../hooks/index.ts";
 import type { Metrics } from "../metrics/index.ts";
 import { createSecurityHeaders } from "./headers.ts";
 import { failRequest, notFoundProblem, responseStage, type ResponseValidation } from "./problem.ts";
@@ -58,6 +59,11 @@ export interface ChainEnv {
     principalType?: "anonymous" | "session" | "api-token";
     /** Set by the tenant-resolution stage: the active workspace's internal UUID. */
     workspaceId?: string;
+    /**
+     * Set when the handler stage starts, after authentication, tenant resolution
+     * and authorization: no earlier stage can consult a hook (doc 01 section 13).
+     */
+    hooks?: HookDispatcher;
     /** The route of the request, resolved before the first stage; absent when no operation matches. */
     route?: MatchedRoute;
   };
@@ -90,6 +96,8 @@ export interface ChainDependencies {
   readonly appOrigin: string;
   /** Receives every unexpected failure (stage 11). */
   readonly errors: ErrorReportPort;
+  /** The hooks modules registered, consulted by the handlers of the core flows. */
+  readonly hooks: HookDispatcher;
   /** How stage 11 treats a response that differs from its declared schema. */
   readonly responseValidation: ResponseValidation;
   /** Counts every request under its route template (doc 01 section 12). */
@@ -184,7 +192,7 @@ export function installChain(
   dependencies: ChainDependencies,
   stages: StageImplementations = {},
 ): readonly StageName[] {
-  const { logger, routes, trustedProxyHops, appOrigin, errors, responseValidation, metrics } = dependencies;
+  const { logger, routes, trustedProxyHops, appOrigin, errors, hooks, responseValidation, metrics } = dependencies;
   const requestContext = createRequestContext({ logger, trustedProxyHops, ...(metrics === undefined ? {} : { metrics }) });
   const securityHeaders = createSecurityHeaders({ appOrigin });
 
@@ -198,6 +206,7 @@ export function installChain(
     name: "handler" as const,
     run: (context: ChainContext): Response | Promise<Response> => {
       const route = context.get("route");
+      context.set("hooks", hooks);
       return route === undefined ? notFoundProblem(context) : route.handler(context, route);
     },
   };

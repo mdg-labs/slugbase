@@ -3,6 +3,7 @@ import type { Database } from "@slugbase/db";
 import { defineOperation, jsonResponse, problemResponse, type OperationDefinition } from "@slugbase/contracts";
 import { z } from "zod";
 import { loadConfig } from "../src/config/index.ts";
+import { createHookDispatcher, type HookDispatcher, type HookRegistration } from "../src/hooks/index.ts";
 import type { Logger, ModuleContext } from "../src/create-server.ts";
 import { productionEnv } from "./config/support.ts";
 
@@ -36,6 +37,11 @@ export function serverConfig(overrides: Record<string, string | undefined> = {})
 
 export function adapters(): Adapters {
   return unconfigured();
+}
+
+/** A hook dispatcher over the unconfigured client error-report source, for tests that do not exercise hooks. */
+export function hookDispatcher(registrations: readonly HookRegistration[] = [], logger: Logger = recordingLogger()): HookDispatcher {
+  return createHookDispatcher({ registrations, clientErrorReport: adapters().clientErrorReport, logger });
 }
 
 export interface FakeDatabase extends Database {

@@ -1,6 +1,7 @@
 import type { AiSuggestPort } from "./ai-suggest.ts";
 import type { AnalyticsPort } from "./analytics.ts";
 import type { ChallengePort } from "./challenge.ts";
+import type { ClientErrorReportPort } from "./client-error-report.ts";
 import type { EgressPort } from "./egress.ts";
 import type { ErrorReportPort } from "./error-report.ts";
 import type { IdentityPort } from "./identity.ts";
@@ -20,6 +21,7 @@ export interface Adapters {
   readonly identity: IdentityPort;
   readonly analytics: AnalyticsPort;
   readonly errors: ErrorReportPort;
+  readonly clientErrorReport: ClientErrorReportPort;
   readonly challenge: ChallengePort;
   readonly egress: EgressPort;
   readonly rateLimit: RateLimitPort;
