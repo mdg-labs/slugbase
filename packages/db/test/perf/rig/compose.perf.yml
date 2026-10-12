@@ -1,0 +1,64 @@
+# The rig of `pnpm perf:go` (docs/internal/12-roadmap.md, R3): a throwaway
+# PostgreSQL and a PgBouncer in transaction pooling mode in front of it, on
+# their own network and ports, apart from the development stack of
+# compose.dev.yml. Start it, run the measurement, remove it with its volume:
+#
+#   docker compose -p slugbase-perf -f test/perf/rig/compose.perf.yml up -d --wait
+#   pnpm perf:go
+#   docker compose -p slugbase-perf -f test/perf/rig/compose.perf.yml down -v
+#
+# PERF_PG_IMAGE selects the PostgreSQL major (17 and 18 are supported, doc 00).
+# Development values only: nothing here is a secret. Pass PERF_PG_CPUS and
+# PERF_PG_MEMORY to size the database container to the instance being measured.
+name: slugbase-perf
+
+services:
+  postgres:
+    image: ${PERF_PG_IMAGE:-postgres:18}
+    command:
+      - postgres
+      - -c
+      - shared_buffers=${PERF_PG_SHARED_BUFFERS:-2GB}
+      - -c
+      - effective_cache_size=${PERF_PG_EFFECTIVE_CACHE_SIZE:-6GB}
+      - -c
+      - max_connections=200
+      - -c
+      - random_page_cost=1.1
+      - -c
+      - work_mem=16MB
+    environment:
+      POSTGRES_USER: slugbase
+      POSTGRES_PASSWORD: slugbase
+      POSTGRES_DB: slugbase_perf
+    ports:
+      - "127.0.0.1:${PERF_PG_PORT:-54330}:5432"
+    shm_size: 2gb
+    cpus: ${PERF_PG_CPUS:-4}
+    mem_limit: ${PERF_PG_MEMORY:-8g}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U slugbase -d slugbase_perf"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  pgbouncer:
+    # PgBouncer 1.26.0 at the time of writing; pin the digest of the tag you
+    # measured and record it with the results.
+    image: edoburu/pgbouncer:latest
+    entrypoint: ["/usr/bin/pgbouncer", "/etc/pgbouncer/pgbouncer.ini"]
+    command: []
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - ./userlist.txt:/etc/pgbouncer/userlist.txt:ro
+    ports:
+      - "127.0.0.1:${PERF_POOLER_PORT:-64330}:6432"
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 6432"]
+      interval: 2s
+      timeout: 3s
+      retries: 15

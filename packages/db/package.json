@@ -29,6 +29,7 @@
     "db:migrate": "node scripts/migrate.ts",
     "db:check": "node scripts/db-check.ts",
     "db:record-checksums": "node scripts/record-migration-checksums.ts",
+    "perf:go": "node test/perf/go-resolution.ts",
     "test:prune-templates": "node scripts/prune-templates.ts",
     "contracts:check": "node ../../tooling/api-report/api-report.ts check --package ."
   },

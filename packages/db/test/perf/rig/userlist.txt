@@ -1,0 +1,2 @@
+"slugbase_perf_app" "slugbase_perf_dev_only"
+"slugbase_perf_admin" "slugbase_perf_admin_dev_only"
