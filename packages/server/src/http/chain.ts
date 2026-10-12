@@ -1,10 +1,11 @@
 import type { OperationDefinition } from "@slugbase/contracts";
-import type { ErrorReportPort } from "@slugbase/core";
+import type { ChallengePort, ErrorReportPort } from "@slugbase/core";
 import type { Context, Hono, MiddlewareHandler } from "hono";
 import type { Logger } from "../create-server.ts";
 import type { HookDispatcher } from "../hooks/index.ts";
 import type { Metrics } from "../metrics/index.ts";
 import { bodyLimits } from "./body-limits.ts";
+import { createCrossSiteProtection } from "./cross-site.ts";
 import { createSecurityHeaders } from "./headers.ts";
 import { failRequest, notFoundProblem, responseStage, type ResponseValidation } from "./problem.ts";
 import { createRequestContext } from "./request-context.ts";
@@ -45,6 +46,10 @@ export interface MatchedRoute {
   readonly handler: RouteHandler;
   /** Path parameters, decoded. */
   readonly params: Readonly<Record<string, string>>;
+  /** From the binding: a `multipart/form-data` body is accepted by the cross-site stage. */
+  readonly acceptsMultipart?: boolean;
+  /** From the binding: the one origin a `marketing-form` route accepts. */
+  readonly marketingOrigin?: string;
 }
 
 /** The variables the stages share through the request context. */
@@ -79,6 +84,16 @@ export type RouteHandler = (context: ChainContext, route: MatchedRoute) => Respo
 export interface RouteBinding {
   readonly operation: OperationDefinition;
   readonly handler: RouteHandler;
+  /**
+   * The route takes a `multipart/form-data` body; every other mutation must be
+   * `application/json` (doc 04 section 5). Only the Netscape import upload sets it.
+   */
+  readonly acceptsMultipart?: boolean;
+  /**
+   * The origin of the marketing site whose proxy calls this route. Required on,
+   * and only allowed on, an operation with `audience: 'marketing-form'`.
+   */
+  readonly marketingOrigin?: string;
 }
 
 export type RequestStage = MiddlewareHandler<ChainEnv>;
@@ -95,6 +110,8 @@ export interface ChainDependencies {
   readonly trustedProxyHops: number;
   /** `APP_ORIGIN`: an `https` origin turns on `Strict-Transport-Security`. */
   readonly appOrigin: string;
+  /** Verifies the bot-protection solution of a `marketing-form` request (stage 5). */
+  readonly challenge: ChallengePort;
   /** Receives every unexpected failure (stage 11). */
   readonly errors: ErrorReportPort;
   /** The hooks modules registered, consulted by the handlers of the core flows. */
@@ -146,7 +163,14 @@ export class RouteTable {
       }
       const params = matchSegments(route.segments, requested);
       if (params !== undefined) {
-        return { operation: route.binding.operation, handler: route.binding.handler, params };
+        const { operation, handler, acceptsMultipart, marketingOrigin } = route.binding;
+        return {
+          operation,
+          handler,
+          params,
+          ...(acceptsMultipart === undefined ? {} : { acceptsMultipart }),
+          ...(marketingOrigin === undefined ? {} : { marketingOrigin }),
+        };
       }
     }
     return undefined;
@@ -193,7 +217,7 @@ export function installChain(
   dependencies: ChainDependencies,
   stages: StageImplementations = {},
 ): readonly StageName[] {
-  const { logger, routes, trustedProxyHops, appOrigin, errors, hooks, responseValidation, metrics } = dependencies;
+  const { logger, routes, trustedProxyHops, appOrigin, challenge, errors, hooks, responseValidation, metrics } = dependencies;
   const requestContext = createRequestContext({ logger, trustedProxyHops, ...(metrics === undefined ? {} : { metrics }) });
   const securityHeaders = createSecurityHeaders({ appOrigin });
 
@@ -201,6 +225,7 @@ export function installChain(
     "request-context": requestContext.stage,
     "security-headers": securityHeaders.stage,
     "body-limits": bodyLimits,
+    "cross-site-protection": createCrossSiteProtection({ appOrigin, challenge, logger }),
   };
   const requestStages = REQUEST_STAGES.map((name) => ({
     name,

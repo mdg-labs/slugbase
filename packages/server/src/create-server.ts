@@ -114,6 +114,7 @@ export type CompositionErrorCode =
   | "invalid_hook"
   | "module_failed"
   | "duplicate_route"
+  | "invalid_route"
   | "duplicate_job"
   | "unknown_job"
   | "duplicate_schedule"
@@ -178,6 +179,32 @@ function shapeOf(binding: RouteBinding): string {
   return `${binding.operation.method.toUpperCase()} ${path}`;
 }
 
+function isOrigin(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (url.protocol === "http:" || url.protocol === "https:") && url.origin === value;
+  } catch {
+    return false;
+  }
+}
+
+// The audience of a route is what exempts it from the cross-site rule, so a
+// declaration that cannot be enforced is refused when the server is composed.
+function invalidRoute(binding: RouteBinding): string | undefined {
+  const { operation, marketingOrigin } = binding;
+  if (operation.audience === "marketing-form") {
+    if (!["post", "put", "patch", "delete"].includes(operation.method)) {
+      return "a marketing-form route must be a mutation";
+    }
+    if (marketingOrigin === undefined || !isOrigin(marketingOrigin)) {
+      return "a marketing-form route needs the origin of the marketing site as marketingOrigin (scheme, host and optional port)";
+    }
+  } else if (marketingOrigin !== undefined) {
+    return "marketingOrigin belongs to a route with audience marketing-form";
+  }
+  return undefined;
+}
+
 export function compose(
   modules: readonly ServerModule[],
   context: ModuleContext,
@@ -226,6 +253,13 @@ export function compose(
     jobs.push(...(contribution.jobs ?? []));
     schedules.push(...(contribution.schedules ?? []));
     chains.push(...(contribution.migrations ?? []));
+  }
+
+  for (const binding of routes) {
+    const problem = invalidRoute(binding);
+    if (problem !== undefined) {
+      throw new CompositionError("invalid_route", `${binding.operation.operationId}: ${problem}`);
+    }
   }
 
   const shapes = new Set<string>();
@@ -311,6 +345,7 @@ export function createServer(options: CreateServerOptions): Server {
     }),
     trustedProxyHops: config.TRUSTED_PROXY_HOPS,
     appOrigin: config.APP_ORIGIN,
+    challenge: adapters.challenge,
     errors: adapters.errors,
     responseValidation: config.NODE_ENV === "production" ? "strip" : "throw",
     metrics,

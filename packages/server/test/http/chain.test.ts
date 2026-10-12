@@ -36,7 +36,7 @@ function build(bindings: readonly RouteBinding[], stages: StageImplementations =
   const logger = recordingLogger();
   const installed = installChain(
     app,
-    { logger, routes: new RouteTable(bindings), trustedProxyHops: 0, appOrigin: "https://bookmarks.example.com", errors: unconfigured().errors, hooks, responseValidation: "throw" },
+    { logger, routes: new RouteTable(bindings), trustedProxyHops: 0, appOrigin: "https://bookmarks.example.com", challenge: unconfigured().challenge, errors: unconfigured().errors, hooks, responseValidation: "throw" },
     stages,
   );
   return { app, logger, installed };
@@ -129,7 +129,7 @@ describe("the middleware chain", () => {
 
   it("answers a known path with another method as not_found", async () => {
     const { app } = build([ping()]);
-    expect((await app.request("/api/v1/ping", { method: "DELETE" })).status).toBe(404);
+    expect((await app.request("/api/v1/ping", { method: "DELETE", headers: { origin: "https://bookmarks.example.com", "content-type": "application/json" } })).status).toBe(404);
   });
 
   it("resolves the route before the first stage and hands the decoded parameters to the handler", async () => {

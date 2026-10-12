@@ -70,8 +70,15 @@ function jsonOfLength(length: number): string {
   return JSON.stringify({ note: "a".repeat(length - overhead) });
 }
 
+const APP_ORIGIN = serverConfig().APP_ORIGIN;
+
+// A browser-facing mutation comes from the app's own origin (stage 5); the tests here are about stage 3.
 function request(path: string, init: RequestInit): Request {
-  return new Request(`http://localhost${path}`, init);
+  const headers = new Headers(init.headers);
+  if (!headers.has("origin")) {
+    headers.set("origin", APP_ORIGIN);
+  }
+  return new Request(`http://localhost${path}`, { ...init, headers });
 }
 
 async function problemOf(response: Response): Promise<Record<string, unknown>> {
@@ -187,7 +194,8 @@ describe("the body-limits stage", () => {
 
   it("leaves the content-type rule of a browser-facing request to stage 5", async () => {
     const response = await server().fetch(request("/api/v1/json", { method: "POST", headers: { "content-type": "text/plain" }, body: "not json" }));
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(403);
+    expect(await problemOf(response)).toMatchObject({ code: "cross_site_request" });
   });
 
   describe("a bearer-authenticated mutation", () => {

@@ -24,6 +24,7 @@ function app(bindings: readonly RouteBinding[], stages: StageImplementations = {
       routes: new RouteTable(bindings),
       trustedProxyHops: 0,
       appOrigin,
+      challenge: unconfigured().challenge,
       errors: unconfigured().errors,
       hooks: hookDispatcher(),
       responseValidation: "throw",

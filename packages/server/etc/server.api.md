@@ -48,7 +48,7 @@ export class CompositionError extends Error {
 }
 
 // @public (undocumented)
-export type CompositionErrorCode = "missing_adapter" | "invalid_module" | "duplicate_module" | "invalid_hook" | "module_failed" | "duplicate_route" | "duplicate_job" | "unknown_job" | "duplicate_schedule" | "invalid_schedule";
+export type CompositionErrorCode = "missing_adapter" | "invalid_module" | "duplicate_module" | "invalid_hook" | "module_failed" | "duplicate_route" | "invalid_route" | "duplicate_job" | "unknown_job" | "duplicate_schedule" | "invalid_schedule";
 
 // @public (undocumented)
 export interface ConfigByProcess {
@@ -404,8 +404,10 @@ export interface LoggerOptions {
 
 // @public (undocumented)
 export interface MatchedRoute {
+    readonly acceptsMultipart?: boolean;
     // (undocumented)
     readonly handler: RouteHandler;
+    readonly marketingOrigin?: string;
     // (undocumented)
     readonly operation: OperationDefinition;
     readonly params: Readonly<Record<string, string>>;
@@ -574,8 +576,10 @@ export interface RetryPolicy {
 
 // @public
 export interface RouteBinding {
+    readonly acceptsMultipart?: boolean;
     // (undocumented)
     readonly handler: RouteHandler;
+    readonly marketingOrigin?: string;
     // (undocumented)
     readonly operation: OperationDefinition;
 }

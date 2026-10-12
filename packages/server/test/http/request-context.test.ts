@@ -158,6 +158,7 @@ describe("the client IP across the trusted hops", () => {
       routes: new RouteTable([binding]),
       trustedProxyHops: hops,
       appOrigin: "https://bookmarks.example.com",
+      challenge: unconfigured().challenge,
       errors: unconfigured().errors,
       hooks: hookDispatcher(),
       responseValidation: "throw",
@@ -264,7 +265,7 @@ describe("the request log line", () => {
   it("is written by the request logger, and a handler's own line is redacted by field name", async () => {
     const { server, output } = compose();
     const response = await server.fetch(
-      new Request("http://localhost/api/v1/login", { method: "POST", body: "{}", headers: { "x-request-id": "edge-7f3a9c1e.03" } }),
+      new Request("http://localhost/api/v1/login", { method: "POST", body: "{}", headers: { "x-request-id": "edge-7f3a9c1e.03", origin: "https://bookmarks.example.com", "content-type": "application/json" } }),
     );
     expect(response.status).toBe(200);
     const handlerLine = output.entries().find((entry) => entry["msg"] === "Handler ran");
@@ -294,6 +295,7 @@ describe("the request log line", () => {
           ]),
           trustedProxyHops: 0,
           appOrigin: "https://bookmarks.example.com",
+          challenge: unconfigured().challenge,
           errors: unconfigured().errors,
           hooks: hookDispatcher(),
           responseValidation: "throw",
