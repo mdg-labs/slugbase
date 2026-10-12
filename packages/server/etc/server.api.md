@@ -4,10 +4,40 @@
 
 ```ts
 
+import type { Adapters } from '@slugbase/core';
+import type { Context } from 'hono';
+import { Database } from '@slugbase/db';
+import { MigrationChain } from '@slugbase/db';
+import type { OperationDefinition } from '@slugbase/contracts';
 import { z } from 'zod';
 
 // @public
+export const CHAIN_STAGES: readonly ["request-context", "security-headers", "body-limits", "authentication", "cross-site-protection", "rate-limiting", "tenant-resolution", "validation", "authorization", "handler", "response", "audit-telemetry"];
+
+// @public (undocumented)
+export type ChainContext = Context<ChainEnv>;
+
+// @public
+export interface ChainEnv {
+    // (undocumented)
+    Variables: {
+        requestId?: string;
+        route?: MatchedRoute;
+    };
+}
+
+// @public
 export function composeEnvSchema<const Fragments extends readonly EnvFragment[]>(fragments: Fragments): EnvSchema<MergedShape<Fragments>>;
+
+// @public
+export class CompositionError extends Error {
+    constructor(code: CompositionErrorCode, message: string);
+    // (undocumented)
+    readonly code: CompositionErrorCode;
+}
+
+// @public (undocumented)
+export type CompositionErrorCode = "missing_adapter" | "invalid_module" | "duplicate_module" | "module_failed" | "duplicate_route" | "duplicate_job" | "unknown_job" | "duplicate_schedule";
 
 // @public (undocumented)
 export interface ConfigByProcess {
@@ -32,6 +62,24 @@ export interface ConfigIssue {
     readonly key: string;
     // (undocumented)
     readonly message: string;
+}
+
+// @public
+export function createServer(options: CreateServerOptions): Server;
+
+// @public (undocumented)
+export interface CreateServerOptions {
+    // (undocumented)
+    readonly adapters: Adapters;
+    // (undocumented)
+    readonly config: ServerConfig;
+    readonly database?: Database;
+    // (undocumented)
+    readonly logger: Logger;
+    readonly migrations: readonly MigrationChain[];
+    // (undocumented)
+    readonly modules: readonly ServerModule[];
+    readonly shutdownTimeoutMs?: number;
 }
 
 // @public
@@ -186,6 +234,25 @@ export interface LoadOptions {
 // @public (undocumented)
 export const LOG_LEVELS: readonly ["fatal", "error", "warn", "info", "debug", "trace", "silent"];
 
+// @public
+export interface Logger {
+    // (undocumented)
+    error(message: string, fields?: Readonly<Record<string, unknown>>): void;
+    // (undocumented)
+    info(message: string, fields?: Readonly<Record<string, unknown>>): void;
+    // (undocumented)
+    warn(message: string, fields?: Readonly<Record<string, unknown>>): void;
+}
+
+// @public (undocumented)
+export interface MatchedRoute {
+    // (undocumented)
+    readonly handler: RouteHandler;
+    // (undocumented)
+    readonly operation: OperationDefinition;
+    readonly params: Readonly<Record<string, string>>;
+}
+
 // @public (undocumented)
 export type MergedShape<Fragments extends readonly EnvFragment[]> = IntersectUnion<Fragments[number]["shape"]> extends infer Shape extends z.ZodRawShape ? Shape : never;
 
@@ -240,6 +307,45 @@ DATABASE_MIGRATE_URL: z.ZodString;
 // @public (undocumented)
 export const MIN_SESSION_SECRET_LENGTH = 32;
 
+// @public
+export interface ModuleContext {
+    // (undocumented)
+    readonly adapters: Readonly<Adapters>;
+    // (undocumented)
+    readonly config: ServerConfig;
+    // (undocumented)
+    readonly logger: Logger;
+    readonly withTenant: Database["withTenant"];
+}
+
+// @public (undocumented)
+export interface ModuleContribution {
+    // (undocumented)
+    readonly jobs?: readonly ModuleJob[];
+    readonly migrations?: readonly MigrationChain[];
+    readonly routes?: readonly RouteBinding[];
+    // (undocumented)
+    readonly schedules?: readonly ModuleSchedule[];
+}
+
+// @public
+export interface ModuleJob {
+    // (undocumented)
+    readonly handle: (payload: unknown, context: ModuleContext) => Promise<void>;
+    // (undocumented)
+    readonly name: string;
+}
+
+// @public
+export interface ModuleSchedule {
+    // (undocumented)
+    readonly cron: string;
+    // (undocumented)
+    readonly job: string;
+    // (undocumented)
+    readonly name: string;
+}
+
 // @public (undocumented)
 export const NODE_ENVS: readonly ["development", "test", "production"];
 
@@ -262,6 +368,24 @@ export interface RefineContext {
 
 // @public
 export function requireAllOrNone(keys: readonly string[], values: Readonly<Record<string, unknown>>, context: RefineContext): void;
+
+// @public
+export interface RouteBinding {
+    // (undocumented)
+    readonly handler: RouteHandler;
+    // (undocumented)
+    readonly operation: OperationDefinition;
+}
+
+// @public
+export type RouteHandler = (context: ChainContext, route: MatchedRoute) => Response | Promise<Response>;
+
+// @public (undocumented)
+export interface RunningServer {
+    // (undocumented)
+    readonly port: number;
+    shutdown(): Promise<void>;
+}
 
 // @public
 export const runtimeFragment: EnvFragment<    {
@@ -287,6 +411,18 @@ SESSION_SECRET: z.ZodString;
 ENCRYPTION_KEY: z.ZodString;
 ENCRYPTION_KEY_ID: z.ZodString;
 }>;
+
+// @public (undocumented)
+export interface Server {
+    fetch(request: Request): Promise<Response>;
+    // (undocumented)
+    readonly jobs: readonly ModuleJob[];
+    readonly migrations: readonly MigrationChain[];
+    // (undocumented)
+    readonly schedules: readonly ModuleSchedule[];
+    readonly stages: readonly StageName[];
+    start(options?: StartOptions): Promise<RunningServer>;
+}
 
 // @public (undocumented)
 export type ServerConfig = z.infer<typeof serverEnvSchema.object>;
@@ -366,6 +502,22 @@ export const serverMigrationFragment: EnvFragment<    {
 MIGRATE_ON_START: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
 DATABASE_MIGRATE_URL: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
 }>;
+
+// @public
+export interface ServerModule {
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    register(context: ModuleContext): ModuleContribution;
+}
+
+// @public (undocumented)
+export type StageName = (typeof CHAIN_STAGES)[number];
+
+// @public (undocumented)
+export interface StartOptions {
+    readonly port?: number;
+}
 
 // @public (undocumented)
 export function validateEnvironment<Shape extends z.ZodRawShape>(schema: EnvSchema<Shape>, env: EnvironmentVariables, options?: LoadOptions): LoadedConfig<z.infer<z.ZodObject<Shape>>>;

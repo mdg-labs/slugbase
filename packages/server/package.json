@@ -18,13 +18,16 @@
     "lint": "eslint --max-warnings=0 .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test:unit": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
     "build": "tsc -p tsconfig.build.json",
     "contracts:check": "node ../../tooling/api-report/api-report.ts check --package ."
   },
   "dependencies": {
+    "@hono/node-server": "^2.1.4",
     "@slugbase/contracts": "workspace:*",
     "@slugbase/core": "workspace:*",
     "@slugbase/db": "workspace:*",
+    "hono": "^4.13.13",
     "zod": "^4.6.5"
   },
   "devDependencies": {
