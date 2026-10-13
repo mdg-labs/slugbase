@@ -137,7 +137,12 @@ describe("the SMTP mail adapter and the relay's certificate", () => {
     return (server.address() as { port: number }).port;
   }
 
-  it("refuses a self-signed certificate over implicit TLS: no session is established and nothing is sent", async () => {
+  const AUTH = { user: "relay-user", pass: "relay-pass-qx70" };
+
+  it.each([
+    ["without credentials", undefined],
+    ["with credentials", AUTH],
+  ] as const)("refuses a self-signed certificate over implicit TLS %s: no session is established and nothing is sent", async (_label, auth) => {
     let sessions = 0;
     const relay = createTlsServer(certificate, (socket) => {
       sessions += 1;
@@ -146,12 +151,15 @@ describe("the SMTP mail adapter and the relay's certificate", () => {
     });
     relay.on("tlsClientError", () => undefined);
     const port = await listen(relay);
-    const mail = createSmtpMail({ ...UNREACHABLE, host: "127.0.0.1", port, security: "tls" });
+    const mail = createSmtpMail({ ...UNREACHABLE, host: "127.0.0.1", port, security: "tls", ...(auth === undefined ? {} : { auth }) });
     await expect(mail.send(message())).rejects.toMatchObject({ reason: "delivery_failed" });
     expect(sessions).toBe(0);
   });
 
-  it("refuses to send in plain text when STARTTLS is required and the relay does not offer it", async () => {
+  it.each([
+    ["without credentials", undefined],
+    ["with credentials", AUTH],
+  ] as const)("refuses to send in plain text %s when STARTTLS is required and the relay does not offer it", async (_label, auth) => {
     const received: string[] = [];
     const relay = createServer((socket) => {
       socket.write("220 relay ready\r\n");
@@ -167,8 +175,8 @@ describe("the SMTP mail adapter and the relay's certificate", () => {
       socket.on("error", () => undefined);
     });
     const port = await listen(relay);
-    const mail = createSmtpMail({ ...UNREACHABLE, host: "127.0.0.1", port, security: "starttls" });
+    const mail = createSmtpMail({ ...UNREACHABLE, host: "127.0.0.1", port, security: "starttls", ...(auth === undefined ? {} : { auth }) });
     await expect(mail.send(message())).rejects.toMatchObject({ reason: "delivery_failed" });
-    expect(received.join("")).not.toMatch(/MAIL FROM|RCPT TO|DATA/i);
+    expect(received.join("")).not.toMatch(/AUTH|MAIL FROM|RCPT TO|DATA/i);
   });
 });

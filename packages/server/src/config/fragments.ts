@@ -158,11 +158,19 @@ export const errorReportFragment = envFragment({
 
 export const SMTP_SECURITIES = ["tls", "starttls", "none"] as const;
 
+/** The relay and the sender: required together as soon as any SMTP key is set. */
+export const SMTP_REQUIRED_KEYS = ["SMTP_HOST", "SMTP_PORT", "SMTP_SECURITY", "SMTP_FROM"] as const;
+
+/** The relay's credentials: an optional pair, so an authless relay needs neither. */
+export const SMTP_CREDENTIAL_KEYS = ["SMTP_USER", "SMTP_PASS"] as const;
+
 export const SMTP_KEYS = ["SMTP_HOST", "SMTP_PORT", "SMTP_SECURITY", "SMTP_USER", "SMTP_PASS", "SMTP_FROM"] as const;
 
 /**
  * The SMTP relay of the mail adapter (doc 01 sections 6 and 11), for the server and the worker. All
- * six keys unset selects the log-only adapter; a partial set refuses to start and names the missing keys.
+ * six keys unset selects the log-only adapter. `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURITY` and `SMTP_FROM`
+ * are required together; `SMTP_USER` and `SMTP_PASS` are an optional pair, both or neither, and neither
+ * is set without the other four. A violation refuses to start and names the missing keys.
  */
 export const smtpFragment = envFragment({
   shape: {
@@ -174,6 +182,13 @@ export const smtpFragment = envFragment({
     SMTP_FROM: optional(mailbox()),
   },
   refine(values, context) {
-    requireAllOrNone(SMTP_KEYS, values, context);
+    requireAllOrNone(SMTP_CREDENTIAL_KEYS, values, context);
+    const set = SMTP_KEYS.filter((key) => values[key] !== undefined);
+    if (set.length === 0) {
+      return;
+    }
+    for (const key of SMTP_REQUIRED_KEYS.filter((candidate) => values[candidate] === undefined)) {
+      context.issue(key, `is required because ${set.join(", ")} ${set.length === 1 ? "is" : "are"} set`);
+    }
   },
 });

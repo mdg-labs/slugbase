@@ -61,7 +61,55 @@ describe("the SMTP keys", () => {
 
   it("names every missing key of a partial set", () => {
     const found = issues("server", { SMTP_HOST: SMTP.SMTP_HOST });
-    expect(found.map((issue) => issue.key).sort()).toEqual(["SMTP_FROM", "SMTP_PASS", "SMTP_PORT", "SMTP_SECURITY", "SMTP_USER"]);
+    expect(found.map((issue) => issue.key).sort()).toEqual(["SMTP_FROM", "SMTP_PORT", "SMTP_SECURITY"]);
+  });
+
+  describe("without credentials, for an authless relay", () => {
+    const AUTHLESS = { ...SMTP, SMTP_USER: undefined, SMTP_PASS: undefined };
+
+    it.each(["server", "worker"] as const)("%s: accepts the four required keys alone and leaves the credentials unset", (type) => {
+      const { config } = loadConfig(type, productionEnv(AUTHLESS));
+      expect(config).toMatchObject({ SMTP_HOST: "smtp.example.com", SMTP_PORT: 587, SMTP_SECURITY: "starttls" });
+      expect(config.SMTP_USER).toBeUndefined();
+      expect(config.SMTP_PASS).toBeUndefined();
+    });
+
+    it.each(["SMTP_HOST", "SMTP_PORT", "SMTP_SECURITY", "SMTP_FROM"])("refuses a set without %s, naming exactly that key", (missing) => {
+      expect(issues("server", { ...AUTHLESS, [missing]: undefined }).map((issue) => issue.key)).toEqual([missing]);
+      expect(issues("worker", { ...AUTHLESS, [missing]: undefined }).map((issue) => issue.key)).toEqual([missing]);
+    });
+
+    it.each([
+      ["SMTP_USER", "SMTP_PASS"],
+      ["SMTP_PASS", "SMTP_USER"],
+    ] as const)("refuses %s without %s, naming the missing key", (given, missing) => {
+      expect(issues("server", { ...AUTHLESS, [given]: SMTP[given] }).map((issue) => issue.key)).toEqual([missing]);
+      expect(issues("worker", { ...AUTHLESS, [given]: SMTP[given] }).map((issue) => issue.key)).toEqual([missing]);
+    });
+
+    it.each(["SMTP_USER", "SMTP_PASS"] as const)("refuses %s alone, naming the other credential and the four required keys", (given) => {
+      const found = issues("server", { [given]: SMTP[given] });
+      const other = given === "SMTP_USER" ? "SMTP_PASS" : "SMTP_USER";
+      expect(found.map((issue) => issue.key).sort()).toEqual([other, "SMTP_FROM", "SMTP_HOST", "SMTP_PORT", "SMTP_SECURITY"].sort());
+    });
+
+    it("refuses both credentials without the four required keys, naming all four", () => {
+      const found = issues("server", { SMTP_USER: SMTP.SMTP_USER, SMTP_PASS: SMTP.SMTP_PASS });
+      expect(found.map((issue) => issue.key).sort()).toEqual(["SMTP_FROM", "SMTP_HOST", "SMTP_PORT", "SMTP_SECURITY"]);
+    });
+
+    it("refuses a half pair without echoing either credential", () => {
+      for (const given of ["SMTP_USER", "SMTP_PASS"] as const) {
+        let thrown: unknown;
+        try {
+          loadConfig("server", productionEnv({ ...AUTHLESS, [given]: SMTP[given] }));
+        } catch (error) {
+          thrown = error;
+        }
+        expect(thrown).toBeInstanceOf(ConfigError);
+        expect((thrown as ConfigError).message).not.toContain(SMTP[given]);
+      }
+    });
   });
 
   it.each([

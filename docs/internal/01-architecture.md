@@ -213,7 +213,7 @@ Every capability that leaves the process or the database is a port (D22). The co
 | `RateLimitPort` | Token buckets keyed by IP/principal/route | Postgres (unlogged table) | — | Postgres; Valkey adapter when measured (§8.2) |
 | `BlobPort` | Reserved — no v1 feature stores files | — | — | — |
 
-**Two operator-configured destinations are outside `EgressPort`.** `EgressPort` is scoped to HTTP requests; the SMTP connection of `MailPort` is not HTTP, and the transport of `ErrorReportPort` talks to the host in the operator's `ERROR_REPORT_DSN`. Both targets come only from the environment, never from a request, a member's input or stored content, so they do not pass the address check, which exists to stop request-influenced fetches. They are validated at startup (a partial SMTP key set refuses to start; TLS certificates are verified by default) and are listed in doc 10 as operator-configured destinations, not as SSRF surface.
+**Two operator-configured destinations are outside `EgressPort`.** `EgressPort` is scoped to HTTP requests; the SMTP connection of `MailPort` is not HTTP, and the transport of `ErrorReportPort` talks to the host in the operator's `ERROR_REPORT_DSN`. Both targets come only from the environment, never from a request, a member's input or stored content, so they do not pass the address check, which exists to stop request-influenced fetches. They are validated at startup (a partial SMTP key set refuses to start, where the credentials are an optional pair; TLS certificates are verified by default) and are listed in doc 10 as operator-configured destinations, not as SSRF surface.
 
 Adapters for CE live in the public repository; Cloud-only adapters (the billing client, the Cloud entitlement source) live in the private Cloud repository and reach CE only through the composition root (§7).
 
@@ -390,7 +390,7 @@ Doc 10 is the threat model; this is the shape that implements it.
   | `TRUSTED_PROXY_HOPS` | Proxy hops trusted for `X-Forwarded-For` | `0` |
   | `API_DOCS_ENABLED` | Serve `/api/docs` and the OpenAPI document | `true` |
   | `DOCS_BASE_URL` | Base URL the app's help links point to; links are `<base>/<route>` with the stable `/docs/<route>` routes of doc 09 §3.5 | `https://slugbase.app/docs` |
-  | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURITY`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | The SMTP adapter; unset selects the log-only adapter, a partial set refuses to start | unset |
+  | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURITY`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | The SMTP adapter; all six unset selects the log-only adapter. `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURITY` and `SMTP_FROM` are required together; `SMTP_USER` and `SMTP_PASS` are an optional pair (both or neither, for a relay without authentication) and are set only with the other four. A violation refuses to start and names the missing keys | unset |
   | `ERROR_REPORT_DSN` | Sentry-protocol error reporting; unset selects the no-op adapter | unset |
   | `METRICS_PORT` | Internal listener for `/metrics` (§12) | unset |
   | `RATE_LIMIT_<BUCKET>_*` | Override a bucket's defaults (doc 02 §16) | see doc 02 §16 |

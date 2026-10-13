@@ -40,6 +40,8 @@ const smtp = {
   SMTP_FROM: "SlugBase <slugbase@example.com>",
 };
 
+const authless = { SMTP_HOST: smtp.SMTP_HOST, SMTP_PORT: smtp.SMTP_PORT, SMTP_SECURITY: smtp.SMTP_SECURITY, SMTP_FROM: smtp.SMTP_FROM };
+
 const message = { template: "welcome", to: "Member@Example.org", locale: "en", data: { link: "https://bookmarks.example.com/t/seedtokenAAAA" } };
 
 const ALWAYS_ALLOWED: RateLimitPort = {
@@ -94,9 +96,22 @@ describe("mail in the composition root", () => {
     expect(composeAdapters(worker, logger).mail.available).toBe(true);
   });
 
-  it("reports features.mail from /api/config only when the SMTP adapter is configured", async () => {
+  it("selects the SMTP adapter without credentials, for the server and the worker", () => {
+    const server = loadConfig("server", { ...environment, ...authless }).config;
+    const worker = loadConfig("worker", { ...environment, ...authless }).config;
+    expect(composeAdapters(server, logger).mail.available).toBe(true);
+    expect(composeAdapters(worker, logger).mail.available).toBe(true);
+  });
+
+  it("reports features.mail from /api/config only when the SMTP adapter is configured, with or without credentials", async () => {
     expect(await features(serverWith({}))).toEqual({ mail: false, ai: false });
     expect(await features(serverWith(smtp))).toEqual({ mail: true, ai: false });
+    expect(await features(serverWith(authless))).toEqual({ mail: true, ai: false });
+  });
+
+  it("refuses to start with one credential, or with credentials and no relay", () => {
+    expect(() => loadConfig("server", { ...environment, ...authless, SMTP_USER: smtp.SMTP_USER })).toThrow(/SMTP_PASS/);
+    expect(() => loadConfig("server", { ...environment, SMTP_USER: smtp.SMTP_USER, SMTP_PASS: smtp.SMTP_PASS })).toThrow(/SMTP_HOST/);
   });
 
   it("registers no template yet, so the SMTP adapter refuses a message instead of sending it", async () => {

@@ -139,13 +139,16 @@ const RATE_LIMIT_POOL_SIZE = 4;
 const MAIL_TEMPLATES: MailTemplates = {};
 
 // Mail is the SMTP adapter when the operator set the SMTP keys, and the log-only adapter, which reports
-// itself unavailable, when not. The configuration refuses a partial set, so the keys are all set or all unset.
+// itself unavailable, when not. The configuration refuses a partial set: the host, port, security mode and sender
+// are all set or all unset, and the credentials are a pair that is set only with them. No credentials means an
+// authless relay.
 function composeMail(config: ServerConfig | WorkerConfig, logger: Logger): MailPort {
   const { SMTP_HOST: host, SMTP_PORT: port, SMTP_SECURITY: security, SMTP_USER: user, SMTP_PASS: pass, SMTP_FROM: from } = config;
-  if (host === undefined || port === undefined || security === undefined || user === undefined || pass === undefined || from === undefined) {
+  if (host === undefined || port === undefined || security === undefined || from === undefined) {
     return createLogOnlyMail({ logger });
   }
-  return createSmtpMail({ host, port, security, auth: { user, pass }, from, templates: MAIL_TEMPLATES });
+  const auth = user === undefined || pass === undefined ? undefined : { user, pass };
+  return createSmtpMail({ host, port, security, ...(auth === undefined ? {} : { auth }), from, templates: MAIL_TEMPLATES });
 }
 
 // The secret box is built from the environment by the server and the worker
