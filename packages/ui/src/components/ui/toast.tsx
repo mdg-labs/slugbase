@@ -62,9 +62,11 @@ function upsertReplayClassName(toast: {
 function Toasts({
   position,
   portalProps,
+  viewportLabel,
 }: {
   position: ToastPosition;
   portalProps?: React.ComponentProps<typeof Toast.Portal>;
+  viewportLabel?: string;
 }): React.ReactElement {
   const { toasts } = Toast.useToastManager();
   const swipeDirection = getSwipeDirection(position);
@@ -72,6 +74,7 @@ function Toasts({
   return (
     <Toast.Portal data-slot="toast-portal" {...portalProps}>
       <Toast.Viewport
+        {...(viewportLabel === undefined ? {} : { "aria-label": viewportLabel })}
         className={cn(
           "fixed z-60 mx-auto flex w-[calc(100%-var(--toast-inset)*2)] max-w-90 [--toast-inset:--spacing(4)] sm:[--toast-inset:--spacing(8)]",
           // Vertical positioning
@@ -289,18 +292,21 @@ export type ToastPosition =
 export interface ToastProviderProps extends Toast.Provider.Props {
   position?: ToastPosition;
   portalProps?: React.ComponentProps<typeof Toast.Portal>;
+  /** The accessible name of the live region the toasts appear in; Base UI names it "Notifications" when absent. */
+  viewportLabel?: string;
 }
 
 export function ToastProvider({
   children,
   position = "bottom-right",
   portalProps,
+  viewportLabel,
   ...props
 }: ToastProviderProps): React.ReactElement {
   return (
     <Toast.Provider toastManager={toastManager} {...props}>
       {children}
-      <Toasts portalProps={portalProps} position={position} />
+      <Toasts portalProps={portalProps} position={position} viewportLabel={viewportLabel} />
     </Toast.Provider>
   );
 }

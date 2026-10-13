@@ -395,6 +395,7 @@ export interface ToastProviderProps extends ToastPrimitive.Provider.Props {
     portalProps?: React_3.ComponentProps<typeof ToastPrimitive.Portal>;
     // (undocumented)
     position?: ToastPosition;
+    viewportLabel?: string;
 }
 
 // @public (undocumented)

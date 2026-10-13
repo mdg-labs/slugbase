@@ -1,5 +1,4 @@
 import type { ReactElement, ReactNode } from "react";
-import { useEffect } from "react";
 import { ToastProvider, toastManager } from "../components/ui/toast.tsx";
 
 export interface FeedbackToastProviderProps {
@@ -8,43 +7,9 @@ export interface FeedbackToastProviderProps {
   regionLabel: string;
 }
 
-const VIEWPORT = '[data-slot="toast-viewport"]';
-
-// The viewport of the base toast names its region in English; this gives it the app's language.
-// The viewport is portalled after the provider's own effects run, so the label waits for it.
-function RegionLabel({ label }: { label: string }): null {
-  useEffect(() => {
-    const apply = (): boolean => {
-      const viewports = document.querySelectorAll(VIEWPORT);
-      viewports.forEach((viewport) => {
-        viewport.setAttribute("aria-label", label);
-      });
-      return viewports.length > 0;
-    };
-    if (apply()) {
-      return undefined;
-    }
-    const observer = new MutationObserver(() => {
-      if (apply()) {
-        observer.disconnect();
-      }
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-    return () => {
-      observer.disconnect();
-    };
-  }, [label]);
-  return null;
-}
-
 /** Hosts the toasts that `feedbackToast` raises. The region is a polite live region, so assistive technology announces each toast. */
 export function FeedbackToastProvider({ children, regionLabel }: FeedbackToastProviderProps): ReactElement {
-  return (
-    <ToastProvider>
-      {children}
-      <RegionLabel label={regionLabel} />
-    </ToastProvider>
-  );
+  return <ToastProvider viewportLabel={regionLabel}>{children}</ToastProvider>;
 }
 
 /**
