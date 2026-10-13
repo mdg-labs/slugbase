@@ -5,7 +5,6 @@ import {
   createRateLimiter,
   createSecretBox,
   createSentryErrorReport,
-  type BucketLimit,
 } from "@slugbase/adapters";
 import "@slugbase/contracts";
 import { unconfigured, type Adapters } from "@slugbase/core";
@@ -14,7 +13,9 @@ import "@slugbase/email";
 import {
   ConfigError,
   PROCESS_TYPES,
+  RATE_LIMIT_BUCKETS,
   createLogger,
+  createRateLimitRegistry,
   createServer,
   createWorker,
   isProcessType,
@@ -128,38 +129,6 @@ const WEB_ROOT = fileURLToPath(new URL("../web", import.meta.url));
 // sets are the ones `migrate` and the server's migrate-on-start both apply.
 const MIGRATIONS: readonly MigrationChain[] = [];
 
-// The limits of the token buckets, from doc 04 section 7: `<bucket>` is the
-// per-IP limit of a bucket and `<bucket>:account` its per-account (or per-target)
-// limit, `ai:workspace` the per-workspace one. A limit of n per period is a bucket of
-// capacity n that refills n / period every second.
-const MINUTE = 60;
-const HOUR = 3600;
-const perMinute = (n: number): BucketLimit => ({ capacity: n, refillPerSecond: n / MINUTE });
-const perHour = (n: number): BucketLimit => ({ capacity: n, refillPerSecond: n / HOUR });
-const RATE_LIMITS: Readonly<Record<string, BucketLimit>> = {
-  login: perMinute(10),
-  "login:account": perHour(20),
-  mfa: perMinute(10),
-  "mfa:account": perHour(30),
-  register: perHour(5),
-  reset: perHour(5),
-  "reset:account": perHour(3),
-  token_redeem: perHour(10),
-  "token_create:account": perHour(20),
-  setup: perHour(10),
-  go: perMinute(600),
-  "go:account": perMinute(300),
-  read: perMinute(1200),
-  "read:account": perMinute(1200),
-  write: perMinute(300),
-  "write:account": perMinute(120),
-  "bulk:account": perHour(20),
-  fetch: perMinute(120),
-  "fetch:account": perMinute(60),
-  "ai:account": perHour(60),
-  "ai:workspace": perHour(600),
-  public: perMinute(300),
-};
 const RATE_LIMIT_POOL_SIZE = 4;
 
 // The secret box is built from the environment by the server and the worker
@@ -170,7 +139,8 @@ const RATE_LIMIT_POOL_SIZE = 4;
 // section 6): the adapter that resolves, validates and pins every outbound request.
 // The rate limiter keeps its tokens in Postgres through the system operation of
 // `@slugbase/db`, on a small pool of its own as the role of `DATABASE_URL`; the
-// pool connects on the first limited request, not at start-up.
+// pool connects on the first limited request, not at start-up. Its limits are the
+// bucket registry of the server package, with the `RATE_LIMIT_*` keys applied.
 export function composeAdapters(config: ServerConfig | WorkerConfig, logger: Logger): Adapters {
   const secretBox = createSecretBox({
     current: { keyId: config.ENCRYPTION_KEY_ID, key: Buffer.from(config.ENCRYPTION_KEY, "base64") },
@@ -186,11 +156,12 @@ export function composeAdapters(config: ServerConfig | WorkerConfig, logger: Log
       ? defaults.errors
       : createSentryErrorReport({ dsn: config.ERROR_REPORT_DSN, environment: config.NODE_ENV });
   logger.info(errors.available ? "Error reporting ready" : "Error reporting is off; errors are only logged");
+  const limits = createRateLimitRegistry(config);
   const rateLimit = createRateLimiter({
     store: createRateLimitStore({ url: config.DATABASE_URL, poolSize: RATE_LIMIT_POOL_SIZE }),
-    limits: (bucket) => (Object.hasOwn(RATE_LIMITS, bucket) ? RATE_LIMITS[bucket] : undefined),
+    limits: (name) => limits.window(name),
   });
-  logger.info("Rate limiter ready", { buckets: Object.keys(RATE_LIMITS).length });
+  logger.info("Rate limiter ready", { buckets: RATE_LIMIT_BUCKETS.length });
   return { ...defaults, secretBox, errors, egress: new HttpEgress({ nodeEnv: config.NODE_ENV }), rateLimit };
 }
 

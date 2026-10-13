@@ -5,7 +5,7 @@ import type { Adapters } from "@slugbase/core";
 import { createDatabase, type Database, type MigrationChain } from "@slugbase/db";
 import { Hono } from "hono";
 import { DEVELOPMENT_BUILD_INFO, type BuildInfo } from "./build-info.ts";
-import type { ServerConfig, WorkerConfig } from "./config/index.ts";
+import { createRateLimitRegistry, type ServerConfig, type WorkerConfig } from "./config/index.ts";
 import type { Authenticator } from "./http/authenticate.ts";
 import { bodyLimits } from "./http/body-limits.ts";
 import {
@@ -32,6 +32,7 @@ import { WebRootError, serveWebRoot } from "./routes/static.ts";
 import type { JobDefinition, ScheduleDefinition } from "./worker/job.ts";
 
 export type { ChainContext, ChainEnv, MatchedRoute, RouteBinding, RouteHandler, StageName, ValidatedInput } from "./http/chain.ts";
+export type { RateLimitState, TakenLimit } from "./http/rate-limit.ts";
 export type {
   ApiTokenPrincipal,
   Authenticator,
@@ -486,6 +487,8 @@ export function createServer(options: CreateServerOptions): Server {
     appOrigin: config.APP_ORIGIN,
     challenge: adapters.challenge,
     errors: adapters.errors,
+    rateLimit: adapters.rateLimit,
+    rateLimits: createRateLimitRegistry(config),
     authenticators: composition.authenticators,
     tenantResolver: adapters.tenantResolver,
     withTenant: context.withTenant,

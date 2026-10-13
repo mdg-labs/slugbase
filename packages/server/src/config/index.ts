@@ -17,6 +17,26 @@ export {
   serverMigrationFragment,
 } from "./fragments.ts";
 export type { PreviousKey } from "./fields.ts";
+export {
+  RATE_LIMIT_BUCKETS,
+  RATE_LIMIT_DEFAULTS,
+  RATE_LIMIT_SCOPES,
+  createRateLimitRegistry,
+  limitName,
+  rateLimitFragment,
+  rateLimitKey,
+} from "./rate-limits.ts";
+export type {
+  RateLimitBucket,
+  RateLimitConfig,
+  RateLimitDefaults,
+  RateLimitKey,
+  RateLimitRegistry,
+  RateLimitSpec,
+  RateLimitWindow,
+  RateScope,
+  ScopeLimit,
+} from "./rate-limits.ts";
 export { ConfigError, loadConfig, validateEnvironment } from "./load.ts";
 export type { EnvironmentVariables, LoadOptions, LoadedConfig } from "./load.ts";
 export {

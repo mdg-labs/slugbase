@@ -11,7 +11,7 @@ import {
   type StageImplementations,
   type StageName,
 } from "../../src/http/chain.ts";
-import { hookDispatcher, operation, recordingLogger, tenantDependencies } from "../support.ts";
+import { hookDispatcher, operation, recordingLogger, tenantDependencies, rateLimitDependencies } from "../support.ts";
 import { HookResult } from "../../src/hooks/index.ts";
 
 // The order of doc 01 section 4, written out here so that a change to the
@@ -36,7 +36,7 @@ function build(bindings: readonly RouteBinding[], stages: StageImplementations =
   const logger = recordingLogger();
   const installed = installChain(
     app,
-    { logger, routes: new RouteTable(bindings), trustedProxyHops: 0, appOrigin: "https://bookmarks.example.com", challenge: unconfigured().challenge, errors: unconfigured().errors, ...tenantDependencies(), hooks, responseValidation: "throw" },
+    { logger, routes: new RouteTable(bindings), trustedProxyHops: 0, appOrigin: "https://bookmarks.example.com", challenge: unconfigured().challenge, errors: unconfigured().errors, ...tenantDependencies(), ...rateLimitDependencies(), hooks, responseValidation: "throw" },
     stages,
   );
   return { app, logger, installed };

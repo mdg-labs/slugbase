@@ -54,6 +54,7 @@ export type {
   ModuleContext,
   ModuleContribution,
   Principal,
+  RateLimitState,
   RequestTenant,
   RouteBinding,
   RouteHandler,
@@ -63,6 +64,7 @@ export type {
   SessionPrincipal,
   StageName,
   StartOptions,
+  TakenLimit,
   ValidatedInput,
 } from "./create-server.ts";
 export * from "./worker/index.ts";

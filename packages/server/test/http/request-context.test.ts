@@ -13,7 +13,7 @@ import {
 } from "../../src/http/chain.ts";
 import { createLogger } from "../../src/http/logger.ts";
 import { requestIdFrom } from "../../src/http/request-context.ts";
-import { adapters, fakeDatabase, hookDispatcher, operation, serverConfig, documentOf, tenantDependencies } from "../support.ts";
+import { adapters, fakeDatabase, hookDispatcher, operation, serverConfig, documentOf, tenantDependencies, rateLimitDependencies } from "../support.ts";
 
 const exporter = new InMemorySpanExporter();
 
@@ -161,7 +161,7 @@ describe("the client IP across the trusted hops", () => {
       appOrigin: "https://bookmarks.example.com",
       challenge: unconfigured().challenge,
       errors: unconfigured().errors,
-      ...tenantDependencies(),
+      ...tenantDependencies(), ...rateLimitDependencies(),
       hooks: hookDispatcher(),
       responseValidation: "throw",
     });
@@ -299,7 +299,7 @@ describe("the request log line", () => {
           appOrigin: "https://bookmarks.example.com",
           challenge: unconfigured().challenge,
           errors: unconfigured().errors,
-      ...tenantDependencies(),
+      ...tenantDependencies(), ...rateLimitDependencies(),
           hooks: hookDispatcher(),
           responseValidation: "throw",
         },

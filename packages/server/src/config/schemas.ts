@@ -11,6 +11,7 @@ import {
   secretsFragment,
   serverMigrationFragment,
 } from "./fragments.ts";
+import { rateLimitFragment } from "./rate-limits.ts";
 
 export const PROCESS_TYPES = ["server", "worker", "migrate"] as const;
 
@@ -28,6 +29,7 @@ export const serverFragments = [
   databaseFragment,
   serverMigrationFragment,
   httpFragment,
+  rateLimitFragment,
   metricsFragment,
   errorReportFragment,
 ] as const;
@@ -38,6 +40,7 @@ export const workerFragments = [
   originFragment,
   secretsFragment,
   databaseFragment,
+  rateLimitFragment,
   metricsFragment,
   errorReportFragment,
 ] as const;

@@ -61,6 +61,7 @@ export interface ChainEnv {
         logger?: Logger;
         principalType?: "anonymous" | "session" | "api-token";
         principal?: Principal;
+        rateLimit?: RateLimitState;
         workspaceId?: string;
         tenant?: RequestTenant;
         hooks?: HookDispatcher;
@@ -123,6 +124,9 @@ export interface CookieAuthenticator {
 
 // @public
 export function createLogger(input: LoggerOptions): Logger;
+
+// @public (undocumented)
+export function createRateLimitRegistry(config: RateLimitConfig): RateLimitRegistry;
 
 // @public
 export function createServer(options: CreateServerOptions): Server;
@@ -289,7 +293,7 @@ export const envSchemas: {
     METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
     } & {
     ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
-    }>;
+    } & Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>>;
     readonly worker: EnvSchema<    {
     NODE_ENV: z.ZodEnum<{
     development: "development";
@@ -319,7 +323,7 @@ export const envSchemas: {
     METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
     } & {
     ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
-    }>;
+    } & Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>>;
     readonly migrate: EnvSchema<    {
     NODE_ENV: z.ZodEnum<{
     development: "development";
@@ -424,6 +428,9 @@ export type JobPayload = Readonly<Record<string, JobScalar>>;
 
 // @public
 export type JobScalar = string | number | boolean | null | undefined;
+
+// @public
+export function limitName(bucket: string, scope: RateScope): string;
 
 // @public
 export function loadBuildInfo(file: URL | string): BuildInfo;
@@ -611,6 +618,122 @@ export const PROCESS_TYPES: readonly ["server", "worker", "migrate"];
 // @public (undocumented)
 export type ProcessType = (typeof PROCESS_TYPES)[number];
 
+// @public (undocumented)
+export const RATE_LIMIT_BUCKETS: readonly RateLimitBucket[];
+
+// @public (undocumented)
+export const RATE_LIMIT_DEFAULTS: {
+    readonly login: {
+        readonly ip: "10/min";
+        readonly email: "20/hour";
+    };
+    readonly mfa: {
+        readonly ip: "10/min";
+        readonly account: "30/hour";
+    };
+    readonly register: {
+        readonly ip: "5/hour";
+    };
+    readonly reset: {
+        readonly ip: "5/hour";
+        readonly email: "3/hour";
+    };
+    readonly token_redeem: {
+        readonly ip: "10/hour";
+    };
+    readonly token_create: {
+        readonly account: "20/hour";
+    };
+    readonly setup: {
+        readonly ip: "10/hour";
+    };
+    readonly go: {
+        readonly ip: "600/min";
+        readonly account: "300/min";
+    };
+    readonly read: {
+        readonly ip: "1200/min";
+        readonly account: "1200/min";
+    };
+    readonly write: {
+        readonly ip: "300/min";
+        readonly account: "120/min";
+    };
+    readonly bulk: {
+        readonly account: "20/hour";
+    };
+    readonly fetch: {
+        readonly ip: "120/min";
+        readonly account: "60/min";
+    };
+    readonly ai: {
+        readonly account: "60/hour";
+        readonly workspace: "600/hour";
+    };
+    readonly public: {
+        readonly ip: "300/min";
+    };
+};
+
+// @public (undocumented)
+export const RATE_LIMIT_SCOPES: readonly ["ip", "account", "workspace", "email"];
+
+// @public
+export type RateLimitBucket = keyof RateLimitDefaults;
+
+// @public
+export type RateLimitConfig = {
+    readonly [Key in RateLimitKey]: RateLimitSpec;
+};
+
+// @public (undocumented)
+export type RateLimitDefaults = typeof RATE_LIMIT_DEFAULTS;
+
+// @public
+export const rateLimitFragment: EnvFragment<Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>>;
+
+// @public
+export type RateLimitKey = {
+    [Bucket in RateLimitBucket]: {
+        [Scope in keyof RateLimitDefaults[Bucket] & string]: `RATE_LIMIT_${Uppercase<Bucket>}_${Uppercase<Scope>}`;
+    }[keyof RateLimitDefaults[Bucket] & string];
+}[RateLimitBucket];
+
+// @public (undocumented)
+export function rateLimitKey(bucket: string, scope: RateScope): string;
+
+// @public (undocumented)
+export interface RateLimitRegistry {
+    scopesOf(bucket: string): readonly ScopeLimit[] | undefined;
+    window(name: string): RateLimitWindow | undefined;
+}
+
+// @public
+export interface RateLimitSpec {
+    // (undocumented)
+    readonly count: number;
+    // (undocumented)
+    readonly windowSeconds: number;
+}
+
+// @public
+export interface RateLimitState {
+    readonly retryAfterSeconds?: number;
+    // (undocumented)
+    readonly taken: readonly TakenLimit[];
+}
+
+// @public
+export interface RateLimitWindow {
+    // (undocumented)
+    readonly capacity: number;
+    // (undocumented)
+    readonly refillPerSecond: number;
+}
+
+// @public (undocumented)
+export type RateScope = (typeof RATE_LIMIT_SCOPES)[number];
+
 // @public
 export interface RefineContext {
     issue(key: string, message: string): void;
@@ -781,6 +904,16 @@ export interface ScheduleDefinition {
     readonly payload?: JobPayload;
 }
 
+// @public
+export interface ScopeLimit {
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly scope: RateScope;
+    // (undocumented)
+    readonly spec: RateLimitSpec;
+}
+
 // @public (undocumented)
 export interface SeatCheckAnswer {
     readonly seatLimit: number | null;
@@ -857,7 +990,7 @@ DOCS_BASE_URL: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<string, string
 METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
 } & {
 ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
-}>;
+} & Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>>;
 
 // @public
 export const serverFragments: readonly [EnvFragment<    {
@@ -893,7 +1026,7 @@ PORT: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
 TRUSTED_PROXY_HOPS: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
 API_DOCS_ENABLED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
 DOCS_BASE_URL: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>>;
-}>, EnvFragment<    {
+}>, EnvFragment<Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>>, EnvFragment<    {
 METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
 }>, EnvFragment<    {
 ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
@@ -937,6 +1070,18 @@ export type StageName = (typeof CHAIN_STAGES)[number];
 export interface StartOptions {
     readonly metricsPort?: number;
     readonly port?: number;
+}
+
+// @public
+export interface TakenLimit {
+    // (undocumented)
+    readonly limit: number;
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly remaining: number;
+    // (undocumented)
+    readonly window: RateLimitWindow;
 }
 
 // @public
@@ -994,7 +1139,7 @@ SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransf
 METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
 } & {
 ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
-}>;
+} & Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>>;
 
 // @public
 export const workerFragments: readonly [EnvFragment<    {
@@ -1022,7 +1167,7 @@ ENCRYPTION_KEY_PREVIOUS: z.ZodPreprocess<z.ZodDefault<z.ZodPipe<z.ZodString, z.Z
 }>, EnvFragment<    {
 DATABASE_URL: z.ZodString;
 SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
-}>, EnvFragment<    {
+}>, EnvFragment<Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>>, EnvFragment<    {
 METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
 }>, EnvFragment<    {
 ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
