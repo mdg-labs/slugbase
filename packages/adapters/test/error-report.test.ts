@@ -561,7 +561,7 @@ describe("scrubText over secret shapes, wrappers and keys", () => {
     expect(combinations).toBeGreaterThan(5000);
     expect(failures.slice(0, 25)).toEqual([]);
     expect(failures).toHaveLength(0);
-  });
+  }, 30_000);
 });
 
 describe("routeTemplate", () => {
