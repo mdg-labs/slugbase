@@ -108,7 +108,9 @@ async function runServer(env: Record<string, string>, ...args: string[]): Promis
   }
 }
 
-describe("apps/slugbase main", () => {
+// Every test starts the app as a child process, whose cold start alone can approach vitest's 5 s
+// default on a busy runner; the tests get the bound the child processes already have.
+describe("apps/slugbase main", { timeout: 60_000 }, () => {
   it("starts the server, answers through the middleware chain and exits 0 on SIGTERM", async () => {
     const { status, output, response } = await runServer(standalone);
     expect(status, output).toBe(0);
