@@ -1,6 +1,6 @@
 import { getResponse } from "msw";
 import { describe, expect, it } from "vitest";
-import { createHandlers, listOperations, parseDocument, scenarioFromSearch, SCENARIOS, type Scenario } from "../src/msw.ts";
+import { createHandlers, handlerPath, listOperations, parseDocument, scenarioFromSearch, SCENARIOS, type Scenario } from "../src/msw.ts";
 import { readOpenApiDocument } from "../src/msw/node.ts";
 import { validatorFor } from "./support/schema.ts";
 
@@ -168,6 +168,20 @@ describe("the generated handlers", () => {
   it("answer /api/config with a product name the shell shows", async () => {
     const operation = operations.find((candidate) => candidate.operationId === "getApiConfig");
     expect(await (await answer(operation as Declared)).json()).toMatchObject({ product: { name: "SlugBase Mock" } });
+  });
+});
+
+describe("handlerPath", () => {
+  it("turns each {name} of a path template into :name", () => {
+    expect(handlerPath("/api/v1/bookmarks/{bookmarkId}/tags/{tagId}")).toBe("/api/v1/bookmarks/:bookmarkId/tags/:tagId");
+    expect(handlerPath("/api/v1/bookmarks")).toBe("/api/v1/bookmarks");
+  });
+
+  it("reads a long run of unclosed braces in linear time", () => {
+    const template = `/${"{{|".repeat(50_000)}`;
+    const start = performance.now();
+    expect(handlerPath(template)).toBe(template);
+    expect(performance.now() - start).toBeLessThan(1_000);
   });
 });
 

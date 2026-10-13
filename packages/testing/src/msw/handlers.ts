@@ -141,9 +141,12 @@ const BUILDERS: Readonly<Record<HttpMethod, typeof http.get>> = {
   options: http.options,
 };
 
-/** `/api/v1/bookmarks/{bookmarkId}` as the path syntax of the handlers. */
+/**
+ * `/api/v1/bookmarks/{bookmarkId}` as the path syntax of the handlers. A name holds
+ * neither brace, so a run of unclosed `{` is scanned once, not once per brace.
+ */
 export function handlerPath(template: string): string {
-  return template.replaceAll(/\{([^}]+)\}/g, ":$1");
+  return template.replaceAll(/\{([^{}]+)\}/g, ":$1");
 }
 
 /**
