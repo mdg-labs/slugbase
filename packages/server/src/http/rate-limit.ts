@@ -4,14 +4,17 @@ import type { RateLimitRegistry, RateLimitWindow, ScopeLimit } from "../config/i
 import type { ChainContext, RequestStage } from "./chain.ts";
 import { ProblemError, describeError, problemDocument, requestIdOf } from "./problem.ts";
 
-// Stage 6 of the chain (doc 01 section 4, doc 04 section 7, doc 10 T9): token
-// buckets keyed by the bucket the operation declares in `x-slugbase-rate`. A
-// request takes one token from the bucket of its client IP and, when it is
-// authenticated, from the buckets of its account (and, for a bucket that has
-// one, its workspace); whichever is empty first denies it. The IP is the one
-// the request-context stage derived across the trusted proxy hops, never a
-// header read here. An operation that declares `none`, a `machine` route and a
-// request that matches no operation are not limited by this stage.
+// Stages 3a and 6 of the chain (doc 01 section 4, doc 04 section 7, doc 10 T9):
+// token buckets keyed by the bucket the operation declares in
+// `x-slugbase-rate`. A request takes one token from the bucket of its client IP
+// before it is authenticated (stage 3a), so a flood of unauthenticated or
+// bad-credential requests is throttled before any credential lookup. Once it is
+// authenticated it takes one from the buckets of its account and, for a bucket
+// that has one, its workspace (stage 6); whichever is empty first denies it. The
+// IP is the one the request-context stage derived across the trusted proxy
+// hops, never a header read here. An operation that declares `none`, a
+// `machine` route and a request that matches no operation are not limited by
+// these stages.
 //
 // A limiter that cannot decide never lets a request through: a failure of its
 // storage, an unconfigured port or a bucket the registry does not know answers
@@ -39,7 +42,9 @@ export interface RateLimitState {
 }
 
 export interface RateLimiting {
-  /** Stage 6. */
+  /** Stage 3a: the per-IP take, before authentication. */
+  readonly ipStage: RequestStage;
+  /** Stage 6: the per-account and per-workspace takes, after authentication. */
   readonly stage: RequestStage;
   /** Sets the `RateLimit-Policy` and `RateLimit` headers on `context.res`; nothing happens for a request the stage did not limit. */
   apply(context: ChainContext): void;
@@ -100,10 +105,12 @@ export function createRateLimiting({ limiter, registry, logger, errors, recordRe
     }
   };
 
-  const stage: RequestStage = async (context, next) => {
+  // Takes one token from each of the bucket's limits that `include` selects, in
+  // the registry's order, and answers the refusal of the first one that is empty.
+  const take = async (context: ChainContext, include: (limit: ScopeLimit) => boolean): Promise<Response | undefined> => {
     const operation = context.get("route")?.operation;
     if (operation === undefined || operation.rate === "none" || operation.audience === "machine") {
-      return next();
+      return undefined;
     }
     const bucket = operation.rate;
     const limits = registry.scopesOf(bucket);
@@ -111,8 +118,8 @@ export function createRateLimiting({ limiter, registry, logger, errors, recordRe
       throw failure(context, bucket, new Error("the bucket is not in the registry"));
     }
 
-    const taken: TakenLimit[] = [];
-    for (const limit of limits) {
+    const taken: TakenLimit[] = [...(context.get("rateLimit")?.taken ?? [])];
+    for (const limit of limits.filter(include)) {
       const key = subjectOf(context, limit);
       const window = registry.window(limit.name);
       if (key === undefined) {
@@ -142,7 +149,17 @@ export function createRateLimiting({ limiter, registry, logger, errors, recordRe
     if (taken.length > 0) {
       context.set("rateLimit", { taken });
     }
-    return next();
+    return undefined;
+  };
+
+  const ipStage: RequestStage = async (context, next) => {
+    const refusal = await take(context, (limit) => limit.scope === "ip");
+    return refusal ?? next();
+  };
+
+  const stage: RequestStage = async (context, next) => {
+    const refusal = await take(context, (limit) => limit.scope !== "ip");
+    return refusal ?? next();
   };
 
   const apply = (context: ChainContext): void => {
@@ -159,5 +176,5 @@ export function createRateLimiting({ limiter, registry, logger, errors, recordRe
     context.res = new Response(response.body, { status: response.status, statusText: response.statusText, headers });
   };
 
-  return { stage, apply };
+  return { ipStage, stage, apply };
 }

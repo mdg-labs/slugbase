@@ -140,6 +140,16 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
+      # Catches the mail the SMTP adapter's integration test sends (doc 08
+      # section 1.2); the test reaches it by the service name `mailpit`, on its
+      # SMTP port 1025 and its HTTP API on 8025.
+      mailpit:
+        image: axllent/mailpit:v1.31.5
+        options: >-
+          --health-cmd "/mailpit readyz"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     env:
       SLUGBASE_TEST_PG_URL: postgres://slugbase_ci:slugbase_ci@postgres:5432/postgres
     steps:

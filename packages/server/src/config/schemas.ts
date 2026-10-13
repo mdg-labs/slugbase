@@ -10,6 +10,7 @@ import {
   runtimeFragment,
   secretsFragment,
   serverMigrationFragment,
+  smtpFragment,
 } from "./fragments.ts";
 import { rateLimitFragment } from "./rate-limits.ts";
 
@@ -32,6 +33,7 @@ export const serverFragments = [
   rateLimitFragment,
   metricsFragment,
   errorReportFragment,
+  smtpFragment,
 ] as const;
 
 /** The worker never receives the migrator URL (doc 01 section 2.1). */
@@ -43,6 +45,7 @@ export const workerFragments = [
   rateLimitFragment,
   metricsFragment,
   errorReportFragment,
+  smtpFragment,
 ] as const;
 
 export const migrateFragments = [runtimeFragment, migrateFragment] as const;

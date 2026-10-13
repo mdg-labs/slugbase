@@ -40,14 +40,14 @@ export const RATE_LIMIT_DEFAULTS = {
   register: { ip: "5/hour" },
   reset: { ip: "5/hour", email: "3/hour" },
   token_redeem: { ip: "10/hour" },
-  token_create: { account: "20/hour" },
+  token_create: { ip: "20/hour", account: "20/hour" },
   setup: { ip: "10/hour" },
   go: { ip: "600/min", account: "300/min" },
   read: { ip: "1200/min", account: "1200/min" },
   write: { ip: "300/min", account: "120/min" },
-  bulk: { account: "20/hour" },
+  bulk: { ip: "20/hour", account: "20/hour" },
   fetch: { ip: "120/min", account: "60/min" },
-  ai: { account: "60/hour", workspace: "600/hour" },
+  ai: { ip: "60/hour", account: "60/hour", workspace: "600/hour" },
   public: { ip: "300/min" },
 } as const satisfies Record<string, Partial<Record<RateScope, string>>>;
 

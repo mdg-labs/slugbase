@@ -2,9 +2,11 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "noEmit": true,
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
     "types": ["node"],
     "allowImportingTsExtensions": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["../../vitest.shared.ts", "vitest.config.ts", "src", "test"]
+  "include": ["../../vitest.shared.ts", "vitest.config.ts", "vite.config.ts", "src", "test"]
 }

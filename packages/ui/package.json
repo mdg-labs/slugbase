@@ -9,10 +9,15 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./styles/theme.css": {
+      "types": "./dist/styles/theme.d.ts",
+      "default": "./src/styles/theme.css"
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "src/styles"
   ],
   "scripts": {
     "lint": "eslint --max-warnings=0 .",
@@ -21,7 +26,27 @@
     "build": "tsc -p tsconfig.build.json",
     "contracts:check": "node ../../tooling/api-report/api-report.ts check --package ."
   },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "dependencies": {
+    "@base-ui/react": "^1.9.0",
+    "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@fontsource/ibm-plex-sans": "^5.3.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.56.0",
+    "tailwind-merge": "^3.7.0"
+  },
   "devDependencies": {
-    "@slugbase/testing": "workspace:*"
+    "@slugbase/testing": "workspace:*",
+    "@testing-library/react": "^16.3.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "tailwindcss": "^4.3.3",
+    "vitest-axe": "^0.1.0"
   }
 }

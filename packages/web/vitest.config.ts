@@ -1,3 +1,3 @@
 import { defineSlugbaseConfig } from "../../vitest.shared.ts";
 
-export default defineSlugbaseConfig();
+export default defineSlugbaseConfig({ jsdom: true });

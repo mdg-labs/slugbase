@@ -301,17 +301,17 @@ This table is the single list of defaults; doc 02 §16 shows the same values.
 | `register` | `POST /auth/register` | 5 / hour | — |
 | `reset` | `POST /auth/password/forgot`, `/auth/verify-email/resend`, `POST /me/email`, `POST /invitations/{id}/resend` | 5 / hour | 3 / hour per target email |
 | `token_redeem` | `POST /auth/verify-email`, `/auth/password/reset`, `/invitations/inspect`, `/invitations/accept`, `/me/email/confirm`, `/me/email/cancel` | 10 / hour | — |
-| `token_create` | `POST /me/api-tokens` | — | 20 / hour |
+| `token_create` | `POST /me/api-tokens` | 20 / hour | 20 / hour |
 | `setup` | `POST /setup` | 10 / hour | — |
 | `go` | `GET /go/*`, `POST /go/resolve`, `POST /go/choose`, `GET /go/suggest`, `POST /bookmarks/{id}/open` | 600 / min | 300 / min |
 | `read` | Every other authenticated `GET` | 1 200 / min | 1 200 / min |
 | `write` | Every other authenticated mutation | 300 / min | 120 / min |
-| `bulk` | `POST /bookmarks/bulk`, `/import/*`, `GET /export/*` | — | 20 / hour |
+| `bulk` | `POST /bookmarks/bulk`, `/import/*`, `GET /export/*` | 20 / hour | 20 / hour |
 | `fetch` | `POST /bookmarks/metadata`, `GET /favicons/*` (cache misses only) | 120 / min | 60 / min |
-| `ai` | `POST /ai/suggestions` | — | 60 / hour per account, 600 / hour per workspace |
+| `ai` | `POST /ai/suggestions` | 60 / hour | 60 / hour per account, 600 / hour per workspace |
 | `public` | `GET /api/config`, `GET /setup/status`, `GET /opensearch.xml` and the public read operations modules declare | 300 / min | — |
 
-All limits are configuration (`RATE_LIMIT_<BUCKET>_*`); the values above are the defaults. Modules may add their own buckets; the Cloud modules do (Cloud docs 06 and 07). Probes (`/health`, `/ready`, `/version`) and `machine` routes declare `x-slugbase-rate: none` and are not rate-limited by this port; a `machine` route is protected by its signature check and the deployment's edge rules. If the limiter's store fails, the request answers `503 unavailable` — credential endpoints are never left unthrottled.
+Every bucket other than `none` has a per-IP limit, taken before authentication (doc 01 §4 step 3a), so a flood of bad credentials from one address is throttled whatever the operation; the per-account and per-workspace limits are taken after it. A per-IP limit is never lower than the per-account limit of the same bucket. All limits are configuration (`RATE_LIMIT_<BUCKET>_*`); the values above are the defaults. Modules may add their own buckets; the Cloud modules do (Cloud docs 06 and 07). Probes (`/health`, `/ready`, `/version`) and `machine` routes declare `x-slugbase-rate: none` and are not rate-limited by this port; a `machine` route is protected by its signature check and the deployment's edge rules. If the limiter's store fails, the request answers `503 unavailable` — credential endpoints are never left unthrottled.
 
 ---
 

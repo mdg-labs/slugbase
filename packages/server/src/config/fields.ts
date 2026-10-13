@@ -71,6 +71,26 @@ export function baseUrl() {
     .transform((value) => value.replace(/\/+$/, ""));
 }
 
+/** The host name or IP address of a relay, with no scheme, port or path. */
+export function relayHost() {
+  const isName = (value: string): boolean => /^[A-Za-z0-9.-]{1,253}$/.test(value);
+  const isIpv6 = (value: string): boolean => /^[0-9A-Fa-f:.]{2,45}$/.test(value) && value.split(":").length > 2;
+  return z.string().refine((value) => isName(value) || isIpv6(value), {
+    error: "must be a host name or IP address, with no scheme, port or path",
+  });
+}
+
+const MAILBOX_ADDRESS = String.raw`[^\s@<>,;:"()[\]\\]+@[^\s@<>,;:"()[\]\\]+`;
+
+/** One mailbox: an address, or a display name followed by an address in angle brackets. */
+export function mailbox() {
+  const plain = new RegExp(`^${MAILBOX_ADDRESS}$`);
+  const named = new RegExp(`^[^\\r\\n<>"]+<${MAILBOX_ADDRESS}>$`);
+  return z.string().refine((value) => plain.test(value) || named.test(value), {
+    error: "must be an address such as slugbase@example.com, or a name and address such as SlugBase <slugbase@example.com>",
+  });
+}
+
 /**
  * A Sentry-protocol DSN: an http or https URL with a public key before the host and a numeric project id as the
  * last path segment. The value is the operator's, so it is kept as it is.

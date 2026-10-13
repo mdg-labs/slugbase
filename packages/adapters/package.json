@@ -26,7 +26,8 @@
     "@sentry/node-core": "^10.75.2",
     "@slugbase/contracts": "workspace:*",
     "@slugbase/core": "workspace:*",
-    "@slugbase/db": "workspace:*"
+    "@slugbase/db": "workspace:*",
+    "nodemailer": "^10.1.0"
   },
   "devDependencies": {
     "@slugbase/testing": "workspace:*"

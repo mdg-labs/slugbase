@@ -4,6 +4,46 @@
 
 ```ts
 
+import { ComponentType } from 'react';
+import type { ComponentTypes } from '@slugbase/contracts';
+
+// @public
+export type ApiConfig = ComponentTypes["schemas"]["ApiConfig"];
+
+// @public
+export type ApiProblemCode = ComponentTypes["schemas"]["Problem"]["code"];
+
+// @public
+export class ApiProblemError extends Error {
+    constructor(problem: {
+        code: ApiProblemCode;
+        status: number;
+        requestId: string;
+    });
+    // (undocumented)
+    readonly code: ApiProblemCode;
+    // (undocumented)
+    readonly requestId: string;
+    // (undocumented)
+    readonly status: number;
+}
+
+// @public
+export function createWebApp(input: CreateWebAppOptions): ComponentType;
+
+// @public (undocumented)
+export interface CreateWebAppOptions {
+    readonly extensions: readonly WebExtension[];
+}
+
+// @public
+export function useConfig(): ApiConfig;
+
+// @public
+export interface WebExtension {
+    readonly id: string;
+}
+
 // (No @packageDocumentation comment for this package)
 
 ```

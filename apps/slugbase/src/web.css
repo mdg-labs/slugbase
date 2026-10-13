@@ -1,0 +1,4 @@
+@import "@slugbase/ui/styles/theme.css";
+
+/* Classes used only by the web app's own sources; the theme scans the UI package. */
+@source "../../../packages/web/src";

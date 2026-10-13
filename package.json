@@ -11,8 +11,9 @@
   "scripts": {
     "preinstall": "node scripts/check-node.mjs",
     "build": "turbo run build",
-    "lint": "turbo run lint && pnpm lint:forbidden-terms",
+    "lint": "turbo run lint && pnpm lint:forbidden-terms && pnpm lint:external-hosts",
     "lint:forbidden-terms": "bash scripts/check-forbidden-terms.test.sh && bash scripts/check-forbidden-terms.sh",
+    "lint:external-hosts": "bash scripts/check-external-hosts.test.sh && bash scripts/check-external-hosts.sh",
     "typecheck": "turbo run typecheck",
     "test:unit": "turbo run test:unit",
     "test:integration": "turbo run test:integration",
@@ -27,6 +28,7 @@
     "api:extract": "turbo run build && node tooling/api-report/api-report.ts extract",
     "dev:services": "docker compose -f compose.dev.yml up -d --wait",
     "dev:services:down": "docker compose -f compose.dev.yml down",
+    "dev:web": "pnpm --filter slugbase dev:web",
     "dev:env": "node scripts/dev-env.mjs"
   },
   "devDependencies": {

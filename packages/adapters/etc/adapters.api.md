@@ -8,6 +8,8 @@ import { EgressPort } from '@slugbase/core';
 import { EgressRequest } from '@slugbase/core';
 import { EgressResponse } from '@slugbase/core';
 import type { ErrorReportPort } from '@slugbase/core';
+import type { MailMessage } from '@slugbase/core';
+import { MailPort } from '@slugbase/core';
 import type { RateLimitPort } from '@slugbase/core';
 import type { RateLimitStore } from '@slugbase/db';
 import type { SecretBoxPort } from '@slugbase/core';
@@ -31,6 +33,11 @@ export interface CreateEgressOptions {
         readonly dnsServers?: readonly string[];
     };
 }
+
+// @public
+export function createLogOnlyMail(options: {
+    readonly logger: MailLogger;
+}): MailPort;
 
 // @public
 export function createRateLimiter(options: CreateRateLimiterOptions): RateLimitPort;
@@ -64,6 +71,28 @@ export interface CreateSentryErrorReportOptions {
 }
 
 // @public
+export function createSmtpMail(options: CreateSmtpMailOptions): MailPort;
+
+// @public (undocumented)
+export interface CreateSmtpMailOptions {
+    // (undocumented)
+    readonly auth?: {
+        readonly user: string;
+        readonly pass: string;
+    };
+    readonly from: string;
+    readonly host: string;
+    // (undocumented)
+    readonly port: number;
+    // (undocumented)
+    readonly security: SmtpSecurity;
+    // (undocumented)
+    readonly templates: MailTemplates;
+    // (undocumented)
+    readonly timeoutMs?: number;
+}
+
+// @public
 export type EgressResolver = (hostname: string) => Promise<readonly string[]>;
 
 // @public
@@ -76,6 +105,36 @@ export class HttpEgress implements EgressPort {
 }
 
 // @public
+export class MailError extends Error {
+    constructor(reason: MailErrorReason);
+    // (undocumented)
+    readonly reason: MailErrorReason;
+}
+
+// @public
+export type MailErrorReason = "invalid_message" | "unknown_template" | "delivery_failed";
+
+// @public
+export interface MailLogger {
+    // (undocumented)
+    warn(message: string, fields?: Readonly<Record<string, unknown>>): void;
+}
+
+// @public
+export type MailTemplate = (input: MailTemplateInput) => RenderedMail;
+
+// @public (undocumented)
+export interface MailTemplateInput {
+    // (undocumented)
+    readonly data: MailMessage["data"];
+    // (undocumented)
+    readonly locale: string;
+}
+
+// @public
+export type MailTemplates = Readonly<Record<string, MailTemplate>>;
+
+// @public
 export class RateLimitError extends Error {
     constructor(reason: RateLimitErrorReason);
     // (undocumented)
@@ -84,6 +143,17 @@ export class RateLimitError extends Error {
 
 // @public
 export type RateLimitErrorReason = "unknown_bucket" | "invalid_request" | "invalid_store_answer";
+
+// @public
+export interface RenderedMail {
+    readonly headers?: Readonly<Record<string, string>>;
+    // (undocumented)
+    readonly html: string;
+    // (undocumented)
+    readonly subject: string;
+    // (undocumented)
+    readonly text: string;
+}
 
 // @public
 export class SecretBoxError extends Error {
@@ -101,6 +171,9 @@ export interface SecretBoxKey {
 
 // @public (undocumented)
 export type SecretBoxOperation = "configure" | "seal" | "open";
+
+// @public
+export type SmtpSecurity = "tls" | "starttls" | "none";
 
 // (No @packageDocumentation comment for this package)
 

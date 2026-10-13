@@ -1,9 +1,11 @@
 import { connect } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
-import { createServer, type RunningServer } from "../../src/create-server.ts";
-import { adapters, fakeDatabase, recordingLogger, serverConfig } from "../support.ts";
+import { defineOperation, jsonResponse, problemResponse, type RateBucket } from "@slugbase/contracts";
+import { z } from "zod";
+import { createServer, type RunningServer, type ServerModule } from "../../src/create-server.ts";
+import { adapters, documentOf, fakeDatabase, recordingLogger, serverConfig } from "../support.ts";
 
-// Stage 6 over a real socket (doc 10 T9): GET /api/config, bucket `public`, is
+// Stages 3a and 6 over a real socket (doc 10 T9): GET /api/config, bucket `public`, is
 // refused after the configured burst, and the client address the bucket is
 // keyed by comes from the connection or the trusted X-Forwarded-For entry,
 // never from the entries a client can write. The client is a raw socket: the
@@ -15,7 +17,7 @@ interface Answer {
   readonly body: string;
 }
 
-function get(port: number, headers: Record<string, string>): Promise<Answer> {
+function get(port: number, headers: Record<string, string>, path = "/api/config"): Promise<Answer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     const socket = connect({ port, host: "127.0.0.1" });
@@ -32,7 +34,7 @@ function get(port: number, headers: Record<string, string>): Promise<Answer> {
       });
     });
     const lines = Object.entries(headers).map(([name, value]) => `${name}: ${value}\r\n`);
-    socket.write(`GET /api/config HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n${lines.join("")}\r\n`);
+    socket.write(`GET ${path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n${lines.join("")}\r\n`);
   });
 }
 
@@ -42,12 +44,12 @@ afterEach(async () => {
   await Promise.all(running.splice(0).map((server) => server.shutdown()));
 });
 
-async function listen(hops: number, burst: number): Promise<number> {
+async function listen(hops: number, burst: number, modules: readonly ServerModule[] = []): Promise<number> {
   const config = serverConfig({ TRUSTED_PROXY_HOPS: String(hops), RATE_LIMIT_PUBLIC_IP: `${String(burst)}/min` });
   const server = createServer({
     config,
     adapters: adapters(config),
-    modules: [],
+    modules,
     migrations: [],
     logger: recordingLogger(),
     database: fakeDatabase(),
@@ -91,5 +93,89 @@ describe("the rate-limit stage over a socket", () => {
       statuses.push((await get(port, { "X-Forwarded-For": `192.0.2.${String(spoof)}`, "X-Real-IP": `192.0.2.${String(spoof)}` })).status);
     }
     expect(statuses).toEqual([200, 200, 200, 429, 429, 429]);
+  });
+
+  it("answers GET /api/config with a bad bearer token 401 within the burst and 429 after it, without another token lookup", async () => {
+    let lookups = 0;
+    const rejecting: ServerModule = {
+      name: "rejecting-bearer",
+      register: () => ({
+        authenticators: [
+          {
+            credential: "bearer",
+            authenticate: () => {
+              lookups += 1;
+              return Promise.resolve(undefined);
+            },
+          },
+        ],
+      }),
+    };
+    const port = await listen(0, 3, [rejecting]);
+    const answers: Answer[] = [];
+    for (let request = 0; request < 6; request += 1) {
+      answers.push(await get(port, { Authorization: `Bearer slb_${crypto.randomUUID()}` }));
+    }
+    expect(answers.map((answer) => answer.status)).toEqual([401, 401, 401, 429, 429, 429]);
+    expect(lookups).toBe(3);
+    const denied = answers[3];
+    expect(denied?.headers.get("retry-after")).toMatch(/^[1-9]\d*$/);
+    expect(denied?.headers.get("ratelimit")).toMatch(/^"public";r=0;t=\d+$/);
+    expect(JSON.parse(denied?.body ?? "{}")).toMatchObject({ code: "rate_limited", status: 429 });
+  });
+
+  describe.each(["token_create", "bulk", "ai"] as const satisfies readonly RateBucket[])("a route of the %s bucket", (bucket) => {
+    it("answers a flood of random bearer tokens from one IP 429 after the per-IP burst, without another token lookup", async () => {
+      let lookups = 0;
+      const path = `/api/v1/${bucket}`;
+      const guarded: ServerModule = {
+        name: `guarded-${bucket}`,
+        register: () => ({
+          routes: [
+            {
+              operation: defineOperation({
+                method: "get",
+                path,
+                operationId: `guarded_${bucket}`,
+                tag: "test",
+                auth: "member",
+                rate: bucket,
+                responses: { 200: jsonResponse("ok", z.record(z.string(), z.unknown())), 404: problemResponse("not found") },
+              }),
+              handler: () => Response.json({ ok: true }),
+            },
+          ],
+          authenticators: [
+            {
+              credential: "bearer",
+              authenticate: () => {
+                lookups += 1;
+                return Promise.resolve(undefined);
+              },
+            },
+          ],
+        }),
+      };
+      const config = serverConfig({ [`RATE_LIMIT_${bucket.toUpperCase()}_IP`]: "3/hour" });
+      const server = createServer({
+        config,
+        adapters: adapters(config),
+        modules: [guarded],
+        openApiDocument: documentOf([guarded]),
+        migrations: [],
+        logger: recordingLogger(),
+        database: fakeDatabase(),
+      });
+      const started = await server.start({ port: 0 });
+      running.push(started);
+      const answers: Answer[] = [];
+      for (let request = 0; request < 6; request += 1) {
+        answers.push(await get(started.port, { Authorization: `Bearer slb_${crypto.randomUUID()}` }, path));
+      }
+      expect(answers.map((answer) => answer.status)).toEqual([401, 401, 401, 429, 429, 429]);
+      expect(lookups).toBe(3);
+      expect(answers[3]?.headers.get("ratelimit")).toMatch(new RegExp(`^"${bucket}";r=0;t=\\d+$`));
+      expect(JSON.parse(answers[3]?.body ?? "{}")).toMatchObject({ code: "rate_limited", status: 429 });
+    });
   });
 });
