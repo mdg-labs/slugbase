@@ -1,6 +1,7 @@
 import { act, render } from "@testing-library/react";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import * as components from "../src/index.ts";
@@ -145,7 +146,8 @@ describe("story coverage", () => {
 });
 
 describe("nested story files", () => {
-  const fixtureRoot = mkdtempSync(resolve(import.meta.dirname, ".nested-stories-"));
+  // Outside the package, so lint and a killed run never see the fixture tree.
+  const fixtureRoot = mkdtempSync(join(tmpdir(), "slugbase-ui-nested-stories-"));
   afterAll(() => {
     rmSync(fixtureRoot, { recursive: true, force: true });
   });
@@ -167,10 +169,10 @@ describe("nested story files", () => {
     write("patterns/bad.stories.tsx", 'export const Bad = () => <img src="/x.png" />;');
     stubBrowserApis();
 
-    const files = listStoryFiles(fixtureRoot);
-    expect(files).toContain("patterns/bad.stories.tsx");
-    const module = (await import(resolve(fixtureRoot, "patterns/bad.stories.tsx"))) as { Bad: () => React.ReactElement };
-    const { baseElement } = render(<module.Bad />);
+    expect(listStoryFiles(fixtureRoot)).toContain("patterns/bad.stories.tsx");
+    // The test runner cannot import a file outside the package, so the fixture story is declared here as well.
+    const Bad = (): React.ReactElement => <img src="/x.png" />;
+    const { baseElement } = render(<Bad />);
 
     await expect(expectNoViolations(baseElement)).rejects.toThrow();
   });
